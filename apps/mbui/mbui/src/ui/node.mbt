@@ -95,6 +95,11 @@ struct Node {
   /// a node of the window's tree's, put among the frame's for the corner rule (corners.mbt with_tree_nodes), that
   /// scrolls what it holds up and down (Tree::scrolls_now): as a list does, what is in it lies under its top and foot
   mut tree_scrolls : Bool
+  /// how far its scroll was put in all for what came out another height over what shows (Tree::scroll_corrected): no
+  /// move of it, what shows held where it was (sizes_steady.mbt takes the scroll out but for this)
+  mut tree_corrected : Double
+  /// a node of the window's tree's, put among the frame's, that holds a page's list's rows (Tree::holds_rows)
+  mut tree_rows : Bool
   /// it floats over what scrolls under it (Ctx::floats_over): the frame's `floating` are found from the nodes
   mut floats : Bool
   /// it scrolls what it holds, as the scrolling box `scroller` is (sideways.mbt: its id, 0 none), what it holds its
@@ -237,8 +242,6 @@ struct Node {
   // a page of a book, and which
   mut pages : Pages?
   mut page_no : Int
-  // a pager's page: the pager's id
-  mut pager : Int
   // laid over its parent rather than beside its siblings
   mut layer : Bool
   // a ground its style gives it in a state it is not in now (pointed at, pressed, chosen, focused): the corner rule's
@@ -420,6 +423,8 @@ fn Node::new() -> Node {
     sem_hid: false,
     island: None,
     tree_scrolls: false,
+    tree_corrected: 0.0,
+    tree_rows: false,
     floats: false,
     scroller: 0,
     scroller_inner: false,
@@ -501,7 +506,6 @@ fn Node::new() -> Node {
     still: false,
     pages: None,
     page_no: -1,
-    pager: 0,
     layer: false,
     state_ground: false,
     mar_l: 0.0,
@@ -610,6 +614,8 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.sem_hid = false
   self.island = None
   self.tree_scrolls = false
+  self.tree_corrected = 0.0
+  self.tree_rows = false
   self.floats = false
   self.scroller = 0
   self.scroller_inner = false
@@ -634,7 +640,6 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.still = false
   self.pages = None
   self.page_no = -1
-  self.pager = 0
   self.layer = false
   self.mar_l = 0.0
   self.mar_t = 0.0
@@ -787,13 +792,18 @@ fn Node::radius_at(self : Node, j : Int) -> Double {
 }
 
 ///|
-/// Its corners made `r` (radius_at's order): all four one, `radius`; else each its own.
+/// Its corners made `r` (radius_at's order): all four one, `radius`; else each its own. One within a millionth of a
+/// point: a corner worked out from where boxes are (corners.mbt, concentric) has their rounding in it, and a box laid
+/// out again and one kept and moved there are a rounding apart (layout.mbt's moved_shift): their corners are the same
+/// either way, said the same way.
 fn Node::set_radii(self : Node, r : FixedArray[Double]) -> Unit {
-  if r[0] == r[1] && r[1] == r[2] && r[2] == r[3] {
-    self.radius = r[0]
+  let most = dmax(dmax(r[0], r[1]), dmax(r[2], r[3]))
+  let least = dmin(dmin(r[0], r[1]), dmin(r[2], r[3]))
+  if most - least < 1.0e-6 {
+    self.radius = most
     self.radii = None
   } else {
-    self.radius = dmax(dmax(r[0], r[1]), dmax(r[2], r[3]))
+    self.radius = most
     self.radii = Some(r)
   }
 }

@@ -213,7 +213,6 @@
       "src/kit/pick.mbt": 3
     },
     "layout-read-back": {
-      "src/kit/disclosure.mbt": 1,
       "src/kit/media.mbt": 2,
       "src/kit/menu.mbt": 2,
       "src/kit/pick.mbt": 1,
@@ -223,21 +222,13 @@
     "motion-length": {},
     "tester-branch": {},
     "frame-number": {
-      "src/motion/fx.mbt": 1,
       "src/motion/layer.mbt": 2
     },
-    "ui-current": {
-      "src/kit/toast_node.mbt": 1,
-      "src/kit/zoom.mbt": 4,
-      "src/motion/anim.mbt": 7,
-      "src/motion/fx.mbt": 3,
-      "src/motion/way.mbt": 2
-    },
+    "ui-current": {},
     "build-clock": {
       "src/kit/progress.mbt": 1,
       "src/kit/zoom.mbt": 1,
-      "src/motion/anim.mbt": 4,
-      "src/motion/fx.mbt": 1,
+      "src/motion/anim.mbt": 3,
       "src/motion/layer.mbt": 2,
       "src/motion/way.mbt": 1,
       "src/ui/cover.mbt": 2,
@@ -252,14 +243,12 @@
       "src/ui/sideways.mbt": 2
     },
     "build-motion": {
-      "src/kit/disclosure.mbt": 1,
       "src/kit/loupe.mbt": 2,
       "src/kit/media.mbt": 1,
-      "src/kit/progress.mbt": 2,
+      "src/kit/progress.mbt": 1,
       "src/kit/sheet.mbt": 1,
       "src/kit/switch.mbt": 1,
       "src/kit/toggle.mbt": 1,
-      "src/motion/fx.mbt": 9,
       "src/motion/layer.mbt": 21
     },
     "old-list": {
@@ -268,7 +257,10 @@
     },
     "old-island": {},
     "old-panel": {},
-    "click-read": {}
+    "click-read": {},
+    "key-read": {},
+    "part-place": {},
+    "layout-told": {}
   },
   "excused": {
     "frame-request": {},
@@ -331,7 +323,10 @@
     "old-list": {},
     "old-island": {},
     "old-panel": {},
-    "click-read": {}
+    "click-read": {},
+    "key-read": {},
+    "part-place": {},
+    "layout-told": {}
   },
   "tester": {
     "names": [

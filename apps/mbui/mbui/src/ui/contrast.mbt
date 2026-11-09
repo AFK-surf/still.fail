@@ -606,11 +606,13 @@ fn Ctx::drawn_over(self : Ctx, k : Int, own : Int, px : Double, py : Double) -> 
 }
 
 ///|
-/// Where node `i` is, and the words nearest it (its own, or the first of what holds it), to find it by: ` at x,y w×h
-/// by "…"`.
+/// Where node `i` is (and where the old view it is in was made: Ctx::old_source_said), and the words nearest it (its
+/// own, or the first of what holds it), to find it by: ` at x,y w×h (in an old view made at …) by "…"`.
 fn Ctx::contrast_where(self : Ctx, i : Int) -> String {
   let n = self.nodes[i]
-  let at = " at \{n.x.round()},\{n.y.round()} \{n.fw.round()}×\{n.fh.round()}"
+  let src = self.old_source_said(i)
+  let at = " at \{n.x.round()},\{n.y.round()} \{n.fw.round()}×\{n.fh.round()}" +
+    (if src == "" { "" } else { " (" + src + ")" })
   // (the first words in it, depth first, or in what holds it, up to four boxes out)
   let words_in = fn(r : Int) -> String {
     let todo = [r]
@@ -687,6 +689,18 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
   // view_host.mbt); its shapes at their strongest piece, as an old view's icon or line)
   let tree_lines : Map[(@view.NodeId, Int), (Double, String)] = Map::new()
   let tree_order : Array[(@view.NodeId, Int)] = []
+  // (what a node of the window's tree said disabled holds, as an old view's in a widget said disabled: asked nothing;
+  // its own presses off, not what a modal layer over it takes them from)
+  let tree_off : Array[@view.NodeId] = match view_app.val {
+    Some(tree) => tree.said_order().filter(fn(s) { s.disabled && s.allowed }).map(fn(s) { s.id })
+    None => []
+  }
+  let tree_off_holds = fn(id : @view.NodeId) {
+    match view_app.val {
+      Some(tree) => tree_off.iter().any(fn(o) { tree.holds(o, id) })
+      None => false
+    }
+  }
   for k in 0..<self.ninst {
     let b = k * inst_size
     match inst_by(k) {
@@ -696,6 +710,9 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
         // (a shape's piece: checked as the whole shape it is of is, an icon or a line, as made: inst_owners' `mark`)
         let mark = if !is_words && kind == 11.0 { inst_mark_of(k) } else { 0 }
         if !is_words && mark == 0 {
+          continue
+        }
+        if tree_off_holds(id) {
           continue
         }
         // (a picture in its own colours (View::picture: a maker's mark, a logo), its owner's, as an old view's own_colours
@@ -744,7 +761,9 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
           ("line", marks)
         }
         let said = if r < least - 0.005 {
-          "\{what} (a node of the window's tree's) at \{a[b].round()},\{a[b + 1].round()}: " +
+          "\{what} (a node of the window's tree's) at \{a[b].round()},\{a[b + 1].round()}" +
+          tree_source_said(id, paren=true) +
+          ": " +
           "\{shown.hex()} on \{ground.hex()} \{ratio_said(r)}:1, under \{least}"
         } else {
           ""

@@ -1,14 +1,30 @@
 // still.fail's crash reports and timings, as its own Android app sends them (Crashes.kt,
 // BarTiming.kt): the host's (android/app/src/main/java/dev/mbui: Crashes.java, BarTiming.java), told here what only
 // the app knows: the account signed in (the crashes kept since the last report go as it), the core failing and started
-// again (CoreFailed), what the UI could not do as asked (UiFault), the bottom bar's switches (src/sfapp/bar_timing.mbt) and the topics their pages subscribe. iOS's
-// host takes them too (src/host/apple_reports.m: MetricKit's crash and hang reports; the bar's timing not). Where
+// again (CoreFailed), what the UI could not do as asked (UiFault), the bottom bar's switches (src/sfapp/bar_timing.mbt)
+// and the topics their pages subscribe, the window thread's hangs (mbui's src/ui/journal.mbt). iOS's host takes them
+// too (src/host/apple_reports.m: MetricKit's crash and hang reports; the bar's timing not). Where
 // no host takes them (macOS, Windows, the web, an iOS build without PostHog's key: host_tell answers 0) only UiFault
 // is set, as the core's span.
 
 ///|
 /// Whether the account signed in was told (once a process, as Android's MainActivity does).
 let reported : Ref[Bool] = Ref(false)
+
+///|
+/// How many hangs have been sent in the ten minutes from `hangs_since` (the work clock's ms; below 0 none yet), and the
+/// most sent in each: a phone slow throughout says so in each ten minutes' first and in each summary, not only in its
+/// run's first twenty (a run of hours told nothing of its later stutters, 2026-11-09).
+let hangs_sent : Ref[Int] = Ref(0)
+
+///|
+let hangs_since : Ref[Double] = Ref(-1.0)
+
+///|
+let hangs_most : Int = 20
+
+///|
+let hangs_span_ms : Double = 600000.0
 
 ///|
 /// The subscriptions a switch being timed took on (by their ids), until their first message.
@@ -41,6 +57,21 @@ fn reports_start() -> Unit {
       }),
     )
   }
+  // the window thread's hangs (mbui's src/ui/journal.mbt), each at once while fewer than hangs_most were sent in its
+  // ten minutes; what the app did while shown as it is hidden, its hangs all counted: hangs per hour shown
+  @ui.hangs_told(
+    Some(fn(h) {
+      if hangs_since.val < 0.0 || h.end - hangs_since.val >= hangs_span_ms {
+        hangs_since.val = h.end
+        hangs_sent.val = 0
+      }
+      if hangs_sent.val < hangs_most {
+        hangs_sent.val += 1
+        host_tell("hang", h.json().stringify(), "", 0, 0) |> ignore
+      }
+    }),
+  )
+  @ui.hang_summary_told(Some(fn(s) { host_tell("hang_summary", s.json().stringify(), "", 0, 0) |> ignore }))
   @sfapp.bar_timing.val = Some({
     placed: fn(from, to) { host_tell("placed", from, to, 0, 0) |> ignore },
     built: fn(place) { host_tell("built", place, "", 0, 0) |> ignore },

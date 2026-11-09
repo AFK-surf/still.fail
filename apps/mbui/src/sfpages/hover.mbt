@@ -401,8 +401,8 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit
       ran_lines[lid] = r
       // (as they are: none on its way from an opening before)
       for k in keys {
-        line_y(c, k).snap(0.0)
-        line_faint(c, k).snap(1.0)
+        line_y(c, k).snap(c, 0.0)
+        line_faint(c, k).snap(c, 1.0)
       }
       r
     }
@@ -421,34 +421,34 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit
       let faint = line_faint(c, k)
       let j = at(before, k)
       // from where it was drawn (its place then, and how far it still was from it), as faint as it was
-      let (from, f) = if j >= 0 { ((j - i).to_double() * ran.pitch + y.get(), faint.get()) } else { (shift, 0.0) }
+      let (from, f) = if j >= 0 { ((j - i).to_double() * ran.pitch + y.get(c), faint.get(c)) } else { (shift, 0.0) }
       if from.abs() < 0.5 && f == 1.0 {
         continue
       }
-      y.snap(from)
-      y.animate(0.0, spec)
-      faint.snap(f)
-      faint.animate(1.0, spec)
+      y.snap(c, from)
+      y.animate(c, 0.0, spec)
+      faint.snap(c, f)
+      faint.animate(c, 1.0, spec)
     }
     // one gone: a copy of it where it was drawn, leaving as far as the others ran on
     for j, k in before {
       if at(keys, k) >= 0 {
         continue
       }
-      let (y, f) = (line_y(c, k).get(), line_faint(c, k).get())
+      let (y, f) = (line_y(c, k).get(c), line_faint(c, k).get(c))
       let (words, now) = ran.words.get(k).unwrap_or(("", false))
       ran.gone.push({ key: k, words, now, top: j.to_double() * ran.pitch })
       let gy = gone_y(c, k)
-      gy.snap(y)
-      gy.animate(y - shift, spec)
+      gy.snap(c, y)
+      gy.animate(c, y - shift, spec)
       let gf = gone_faint(c, k)
-      gf.snap(f)
-      gf.animate(0.0, spec)
+      gf.snap(c, f)
+      gf.animate(c, 0.0, spec)
     }
     ran.keys = keys.copy()
   }
-  // the copies gone out of sight let go
-  ran.gone.retain(fn(g) { gone_faint(c, g.key).get() > 0.0 })
+  // the copies gone out of sight let go, at the end their fading declared
+  ran.gone.retain(fn(g) { !gone_faint(c, g.key).over(c) })
   c.box(style=agent_card_lines, fn() {
     for l in latest {
       let k = text(Some(l), "key")
@@ -463,10 +463,9 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit
         c.text(text(Some(l), "text"), style=if now || c.lit(id) { agent_card_now } else { agent_card_line }) |> ignore
       })
       c.semantics(n, Button, id~, label=text(Some(l), "text"))
-      let (y, f) = (line_y(c, k).get(), line_faint(c, k).get())
-      if y != 0.0 || f != 1.0 {
-        c.look(n, @ui.look(dy=y, alpha=f))
-      }
+      // (where it is on its way and how faint, as it is drawn)
+      let (y, f) = (line_y(c, k), line_faint(c, k))
+      c.look_by(n, fn() { @ui.look(dy=y.get(c), alpha=f.get(c)) })
       // how far apart they are as laid out: the steps of the next change
       match c.laid_size(id) {
         Some((_, h)) if h > 0.0 => ran.pitch = h + agent_card_lines_gap.px()
@@ -479,7 +478,8 @@ fn agent_card_latest(c : @ui.Ctx, latest : Array[Json], history : (Int?) -> Unit
           let n = c.box(style=agent_card_gone_box, fn() {
             c.text(g.words, style=if g.now { agent_card_now } else { agent_card_line }) |> ignore
           })
-          c.look(n, @ui.look(dy=g.top + gone_y(c, g.key).get(), alpha=gone_faint(c, g.key).get()))
+          let (y, f) = (gone_y(c, g.key), gone_faint(c, g.key))
+          c.look_by(n, fn() { @ui.look(dy=g.top + y.get(c), alpha=f.get(c)) })
         }
       })
       |> ignore
@@ -517,6 +517,7 @@ fn hover_reset() -> Unit {
   hover_shut.val = false
   hover_open.clear()
   hover_holds.clear()
+  peek_copied_at.clear()
 }
 
 ///|

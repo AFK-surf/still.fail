@@ -1,7 +1,7 @@
 // The app's widgets for Windows' UI Automation (Narrator, NVDA, voice access, whatever reads the screen through it), as
-// Android's A11y.java gives them to TalkBack: a provider for each node the app last said (src/ui/a11y.mbt,
-// @hostapi.a11y_tree), kept by the node's number from frame to frame (one whose node is gone answers that it is no
-// more), under the window's own (the fragment root, which WM_GETOBJECT hands out: mb_a11y_object). Each says its control
+// Android's A11y.java gives them to TalkBack: a provider for each node the app told (src/ui/a11y.mbt's updates,
+// @hostapi.a11y_tree: what changed, kept by the node's number; one whose node is gone answers that it is no more; those
+// of no use of their own, flags v, none: what they hold their holder's), under the window's own (the fragment root, which WM_GETOBJECT hands out: mb_a11y_object). Each says its control
 // type by the node's role, its name, its state and its rectangle on the screen, and the patterns its node can take:
 // Invoke, Toggle, ExpandCollapse, SelectionItem, Value, RangeValue. What the reader asks (Invoke, Toggle, a slider's
 // value, a field's words) goes to the app on @hostapi.a11y_channel for its next frame, as on Android. The app tells its widgets once a
@@ -31,6 +31,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <algorithm>
 #include "win.h"
 
 #pragma comment(lib, "uiautomationcore.lib")
@@ -41,7 +42,7 @@ extern "C" void mb_post(const char *channel, const char *json, size_t len, const
 
 namespace {
 
-// A node as the app said it (a11y.mbt's line)
+// A node as the app told it (a11y.mbt's line: where it is from where its holder is), what holds it
 struct Node {
   int id = 0, parent = 0, widget = 0;
   std::wstring role, flags, label, value, description, actions;
@@ -55,7 +56,6 @@ struct Node {
 
 HWND win;
 std::unordered_map<int, Node> nodes;
-std::vector<int> tops;  // the nodes whose parent is the window, in order
 int focused;            // the node with the keyboard's focus (0: none)
 bool asked;             // a reader asked for the window (a frame asked for then, for the app to tell its widgets)
 
@@ -67,6 +67,38 @@ std::unordered_map<int, Item *> items;  // this side's providers, by node (one h
 const Node *node_of(int id) {
   auto it = nodes.find(id);
   return it == nodes.end() ? nullptr : &it->second;
+}
+
+// what node `id` holds as providers: those of no use of their own (flags v: what a column scrolls is held in) left out,
+// what they hold in their place
+std::vector<int> shown_kids(int id) {
+  std::vector<int> out;
+  const Node *n = node_of(id);
+  if (!n) return out;
+  for (int k : n->kids) {
+    const Node *c = node_of(k);
+    if (!c) continue;
+    if (c->has(L'v')) {
+      std::vector<int> in = shown_kids(k);
+      out.insert(out.end(), in.begin(), in.end());
+    } else {
+      out.push_back(k);
+    }
+  }
+  return out;
+}
+
+// the provider that holds node `n`: its nearest holder of use of its own (0: the window's)
+int shown_holder(const Node *n) {
+  const Node *p = node_of(n->parent);
+  while (p && p->id && p->has(L'v')) p = node_of(p->parent);
+  return p ? p->id : 0;
+}
+
+// where node `n` is in the window (points): its holders' places and its own
+void place_of(const Node *n, double *x, double *y) {
+  *x = n->x, *y = n->y;
+  for (const Node *p = node_of(n->parent); p && p->id; p = node_of(p->parent)) *x += p->x, *y += p->y;
 }
 
 // what is asked of the node's widget, posted to the app (its next frame does it)
@@ -106,8 +138,9 @@ double scale_now() { return mb_app_scale(); }
 UiaRect screen_rect(const Node *n) {
   POINT o = {0, 0};
   ClientToScreen(win, &o);
-  double s = scale_now();
-  return {o.x + n->x * s, o.y + n->y * s, n->w * s, n->h * s};
+  double s = scale_now(), x, y;
+  place_of(n, &x, &y);
+  return {o.x + x * s, o.y + y * s, n->w * s, n->h * s};
 }
 
 // a role's control type (ARIA's roles as UIA's: a switch a button that toggles, as Windows' own toggle switch is)
@@ -242,8 +275,8 @@ class Item : public IRawElementProviderSimple,
         break;
       case UIA_FrameworkIdPropertyId: put_bstr(v, L"mbui"); break;
       case UIA_IsEnabledPropertyId: put_bool(v, !n->has(L'd')); break;
-      case UIA_HasKeyboardFocusPropertyId: put_bool(v, n->has(L'f')); break;
-      case UIA_IsKeyboardFocusablePropertyId: put_bool(v, n->can(L'f') || n->has(L'f')); break;
+      case UIA_HasKeyboardFocusPropertyId: put_bool(v, n->id == focused); break;
+      case UIA_IsKeyboardFocusablePropertyId: put_bool(v, n->can(L'f') || n->id == focused); break;
       case UIA_IsControlElementPropertyId:
       case UIA_IsContentElementPropertyId: put_bool(v, true); break;
       case UIA_IsOffscreenPropertyId: put_bool(v, n->w <= 0 || n->h <= 0); break;
@@ -347,8 +380,8 @@ class Item : public IRawElementProviderSimple,
     *out = NULL;
     const Node *n = node();
     if (!n) return UIA_E_ELEMENTNOTAVAILABLE;
-    if (n->parent) {
-      IRawElementProviderFragment *p = fragment_of(n->parent);
+    if (shown_holder(n)) {
+      IRawElementProviderFragment *p = fragment_of(shown_holder(n));
       if (p) {
         p->QueryInterface(IID_PPV_ARGS(out));
         p->Release();
@@ -460,6 +493,7 @@ class Root : public IRawElementProviderSimple, public IRawElementProviderFragmen
   // IRawElementProviderFragment
   HRESULT STDMETHODCALLTYPE Navigate(NavigateDirection d, IRawElementProviderFragment **out) override {
     *out = NULL;
+    std::vector<int> tops = shown_kids(0);
     if (tops.empty()) return S_OK;
     if (d == NavigateDirection_FirstChild) *out = fragment_of(tops.front());
     else if (d == NavigateDirection_LastChild) *out = fragment_of(tops.back());
@@ -492,7 +526,10 @@ class Root : public IRawElementProviderSimple, public IRawElementProviderFragmen
     int at = 0;
     for (auto &kv : nodes) {
       const Node &n = kv.second;
-      if (x < n.x || y < n.y || x >= n.x + n.w || y >= n.y + n.h) continue;
+      if (!n.id || n.has(L'v')) continue;
+      double nx, ny;
+      place_of(&n, &nx, &ny);
+      if (x < nx || y < ny || x >= nx + n.w || y >= ny + n.h) continue;
       double area = n.w * n.h;
       if (best < 0 || area < best) best = area, at = n.id;
     }
@@ -523,15 +560,15 @@ HRESULT STDMETHODCALLTYPE Item::Navigate(NavigateDirection d, IRawElementProvide
   const Node *n = node();
   if (!n) return UIA_E_ELEMENTNOTAVAILABLE;
   if (d == NavigateDirection_Parent) {
-    *out = fragment_of(n->parent);
+    *out = fragment_of(shown_holder(n));
     return S_OK;
   }
   if (d == NavigateDirection_FirstChild || d == NavigateDirection_LastChild) {
-    if (!n->kids.empty()) *out = fragment_of(d == NavigateDirection_FirstChild ? n->kids.front() : n->kids.back());
+    std::vector<int> kids = shown_kids(id);
+    if (!kids.empty()) *out = fragment_of(d == NavigateDirection_FirstChild ? kids.front() : kids.back());
     return S_OK;
   }
-  const Node *p = n->parent ? node_of(n->parent) : nullptr;
-  const std::vector<int> &sibs = p ? p->kids : tops;
+  std::vector<int> sibs = shown_kids(shown_holder(n));
   for (size_t i = 0; i < sibs.size(); i++) {
     if (sibs[i] != id) continue;
     if (d == NavigateDirection_NextSibling && i + 1 < sibs.size()) *out = fragment_of(sibs[i + 1]);
@@ -573,50 +610,76 @@ extern "C" {
 // window, while one listens (not merely one listening somewhere: the app makes its tree each frame only then)
 int32_t mb_host_a11y_on(void) { return asked && UiaClientsAreListening() ? 1 : 0; }
 
-// What the widgets are now (@hostapi.a11y_tree: a11y.mbt's lines): the nodes made anew, the readers told what changed
+// What the widgets are now (@hostapi.a11y_tree: an update of them, a11y.mbt's head: the nodes that changed, each whole,
+// and the focus): kept, one in nothing that holds it gone with what it holds, the readers told what changed
 void mb_host_a11y_tree(moonbit_string_t s) {
   const wchar_t *t = (const wchar_t *)s;
   size_t n = (size_t)Moonbit_array_length(s);
-  std::unordered_map<int, Node> next;
-  std::vector<int> order;
+  bool full = false, head = false;
+  int focus = 0;
+  std::vector<Node> told;
   for (size_t i = 0; i < n;) {
     size_t e = i;
     while (e < n && t[e] != L'\n') e++;
     std::vector<std::wstring> f = fields_of(t + i, e - i);
     i = e + 1;
-    if (f.size() < 16) continue;
+    if (!head) {
+      if (f.size() < 3 || f[0] != L"T") return;
+      head = true, full = f[1] == L"1", focus = (int)number(f[2]);
+      continue;
+    }
+    if (f.size() < 17 || f[0] != L"N") continue;
     Node d;
-    d.id = (int)number(f[0]), d.parent = (int)number(f[1]), d.widget = (int)number(f[2]);
-    d.role = f[3], d.flags = f[4];
-    d.x = number(f[5]), d.y = number(f[6]), d.w = number(f[7]), d.h = number(f[8]);
-    d.label = f[9], d.value = f[10], d.description = f[11];
-    d.range = !f[13].empty();
-    d.low = number(f[12]), d.at = number(f[13]), d.high = number(f[14]);
-    d.actions = f[15];
-    if (!d.id || next.count(d.id)) continue;
-    order.push_back(d.id);
-    next[d.id] = d;
+    d.id = (int)number(f[1]), d.role = f[2], d.flags = f[3];
+    d.x = number(f[4]), d.y = number(f[5]), d.w = number(f[6]), d.h = number(f[7]);
+    d.label = f[8], d.value = f[9], d.description = f[10];
+    d.range = !f[12].empty();
+    d.low = number(f[11]), d.at = number(f[12]), d.high = number(f[13]);
+    d.actions = f[14], d.widget = (int)number(f[15]);
+    for (size_t k = 0; k < f[16].size();) {
+      size_t c = f[16].find(L',', k);
+      if (c == std::wstring::npos) c = f[16].size();
+      d.kids.push_back((int)number(f[16].substr(k, c - k)));
+      k = c + 1;
+    }
+    told.push_back(d);
   }
-  std::vector<int> top;
-  for (int id : order) {
-    Node &d = next[id];
-    auto p = next.find(d.parent);
-    if (d.parent && p != next.end()) p->second.kids.push_back(id);
-    else d.parent = 0, top.push_back(id);
-  }
-  // what changed, as the readers are to hear it
-  bool shape = top != tops || next.size() != nodes.size();
-  int focus = 0;
-  for (int id : order) {
-    const Node &d = next[id];
-    if (d.has(L'f')) focus = id;
-    const Node *was = node_of(id);
-    if (!was || was->parent != d.parent || was->kids != d.kids) shape = true;
-  }
+  if (!head) return;
+  if (full) nodes.clear();
+  // what changed, as the readers are to hear it: each node told as it was, what holds anything otherwise
+  bool shape = full;
   std::unordered_map<int, Node> old;
-  old.swap(nodes);
-  nodes.swap(next);
-  tops.swap(top);
+  std::unordered_map<int, bool> held;
+  std::vector<int> let_go;
+  for (Node &d : told) {
+    for (int k : d.kids) held[k] = true;
+    auto w = nodes.find(d.id);
+    if (w != nodes.end()) {
+      d.parent = w->second.parent;
+      for (int k : w->second.kids)
+        if (std::find(d.kids.begin(), d.kids.end(), k) == d.kids.end()) let_go.push_back(k);
+      if (w->second.kids != d.kids) shape = true;
+      old[d.id] = w->second;
+    } else {
+      shape = true;
+    }
+    nodes[d.id] = d;
+  }
+  for (const Node &d : told)
+    for (int k : d.kids) {
+      auto c = nodes.find(k);
+      if (c != nodes.end()) c->second.parent = d.id;
+    }
+  // (one in nothing told holds: gone, with what it holds)
+  while (!let_go.empty()) {
+    int k = let_go.back();
+    let_go.pop_back();
+    if (held.count(k)) continue;
+    auto w = nodes.find(k);
+    if (w == nodes.end()) continue;
+    let_go.insert(let_go.end(), w->second.kids.begin(), w->second.kids.end());
+    nodes.erase(w);
+  }
   // providers of nodes gone let go (a reader holding one is told it is no more)
   for (auto it = items.begin(); it != items.end();) {
     if (!nodes.count(it->first)) {

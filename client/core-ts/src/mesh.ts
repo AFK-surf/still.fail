@@ -388,7 +388,7 @@ class Control {
         const reason = typeof answer.error === "string" ? answer.error : JSON.stringify(answer.error);
         if (answer.code === "client_upgrade_required") return yield* Effect.fail(new CoreError("client_upgrade_required", reason));
         // A station with a workspace lock that does not know this device yet: it waits to be confirmed (lock.ts).
-        if (answer.code === "lock_unconfirmed") return yield* Effect.fail(new LockUnconfirmed(t("core-logic.mesh.lock_unconfirmed", { reason }), answer.lock ?? null));
+        if (answer.code === "lock_unconfirmed") return yield* Effect.fail(new LockUnconfirmed(t("core-logic.mesh.lock_unconfirmed", { reason }), answer.lock ?? null, answer.person, answer.entries));
         // A station that takes none of this workspace's members for a security mode, its own or this workspace's not
         // brought to it yet (station/src/cloud/state.ts `leftOut`): why, as it said.
         if (answer.code === "lock_station") return yield* Effect.fail(new CoreError("lock_station", lockStationWords(answer.why, reason)));
@@ -403,12 +403,18 @@ class Control {
   }
 }
 
-/// A station's refusal of this device for its workspace lock, with how far its own lock goes (`lock`, as it said).
+/// A station's refusal of this device for its workspace lock, with how far its own lock goes (`lock`, as it said) and
+/// the chains of the person's own lock it keeps (`person`: a device not on it yet finds who may let it in), and the last
+/// entries of its lock (`entries`: one taken out of it hears so).
 export class LockUnconfirmed extends CoreError {
   readonly lock: unknown;
-  constructor(message: string, lock: unknown) {
+  readonly person: unknown;
+  readonly entries: unknown;
+  constructor(message: string, lock: unknown, person?: unknown, entries?: unknown) {
     super("lock_unconfirmed", message);
     this.lock = lock;
+    this.person = person;
+    this.entries = entries;
   }
 }
 
@@ -716,6 +722,9 @@ export class Mesh {
   readonly #atDialling = new Set<string>();
   /// By address: the addresses a dial on the main endpoint was given when it went unanswered (`#dialAll`).
   readonly #unansweredAt = new Map<string, string>();
+  /// The addresses whose one connection on the main endpoint was let go unanswered (`#choose`): the next dial goes on
+  /// each relay's own endpoint beside it (`#dialAll`).
+  readonly #lostMain = new Set<string>();
   /// Dials under way on pinned endpoints (their endpoints are not let go meanwhile).
   #dialing = 0;
   /// By address: the relay requests last moved to (its host), and how many times they moved.
@@ -1341,9 +1350,16 @@ export class Mesh {
         // way the station heard first: a station in WSL with mirrored networking says the Windows machine's own
         // addresses, its answers to the Windows app there going back into WSL; that app's dials waited out
         // CONNECT_TIMEOUT_MS on them for hours while the phone came through a relay (2026-11-03).
-        if (straight.length === 0 || this.#unansweredAt.get(addr) !== straight.join(" ")) return dial;
+        const unanswered = straight.length > 0 && this.#unansweredAt.get(addr) === straight.join(" ");
+        // Its one connection let go for its pings going unanswered: dialled again on each other relay's own endpoint
+        // as well, the requests going on whichever answers. Its path went through a relay that lost half of what went
+        // and took 2–6 s a round trip from where the device is, and iroh dialled it there again: devices in China let
+        // their links to stations in Tokyo go every 15–40 s for an evening, while Shenzhen's relay reached them in
+        // 0.4 s (2026-11-09).
+        const lost = this.#lostMain.delete(addr);
+        if (!unanswered && !lost) return dial;
         main.push(dial);
-        pinned = this.#waysFor(addr).map((r) => this.#dialPinned(addr, r, credentials, fresh, ctx));
+        pinned = (unanswered ? this.#waysFor(addr) : this.#pinnable(addr)).map((r) => this.#dialPinned(addr, r, credentials, fresh, ctx));
       } else {
         pinned = this.#pinnable(addr).map((r) => this.#dialPinned(addr, r, credentials, fresh, ctx));
         // Where the station said (in a run before, perhaps) it is reached straight: dialled beside the relays, not
@@ -1638,10 +1654,12 @@ export class Mesh {
       const best = this.#best(addr, this.#takeable(addr, up.filter((w) => w.link !== cur)));
       if (best !== null) this.#promote(addr, best, "lost");
       else if (cur !== null && mine !== undefined && mine.missed >= DEAD_PINGS && this.#mainOn(addr)) {
-        // Its one connection: the station has not answered on it DEAD_PINGS times (iroh keeps the connection up across
-        // its paths, so this is the station, not the way): let go, and the station dialled anew.
+        // Its one connection: the station has not answered on it DEAD_PINGS times: let go, and the station dialled
+        // anew. iroh keeps the connection up across its paths, but not off one that only loses most of what goes: the
+        // dial goes on each other relay's own endpoint too (`#dialAll`).
         const credentials = cur.credentials;
         this.dropLink(addr);
+        this.#lostMain.add(addr);
         this.#env.runner.fork(Effect.ignore(this.link(addr, credentials, undefined, undefined, "again"), { log: "Unhandled", message: "link opened" }));
       }
       return;
@@ -2282,8 +2300,9 @@ export type MeshWireEnv = {
   off?: (workspace: string) => string[];
   status: (workspace: string) => import("./status.ts").Status;
   /// The workspace lock (views/lock.ts): a station refused this device for it (`theirs`: how far its own lock goes, as
-  /// it said); why a station is not asked now.
-  lockRefused?: (workspace: string, station: string, theirs: unknown) => CoreError | null;
+  /// it said; `told`: the chains of the person's own lock it keeps and the last entries of its lock, as it told them);
+  /// why a station is not asked now.
+  lockRefused?: (workspace: string, station: string, theirs: unknown, told?: { person?: unknown; entries?: unknown }) => CoreError | null;
   lockWaiting?: (workspace: string, station: string) => CoreError | null;
 };
 
@@ -2308,7 +2327,7 @@ export class MeshWire implements StationWire {
     const waits = env.lockWaiting?.(workspace, id);
     if (waits) return Effect.fail(waits);
     // Refused for it: noted (this device asks to be confirmed), and said as the lock has it (which workspace, where).
-    const refusedFor = (e: CoreError) => (e.code === "lock_unconfirmed" ? (env.lockRefused?.(workspace, id, e instanceof LockUnconfirmed ? e.lock : null) ?? e) : e);
+    const refusedFor = (e: CoreError) => (e.code === "lock_unconfirmed" ? (env.lockRefused?.(workspace, id, e instanceof LockUnconfirmed ? e.lock : null, e instanceof LockUnconfirmed ? { person: e.person, entries: e.entries } : undefined) ?? e) : e);
     return Effect.mapError(Effect.gen(function* () {
       const status = env.status(workspace);
       const credentials = env.credentials(workspace);
@@ -2530,7 +2549,7 @@ export function meshWire(inner: Inner): StationWire {
     relays: (workspace) => inner.cloudSync.workspaceRelays(workspace),
     off: (workspace) => inner.cloudSync.workspaceOff(workspace),
     status: (workspace) => inner.workspaces.of(workspace).status,
-    lockRefused: (workspace, station, theirs) => hooks.lockRefused?.(inner, workspace, station, theirs) ?? null,
+    lockRefused: (workspace, station, theirs, told) => hooks.lockRefused?.(inner, workspace, station, theirs, told) ?? null,
     lockWaiting: (workspace, station) => hooks.lockWaiting?.(inner, workspace, station) ?? null,
   });
 }

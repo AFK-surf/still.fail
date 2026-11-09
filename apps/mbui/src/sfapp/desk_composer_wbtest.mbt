@@ -85,7 +85,7 @@ test "desk composer: typed words are the core's draft (composer.text); Enter sen
   t.draw()
   // (with a mouse and nothing focused it says which key brings the cursor there: pressed in its middle)
   t.tap(450.0, 500.0 - 16.0 - 22.0)
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   t.type_text("先看第三项")
   t.frame()
   assert_true(named(calls, "composer.text").length() > 0)
@@ -95,6 +95,31 @@ test "desk composer: typed words are the core's draft (composer.text); Enter sen
   assert_eq(sends.length(), 1)
   assert_eq(text(Some(sends[0].params), "text"), "先看第三项")
   assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").text.get(), "")
+}
+
+///|
+test "desk composer: ⌘Enter 发送 chosen in 快捷键 (prefs sendKey), Enter and ⇧Enter are new lines and ⌘Enter sends; Ctrl+Enter on Windows" {
+  for one in [(0, @ui.mod_cmd), (3, @ui.mod_ctrl)] {
+    let (platform, command) = one
+    let calls : Array[Made] = []
+    let (t, src) = desk_composer_tester(calls, platform~)
+    (src.call)("prefs.set", { "sendKey": "mod" }, fn(_) {  })
+    t.draw()
+    t.tap(450.0, 500.0 - 16.0 - 22.0)
+    assert_true(composer_focused())
+    t.type_text("先看第三项")
+    t.enter()
+    t.key(@ui.key_code_enter, mods=@ui.mod_shift_key)
+    t.type_text("再看第四项")
+    t.frame()
+    assert_eq(named(calls, "chat.send").length(), 0, msg="platform \{platform}")
+    assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").text.get(), "先看第三项\n\n再看第四项")
+    t.key(@ui.key_code_enter, mods=command)
+    t.frame()
+    let sends = named(calls, "chat.send")
+    assert_eq(sends.length(), 1, msg="platform \{platform}")
+    assert_eq(text(Some(sends[0].params), "text"), "先看第三项\n\n再看第四项")
+  }
 }
 
 ///|
@@ -131,7 +156,7 @@ test "desk composer: Enter in a quote's comment keeps the comment and goes back 
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
   assert_eq(w.quotes.get().length(), 1)
   assert_eq(text(Some(w.quotes.get()[0]), "comment"), "这里要对齐")
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   assert_eq(named(calls, "chat.send").length(), 0)
 }
 
@@ -142,11 +167,20 @@ fn desk_words(src : Source) -> String {
 }
 
 ///|
+/// Whether draft `key`'s composer has the keyboard (its field's: Field::focused).
+fn composer_focused(key? : String = "ws1/st1:s-c1") -> Bool {
+  match @sfbase.writings.get(key) {
+    Some(w) => w.field.focused()
+    None => false
+  }
+}
+
+///|
 /// The desk's composer focused (tapped in its middle).
 fn desk_focus(t : @ui.Tester) -> Unit raise {
   t.draw()
   t.tap(450.0, 500.0 - 16.0 - 22.0)
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
 }
 
 ///|
@@ -162,7 +196,7 @@ test "desk composer: `@` and words offer the chats they find over it (ChatRefMen
   t.key(@ui.key_code_down)
   t.key(@ui.key_code_up)
   assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").field.selection(), (5, 5))
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   assert_true(t.find("引用对话") is Some(_))
   t.enter()
   t.frame()
@@ -287,7 +321,7 @@ test "desk composer: words dragged in from another app go into its field: let go
   t.drop_words(fx + 4.0, fy + fh / 2.0, "对话 ID：c1")
   t.frame()
   t.frame()
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   assert_eq(desk_words(src), "对话 ID：c1")
   // on ＋ (the composer opened now), beside the field: at its caret, after them
   let (px, py, pw, ph) = t.query(Button, label=@sf.t("web-main.composer.attach")).unwrap().rect
@@ -806,12 +840,12 @@ test "a finger's tap outside the composer keeps the keyboard until it is put awa
   let (t, _) = desk_composer_tester(calls, pointing=Finger, platform=2)
   t.draw()
   t.tap(450.0, 500.0 - 16.0 - 22.0)
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   t.tap(450.0, 60.0)
   t.draw()
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   t.keyboard_gone()
-  assert_true(!t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(!composer_focused())
 }
 
 ///|
@@ -822,7 +856,7 @@ test "the room a list keeps for the composer opened with one line is as tall as 
     let (t, _) = desk_composer_tester(calls, pointing~, platform~)
     t.draw()
     t.tap(450.0, 500.0 - 16.0 - 22.0)
-    assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+    assert_true(composer_focused())
     // (its box come to its opened shape)
     let opened = t.rest_of("composer")
     if opened > t.time() && opened < @double.infinity {

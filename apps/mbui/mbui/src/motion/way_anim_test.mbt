@@ -22,8 +22,8 @@ fn way_and_anim(
     let a = @motion.anim(c, "a", 0.0)
     kept.val = Some(a)
     let o = open.get()
-    a.follow(if o { 1.0 } else { 0.0 }, if o { in_spec } else { out_spec })
-    seen.push((f(a.get()), f(w.value_at(c.moment()))))
+    a.follow(c, if o { 1.0 } else { 0.0 }, if o { in_spec } else { out_spec })
+    seen.push((f(a.get(c)), f(w.value_at(c.moment()))))
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
   t.frame_at(open_at - 50.0)

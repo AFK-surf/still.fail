@@ -175,6 +175,8 @@ fn writing_cached(src : Source, key : String) -> Writing {
       }
       let topic = src.topic("composer", { "key": Json::string(key) })
       let following = @signals.computed(fn(_) {
+        // (what the core reads of its field's words: its marks, its `@` words, refs.mbt)
+        refs_follow(src, key, state.field)
         @signals.effect(fn() {
           let t = topic.get()
           state.pending.get() |> ignore
@@ -335,6 +337,22 @@ fn writing_act(
     Some(b) => (src.call_bytes)("composer." + what, Json::object(params), b, answered)
     None => (src.call)("composer." + what, Json::object(params), answered)
   }
+}
+
+///|
+/// The core's calls whose answers change only signals (@core.said, as the app starts; a made-up core's the same): the
+/// words of a draft told (`composer.text`: what writing_act does with its answer, `pending` and the version it is at,
+/// read by what follows the draft's topic), where a ref is asked at the caret (`ref.at`: refs_ask_at's, what it found
+/// set with the signals the menu reads). Taken as they come, what read those is built again, nothing else: not a page
+/// whose field had a word typed in it built whole for each.
+pub fn calls_said() -> Array[String] {
+  ["composer.text", "ref.at"]
+}
+
+///|
+/// Whether call `name`'s answer changes only signals (calls_said).
+pub fn call_said(name : String) -> Bool {
+  calls_said().contains(name)
 }
 
 ///|

@@ -35,6 +35,7 @@ pub fn update_reset() -> Unit {
   update.available.set(None)
   update.asked = false
   update_again_n.val = 0
+  update_told.val = -1
   update.checking.set(false)
   update.source = None
   update.said.set(Unsaid)
@@ -757,3 +758,33 @@ let update_going : @ui.Style = @ui.css("w=Full pt=S2")
 /// The bar's room: 6 under it, over the words.
 // kept across runs: a value (no field of it changes)
 let update_bar_room : @ui.Style = @ui.css("w=Full pb=S1_5")
+
+///|
+/// The core's word that a newer build may be out (the `releases` topic's `told`) as last heard (-1: none yet).
+// kept across runs: put back by update_reset
+let update_told : Ref[Int] = Ref(-1)
+
+///|
+/// Asked again each time the core says a newer build may be out (still.fail cloud said a release is out, or its socket
+/// opened again), in every frame beside update_first: the build got ready is the newest, not one heard of before (one
+/// put in as the app quits or while it is away, then another as the newer one asks: 2026-11-09, pengxiao, 「不会用最新
+/// 的版本，而是会连续更新好几次」).
+pub fn update_on_release(c : @ui.Ctx, src : Source) -> Unit {
+  if !update_asks() {
+    return
+  }
+  let v = src.topic("releases", {}).get().value
+  if v is None {
+    return
+  }
+  let told = count(v, "told")
+  if told != update_told.val {
+    c.tell("update-release", fn() {
+      let first = update_told.val < 0
+      update_told.val = told
+      if !first {
+        update_check(src, false)
+      }
+    })
+  }
+}

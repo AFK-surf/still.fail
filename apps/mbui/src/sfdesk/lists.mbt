@@ -215,7 +215,7 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         Failing(words) => side_said(c, words, true)
         Waiting => @sf.waiting(c, fn() { archive_sample(c) })
         Said(words) => side_said(c, words, false)
-        Day(label) => @sf.list_heading(c, label, Side)
+        Day(label) => @sf.list_heading(c, label, side_at())
         Row(it) => archive_side_row(c, src, it, i + 1 < lines.length() && lines[i + 1] is Row(_))
         Foot => side_space(c, @sf.list_foot_in(Side))
       }
@@ -251,7 +251,7 @@ fn archive_search_side(c : @ui.Ctx, gap : Bool) -> Unit {
   let l = t.chat_list
   let (size, line) = c.text_size(Ui)
   c.box(style=if gap { arch_field_box } else { arch_field_alone }, fn() {
-    c.box(style=arch_field.then(@ui.style(h=Fixed(l.band_h), px=@sf.room_of(l.band_pad))), fn() {
+    c.box(style=arch_field.then(@ui.style(h=Fixed(l.band_h), px=@sf.room_of(@sf.band_pad_in(side_at())))), fn() {
       @sf.icon(c, "search", size=l.band_icon, color=t.p.muted) |> ignore
       let r = c.editor(
         "side/archive-q",
@@ -312,7 +312,7 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
     @sf.list_row(
       c,
       id,
-      Side,
+      side_at(),
       0L,
       ground_by=nav_ground_by(c, "side/archived/" + key, c.lit(id) || c.pressed(id), on),
       high=true,
@@ -535,7 +535,7 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     return
   }
   c.box(style=todo_box, fn() {
-    if band_row(c, "side/attention", wide.attention_open.get(), fn() {
+    band_row(c, "side/attention", wide.attention_open.get(), fn() {
         band_mark(c, "bell", t.p.muted)
         band_words(c, @sf.t("web-main.attention.entry"))
         c.box(style=todo_slot, fn() {
@@ -544,9 +544,7 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           }
         })
         |> ignore
-      }) {
-      attention_set(!wide.attention_open.get())
-    }
+      }, at=side_at(), on_press=fn() { attention_set(!wide.attention_open.get()) })
   })
   |> ignore
 }

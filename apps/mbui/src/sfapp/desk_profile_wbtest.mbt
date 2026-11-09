@@ -1,4 +1,4 @@
-// Adding a profile on the desktop (sfdesk add_profile.mbt), a secret's page, a place's first,
+// Adding a profile on the desktop (sfpages new_profile.mbt, a wide page), a secret's page, a place's first,
 // over the whole app and the settings' fixture (a profile's own page: src/sfpages accounts_wbtest.mbt).
 
 ///|

@@ -24,6 +24,9 @@ extern "js" fn js_request_frame() -> Unit =
 extern "js" fn js_wake_after(ms : Double) -> Unit =
   #|(ms) => globalThis.__mbhost && globalThis.__mbhost.wakeAfter(ms)
 
+extern "js" fn js_frames_paced(hz : Double) -> Unit =
+  #|(hz) => globalThis.__mbhost && globalThis.__mbhost.framesPaced && globalThis.__mbhost.framesPaced(hz)
+
 extern "js" fn js_font_metrics(
   size : Double,
   weight : Int,
@@ -217,6 +220,13 @@ fn platform() -> Int {
 ///|
 fn request_frame() -> Unit {
   js_request_frame()
+}
+
+///|
+/// The frame asked for what moves on by the clock needs only `hz` frames a second (@hostapi.frames_paced): a browser's
+/// host that says nothing of it draws the next animation frame.
+fn frames_paced(hz : Double) -> Unit {
+  js_frames_paced(hz)
 }
 
 ///|
@@ -1245,6 +1255,13 @@ fn full_screen() -> Bool {
 ///|
 fn set_full_screen(on : Bool) -> Unit {
   ignore(on)
+}
+
+///|
+/// A browser's page: no window's buttons in it.
+fn window_buttons_down(by : Double, ms : Double) -> Unit {
+  ignore(by)
+  ignore(ms)
 }
 
 ///|

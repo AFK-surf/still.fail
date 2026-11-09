@@ -220,8 +220,8 @@ fn since_words(now : Double, at : Double) -> String {
 }
 
 ///|
-/// A row of a size (SizeRow): what, a line under it, its size; tapped when `key` is given; `piece`: a piece of its card
-/// (list_row).
+/// A row of a size (SizeRow): what, a line under it, its size; tapped when `key` is given (`on_press`: what tapping it
+/// does); `piece`: a piece of its card (list_row).
 fn size_row(
   c : @ui.Ctx,
   key : String,
@@ -230,9 +230,10 @@ fn size_row(
   size : Double,
   more? : Bool = false,
   piece? : (Bool, Bool),
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = @sf.theme()
-  list_row(c, key~, piece?, fn() {
+  list_row(c, key~, piece?, on_press?, fn() {
     // its size and chevron by its title, what it holds under them as wide as the row
     row_lines(c, title, sub, end=fn() {
       c.text(size_words(size), size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
@@ -299,9 +300,9 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
             } else {
               fill("web-main.usage.showAll", [("n", chats.length().to_string())])
             }
-            if list_row(c, key="kept-chats-all", piece=(false, true), fn() { row_title(c, words, color=t.p.muted) }) {
+            list_row(c, key="kept-chats-all", piece=(false, true), fn() { row_title(c, words, color=t.p.muted) }, on_press=fn() {
               kept_all.set(!all)
-            }
+            })
           })
         }
       }
@@ -309,7 +310,7 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
       if total > 0.0 {
         blocks.push(fn() {
           list_card(c, fn() {
-            if list_row(c, key="kept-all", fn() { row_title(c, tr("android-settings.files.clearAll"), color=t.p.red) }) {
+            list_row(c, key="kept-all", fn() { row_title(c, tr("android-settings.files.clearAll"), color=t.p.red) }, on_press=fn() {
               confirm(
                 tr("android-settings.files.clearAll.title"),
                 fill("android-settings.files.clearAll.text", [("size", size_words(total))]),
@@ -327,7 +328,7 @@ fn kept_page(c : @ui.Ctx, core : Core) -> Unit {
                   }
                 },
               )
-            }
+            })
           })
         })
       }
@@ -407,14 +408,16 @@ fn kept_parts(c : @ui.Ctx, core : Core, chats : Array[Json], loose : Array[Json]
             }
           })
           |> ignore
-          if id != 0 && hit(c, id) {
-            if what == "drive" {
-              confirm(tr("android-settings.files.drive"), tr("android-settings.files.drive.text"), tr("android-settings.files.clear.action"), danger=true, fn() {
-                (core.call)("drive.kept.clear", obj([]), fn(_) { kept.asked.set(kept.asked.get() + 1)})
-              })
-            } else {
-              (core.push)(KeptChat("", -1))
-            }
+          if id != 0 {
+            c.on_press(id, fn() {
+              if what == "drive" {
+                confirm(tr("android-settings.files.drive"), tr("android-settings.files.drive.text"), tr("android-settings.files.clear.action"), danger=true, fn() {
+                  (core.call)("drive.kept.clear", obj([]), fn(_) { kept.asked.set(kept.asked.get() + 1)})
+                })
+              } else {
+                (core.push)(KeptChat("", -1))
+              }
+            })
           }
         }
       })
@@ -444,14 +447,14 @@ fn kept_chat_row(c : @ui.Ctx, core : Core, x : Json, piece : (Bool, Bool)) -> Un
     ])
   }
   let key = "kept/" + text(xv, "station") + "/" + count(xv, "thread").to_string()
-  if list_row(c, key~, piece~, fn() {
-      row_lines(c, title, sub, end=fn() {
-        c.text(size_words(size), style=fill_size_words) |> ignore
-        chevron(c)
-      })
-    }) {
+  list_row(c, key~, piece~, fn() {
+    row_lines(c, title, sub, end=fn() {
+      c.text(size_words(size), style=fill_size_words) |> ignore
+      chevron(c)
+    })
+  }, on_press=fn() {
     (core.push)(KeptChat(text(xv, "station"), count(xv, "thread")))
-  }
+  })
 }
 
 ///|
@@ -553,12 +556,12 @@ fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
       }
       if on {
         let id = c.id("kept-fill-max")
-        if list_row(c, key="kept-fill-max", fn() {
-            row_lines(c, tr("android-settings.files.fill.max"), tr("android-settings.files.fill.max.sub"), end=fn() {
-              c.text(size_said(most), style=fill_size_words) |> ignore
-              chevron(c)
-            })
-          }) {
+        list_row(c, key="kept-fill-max", fn() {
+          row_lines(c, tr("android-settings.files.fill.max"), tr("android-settings.files.fill.max.sub"), end=fn() {
+            c.text(size_said(most), style=fill_size_words) |> ignore
+            chevron(c)
+          })
+        }, on_press=fn() {
           let choices = fill_sizes.map(fn(n) { @sf.choice(n.to_string(), size_said(n)) })
           @sf.pick(
             tr("android-settings.files.fill.max"),
@@ -570,7 +573,7 @@ fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
             },
             from=Of(id),
           )
-        }
+        })
       }
     })
   })
@@ -591,11 +594,11 @@ fn fill_blocks(c : @ui.Ctx, core : Core, blocks : Array[() -> Unit]) -> Unit {
     })
   }
   blocks.push(fn() {
-    if list_row(c, key="kept-fill-stop-all", piece=(false, true), fn() {
-        row_title(c, tr("android-settings.files.fill.stopAll"), color=t.p.red)
-      }) {
+    list_row(c, key="kept-fill-stop-all", piece=(false, true), fn() {
+      row_title(c, tr("android-settings.files.fill.stopAll"), color=t.p.red)
+    }, on_press=fn() {
       (core.call)("fill.stopAll", obj([]), fn(_) {  })
-    }
+    })
   })
 }
 
@@ -639,9 +642,9 @@ fn kept_file_row(c : @ui.Ctx, core : Core, station : String, f : Json, piece : (
         @motion.ripple(c, id, 18.0)
       })
       c.semantics(b, Button, id~, label=tr("android-settings.files.clear.action") + "「" + name + "」")
-      if hit(c, id) {
+      c.on_press(id, fn() {
         kept_file_clear(core, station, f)
-      }
+      })
     })
   })
   |> ignore
@@ -686,13 +689,13 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
     if chat is Some(_) {
       blocks.push(fn() {
         list_card(c, fn() {
-          if size_row(c, if messages > 0.0 { "kept-messages" } else { "" }, tr("android-settings.files.messages"), tr("android-settings.files.messages.text"), messages) {
+          size_row(c, if messages > 0.0 { "kept-messages" } else { "" }, tr("android-settings.files.messages"), tr("android-settings.files.messages.text"), messages, on_press=fn() {
             confirm(tr("android-settings.files.messages"), tr("android-settings.files.messages.clear"), tr("android-settings.files.clear.action"), danger=true, fn() {
               (core.call)("cache.clear", obj([("station", str(station)), ("thread", Json::number(thread.to_double()))]), fn(_) {
                 kept.asked.set(kept.asked.get() + 1)
               })
             })
-          }
+          })
         })
       })
     }
@@ -715,7 +718,7 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
     if all > 0.0 {
       blocks.push(fn() {
         list_card(c, fn() {
-          if list_row(c, key="kept-chat-all", fn() { row_title(c, tr("android-settings.files.clearChat"), color=t.p.red) }) {
+          list_row(c, key="kept-chat-all", fn() { row_title(c, tr("android-settings.files.clearChat"), color=t.p.red) }, on_press=fn() {
             confirm(
               tr("android-settings.files.clearChat"),
               fill("android-settings.files.clearChat.text", [("size", size_words(all))]),
@@ -723,7 +726,7 @@ fn kept_chat_page(c : @ui.Ctx, core : Core, station : String, thread : Int) -> U
               danger=true,
               clear,
             )
-          }
+          })
         })
       })
     }

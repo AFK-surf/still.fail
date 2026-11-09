@@ -129,6 +129,11 @@ fn setting_made(p : @view.View, src : Source, route : @settings.Route, width : (
     UsagePrices(days) => usage_prices_node(p, core, here, days, on_back=core.pop, frame~, width~)
     Workspace => workspace_node(p, core, here, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
     VaultItems => vault_items_node(p, core, here, on_back=core.pop, frame~, width~)
+    Connects(only) => connects_node(p, src, core, here, only, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
+    Connect(station, id) => connect_node(p, src, core, here, station, id, on_back=core.pop, frame~, stint=fn() { 0 }, width~)
+    Profile(a, id) => profile_node(p, core, here, a, id, on_back=core.pop, frame~, width~)
+    NewProfile(a) => new_profile_node(p, core, here, a, on_back=core.pop, frame~, width~)
+    Station(a) => station_node(p, core, here, a, on_back=core.pop, frame~, width~)
     // (the pages opened from them not made once yet: their old view, hosted)
     _ =>
       @ui.old(p, fn(c) {
@@ -153,10 +158,6 @@ fn setting_alone(c : @ui.Ctx, src : Source, route : @settings.Route) -> Unit {
     Me => me_page(c, core, here, frame)
     Vault => vault_page(c, core, here, frame)
     VaultItem(v, item) => vault_item_page(c, core, here, frame, v, item)
-    Connects(only) => connects_page(c, src, core, here, frame, only)
-    Connect(station, id) => connect_page(c, src, core, here, frame, station, id)
-    Station(a) => station_page(c, core, here, frame, a)
-    Profile(a, id) => profile_page(c, core, here, frame, a, id)
     _ => ()
   }
 }

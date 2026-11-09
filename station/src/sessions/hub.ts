@@ -38,7 +38,7 @@ import type { RecentChatList } from "../store/chat-list.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
 import { Places } from "../ops/places.ts";
-import { threadCommand } from "./args.ts";
+import { threadCommand, type Args } from "./args.ts";
 import type { CardPage } from "../logins/index.ts";
 import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ModelChoice, Person, ThreadRef } from "./chat.ts";
 import { toolStatus } from "./chat.ts";
@@ -50,7 +50,7 @@ import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
 import { Presets, RepoIndex } from "./presets.ts";
 import { type Roots, roots as machineRoots } from "../read/machine.ts";
-import { carrySubagents, goesAfresh, startsAfresh, toldCleared, toldResumeLost } from "./afresh.ts";
+import { carrySubagents, goesAfresh, startsAfresh, toldCleared, toldLongChat, toldResumeLost } from "./afresh.ts";
 import { serves } from "./pool.ts";
 import { settled } from "./opened.ts";
 import { untitledChat } from "./titles.ts";
@@ -228,6 +228,10 @@ export class Hub {
   /// Conversations a chat was relayed to whose agent has not posted there yet, by thread: the session and the station's
   /// first message there, which that post goes into (relay.ts). Kept in memory: after a restart it is a reply.
   readonly openings = new Map<number, { session: string; ts: string; claimed?: boolean }>();
+  /// Posts chat_post held back because messages the agent had not read came in their thread first (conversations.ts),
+  /// by session and then by id, until it sends them with send or the station restarts.
+  readonly heldPosts = new Map<string, Map<string, Args>>();
+  heldCount = 0;
   /// One incoming message or edit at a time per thread: Slack also sends a mention twice (app_mention and message).
   readonly gates = new Map<string, { tail: Promise<{ error: unknown } | null>; waiting: number }>();
   private readonly incoming = new AbortController();
@@ -988,6 +992,14 @@ export class Hub {
     for (const actor of [...this.actors.values()]) void actor.changed(true).catch(() => {});
   }
 
+  /// A runtime updated here (from the pages): the processes of its sessions still run the old executable, which the
+  /// service may refuse from then on (a model a version before does not support), so each ends now if idle, else before
+  /// its next turn, and the next starts on the new one, resuming. Codex's app-servers are its driver's (codex.ts
+  /// `runtimeChanged`).
+  runtimeUpdated(runtime: RuntimeKind) {
+    for (const actor of [...this.actors.values()]) if (actor.runtime === runtime) void actor.changed(true).catch(() => {});
+  }
+
   /// A profile was deleted: the sessions on it are taken on by another of their runtime's (their process ends now if
   /// idle, else when its turn is over); those no other profile can run are stopped, and their process ends.
   async profileGone(id: string) {
@@ -1334,6 +1346,7 @@ export class Hub {
       cleared: (key, readBack) => toldCleared(this, key, readBack),
       coldAfresh: (key, now) => goesAfresh(this, key, now),
       resumeLost: (key) => toldResumeLost(this, key),
+      longChat: (key) => toldLongChat(this, key),
       carrySubagents: (from, to, on, ids) => carrySubagents(this, from, to, on, ids),
       ranIn: (key, id, profile) => this.store.ranIn(key, id, profile),
       idle: (key) => this.idleNow(key),

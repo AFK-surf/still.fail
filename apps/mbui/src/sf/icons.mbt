@@ -23,6 +23,11 @@ struct DrawnShapes {
 let icons_made : Map[(String, Double, Int64), DrawnShapes] = {}
 
 ///|
+/// Icons' parts drawn, by name, parts, size and ink (`icon_parts_shapes`): what breathes or lights in steps drawn in
+/// each step's ink found again, not cut from the icon's numbers anew each step.
+let parts_made : Map[(String, Array[Int], Double, Int64), Array[@ui.Shape]] = {}
+
+///|
 /// The pictures drawn, by key, width, scale and tint (picture.mbt draw_drawable), as icons_made.
 let pictures_made : Map[(String, Double, Double, Int64?), DrawnShapes] = {}
 
@@ -34,6 +39,7 @@ fn init {
     made.clear()
     shapes_made.clear()
     icons_made.clear()
+    parts_made.clear()
     pictures_made.clear()
     tiles_made.clear()
     copied_at.clear()
@@ -110,8 +116,8 @@ pub fn play_mark(c : @ui.Ctx, side : Double, shade : @ui.Color) -> Int {
 /// A video's capsule over its picture, in its foot's start corner concentric with its `corner` (a message's file's: the
 /// chat's media tiles' and a message's video's; a quote's picture's): a small play mark and how long it is (`duration`, none where that is
 /// not known) on the video's shade. `coming`: how far the core has brought it here, a ring of that share and the share
-/// in words in their place, the one going out before the other comes in (words never over words) as the capsule
-/// changes its width with them over dur_ms. `key` names
+/// in words in their place, the one going out before the other comes in (words never over words), each over half of
+/// dur_ms, as the capsule changes its width between them on a Move as long as that is far. `key` names
 /// its motion. Nothing else over the picture: what it shows is the picture (the user, 2026-11-01: a band with its name
 /// and a play mark in its middle left little of a wide one to see).
 pub fn video_capsule(
@@ -128,7 +134,6 @@ pub fn video_capsule(
     }
     None => video_capsule_last.get(key).unwrap_or(0.0)
   }
-  let k = @motion.animate(c, key, if coming is Some(_) { 1.0 } else { 0.0 }, spec=@motion.tween(dur_ms, ease=Out))
   let length = if duration > 0.0 { clock(duration) } else { "" }
   let share = "\{(dmin(1.0, dmax(0.0, part)) * 100.0).floor().to_int()}%"
   let gap = @ui.Space::px(S1)
@@ -138,10 +143,21 @@ pub fn video_capsule(
     if length != "" { [video_capsule_mark, gap, end, end] } else { [video_capsule_mark, end, end] },
   )
   let share_w = c.fitting_width(c.words_across(share, video_capsule_words), [video_capsule_ring, gap, end, end])
-  // The wider label needs all of its room until it has faded out, and before it fades in. The capsule can change
-  // width during the other half, while the shorter label is showing, without cutting either label on the way.
-  let width_way = if length_w >= share_w { dmax(0.0, 2.0 * k - 1.0) } else { dmin(1.0, 2.0 * k) }
-  let across = length_w + (share_w - length_w) * @ui.Ease::Move.at(width_way)
+  // The wider label needs all of its room until it has faded out, and before it fades in. The capsule changes width
+  // while the shorter label is showing, without cutting either label on the way: laid out as wide as it ends at once,
+  // its ground reshaped there from the width it was drawn (@motion.reshape), on a Move as long as its way is far. Going
+  // to the wider, the ground goes at once and the wider label comes in once it is there; going to the narrower, the
+  // wider label goes first and the ground after it. Each label laid out as wide as it needs, whatever the capsule's
+  // width, faded over half of dur_ms (told as it is built, read as it is drawn), built while it shows or till its
+  // fade's declared end: never both seen.
+  let shown = coming is Some(_)
+  let to_wider = shown == (share_w > length_w)
+  let half = dur_ms / 2.0
+  let comes_at = if to_wider { dmax(half, @ui.move_ms((share_w - length_w).abs())) } else { half }
+  let fade = fn(on : Bool) { @motion.tween(half, ease=Out, delay=if on { comes_at } else { 0.0 }) }
+  let length_k = @motion.told(c, key + "/length", if shown { 0.0 } else { 1.0 }, spec=fade(!shown))
+  let share_k = @motion.told(c, key + "/share", if shown { 1.0 } else { 0.0 }, spec=fade(shown))
+  let reshape = if to_wider { @motion.move() } else { @motion.move(delay=half) }
   c.layer(fn() {
     let foot = if corner == message_file_corner {
       video_capsule_foot
@@ -149,28 +165,60 @@ pub fn video_capsule(
       video_capsule_foot.then(@ui.style(p=room_of(capsule_fit(corner, video_capsule_h, video_capsule_alone_in))))
     }
     c.box(style=foot, fn() {
-      c.box(style=video_capsule_box.then(@ui.style(w=Fixed(across))), fn() {
-        if k < 0.5 {
-          let l = c.box(style=video_capsule_row, fn() {
-            icon(c, "play", size=video_capsule_mark, color=white) |> ignore
-            if length != "" {
-              c.text(length, style=video_capsule_words) |> ignore
-            }
-          })
-          c.look(l, @ui.look(alpha=1.0 - 2.0 * k))
-        }
-        if k > 0.5 {
+      let b = c.box(style=video_capsule_box.then(@ui.style(w=Fixed(if shown { share_w } else { length_w }))), fn() {
+        if !shown || !length_k.over(c) {
           c.layer(fn() {
-            c.box(style=video_capsule_over, fn() {
-              let r = c.box(style=video_capsule_row, fn() {
-                progress_ring(c, video_capsule_ring, part, white) |> ignore
-                c.text(share, style=video_capsule_words) |> ignore
+            c.box(style=video_capsule_over.then(@ui.style(w=Fixed(length_w))), fn() {
+              let l = c.box(style=video_capsule_row, fn() {
+                icon(c, "play", size=video_capsule_mark, color=white) |> ignore
+                if length != "" {
+                  c.text(length, style=video_capsule_words) |> ignore
+                }
               })
-              c.look(r, @ui.look(alpha=2.0 * k - 1.0))
+              c.look_by(l, fn() { @ui.look(alpha=length_k.get(c)) })
             })
             |> ignore
           })
           |> ignore
+        }
+        if shown || !share_k.over(c) {
+          c.layer(fn() {
+            c.box(style=video_capsule_over.then(@ui.style(w=Fixed(share_w))), fn() {
+              let r = c.box(style=video_capsule_row, fn() {
+                progress_ring(c, video_capsule_ring, part, white) |> ignore
+                c.text(share, style=video_capsule_words) |> ignore
+              })
+              c.look_by(r, fn() { @ui.look(alpha=share_k.get(c)) })
+            })
+            |> ignore
+          })
+          |> ignore
+        }
+      })
+      @motion.reshape(c, b, "video-capsule/" + key, by=key + (if shown { "/share" } else { "/length" }), spec=reshape)
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A video's capsule (video_capsule's, as a node, at rest: nothing coming) laid over `parent`, in its foot's start corner
+/// concentric with a message's file's: a small play mark and how long it is (`duration`, none where that is not known)
+/// on the video's shade.
+#callsite(autofill(loc))
+pub fn video_capsule_node(parent : @view.View, duration : Double, loc~ : SourceLoc) -> Unit {
+  let length = if duration > 0.0 { clock(duration) } else { "" }
+  parent.box(made_for=loc, fn(foot) {
+    foot.over(Is(true)) |> ignore
+    style_node(foot, fn() { video_capsule_foot })
+    foot.box(fn(b) {
+      style_node(b, fn() { video_capsule_box })
+      b.box(fn(row) {
+        style_node(row, fn() { video_capsule_row })
+        icon_node(row, "play", video_capsule_mark, Is(white)) |> ignore
+        if length != "" {
+          words_node(row, fn() { length }, fn() { video_capsule_words }) |> ignore
         }
       })
       |> ignore
@@ -251,6 +299,27 @@ pub fn icon_parts(c : @ui.Ctx, name : String, parts : Array[Int], size? : Double
     }
   }
   c.shapes(shapes, w=Px(size), h=Px(size), name="sf/" + key)
+}
+
+///|
+/// Of icon `name`, its parts `parts` `size` across in `ink` (none where there is no such icon): made once for each, the
+/// same shapes after (which no one changes). Past 256 of them all go, to be made again as they are asked for.
+fn icon_parts_shapes(name : String, parts : Array[Int], size : Double, ink : Int64) -> Array[@ui.Shape] {
+  let key = (name, parts, size, ink)
+  match parts_made.get(key) {
+    Some(s) => s
+    None => {
+      let s = match icon_numbers(name) {
+        Some(d) => icon_shapes(icon_data_parts(d, parts), size / 24.0, ink)
+        None => []
+      }
+      if parts_made.length() >= 256 {
+        parts_made.clear()
+      }
+      parts_made[(name, parts.copy(), size, ink)] = s
+      s
+    }
+  }
 }
 
 ///|

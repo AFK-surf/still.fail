@@ -202,8 +202,8 @@ pub fn[P] nav_flat_view(
       },
       fn(moving) { if moving { nav.settle() } },
     )
-    s.each(fn() { seen.get().keys }, fn(k) { k }, fn(pv, serial) {
-      let k = @signals.untracked(fn() { serial.get() })
+    s.each(at_once=true, fn() { seen.get().keys }, fn(k) { k }, fn(pv, serial) {
+      let k = serial.untracked()
       held[k] = true
       let entry = match nav.entry(k) {
         Some(e) => Some(e)
@@ -240,6 +240,7 @@ pub fn[P] nav_flat_view(
       // `kinds`, never the half between a change and its owner's keeping), its nodes made once, as it first shows, and
       // kept while it is held, laid out nowhere while it does not show: as nav_view's)
       pv.pick(
+        at_once=true,
         fn() {
           let st = seen.get()
           match st.keys.search(k) {
@@ -254,6 +255,7 @@ pub fn[P] nav_flat_view(
             Some((e, Some((_, f)))) if kind != "" => {
               let shown = Ref(false)
               pb.show(
+                at_once=true,
                 fn() {
                   if shows() {
                     shown.val = true
@@ -273,7 +275,7 @@ pub fn[P] nav_flat_view(
               )
             }
             _ =>
-              pb.show(shows, fn(b) {
+              pb.show(at_once=true, shows, fn(b) {
                 b.grow(Is(1.0)) |> ignore
                 let draw_page = draw_for(b)
                 let key = fn() {

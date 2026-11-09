@@ -423,7 +423,6 @@
   "core-views.usage.prices.model_unpriced": "{model}（未计价）",
   "core-views.usage.prices.offline": "station 离线，无法读取价目",
   "core-views.usage.prices.output": "输出",
-  "core-views.usage.prices.unit": "美元 / 100 万 token",
   "core-views.usage.tile.same": "持平",
   "core-views.usage.tile.versus": "比前 {n} 天",
   "core-views.usage.period": "近 {n} 天",

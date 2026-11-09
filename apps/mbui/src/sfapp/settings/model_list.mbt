@@ -105,7 +105,7 @@ fn model_list(
           // it is: at half it was 1.9 to 1, mbui ui/contrast.mbt)
           let faint = text(mv, "availability") == "borrowable" && !is_on
           let from = field(mv, "fromStation")
-          if @sf.choice_row(c, key + "/" + model, is_on, text(mv, "name"), ink=if faint { t.p.muted } else { t.p.text }, lead=fn() { @sf.maker_mark(c, text(field(mv, "maker"), "id"), runtime, 18.0) |> ignore }, tag?=match from {
+          @sf.choice_row(c, key + "/" + model, is_on, text(mv, "name"), ink=if faint { t.p.muted } else { t.p.text }, lead=fn() { @sf.maker_mark(c, text(field(mv, "maker"), "id"), runtime, 18.0) |> ignore }, tag?=match from {
                 Some(Object(_)) =>
                   Some(fn() {
                     if @sf.has_station_mark(text(from, "emoji"), text(from, "icon")) {
@@ -115,9 +115,9 @@ fn model_list(
                     }
                   })
                 _ => None
-              }) {
-            on_pick(model)
-          }
+              },
+            on_press=fn() { on_pick(model) },
+          )
         })
       }
     }

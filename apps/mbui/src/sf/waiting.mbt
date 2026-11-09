@@ -35,23 +35,33 @@ pub fn done_waiting(c : @ui.Ctx, key : String) -> Unit {
 /// each frame is drawn, never built anew for it (Ctx::cycle_look); still and whole when what it waits on failed (the
 /// red words over them say so: faded, they were drawn too faint to be seen, mbui ui/contrast.mbt). `resident`: a
 /// state's for as long as it lasts (a service restarting), on the one clock's steps, not a wait's (Ctx::cycle).
-/// `share`: how much of its breath it takes (0 … 1), what stops waiting going back to whole over a while, not at once.
+/// `share`: how much of its breath it takes (0 … 1; all of it where not said), what stops waiting going back to whole
+/// over a while, not at once: read as it is drawn, as the breath is; breathing till its way to none has come to its
+/// declared end.
 pub fn breathe(
   c : @ui.Ctx,
   node : Int,
   failed? : Bool = false,
   low? : Double = 0.5,
   resident? : Bool = false,
-  share? : Double = 1.0,
+  share? : @motion.Anim,
 ) -> Unit {
-  if failed || share <= 0.0 {
+  if failed {
     return
+  }
+  match share {
+    Some(s) if s.target() <= 0.0 && s.over(c) => return
+    _ => ()
   }
   c.cycle_look(
     node,
     breath_ms,
     fn(f) {
       let way = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
+      let share = match share {
+        Some(s) => dmax(0.0, s.get(c))
+        None => 1.0
+      }
       @ui.look(alpha=1.0 - (1.0 - low) * share * @ui.Ease::InOut.at(way))
     },
     resident~,
@@ -190,6 +200,7 @@ pub fn spinner(
 /// (View::lines, in the theme's colours as they change, or `ring` and `arc`'s), turned by the clock about the middle of
 /// what its pieces cover as each frame is drawn (View::cycle, View::turn): nothing made again for it while it turns; its turning let go with it.
 /// The node.
+#callsite(autofill(loc))
 pub fn spinner_node(
   parent : @view.View,
   size? : Double = 14.0,
@@ -198,6 +209,7 @@ pub fn spinner_node(
   arc? : () -> Int64,
   sweep? : Double = 0.25,
   period? : Double = spinner_turn_ms,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let pi = 3.141592653589793
   let mid = size / 2.0
@@ -207,7 +219,7 @@ pub fn spinner_node(
   // (its points worked out once: only its colours change as it lives)
   let round = @ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi)
   let part = @ui.arc(mid, mid, r, from=-0.75 * pi, sweep=sweep * 2.0 * pi)
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     v
     .width(Is(Some(size)))
     .height(Is(Some(size)))
@@ -437,9 +449,10 @@ let wait_pills : @ui.Style = @ui.css("w=Full px=S5 pt=S3_5 pb=S1 gap=S2 align=AC
 /// A wait as nodes of the window's tree (wait_line's): nothing for a moment but its room, 18 high (later_ms from as it
 /// is made: a wait that ends sooner shows none), then a spinner and `words` in the muted ink, 8 apart, as high as they
 /// are (wait_words: the Ui size, L5's line, both as the system's size of words makes them).
-pub fn wait_line_node(parent : @view.View, words : () -> String) -> @view.View {
+#callsite(autofill(loc))
+pub fn wait_line_node(parent : @view.View, words : () -> String, loc~ : SourceLoc) -> @view.View {
   let long = @signals.signal(false)
-  parent.box(fn(l) {
+  parent.box(made_for=loc, fn(l) {
     l
     .row(Is(true))
     .gap(Is(8.0))
@@ -473,12 +486,14 @@ pub fn wait_line_node(parent : @view.View, words : () -> String) -> @view.View {
 /// failing), each in a pill, at once; what it waits on (`note`'s words, where it says any) said only to a screen reader,
 /// while it is read. `fill`: it takes the room left (a page's body). Made inside what is in its bones already: only its
 /// sample, breathing as that does (one breath).
+#callsite(autofill(loc))
 pub fn waiting_node(
   parent : @view.View,
   sample : (@view.View) -> Unit,
   error? : () -> String = fn() { "" },
   note? : () -> WaitNote = fn() { { reading: true, text: "", failing: [] } },
   fill? : Bool = false,
+  loc~ : SourceLoc,
 ) -> Unit {
   if parent.in_bones() {
     sample(parent)
@@ -490,7 +505,7 @@ pub fn waiting_node(
     out + note().failing
   }
   let reading = fn() { error() == "" && note().reading }
-  parent.box(fn(w) {
+  parent.box(made_for=loc, fn(w) {
     w.min_width(Is(Some(0.0))) |> ignore
     if fill {
       w.grow(Is(1.0)) |> ignore
@@ -554,8 +569,9 @@ let wait_pills_gap : Double = 8.0
 ///|
 /// What could not be read, in a grey capsule, in red at once (wait_pill's `error`, as a node): its words 12 on 18,
 /// 12 and 6 in.
-fn wait_pill_node(parent : @view.View, words : () -> String) -> Unit {
-  parent.box(fn(p) {
+#callsite(autofill(loc))
+fn wait_pill_node(parent : @view.View, words : () -> String, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(p) {
     p
     .row(Is(true))
     .padding(Is((12.0, 6.0, 12.0, 6.0)))

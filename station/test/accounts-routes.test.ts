@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { Accounts, type AccountsDeps } from "../src/accounts/index.ts";
 import { checkConfig } from "../src/accounts/check.ts";
 import { MachineLogins } from "../src/accounts/machine.ts";
-import { OUTDATED } from "../src/accounts/models.ts";
+import { learn } from "../src/accounts/catalog.ts";
 import { routes } from "../src/api/routes/accounts.ts";
 import { overview } from "../src/api/overview.ts";
 import type { Request } from "../src/api/request.ts";
@@ -385,7 +385,7 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
-  test("known outdated models are unchecked once when the station starts; one checked again by hand stays", async () => {
+  test("outdated models are unchecked once when the station starts; one checked again by hand stays", async () => {
     const data = temp("outdated");
     writeFileSync(
       join(data, "config.json"),
@@ -396,12 +396,51 @@ describe("the accounts routes", { concurrency: true }, () => {
     store.setProfileCheck("cc", { state: "ok", detail: "", models: ["claude-opus-4-6", "claude-opus-5-5", "claude-sonnet-5-5"], checkedAt: 1 });
     const first = await rig({ data, store });
     assert.deepEqual(first.profile("cc")!.named, ["claude-sonnet-5-5", "claude-opus-5-5"]);
-    assert.deepEqual(JSON.parse(readFileSync(first.path, "utf8")).outdatedUnchecked, [...OUTDATED.keys()].sort());
+    assert.deepEqual(JSON.parse(readFileSync(first.path, "utf8")).outdatedUnchecked, ["claude-opus-4-6"]);
     assert.equal((await first.call("PUT", "/profiles/cc", { models: ["claude-opus-4-6", "claude-opus-5-5"] }))[0], 200);
     await first.close();
     const again = await rig({ data, store: Store.open(db, null) });
     assert.deepEqual(again.profile("cc")!.named, ["claude-opus-4-6", "claude-opus-5-5"]);
     await again.close();
+  });
+
+  test("a model new in the catalog has its maker's profiles checked again, and replaces the one before it", async () => {
+    const data = temp("new-model");
+    writeFileSync(
+      join(data, "config.json"),
+      JSON.stringify({
+        profiles: [
+          { id: "cc", runtime: "claude", access: { kind: "subscription" }, home: "homes/cc", models: ["claude-fable-5-1", "claude-opus-5-5"] },
+          { id: "cx", runtime: "codex", access: { kind: "subscription" }, home: "homes/cx", models: ["gpt-6.1-sol"] },
+        ],
+      }),
+    );
+    const store = Store.open(join(data, "stillfail.db"), null);
+    store.setProfileCheck("cc", { state: "ok", detail: "", models: ["claude-fable-5-1", "claude-opus-5-5"], checkedAt: 1 });
+    store.setProfileCheck("cx", { state: "ok", detail: "", models: ["gpt-6.1-sol"], checkedAt: 1 });
+    const checked: string[] = [];
+    const t = await rig({
+      data,
+      store,
+      check: async (o) => {
+        checked.push(o.runtime);
+        return { state: "ok", detail: "fake", models: o.runtime === "claude" ? ["claude-fable-5-2", "claude-fable-5-1", "claude-opus-5-5"] : ["gpt-6.1-sol"], checkedAt: 0 };
+      },
+    });
+    try {
+      learn({ "claude-fable-5-2": { maker: "anthropic" }, "claude-fable-5-1": { maker: "anthropic" }, "claude-opus-5-5": { maker: "anthropic" }, "gpt-6.1-sol": { maker: "openai" } });
+      // A maker none of its profiles has a model of: nothing checked.
+      t.accounts.newModels(["glm-9"]);
+      t.accounts.newModels(["claude-fable-5-2"]);
+      await until(() => t.profile("cc")!.named.includes("claude-fable-5-2"), "checked again");
+      await settle();
+      assert.deepEqual(checked, ["claude"]);
+      assert.deepEqual(t.profile("cc")!.named, ["claude-opus-5-5", "claude-fable-5-2"]);
+      assert.deepEqual(JSON.parse(readFileSync(t.path, "utf8")).outdatedUnchecked, ["claude-fable-5-1"]);
+    } finally {
+      learn(null);
+      await t.close();
+    }
   });
 
   test("a login its allowance's reading finds over is checked again, once, and the check says to sign in", async () => {

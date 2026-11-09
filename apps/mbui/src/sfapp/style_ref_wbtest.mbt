@@ -53,39 +53,41 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     }
   }
   inspect(out.to_string(), content=(
-    #|waiting narrow 28261:276919d4
-    #|waiting wide 58300:3d0f259d
-    #|waiting-dark narrow 28177:273f1828
-    #|waiting-dark wide 58125:a68233b
-    #|finding narrow 34240:be2ffdf1
-    #|finding wide 64941:60ae07a8
-    #|finding-dark narrow 34337:52a2c840
-    #|finding-dark wide 64947:cfd3b903
-    #|code narrow 26964:88a7f87b
-    #|code wide 57132:eca4c01
-    #|code-dark narrow 26856:ce8b5d5e
-    #|code-dark wide 56933:bcc53334
-    #|wrong narrow 28173:7d27636f
-    #|wrong wide 58361:99b592ba
-    #|wrong-dark narrow 28275:4b23cc12
-    #|wrong-dark wide 58372:b3135e79
-    #|checking narrow 35247:a55b4d68
-    #|checking wide 66068:41ce6ab8
-    #|checking-dark narrow 35339:cf8b4c9d
-    #|checking-dark wide 66069:5e63ee5
-    #|none narrow 27729:50cff18b
-    #|none wide 57776:96048427
-    #|none-dark narrow 27649:92e439f
-    #|none-dark wide 57605:4b2ab2c7
-    #|failed narrow 23488:6a0bface
-    #|failed wide 53528:cecaea53
-    #|failed-dark narrow 23488:d6aa537e
-    #|failed-dark wide 53437:e5a3c97f
-    #|nocode narrow 28261:276919d4
-    #|nocode wide 58300:3d0f259d
-    #|nocode-dark narrow 28177:273f1828
-    #|nocode-dark wide 58125:a68233b
+    #|waiting narrow 28275:39622baf
+    #|waiting wide 58561:95cb81f6
+    #|waiting-dark narrow 28193:277c0cc7
+    #|waiting-dark wide 58388:a2810814
+    #|finding narrow 34348:3995ba5f
+    #|finding wide 65295:e7bc693c
+    #|finding-dark narrow 34445:bae1daea
+    #|finding-dark wide 65301:832f7fed
+    #|code narrow 27031:30c1da85
+    #|code wide 57446:5c092151
+    #|code-dark narrow 26923:d9ac61aa
+    #|code-dark wide 57247:303946da
+    #|wrong narrow 28240:97d2f231
+    #|wrong wide 58675:b9440a2a
+    #|wrong-dark narrow 28342:6b141516
+    #|wrong-dark wide 58686:1155f0c7
+    #|checking narrow 35321:c76ea221
+    #|checking wide 66422:4a6b188c
+    #|checking-dark narrow 35413:be05c142
+    #|checking-dark wide 66423:3eb6872b
+    #|none narrow 27743:966399a0
+    #|none wide 58037:1ff41a7c
+    #|none-dark narrow 27665:2f9fa108
+    #|none-dark wide 57868:c472bf60
+    #|failed narrow 23502:ede593dd
+    #|failed wide 53789:444ff120
+    #|failed-dark narrow 23504:9d059bad
+    #|failed-dark wide 53700:83d0c2ac
+    #|nocode narrow 28275:39622baf
+    #|nocode wide 58561:95cb81f6
+    #|nocode-dark narrow 28193:277c0cc7
+    #|nocode-dark wide 58388:a2810814
     #|
+
+
 
 
 
@@ -134,6 +136,10 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
       let (name, w, h) = size
       let home = screen_drawlist("settings" + dark, w, h, page="home")
       out.write_string("settings" + dark + " " + name + " " + fnv(home) + "\n")
+      // (a station's page made once: what lies in the window drawn as the old list drew it, each of the four drawn to a
+      // picture the same to the byte as main's at 16203ebae7, every glyph shown in the same box and every word seen at
+      // the same place; the tree also hands the draw list the rows wholly under the window's foot, cut out by the page's
+      // clip, and the shapes they draw, which the old list never drew)
       let station = screen_drawlist("settings" + dark, w, h, page="station:ws1/st1")
       out.write_string("station" + dark + " " + name + " " + fnv(station) + "\n")
       // a settings page's wait line, in its list's rows (built as the list is laid out: still.fail#791)
@@ -142,19 +148,21 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
     }
   }
   inspect(out.to_string(), content=(
-    #|settings narrow 76418:78e6df57
-    #|station narrow 86425:11f0a459
+    #|settings narrow 77022:ba68b727
+    #|station narrow 95281:75936fb1
     #|me-reading narrow 23860:9496c484
-    #|settings wide 166217:3ff036f4
-    #|station wide 224468:b59322d8
-    #|me-reading wide 160863:95a10e87
-    #|settings-dark narrow 76686:4ba88ca0
-    #|station-dark narrow 86258:47aff2b5
+    #|settings wide 172993:24ac3018
+    #|station wide 240131:fb326c7c
+    #|me-reading wide 167639:a390393c
+    #|settings-dark narrow 77290:42efbe58
+    #|station-dark narrow 95149:7bceef30
     #|me-reading-dark narrow 23998:61f49844
-    #|settings-dark wide 166143:2f9700e1
-    #|station-dark wide 224105:fdcad2e7
-    #|me-reading-dark wide 160865:b791b0f9
+    #|settings-dark wide 172913:55a02a3d
+    #|station-dark wide 239797:5a9c18f0
+    #|me-reading-dark wide 167635:20849138
     #|
+
+
 
 
 

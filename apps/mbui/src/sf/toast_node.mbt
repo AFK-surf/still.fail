@@ -6,7 +6,8 @@
 ///|
 /// Toast `s` drawn in `b` (@kit.toaster_node's `look`) as toast_look draws it, saying what it says now: its action (its
 /// toast's, "" none) a capsule in its end, pressed as the toaster's (ToastNode::action).
-pub fn toast_look_node(b : @view.View, s : @kit.ToastNode) -> Unit {
+#callsite(autofill(loc))
+pub fn toast_look_node(b : @view.View, s : @kit.ToastNode, loc~ : SourceLoc) -> Unit {
   let theme = fn() { @ui.tree_theme() }
   let action = fn() { s.toast().action }
   // (its action while it is there: going out, none, as toast_look's for one no longer the one said)
@@ -21,7 +22,7 @@ pub fn toast_look_node(b : @view.View, s : @kit.ToastNode) -> Unit {
       0.0
     }
   }
-  b.box(fn(tb) {
+  b.box(made_for=loc, fn(tb) {
     tb
     .row(Is(true))
     .lines_up(Is(Some(Middle)))

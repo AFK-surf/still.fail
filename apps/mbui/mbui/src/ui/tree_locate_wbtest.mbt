@@ -38,7 +38,7 @@ fn located_tester(
       o.over(Is(true)) |> ignore
       old(o, fn(c) {
         let id = c.id("over it")
-        ignore(c.clicked(id))
+        c.takes_presses(id)
         c.box(w=Px(300.0), h=Px(200.0), id~, fn() {  }) |> ignore
       }).over(Is(true))
       |> ignore

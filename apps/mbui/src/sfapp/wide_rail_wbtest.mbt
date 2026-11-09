@@ -50,11 +50,12 @@ test "wide: ⌘\\ folds the sidebar to the rail's bar of its own; the pointer on
 }
 
 ///|
-/// The ground (30) of the rail's place at `rect` (its 38 to press): its box as laid out.
+/// The ground (30) of the rail's place at `rect` (its 38 to press): its box as laid out (a node of the window's tree:
+/// among the tree's, Tester::boxes_held).
 fn rail_ground_at(t : @ui.Tester, rect : (Double, Double, Double, Double)) -> @ui.Laid {
   let (x, y, w, h) = rect
   t
-  .boxes()
+  .boxes_held()
   .iter()
   .find_first(fn(b) {
     b.kind != "text" && b.w == 30.0 && b.h == 30.0 && b.x >= x && b.y >= y && b.x + b.w <= x + w && b.y + b.h <= y + h
@@ -271,6 +272,7 @@ test "wide: a row's menu has 接力到频道… for a chat with an agent" {
   let (x, y) = t.find("整理发布清单").unwrap()
   t.right_click(x, y)
   t.frame()
+  open_share(t)
   assert_true(t.find("接力到频道…") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
 

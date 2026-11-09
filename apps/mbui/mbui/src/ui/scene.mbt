@@ -1,5 +1,6 @@
 // Painting: the laid-out tree becomes a flat list of instances (60 floats
-// each) that every renderer draws with one shader:
+// each) that every renderer draws with one shader (some in strips, a
+// ground's middle flat, where that pays: src/host/bands.h):
 //   0-3 rect x y w h · 4 radius (a box's: the roundest of its corners,
 //   36-39) · 5 kind · 6 border width · 7 blur
 //   8-11 color rgba · 12-15 border color, or the glyph's atlas rect
@@ -49,6 +50,12 @@
 
 ///|
 let inst_size = 60
+
+///|
+/// `len` of the numbers of `a` from `from` on, as an array of their own: copied, not made first and then written over.
+fn inst_copy(a : FixedArray[Double], from : Int, len : Int) -> FixedArray[Double] {
+  FixedArray::from_array(a[from:from + len])
+}
 
 ///|
 fn Ctx::grow(self : Ctx) -> Unit {
@@ -866,6 +873,11 @@ fn Ctx::push_inst(
   }
   // (what is not a glyph in words drawn a glyph at a time, a list's mark, a quote's bar, a code block's ground: with
   // the glyph after it, its line's first: Ctx::glyphs_by)
+  // (an ink worked out as what holds it is painted, for its words, lines and shapes: Ctx::ink_by)
+  let color = match ink_now.val {
+    Some(ink) if kind == 1.0 || kind == 7.0 || kind == 10.0 || kind == 11.0 => ink
+    _ => color
+  }
   let (y, alpha, c2d) = match glyph_look.val {
     Some(f) if !glyph_pushing.val => {
       let l = f({ index: glyph_n.val, x, y, h, top: glyph_cut.val.0, foot: glyph_cut.val.1 })
@@ -1035,6 +1047,11 @@ let glyph_look : Ref[((GlyphAt) -> GlyphLook)?] = Ref(None)
 ///|
 // kept across runs: set only while a node that says it is painted, put back as it is done
 let glyph_n : Ref[Int] = Ref(0)
+
+///|
+/// The ink what is painted now is drawn in (Ctx::ink_by): None, its own.
+// kept across runs: set only while a node that says it is painted, put back as it is done
+let ink_now : Ref[Int64?] = Ref(None)
 
 ///|
 /// The top and foot of what cuts the node whose glyphs have looks of their own (Ctx::glyphs_by), as it is painted: what
@@ -1294,6 +1311,15 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     }
     _ => None
   }
+  // (what it holds in an ink worked out as it is painted: Ctx::ink_by)
+  let ink_was = match self.drawn_entry(i) {
+    Some({ ink_by: Some(f), .. }) if drawing => {
+      let was = ink_now.val
+      ink_now.val = Some(f())
+      Some(was)
+    }
+    _ => None
+  }
   // (its words set on the pixels where the old view it is in is laid out, carried with that to where it is drawn,
   // whenever and from wherever it is painted: glyphs_carried)
   let carried_x = glyphs_carried[0]
@@ -1320,6 +1346,10 @@ fn Ctx::paint(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       glyph_n.val = n
       glyph_cut.val = cut
     }
+    None => ()
+  }
+  match ink_was {
+    Some(was) => ink_now.val = was
     None => ()
   }
   if passes {
@@ -1446,11 +1476,13 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     )
     self.corners_last(n)
   }
-  // its border over what it holds (drawn after it, below): the box's own edge, never covered by what is in it, as
-  // CSS's border is outside what a box holds (here it takes no room); with nothing in it, with its ground
+  // its border over what it holds and over what it draws of its own (drawn after them, below): a line drawn inside
+  // its shape, taking no room, what is in it measured from its outer edge and under the line, never over it (SwiftUI's
+  // strokeBorder over what it holds; the user, 2026-11-09): a box holding something, and what draws in its box itself
+  // (words, a field's, a picture, a page, what the host draws, its shapes and lines); a box with nothing over its
+  // ground, with its ground
   let border_over = n.border_w > 0.0 &&
-    n.first >= 0 &&
-    (n.kind == kind_box || n.kind == kind_list || n.kind == kind_scroll)
+    (n.first >= 0 || n.kind != kind_box || n.shapes.length() > 0 || n.lines.length() > 0)
   // (a picture's is what shows until it is in, drawn with it: paint_image)
   let bg = if n.kind == kind_image {
     0L
@@ -1497,6 +1529,36 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
     n.radius = laid.4
     n.radii = laid.5
   }
+  // (its line over all it draws, last: what it holds, its words, its shapes, its picture; never anything over it)
+  let line_over = fn() {
+    let inside_faint = words_alpha.val
+    words_alpha.val = own_faint
+    if border_over && n.dashed {
+      match ground {
+        Some((bx, by, bw, bh, (r0, r1, r2, r3))) =>
+          self.emit_dashes(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), n.border_w, border_c, alpha)
+        None => self.emit_dashes(n.x, n.y, n.fw, n.fh, n.radius, n.border_w, border_c, alpha)
+      }
+    } else if border_over {
+      // (the line as it shows over its own ground, whatever is under it: one colour all along it, over a row's ground
+      // or a picture as over the box's own)
+      let border_c = if (bg & 0xFFL) != 0L { over(bg, border_c) } else { border_c }
+      match ground {
+        // (round its ground drawn in another box: that box's corners, each its own)
+        Some((bx, by, bw, bh, (r0, r1, r2, r3))) => {
+          self.emit_rect(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), 0L, n.border_w, border_c, alpha)
+          self.notch_last(n)
+          self.corners_last_each(r0, r1, r2, r3)
+        }
+        None => {
+          self.emit_rect(n.x, n.y, n.fw, n.fh, n.radius, 0L, n.border_w, border_c, alpha)
+          self.notch_last(n)
+          self.corners_last(n)
+        }
+      }
+    }
+    words_alpha.val = inside_faint
+  }
   // (its own ground drawn: what it holds, and what it draws itself, as faint as the looks it is in say: words_alpha)
   words_alpha.val = held_faint
   // (nothing in a page's bones is pressed or pointed at: it is not there yet)
@@ -1526,6 +1588,7 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if n.bones != 0L {
     self.paint_bones_of(i, n, alpha)
     if n.kind != kind_box && n.kind != kind_scroll && n.kind != kind_list {
+      line_over()
       return
     }
   }
@@ -1547,10 +1610,12 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
         )
       None => ()
     }
+    line_over()
     return
   }
   if n.kind == kind_rich {
     self.paint_rich(i, n, alpha)
+    line_over()
     return
   }
   if n.kind == kind_editor {
@@ -1558,18 +1623,22 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
       self.scroll_target(n, cx0, cy0, cx1, cy1)
     }
     self.paint_editor(n, alpha)
+    line_over()
     return
   }
   if n.kind == kind_image {
     self.paint_image(i, n, alpha)
+    line_over()
     return
   }
   if n.kind == kind_native {
     self.paint_native(i, n)
+    line_over()
     return
   }
   if n.kind == kind_page {
     self.paint_page(n, alpha)
+    line_over()
     return
   }
   if !dr.targets_said && scrolls(n) {
@@ -1645,30 +1714,7 @@ fn Ctx::paint_node(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   if clipped {
     pop_clip()
   }
-  let inside_faint = words_alpha.val
-  words_alpha.val = own_faint
-  if border_over && n.dashed {
-    match ground {
-      Some((bx, by, bw, bh, (r0, r1, r2, r3))) =>
-        self.emit_dashes(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), n.border_w, border_c, alpha)
-      None => self.emit_dashes(n.x, n.y, n.fw, n.fh, n.radius, n.border_w, border_c, alpha)
-    }
-  } else if border_over {
-    match ground {
-      // (round its ground drawn in another box: that box's corners, each its own)
-      Some((bx, by, bw, bh, (r0, r1, r2, r3))) => {
-        self.emit_rect(bx, by, bw, bh, dmax(dmax(r0, r1), dmax(r2, r3)), 0L, n.border_w, border_c, alpha)
-        self.notch_last(n)
-        self.corners_last_each(r0, r1, r2, r3)
-      }
-      None => {
-        self.emit_rect(n.x, n.y, n.fw, n.fh, n.radius, 0L, n.border_w, border_c, alpha)
-        self.notch_last(n)
-        self.corners_last(n)
-      }
-    }
-  }
-  words_alpha.val = inside_faint
+  line_over()
 }
 
 ///|

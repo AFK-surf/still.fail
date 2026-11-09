@@ -26,7 +26,7 @@ fn stage_node(
 ) -> Unit {
   // (its night its own, whoever else dims what is under it (scrim_owner leaves a stage out): as kit's dialog draws a
   // stage's scrim)
-  dialog_layer_node(parent, open, cancel, outside=true, scrim=fn() { stage_scrim }, ground_ms=stage_night_ms, shown~, gone~, covered~, fn(across, layer, look, _veil) {
+  dialog_layer_node(parent, open, cancel, outside=true, scrim=fn() { stage_scrim }, night_with_ground=true, shown~, gone~, covered~, fn(across, layer, look, _veil) {
     // (its name as it is now: `live`'s first, said, never drawn)
     let title = fn() {
       match x.live {
@@ -74,16 +74,11 @@ fn stage_node(
       |> ignore
       // (what it holds: as tall as it is laid out at the stage's width, giving way to what the column leaves it)
       // (the room the column gives it, as the tree laid it out: what it is drawn smaller to)
-      let body_at : Ref[@view.View?] = Ref(None)
-      let body = @ui.old(d, natural=true, gives=true, key=fn() { key + "/body" }, fn(c) {
+      @ui.old(d, natural=true, gives=true, key=fn() { key + "/body" }, fn(c) {
           let (sw, sh) = room()
-          let given = match body_at.val {
-            Some(b) =>
-              match b.laid_size_told() {
-                Some((_, g)) if g > 0.0 => g
-                _ => sh
-              }
-            None => sh
+          let given = match @ui.old_given() {
+            Some((_, g)) if g > 0.0 => g
+            _ => sh
           }
           let was = (stage_room.val, stage_gives.val)
           stage_room.val = Some((sw, sh))
@@ -98,10 +93,10 @@ fn stage_node(
           stage_gives.val = was.1
           // (as wide as it is drawn: told as that changes, the column laid out again)
           let (w, lw) = (stage_drawn_w.val, stage_laid_w.val)
-          if @signals.untracked(fn() { body_w.get() }) != Some(w) {
+          if body_w.untracked() != Some(w) {
             body_w.set(Some(w))
           }
-          if @signals.untracked(fn() { laid_w.get() }) != Some(lw) {
+          if laid_w.untracked() != Some(lw) {
             laid_w.set(Some(lw))
           }
           words_look(c, held)
@@ -110,7 +105,7 @@ fn stage_node(
       .margin(By(fn() { in_middle(laid_w) }))
       .shrink(Is(1.0))
       .min_height(Is(Some(0.0)))
-      body_at.val = Some(body)
+      |> ignore
       // (under it: what is chosen of it over 关闭 and its foot's buttons, on the night)
       @ui.old(d, natural=true, fits=(stage_fits_most, under_w), key=fn() { key + "/foot" }, fn(c) {
           let night = on_night.val
@@ -145,8 +140,3 @@ fn stage_node(
 /// The most a stage's parts are laid out as wide as (old's `fits`): past any window, what each holds deciding.
 let stage_fits_most : Double = 100000.0
 
-///|
-/// How long a stage's night takes to come: its surface, the night in by the time what it holds begins to come (kit's
-/// dialog_in, its ground first: the first half of its way in), all it holds coming on it at once after (Ctx::surface;
-/// its picture's words never over the page's words seen through a night not in yet).
-let stage_night_ms : Double = @kit.dialog_ms / 2.0

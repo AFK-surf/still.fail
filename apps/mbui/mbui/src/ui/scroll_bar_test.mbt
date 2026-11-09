@@ -8,9 +8,9 @@ fn bar_rows(pressed : Array[Int], over_foot? : Double = 0.0, corner? : Double = 
     c.box(w=Fill(1.0), h=Fill(1.0), radius=corner, clip=corner > 0.0, fn() {
       c.list("list", 200, 40.0, fn(i) {
         let id = c.id("row")
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           pressed.push(i)
-        }
+        })
         c.box(w=Fill(1.0), h=Px(40.0), id~, fn() { c.text("Row \{i}", wrap=false) |> ignore }) |> ignore
       })
       |> ignore

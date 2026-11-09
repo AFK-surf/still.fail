@@ -454,8 +454,10 @@ pub fn Ctx::list(
         built: -1,
         stepped: -1,
         fresh: true,
+        on_pixels_by: 0.0,
         rows_read: false,
         island: 0,
+        typed_stays: false,
         glide_shows: false,
         named: "",
         made_at: None,
@@ -472,6 +474,7 @@ pub fn Ctx::list(
         fling_dist: 0.0,
         fling_dur: 0.0,
         fling_done: 0.0,
+        fling_from: None,
         drag_pending: 0.0,
         held: false,
         over: 0.0,
@@ -503,6 +506,7 @@ pub fn Ctx::list(
         from_end: false,
         put_at: -1.0,
         shown_h: {},
+        shown_lead: {},
         sizes_mover: Mover::new(),
       }
       self.lists[id] = s
@@ -539,6 +543,8 @@ pub fn Ctx::list(
   // (rows that show only what they read are kept however what builds them was built: their own watches say when
   // they change; only a build keeping none builds them anew)
   st.rows_read = rows_read
+  // (in a part that goes on through what was typed elsewhere: that part says so as it ends, kept_nodes.mbt)
+  st.typed_stays = false
   st.fresh = if rows_read { nodes_run.whole } else { nodes_run.fresh || nodes_run.part_fresh }
   // shown again (not built the frame before): what of it still moves says so again (where it is at the frame's time
   // is its layout's to work out: Ctx::place_list)
@@ -733,7 +739,8 @@ fn Ctx::place_list(
     if middle {
       dr.rows_soft.push((r, row_soft(shown, h)))
     }
-    let by = if middle { st.row_middle(k, shown, h) } else { 0.0 }
+    let lead_off = if middle { 0.0 } else { st.row_lead_off(k, self.clock) }
+    let by = if middle { st.row_middle(k, shown, h) } else { lead_off }
     // (what comes and goes in it, where something in it is so: not what it is drawn on, Node's `room_held`)
     for ch in (if st.causes is Some(_) { self.room_held_in(r) } else { [] }) {
       let n = self.nodes[ch]
@@ -751,7 +758,7 @@ fn Ctx::place_list(
       h
     }
     st.set_height(k, h)
-    st.row_shown(k, h)
+    st.row_shown(k, h, lead_off~)
     (r, h)
   }
   let bottom_edge = iy + ih
@@ -1006,7 +1013,7 @@ fn Ctx::place_list(
     }
   }
   // set on the device's pixels (where the list stands said above, as they are laid)
-  self.rows_on_pixels(order)
+  self.rows_on_pixels(st, order)
   self.stick_in(li, order, iy)
   self.list_finds_field(st, order, iy)
   if was_position != (st.anchor, st.anchor_off, st.over_offset()) {
@@ -1140,16 +1147,49 @@ fn Ctx::row_slot(self : Ctx, r : Int, h : Double) -> Double {
 /// the list stands at its end and what is under its rows grows (words sent flying in, an agent's line coming), the
 /// keyboard comes, an end stops it, it is said from another row. On the pixels, all of a row moves as one, by whole
 /// pixels, and a row kept is moved as its laying out there would move it (kept_nodes.mbt).
-fn Ctx::rows_on_pixels(self : Ctx, order : Array[Int]) -> Unit {
+fn Ctx::rows_on_pixels(self : Ctx, st : ListState, order : Array[Int]) -> Unit {
+  st.on_pixels_by = 0.0
   if !self.rows_on_grid() || order.length() == 0 {
     return
   }
   let y = self.nodes[order[0]].y
   let by = on_pixels(y, self.scale) - y
+  st.on_pixels_by = by
   if by != 0.0 {
     for r in order {
       self.shift(r, by)
     }
+  }
+}
+
+///|
+/// Each list in node `i` (it and what it holds) with its rows set on the device's pixels again, as laying it out where
+/// it is now would set them (Ctx::rows_on_pixels): `i` carried a share of a pixel to where it is drawn as the frame is
+/// painted (Ctx::moved_place, an old view's box: Ctx::moved_carries), its rows moved with it from where they were set.
+fn Ctx::rows_carried(self : Ctx, i : Int) -> Unit {
+  let n = self.nodes[i]
+  if n.kind == kind_list && n.first >= 0 {
+    match self.lists.get(n.id) {
+      Some(st) => {
+        let y = self.nodes[n.first].y - st.on_pixels_by
+        let by = on_pixels(y, self.scale) - y
+        let d = by - st.on_pixels_by
+        st.on_pixels_by = by
+        if d != 0.0 {
+          let mut r = n.first
+          while r >= 0 {
+            self.shift(r, d)
+            r = self.nodes[r].next
+          }
+        }
+      }
+      None => ()
+    }
+  }
+  let mut c = n.first
+  while c >= 0 {
+    self.rows_carried(c)
+    c = self.nodes[c].next
   }
 }
 
@@ -1246,7 +1286,11 @@ pub fn Ctx::list_scroll_to(
 /// Back to list `key`'s end: gliding there (what is left of the way e^(-t/list_glide_ms) of it, as still.fail's lists
 /// follow their newest; far from it, more than list_glide_rows rows, at once), or at once.
 pub fn Ctx::list_to_end(self : Ctx, key : String, glide? : Bool = true) -> Unit {
-  let id = self.id(key)
+  self.list_to_end_of(self.id(key), glide)
+}
+
+///|
+fn Ctx::list_to_end_of(self : Ctx, id : Int, glide : Bool) -> Unit {
   match self.lists.get(id) {
     Some(st) => {
       st.follow_item = -1
@@ -1413,7 +1457,8 @@ pub fn[T : Eq] Ctx::list_info_as(self : Ctx, key : String, made : (ListInfo?) ->
 ///|
 /// A list, to read later as it then stands and never read back: for what a frame works out of where it is once its
 /// builds are over and tells outside (Ctx::after_build: a reader's place, what they have seen whole), never for what it
-/// draws (that reads Ctx::list_info, list_place and list_row_height as it builds).
+/// draws (that reads Ctx::list_info, list_place and list_row_height as it builds); sent to its end by what a press
+/// does (Ctx::on_press: outside the scope the list is built in).
 pub struct ListReader {
   priv ctx : Ctx
   priv id : Int
@@ -1435,6 +1480,12 @@ pub fn ListReader::info(self : ListReader) -> ListInfo? {
 /// Where the list is now (Ctx::list_place's).
 pub fn ListReader::place(self : ListReader) -> (Int, Double, Double)? {
   self.ctx.list_place_of(self.id)
+}
+
+///|
+/// The list sent to its end, following it again (Ctx::list_to_end's).
+pub fn ListReader::to_end(self : ListReader, glide? : Bool = true) -> Unit {
+  self.ctx.list_to_end_of(self.id, glide)
 }
 
 ///|

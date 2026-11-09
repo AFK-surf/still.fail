@@ -82,13 +82,13 @@ fn hold_while(n : @view.View, held : @signals.Signal[Int], on : () -> Bool) -> U
     if h != had.val {
       had.val = h
       let d = if h { 1 } else { -1 }
-      held.set(@signals.untracked(fn() { held.get() }) + d)
+      held.set(held.untracked() + d)
     }
   })
   n.owns(fn() {
     if had.val {
       had.val = false
-      held.set(@signals.untracked(fn() { held.get() }) - 1)
+      held.set(held.untracked() - 1)
     }
   })
   |> ignore
@@ -143,6 +143,7 @@ fn toast_node_rest(key : String) -> Double? {
 /// building each (its ToastNode); `acted` and `gone` told with a toast's id as its action is taken and as it goes by
 /// itself (its time out, swiped away), each once, each its own. Read out as a region named `label`; its times as
 /// `key`'s (toast_due, toast_rest). The node.
+#callsite(autofill(loc))
 pub fn toaster_node(
   parent : @view.View,
   toasts : () -> Array[Toast],
@@ -154,12 +155,13 @@ pub fn toaster_node(
   key? : String = "toast",
   w? : Double = 560.0,
   label? : String = "通知",
+  loc~ : SourceLoc,
 ) -> @view.View {
   // (how many hold the time of all of them: the pointer over one, the focus in one)
   let held = @signals.signal(0, same=fn(a, b) { a == b })
   let times : ToastTimes = { key, rows: Map([]) }
   toast_nodes[key] = times
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     v.owns(fn() {
       if toast_nodes.get(key) is Some(t) && physical_equal(t, times) {
         toast_nodes.remove(key)
@@ -183,7 +185,6 @@ pub fn toaster_node(
       room.box(fn(region) {
         region
         .width(By(fn() { Some(width()) }))
-        .gap(Is(8.0))
         .lines_up(Is(Some(Middle)))
         .says(Is(Some(@view.said(Region, label~))))
         |> ignore
@@ -201,6 +202,7 @@ pub fn toaster_node(
 
 ///|
 /// Toast `item` in `row` (toaster_node's): its way in and out, its time, its swipe; built by `look`.
+#callsite(autofill(loc))
 fn toast_lives(
   row : @view.View,
   item : @signals.Signal[Toast],
@@ -211,6 +213,7 @@ fn toast_lives(
   look : (@view.View, ToastNode) -> Unit,
   acted : (String) -> Unit,
   gone : (String) -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
   let id = @signals.untracked(fn() { item.get().id })
   let shown = ToastWay::new(0.0, times.key + "/" + id)
@@ -238,7 +241,7 @@ fn toast_lives(
   }
   // (going out from this moment: its time let go; told once, its own)
   let leave = fn(f : (String) -> Unit) {
-    if @signals.untracked(fn() { live.get() }) {
+    if live.untracked() {
       live.set(false)
       stop(row.cause_at())
       f(id)
@@ -313,46 +316,65 @@ fn toast_lives(
   })
   |> ignore
   let s : ToastNode = { item, node: row, shown, dx, away_w: width, live, focus_in, acted: fn() { leave(acted) } }
-  row.box(fn(b) {
-    b
-    .presses(Is(true))
-    .says(By(fn() {
-      let to = item.get()
-      Some(@view.said(Status, label=to.title, description=to.description))
-    }))
-    |> ignore
-    // (held: the pointer on it (on its action too, nothing over it there) or the focus on its action, one of the toasts holding them all)
-    hold_while(b, held, fn() { b.pointed_in() || focus_in.get() })
-    // swiped: followed while held, put away past a third of it (as wide as it is) or quick, else back
-    let x0 = Ref(0.0)
-    let last = Ref((0.0, 0.0))
-    let quick = Ref(0.0)
-    b.on_drag(fn(d) {
-      match d.kind {
-        Down => {
-          x0.val = d.x
-          last.val = (d.x, d.at)
-          quick.val = 0.0
-        }
-        Moved => {
-          dx.set(if d.x - x0.val > 0.0 { d.x - x0.val } else { 0.0 })
-          let (lx, lt) = last.val
-          if d.at > lt {
-            quick.val = (d.x - lx) / (d.at - lt)
-          }
-          last.val = (d.x, d.at)
-        }
-        Up =>
-          if d.x - x0.val > d.w / 3.0 || quick.val > 0.5 {
-            leave(gone)
-          } else {
-            dx.set(0.0)
-          }
-        Off => dx.set(0.0)
+  // (its room, and the 8 over it, opening as it comes in and closing as it goes, it on its foot: those over it moved up
+  // and down with it, not at once, sizes_steady.mbt)
+  row
+  .opens(
+    By(fn() {
+      let k = shown.shown(row)
+      if k >= 1.0 {
+        None
+      } else {
+        Some(dmax(0.0, k))
       }
+    }),
+    from_foot=true,
+  )
+  |> ignore
+  row.box(made_for=loc, fn(gap) {
+    gap.padding(Is((0.0, 8.0, 0.0, 0.0))) |> ignore
+    gap.box(fn(b) {
+      b
+      .presses(Is(true))
+      .says(By(fn() {
+        let to = item.get()
+        Some(@view.said(Status, label=to.title, description=to.description))
+      }))
+      |> ignore
+      // (held: the pointer on it (on its action too, nothing over it there) or the focus on its action, one of the toasts holding them all)
+      hold_while(b, held, fn() { b.pointed_in() || focus_in.get() })
+      // swiped: followed while held, put away past a third of it (as wide as it is) or quick, else back
+      let x0 = Ref(0.0)
+      let last = Ref((0.0, 0.0))
+      let quick = Ref(0.0)
+      b.on_drag(fn(d) {
+        match d.kind {
+          Down => {
+            x0.val = d.x
+            last.val = (d.x, d.at)
+            quick.val = 0.0
+          }
+          Moved => {
+            dx.set(if d.x - x0.val > 0.0 { d.x - x0.val } else { 0.0 })
+            let (lx, lt) = last.val
+            if d.at > lt {
+              quick.val = (d.x - lx) / (d.at - lt)
+            }
+            last.val = (d.x, d.at)
+          }
+          Up =>
+            if d.x - x0.val > d.w / 3.0 || quick.val > 0.5 {
+              leave(gone)
+            } else {
+              dx.set(0.0)
+            }
+          Off => dx.set(0.0)
+        }
+      })
+      |> ignore
+      look(b, s)
     })
     |> ignore
-    look(b, s)
   })
   |> ignore
 }
@@ -366,7 +388,6 @@ priv struct ToastWay {
   way : @motion.Way
   ended : @signals.Signal[Int]
   mut due : () -> Unit
-  mover : @ui.Mover
   name : String
   mut rest : (Double) -> Double
   mut alive : Bool
@@ -374,14 +395,7 @@ priv struct ToastWay {
 
 ///|
 fn ToastWay::new(v : Double, name : String) -> ToastWay {
-  { way: @motion.Way::new(v), ended: @signals.signal(0), due: fn() {  }, mover: @ui.Mover::new(), name, rest: fn(_) { -1.0 }, alive: true }
-}
-
-///|
-impl @ui.Moving for ToastWay with rest_at(self, now, frame) {
-  // (as of the moment the frames are at, as any of what is said to move answers: Ctx::motion_owed's)
-  ignore(frame)
-  (self.rest)(now)
+  { way: @motion.Way::new(v), ended: @signals.signal(0), due: fn() {  }, name, rest: fn(_) { -1.0 }, alive: true }
 }
 
 ///|
@@ -389,11 +403,12 @@ fn ToastWay::go(self : ToastWay, n : @view.View, to : Double, spec : @motion.Spe
   (self.due)()
   self.way.go(to, spec, at=n.cause_at())
   self.due = if self.way.ends_at() >= 0.0 {
-    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
     fn() {  }
   }
-  @ui.current().moving_as(self.mover, self as &@ui.Moving, "Anim \"\u{2}presence/" + self.name + "\" to \{to}")
+  // (as of the moment the frames are at, as any of what is said to move answers: Ctx::motion_owed's)
+  n.said_moving(self.name, "Anim \"\u{2}presence/" + self.name + "\" to \{to}", fn(now) { (self.rest)(now) })
 }
 
 ///|

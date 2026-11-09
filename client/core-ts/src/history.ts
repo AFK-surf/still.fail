@@ -35,6 +35,12 @@ export type Context = {
   md?: MdStore;
 };
 
+/// An entry in this device's words: a call's result that is in its script's output, which its station leaves the
+/// words of to the client (station/src/read/transcript.ts `inScript`).
+function worded(e: J): J {
+  return e?.inScript === true && e.text === "" ? { ...e, text: t("station.transcript.inScriptOutput") } : e;
+}
+
 function kindKey(kind: string): string {
   return ["read", "search", "edit", "command", "web", "agent", "thread"].includes(kind) ? kind : "other";
 }
@@ -328,7 +334,7 @@ type Item =
 type Row = { thought: number } | { step: number };
 
 export function presentHistory(live: J, cx: Context): J {
-  const timeline: J[] = Array.isArray(live?.timeline) ? live.timeline : [];
+  const timeline: J[] = (Array.isArray(live?.timeline) ? live.timeline : []).map(worded);
   const base = typeof live?.first === "number" ? live.first : 0;
   const s = (e: J, k: string): string => (typeof e?.[k] === "string" ? e[k] : "");
   const flag = (e: J, k: string): boolean => e?.[k] === true;
@@ -554,15 +560,19 @@ export function presentHistory(live: J, cx: Context): J {
   const phase = pushedNow.phase;
   const { usage, usageLine } = usageOf(live?.usage);
   const loaded = flag(live, "loaded");
+  // Why its first read failed (it is read again), and how the page before stands: being read, or why it was not.
+  const failed = typeof live?.failed === "string" && live.failed !== "" ? live.failed : null;
+  const older = live?.older === "reading" || live?.older === "failed" ? live.older : null;
   let edge: string;
   let empty: boolean;
   if (!loaded && shown.length === 0) [edge, empty] = [t("core-logic.history.edge.loading"), true];
   else if (shown.length === 0 && liveSteps.length === 0 && phase === null && base === 0) {
     const why = flag(live, "offline") ? "core-logic.history.edge.offline" : cx.started ? "core-logic.history.edge.missing" : "core-logic.history.edge.not_started";
     [edge, empty] = [t(why), true];
-  } else if (base > 0) [edge, empty] = [t("core-logic.history.edge.earlier"), false];
+  } else if (base > 0 && older === "failed") [edge, empty] = [t("core-logic.history.edge.earlier_failed", { why: String(live.olderFailed ?? "") }), false];
+  else if (base > 0) [edge, empty] = [t("core-logic.history.edge.earlier"), false];
   else [edge, empty] = [t("core-logic.history.edge.start"), false];
-  return { items: shown, live: liveSteps, phase, usage, usageLine, edge, empty, loaded, more: base > 0 };
+  return { items: shown, live: liveSteps, phase, usage, usageLine, edge, empty, loaded, more: base > 0, ...(failed !== null && !loaded && shown.length === 0 ? { failed } : {}), ...(base > 0 && older !== null ? { older } : {}) };
 }
 
 /// What a session's calls used (views/brief.ts `usageNow`), as its history shows it: label and value rows, and in a

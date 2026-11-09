@@ -16,6 +16,7 @@ pub(open) trait Host {
   wheel_kept(Self, Bool) -> Unit = _
   window_setup(Self, Double, Double, Double, Double, Bool) -> Unit = _
   window_inset(Self) -> Bool = _
+  window_buttons_down(Self, Double, Double) -> Unit = _
   window_hold(Self) -> Unit = _
   window_show(Self) -> Unit = _
   full_screen(Self) -> Bool = _
@@ -47,6 +48,7 @@ pub(open) trait Host {
   platform(Self) -> Int = _
   request_frame(Self) -> Unit = _
   request_frame_on(Self) -> Unit = _
+  frames_paced(Self, Double) -> Unit = _
   wake_after(Self, Double) -> Unit = _
   font_metrics(Self, Double, Int, Int, FixedArray[Double]) -> Unit = _
   shape(Self, String, Double, Int, Int, FixedArray[Double]) -> Int = _
@@ -78,6 +80,7 @@ pub(open) trait Host {
   answers_by_frame(Self, Int) -> Bool = _
   script_step(Self, String, String) -> String = _
   rows_on_pixels(Self) -> Bool = _
+  keeps_sources(Self) -> Bool = _
   lines_on_pixels(Self) -> Bool = _
   frame_awaiting(Self, Int, String) -> Unit = _
   own_clock(Self) -> Bool = _
@@ -276,6 +279,11 @@ impl Host with window_inset(_) {
 }
 
 ///|
+impl Host with window_buttons_down(_, _, _) {
+  ()
+}
+
+///|
 impl Host with window_hold(_) {
   ()
 }
@@ -431,6 +439,11 @@ impl Host with request_frame_on(self) {
 }
 
 ///|
+impl Host with frames_paced(self, _) {
+  self.request_frame_on()
+}
+
+///|
 impl Host with wake_after(_, _) {
   ()
 }
@@ -577,6 +590,11 @@ impl Host with answers_by_frame(_, _) {
 
 ///|
 impl Host with rows_on_pixels(_) {
+  false
+}
+
+///|
+impl Host with keeps_sources(_) {
   false
 }
 
@@ -1451,6 +1469,15 @@ pub fn window_inset() -> Bool {
 }
 
 ///|
+/// The window's buttons in the app's top row (window_inset) moved to `by` lower than centred on its first 44, where the
+/// app's top row starts that much under the window's top (macOS's; a panel inset from the window's edges): from where
+/// they are, over `ms` on a Move's way (Ease::Move), at once where the window is not seen yet. Nothing where the system
+/// has no such buttons there.
+pub fn window_buttons_down(by : Double, ms : Double) -> Unit {
+  current.val.window_buttons_down(by, ms)
+}
+
+///|
 /// Whether the desktop's window fills the screen now (macOS's full screen). False where there is no such window.
 pub fn full_screen() -> Bool {
   current.val.full_screen()
@@ -1692,6 +1719,16 @@ pub fn request_frame() -> Unit {
 /// next display frame, as request_frame; a run whose time goes by as it says (a Tester's) owes none at this moment.
 pub fn request_frame_on() -> Unit {
   current.val.request_frame_on()
+}
+
+///|
+/// A frame asked for what moves on by the clock (as request_frame_on, in the frame that asks) that needs only `hz`
+/// frames a second: drawn at the display's frame about `1000 / hz` ms after this one's, those between drawing nothing,
+/// and the display told it may refresh that slowly meanwhile (iOS's and macOS's CADisplayLink preferredFrameRateRange,
+/// Android's Surface.setFrameRate); anything asking for a frame before then (request_frame: an input, a change) has
+/// the display's next and every frame again. A host with nothing for it draws the display's next (request_frame_on).
+pub fn frames_paced(hz : Double) -> Unit {
+  current.val.frames_paced(hz)
 }
 
 ///|
@@ -1962,6 +1999,14 @@ pub fn rows_on_pixels() -> Bool {
 }
 
 ///|
+/// Whether the window's tree keeps where in the source each node was made and its properties said (view's source.mbt):
+/// a Tester's fake host does, for what it finds to say where to change it; a device's does not, its calls only passing
+/// their places on.
+pub fn keeps_sources() -> Bool {
+  current.val.keeps_sources()
+}
+
+///|
 /// Whether the host sets things on whole device pixels, its lengths as its lines (Android's: Compose rounds each
 /// length to pixels, StaticLayout each line), as it says of its fonts (font_metrics' sixth number).
 pub fn lines_on_pixels() -> Bool {
@@ -2075,21 +2120,22 @@ pub fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {
 
 ///|
 /// Whether something reads the app's widgets out (Android: an accessibility service on, TalkBack's or another's): the
-/// app then tells the host what its widgets are as they change (`a11y_tree`, @ui's semantics.mbt).
+/// app then tells the host what of its widgets changed (`a11y_tree`, @ui's a11y.mbt).
 pub fn a11y_on() -> Bool {
   current.val.a11y_on()
 }
 
 ///|
-/// What the app's widgets are now, for the system's accessibility (@ui's semantics.mbt says the lines). What is asked
-/// of one comes back on the channel `a11y_channel`.
+/// What of the app's widgets changed, for the system's accessibility: an update of what the host keeps of them (@ui's
+/// a11y.mbt's head says it: the nodes that changed, each whole, and the focus). What is asked of one comes back on the
+/// channel `a11y_channel`.
 pub fn a11y_tree(tree : String) -> Unit {
   current.val.a11y_tree(tree)
 }
 
 ///|
-/// The channel what the system's accessibility asks of a widget is posted on (`{"id": widget, "action": name}`): the
-/// framework's own (@ui takes it).
+/// The channel what the system's accessibility asks of a widget is posted on (`{"id": widget, "action": name}`; a host
+/// that lost what it kept, `{"action": "resend"}`): the framework's own (@ui takes it).
 pub let a11y_channel : String = "a11y"
 
 ///|
@@ -2332,7 +2378,9 @@ pub fn install_package(name : String, data : Bytes) -> Unit {
 /// app's notifications (notify.mbt) whose title or words hold `text`, tapped (6) or only looked for (7), false when none
 /// does; 8 the window resized to "<w>x<h>"; 9 the directory `text` watched for what the run's runner has done, each
 /// file come there posted on channel "runner" (done_watch.h: macOS, Android, Windows); 10 the canvas's GL context made
-/// anew, as one lost (Linux and the browser: the images' contract, scripts/host_contract.sh), 11 whether it has been since. False where
+/// anew, as one lost (Linux and the browser: the images' contract, scripts/host_contract.sh), 11 whether it has been since;
+/// 12 input to the screen measured by the host, `text` "MODE X Y" (macOS's mac_latency.h, Android's Latency.java: its
+/// own events from then on, the process ending with what it measured). False where
 /// the host has no such path (the caller sends it to the app itself).
 pub fn drive(kind : Int, text : String) -> Bool {
   current.val.drive(kind, text)

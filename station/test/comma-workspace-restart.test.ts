@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { WebSocketServer } from "ws";
-import { homeIndex } from "../src/comma/home-index.ts";
+import { workspaceIndex } from "../src/comma/workspace-index.ts";
 import { makeComma } from "../src/comma/index.ts";
 import { CommaStats, RevIndex, type StationRows } from "../src/comma/stats.ts";
 import { ConfigFile } from "../src/ops/config.ts";
@@ -54,13 +54,13 @@ test("a new home resets the old copy before its own first read completes", async
   const empty = { stats: new RevIndex(db, "stats_index"), tasks: new RevIndex(db, "task_index"), start: () => {} };
   let release!: (v: { stations: StationRows[]; unread: string[] }) => void;
   const pending = new Promise<{ stations: StationRows[]; unread: string[] }>((resolve) => { release = resolve; });
-  let index: ReturnType<typeof homeIndex> | null = null;
+  let index: ReturnType<typeof workspaceIndex> | null = null;
   const hasOldTitle = (page: Json) => /unscoped old title|old home title/.test(JSON.stringify(page.rows));
   const connects = makeComma({ data: dir, config, store: rig.store, receive: async () => {}, bound: () => true,
     scope: (ws) => {
-      index ??= homeIndex(dir, ws, () => "new-home", () => 1, () => pending, quiet);
+      index ??= workspaceIndex(dir, ws, () => true, () => 1, () => pending, quiet);
       return { indexes: index.indexes, chats: { read: async () => ({}), say: async () => ({}) } };
-    }, empty, home: () => "new-home", homeVersion: () => 1, onHomeChange: () => () => {}, previousExited: Promise.resolve() });
+    }, empty, home: () => "new-home", within: () => true, scopeVersion: () => 1, onScopeChange: () => () => {}, previousExited: Promise.resolve() });
   try {
     await connects.reconcile();
     await until(() => pages.some((page) => page.method === "task.index" && page.reset));
@@ -72,7 +72,7 @@ test("a new home resets the old copy before its own first read completes", async
   } finally {
     release({ stations: [], unread: [] });
     await connects.close();
-    if (index !== null) { await (index as ReturnType<typeof homeIndex>).stats.settled(); (index as ReturnType<typeof homeIndex>).stats.close(); }
+    if (index !== null) { await (index as ReturnType<typeof workspaceIndex>).stats.settled(); (index as ReturnType<typeof workspaceIndex>).stats.close(); }
     db.close(); wss.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await rig.close();

@@ -425,6 +425,11 @@ fn main {
   for name in @sfpages.screen_unread_calls() {
     @core.unread(name)
   }
+  // (a draft's words told and a ref asked at the caret, as each key is typed: their answers change only signals, taken
+  // as they come, the page they were typed in not built whole for them, sfbase's calls_said)
+  for name in @sfbase.calls_said() {
+    @core.said(name)
+  }
   if core_linked() == 0 || !@sfcore.start() {
     @sfapp.host_setup()
     @ui.run(@sf.product(), fn(c) {

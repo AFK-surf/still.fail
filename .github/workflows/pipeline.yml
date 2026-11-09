@@ -59,8 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, fetch-tags: true, filter: "blob:none" } # (the history's commits and trees: the range, the paths it changed; a blob read is fetched then)
-      - uses: actions/setup-node@v5
-        with: { node-version-file: .node-version, package-manager-cache: false }
+      - uses: ./.github/actions/node
       # Whether the natives job has anything to do: a part this run uses that the release native-artifacts lacks (the
       # keys are the sources' hashes: scripts/native.ts). None, and it is skipped (~25 s on macos-ci that everything
       # building waited for).
@@ -152,8 +151,7 @@ jobs:
       # the keys are git's blobs: the checkout as git has it
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version-file: .node-version, package-manager-cache: false }
+      - uses: ./.github/actions/node
       # (the Windows engine and shell in the native cache, as a run before fetched them: a download is not every run's
       # to break off, 39431384793)
       - name: The Windows natives' keys
@@ -476,8 +474,8 @@ jobs:
 
   # monoid's cloud (deploy.py CLOUDS: monoid.build, its test channel monoid.zone), in the company's Cloudflare account:
   # the same API and static parts, after still.fail's, as their own jobs (each fits its 5 minutes on its own). Its
-  # secrets are its own token and keys.json; the Google client, the push keys, PostHog and Axiom are still.fail's (one
-  # app). Its test channel's site (monoid.zone: website/ named monoid.zone; monoid.build's with the stable release),
+  # secrets are its own token, keys.json, Google client and FCM service account (monoid-build's); APNs, PostHog and
+  # Axiom are still.fail's. Its test channel's site (monoid.zone: website/ named monoid.zone; monoid.build's with the stable release),
   # not still.fail's status page, nor its relay (by hand, as ours).
   # monoid's jobs (monoid-*) run only while the repository's variable MONOID_CI is on (turned off 2026-11-04, as asked).
   monoid-api:
@@ -498,8 +496,8 @@ jobs:
           GOOGLE_OAUTH_JSON: ${{ secrets.MONOID_GOOGLE_OAUTH_JSON || secrets.GOOGLE_OAUTH_JSON }}
           AXIOM_JSON: ${{ secrets.AXIOM_JSON }}
           VAPID_JSON: ${{ secrets.VAPID_JSON }}
-          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
-          APNS_JSON: ${{ secrets.APNS_JSON }}
+          FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.MONOID_FCM_SERVICE_ACCOUNT_JSON }}
+          APNS_JSON: ${{ secrets.MONOID_APNS_JSON }}
           APPLE_JSON: ${{ secrets.APPLE_JSON }}
           REVIEW_ACCOUNTS_JSON: ${{ secrets.REVIEW_ACCOUNTS_JSON }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
@@ -607,6 +605,9 @@ jobs:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           RELEASE_DIR: ${{ runner.temp }}/release
         run: sh .github/release.sh android
+      # (what it weighs and takes once idle: mbui-size.yml, after this run)
+      - uses: actions/upload-artifact@v4
+        with: { name: "mbui-apk-${{ github.sha }}", path: "${{ runner.temp }}/release/android/*.apk", retention-days: 1, compression-level: 0 }
       - name: Put its files (named by its version, nothing points at them until put writes the feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -800,6 +801,7 @@ jobs:
           bash apps/mbui/scripts/moon-mtimes.sh
           bash .github/mac-release-prebuild.sh ready
       - uses: ./.github/actions/setup
+      - run: bash .github/mac-release-prebuild.sh packages
       - uses: actions/cache@v4
         with:
           path: apps/mbui/out/mac/AppIcon-*
@@ -1144,9 +1146,8 @@ jobs:
       actions: read
     steps:
       - uses: actions/checkout@v5
-        with: { sparse-checkout: "scripts/ci-time.ts\n.node-version", sparse-checkout-cone-mode: false }
-      - uses: actions/setup-node@v5
-        with: { node-version-file: .node-version, package-manager-cache: false }
+        with: { sparse-checkout: "scripts/ci-time.ts\n.node-version\n.github/actions/node", sparse-checkout-cone-mode: false }
+      - uses: ./.github/actions/node
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |

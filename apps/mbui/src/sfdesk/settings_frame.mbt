@@ -31,10 +31,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
   }
   @settings.frame(core, here)
   settings_fixture(src, core)
-  match route {
-    NewProfile(a) => add_profile_page(c, core, here, a)
-    _ => @settings.page(c, core, here, route)
-  }
+  @settings.page(c, core, here, route)
 }
 
 ///|
@@ -43,7 +40,7 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
 /// (关于, 更新日志, 记忆, 一台 station 的记忆, 用量, 价目表: pane_made, tape_made, narrow_made), and for one whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (Fonts | BarSettings | Me | Vault | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _))) {
+  if !(route is (Fonts | BarSettings | Me | Vault | VaultItem(_, _))) {
     return false
   }
   let core = settings_core(src, w)
@@ -56,10 +53,6 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
     Me => @sfpages.me_page(c, core, here, frame)
     Vault => @sfpages.vault_page(c, core, here, frame)
     VaultItem(v, item) => @sfpages.vault_item_page(c, core, here, frame, v, item)
-    Connects(only) => @sfpages.connects_page(c, src, core, here, frame, only)
-    Connect(station, id) => @sfpages.connect_page(c, src, core, here, frame, station, id)
-    Station(a) => @sfpages.station_page(c, core, here, frame, a)
-    Profile(a, id) => @sfpages.profile_page(c, core, here, frame, a, id)
     _ => ()
   }
   true
@@ -137,14 +130,14 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     }
     // Without the back row, keep the field below the sidebar's upper corners.
     let search_band = if @sf.native_on() { settings_search_native_band } else { settings_search_band }
-    c.box(style=@sf.side_list().then(search_band), fn() { @sfpages.settings_search(c) }) |> ignore
+    c.box(style=@sf.side_list().then(search_band), fn() { @sfpages.settings_search(c, side_at()) }) |> ignore
     side_scroll(c, "settings-nav", fn() {
       // (a row's page in place of the one open; on the tape brought over to show it)
       @sfpages.settings_side_rows(c, core, here, lit, fn(r) {
         @sfbase.history_push()
         app.nav.replace_above(1, [Setting(r)])
         @sfbase.show_chosen()
-      })
+      }, side_at())
     })
   })
   |> ignore
@@ -158,16 +151,16 @@ fn settings_back(c : @ui.Ctx, band : Bool) -> Unit {
     @sf.icon(c, "arrow-left", size=settings_nav_icon, color=t.p.muted) |> ignore
     nav_words(c, @sf.t("web-pages.settings.nav.backToChats"))
   }
-  let pressed = if band {
-    band_row(c, "settings-nav/back", false, body)
-  } else {
-    nav_row(c, "settings-nav/back", false, body)
-  }
-  if pressed {
+  let back = fn() {
     @sfpages.settings_search_reset()
     @sfbase.history_push()
     @sfbase.nav_over_home([])
     wide.landed.set("")
+  }
+  if band {
+    band_row(c, "settings-nav/back", false, body, at=side_at(), on_press=back)
+  } else {
+    nav_row(c, "settings-nav/back", false, body, at=side_at(), on_press=back)
   }
 }
 

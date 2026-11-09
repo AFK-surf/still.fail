@@ -133,7 +133,7 @@ test "a picture looked at on an iPhone Duo: the system's tabs put away, its acti
       fail("\{s.label} under the system's column: \{s.rect}")
     }
   }
-  match viewer.get().unwrap().zoom.rect() {
+  match viewer.get().unwrap().zoom.rect(t.ctx()) {
     Some((x, _, w, _)) => assert_true(x + w <= 951.0 - 84.0 + 0.5)
     None => fail("no picture laid out")
   }
@@ -1093,7 +1093,7 @@ test "a picture looked at and marked on an iPhone Duo on its side: laid out clea
   assert_eq(@sf.native_clear(), 84.0)
   let clear = 951.0 - 84.0
   // (the picture in the middle of what is clear of the column)
-  let (x, _, w, _) = viewer.get().unwrap().zoom.rect().unwrap()
+  let (x, _, w, _) = viewer.get().unwrap().zoom.rect(t.ctx()).unwrap()
   assert_true((x + w / 2.0 - clear / 2.0).abs() < 0.5, msg="its middle \{x + w / 2.0}, what is clear's \{clear / 2.0}")
   t.post(@hostapi.system_channel, "{\"nav\":\"over/mark\"}")
   t.run_for(@ui.move_most_ms)
@@ -1224,7 +1224,7 @@ test "an iPhone Duo: the chat's … in the system's bars is a menu of the system
   let t = native_chat(951.0, 669.0, true, side=84.0)
   let said = t.nav_said()
   // (its rows as the page's menu has them: the chat's own group, a line, where else it goes; no line closing it)
-  for s in ["\"id\":\"page/chat/more/0\",\"title\":\"" + @sf.t("web-main.chat.rename") + "\"", "\"id\":\"-\"", @sf.t("web-main.chat.copyLink")] {
+  for s in ["\"id\":\"page/chat/more/0\",\"title\":\"" + @sf.t("web-main.chat.rename") + "\"", "\"id\":\"-\"", @sf.t("web-main.chat.share")] {
     if !said.contains(s) {
       fail("the chat's … handed holds no \{s}: \{said}")
     }

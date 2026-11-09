@@ -29,12 +29,12 @@ pub fn switcher_open() -> Bool {
 }
 
 ///|
-/// ⌘K pressed (the keymap's chat.switch): open, empty; open already, closed.
-pub fn switcher_toggle(c : @ui.Ctx) -> Unit {
+/// ⌘K pressed (the keymap's chat.switch): open, empty; open already, closed, the keyboard let go (`blur`).
+pub fn switcher_toggle(blur : () -> Unit) -> Unit {
   // (what it was, as the key is taken: not followed by what takes it)
-  let was = @signals.untracked(fn() { switching.get() })
+  let was = switching.untracked()
   if was {
-    c.blur()
+    blur()
   }
   switching.set(!was)
   switcher_closed()
@@ -42,15 +42,15 @@ pub fn switcher_toggle(c : @ui.Ctx) -> Unit {
 
 ///|
 /// Esc: in one kind's list, back to all of them; else closed (its field let go: the keyboard goes nowhere until another
-/// is pressed). Whether it took it (open).
-pub fn switcher_escape(c : @ui.Ctx) -> Bool {
-  if !@signals.untracked(fn() { switching.get() }) {
+/// is pressed: `blur`). Whether it took it (open).
+pub fn switcher_escape(blur : () -> Unit) -> Bool {
+  if !switching.untracked() {
     return false
   }
   if !@sfpages.finder_back() {
     switching.set(false)
     switcher_closed()
-    c.blur()
+    blur()
   }
   true
 }

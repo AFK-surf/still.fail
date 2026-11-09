@@ -24,6 +24,8 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/stationcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/playcheck.mbt"
       - "apps/mbui/mbui/src/kitdemo/gallery/badgecheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/gallery/a11ycheck.mbt"
+      - "apps/mbui/mbui/src/ui/a11y.mbt"
       - "apps/mbui/mbui/src/host/linux*"
       - "apps/mbui/mbui/src/host/mini_json.h"
       - "apps/mbui/mbui/src/kitdemo/gallery/linkcheck.mbt"
@@ -112,6 +114,9 @@ jobs:
       - name: "The dock's number's contract: said to the docks on the session bus, given to one that asks"
         if: success() || failure()
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux badge
+      - name: "The accessibility's contract: a button and a checkbox told GTK's accessibility, walked as AT-SPI walks them"
+        if: success() || failure()
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/host_contract.sh linux a11y
       - name: "Streams: streamdemo's JPEG (gdk-pixbuf) said shown to its end (STREAM done)"
         if: success() || failure()
         run: |

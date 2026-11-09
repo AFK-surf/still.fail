@@ -139,6 +139,9 @@ double mb_app_scale(void) { return scale; }
 
 void *mb_app_under(void) { return under; }
 
+// the app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): accessibles under the canvas
+#include "linux_a11y.h"
+
 // The canvas: a GtkGLArea that holds no press where a native view shows (linux_views.c): the view under it has it.
 // Drawn at the window's own scale, a fractional one too (GNOME's 125%, 150%, at which GTK draws the window:
 // gdk_surface_get_scale): GtkGLArea makes its picture at the whole scale above that (2 for 1.25), which GTK then
@@ -164,7 +167,8 @@ typedef struct {
 typedef struct {
   GtkGLAreaClass parent;
 } CanvasClass;
-G_DEFINE_TYPE(Canvas, canvas, GTK_TYPE_GL_AREA)
+G_DEFINE_TYPE_WITH_CODE(Canvas, canvas, GTK_TYPE_GL_AREA,
+                        G_IMPLEMENT_INTERFACE(GTK_TYPE_ACCESSIBLE, canvas_accessible_init))
 
 static gboolean on_render(GtkGLArea *a, GdkGLContext *c, gpointer data);
 static void canvas_resized(int pw, int ph);
@@ -938,6 +942,12 @@ int32_t mb_host_platform(void) { return 5; }
 
 void mb_host_request_frame(void) { schedule(); }
 
+// A frame for what moves on by the clock that needs fewer (@hostapi.frames_paced): not paced here, the next drawn.
+void mb_host_frames_paced(double hz) {
+  (void)hz;
+  mb_host_request_frame();
+}
+
 // (the loop waits no longer than it: run_loop)
 void mb_host_wake_after(double ms) {
   double t = mb_now_ms() + ms;
@@ -1127,9 +1137,6 @@ double mb_host_font_scale(void) {
 int32_t mb_host_native_pointing(void) { return 2; }
 // Whether a keyboard is at hand (@hostapi.keyboard): a computer's, always.
 int32_t mb_host_keyboard(void) { return 1; }
-// The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
-int32_t mb_host_a11y_on(void) { return 0; }
-void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }
 
 // Sharing (@hostapi.share, @hostapi.shared_in): no share sheet on Linux; nothing comes in.
 int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_string_t mime, moonbit_bytes_t data) {
@@ -1253,6 +1260,9 @@ void mb_host_set_full_screen(int32_t on) {
   if (on) gtk_window_fullscreen(GTK_WINDOW(win));
   else gtk_window_unfullscreen(GTK_WINDOW(win));
 }
+
+// The app's own top row draws Linux's buttons (window_keys_own): nothing of the system's to move.
+void mb_host_window_buttons_down(double by, double ms) { (void)by; (void)ms; }
 
 // How round the system draws the window's corners (@hostapi.window_corner): its content's are square under the title
 // bar.

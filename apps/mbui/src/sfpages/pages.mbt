@@ -76,6 +76,7 @@ pub fn reset() -> Unit {
   station_cards_reset()
   station_page_reset()
   profile_page_reset()
+  add_profile_start.clear()
   local_menu.val = false
   memory_doc_reset()
   signin_reset()

@@ -150,7 +150,7 @@ fn screen_rig(
         },
         fn(k) { k },
         fn(row, k) {
-          let (station, screen) = @signals.untracked(fn() { k.get() })
+          let (station, screen) = k.untracked()
           row.owns(fn() { screen_left(src, station, screen) }) |> ignore
         },
       )
@@ -314,7 +314,7 @@ fn ScreenRig::frame(self : ScreenRig, ts : Double) -> Unit {
 /// A point of the frame (0..1 each way), in the window.
 fn ScreenRig::at(self : ScreenRig, x : Double, y : Double) -> (Double, Double) {
   let u = self.ui()
-  let s = u.shown()
+  let s = u.shown(self.t.ctx())
   (u.stage_x + s.x + x * s.w, u.stage_y + s.y + y * s.h)
 }
 
@@ -506,18 +506,18 @@ test "zoomed in, the part in sight is asked for, as sharp as it is shown; its fr
   let u = r.ui()
   // not zoomed: nothing told
   assert_eq(r.told("screen.look").length(), 0)
-  u.zoom.zoom_to(u.zoom.fit() * 4.0, u.box_w / 2.0, u.box_h / 2.0, false)
+  u.zoom.zoom_to(u.zoom.fit() * 4.0, u.box_w.get() / 2.0, u.box_h.get() / 2.0, false, at=r.t.ctx().moment())
   r.t.draw()
   r.t.draw()
   let looks = r.told("screen.look")
   assert_eq(looks.length(), 1)
   let region = field(Some(looks[0]), "region")
-  let shown = u.shown()
+  let shown = u.shown(r.t.ctx())
   // a quarter of its width in the middle, all the stage's height of it, in the pixels it is shown in
   assert_true(close_to(number(region, "x"), 0.375))
   assert_true(close_to(number(region, "w"), 0.25))
   let rh = number(region, "h")
-  assert_true(close_to(rh, u.box_h / shown.h))
+  assert_true(close_to(rh, u.box_h.get() / shown.h))
   assert_true(close_to(number(Some(looks[0]), "width") / number(Some(looks[0]), "height"), 0.25 * shown.w / (rh * shown.h)))
   // the part's frames (the station's config saying the part): a decoder of their own, drawn over the whole there
   let part : Json = { "x": 0.375, "y": number(region, "y"), "w": 0.25, "h": rh }
@@ -539,7 +539,7 @@ test "zoomed in, the part in sight is asked for, as sharp as it is shown; its fr
   // laid out by the whole screen's size still
   assert_eq(r.sess().frame_size(), Some((1280, 720)))
   // zoomed out: the whole told; the part drawn until the whole's frame comes, then the whole alone
-  u.zoom.fit_now()
+  u.zoom.fit_now(at=r.t.ctx().moment())
   r.t.draw()
   r.t.draw()
   assert_eq(r.told("screen.look").length(), 2)
@@ -644,25 +644,25 @@ test "only looking, a double tap zooms in where it is and another back to fitted
   r.config()
   r.frame(1000.0)
   let u = r.ui()
-  assert_false(u.zoom.zoomed())
+  assert_false(u.zoom.zoomed(r.t.ctx()))
   r.tap_at(0.25, 0.25)
   r.tap_at(0.25, 0.25)
   r.t.run_for(@ui.move_most_ms)
-  assert_true(u.zoom.zoomed())
+  assert_true(u.zoom.zoomed(r.t.ctx()))
   assert_eq(r.inputs().length(), 0)
   // the same point of the screen, still under the finger
   r.t.run_for(screen_double_tap_ms)
   r.tap_at(0.25, 0.25)
   r.tap_at(0.25, 0.25)
   r.t.run_for(@ui.move_most_ms)
-  assert_false(u.zoom.zoomed())
+  assert_false(u.zoom.zoomed(r.t.ctx()))
   // one tap, then the wait over before the next: no zoom
   r.t.run_for(screen_double_tap_ms)
   r.tap_at(0.25, 0.25)
   r.t.run_for(screen_double_tap_ms)
   r.tap_at(0.25, 0.25)
   r.t.run_for(@ui.move_most_ms)
-  assert_false(u.zoom.zoomed())
+  assert_false(u.zoom.zoomed(r.t.ctx()))
   screen_done(r.t)
 }
 
@@ -730,7 +730,7 @@ test "全屏 (控制中心's upright): the screen alone, sideways, its tools fol
   let u = r.ui()
   assert_true(u.full.get())
   // edge to edge: the stage is the whole window
-  assert_eq((u.box_w, u.box_h), (844.0, 390.0))
+  assert_eq((u.box_w.get(), u.box_h.get()), (844.0, 390.0))
   assert_true(r.labelled("工具") is Some(_))
   assert_true(r.labelled("关闭") is None)
   r.tap_label("工具")
@@ -747,17 +747,17 @@ test "全屏 (控制中心's upright): the screen alone, sideways, its tools fol
 ///|
 test "the keyboard up keeps the frame as large, the pointer in sight; down again, fitted as before" {
   let zoom = screen_zoom()
-  zoom.natural(1280.0, 720.0)
-  zoom.boxed(800.0, 360.0)
+  zoom.natural(1280.0, 720.0, at=@ui.current().moment())
+  zoom.boxed(800.0, 360.0, at=@ui.current().moment())
   let before = fit_in(800.0, 360.0, 1280.0, 720.0)
-  zoom.resize_keeping(800.0, 150.0, Some((0.5, 0.9)), 40.0)
-  let (_, sy, sw, sh) = zoom.rect().unwrap()
+  zoom.resize_keeping(800.0, 150.0, Some((0.5, 0.9)), 40.0, when=@ui.current().moment())
+  let (_, sy, sw, sh) = zoom.rect(@ui.current()).unwrap()
   assert_true((sw - before.w).abs() < 1.0)
   let y = sy + 0.9 * sh
   assert_true(y >= 0.0 && y <= 150.0)
-  zoom.resize_keeping(800.0, 360.0, Some((0.5, 0.9)), 40.0)
-  assert_true(!zoom.zoomed())
-  let (x, y, w, h) = zoom.rect().unwrap()
+  zoom.resize_keeping(800.0, 360.0, Some((0.5, 0.9)), 40.0, when=@ui.current().moment())
+  assert_true(!zoom.zoomed(@ui.current()))
+  let (x, y, w, h) = zoom.rect(@ui.current()).unwrap()
   assert_true((x - before.x).abs() < 0.001 && (y - before.y).abs() < 0.001)
   assert_true((w - before.w).abs() < 0.001 && (h - before.h).abs() < 0.001)
 }
@@ -960,9 +960,9 @@ test "on a phone a page of the station's browser is laid out for the stage it is
   let r = screen_rig(until_gone=true)
   let u = r.ui()
   let fit = field(Some(r.told("screen.view")[0]), "fit")
-  assert_true(u.box_w > 0.0 && u.box_h > 0.0)
-  assert_eq(number(fit, "width"), u.box_w.round())
-  assert_eq(number(fit, "height"), u.box_h.round())
+  assert_true(u.box_w.get() > 0.0 && u.box_h.get() > 0.0)
+  assert_eq(number(fit, "width"), u.box_w.get().round())
+  assert_eq(number(fit, "height"), u.box_h.get().round())
   assert_true(number(fit, "scale") > 0.0)
   r.live()
   assert_true(!r.sess().pad(r.sess().src), msg="driven directly, as the phone's own browser")
@@ -1066,8 +1066,10 @@ test "a login field in focus while driving a tab: 用 1Password 填入; its logi
   r.t.draw()
   r.t.draw()
   assert_true(r.t.find("1Password 里没有 example.org 的登录") is Some(_))
-  @ui.fake_op.val = None
   screen_done(r.t)
+  // (the host's 1Password let go of once the run is done: taken away before, the page lost its offer between two
+  // frames with nothing said, a frame painted from the last build showing it still, MBUI_TEST_FPS=24)
+  @ui.fake_op.val = None
 }
 
 ///|

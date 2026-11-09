@@ -403,9 +403,9 @@ test "a scripted run taps words only where a finger reaches them: not under what
   let t = @ui.Tester::new(
     fn(c) {
       let row = c.id("row")
-      if c.clicked(row) {
+      c.on_press(row, fn() {
         tapped.val += 1
-      }
+      })
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
         c.box(h=Px(80.0), fn() {  }) |> ignore
         c.box(id=row, h=Px(20.0), fn() { c.text("忽略", wrap=false) |> ignore }) |> ignore
@@ -637,7 +637,7 @@ test "a motion going on owes no frame at a moment: draw draws one, run_for draws
 ///|
 test "set_frame_times: every frame at the times given (an input's, run_for's, draw's), then on the period from the last" {
   let taps : Array[Double] = []
-  let t = @ui.Tester::new(fn(c) { if c.button("Go") { taps.push(c.moment()) } }, w=200.0, h=200.0)
+  let t = @ui.Tester::new(fn(c) { c.button("Go", on_press=fn() { taps.push(c.moment()) }) }, w=200.0, h=200.0)
   let now = t.time()
   // a run's own frames: not evenly apart
   let times = Array::makei(12, fn(k) { now + 15.0 * (k + 1).to_double() + (if k % 3 == 0 { 1.5 } else { 0.0 }) })
@@ -648,9 +648,11 @@ test "set_frame_times: every frame at the times given (an input's, run_for's, dr
   // a frame: the first of them
   t.frame()
   assert_eq(t.time(), times[0])
-  // a tap: taken at the next of them, the frames it causes each one of them
+  // a tap: its handler told at its moment (the time it came, the frame's it came after), the frames it causes each one
+  // of them
   t.tap_text("Go")
-  assert_eq(taps, [times[1]])
+  assert_eq(taps, [times[0]])
+  assert_true(times.contains(t.time()) && t.time() > times[0], msg="\{t.time()}")
   let k = times.search(t.time()).unwrap()
   // run_for: to the first of them at or past its end
   t.run_for(times[k + 2] - 1.0 - t.time())

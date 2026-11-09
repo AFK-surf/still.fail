@@ -167,6 +167,7 @@ fn Ctx::row_drawing_safe(self : Ctx, rn : RowNodes, i : Int) -> String {
         // a row come in, its look still once it is in, ListRows::enter)
         if e.look_by is Some(_) && !e.look_now().is_still() { return "look_by" }
         if e.glyphs_by is Some(_) || e.notch_by is Some(_) || e.cut_by is Some(_) { return "glyphs/notch/cut_by" }
+        if e.ink_by is Some(_) { return "ink_by" }
       }
       None => ()
     }

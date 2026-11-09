@@ -23,11 +23,11 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         if @sf.native_on() {
           // (as high as 新建对话's row, the filter beside it on the tape's line: band_new_tape_over)
           workspace_heading(c, src, w)
-        } else if band_row(c, "side/new", is_new, fn() {
+        } else {
+          band_row(c, "side/new", is_new, fn() {
             band_mark(c, "compose", t.p.muted)
             band_words(c, @sf.t("web-main.sidebar.newChat"))
-          }) {
-          new_chat()
+          }, at=side_at(), on_press=new_chat)
         }
       })
       |> ignore
@@ -156,7 +156,7 @@ fn band_new_tape(at? : BandAt = band_at_old()) -> @ui.Style {
     // The glass's outside edge follows the day heading's words, including the
     // list row's inner padding, not just the card's outer content margin.
     let list = @sf.theme().chat_list
-    let inset = @sf.room_of(list.band_in + list.heading_in)
+    let inset = @sf.room_of(list.band_in + @sf.heading_in_at(Tape))
     return nav_new().then(@ui.style(pl=inset, pr=inset, pt=S1))
   }
   let corner = @sf.tape_side_corners()[1].radius(at.roots)
@@ -310,13 +310,13 @@ fn filter_button(
   let look = if in_bar { filter_box_bar() } else { filter_box }
   let b = c.box(style=look, id~, fn() {
     let plain = @sf.icon(c, "filter", size=side_icon, color=t.p.muted)
-    c.look_by(plain, fn() { @ui.look(alpha=1.0 - dmax(0.0, dmin(1.0, hot.get()))) })
+    c.look_by(plain, fn() { @ui.look(alpha=1.0 - dmax(0.0, dmin(1.0, hot.get(c)))) })
     let lit = c.layer(fn() {
       c.box(style=filter_lit_at, fn() { @sf.icon(c, "filter", size=side_icon, color=t.p.text) |> ignore }) |> ignore
     })
-    c.look_by(lit, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, hot.get()))) })
+    c.look_by(lit, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, hot.get(c)))) })
   })
-  c.bg_by(b, fn() { @sf.alpha(hover, hot.get()) })
+  c.bg_by(b, fn() { @sf.alpha(hover, hot.get(c)) })
   c.semantics(b, Button, id~, label=@sf.t("web-main.filter.chats.named", args=[("named", filter_named(shown))]))
   @sf.tip(c, "side/filter-tip", id, @sf.t("web-main.filter.chats"))
 }

@@ -85,6 +85,16 @@ fn h_spin(ms : Double) -> Unit = "film" "spin"
 fn h_now() -> Double = "film" "now"
 
 ///|
+fn h_mark(frame : Int, end : Int) -> Unit = "film" "mark"
+
+///|
+/// A measured frame drawn begins (`end` false) or ends: told to the host, which counts what a profiled program runs
+/// between the two (mbui's wasm_shell.c with MBUI_PROFILE_FILE; scripts/wasmgas).
+fn mark(frame : Int, end : Bool) -> Unit {
+  h_mark(frame, if end { 1 } else { 0 })
+}
+
+///|
 /// What the host answered last.
 fn got() -> String {
   let out = StringBuilder::new()

@@ -19,7 +19,7 @@ test "a sending flight is read only while an answer can be held by it" {
     agent: "agent",
     pose: Fold,
     from: None,
-    clock: pose_clock(Fold.ms(), Some(t.time())),
+    clock: pose_clock(t.ctx(), Fold.ms(), Some(t.time())),
     span: Fold.ms(),
     warp: None,
   })

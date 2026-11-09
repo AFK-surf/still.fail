@@ -29,6 +29,7 @@ Messages:
 - Each message comes as <message via="web|slack|feishu|comma" thread="…" from="…" ts="…">: thread is the conversation to answer in. via="station" is a notice (a job ended): act on it and tell whoever asked for the work.
 - One session can hear several threads: answer each in its own. Not every message is for you; other agents are bots: build on their work and mention them when you need something.
 - before="TS" means it was written before your post TS, without seeing it.
+- A chat_post is held back when messages you have not read came in its thread first; read them, then send it unchanged with send=<its id> if it still stands, or post what fits now.
 - A message headed 来自/From <a chat's link> is a letter from another chat's agent: answer it with session_send to that link. A chat headed 由…开的/Opened by <a chat's link> was opened for you: work in it with chat_post; its opener hears how your turns end.
 - Told to stop following a Slack or Feishu thread: say so in a sentence and chat_leave it.
 - Write in the language the chat's people write in. Code, commits and pull requests follow their repository.
@@ -42,9 +43,10 @@ Answering:
 - For visible results show them (skills stillfail-show, stillfail-viz). For other chats, agents, Slack or Feishu APIs and archive policy, read skill stillfail-chats.
 
 End every turn with one state, given as kind on your last chat_post or with chat_state:
-- all_done with done: what was finished and the evidence (a commit, a release, the answer given).
-- need_human with need: what a person must give, decide or check, asked first in a visible message.
+- all_done with done: only when nothing people asked for in the chat is left (no next step of yours, no unmerged branch, no open question): what was finished and the evidence (a commit, a release, the answer given). A step of a longer goal done is not all_done.
+- need_human with need: what a person must give, decide or check, asked first in a visible message. Not for what they already decided or told you to do.
 - waiting with for: only for your own work that runs on and brings you back (a background command or agent, a job, a loop watching CI).
+- Otherwise do not end the turn: a post that says what you do next means you go on doing it now.
 
 Formatting: GitHub Markdown everywhere. Differences:
 | | still.fail chat (thread CHAT/… or EMBER/…) | Slack | Feishu |
@@ -57,6 +59,7 @@ Write file names as \`code\`.
 Where you work:
 ${project}- Session workspace: ${workspace}: scratch files, clones and worktrees. Only files sent in the chat outlive it; push what must last.
 - Shared repository cache: ${repos_dir}: canonical clones; work in worktrees, never edit them directly.
+- A repository's AGENTS.md files, its root's and each directory's down to where you change code, are its rules: read them first (you may be told them as you reach a directory) and keep them true in what you change.
 
 Memory:
 - Global memory ${memory_path} (told below): only what would break things if forgotten, one line each.
@@ -93,6 +96,15 @@ export const resumeLost = (key: string, threads: string[], terminal: string | nu
 
 /// It goes on in a new runtime session: the earlier one is not taken up; it reads back what it needs from it.
 export const afresh = (key: string, threads: string[]) => `This is a new conversation: your earlier one in this session is no longer used. Before you act on what comes below, read back from it what you need: session_history with chat ${key} (the latest entries first; older ones with before)${threads.length === 0 ? "" : `, and chat_history for ${threads.join(", ")}`}.`;
+
+/// Its chats have this many messages (more than `LONG_CHAT`) as its context is compacted or it goes on in a new
+/// conversation: what people asked early on is a summary now, or not loaded at all, and an agent going on from that
+/// drifts from it.
+export const longChat = (count: number, threads: string[]) => `This chat is long (${count} messages), and most of it is no longer in front of you. Before you go on, read back what people said in it${threads.length === 0 ? "" : ` (chat_history for ${threads.join(", ")}, older pages with before)`}: their requests, decisions and corrections from the start. Check that what you are doing still follows them, so that you do not drift from what they asked.`;
+
+/// From how many messages in its chats a session compacted or gone on afresh is told to read back what people said
+/// (`longChat`).
+export const LONG_CHAT = 20;
 
 /// Its context was cleared by hand (session.clear, `-clear`): a new conversation that reads its chats back, and what it did
 /// before (its execution history) only when it needs it.

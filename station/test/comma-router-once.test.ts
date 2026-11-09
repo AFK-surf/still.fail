@@ -376,15 +376,15 @@ test("a Router write is refused until the old process has actually exited", asyn
     rig.store.joinThread(thread.id, "a", "ember");
     let exited!: () => void;
     const gone = new Promise<void>((resolve) => { exited = resolve; });
-    const said = routerSaysAfter(rig.hub, stats, () => rig.hub.wsOf("a"), gone);
+    const said = routerSaysAfter(rig.hub, stats, gone);
     const w = { thread: thread.id, text: "after handover", key: "cm:handover", requester: "Router", connect: "cm" };
-    assert.throws(() => said(w), /still handing over/);
+    assert.throws(() => said(rig.hub.wsOf("a"), w), /still handing over/);
     assert.deepEqual(rig.store.entriesAfter(thread.id, 0), []);
     exited();
     await gone;
-    const n = said(w);
+    const n = said(rig.hub.wsOf("a"), w);
     assert.deepEqual(rig.store.entriesAfter(thread.id, 0).map((e) => [e.n, e.text]), [[n, "after handover"]]);
-    assert.equal(said(w), n);
+    assert.equal(said(rig.hub.wsOf("a"), w), n);
   } finally { stats.close(); await rig.close(); }
 });
 

@@ -5,7 +5,9 @@
 // workspace with nothing in it yet); "chat" (the first row's chat open: chat_fixture.mbt), "chat-loading" (it being
 // read), "chat-long" (thousands of messages in it); "long" (the chats and many weeks more of them: for flinging,
 // scripts/android.sh fling-test); "home-pins" (the chats as a station that knows pins says them: one pinned, one kept);
-// "home-share" (one of them shared and pictured from its row's menu, and in Slack).
+// "home-share" (one of them shared and pictured from its row's menu, and in Slack); "long-paged" (a long account's
+// chats, two hundred days of them, given a page at a time as the core gives them: firstRows, its `limit` and `more`;
+// scripts/instrbench.sh's `paged`).
 
 ///|
 pub(all) struct Fixture {
@@ -21,6 +23,8 @@ pub(all) struct Fixture {
   mut haptics : String
   /// automatic updates chosen (the prefs' `appUpdate`: off; "" on)
   mut app_update : String
+  /// how the composer sends (prefs `sendKey`): `mod`, or "" Enter
+  mut send_key : String
   archived : Map[String, Bool]
   hidden : Map[String, Bool]
   muted : Map[String, Bool]
@@ -578,7 +582,7 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
     { "daysAgo": 1, "at": 0, "label": "昨天", "items": keep(yesterday) },
     { "daysAgo": 4, "at": 0, "label": "星期三", "items": keep(earlier) },
   ]
-  if f.mode == "long" {
+  if f.mode == "long" || f.mode == "long-paged" {
     // weeks more, six chats a day, every word made up
     let topics = ["例会的记录", "接口的命名", "图标的尺寸", "崩溃的日志", "发布的说明", "测试的清单"]
     // (each with what leads it, as the core would say: none for words of their own)
@@ -590,7 +594,7 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
       ("要你帮忙看一眼", "", ""),
       ("已经交给评审", "", ""),
     ]
-    for d in 0..<40 {
+    for d in 0..<(if f.mode == "long-paged" { 200 } else { 40 }) {
       let items = Array::makei(6, fn(k) {
         let n = d * 6 + k + 11
         let (said, lead, rest) = states[(d + k) % 6]
@@ -605,6 +609,36 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
     }
   }
   days
+}
+
+///|
+/// The first `limit` rows of `days`, in their days, and how many more there are (the core's views.ts firstRows).
+fn first_rows(days : Array[Json], limit : Int) -> (Array[Json], Int) {
+  let mut left = limit
+  let mut more = 0
+  let out : Array[Json] = []
+  for d in days {
+    let its = items(Some(d), "items")
+    if left <= 0 {
+      more += its.length()
+      continue
+    }
+    if its.length() <= left {
+      out.push(d)
+    } else {
+      match d {
+        Object(m) => {
+          let v = m.copy()
+          v["items"] = Json::array(its[:left].to_array())
+          out.push(Json::object(v))
+        }
+        _ => out.push(d)
+      }
+      more += its.length() - left
+    }
+    left -= if its.length() < left { its.length() } else { left }
+  }
+  (out, more)
 }
 
 ///|
@@ -638,7 +672,19 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
   let mine = params.get("mine") is Some(True)
   let watching = params.get("watching") is Some(True)
   let days = if scope == "ws1" && f.mode != "empty" && !watching {
-    let all = fixture_days(f)
+    // (a long account's made once, as a core keeps its chats: what each page asks costs it no more)
+    let all = if f.mode == "long-paged" {
+      match paged_days.val {
+        Some(d) => d
+        None => {
+          let d = fixture_days(f)
+          paged_days.val = Some(d)
+          d
+        }
+      }
+    } else {
+      fixture_days(f)
+    }
     if mine {
       // the viewer's: those they are in
       all.map(fn(d) {
@@ -683,7 +729,12 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
     days
   }
   let empty = days.iter().all(fn(d) { items(Some(d), "items").length() == 0 })
-  Some({
+  // (its first `limit` rows and how many more it has, as the core's firstRows gives them)
+  let (days, more) = match params.get("limit") {
+    Some(Number(n, ..)) if f.mode == "long-paged" => first_rows(days, n.to_int())
+    _ => (days, 0)
+  }
+  let chats : Json = {
     "me": { "email": "lin@example.com" },
     "stations": if scope == "ws1" { stations } else { [] },
     "loading": false,
@@ -706,8 +757,59 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
     } else {
       { "online": 1, "dim": 0, "failing": 0, "working": 0, "connecting": 0, "label": "1 台在线" }
     },
-  })
+  }
+  match chats {
+    Object(m) if more > 0 => m["more"] = Json::number(more.to_double())
+    _ => ()
+  }
+  if f.mode == "long-paged" {
+    // (as the core's message comes to the app, more of a list asked from what it has: the rows it had kept as they
+    // were, those new read from their text)
+    match chats {
+      Object(m) =>
+        m["days"] = Json::array(
+          items(Some(chats), "days").map(fn(d) {
+            match d {
+              Object(dm) => {
+                let v = dm.copy()
+                v["items"] = Json::array(items(Some(d), "items").map(paged_row))
+                Json::object(v)
+              }
+              _ => d
+            }
+          }),
+        )
+      _ => ()
+    }
+    Some(chats)
+  } else {
+    Some(chats)
+  }
 }
+
+///|
+// kept across runs: let go of as a fixture is made (fixture)
+/// A long-paged account's rows as the app has had them, by their keys.
+let paged_rows : Map[String, Json] = {}
+
+///|
+/// Row `r` as the app has it: as it had it, else read from its text.
+fn paged_row(r : Json) -> Json {
+  let key = text(Some(r), "station") + "\u{1}" + text(Some(r), "id")
+  match paged_rows.get(key) {
+    Some(had) => had
+    None => {
+      let read = @json.parse(r.stringify()) catch { _ => r }
+      paged_rows[key] = read
+      read
+    }
+  }
+}
+
+///|
+// kept across runs: let go of as a fixture is made (fixture)
+/// A long-paged account's days, made once.
+let paged_days : Ref[Array[Json]?] = Ref(None)
 
 ///|
 ///|
@@ -733,21 +835,31 @@ pub fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> 
   // (the same answer while the made-up core is as it was, as the core's own: a subscription's value kept, not worked
   // out again each time it is read)
   let version = f.changes() + @settings.fixture_version() + fix_browse.changes + fix_presets_said.val
+  // (a draft's own changes, its words as they are typed: its topic's alone, fix_compose_call)
+  let own = if name == "composer" {
+    @settings.fixture_draft_followed()
+    match fix_writes.get(text(Some(Json::object(params)), "key")) {
+      Some(w) => w.version
+      None => 0
+    }
+  } else {
+    0
+  }
   let key = name + "\u{1}" + f.mode + "\u{1}" + Json::object(params).stringify()
   match fixture_answers.get(key) {
-    Some(t) if t.version == version => return t
+    Some((at, at_own, t)) if at == version && at_own == own => return t
     _ => ()
   }
   let t = fixture_answer(f, name, params, version)
-  fixture_answers[key] = t
+  fixture_answers[key] = (version, own, t)
   t
 }
 
 ///|
-/// The made-up core's answers given, by topic and what was asked, each as of the version it was given at
-/// (fixture_topic).
+/// The made-up core's answers given, by topic and what was asked, each as of the version it was given at, and its
+/// draft's for a draft's topic (fixture_topic).
 // kept across runs: let go as a fixture is made (fixture)
-let fixture_answers : Map[String, Topic] = {}
+let fixture_answers : Map[String, (Int, Int, Topic)] = {}
 
 ///|
 /// Topic `name` asked with `params`, worked out of the made-up core as it is (`version`).
@@ -937,7 +1049,8 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         "fonts": fixture_fonts(f.fonts),
         "faces": fixture_faces(f.fonts),
         "keys": fixture_keys(f.keys),
-        "keymap": fixture_keymap(f.keys),
+        "sendKey": if f.send_key == "" { Json::null() } else { Json::string(f.send_key) },
+        "keymap": fixture_keymap(f.keys, send_key=f.send_key),
         // the rail as the core says it (rail.ts railView), none kept: its default
         "railView": match fixture_kept("railView", {}, None) {
           Some(Ok((v, _))) => v
@@ -1014,6 +1127,8 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         Some(fix_presets_of(text(Some(Json::object(params)), "station")))
       }
     "newChat" | "pick" => fixture_new_topic(f, name)
+    // none left up long, as the core answers it (the first page waits for it); decide_fixture.mbt's modes say theirs
+    "longJobs" if !decide_mode(f.mode) => Some({ "groups": [], "lit": false, "ids": [] })
     _ =>
       match decide_fixture_topic(f, name, params) {
         Some(v) => v
@@ -1137,6 +1252,8 @@ pub fn failed_topics(base : Source, failed : Array[String], why : String) -> Sou
 /// A source of made-up chats (see the top of this file for `mode`).
 pub fn fixture(mode : String) -> Source {
   fixture_answers.clear()
+  paged_days.val = None
+  paged_rows.clear()
   fixture_preview(mode)
   let f : Fixture = {
     mode: if mode == "" { "home" } else { mode },
@@ -1150,6 +1267,7 @@ pub fn fixture(mode : String) -> Source {
     window_zoom: "",
     haptics: "",
     app_update: "",
+    send_key: "",
     archived: {},
     hidden: {},
     muted: {},
@@ -1293,9 +1411,12 @@ pub fn fixture(mode : String) -> Source {
     topic_alive: fn() { true },
     topic_lease_own: None,
     call: fn(name, params, done) {
-      // (answered at once, as a core's answer comes from outside: what it changes of what is no signal taken so)
+      // (answered at once, as a core's answer comes from outside: what it changes of what is no signal taken so; but one
+      // whose answer changes only signals, as the core's is taken as it comes, sfbase's calls_said)
       let done = fn(r) {
-        @ui.came_from_outside()
+        if !@sfbase.call_said(name) {
+          @ui.came_from_outside()
+        }
         done(r)
       }
       match fixture_kept(name, params, None) {
@@ -1472,6 +1593,11 @@ pub fn fixture(mode : String) -> Source {
           match field(Some(params), "appUpdate") {
             Some(String(u)) => f.app_update = u
             Some(Null) => f.app_update = ""
+            _ => ()
+          }
+          match field(Some(params), "sendKey") {
+            Some(String(k)) => f.send_key = k
+            Some(Null) => f.send_key = ""
             _ => ()
           }
           match field(Some(params), "listFilter") {

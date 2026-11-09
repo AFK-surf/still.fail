@@ -112,31 +112,31 @@ fn station_card(c : @ui.Ctx, core : Core, st : Json) -> Unit {
   let t = @sf.theme()
   let s = Some(st)
   let address = text(s, "station")
-  if card(c, key="station/" + address, fn() {
-      let emoji = text(s, "emoji")
-      let icon = text(s, "icon")
-      card_head(
-        c,
-        fn() {
-          if @sf.has_station_mark(emoji, icon) {
-            @sf.station_mark(c, emoji, icon, card_mark, t.p.text)
-          } else {
-            @sf.icon(c, "server", size=card_mark, color=t.p.text) |> ignore
-          }
-        },
-        text(s, "name"),
-        Some(join([joined_mark(s), text(s, "summary")], " · ")),
-        fn() {
-          if flag(s, "reconnecting") {
-            reconnecting(c)
-          }
-          chevron(c)
-        },
-      )
-      station_body(c, core, s)
-    }) {
+  card(c, key="station/" + address, fn() {
+    let emoji = text(s, "emoji")
+    let icon = text(s, "icon")
+    card_head(
+      c,
+      fn() {
+        if @sf.has_station_mark(emoji, icon) {
+          @sf.station_mark(c, emoji, icon, card_mark, t.p.text)
+        } else {
+          @sf.icon(c, "server", size=card_mark, color=t.p.text) |> ignore
+        }
+      },
+      text(s, "name"),
+      Some(join([joined_mark(s), text(s, "summary")], " · ")),
+      fn() {
+        if flag(s, "reconnecting") {
+          reconnecting(c)
+        }
+        chevron(c)
+      },
+    )
+    station_body(c, core, s)
+  }, on_press=fn() {
     (core.push)(Station(address))
-  }
+  })
 }
 
 ///|

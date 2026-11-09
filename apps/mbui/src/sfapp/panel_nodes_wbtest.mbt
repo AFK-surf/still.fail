@@ -39,10 +39,19 @@ fn ink_node(v : @view.View, w : Double, h : Double, ink : Int64) -> Unit {
 }
 
 ///|
-/// Where the body's and the foot's boxes are drawn once the panel is in, then closed by Escape and gone.
-fn body_and_foot(t : @ui.Tester) -> ((Double, Double, Double, Double), (Double, Double, Double, Double)) raise {
+/// Where the body's and the foot's boxes are drawn once the panel is in, and its head's words and its close button,
+/// then closed by Escape and gone.
+fn body_and_foot(
+  t : @ui.Tester,
+  close? : Bool = false,
+) -> ((Double, Double, Double, Double), (Double, Double, Double, Double), Array[String], String) raise {
   t.run_for(@ui.move_most_ms)
-  let at = (painted_at(t, body_ink), painted_at(t, foot_ink))
+  // (in any order: what of it is nodes listed before or after the old frame's as the tree draws it)
+  let words = t.words().map(fn(w) { "\{w.0} \{tenth4((w.1, w.2, w.3, w.4))}" })
+  words.sort()
+  // (its close button where it has one: asked of what is read out only where asked, `close`)
+  let close = if close { t.query(Button, label=@sf.t("common.close")).map(fn(b) { tenth4(b.rect) }) } else { None }
+  let at = (painted_at(t, body_ink), painted_at(t, foot_ink), words, "\{close}")
   t.key(@ui.key_escape)
   t.run_for(@kit.pop_out_ms)
   assert_false(@sf.presenter_visible(), msg="gone")
@@ -75,11 +84,11 @@ test "大屏: an untitled panel beside what opened it whose body is nodes, ruled
 test "大屏: a panel in the middle of the window whose body and foot are nodes, titled and saying what it is: each where the old frame's are" {
   let t = menu_tester(1280.0, 800.0, 0)
   @sf.panel("对话框", description="它说的话", from=Unanchored, foot=old_foot(), old_body())
-  let old = body_and_foot(t)
+  let old = body_and_foot(t, close=true)
   @sf.panel_nodes("对话框", description="它说的话", from=Unanchored, foot=fn(v, _) { ink_node(v, 60.0, 36.0, foot_ink) }, fn(v, _) {
     ink_node(v, 40.0, 36.0, body_ink)
   })
-  assert_eq(body_and_foot(t), old)
+  assert_eq(body_and_foot(t, close=true), old)
 }
 
 ///|
@@ -114,4 +123,15 @@ test "大屏: a panel whose body is nodes: drawn by the window's tree, read out 
   t.key(@ui.key_escape)
   t.run_for(@kit.pop_out_ms)
   assert_eq((@sf.presenting(), @sf.presenter_visible(), gone.val), (false, false, 1))
+}
+
+///|
+test "大屏: an untitled panel in the middle of the window whose body and foot are nodes: its close button in its corner where the old frame's is" {
+  let t = menu_tester(1280.0, 800.0, 0)
+  @sf.panel("", from=Unanchored, foot=old_foot(), old_body())
+  let old = body_and_foot(t, close=true)
+  @sf.panel_nodes("", from=Unanchored, foot=fn(v, _) { ink_node(v, 60.0, 36.0, foot_ink) }, fn(v, _) {
+    ink_node(v, 40.0, 36.0, body_ink)
+  })
+  assert_eq(body_and_foot(t, close=true), old)
 }

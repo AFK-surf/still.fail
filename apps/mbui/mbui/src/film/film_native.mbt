@@ -97,6 +97,12 @@ fn draw_timed(
 }
 
 ///|
+/// (a frame's work counted only by a Wasm host: film_wasm.mbt's)
+fn mark(frame : Int, end : Bool) -> Unit {
+  ignore((frame, end))
+}
+
+///|
 /// The machine's clock (ms): what a bench times the work by.
 fn now_ms() -> Double {
   ffi_now_ms()

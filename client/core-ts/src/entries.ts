@@ -1,6 +1,7 @@
 // A thread's entries merged into its messages: the one place edits are applied. A message shows its
 // latest edit's text, attachments and quotes, marked edited.
 import { get, isObject, sharedValue } from "./util.ts";
+import { t } from "./i18n.ts";
 
 /// The message each entry makes (an entry held is the same object while it does not change: data.ts): made once, so the
 /// messages of what did not change are the objects they were, which what is made of them keeps (views.ts).
@@ -37,7 +38,7 @@ export function merge(entries: unknown[], source?: (seq: number, entry: object) 
         authorKind: field("authorKind"),
         author: field("author"),
         agentIdentity: field("agentIdentity"),
-        authorName: field("authorName"),
+        authorName: authorNameOf(field("authorKind"), field("author"), field("authorName")),
         text: entry.text === undefined ? "" : entry.text,
         attachments: entry.attachments === undefined ? [] : entry.attachments,
         quotes: entry.quotes === undefined ? [] : entry.quotes,
@@ -86,4 +87,10 @@ export function merge(entries: unknown[], source?: (seq: number, entry: object) 
     }
   }
   return [...messages.keys()].sort((a, b) => a - b).map((k) => messages.get(k)!);
+}
+
+/// What a message's author is called: as its station names them, the local page's admin (whom a station names no more:
+/// station/src/read/views.ts `authorNames`) in this device's words.
+export function authorNameOf(kind: unknown, author: unknown, named: unknown): unknown {
+  return (named === null || named === undefined) && kind === "person" && author === "local" ? t("station.author.admin") : named;
 }

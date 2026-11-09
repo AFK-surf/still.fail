@@ -6,6 +6,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
+import { sep } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import type { Worker } from "node:worker_threads";
@@ -82,7 +83,7 @@ export class MbProcess extends EventEmitter {
 
 /// The reader, started on the station's data directory `data`.
 export class MbReader extends MbProcess implements ReaderLike {
-  constructor(binary: string, data: string) { super(binary, ["--data", data]); }
+  constructor(binary: string, data: string) { super(binary, ["--data", data, "--sep", sep]); }
   override postMessage(ask: Ask) { super.postMessage(ask); }
 }
 

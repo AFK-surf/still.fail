@@ -307,10 +307,12 @@ fn Ctx::view_squeeze_faults(self : Ctx) -> Array[String] {
       return
     }
     let say = fn(kept : Int, need : Double) {
+      // (and where it was made: tester_sources.mbt)
+      let src = tree_source_said(c.id, paren=true)
       if kept < squeeze_kept_chars {
-        out.push("window tree ‘\{c.words}’: its words cut to \{kept} characters (they need \{need.round()})")
+        out.push("window tree ‘\{c.words}’: its words cut to \{kept} characters (they need \{need.round()})\{src}")
       } else if !tree.allows_ellipsis(c.id) {
-        out.push("window tree ‘\{c.words}’: its words cut short without saying they may be")
+        out.push("window tree ‘\{c.words}’: its words cut short without saying they may be\{src}")
       }
     }
     let k = c.words_look
@@ -435,11 +437,11 @@ fn Ctx::squeeze_scaled(self : Ctx, i : Int) -> Bool {
 }
 
 ///|
-/// Whether a node lies apart from its parent's flow, over what is beside it on purpose: a layer, a pager's page, one put
-/// where it is said, what is over the whole window, one drawn moved off its place (`tx`, `ty`: a face over the one
+/// Whether a node lies apart from its parent's flow, over what is beside it on purpose: a layer, one put where it
+/// is said, what is over the whole window, one drawn moved off its place (`tx`, `ty`: a face over the one
 /// before it, something on its way).
 fn Node::squeeze_aside(self : Node) -> Bool {
-  self.layer || self.portal || self.pager != 0 || self.placed_at() || self.moved_off()
+  self.layer || self.portal || self.placed_at() || self.moved_off()
 }
 
 ///|

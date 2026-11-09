@@ -4,7 +4,7 @@
 // head's end 只看收发 and 详情. 详情 unfold under the head, open to begin with: what it has used (the large figures, a
 // quiet line), then a line each, its mark leading: what runs it (Profile 详情), the station it runs on (what runs low
 // on it), its context (管理: compacted, or cleared, asked first), where its runtime keeps the session's transcript
-// (复制路径). Its steps under them are the page's to give.
+// (复制路径). Its steps under them are nodes of the window's tree (sfpages' history_steps_node.mbt: side_body_node).
 
 ///|
 /// What the history keeps of its own (the rest is the core's): 只看收发 (for every history, as the web keeps it), its
@@ -39,12 +39,20 @@ fn history_beside(src : Source, r : ChatRef, key : String, entry : Int?) -> Unit
 }
 
 ///|
-/// Agent `key`'s history on `station` (`a` as its chat's view has it): its head and, unfolded, its details, a line
-/// under them; its steps in the rest (sfpages' history_steps.mbt).
-fn agent_history(c : @ui.Ctx, src : Source, station : String, key : String, a : Json?) -> Unit {
-  history_head(c, src, station, key, a)
-  c.box(style=wh_fill, fn() { @sfpages.history_steps(c, src, station, key) }) |> ignore
+/// Agent `key`'s history's top in chat `r`'s panel (`tabs`, it in front), an old view as tall as it is: the panel's bar,
+/// the head and, unfolded, its details, a line under them. Its steps under it are the tree's (side_body_node).
+fn history_top(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tabs : Array[String], key : String) -> Unit {
+  c.box(style=history_top_box, fn() {
+    side_bar_row(c, src, r, v, tabs, key)
+    history_head(c, src, r.station, key, agent_json(src.topic("chat", chat_params(r)).get().value, key))
+  })
+  |> ignore
 }
+
+///|
+/// The history's top: across the panel, on its ground.
+// kept across runs: a value (no field of it changes)
+let history_top_box : @ui.Style = @ui.css("w=Full bg=Bg")
 
 ///|
 /// The head and, unfolded, its details; a line under them.
@@ -456,8 +464,3 @@ let wh_link_box : @ui.Style = @ui.css("row align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let wh_link_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
-
-///|
-/// The steps under the head: the rest of the panel.
-// kept across runs: a value (no field of it changes)
-let wh_fill : @ui.Style = @ui.css("w=Full h=Full")

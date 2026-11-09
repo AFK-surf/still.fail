@@ -39,7 +39,7 @@ fn button_case(
     @ui.set_view_app(fn(root) {
       root.box(fn(col) {
         col.width(Is(Some(300.0))).height(Is(Some(200.0))).lines_up(Is(if start { Some(Start) } else { None })) |> ignore
-        col.show(fn() { there.get() }, fn(at) {
+        col.show(at_once=true, fn() { there.get() }, fn(at) {
           // (what it is shown in as wide as the column and lining it up as the column does: the button laid out as
           // in the column itself)
           at.width_share(Is(1.0)).lines_up(Is(if start { Some(Start) } else { None })) |> ignore

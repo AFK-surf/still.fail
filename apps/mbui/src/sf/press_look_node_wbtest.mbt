@@ -189,3 +189,76 @@ test "a press on a node held, moved off it and called off: its ripple as the old
   assert_true(seen[0][0].length() > 0, msg="the old one's disc on its way out: \{seen[0]}")
   assert_eq(seen[1], seen[0], msg="as the old one's: \{seen[1]} and \{seen[0]}")
 }
+
+///|
+/// A rippled row 300 by 48, 20 down, in a list 200 tall that scrolls (600 under it), pressed by a finger; how many times
+/// it was pressed into `pressed`.
+fn scrolled_ripple(pressed : Ref[Int]) -> @ui.Tester {
+  let t = @ui.Tester::new(fn(_c) {  }, w=320.0, h=200.0, platform=2)
+  @ui.set_view_app(fn(root) {
+    root.box(fn(v) {
+      v.height(Is(Some(200.0))) |> ignore
+      v.scrolls(@view.Scroll::list(), fn(s) {
+        s.box(fn(gap) { gap.height(Is(Some(20.0))) |> ignore }) |> ignore
+        s.box(fn(r) {
+          r.width(Is(Some(300.0))).height(Is(Some(48.0))) |> ignore
+          rippled_node(r, fn() { pressed.val += 1 }, 10.0, fn() { "row" })
+        })
+        |> ignore
+        s.box(fn(tall) { tall.height(Is(Some(600.0))) |> ignore }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t
+}
+
+///|
+/// The discs drawn now (a ripple's).
+fn discs_now(t : @ui.Tester) -> Int {
+  t.drawn_shadows().filter(fn(s) { (s.6 & 0xFFFFFF00L) == 0L && (s.6 & 0xFFL) > 0L }).length()
+}
+
+///|
+test "a finger's press on a node in what scrolls ripples once it has stayed tap_indication_ms; going on to scroll, never; a quicker tap, from as it is let go" {
+  let pressed = Ref(0)
+  // (held still: nothing till tap_indication_ms, its ripple then)
+  let t = scrolled_ripple(pressed)
+  t.touch(0, 100.0, 44.0)
+  t.draw()
+  t.run_for(@ui.tap_indication_ms / 2.0)
+  let before = discs_now(t)
+  t.run_for(@ui.tap_indication_ms / 2.0 + @motion.ripple_enter_ms / 2.0)
+  assert_eq((before, discs_now(t) > 0), (0, true))
+  t.touch(2, 100.0, 44.0)
+  t.draw()
+  // (going on to scroll: no ripple at any move, none as it ends; nothing pressed)
+  let t = scrolled_ripple(pressed)
+  t.touch(0, 100.0, 44.0)
+  t.draw()
+  let seen = []
+  for i in 1..=10 {
+    t.advance(@ui.input_step_ms)
+    t.touch(1, 100.0, 44.0 - i.to_double() * 6.0)
+    t.draw()
+    seen.push(discs_now(t))
+  }
+  t.touch(2, 100.0, -16.0)
+  t.draw()
+  seen.push(discs_now(t))
+  assert_eq((seen, pressed.val), (Array::make(11, 0), 1))
+  // (a tap quicker than that: its ripple as it is let go, on its way out, gone after its whole way)
+  let t = scrolled_ripple(pressed)
+  t.touch(0, 100.0, 44.0)
+  t.draw()
+  t.run_for(@ui.tap_indication_ms / 2.0)
+  let before = discs_now(t)
+  t.touch(2, 100.0, 44.0)
+  t.draw()
+  t.run_for(@motion.ripple_enter_ms / 2.0)
+  let at_up = discs_now(t)
+  t.run_for(@motion.ripple_tap_ms)
+  assert_eq((before, at_up > 0, discs_now(t), pressed.val), (0, true, 0, 2))
+}

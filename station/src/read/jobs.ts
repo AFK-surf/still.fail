@@ -104,7 +104,7 @@ export function openJobs(s: Store, viewer: Viewer, lang: Lang, named = true): Js
     if (ms >= 1_000) log.warn("readers", "a jobs read's stages", { ms, named, ...stage });
   };
   setLang(lang);
-  const up = store.upJobs(s);
+  const up = store.upJobs(s, viewer);
   const seen = store.seenBy(s, viewer, up.map((j) => j.sessionKey));
   const open = up.filter((j) => seen(j.sessionKey));
   const looked = Math.round(performance.now() - started);

@@ -11,13 +11,27 @@
 // ); stacking is for what is asked and returned from.
 
 ///|
-/// What opened a presenter: the box pressed (its id, `c.id(key)`), a rectangle of the window (x, y, w, h: a point
-/// is one 0 by 0, where a right click was), or nothing (what is asked by no press of the person's).
+/// What opened a presenter: the box pressed (its id, `c.id(key)`; a node of the window's tree, `Node`: a row of a
+/// panel whose body is nodes), a rectangle of the window (x, y, w, h: a point is one 0 by 0, where a right click was),
+/// or nothing (what is asked by no press of the person's).
 pub(all) enum Anchor {
   Of(Int)
+  Node(@view.View)
   At(Double, Double, Double, Double)
   Unanchored
-} derive(Eq)
+}
+
+///|
+/// The same opener: the same box, the same node, the same rectangle, or both nothing.
+pub impl Eq for Anchor with equal(self, other) {
+  match (self, other) {
+    (Of(a), Of(b)) => a == b
+    (Node(a), Node(b)) => a.id() == b.id()
+    (At(x, y, w, h), At(x2, y2, w2, h2)) => x == x2 && y == y2 && w == w2 && h == h2
+    (Unanchored, Unanchored) => true
+    _ => false
+  }
+}
 
 ///|
 /// What opened a menu or a pick, which stand beside it on Medium and Large (rule 3: the steps one
@@ -113,8 +127,6 @@ priv struct PanelOf {
   stage : Bool
   /// on a stage, what is chosen of the picture between it and its buttons (panel's `above`)
   above : ((@ui.Ctx) -> Unit)?
-  /// beside what opened it, what stands at its head's end, beside its title (panel's `head_end`)
-  head_end : ((@ui.Ctx) -> Unit)?
   /// in the middle of the window, what its title's row holds in its title's place, its close button at its end (panel's
   /// `title_row`)
   title_row : ((@ui.Ctx) -> Unit)?
@@ -424,9 +436,7 @@ pub fn pick(
 /// a press beside it, Escape and the back close it too; `above`, over those buttons, what is chosen of the picture (the
 /// card to share's looks). `side`, `along`, `offset`: where it stands beside what opened it (under it by default, its
 /// start at the start of it); what opens from a bar down the window's side (the rail) stands beside the bar, out of
-/// it, as everything opened from there does. `head_end`: beside what opened it, what stands at the end of its head's
-/// line, beside its title (the model panel's search: a sheet, its head the sheet's own, leaves it to what it holds).
-/// `title_row`: in the middle of the window, its title's row drawn by it in the title's place (a chat's name with its ✎
+/// it, as everything opened from there does. `title_row`: in the middle of the window, its title's row drawn by it in the title's place (a chat's name with its ✎
 /// after it, an agent's mark, name and where it stands), its close button at that row's end as a title's is; `title`
 /// still what it is called. What it holds asks Ctx-free `title_row_given` whether to draw that row itself (elsewhere:
 /// a sheet, a panel beside what opened it).
@@ -455,7 +465,6 @@ pub fn panel(
   field? : String = "",
   stage? : Bool = false,
   above? : (@ui.Ctx) -> Unit,
-  head_end? : (@ui.Ctx) -> Unit,
   title_row? : (@ui.Ctx) -> Unit,
   heads_itself? : Bool = false,
   side? : @ui.Side = Bottom,
@@ -484,7 +493,6 @@ pub fn panel(
       field,
       stage,
       above,
-      head_end,
       title_row,
       heads_itself,
       side,
@@ -500,8 +508,8 @@ pub fn panel(
 }
 
 ///|
-/// A panel as @sf.panel's (`title`, `from`, `w`, `description`, `wide`, `gone`, `focus`, `ruled`, `form`, `grows`, `side`,
-/// `along`, `offset` as there), what it holds (`body`) and what is at its foot (`foot`) made once as nodes of the window's
+/// A panel as @sf.panel's (`title`, `from`, `w`, `description`, `wide`, `live`, `gone`, `tall`, `focus`, `ruled`, `form`,
+/// `grows`, `side`, `along`, `offset` as there), what it holds (`body`) and what is at its foot (`foot`) made once as nodes of the window's
 /// tree, each in the node the panel gives it, laid out there as the old frame's body and foot are (beside what opened
 /// it: panel_node; in the middle of the window, opened by nothing or a form: panel_centred_node), given what closes it.
 /// The window's tree draws it on every screen: on 小屏 a sheet from the window's foot (sheet_node), as the host draws an
@@ -515,7 +523,9 @@ pub fn panel_nodes(
   description? : String = "",
   foot? : (@view.View, () -> Unit) -> Unit,
   wide? : Bool = false,
+  live? : () -> (String, String, String),
   gone? : () -> Unit = fn() {  },
+  tall? : Double = 0.0,
   focus? : Bool = true,
   ruled? : Bool = false,
   form? : Bool = false,
@@ -533,8 +543,8 @@ pub fn panel_nodes(
       w,
       fits: false,
       wide,
-      live: None,
-      tall: 0.0,
+      live,
+      tall,
       grows,
       focus,
       ruled,
@@ -544,7 +554,6 @@ pub fn panel_nodes(
       field: "",
       stage: false,
       above: None,
-      head_end: None,
       title_row: None,
       heads_itself: false,
       side,
@@ -1327,6 +1336,20 @@ fn dialog_covered(serial : Int) -> Bool {
 }
 
 ///|
+/// How tall the topmost sheet open over the one presented as `serial` is, while it is open and one is (present_sheet's
+/// covered, its `over`'s height): None otherwise.
+fn sheet_over(serial : Int) -> Double? {
+  presented_said.get() |> ignore
+  match presented_now.search_by(fn(q) { q.serial == serial }) {
+    Some(i) if presented_now[i].open =>
+      presented_now[i + 1:].iter().filter(fn(q) { q.open && how_of(q.shows, q.from, true) == AsSheet }).last().map(fn(q) {
+        q.sheet_h.get()
+      })
+    _ => None
+  }
+}
+
+///|
 /// What `p` dims what is under it with, where it is not the one that does (scrim_owner): nothing; where it is, the
 /// theme's (None).
 fn scrim_of(p : Presented, sheet : Bool) -> Int64? {
@@ -1374,7 +1397,7 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
       if q.open || how_of(q.shows, q.from, true) != AsSheet {
         most
       } else {
-        @signals.untracked(fn() { dmax(most, q.sheet_h.get() + q.recede.get() * q.pushed.get()) })
+        @signals.untracked(fn() { dmax(most, q.sheet_h.get() + q.recede.get(c) * q.pushed.get()) })
       }
     })
   } else {
@@ -1396,24 +1419,24 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
       let over = presented_now[i + 1:].iter().filter(fn(q) { q.open && how_of(q.shows, q.from, true) == AsSheet }).last()
       match over {
         Some(q) =>
-          p.pushed.set(push_of(@signals.untracked(fn() { q.sheet_h.get() })))
+          p.pushed.set(push_of(q.sheet_h.untracked()))
         None => ()
       }
     }
     // (one closing goes from where it is: pushed up still where it closes with the one over it, both going down; where
     // the one over it closed first that same moment, held where it had got to as it closes too)
-    if !p.open && !p.recede.over() {
-      p.recede.snap(@signals.untracked(fn() { p.recede.get() }))
+    if !p.open && !p.recede.over(c) {
+      p.recede.snap(c, @signals.untracked(fn() { p.recede.get(c) }))
     }
     if p.open && covered != p.receded {
       p.receded = covered
       let to = if covered { 1.0 } else { 0.0 }
       if sheet {
-        let way = dmax(@signals.untracked(fn() { p.pushed.get() }), 1.0)
-        p.recede.animate(to, @motion.move(points=way))
+        let way = dmax(p.pushed.untracked(), 1.0)
+        p.recede.animate(c, to, @motion.move(points=way))
       } else {
         // (dimmed as a dialog's ground comes and goes)
-        p.recede.animate(to, @motion.tween(confirm_ground_ms, ease=if covered { Out } else { Leave }))
+        p.recede.animate(c, to, @motion.tween(confirm_ground_ms, ease=if covered { Out } else { Leave }))
       }
     }
     let was = p.open
@@ -1530,6 +1553,8 @@ fn closed_by(p : Presented) -> Unit {
 fn anchor_of(c : @ui.Ctx, from : Anchor) -> (Int, (Double, Double, Double, Double)?) {
   match from {
     Of(id) => (id, None)
+    // (a node of the window's tree: where it was placed last, as an old box's is read where it was drawn)
+    Node(v) => (0, Some(v.placed_window_now()))
     At(x, y, w, h) => (0, Some((x, y, w, h)))
     Unanchored => {
       let (ww, wh) = c.window_size()
@@ -1616,7 +1641,7 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
         None => x.title
       }
       if title != "" && !x.heads_itself {
-        panel_head(c, title, end?=x.head_end)
+        panel_head(c, title)
       }
       // (small_panel's pad round it: what reaches its sides on purpose goes out past that, panel_bleed; its rows stand
       // at it)
@@ -1728,7 +1753,7 @@ fn panel_centred(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
     step~,
     column_in=panel_words - dialog_pad,
     scrim?=scrim_of(p, false),
-    veil=p.recede.get(),
+    veil=p.recede,
   )
   words_in_now.val = words_were
   (still && p.open, dialog_built(c, key, p.open))
@@ -1767,7 +1792,7 @@ fn steps_centred(
     bare=true,
     on_escape=fn() { steps_escape(p) },
     scrim?=scrim_of(p, false),
-    veil=p.recede.get(),
+    veil=p.recede,
   )
   words_in_now.val = words_were
   (still && p.open, dialog_built(c, key, p.open))
@@ -1992,9 +2017,13 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   let look = fn(c : @ui.Ctx, st : @kit.SheetState, body : () -> Unit) {
     base(c, st, fn() {
       body()
-      let veil = @ui.alpha(sheet_scrim, p.recede.get())
-      if (veil & 0xFFL) != 0L {
-        c.layer(fn() { c.box(style=sheet_veil_at.then(@ui.style(bg=Data(veil))), fn() {  }) |> ignore }) |> ignore
+      // (dimmed as it is drawn, not built again as it goes: built while it dims or comes back, till its declared end)
+      if p.recede.target() > 0.0 || !p.recede.over(c) {
+        c.layer(fn() {
+          let v = c.box(style=sheet_veil_at, fn() {  })
+          c.bg_by(v, fn() { @ui.alpha(sheet_scrim, dmax(0.0, p.recede.get(c))) })
+        })
+        |> ignore
       }
     })
   }
@@ -2009,7 +2038,7 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   // (dimming what is under it only where nothing under it does: scrim_owner; pushed up out of the way of a sheet over
   // it, as far as it has gone, closing from there)
   let scrim = scrim_of(p, true).unwrap_or(sheet_scrim)
-  let r = @kit.sheet(c, key, p.open, h~, detents=if grows { sheet_grows_to } else { [] }, scrim~, look~, on_escape?, raised=p.recede.get() * p.pushed.get(), sinks=p.sinks, fn() {
+  let r = @kit.sheet(c, key, p.open, h~, detents=if grows { sheet_grows_to } else { [] }, scrim~, look~, on_escape?, raised=p.recede.get(c) * p.pushed.get(), sinks=p.sinks, fn() {
     match share {
       Some(_) =>
         c.box(style=sheet_whole, id=whole_id, fn() {
@@ -2340,19 +2369,19 @@ fn steps_shown(
   match @motion.measured(c, key_of(top)) {
     Some(h) =>
       if p.step_h_of < 0 {
-        p.step_h.snap(h)
+        p.step_h.snap(c, h)
         p.step_h_of = top.n
       } else if p.step_h_of != top.n {
         // (another step come or gone back to: its height reached with its slide)
-        p.step_h.animate(h, slide)
+        p.step_h.animate(c, h, slide)
         p.step_h_of = top.n
       } else if p.step_h.target() != h {
         // (what the step holds changed: that height at once, or, before its slide's declared end, where it goes on its
         // way there)
-        if p.step_h.over() {
-          p.step_h.snap(h)
+        if p.step_h.over(c) {
+          p.step_h.snap(c, h)
         } else {
-          p.step_h.animate(h, slide)
+          p.step_h.animate(c, h, slide)
         }
       }
     None => ()
@@ -2362,7 +2391,7 @@ fn steps_shown(
   } else if p.step_h_of < 0 {
     full_width
   } else {
-    @ui.style(w=Full, h=Fixed(p.step_h.get()))
+    @ui.style(w=Full, h=Fixed(p.step_h.get(c)))
   }
   c.box(style=tall.then(@ui.style(mx=room(-out))), fn() {
     // (a flow kept elsewhere takes back on its step: no edge of the panel swiped back past it)

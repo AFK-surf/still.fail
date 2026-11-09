@@ -21,20 +21,49 @@ const STATION = "ws/st";
 /// A cloud that keeps one chain, as cloud/src/personal-lock.ts does.
 function cloud() {
   const kept = { entries: [] as Entry[] };
+  // (`limited`: how many writes it answers "too many requests" first; `down`: none answered; `asked`: how many asks)
+  const say = { limited: 0, down: false, asked: 0 };
   return {
     kept,
+    say,
     call: (_sub: string, method: string, _path: string, body: unknown) =>
-      Effect.sync(() => {
+      Effect.suspend(() => (say.asked++, say.down) ? Effect.fail(new CoreError("network", "the cloud is down")) : method === "POST" && say.limited-- > 0 ? Effect.fail(new CoreError("rate_limited", "too many", 429)) : Effect.sync(() => {
         if (method === "GET") return { entries: kept.entries };
         const adding = (body as { entries: Entry[] }).entries;
         kept.entries = adding[0]!.seq === 0 ? adding : [...kept.entries.slice(0, adding[0]!.seq), ...adding];
         return { entries: kept.entries };
-      }) as Effect.Effect<unknown, CoreError>,
+      })) as Effect.Effect<unknown, CoreError>,
+  };
+}
+
+/// The person's stations, as station/src/mesh/person-chains.ts keeps their lock: each chain by its first entry, the
+/// longer taken where it goes on from the one kept, one at odds refused. `up`: whether any of them is reached.
+function stations() {
+  const kept = new Map<string, Entry[]>();
+  const say = { up: true, read: 0, brought: 0, at: [] as (string | undefined)[] };
+  const root = (c: Entry[]) => JSON.stringify(c[0]);
+  return {
+    kept,
+    say,
+    env: {
+      read: (_sub: string, at?: string) => Effect.sync(() => (say.read++, say.at.push(at), say.up ? [...kept.values()] : null)),
+      bring: (_sub: string, chain: Entry[]) =>
+        Effect.suspend(() => {
+          say.brought++;
+          if (!say.up) return Effect.succeed(null);
+          const had = kept.get(root(chain)) ?? [];
+          const [short, long] = had.length <= chain.length ? [had, chain] : [chain, had];
+          if (!short.every((e, i) => JSON.stringify(e) === JSON.stringify(long[i]))) return Effect.fail(new CoreError("lock_refused", "at odds with the one kept", 409));
+          kept.set(root(chain), long);
+          return Effect.succeed(1);
+        }),
+    },
   };
 }
 
 /// A device: its host keeps what is sealed with `user: true` apart, each read of it counted, as asking the person.
-function device(c: ReturnType<typeof cloud>, name: string) {
+/// `at`: its person's stations, where it reads and brings the lock (none: the cloud alone, as a core from before).
+function device(c: ReturnType<typeof cloud>, name: string, at?: ReturnType<typeof stations>) {
   const id = name.charCodeAt(0).toString(16).repeat(32);
   const host = new FakeHost();
   host.appKeys = true;
@@ -50,8 +79,10 @@ function device(c: ReturnType<typeof cloud>, name: string) {
   };
   host.secureAsk = () => Effect.sync(() => void asks.n++);
   const runner = new Runner(host.time.clock);
-  const lock = new PersonalLock({ host, runner, cloud: c.call, device: () => Effect.succeed(id), label: () => name, changed: () => {} });
-  return { host, runner, lock, asks };
+  // (how often it tells its lock changed: each time, the stations that refused it are asked again)
+  const told = { n: 0 };
+  const lock = new PersonalLock({ host, runner, cloud: c.call, device: () => Effect.succeed(id), label: () => name, changed: () => void told.n++, ...(at ? { stations: at.env } : {}) });
+  return { host, runner, lock, asks, id, told };
 }
 
 const body = (over: Record<string, unknown> = {}) => ({ station: STATION, request: "p1", session: "sess", chat: "chat", scope: "hour" as const, exp: 2_000_000_000, ...over });
@@ -78,6 +109,97 @@ test("the first signature begins the lock; it asks the person and signs what hol
     await assert.rejects(a.runner.run(a.lock.signGrant(SUB, body(), "why")));
   } finally {
     a.runner.shutdown();
+  }
+});
+
+test("an entry the person signs waits out the cloud's too many requests, and is taken once it answers", async () => {
+  const c = cloud();
+  const a = device(c, "a");
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    // The account's budget used up: the next two writes answered 429, then taken.
+    c.say.limited = 2;
+    const out: unknown[] = [];
+    a.runner.fork(Effect.map(Effect.result(a.lock.removeDevice(SUB, "ed25519:" + "22".repeat(32), "why")), (r) => out.push(r)));
+    for (let i = 0; i < 40 && out.length === 0; i++) await a.host.time.pass(1000, 100);
+    assert.equal((out[0] as { _tag: string })?._tag, "Success", JSON.stringify(out));
+    assert.equal(c.say.limited, -1, "tried again until the cloud took it");
+    assert.equal(c.kept.entries.at(-1)?.kind, "device.remove");
+  } finally {
+    a.runner.shutdown();
+  }
+});
+
+test("a person's devices read and bring their lock at their stations, the cloud not waited on", async () => {
+  const c = cloud();
+  const st = stations();
+  const a = device(c, "a", st);
+  const b = device(c, "b", st);
+  try {
+    // Begun at the stations (the cloud told too, for the devices from before, and not waited on: it is down).
+    c.say.down = true;
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    assert.equal(a.lock.standing(SUB), "member");
+    assert.deepEqual([...st.kept.values()].map((ch) => ch.length), [1]);
+    // A grant is signed on what its own station keeps: the person's other stations are not read first (one offline held
+    // a read of them all, and the fingerprint asked after it, until it timed out).
+    assert.deepEqual(st.say.at, [STATION]);
+    // A device let in, the cloud still down: brought to the stations, and b reads it there.
+    const bKey = await b.runner.run(b.lock.makeKey());
+    const whole = await a.runner.run(a.lock.addDevice(SUB, { key: bKey, id: b.id, label: "b" }, "why"));
+    assert.deepEqual([...st.kept.values()].map((ch) => ch.length), [2]);
+    await b.runner.run(b.lock.refresh(SUB));
+    assert.deepEqual(b.lock.approvers(SUB).map((d) => d.label), ["a"]);
+    await b.runner.run(b.lock.joined(SUB, whole));
+    assert.equal(b.lock.standing(SUB), "member");
+    // b lets another in; a reads that of the stations.
+    const other = (n: string) => ({ key: `ed25519:${n.repeat(32)}`, id: n.repeat(32), label: n });
+    await b.runner.run(b.lock.addDevice(SUB, other("22"), "why"));
+    await a.runner.run(a.lock.refresh(SUB));
+    assert.equal(a.lock.entries(SUB).length, 3);
+    // a, behind (it did not read since), signs at odds with what the stations keep: refused there, as the cloud did.
+    await b.runner.run(b.lock.addDevice(SUB, other("33"), "why"));
+    const out = await a.runner.run(Effect.result(a.lock.addDevice(SUB, other("44"), "why")));
+    assert.equal(out._tag === "Failure" && out.failure.code, "lock_refused");
+    // None of the stations reached: the cloud is what it is read of and brought to, as before.
+    c.say.down = false;
+    st.say.up = false;
+    const asked = c.say.asked;
+    await a.runner.run(a.lock.refresh(SUB));
+    assert.ok(c.say.asked > asked);
+  } finally {
+    a.runner.shutdown();
+    b.runner.shutdown();
+  }
+});
+
+test("a new device refused by every station finds who may let it in of what their refusals told, not the cloud", async () => {
+  const c = cloud();
+  const st = stations();
+  const a = device(c, "a", st);
+  const n = device(c, "n", st);
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    c.say.down = true;
+    // Read once (nothing pinned here, the stations refusing it: none said), then told by a refusal.
+    st.say.up = false;
+    await n.runner.run(Effect.result(n.lock.refresh(SUB)));
+    await n.runner.run(n.lock.heardFrom(SUB, [...st.kept.values()]));
+    assert.deepEqual(n.lock.approvers(SUB).map((d) => d.label), ["a"]);
+    assert.equal(n.lock.standing(SUB), "outside");
+    // Each refusal tells the same again: not told as a change, or the stations would be asked again at once, endlessly.
+    const told = n.told.n;
+    await n.runner.run(n.lock.heardFrom(SUB, [...st.kept.values()]));
+    await n.runner.run(n.lock.heardFrom(SUB, [...st.kept.values()]));
+    assert.equal(n.told.n, told);
+    // What grew is.
+    st.say.up = true;
+    await a.runner.run(a.lock.addDevice(SUB, { key: `ed25519:${"22".repeat(32)}`, id: "22".repeat(32), label: "22" }, "why"));
+    await n.runner.run(n.lock.heardFrom(SUB, [...st.kept.values()]));
+    assert.equal(n.told.n, told + 1);
+  } finally {
+    a.runner.shutdown();
+    n.runner.shutdown();
   }
 });
 

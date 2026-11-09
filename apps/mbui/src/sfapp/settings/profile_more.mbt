@@ -124,25 +124,28 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, s : Json?, go_new : (String) -
                 if !blocked {
                   if busy {
                     spinner(c)
-                  } else if tap_text(
+                  } else {
+                    tap_text(
                       c,
                       "machine-use/" + rt,
                       tr(if flag(lv, "usable") { "android-settings.machine.use" } else { "android-settings.login.signIn" }),
                       size=14.0,
-                    ) {
-                    if flag(lv, "usable") {
-                      (core.call)("profile.useMachineLogin", obj([("station", str(station)), ("runtime", str(rt))]), fn(r) {
-                        match r {
-                          Ok(v) => {
-                            (core.say)(tr("android-settings.machine.added"))
-                            (core.push)(Profile(station, text(Some(v), "id")))
-                          }
-                          Err(e) => (core.say)(error_text(e))
+                      on_press=fn() {
+                        if flag(lv, "usable") {
+                          (core.call)("profile.useMachineLogin", obj([("station", str(station)), ("runtime", str(rt))]), fn(r) {
+                            match r {
+                              Ok(v) => {
+                                (core.say)(tr("android-settings.machine.added"))
+                                (core.push)(Profile(station, text(Some(v), "id")))
+                              }
+                              Err(e) => (core.say)(error_text(e))
+                            }
+                          })
+                        } else {
+                          go_new(rt)
                         }
-                      })
-                    } else {
-                      go_new(rt)
-                    }
+                      },
+                    )
                   }
                 }
               }, fn() {

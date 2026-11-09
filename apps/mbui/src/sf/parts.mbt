@@ -40,7 +40,7 @@ pub(all) enum Tone {
 /// narrow, as tall as a bar's tools among them (viewer_bar's: 32); an icon before its words if given, a spinner in its
 /// place while `busy`; `reach`, where it stands in a card's foot corners: how its ground reaches past the card's words
 /// (foot_across); `hint`, what pressing it does in more words, over it while it is pointed at (a Button in a Tip);
-/// `on_press`, what pressing it does, as it is let go (press_does). True on the frame after it was pressed.
+/// `on_press`, what pressing it does, as it is let go (press_does).
 pub fn button(
   c : @ui.Ctx,
   label : String,
@@ -53,14 +53,14 @@ pub fn button(
   reach? : @ui.Style,
   hint? : String = "",
   on_press? : () -> Unit,
-) -> Bool {
-  button_part(c, label, key~, tone~, icon~, busy~, disabled~, w~, reach?, hint~, on_press?).0
+) -> Unit {
+  button_part(c, label, key~, tone~, icon~, busy~, disabled~, w~, reach?, hint~, on_press?) |> ignore
 }
 
 ///|
 /// What pressing `id` does (`on_press`), where it takes presses now (`live`): done as the press is let go on it (a tap,
 /// a click, Enter or Space, Activate), outside any build, at its moment (Ctx::on_press), not read by the build after.
-fn press_does(c : @ui.Ctx, id : Int, live : Bool, on_press : (() -> Unit)?) -> Unit {
+pub fn press_does(c : @ui.Ctx, id : Int, live : Bool, on_press : (() -> Unit)?) -> Unit {
   match on_press {
     Some(f) if live => c.on_press(id, f)
     _ => ()
@@ -86,7 +86,7 @@ fn button_part(
   active? : Bool = false,
   expanded? : Bool,
   on_press? : () -> Unit,
-) -> (Bool, Int) {
+) -> Int {
   let t = theme()
   let p = t.p
   let id = c.id(if key == "" { "sf-btn/" + label } else { key })
@@ -94,52 +94,43 @@ fn button_part(
   press_does(c, id, live, on_press)
   // Quiet actions keep their usual look at rest, and show their own ground while doing what was pressed.
   let quiet_busy = busy && (tone == Ghost || tone == GhostDanger)
-  let h = ease_to(c, "sf-btn-h/\{id}", quiet_busy || (live && (c.lit(id) || c.pressed(id) || active)))
+  // (its ground eased as it is painted: told as it is built, read where it is drawn, Ctx::bg_by)
+  let h = @motion.told(
+    c,
+    "sf-btn-h/\{id}",
+    if quiet_busy || (live && (c.lit(id) || c.pressed(id) || active)) { 1.0 } else { 0.0 },
+    spec=@motion.tween(dur_ms, ease=Out),
+  )
   // (turning and greyed as a control answers: over dur_ms, never at once. With an icon, the spinner in its place, the
   // icon fading out under it as it fades in, nothing moved; with none, the spinner coming in before its words, which
   // stay: they are what it does, said on as it does it. At work is not greyed: it is the button pressed, at full
   // strength, its spinner what to look at (2026-10-31 the user: 从不带 loading 到带 loading……感觉有点不对, 能不能不换掉字;
   // it faded to 0.7 as the web's aria-busy does, its icon swapped at once, its words faded out under the spinner).)
-  let turning = ease_to(c, "sf-btn-busy/\{id}", busy)
-  let seen = @motion.animate(
-    c,
-    "sf-btn-seen/\{id}",
-    if disabled {
-      0.45
-    } else {
-      1.0
-    },
-    spec=@motion.tween(dur_ms, ease=Out),
-  )
-  let (ground, line, tone_ink) = if on_night.val {
+  // (told as it is built, read where it is painted: the spinner built while it is busy or on its way back, up to
+  // its declared end)
+  let turning = @motion.told(c, "sf-btn-busy/\{id}", if busy { 1.0 } else { 0.0 }, spec=@motion.tween(dur_ms, ease=Out))
+  let spun = busy || !turning.over(c)
+  // (faded as it is drawn)
+  let seen = @motion.told(c, "sf-btn-seen/\{id}", if disabled { 0.45 } else { 1.0 }, spec=@motion.tween(dur_ms, ease=Out))
+  // its ground `h` of the way to the one under the hand (no outline: where a tone has a line, it is its ground), and
+  // its words' ink
+  let (ground_at, tone_ink) = if on_night.val {
     // (on a stage: the night under it whatever the theme)
     match tone {
-      Primary | DangerSolid => (mix(0xFFFFFFFFL, h, share_ink), 0L, share_ground)
-      _ => (mix(stage_plain_lit, h, stage_plain), 0L, share_ink)
+      Primary | DangerSolid => (fn(h : Double) -> Int64 { mix(0xFFFFFFFFL, h, share_ink) }, share_ground)
+      _ => (fn(h) { mix(stage_plain_lit, h, stage_plain) }, share_ink)
     }
   } else {
     // the phone's: the ink with the paper's words, the chip's ground, no outline; pointed at or pressed, a
     // solid ground a step towards the page and a quiet one the hover's step darker (mbui ui/hand_moves.mbt)
     match tone {
-      Primary => {
-        let g = mix(p.primary_hover, h, p.primary)
-        (g, g, p.bg)
-      }
+      Primary => (fn(h : Double) -> Int64 { mix(p.primary_hover, h, p.primary) }, p.bg)
       // (white on the light theme's deep red, the page's ink on the dark one's light red: white was 2.4 to 1 there)
-      DangerSolid => {
-        let g = mix(mix(p.red, 0.85, p.canvas), h, p.red)
-        (g, g, if t.dark { p.bg } else { 0xFFFFFFFFL })
-      }
-      Danger => {
-        let g = over(p.chip, alpha(p.hover, h))
-        (g, g, p.red)
-      }
-      Ghost => (alpha(p.hover, h), 0L, p.text)
-      GhostDanger => (alpha(p.hover, h), 0L, p.red)
-      Plain => {
-        let g = over(p.chip, alpha(p.hover, h))
-        (g, g, p.text)
-      }
+      DangerSolid => (fn(h) { mix(mix(p.red, 0.85, p.canvas), h, p.red) }, if t.dark { p.bg } else { 0xFFFFFFFFL })
+      Danger => (fn(h) { over(p.chip, alpha(p.hover, h)) }, p.red)
+      Ghost => (fn(h) { alpha(p.hover, h) }, p.text)
+      GhostDanger => (fn(h) { alpha(p.hover, h) }, p.red)
+      Plain => (fn(h) { over(p.chip, alpha(p.hover, h)) }, p.text)
     }
   }
   let ink = ink_override.unwrap_or(tone_ink)
@@ -170,11 +161,8 @@ fn button_part(
     gap=if t.touch { 8.0 } else { 6.0 },
     align=ACenter,
     justify=JCenter,
-    bg=ground,
+    bg=ground_at(h.target()),
     radius=height / 2.0,
-    border=if line != 0L && line != ground { 1.0 } else { 0.0 },
-    border_color=line,
-    opacity=seen,
     id=if live { id } else { 0 },
     fn() {
       let turn = fn() {
@@ -193,11 +181,11 @@ fn button_part(
           // taking none, so the two ends look alike)
           let drawn = c.box(fn() { draw_icon(c, icon, button_icon, ink, by_ink=true) })
           // (the spinner over it, in its place and its size: the icon's room kept, nothing beside it moved)
-          if turning > 0.0 {
-            c.look(drawn, @ui.look(alpha=1.0 - turning))
+          if spun {
+            c.look_by(drawn, fn() { @ui.look(alpha=1.0 - turning.get(c)) })
             c.layer(fn() {
               let s = c.box(style=button_turning, turn)
-              c.look(s, @ui.look(alpha=turning))
+              c.look_by(s, fn() { @ui.look(alpha=turning.get(c)) })
             })
             |> ignore
           }
@@ -230,7 +218,9 @@ fn button_part(
           if busy || over > 0.0 {
             c.box(style=@ui.style(row=true, w=Fixed(room * over), h=Fixed(button_icon)), fn() {
               let s = c.box(style=button_spin, fn() { turn() })
-              c.look(s, @ui.look(alpha=turning * seen_at(over), scale=over, ox=0.0))
+              c.look(s, @ui.look(scale=over, ox=0.0))
+              let grown = seen_at(over)
+              c.look_by(s, fn() { @ui.look(alpha=turning.get(c) * grown) })
             })
             |> ignore
           }
@@ -245,6 +235,8 @@ fn button_part(
       }
     },
   )
+  c.bg_by(b, fn() { ground_at(h.get(c)) })
+  c.look_by(b, fn() { @ui.look(alpha=seen.get(c)) })
   // its words changed (复制图片 to 已复制): its ground goes from the width it had to the new one, its words with it, on
   // the curve a thing reshaped is moved by, not at once (the user, 2026-10-30: 按钮的变长应该也有过渡; their cause,
   // its words: sf/motion.mbt 3)
@@ -262,7 +254,7 @@ fn button_part(
   if live {
     tip(c, "sf-btn/" + key + label + "/tip", id, hint)
   }
-  (live && c.clicked(id), b)
+  b
 }
 
 ///|
@@ -345,20 +337,22 @@ pub fn icon_button(
   label? : String = "",
   shortcut? : String = "",
   on_press? : () -> Unit,
-) -> Bool {
+) -> Unit {
   let t = theme()
   // (drawn its own size with a finger too: a finger reaches it from round it, mbui's press_reach)
   let ink = ink.unwrap_or(t.p.text)
   let quiet = quiet.unwrap_or(t.p.muted)
   let id = c.id(if key == "" { "sf-ib/" + icon } else { key })
   press_does(c, id, !disabled, on_press)
-  let h = ease_to(c, "sf-ib-h/\{id}", !disabled && (lit || c.lit(id) || c.pressed(id)))
-  let ground = if on {
-    alpha(ink, 0.08)
-  } else {
-    // the page's hover, as a tint of the ink it sits with
-    alpha(ink, 0.065 * h)
-  }
+  // (its ground and its icon's ink eased as they are painted: told as it is built, read where it is drawn)
+  let h = @motion.told(
+    c,
+    "sf-ib-h/\{id}",
+    if !disabled && (lit || c.lit(id) || c.pressed(id)) { 1.0 } else { 0.0 },
+    spec=@motion.tween(dur_ms, ease=Out),
+  )
+  // the page's hover, as a tint of the ink it sits with
+  let ground_at = fn(h : Double) { if on { alpha(ink, 0.08) } else { alpha(ink, 0.065 * h) } }
   let corner : @ui.Radius = match linked {
     Some(link) => Linked(link)
     None => rounded(if round { size / 2.0 } else { corner })
@@ -369,19 +363,24 @@ pub fn icon_button(
     h=Px(size),
     align=ACenter,
     justify=JCenter,
-    bg=ground,
+    bg=ground_at(h.target()),
     opacity=if disabled { 0.35 } else { 1.0 },
     id=if disabled { 0 } else { id },
     fn() {
-      draw_icon(c, icon, icon_size, if on || h > 0.5 { ink } else { quiet })
+      draw_icon(c, icon, icon_size, if on || h.target() > 0.5 { ink } else { quiet })
     },
   )
+  c.bg_by(b, fn() { ground_at(h.get(c)) })
+  // (its icon quiet, in the ink once its ground is half way to the hover's, as it is painted; a runtime's mark in its
+  // maker's own colours)
+  if !on && !icon.has_prefix("runtime:") {
+    c.ink_by(b, fn() { if h.get(c) > 0.5 { ink } else { quiet } })
+  }
   // named (IconButton's label): what a screen reader calls it, and its tip
   if label != "" {
     c.semantics(b, Button, id~, label~, disabled~)
     tip(c, "ib/" + key + icon, id, label, shortcut~)
   }
-  !disabled && c.clicked(id)
 }
 
 ///|
@@ -398,12 +397,13 @@ pub fn chip(
   inner? : Bool = false,
   said? : String = "",
   on_press? : () -> Unit,
-) -> Bool {
+) -> Unit {
   let t = theme()
   let ink = ink.unwrap_or(t.p.text)
   let id = c.id(if key == "" { "sf-chip/" + label + icon } else { key })
   press_does(c, id, !disabled, on_press)
-  let h = ease_to(c, "sf-chip-h/\{id}", !disabled && c.lit(id))
+  // (its ground eased as it is painted)
+  let h = @motion.told(c, "sf-chip-h/\{id}", if !disabled && c.lit(id) { 1.0 } else { 0.0 }, spec=@motion.tween(dur_ms, ease=Out))
   let b = c.box(
     dir=Row,
     h=Px(30.0),
@@ -412,7 +412,7 @@ pub fn chip(
     gap=2.0,
     align=ACenter,
     justify=JCenter,
-    bg=alpha(ink, 0.07 + 0.05 * h),
+    bg=alpha(ink, 0.07 + 0.05 * h.target()),
     style=if inner { chip_inner } else { @ui.style() },
     radius?=if inner { None } else { Some(10.0) },
     opacity=if disabled { 0.35 } else { 1.0 },
@@ -426,6 +426,7 @@ pub fn chip(
       }
     },
   )
+  c.bg_by(b, fn() { alpha(ink, 0.07 + 0.05 * h.get(c)) })
   c.bone_whole(b)
   if said != "" {
     c.semantics(b, Button, id=if disabled { 0 } else { id }, label=said, disabled~)
@@ -433,7 +434,6 @@ pub fn chip(
       tip(c, "sf-chip/" + key + "/tip", id, said)
     }
   }
-  !disabled && c.clicked(id)
 }
 
 ///|
@@ -814,7 +814,7 @@ pub fn menu_item(
   at_top? : Bool = false,
   at_foot? : Bool = false,
   on_press? : () -> Unit,
-) -> Bool {
+) -> Unit {
   let t = theme()
   let id = c.id(if key == "" { "sf-mi/" + label } else { key })
   press_does(c, id, true, on_press)
@@ -895,7 +895,6 @@ pub fn menu_item(
     },
   )
   |> ignore
-  c.clicked(id)
 }
 
 ///|
@@ -1452,7 +1451,7 @@ fn menu_is(key : String) -> Bool {
 ///|
 /// The menu open now ("" none), as it is, read by nothing.
 fn menu_open_peek() -> String {
-  @signals.untracked(fn() { menu_open.get() })
+  menu_open.untracked()
 }
 
 ///|
@@ -2108,6 +2107,10 @@ pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral, icon? : Str
 let pill_icon : Double = 14.0
 
 ///|
+/// What is between a pill's icon and its words (pill_box's gap=S1).
+let pill_icon_gap : Double = 4.0
+
+///|
 /// Steps to take in order (controls.css.ts steps: an ordered list, its numbers in the muted ink in 20 at its start,
 /// 8 apart, the ui's 13): each what `steps` draws for it (its words, a button after them), their parts 8 apart in a
 /// line, going on in the next where they do not fit.
@@ -2208,6 +2211,18 @@ pub fn empty(c : @ui.Ctx, body : () -> Unit) -> Unit {
 }
 
 ///|
+/// What a list with nothing in it shows (empty's, as a node) in `parent`: what `body` makes, in the middle of the room
+/// left, 40 in.
+#callsite(autofill(loc))
+pub fn empty_node(parent : @view.View, body : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(b) {
+    style_node(b, fn() { empty_box })
+    body(b)
+  })
+  |> ignore
+}
+
+///|
 // kept across runs: a value (no field of it changes)
 let empty_box : @ui.Style = @ui.css("w=Full h=Grow(1.0) p=S10 gap=S1_5 align=ACenter justify=JCenter")
 
@@ -2303,7 +2318,8 @@ pub fn dialog_body_most(c : @ui.Ctx, key : String, inner : Int) -> Double? {
 /// goes in steps, each sliding in whole: panel_centred), untitled, none of the room round a body (its close button in
 /// its corner, over it: untitled_clear). An Escape `on_escape` says it took is a step back within it, not closing it.
 /// `scrim`: what the page under it is dimmed with (the theme's where not said; none, 0, where what is under it is
-/// dimmed already: presenters' scrim_owner); `veil`: how far another over it dims it over itself (0 … 1: dialog_veil).
+/// dimmed already: presenters' scrim_owner); `veil`: how far another over it dims it over itself (0 … 1, read as it is
+/// drawn: dialog_veil).
 /// Whether it is open now; `on_close`: what its close button does, as it is pressed (its owner's open let go).
 pub fn dialog(
   c : @ui.Ctx,
@@ -2321,7 +2337,7 @@ pub fn dialog(
   bare? : Bool = false,
   on_escape? : () -> Bool,
   scrim? : Int64,
-  veil? : Double = 0.0,
+  veil? : @motion.Anim,
   on_close? : () -> Unit = fn() {  },
 ) -> Bool {
   let w = w.unwrap_or(if wide { dialog_wide_w } else { dialog_w })
@@ -2418,7 +2434,10 @@ pub fn dialog(
           })
           |> ignore
         }
-        dialog_veil(c, veil)
+        match veil {
+          Some(v) => dialog_veil(c, v)
+          None => ()
+        }
         },
       )
       c.surface(panel)
@@ -2430,13 +2449,18 @@ pub fn dialog(
 
 ///|
 /// A dialog dimmed over all of itself `f` of the way (0 … 1) as the window under it is (the theme's scrim), another over
-/// it (it takes nothing then): over what it holds, its corners its own; nothing where `f` is 0.
-fn dialog_veil(c : @ui.Ctx, f : Double) -> Unit {
-  if f <= 0.0 {
+/// it (it takes nothing then): over what it holds, its corners its own; nothing where `f` is not going from 0. Dimmed
+/// as it is drawn (Ctx::bg_by), not built again as it goes; built while it dims or comes back, till its declared end.
+fn dialog_veil(c : @ui.Ctx, f : @motion.Anim) -> Unit {
+  if f.target() <= 0.0 && f.over(c) {
     return
   }
-  let ink = @ui.alpha(c.theme().scrim, f)
-  c.layer(fn() { c.box(style=dialog_veil_at.then(@ui.style(bg=Data(ink))), fn() {  }) |> ignore }) |> ignore
+  let scrim = c.theme().scrim
+  c.layer(fn() {
+    let v = c.box(style=dialog_veil_at, fn() {  })
+    c.bg_by(v, fn() { @ui.alpha(scrim, dmax(0.0, f.get(c))) })
+  })
+  |> ignore
 }
 
 ///|
@@ -3154,21 +3178,14 @@ let radio_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Fg")
 // Asking before (parts.tsx Confirm; parts.css.ts dialogAlert, dialogError)
 
 ///|
-/// What a confirm reports: whether it is open now, and whether its action was pressed this frame.
-pub(all) struct Confirmed {
-  open : Bool
-  confirmed : Bool
-}
-
-///|
 /// Asks before something that cannot be undone (parts.tsx Confirm: an alert dialog, a press outside does not close
 /// it): 420 wide, 28 over its title, 24 in; its title (22, 600) and `description` (13, muted), what went wrong (`error`:
 /// 13 red, 12 over the buttons, it stays open), an optional red `warning`, then `cancel` (its words alone) and `action`
 /// (solid red, the primary's when not `danger`; a ring while `busy`) at its end, 16 under, 8 apart. Escape, the back
 /// and `cancel` close it.
-/// `scrim`: what the page under it is dimmed with (the theme's where not said; 0 where it is dimmed already); `veil`:
-/// how far another over it dims it over itself (0 … 1: dialog_veil); `on_confirm`: what its action does, as it is
-/// pressed (press_does).
+/// `scrim`: what the page under it is dimmed with (the theme's where not said; 0 where it is dimmed already);
+/// `on_confirm`: what its action does, as it is pressed (press_does); `on_close`: what closing it does (`cancel`
+/// pressed, Escape, the back), as it is.
 pub fn confirm_dialog(
   c : @ui.Ctx,
   key : String,
@@ -3182,12 +3199,11 @@ pub fn confirm_dialog(
   danger? : Bool = true,
   warning? : String = "",
   scrim? : Int64,
-  veil? : Double = 0.0,
   on_confirm? : () -> Unit,
-) -> Confirmed {
-  let mut confirmed = false
-  let mut closed = false
-  let d = @kit.dialog(
+  on_close? : () -> Unit = fn() {  },
+) -> Unit {
+  c.with_dismissed(fn(_) { on_close() }, fn() {
+  @kit.dialog(
     c,
     key,
     open,
@@ -3214,7 +3230,6 @@ pub fn confirm_dialog(
             c.text(warning, style=confirm_warning) |> ignore
           }
           inner()
-          dialog_veil(c, veil)
         },
       )
       c.surface(panel)
@@ -3224,17 +3239,14 @@ pub fn confirm_dialog(
         c.box(style=confirm_error_at, fn() { c.text(error, style=confirm_error) |> ignore }) |> ignore
       }
       c.box(style=confirm_foot.then(dialog_corner_foot(dialog_pad)), fn() {
-        if button(c, cancel, key=key + "/cancel", tone=Ghost) {
-          closed = true
-        }
-        if button(c, action, key=key + "/action", tone=if danger { DangerSolid } else { Primary }, busy~, on_press?=on_confirm) {
-          confirmed = true
-        }
+        button(c, cancel, key=key + "/cancel", tone=Ghost, on_press=on_close)
+        button(c, action, key=key + "/action", tone=if danger { DangerSolid } else { Primary }, busy~, on_press?=on_confirm)
       })
       |> ignore
     },
   )
-  { open: d.value && !closed, confirmed }
+  |> ignore
+  })
 }
 
 ///|
@@ -3357,7 +3369,7 @@ pub(all) enum PanelTone {
 ///|
 /// Words to press in a small panel (PanelButton): a small pill, 24 high, 10 in, its words 12 and 500; a ground only
 /// while pointed at (`Filled`: the accent's pale ground always, the accent at 20% pointed at: the web's 22%, the scale's
-/// nearest). True on the frame after it was pressed.
+/// nearest). `on_press`: what pressing it does, as it is let go (press_does).
 pub fn panel_button(
   c : @ui.Ctx,
   key : String,
@@ -3365,7 +3377,7 @@ pub fn panel_button(
   tone? : PanelTone = Plainly,
   disabled? : Bool = false,
   on_press? : () -> Unit,
-) -> Bool {
+) -> Unit {
   let id = c.id(key)
   press_does(c, id, !disabled, on_press)
   let hot = !disabled && c.lit(id)
@@ -3386,13 +3398,12 @@ pub fn panel_button(
   @motion.reshape(c, b, "sf-pbtn/shape/" + key, by=words, spec=button_reshape)
   @motion.layout(c, words_at, "sf-pbtn/words/" + key, by=words, spec=button_reshape)
   c.semantics(b, Button, id~, label=words, disabled~)
-  !disabled && c.clicked(id)
 }
 
 ///|
 /// An icon to press in a small panel (PanelIconButton: close, stop, a step): a 24 circle, the muted ink, the hover's
-/// ground and the ink pointed at; named on hover; `cornered`, in the panel's top end corner (panel_icon_corner). True
-/// on the frame after it was pressed.
+/// ground and the ink pointed at; named on hover; `cornered`, in the panel's top end corner (panel_icon_corner).
+/// `on_press`: what pressing it does, as it is let go (press_does).
 pub fn panel_icon_button(
   c : @ui.Ctx,
   key : String,
@@ -3401,7 +3412,7 @@ pub fn panel_icon_button(
   disabled? : Bool = false,
   cornered? : Bool = false,
   on_press? : () -> Unit,
-) -> Bool {
+) -> Unit {
   let p = theme().p
   let id = c.id(key)
   press_does(c, id, !disabled, on_press)
@@ -3412,7 +3423,6 @@ pub fn panel_icon_button(
   })
   c.semantics(b, Button, id~, label~, disabled~)
   tip(c, "pib/" + key, id, label)
-  !disabled && c.clicked(id)
 }
 
 ///|
@@ -3590,7 +3600,7 @@ pub fn chooser(
     })
   }
   if as_button {
-    let (_, node) = button_part(
+    let node = button_part(
       c,
       words,
       key~,
@@ -4097,8 +4107,10 @@ pub fn ask_line_button(
   let out = pad - inset
   let id = c.id(key)
   let live = !disabled
-  let lit = ease_to(c, "sf-ask-line-btn/\{id}", live && (c.lit(id) || c.pressed(id)))
-  let seen = @motion.animate(c, "sf-ask-line-btn-seen/\{id}", if disabled { 0.45 } else { 1.0 }, spec=@motion.tween(dur_ms, ease=Out))
+  // (its ground and its words' ink eased, and it faded, as it is painted: told as it is built, read where it is drawn)
+  let ease = @motion.tween(dur_ms, ease=Out)
+  let lit = @motion.told(c, "sf-ask-line-btn/\{id}", if live && (c.lit(id) || c.pressed(id)) { 1.0 } else { 0.0 }, spec=ease)
+  let seen = @motion.told(c, "sf-ask-line-btn-seen/\{id}", if disabled { 0.45 } else { 1.0 }, spec=ease)
   let look = theme().chat_list
   // (its words as far in from its end as the bell's from the row's start: the bell's room in its disc's column)
   let side = (ask_line_disc() - mark) / 2.0
@@ -4111,19 +4123,22 @@ pub fn ask_line_button(
     mr=room(-out),
     radius=Full,
     align=ACenter,
-    bg=Data(alpha(theme().p.hover, lit)),
   )
+  let hover = theme().p.hover
   let b = c.box(
     style=room_of,
     id=if live { id } else { 0 },
     fn() {
-      // (its ink the quiet one's, the line's own under the hand, over dur_ms)
-      let ink = mix(theme().p.text, lit, theme().p.muted)
+      // (its ink the quiet one's, the line's own under the hand, over dur_ms, as it is painted)
+      let (text, muted) = (theme().p.text, theme().p.muted)
+      let ink = mix(text, lit.target(), muted)
       let words = look.state_quiet.then(ask_line_button_words).then(@ui.text_style(color=Data(ink)))
-      c.text(label, style=ask_line_words(words)) |> ignore
+      let w = c.text(label, style=ask_line_words(words))
+      c.ink_by(w, fn() { mix(text, lit.get(c), muted) })
     },
   )
-  c.look(b, @ui.look(alpha=seen))
+  c.bg_by(b, fn() { alpha(hover, lit.get(c)) })
+  c.look_by(b, fn() { @ui.look(alpha=seen.get(c)) })
   c.semantics(b, Button, id=if live { id } else { 0 }, label~, disabled=!live)
   match on_press {
     Some(f) if live => c.on_press(id, f)
@@ -4207,10 +4222,14 @@ pub fn options_card(
         let picked_here = !history && chosen == Some(i)
         let ease = @motion.tween(dur_ms, ease=Out)
         let k = key + "/" + i.to_string()
-        let there = @motion.animate(c, "options-seen/" + k, if history || enabled || chosen == Some(i) { 1.0 } else { 0.5 }, spec=ease)
-        let ticked = @motion.animate(c, "options-ticked/" + k, if picked_here { 1.0 } else { 0.0 }, spec=ease)
-        let turning = @motion.animate(c, "options-turning/" + k, if busy == Some(i) { 1.0 } else { 0.0 }, spec=ease)
-        c.box(
+        // (faded as it is drawn)
+        let there = @motion.told(c, "options-seen/" + k, if history || enabled || chosen == Some(i) { 1.0 } else { 0.5 }, spec=ease)
+        // (told as they are built, read where they are painted: the check and the spinner built while they are there
+        // or on their way, up to their declared ends)
+        let ticked = @motion.told(c, "options-ticked/" + k, if picked_here { 1.0 } else { 0.0 }, spec=ease)
+        let turning = @motion.told(c, "options-turning/" + k, if busy == Some(i) { 1.0 } else { 0.0 }, spec=ease)
+        let disc_off = alpha(t.p.text, 0.09)
+        let row = c.box(
           dir=Row,
           w=Fill(1.0),
           pl=ot.pad_in,
@@ -4221,14 +4240,13 @@ pub fn options_card(
           align=AStart,
           radius=option_row_corner,
           bg=if hot { t.p.hover } else { 0L },
-          opacity=there,
           id~,
           fn() {
-            c.box(
+            let disc = c.box(
               w=Px(ot.disc),
               h=Px(ot.disc),
               radius=ot.disc / 2.0,
-              bg=if o.2 { t.p.accent } else { mix_seen(t.p.accent, ticked, alpha(t.p.text, 0.09)) },
+              bg=if o.2 { t.p.accent } else { mix_seen(t.p.accent, ticked.target(), disc_off) },
               align=ACenter,
               justify=JCenter,
               fn() {
@@ -4238,19 +4256,21 @@ pub fn options_card(
                 } else {
                   c.text("\{i + 1}", size=theme().t.caption, weight=600, color~, wrap=false)
                 }
-                if ticked > 0.0 {
-                  c.look(number, @ui.look(alpha=1.0 - ticked))
+                if picked_here || !ticked.over(c) {
+                  c.look_by(number, fn() { @ui.look(alpha=1.0 - ticked.get(c)) })
                   c.layer(fn() {
                     let mark = c.box(style=option_check_room, fn() {
                       icon(c, "check", size=ot.disc * option_check_share, color=0xFFFFFFFFL) |> ignore
                     })
-                    c.look(mark, @ui.look(alpha=ticked))
+                    c.look_by(mark, fn() { @ui.look(alpha=ticked.get(c)) })
                   })
                   |> ignore
                 }
               },
             )
-            |> ignore
+            if !o.2 {
+              c.bg_by(disc, fn() { mix_seen(t.p.accent, ticked.get(c), disc_off) })
+            }
             c.box(w=Fill(1.0), fn() {
               c.text(o.0, size=ot.label, weight=500, color=t.p.text, line=ot.label_line) |> ignore
               if o.1 != "" {
@@ -4259,12 +4279,12 @@ pub fn options_card(
             })
             |> ignore
             // (turning over the row's end, in what it leaves at the end of the words: never narrowing them)
-            if turning > 0.0 {
+            if busy == Some(i) || !turning.over(c) {
               c.layer(fn() {
                 let s = c.box(style=@ui.style(w=Full, align=AEnd, pt=room_of(ot.pad_in), pr=room_of(option_row_end)), fn() {
                   c.box(h=Px(ot.label_line), justify=JCenter, fn() { spinner(c, size=12.0) |> ignore }) |> ignore
                 })
-                c.look(s, @ui.look(alpha=turning))
+                c.look_by(s, fn() { @ui.look(alpha=turning.get(c)) })
               })
               |> ignore
             }
@@ -4280,7 +4300,7 @@ pub fn options_card(
             }
           },
         )
-        |> ignore
+        c.look_by(row, fn() { @ui.look(alpha=there.get(c)) })
       }
     })
     |> ignore
@@ -4321,6 +4341,38 @@ pub fn waiting_page(c : @ui.Ctx, mark : String, title : String, lead : String, b
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// The same page (waiting_page) as nodes of the window's tree, made once in `parent`: its mark, `title()` and `lead()`
+/// as they change, then what `body` makes in the column under them. The node.
+#callsite(autofill(loc))
+pub fn waiting_page_node(
+  parent : @view.View,
+  mark : String,
+  title : () -> String,
+  lead : () -> String,
+  body : (@view.View) -> Unit,
+  loc~ : SourceLoc,
+) -> @view.View {
+  // (the native input the app was started with: the same the whole run)
+  let touch = @signals.untracked(native_input) is Finger
+  parent.box(made_for=loc, fn(room) {
+    style_node(room, fn() { if touch { wait_room_touch } else { wait_room } })
+    if !touch {
+      room.box(fn(top) { top.height(Is(Some(wait_top))) |> ignore }) |> ignore
+    }
+    room.box(fn(col) {
+      style_node(col, fn() { if touch { wait_column_touch } else { wait_column } })
+      icon_node(col, mark, if touch { wait_icon_touch } else { wait_icon }, By(fn() { theme().p.text })) |> ignore
+      // (each line in the middle, as the old view's centred words: Ctx::text's `center`)
+      words_node(col, title, fn() { if touch { wait_title_touch } else { wait_title } }).words_centered(Is(true))
+      |> ignore
+      words_node(col, lead, fn() { wait_lead }).words_centered(Is(true)) |> ignore
+      body(col)
+    })
+    |> ignore
+  })
 }
 
 ///|
@@ -4422,7 +4474,12 @@ pub fn update_key(
   let t = theme()
   let id = c.id(key)
   let hot = c.lit(id) && !busy
-  let progress = ease_to(c, "update/coming/" + key, coming is Some(_))
+  // (told as it is built, read where it is painted: the ring built while it comes or is on its way back, up to its
+  // declared end)
+  let progress = @motion.told(c, "update/coming/" + key, if coming is Some(_) { 1.0 } else { 0.0 }, spec=@motion.tween(
+      dur_ms,
+      ease=Out,
+    ))
   let b = c.box(
     style=(if hot { update_key_hot } else { update_key_box }).then(@ui.style(w=Fixed(side), h=Fixed(side))),
     id~,
@@ -4435,15 +4492,15 @@ pub fn update_key(
             icon(c, if offered { "download" } else { "update" }, size=mark, color=t.p.text) |> ignore
           }
         })
-        c.look(ready, @ui.look(alpha=1.0 - progress))
-        if progress > 0.0 {
+        c.look_by(ready, fn() { @ui.look(alpha=1.0 - progress.get(c)) })
+        if coming is Some(_) || !progress.over(c) {
           c.layer(fn() {
             let part = match coming {
               Some(part) => part
               None => Some(1.0)
             }
             let downloading = c.box(style=update_ring_at, fn() { coming_mark(c, key, part, mark, t.p.text) })
-            c.look(downloading, @ui.look(alpha=progress))
+            c.look_by(downloading, fn() { @ui.look(alpha=progress.get(c)) })
           })
           |> ignore
         }
@@ -4557,7 +4614,7 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
         Some(r) =>
           if back == 0.0 {
             c.look_by(a, fn() {
-              let k = resting.get()
+              let k = resting.get(c)
               if k < 1.0 {
                 @ui.look(rot=r.from + (r.to - r.from) * k)
               } else {
@@ -4585,7 +4642,7 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
   })
   // (coming and going, faded as it is drawn)
   let fade = p.t
-  c.look_by(b, fn() { { ..@ui.still_look, alpha: dmin(1.0, fade.get()) } })
+  c.look_by(b, fn() { { ..@ui.still_look, alpha: dmin(1.0, fade.get(c)) } })
   c.semantics(b, Status, id~, label=words)
   tip(c, key + "/tip", id, words, side=Bottom)
 }
@@ -4796,6 +4853,71 @@ pub fn coming_mark(c : @ui.Ctx, key : String, coming : Double?, size : Double, c
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// coming_mark as a node of the window's tree in `parent`: the download's mark `size` across in `color`, the ring round
+/// it the accent from its top as far round as `coming` says it has come (0 to 1), going to a part told anew over
+/// @kit.progress_ms, eased out (progress_spinner's).
+#callsite(autofill(loc))
+pub fn coming_mark_node(
+  parent : @view.View,
+  coming : () -> Double,
+  size : Double,
+  color : () -> Int64,
+  loc~ : SourceLoc,
+) -> Unit {
+  let stroke = size * icon_stroke / 24.0
+  let side = size * coming_ring / 24.0 + stroke
+  let pi = 3.141592653589793
+  let mid = side / 2.0
+  let r = mid - stroke / 2.0
+  let ring = @ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi)
+  let part = fn() {
+    let k = coming()
+    if k < 0.0 {
+      0.0
+    } else if k > 1.0 {
+      1.0
+    } else {
+      k
+    }
+  }
+  let way = EdgeWay::new(@signals.untracked(part))
+  let look = coming_mark_box(size)
+  parent.box(made_for=loc, fn(m) {
+    style_node(m, fn() { look })
+    m.reacts(part, fn(k) { way.go(m, k, @kit.progress_ms) })
+    m.box(fn(l) {
+      l
+      .width(Is(Some(side)))
+      .height(Is(Some(side)))
+      .lines(By(fn() {
+        let t = theme()
+        let shown = way.shown(m)
+        let lines = [@ui.line(ring, width=stroke, color=t.p.line_strong)]
+        if shown > 0.0 {
+          lines.push(@ui.line(@ui.arc(mid, mid, r, from=-0.5 * pi, sweep=shown * 2.0 * pi), width=stroke, color=t.p.accent))
+        }
+        lines
+      }))
+      |> ignore
+    })
+    |> ignore
+    m.box(fn(o) {
+      o.over(Is(true)) |> ignore
+      style_node(o, fn() { update_ring_at })
+      icon_node(o, "download-ring", size, By(color)) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// What coming_mark draws in: `size` square, what it holds in its middle.
+fn coming_mark_box(size : Double) -> @ui.Style {
+  @ui.style(w=Fixed(size), h=Fixed(size), align=ACenter, justify=JCenter)
 }
 
 ///|

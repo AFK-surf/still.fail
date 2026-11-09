@@ -301,7 +301,7 @@ test "kept layouts: a box moving into the row before it, the same as it was" {
 
 ///|
 /// What a slot held last frame is gone when it holds something else: a
-/// coloured, padded box then a spacer, a pager then a plain box.
+/// coloured, padded box then a spacer, a list then a plain box.
 test "kept layouts: a slot holding another kind of thing" {
   same_both_ways("slot reused", fn() {
     let flip = @signals.signal(false)
@@ -320,7 +320,7 @@ test "kept layouts: a slot holding another kind of thing" {
           if flip.get() {
             c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
           } else {
-            c.pager("p", 3, 0, fn(k) { c.text("page \{k}") |> ignore }) |> ignore
+            c.list("p", 3, 40.0, fn(k) { c.text("page \{k}") |> ignore }) |> ignore
           }
         })
         |> ignore
@@ -668,9 +668,9 @@ test "kept layouts: pages pushed and popped, mid-slide" {
         fn(i) {
           c.column(w=Fill(1.0), h=Fill(1.0), fn() {
             c.text("title \{i}", wrap=false) |> ignore
-            if c.button("open \{i + 1}") {
+            c.button("open \{i + 1}", on_press=fn() {
               nav.push(i + 1)
-            }
+            })
             c.list("rows", 50, 30.0, fn(r) { c.text("row \{r} of \{i}") |> ignore }) |> ignore
           })
           |> ignore
@@ -690,33 +690,6 @@ test "kept layouts: pages pushed and popped, mid-slide" {
     t.back_gesture(150.0, false)
     t.draw()
     t.back_gesture(300.0, true)
-    t.draw()
-  })
-  |> ignore
-}
-
-///|
-test "kept layouts: a pager dragged and turned, images arriving" {
-  same_both_ways("pager", fn() {
-    let t = Tester::new(
-      fn(c) {
-        c.column(w=Fill(1.0), h=Fill(1.0), fn() {
-          c.image("a.png", w=Px(100.0)) |> ignore
-          c.pager("p", 5, 0, fn(k) {
-            c.column(pad=10.0, fn() { c.text("page \{k}") |> ignore }) |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
-      },
-      w=300.0,
-      h=500.0,
-      images=[("a.png", 400, 200)],
-    )
-    t.draw()
-    t.drag(250.0, 300.0, 120.0, 300.0)
-    t.draw()
-    t.drag(100.0, 300.0, 140.0, 300.0)
     t.draw()
   })
   |> ignore
@@ -810,8 +783,10 @@ test "a list's running sums are its rows' heights added up" {
     built: -1,
     stepped: -1,
     fresh: true,
+    on_pixels_by: 0.0,
     rows_read: false,
     island: 0,
+    typed_stays: false,
     glide_shows: false,
     named: "",
     made_at: None,
@@ -828,6 +803,7 @@ test "a list's running sums are its rows' heights added up" {
     fling_dist: 0.0,
     fling_dur: 0.0,
     fling_done: 0.0,
+    fling_from: None,
     drag_pending: 0.0,
     held: false,
     over: 0.0,
@@ -855,6 +831,7 @@ test "a list's running sums are its rows' heights added up" {
         from_end: false,
         put_at: -1.0,
         shown_h: {},
+        shown_lead: {},
         sizes_mover: Mover::new(),
   }
   let mut seed = 7
@@ -906,7 +883,7 @@ test "a slot taken by another builder starts afresh" {
         if flip.val {
           c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
         } else {
-          c.pager("p", 3, 0, fn(k) { c.text("page \{k}") |> ignore }) |> ignore
+          c.list("p", 3, 40.0, fn(k) { c.text("page \{k}") |> ignore }) |> ignore
         }
       })
       |> ignore
@@ -918,7 +895,7 @@ test "a slot taken by another builder starts afresh" {
   assert_eq(g().scroll_ids.length(), 1)
   flip.val = true
   t.frame()
-  // nothing drawn: no colour, no words, no pager to drag
+  // nothing drawn: no colour, no words, no list to drag
   assert_eq(t.drawn_rects().length(), 0)
   assert_eq(t.drawn_glyphs().length(), 0)
   assert_eq(g().scroll_ids.length(), 0)

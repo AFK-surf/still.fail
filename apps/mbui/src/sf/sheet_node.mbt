@@ -1,9 +1,12 @@
 // A panel whose body and foot are nodes (panel_nodes) as a sheet from the foot of the window (小屏's: @kit.sheet's, the
 // host's present_sheet), as nodes of the window's tree: a modal layer over the window, what is under it dimmed by the
 // sheet's scrim (black at 28%, in and out over @kit.sheet_scrim_ms, CSS's ease), the sheet in the window's foot as
-// tall as what it holds (sheet_most of the window at most, what it holds scrolling in it past that), its top corners
-// the pane's, on the frosted glass of a sheet; its grabber over its title, what it says, what it holds and its foot,
-// laid out as the host's sheet lays a panel out (sheet_step). It rises from below on a Move as long as its own height
+// tall as what it holds (sheet_most of the window at most, what it holds scrolling in it past that; one a share of the
+// window tall, `tall`, that share, what it holds filling the room it leaves and laid out in it), its top corners
+// the pane's, on the frosted glass of a sheet; its grabber over its title (none where what it holds heads itself,
+// `heads_itself`), what it says, what it holds and its foot, laid out as the host's sheet lays a panel out
+// (sheet_step); its title and what it says as they are now where it says them (`live`), its title's row there while
+// it has one. It rises from below on a Move as long as its own height
 // makes it (SheetRise, placed as it is drawn by how tall it is laid out: View::moved_by) and sinks away on one as
 // it closes. Its top (sheet_drag_h: the grabber and the head) drags it down with the finger: let go more than
 // sheet_drag_close down it closes, from where it is, else it goes back on a Move as fast as it was let go. Escape, the
@@ -20,7 +23,8 @@ let sheet_drag_h : Double = 64.0
 ///|
 /// A sheet of panel `x` (its body and foot `n`) in `parent` while `open()`; `close`: what what it holds is given to
 /// close it; `cancel` as it is closed by Escape, the back, a press over it or its top dragged down. `shown`, `gone`: as
-/// dialog_layer_node's.
+/// dialog_layer_node's. `covered_by`: how tall the sheet over it is, while one is (it steps back under it, pushed up out
+/// of its way and dimmed, as the host's sheet does: present_sheet's recede).
 fn sheet_node(
   parent : @view.View,
   open : () -> Bool,
@@ -31,6 +35,7 @@ fn sheet_node(
   from : Anchor,
   shown? : () -> Unit = fn() {  },
   gone? : () -> Unit = fn() {  },
+  covered_by? : () -> Double? = fn() { None },
 ) -> Unit {
   parent.show(
     open,
@@ -57,6 +62,30 @@ fn sheet_node(
         }
       })
       let live = fn() { !layer.leaving() }
+      // (a sheet over it: it steps back, as far up as that one's height makes it (push_of), its veil over it as far as
+      // it has gone, on a Move as far as it goes; that one gone, back down from there, as the host's (present_sheet))
+      let recede = EdgeWay::new(0.0)
+      let pushed = @signals.signal(0.0)
+      layer.reacts(covered_by, fn(h) {
+        match h {
+          Some(h) => pushed.set(push_of(h))
+          None => ()
+        }
+        let way = dmax(pushed.untracked(), 1.0)
+        recede.go_by(layer, if h is Some(_) { 1.0 } else { 0.0 }, @motion.move(points=way))
+      })
+      |> ignore
+      // (its title and what it says as they are now, `live`'s where it says them, as the host's sheet heads a panel:
+      // sheet_body's)
+      let now = fn() {
+        match x.live {
+          Some(f) => f()
+          None => (x.title, "", x.description)
+        }
+      }
+      // (a share of the window tall (`tall`, not a form): that tall, what it holds filling the room left it and laid out
+      // in it, scrolling as it does itself, as the host's sheet has a capped panel's (sheet_capped_room))
+      let capped = x.tall > 0.0 && !x.form
       layer
       .over(Is(true))
       // (modal while open: closing, what is under it its own again as it begins to go)
@@ -99,7 +128,15 @@ fn sheet_node(
         .height(By(fn() {
           match tall_held.get() {
             Some(h) => Some(h + sheet_under)
-            None => if sized.get() { Some(tall.shown(sheet) + sheet_under) } else { None }
+            None =>
+              if sized.get() {
+                Some(tall.shown(sheet) + sheet_under)
+              } else if capped {
+                // (its share of the window, as the host's sheet is: present_sheet's)
+                Some(x.tall * layer.window().1 + sheet_under)
+              } else {
+                None
+              }
           }
         }))
         .radius(Is(pane_corner))
@@ -119,12 +156,13 @@ fn sheet_node(
           holds_leaving=true,
         )
         .offset(By(fn() {
+          let raised = recede.shown(layer) * pushed.get()
           match held.get() {
-            Some(y) => (0.0, y)
-            None => (0.0, back.shown(layer))
+            Some(y) => (0.0, y - raised)
+            None => (0.0, back.shown(layer) - raised)
           }
         }))
-        .says(Is(Some(@view.said(Dialog, label=x.title))))
+        .says(By(fn() { Some(@view.said(Dialog, label=now().0)) }))
         // (a press on it its own: not over it)
         .presses(Is(true))
         .on_press(fn() {  })
@@ -203,26 +241,48 @@ fn sheet_node(
           |> ignore
         })
         |> ignore
-        // (its title)
-        if x.title != "" {
-          sheet.box(fn(r) {
-            style_node(r, fn() { sheet_title_row })
-            words_node(r, fn() { x.title }, fn() { sheet_title_words }) |> ignore
+        // (its title, none where what it holds heads itself (`heads_itself`): its own title's row there; one as it is now
+        // (`live`), there while it has one)
+        let title_row = fn(r : @view.View) {
+          style_node(r, fn() { sheet_title_row })
+          words_node(r, fn() { now().0 }, fn() { sheet_title_words }) |> ignore
+        }
+        if x.heads_itself {
+          ()
+        } else if x.live is Some(_) {
+          sheet.show(fn() { now().0 != "" }, title_row)
+        } else if x.title != "" {
+          sheet.box(title_row) |> ignore
+        }
+        // (what it says, under its title, as it is now)
+        let said = fn(s : @view.View) {
+          s.show(fn() { now().2 != "" }, fn(w) {
+            style_node(w, fn() { sheet_words_at })
+            words_node(w, fn() { now().2 }, fn() { sheet_lead }) |> ignore
+          })
+        }
+        // what it holds, scrolling where the sheet is short of room for it; a share of the window tall, filling the room
+        // it leaves, laid out in it (sheet_capped_room: its words as far in as a sheet's, sheet_step's)
+        if capped {
+          sheet.box(fn(b) {
+            b.grow(Is(1.0)).shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+            said(b)
+            b.box(fn(col) {
+              style_node(col, fn() { sheet_capped_room })
+              col.min_height(Is(Some(0.0))) |> ignore
+              // (laid out as the host's sheet lays out a capped panel's body: narrow, its words a sheet's own in, sheet_step's)
+              panel_in_lend(col, Narrow, sheet_panel_sides)
+              (n.body)(col, close)
+            })
+            |> ignore
           })
           |> ignore
-        }
-        // what it holds, scrolling where the sheet is short of room for it
+        } else {
         sheet.box(fn(b) {
           let scroll = @view.Scroll::new()
           b.shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
           b.scrolls(scroll, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(s) {
-            if x.description != "" {
-              s.box(fn(w) {
-                style_node(w, fn() { sheet_words_at })
-                words_node(w, fn() { x.description }, fn() { sheet_lead }) |> ignore
-              })
-              |> ignore
-            }
+            said(s)
             // (in from its sides as the host's sheet has a panel's: opened by a press as far in as a pick's rows,
             // else as its words)
             let room = if from != Unanchored {
@@ -232,6 +292,15 @@ fn sheet_node(
             }
             s.box(fn(col) {
               style_node(col, fn() { room })
+              // (laid out as the host's sheet lays out a panel's body, sheet_step's: narrow; its words what a sheet's rows
+              // leave of its words' in one a press opened, its rows out to its words' in one opened by nothing)
+              let pressed = from != Unanchored
+              panel_in_lend(
+                col,
+                Narrow,
+                if pressed { sheet_panel_sides - sheet_row_sides } else { 0.0 },
+                rows_out=dmax(0.0, (if pressed { sheet_row_sides } else { sheet_panel_sides }) - panel_card_in),
+              )
               (n.body)(col, close)
             })
             |> ignore
@@ -241,6 +310,7 @@ fn sheet_node(
           |> ignore
         })
         |> ignore
+        }
         match n.foot {
           Some(f) => {
             if x.ruled {
@@ -248,6 +318,8 @@ fn sheet_node(
             }
             sheet.box(fn(row) {
               style_node(row, fn() { sheet_foot_at })
+              // (its buttons across it, each its share, in a thumb's reach: the host's sheet's foot_fills)
+              row.lends(foot_fills_lent, true) |> ignore
               f(row, close)
             })
             |> ignore
@@ -256,6 +328,9 @@ fn sheet_node(
         }
         // (under it, the navigation bar's room: sheet_foot)
         sheet.box(fn(nav) { nav.height(By(fn() { Some(@ui.system_bars().bottom) })) |> ignore }) |> ignore
+        // (stepped back under a sheet over it: dimmed all over as far as it has gone, the host's sheet_veil_at)
+        sheet.box(fn(v) { v.over(Is(true)).ground(By(fn() { @ui.alpha(sheet_scrim, recede.shown(layer)) })) |> ignore })
+        |> ignore
       })
       |> ignore
       layer.focus_returns() |> ignore
@@ -333,7 +408,7 @@ fn SheetRise::go(self : SheetRise, n : @view.View, to : Double) -> Unit {
     _ => ()
   }
   self.ways.push((at, to))
-  self.said.set(@signals.untracked(fn() { self.said.get() }) + 1)
+  self.said.set(self.said.untracked() + 1)
 }
 
 ///|

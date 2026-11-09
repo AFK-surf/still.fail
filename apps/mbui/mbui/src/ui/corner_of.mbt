@@ -120,7 +120,7 @@ pub fn window_keys_own_now() -> Bool {
 /// The corners of nodes of the window's tree that are linked each (tree_corners_linked), by the node: what the corner
 /// rule takes of them as of an old view's box said so (Ctx::with_tree_nodes).
 // kept across runs: each let go with its node
-let tree_links : Map[@view.NodeId, () -> FixedArray[CornerOf]?] = {}
+let tree_links : ByNode[() -> FixedArray[CornerOf]?] = ByNode::new()
 
 ///|
 /// Node `v` of the window's tree round at each corner as `links` says (Radius::LinkedEach's: a panel's in the window's

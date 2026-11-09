@@ -270,9 +270,9 @@ test "a run filmed: every frame of the film once, in order, from the Tester's fi
 ///|
 fn film_frame_view(value : Ref[Int]) -> (@ui.Ctx) -> Unit {
   fn(c) {
-    if c.button("go") {
+    c.button("go", on_press=fn() {
       value.val = value.val + 1
-    }
+    })
     c.text("count \{value.val}", wrap=false) |> ignore
   }
 }

@@ -24,6 +24,8 @@ import { Priority } from "./scheduler.ts";
 /// The first wait before an events socket is opened again; it doubles up to a minute, back to the first after one
 /// held a minute.
 export const SOCKET_RETRY_MS = 1_000;
+/// How long a read the cloud turned away for too many asks (429) waits to be asked again.
+export const LIMITED_MS = 10_000;
 export const SOCKET_RETRY_MAX_MS = 60_000;
 /// An events socket that heard nothing this long is opened again, including before its first heartbeat.
 export const SOCKET_IDLE_MS = 2 * 25_000 + 10_000;
@@ -62,6 +64,8 @@ export class CloudSync {
   /// An operator's lists that failed to come (the network, still.fail cloud's 5xx): the wait before they are asked
   /// again, by account, and the retry waiting.
   readonly #adminRetry = new Map<string, { ms: number; fiber: Fiber.Fiber<unknown, unknown> | null }>();
+  /// A workspace's view to read again, the cloud having turned it away for too many asks.
+  readonly #workspaceRetry = new Map<string, Fiber.Fiber<unknown, unknown>>();
   /// The kept credentials being renewed beside their use (`#credential`), by device and key.
   readonly #renewing = new Set<string>();
 
@@ -230,9 +234,24 @@ export class CloudSync {
           core.data.dropWorkspace(id);
           this.errors.set(id, error);
         } else if (core.data.get(topic) === undefined) this.errors.set(id, error);
+        // Turned away for the account's asks this minute (its devices all read at once as its lock moves): read again
+        // a little later, else what it says (how far the lock goes) stayed behind until it changed once more.
+        if (error.status === 429) this.#workspaceLater(id);
         core.store.invalidate(topic);
       }
     });
+  }
+
+  #workspaceLater(id: string): void {
+    const core = this.#core;
+    if (this.#workspaceRetry.has(id)) return;
+    const again = Effect.sleep(LIMITED_MS).pipe( // timer: a retry after a failure (429)
+      Effect.andThen(Effect.sync(() => {
+        this.#workspaceRetry.delete(id);
+        if (core.workspaces.owner(id) !== null) core.scheduler.enqueue("cloud", `workspace/${id}`, Priority.shown, this.#workspace(id));
+      })),
+    );
+    this.#workspaceRetry.set(id, core.runner.fork(again) as Fiber.Fiber<unknown, unknown>);
   }
 
   #loginSessions(sub: string): Effect.Effect<void, CoreError> {
@@ -449,7 +468,9 @@ export class CloudSync {
     // device yet needs to let it in at all)
     const chain = claim === null ? null : (this.carryPerson?.(workspace) ?? null);
     const person = chain !== null && entries !== null && JSON.stringify(entries).length + JSON.stringify(chain).length > CARRY_BYTES ? null : chain;
-    const claimed = (c: Credential): Credential => (claim === null ? c : { ...c, lock: { ...claim, ...(entries ? { entries } : {}), ...(person ? { person } : {}) } });
+    // (and what the device is: the station lists it for the lock's owner, as the cloud did from the ask)
+    const about = { kind: this.#core.host.appKeys ? "app" : "web", label: prefs.deviceName(this.#core.data) ?? "" };
+    const claimed = (c: Credential): Credential => (claim === null ? c : { ...c, lock: { ...claim, ...about, ...(entries ? { entries } : {}), ...(person ? { person } : {}) } });
     return Effect.map(this.#credential(workspace, device, fresh, main, claim), claimed);
   }
 
@@ -580,7 +601,20 @@ export class CloudSync {
     else if (event.type === "release") this.onRelease();
     else if (event.type === "relays") this.onRelayLoad(sub);
     else if (event.type === "workspace" && typeof event.id === "string") {
-      if (core.workspaces.owner(event.id) !== null) core.scheduler.enqueue("cloud", `workspace/${event.id}`, Priority.shown, this.#workspace(event.id));
+      if (core.workspaces.owner(event.id) === null) return;
+      const lock = event.lock;
+      const topic = { topic: "workspace", workspace: event.id } as const;
+      // Only its lock moved on, as the event says: in place, no request (the lock itself is read of the stations,
+      // views/lock.ts; each entry signed had every device of its members ask for the workspace again, using up the
+      // account's budget).
+      if (isObject(lock) && "head" in lock && isObject(core.data.shared(topic))) {
+        const head = isObject(lock.head) ? lock.head : null;
+        core.data.update(topic, (w) => {
+          if (!isObject(w)) return w;
+          const { locked: _, ...rest } = w;
+          return { ...rest, lock: head, ...(lock.locked === true ? { locked: true } : {}) };
+        });
+      } else core.scheduler.enqueue("cloud", `workspace/${event.id}`, Priority.shown, this.#workspace(event.id));
     } else if (event.type === "station" && typeof event.workspace === "string" && typeof event.id === "string" && typeof event.online === "boolean") {
       // A station came online or went: in place, no request.
       const online = event.online;

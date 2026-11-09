@@ -1,6 +1,7 @@
 // An execution history, an agent's card, jobs, for the app with no core (fixture.mbt; slice 8's screenshots).
 // MBUI_FIXTURE: "history" (an agent's steps, a few opened), "history-reading" (the
-// steps not read yet: their bones), "history-details", the chat
+// steps not read yet: their bones), "history-failed" (their first read failed: why, over the bones), "history-older"
+// (pages before them, being read), "history-older-failed" (their read failed: why, at its top), "history-details", the chat
 // with a sheet open over it: "chat-info", "chat-detail", "chat-actions", "chat-publish", "chat-agent", "chat-agent-unsaid" (an agent's card that knows
 // no figure of it, as a station from before tells none of an agent at rest), "chat-peek" (its station's card), "chat-jobs",
 // "chat-job"; "chat-letters-many" (their sheet, more chats written with than it holds at its share: its list
@@ -22,7 +23,7 @@
 /// Whether `mode` is one of this slice's.
 pub fn decide_mode(mode : String) -> Bool {
   [
-    "history", "history-reading", "history-details",
+    "history", "history-reading", "history-failed", "history-older", "history-older-failed", "history-details",
     "chat-info", "chat-detail", "chat-actions", "chat-publish", "chat-agent", "chat-agent-unsaid", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "home-jobs-screens", "history-link",
     "chat-letters-info", "chat-letters", "chat-letters-many", "chat-letters-open", "chat-letters-pop", "chat-letters-side", "chat-jobs-pop",
     "chat-things", "chat-things-side", "chat-info-pulls",
@@ -372,6 +373,34 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
         None
       }
     "history" if f.mode == "history-reading" => Some(None)
+    "history" if f.mode == "history-failed" =>
+      Some(
+        Some({
+          "items": [],
+          "live": [],
+          "usage": [],
+          "edge": "正在读取执行历史",
+          "empty": true,
+          "loaded": false,
+          "failed": "请求超时",
+        }),
+      )
+    "history" if f.mode == "history-older" || f.mode == "history-older-failed" =>
+      match fix_history() {
+        Object(m) => {
+          let m = m.copy()
+          m["more"] = Json::boolean(true)
+          if f.mode == "history-older-failed" {
+            m["older"] = Json::string("failed")
+            m["edge"] = Json::string("读取更早的执行历史失败：请求超时，稍后重试")
+          } else {
+            m["older"] = Json::string("reading")
+            m["edge"] = Json::string("正在读取更早的执行历史")
+          }
+          Some(Some(Json::object(m)))
+        }
+        j => Some(Some(j))
+      }
     "history" => Some(Some(fix_history()))
     "agentCard" if f.mode == "chat-agent-unsaid" =>
       Some(
@@ -411,7 +440,9 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
     "jobLog" =>
       Some(
         Some({
-          "text": "✓ build (1m 12s)\n✓ unit tests (48s)\n✓ step 3: screenshots\n… waiting for deploy",
+          "text": Json::string(
+            "✓ build (1m 12s)\n✓ unit tests (48s)\n✓ step 3: screenshots\n… waiting for deploy" + fix_job_more_text(),
+          ),
           "said": "最后输出 · 3 分钟前",
           "last": "… waiting for deploy",
         }),
@@ -434,7 +465,7 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
           }),
         )
       } else {
-        None
+        Some(Some({ "groups": [], "lit": false, "ids": [] }))
       }
     _ => None
   }
@@ -802,4 +833,20 @@ pub fn fix_letters() -> Json {
       },
     ],
   }
+}
+
+///|
+/// How many lines a job's output (jobLog) has come to have past its made-up four (more said by fix_now, as a running
+/// job's come), each `deploy check N`.
+// kept across runs: put back by fixture_reset
+pub let fix_job_more : Ref[Int] = Ref(0)
+
+///|
+/// The lines past the four, each on a line of its own after them.
+fn fix_job_more_text() -> String {
+  let out = StringBuilder::new()
+  for k in 1..=fix_job_more.val {
+    out.write_string("\ndeploy check \{k}")
+  }
+  out.to_string()
 }

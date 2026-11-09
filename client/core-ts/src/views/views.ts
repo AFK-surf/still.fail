@@ -2106,18 +2106,19 @@ export class Views implements Owner {
     if (pageV === undefined) return undefined;
     if ("err" in pageV) return pageV;
     const page = pageV.ok as J;
-    let thread: J;
     const data = this.#core.data;
-    if (data.listed(station, "threads")) {
-      const found = data.listedThread(station, id);
-      if (found === undefined) return { err: new CoreError("http_404", t("core-views.error.no_chat"), 404) };
-      thread = structuredClone(found);
-    } else {
+    const listed = data.listed(station, "threads");
+    if (!listed) {
       const threadsV = this.value({ topic: "threads", station });
       if (threadsV !== undefined && "err" in threadsV) return threadsV;
-      if (!isObject(page.thread)) return undefined;
-      thread = structuredClone(page.thread);
     }
+    // Its summary as the station lists it, else as held (one not in the list read last: made since, elsewhere or while
+    // away, or told before that list came back), else not known yet. A chat not in the list held is not one gone: that
+    // is the station's to say (sync.ts #threadGone, the page's error); it said so at once of a chat made since
+    // (2026-11-09).
+    const summary = (listed ? data.listedThread(station, id) : undefined) ?? (isObject(page.thread) ? page.thread : undefined);
+    if (summary === undefined) return undefined;
+    const thread: J = structuredClone(summary);
     const agents = timed("chat.agents", () => this.#agentsOf(station, thread));
     // What two chats' agents wrote each other is not said in it: it has a page of its own (`chatLetters`).
     const keys = new Set(members(thread));
@@ -2213,7 +2214,7 @@ export class Views implements Owner {
       ...(feishuUrl !== null ? { feishuUrl } : {}),
       title,
       people,
-      agents,
+      agents: answeredAt(agents, messages, outbox),
       messages,
       elsewhere,
       more: u64(page.first) !== null && page.first > 1,
@@ -2245,7 +2246,11 @@ export class Views implements Owner {
     if (watch !== null) view.watch = watch;
     const card = row !== undefined ? decisions.ofRow(row) : null;
     if (card !== null && open(card)) view.decision = decisions.shown(card);
-    if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
+    // Its row as this page has it: read, for showing it reads it. Whether it was read before it was opened changes
+    // nothing here (where it stands, its archive): opening a chat only raises what is brought first, so the page is
+    // as it would be at once, not a moment after its read is told (the user, 2026-11-09).
+    const seen = row !== undefined ? { ...row, unread: false } : undefined;
+    if (seen !== undefined && present.archivable(seen) && view.archived !== true) view.archivable = true;
     // Where it stands, as its row's second line says it (what an agent needs, why it stopped, what it waits on, done):
     // said at the end of its messages too. A card waiting is not: it shows in the chat itself; nor what an agent waits
     // on: its activity under the messages says it, with how long it has waited. An agent this page's summary has at
@@ -2257,7 +2262,7 @@ export class Views implements Owner {
       const status = s !== undefined ? present.shownStatus(s) : null;
       return status === "queued" || (status === "running" && present.waiting(s) === null) ? s : present.session(a);
     };
-    const shown = row !== undefined && Array.isArray(row.agents) && !sending ? { ...row, agents: row.agents.map(held) } : null;
+    const shown = seen !== undefined && Array.isArray(seen.agents) && !sending ? { ...seen, agents: seen.agents.map(held) } : null;
     const line = shown !== null ? present.rowStateLine(shown, false, (agent) => {
       const status = present.shownStatus(agent);
       // A stop is already announced in the conversation; its status still remains on the list row.
@@ -2941,7 +2946,8 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
 /// names the upload), as its message draws it once up, not a card that turns into it then; any other a card saying how
 /// far, as it is a card once up. While any goes up, 正在上传 under it (`waits`), unless something else holds it, and how far all
 /// of them together are (`progress`, 正在上传 42%) once each says how much of it the station has (a station's file
-/// copied across says nothing until it is there).
+/// copied across says nothing until it is there). Every byte gone and its station not yet saying it has them all (its
+/// answer can take seconds more), 等待 station 确认收到, not 100% (it read as stuck, zuozijian 2026-11-09).
 function goingUp(o: J): J {
   const { uploads, ...rest } = o as Record<string, unknown>;
   const going = arr(uploads).filter((u) => isObject(u));
@@ -2957,7 +2963,9 @@ function goingUp(o: J): J {
     attachments: [...arr(o.attachments), ...shown],
     ...(cards.length > 0 ? { uploads: cards } : {}),
     ...(o.state === "sending" && typeof o.waits !== "string"
-      ? progress !== null ? { waits: t("core-views.outbox.uploading", { percent: Math.floor(progress * 100) }), progress } : { waits: t("common.uploading") }
+      ? progress === null ? { waits: t("common.uploading") }
+        : progress >= 1 ? { waits: t("common.uploadConfirming"), progress }
+        : { waits: t("core-views.outbox.uploading", { percent: Math.floor(progress * 100) }), progress }
       : {}),
   };
 }
@@ -2991,4 +2999,44 @@ export function stationProblems(online: boolean, silent: boolean, blocked: strin
   if (!online && updating) return [{ key: "updating", level: "amber", text: t("core-views.station.updating_back") }];
   if (!online) return [{ key: "away", level: seen ? "red" : "amber", text: seen ? t("core-views.station.away", { name: brand.name() }) : t("core-views.station.never_connected", { name: brand.name() }) }];
   return [];
+}
+
+
+/// The chat's agents (`agents`), each whose card was answered from here at work (queued) from the moment the answer
+/// is sent: while the answer is on its way (`outbox`: one quoting the card, or any under it as the chat's last word),
+/// and once it is here (`messages`, the viewer's last) till a turn of the agent's begins after it, as its station says
+/// once it has taken the answer. So its activity comes in with the answer, the card folding and the answer coming on
+/// one way of the list, not a moment after as the station tells it (the user, 2026-11-09: 「点选项时「处理中」立刻出来」).
+export function answeredAt(agents: J[], messages: J[], outbox: J[]): J[] {
+  const cardBy = (m: J | undefined): string | null => (m !== undefined && isObject(m.card) ? str(get(m.by, "agent")) : null);
+  const cards = new Map<string, string>();
+  for (const m of messages) {
+    const by = cardBy(m);
+    if (by !== null && typeof m.ts === "string") cards.set(m.ts, by);
+  }
+  if (cards.size === 0) return agents;
+  const said = messages.filter((m) => m.system !== true);
+  const quoted = (m: J): string[] => arr(m.quotes).flatMap((q) => {
+    const by = get(q, "role") === "agent" && typeof get(q, "ts") === "string" ? cards.get(q.ts) : undefined;
+    return by === undefined ? [] : [by];
+  });
+  const waiting = new Map<string, number>();
+  for (const m of outbox) {
+    if (m.state === "failed") continue;
+    const under = cardBy(said[said.length - 1]);
+    for (const by of [...quoted(m), ...(under !== null ? [under] : [])]) waiting.set(by, Infinity);
+  }
+  const last = said[said.length - 1];
+  if (last !== undefined && last.mine === true) {
+    const under = cardBy(said[said.length - 2]);
+    for (const by of [...quoted(last), ...(under !== null ? [under] : [])]) if (!waiting.has(by)) waiting.set(by, u64(last.createdAt) ?? 0);
+  }
+  if (waiting.size === 0) return agents;
+  return agents.map((a) => {
+    const key = str(get(a.session, "key"));
+    const since = key !== null ? waiting.get(key) : undefined;
+    if (since === undefined || a.status === "running" || a.status === "queued") return a;
+    const began = u64(get(get(a.session, "lastTurn"), "startedAt"));
+    return began !== null && began >= since ? a : { ...a, status: "queued" };
+  });
 }

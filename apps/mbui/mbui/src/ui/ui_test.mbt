@@ -151,7 +151,7 @@ test "scrolling up keeps the row under the finger in place" {
 test "tabs move their indicator on a spring and come to rest" {
   let sel = [0]
   let t = @ui.Tester::new(fn(c) {
-    sel[0] = c.segmented("tabs", ["One", "Two", "Three"], sel[0])
+    c.segmented("tabs", ["One", "Two", "Three"], sel[0], on_pick=fn(i) { sel[0] = i })
   })
   t.tap_text("Three")
   assert_eq(sel[0], 2)
@@ -325,9 +325,9 @@ test "a scripted run (MBUI_DRIVE) taps words on screen, types through the input 
   let taps = Ref::new(0)
   let t = @ui.Tester::new(fn(c) {
     c.column(w=Fill(1.0), h=Fill(1.0), fn() {
-      if c.button("按一下") {
+      c.button("按一下", on_press=fn() {
         taps.val = taps.val + 1
-      }
+      })
       c.text("按了 \{taps.val} 次") |> ignore
       c.editor("field", placeholder="写点什么", enter_sends=false) |> ignore
     })
@@ -370,10 +370,10 @@ test "a scripted step waits for nothing settling: a tap goes as soon as its word
     let _ = c.spring("sheet", if open.val { 1.0 } else { 0.0 }, stiffness=slow_sheet_stiffness, damping=6.0)
     let moving = c.spring_rest("sheet") > c.moment()
     c.column(fn() {
-      if c.button("动起来") {
+      c.button("动起来", on_press=fn() {
         open.val = true
-      }
-      if c.button("打开") {
+      })
+      c.button("打开", on_press=fn() {
         // a page the host loads (what hostcall.mbt asks of a host: a ticket until its event, a while after)
         let rt = @ui.runtime()
         let ticket = rt.outside_start("page 1 (a slow host)")
@@ -381,13 +381,13 @@ test "a scripted step waits for nothing settling: a tap goes as soon as its word
           page.val = true
           rt.outside_end(ticket)
         })
-      }
+      })
       if page.val {
         c.text("页面来了") |> ignore
       }
-      if c.button("按一下") {
+      c.button("按一下", on_press=fn() {
         tapped.val = Some((moving, page.val))
-      }
+      })
     })
     |> ignore
   })
@@ -406,10 +406,10 @@ test "a scripted step waits for nothing settling: a tap goes as soon as its word
 test "a scripted step that never sees what it waits for fails within its timeout, saying what was on screen" {
   let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
-      if c.button("打开") {
+      c.button("打开", on_press=fn() {
         // a ticket never ended: the host never answers
         @ui.runtime().outside_start("view 7 (a page that never loads)") |> ignore
-      }
+      })
       c.text("在这里") |> ignore
     })
     |> ignore

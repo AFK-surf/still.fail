@@ -146,6 +146,33 @@ pub struct Damage {
   /// how far each group a host keeps reaches (Damage::group_set), wherever it is moved to: what a header of it (kind
   /// 13, src/ui/scene.mbt) covers, moved by its 0, 1
   priv groups : Map[Int, Rect]
+  /// what of each group a header of it reads of what is under it: whether it holds glass, and the groups whose headers
+  /// it holds (Damage::occlude)
+  priv group_reads : Map[Int, (Bool, Array[Int])]
+  /// Damage::occlude's: its covers (cover_most, four numbers each), where each unit of the frame starts, which are
+  /// hidden, and the frame without them
+  priv covers : FixedArray[Double]
+  priv mut unit_at : FixedArray[Int]
+  priv mut hidden : FixedArray[Bool]
+  priv mut shown : FixedArray[Double]
+  /// and as it last found them, for a frame that moves only headers of it (Damage::occlude_moved): whether it may be
+  /// asked so, of how many instances and what window; how many units, where the pieces of shapes start, the last unit
+  /// that may be hidden, how many are; each cover put as it went (the unit it looked at, where it put it (-1: all let
+  /// go), its four numbers), and the covers as they were before one unit, worked out again from those; where each unit
+  /// shown is in `shown`, and how many instances that is
+  priv mut occ_ok : Bool
+  priv mut occ_count : Int
+  priv mut occ_w : Double
+  priv mut occ_h : Double
+  priv mut occ_units : Int
+  priv mut occ_pieces : Int
+  priv mut occ_last : Int
+  priv mut occ_hid : Int
+  priv mut cover_unit : Int
+  priv cover_log : Array[Double]
+  priv replay : FixedArray[Double]
+  priv mut shown_at : FixedArray[Int]
+  priv mut occ_shown : Int
   /// a frame with headers, each instance once and each header once, its group's room after it left out (Damage::next)
   priv mut units : FixedArray[Double]
   // each instance's hash (inst_hash) as it was worked out, the kept frame's and this one's, by the frame it was worked
@@ -156,6 +183,25 @@ pub struct Damage {
   priv mut cur_at : FixedArray[Int]
   priv mut stamp : Int
   priv mut prev_stamp : Int
+  /// the kept frame as it was given (Damage::next): how many instances, headers and their groups' rooms among them,
+  /// and where each header was among them and among its units (Damage::moved)
+  priv mut given_n : Int
+  priv heads_at : Array[(Int, Int)]
+  /// of the kept frame, found as a frame of its headers alone is first compared with it (Damage::moved), what no
+  /// header changes: whether a picture of it changes under the same numbers (a stream's), and what its glass copies
+  priv mut kept_read : Bool
+  priv mut kept_streams : Bool
+  priv mut kept_glass : Array[Rect]
+  /// where the pieces of shapes start in the kept frame (pieces_from), where it was found as it was given (-1: not),
+  /// and in the frame being given
+  priv mut kept_seg : Int
+  priv mut seg_now : Int
+  /// what the frame compared last moved by, its changes each an instance against the same one before it (pair_step):
+  /// how far at most (points) and how much its colours at most (0 to 1); `step_known` false where a change was none
+  /// such (one come or gone, a picture or a shape's pieces changed, a part known drawn anew, the frame drawn whole)
+  priv mut step_far : Double
+  priv mut step_ink : Double
+  priv mut step_known : Bool
 }
 
 ///|
@@ -175,6 +221,24 @@ pub fn Damage::new() -> Damage {
     seen: [],
     telling: false,
     groups: {},
+    group_reads: {},
+    covers: FixedArray::make(cover_most * 4, 0.0),
+    unit_at: FixedArray::make(0, 0),
+    hidden: FixedArray::make(0, false),
+    shown: FixedArray::make(0, 0.0),
+    occ_ok: false,
+    occ_count: 0,
+    occ_w: 0.0,
+    occ_h: 0.0,
+    occ_units: 0,
+    occ_pieces: 0,
+    occ_last: -1,
+    occ_hid: 0,
+    cover_unit: -1,
+    cover_log: [],
+    replay: FixedArray::make(cover_most * 4, 0.0),
+    shown_at: FixedArray::make(0, -1),
+    occ_shown: 0,
     units: FixedArray::make(0, 0.0),
     prev_hash: FixedArray::make(0, 0L),
     prev_at: FixedArray::make(0, -1),
@@ -182,6 +246,16 @@ pub fn Damage::new() -> Damage {
     cur_at: FixedArray::make(0, -1),
     stamp: 0,
     prev_stamp: -1,
+    given_n: -1,
+    heads_at: [],
+    kept_read: false,
+    kept_streams: false,
+    kept_glass: [],
+    kept_seg: -1,
+    seg_now: -1,
+    step_far: 0.0,
+    step_ink: 0.0,
+    step_known: false,
   }
 }
 
@@ -210,7 +284,10 @@ pub fn Damage::next(
   groups? : Bool = false,
   known? : Array[(Double, Double, Double, Double)] = [],
 ) -> Array[(Double, Double, Double, Double)] {
+  let given = count
+  self.heads_at.clear()
   let (inst, count) = if groups { self.units_of(inst, count) } else { (inst, count) }
+  self.given_n = given
   self.stamp = self.stamp + 1
   let same_frame = self.has &&
     w == self.w &&
@@ -226,6 +303,11 @@ pub fn Damage::next(
   } else {
     0
   }
+  // (where the pieces of shapes start in it, where it is compared: kept with it, the next frame compared there)
+  self.seg_now = -1
+  self.step_far = 0.0
+  self.step_ink = 0.0
+  self.step_known = same_frame && known.is_empty()
   let out = if same_frame {
     self.changed(inst, count, w, h, known)
   } else {
@@ -240,37 +322,200 @@ pub fn Damage::next(
 
 ///|
 /// Group `id` of a host's (@hostapi.group_set: `n` instances in `inst`) kept, as far as it reaches wherever it is
-/// moved, for a header of it to be compared.
+/// moved, for a header of it to be compared: a header it holds (a list's rows kept, in the list's group, each in one
+/// place of it) as far as its own group reaches, moved where it says.
 pub fn Damage::group_set(self : Damage, id : Int, inst : FixedArray[Double], n : Int) -> Unit {
   let r = Rect::none()
+  let mut glass = false
+  let heads = []
   for k in 0..<n {
-    reach(inst, k, r, cut=false)
+    if kind_at(inst, k) == 13 {
+      self.reach_of(inst, k, r)
+      heads.push(inst[k * inst_size + 12].to_int())
+    } else {
+      reach(inst, k, r, cut=false)
+      glass = glass || is_glass(kind_at(inst, k))
+    }
   }
   self.groups[id] = r
+  self.group_reads[id] = (glass, heads)
+  // (what a header of it hides or reads under it otherwise: the next frame's occluded whole)
+  self.occ_ok = false
 }
 
 ///|
 /// Group `id` let go.
 pub fn Damage::group_drop(self : Damage, id : Int) -> Unit {
   self.groups.remove(id)
+  self.group_reads.remove(id)
+  self.occ_ok = false
 }
 
 ///|
 /// The frame `inst` (`count` instances, headers among them) as its units: each instance, each header, its group's room
 /// after it left out.
 fn Damage::units_of(self : Damage, inst : FixedArray[Double], count : Int) -> (FixedArray[Double], Int) {
+  // (twice as many as asked where it grows, as `prev` does: not made again, all of it zeroed, for each one more)
   if self.units.length() < count * inst_size {
-    self.units = FixedArray::make(count * inst_size, 0.0)
+    self.units = FixedArray::make(count * inst_size * 2, 0.0)
   }
   let u = self.units
   let mut k = 0
   let mut n = 0
+  // (each run up to a header and the header copied as one: the frame's instances moved a run at a time, not one by one)
   while k < count {
-    inst.blit_to(u, len=inst_size, src_offset=k * inst_size, dst_offset=n * inst_size)
-    n = n + 1
-    k = if kind_at(inst, k) == 13 { k + inst[k * inst_size + 14].to_int() } else { k + 1 }
+    let mut e = k
+    while e < count && kind_at(inst, e) != 13 {
+      e = e + 1
+    }
+    let run = if e < count { e - k + 1 } else { e - k }
+    inst.blit_to(u, len=run * inst_size, src_offset=k * inst_size, dst_offset=n * inst_size)
+    n = n + run
+    if e < count {
+      self.heads_at.push((e, n - 1))
+      k = e + inst[e * inst_size + 14].to_int()
+    } else {
+      k = e
+    }
   }
   (u, n)
+}
+
+///|
+/// The parts of the frame `inst` (`count` instances, a window `w` × `h` points at `scale`, its ground `r`, `g`, `b`)
+/// that differ from the frame given before it, where it is that frame with only the headers at `moved` (their indices
+/// among its instances) written anew (a frame of its looks alone, a list moved by its header: src/ui/frame_watch.mbt's
+/// looks_frame): each of them compared as Damage::next compares it, nothing else gone through; `known` as Damage::next's.
+/// None where it cannot be (another window, scale, ground or number of instances; a header not among the kept frame's;
+/// a picture that changes under the same numbers, glass): Damage::next then.
+pub fn Damage::moved(
+  self : Damage,
+  inst : FixedArray[Double],
+  count : Int,
+  w : Double,
+  h : Double,
+  scale : Double,
+  r : Double,
+  g : Double,
+  b : Double,
+  moved : Array[Int],
+  known? : Array[(Double, Double, Double, Double)] = [],
+) -> Array[(Double, Double, Double, Double)]? {
+  guard self.has &&
+    count == self.given_n &&
+    w == self.w &&
+    h == self.h &&
+    scale == self.scale &&
+    r == self.r &&
+    g == self.g &&
+    b == self.b else {
+    return None
+  }
+  // (each header where it is among the kept frame's units)
+  let units = []
+  for k in moved {
+    let mut u = -1
+    for p in self.heads_at {
+      if p.0 == k {
+        u = p.1
+        break
+      }
+    }
+    guard u >= 0 && u < self.n && kind_at(inst, k) == 13 else { return None }
+    units.push(u)
+  }
+  // (what is drawn anew under the same numbers: compared whole, Damage::next)
+  let prev = self.prev
+  if !self.kept_read {
+    // (of what is drawn alone: the pieces of shapes after it show no picture, nor are glass; where they start found
+    // as it was compared, Damage::next)
+    if self.kept_seg < 0 {
+      self.kept_seg = pieces_from(prev, self.n)
+    }
+    self.kept_streams = false
+    for k in 0..<self.kept_seg {
+      let t = prev[k * inst_size + 20]
+      if t >= stream_tex_base && t < view_tex_base {
+        self.kept_streams = true
+        break
+      }
+    }
+    self.kept_glass = glass_groups(prev, self.kept_seg)
+    self.kept_read = true
+  }
+  if self.kept_streams {
+    return None
+  }
+  self.stamp = self.stamp + 1
+  self.why = 0
+  self.seen.clear()
+  self.step_far = 0.0
+  self.step_ink = 0.0
+  self.step_known = known.is_empty()
+  let window = { x0: 0.0, y0: 0.0, x1: w, y1: h }
+  let parts : Array[Rect] = []
+  let most_area = whole_share * w * h
+  for kr in known {
+    let (x0, y0, x1, y1) = kr
+    let p = { x0, y0, x1, y1 }
+    p.cut_to(window)
+    add_part(parts, p) |> ignore
+  }
+  let was = Rect::none()
+  let now = Rect::none()
+  for i, k in moved {
+    let u = units[i]
+    if same_pair(prev, u, inst, k) {
+      continue
+    }
+    self.pair_step(prev, u, inst, k)
+    was.clear()
+    now.clear()
+    self.reach_of(prev, u, was)
+    was.cut_to(window)
+    // (kept as it is now: the kept frame this one, its hash worked out again when it is asked)
+    inst.blit_to(prev, len=inst_size, src_offset=k * inst_size, dst_offset=u * inst_size)
+    if u < self.prev_at.length() {
+      self.prev_at[u] = -1
+    }
+    self.reach_of(prev, u, now)
+    now.cut_to(window)
+    if !was.empty() && !now.empty() && was.near(now) {
+      was.add(now.x0, now.y0, now.x1, now.y1)
+      add_part(parts, was) |> ignore
+    } else {
+      add_part(parts, was) |> ignore
+      add_part(parts, now) |> ignore
+    }
+  }
+  if parts.is_empty() {
+    return Some([])
+  }
+  // (what captures of glass copy, where a part reaches it: all of it in that part, as Damage::changed takes it in)
+  let groups = self.kept_glass
+  let mut grew = true
+  while grew {
+    grew = false
+    for gr in groups {
+      for p in parts {
+        if p.meets(gr) && !p.holds(gr.within(window)) {
+          let g = gr.within(window)
+          p.add(g.x0, g.y0, g.x1, g.y1)
+          grew = true
+        }
+      }
+      if grew {
+        settle(parts)
+        break
+      }
+    }
+  }
+  if parts_area(parts) > most_area {
+    self.why = 5
+    self.step_known = false
+    return Some([(0.0, 0.0, -1.0, -1.0)])
+  }
+  Some(parts.map(fn(p) { (p.x0, p.y0, p.x1 - p.x0, p.y1 - p.y0) }))
 }
 
 ///|
@@ -282,6 +527,17 @@ fn Damage::reach_of(self : Damage, a : FixedArray[Double], k : Int, into : Rect)
     return
   }
   match self.groups.get(a[o + 12].to_int()) {
+    // (cut to its clip where it says one, 16-19: a list's whole, cut to its column, src/ui/view_ride.mbt's ListRiding)
+    Some(g) if !g.empty() &&
+      !(a[o + 16] == 0.0 && a[o + 17] == 0.0 && a[o + 18] == 0.0 && a[o + 19] == 0.0) => {
+      let x0 = dmax(g.x0 + a[o], a[o + 16] - reach_pad)
+      let y0 = dmax(g.y0 + a[o + 1], a[o + 17] - reach_pad)
+      let x1 = dmin(g.x1 + a[o], a[o + 18] + reach_pad)
+      let y1 = dmin(g.y1 + a[o + 1], a[o + 19] + reach_pad)
+      if x0 < x1 && y0 < y1 {
+        into.add(x0, y0, x1, y1)
+      }
+    }
     Some(g) if !g.empty() => into.add(g.x0 + a[o], g.y0 + a[o + 1], g.x1 + a[o], g.y1 + a[o + 1])
     Some(_) => ()
     // (one not known: all of it)
@@ -342,6 +598,8 @@ fn Damage::keep(
   self.cur_hash = was_hash
   self.cur_at = was_at
   self.prev_stamp = self.stamp
+  self.kept_read = false
+  self.kept_seg = self.seg_now
   self.n = count
   self.w = w
   self.h = h
@@ -350,6 +608,141 @@ fn Damage::keep(
   self.g = g
   self.b = b
   self.has = true
+}
+
+///|
+/// What the frame compared last moved by (Damage::next, Damage::moved), where every change of it was an instance
+/// against the same one before it: how far any of their pixels went at most (points), and how much any of their colours
+/// or opacities changed at most (0 to 1). None where a change was none such: an instance come or gone, a picture or a
+/// shape's pieces changed under it, a header moved (a list's rows), a part known drawn anew, the frame drawn whole or
+/// not compared. What moves on by
+/// the clock is drawn as often as that asks (src/ui/frame_pace.mbt), not by what it is.
+pub fn Damage::step(self : Damage) -> (Double, Double)? {
+  if self.step_known {
+    Some((self.step_far, self.step_ink))
+  } else {
+    None
+  }
+}
+
+///|
+/// What the slots of an instance of `kind` (src/ui/scene.mbt) are, for how far a change of them goes (pair_step): 0 a
+/// length or a place (points), 1 a colour, an opacity or a share of 0 to 1, 2 what pair_step works out of several (its
+/// rect, its turn, a line's ends), 3 what is the same or another thing drawn (its kind, its picture, a glyph, a flag).
+fn slot_is(kind : Int, j : Int) -> Int {
+  if j < 4 || j == 32 {
+    2
+  } else if j == 5 || j == 20 || j == 35 {
+    3
+  } else if j == 6 && kind == 11 {
+    3
+  } else if j < 8 {
+    0
+  } else if j < 12 {
+    1
+  } else if j < 16 {
+    match kind {
+      0 => 1
+      2 => 0
+      10 => 2
+      _ => 3
+    }
+  } else if j < 20 {
+    0
+  } else if j < 24 {
+    match kind {
+      0 | 5 | 6 => 0
+      4 => if j == 22 { 3 } else { 1 }
+      _ => 3
+    }
+  } else if (j >= 28 && j < 32) || (j >= 48 && j < 52) {
+    1
+  } else {
+    0
+  }
+}
+
+///|
+/// Instance `ka` of `a` against `kb` of `b`, which differ (Damage::changed's, Damage::moved's pairs): how far it moved
+/// and how much its colours changed, added to the frame's (Damage::step), or the step not known where it is another
+/// thing drawn.
+fn Damage::pair_step(self : Damage, a : FixedArray[Double], ka : Int, b : FixedArray[Double], kb : Int) -> Unit {
+  let oa = ka * inst_size
+  let ob = kb * inst_size
+  let kind = kind_at(b, kb)
+  // (a header moved is a list's rows moved by it, scrolled: drawn at every frame, src/ui/frame_pace.mbt)
+  if kind_at(a, ka) != kind || kind == 12 || kind == 13 {
+    self.step_known = false
+    return
+  }
+  let mut far = 0.0
+  let mut ink = 0.0
+  let mut any = false
+  for j in 0..<inst_size {
+    let u = a[oa + j]
+    let v = b[ob + j]
+    if u == v {
+      continue
+    }
+    any = true
+    match slot_is(kind, j) {
+      0 => {
+        // (none of a clip's sides: "no edge" is far off, past any window)
+        if u.abs() > 1.0e6 || v.abs() > 1.0e6 {
+          self.step_known = false
+          return
+        }
+        far = dmax(far, (v - u).abs())
+      }
+      1 => ink = dmax(ink, (v - u).abs())
+      2 => ()
+      _ => {
+        self.step_known = false
+        return
+      }
+    }
+  }
+  // (no number of it changed: a stream's picture, or a band whose pieces did; nothing known of how far)
+  if !any {
+    self.step_known = false
+    return
+  }
+  // its rect's sides
+  let x0 = (b[ob] - a[oa]).abs()
+  let y0 = (b[ob + 1] - a[oa + 1]).abs()
+  let x1 = (b[ob] + b[ob + 2] - a[oa] - a[oa + 2]).abs()
+  let y1 = (b[ob + 1] + b[ob + 3] - a[oa + 1] - a[oa + 3]).abs()
+  far = dmax(far, dmax(dmax(x0, y0), dmax(x1, y1)))
+  // a line's ends, shares of its rect (scene.mbt), and how far from where it is turned about its farthest is
+  let (w, h) = (b[ob + 2], b[ob + 3])
+  let mut reach = 0.0
+  if kind == 10 {
+    for e in 0..<2 {
+      let sx = b[ob + 12 + 2 * e]
+      let sy = b[ob + 13 + 2 * e]
+      far = dmax(
+        far,
+        dmax(((sx - a[oa + 12 + 2 * e]) * w).abs(), ((sy - a[oa + 13 + 2 * e]) * h).abs()),
+      )
+      let dx = b[ob] + sx * w - b[ob + 33]
+      let dy = b[ob + 1] + sy * h - b[ob + 34]
+      reach = dmax(reach, (dx * dx + dy * dy).sqrt() + b[ob + 4])
+    }
+  } else {
+    let dx = dmax((b[ob] - b[ob + 33]).abs(), (b[ob] + w - b[ob + 33]).abs())
+    let dy = dmax((b[ob + 1] - b[ob + 34]).abs(), (b[ob + 1] + h - b[ob + 34]).abs())
+    reach = (dx * dx + dy * dy).sqrt()
+  }
+  // turned: as far round as its farthest pixel goes, the arc of its turn
+  // (the short way round: a turn by the clock goes on from a whole turn to none)
+  let round = 2.0 * 3.141592653589793
+  let turn = (b[ob + 32] - a[oa + 32]).abs()
+  if turn > 0.0 {
+    let t = turn - (turn / round).floor() * round
+    far = dmax(far, dmin(t, round - t) * reach)
+  }
+  self.step_far = dmax(self.step_far, far)
+  self.step_ink = dmax(self.step_ink, ink)
 }
 
 ///|
@@ -703,11 +1096,13 @@ fn Damage::changed(
     p.cut_to(window)
     if add_part(parts, p) && parts_area(parts) > most_area {
       self.why = 5
+      self.step_known = false
       return [(0.0, 0.0, -1.0, -1.0)]
     }
   }
   let seg = pieces_from(inst, count)
-  let seg_old = pieces_from(prev, n_old)
+  self.seg_now = seg
+  let seg_old = if self.kept_seg >= 0 { self.kept_seg } else { pieces_from(prev, n_old) }
   let mut whole = false
   // instance `k_old` of the last frame against `k` of this one: the same, a band's pieces too, a stream's picture
   // not (it changes under the same numbers)
@@ -731,6 +1126,11 @@ fn Damage::changed(
   let changed = fn(k_old : Int, k : Int) {
     if self.telling && self.seen.length() < 400 && k >= 0 {
       self.seen.push("#\{k} kind \{inst[k * inst_size + 5]} at \{inst[k * inst_size]},\{inst[k * inst_size + 1]}")
+    }
+    if k_old < 0 || k < 0 {
+      self.step_known = false
+    } else if self.step_known {
+      self.pair_step(prev, k_old, inst, k)
     }
     was.clear()
     now.clear()
@@ -846,6 +1246,7 @@ fn Damage::changed(
   }
   if whole {
     self.why = 5
+    self.step_known = false
     return [(0.0, 0.0, -1.0, -1.0)]
   }
   if parts.is_empty() {
@@ -875,6 +1276,7 @@ fn Damage::changed(
   }
   if parts_area(parts) > most_area {
     self.why = 5
+    self.step_known = false
     return [(0.0, 0.0, -1.0, -1.0)]
   }
   parts.map(fn(p) { (p.x0, p.y0, p.x1 - p.x0, p.y1 - p.y0) })

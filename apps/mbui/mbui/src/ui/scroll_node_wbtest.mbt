@@ -58,7 +58,7 @@ fn scroll_node_case(
   t.check_looks(false)
   set_view_app(fn(root) {
     root.box(fn(gap) { gap.height(Is(Some(50.0))) |> ignore }) |> ignore
-    root.show(fn() { there.map(fn(s) { s.get() }).unwrap_or(true) }, fn(v) {
+    root.show(at_once=true, fn() { there.map(fn(s) { s.get() }).unwrap_or(true) }, fn(v) {
       v
       .width(Is(Some(400.0)))
       .height(Is(Some(200.0)))

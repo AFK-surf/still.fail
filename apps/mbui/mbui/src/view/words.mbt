@@ -69,7 +69,8 @@ pub let runs_plain : RunsLook = {
 ///|
 /// How its words in pieces are set where a piece says nothing of it itself (RunsLook), as it changes: their sizes
 /// (code's share, a person's words' face) laid out again, their inks drawn again alone.
-pub fn View::runs_look(self : View, look : Live[RunsLook]) -> View {
+#callsite(autofill(loc))
+pub fn View::runs_look(self : View, look : Live[RunsLook], loc~ : SourceLoc) -> View {
   let tree = self.tree
   let at = self.at
   let (set, ink) = match look {
@@ -86,13 +87,13 @@ pub fn View::runs_look(self : View, look : Live[RunsLook]) -> View {
         }),
       )
   }
-  self.bind(RunsSet, set, Both, fn(s) {
+  self.bind(loc~, RunsSet, set, Both, fn(s) {
     let l = tree.nodes[at].look.runs_look
     tree.nodes[at].look.runs_look = { ..l, code_scale: s.0, words: s.1 }
     // (how its words are set said: what follows it told, once this is)
     self.words_told()
   })
-  self.bind(RunsInk, ink, Paint, fn(k) {
+  self.bind(loc~, RunsInk, ink, Paint, fn(k) {
     let l = tree.nodes[at].look.runs_look
     tree.nodes[at].look.runs_look = { ..l, link: k.0, pressed: k.1, code_ink: k.2, code_ground: k.3 }
     // (code's ground come or gone is its sizes' too (RunsSet's, told before this is written): told again once it is,
@@ -107,20 +108,22 @@ pub fn View::runs_look(self : View, look : Live[RunsLook]) -> View {
 ///|
 /// The link of its words in pieces held (by its first piece, as their runs say it: -1 none), as it changes: its
 /// pressed ground (RunsLook's `pressed`) drawn under that link alone.
-pub fn View::runs_pressed(self : View, k : Live[Int]) -> View {
+#callsite(autofill(loc))
+pub fn View::runs_pressed(self : View, k : Live[Int], loc~ : SourceLoc) -> View {
   let tree = self.tree
   let at = self.at
-  self.bind(RunsPressed, k, Paint, fn(k) { tree.nodes[at].look.runs_pressed = k })
+  self.bind(loc~, RunsPressed, k, Paint, fn(k) { tree.nodes[at].look.runs_pressed = k })
   self
 }
 
 ///|
 /// What of its words in pieces is picked with the pointer (from, until, in their text's terms; none where the same), as
 /// it changes: drawn picked under them alone (what picks them says it: mbui/ui's selection).
-pub fn View::runs_picked(self : View, span : Live[(Int, Int)]) -> View {
+#callsite(autofill(loc))
+pub fn View::runs_picked(self : View, span : Live[(Int, Int)], loc~ : SourceLoc) -> View {
   let tree = self.tree
   let at = self.at
-  self.bind(RunsPicked, span, Paint, fn(s) { tree.nodes[at].look.runs_picked = s })
+  self.bind(loc~, RunsPicked, span, Paint, fn(s) { tree.nodes[at].look.runs_picked = s })
   self
 }
 
@@ -153,7 +156,7 @@ pub fn View::runs_picked_now(self : View) -> (Int, Int) {
 
 ///|
 /// Where the pointer is in its own terms (where it is drawn now, as big as it is drawn), as the tree last had it; None
-/// where the tree has it nowhere (gone from the window) or it is let go. Read once, not followed (pointer_here_told).
+/// where the tree has it nowhere (gone from the window) or it is let go. Read once, not followed (what is under it worked out as things are placed: View::pointer_piece).
 pub fn View::pointer_here(self : View) -> (Double, Double)? {
   guard self.alive() else { return None }
   self.tree.pointer_in(self.at)
@@ -173,17 +176,18 @@ fn Tree::pointer_in(self : Tree, at : Int) -> (Double, Double)? {
 }
 
 ///|
-/// Where the pointer is in its own terms (pointer_here's), followed: told as the pointer moves and as what changed is
-/// placed (it, or what holds it, moved or grown under a pointer that stays where it is), at the change's end, no frame
-/// waited for (as View::pointer_within is: Tree::withins_told). Never what a move of the pointer's own is told by
-/// (View::on_pointer_moved).
-pub fn View::pointer_here_told(self : View) -> (Double, Double)? {
-  guard self.live() is Some(n) else { return None }
-  let cell = match n.here_cell {
-    Some(c) => c
+/// Which piece of it the pointer is over (a link of its words'), as `piece` says from where the pointer is in its own
+/// terms (-1: none of them; -1 too where the pointer is nowhere), followed: worked out by the tree as the pointer moves
+/// and as anything is placed or laid out (it or what holds it moved, grown, its words set again under a pointer that
+/// stays where it is), as what the pointer is within is (Tree::withins_told), and told only as that comes out
+/// otherwise. `piece` the first one asked, for as long as it lives.
+pub fn View::pointer_piece(self : View, piece : (Double, Double) -> Int) -> Int {
+  guard self.live() is Some(n) else { return -1 }
+  let cell = match n.piece_cell {
+    Some((c, _)) => c
     None => {
-      let c = @signals.signal(self.tree.pointer_in(self.at), same=fn(a, b) { a == b })
-      n.here_cell = Some(c)
+      let c = @signals.signal(@signals.untracked(fn() { self.tree.piece_in(self.at, piece) }), same=fn(a, b) { a == b })
+      n.piece_cell = Some((c, piece))
       if n.within_cell is None {
         self.tree.withins_at.push((self.at, n.gen))
       }
@@ -191,6 +195,15 @@ pub fn View::pointer_here_told(self : View) -> (Double, Double)? {
     }
   }
   cell.get()
+}
+
+///|
+/// Which piece of node `at` the pointer is over, by `piece` (View::pointer_piece): -1 where the pointer is nowhere.
+fn Tree::piece_in(self : Tree, at : Int, piece : (Double, Double) -> Int) -> Int {
+  match self.pointer_in(at) {
+    Some((x, y)) => @signals.untracked(fn() { piece(x, y) })
+    None => -1
+  }
 }
 
 ///|
@@ -214,7 +227,7 @@ pub fn View::words_said(self : View) -> Int {
 /// How its words are set said again (words_said), told what follows it.
 fn View::words_told(self : View) -> Unit {
   match self.live() {
-    Some({ said_cell: Some(c), .. }) => c.set(@signals.untracked(fn() { c.get() }) + 1)
+    Some({ said_cell: Some(c), .. }) => c.set(c.untracked() + 1)
     _ => ()
   }
 }
@@ -254,23 +267,30 @@ pub fn runs_measure(runs : Array[@text.Run], look : WordsLook, set : RunsLook, w
 
 ///|
 /// The ink its words are drawn in, as it changes (a theme's, a state's): paint's.
-pub fn View::ink(self : View, ink : Live[Int64]) -> View {
-  self.bind(Ink, ink, Paint, fn(k) { self.tree.nodes[self.at].look.ink = k })
+#callsite(autofill(loc))
+pub fn View::ink(self : View, ink : Live[Int64], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Ink, ink, Paint, fn(k) { self.tree.nodes[self.at].look.ink = k })
   self
 }
 
 ///|
 /// The shadow it casts under its ground, in its corners (`blur`: its sigma, `dy` how far down, `ink` its colour; 0
 /// blur: none), as it changes: paint's.
-pub fn View::shadow(self : View, cast : Live[(Double, Double, Int64)]) -> View {
-  self.bind(Shadow, cast, Paint, fn(c) { self.tree.nodes[self.at].look.shadow = c })
+#callsite(autofill(loc))
+pub fn View::shadow(self : View, cast : Live[(Double, Double, Int64)], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Shadow, cast, Paint, fn(c) { self.tree.nodes[self.at].look.shadow = c })
   self
 }
 
 ///|
-/// How wide it may grow at most (points; None: as wide as its holder lets it), as it changes: layout's.
-pub fn View::max_width(self : View, w : Live[Double?]) -> View {
-  self.bind(MaxWidth, w, Layout, fn(w) {
+/// How wide it may grow at most (points; None: as wide as its holder lets it), as it changes; `within`: no wider than
+/// the width what holds it gives it where that is less (CSS's `max-width: min(100%, w)`). Layout's.
+#callsite(autofill(loc))
+pub fn View::max_width(self : View, w : Live[Double?], within? : Bool = false, loc~ : SourceLoc) -> View {
+  if self.live() is Some(n) {
+    n.max_w_within = within
+  }
+  self.bind(loc~, MaxWidth, w, Layout, fn(w) {
     // (said: as said, or, one line of words in a column, within the column's width: Tree::capped_applied)
     self.tree.nodes[self.at].max_w_said = Some(w)
     self.tree.capped_applied(self.at)
@@ -282,8 +302,9 @@ pub fn View::max_width(self : View, w : Live[Double?]) -> View {
 /// How tall it is at the least, as it changes (none: as tall as what it holds makes it), whatever else lays it out
 /// shorter: a dialog's title row as tall as its close button's room, its title on more lines taller. Its field is
 /// min_height_share's too (one binding to a field: the one said last).
-pub fn View::min_height(self : View, h : Live[Double?]) -> View {
-  self.bind(MinHeight, h, Layout, fn(h) {
+#callsite(autofill(loc))
+pub fn View::min_height(self : View, h : Live[Double?], loc~ : SourceLoc) -> View {
+  self.bind(loc~, MinHeight, h, Layout, fn(h) {
     self.tree.nodes[self.at].flex.style.set_min_height(match h {
       Some(h) => Pt(h)
       None => Auto
@@ -295,8 +316,9 @@ pub fn View::min_height(self : View, h : Live[Double?]) -> View {
 ///|
 /// How tall it is at the most, as it changes (none: no bound), what it holds shrinking (View::shrink) or scrolling in it
 /// past that: a dialog no taller than the window leaves it.
-pub fn View::max_height(self : View, h : Live[Double?]) -> View {
-  self.bind(MaxHeight, h, Layout, fn(h) {
+#callsite(autofill(loc))
+pub fn View::max_height(self : View, h : Live[Double?], loc~ : SourceLoc) -> View {
+  self.bind(loc~, MaxHeight, h, Layout, fn(h) {
     self.tree.nodes[self.at].flex.style.set_max_height(match h {
       Some(h) => Pt(h)
       None => Auto
@@ -308,8 +330,9 @@ pub fn View::max_height(self : View, h : Live[Double?]) -> View {
 ///|
 /// How its words are set, as it changes (a theme's for the window's width): layout's (what they measure) and paint's
 /// (how they are drawn), one said value read by both.
-pub fn View::words_look(self : View, look : Live[WordsLook]) -> View {
-  self.bind(WordsLook, look, Both, fn(k) {
+#callsite(autofill(loc))
+pub fn View::words_look(self : View, look : Live[WordsLook], loc~ : SourceLoc) -> View {
+  self.bind(loc~, WordsLook, look, Both, fn(k) {
     let n = self.tree.nodes[self.at]
     n.look.words_look = k
     // (on one line or not: held to its column's width or not)
@@ -326,8 +349,9 @@ pub fn View::words_look(self : View, look : Live[WordsLook]) -> View {
 
 ///|
 /// A last-resort ellipsis is intended without changing the words' layout sizing (as Ctx::text's allow_ellipsis).
-pub fn View::allow_ellipsis(self : View, on : Live[Bool]) -> View {
-  self.bind(AllowEllipsis, on, Said, fn(v) { self.tree.nodes[self.at].allow_ellipsis = v })
+#callsite(autofill(loc))
+pub fn View::allow_ellipsis(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, AllowEllipsis, on, Said, fn(v) { self.tree.nodes[self.at].allow_ellipsis = v })
   self
 }
 
@@ -360,9 +384,10 @@ pub fn Tree::allows_ellipsis(self : Tree, id : NodeId) -> Bool {
 /// holds needs; Some(0) to give way down to nothing), what it shows cut to what is left (words on one line ending in an
 /// ellipsis: WordsLook's `wrap` false), the others kept whole. Its share alone: how wide it is at least is min_width's
 /// (one binding to a field). Layout's.
-pub fn View::shrink(self : View, s : Live[Double]) -> View {
+#callsite(autofill(loc))
+pub fn View::shrink(self : View, s : Live[Double], loc~ : SourceLoc) -> View {
   // (said so, not cut short by what holds it: its one say of how it gives way, View::cuts let go of)
-  self.bind(Shrink, s, Layout, fn(s) {
+  self.bind(loc~, Shrink, s, Layout, fn(s) {
     self.tree.nodes[self.at].cut = false
     self.tree.nodes[self.at].shrink_said = Some(s)
     self.tree.give_way_applied(self.at)
@@ -376,10 +401,11 @@ pub fn View::shrink(self : View, s : Live[Double]) -> View {
 /// down. That alone: how wide it may be and whether its words end in an ellipsis are their own properties
 /// (View::min_width, View::max_width, View::allow_ellipsis). As what holds it lays out now (View::row), as it changes.
 /// How much it gives way said otherwise (View::shrink) or this said again: the one said last.
-pub fn View::cuts(self : View, on : Live[Bool]) -> View {
+#callsite(autofill(loc))
+pub fn View::cuts(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
   // (how it gives way, as View::shrink says it: one binding of the two, the last said taking it; not cut short, it
   // gives way nowhere, as a node says nothing of it)
-  self.bind(Shrink, on, Layout, fn(c) {
+  self.bind(loc~, Shrink, on, Layout, fn(c) {
     let n = self.tree.nodes[self.at]
     n.cut = c
     if c {
@@ -439,15 +465,17 @@ fn Tree::cuts_under(self : Tree, at : Int) -> Unit {
 /// as it is, the rest their least width, a row of parts at least theirs with its gaps; and none of them comes to less,
 /// so a line holds each of its parts whole. On one line, while all of it has the room so, its parts sharing it as they
 /// would without it. Layout's.
-pub fn View::wraps_at_least(self : View, on : Live[Bool]) -> View {
-  self.bind(WrapsLeast, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.wrap_least = on })
+#callsite(autofill(loc))
+pub fn View::wraps_at_least(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, WrapsLeast, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.wrap_least = on })
   self
 }
 
 ///|
 /// How far apart what it holds is laid out (points, along and across), as it changes: layout's.
-pub fn View::gap(self : View, g : Live[Double]) -> View {
-  self.bind(Gap, g, Layout, fn(g) {
+#callsite(autofill(loc))
+pub fn View::gap(self : View, g : Live[Double], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Gap, g, Layout, fn(g) {
     let n = self.tree.nodes[self.at]
     let st = n.flex.style
     // (between the lines of a row that wraps, as View::wraps says where it says so)
@@ -461,8 +489,9 @@ pub fn View::gap(self : View, g : Live[Double]) -> View {
 /// Whether what it holds, laid out in a row, goes on in another line where the row has not the room (Some: the lines
 /// that far apart, its gap along each line as View::gap says; None: one line), as an old view's box's `flow` (with
 /// its `line_gap`), as it changes: layout's.
-pub fn View::wraps(self : View, lines : Live[Double?]) -> View {
-  self.bind(Wraps, lines, Layout, fn(lines) {
+#callsite(autofill(loc))
+pub fn View::wraps(self : View, lines : Live[Double?], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Wraps, lines, Layout, fn(lines) {
     let n = self.tree.nodes[self.at]
     let st = n.flex.style
     n.line_gap = lines
@@ -482,9 +511,14 @@ pub fn View::wraps(self : View, lines : Live[Double?]) -> View {
 }
 
 ///|
-/// How wide it is at least (points; None: as what it holds makes it), as it changes: layout's.
-pub fn View::min_width(self : View, w : Live[Double?]) -> View {
-  self.bind(MinWidth, w, Layout, fn(w) {
+/// How wide it is at least (points; None: as what it holds makes it), as it changes; `within`: no wider for it than the
+/// width what holds it gives it where that is less (CSS's `min-width: min(100%, w)`). Layout's.
+#callsite(autofill(loc))
+pub fn View::min_width(self : View, w : Live[Double?], within? : Bool = false, loc~ : SourceLoc) -> View {
+  if self.live() is Some(n) {
+    n.min_w_within = within
+  }
+  self.bind(loc~, MinWidth, w, Layout, fn(w) {
     self.tree.nodes[self.at].min_w_said = Some(w)
     self.tree.give_way_applied(self.at)
   })
@@ -494,8 +528,9 @@ pub fn View::min_width(self : View, w : Live[Double?]) -> View {
 ///|
 /// How tall it is at least as a share of what holds it (0 to 1, of the height what holds it is laid out at; None: as
 /// what it holds makes it), as it changes: as tall as that, or taller as what it holds needs. Layout's.
-pub fn View::min_height_share(self : View, share : Live[Double?]) -> View {
-  self.bind(MinHeight, share, Layout, fn(s) {
+#callsite(autofill(loc))
+pub fn View::min_height_share(self : View, share : Live[Double?], loc~ : SourceLoc) -> View {
+  self.bind(loc~, MinHeight, share, Layout, fn(s) {
     self.tree.nodes[self.at].flex.style.set_min_height(match s {
       Some(s) => Pct(s * 100.0)
       None => Auto
@@ -507,8 +542,9 @@ pub fn View::min_height_share(self : View, share : Live[Double?]) -> View {
 ///|
 /// How wide it is for how tall (0: neither said by the other), as it changes: the side its holder or its own size leaves
 /// open worked out from the other (a picture laid out as wide as it is given, as tall as it is drawn then). Layout's.
-pub fn View::aspect(self : View, wide_for_tall : Live[Double]) -> View {
-  self.bind(Aspect, wide_for_tall, Layout, fn(a) { self.tree.nodes[self.at].flex.style.aspect = a })
+#callsite(autofill(loc))
+pub fn View::aspect(self : View, wide_for_tall : Live[Double], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Aspect, wide_for_tall, Layout, fn(a) { self.tree.nodes[self.at].flex.style.aspect = a })
   self
 }
 
@@ -518,16 +554,18 @@ pub fn View::aspect(self : View, wide_for_tall : Live[Double]) -> View {
 /// for is (View::drops, View::left_out): it and all it holds not drawn, pressed (by a finger, by its id, by a screen
 /// reader) or read out, a press held on it called off, from the layout that lays it out so; back, the same nodes, as
 /// it is laid out again. Layout's.
-pub fn View::laid_nowhere(self : View, on : Live[Bool]) -> View {
-  self.bind(Nowhere, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.display = if on { @flex.DisplayNone } else { @flex.Flex } })
+#callsite(autofill(loc))
+pub fn View::laid_nowhere(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Nowhere, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.display = if on { @flex.DisplayNone } else { @flex.Flex } })
   self
 }
 
 ///|
 /// How what it holds lines up across it (None: stretched across it; their starts, middles or ends), as it changes:
 /// layout's.
-pub fn View::lines_up(self : View, along : Live[Along?]) -> View {
-  self.bind(LinesUp, along, Layout, fn(a) {
+#callsite(autofill(loc))
+pub fn View::lines_up(self : View, along : Live[Along?], loc~ : SourceLoc) -> View {
+  self.bind(loc~, LinesUp, along, Layout, fn(a) {
     self.tree.nodes[self.at].flex.style.align_items = match a {
       None => Stretch
       Some(Start) => FlexStart
@@ -541,8 +579,9 @@ pub fn View::lines_up(self : View, along : Live[Along?]) -> View {
 ///|
 /// Where what it holds lies along it, as it changes (its start, by default; their middle; its end): what is left of its
 /// room on its main way before it, round it or after it. Layout's.
-pub fn View::lies_along(self : View, along : Live[Along]) -> View {
-  self.bind(LiesAlong, along, Layout, fn(a) {
+#callsite(autofill(loc))
+pub fn View::lies_along(self : View, along : Live[Along], loc~ : SourceLoc) -> View {
+  self.bind(loc~, LiesAlong, along, Layout, fn(a) {
     self.tree.nodes[self.at].flex.style.justify = match a {
       Start => FlexStart
       Middle => Center
@@ -555,8 +594,9 @@ pub fn View::lies_along(self : View, along : Live[Along]) -> View {
 ///|
 /// How wide it is as a share of what holds it (0 to 1; the same binding as View::width, which says it in points), as it
 /// changes: layout's.
-pub fn View::width_share(self : View, share : Live[Double]) -> View {
-  self.bind(Width, share, Layout, fn(s) {
+#callsite(autofill(loc))
+pub fn View::width_share(self : View, share : Live[Double], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Width, share, Layout, fn(s) {
     self.tree.nodes[self.at].flex.style.set_width(Pct(s * 100.0))
     self.tree.capped_applied(self.at)
   })
@@ -566,8 +606,9 @@ pub fn View::width_share(self : View, share : Live[Double]) -> View {
 ///|
 /// How tall it is as a share of what holds it (0 to 1; the same binding as View::height, which says it in points), as
 /// it changes: layout's.
-pub fn View::height_share(self : View, share : Live[Double]) -> View {
-  self.bind(Height, share, Layout, fn(s) { self.tree.nodes[self.at].flex.style.set_height(Pct(s * 100.0)) })
+#callsite(autofill(loc))
+pub fn View::height_share(self : View, share : Live[Double], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Height, share, Layout, fn(s) { self.tree.nodes[self.at].flex.style.set_height(Pct(s * 100.0)) })
   self
 }
 
@@ -580,9 +621,9 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
   // (what takes the pointer where, as whether it takes presses is (View::presses): said at the moment it changes, its
   // hits found anew, nothing laid out for it; said anew, what was said before let go of)
   guard self.live() is Some(n) else { return self }
-  match n.props.get(Points) {
+  match n.props.get(Prop::Points.ord()) {
     Some(stop) => {
-      n.props.remove(Points)
+      n.props.remove(Prop::Points.ord())
       stop()
     }
     None => ()
@@ -591,6 +632,7 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
     guard self.live() is Some(n) else { return }
     if n.points != on {
       n.points = on
+      self.tree.inputs_own_said(self.at)
       self.tree.hits = self.tree.hits + 1
       self.tree.marked()
     }
@@ -600,7 +642,7 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[Points] = stop
+        n.props[Prop::Points.ord()] = stop
       })
   }
   self

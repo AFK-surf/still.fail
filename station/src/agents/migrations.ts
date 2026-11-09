@@ -128,7 +128,10 @@ export const NOTES: [number, string][] = [
   [121, "The instructions were rewritten whole and much shorter; every earlier note is void. Follow only the current instructions (the file named below): one state per turn, cards only for real choices, details of other chats, agents, Slack and Feishu in the new skill stillfail-chats."],
   [122, "phone_send {path} puts a file on the phone granted to your chat (it fetches it as it downloads a chat's file), much faster and surer than adb push over its link, and answers its path there (pm cannot read that folder: install an APK from a copy in /data/local/tmp). Use it instead of adb push for anything but small files."],
   [123, "Skill stillfail-chats corrected: Slack shows login cards (a login on this station that takes a pasted code or a device code, with its link); only Feishu has none, where the login's link goes alone."],
-  [124, "A station's queue no longer holds station_task tasks back for busy CPUs: a task waits only for memory pressure, the screen, or the small-task slot (queue.why memory, screen, person or small; no cause, and decision has only memoryPressure)."],
+  [124, "A repository's AGENTS.md files (its root's and each directory's down to where you change code) are its rules: read them before changing code there and keep them true in what you change."],
+  [125, "chat_post no longer posts over messages you have not read: when some came in its thread first, it holds the post back and answers its id, and they come to you next. If it still stands, send it unchanged with chat_post {to, send: <id>} plus the state the turn ends with, without writing it again; otherwise post what fits now."],
+  [126, "all_done only when nothing people asked for in the chat is left, not when a step of a longer goal is done; a post that says what you do next means you go on doing it in this turn; need_human is not for what people already decided."],
+  [127, "A station's queue no longer holds station_task tasks back for busy CPUs: a task waits only for memory pressure, the screen, or the small-task slot (queue.why memory, screen, person or small; no cause, and decision has only memoryPressure)."],
 ];
 
 /// The last note that replaces every one before it (the instructions rewritten whole): a session behind it hears only

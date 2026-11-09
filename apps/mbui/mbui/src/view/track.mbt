@@ -72,6 +72,30 @@ pub fn Tracker::reset(self : Tracker) -> Unit {
 }
 
 ///|
+/// What a tracker holds as of a moment, kept as it was (its samples copied): its velocity as of then worked out only
+/// where it is asked (Drag::vx, Drag::vy), as Tracker::velocity_at would have then, whatever the tracker took since.
+pub struct TrackerSaid {
+  priv times : FixedArray[Double]
+  priv vals : FixedArray[Double]
+  priv index : Int
+  priv n : Int
+  priv t : Double
+} derive(Eq, Show, Debug)
+
+///|
+/// What it holds now, kept for its velocity as of `t` (Tracker::velocity_at).
+pub fn Tracker::said_at(self : Tracker, t : Double) -> TrackerSaid {
+  { times: self.times.copy(), vals: self.vals.copy(), index: self.index, n: self.n, t }
+}
+
+///|
+/// Its velocity as of its moment, as the tracker said it then (Tracker::velocity_at).
+pub fn TrackerSaid::velocity(self : TrackerSaid) -> Double {
+  let tr : Tracker = { times: self.times, vals: self.vals, index: self.index, n: self.n, fit: None }
+  tr.velocity_at(self.t)
+}
+
+///|
 /// A sample: the coordinate `v` at `t` (ms).
 pub fn Tracker::add(self : Tracker, t : Double, v : Double) -> Unit {
   self.index = (self.index + 1) % track_size
@@ -210,11 +234,12 @@ fn Tracker::bears(self : Tracker, v : Double, i : Int) -> Bool {
 }
 
 ///|
-/// Of `a` from `ai` and `b` from `bi`, the first `m` multiplied pairwise and summed.
+/// Of `a` from `ai` and `b` from `bi`, the first `m` multiplied pairwise and summed (each within its fit's rows,
+/// lsq_slope's: read unchecked).
 fn dot(a : FixedArray[Double], ai : Int, b : FixedArray[Double], bi : Int, m : Int) -> Double {
   let mut s = 0.0
   for h in 0..<m {
-    s = s + a[ai + h] * b[bi + h]
+    s = s + a.unsafe_get(ai + h) * b.unsafe_get(bi + h)
   }
   s
 }
@@ -223,7 +248,8 @@ fn dot(a : FixedArray[Double], ai : Int, b : FixedArray[Double], bi : Int, m : I
 /// The slope at x = 0 of the polynomial of degree 2 (1 with two points)
 /// fitted to the first `m` of `f`'s points by least squares: Compose's
 /// polyFitLeastSquares (QR by Gram-Schmidt, back-substituted), in `f`'s
-/// matrices.
+/// matrices. (`m` is at most track_size and each index within its matrix's rows: read and written unchecked, as a
+/// finger's every move asks it, Tree::tracked)
 fn lsq_slope(f : Fit, m : Int) -> Double {
   let x = f.xs
   let y = f.ys
@@ -232,38 +258,39 @@ fn lsq_slope(f : Fit, m : Int) -> Double {
   let r = f.r
   let coef = f.coef
   let k = track_size
+  let m = if m > k { k } else { m }
   let n = if m > 2 { 3 } else { m }
   for h in 0..<m {
-    a[h] = 1.0
+    a.unsafe_set(h, 1.0)
     for i in 1..<n {
-      a[i * k + h] = a[(i - 1) * k + h] * x[h]
+      a.unsafe_set(i * k + h, a.unsafe_get((i - 1) * k + h) * x.unsafe_get(h))
     }
   }
   for j in 0..<n {
     let w = j * k
     for h in 0..<m {
-      q[w + h] = a[j * k + h]
+      q.unsafe_set(w + h, a.unsafe_get(j * k + h))
     }
     for i in 0..<j {
       let d = dot(q, w, q, i * k, m)
       for h in 0..<m {
-        q[w + h] = q[w + h] - d * q[i * k + h]
+        q.unsafe_set(w + h, q.unsafe_get(w + h) - d * q.unsafe_get(i * k + h))
       }
     }
     let inv = 1.0 / dmax(dot(q, w, q, w, m).sqrt(), 1.0e-6)
     for h in 0..<m {
-      q[w + h] = q[w + h] * inv
+      q.unsafe_set(w + h, q.unsafe_get(w + h) * inv)
     }
     for i in 0..<n {
-      r[j * 3 + i] = if i < j { 0.0 } else { dot(q, w, a, i * k, m) }
+      r.unsafe_set(j * 3 + i, if i < j { 0.0 } else { dot(q, w, a, i * k, m) })
     }
   }
   for i = n - 1; i >= 0; i = i - 1 {
     let mut c = dot(q, i * k, y, 0, m)
     for j = n - 1; j > i; j = j - 1 {
-      c = c - r[i * 3 + j] * coef[j]
+      c = c - r.unsafe_get(i * 3 + j) * coef.unsafe_get(j)
     }
-    coef[i] = c / r[i * 3 + i]
+    coef.unsafe_set(i, c / r.unsafe_get(i * 3 + i))
   }
   coef[1]
 }

@@ -337,8 +337,12 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
       _ => ()
     }
     c.box(style=find_field_style, fn() {
-      // ⇧Enter: the one before (read before the field takes it as its Enter)
-      let back = c.key_pressed(@ui.key_code_enter, mods=@ui.mod_shift_key, in_field=true)
+      // ⇧Enter: the one before, as it comes, before the field takes it as its Enter (Ctx::on_key)
+      c.on_key(c.id(find_key), fn(code, mods) {
+        guard code == @ui.key_code_enter && mods == @ui.mod_shift_key else { return false }
+        find_move(src, key, list, -1)
+        true
+      })
       let res = c.editor(
         find_key,
         placeholder=@sf.t("web-main.find.placeholder"),
@@ -354,7 +358,7 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
         // Enter: the next one, as it is pressed
         on_submit=fn(_) { find_move(src, key, list, 1) },
       )
-      // (⇧Enter put a new line in it: taken out)
+      // (a new line put in it otherwise: taken out)
       let typed = res.text.replace_all(old="\n", new="")
       finding.query = typed
       // looked for 120 ms after the last key; none typed, nothing found at once
@@ -363,10 +367,6 @@ pub fn find_bar(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, list : 
         // (asked once the frame's builds are over)
         finding.asked.set(typed)
         c.tell("find/ask/" + typed, fn() { find_ask(src, r.station, thread, key, list, typed) })
-      }
-      if back {
-        finding.field.set(typed)
-        c.tell("find/move", fn() { find_move(src, key, list, -1) })
       }
       let (at, total) = find_position()
       match finding.found.get() {

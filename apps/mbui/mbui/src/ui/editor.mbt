@@ -541,25 +541,83 @@ fn EditorState::erase(self : EditorState, r : Reach, up : Bool) -> Unit {
 
 ///|
 fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) -> Unit {
-  let before = self.text
+  let (before, anchor, caret) = (self.text, self.anchor, self.caret)
   self.key_edit(code, mods, now)
   self.words_told()
-  self.typed_told(before)
+  self.typed_told(before, anchor, caret, Typed)
 }
 
 ///|
-/// Its words changed from `before` by the person's edit just made: told what its last build said that does
-/// (Ctx::editor's `on_change`), at once, outside any build.
-fn EditorState::typed_told(self : EditorState, before : String) -> Unit {
-  match self.on_change {
-    Some(f) if self.text != before => {
-      let words = self.text
-      @signals.start_batch()
-      @signals.untracked(fn() { f(words) })
-      @signals.end_batch()
-    }
-    _ => ()
+/// The person's edit just made, from words `before` and the selection from `anchor` to `caret` (`by`: typed, pasted,
+/// undone, the pointer's): told what its last build said that does, at once, outside any build: its words where they
+/// changed (Ctx::editor's `on_change`), its words or its selection where either did (`on_edit`).
+fn EditorState::typed_told(self : EditorState, before : String, anchor : Int, caret : Int, by : FieldEditBy) -> Unit {
+  let changed = self.text != before
+  guard changed || self.anchor != anchor || self.caret != caret else { return }
+  let words = self.text
+  let edit : FieldEdit = {
+    was: before,
+    was_selection: (anchor, caret),
+    now: words,
+    selection: (self.anchor, self.caret),
+    by,
   }
+  @signals.start_batch()
+  @signals.untracked(fn() {
+    match self.on_change {
+      Some(f) if changed => f(words)
+      _ => ()
+    }
+    match self.on_edit {
+      Some(f) => f(edit)
+      None => ()
+    }
+  })
+  @signals.end_batch()
+}
+
+///|
+/// An edit of a field's words or selection by the person (EditorState::typed_told): its words and selection before it
+/// and after it, and what made it.
+pub(all) struct FieldEdit {
+  was : String
+  was_selection : (Int, Int)
+  now : String
+  selection : (Int, Int)
+  by : FieldEditBy
+} derive(Eq, Show, Debug)
+
+///|
+/// What made an edit of a field: keys typed (a key, the input method's text), a paste (and words let go on it), an undo
+/// or a redo, the pointer (its caret put or words picked with it).
+pub(all) enum FieldEditBy {
+  Typed
+  Pasted
+  Undone
+  Pointed
+} derive(Eq, Show, Debug)
+
+///|
+/// What the edit changed of its words (words_changed).
+pub fn FieldEdit::span(self : FieldEdit) -> (Int, Int, Int) {
+  words_changed(self.was, self.now)
+}
+
+///|
+/// What changed words `was` into `now`: the same in both up to `start`, then the end in `was` of what was taken and the
+/// end in `now` of what was put in (after them the same again in both).
+pub fn words_changed(was : String, now : String) -> (Int, Int, Int) {
+  let most = if was.length() < now.length() { was.length() } else { now.length() }
+  let mut start = 0
+  while start < most && was.unsafe_charcode_at(start) == now.unsafe_charcode_at(start) {
+    start += 1
+  }
+  let mut end = 0
+  while end < most - start &&
+        was.unsafe_charcode_at(was.length() - 1 - end) == now.unsafe_charcode_at(now.length() - 1 - end) {
+    end += 1
+  }
+  (start, was.length() - end, now.length() - end)
 }
 
 ///|
@@ -609,11 +667,17 @@ fn EditorState::key_edit(self : EditorState, code : Int, mods : Int, now : Doubl
           }
         }
       } else if code == key_enter {
-        if shift || !self.enter_sends {
+        // (⌘Enter, Ctrl+Enter elsewhere, where Enter is a new line and that sends: `command_sends`)
+        let command = (mods & (if h_keys() == 0 { mod_cmd } else { mod_ctrl })) != 0
+        if shift || !(self.enter_sends || (self.command_sends && command)) {
           if self.marked.length() > 0 {
             self.put_text(2, "", 0, 0, now)
           }
           self.insert("\n")
+        } else if self.marked.length() > 0 {
+          // (a composition under way: what it chose put in, nothing sent; a host's input method keeps its Enter, this is
+          // where one gave it on)
+          self.put_text(2, "", 0, 0, now)
         } else {
           // (the words stay: what is done with them, a message sent and its field emptied, is the app's; empty too,
           // whether there is anything to send is the app's: a picture waiting with no words, the web's form submitted)
@@ -655,7 +719,7 @@ fn EditorState::text_input(
   self.put_text(kind, s, a, b, now)
   self.edited(text, anchor, caret, kind != text_paste)
   self.words_told()
-  self.typed_told(text)
+  self.typed_told(text, anchor, caret, if kind == text_paste { Pasted } else { Typed })
 }
 
 ///|
@@ -756,14 +820,16 @@ pub fn enter_sends_by(max_lines : Int, ime_action : Int) -> Bool {
 /// A field of words. `enter_sends`: whether Enter gives the words up (`submitted`) rather than starting a new line;
 /// unsaid, the way the words come in decides (enter_sends_by): a keyboard's Enter gives them up (Shift+Enter a new
 /// line); a finger's keyboard's Enter is a new line where the field holds more than one and the keyboard has no key of
-/// its own for it (`ime_action`), else that key, giving them up. `placeholder`: what it shows while nothing is typed in
+/// its own for it (`ime_action`), else that key, giving them up. `command_sends`: where Enter is a new line, ⌘Enter
+/// (Ctrl+Enter elsewhere) gives them up. `placeholder`: what it shows while nothing is typed in
 /// it, without soft wrapping; `min_lines`, the least lines it holds even while empty, up to `max_lines`; `shorter`, other ways to
 /// say the placeholder where the field has less room, each shorter than the one before
 /// (搜索全部内容, then 搜索): the longest of them all that fits is shown whole, the shortest cut with an ellipsis only
 /// where none does, as Ctx::text's words (Node::hint_shown). `on_submit`: what giving its words up does, given them, as
 /// Enter is taken, outside any build (the result's `submitted` then none); `on_change`: what the person's edit of its
 /// words does (a key, the input method's text, a paste, an undo), given them, as it is made, outside any build (not
-/// what the app puts in it: Field::set).
+/// what the app puts in it: Field::set); `on_edit`: what the person's edit of its words or its selection does (the
+/// pointer's too: its caret put, words picked), given the edit (FieldEdit), likewise.
 pub fn Ctx::editor(
   self : Ctx,
   key : String,
@@ -780,6 +846,7 @@ pub fn Ctx::editor(
   placeholder_color? : Int64 = 0x8E8E93FFL,
   caret_color? : Int64 = 0x0A84FFFFL,
   enter_sends? : Bool,
+  command_sends? : Bool = false,
   leaves? : Array[Int] = [],
   ime_action? : Int = 0,
   paste_limit? : Int = 0,
@@ -790,11 +857,13 @@ pub fn Ctx::editor(
   files? : Bool = false,
   on_submit? : (String) -> Unit,
   on_change? : (String) -> Unit,
+  on_edit? : (FieldEdit) -> Unit,
 ) -> EditorResult {
   let id = self.id(key)
-  // (what the hand does to it, read so: the keys and words typed, a press on it, the pointer while a press on it drags
+  // (what the hand does to it, read so: the keys and words typed (into a field of an old view: hand_typed), a press on it, the pointer while a press on it drags
   // its caret, what is picked in it or a handle of it: hand.mbt; not a press elsewhere)
   hand_presses_read()
+  hand.typed.get() |> ignore
   hand.down.get() |> ignore
   if self.down && (self.active == id || self.word_drag == id || self.handle_drag == id) {
     hand.pointer.get() |> ignore
@@ -845,8 +914,10 @@ pub fn Ctx::editor(
   st.written.get() |> ignore
   st.limit = paste_limit
   st.enter_sends = enter_sends.unwrap_or(enter_sends_by(max_lines, ime_action))
+  st.command_sends = command_sends
   st.on_submit = on_submit
   st.on_change = on_change
+  st.on_edit = on_edit
   st.leaves = leaves
   st.ime_action = ime_action
   st.secret = secret
@@ -855,10 +926,11 @@ pub fn Ctx::editor(
   // (what the look makes of the words worked out again, once, for this build: it may say other colours now)
   st.looked = None
   // (the focus asked for it before anything held it (Ctx::focus_field): given now this editor holds it, where the old
-  // view it is being built in takes input (that one: its node not made yet, nothing found of it by its id))
+  // view it is being built in takes input (that one: its node not made yet, nothing found of it by its id); under a
+  // modal layer of the tree's over that old view, kept for the layer to give back, as Ctx::focus_editor's)
   if field is Some(_) && st.focus_asked {
     st.focus_asked = false
-    if island_allows(self.island_said()) {
+    if !view_focus_kept_for(self, id) && island_allows(self.island_said()) {
       self.focus_moved(id)
     }
   }
@@ -1769,6 +1841,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     submitted: None,
     on_submit: None,
     on_change: None,
+    on_edit: None,
     pref_x: -1.0,
     upstream: -1,
     floating: None,
@@ -1779,6 +1852,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     retell: false,
     limit: 0,
     enter_sends: true,
+    command_sends: false,
     leaves: [],
     ime_action: 0,
     color: 0L,
@@ -1951,7 +2025,7 @@ pub fn Field::set(self : Field, text : String, caret? : Int) -> Unit {
   st.blink_again = true
   // (told as the whole of it is so: its words, its caret, nothing composed)
   st.words_told()
-  st.written.set(@signals.untracked(fn() { st.written.get() }) + 1)
+  st.written.set(st.written.untracked() + 1)
   field_written()
 }
 
@@ -1978,7 +2052,7 @@ pub fn Field::pick(self : Field, from : Int, to : Int) -> Unit {
   st.blink_again = true
   // (what is composed shown at the caret where it is now: told so, Field::composed_said)
   st.words_told()
-  st.written.set(@signals.untracked(fn() { st.written.get() }) + 1)
+  st.written.set(st.written.untracked() + 1)
   field_written()
 }
 
@@ -2089,6 +2163,11 @@ pub fn Ctx::blur(self : Ctx) -> Unit {
 ///|
 /// How soon a second tap on a field picks the word there (ViewConfiguration's double tap timeout).
 pub let double_tap_ms : Double = 300.0
+
+///|
+/// How far from the first, in points, a finger's second tap may be let go and still be the second of two (the window's
+/// tree's: Tree::twice_within; a picture's viewer had it so).
+pub let double_tap_slop : Double = 40.0
 
 ///|
 /// The word at (`x`, `y`) in the field picked (a long press's, a double tap's): its two handles, the floating menu

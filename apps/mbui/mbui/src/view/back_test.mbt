@@ -7,7 +7,7 @@ test "back follows the current order as rows move, leave, and are made again" {
   let items = @signals.signal([1, 2, 3])
   let told : Array[Int] = []
   let t = @view.Tree::new(fn(root) {
-    root.each(fn() { items.get() }, fn(it) { it }, fn(row, item) {
+    root.each(at_once=true, fn() { items.get() }, fn(it) { it }, fn(row, item) {
       let id = item.get()
       row.takes_back(fn() { told.push(id) }) |> ignore
     })
@@ -34,7 +34,7 @@ test "back can change how a node takes it, and a removed node cannot take it aga
   let node : Ref[@view.View?] = Ref(None)
   let told : Array[String] = []
   let t = @view.Tree::new(fn(root) {
-    root.show(fn() { shown.get() }, fn(a) {
+    root.show(at_once=true, fn() { shown.get() }, fn(a) {
       node.val = Some(a)
       a.takes_back(fn() { told.push("once") }) |> ignore
     })
@@ -69,10 +69,10 @@ fn backed(
 ) -> @view.Tree {
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { a_on.get() }, fn(a) {
+      root.show(at_once=true, fn() { a_on.get() }, fn(a) {
         a.presses(By(fn() { a_presses.get() })).follows_back(fn(s) { told.push("A \{s}") }) |> ignore
       })
-      root.show(fn() { b_on.get() }, fn(b) {
+      root.show(at_once=true, fn() { b_on.get() }, fn(b) {
         b.over(Is(true)).takes_back(fn() { told.push("B done") }) |> ignore
       })
       root.box(fn(m) {

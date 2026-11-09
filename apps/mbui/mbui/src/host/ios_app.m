@@ -127,6 +127,9 @@ static double frame_late, last_target = -1;
 // display link's targets' clock), or -1; the time of the frame being built (what wake_after counts from), and the
 // display's frame (ms).
 static double wake_for = -1, building_for = -1, link_period = 1000.0 / 120.0;
+// How many frames a second what moves on by the clock needs, as the last frame said it (mb_host_frames_paced; 0: the
+// display's every frame, as anything that asks for a frame has), and what the display link was last told of it.
+static double paced_hz, link_hz = -1;
 // How far the soft keyboard reaches over the view's foot past the safe area's, in points, where it is on the screen
 // now (its motion followed frame by frame: the controller's), and whether it is moving.
 static double ime_over(void);
@@ -177,7 +180,17 @@ static void run_script_step(int step);
 
 - (void)requestFrame {
   self.wantFrame = YES;
+  paced_hz = 0;
   self.link.paused = NO;
+}
+
+// The display link told the rate the frames want (paced_hz), where it changed: the display's highest, or that of what
+// moves on by the clock alone, so a ProMotion screen refreshes as slowly (as the tick draws only at the paced frames).
+static void link_rate(CADisplayLink *l) {
+  if (link_hz == paced_hz) return;
+  link_hz = paced_hz;
+  l.preferredFrameRateRange = paced_hz > 0 ? CAFrameRateRangeMake(paced_hz, paced_hz, paced_hz)
+                                           : CAFrameRateRangeMake(60, 120, 120);
 }
 
 // The floating edit menu over the words it is about (Android's ActionMode.TYPE_FLOATING's content rect), kept there
@@ -243,6 +256,7 @@ static double drawn_for;
 
 - (void)tick:(CADisplayLink *)l {
   link_period = (l.targetTimestamp - l.timestamp) * 1000.0;
+  link_rate(l);
   // a frame waited for (wake_after): the first whose time is at or past it, on the display's frames (not when a timer
   // happens to fire and the link wakes after it: a step a frame or two late, by as much as the timer and the link's
   // wake fall, so a resident cycle's steps 75 to 108 ms apart, not 100); the ticks before it draw nothing
@@ -1657,6 +1671,25 @@ void mb_host_wake_after(double ms) {
   });
 }
 
+// A frame for what moves on by the clock that needs only `hz` frames a second (@hostapi.frames_paced, said in the
+// frame): not drawn at the next tick but woken for (wake_after) at the display's frame a whole number of its frames on,
+// as near `hz` as they come (40 on a 60 Hz display: every second, 30), the ticks between drawing nothing and the link
+// told the rate; anything asking for a frame before then (requestFrame) has the next tick and every one again. Counted
+// in the display's fastest frames, not the link's now (at a rate told, its frames are that rate's). The next tick's,
+// as any frame asked for, in a scripted run (its frames are its steps') and where the frame asks for it besides (the
+// soft keyboard moving: drawFor).
+void mb_host_frames_paced(double hz) {
+  double top = (double)(the_view.window.screen ?: UIScreen.mainScreen).maximumFramesPerSecond;
+  double every = top > 0 && hz > 0 ? round(top / hz) : 1;
+  if (script || building_for < 0 || the_view.wantFrame || every <= 1) {
+    mb_host_request_frame();
+    return;
+  }
+  paced_hz = top / every;
+  // (half a display frame short of it: the tick at it, whatever its time's rounding)
+  mb_host_wake_after((every - 0.5) * 1000.0 / top);
+}
+
 #include "groups.h"
 
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
@@ -2034,9 +2067,329 @@ int32_t mb_host_keyboard(void) {
   }
   return -1;
 }
-// The app's widgets for the system's accessibility (@hostapi.a11y_on, a11y_tree): not told here yet.
-int32_t mb_host_a11y_on(void) { return 0; }
-void mb_host_a11y_tree(moonbit_string_t s) { (void)s; }
+// ---- the app's widgets for VoiceOver ----
+// As the Mac's mac_app.m gives them: an element of each node the app told (a11y.mbt's updates, @hostapi.a11y_tree:
+// what changed, kept by its number; one whose node is gone is no element), held by the view (UIAccessibilityContainer:
+// its accessibilityElements) or by the element of what holds it (those of no use of their own, flags v, none: what they
+// hold their holder's). One that holds others and is a group (a dialog, a menu, a list, a region...) is a container of
+// them and no element itself, as UIKit's own are; any other is one element, what it holds read in its name. Its traits by
+// its role and state, its label, value, hint and frame on the screen. What is asked of it (activate, a step up or down,
+// escape) goes to the app on @hostapi.a11y_channel. The app tells its widgets while VoiceOver or Switch Control runs; as
+// either comes on, a frame is asked for. As they change, VoiceOver is told the layout changed (and the screen, as a
+// modal one comes); a view made again that is told a part asks for all of it again. MBUI_A11Y_SELFCHECK=1: told as
+// though one read them, walked and pressed through as VoiceOver would (a11y_selfcheck).
+
+@interface MBA11yNode : NSObject
+@property(nonatomic) int nid, parent, widget;
+@property(nonatomic, copy) NSString *role, *flags, *label, *value, *help, *actions;
+@property(nonatomic) CGRect rel;
+@property(nonatomic) BOOL range;
+@property(nonatomic) double low, at, high;
+@property(nonatomic, strong) NSMutableArray<NSNumber *> *kids;
+@end
+@implementation MBA11yNode
+@end
+
+@interface MBA11yElement : UIAccessibilityElement
+@property(nonatomic) int nid;
+@end
+
+static NSMutableDictionary<NSNumber *, MBA11yNode *> *a11y_nodes;
+static NSMutableDictionary<NSNumber *, MBA11yElement *> *a11y_elements;
+static BOOL a11y_watched;
+
+static BOOL a11y_has(NSString *letters, unichar c) {
+  return [letters rangeOfString:[NSString stringWithCharacters:&c length:1]].location != NSNotFound;
+}
+
+// where node `n` is in the view: its holders' places and its own, each from where its holder is (a11y.mbt's head)
+static CGRect a11y_rect(MBA11yNode *n) {
+  CGRect r = n.rel;
+  for (MBA11yNode *p = a11y_nodes[@(n.parent)]; p && p.nid; p = a11y_nodes[@(p.parent)])
+    r.origin.x += p.rel.origin.x, r.origin.y += p.rel.origin.y;
+  return r;
+}
+
+// what node `nid` holds as elements: those of no use of their own (flags v) left out, what they hold in their place
+static NSArray<NSNumber *> *a11y_shown_kids(int nid) {
+  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+  for (NSNumber *k in a11y_nodes[@(nid)].kids) {
+    MBA11yNode *c = a11y_nodes[k];
+    if (!c) continue;
+    if (a11y_has(c.flags, 'v')) [out addObjectsFromArray:a11y_shown_kids(c.nid)];
+    else [out addObject:k];
+  }
+  return out;
+}
+
+// the element that holds node `n`: its nearest holder of use of its own (0: the view)
+static int a11y_shown_holder(MBA11yNode *n) {
+  MBA11yNode *p = a11y_nodes[@(n.parent)];
+  while (p && p.nid && a11y_has(p.flags, 'v')) p = a11y_nodes[@(p.parent)];
+  return p ? p.nid : 0;
+}
+
+// whether node `n` is a container of what it holds (a group's role, holding some), not an element itself
+static BOOL a11y_groups(MBA11yNode *n) {
+  static NSSet<NSString *> *groups;
+  if (!groups)
+    groups = [NSSet setWithArray:@[
+      @"Group", @"RadioGroup", @"TabList", @"TabPanel", @"Dialog", @"AlertDialog", @"Menu", @"MenuBar", @"Listbox",
+      @"Toolbar", @"Region", @"Navigation", @"Form", @"ScrollArea"
+    ]];
+  return [groups containsObject:n.role] && a11y_shown_kids(n.nid).count > 0;
+}
+
+static MBA11yElement *a11y_element(int nid);
+
+static NSArray *a11y_elements_of(NSArray<NSNumber *> *ids) {
+  NSMutableArray *out = [NSMutableArray arrayWithCapacity:ids.count];
+  for (NSNumber *k in ids) {
+    MBA11yElement *e = a11y_element(k.intValue);
+    if (e) [out addObject:e];
+  }
+  return out;
+}
+
+static MBA11yElement *a11y_element(int nid) {
+  MBA11yNode *n = a11y_nodes[@(nid)];
+  if (!n || !nid || !the_view) return nil;
+  if (!a11y_elements) a11y_elements = [NSMutableDictionary dictionary];
+  MBA11yElement *e = a11y_elements[@(nid)];
+  if (!e) {
+    e = [[MBA11yElement alloc] initWithAccessibilityContainer:the_view];
+    e.nid = nid;
+    a11y_elements[@(nid)] = e;
+  }
+  int holder = a11y_shown_holder(n);
+  e.accessibilityContainer = holder ? (id)a11y_element(holder) : (id)the_view;
+  return e;
+}
+
+// what is asked of the node's widget, posted to the app
+static void a11y_ask(MBA11yNode *n, NSString *action) {
+  if (!n || !n.widget) return;
+  NSData *json = [NSJSONSerialization dataWithJSONObject:@{@"id" : @(n.widget), @"action" : action} options:0 error:nil];
+  if (json) mb_post("a11y", (const char *)json.bytes, json.length, NULL, 0);
+}
+
+@implementation MBA11yElement
+- (MBA11yNode *)node {
+  return a11y_nodes[@(self.nid)];
+}
+- (BOOL)isAccessibilityElement {
+  MBA11yNode *n = self.node;
+  return n && !a11y_groups(n);
+}
+- (NSArray *)accessibilityElements {
+  MBA11yNode *n = self.node;
+  return n && a11y_groups(n) ? a11y_elements_of(a11y_shown_kids(n.nid)) : nil;
+}
+- (UIAccessibilityContainerType)accessibilityContainerType {
+  NSString *r = self.node.role;
+  if ([r isEqualToString:@"Listbox"] || [r isEqualToString:@"Menu"] || [r isEqualToString:@"ScrollArea"])
+    return UIAccessibilityContainerTypeList;
+  if ([r isEqualToString:@"Navigation"] || [r isEqualToString:@"Region"] || [r isEqualToString:@"Form"])
+    return UIAccessibilityContainerTypeLandmark;
+  return UIAccessibilityContainerTypeSemanticGroup;
+}
+- (NSString *)accessibilityLabel {
+  MBA11yNode *n = self.node;
+  return n.label.length ? n.label : nil;
+}
+- (NSString *)accessibilityValue {
+  MBA11yNode *n = self.node;
+  if (!n) return nil;
+  if (n.value.length) return n.value;
+  if (n.range && n.high > n.low) return [NSString stringWithFormat:@"%.0f%%", (n.at - n.low) / (n.high - n.low) * 100.0];
+  return nil;
+}
+- (NSString *)accessibilityHint {
+  NSString *h = self.node.help;
+  return h.length ? h : nil;
+}
+- (UIAccessibilityTraits)accessibilityTraits {
+  MBA11yNode *n = self.node;
+  if (!n) return UIAccessibilityTraitNone;
+  static NSSet<NSString *> *buttons;
+  if (!buttons)
+    buttons = [NSSet setWithArray:@[
+      @"Button", @"Checkbox", @"Switch", @"Radio", @"Tab", @"MenuItem", @"MenuItemCheckbox", @"MenuItemRadio",
+      @"Option", @"Combobox"
+    ]];
+  NSString *r = n.role;
+  UIAccessibilityTraits t = UIAccessibilityTraitNone;
+  if ([buttons containsObject:r]) t |= UIAccessibilityTraitButton;
+  if ([r isEqualToString:@"Link"]) t |= UIAccessibilityTraitLink;
+  if ([r isEqualToString:@"Heading"]) t |= UIAccessibilityTraitHeader;
+  if ([r isEqualToString:@"Image"]) t |= UIAccessibilityTraitImage;
+  if ([r isEqualToString:@"Text"] || [r isEqualToString:@"Status"]) t |= UIAccessibilityTraitStaticText;
+  if ([r isEqualToString:@"ProgressBar"]) t |= UIAccessibilityTraitUpdatesFrequently;
+  if ([r isEqualToString:@"TabList"]) t |= UIAccessibilityTraitTabBar;
+  if ([r isEqualToString:@"Slider"] || a11y_has(n.actions, 'i') || a11y_has(n.actions, 'd')) t |= UIAccessibilityTraitAdjustable;
+  // (one checked or not: a toggle, on as it is checked)
+  if (a11y_has(n.flags, 'c')) {
+    t |= UIAccessibilityTraitToggleButton;
+    if (a11y_has(n.flags, 'C')) t |= UIAccessibilityTraitSelected;
+  }
+  if (a11y_has(n.flags, 's') || a11y_has(n.flags, 'P')) t |= UIAccessibilityTraitSelected;
+  if (a11y_has(n.flags, 'd')) t |= UIAccessibilityTraitNotEnabled;
+  return t;
+}
+- (CGRect)accessibilityFrame {
+  MBA11yNode *n = self.node;
+  if (!n || !the_view) return CGRectZero;
+  return UIAccessibilityConvertFrameToScreenCoordinates(a11y_rect(n), the_view);
+}
+- (BOOL)accessibilityViewIsModal {
+  return a11y_has(self.node.flags, 'm');
+}
+- (BOOL)accessibilityActivate {
+  MBA11yNode *n = self.node;
+  if (!n || !a11y_has(n.actions, 'a')) return NO;
+  a11y_ask(n, @"activate");
+  return YES;
+}
+- (void)accessibilityIncrement {
+  if (a11y_has(self.node.actions, 'i')) a11y_ask(self.node, @"increment");
+}
+- (void)accessibilityDecrement {
+  if (a11y_has(self.node.actions, 'd')) a11y_ask(self.node, @"decrement");
+}
+- (BOOL)accessibilityPerformEscape {
+  MBA11yNode *n = self.node;
+  if (!n || !a11y_has(n.actions, 'x')) return NO;
+  a11y_ask(n, @"dismiss");
+  return YES;
+}
+@end
+
+// The view: no element itself, the container of the app's widgets
+@interface MBView (A11y)
+@end
+@implementation MBView (A11y)
+- (BOOL)isAccessibilityElement {
+  return NO;
+}
+- (NSArray *)accessibilityElements {
+  return a11y_nodes ? a11y_elements_of(a11y_shown_kids(0)) : nil;
+}
+@end
+
+// MBUI_A11Y_SELFCHECK=1 (host_contract.sh ios a11y): the view's elements walked as VoiceOver walks them once told, each
+// said ("A11Y node <role> <label>"), and the button named "A11YCHECK press" activated through its element
+static BOOL a11y_selfcheck_done;
+static void a11y_walk(NSArray *els, MBA11yElement **button) {
+  for (MBA11yElement *e in els) {
+    if (![e isKindOfClass:MBA11yElement.class]) continue;
+    MBA11yNode *n = e.node;
+    fprintf(stderr, "A11Y node %s %s%s\n", n.role.UTF8String, n.label.UTF8String, e.isAccessibilityElement ? "" : " (group)");
+    if ([n.label isEqualToString:@"A11YCHECK press"]) *button = e;
+    a11y_walk(e.accessibilityElements, button);
+  }
+}
+static void a11y_selfcheck(void) {
+  MBA11yElement *button = nil;
+  a11y_walk(the_view.accessibilityElements, &button);
+  if (!button) return;
+  a11y_selfcheck_done = YES;
+  fprintf(stderr, "A11Y button traits %llu activated %d\n", (unsigned long long)button.accessibilityTraits,
+         [button accessibilityActivate]);
+  fflush(stderr);
+}
+
+// Whether something reads the widgets out (@hostapi.a11y_on): VoiceOver or Switch Control running (a frame asked for as
+// either comes on or goes)
+int32_t mb_host_a11y_on(void) {
+  if (!a11y_watched) {
+    a11y_watched = YES;
+    for (NSNotificationName name in @[
+           UIAccessibilityVoiceOverStatusDidChangeNotification, UIAccessibilitySwitchControlStatusDidChangeNotification
+         ]) {
+      [NSNotificationCenter.defaultCenter addObserverForName:name object:nil queue:NSOperationQueue.mainQueue
+                                                  usingBlock:^(NSNotification *note) {
+                                                    (void)note;
+                                                    mb_host_request_frame();
+                                                  }];
+    }
+  }
+  return UIAccessibilityIsVoiceOverRunning() || UIAccessibilityIsSwitchControlRunning() || getenv("MBUI_A11Y_SELFCHECK") ? 1 : 0;
+}
+
+// What the widgets are now (@hostapi.a11y_tree): an update of them (a11y.mbt's head: the nodes that changed, each whole,
+// and the focus), kept; one in nothing that holds it gone with what it holds; VoiceOver told what changed
+void mb_host_a11y_tree(moonbit_string_t s) {
+  NSString *all = mb_ns_from_string(s);
+  NSArray<NSString *> *lines = [all componentsSeparatedByString:@"\n"];
+  NSArray<NSString *> *head = [lines.firstObject componentsSeparatedByString:@"\x1f"];
+  if (head.count < 3 || ![head[0] isEqualToString:@"T"]) return;
+  BOOL full = [head[1] isEqualToString:@"1"];
+  if (!a11y_nodes) a11y_nodes = [NSMutableDictionary dictionary];
+  // (a part told to a host that has none: all of it asked for again)
+  if (!full && !a11y_nodes.count) {
+    static const char resend[] = "{\"action\":\"resend\"}";
+    mb_post("a11y", resend, sizeof resend - 1, NULL, 0);
+    return;
+  }
+  if (full) {
+    [a11y_nodes removeAllObjects];
+    [a11y_elements removeAllObjects];
+  }
+  NSMutableArray<MBA11yNode *> *told = [NSMutableArray array];
+  NSMutableSet<NSNumber *> *held = [NSMutableSet set];
+  NSMutableArray<NSNumber *> *let_go = [NSMutableArray array];
+  BOOL shape = full, changed = NO, modal = NO;
+  for (NSUInteger i = 1; i < lines.count; i++) {
+    NSArray<NSString *> *f = [lines[i] componentsSeparatedByString:@"\x1f"];
+    if (f.count < 17 || ![f[0] isEqualToString:@"N"]) continue;
+    MBA11yNode *n = [MBA11yNode new];
+    n.nid = f[1].intValue, n.role = f[2], n.flags = f[3];
+    n.rel = CGRectMake(f[4].doubleValue, f[5].doubleValue, f[6].doubleValue, f[7].doubleValue);
+    n.label = f[8], n.value = f[9], n.help = f[10];
+    n.range = f[12].length > 0;
+    n.low = f[11].doubleValue, n.at = f[12].doubleValue, n.high = f[13].doubleValue;
+    n.actions = f[14], n.widget = f[15].intValue;
+    n.kids = [NSMutableArray array];
+    if (f[16].length)
+      for (NSString *k in [f[16] componentsSeparatedByString:@","]) [n.kids addObject:@(k.intValue)];
+    MBA11yNode *o = a11y_nodes[@(n.nid)];
+    if (o) {
+      n.parent = o.parent;
+      for (NSNumber *k in o.kids)
+        if (![n.kids containsObject:k]) [let_go addObject:k];
+      if (![o.kids isEqualToArray:n.kids]) shape = YES;
+      if (![o.label isEqualToString:n.label] || ![o.value isEqualToString:n.value] || ![o.flags isEqualToString:n.flags] ||
+          o.at != n.at)
+        changed = YES;
+    } else {
+      shape = YES;
+      if (a11y_has(n.flags, 'm')) modal = YES;
+    }
+    a11y_nodes[@(n.nid)] = n;
+    [told addObject:n];
+    [held addObjectsFromArray:n.kids];
+  }
+  for (MBA11yNode *n in told)
+    for (NSNumber *k in n.kids) a11y_nodes[k].parent = n.nid;
+  // (one in nothing told holds: gone, with what it holds)
+  while (let_go.count) {
+    NSNumber *k = let_go.lastObject;
+    [let_go removeLastObject];
+    if ([held containsObject:k]) continue;
+    MBA11yNode *n = a11y_nodes[k];
+    if (!n) continue;
+    if (a11y_has(n.flags, 'm')) modal = YES;
+    [let_go addObjectsFromArray:n.kids];
+    [a11y_nodes removeObjectForKey:k];
+    [a11y_elements removeObjectForKey:k];
+  }
+  if (getenv("MBUI_A11Y_SELFCHECK") && !a11y_selfcheck_done) dispatch_async(dispatch_get_main_queue(), ^{
+      a11y_selfcheck();
+    });
+  if (!UIAccessibilityIsVoiceOverRunning() && !UIAccessibilityIsSwitchControlRunning()) return;
+  if (modal) UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
+  else if (shape || changed) UIAccessibilityPostNotification(UIAccessibilityLayoutChangedNotification, nil);
+}
 
 int32_t mb_host_system_dark(void) {
   return UIScreen.mainScreen.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark ? 1 : 0;
@@ -2447,6 +2800,7 @@ int32_t mb_host_window_inset(void) { return 0; }
 // A window filling the screen (@hostapi.full_screen): not one of this host's.
 int32_t mb_host_full_screen(void) { return 0; }
 void mb_host_set_full_screen(int32_t on) { (void)on; }
+void mb_host_window_buttons_down(double by, double ms) { (void)by; (void)ms; }
 void mb_host_window_drag(void) {}
 
 // The window's own buttons, the app's to draw where the system draws none (@hostapi.window_act, window_zoomed,

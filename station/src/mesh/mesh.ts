@@ -4,12 +4,15 @@
 import { Cause, Effect, FiberSet, Layer, Option, Stream } from "effect";
 import { log } from "../ops/log.ts";
 import { stationLog } from "../ops/log-export.ts";
-import { AdminApi, ControlPlane, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
+import { AdminApi, ControlPlane, Events, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
 import { DeviceTools, accessOf } from "../device/tools.ts";
 import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
 import { PEER_ALPN, PEER_BYTES_ALPN, peerCall, servePeer } from "./peer.ts";
 import { PEER_HTTP_ALPN, PeerHttp, serveHttp } from "./peer-http.ts";
 import { followLock } from "./lock-sync.ts";
+import { followPersons } from "./person-sync.ts";
+import { tellLocks } from "./lock-events.ts";
+import { personChainsOf } from "./serve.ts";
 import { Traces } from "./traces.ts";
 import { SubscriptionRef } from "effect";
 import { keepRelays } from "./relays.ts";
@@ -38,6 +41,7 @@ export const MeshLive = Layer.effectDiscard(
     const parts = yield* Parts;
     const config = yield* StationConfig;
     const screens = yield* ScreenRegistry;
+    const events = yield* Events;
     const run = Effect.gen(function* () {
       // Not in a workspace yet: on the mesh once `enroll` writes cloud.json.
       if (!cloud.state.state) yield* cloud.changes.pipe(Stream.filter(() => cloud.state.state !== null), Stream.runHead);
@@ -92,6 +96,16 @@ export const MeshLive = Layer.effectDiscard(
       // The workspace lock, kept level with the other stations it names (lock-sync.ts).
       yield* Effect.acquireRelease(
         Effect.sync(() => followLock(cloud.state, call)),
+        (stop) => Effect.sync(stop),
+      );
+      // Each person's own lock, kept level with the stations of the workspaces it was heard in (person-sync.ts), and
+      // the locks' changes told to the devices (lock-events.ts).
+      yield* Effect.acquireRelease(
+        Effect.sync(() => followPersons(cloud.state, personChainsOf(cloud.state), call)),
+        (stop) => Effect.sync(stop),
+      );
+      yield* Effect.acquireRelease(
+        Effect.sync(() => tellLocks(cloud.state, personChainsOf(cloud.state), (event, data, of, to) => events.tell(event, data, of, to))),
         (stop) => Effect.sync(stop),
       );
       const connections = yield* FiberSet.make();

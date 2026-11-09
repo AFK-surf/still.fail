@@ -205,7 +205,8 @@ shell_src=$(cat $host_c $H/*.h $H/wasm_shell.c "$O/thunks.c" $stubs "$moon_root/
   out/core/aarch64-apple-darwin/*.a "$WT/lib/libwasmtime.dylib" "$0" | cksum)
 if [ ! -x "$O/shell" ] || [ "$(cat "$O/shell.src" 2>/dev/null)" != "$shell_src" ]; then
   t0=$SECONDS
-  # (each source its own object, side by side)
+  # (each source its own object, side by side; none left of another build's, whose names say another MoonBit's runtime)
+  rm -rf "$O/obj"
   mkdir -p "$O/obj"
   pids=()
   for f in $host_c $H/wasm_shell.c "$O/thunks.c" $stubs "$moon_root/lib/runtime/runtime.c"; do

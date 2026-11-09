@@ -77,7 +77,8 @@ pub let tip_in : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.tween(120.
 
 ///|
 /// `key`'s popover (see the file's head), `open` or not, by the trigger `anchor` (its id; or by the rectangle `at`, a
-/// Radix Popover.Anchor apart from its trigger), on its `side` (lined up `along` it, `offset` away), named `label` for
+/// Radix Popover.Anchor apart from its trigger; its trigger a node of the window's tree, `anchor_node`, a press there
+/// none outside it: Ctx::overlay's), on its `side` (lined up `along` it, `offset` away), named `label` for
 /// the semantics tree; `modal`: the page under it takes no press and Tab stays in it; not `focus`: the focus stays
 /// where it is as it opens (Radix's onOpenAutoFocus prevented: what a field offers as it is typed in, the field keeping
 /// the keys). It comes by `enter` and goes by `exit`. Whether it is open now.
@@ -94,13 +95,14 @@ pub fn popover(
   focus? : Bool = true,
   look? : (@ui.Ctx, PopState, () -> Unit) -> Unit = popover_look,
   at? : (Double, Double, Double, Double),
+  anchor_node? : @view.View,
   enter? : @motion.Trans = pop_in,
   exit? : @motion.Trans = pop_out,
   body : () -> Unit,
 ) -> @ui.Changed[Bool] {
   let mut now = open
   if @motion.presence(c, "\u{2}pop/" + key, open, initial=true, enter~, exit~) is Some(shows) {
-    let o = c.overlay(key, modal~, anchor~, initial_focus=if focus { -1 } else { 0 }, inert=!open, fn() {
+    let o = c.overlay(key, modal~, anchor~, anchor_node?, initial_focus=if focus { -1 } else { 0 }, inert=!open, fn() {
       beside(c, key, anchor, side, along, offset, shows, Dialog, label, look, body, at?)
     })
     if o.dismissed is Some(_) {
@@ -144,12 +146,14 @@ pub fn hover_card(
 ) -> Bool {
   install()
   let id = c.id(key)
+  // (a finger's tap on a `tap` trigger opens it or shuts it as it is let go, beside what the trigger's own press does:
+  // Ctx::on_press_beside)
+  if tap && @ui.pointing() is Finger {
+    c.on_press_beside(trigger, fn() { kit.val.opens[id] = !kit.val.opens.get(id).unwrap_or(false) })
+  }
   let was = kit.val.opens.get(id).unwrap_or(false)
   let mut open = match @ui.pointing() {
-    Finger => {
-      let tapped = tap && c.clicked(trigger)
-      if was { !tapped } else { tapped || c.held_long(trigger) }
-    }
+    Finger => was || c.held_long(trigger)
     Mouse => {
       let on_trigger = c.hovered(trigger)
       let on_card = was && (c.hovered(c.id(key + "/panel")) || c.pointer_in_overlay(id) || c.keyboard_in_overlay(id))
@@ -236,7 +240,7 @@ pub fn tip_node_owner() -> TipOwner {
 /// Give the window's tooltip slot to `owner` as it is newly shown. The views and nodes that read it follow the signal.
 pub fn tip_claim(owner : TipOwner) -> Unit {
   install()
-  if @signals.untracked(fn() { kit.val.tip_owner.get() }) != Some(owner) {
+  if kit.val.tip_owner.untracked() != Some(owner) {
     kit.val.tip_owner.set(Some(owner))
   }
 }

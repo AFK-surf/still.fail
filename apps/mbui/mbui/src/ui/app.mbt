@@ -77,7 +77,7 @@ pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -
   @hostapi.set_back(fn(k, x, p, e) { on_back(k, x, p, e) })
   @hostapi.set_window_key(fn(code, mods) {
     let taken = Ref(false)
-    view_event(fn() { taken.val = window_key_taken(code, mods) })
+    view_event(fn() { taken.val = window_key_taken(code, mods) }, what="key")
     if taken.val { 1 } else { 0 }
   })
   @hostapi.set_app_state(fn(s) { on_app_state(s) })
@@ -178,6 +178,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   if bench.mode > 0 {
     bench_step(c, t3 - t0, t4 - t3)
   }
+  // (the frame into the window thread's journal, the interval it closes looked over: journal.mbt)
+  journal_frame(c, tw, t0, t3, t4)
   slow_probe(c, t, t3 - t0, t4 - t3, tree=t0 - tw)
   perf_log(c, t, t3 - t0, t4 - t3)
   drive_frame(c)
@@ -192,6 +194,9 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // (what the window's tree has going: drawn as the clock goes; what ends at a moment, woken then: view_host.mbt)
   view_frame_end(c)
   frame_afters_run()
+  // what of the widgets changed, for a screen reader reading them, as the frame left them (its layers, its focus, where
+  // what a page in the hand moved is: a11y.mbt)
+  c.a11y_after_paint()
   // (a layout read back that moved: what was placed from it, placed again)
   if c.read_back_moved {
     c.wants_frame = true
@@ -203,14 +208,29 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   bench.held = false
   looks_left(c, held)
   if c.wants_frame || c.took_input || bench.mode > 0 || held || paint_left() || layout_left() || glyphs_short_owed() {
+    pace_none()
     h_request_frame()
   } else if c.motion_left || c.cycling || c.fiber_frame {
     // what moves on (a motion, a fiber stepping a frame at a time) is drawn as the clock goes, on the host's next
-    // frame: no frame is owed at this moment (a Tester's draw draws none for it; its run_for does, as its time goes)
+    // frame: no frame is owed at this moment (a Tester's draw draws none for it; its run_for does, as its time goes);
+    // a motion as often as it needs where it is seen (frame_pace.mbt), a fiber every frame
     c.wants_frame = true
-    h_request_frame_on()
-  } else if c.wake_at > 0.0 {
-    h_wake_after(dmax(c.wake_at - t, 1.0))
+    let pace = if c.fiber_frame {
+      pace_none()
+      0.0
+    } else {
+      pace_by_clock(t)
+    }
+    if pace > 0.0 {
+      @hostapi.frames_paced(pace)
+    } else {
+      h_request_frame_on()
+    }
+  } else {
+    pace_none()
+    if c.wake_at > 0.0 {
+      h_wake_after(dmax(c.wake_at - t, 1.0))
+    }
   }
   // what is still awaited from the host (an image decoding, a view loading): a run to a declared moment keeps its
   // clock still while any is (mac_app.m, MBView, web/host.js), so its picture does not hang on how fast the machine is
@@ -220,6 +240,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
     @hostapi.frame_awaiting(rt.awaiting(), what)
   }
   frame_afters_run()
+  journal_frame_ended(t4)
   frame_running.val = false
   frame_moment.val = -1.0
   frame_built.val = false
@@ -324,6 +345,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
   c.wake_waited = -1.0
   c.frame_by = None
   c.wake_by = None
+  // what was said to be done at a moment by now, done before anything is built (Ctx::at_moment)
+  c.dues_frame_start()
   c.page_in_hand = false
   c.cycling = false
   c.cycles.clear()
@@ -457,7 +480,6 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
     // actions since the last frame)
     c.clicked.clear()
     c.double_clicked.clear()
-    c.click_at = None
     c.tapped = None
     desk.keys.clear()
     desk.menus.clear()
@@ -596,8 +618,6 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   // the shots being taken, each into instances of its own (shot.mbt)
   c.paint_shots()
   c.sync_views()
-  // what the widgets are, for a screen reader reading them (a11y.mbt)
-  c.a11y_after_paint()
   // what the paint said, where a Tester asks (said.mbt)
   frame_said_told(c, 1)
   // the streams' frames taken in this frame said shown (stream.mbt)
@@ -770,7 +790,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   // (under a change of theme spreading from where it was asked, while it does: reveal.mbt)
   c.with_parent(root, fn() {
     c.revealed(w, h, fn() { (g_view.val)(c) })
-    // (and the pictures asked apart from any build: shot.mbt take_picture)
+    // (and the pictures made as nodes apart, laid out at this frame: shot.mbt take_picture)
     c.pictures_built()
   })
   // what lies over the page over everything else (overlay.mbt)
@@ -884,6 +904,10 @@ fn input_came() -> Unit {
 
 ///|
 fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
+  // (a press or a let-go, a mouse's or a finger's: what the list does after it is its answer, rows_steady.mbt)
+  if kind == 0 || kind == 2 || kind == 10 || kind == 12 {
+    rows_steady_hand()
+  }
   // a touch screen's finger as the host has it, by the system's id for it (touches.mbt)
   if kind >= 10 && kind <= 13 {
     touch_in(kind - 10, button, x, y)
@@ -907,6 +931,36 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
 
 ///|
 fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? : Int = -1) -> Unit {
+  // (what the event does to the fields' selections, the old view's and the tree's: told each field's as the event
+  // is taken, EditorState::typed_told)
+  pointed_edits(fn() { pointer_event_now(kind, x, y, button, mods, by~) })
+}
+
+///|
+/// What `f`, the pointer's (an event of it, a hold it made at its moment), does to the selection of each field (the
+/// old view's and the tree's, each among the editors): told as `f` is done, for each whose selection it moved in the
+/// words it had, from the selection it had. A field whose words `f` changed is not told so: an edit of them by the
+/// person told already, as it was made (words let go on it), and what the app put in it as it answered (a chat picked
+/// from a menu put in: Field::set, its caret with it) no one's edit.
+fn pointed_edits(f : () -> Unit) -> Unit {
+  let had : Array[(EditorState, String, Int, Int)] = []
+  for _, st in g().editors {
+    // (one Field's held by two ids, its old editor's and its node's: once)
+    if !had.iter().any(fn(e) { physical_equal(e.0, st) }) {
+      had.push((st, st.text, st.anchor, st.caret))
+    }
+  }
+  f()
+  for e in had {
+    let (st, words, anchor, caret) = e
+    if st.text == words {
+      st.typed_told(words, anchor, caret, Pointed)
+    }
+  }
+}
+
+///|
+fn pointer_event_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? : Int = -1) -> Unit {
   let args = [kind.to_double(), x, y, button.to_double(), mods.to_double()]
   if by >= 0 {
     args.push(by.to_double())
@@ -961,14 +1015,10 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
   // a second finger (4 down, 5 moved, 6 up: hosts with touch screens; 8 the first let go, the second the first from
   // here), for a pinch (native.mbt `second_pointer`)
   if (kind >= 4 && kind <= 6) || kind == 8 {
-    // a list or a pager being dragged follows the newest finger, as Android's RecyclerView (the first's moves meanwhile
-    // move nothing)
+    // a list being dragged follows the newest finger, as Android's RecyclerView (the first's moves meanwhile move
+    // nothing)
     if kind == 5 && second_ptr[2] > 0.0 && c.down && c.dragging && c.following {
-      if pagers.contains(c.drag_scroll) {
-        c.pager_drag(c.drag_scroll, x - second_ptr[0]) |> ignore
-      } else {
-        c.list_drag(c.drag_scroll, -(y - second_ptr[1]))
-      }
+      c.list_drag(c.drag_scroll, -(y - second_ptr[1]))
       h_frame_owed()
     }
     // the first let go: the second's moves come as the first's from where the second is, the press's slop measured as
@@ -1295,34 +1345,29 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
         quiet = true
       } else if sideways.contains(c.drag_scroll) &&
         !sideways_move(c, c.drag_scroll, x, y) {
-        // dragged sideways (or not yet past the slop); moved up or down first, the list takes it below
-        ()
+        // dragged sideways (or not yet past the slop); moved up or down first, the list takes it below. Dragged across,
+        // where it is is what its paint reads (Ctx::sideways_drawn): the frame painted again, nothing built for it, as
+        // a list following the finger is (one up and down is placed as it is built: Ctx::capped)
+        quiet = c.dragging && sideways_across(c.drag_scroll)
       } else if drags.contains(c.drag_scroll) {
         if drag_move(c.drag_scroll, x, y) && !c.dragging {
           c.dragging = true
           c.active = 0
         }
       } else if c.drag_scroll != 0 && !captures.contains(c.drag_scroll) {
-        // a pager follows the finger sideways, a list up and down
-        let pager = pagers.contains(c.drag_scroll)
+        // a list follows the finger up and down
         if !c.dragging {
-          let moved = if pager { x - c.press_x } else { y - c.press_y }
+          let moved = y - c.press_y
           let slop = touch_slop()
           if moved.abs() > slop {
             c.dragging = true
             c.following = true
             c.active = 0
-            if !pager {
-              c.scroll_lets_go(c.drag_scroll)
-            }
+            c.scroll_lets_go(c.drag_scroll)
             // from where the slop ends, as Compose starts a drag: nothing
             // jumps, and what moved past the slop is not lost
             let past = if moved > 0.0 { moved - slop } else { moved + slop }
-            if pager {
-              c.pager_drag(c.drag_scroll, past) |> ignore
-            } else {
-              c.list_drag(c.drag_scroll, -past)
-            }
+            c.list_drag(c.drag_scroll, -past)
           } else {
             // (within the slop: nothing moves)
             quiet = true
@@ -1330,8 +1375,6 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
         } else if second_ptr[2] > 0.0 && c.following {
           // (a second finger down: the list follows it, above)
           quiet = true
-        } else if pager {
-          c.pager_drag(c.drag_scroll, x - c.last_x) |> ignore
         } else {
           // (the list follows the finger: where it stands is its signal's, ListState::hand_moved)
           c.list_drag(c.drag_scroll, -(y - c.last_y))
@@ -1362,8 +1405,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
     if c.active != 0 && target == c.active && !c.dragging {
       c.clicked.push(c.active)
-      c.click_at = Some((x, y))
-      // the second of two (Ctx::double_clicked): on the same, soon enough and near enough; then none is first
+      // the second of two (Ctx::on_double_press): on the same, soon enough and near enough; then none is first
       let (was, at, ax, ay) = c.last_click
       let second = was == c.active &&
         t - at <= double_click_ms &&
@@ -1413,9 +1455,6 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
         None => ()
       }
       sideways_up(c, c.drag_scroll, lift_x, lift_y)
-      if pagers.contains(c.drag_scroll) {
-        c.pager_release(c.drag_scroll, lift_x)
-      }
     }
     // a tap on a field (Android's): the focus and the caret where it was tapped, its handle under the caret
     if c.editor_tap != 0 &&
@@ -1545,9 +1584,6 @@ fn Ctx::press_called_off(self : Ctx, x : Double, y : Double, t : Double) -> Unit
       None => ()
     }
     sideways_up(c, c.drag_scroll, 0.0, 0.0)
-    if pagers.contains(c.drag_scroll) {
-      c.pager_release(c.drag_scroll, 0.0)
-    }
   }
   // (words being picked by it: picked as far as they are, no more, nothing scrolled on at an edge for it)
   picked.dragging = false
@@ -1696,8 +1732,9 @@ fn Ctx::edge_move(self : Ctx, x : Double, y : Double, t : Double) -> Bool {
 /// with no gesture. Its steps are the hand's events but where it is as it goes: that is where what follows it reads it
 /// (Nav's `finger`), as a pointer moved is (inputrec.mbt).
 fn on_back(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
+  rows_steady_hand()
   // (one event, at its own moment: view_host.mbt)
-  view_event(fn() { on_back_now(kind, x, progress, edge) })
+  view_event(fn() { on_back_now(kind, x, progress, edge) }, what="back")
 }
 
 ///|
@@ -1761,9 +1798,10 @@ fn on_back_now(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
 
 ///|
 fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
+  rows_steady_hand()
   // (one event, at its own moment: view_host.mbt)
   zoom_wheel_kept.val = false
-  view_event(fn() { on_wheel_now(x, y, dx, dy, phase) })
+  view_event(fn() { on_wheel_now(x, y, dx, dy, phase) }, what="wheel")
   h_wheel_kept(zoom_wheel_kept.val)
 }
 
@@ -1955,6 +1993,7 @@ fn wheel_taken() -> Unit {
 
 ///|
 fn on_key(code : Int, mods : Int) -> Unit {
+  rows_steady_hand()
   // (one event, at its own moment: view_host.mbt)
   view_event(fn() {
     if !window_key_taken(code, mods) {
@@ -1962,7 +2001,7 @@ fn on_key(code : Int, mods : Int) -> Unit {
     }
     // (what a field of the window's tree gave up of its words by it, told at its moment: tree_field.mbt)
     tree_field_said()
-  })
+  }, what="key")
 }
 
 ///|
@@ -1992,8 +2031,9 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
     input_taped("key", h_now(), [code.to_double(), mods.to_double()])
     return
   }
-  took_input("key", h_now(), [code.to_double(), mods.to_double()])
-  hand_event()
+  let typed = typed_key_part(code, mods)
+  took_input("key", h_now(), [code.to_double(), mods.to_double()], typed~)
+  typed_event(typed)
   key_in(code, mods)
   // (Escape to the topmost layer it dismisses, at its moment: overlay.mbt)
   if code == key_escape {
@@ -2075,7 +2115,7 @@ fn key_in(code : Int, mods : Int) -> Unit {
       if target != 0 &&
         island_allows(c.island_of_id(target)) &&
         !c.focus_takes(code) &&
-        (c.list_key(target, code) || c.pager_key(target, code)) {
+        c.list_key(target, code) {
         h_request_frame()
       }
     }
@@ -2084,18 +2124,20 @@ fn key_in(code : Int, mods : Int) -> Unit {
 
 ///|
 fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
+  rows_steady_hand()
   // (one event, at its own moment: view_host.mbt)
   view_event(fn() {
     on_text_now(kind, s, a, b)
     // (what a field of the window's tree gave up of its words by it, told at its moment: tree_field.mbt)
     tree_field_said()
-  })
+  }, what="text")
 }
 
 ///|
 fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
-  took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s)
-  hand_event()
+  let typed = typed_text_part(kind)
+  took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s, typed~)
+  typed_event(typed)
   let c = g()
   // (words for a focus a modal layer of the window's tree keeps from input: none's, island_allows; but a field it
   // leaves what is typed to, its: Ctx::typing_allowed)
@@ -2258,7 +2300,7 @@ let app_change : Ref[((Bool, Bool) -> Unit)?] = Ref::new(None)
 ///|
 fn on_app_state(s : Int) -> Unit {
   // (one event, at its own moment: view_host.mbt)
-  view_event(fn() { on_app_state_now(s) })
+  view_event(fn() { on_app_state_now(s) }, what="app-state")
 }
 
 ///|
@@ -2291,6 +2333,10 @@ fn app_state_taken(s : Int) -> Unit {
     return
   }
   app_state.val = s
+  // (not shown: the window thread's interval closed as the event that said so ends, journal.mbt)
+  if (s & 1) == 0 {
+    journal_hidden.val = true
+  }
   // (no longer in front: the fingers down called off, all of it (touches.mbt); a finger held on the window's tree let
   // go of now)
   if (s & 2) == 0 {

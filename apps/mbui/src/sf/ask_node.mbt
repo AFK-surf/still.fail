@@ -93,8 +93,13 @@ pub fn ask_node(
         body.alpha(By(words_in)) |> ignore
         body.scrolls(@view.Scroll::new(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(b) {
         b.padding(Is((panel_words, @ui.Space::px(S4_5), panel_words, 0.0))).gap(Is(@ui.Space::px(S4))) |> ignore
-        // (its field the library's line, as wide as what it holds: Enter says it, at that key's moment)
-        field.val = Some(input_node(b, line, placeholder~, secret~, submitted=fn(_) { go() }))
+        // (its field the library's line, as wide as what it holds: Enter says it, at that key's moment; read out by the
+        // question's title where it shows no placeholder)
+        field.val = Some(
+          input_node(b, line, placeholder~, label=if placeholder == "" { title } else { "" }, secret~, submitted=fn(_) {
+            go()
+          }),
+        )
         if hint != "" {
           b.box(fn(t) {
             t.words(Is(hint), look=toast_words_look(Meta, L5, 400, true)).ink(By(fn() { theme().color(Muted) })) |> ignore

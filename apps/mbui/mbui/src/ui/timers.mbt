@@ -196,4 +196,69 @@ pub fn Ctx::within(self : Ctx, id : Int, ms : Double) -> Bool {
 fn timers_reset() -> Unit {
   helds.clear()
   marks_at.clear()
+  dues.clear()
+}
+
+///|
+/// What is to be done at a moment said so (Ctx::at_moment): its moment, what (in the scope it was said in), whether what
+/// is shown waits for it, and where it was said.
+priv struct Due {
+  at : Double
+  f : () -> Unit
+  later : Bool
+  loc : SourceLoc
+}
+
+///|
+/// What is due, by the id of the key it was said under (Ctx::at_moment).
+// kept across runs: said as each is declared, let go as it is done, called off or declared anew; a run's start clears it
+let dues : Map[Int, Due] = {}
+
+///|
+/// `f` done once at the moment `when` (the frames' clock), declared under `key` (the cause it is the moment of: "this
+/// item's tap left single"; in the scope it is said in), as the first frame at or after it begins, before it is built,
+/// outside any build, whatever frames come between: what is to be done at a moment said so, never found by asking a
+/// wait each frame (Ctx::held). Declared again under the same key, the new moment and `f` take its place; called off
+/// (Ctx::call_off), it is not done. Waited for (a wake at its moment: a test's run goes on to it), unless `later`. It
+/// runs in the scope it was said in (Ctx::on_press's in_said_scope). The View's own: View::at_moment.
+#callsite(autofill(loc))
+pub fn Ctx::at_moment(self : Ctx, key : String, when : Double, f : () -> Unit, later? : Bool = false, loc~ : SourceLoc) -> Unit {
+  dues[self.id("\u{2}due/" + key)] = { at: when, f: self.in_said_scope(f), later, loc }
+  self.wake_at_time(when, later~, loc~)
+}
+
+///|
+/// What was declared under `key` (Ctx::at_moment, in the scope it is said in) ended, not done: whether it was still to
+/// come (a second tap calling off the first's moment: it was).
+pub fn Ctx::call_off(self : Ctx, key : String) -> Bool {
+  let id = self.id("\u{2}due/" + key)
+  let was = dues.contains(id)
+  dues.remove(id)
+  was
+}
+
+///|
+/// A frame begins: what was due by its time done, in the order of their moments, each once (what one does may declare
+/// or call off others: those it calls off are not done); the wake of each still to come said again (this frame's wakes
+/// begin from none).
+fn Ctx::dues_frame_start(self : Ctx) -> Unit {
+  if dues.is_empty() {
+    return
+  }
+  let now = self.clock
+  let due : Array[(Int, Due)] = []
+  dues.each(fn(id, d) { if d.at <= now { due.push((id, d)) } })
+  due.sort_by(fn(a, b) { a.1.at.compare(b.1.at) })
+  for p in due {
+    let (id, d) = p
+    // (still the one declared under its key: not called off, nor declared anew, by what ran before it)
+    match dues.get(id) {
+      Some(now_d) if physical_equal(now_d, d) => {
+        dues.remove(id)
+        run_press(Some(d.f))
+      }
+      _ => ()
+    }
+  }
+  dues.each(fn(_, d) { self.wake_at_time(d.at, later=d.later, loc=d.loc) })
 }

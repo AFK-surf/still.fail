@@ -55,7 +55,7 @@ impl @hostapi.Host for FakeHost with update_apply(_, _) {
 ///|
 /// How an update goes: as the test told it (Tester::tells_update).
 impl @hostapi.Host for FakeHost with update_state(_) {
-  @signals.untracked(fn() { update_told.get() })
+  update_told.untracked()
 }
 
 // The system's pickers and the files kept on the device (@hostapi pick.mbt, keep.mbt) as a test has them: its pickers
@@ -276,6 +276,7 @@ impl @hostapi.Host for FakeHost with keys_platform(self) {
 ///|
 impl @hostapi.Host for FakeHost with request_frame(self) {
   self.wants = true
+  self.paced = 0.0
 }
 
 ///|
@@ -283,6 +284,15 @@ impl @hostapi.Host for FakeHost with request_frame(self) {
 /// (Tester::frames_on).
 impl @hostapi.Host for FakeHost with request_frame_on(self) {
   self.frames_on = self.frames_on + 1
+  self.paced = 0.0
+}
+
+///|
+/// A frame for what moves on by the clock that needs only `hz` frames a second: counted as request_frame_on's, its rate
+/// told (Tester::frames_paced); its own frames are run_for's, whatever it is told.
+impl @hostapi.Host for FakeHost with frames_paced(self, hz) {
+  self.frames_on = self.frames_on + 1
+  self.paced = hz
 }
 
 ///|
@@ -615,6 +625,11 @@ impl @hostapi.Host for FakeHost with a11y_on(self) {
 ///|
 impl @hostapi.Host for FakeHost with a11y_tree(self, tree) {
   self.a11y_said = tree
+  // (kept as a host keeps it: A11yMirror::apply)
+  match a11y_update_read(tree) {
+    Some((full, focus, told)) => self.a11y_told.apply(full, focus, told) |> ignore
+    None => ()
+  }
 }
 
 ///|
@@ -1303,6 +1318,12 @@ impl @hostapi.Host for FakeHost with set_full_screen(self, on) {
 }
 
 ///|
+/// The window's buttons moved lower: kept (Tester::window_buttons_down).
+impl @hostapi.Host for FakeHost with window_buttons_down(self, by, ms) {
+  self.buttons_down = (by, ms)
+}
+
+///|
 /// How round the window's corners are (Tester::new's `window_corner`, the roundest of its `window_corners`): none
 /// while it fills the screen.
 impl @hostapi.Host for FakeHost with window_corner(self) {
@@ -1382,11 +1403,13 @@ impl @hostapi.Host for FakeHost with clipboard_set_image(self, data) {
 /// A frame presented: its instances counted, what a host that keeps its picture is handed kept for a test that
 /// records it (tester_host.mbt).
 /// Drawn out where a header stands for a group it keeps, as a host draws them (Ctx::flat_from): what a test reads of
-/// the frame reads the instances drawn.
-impl @hostapi.Host for FakeHost with present(self, buf, count, _, _, _) {
-  g().flat_from(0)
-  self.instances = count
-  host_presented_now(buf, count)
+/// the frame reads the instances drawn. Those are the frame's, every one: what a host is handed leaves out what
+/// cannot be seen (h_present, @damage's Damage::occlude), which draws the same.
+impl @hostapi.Host for FakeHost with present(self, _, _, _, _, _) {
+  let c = g()
+  c.flat_from(0)
+  self.instances = c.ninst
+  host_presented_now(c.inst, c.ninst)
 }
 
 ///|
@@ -2187,6 +2210,13 @@ impl @hostapi.Host for FakeHost with groups_here(_) {
 /// (Tester::set_rows_on_pixels).
 impl @hostapi.Host for FakeHost with rows_on_pixels(self) {
   self.rows_on_pixels
+}
+
+///|
+/// The window's tree keeps where in the source each node was made, for what a test finds to say where to change it
+/// (view's source.mbt), unless the test runs it as a device does (Tester::new's `keeps_sources`).
+impl @hostapi.Host for FakeHost with keeps_sources(self) {
+  self.keeps_sources
 }
 
 ///|

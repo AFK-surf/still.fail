@@ -282,9 +282,9 @@ fn off_pixels_block(how : Int) -> ((Double, Double, Double, Double), (Double, Do
   let pressed = Ref(0)
   let block = fn(c : Ctx) {
     let id = c.id("old block")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       pressed.val = pressed.val + 1
-    }
+    })
     let b = c.box(w=Px(100.0), h=Px(50.0), bg=natural_mark, id~, fn() {  })
     c.semantics(b, Button, id~, label="old block")
   }

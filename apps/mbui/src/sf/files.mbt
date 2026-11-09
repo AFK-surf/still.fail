@@ -213,13 +213,13 @@ pub fn file_name(c : @ui.Ctx, name : String) -> Unit {
 }
 
 ///|
-/// What was done with a file's card this frame: its ✕, its ↻ or its ✎ pressed, or (one that opens) the card itself.
-pub(all) struct FileCardDone {
-  removed : Bool
-  retried : Bool
-  restored : Bool
-  opened : Bool
-}
+/// What of a file's card a press was on: its ✕, its ↻ or its ✎, or (one that opens) the card itself.
+pub(all) enum FileCardPress {
+  Remove
+  Retry
+  Restore
+  Open
+} derive(Eq, Show, Debug)
 
 ///|
 /// A file as a card (FileCard): its sheet, its name over its size (or how far it has gone up,
@@ -235,7 +235,8 @@ pub(all) struct FileCardDone {
 /// `named`: a file named where it is and not going,
 /// its card no ground, its edge dashed in the strong line. Going up and how far not known yet (`pending`, no `sent`),
 /// a spinner where its sheet is: what goes on is seen to (an empty sheet that stays so looks stuck). `composer`: waiting
-/// in the composer, on composer_card's ground.
+/// in the composer, on composer_card's ground. `on_press`: what a press on its ✕, ↻, ✎ or itself does (none: what
+/// it draws takes no press, a card flying).
 pub fn file_card(
   c : @ui.Ctx,
   key : String,
@@ -258,13 +259,33 @@ pub fn file_card(
   remove_label? : String = "",
   retry_label? : String = "",
   composer? : Bool = false,
-) -> FileCardDone {
+  on_press? : (FileCardPress) -> Unit,
+) -> Unit {
   let id = c.id(key)
   let x = c.id(key + "/remove")
   let again = c.id(key + "/retry")
   let back = c.id(key + "/restore")
+  match on_press {
+    Some(f) => {
+      if remove {
+        c.on_press(x, fn() { f(Remove) })
+      }
+      if retry {
+        c.on_press(again, fn() { f(Retry) })
+      }
+      if restore {
+        c.on_press(back, fn() { f(Restore) })
+      }
+      if open {
+        c.on_press(id, fn() { f(Open) })
+      }
+    }
+    None => ()
+  }
   let said = meta
   let going = match sent {
+    // every byte gone, its station not yet saying it has them: not 100% (read as stuck)
+    Some(s) if pending && size > 0.0 && s >= size => t("common.uploadConfirming")
     Some(s) if pending && size > 0.0 =>
       t(
         "web-main.file.uploadingPart",
@@ -366,10 +387,6 @@ pub fn file_card(
   c.semantics(b, Group, id~, label=if title != "" { title } else { name })
   // (where it is; else what it says, whole where it is cut short: pasted words' meta, a failure at length)
   tip(c, key + "/tip", id, if path != "" { path } else if title != "" { meta } else { name }, repeats=path == "")
-  let removed = remove && c.clicked(x)
-  let retried = retry && c.clicked(again)
-  let restored = restore && c.clicked(back)
-  { removed, retried, restored, opened: open && !removed && !retried && !restored && c.clicked(id) }
 }
 
 ///|
@@ -382,7 +399,8 @@ pub fn file_card(
 /// none: it reaches past its right edge into the room round it as past its top, as far from that room's edge there as
 /// it is from its top (the user, 2026-10-26: 上边距和右边距不一致). `key` names it (its ✕ `key/remove`), `label` what a screen reader
 /// calls its ✕; `turn` how far its ✕ is turned (a quarter of a half turn: a ＋, which puts back what was taken out: a
-/// shared picture's attachments). Whether its ✕ was pressed.
+/// shared picture's attachments), read as it is drawn. `on_remove`: what a press on its ✕ does (none: a copy flying,
+/// taking no press).
 pub fn with_corner_remove(
   c : @ui.Ctx,
   key : String,
@@ -390,9 +408,14 @@ pub fn with_corner_remove(
   corner : Double,
   body : () -> Unit,
   w? : Double,
-  turn? : Double = 0.0,
-) -> Bool {
+  turn? : () -> Double,
+  on_remove? : () -> Unit,
+) -> Unit {
   let x = c.id(key + "/remove")
+  match on_remove {
+    Some(f) => c.on_press(x, f)
+    None => ()
+  }
   let reach = corner_remove_reach(corner)
   let outer = match w {
     Some(w) => @ui.style(w=Fixed(w + reach))
@@ -411,8 +434,9 @@ pub fn with_corner_remove(
           c.box(style=corner_remove_at, fn() {
             let b = c.box(style=corner_remove_box, id=x, tx=reach, ty=-reach, fn() {
               let m = c.box(fn() { corner_remove_mark(c) })
-              if turn != 0.0 {
-                c.look(m, @ui.look(rot=turn))
+              match turn {
+                Some(turn) => c.look_by(m, fn() { @ui.look(rot=turn()) })
+                None => ()
               }
             })
             c.semantics(b, Button, id=x, label~)
@@ -425,7 +449,6 @@ pub fn with_corner_remove(
     |> ignore
   })
   |> ignore
-  c.clicked(x)
 }
 
 ///|
@@ -674,19 +697,11 @@ let name_row : @ui.Style = @ui.css("row w=Full")
 let name_stem : @ui.Style = @ui.css("w=Hug")
 
 ///|
-/// What was done with a quote's card this frame: its source pressed (`jump`), its ✕ pressed; and the card's own box
-/// (its ground: what a quote sent flies from and to, sfbase's flight.mbt).
-pub(all) struct QuoteCardDone {
-  jumped : Bool
-  removed : Bool
-  card : Int
-}
-
-///|
 /// One quote (QuoteCard): the passage, two lines at most, small and quiet (the text's ink under the pointer when it
-/// leads to its message, `jump`), after a quote's mark and whose it is (a page's or an image's mark: its pin's number
+/// leads to its message: `on_jump`, what a press on it does), after a quote's mark and whose it is (a page's or an image's mark: its pin's number
 /// and its first line instead); its own `picture` under it; what is said about it (`comment`'s words, or `comment_field`
-/// where it is written: the composer's); ✕ at its corner where it can be let go (`remove`). In the composer
+/// where it is written: the composer's); ✕ at its corner where it can be let go (`on_remove`, what a press on it does).
+/// The card's own box (its ground: what a quote sent flies from and to, sfbase's flight.mbt). In the composer
 /// (`composer`) its corner the composer's inner and its words further in. `key` names it. During a send, the words'
 /// width can follow the card's flight (`words_width`); `words_key` keeps their laid-out shape for that flight.
 pub fn quote_card(
@@ -697,16 +712,22 @@ pub fn quote_card(
   role? : String = "",
   comment? : String = "",
   composer? : Bool = false,
-  jump? : Bool = false,
-  remove? : Bool = false,
+  on_jump? : () -> Unit,
+  on_remove? : () -> Unit,
   picture? : () -> Unit,
   comment_field? : () -> Unit,
   words_width? : Double,
   words_key? : String = "",
-) -> QuoteCardDone {
+) -> Int {
   let p = theme().p
   let source = c.id(key + "/source")
   let x = c.id(key + "/remove")
+  let jump = on_jump is Some(_)
+  let remove = on_remove is Some(_)
+  match on_jump {
+    Some(f) => c.on_press(source, f)
+    None => ()
+  }
   let pin = pin_of(author, role)
   if jump {
     tip(c, key + "/jump-tip", source, t("web-main.quote.jump"))
@@ -773,13 +794,16 @@ pub fn quote_card(
     }
   })
   }
-  let removed = if hung {
-    with_corner_remove(c, key, t("web-main.quote.remove"), composer_inner(), card)
+  if hung {
+    with_corner_remove(c, key, t("web-main.quote.remove"), composer_inner(), card, on_remove?)
   } else {
+    match on_remove {
+      Some(f) => c.on_press(x, f)
+      None => ()
+    }
     card()
-    remove && c.clicked(x)
   }
-  { jumped: jump && c.clicked(source), removed, card: node.val }
+  node.val
 }
 
 ///|

@@ -625,10 +625,20 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
       c.box(style=@sf.untitled_clear().then(title_row_whole), fn() { agent_title_row(c, src, r, key) }) |> ignore
     }
     // (its words on the card's 24, its figures blocks at its foot 8 in, a row's corner)
+    // (each part of it opening its room as what it says comes (the card read after it rose): the sheet's top not
+    // stepping up as its height does, 2026-11-09 the user: 「好像还存在高度突变的元素」)
     c.box(style=info_list_style.then(@sf.panel_card_out()), radius=info_list_radius, fn() {
-    agent_lines(c, card)
-    agent_notes(c, card, 10.0)
-    agent_tiles(c, card, 14.0, entry~)
+      let parts : Array[(String, () -> Unit)] = []
+      if items(card, "latest").length() > 0 {
+        parts.push(("lines", fn() { agent_lines(c, card) }))
+      }
+      if items(card, "attention").length() > 0 {
+        parts.push(("notes", fn() { agent_notes(c, card, 10.0) }))
+      }
+      if agent_tiles_known(card) {
+        parts.push(("tiles", fn() { agent_tiles(c, card, 14.0, entry~) }))
+      }
+      @sf.group_rows(c, "agent-card/" + r.station + "/" + key, parts)
     })
     |> ignore
     c.box(style=info_card_under, fn() {  }) |> ignore
@@ -929,6 +939,13 @@ fn agent_lines(c : @ui.Ctx, card : Json?) -> Unit {
 }
 
 ///|
+/// Whether any of the figures that say most is known (agent_tiles): none (a station from before tells none of an agent
+/// at rest), no figures, its context's entry a row instead.
+fn agent_tiles_known(card : Json?) -> Bool {
+  text(card, "cost") != "" || field(card, "cache") is Some(Object(_)) || field(card, "context") is Some(Object(_))
+}
+
+///|
 /// The figures that say most (AgentTiles): what it cost, the cache's hit rate, how full its context is, each large over
 /// its name, side by side; a context worth a look in its level's colour.
 fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = None) -> Unit {
@@ -936,8 +953,7 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
   let context = field(card, "context")
   let cost = text(card, "cost")
   let cache = field(card, "cache")
-  // none known (a station from before tells none of an agent at rest): no figures, its context's entry a row instead
-  if cost == "" && !(cache is Some(Object(_))) && !(context is Some(Object(_))) {
+  if !agent_tiles_known(card) {
     return
   }
   let tile = fn(figure : String, name : String, color : Int64, open : ContextTile?) {
@@ -1235,328 +1251,644 @@ fn waiting_rows(c : @ui.Ctx, error : Json?, sample : () -> Unit) -> Unit {
 }
 
 ///|
-/// A job, from the chat's sheet (JobBody): its name and how it stands, what it said or its output as it
-/// grows (a service has only its output), stopped from here while it runs.
-fn job_body(c : @ui.Ctx, src : Source, r : ChatRef, id : String, close : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  let topic = src.topic("chatJobs", chat_params(r)).get().snapshot()
-  let job = items(topic.value, "jobs").iter().find_first(fn(j) { text(Some(j), "id") == id })
-  let j = match job {
-    Some(j) => Some(j)
-    None => {
-      c.box(style=@sf.panel_words_in(), fn() {
-        c.text(
-          if topic.value is Some(_) { tr("android-misc.jobs.gone") } else { tr("common.reading") },
-          size=t.t.meta,
-          color=t.p.muted,
-        )
-        |> ignore
-      })
-      |> ignore
-      return
-    }
-  }
-  job_detail(c, src, r, id, j)
+/// Words as the job's sheet sets them (an old view's words of a size, a weight and a wrap said alone, as nodes): `size`
+/// as the theme has it, on lines of the theme's line to it (or `line` points), the face's own letters.
+fn job_words(size : Double, weight? : Int = 400, wrap? : Bool = true, line? : Double = 0.0) -> @view.WordsLook {
+  { size, weight, line: if line > 0.0 { line } else { @ui.tree_theme().text_line * size }, wrap, tracking: @view.letters_own, balance: false }
 }
 
 ///|
-/// A job (job_body): the library's panel, most of the window, dragged between half and nearly all of it; titled 任务
-/// while it is not there (read, or gone), its own head (its dot and name) once it is.
-fn open_job(src : Source, r : ChatRef, id : String) -> Unit {
-  let missing = fn() {
-    !items(src.topic("chatJobs", chat_params(r)).get().value, "jobs").iter().any(fn(j) { text(Some(j), "id") == id })
-  }
-  @sf.panel(
-    "",
-    from=Unanchored,
-    tall=0.8,
-    grows=true,
-    live=fn() { (if missing() { tr("android-misc.jobs.job") } else { "" }, "", "") },
-    fn(c, close) { job_body(c, src, r, id, close) },
+/// Words in node `parent`, `words` as they are now, set `look` in `ink`.
+fn job_words_node(parent : @view.View, words : () -> String, look : () -> @view.WordsLook, ink : () -> Int64) -> Unit {
+  parent.box(fn(w) { w.words(By(words)).words_look(By(look)).ink(By(ink)) |> ignore }) |> ignore
+}
+
+///|
+/// Pieces of words in node `parent` (an old view's rich words), `runs` as they are now, set `look` in `ink` where a
+/// piece says no ink of its own.
+fn job_runs_node(parent : @view.View, runs : () -> Array[@ui.Run], look : () -> @view.WordsLook, ink : () -> Int64) -> Unit {
+  parent.box(fn(w) {
+    w.words_runs(By(runs), look=@signals.untracked(look)).words_look(By(look)).ink(By(ink)) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A job's dot (job_dot's, as a node) in `parent`: 8 across, its tone's tint as it is now; restarting, breathing to .35
+/// and back (@sf.breathe's: breath_ms each way and back, from moment 0 on).
+fn job_dot_node(parent : @view.View, tone : () -> String) -> Unit {
+  parent.box(fn(d) {
+    d
+    .width(Is(Some(job_dot_side)))
+    .height(Is(Some(job_dot_side)))
+    .radius(Is(job_dot_side / 2.0))
+    .ground(By(fn() { job_tint(tone()).unwrap_or(@sf.theme().p.subtle) }))
+    .alpha(By(fn() {
+      if tone() != "restart" {
+        1.0
+      } else {
+        let f = d.cycle(@sf.breath_ms)
+        let way = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
+        1.0 - (1.0 - job_dot_low) * @ui.Ease::InOut.at(way)
+      }
+    }))
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// How faint a job's dot breathes while it restarts (Jobs.css.ts jobBreathe).
+let job_dot_low : Double = 0.35
+
+///|
+/// The line under a job's name (job_meta's, as a node) in `parent`: its state's word in its dot's colour's ink, what it
+/// said in the ink, the rest muted, `size`, on one line; the job as it is now.
+fn job_meta_node(parent : @view.View, job : () -> Json?, size : Double) -> Unit {
+  job_runs_node(
+    parent,
+    fn() {
+      let j = job()
+      let t = @sf.theme()
+      let word = match text(j, "tone") {
+        "up" | "live" => t.p.green_ink
+        "restart" => t.p.warn_ink
+        "fail" => t.p.red
+        _ => 0L
+      }
+      items(j, "meta").map(fn(p) {
+        let pv = Some(p)
+        match text(pv, "kind") {
+          "word" => @ui.span(text(pv, "text"), color=word)
+          "notice" => @ui.span(text(pv, "text"), color=t.p.text)
+          _ => @ui.span(text(pv, "text"))
+        }
+      })
+    },
+    fn() { job_words(size, wrap=false) },
+    fn() { @sf.theme().p.muted },
   )
 }
 
 ///|
-/// A job, what it is, said and wrote: its dot, name and line, its command, then what it said
-/// or its output (a service's output alone), and stopping it while it runs. In its panel (open_job), on its words' line
-/// (the wide frame's 任务 tab has its own: sfdesk's jobs.mbt).
-fn job_detail(c : @ui.Ctx, src : Source, r : ChatRef, id : String, j : Json?) -> Unit {
-  let t = @sf.theme()
-  let service = flag(j, "service")
-  let tab = if service { 1 } else { dui.job_tab }
-  let running = text(j, "state") == "running"
+/// A job, from the chat's sheet (JobBody), as nodes of the window's tree made once in `v` (open_job's panel's body): its
+/// name and how it stands, what it said or its output as it grows (a service has only its output), stopped from here
+/// while it runs; while it is read, or once it is gone, words saying so. What it shows follows the core's `chatJobs` as
+/// it changes.
+fn job_node(v : @view.View, src : Source, r : ChatRef, id : String) -> Unit {
+  let topic = fn() { src.topic("chatJobs", chat_params(r)).get().value }
+  let job = fn() { items(topic(), "jobs").iter().find_first(fn(j) { text(Some(j), "id") == id }) }
+  v.show(fn() { job() is None }, fn(w) {
+    @sf.style_node(w, fn() { @sf.panel_words_in_node(w) })
+    job_words_node(
+      w,
+      fn() { if topic() is Some(_) { tr("android-misc.jobs.gone") } else { tr("common.reading") } },
+      fn() { job_words(@sf.theme().t.meta) },
+      fn() { @sf.theme().p.muted },
+    )
+  })
+  v.show(fn() { job() is Some(_) }, fn(d) {
+    // (the room the sheet leaves it, whatever it holds: from none, never pushed past it by a long output)
+    d.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+    job_detail_node(d, src, r, id, job)
+  })
+}
+
+///|
+/// A job, what it is, said and wrote (job_detail's, as nodes), in `v`: its dot, name and line, its command, then what it
+/// said or its output (a service's output alone), and stopping it while it runs; `j` the job as it is now. In its
+/// panel (open_job), on its words' line (the wide frame's 任务 tab has its own: sfdesk's jobs.mbt).
+fn job_detail_node(v : @view.View, src : Source, r : ChatRef, id : String, j : () -> Json?) -> Unit {
+  let service = flag(@signals.untracked(j), "service")
+  // (what it said (0) or its output (1), as the sheet was opened to show; a service's, its output)
+  let tab = @signals.signal(if service { 1 } else { dui.job_tab })
+  let running = fn() { text(j(), "state") == "running" }
   // (on its panel's words' line, clear of an untitled dialog's close button)
-  c.box(style=@sf.panel_words_in().then(@sf.untitled_clear()), dir=Row, w=Fill(1.0), pt=4.0, pb=14.0, gap=12.0, align=AStart, fn() {
-    c.box(pt=8.0, fn() { job_dot(c, text(j, "tone")) }) |> ignore
-    c.box(w=Fill(1.0), fn() {
-      c.text(text(j, "name"), size=t.t.title, weight=600, color=t.p.text) |> ignore
-      job_meta(c, j, 12.5)
+  v.box(fn(h) {
+    @sf.style_node(h, fn() { @sf.panel_words_in_node(h).then(@sf.untitled_clear_node(h)).then(job_head_at) })
+    h.box(fn(b) {
+      @sf.style_node(b, fn() { job_head_dot })
+      job_dot_node(b, fn() { text(j(), "tone") })
+    })
+    |> ignore
+    h.box(fn(b) {
+      @sf.style_node(b, fn() { job_head_words }, in_row=true)
+      job_words_node(b, fn() { text(j(), "name") }, fn() { job_words(@sf.theme().t.title, weight=600) }, fn() {
+        @sf.theme().p.text
+      })
+      job_meta_node(b, j, job_meta_size)
     })
     |> ignore
   })
   |> ignore
-  c.box(style=@sf.panel_words_in(), w=Fill(1.0), h=Fill(1.0), pb=24.0, gap=14.0, fn() {
-    let command = text(j, "command")
-    if command.trim(chars=" \n").to_string() != "" {
-      c.rich([@ui.span(command, mono=true)], size=t.t.caption, line=17.0, color=t.p.muted, w=Fill(1.0)) |> ignore
-    }
+  v.box(fn(col) {
+    @sf.style_node(col, fn() { @sf.panel_words_in_node(col).then(job_body_at) })
+    // (filling what its head leaves (job_body_at's h=Full, an old view's Fill), from none: never pushed past it by a
+    // long output)
+    col.height(Is(None)).grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+    col.show(fn() { text(j(), "command").trim(chars=" \n").to_string() != "" }, fn(w) {
+      job_runs_node(
+        w,
+        fn() { [@ui.span(text(j(), "command"), mono=true)] },
+        fn() { job_words(@sf.theme().t.caption, line=job_code_line) },
+        fn() { @sf.theme().p.muted },
+      )
+    })
     if !service {
-      dui.job_tab = @sf.segmented(c, "job/tab", [tr("android-misc.jobs.notices"), tr("android-misc.jobs.output")], tab)
-    }
-    if tab == 0 {
-      let notices = items(j, "notices")
-      c.box(w=Fill(1.0), gap=12.0, fn() {
-        if notices.length() == 0 {
-          c.box(padx=20.0, pady=8.0, fn() {
-            c.text(tr("android-misc.jobs.noNotices"), size=t.t.meta, color=t.p.muted) |> ignore
-          })
-          |> ignore
-        }
-        for n in notices {
-          c.box(dir=Row, w=Fill(1.0), gap=10.0, fn() {
-            c.box(w=Px(48.0), fn() {
-              c.text(text(Some(n), "clock"), size=t.t.meta, color=t.p.subtle, wrap=false) |> ignore
-            })
-            |> ignore
-            c.box(w=Fill(1.0), fn() {
-              c.text(text(Some(n), "text"), size=t.t.ui, color=t.p.text) |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-        }
-      })
-      |> ignore
-      let last = @sfbase.hold(src, @sfbase.jobs_scope(r.station), "jobLog", {
-        "station": Json::string(r.station),
-        "job": Json::string(id),
-        "lines": Json::number(1.0),
-      }).get().value
-      let said = match last {
-        Some(Object(_)) => text(last, "said")
-        _ => text(j, "outputSaid")
-      }
-      if said != "" {
-        c.box(w=Fill(1.0), gap=2.0, fn() {
-          c.text(said, size=t.t.caption, color=t.p.subtle) |> ignore
-          match text(last, "last") {
-            "" => ()
-            l => c.rich([@ui.span(l, mono=true)], size=t.t.caption, color=t.p.muted, wrap=false) |> ignore
-          }
+      col.box(fn(line) {
+        line.row(Is(true)) |> ignore
+        line.box(fn(slot) {
+          @sf.segmented_node(
+            slot,
+            fn() { [tr("android-misc.jobs.notices"), tr("android-misc.jobs.output")] },
+            fn() { tab.get() },
+            fn(i) {
+              dui.job_tab = i
+              tab.set(i)
+            },
+          )
         })
         |> ignore
-      }
-    } else {
-      // in a terminal's colours where the core says them, else as words
-      let output = job_output_lines(src, r.station, id, 300.0, t.p.text, t.dark)
-      c.box(
-        w=Fill(1.0),
-        h=Fill(1.0),
-        min_h=120.0,
-        radius=16.0,
-        bg=@sf.alpha(t.p.text, 0.05),
-        clip=true,
-        fn() {
-          match output {
-            Some(written) => {
-              let lines = if written.is_empty() {
-                [[@ui.span(tr("android-misc.jobs.noOutput"), mono=true)]]
-              } else {
-                written
-              }
-              c.list(
-                "job-log/" + id,
-                lines.length(),
-                17.0,
-                fn(i) {
-                  c.box(w=Fill(1.0), padx=14.0, pt=if i == 0 { 12.0 } else { 0.0 }, pb=if i ==
-                    lines.length() - 1 {
-                      12.0
-                    } else {
-                      0.0
-                    }, fn() {
-                    c.rich(lines[i], size=t.t.caption, line=17.0, color=t.p.text, w=Fill(1.0)) |> ignore
-                  })
-                  |> ignore
-                },
-                stick_end=true,
-              )
-              |> ignore
-            }
-            _ =>
-              c.box(padx=14.0, pady=12.0, fn() { @sf.spinner(c, size=12.0) |> ignore }) |> ignore
-          }
-        },
-      )
+      })
       |> ignore
     }
-    if running {
-      let skey = "job-stop/" + r.station + "/" + id
-      let busy = doing(skey)
-      let sid = c.id("job/stop")
-      c.on_press(sid, fn() {
-        if !busy {
+    col.show(fn() { tab.get() == 0 }, fn(said) { job_said_node(said, src, r, id, j) })
+    col.show(fn() { tab.get() == 1 }, fn(out) { job_output_node(out, src, r, id) })
+    col.show(running, fn(b) { job_stop_node(b, src, r, id, j) })
+  })
+  |> ignore
+}
+
+///|
+/// What a job said (job_detail's notices, as nodes) in `v`: its notices each with its clock, or words saying it said
+/// none; then what it wrote last and when (the core's `jobLog`, its last line), as they are now.
+fn job_said_node(v : @view.View, src : Source, r : ChatRef, id : String, j : () -> Json?) -> Unit {
+  // (in the column of what it shows, 14 apart as that has them: none of its own)
+  v.gap(Is(job_body_gap)) |> ignore
+  v.box(fn(list) {
+    @sf.style_node(list, fn() { job_notices })
+    list.show(fn() { items(j(), "notices").length() == 0 }, fn(none) {
+      @sf.style_node(none, fn() { job_no_notices })
+      job_words_node(none, fn() { tr("android-misc.jobs.noNotices") }, fn() { job_words(@sf.theme().t.meta) }, fn() {
+        @sf.theme().p.muted
+      })
+    })
+    list.each(
+      fn() { items(j(), "notices").mapi(fn(i, n) { (i, n) }) },
+      fn(x) { x.0 },
+      fn(row, n) {
+        let nv = fn() { Some(n.get().1) }
+        @sf.style_node(row, fn() { job_notice })
+        row.box(fn(b) {
+          b.width(Is(Some(job_clock_w))) |> ignore
+          job_words_node(b, fn() { text(nv(), "clock") }, fn() { job_words(@sf.theme().t.meta, wrap=false) }, fn() {
+            @sf.theme().p.subtle
+          })
+        })
+        |> ignore
+        row.box(fn(b) {
+          @sf.style_node(b, fn() { job_notice_words }, in_row=true)
+          job_words_node(b, fn() { text(nv(), "text") }, fn() { job_words(@sf.theme().t.ui) }, fn() { @sf.theme().p.text })
+        })
+        |> ignore
+      },
+    )
+  })
+  |> ignore
+  let last = @sfbase.hold(src, @sfbase.jobs_scope(r.station), "jobLog", {
+    "station": Json::string(r.station),
+    "job": Json::string(id),
+    "lines": Json::number(1.0),
+  })
+  let said = fn() {
+    let l = last.get().value
+    match l {
+      Some(Object(_)) => text(l, "said")
+      _ => text(j(), "outputSaid")
+    }
+  }
+  v.show(fn() { said() != "" }, fn(b) {
+    @sf.style_node(b, fn() { job_last })
+    job_words_node(b, said, fn() { job_words(@sf.theme().t.caption) }, fn() { @sf.theme().p.subtle })
+    b.show(fn() { text(last.get().value, "last") != "" }, fn(w) {
+      job_runs_node(
+        w,
+        fn() { [@ui.span(text(last.get().value, "last"), mono=true)] },
+        fn() { job_words(@sf.theme().t.caption, wrap=false) },
+        fn() { @sf.theme().p.muted },
+      )
+    })
+  })
+}
+
+///|
+/// A job's output (job_detail's, as nodes) in `v`: its last lines (the core's `jobLog`) in a terminal's colours where the
+/// core says them, else as words, on a faint ground, scrolling, from its end and kept there as lines come while it is
+/// there; words saying it wrote nothing where it did not, a spinner while it is read.
+fn job_output_node(v : @view.View, src : Source, r : ChatRef, id : String) -> Unit {
+  let params : Map[String, Json] = {
+    "station": Json::string(r.station),
+    "job": Json::string(id),
+    "lines": Json::number(job_output_most),
+  }
+  let log = @sfbase.hold(src, @sfbase.jobs_scope(r.station), "jobLog", params)
+  // (its lines as they are now, in the theme's ink: job_output_lines's)
+  let lines : @signals.Computed[Array[Array[@ui.Run]]?] = @signals.computed(fn(_) {
+    guard log.get().value is Some(Object(_)) else { return None }
+    let t = @sf.theme()
+    let value = src.topic("jobLog", params).get().value
+    let words = text(value, "text")
+    let runs = items(value, "runs")
+    Some(
+      if words == "" {
+        [[@ui.span(tr("android-misc.jobs.noOutput"), mono=true)]]
+      } else if runs.length() > 0 {
+        @sfbase.term_lines(runs, t.p.text, t.dark)
+      } else {
+        words.split("\n").map(fn(l) { [@ui.span(l.to_owned(), mono=true)] }).to_array()
+      },
+    )
+  })
+  @sf.style_node(v, fn() { job_output_box.then(@ui.style(bg=Data(@sf.alpha(@sf.theme().p.text, job_output_ink)))) })
+  // (filling what is left of its column (job_output_box's h=Full, an old view's Fill), at least its min_h, from none:
+  // as tall whatever it holds, its lines scrolling in it)
+  v.height(Is(None)).grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
+  v.show(fn() { lines.get() is None }, fn(w) {
+    @sf.style_node(w, fn() { job_output_wait })
+    @sf.spinner_node(w, size=job_output_spin) |> ignore
+  })
+  v.show(fn() { lines.get() is Some(_) }, fn(b) {
+    // (the room its box has, whatever it holds: from none, not from how tall all its lines are, an old list's)
+    b.grow(Is(1.0)).basis(Is(Some(0.0))).min_height(Is(Some(0.0))) |> ignore
+    let scroll = @view.Scroll::list()
+    let count = fn() { lines.get().map(fn(l) { l.length() }).unwrap_or(0) }
+    b.scrolls_window(
+      scroll,
+      fn() { Array::makei(count(), fn(i) { i }) },
+      fn(row, i) {
+        @sf.style_node(row, fn() {
+          job_output_line.then(
+            @ui.style(
+              pt=@sf.room_of(if i == 0 { job_output_end } else { 0.0 }),
+              pb=@sf.room_of(if i == count() - 1 { job_output_end } else { 0.0 }),
+            ),
+          )
+        })
+        job_runs_node(
+          row,
+          fn() { lines.get().bind(fn(l) { l.get(i) }).unwrap_or([]) },
+          fn() { job_words(@sf.theme().t.caption, line=job_code_line) },
+          fn() { @sf.theme().p.text },
+        )
+      },
+      est=job_code_line,
+      slop=@ui.touch_slop(),
+      bar=@ui.tree_scroll_bar(),
+      // (Ctx::list's stick_end, the old one's: made at its end, kept there as lines come while it is there, not once
+      // scrolled off it; followed again once scrolled back to it)
+      follows=fn() { true },
+      // (what shows held where it is by none of its lines as more come under them: its end followed, an old list's)
+      holds=fn(_) { false },
+    )
+    |> ignore
+  })
+}
+
+///|
+/// How many of a job's last lines its output shows.
+let job_output_most : Double = 300.0
+
+///|
+/// Stopping a running job (job_detail's 停止, as a node) in `v`: a pale red capsule across, its stop mark (a spinner
+/// while it is asked) and its words; pressed, the core asked to stop it, said so (act's).
+fn job_stop_node(v : @view.View, src : Source, r : ChatRef, id : String, j : () -> Json?) -> Unit {
+  let skey = "job-stop/" + r.station + "/" + id
+  let busy = fn() { doing(skey) }
+  v.box(fn(b) {
+    @sf.style_node(b, fn() { job_stop.then(@ui.style(bg=Data(@sf.alpha(@sf.theme().p.red, job_stop_ink)))) })
+    @sf.rippled_node(
+      b,
+      fn() {
+        if !@signals.untracked(busy) {
           @ui.haptic(Confirm)
           act(
             src,
-            fill("android-misc.jobs.stopWhat", [("name", text(j, "name"))]),
+            fill("android-misc.jobs.stopWhat", [("name", text(@signals.untracked(j), "name"))]),
             skey,
             "job.stop",
             { "station": Json::string(r.station), "id": Json::string(id) },
           )
         }
-      })
-      c.box(
-        dir=Row,
-        w=Fill(1.0),
-        h=Px(46.0),
-        radius=23.0,
-        gap=6.0,
-        align=ACenter,
-        justify=JCenter,
-        bg=@sf.alpha(t.p.red, 0.12),
-        id=sid,
-        fn() {
-          if busy {
-            @sf.spinner(c, size=14.0) |> ignore
-          } else {
-            @sf.icon(c, "stop", size=16.0, color=t.p.red) |> ignore
-          }
-          c.text(tr("android-misc.jobs.stop"), size=t.t.ui, weight=500, color=t.p.red, wrap=false)
-          |> ignore
-          // Jobs.kt: clip(Smooth(23)).clickable
-          @motion.ripple(c, sid, 23.0)
-        },
-      )
-      |> ignore
-    }
+      },
+      job_stop_h / 2.0,
+      fn() { tr("android-misc.jobs.stop") },
+    )
+    b.show(busy, fn(s) { @sf.spinner_node(s, size=job_stop_spin) |> ignore })
+    b.show(fn() { !busy() }, fn(s) { @sf.icon_node(s, "stop", job_stop_icon, By(fn() { @sf.theme().p.red })) |> ignore })
+    job_words_node(b, fn() { tr("android-misc.jobs.stop") }, fn() { job_words(@sf.theme().t.ui, weight=500, wrap=false) }, fn() {
+      @sf.theme().p.red
+    })
   })
   |> ignore
 }
 
 ///|
-/// What is left up a long while on the workspace's stations, at the top of Home's list: web services and
-/// background jobs, each under its heading, three of a group and the rest folded under 还有 N 个; nothing while there
-/// are none. A row leads to its chat; its stop at its end.
-fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let groups = items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups")
-  if groups.length() == 0 {
-    return
-  }
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), pl=10.0, pr=10.0, pt=4.0, pb=10.0, gap=8.0, fn() {
-    for g in groups {
-      let gv = Some(g)
-      let gkey = "open-jobs/" + text(gv, "key")
-      let list = items(gv, "jobs")
-      let shown = if dui.opened.contains(gkey) || list.length() <= 4 {
-        list
-      } else {
-        list[:3].to_array()
-      }
-      c.box(w=Fill(1.0), gap=2.0, fn() {
-        c.box(padx=10.0, pady=2.0, fn() {
-          c.text(text(gv, "head"), size=t.t.caption, color=t.p.muted, wrap=false) |> ignore
-        })
-        |> ignore
-        for j in shown {
-          open_job_row(c, src, Some(j))
-        }
-        if shown.length() < list.length() {
-          let id = c.id(gkey + "/more")
-          c.on_press(id, fn() {
-            dui.opened[gkey] = true
-          })
-          c.box(padx=10.0, pady=3.0, radius=8.0, id~, fn() {
-            c.text(
-              fill("android-misc.openJobs.more", [("n", (list.length() - shown.length()).to_string())]),
-              size=t.t.caption,
-              color=t.p.muted,
-              wrap=false,
-            )
-            |> ignore
-          })
-          |> ignore
-        }
-      })
-      |> ignore
-    }
-  })
-  |> ignore
-}
+/// A job's head: on its words' line, 4 over it, 14 under, its dot (8 down, on its name's line) and its words 12 apart.
+// kept across runs: a value (no field of it changes)
+let job_head_at : @ui.Style = @ui.css("row w=Full pt=S1 pb=S3_5 gap=S3 align=AStart")
 
 ///|
-/// A job left up: its dot, its name over where it is and how long; the row to its chat, stop at
-/// its end.
-fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
-  let t = @sf.theme()
-  let station = text(job, "station")
-  if station == "" {
-    return
+// kept across runs: a value (no field of it changes)
+let job_head_dot : @ui.Style = @ui.css("pt=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let job_head_words : @ui.Style = @ui.css("w=Full")
+
+///|
+/// How big the line under a job's name is in its sheet.
+let job_meta_size : Double = 12.5
+
+///|
+/// What it shows under its head: filling the sheet's room, 24 over its foot, its parts 14 apart.
+// kept across runs: a value (no field of it changes)
+let job_body_at : @ui.Style = @ui.css("w=Full h=Full pb=S6 gap=S3_5")
+
+///|
+let job_body_gap : Double = 14.0
+
+///|
+/// The lines of code it shows (its command, its output), 17 apart.
+let job_code_line : Double = 17.0
+
+///|
+/// Its notices, 12 apart; none, words saying so 20 in and 8 over and under.
+// kept across runs: a value (no field of it changes)
+let job_notices : @ui.Style = @ui.css("w=Full gap=S3")
+
+///|
+// kept across runs: a value (no field of it changes)
+let job_no_notices : @ui.Style = @ui.css("px=S5 py=S2")
+
+///|
+/// A notice: its clock in a column 48 wide, its words 10 after it.
+// kept across runs: a value (no field of it changes)
+let job_notice : @ui.Style = @ui.css("row w=Full gap=S2_5")
+
+///|
+let job_clock_w : Double = 48.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let job_notice_words : @ui.Style = @ui.css("w=Full")
+
+///|
+/// What it wrote last and when, 2 apart.
+// kept across runs: a value (no field of it changes)
+let job_last : @ui.Style = @ui.css("w=Full gap=S0_5")
+
+///|
+/// Its output: filling what is left, 120 at least, 16 round, on the ink at 5%, cut at its corners; its lines 14 in, 12
+/// over the first and under the last; a spinner 12 across 14 in and 12 down while it is read.
+// kept across runs: a value (no field of it changes)
+let job_output_box : @ui.Style = @ui.css("w=Full h=Full min_h=Fixed(120.0) radius=Xl1_5 clip")
+
+///|
+let job_output_ink : Double = 0.05
+
+///|
+// kept across runs: a value (no field of it changes)
+let job_output_line : @ui.Style = @ui.css("w=Full px=S3_5")
+
+///|
+let job_output_end : Double = 12.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let job_output_wait : @ui.Style = @ui.css("px=S3_5 py=S3")
+
+///|
+let job_output_spin : Double = 12.0
+
+///|
+/// Stopping it: a capsule across, 46 high, its mark and words 6 apart in its middle, on red at 12%.
+// kept across runs: a value (no field of it changes)
+let job_stop : @ui.Style = @ui.css("row w=Full h=Fixed(46.0) radius=Full gap=S1_5 align=ACenter justify=JCenter")
+
+///|
+let job_stop_h : Double = 46.0
+
+///|
+let job_stop_ink : Double = 0.12
+
+///|
+let job_stop_spin : Double = 14.0
+
+///|
+let job_stop_icon : Double = 16.0
+
+///|
+/// A job (job_node): the library's panel, most of the window, dragged between half and nearly all of it; titled 任务
+/// while it is not there (read, or gone), its own head (its dot and name) once it is.
+fn open_job(src : Source, r : ChatRef, id : String) -> Unit {
+  let missing = fn() {
+    !items(src.topic("chatJobs", chat_params(r)).get().value, "jobs").iter().any(fn(j) { text(Some(j), "id") == id })
   }
-  let id = text(job, "id")
-  let chat = field(job, "chat")
-  let row = c.id("open-job/" + station + "/" + id)
-  c.on_press(row, fn() {
-    if chat is Some(Object(_)) {
-      @sfbase.history_push()
-      app.nav.push(Chat({ station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }))
-      // a service: its page over its chat
-      if flag(job, "service") {
-        app.nav.push(Service(station, id))
-      }
-    }
-  })
-  let skey = "job-stop/" + station + "/" + id
-  let stop = c.id("open-job-stop/" + station + "/" + id)
-  c.on_press(stop, fn() {
-    if !doing(skey) {
-      @ui.haptic(Confirm)
-      // a job's own stop, or a simulator's or a view's (its `stop`: 关闭, 断开)
-      let (call, params, _) = long_stop(station, job)
-      act(src, fill("android-misc.jobs.stopWhat", [("name", text(job, "name"))]), skey, call, params)
-    }
-  })
-  c.box(
-    dir=Row,
-    w=Fill(1.0),
-    pl=10.0,
-    pr=4.0,
-    pt=5.0,
-    pb=5.0,
-    gap=10.0,
-    radius=10.0,
-    align=ACenter,
-    id=row,
-    fn() {
-      c.box(w=Px(16.0), align=ACenter, fn() { job_dot(c, text(job, "tone")) }) |> ignore
-      c.box(w=Fill(1.0), fn() {
-        c.text(text(job, "name"), size=t.t.ui, color=t.p.text, wrap=false, line=18.0, allow_ellipsis=true) |> ignore
-        c.text(
-          text(job, "whereText") + " · " + text(job, "age"),
-          size=t.t.caption,
-          color=t.p.muted,
-          wrap=false,
-          line=16.0,
-          allow_ellipsis=true,
-        )
-        |> ignore
-      })
-      |> ignore
-      c.box(w=Px(32.0), h=Px(32.0), radius=16.0, align=ACenter, justify=JCenter, id=stop, fn() {
-        if doing(skey) {
-          @sf.spinner(c, size=12.0) |> ignore
-        } else {
-          @sf.icon(c, "stop", size=15.0, color=t.p.muted) |> ignore
-        }
-      })
-      |> ignore
-      // the row clickable over its clip
-      @motion.ripple(c, row, 10.0)
-    },
+  @sf.panel_nodes(
+    "",
+    from=Unanchored,
+    tall=0.8,
+    grows=true,
+    live=fn() { (if missing() { tr("android-misc.jobs.job") } else { "" }, "", "") },
+    fn(v, _) { job_node(v, src, r, id) },
   )
+}
+
+///|
+/// What is left up a long while on the workspace's stations, at the top of Home's list (in node `v`): web services and
+/// background jobs, each under its heading, three of a group and the rest folded under 还有 N 个. A row leads to its
+/// chat; its stop at its end.
+fn open_jobs_node(v : @view.View, src : Source, w : Workspace) -> Unit {
+  let groups = fn() { items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups") }
+  @sf.style_node(v, fn() { open_jobs_at })
+  v.each(groups, fn(g) { text(Some(g), "key") }, fn(gb, g) {
+    let gv = fn() { Some(g.get()) }
+    let gkey = fn() { "open-jobs/" + text(gv(), "key") }
+    let list = fn() { items(gv(), "jobs") }
+    let shown = fn() {
+      let l = list()
+      if dui.opened.contains(gkey()) || l.length() <= 4 {
+        l
+      } else {
+        l[:3].to_array()
+      }
+    }
+    @sf.style_node(gb, fn() { open_jobs_group })
+    gb.box(fn(h) {
+      @sf.style_node(h, fn() { open_jobs_head })
+      @sf.words_node(h, fn() { text(gv(), "head") }, fn() { open_jobs_head_words }) |> ignore
+    })
+    |> ignore
+    gb.each(shown, fn(j) { text(Some(j), "station") + "/" + text(Some(j), "id") }, fn(row, j) {
+      open_job_row_node(row, src, fn() { Some(j.get()) })
+    })
+    // (on a line of its own, as wide as its words)
+    gb.show(fn() { shown().length() < list().length() }, fn(line) {
+      @sf.style_node(line, fn() { open_job_line })
+      line.box(fn(m) {
+        @sf.style_node(m, fn() { open_jobs_more })
+        let more = fn() { fill("android-misc.openJobs.more", [("n", (list().length() - shown().length()).to_string())]) }
+        @sf.rippled_node(m, fn() { dui.opened[@signals.untracked(gkey)] = true }, open_jobs_more_corner, more)
+        @sf.words_node(m, more, fn() { open_jobs_more_words }) |> ignore
+      })
+      |> ignore
+    })
+  })
+}
+
+///|
+/// A job left up (in node `row`): its dot, its name over where it is and how long; the row to its chat, stop at its end.
+fn open_job_row_node(row : @view.View, src : Source, job : () -> Json?) -> Unit {
+  let station = fn() { text(job(), "station") }
+  let id = fn() { text(job(), "id") }
+  let skey = fn() { "job-stop/" + station() + "/" + id() }
+  @sf.style_node(row, fn() { open_job_row })
+  @sf.rippled_node(
+    row,
+    fn() {
+      let j = @signals.untracked(job)
+      let chat = field(j, "chat")
+      if chat is Some(Object(_)) {
+        let station = text(j, "station")
+        @sfbase.history_push()
+        app.nav.push(Chat({ station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }))
+        // a service: its page over its chat
+        if flag(j, "service") {
+          app.nav.push(Service(station, text(j, "id")))
+        }
+      }
+    },
+    open_job_row_corner,
+    fn() { text(job(), "name") },
+  )
+  row.box(fn(d) {
+    @sf.style_node(d, fn() { open_job_dot })
+    job_dot_node(d, fn() { text(job(), "tone") })
+  })
+  |> ignore
+  row.box(fn(words) {
+    @sf.style_node(words, fn() { open_job_words }, in_row=true)
+    // (each on a line of its own across it, cut short where it has less room)
+    words.box(fn(line) {
+      @sf.style_node(line, fn() { open_job_line })
+      @sf.words_node(line, fn() { text(job(), "name") }, fn() { open_job_name }) |> ignore
+    })
+    |> ignore
+    words.box(fn(line) {
+      @sf.style_node(line, fn() { open_job_line })
+      @sf.words_node(line, fn() { text(job(), "whereText") + " · " + text(job(), "age") }, fn() { open_job_meta }) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+  row.box(fn(s) {
+    @sf.style_node(s, fn() { open_job_stop })
+    @sf.rippled_node(
+      s,
+      fn() {
+        let j = @signals.untracked(job)
+        let key = @signals.untracked(skey)
+        if !doing(key) {
+          @ui.haptic(Confirm)
+          // a job's own stop, or a simulator's or a view's (its `stop`: 关闭, 断开)
+          let (call, params, _) = long_stop(text(j, "station"), j)
+          act(src, fill("android-misc.jobs.stopWhat", [("name", text(j, "name"))]), key, call, params)
+        }
+      },
+      open_job_stop_side / 2.0,
+      fn() {
+        match text(field(job(), "stop"), "word") {
+          "" => tr("android-misc.jobs.stop")
+          word => word
+        }
+      },
+    )
+    s.show(fn() { doing(skey()) }, fn(b) { @sf.spinner_node(b, size=open_job_stop_spin) |> ignore })
+    s.show(fn() { !doing(skey()) }, fn(b) {
+      @sf.icon_node(b, "stop", open_job_stop_icon, By(fn() { @sf.theme().p.muted })) |> ignore
+    })
+  })
   |> ignore
 }
+
+///|
+/// 10 in at its sides, 4 over, 10 under, its groups 8 apart.
+// kept across runs: a value (no field of it changes)
+let open_jobs_at : @ui.Style = @ui.css("w=Full pl=S2_5 pr=S2_5 pt=S1 pb=S2_5 gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_jobs_group : @ui.Style = @ui.css("w=Full gap=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_jobs_head : @ui.Style = @ui.css("px=S2_5 py=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_jobs_head_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_jobs_more : @ui.Style = @ui.css("px=S2_5 py=S1")
+
+///|
+let open_jobs_more_corner : Double = 8.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_jobs_more_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
+
+///|
+/// Across, 10 in at its left, 4 at its right, 5 over and under, its parts 10 apart and on its middle.
+// kept across runs: a value (no field of it changes)
+let open_job_row : @ui.Style = @ui.css("row w=Full pl=S2_5 pr=S1 py=S1_25 gap=S2_5 align=ACenter")
+
+///|
+let open_job_row_corner : Double = 10.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_job_dot : @ui.Style = @ui.css("w=S4 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_job_words : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_job_line : @ui.Style = @ui.css("row w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_job_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Cut, leading=L4_75)
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_job_meta : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false, w=Cut, leading=L4)
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_job_stop : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter")
+
+///|
+let open_job_stop_side : Double = 32.0
+
+///|
+let open_job_stop_spin : Double = 12.0
+
+///|
+let open_job_stop_icon : Double = 15.0
 
 ///|
 /// An info row's words (14, the ink, on one line).
@@ -1575,11 +1907,11 @@ fn open_letters(src : Source, r : ChatRef, thread : Double) -> Unit {
 }
 
 ///|
-/// Opens what was said in the chat besides words (the library's panel, as the letters'); 在对话里看 closes it and goes
-/// to the message in the chat.
+/// Opens what was said in the chat besides words (the library's panel, as the letters', what it holds nodes:
+/// things_node); 在对话里看 closes it and goes to the message in the chat.
 fn open_things(src : Source, r : ChatRef, thread : Double) -> Unit {
-  @sf.panel(tr("web-main.things.title"), from=Unanchored, tall=0.8, grows=true, fn(c, close) {
-    @sfpages.things_body(c, src, r, thread, true, fn(seq) {
+  @sf.panel_nodes(tr("web-main.things.title"), from=Unanchored, tall=0.8, grows=true, fn(v, close) {
+    @sfpages.things_node(v, src, r, thread, fn(seq) {
       close()
       go_to(r, seq)
     })

@@ -109,6 +109,7 @@ pub fn chats_topic(src : Source, scope : String) -> Topic {
 pub fn chat_limits_reset() -> Unit {
   chat_limits.clear()
   chat_limits_was.clear()
+  chats_read_last.val = []
 }
 
 ///|
@@ -133,11 +134,14 @@ let chats_read : Derived[ChatsRead] = Derived::new("chats", fn(v, was) {
     jsons,
     match was {
       Some(w) => w.read
-      None => []
+      // (a list asked anew, more of its rows: its rows as the list asked before had them, the same JSON where the
+      // core's delta kept them, taken as they were made)
+      None => chats_read_last.val
     },
     chat_row_key,
     chat_item,
   )
+  chats_read_last.val = read
   // (each row's JSON to what was made of it, in the order the days hold them; as its station's state makes it)
   let stations = stations_said(v)
   let at = Ref(0)
@@ -152,6 +156,11 @@ let chats_read : Derived[ChatsRead] = Derived::new("chats", fn(v, was) {
   })
   { view, read }
 })
+
+///|
+// kept across runs: let go of by reset (chat_limits_reset)
+/// The rows chats_read made last, of whichever list: what a list asked anew is made from.
+let chats_read_last : Ref[Array[(Json, ChatItem)]] = Ref([])
 
 ///|
 /// A row's key in the list, as the core keys them (client/core-ts collections.ts: `station` and `id`).
@@ -450,6 +459,22 @@ pub fn long_jobs(src : Source, w : Workspace) -> Int {
   items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups").fold(init=0, fn(n, g) {
     n + items(Some(g), "jobs").length()
   })
+}
+
+///|
+/// What is left up long in the workspace in view (the `longJobs` topic) held by node `v` from when it is made, asked
+/// with the chats' list it shows under (Home's) rather than once that list has come: Home's first page waits for both
+/// (held_unanswered).
+pub fn long_jobs_read(v : @view.View, src : Source, workspace : () -> Workspace?) -> Unit {
+  v.reacts(
+    fn() {
+      match workspace() {
+        Some(w) => src.topic("longJobs", { "scope": Json::string(w.id) }).get().value is Some(_)
+        None => false
+      }
+    },
+    fn(_) { () },
+  )
 }
 
 ///|

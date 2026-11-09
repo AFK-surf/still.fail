@@ -143,7 +143,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   // for before it was here saved as its whole comes; each once (Viewer::ask_save)
   n.reacts(fn() { (vw.asked_told.get(), vw.bytes.get() is Some(_)) }, fn(_) {
     download_told(src, vw)
-    if vw.save_after && @signals.untracked(fn() { vw.bytes.get() }) is Some(_) {
+    if vw.save_after && vw.bytes.untracked() is Some(_) {
       vw.save_after = false
       vw.ask_save(@ui.current())
     }
@@ -814,7 +814,7 @@ fn Viewer::finger_on(self : Viewer, canvas : @view.View, src : Source, d : @view
         v.held = false
         return
       }
-      v.image_let_go(c, src, d, pinched, has_before, has_after)
+      v.image_let_go(c, canvas, src, d, pinched, has_before, has_after)
     }
   }
 }
@@ -933,7 +933,7 @@ pub fn Viewer::picture_flat(self : Viewer) -> Bool {
 fn Viewer::marks_shown(self : Viewer) -> Bool {
   marks_said()
   self.zoom.told()
-  marking.on && !self.picture_failed() && self.zoom.rect() is Some(_)
+  marking.on && !self.picture_failed() && self.zoom.sized()
 }
 
 ///|
@@ -956,6 +956,7 @@ fn Viewer::pinch_now(self : Viewer) -> (Double, Double, Double) {
 fn Viewer::image_let_go(
   self : Viewer,
   c : @ui.Ctx,
+  canvas : @view.View,
   src : Source,
   d : @view.Drag,
   pinched : Bool,
@@ -966,7 +967,6 @@ fn Viewer::image_let_go(
   let z = v.zoom
   let strip = pv_strip.way
   let at = d.at
-  let (x, y) = (d.wx, d.wy)
   let zoomed = z.zoomed_at(at)
   let (vx, vy) = v.speed.get_at(at)
   let s = strip.value_at(at)
@@ -998,22 +998,19 @@ fn Viewer::image_let_go(
   if pinched && z.scale_at(at) < z.fit() {
     z.reset(at~)
   }
-  // a tap (and a second: zoomed in, or back)
+  // a tap (and a second of two, View::twice: zoomed in, or back)
   if held && v.moved <= tap_slop && !pinched && !v.caught {
     let on_picture = match z.rect_at(at) {
       Some((rx, ry, rw, rh)) => d.x >= rx && d.x < rx + rw && d.y >= ry && d.y < ry + rh
       None => false
     }
     if (@sf.pointer_rests() || (!zoomed && @sf.native_able())) && !on_picture && !marking.on {
+      canvas.twice_forgot()
       v.shut(c)
-    } else if at - v.tap_at < double_tap_ms && (x - v.tap_x).abs() < 40.0 && (y - v.tap_y).abs() < 40.0 {
-      v.tap_at = -1.0e9
+    } else if canvas.twice(d) {
       v.toggle()
       z.double_tap(d.x, d.y, at~)
     } else {
-      v.tap_at = at
-      v.tap_x = x
-      v.tap_y = y
       v.toggle()
     }
   }
@@ -1317,7 +1314,7 @@ fn image_tools(
       ink,
       corner,
       fn() {
-        match @signals.untracked(fn() { vw.bytes.get() }) {
+        match vw.bytes.untracked() {
           Some(b) => {
             @ui.current().copy_image(b)
             vw.copied += 1
@@ -1467,9 +1464,9 @@ fn Viewer::flying_at(self : Viewer, t : Double) -> Double {
 }
 
 ///|
-/// How far its thumbnail has gone out from under the bar or the composer at `t` (Viewer::lifted's, at a moment of its
-/// own).
-fn Viewer::lifted_at(self : Viewer, t : Double) -> Double {
+/// How far its thumbnail has gone out from under the bar or the composer at `t` (0 where the chat lays it out, 1 clear
+/// of them): the first share of the flight's one Move, at a moment of its own; 1 when nothing hid it.
+pub fn Viewer::lifted_at(self : Viewer, t : Double) -> Double {
   if !self.flies || self.fly_lift <= 0.0 {
     1.0
   } else {
@@ -1599,7 +1596,7 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
   // 下载 asked on it (Viewer::ask_save): the core told at that change, on by itself whatever becomes of this viewer;
   // 安装 asked before its bytes came, done as they come (Viewer::ask_install)
   n.reacts(fn() { (vw.asked_told.get(), vw.bytes.get() is Some(_)) }, fn(_) {
-    if vw.install_after && @signals.untracked(fn() { vw.bytes.get() }) is Some(_) {
+    if vw.install_after && vw.bytes.untracked() is Some(_) {
       vw.install_after = false
       vw.ask_install()
     }
@@ -1607,31 +1604,37 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
 }
 
 ///|
-/// What viewer `vw` shows of a film or a song, in node `n`: the player (@sf.player_view: its picture, its bars and
-/// controls, its keys, the full screen and turning sideways), an old view hosted on the stage (Viewer::player_stage), as
-/// far in as its fade has come and, while the picture flies, as far as its bars come with it (bars_share: none till
-/// its ground is whole); in flight its still the tree's (Viewer::player_flight): from the thumbnail to where the player
-/// draws its picture and back, the black and the still one frame cut once (View::image_in), what the thumbnail draws
-/// over it (its capsule) going as it leaves and back as it lands; going, the page's presses theirs. Back is the
-/// player's first (its 全屏 left, beside the system's bars), then the viewer's: the viewer's said before the player's,
-/// the last said taking it.
-fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
-  // (the moment what follows its flight and fade reads them at: as each frame draws it while either goes; else as it
-  // is, the clock read no more)
-  let at = fn(node : @view.View) {
-    vw.fly.said()
-    vw.fade.said()
-    let now = node.logic_at()
-    if vw.fly.goes_at(now) || vw.fade.goes_at(now) {
-      node.drawn_at()
+/// The moment what follows film `vw`'s flight and fade in `node` reads them at: as each frame draws it while either
+/// goes; else as it is, the clock read no more.
+fn film_at(vw : Viewer, node : @view.View) -> Double {
+  vw.fly.said()
+  vw.fade.said()
+  let now = node.logic_at()
+  if vw.fly.goes_at(now) || vw.fade.goes_at(now) {
+    node.drawn_at()
+  } else {
+    @double.infinity
+  }
+}
+
+///|
+/// Film `vw`'s flight (Viewer::player_flight), in `parent` laid out over all of the window: the box it is cut to, its
+/// box round, its still on the black, what its thumbnail draws over it; drawn at the moments `mine` says (its own
+/// layer's, or the slot of the page it flies from under that page's bar: viewer_flight_slot), as image_flight is.
+fn film_flight(parent : @view.View, src : Source, vw : Viewer, mine : (Double) -> Bool) -> Unit {
+  let at = fn(node) { film_at(vw, node) }
+  let mine_flight = fn(node : @view.View) -> (FlightBox, Double)? {
+    let t = at(node)
+    if mine(t) {
+      vw.player_flight(src, node, t)
     } else {
-      @double.infinity
+      None
     }
   }
   // its flight: the box it is cut to, its box round (the thumbnail's corners as far as the flight leaves them), the
   // still in it on the black where it is letterboxed or not decoded yet (one frame), what the thumbnail draws over it
-  let flight = fn(node : @view.View) -> FlightBox? { vw.player_flight(src, node, at(node)).map(fn(f) { f.0 }) }
-  n.box(fn(cut) {
+  let flight = fn(node : @view.View) -> FlightBox? { mine_flight(node).map(fn(f) { f.0 }) }
+  parent.box(fn(cut) {
     cut
     .over(Is(true))
     // (a picture alone: no press taken anywhere in it, whatever is under it its own (it covers the window as it waits
@@ -1707,7 +1710,7 @@ fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
         o
         .over(Is(true))
         .alpha(By(fn() {
-          match vw.player_flight(src, o, at(o)) {
+          match mine_flight(o) {
             Some((_, p)) => dmax(0.0, 1.0 - flight_over_gone * p)
             None => 0.0
           }
@@ -1724,6 +1727,22 @@ fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// What viewer `vw` shows of a film or a song, in node `n`: the player (@sf.player_view: its picture, its bars and
+/// controls, its keys, the full screen and turning sideways), an old view hosted on the stage (Viewer::player_stage), as
+/// far in as its fade has come and, while the picture flies, as far as its bars come with it (bars_share: none till
+/// its ground is whole); in flight its still the tree's (Viewer::player_flight): from the thumbnail to where the player
+/// draws its picture and back, the black and the still one frame cut once (View::image_in), what the thumbnail draws
+/// over it (its capsule) going as it leaves and back as it lands; going, the page's presses theirs. Back is the
+/// player's first (its 全屏 left, beside the system's bars), then the viewer's: the viewer's said before the player's,
+/// the last said taking it.
+fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
+  let at = fn(node) { film_at(vw, node) }
+  // its flight, in its own layer once it is out from under the bar of the page it flies from (that page's slot draws
+  // it till then, the bar over it: viewer_flight_slot)
+  film_flight(n, src, vw, fn(t) { vw.flies_from_page() == 0 || vw.lifted_at(t) >= 1.0 })
   // (the player over its flight, its bars coming as its ground is whole)
   n.box(fn(s) {
     s
@@ -1774,7 +1793,7 @@ fn Viewer::player_flight(self : Viewer, src : Source, node : @view.View, t : Dou
   let width = player_width(w)
   let to = match vw.fly_to {
     Some(r) if vw.fly_back => Some(r)
-    _ => vw.video_target(src, width, h)
+    _ => vw.video_target(src, width, h, t)
   }
   match (vw.flight_from(@ui.current()), to) {
     (Some(from), Some(to)) => {
@@ -2130,6 +2149,10 @@ pub fn viewer_flight_slot(slot : @view.View, src : Source, serial : Int, stage :
   slot.pick(fn() { { from: flying() } }, fn(f, which) {
     guard which.from is Some(vw) else { return }
     f.over(Is(true)).presses(Is(false)) |> ignore
-    image_flight(f, src, vw, stage, fn(t) { vw.lifted_at(t) < 1.0 })
+    if vw.played() {
+      film_flight(f, src, vw, fn(t) { vw.lifted_at(t) < 1.0 })
+    } else {
+      image_flight(f, src, vw, stage, fn(t) { vw.lifted_at(t) < 1.0 })
+    }
   })
 }

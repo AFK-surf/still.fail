@@ -9,6 +9,12 @@ struct Reader {
   host : @host.Host
   db : String
   mut writer : Int64?
+  /// The connection reads are made on, made at the first.
+  mut reading : @sql.Db?
+  /// The station's data directory, its paths' separator, and where transcripts were found (kept between reads).
+  data : String
+  sep : String
+  finder : @locate.Finder
 }
 
 ///|
@@ -56,8 +62,54 @@ fn Reader::answer(self : Reader, line : String) -> Json {
       } catch {
         e => { "id": id, "status": 500, "error": Json::string(message(e)) }
       }
+    { "op": String(op), .. } if moved(op) =>
+      try {
+        { "id": id, "text": Json::string(self.read(op, ask.value("args").unwrap_or(Json::null())).stringify()) }
+      } catch {
+        @readops.Refused(status, m) => { "id": id, "status": Json::number(status.to_double()), "error": Json::string(m) }
+        e => { "id": id, "status": 500, "error": Json::string(message(e)) }
+      }
     { "op": String(op), .. } => { "id": id, "status": 500, "error": Json::string("no read \{op}") }
     _ => { "id": id, "status": 400, "error": Json::string("no op") }
+  }
+}
+
+///|
+/// The reads moved here from read/worker.ts (read/pool.ts `MOVED`).
+fn moved(op : String) -> Bool {
+  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile"].contains(
+    op,
+  )
+}
+
+///|
+/// A read, in one snapshot as read/worker.ts makes it (a transaction around it).
+fn Reader::read(self : Reader, op : String, args : Json) -> Json raise {
+  let db = match self.reading {
+    Some(db) => db
+    None => {
+      let db = @sql.Db::attach(self.host, self.db, wait=5000)
+      self.reading = Some(db)
+      db
+    }
+  }
+  db.exec("BEGIN")
+  defer (db.exec("COMMIT") catch { _ => () })
+  match op {
+    "job" => @readops.job(db, self.host, args)
+    "jobLog" => @readops.job_log(db, self.host, args)
+    "historyPendingCard" => @readops.pending_card_number(db, args.value("thread").unwrap_or(Json::null()))
+    "statePendingCard" => @readops.state_pending_card(db, args)
+    "deliveryCardState" => @readops.delivery_card_state(db, args)
+    "reviewPendingCard" => @readops.review_pending_card(db, args)
+    "stateQuestion" => @readops.state_question(db, args)
+    "pendingDeliveries" => @readops.pending_deliveries(db, args)
+    "latestMessages" => @readops.latest_messages(db, args)
+    "chatHistoryMessages" => @readops.chat_history_messages(db, args)
+    "openedChatSaid" => @readops.opened_chat_said(db, args)
+    "widgetState" => @readops.widget_state(db, args)
+    "transcriptFile" => @readops.transcript_file(db, self.host, self.data, self.sep, self.finder, args)
+    _ => fail("no read \{op}")
   }
 }
 
@@ -398,6 +450,49 @@ async fn vault_uses(host : @host.Host, db_path : String) -> Unit {
 }
 
 ///|
+/// The live view's transcript locator (sessions/live-locator.ts): each line a `locate` or a reply to one being looked
+/// for (@locate.Locator).
+async fn live_locator(host : @host.Host, db_path : String, data : String, sep : String) -> Unit {
+  let locator = @locate.Locator::new(host, @sql.Db::attach(host, db_path, wait=5000), data, sep)
+  while host.line() is Some(line) {
+    if line != "" {
+      locator.heard(line)
+    }
+  }
+}
+
+///|
+/// The search (search/worker.ts): each `{"type": "query"}` looked for in a fiber of its own, the searches taking turns
+/// where the worker let others through, answered `{id, groups}` or `{id, error}`; `{"type": "cancel", id}` stops one.
+/// Where transcripts were found is kept between searches, as the worker keeps it.
+async fn search_program(host : @host.Host, db_path : String, data : String, sep : String) -> Unit {
+  let db = @sql.Db::attach(host, db_path, wait=5000)
+  let finder = @locate.Finder::new(host, sep)
+  let cancelled : Set[String] = Set([])
+  while host.line() is Some(line) {
+    let told : Json = @json.parse(line) catch { _ => continue }
+    guard told is { "id": id, .. } else { continue }
+    let key = id.stringify()
+    match told {
+      { "type": "cancel", .. } => cancelled.add(key)
+      { "type": "query", .. } =>
+        ignore(
+          host.rt.fork(() => {
+            let answer : Json = try {
+              { "id": id, "groups": Json::array(@history.answer(db, host, data, sep, finder, told, () => cancelled.contains(key))) }
+            } catch {
+              e => { "id": id, "error": Json::string(@search.describe(e)) }
+            }
+            cancelled.remove(key)
+            host.say(answer.stringify())
+          }),
+        )
+      _ => ()
+    }
+  }
+}
+
+///|
 fn main {
   let code = match (flag("--builder"), flag("--db"), flag("--data")) {
     (Some("archive-marks"), Some(db), _) =>
@@ -514,6 +609,22 @@ fn main {
         String(session) => Some(@signin.step(db, session))
         _ => None
       }))
+    (Some("search"), Some(db), Some(data)) =>
+      @host.run(shell_dir=beside(db, "shell"), host => search_program(host, db, data, flag("--sep").unwrap_or("/")))
+    (Some("search-scope"), Some(db), _) => {
+      // (the lanes taken in turn across steps, as one SearchScopePreparation keeps its turn)
+      let turn = Ref(0)
+      @host.run(shell_dir=beside(db, "shell"), host => builder(host, db, "search scope", (db, ask) => match ask {
+        { "scope": "all", .. } => {
+          let (done, next) = @searchscope.step(db, turn.val)
+          turn.val = next
+          Some(done)
+        }
+        _ => None
+      }))
+    }
+    (Some("live-locator"), Some(db), Some(data)) =>
+      @host.run(shell_dir=beside(db, "shell"), host => live_locator(host, db, data, flag("--sep").unwrap_or("/")))
     (Some("vault-uses"), Some(db), _) =>
       @host.run(shell_dir=beside(db, "shell"), host => vault_uses(host, db))
     (Some("outflow-chats"), Some(db), _) =>
@@ -599,7 +710,8 @@ fn main {
       }))
     (None, _, Some(data)) =>
       @host.run(shell_dir=data + "/shell", host => {
-        let reader = { host, db: data + "/stillfail.db", writer: None }
+        let sep = flag("--sep").unwrap_or("/")
+        let reader = { host, db: data + "/stillfail.db", writer: None, reading: None, data, sep, finder: @locate.Finder::new(host, sep) }
         let ready : Json = { "ready": { "loadedMs": 0, "openedMs": 0 } }
         host.say(ready.stringify())
         while host.line() is Some(line) {

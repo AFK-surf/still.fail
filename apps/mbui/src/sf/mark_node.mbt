@@ -8,15 +8,17 @@
 /// A person, round (avatar's, as a node) in `parent`, `size` across: `picture` (an image's key, "" while it comes or
 /// without one) once it is decoded at the size it is shown, at once; their initial on their colour (by `id`) until
 /// then, and for good when it cannot be decoded. Each as it changes.
+#callsite(autofill(loc))
 pub fn avatar_node(
   parent : @view.View,
   id : () -> String,
   name : () -> String,
   picture : () -> String,
   size : Double,
+  loc~ : SourceLoc,
 ) -> Unit {
   let half = size / 2.0
-  parent.box(fn(d) {
+  parent.box(made_for=loc, fn(d) {
     let px = fn() { size * d.pixel_scale() }
     let decoded = fn() {
       let p = picture()
@@ -58,6 +60,7 @@ pub fn avatar_node(
 /// (glyph:<name>, glyph:<name>:<colour>, in that colour, else `tint`) or a picture put up (its address: its bytes the
 /// core's, asked for on `stint` as the page's time on top is, a GIF among them moving; or a data URL), covering its
 /// square, its corners a quarter of it round; else, and while that picture comes, its emoji. Each as it changes.
+#callsite(autofill(loc))
 pub fn station_mark_node(
   parent : @view.View,
   emoji : () -> String,
@@ -65,6 +68,7 @@ pub fn station_mark_node(
   size : Double,
   tint : () -> Int64,
   stint : () -> Int,
+  loc~ : SourceLoc,
 ) -> Unit {
   // (which it shows: a glyph's paths, a picture's key, its emoji, nothing)
   let glyph = fn() -> (String, Array[String], Array[String], String)? {
@@ -90,7 +94,7 @@ pub fn station_mark_node(
     }
     (data_image(i), false)
   }
-  parent.box(fn(m) {
+  parent.box(made_for=loc, fn(m) {
     m.show(fn() { glyph() is Some(_) }, fn(g) {
       g.width(Is(Some(size))).height(Is(Some(size))) |> ignore
       g

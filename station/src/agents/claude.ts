@@ -16,6 +16,7 @@
 //   say owned_by_subagent. They all end with the process.
 import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { REPO_RULES_COMMAND } from "./repo-rules.ts";
 import { log } from "../ops/log.ts";
 import { claudeProject } from "../read/transcript.ts";
 import { LiveFromClaude, chars, type ClaudeLiveState } from "./live.ts";
@@ -175,6 +176,11 @@ const RENEW_ATTEMPTS = 2;
 const DISALLOWED = ["ScheduleWakeup", "CronCreate", "CronDelete", "CronList", "RemoteTrigger"];
 const SETTINGS = {
   disableClaudeAiConnectors: true,
+  // A repository's rules told as its tools first touch it (./repo-rules.ts), and again after a compaction.
+  hooks: {
+    PostToolUse: [{ matcher: "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob", hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
+    SessionStart: [{ matcher: "compact", hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
+  },
   skillOverrides: {
     ...Object.fromEntries(["loop", "schedule", "keybindings-help", "fewer-permission-prompts", "plugin-authoring", "update-config"].map((name) => [name, "off"])),
     ...Object.fromEntries(["dataviz", "claude-api", "code-review", "run"].map((name) => [name, "name-only"])),
@@ -250,6 +256,8 @@ function frameDoes(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => void,
   } else if (kind === "system" && subtype === "status" && turn.compacting === true && frame.compact_result === "failed") {
     // `/compact` that compacted nothing still ends in a result of success: only this says so (2.1.289).
     turn.compactError = typeof frame.compact_error === "string" && frame.compact_error !== "" ? frame.compact_error : "compaction failed";
+  } else if (kind === "system" && subtype === "compact_boundary") {
+    emit({ type: "compacted" });
   } else if (kind === "result") {
     const text = typeof frame.result === "string" ? frame.result : subtype;
     let outcome: TurnOutcome;

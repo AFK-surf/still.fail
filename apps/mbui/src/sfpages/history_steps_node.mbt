@@ -1,8 +1,17 @@
-// An agent's history's steps (history_steps.mbt's) as nodes of the window's tree: the same rows of what the core put
-// together, laid out from the same styles (style_node), in a page's list that holds each row only while it shows
-// (View::scrolls_window). It follows its newest end; the page before comes in above what is read, which stays where it
-// is (the list's top, where the history begins, holding nothing: what comes in comes under it); the page before that is
-// asked for as the reader nears its top again; an entry gone to is brought to the middle and marked a moment.
+// An agent's execution history's steps, in any pane (still.fail web/src/History.tsx, History.css.ts; ToolStep.tsx,
+// ToolStep.css.ts): what the core put together (its `history` view) drawn turn by turn, each prompt that woke the agent
+// beginning one under a rule saying when and what it did; each event a mark in the gutter on the turn's rail and what it
+// is beside it. What people were sent leads, on a card; the agent's own words are a grey line; the calls and thoughts
+// between fold into a group, a call opening to what it asked for and what came back (the core's reading of them:
+// `history.tool`). Long words fold to a few lines. A call or thought in brief is read whole as it is opened
+// (`history.detail`), the pages before as the reader nears the top (`history.older`). 只看收发 leaves out what the
+// core calls `work`.
+//
+// They are nodes of the window's tree, laid out from the styles below (style_node), in a page's list that holds each
+// row only while it shows (View::scrolls_window). It follows its newest end; the page before comes in above what is
+// read, which stays where it is (the list's top, where the history begins, holding nothing: what comes in comes under
+// it); the page before that is asked for as the reader nears its top again; an entry gone to is brought to the middle
+// and marked a moment.
 
 ///|
 /// A row of the list as it was picked: the same as another where it is (steps_row_same), so its nodes are made again
@@ -33,7 +42,7 @@ fn steps_state(h : StepsHead) -> Int {
 }
 
 ///|
-/// Agent `key`'s history on `station`, its steps (history_steps') made once in node `v`, which they fill; tips in `tips`.
+/// Agent `key`'s history on `station`, its steps made once in node `v`, which they fill; tips in `tips`.
 pub fn history_steps_node(v : @view.View, src : Source, station : String, key : String, tips : @sf.TipLayer) -> Unit {
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
   let lkey = "history-steps/" + station + "/" + key
@@ -51,11 +60,19 @@ pub fn history_steps_node(v : @view.View, src : Source, station : String, key : 
                 "" => @sf.t("web-main.history.reading")
                 e => e
               },
-              failing: [],
+              failing: match head().failed {
+                "" => []
+                f => [f]
+              },
             }
           })
         })
-      1 => steps_box_node(p, steps_box, fn(b) { steps_words(b, fn() { head().edge }, steps_edge) })
+      1 =>
+        steps_box_node(p, steps_box, fn(b) {
+          // (in the middle across, as steps_edge says: center)
+          b.lines_up(Is(Some(Middle))) |> ignore
+          steps_words(b, fn() { head().edge }, steps_edge)
+        })
       _ => steps_list_node(p, src, station, key, params, lkey, tips)
     }
   })
@@ -96,7 +113,7 @@ fn steps_list_node(
   })
   let scroll = @view.Scroll::list()
   // (the item gone to: brought to the middle, its ground the accent's faint one till steps_marked_ms on)
-  let goto : @signals.Signal[String?] = @signals.signal(None)
+  let place : @view.ListPlace[String] = @view.ListPlace::new()
   let lit : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
   let unlit = Ref(fn() {  })
   // opened at an entry: the item that draws it brought to the middle, marked a moment; one before what is loaded, the
@@ -106,7 +123,7 @@ fn steps_list_node(
     let loaded = items(@signals.untracked(fn() { src.topic("history", params).get().value }), "items")
     match loaded.search_by(fn(i) { entries_of(Some(i)).map(fn(x) { x.0 <= e && e <= x.1 }).unwrap_or(false) }) {
       Some(at) => {
-        if @signals.untracked(fn() { steps_own.only_io.get() }) && flag(loaded.get(at), "work") {
+        if steps_own.only_io.untracked() && flag(loaded.get(at), "work") {
           steps_own.only_io.set(false)
         }
         let ik = text(loaded.get(at), "key")
@@ -116,7 +133,7 @@ fn steps_list_node(
         lit.set(ik)
         (unlit.val)()
         unlit.val = v.at_moment(v.cause_at() + steps_marked_ms, fn() { lit.set("") })
-        goto.set(Some("i/" + ik))
+        place.centre("i/" + ik)
       }
       None =>
         match loaded.get(0) {
@@ -142,16 +159,14 @@ fn steps_list_node(
           Some(i) => i <= 2
           None => false
         })
-      (h.more && (near || steps_own.focus.contains(fk)), h.first, steps_own.older.get())
+      // (not while the core reads it, nor while it waits after a read that failed: it says when to ask again)
+      (h.more && h.older == "" && (near || steps_own.focus.contains(fk)), h.first)
     },
     fn(now) {
-      let (ask, first, older) = now
-      guard ask && older != first else { return }
-      steps_own.older.set(first)
+      guard now.0 else { return }
       (src.call)("history.older", Json::object(params), fn(res) {
+        // (an entry asked for before what could be had: where it opens)
         if res is Err(_) {
-          steps_own.older.set("")
-          // (an entry asked for before what could be had: where it opens)
           steps_own.focus.remove(fk)
         }
       })
@@ -171,7 +186,7 @@ fn steps_list_node(
         holds=fn(k) { k != "edge" },
         // (followed at its newest; not once gone to an entry)
         follows=fn() { !steps_own.went.contains(lkey) },
-        centres=fn() { goto.get() },
+        place~,
         first_told=fn(k) {
           first_shown.set((k, @signals.untracked(fn() { steps_head_of(src, params, lkey).first })))
         },
@@ -187,6 +202,8 @@ fn steps_list_node(
                         @sf.wait_line_node(w, fn() { steps_head_of(src, params, lkey).edge }) |> ignore
                       })
                     } else {
+                      // (in the middle across, as steps_edge says: center)
+                      e.lines_up(Is(Some(Middle))) |> ignore
                       steps_words(e, fn() { steps_head_of(src, params, lkey).edge }, steps_edge)
                     }
                   })
@@ -305,7 +322,7 @@ fn steps_seconds(v : @view.View, src : Source, since : Double, till? : Double) -
     }
     let into = if gone > 0.0 { gone - (gone / second_ms).floor() * second_ms } else { gone }
     v.at_moment(v.logic_at() + second_ms - into, later=true, fn() {
-      tick.set(@signals.untracked(fn() { tick.get() }) + 1)
+      tick.set(tick.untracked() + 1)
       plan()
     })
     |> ignore
@@ -316,7 +333,7 @@ fn steps_seconds(v : @view.View, src : Source, since : Double, till? : Double) -
 }
 
 ///|
-/// The history's rows to come while it is read the first time (steps_sample's) in `v`, as its list draws them.
+/// The history's rows to come while it is read the first time in `v`, as its list draws them.
 fn steps_sample_node(v : @view.View, station : String, key : String, tips : @sf.TipLayer) -> Unit {
   let lines = [("group", 16), ("text", 24), ("group", 12), ("group", 20), ("text", 9), ("group", 18)]
   for i, line in lines {
@@ -338,7 +355,7 @@ fn steps_sample_node(v : @view.View, station : String, key : String, tips : @sf.
 }
 
 ///|
-/// An item (history_row's) in `v`: the rule of the turn it begins, then its events; on the accent's faint ground while
+/// An item in `v`: the rule of the turn it begins, then its events; on the accent's faint ground while
 /// `marked` says (an entry gone to).
 fn history_row_node(
   v : @view.View,
@@ -388,7 +405,7 @@ fn steps_main_node(v : @view.View, body : (@view.View) -> Unit) -> Unit {
 }
 
 ///|
-/// One event (ev's) in `v`: its mark in the gutter and what `body` makes beside it; the turn's rail from under its mark
+/// One event in `v`: its mark in the gutter and what `body` makes beside it; the turn's rail from under its mark
 /// (`rail`: to the next event's; `rail_last`: on to the next item), or a state's block in its colour behind it.
 fn ev_node(
   v : @view.View,
@@ -461,7 +478,7 @@ fn ev_node(
 }
 
 ///|
-/// What an item is (item_view's) in `v`.
+/// What an item is in `v`.
 fn item_node(
   v : @view.View,
   src : Source,
@@ -523,6 +540,7 @@ fn item_node(
       let failed = flag(content, "failed")
       ev_node(v, "send", "", if failed { "red" } else { "accent" }, rail=ends != "", rail_last=ends == "" && rail, fn(b) {
         steps_box_node(b, h_label, fn(l) {
+          label_wraps(l)
           steps_words(l, fn() { @sf.t("web-main.history.sentTo") }, h_label_words)
           match field(content, "place") {
             Some(Object(_)) as p => place_node(l, station, p)
@@ -561,7 +579,7 @@ fn item_node(
 }
 
 ///|
-/// Words as Markdown (md_view's) in `v`: the panel's size, or small and grey.
+/// Words as Markdown in `v`: the panel's size, or small and grey.
 fn md_node(v : @view.View, words : String, md : Json?, small? : Bool = false) -> Unit {
   @sf.markdown_node(v, fn() { words }, tree=fn() { md }, size=fn() { if small { 12.0 } else { 13.0 } }, ink=fn() {
     if small {
@@ -574,7 +592,7 @@ fn md_node(v : @view.View, words : String, md : Json?, small? : Bool = false) ->
 }
 
 ///|
-/// An event in one line (one_line's) in `v`: `lead`, then `line` cut at its end; pressed (where there is more), what
+/// An event in one line in `v`: `lead`, then `line` cut at its end; pressed (where there is more), what
 /// `whole` makes under it, the line giving way to 收起.
 fn one_line_node(
   v : @view.View,
@@ -610,51 +628,70 @@ fn one_line_node(
     })
   })
   |> ignore
-  v.show(open, fn(b) { steps_box_node(b, h_one_body, whole) })
+  // (opening and closing with its room, sizes_steady.mbt)
+  @motion.reveal_node(v, open, fn(b) { steps_box_node(b, h_one_body, whole) }, lazy=true) |> ignore
 }
 
 ///|
-/// Long words folded to `lines` lines of `line` (fold's) in `v`: past that cut, a button under them saying how many
+/// Long words folded to `lines` lines of `line` in `v`: past that cut, a button under them saying how many
 /// more lines there are; pressed, all of them, 收起 under them.
 fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@view.View) -> Unit) -> Unit {
   let most = lines.to_double() * line + 2.0
-  // (how tall what it holds is laid out, all of it)
-  let tall : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
-  let long = fn() { tall.get() > most + 4.0 }
   let open = fn() { steps_own.opened.contains(key) }
-  steps_box_node(v, h_fold, fn(f) {
-    steps_box_node(f, h_fold_room, fn(room) {
-      room.max_height(By(fn() { if long() && !open() { Some(most) } else { None } })) |> ignore
-      steps_box_node(room, h_fold_inner, fn(inner) {
-        inner.shrink(Is(0.0)) |> ignore
-        inner.reacts(fn() { inner.laid_size_told() }, fn(z) {
-          match z {
-            Some((_, h)) => tall.set(h)
-            None => ()
-          }
-        })
-        body(inner)
-      })
-    })
-    f.show(long, fn(t) {
-      let words = fn() {
-        if open() {
-          @sf.t("web-main.fold")
-        } else {
-          let more = dmax(1.0, ((tall.get() - most) / line).round()).to_int()
-          @sf.t("web-main.history.more", args=[("n", more.to_string())])
-        }
+  // (by the room it is given: how tall what it holds comes to whole at that width, measured as it is laid out, what
+  // shows by that laid out in that same layout)
+  v.by_room(fn(v, given) {
+    let inner : Ref[@view.View?] = Ref(None)
+    let tall = fn() {
+      match inner.val {
+        Some(i) => given.tall(i)
+        None => 0.0
       }
-      steps_box_node(t, h_fold_toggle, fn(b) {
-        steps_pressed(b, fn() { steps_flip(key) }, label=words)
-        @sf.words_node(b, words, fn() { if @sf.lit_node(b) { h_toggle_hot } else { h_toggle_words } }) |> ignore
+    }
+    let long = fn() { tall() > most + 4.0 }
+    steps_box_node(v, h_fold, fn(f) {
+      steps_box_node(f, h_fold_room, fn(room) {
+        steps_box_node(room, h_fold_inner, fn(i) {
+          i.shrink(Is(0.0)) |> ignore
+          inner.val = Some(i)
+          body(i)
+        })
+        // (cut from the first: measured whole however short it is cut, View::holds_whole; said once what it measures
+        // is made)
+        room
+        .holds_whole()
+        .max_height(By(fn() { if open() { None } else if long() { Some(most) } else { Some(most + 4.0) } }))
+        |> ignore
+      })
+      f.show(long, fn(t) {
+        let words = fn() {
+          if open() {
+            @sf.t("web-main.fold")
+          } else {
+            let more = dmax(1.0, ((tall() - most) / line).round()).to_int()
+            @sf.t("web-main.history.more", args=[("n", more.to_string())])
+          }
+        }
+        steps_box_node(t, h_fold_toggle, fn(b) {
+          steps_pressed(b, fn() { steps_flip(key) }, label=words)
+          @sf.words_node(b, words, fn() { if @sf.lit_node(b) { h_toggle_hot } else { h_toggle_words } }) |> ignore
+        })
       })
     })
   })
+  |> ignore
 }
 
 ///|
-/// A message to the agent (received's) in `v`.
+/// A step's label in `l` going on in the next line where its line has not the room: each part as wide as its words
+/// while its line has the room, giving way only alone in a line (a row of parts each giving way squeezed every one of
+/// them, 收到来… with its name in two lines, desktop 0.1.7973).
+fn label_wraps(l : @view.View) -> Unit {
+  l.wraps(Is(Some(0.0))) |> ignore
+}
+
+///|
+/// A message to the agent in `v`.
 fn received_node(
   v : @view.View,
   src : Source,
@@ -669,6 +706,7 @@ fn received_node(
   let job = notice == "job"
   ev_node(v, "received", "", "", rail~, rail_last~, fn(b) {
     steps_box_node(b, h_label, fn(l) {
+      label_wraps(l)
       steps_words(l, fn() {
         @sf.t(if job { "web-main.history.jobMessage.before" } else { "web-main.history.message.before" })
       }, h_label_words)
@@ -683,10 +721,13 @@ fn received_node(
         @sf.t(if job { "web-main.history.jobMessage.after" } else { "web-main.history.message.after" })
       }, h_label_words)
       match field(m, "place") {
-        Some(Object(_)) as p => {
-          steps_words(l, fn() { " · " }, h_label_words)
-          place_node(l, station, p)
-        }
+        Some(Object(_)) as p =>
+          // (the dot going on with its place, never left at a line's end)
+          steps_box_node(l, h_label_place, fn(dp) {
+            dp.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+            steps_words(dp, fn() { "·" }, h_label_words)
+            place_node(dp, station, p)
+          })
         _ => ()
       }
     })
@@ -706,7 +747,7 @@ fn received_node(
 }
 
 ///|
-/// A place as its platform's mark and its name (place_view's) in `v`: a Slack thread opens in Slack, a still.fail
+/// A place as its platform's mark and its name in `v`: a Slack thread opens in Slack, a still.fail
 /// chat its page.
 fn place_node(v : @view.View, station : String, place : Json?) -> Unit {
   let url = text(place, "url")
@@ -741,7 +782,7 @@ fn place_node(v : @view.View, station : String, place : Json?) -> Unit {
 }
 
 ///|
-/// A Slack user's name (slack_name's) in `v`: pressed, 这是我 or 不是我 in its menu beside it; turning while the station
+/// A Slack user's name in `v`: pressed, 这是我 or 不是我 in its menu beside it; turning while the station
 /// is told, a red mark a few seconds if that failed (its tip in `tips`).
 fn slack_name_node(
   v : @view.View,
@@ -794,7 +835,7 @@ fn slack_name_node(
 }
 
 ///|
-/// Work the agent started in the background, ended (task_view's) in `v`.
+/// Work the agent started in the background, ended in `v`.
 fn task_node(v : @view.View, key : String, task : Json?, rail : Bool, rail_last : Bool) -> Unit {
   let failed = flag(task, "failed")
   let answer = text(task, "result")
@@ -819,7 +860,7 @@ fn task_node(v : @view.View, key : String, task : Json?, rail : Bool, rail_last 
 }
 
 ///|
-/// A turn's state (mark_view's) in `v`: waiting on work it started (counting on each second while it does, a bar
+/// A turn's state in `v`: waiting on work it started (counting on each second while it does, a bar
 /// filling toward the most it waits), done, or waiting on a person.
 fn mark_node(v : @view.View, src : Source, mark : Json?, rail : Bool) -> Unit {
   let wait = field(mark, "wait")
@@ -873,7 +914,7 @@ fn mark_node(v : @view.View, src : Source, mark : Json?, rail : Bool) -> Unit {
 }
 
 ///|
-/// How a turn ended (ended's) in `v`.
+/// How a turn ended in `v`.
 fn ended_node(v : @view.View, ends : String, words : String, rail : Bool) -> Unit {
   let (icon, state) = match ends {
     "human" => ("user", "human")
@@ -887,7 +928,7 @@ fn ended_node(v : @view.View, ends : String, words : String, rail : Bool) -> Uni
 }
 
 ///|
-/// A group of calls and thoughts (group_view's) in `v`: its line, all of it opening the group (its title its tip, in
+/// A group of calls and thoughts in `v`: its line, all of it opening the group (its title its tip, in
 /// `tips`); opened, a line each beside the turn's rail.
 fn group_node(
   v : @view.View,
@@ -958,7 +999,7 @@ fn group_node(
       }
     })
     |> ignore
-    gv.show(open, fn(s) {
+    @motion.reveal_node(gv, open, lazy=true, fn(s) {
       steps_box_node(s, h_steps, fn(list) {
         for i, row in rows {
           let rv = Some(row)
@@ -981,11 +1022,12 @@ fn group_node(
         }
       })
     })
+    |> ignore
   })
 }
 
 ///|
-/// A call (step_view's) in `v`: its line; opened, what it asked for and what came back.
+/// A call in `v`: its line; opened, what it asked for and what came back.
 fn step_node(v : @view.View, src : Source, station : String, key : String, rk : String, step : Json?) -> Unit {
   let failed = flag(step, "failed")
   opened_node(v, src, station, key, rk, step, fn(sum) {
@@ -1001,7 +1043,7 @@ fn step_node(v : @view.View, src : Source, station : String, key : String, rk : 
 }
 
 ///|
-/// A line of a group that opens to what is behind it (opened's) in `v`; in brief, read whole as it is opened.
+/// A line of a group that opens to what is behind it in `v`; in brief, read whole as it is opened.
 fn opened_node(
   v : @view.View,
   src : Source,
@@ -1022,12 +1064,12 @@ fn opened_node(
       summary(line)
     })
     |> ignore
-    s.show(open, fn(o) { whole_node(o, src, station, key, rk, content, body) })
+    @motion.reveal_node(s, open, fn(o) { whole_node(o, src, station, key, rk, content, body) }, lazy=true) |> ignore
   })
 }
 
 ///|
-/// What a step or thought holds as it shows (whole's) in `v`: in brief, read whole now (`history.detail`), a line saying
+/// What a step or thought holds as it shows in `v`: in brief, read whole now (`history.detail`), a line saying
 /// so till it comes (or why it did not).
 fn whole_node(
   v : @view.View,
@@ -1086,7 +1128,7 @@ fn whole_node(
 }
 
 ///|
-/// A call opened (tool_body's) in `v`: what it asked for, then what came back, as the core reads them (`history.tool`),
+/// A call opened in `v`: what it asked for, then what came back, as the core reads them (`history.tool`),
 /// asked once as it is first shown.
 fn tool_body_node(v : @view.View, src : Source, rk : String, step : Json?) -> Unit {
   let ask : Map[String, Json] = {
@@ -1135,7 +1177,7 @@ fn tool_body_node(v : @view.View, src : Source, rk : String, step : Json?) -> Un
 }
 
 ///|
-/// A list of things to do (plan_list's) in `v`: done ✓ struck and muted, under way › in 600, the rest ·.
+/// A list of things to do in `v`: done ✓ struck and muted, under way › in 600, the rest ·.
 fn plan_node(v : @view.View, list : Array[Json]) -> Unit {
   steps_box_node(v, tool_plan, fn(p) {
     for it in list {
@@ -1175,7 +1217,7 @@ fn plan_node(v : @view.View, list : Array[Json]) -> Unit {
 }
 
 ///|
-/// One part of a call or of what came back (tool_part's) in `v`.
+/// One part of a call or of what came back in `v`.
 fn tool_part_node(v : @view.View, part : Json?) -> Unit {
   let mono_box = fn(look : @ui.Style, words : String, style : @ui.TextStyle) {
     steps_box_node(v, look, fn(b) { steps_run(b, fn() { words }, style, mono=true) })
@@ -1292,7 +1334,7 @@ fn tool_part_node(v : @view.View, part : Json?) -> Unit {
 }
 
 ///|
-/// Where the turn stands with the model (phase_line's) in `v`: its pulse in the gutter, the core's words, a clock
+/// Where the turn stands with the model in `v`: its pulse in the gutter, the core's words, a clock
 /// running each second.
 fn phase_line_node(v : @view.View, src : Source, p : Json?) -> Unit {
   let since = number(p, "since")
@@ -1315,3 +1357,747 @@ fn phase_line_node(v : @view.View, src : Source, p : Json?) -> Unit {
 /// A call's hint and a thought's first words on their line, cut at its end (h_step_hint's, one line).
 // kept across runs: a value (no field of it changes)
 let h_step_hint_line : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, w=Cut)
+
+///|
+/// What the steps keep of their own (the rest is the core's): what the reader opened (folds, lines, groups, calls), by
+/// their keys; the entries read whole (by the step's key: when they came, -1 asked, -2 failed and why); what the core
+/// said each opened call is (`history.tool`, by its key). What
+/// a row shows of them it reads, followed (a row is kept while nothing it read changed: history_steps_node).
+priv struct StepsOwn {
+  opened : @sf.LiveMap[String, Bool]
+  detail : @sf.LiveMap[String, (Double, String)]
+  tools : @sf.LiveMap[String, Json]
+  /// an entry asked to be brought into view, by history (`<station>\u{1}<key>`); the item gone to, marked a moment
+  /// (its history's list, its key), and the histories gone to an entry, not following their newest since
+  focus : @sf.LiveMap[String, Int]
+  marked : @signals.Signal[(String, String)]
+  went : Map[String, Bool]
+  /// each history's first item as its list was last built, by the list's key
+  tops : Map[String, String]
+  /// 只看收发, for every history (as the web keeps it): a signal, what each history's rows are worked out by
+  only_io : @signals.Signal[Bool]
+}
+
+///|
+let steps_own : StepsOwn = {
+  opened: @sf.LiveMap::new(),
+  detail: @sf.LiveMap::new(),
+  tools: @sf.LiveMap::new(),
+  focus: @sf.LiveMap::new(),
+  marked: @signals.signal(("", ""), same=fn(a, b) { a == b }),
+  went: {},
+  tops: {},
+  only_io: @signals.signal(false, same=fn(a, b) { a == b }),
+}
+
+///|
+fn steps_reset() -> Unit {
+  steps_own.opened.clear()
+  steps_own.detail.clear()
+  steps_own.tools.clear()
+  steps_own.focus.clear()
+  steps_own.marked.set(("", ""))
+  steps_own.went.clear()
+  steps_own.tops.clear()
+  steps_own.only_io.set(false)
+}
+
+///|
+/// Whether a history shows only what came in and went out.
+pub fn history_only_io() -> Bool {
+  steps_own.only_io.get()
+}
+
+///|
+/// 只看收发 turned on or off.
+pub fn history_only_io_flip() -> Unit {
+  steps_own.only_io.set(!steps_own.only_io.get())
+}
+
+///|
+/// Agent `key`'s history on `station` to bring transcript entry `entry` into view as it next shows (a link's
+/// `?history=…&entry=…`, History.tsx focusEntry): the item that draws it in the pane's middle, marked a moment.
+pub fn history_focus(station : String, key : String, entry : Int) -> Unit {
+  steps_own.focus[station + "\u{1}" + key] = entry
+}
+
+///|
+/// The transcript entries an item spans (HistoryItem.entries: its first and last), if it says.
+fn entries_of(item : Json?) -> (Int, Int)? {
+  match field(item, "entries") {
+    Some(Array([Number(a, ..), Number(b, ..)])) => Some((a.to_int(), b.to_int()))
+    _ => None
+  }
+}
+
+///|
+/// One of the history's rows: its top (where it begins, or the pages before on their way), an item (the rail running on
+/// past it), the thinking and reply streaming in, the turn's state with the model.
+priv enum StepsRow {
+  Edge
+  Item(Json, Bool)
+  Live(Json, Bool)
+  Phase(Json)
+}
+
+///|
+/// How an agent's history's steps stand (what builds them reads of it): read yet, why its read failed (read again),
+/// none, what its top says, whether there are pages before and how the page before stands (reading, failed, or ""),
+/// how many rows and its first item's key.
+priv struct StepsHead {
+  waiting : Bool
+  failed : String
+  empty : Bool
+  edge : String
+  more : Bool
+  older : String
+  rows : Int
+  first : String
+} derive(Eq)
+
+///|
+/// Each history's StepsHead, by its list's key: told only as it comes out otherwise.
+// kept across runs: what it keeps is let go of by a run anew and by reset (sfbase derived.mbt)
+let steps_head : @sfbase.Kept[StepsHead] = @sfbase.Kept::new()
+
+///|
+fn steps_head_of(src : Source, params : Map[String, Json], lkey : String) -> StepsHead {
+  steps_head.read(
+    src,
+    lkey,
+    fn(_) {
+      let h = src.topic("history", params).get().value
+      let empty = flag(h, "empty")
+      let waiting = !(h is Some(Object(_))) || (empty && !flag(h, "loaded"))
+      let (all, rows) = if waiting || empty { ([], []) } else { steps_rows_of_topic(src, params, lkey) }
+      {
+        waiting,
+        failed: text(h, "failed"),
+        empty,
+        edge: text(h, "edge"),
+        more: flag(h, "more"),
+        older: text(h, "older"),
+        rows: rows.length(),
+        first: match all.get(0) {
+          Some(i) => text(Some(i), "key")
+          None => ""
+        },
+      }
+    },
+    same=fn(a, b) { a == b },
+  )
+}
+
+///|
+/// Agent `key`'s history's rows (steps_rows).
+fn steps_rows_of_topic(src : Source, params : Map[String, Json], lkey : String) -> (Array[Json], Array[StepsRow]) {
+  steps_rows.read(src, lkey, fn(_) {
+    let h = src.topic("history", params).get().value
+    steps_rows_of(h, items(h, "items"), steps_own.only_io.get())
+  })
+}
+
+///|
+/// A row the same as before: the same of it, its item the same JSON (the core's deltas keep what they do not touch),
+/// its rail running on as it did.
+fn steps_row_same(a : StepsRow?, b : StepsRow?) -> Bool {
+  match (a, b) {
+    (None, None) | (Some(Edge), Some(Edge)) => true
+    (Some(Item(x, r)), Some(Item(y, s))) => physical_equal(x, y) && r == s
+    (Some(Live(x, r)), Some(Live(y, s))) => physical_equal(x, y) && r == s
+    (Some(Phase(x)), Some(Phase(y))) => physical_equal(x, y)
+    _ => false
+  }
+}
+
+///|
+/// An agent's history's rows (`h`, its items `loaded`), 只看收发 (`io`) or not: the items shown, and the rows (the edge's,
+/// each item's, what is in flight, the phase it is in).
+fn steps_rows_of(h : Json?, loaded : Array[Json], io : Bool) -> (Array[Json], Array[StepsRow]) {
+  let all = loaded.filter(fn(i) { !io || !flag(Some(i), "work") })
+  let live = if io { [] } else { items(h, "live") }
+  let phase = field(h, "phase")
+  let going = live.length() > 0 || phase is Some(Object(_))
+  let rows : Array[StepsRow] = [Edge]
+  for i, item in all {
+    // the turn's rail runs on from an item to the next unless the next begins a turn of its own; from the last, to what
+    // is in flight
+    let rail = match all.get(i + 1) {
+      Some(next) => !(field(Some(next), "turn") is Some(Object(_)))
+      None => going
+    }
+    rows.push(Item(item, rail))
+  }
+  for i, l in live {
+    rows.push(Live(l, i < live.length() - 1 || phase is Some(Object(_))))
+  }
+  match phase {
+    Some(Object(_)) as p => rows.push(Phase(p.unwrap()))
+    _ => ()
+  }
+  (all, rows)
+}
+
+///|
+/// Each history's rows, by its list's key: worked out again as its topic changes or 只看收发 is turned (steps_rows_of,
+/// a computed: sfbase derived.mbt).
+// kept across runs: what it keeps is let go of by a run anew and by reset (sfbase derived.mbt)
+let steps_rows : @sfbase.Kept[(Array[Json], Array[StepsRow])] = @sfbase.Kept::new()
+
+///|
+/// About how tall a row stands before it is laid out.
+let steps_est : Double = 48.0
+
+///|
+/// The lines a sent message and a person's words show folded, and how tall a line of each is.
+let post_lines : Int = 6
+
+///|
+let words_lines : Int = 4
+
+///|
+let md_line : Double = 23.0
+
+///|
+let words_line : Double = 20.0
+
+///|
+/// The steps (historyBody): 12 over, 16 at the sides; a row 14 under the one before; 40 under the last.
+// kept across runs: a value (no field of it changes)
+let steps_box : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let steps_waiting : @ui.Style = @ui.css("w=Full h=Full px=S4 pt=S3")
+
+///|
+// kept across runs: a value (no field of it changes)
+let steps_row_first : @ui.Style = @ui.css("w=Full px=S4 pt=S3")
+
+///|
+// kept across runs: a value (no field of it changes)
+let steps_row : @ui.Style = @ui.css("w=Full px=S4 pt=S3_5")
+
+///|
+/// Its top (historyEdge): 4 over and under, 12 muted, in the middle; on their way, a spinner before the words.
+// kept across runs: a value (no field of it changes)
+let steps_edge : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full, center=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let steps_edge_wait : @ui.Style = @ui.css("row w=Full py=S1 justify=JCenter")
+
+///|
+/// An item (hItem): its turn's rule and its events, 8 apart.
+// kept across runs: a value (no field of it changes)
+let h_item : @ui.Style = @ui.css("w=Full gap=S2")
+
+///|
+/// Groups and calls opened as a screen opens (a fixture's), by their keys (an item's key, `/group`, `/<its row>`).
+pub fn history_open(keys : Array[String]) -> Unit {
+  for k in keys {
+    steps_own.opened[k] = true
+  }
+}
+
+///|
+/// The item last gone to (a link's entry), its history's list and its key.
+pub fn history_marked() -> (String, String) {
+  steps_own.marked.untracked()
+}
+
+///|
+/// How long an item gone to stays marked.
+pub let steps_marked_ms : Double = 1600.0
+
+///|
+/// A turn's rule (hTurn): 8 over it, 11 muted, a line on to the edge 8 after the words.
+// kept across runs: a value (no field of it changes)
+let h_turn : @ui.Style = @ui.css("row w=Full pt=S2 gap=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_turn_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
+
+///|
+/// An item's events (hMain), 10 apart.
+// kept across runs: a value (no field of it changes)
+let h_main : @ui.Style = @ui.css("w=Full gap=S2_5")
+
+///|
+/// An event (hEv): its 20 gutter and what it is, 8 apart.
+// kept across runs: a value (no field of it changes)
+let h_ev : @ui.Style = @ui.css("row w=Full gap=S2 align=AStart")
+
+///|
+/// The turn's rail: 1 wide, 9.5 in, from under its mark (20) down past the event to the next one's (10 more; 14 to the
+/// next item).
+// kept across runs: a value (no field of it changes)
+let h_rail_room : @ui.Style = @ui.style(w=Full, h=Full, pt=S5, pl=@sf.history_rail_in).then(@sf.outset_bottom(10.0))
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_rail_room_last : @ui.Style = @ui.style(w=Full, h=Full, pt=S5, pl=@sf.history_rail_in).then(@sf.outset_bottom(14.0))
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_rail : @ui.Style = @ui.css("w=SPx h=Full bg=Line")
+
+///|
+/// A state's block (hEv[data-state]::after): 6 past its gutter, over and under, round as a field, on the neutral ground
+/// (waiting the blue's, on a person the accent's).
+// kept across runs: a value (no field of it changes)
+let h_state : @ui.Style = @ui.css("w=Full h=Full radius=Xl bg=Neutral").then(@sf.outset_start(6.0)).then(@sf.outset_top(6.0)).then(@sf.outset_bottom(6.0))
+
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_state_human : @ui.Style = h_state.then(@ui.css("bg=AccentBg"))
+
+///|
+/// An event's mark (hIcon): 20 square, on whatever it stands on (a state's block, a group's line pointed at): the
+/// turn's rail runs from under it, so nothing of it covers the rail (a ground of its own would stand out as a square
+/// on a pane that is not the canvas). As high as its event's first line (ev's `row`), its mark in its middle.
+// kept across runs: a value (no field of it changes)
+let h_icon : @ui.Style = @ui.css("w=S5 h=S5 align=ACenter justify=JCenter")
+
+///|
+/// How high an event's mark is, and a line of its words.
+let h_mark : Double = 20.0
+
+///|
+/// The model's pulse (activityPulse): a 7 dot in the accent.
+// kept across runs: a value (no field of it changes)
+let h_pulse : @ui.Style = @ui.style(w=@sf.dot_size, h=@sf.dot_size, radius=Full, bg=Accent)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_ev_body : @ui.Style = @ui.style(w=@sf.grow, gap=SPx)
+
+///|
+/// Who and where in a line (hLabel): 20 high, 12 muted, 6 apart; who in the words' ink, 600.
+// kept across runs: a value (no field of it changes)
+let h_label : @ui.Style = @ui.css("row w=Full min_h=S5 gap=S1_5 align=ACenter clip")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_label_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_strong : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=Fg)
+
+///|
+/// A reminder's label stays on one line; its preview gives way when the row is narrow.
+// kept across runs: a value (no field of it changes)
+let h_reminder : @ui.TextStyle = h_strong.then(@ui.text_style(wrap=false))
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_label_place : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_person : @ui.Style = @ui.css("row gap=S1 align=ACenter")
+
+///|
+/// A place (hPlace): its mark and name 4 apart; where it goes, the pointer's ground on it.
+// kept across runs: a value (no field of it changes)
+let h_place : @ui.Style = @ui.css("row gap=S1 align=ACenter radius=Base clip")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_place_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semibold, color=Fg)
+
+///|
+/// A person's words (hWords: 13, the ink); a job's (hOutput: 11 mono on 1.55).
+// kept across runs: a value (no field of it changes)
+let h_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_output : @ui.TextStyle = @ui.text_style(size=Caption, color=Fg, w=Full)
+
+///|
+/// A message it sent (hCard): 4 under its line, 8 by 12 in, a line round it, round as a field, on the paper; red when it
+/// failed.
+// kept across runs: a value (no field of it changes)
+let h_card : @ui.Style = @ui.css("w=Full mt=S1 py=S2 px=S3 radius=Xl border=B1 border_color=Line bg=Card")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_card_failed : @ui.Style = h_card.then(@ui.css("border_color=Danger"))
+
+///|
+/// A fold (fold): its words, cut past its lines; its button under them at their left (textToggle: 12, muted).
+// kept across runs: a value (no field of it changes)
+let h_fold : @ui.Style = @ui.css("w=Full gap=SPx")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_fold_room : @ui.Style = @ui.css("w=Full clip")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_fold_inner : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_fold_toggle : @ui.Style = @ui.css("row py=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_toggle_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_toggle_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
+
+///|
+/// An event in one line (hOne): 20 high, 12 muted (the ink pointed at, red when it failed), 6 apart; 收起 at its end;
+/// what it says in whole under it, 2 over and 4 under (hOneBody).
+// kept across runs: a value (no field of it changes)
+let h_one : @ui.Style = @ui.css("row w=Full min_h=S5 gap=S1_5 align=ACenter clip")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_one_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Cut)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_one_hot : @ui.TextStyle = h_one_words.then(@ui.text_style(color=Fg))
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_one_red : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Danger, wrap=false, w=Cut)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_one_fold : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_one_fold_hot : @ui.TextStyle = h_one_fold.then(@ui.text_style(color=Fg))
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_one_body : @ui.Style = @ui.css("w=Full pt=S0_5 pb=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_note_plain : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
+
+///|
+/// What kind of words a one-line event's are (hTag): 5 in, round 4, on the neutral ground, 11.
+// kept across runs: a value (no field of it changes)
+let h_tag : @ui.Style = @ui.css("row px=S1_25 radius=Base bg=Neutral")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_tag_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_grow : @ui.Style = @ui.style(w=@sf.grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_grow_clip : @ui.Style = @ui.style(row=true, w=@sf.grow, clip=true)
+
+///|
+/// A state's words in a line (hStateLine): 20 high, 12, 6 apart.
+// kept across runs: a value (no field of it changes)
+let h_state_line : @ui.Style = @ui.css("row w=Full min_h=S5 gap=S1_5 align=ACenter clip")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_state_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)
+
+///|
+/// How much of the most it waits has gone (hWaitBar): a 3 bar under the words, its fill in the blue.
+// kept across runs: a value (no field of it changes)
+let h_wait_bar : @ui.Style = @ui.style(row=true, w=Full, h=@sf.wait_bar_h, mt=SPx, radius=Full, clip=true, bg=A(Link, O20))
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_wait_fill : @ui.Style = @ui.css("h=Full bg=Link")
+
+///|
+/// A group (hGroup), its line (hGroupHead: the chevron's 20 column, its words, its pills 8 apart; 6 past the column on
+/// either side, round as an option, the pointer's ground and the ink on it).
+// kept across runs: a value (no field of it changes)
+let h_group : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_group_head : @ui.Style = @ui.css("row w=Full px=S1_5 gap=S2 align=ACenter radius=Xl hovered{bg=Hover}").then(@sf.outset(6.0))
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_group_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Cut)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_group_hot : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Fg, wrap=false, w=Cut)
+
+///|
+/// Its calls, opened (hSteps): in its words' column (past the 20 gutter and 8), 2 apart, 2 under its line.
+// kept across runs: a value (no field of it changes)
+let h_steps : @ui.Style = @ui.css("w=Full pl=S7 pt=S0_5 gap=S0_5")
+
+///|
+/// A call's line (hStep summary): 5 by 6 in, round 8, 8 apart, 12; the pointer's ground on it.
+// kept across runs: a value (no field of it changes)
+let h_step : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_step_summary : @ui.Style = @ui.css("row w=Full py=S1_25 px=S1_5 gap=S2 align=ACenter radius=Lg hovered{bg=Hover}")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_step_name : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_step_name_red : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Danger, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_step_said : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false, w=Cut)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_step_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_step_meta_red : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, wrap=false)
+
+///|
+/// A step's or thought's words (hStepBody: 4 by 6 in, 8 under, 12); a thought alone (hThinking: 2 over, 6 under and at
+/// its start, muted).
+// kept across runs: a value (no field of it changes)
+let h_step_body : @ui.Style = @ui.css("w=Full pt=S1 px=S1_5 pb=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_thinking : @ui.Style = @ui.css("w=Full pt=S0_5 pb=S1_5 pl=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_thinking_muted : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
+
+///|
+/// The thinking streaming in (hLiveThinking): 12 on 20, muted, a line.
+// kept across runs: a value (no field of it changes)
+let live_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false, w=Cut)
+
+///|
+/// Where the turn stands (hPhase: 12, muted; responding in the ink), its clock subtle.
+// kept across runs: a value (no field of it changes)
+let h_phase_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_phase_now : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_phase_time : @ui.TextStyle = @ui.text_style(size=Meta, color=Subtle, wrap=false)
+
+///|
+/// A call opened: 4 by 6 in, 10 under, the call and what came back 8 apart; each a section, its
+/// parts 6 apart (what came back 4).
+// kept across runs: a value (no field of it changes)
+let tool_body_box : @ui.Style = @ui.css("w=Full pt=S1 px=S1_5 pb=S2_5 gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_section : @ui.Style = @ui.css("w=Full gap=S1_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_result_box : @ui.Style = @ui.css("w=Full gap=S1")
+
+///|
+/// A box of words (box): 8 by 12 in, round 10, the ink at 4% over the canvas, 12 mono on 1.55; red's ground when it
+/// failed.
+// kept across runs: a value (no field of it changes)
+let tool_box : @ui.Style = @ui.style(w=Full, py=S2, px=S3, radius=@sf.custom_field_r, bg=@sf.faint_ground)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_box_red : @ui.Style = tool_box.then(@ui.css("bg=DangerBg"))
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_mono : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_mono_muted : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_mono_head : @ui.TextStyle = @ui.text_style(size=Meta, weight=Medium, color=Link, w=Full)
+
+///|
+/// The facts (facts): 4 by 10 apart, 11 subtle, a fact's value in mono, muted.
+// kept across runs: a value (no field of it changes)
+let tool_facts : @ui.Style = @ui.css("row w=Full px=S0_5 gap=S2_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_fact : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, wrap=false)
+
+///|
+/// A path (path): 2 in, 12 mono on 1.5, the ink; what of it after, 11 subtle.
+// kept across runs: a value (no field of it changes)
+let tool_path : @ui.Style = @ui.css("row w=Full px=S0_5 gap=S2 align=AEnd")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_path_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=@sf.grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_path_extra : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, wrap=false)
+
+///|
+/// A diff (diff: the box, 6 over and under, no sides; a line's mark 9 in at its start, its words 22, its end 9 in as
+/// its start is (what a line on its ground holds as far in from both sides: the web's 12 at its end, beside its mark
+/// laid over the line, held it 22 and 12); taken out on the red's ground, put in on the green's, a header in the blue,
+/// 4 over it).
+// kept across runs: a value (no field of it changes)
+let tool_diff : @ui.Style = @ui.style(w=Full, py=S1_5, radius=@sf.custom_field_r, bg=@sf.faint_ground, clip=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_diff_line : @ui.Style = @ui.style(row=true, w=Full, pl=@sf.diff_mark_in, pr=@sf.diff_mark_in)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_diff_out : @ui.Style = tool_diff_line.then(@ui.css("bg=DangerBg"))
+
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_diff_head : @ui.Style = tool_diff_line.then(@ui.css("pt=S1"))
+
+///|
+/// The gutter a line's mark stands in (taken out or put in), 9 in: as far as its words are 22 in.
+// kept across runs: a value (no field of it changes)
+let tool_diff_mark : @ui.Style = @ui.style(w=Fixed(@sf.diff_line_in.px() - @sf.diff_mark_in.px()))
+
+///|
+/// A line's words: what the gutter leaves.
+// kept across runs: a value (no field of it changes)
+let tool_diff_words : @ui.Style = @ui.style(w=@sf.grow, min_w=S0)
+
+///|
+/// A plan (plan): 2 apart, 2 in, 12; its marks in a 16 column; done struck and muted, under way in 600.
+// kept across runs: a value (no field of it changes)
+let tool_plan : @ui.Style = @ui.css("w=Full px=S0_5 gap=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_plan_row : @ui.Style = @ui.css("row w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_plan_mark : @ui.Style = @ui.css("w=S4")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_plan_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=@sf.grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_plan_done : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=@sf.grow)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_plan_now : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, color=Fg, w=@sf.grow)
+
+///|
+/// Fields (fields): 4 apart, 2 in; a key in a column 64 wide at least (11 subtle), its value 12 apart (12 mono), long
+/// words and data in a box.
+// kept across runs: a value (no field of it changes)
+let tool_fields : @ui.Style = @ui.css("w=Full px=S0_5 gap=S1")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_field : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_field_key : @ui.Style = @ui.css("min_w=S16")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_key_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_value : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_long_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=Full)
+
+///|
+/// The one thing it asked about (lead): 2 in, 12 mono on 1.5; nothing (none): 11 subtle.
+// kept across runs: a value (no field of it changes)
+let tool_lead : @ui.Style = @ui.css("w=Full px=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_lead_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, w=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tool_none : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, w=Full)
+
+///|
+/// What agent `key`'s history on `station` says it used, in a line (its `usageLine`): what reads it is told only as the
+/// line changes, not as the rest of the history does (what streams in as the agent works: history_steps_node).
+pub fn history_usage_line(src : Source, station : String, key : String) -> String {
+  let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
+  steps_usage_line.read(
+    src,
+    station + "\u{1}" + key,
+    fn(_) { text(src.topic("history", params).get().value, "usageLine") },
+    same=fn(a, b) { a == b },
+  )
+}
+
+///|
+/// What agent `key`'s history on `station` says it used, each figure (its `usage`): told only as they change.
+pub fn history_usage(src : Source, station : String, key : String) -> Array[Json] {
+  let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
+  let usage = steps_usage.read(
+    src,
+    station + "\u{1}" + key,
+    fn(_) { field(src.topic("history", params).get().value, "usage") },
+    same=fn(a, b) {
+      match (a, b) {
+        (Some(x), Some(y)) => physical_equal(x, y)
+        (None, None) => true
+        _ => false
+      }
+    },
+  )
+  match usage {
+    Some(Array(a)) => a
+    _ => []
+  }
+}
+
+///|
+// kept across runs: what it keeps is let go of by a run anew and by reset (sfbase derived.mbt)
+let steps_usage_line : @sfbase.Kept[String] = @sfbase.Kept::new()
+
+///|
+// kept across runs: what it keeps is let go of by a run anew and by reset (sfbase derived.mbt)
+let steps_usage : @sfbase.Kept[Json?] = @sfbase.Kept::new()

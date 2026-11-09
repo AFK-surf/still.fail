@@ -24,7 +24,7 @@ import type { Viewer } from "../mesh/credential.ts";
 import type { Connection, Stream } from "../mesh/native.ts";
 import { Reader, writeLine } from "../mesh/serve.ts";
 import type { GrantServers } from "./servers.ts";
-import { AdbActivity, KEEP_LENDING } from "./activity.ts";
+import { AdbActivity, KEEP_LENDING, KEEP_TCP, TCP_PORT } from "./activity.ts";
 
 type Json = any;
 
@@ -212,6 +212,8 @@ export class Share {
 /// The phones offered now, by whose and which (`key`).
 export class Shares {
   readonly byKey = new Map<string, Share>();
+  /// The phones' boots `adb tcpip` was asked in (keepTcp).
+  readonly tcpAsked = new Set<string>();
   /// When each person's phone was last offered no longer, and why (`stopped`: the phone ended it; else its link went):
   /// what phone_use says of a granted phone not lent now.
   readonly gone = new Map<string, { at: number; ended: string }>();
@@ -758,7 +760,22 @@ function keepLending(shares: Shares, share: Share, server: string[]): void {
       const said = await run(adb, [...server, "-s", share.serial(), ...ask], shares.limits.long).catch((error: Error) => error.message);
       log.info("adb", "adb kept the phone lending", { ask: ask.slice(2, 4).join(" "), said: said.split("\n")[0]!.trim().slice(0, 160), ...about(share.conn) });
     }
+    await keepTcp(shares, share, adb, server);
   })();
+}
+
+/// adbd's plain port, `TCP_PORT`, on: what the app holds its session to once Wi-Fi is gone, which Wireless debugging
+/// goes with (on mobile data, the phone lent on). `adb tcpip` restarts adbd, the held session with it, and lasts until
+/// the phone starts again: asked once a boot (`/proc/sys/kernel/random/boot_id`), so a phone that does not keep it is
+/// not restarted again and again.
+export async function keepTcp(shares: Shares, share: Pick<Share, "info" | "serial" | "conn">, adb: string, server: string[]): Promise<void> {
+  if (share.info.connect === TCP_PORT) return;
+  const said = await run(adb, [...server, "-s", share.serial(), "shell", KEEP_TCP], shares.limits.long).catch(() => "");
+  const [boot, port] = said.split("\n").map((l) => l.trim());
+  if (port === String(TCP_PORT) || !boot || !/^[0-9a-z-]+$/.test(boot) || shares.tcpAsked.has(boot)) return;
+  shares.tcpAsked.add(boot);
+  const done = await run(adb, [...server, "-s", share.serial(), "tcpip", String(TCP_PORT)], shares.limits.long).catch((error: Error) => error.message);
+  log.info("adb", "adb asked for adbd's plain port", { said: done.split("\n")[0]!.trim().slice(0, 160), ...about(share.conn) });
 }
 
 /// Lets the app turn Wireless debugging on itself from now on (`WRITE_SECURE_SETTINGS`), as its person asked.

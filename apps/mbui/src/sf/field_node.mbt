@@ -9,13 +9,16 @@
 /// panel's rows with a mouse, its ends round; 16 in, the strong grey's line, on the surface, its words the
 /// body's), editing `field`: `placeholder` while empty (`shorter` ways of saying it where it has less room), as
 /// dots where `secret`; Enter gives its words to `submitted`, once, at that key's moment; `leaves`: the keys it leaves
-/// to what it offers as it is typed in; `placeholder_by`: its placeholder as it is now, followed (in place of
-/// `placeholder`). While `disabled()`, faded, taking no press nor the focus (losing it then). The field's node (what
+/// to what it offers as it is typed in; `edited`: its words as the person's edit changes them (ui's field's), never
+/// as the app puts words in it; `placeholder_by`: its placeholder as it is now, followed (in place of
+/// `placeholder`); `label`: what a screen reader calls it, where no placeholder does (it shows none). While
+/// `disabled()`, faded, taking no press nor the focus (losing it then). The field's node (what
 /// the focus is given to).
 pub fn input_node(
   parent : @view.View,
   field : @ui.Field,
   placeholder? : String = "",
+  label? : String = "",
   shorter? : Array[String] = [],
   secret? : Bool = false,
   placeholder_by? : () -> String,
@@ -23,6 +26,7 @@ pub fn input_node(
   small? : Bool = false,
   leaves? : Array[Int] = [],
   submitted? : (String) -> Unit = fn(_) {  },
+  edited? : (String) -> Unit,
 ) -> @view.View {
   let line = @signals.untracked(fn() { theme().t.body_line })
   field_frame(parent, disabled, row=true, fn(f) {
@@ -44,9 +48,11 @@ pub fn input_node(
       line~,
       max_lines=1,
       enter_sends=true,
+      label~,
       secret~,
       leaves~,
       submitted~,
+      edited?,
       size_by=fn() { theme().t.body },
       colors_by=fn() {
         let th = @ui.tree_theme()
@@ -63,17 +69,20 @@ pub fn input_node(
 /// Lines to type in in `parent` (textarea's look: a one-line field grown taller, round as its ends are, or `corner`
 /// round where said; 16 in and 8 under its top, the strong grey's line, on the surface; its words 14 on lines 1.6 of
 /// them), editing `field`: at least `rows` lines high, growing to `most`, its words scrolling in it past them;
-/// `placeholder` while empty (`placeholder_by`: as it is now, followed); Enter a new line. While `disabled()`, as
-/// input_node's. The field's node.
+/// `placeholder` while empty (`placeholder_by`: as it is now, followed; `label`: as input_node's); Enter a new line;
+/// `edited`: as input_node's.
+/// While `disabled()`, as input_node's. The field's node.
 pub fn textarea_node(
   parent : @view.View,
   field : @ui.Field,
   rows? : Int = 3,
   most? : Int = 16,
   placeholder? : String = "",
+  label? : String = "",
   corner? : Double,
   placeholder_by? : () -> String,
   disabled? : () -> Bool = fn() { false },
+  edited? : (String) -> Unit,
 ) -> @view.View {
   field_frame(parent, disabled, row=false, fn(f) {
     f
@@ -91,9 +100,11 @@ pub fn textarea_node(
       placeholder_by?,
       font_size=input_size,
       line=textarea_line,
+      label~,
       min_lines=rows,
       max_lines=most,
       enter_sends=false,
+      edited?,
       colors_by=fn() {
         let p = theme().p
         (p.text, p.subtle, p.accent)
@@ -108,14 +119,16 @@ pub fn textarea_node(
 /// (a mouse's pointer on it or its field, nothing over it there; a finger pressing its field: Ctx::lit's); faded to
 /// O55 (input_box's `disabled`) over dur_ms while `disabled()`, its field then taking no press nor the focus. The
 /// field's node.
+#callsite(autofill(loc))
 fn field_frame(
   parent : @view.View,
   disabled : () -> Bool,
   row~ : Bool,
   body : (@view.View) -> @view.View,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let made : Ref[@view.View?] = Ref(None)
-  parent.box(fn(f) {
+  parent.box(made_for=loc, fn(f) {
     let live = fn() { !disabled() }
     let seen = EdgeWay::new(if @signals.untracked(disabled) { field_disabled_alpha } else { 1.0 })
     f.reacts(disabled, fn(off) { seen.go(f, if off { field_disabled_alpha } else { 1.0 }, dur_ms) })
@@ -150,3 +163,22 @@ fn field_frame(
 ///|
 /// How far a disabled field is seen (input_box's `disabled{opacity=O55}`).
 let field_disabled_alpha : Double = 0.55
+
+///|
+/// A field (field's, as nodes) in `parent`: its `label` (13, 500) over what `body` makes in it (the input), 6 apart; on
+/// a wide page not in a panel as wide as what is typed in it needs (field_box_wide), else as wide as where it is.
+#callsite(autofill(loc))
+pub fn field_node(parent : @view.View, label : () -> String, body : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(f) {
+    // (in a panel's body: lent where it is, panel_in_lent)
+    let wide_page = look_node(f) is Wide && f.lent(panel_in_lent) is None
+    style_node(f, fn() { if wide_page { field_box_wide } else { field_box } })
+    f.box(fn(top) {
+      style_node(top, fn() { field_top })
+      words_node(top, label, fn() { field_label }) |> ignore
+    })
+    |> ignore
+    body(f)
+  })
+  |> ignore
+}

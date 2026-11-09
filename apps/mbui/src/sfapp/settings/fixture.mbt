@@ -324,13 +324,31 @@ let fixture_changes : @signals.Signal[Int] = @signals.signal(0)
 /// The made-up core changed (the app's fixture, its settings, its browsing): what read its topics in a computed is
 /// worked out again.
 pub fn fixture_changed() -> Unit {
-  fixture_changes.set(@signals.untracked(fn() { fixture_changes.get() }) + 1)
+  fixture_changes.set(fixture_changes.untracked() + 1)
 }
 
 ///|
 /// A topic of the made-up core read: what reads it in a computed follows its changes (fixture_changed).
 pub fn fixture_followed() -> Unit {
   fixture_changes.get() |> ignore
+}
+
+///|
+/// A draft's words told the made-up core (`composer.text`): its topic alone changed, told to what reads that topic
+/// (fixture_draft_followed), nothing else of the made-up core's, as the core changes the draft's alone.
+// kept across runs: a count of changes; a run anew reads its topics anew
+let fixture_draft_changes : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// A draft's words changed in the made-up core (fixture_draft_changes).
+pub fn fixture_draft_changed() -> Unit {
+  fixture_draft_changes.set(fixture_draft_changes.untracked() + 1)
+}
+
+///|
+/// A draft's topic of the made-up core read: followed as its words change (fixture_draft_changed).
+pub fn fixture_draft_followed() -> Unit {
+  fixture_draft_changes.get() |> ignore
 }
 
 ///|
@@ -559,7 +577,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-me-reading" => "me"
     "settings-usage-details-pending" => "usage"
     "settings-profiles-pick" | "settings-profiles-monthly" => "profiles"
-    "settings-connect" => "connect:ws1/st1#k1"
+    "settings-connect" | "settings-connect-borrow" => "connect:ws1/st1#k1"
     _ =>
       if m.has_prefix("settings-") {
         m.unsafe_substring(start=9, end=m.length())

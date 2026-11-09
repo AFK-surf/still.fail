@@ -43,6 +43,8 @@ export type RuntimeEvent =
   /// The station's tools (its MCP endpoint) failed it as unreachable: what it says through them reaches nobody until its
   /// process starts again.
   | { type: "toolsLost"; why: string }
+  /// It compacted its context (on its own as it filled, or asked for by hand): what it had read is now a summary.
+  | { type: "compacted" }
   | { type: "live"; event: LiveEvent };
 
 export type Profile = {

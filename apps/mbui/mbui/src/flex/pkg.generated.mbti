@@ -18,6 +18,24 @@ pub let counters : FixedArray[Int32]
 
 pub fn measured_height(Node, Double) -> Double
 
+pub fn measured_width(Node, Double) -> Double
+
+pub fn move_at(Double) -> Double
+
+pub let move_end : Double
+
+pub let move_k : Double
+
+pub let move_least_ms : Double
+
+pub let move_most_ms : Double
+
+pub fn move_ms(Double) -> Double
+
+pub let move_whole_frames_ms : Double
+
+pub fn performing() -> Bool
+
 pub fn relayout(Node) -> Unit
 
 // Errors
@@ -93,6 +111,7 @@ pub(all) struct Node {
   mut box_ver : Int32
   mut dirty : Bool
   mut p_ok : Bool
+  mut room : Bool
   mut p_kw : Double
   mut p_kh : Double
   mut p_cbw : Double
@@ -104,8 +123,8 @@ pub(all) struct Node {
   mut skip_gen : Int32
 }
 pub fn Node::add(Self, Self) -> Unit
-pub fn Node::laid_out(Self) -> Bool
 pub fn Node::laid_given(Self) -> Bool
+pub fn Node::laid_out(Self) -> Bool
 pub fn Node::laid_out_at(Self) -> Int32
 pub fn Node::left_out(Self) -> Bool
 pub fn Node::new() -> Self
@@ -145,6 +164,12 @@ pub(all) struct Style {
   mut min_held : Bool
   mut wrap_least : Bool
   mut content_share : Double
+  mut come_from : Double
+  mut come_to : Double
+  mut come_at : Double
+  mut come_now : Double
+  mut come_ends : Double
+  mut come_k : Double
   mut rows_grid : Double
   // private fields
 }

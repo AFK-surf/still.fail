@@ -78,14 +78,14 @@ test "a timer set between frames before one set already: the host woken for the 
 }
 
 ///|
-test "a frame's handler forks; the fiber first runs at the start of the next frame, at the tap's moment, before the view" {
+test "a press's handler forks; the fiber first runs as the frame the press brings begins, at the tap's moment, before the view" {
   let log : Array[String] = []
   let shown = Ref("idle")
   // how long the fiber sleeps
   let nap = 32
   let t = @ui.Tester::new(fn(c) {
     log.push("view \{shown.val}")
-    if c.button("Go") {
+    c.button("Go", on_press=fn() {
       ignore(
         c.fork(async fn() {
           log.push("fiber at \{@effect.now()}")
@@ -94,17 +94,18 @@ test "a frame's handler forks; the fiber first runs at the start of the next fra
           shown.val = "done"
         }),
       )
-    }
+    })
   })
   log.clear()
   let (x, y) = t.find("Go").unwrap()
   t.touch(0, x, y)
   t.touch(2, x, y)
-  // the tap's frame, drawn at its moment (1016.7): the handler forks; the frame after, at the same moment: the fiber runs
-  // first, at the time it was forked (1016), then the view; it sleeps until 1048
+  // let go (1016.7): the handler forks, outside any build, nothing drawn yet; the frame the press brings, at that
+  // moment: the fiber runs first, at the time it was forked (1016), then the view; it sleeps until 1048
   let tapped = t.time().floor().to_int64()
+  assert_eq(log, [])
   t.draw()
-  assert_eq(log[0:3].to_array(), ["view idle", "fiber at \{tapped}", "view busy"])
+  assert_eq(log[0:2].to_array(), ["fiber at \{tapped}", "view busy"])
   let due = (tapped + nap.to_int64()).to_double()
   // a millisecond before it
   t.run_for(due - 1.0 - t.time())

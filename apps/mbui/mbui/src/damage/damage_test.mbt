@@ -302,6 +302,92 @@ test "a header compared as itself, its room passed over; moved, where its group 
 }
 
 ///|
+test "a group holding a header of another reaches as far as that one does, moved where it stands in it" {
+  let d = @damage.Damage::new()
+  d.group_set(7, frame([(100.0, 50.0, 20.0, 10.0, 0), (100.0, 70.0, 20.0, 10.0, 0)]), 2)
+  // (group 8: an instance, and group 7's header 100 down in one place of it, standing for its two)
+  let inner = FixedArray::make(2 * 60, 0.0)
+  frame([(10.0, 10.0, 10.0, 10.0, 0)]).blit_to(inner, len=60)
+  inner[60 + 1] = 100.0
+  inner[60 + 5] = 13.0
+  inner[60 + 12] = 7.0
+  inner[60 + 14] = 2.0
+  d.group_set(8, inner, 2)
+  let next_h = fn(a : FixedArray[Double]) {
+    d.next(a, a.length() / 60, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true)
+  }
+  // (its header standing for the three it draws out to)
+  ignore(next_h(headed(8, 3, 0.0, 3.0)))
+  // (moved 40 down: from its own instance's top to group 7's foot where it stands in it, where it was and is)
+  inspect(next_h(headed(8, 3, 40.0, 3.0)), content="[(8, 8, 114, 214)]")
+}
+
+///|
+test "a frame with only its headers moved: those compared alone, the same parts as the whole frame compared; else none" {
+  let whole = @damage.Damage::new()
+  let alone = @damage.Damage::new()
+  for d in [whole, alone] {
+    d.group_set(7, frame([(100.0, 50.0, 20.0, 10.0, 0), (100.0, 70.0, 20.0, 10.0, 0)]), 2)
+    ignore(d.next(headed(7, 2, 0.0, 3.0), 3, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true))
+  }
+  for dy in [40.0, 41.0, 41.0, 0.0] {
+    let a = headed(7, 2, dy, 3.0)
+    let by_whole = whole.next(a, 3, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true)
+    assert_eq(alone.moved(a, 3, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, [1]), Some(by_whole), msg="moved to \{dy}")
+  }
+  // (glass over where the group moves: what it copies drawn again with it, as the whole frame compared has it)
+  let glassed = fn(dy : Double) {
+    let a = headed(7, 2, dy, 3.0)
+    let g = frame([(90.0, 60.0, 60.0, 30.0, 5)])
+    g[20] = -1.0
+    let b = FixedArray::make(a.length() + 60, 0.0)
+    a.blit_to(b, len=a.length())
+    g.blit_to(b, len=60, dst_offset=a.length())
+    b
+  }
+  let gw = @damage.Damage::new()
+  let ga = @damage.Damage::new()
+  for d in [gw, ga] {
+    d.group_set(7, frame([(100.0, 50.0, 20.0, 10.0, 0), (100.0, 70.0, 20.0, 10.0, 0)]), 2)
+    ignore(d.next(glassed(0.0), 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true))
+  }
+  for dy in [40.0, 41.0] {
+    let a = glassed(dy)
+    let by_whole = gw.next(a, 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true)
+    assert_eq(ga.moved(a, 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, [1]), Some(by_whole), msg="under glass, moved to \{dy}")
+  }
+  // (as a host presents it (ui's h_present: next, then occlude), the kept frame's glass and pictures found of what is
+  // drawn alone, its pieces of shapes passed over: the same parts)
+  let go = @damage.Damage::new()
+  go.group_set(7, frame([(100.0, 50.0, 20.0, 10.0, 0), (100.0, 70.0, 20.0, 10.0, 0)]), 2)
+  ignore(go.next(glassed(0.0), 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true))
+  ignore(go.occlude(glassed(0.0), 4, 400.0, 300.0))
+  let gw2 = @damage.Damage::new()
+  gw2.group_set(7, frame([(100.0, 50.0, 20.0, 10.0, 0), (100.0, 70.0, 20.0, 10.0, 0)]), 2)
+  ignore(gw2.next(glassed(0.0), 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true))
+  for dy in [40.0, 41.0] {
+    let a = glassed(dy)
+    let by_whole = gw2.next(a, 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true)
+    assert_eq(go.moved(a, 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, [1]), Some(by_whole), msg="occluded, moved to \{dy}")
+  }
+  // (a stream's picture in it, found so: compared whole)
+  let streamed = glassed(0.0)
+  streamed[3 * 60 + 5] = 4.0
+  streamed[3 * 60 + 20] = @damage.stream_tex_base
+  let gs = @damage.Damage::new()
+  gs.group_set(7, frame([(100.0, 50.0, 20.0, 10.0, 0), (100.0, 70.0, 20.0, 10.0, 0)]), 2)
+  ignore(gs.next(streamed, 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true))
+  ignore(gs.occlude(streamed, 4, 400.0, 300.0))
+  let moved_streamed = copy(streamed)
+  moved_streamed[60 + 1] = 40.0
+  assert_eq(gs.moved(moved_streamed, 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, [1]), None)
+  // (another number of instances, another window, or what was no header: not so)
+  assert_eq(alone.moved(headed(7, 3, 0.0, 3.0), 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, [1]), None)
+  assert_eq(alone.moved(headed(7, 2, 0.0, 3.0), 3, 500.0, 300.0, 2.0, 1.0, 1.0, 1.0, [1]), None)
+  assert_eq(alone.moved(headed(7, 2, 0.0, 3.0), 3, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, [0]), None)
+}
+
+///|
 test "known drawn anew: a part from the start, past half the window whole with nothing compared" {
   let a = frame([(10.0, 10.0, 20.0, 20.0, 0), (300.0, 200.0, 20.0, 20.0, 0)])
   let d = seen(a)

@@ -1211,7 +1211,7 @@ fn screen_layout(width : Double) -> Layout {
 /// too), keyboard and mouse's on a computer, its window narrow or not; its colours one palette on every screen, light
 /// or dark as set: call at the top of a view.
 pub fn begin(_c : @ui.Ctx) -> Theme {
-  let dark = @signals.untracked(fn() { dark_set.get() }).unwrap_or(false)
+  let dark = dark_set.untracked().unwrap_or(false)
   current.val = theme_of(dark)
   current.val
 }
@@ -1460,7 +1460,7 @@ pub fn set_accent(key : String) -> Unit {
 ///|
 /// The colour theme drawn now (accent_set's).
 fn accent_now() -> AccentTone {
-  tone_of(@signals.untracked(fn() { accent_set.get() })).unwrap_or(accents[0])
+  tone_of(accent_set.untracked()).unwrap_or(accents[0])
 }
 
 ///|
@@ -1504,7 +1504,7 @@ fn accented(p : Palette, dark : Bool, key : String) -> Palette {
 /// is asked, not only as a frame begins.
 fn theme_of(dark : Bool) -> Theme {
   let touch = native_input() is Finger
-  let accent = @signals.untracked(fn() { accent_set.get() })
+  let accent = accent_set.untracked()
   // (one of each: the same whenever it is asked, what is made of it kept as long as it is)
   match themes_made.get((dark, touch, accent)) {
     Some(t) => return t
@@ -2840,15 +2840,34 @@ pub let rail_in : @ui.Space = room(8.0)
 /// The same as the sidebar's panel on the tape (laid out Medium, its left corners tape_side_corners'): the places in
 /// its left corners (a 38 to press, its ground 30 round in its middle) as far in as makes their grounds concentric with
 /// them; where the corner is too square for a circle (it follows a Mac window's), as far in as makes a ground's corner
-/// there concentric with it (box_fit: the grounds boxes as round, rail_ground_radius); else 9 as open.
+/// there concentric with it (box_fit: the grounds boxes as round, rail_ground_radius); else 9 as open. In a corner
+/// that follows the window's, where it stood before #3806 (5b8b71713d), from its left and its foot alike (the user,
+/// 2026-11-09: 「把左边距恢复过来」, 「你左下角要两边一致啊」): that change took what follows a corner and how far in a
+/// box may stand there by the radius as given (concentric: the corner less the inset), and so moved the rail's places
+/// in by 2.5 (in a Mac's 16, 6.5 to 4 for their grounds); here they keep the places of the radius as drawn, a quarter
+/// longer (smooth_scale: the window's followed `window_in` in, 11.2 in a Mac's 16, a ground at most so far in that its
+/// own corner is corner_fit's least, (11.2 - 6) × 1.25 = 6.5), the corners themselves as they are now.
 pub fn rail_in_tape() -> Double {
   let ground_in = (38.0 - rail_ground_side) / 2.0
-  let corner = tape_side_corners()[3].radius(@ui.corner_roots())
+  let at = @ui.corner_roots()
+  let k = tape_side_corners()[3]
+  let corner = k.radius(at)
   let d = @ui.capsule_in(corner, rail_ground_side)
   if place_fits(d) {
     d - ground_in
   } else {
-    box_fit(corner, 9.0 + ground_in, 0.0).0 - ground_in
+    match k {
+      Follow(from, inset, _) if k.follows(at) => {
+        let s = @ui.smooth_scale
+        let drawn = from.radius(at) - inset / s
+        let nearest = dmax(corner_fit.near, (drawn - corner_fit.most) * s)
+        let furthest = dmin(corner_fit.far, (drawn - corner_fit.least) * s)
+        let want = 9.0 + ground_in
+        let place = if nearest > furthest { want } else { dmin(dmax(want, nearest), furthest) }
+        place - ground_in
+      }
+      _ => box_fit(corner, 9.0 + ground_in, 0.0).0 - ground_in
+    }
   }
 }
 

@@ -31,12 +31,13 @@ pub fn collapsible(
   let id = c.id(key)
   let r = c.interact(id, disabled~)
   let now = if r.clicked { !open } else { open }
+  let p = unfolds(c, key, now)
   c.box(fn() {
     let i = c.box(id=pick(disabled, 0, id), fn() {
       look(c, { label, open: now, hovered: r.hovered, focus_shown: r.focus_shown, disabled })
     })
     c.semantics(i, Button, id~, label~, expanded=now, disabled~, actions=pick(disabled, [], [@ui.Action::Activate]))
-    unfolding(c, key, now, label, body)
+    unfolding(c, key, p, label, body, unfold_spec(p))
   })
   |> ignore
   { value: now, response: r.changed_to(now != open) }
@@ -50,48 +51,48 @@ pub let collapsible_open_ms : Double = 200.0
 pub let collapsible_close_ms : Double = 160.0
 
 ///|
-/// What `body` builds, while `open` (and while it closes), its height growing from nothing to its own and back by
-/// `presence`; a region named `label` for the semantics tree.
-fn unfolding(c : @ui.Ctx, key : String, open : Bool, label : String, body : () -> Unit) -> Unit {
-  let p = presence(c, key + "/content", open, enter=@motion.tween(collapsible_open_ms, ease=Out), exit=@motion.tween(collapsible_close_ms, ease=Out))
-  if !p.built {
-    return
-  }
-  let cid = c.id(key + "/content")
-  // (read as it is built: its height is laid out by it, what is under it moving with it; a look would leave a hole
-  // as tall as it is, or draw it over what is under it)
-  let t = p.t.get()
-  let k = if t > 1.0 { 1.0 } else if t < 0.0 { 0.0 } else { t }
-  let full = match c.rect_of(cid) {
-    Some((_, _, _, h)) => Some(h)
-    None => None
-  }
-  // all the way open: as tall as it is (it may grow); on its way, cut to its share of its height
-  let h : @ui.Size = match full {
-    Some(fh) if k < 1.0 => Px(fh * k)
-    // (not yet laid out: its first frame, at 0 of its way; its presence moving draws the next)
-    None if k < 1.0 => Px(0.0)
-    _ => Auto
-  }
-  // (on its way, what shows of it fading to where it is cut, by each pixel: @ui.cut_soft; cut there too, so nothing of
-  // it past its room is pressed)
-  c.box(h~, clip=true, fn() {
-    let i = c.box(id=cid, fn() {
-      if p.leaving() {
-        c.hidden_from_semantics(body)
-      } else {
-        body()
+/// Whether `key`'s content is shown (`open`), and built while it closes, till its declared end (presence).
+fn unfolds(c : @ui.Ctx, key : String, open : Bool) -> Presence {
+  presence(c, key + "/content", open, enter=@motion.tween(collapsible_open_ms, ease=Out), exit=@motion.tween(collapsible_close_ms, ease=Out))
+}
+
+///|
+/// How what moves as content `p` opens or closes goes: as long as it opens, or as it closes.
+fn unfold_spec(p : Presence) -> @motion.Spec {
+  @motion.tween(if p.shown { collapsible_open_ms } else { collapsible_close_ms }, ease=Out)
+}
+
+///|
+/// What `body` builds while `p` shows it (and while it closes, till its declared end), in a room laid out as it ends at
+/// once (as tall as it is, open; none, closing) and reshaped there by `spec` from as tall as it showed (@motion.layout,
+/// keyed by `key`, for its being opened): what it holds shown only as far down as the room has got, fading to it by
+/// each pixel (layout's cut), what is under it (said so with the same cause: an accordion's items) moving with it.
+/// A region named `label` for the semantics tree.
+fn unfolding(
+  c : @ui.Ctx,
+  key : String,
+  p : Presence,
+  label : String,
+  body : () -> Unit,
+  spec : @motion.Spec,
+) -> Unit {
+  // (closing: as much of its room left as its told end says, none, what it holds past it till it has gone in under its
+  // foot, cut only by its way there; open, as tall as it is (it may grow), what it holds cut to it)
+  let room = c.box(h=if p.leaving() { Px(p.t.target()) } else { Auto }, clip=!p.leaving(), fn() {
+    if p.built {
+      let i = c.box(id=c.id(key + "/content"), fn() {
+        if p.leaving() {
+          c.hidden_from_semantics(body)
+        } else {
+          body()
+        }
+      })
+      if !p.leaving() {
+        c.semantics(i, Region, label~)
       }
-    })
-    match full {
-      Some(fh) if k < 1.0 => c.cut_to_top(i, fh * k, soft=@ui.cut_soft(fh * k, fh * (1.0 - k)))
-      _ => ()
-    }
-    if !p.leaving() {
-      c.semantics(i, Region, label~)
     }
   })
-  |> ignore
+  @motion.layout(c, room, "kit-unfold/" + key, spec~, by=if p.shown { "open" } else { "shut" })
 }
 
 ///|
@@ -150,7 +151,8 @@ pub fn accordion(
   let mut now = value.copy()
   let gi = c.box(fn() {
     c.roving(key, orientation=Vertical, wrap=true, fn() {
-      for k, it in items {
+      // (what is pressed first, so that each item is built as open as it is after it: what is open one cause for all)
+      let pressed = items.mapi(fn(k, it) {
         let iid = part_id(id, k)
         let r = c.interact(iid, disabled=it.disabled)
         let was = now.contains(it.value)
@@ -167,19 +169,42 @@ pub fn accordion(
             [it.value]
           }
         }
+        r
+      })
+      // (what is open, named so even when none is: a cause, never none)
+  let opened = "open:" + now.join("\u{1}")
+      // (what is under one opening or closing moves with it, as long as one over it opens, else as one closes)
+      let mut opens = false
+      let mut closes = false
+      for k, it in items {
+        let iid = part_id(id, k)
+        let r = pressed[k]
         let on = now.contains(it.value)
-        if k > 0 {
-          c.box(h=Px(1.0), bg=t.line, fn() {  }) |> ignore
+        let p = unfolds(c, key + "/" + it.value, on)
+        let item = c.box(fn() {
+          if k > 0 {
+            c.box(h=Px(1.0), bg=t.line, fn() {  }) |> ignore
+          }
+          let i = c.box(id=pick(it.disabled, 0, iid), fn() {
+            look(c, { label: it.label, open: on, hovered: r.hovered, focus_shown: r.focus_shown, disabled: it.disabled })
+          })
+          c.semantics(i, Button, id=iid, label=it.label, expanded=on, disabled=it.disabled, actions=pick(it.disabled, [], [
+            @ui.Action::Activate,
+          ]))
+          unfolding(c, key + "/" + it.value, p, it.label, fn() {
+            c.box(padx=10.0, pb=12.0, fn() { (it.body)() }) |> ignore
+          }, unfold_spec(p))
+        })
+        let spec = @motion.tween(if opens || !closes { collapsible_open_ms } else { collapsible_close_ms }, ease=Out)
+        @motion.layout(c, item, "kit-fold/" + key + "/" + it.value, spec~, by=opened, cut=false)
+        // (on its way: what it does moves what is under it)
+        if p.built && !p.t.over(c) {
+          if p.shown {
+            opens = true
+          } else {
+            closes = true
+          }
         }
-        let i = c.box(id=pick(it.disabled, 0, iid), fn() {
-          look(c, { label: it.label, open: on, hovered: r.hovered, focus_shown: r.focus_shown, disabled: it.disabled })
-        })
-        c.semantics(i, Button, id=iid, label=it.label, expanded=on, disabled=it.disabled, actions=pick(it.disabled, [], [
-          @ui.Action::Activate,
-        ]))
-        unfolding(c, key + "/" + it.value, on, it.label, fn() {
-          c.box(padx=10.0, pb=12.0, fn() { (it.body)() }) |> ignore
-        })
       }
     })
   })

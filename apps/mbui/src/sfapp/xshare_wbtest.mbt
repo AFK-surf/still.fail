@@ -31,6 +31,7 @@ fn sheet_core(calls : Array[Made], over? : (Json?) -> Json? = fn(v) { v }) -> @u
 test "分享给其他 workspace: its row says where; the sheet ticks another and lets their agents send, 完成 says so" {
   let calls : Array[Made] = []
   let t = sheet_core(calls)
+  open_share(t)
   t.tap_text("分享给其他 workspace")
   // (the chat's sheet put down, the presenters' sheet up: its own end)
   t.frame()
@@ -54,6 +55,7 @@ test "分享给其他 workspace: its row says where; the sheet ticks another and
 test "分享给其他 workspace: none ticked, their agents cannot be let send" {
   let calls : Array[Made] = []
   let t = sheet_core(calls)
+  open_share(t)
   t.tap_text("分享给其他 workspace")
   // (the chat's sheet put down, the presenters' sheet up: its own end)
   t.frame()
@@ -77,6 +79,7 @@ test "分享给其他 workspace: none ticked, their agents cannot be let send" {
 test "分享给其他 workspace on a phone: its rows a finger's, 完成 across the sheet in a thumb's reach" {
   let calls : Array[Made] = []
   let t = sheet_core(calls)
+  open_share(t)
   t.tap_text("分享给其他 workspace")
   t.frame()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
@@ -103,6 +106,7 @@ test "分享给其他 workspace on a phone: its rows a finger's, 完成 across t
 test "分享给其他 workspace on a phone: 完成 drawn as the large screen's, reached past its edge" {
   let calls : Array[Made] = []
   let t = sheet_core(calls)
+  open_share(t)
   t.tap_text("分享给其他 workspace")
   t.frame()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())

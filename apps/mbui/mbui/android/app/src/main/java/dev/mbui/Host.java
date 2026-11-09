@@ -284,6 +284,15 @@ final class Host {
         main.postDelayed(() -> v.wakeAt(at), (long) Math.max(0, lead));
     }
 
+    /**
+     * A frame for what moves on by the clock that needs only {@code hz} frames a second (android_host.c
+     * mb_host_frames_paced, GL thread, in the frame): MBView's (framesPaced); whether it paces it.
+     */
+    static boolean framesPaced(double hz) {
+        MBView v = view;
+        return v != null && v.framesPaced(hz);
+    }
+
     /** The input method's edits sent to MoonBit (MBView.MBInput.edited, main thread) and taken by it (GL thread). */
     static int imeSent;
     static volatile int imeTaken;
@@ -522,6 +531,8 @@ final class Host {
     static int drive(int kind, String text) {
         // a notification of the app's, tapped or looked for by its words (Notices.drive)
         if (kind == 6 || kind == 7) return Notices.drive(kind == 6, text);
+        // input to the screen measured (Latency)
+        if (kind == 12) return Latency.start(text);
         if (kind == 4 || kind > 5) return 0;
         main.post(() -> {
             MBView v = view;

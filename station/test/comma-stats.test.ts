@@ -115,7 +115,7 @@ test("a build reads this station's usage and chats of the home workspace and eac
     return JSON.stringify(args.before === undefined ? { chats: [chat(1, "working")], more: true, next: "5.1" } : { chats: [chat(2, "waiting")], more: false, next: null });
   };
   const read = workspaceRead({
-    home: () => "ws-home",
+    of: () => ({ workspace: "ws-home", home: true }),
     here: async (op, args) => answer("", op, args),
     others: async () => ["st-there", "st-down"],
     there: async (station, op, args) => answer(station, op, args),
@@ -125,6 +125,24 @@ test("a build reads this station's usage and chats of the home workspace and eac
   assert.deepEqual(got.stations.map((s) => [s.station ?? "", s.usage.rows.length, s.chats.map((c: Json) => c.thread)]), [["", 1, [1, 2]], ["st-there", 1, [1, 2]]]);
   assert.deepEqual(asked[0], ["", "outflowUsage", { from: FROM, to: FROM + DAY, tz: 0, ws: { workspace: "ws-home", home: true } }]);
   assert.deepEqual(asked.filter(([s, op]) => s === "st-there" && op === "outflowChats").map(([, , a]) => a.before ?? null), [null, "5.1"]);
+});
+
+test("a build of a workspace the station joined reads that workspace's chats here and its other stations'", async () => {
+  const asked: [string, string, Json][] = [];
+  const answer = (station: string, op: string, args: Json) => {
+    asked.push([station, op, args]);
+    if (op === "outflowUsage") return JSON.stringify({ rows: [usageRow("2026-11-02", `${station}-s`, "ann@x")], people: {} });
+    return JSON.stringify({ chats: [chat(3, "working")], more: false, next: null });
+  };
+  const read = workspaceRead({
+    of: () => ({ workspace: "ws-joined", home: false }),
+    here: async (op, args) => answer("", op, args),
+    others: async () => ["st-joined"],
+    there: async (station, op, args) => answer(station, op, args),
+  });
+  const got = await read(FROM, FROM + DAY);
+  assert.deepEqual(got.stations.map((s) => [s.station ?? "", s.usage.rows.length, s.chats.map((c: Json) => c.thread)]), [["", 1, [3]], ["st-joined", 1, [3]]]);
+  assert.deepEqual(asked.filter(([s]) => s === "").map(([, , a]) => a.ws), [{ workspace: "ws-joined", home: false }, { workspace: "ws-joined", home: false }]);
 });
 
 test("connected, the station sends Comma what it lacks of the statistics, and again as they change; a Comma from before ends it", async () => {

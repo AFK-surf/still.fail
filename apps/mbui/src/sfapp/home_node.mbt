@@ -23,10 +23,10 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
     before: fn(_, _) {
       let parts : Array[@sfpages.NodePart] = []
       if @sfpages.update_card_shown() {
-        parts.push({ key: "update-card", make: fn(p) { @ui.old(p, fn(c) { @sfpages.update_card(c, src) }, natural=true, unlaid=fn() { p.window().1 }) |> @ui.old_takes_own |> ignore } })
+        parts.push({ key: "update-card", make: fn(p) { @sfpages.update_card_node(p, src) } })
       }
       if @sfpages.news_of(src) is Some(_) {
-        parts.push({ key: "changelog-news", make: fn(p) { @ui.old(p, fn(c) { @sfpages.changelog_news(c, src) }, natural=true, unlaid=fn() { p.window().1 }) |> @ui.old_takes_own |> ignore } })
+        parts.push({ key: "changelog-news", make: fn(p) { @sfpages.changelog_news_node(p, src, tips) } })
       }
       parts
     },
@@ -34,7 +34,7 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
     after: fn(_, _) {
       match workspace() {
         Some(w) if items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups").length() > 0 =>
-          [{ key: "open-jobs", make: fn(p) { @ui.old(p, fn(c) { open_jobs(c, src, w) }, natural=true, unlaid=fn() { p.window().1 }) |> ignore } }]
+          [{ key: "open-jobs", make: fn(p) { open_jobs_node(p, src, w) } }]
         _ => []
       }
     },
@@ -49,6 +49,9 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
     // (in view while it is the page on top: what changes under another page is as it is as it is come back to)
     watched: fn() { app.nav.top() is Home },
   }
+  // (what is left up long asked with the lists from the start, not once they have come: the first page waits for
+  // both, app.mbt's page_ready)
+  @sfbase.long_jobs_read(v, src, workspace)
   // (a search the app starts with open: sfpages' search.mbt)
   @sfpages.search_start_now()
   // (while the app's first page waits for what it shows: drawn at none, the splash in its place, as the old views are)
@@ -74,12 +77,14 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
 
 ///|
 /// Home's top bar (top_bar's) in `v`, on its glass, under the status bar: the filter at the left (with stations to
-/// narrow), what is catching up and going up beside it, the workspace's switcher and settings at the right.
+/// narrow), what is catching up and going up beside it, the workspace's switcher and settings at the right; 待处理
+/// first unless not `bell` (over the page of a device waiting in the lock: nothing of the workspace's to attend to).
 fn home_top_bar_node(
   v : @view.View,
   src : Source,
   workspace : () -> Workspace?,
   view : () -> ChatsView?,
+  bell? : Bool = true,
 ) -> Unit {
   v.box(fn(g) {
     g.glass(By(fn() { Some(@sf.glass_bar()) })) |> ignore
@@ -92,22 +97,24 @@ fn home_top_bar_node(
       .lines_up(Is(Some(Middle)))
       |> ignore
       // 待处理, first on the bar: as a system's bar has it (no rail here to hold its bell)
-      row.box(fn(k) {
-        @sf.round_key_node(k, "bell", fn() { tr("web-main.attention.entry") }, fn() {
-          guard @signals.untracked(workspace) is Some(w) else { return }
-          let (x, y, wd, h) = k.placed_window_now()
-          @sfdesk.open_attention_panel(src, w, At(x, y, wd, h))
-        })
-        k.show(fn() { workspace().map(fn(w) { @sfdesk.attention_any(src, w) }).unwrap_or(false) }, fn(m) {
-          m.over(Is(true)).row(Is(true)).lies_along(Is(End)).lines_up(Is(Some(Start))) |> ignore
-          m.box(fn(at) {
-            at.offset(Is((-home_bell_dot_at, home_bell_dot_at))) |> ignore
-            @sfpages.chat_mark_node(at, fn() { "done" })
+      if bell {
+        row.box(fn(k) {
+          @sf.round_key_node(k, "bell", fn() { tr("web-main.attention.entry") }, fn() {
+            guard @signals.untracked(workspace) is Some(w) else { return }
+            let (x, y, wd, h) = k.placed_window_now()
+            @sfdesk.open_attention_panel(src, w, At(x, y, wd, h))
           })
-          |> ignore
+          k.show(fn() { workspace().map(fn(w) { @sfdesk.attention_any(src, w) }).unwrap_or(false) }, fn(m) {
+            m.over(Is(true)).row(Is(true)).lies_along(Is(End)).lines_up(Is(Some(Start))) |> ignore
+            m.box(fn(at) {
+              at.offset(Is((-home_bell_dot_at, home_bell_dot_at))) |> ignore
+              @sfpages.chat_mark_node(at, fn() { "done" })
+            })
+            |> ignore
+          })
         })
-      })
-      |> ignore
+        |> ignore
+      }
       // the filter, and the archive in its menu: nothing to narrow or look back on with no station
       row.show(fn() { view().map(fn(v) { v.stations > 0 }).unwrap_or(false) }, fn(f) {
         let key : Ref[@view.View?] = Ref(None)
@@ -182,13 +189,11 @@ fn home_top_bar_node(
             })
           }
           @sf.presses_node(s, open)
-          // (the fixture's home-sheet: opened by it as the app starts, once it is laid out where it opens from)
-          s.reacts(fn() { s.laid_size_told() is Some(_) }, fn(laid) {
-            if laid && home_sheet_at_start.val {
-              home_sheet_at_start.val = false
-              open()
-            }
-          })
+          // (the fixture's home-sheet: opened by it as the app starts, beside it wherever it is laid out)
+          if home_sheet_at_start.val {
+            home_sheet_at_start.val = false
+            @sfpages.open_workspaces(src, @sf.Anchor::Node(s))
+          }
           s.says(By(fn() { Some(@view.said(Button, label=workspace().map(fn(w) { w.name }).unwrap_or(""))) })) |> ignore
           @sf.icon_node(s, "chevron-down", 16.0, By(fn() { @sf.theme().p.muted })) |> ignore
           s.show(fn() { workspace().map(fn(w) { @sf.has_station_mark(w.emoji, w.icon) }).unwrap_or(false) }, fn(m) {

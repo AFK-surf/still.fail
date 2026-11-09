@@ -29,7 +29,7 @@ pub fn Pose::ms(self : Pose) -> Double {
 
 ///|
 /// What is left of a message's coming out once it shows in the list (it comes out as the avatar lands: Spit), to the
-/// avatar home again (Return): its activity stays till then (ChatMotion.keeps), its turn's linger counted after.
+/// avatar home again (Return).
 pub let emit_out_ms : Double = Spit.ms() + Return.ms()
 
 ///|
@@ -96,7 +96,7 @@ pub(all) struct Emits {
 /// It changed (a message come to wait, a pose on to the next, one let go, where it flies from or lands): what read it
 /// is told.
 pub fn Emits::changed(self : Emits) -> Unit {
-  self.said.set(@signals.untracked(fn() { self.said.get() }) + 1)
+  self.said.set(self.said.untracked() + 1)
 }
 
 ///|
@@ -164,11 +164,11 @@ pub fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Boo
     // its agent's turn over already, no avatar to come out of: it comes in where it is, its words a glyph at a time
     // from now as they would out of one (emit_out), not grown in as a row (the user, 2026-10-31: 「为啥第二条是弹出来的」)
     if !goes && e.watched && m.said && agent != "" {
-      e.out_at[k] = pose_clock(emit_out_ms_most, Some(c.moment()))
+      e.out_at[k] = pose_clock(c, emit_out_ms_most, Some(c.moment()))
     }
     if goes {
       // its agent's activity folds from now
-      e.queue.push((m.seq, agent, pose_clock(Fold.ms(), None)))
+      e.queue.push((m.seq, agent, pose_clock(c, Fold.ms(), None)))
     }
   }
   if e.decided.length() != decided {
@@ -238,7 +238,8 @@ pub fn emit_folded(e : Emits, agent : String) -> Bool {
 }
 
 ///|
-/// Agents whose activity must stay while their messages come out.
+/// Agents whose activity must stay while their messages come out: till the last of them leaves its avatar (Float), its
+/// room opening in the list as the activity's closes, on the list's one way.
 pub fn emit_keeps(e : Emits) -> Map[String, Bool] {
   e.read()
   let out : Map[String, Bool] = {}
@@ -246,8 +247,8 @@ pub fn emit_keeps(e : Emits) -> Map[String, Bool] {
     out[q.1] = true
   }
   match e.current {
-    Some(t) => out[t.agent] = true
-    None => ()
+    Some(t) if t.pose == Fold => out[t.agent] = true
+    _ => ()
   }
   out
 }
@@ -281,14 +282,14 @@ pub fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
   // folded already (its folding at the end it declared, or its agent's avatar out already): on its way; else what is
   // left of its folding (how far its folding has gone, from when it began waiting), from here: from where the turn
   // before was declared to end, else from this frame
-  let float = who == agent || fold.over()
-  let left = Fold.ms() * (1.0 - fold.get())
+  let float = who == agent || fold.over(c)
+  let left = Fold.ms() * (1.0 - fold.get(c))
   e.current = Some({
     seq,
     agent: who,
     pose: if float { Float } else { Fold },
     from: None,
-    clock: if float { pose_clock(Float.ms(), at) } else { pose_clock(left, at) },
+    clock: if float { pose_clock(c, Float.ms(), at) } else { pose_clock(c, left, at) },
     span: if float { Float.ms() } else { left },
     warp: None,
   })
@@ -339,9 +340,9 @@ pub fn pose_ms(pose : Pose, from : (Double, Double)?) -> Double {
 ///|
 /// A pose's way, 0 to 1 over its length, linear: from `at` (where the pose before was declared to end), else from
 /// this frame.
-pub fn pose_clock(ms : Double, at : Double?) -> @motion.Anim {
+pub fn pose_clock(c : @ui.Ctx, ms : Double, at : Double?) -> @motion.Anim {
   let a = @motion.Anim::new(0.0)
-  a.animate(1.0, @motion.tween(ms, ease=Linear), start_at?=at)
+  a.animate(c, 1.0, @motion.tween(ms, ease=Linear), start_at?=at)
   a
 }
 
@@ -393,16 +394,16 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : () -> Double) 
     // the avatar on its way while words sent from here land after it would: its way the rest of it until they land,
     // so it comes down as they do (not there before them, waiting)
     let t = match t.pose {
-      Float if sending >= 0.0 && sending > t.clock.ends() && sending != e.held_until && !t.clock.over() => {
+      Float if sending >= 0.0 && sending > t.clock.ends() && sending != e.held_until && !t.clock.over(c) => {
         // (its clock is linear: how far it is says when now is on it) going on from where it is at the speed it has,
         // to come down at its own end speed when they land: no step in its speed (Turn's warp)
-        let s = t.clock.get()
+        let s = t.clock.get(c)
         let now = t.clock.ends() - (1.0 - s) * t.span
         let u = emit_clock(c, t)
-        let rate = turn_rate(t)
+        let rate = turn_rate(c, t)
         let way = @motion.Anim::new(0.0)
         let long = sending - now
-        way.animate(1.0, @motion.tween(long, ease=Linear), start_at=now)
+        way.animate(c, 1.0, @motion.tween(long, ease=Linear), start_at=now)
         let most = 3.0 * (1.0 - u)
         let end_rate = 1.0 / pose_ms(Float, t.from)
         e.held_until = sending
@@ -415,14 +416,14 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : () -> Double) 
       _ => t
     }
     // (a pose goes on till the end it declared as it set out)
-    if !t.clock.over() {
+    if !t.clock.over(c) {
       break
     }
     // the next from where this one was declared to end, whichever frame sees it
     let at = t.clock.ends()
     match t.pose {
       Fold =>
-        e.current = Some({ ..t, pose: Float, clock: pose_clock(Float.ms(), Some(at)), span: Float.ms(), warp: None })
+        e.current = Some({ ..t, pose: Float, clock: pose_clock(c, Float.ms(), Some(at)), span: Float.ms(), warp: None })
       Float => {
         if sending != -1.0 {
           if sending > e.held_until {
@@ -433,8 +434,8 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : () -> Double) 
         }
         let at = dmax(at, e.held_until)
         e.held_until = -1.0
-        e.out_at[seq_s(t.seq)] = pose_clock(emit_out_ms_most, Some(at))
-        let clock = pose_clock(Spit.ms(), Some(at))
+        e.out_at[seq_s(t.seq)] = pose_clock(c, emit_out_ms_most, Some(at))
+        let clock = pose_clock(c, Spit.ms(), Some(at))
         e.current = Some({ ..t, pose: Spit, from: None, clock, span: Spit.ms(), warp: None })
       }
       Spit =>
@@ -448,14 +449,14 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : () -> Double) 
               agent: next.1,
               pose: Float,
               from: Some(l),
-              clock: pose_clock(emit_drop_ms, Some(at)),
+              clock: pose_clock(c, emit_drop_ms, Some(at)),
               span: emit_drop_ms,
               warp: None,
             })
           }
           _ => {
             let span = return_ms(e)
-            e.current = Some({ ..t, pose: Return, clock: pose_clock(span, Some(at)), span, warp: None })
+            e.current = Some({ ..t, pose: Return, clock: pose_clock(c, span, Some(at)), span, warp: None })
           }
         }
       Return => {
@@ -492,7 +493,7 @@ pub fn emit_step(c : @ui.Ctx, e : Emits, turns : Turns, sending : () -> Double) 
 /// the speed it had to its end at the speed it ends at.
 pub fn emit_clock(c : @ui.Ctx, t : Turn) -> Double {
   ignore(c)
-  let s = t.clock.get()
+  let s = t.clock.get(c)
   match t.warp {
     Some((u0, m0, m1)) => hermite(u0, m0, 1.0, m1, s)
     None => s
@@ -501,9 +502,9 @@ pub fn emit_clock(c : @ui.Ctx, t : Turn) -> Double {
 
 ///|
 /// How fast it goes through its pose now (a share a ms).
-fn turn_rate(t : Turn) -> Double {
+fn turn_rate(c : @ui.Ctx, t : Turn) -> Double {
   match t.warp {
-    Some((u0, m0, m1)) => hermite_slope(u0, m0, 1.0, m1, t.clock.get()) / t.span
+    Some((u0, m0, m1)) => hermite_slope(u0, m0, 1.0, m1, t.clock.get(c)) / t.span
     None => 1.0 / t.span
   }
 }
@@ -538,9 +539,11 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
     Some(t) if t.pose != Fold => t
     _ => return None
   }
-  let avatar = match @motion.measured_rect(c, "emit-avatar/" + key + "/" + t.agent) {
-    Some(r) => (r.0, r.1)
-    None => return None
+  // (its line gone as the answer left it, at work still or not (chat_tick): from where it was last drawn)
+  let avatar = match (@motion.measured_rect(c, "emit-avatar/" + key + "/" + t.agent), e.home) {
+    (Some(r), _) => (r.0, r.1)
+    (None, Some(h)) => h
+    _ => return None
   }
   e.home = Some(avatar)
   // before the message is in the list: where its avatar will be, the first activity's place (the message comes in
@@ -627,7 +630,7 @@ pub fn emit_out(c : @ui.Ctx, col : Int, head : Int, e : Emits, seq : Double) -> 
   // (built again as they are all in: emit_step lets them go then)
   c.wake_in(dmax(way.ends() - c.moment(), 0.0))
   // (how far on from its coming out, read as it is painted)
-  let since = fn() { way.get() * emit_out_ms_most }
+  let since = fn() { way.get(c) * emit_out_ms_most }
   c.look_by(head, fn() {
     let k = @ui.Ease::Out.at(dmin(since() / emit_head_ms, 1.0))
     @ui.look(alpha=k, dx=-emit_out_slide * (1.0 - k))

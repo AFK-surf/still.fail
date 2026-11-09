@@ -15,6 +15,7 @@
 /// across (its own terms) that lands where it lies over what is beside the column: that one's, `beside` told of it
 /// instead); `held` told as a press of it goes down and as it ends (let go, called off, passed on to what lies under
 /// it); its words `label()`, its tip in `tips` on `side`. The node.
+#callsite(autofill(loc))
 pub fn edge_node(
   parent : @view.View,
   label : () -> String,
@@ -28,8 +29,9 @@ pub fn edge_node(
   beside? : (Double) -> Unit = fn(_) {  },
   tips? : TipLayer,
   side? : @view.Side = Right,
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     v
     .grow(Is(1.0))
     .presses(Is(true))
@@ -40,10 +42,8 @@ pub fn edge_node(
       Some(t) => tip_node(t, v, label, side~, delay=edge_tip_ms, skip=false, gap=edge_tip_gap, at_pointer=true) |> ignore
       None => ()
     }
-    // (where the press went down across the window, and the width then; the last press let go without moving, for a
-    // second one)
+    // (where the press went down across the window, and the width then)
     let from = Ref((0.0, 0.0))
-    let last_tap : Ref[(Double, Double, Double)?] = Ref(None)
     let to = fn(wx : Double) {
       let (x0, w0) = from.val
       let d = if edge is Left { x0 - wx } else { wx - x0 }
@@ -54,26 +54,16 @@ pub fn edge_node(
       held(false)
       // (let go on it, as a press is: what is there for the finger as the tree is then, it and nothing over it)
       if !v.finger_target(d.wx, d.wy) {
-        last_tap.val = None
+        v.twice_forgot()
         return
       }
       if on_beside(d.x) {
-        last_tap.val = None
+        v.twice_forgot()
         beside(d.at)
         return
       }
-      match last_tap.val {
-        Some((at, wx, wy)) if d.at - at <= @ui.double_click_ms &&
-          (d.wx - wx).abs() <= @ui.double_click_slop &&
-          (d.wy - wy).abs() <= @ui.double_click_slop => {
-          last_tap.val = None
-          said(Twice, d.at)
-        }
-        _ => {
-          last_tap.val = Some((d.at, d.wx, d.wy))
-          said(Pressed, d.at)
-        }
-      }
+      // (the second of two presses of it: View::twice)
+      said(if v.twice(d) { Twice } else { Pressed }, d.at)
     }
     // (whether this press has moved it: a mouse's held long, not moved, and let go within the slop of where it went
     // down is a press, as a click is, as handle_drag had it; let go past it, with no move told, a drag's end)

@@ -60,6 +60,10 @@ else
   echo "render_offscreen: what a rounded clip cuts is not the box's own rounded ground ($O/clip-cut.png, clip-box.png)"
   exit 1
 fi
+render_strips_dl "$O"
+MBUI_DL=$PWD/$O/strips.dl MBUI_DL_PNG=$PWD/$O/strips.png ./_build/native/release/build/render/render.exe
+MBUI_STRIPS=0 MBUI_DL=$PWD/$O/strips.dl MBUI_DL_PNG=$PWD/$O/strips.whole.png ./_build/native/release/build/render/render.exe
+render_strips offscreen "$O"
 render_matte_dl "$O"
 for k in matte-fill matte-fill-reference matte-contain matte-contain-reference matte-inset matte-inset-reference; do
   MBUI_DL="$PWD/$O/$k.dl" MBUI_DL_PNG="$PWD/$O/$k.png" ./_build/native/release/build/render/render.exe

@@ -14,7 +14,7 @@ import { compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } f
 import { type UsageChatCoverage, usageCardOutcomesComplete, usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
-import { CC_SESSIONS_PENDING, CcSessionsUnavailable, ccSessionReady, indexedCcThreads } from "../store/cc-thread-index.ts";
+import { CC_INDEX_VERSION, CC_SESSIONS_PENDING, CcSessionsUnavailable, ccSessionReady, indexedCcThreads } from "../store/cc-thread-index.ts";
 import { CARD_POSTS_PENDING, CARD_POST_BEFORE, CARD_POST_LATEST, CARD_POST_NEXT, CARD_POST_SAMPLE, cardPostsReady } from "../store/card-post-index.ts";
 import { CLOSED_CARDS_INDEXED, CLOSED_CARDS_PENDING, CLOSED_CHAT_SAMPLE, CLOSED_SAMPLE_LIMIT, CLOSED_TIME_SAMPLE,
   LEGACY_CLOSED_CARDS, closedCardsReady, hasClosedCardsTimeIndex, hasLegacyClosedCards, hasNativeClosedCards } from "../store/legacy-closed-cards.ts";
@@ -23,6 +23,8 @@ import { LEGACY_FIRST_PERSON_SINCE, LEGACY_HAS_PEOPLE_SINCE, LEGACY_PEOPLE_AFTER
 import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION_LIST_SCOPE_CONNECT, sessionListReady } from "../store/session-list-index.ts";
 import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
+import { WORKSPACE_UP_JOBS, workspaceUpJobsReady } from "../store/workspace-up-jobs.ts";
+import { JOB_NAME_FIRST_LARGE, JOB_NAME_FIRST_PENDING, JOB_NAME_FIRST_ROW, checkJobNameFirst } from "../store/job-name-first.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
 import { archiveLastKey } from "../store/archive-last.ts";
 import { PAGE_LETTER_KEYS, PAGE_LETTER_KEYS_AFTER, pageLetterReady } from "../store/page-letter-index.ts";
@@ -94,6 +96,8 @@ export type Store = {
   clientKeys: Map<string, string>;
   /// An old session whose up-job lookup should be prepared after this read returns.
   prepareUpJobs: string | null;
+  /// An old workspace up-job lookup should be prepared after this read returns.
+  prepareWorkspaceUpJobs: boolean;
   /// This connection uses the already-published lookup on an older database.
   legacySaid: boolean;
   /// This connection uses the time lookup prepared for an older database.
@@ -102,7 +106,7 @@ export type Store = {
 
 /// The store over an open database, with the data directory its archive is in.
 export function makeStore(db: DatabaseSync, dataDir: string): Store {
-  return { db, dataDir, names: new Map(), processes: new Map(), clientKeys: new Map(), prepareUpJobs: null,
+  return { db, dataDir, names: new Map(), processes: new Map(), clientKeys: new Map(), prepareUpJobs: null, prepareWorkspaceUpJobs: false,
     legacySaid: hasLegacySaid(db), legacyAgent: hasLegacyAgent(db) };
 }
 
@@ -447,6 +451,31 @@ export function threadSessions(s: Store, thread: number): Membership[] {
   return all(s, "SELECT * FROM thread_sessions WHERE thread = ? ORDER BY joined_at, rowid", thread).map(toMembership);
 }
 
+/// For a named, shown own chat of the only job session, its first member is enough when that member is the live job
+/// session. Short chats use the original reader; only a large requested chat needs the on-demand first-member lookup.
+export function jobNameFirstMembers(s: Store, owner: string, thread: number): Membership[] | null {
+  if (s.db.prepare(JOB_NAME_FIRST_LARGE).get(thread) === undefined) return null;
+  try {
+    checkJobNameFirst(s.db);
+    const scope = s.db.prepare("SELECT thread,ready,restart FROM job_name_first WHERE owner=?").get(owner) as
+      { thread: number; ready: number; restart: number } | undefined;
+    if (scope) {
+      if (scope.thread !== thread) return null;
+      if (scope.ready !== 1 || scope.restart !== 0) throw new Refused(503, JOB_NAME_FIRST_PENDING + JSON.stringify([owner, thread]));
+      const first = s.db.prepare(JOB_NAME_FIRST_ROW).get(owner, thread) as Json | undefined;
+      return first?.session === owner ? [toMembership(first)] : null;
+    }
+    // One owner and one chat can each hold at most one lookup. Do not wait for a lookup owned by another job.
+    if (s.db.prepare("SELECT 1 FROM job_name_first WHERE thread=?").get(thread) !== undefined ||
+        s.db.prepare("SELECT 1 FROM session_up_job_rows WHERE session=? LIMIT 1").get(owner) === undefined) return null;
+    throw new Refused(503, JOB_NAME_FIRST_PENDING + JSON.stringify([owner, thread]));
+  } catch (error) {
+    // An older store (or one opened without the job index) keeps its existing reader.
+    if (error instanceof Error && /^no such table: (?:main\.)?(?:job_name_first_meta|job_name_first|session_up_job_rows)$/.test(error.message)) return null;
+    throw error;
+  }
+}
+
 /// The threads sessions take part in (each once).
 export function threadsOfSessions(s: Store, keys: string[]): number[] {
   if (keys.length === 0) return [];
@@ -471,9 +500,55 @@ export const HAS_NAMING_ORIGIN = `SELECT 1 FROM thread_sessions origin
     WHERE member.thread = t.id
   ) LIMIT 1`;
 
+// An existing copy-destination index already separates external memberships. Its order is different from naming
+// order, but existence needs no order. A live member itself makes each of its external threads visible.
+export const HAS_NAMING_ORIGIN_PREPARED = `SELECT 1 FROM cc_session_rows INDEXED BY cc_session_order
+  WHERE session = ?1 AND surface != 'ember' LIMIT 1`;
+// A short membership list is cheaper to check directly than to verify the prepared projection's journals.
+export const HAS_NAMING_ORIGIN_POSSIBLE = `SELECT 1 FROM cc_sessions c CROSS JOIN sessions live ON live.key = c.session
+      WHERE c.session = ?1 AND c.complete = 1 AND EXISTS (
+        SELECT 1 FROM thread_sessions INDEXED BY thread_sessions_session WHERE session = c.session LIMIT 1 OFFSET 8
+      )`;
+
+const missingOriginIndex = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : "";
+  return /^no such (?:table|index): (?:main\.)?(?:cc_index_meta|cc_sessions|cc_session_rows|cc_session_dirty|cc_order_dispatch|cc_session_order|thread_sessions_session)$/.test(message);
+};
+
+const preparedOriginIndexAvailable = (s: Store): boolean => {
+  // A missing thread has a NULL surface in cc_session_rows. Older schemas that also permit a real thread with a
+  // NULL surface cannot distinguish those cases in the partial index, so they retain the original check.
+  const surface = s.db.prepare(`SELECT "notnull" AS required FROM pragma_table_info('threads') WHERE name = 'surface'`).get();
+  if (surface?.required !== 1) return false;
+  return s.db.prepare("SELECT version FROM cc_index_meta WHERE id = 1").get()?.version === CC_INDEX_VERSION;
+};
+
 export function namingOriginProbe(s: Store): (session: string) => boolean {
   const lookup = s.db.prepare(HAS_NAMING_ORIGIN);
-  return (session) => lookup.get(session, STILLFAIL_SURFACE) !== undefined;
+  const original = (session: string) => lookup.get(session, STILLFAIL_SURFACE) !== undefined;
+  let possible: ReturnType<DatabaseSync["prepare"]>;
+  let prepared: ReturnType<DatabaseSync["prepare"]>;
+  try {
+    if (!preparedOriginIndexAvailable(s)) return original;
+    possible = s.db.prepare(HAS_NAMING_ORIGIN_POSSIBLE);
+    prepared = s.db.prepare(HAS_NAMING_ORIGIN_PREPARED);
+  } catch (error) {
+    if (missingOriginIndex(error)) return original;
+    throw error;
+  }
+  return (session) => {
+    if (possible.get(session) === undefined) return original(session);
+    // A direct caller need not already hold a read transaction. Check the live member and index readiness again
+    // under the same snapshot as the answer, since a writer may change either after the initial fast-path probe.
+    s.db.exec("SAVEPOINT naming_origin_probe");
+    try {
+      if (possible.get(session) === undefined || !ccSessionReady(s.db, session)) return original(session);
+      return prepared.get(session) !== undefined;
+    } catch (error) {
+      if (missingOriginIndex(error) || (error instanceof Error && error.message.startsWith("copy destination index version "))) return original(session);
+      throw error;
+    } finally { s.db.exec("RELEASE naming_origin_probe"); }
+  };
 }
 
 /// Each session's external origin in the order of threadsForChatNames, excluding missing-only origins as in
@@ -488,10 +563,50 @@ export const LATEST_NAMING_ORIGIN = `SELECT (SELECT t.id FROM thread_sessions m
   ) ORDER BY COALESCE(e.at, 0) DESC, t.created_at DESC, t.id DESC LIMIT 1) AS id
   FROM json_each(?1) requested`;
 
+// Classify the requested members together, keeping their array positions even when a session is repeated.
+export const LATEST_NAMING_ORIGIN_POSSIBLE = `SELECT requested.key AS ordinal FROM json_each(?1) requested
+  CROSS JOIN cc_sessions c ON c.session=requested.value CROSS JOIN sessions live ON live.key=c.session
+  WHERE c.complete=1 AND EXISTS (SELECT 1 FROM thread_sessions INDEXED BY thread_sessions_session
+    WHERE session=c.session LIMIT 1 OFFSET 8)`;
+
+// The copy index orders by the last entry, not the last message. Sort a bounded set in naming order and retain the
+// original batch query when there are more external origins; the index is useful here only for a live, ready member.
+export const LATEST_NAMING_ORIGIN_PREPARED = `WITH candidates AS MATERIALIZED (
+    SELECT thread FROM cc_session_rows INDEXED BY cc_session_order
+    WHERE session=?1 AND surface != 'ember' LIMIT 9
+  ) SELECT (SELECT COUNT(*) FROM candidates) AS count,
+    CASE WHEN (SELECT COUNT(*) FROM candidates)<9 THEN (SELECT t.id FROM candidates r
+      CROSS JOIN threads t ON t.id=r.thread LEFT JOIN thread_state st ON st.thread=t.id
+      LEFT JOIN entries e ON e.thread=t.id AND e.n=st.said_n AND e.kind='message'
+      ORDER BY COALESCE(e.at,0) DESC,t.created_at DESC,t.id DESC LIMIT 1) END AS id`;
+
 export function latestNamingOrigins(s: Store, sessions: string[]): number[] {
   if (sessions.length === 0) return [];
-  return all(s, LATEST_NAMING_ORIGIN, JSON.stringify(sessions), STILLFAIL_SURFACE)
-    .flatMap((row) => row.id === null ? [] : [row.id as number]);
+  const original = (keys: string[]) => all(s, LATEST_NAMING_ORIGIN, JSON.stringify(keys), STILLFAIL_SURFACE);
+  // The fast and fallback reads, including liveness and index readiness, must share the old query's one snapshot.
+  s.db.exec("SAVEPOINT latest_naming_origins");
+  try {
+    if (!preparedOriginIndexAvailable(s)) return original(sessions).flatMap((row) => row.id === null ? [] : [row.id as number]);
+    const possible = new Set(s.db.prepare(LATEST_NAMING_ORIGIN_POSSIBLE).all(JSON.stringify(sessions))
+      .map((row) => row.ordinal as number));
+    const prepared = s.db.prepare(LATEST_NAMING_ORIGIN_PREPARED);
+    const ids: (number | null)[] = new Array(sessions.length).fill(null);
+    const pending: string[] = [], positions: number[] = [];
+    for (let i=0; i<sessions.length; i++) {
+      const session = sessions[i]!;
+      if (possible.has(i) && ccSessionReady(s.db, session)) {
+        const candidate = prepared.get(session) as { count: number; id: number | null };
+        if (candidate.count < 9) { ids[i] = candidate.id; continue; }
+      }
+      pending.push(session); positions.push(i);
+    }
+    if (pending.length) for (const [i, row] of original(pending).entries()) ids[positions[i]!] = row.id as number | null;
+    return ids.filter((id): id is number => id !== null);
+  } catch (error) {
+    if (missingOriginIndex(error) || (error instanceof Error && error.message.startsWith("copy destination index version ")))
+      return original(sessions).flatMap((row) => row.id === null ? [] : [row.id as number]);
+    throw error;
+  } finally { s.db.exec("RELEASE latest_naming_origins"); }
 }
 
 /// Of `threads`, those with something new since `since` (ms): made, or a message said, then.
@@ -586,13 +701,14 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
 
 /// The members and message times needed to select chat names for jobs. Message bodies and edits are not needed to
 /// order them; an external thread's first text is read only if that thread actually supplies a name.
-export function threadsForChatNames(s: Store, ids: number[] | null): { thread: ThreadRow; sessions: Membership[]; lastAt: number }[] {
+export function threadsForChatNames(s: Store, ids: number[] | null,
+  members?: ReadonlyMap<number, Membership[]>): { thread: ThreadRow; sessions: Membership[]; lastAt: number }[] {
   if (ids !== null && ids.length === 0) return [];
   const selected = ids === null ? all(s, "SELECT * FROM threads")
     : all(s, `SELECT * FROM threads WHERE id IN (${ids.map(() => "?").join(", ")})`, ...ids);
   const threads = selected.map((row) => {
     const thread = toThread(row);
-    return { thread, sessions: threadSessions(s, thread.id), lastAt: lastSaidAt(s, thread.id) ?? 0 };
+    return { thread, sessions: members?.get(thread.id) ?? threadSessions(s, thread.id), lastAt: lastSaidAt(s, thread.id) ?? 0 };
   });
   threads.sort((a, b) => b.lastAt - a.lastAt || b.thread.createdAt - a.thread.createdAt || b.thread.id - a.thread.id);
   return threads;
@@ -1718,10 +1834,42 @@ const toJob = (r: Json): JobRow => {
   return job;
 };
 
-/// The jobs up (running, or a service stopped on its own that holds its port), newest first: by the index of their
-/// states, not every job the station ever ran.
-export function upJobs(s: Store): JobRow[] {
-  return all(s, rows.JOBS_UP).map(toJob);
+// SQLite compares the stored bytes; seenBy compares strings decoded by the Node SQLite driver. Different Node versions
+// may stop decoding at a NUL, and old writers can have left non-UTF-8 bytes. Keep unusual values for seenBy to decide.
+const JOB_WORKSPACE_CANDIDATE = `(s.ws = ?1 OR (?2 AND s.ws IS NULL)
+  OR typeof(j.session_key) <> 'text' OR instr(CAST(j.session_key AS BLOB), x'00') > 0
+  OR j.session_key GLOB '*[^ -~]*'
+  OR (s.ws IS NOT NULL AND (typeof(s.ws) <> 'text' OR instr(CAST(s.ws AS BLOB), x'00') > 0
+    OR s.ws GLOB '*[^ -~]*')))`;
+
+/// A superset of the viewer's up jobs, filtered before their records leave SQLite. seenBy makes the final decision.
+export const JOBS_UP_IN_WORKSPACE = `SELECT j.* FROM jobs j LEFT JOIN sessions s ON s.key = j.session_key
+  WHERE j.state = 'running' AND ${JOB_WORKSPACE_CANDIDATE}
+  UNION ALL
+  SELECT j.* FROM jobs j LEFT JOIN sessions s ON s.key = j.session_key
+  WHERE j.state = 'exited' AND j.port IS NOT NULL AND ${JOB_WORKSPACE_CANDIDATE}
+  ORDER BY started_at DESC`;
+
+/// The jobs up (running, or a service stopped on its own that holds its port), newest first. The state index still
+/// visits other workspaces' up jobs; the join avoids loading those records and their session keys into the reader.
+export function upJobs(s: Store, visibleTo: InWorkspace | null = null): JobRow[] {
+  if (visibleTo === null) return all(s, rows.JOBS_UP).map(toJob);
+  // Binding an unusual viewer can normalize it before SQLite compares it. Preserve the old JavaScript path for it.
+  if (!/^[\x20-\x7e]*$/.test(visibleTo.workspace)) return all(s, rows.JOBS_UP).map(toJob);
+  try {
+    if (workspaceUpJobsReady(s.db)) return all(s, WORKSPACE_UP_JOBS, visibleTo.workspace, visibleTo.home !== false ? 1 : 0).map(toJob);
+    s.prepareWorkspaceUpJobs = true;
+  } catch (error) {
+    // A reader can be opened on a database from before the index was installed.
+    if (!(error instanceof Error) || !error.message.includes("no such table: workspace_up_meta")) throw error;
+  }
+  try {
+    return all(s, JOBS_UP_IN_WORKSPACE, visibleTo.workspace, visibleTo.home !== false ? 1 : 0).map(toJob);
+  } catch (error) {
+    // Before sessions had workspaces, every session (including a missing one) belonged to the home workspace.
+    if (!(error instanceof Error) || !error.message.includes("no such column: s.ws")) throw error;
+    return visibleTo.home !== false ? all(s, rows.JOBS_UP).map(toJob) : [];
+  }
 }
 
 /// How many of a session's latest jobs its detail lists for a device (`?jobs=now`, `jobsNow`).

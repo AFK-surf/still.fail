@@ -31,7 +31,7 @@ import { IDEMPOTENCY_KEY, JSON_IDLE_MS, READS, Requests, httpError } from "./req
 import { digest } from "../digest.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
 import { ENTRIES, LETTERS, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, lettersOf, transcriptOf } from "./channel-kinds.ts";
-import { type HistoryRead, type Link, Links, type LiveView, MEMORY, PRESETS, filePeekKey, linkPreviewKey, logKey, messagePeekKey } from "./link.ts";
+import { type HistoryRead, type Link, Links, type LiveView, MEMORY, RECONNECT_MAX_MS, PRESETS, filePeekKey, linkPreviewKey, logKey, messagePeekKey } from "./link.ts";
 import { concat, readAll, replyHeader, type StationWire } from "./wire.ts";
 import { SseParser } from "./sse.ts";
 import * as logins from "./machine-logins.ts";
@@ -56,6 +56,9 @@ export const RECHECK_MS = 5 * 60 * 1000;
 /// A read that failed in passing (a 5xx, the link dropping) is tried again after this, doubling, this many times.
 export const READ_RETRY_MS = 2_000;
 export const READ_RETRIES = 5;
+/// How long a read that failed `n` times in a row before waits to be asked again: twice as long each time, at most
+/// RECONNECT_MAX_MS.
+export const retryAfter = (n: number): number => Math.min(READ_RETRY_MS * 2 ** Math.min(n, 10), RECONNECT_MAX_MS);
 /// The field naming a row of each list read whole that may be asked as what changed of it (POST /changed/<list>).
 const LIST_ID: Record<string, string> = { chatRows: "id", archivedRows: "id", threads: "id", sessions: "key" };
 /// A station from before POST /changed/<list> reads its lists whole, and is tried again after this.
@@ -147,6 +150,9 @@ export class StationsSync {
   readonly #links: Links;
   /// What their streams told while a read was out, to tell again on top of what it brings.
   readonly #retold = new Retold();
+  /// The transcripts of the histories shown whose reads failed, how many times in a row.
+  readonly #transcriptMisses = new Map<string, number>();
+  readonly #transcriptAgain = new Set<string>();
   /// The stations whose searches shown are to be asked again once SEARCH_STALE_MS is up.
   readonly #staleSearches = new Set<string>();
   /// A usage preparation can take many bounded batches; it has its own cancellable stream, outside the sync lane.
@@ -409,6 +415,9 @@ export class StationsSync {
         // so its failed range read is asked again, independently of whether the catch-up read brings anything new.
         this.#core.store.invalidate(topic);
       }
+      // A history shown: its first read may have failed while the stream was away, and a station that follows the
+      // sessions at work tells nothing of one at rest, so it would wait for ever.
+      else if (topic.topic === "live" && this.#links.get(address)?.followsRunning === true) this.channels.bring(transcriptOf(address, String(topic.key)), Priority.shown, "latest");
       else if (topic.topic === "drive" && this.#core.store.inUse(topic)) this.driveShown(address, String(topic.root), String(topic.path));
     }
   }
@@ -1303,9 +1312,12 @@ export class StationsSync {
   #channelAnswered(channel: Channel, error: CoreError | null, nothing: boolean): void {
     const link = this.#links.get(channel.station);
     if (!link) return;
-    // A transcript read: what the station has of it is known (a history with nothing in it is not still loading).
+    // A transcript read: what the station has of it is known (a history with nothing in it is not still loading). One
+    // that failed is said, and asked again while it is shown: nothing else would ask (a stream that follows the sessions
+    // at work tells nothing of one at rest, and it stays open).
     if (channel.kind === TRANSCRIPT) {
       if (error === null) this.#transcriptKnown(link, channel.id);
+      else this.#transcriptFailed(link, channel.id, error);
       return;
     }
     if (channel.kind !== ENTRIES) return;
@@ -1946,14 +1958,14 @@ export class StationsSync {
       // Of the chat list the station makes for everyone, once it is read: till then the rows held stand.
       if (link.sharedRows === null) return;
       const lang = current();
-      const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly") };
+      const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly"), admin: tr(lang, "station.author.admin") };
       return data.set({ topic: "chatRows", station: address }, rowsShared(link.sharedRows.values(), link.marks, me, words));
     }
     const sessions = data.shared({ topic: "sessions", station: address });
     const threads = data.shared({ topic: "threads", station: address });
     if (!Array.isArray(sessions) || !Array.isArray(threads)) return;
     const lang = current();
-    const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly") };
+    const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly"), admin: tr(lang, "station.author.admin") };
     data.set({ topic: "chatRows", station: address }, rowsMade(sessions, threads, link.marks, me, words));
   }
 
@@ -2062,13 +2074,19 @@ export class StationsSync {
     );
   }
 
+  /// A chat opened with no summary held (made since the threads were read, elsewhere or while away; opened from a
+  /// link): its summary read at once, as its entries are (topics.ts `start`).
+  summaryOf(address: string, id: number): void {
+    if (this.#links.has(address)) this.#enqueue(address, `thread/${id}`, Priority.shown, this.#threadSummary(address, id));
+  }
+
   #threadSummary(address: string, id: number): Effect.Effect<void, CoreError> {
     return this.#asked((read) => Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
       if (!link) return;
       const view = yield* Effect.result(this.requests.call(link.addr, "GET", `/threads/${id}`, null, { quiet: true }));
       if (view._tag === "Success") this.putThread(address, view.success);
-      else if (view.failure.status === 404) this.#core.data.unlistThread(address, id);
+      else if (view.failure.status === 404) this.#threadGone(address, id);
       this.#retell(address, read);
     }));
   }
@@ -2131,9 +2149,39 @@ export class StationsSync {
   #transcriptKnown(link: Link, key: string): void {
     let view = link.lives.get(key);
     if (!view) link.lives.set(key, (view = { steps: [], phase: null, rate: null, usage: null, loaded: false }));
-    if (view.loaded) return;
+    this.#transcriptMisses.delete(`${link.address}\u0001${key}`);
+    if (view.loaded && view.failed === undefined) return;
     view.loaded = true;
+    delete view.failed;
     this.onChange(link.address, "live", key);
+  }
+
+  /// A read of a session's transcript failed: why, for its history to say, and read again after a while, less often each
+  /// time it fails in a row, while its history is shown.
+  #transcriptFailed(link: Link, key: string, error: CoreError): void {
+    let view = link.lives.get(key);
+    if (!view) link.lives.set(key, (view = { steps: [], phase: null, rate: null, usage: null, loaded: false }));
+    if (view.failed !== error.message) {
+      view.failed = error.message;
+      this.onChange(link.address, "live", key);
+    }
+    const topic: Topic = { topic: "live", station: link.address, key };
+    if (!this.#core.store.inUse(topic)) return;
+    const miss = `${link.address}\u0001${key}`;
+    // (one read again at a time: two that failed together wait as one)
+    if (this.#transcriptAgain.has(miss)) return;
+    this.#transcriptAgain.add(miss);
+    const n = this.#transcriptMisses.get(miss) ?? 0;
+    this.#transcriptMisses.set(miss, n + 1);
+    // timer: retry after a failure, with a backoff
+    const again = Effect.sleep(retryAfter(n)).pipe(
+      Effect.andThen(Effect.sync(() => {
+        this.#transcriptAgain.delete(miss);
+        if (this.#core.store.inUse(topic)) this.channels.bring(transcriptOf(link.address, key), Priority.shown, "latest");
+      })),
+      Effect.onInterrupt(() => Effect.sync(() => this.#transcriptAgain.delete(miss))),
+    );
+    this.#core.runner.fork(again, link.scoped);
   }
 
   /// What the chat shows of a session at work (activity.ts), from its live view.

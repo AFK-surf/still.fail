@@ -199,9 +199,12 @@ test "an animated value starts the frame it is asked in, and follows its target"
   assert_true(near(seen[seen.length() - 1], linear(), 1.0e-9))
   t.run_for(start + tween_ms / 2.0 - t.time())
   assert_true(near(seen[seen.length() - 1], linear(), 1.0e-9))
-  // turned back mid-way: from where it is in the frame it is told in, back from there on
-  shown.val = false
+  // turned back mid-way: from where it is in the frame it is told in, back from there on (said to that frame, the
+  // display's next: `shown` is no signal, and a frame drawn on the way (MBUI_TEST_FPS) would have been told it sooner)
   t.run_for(tween_ms / 10.0)
+  shown.val = false
+  t.stepped()
+  t.frame()
   let back = seen[seen.length() - 1]
   assert_true(near(back, linear(), 1.0e-9), msg="\{back}")
   t.run_for(tween_ms / 10.0)
@@ -798,9 +801,9 @@ test "a look moves what is drawn, never where it is tapped" {
     c.box(w=Px(200.0), h=Px(100.0), clip=true, fn() {
       c.box(h=Px(40.0), min_h=40.0, fn() {  }) |> ignore
       let id = c.id("button")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         taps.val = taps.val + 1
-      }
+      })
       let b = c.box(w=Px(200.0), h=Px(30.0), min_h=30.0, bg=0x336699FFL, id~, fn() {  })
       c.look(b, @ui.look(dy=20.0))
     })
@@ -824,9 +827,9 @@ test "what is faded to nothing is tapped where it is laid out" {
   let taps = Ref::new(0)
   let t = @ui.Tester::new(fn(c) {
     let id = c.id("faded")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       taps.val = taps.val + 1
-    }
+    })
     let b = c.box(w=Px(100.0), h=Px(40.0), bg=0x123456FFL, id~, fn() {  })
     c.look(b, @ui.look(alpha=0.0, scale=0.9))
   })
@@ -847,13 +850,13 @@ test "what leaves is drawn, and a tap meanwhile goes to what is under it" {
   let sheet_ms = 300.0
   let t = @ui.Tester::new(fn(c) {
     let u = c.id("under")
-    if c.clicked(u) {
+    c.on_press(u, fn() {
       under.val = under.val + 1
-    }
+    })
     let o = c.id("over")
-    if c.clicked(o) {
+    c.on_press(o, fn() {
       over.val = over.val + 1
-    }
+    })
     c.box(w=Px(200.0), h=Px(100.0), bg=0x112233FFL, id=u, fn() {  }) |> ignore
     match @motion.presence(c, "sheet", shown.val, enter=@motion.trans(fade=0.0, spec=@motion.tween(sheet_ms, ease=Out))) {
       Some(look) => {
@@ -891,9 +894,9 @@ test "what is drawn cut while it opens is tapped whole, where it is laid out" {
   let taps = Ref::new(0)
   let t = @ui.Tester::new(fn(c) {
     let id = c.id("line")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       taps.val = taps.val + 1
-    }
+    })
     let b = c.box(w=Px(200.0), fn() {
       c.box(w=Px(200.0), h=Px(40.0), min_h=40.0, bg=0x0A0B0CFFL, id~, fn() {  }) |> ignore
       c.box(w=Px(200.0), h=Px(60.0), min_h=60.0, bg=0x0D0E0FFFL, fn() {  }) |> ignore
@@ -918,9 +921,9 @@ test "what is moved into a box that cuts it from outside it is drawn there" {
     c.box(w=Px(200.0), h=Px(100.0), clip=true, fn() {
       c.box(h=Px(110.0), min_h=110.0, fn() {  }) |> ignore
       let id = c.id("button")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         taps.val = taps.val + 1
-      }
+      })
       c.box(dir=Row, h=Px(30.0), min_h=30.0, fn() {
         let b = c.box(w=Px(200.0), h=Px(30.0), min_h=30.0, bg=0x336699FFL, id~, fn() {  })
         c.look(b, @ui.look(dy=-40.0))
@@ -961,7 +964,7 @@ fn told_once(ask : Bool, fade_ms : Double, kept : Ref[@motion.Anim?]) -> @ui.Tes
     let v = @motion.anim(c, "a", 0.0)
     if go.val {
       go.val = false
-      v.animate(100.0, @motion.tween(fade_ms, ease=Out))
+      v.animate(c, 100.0, @motion.tween(fade_ms, ease=Out))
       kept.val = Some(v)
       if ask {
         // started here, at this frame's time: its end said at once
@@ -970,7 +973,7 @@ fn told_once(ask : Bool, fade_ms : Double, kept : Ref[@motion.Anim?]) -> @ui.Tes
         }
       }
     }
-    ignore(v.get())
+    ignore(v.get(c))
   })
 }
 
@@ -1096,7 +1099,7 @@ test "run_for: what its last frame says starts there is drawn at that moment, it
     }
     // (a toast's deadline: it goes once shown that long, from the first frame: a frame at that moment, Ctx::every)
     if c.every(shown, from=begun.val) >= 1 && a.target() != 0.0 {
-      a.animate(0.0, @motion.tween(200.0, ease=Out))
+      a.animate(c, 0.0, @motion.tween(200.0, ease=Out))
     }
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
@@ -1120,19 +1123,19 @@ test "a chain of tweens each from the one before's declared end, whichever frame
     let i = k.val
     if i < 0 {
       k.val = 0
-      segs[0].animate(1.0, @motion.tween(lengths[0], ease=Linear))
-    } else if i < 3 && !segs[i].moving() {
+      segs[0].animate(c, 1.0, @motion.tween(lengths[0], ease=Linear))
+    } else if i < 3 && segs[i].over(c) {
       if !seen_end.val {
         // seen at its end: the next told only the frame after
         seen_end.val = true
       } else if i < 2 {
         seen_end.val = false
         k.val = i + 1
-        segs[i + 1].animate(1.0, @motion.tween(lengths[i + 1], ease=Linear), start_at=segs[i].ends())
+        segs[i + 1].animate(c, 1.0, @motion.tween(lengths[i + 1], ease=Linear), start_at=segs[i].ends())
       }
     }
     let j = k.val
-    seen.push((c.moment(), j, segs[j].get()))
+    seen.push((c.moment(), j, segs[j].get(c)))
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
   t.draw()
@@ -1168,15 +1171,15 @@ test "a chain caught up after a while unseen: what is over is there at once, onl
   let t = @ui.Tester::new(fn(c) {
     if k.val < 0 {
       k.val = 0
-      segs[0].animate(1.0, @motion.tween(lengths[0], ease=Linear))
+      segs[0].animate(c, 1.0, @motion.tween(lengths[0], ease=Linear))
     }
     if shown.val {
       // in the same build, each over one followed by the next from its declared end, till one is under way
-      while k.val < 2 && !segs[k.val].moving() {
-        segs[k.val + 1].animate(1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
+      while k.val < 2 && segs[k.val].over(c) {
+        segs[k.val + 1].animate(c, 1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
         k.val += 1
       }
-      segs[k.val].get() |> ignore
+      segs[k.val].get(c) |> ignore
     }
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
@@ -1190,9 +1193,9 @@ test "a chain caught up after a while unseen: what is over is there at once, onl
   shown.val = true
   t.draw()
   assert_eq(k.val, 1)
-  assert_true(near(segs[1].get(), (t.time() - (start + lengths[0])).floor() / lengths[1], 1.0e-9))
-  assert_false(segs[0].moving())
-  assert_true(segs[1].moving())
+  assert_true(near(segs[1].get(t.ctx()), (t.time() - (start + lengths[0])).floor() / lengths[1], 1.0e-9))
+  assert_true(segs[0].over(t.ctx()))
+  assert_false(segs[1].over(t.ctx()))
   // (said to move: only the one under way)
   assert_eq(t.moving().length(), 1)
   // unseen past the whole chain's end, seen again: caught up in one build, at the last one's end, nothing moving
@@ -1202,8 +1205,8 @@ test "a chain caught up after a while unseen: what is over is there at once, onl
   shown.val = true
   t.draw()
   assert_eq(k.val, 2)
-  assert_eq(segs[2].get(), 1.0)
-  assert_false(segs[2].moving())
+  assert_eq(segs[2].get(t.ctx()), 1.0)
+  assert_true(segs[2].over(t.ctx()))
   assert_true(near(segs[2].ends(), start + lengths[0] + lengths[1] + lengths[2], 1.0e-9))
   t.assert_idle()
 }
@@ -1216,11 +1219,11 @@ test "a chain with motion reduced: each there at once, its end the moment it was
   let t = @ui.Tester::new(fn(c) {
     if k.val < 0 {
       k.val = 0
-      segs[0].animate(1.0, @motion.tween(lengths[0], ease=Linear))
+      segs[0].animate(c, 1.0, @motion.tween(lengths[0], ease=Linear))
     }
     // each at its end followed by the next from its declared end, in the same build
-    while k.val < 2 && !segs[k.val].moving() {
-      segs[k.val + 1].animate(1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
+    while k.val < 2 && segs[k.val].over(c) {
+      segs[k.val + 1].animate(c, 1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
       k.val += 1
     }
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
@@ -1230,8 +1233,8 @@ test "a chain with motion reduced: each there at once, its end the moment it was
   t.draw()
   assert_eq(k.val, 2)
   for s in segs {
-    assert_eq(s.get(), 1.0)
-    assert_false(s.moving())
+    assert_eq(s.get(t.ctx()), 1.0)
+    assert_true(s.over(t.ctx()))
     assert_true(s.ends() <= t.time())
   }
   t.assert_idle()
@@ -1512,7 +1515,7 @@ test "an Anim is over at the end it declared as it was told, whoever asks and ho
   let seen : Array[Bool] = []
   let t = @ui.Tester::new(fn(c) {
     ignore(c)
-    seen.push(a.over())
+    seen.push(a.over(c))
     c.box(fn() {  }) |> ignore
   })
   // never told: over
@@ -1522,15 +1525,15 @@ test "an Anim is over at the end it declared as it was told, whoever asks and ho
   let t2 = @ui.Tester::new(fn(c) {
     if !told.val {
       told.val = true
-      a.animate(1.0, @motion.tween(reshape_ms, ease=Linear))
+      a.animate(c, 1.0, @motion.tween(reshape_ms, ease=Linear))
     }
-    seen.push(a.over())
+    seen.push(a.over(c))
     c.box(fn() {  }) |> ignore
   })
   assert_false(seen[seen.length() - 1])
   t2.run_for(reshape_midway_ms)
-  assert_false(a.over())
+  assert_false(a.over(t2.ctx()))
   t2.run_for(reshape_ms - reshape_midway_ms)
-  assert_true(a.over())
+  assert_true(a.over(t2.ctx()))
   ignore(t)
 }

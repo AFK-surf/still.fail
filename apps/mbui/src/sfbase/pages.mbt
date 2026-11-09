@@ -74,7 +74,8 @@ pub fn page_chat_reader(src : Source, entry : @view.View, serial : Int) -> (Page
 /// built by `build` as the stack built it before (a chat from the source it keeps while its entry is on the stack, its
 /// reader held: page_entry_source, page_chat_reader; a new chat from the node's own), again as `key` changes. Over it
 /// a picture flying from its list while under its bar (viewer_flight_slot), and over that what of it is nodes already (`over`: given a node over the island, the chat's source, what the page is now and its
-/// time on top, `stint`).
+/// time on top, `stint`). What it reads by, the source it keeps (its reads the page's, let go with it), given back:
+/// what is beside it reads by it too.
 pub fn chat_page_made(
   v : @view.View,
   src : Source,
@@ -83,7 +84,7 @@ pub fn chat_page_made(
   key? : () -> String = fn() { "" },
   over? : (@view.View, Source, () -> Page?, () -> Int) -> Unit,
   stint? : () -> Int = fn() { 0 },
-) -> Unit {
+) -> Source {
   let retained = page_entry_source(src, v, serial)
   let page_read = page_chat_reader(retained, v, serial)
   let shown = src.owned_by(v)
@@ -111,6 +112,7 @@ pub fn chat_page_made(
       })
     None => ()
   }
+  retained
 }
 
 ///|
@@ -266,24 +268,46 @@ pub fn open_handing(src : Source, name : String, params : Map[String, Json], ope
     open()
     return
   }
-  let reader = match prepare_chat_handoff(src.lease_topic(name, params)) {
-    Some(reader) => reader
-    None => {
-      open()
-      return
+  hand_over([src.lease_topic(name, params)], open)
+}
+
+///|
+/// `open` run (a place of a sidebar's opening its page in place of the one shown: a favorite folder, a station),
+/// with every topic held now handed over to the entry it opened as open_handing hands one: the page it opens reads, as
+/// it is first built, what the page it leaves read, never one asked for again after that one let it go (opened in a
+/// build, the page left was let go only once the one opened was built in the same frame); what it does not read then
+/// is let go as its first build ends. Not what a place of the page left browses (its topic said by that `place`,
+/// browse_where): that place goes with it, and kept past it, it would be asked again for what the opening changes
+/// (the tabs it keeps), the page opened browsing its own.
+pub fn open_handing_held(open : () -> Unit) -> Unit {
+  let held = topics_held().filter(fn(t) { !t.2.contains("place") })
+  hand_over(held.map(fn(t) { t.0.lease_topic(t.1, t.2) }), open)
+}
+
+///|
+/// `open` run, `leases` handed to the entry it put on top (open_handing): kept past the page that leaves, taken by
+/// that entry as its view is made; let go at once where nothing was put on top.
+fn hand_over(leases : Array[TopicLease], open : () -> Unit) -> Unit {
+  let readers : Array[TopicLease] = []
+  for lease in leases {
+    match prepare_chat_handoff(lease) {
+      Some(reader) => readers.push(reader)
+      None => ()
     }
   }
   let (before, _) = @signals.untracked(fn() { app.nav.top_stay() })
   open()
   let (serial, _) = @signals.untracked(fn() { app.nav.top_stay() })
-  // (nothing opened in its place: no one to hand it to)
+  // (nothing opened in its place: no one to hand them to)
   if serial == before {
-    reader.release()
+    for reader in readers {
+      reader.release()
+    }
     return
   }
   match handed_readers.get(serial) {
-    Some(readers) => readers.push(reader)
-    None => handed_readers[serial] = [reader]
+    Some(had) => had.append(readers)
+    None => handed_readers[serial] = readers
   }
 }
 
@@ -704,6 +728,7 @@ pub fn reset() -> Unit {
   // the drive's files going up and being fetched (drive_upload.mbt, drive_keep.mbt)
   ups_reset()
   dv_fetches.clear()
+  dv_orders_reset()
   keepings.clear()
   // what was worked out of the core's topics (derived.mbt)
   kept_reset()
@@ -729,7 +754,7 @@ pub fn reset() -> Unit {
   viz_pages_reset()
   // what was sent from here, not in the core's view yet (sent.mbt)
   sent_reset()
-  // what the composers' fields were seen as, their marks and `@` words (refs.mbt)
+  // what the core said of the composers' fields, their marks and `@` words (refs.mbt)
   refs_reset()
   // a send asking about what it refers to (outside.mbt)
   outside_reset()

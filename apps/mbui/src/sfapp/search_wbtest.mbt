@@ -266,7 +266,7 @@ test "a chat opened from a found message: the words bold in it, stroked under, n
   // its words laid out for their strokes, drawn in from the left
   assert_true(t.ctx().words_of("pick/ts2") is Some(_))
   assert_true(rd.found_drawn.target() == @sfpages.found_draw_ms)
-  assert_true(rd.found_drawn.get() > 0.0)
+  assert_true(rd.found_drawn.get(t.ctx()) > 0.0)
   t.run_for(@sfpages.found_draw_ms)
   // still marked once drawn in: for as long as the chat shows
   assert_eq(rd.found_at, "ts2")

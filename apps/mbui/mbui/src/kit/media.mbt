@@ -139,8 +139,6 @@ pub struct Media {
   priv mut poke : Int
   priv mut rest_key : String
   priv mut note : MediaNote?
-  /// a tap waiting to be a single one (for double_tap_ms)
-  priv mut tap_waiting : Bool
   /// where the timeline is dragged to (ms); -1: it is not
   priv mut scrub : Double
   /// where the player was last sent while it is dragged (ms; -1: not yet), whether it played when the finger came
@@ -258,7 +256,6 @@ pub fn Media::new(
     poke: 0,
     rest_key: "",
     note: None,
-    tap_waiting: false,
     scrub: -1.0,
     scrub_sent: -1.0,
     scrub_played: false,
@@ -401,7 +398,7 @@ pub fn Media::is_sideways(self : Media) -> Bool {
 ///|
 /// Upright again (back while sideways).
 pub fn Media::upright(self : Media) -> Unit {
-  if @signals.untracked(fn() { self.sideways.get() }) {
+  if self.sideways.untracked() {
     self.sideways.set(false)
     @hostapi.set_sideways(false)
   }
@@ -621,7 +618,7 @@ pub fn Media::toggle_fill(self : Media) -> Unit {
 ///|
 /// Turned sideways, or upright again.
 pub fn Media::toggle_sideways(self : Media) -> Unit {
-  let on = !@signals.untracked(fn() { self.sideways.get() })
+  let on = !self.sideways.untracked()
   self.sideways.set(on)
   @hostapi.set_sideways(on)
 }
@@ -687,15 +684,6 @@ pub fn Media::frame(self : Media, c : @ui.Ctx) -> MediaFrame {
   // what it waits on said only once it has waited wait_ms, with how fast its bytes come meanwhile
   let waited = after(c, p.key + "/wait", phase is (Opening | Buffering), p.wait_ms)
   let rate = p.rate_now(c, phase is (Opening | Buffering))
-  // a tap left single: the controls shown or hidden
-  if p.tap_waiting && after(c, p.key + "/tap", true, p.double_tap_ms) {
-    p.tap_waiting = false
-    if p.awake && phase == Playing {
-      p.awake = false
-    } else {
-      p.wake()
-    }
-  }
   let target = if p.awake || p.near || phase != Playing || audio { 1.0 } else { 0.0 }
   let shown = @motion.animate(c, p.key + "/shown", target, spec=@motion.tween(
       if target > 0.0 {
@@ -750,29 +738,37 @@ fn Media::rate_now(self : Media, c : @ui.Ctx, waiting : Bool) -> Double {
 pub fn Media::stage(self : Media, c : @ui.Ctx, id : Int, w : Double) -> Unit {
   // (a ground, not a control: Ctx::cursor)
   c.cursor(id, Arrow)
-  if !c.clicked(id) {
-    return
-  }
-  let (x, _, _) = c.pointer()
-  if !self.tap_waiting {
-    self.tap_waiting = true
-    restart(c, self.key + "/tap", self.double_tap_ms)
-    return
-  }
-  self.tap_waiting = false
-  let third = w / 3.0
-  if x < third {
-    self.seek_by(-self.nudge_ms)
-    self.note = Some(Back(self.nudge_ms))
-  } else if x > third * 2.0 {
-    self.seek_by(self.nudge_ms)
-    self.note = Some(Ahead(self.nudge_ms))
-  } else {
-    let was = self.status().playing
-    self.play_pause()
-    self.note = Some(if was { Paused } else { Played })
-  }
-  restart(c, self.key + "/note", self.note_ms)
+  // (the moment a tap on it is left single: declared by the first, under this player's key)
+  let single = self.key + "/tap-single"
+  c.on_press(id, fn() {
+    // a second within double_tap_ms of the first: the first's moment called off, a double one where it is let go
+    if c.call_off(single) {
+      let (x, _, _) = c.pointer()
+      let third = w / 3.0
+      if x < third {
+        self.seek_by(-self.nudge_ms)
+        self.note = Some(Back(self.nudge_ms))
+      } else if x > third * 2.0 {
+        self.seek_by(self.nudge_ms)
+        self.note = Some(Ahead(self.nudge_ms))
+      } else {
+        let was = self.status().playing
+        self.play_pause()
+        self.note = Some(if was { Paused } else { Played })
+      }
+      restart(c, self.key + "/note", self.note_ms)
+    } else {
+      // the first: left single once double_tap_ms has gone from it with no second (its moment the tap's: Ctx::moment),
+      // the controls shown or hidden
+      c.at_moment(single, c.moment() + self.double_tap_ms, fn() {
+        if self.awake && self.phase(self.status()) == Playing {
+          self.awake = false
+        } else {
+          self.wake()
+        }
+      })
+    }
+  })
 }
 
 ///|
@@ -821,14 +817,20 @@ pub fn Media::timeline(
       _ => ()
     }
     self.scrub_done()
-  } else if on && c.clicked(id) {
-    match under() {
-      Some(ms) => {
-        self.seek_near(ms)
-        self.wake()
+  }
+  // tapped (let go with no frame having seen it held, so not dragged): there at once, as it is let go
+  if on {
+    c.on_press(id, fn() {
+      if self.scrub < 0.0 {
+        match under() {
+          Some(ms) => {
+            self.seek_near(ms)
+            self.wake()
+          }
+          None => ()
+        }
       }
-      None => ()
-    }
+    })
   }
 }
 

@@ -155,7 +155,7 @@ pub fn publish_close() -> Unit {
 ///|
 /// Whether its page is open (not closed, whether or not it has gone yet).
 pub fn publish_open() -> Bool {
-  @signals.untracked(fn() { publishing.of.get() }) is Some(_)
+  publishing.of.untracked() is Some(_)
 }
 
 ///|
@@ -408,7 +408,7 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
   // its all the same then)
   let list_key = "publish/page/" + r.station + "/" + thread.to_string()
   c.with_dismissed(fn(_) { publish_close() }, fn() {
-    let busy = fn() { @signals.untracked(fn() { publishing.busy.get() }) }
+    let busy = fn() { publishing.busy.untracked() }
     c.overlay("publish", modal=true, stays=busy, scrim=@sf.alpha(@sf.theme().p.bg, look.alpha), inert=leaving, fn() {
       let list_node = Ref(-1)
       let page = c.box(style=publish_fill, fn() {
@@ -525,7 +525,7 @@ fn publish_native(c : @ui.Ctx, p : Json?) -> Unit {
   }
   let busy = publishing.busy.get()
   @sf.native_over_act("close", @sf.t("common.close"), "close", fn() {
-    if !@signals.untracked(fn() { publishing.busy.get() }) {
+    if !publishing.busy.untracked() {
       publish_close()
     }
   }, lead=true)
@@ -618,11 +618,13 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
         // between messages over and under it, so that lit one after another they meet
         let side = @sf.theme().rows.check
         let down = centred_in(first_line_h(c, m), side)
+        // (told as it is built, read where it is painted: the band built while it is lit or on its way out, up to its
+        // declared end)
         let lit = if taking {
-          0.0
+          None
         } else {
           let pointed = c.hand_lit(c.lit(c.id("publish/tick/" + k)))
-          @motion.animate(c, "publish/lit/" + k, if pointed { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
+          Some(@motion.told(c, "publish/lit/" + k, if pointed { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out)))
         }
         let ground = if taking {
           publish_said
@@ -632,9 +634,12 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
           publish_said.then(@sf.bleed_start(start)).then(@sf.bleed_end(paper_edge)).then(@sf.bleed_y(half))
         }
         c.box(style=ground, fn() {
-          if lit > 0.0 {
-            let g = c.layer(fn() { c.box(style=publish_lit, fn() {  }) |> ignore })
-            c.look(g, @ui.look(alpha=lit))
+          match lit {
+            Some(l) if l.target() > 0.0 || !l.over(c) => {
+              let g = c.layer(fn() { c.box(style=publish_lit, fn() {  }) |> ignore })
+              c.look_by(g, fn() { @ui.look(alpha=l.get(c)) })
+            }
+            _ => ()
           }
           // (what it says, faded once out of the picture; its box to tick beside it never is, its edge the muted ink,
           // so that every one shows: 2026-11-06 用户 of the boxes of those not ticked,「看不清」)
@@ -679,9 +684,10 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
           if !taking && publishing.aim && publishing.picked == Some(m.seq) {
             @motion.measure(c, said, publish_aim_measure(m.seq))
           }
-          let out = if taking { 0.0 } else { publish_out(c, k, on) }
-          if out > 0.0 {
-            c.look(content.val, @ui.look(alpha=publish_faded(out)))
+          // (faded as it is drawn)
+          if !taking {
+            let out = publish_out(c, k, on)
+            c.look_by(content.val, fn() { @ui.look(alpha=publish_faded(out.get(c))) })
           }
         })
         |> ignore
@@ -758,27 +764,9 @@ fn publish_file(
 /// Attachment `k` on the page, drawn by `draw` (`w` wide; None: as wide as there is), with its ✕ (publish_file).
 fn publish_ticked(c : @ui.Ctx, k : String, w~ : Double?, draw : () -> Unit) -> Unit {
   let on = !publishing.off.contains(k)
-  // (taken out: fading as its ✕ turns into a ＋, as long as a control's change takes)
+  // (taken out: fading as its ✕ turns into a ＋, as long as a control's change takes, each as it is drawn)
   let out = publish_out(c, k, on)
   let id = c.id("publish/file/" + k)
-  let hung = @sf.with_corner_remove(
-    c,
-    "publish/file/" + k,
-    @sf.t(if on { "web-pages.chat.publish.leaveOut" } else { "web-pages.chat.publish.putBack" }),
-    @sf.message_file_corner,
-    w?=w,
-    turn=out * publish_plus_turn,
-    fn() {
-      // (pressed anywhere, as its mark is: what the chat would open it by does not here)
-      let card = c.box(style=publish_file_box, fn() {
-        draw()
-        c.layer(fn() { c.box(style=publish_file_press, id~, fn() {  }) |> ignore }) |> ignore
-      })
-      if out > 0.0 {
-        c.look(card, @ui.look(alpha=publish_faded(out)))
-      }
-    },
-  )
   let flip = fn() {
     if on {
       publishing.off[k] = true
@@ -786,10 +774,24 @@ fn publish_ticked(c : @ui.Ctx, k : String, w~ : Double?, draw : () -> Unit) -> U
       publishing.off.remove(k)
     }
   }
+  @sf.with_corner_remove(
+    c,
+    "publish/file/" + k,
+    @sf.t(if on { "web-pages.chat.publish.leaveOut" } else { "web-pages.chat.publish.putBack" }),
+    @sf.message_file_corner,
+    w?=w,
+    turn=fn() { out.get(c) * publish_plus_turn },
+    on_remove=flip,
+    fn() {
+      // (pressed anywhere, as its mark is: what the chat would open it by does not here)
+      let card = c.box(style=publish_file_box, fn() {
+        draw()
+        c.layer(fn() { c.box(style=publish_file_press, id~, fn() {  }) |> ignore }) |> ignore
+      })
+      c.look_by(card, fn() { @ui.look(alpha=publish_faded(out.get(c))) })
+    },
+  )
   c.on_press(id, flip)
-  if hung {
-    flip()
-  }
 }
 
 ///|
@@ -865,9 +867,9 @@ let publish_off_alpha : Double = 0.45
 
 ///|
 /// How far what `k` names is out of the picture (0 in it, 1 out), moving as its tick or its ✕ is pressed: as long as a
-/// control's change takes (vars.dur), easing out.
-fn publish_out(c : @ui.Ctx, k : String, on : Bool) -> Double {
-  @motion.animate(c, "publish/out/" + k, if on { 0.0 } else { 1.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
+/// control's change takes (vars.dur), easing out. Told as it is built, read where it is drawn.
+fn publish_out(c : @ui.Ctx, k : String, on : Bool) -> @motion.Anim {
+  @motion.told(c, "publish/out/" + k, if on { 0.0 } else { 1.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
 }
 
 ///|

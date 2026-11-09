@@ -49,7 +49,9 @@ const within = <A, E, R>(work: Effect.Effect<A, E, R>, ms: number) => ms > 0
 export function httpError(status: number, data: unknown): CoreError {
   const e = get(data, "error");
   const code = get(data, "code");
-  return new CoreError(typeof code === "string" && /^[a-z][a-z0-9_]*$/.test(code) ? code : `http_${status}`, typeof e === "string" ? e : t("station.core.requestFailed", { status }), status);
+  // A refusal said by the key of its words (`station.files.notFound`…: station/src/read/sessions.ts) in this device's.
+  const said = typeof e === "string" ? (/^station\.[a-zA-Z]+\.[a-zA-Z.]+$/.test(e) ? t(e) : e) : t("station.core.requestFailed", { status });
+  return new CoreError(typeof code === "string" && /^[a-z][a-z0-9_]*$/.test(code) ? code : `http_${status}`, said, status);
 }
 
 export const failed = failedIn;
@@ -195,9 +197,22 @@ export class Requests {
         const status = this.#status(station);
         const waiting = quiet ? null : status.begin({ station: station.toString() }, stationWhat(method, path), false);
         const [span, head] = this.#head(station, method, path, headers, body.length, ctx);
+        // When its body was all gone and its answer's head came, in ms from the start: a slow request says which
+        // part was slow (a 470 KB picture's station had it in 0.7 s, its answer came 9 s later, 2026-11-09).
+        const host = this.#core.host;
+        const began = host.monotonicMs();
+        let all = false;
+        const gone = wrote && ((n: number) => {
+          if (!all && n >= body.length) {
+            all = true;
+            span.set("stillfail.wrote_ms", Math.round(host.monotonicMs() - began));
+          }
+          wrote(n);
+        });
         const result = yield* Effect.result(
           Effect.gen({ self: this }, function* () {
-            const reply = yield* within(this.wire.request(station, head, body, wrote), idleMs);
+            const reply = yield* within(this.wire.request(station, head, body, gone), idleMs);
+            span.set("stillfail.head_ms", Math.round(host.monotonicMs() - began));
             answered(span, reply);
             const tooOld = stationTooOld(reply.headers);
             if (tooOld !== null) return yield* Effect.fail(tooOld);

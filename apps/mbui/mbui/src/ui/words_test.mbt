@@ -132,9 +132,9 @@ test "a press taken by the app is no tap of what it went down on, and scrolls no
   let t = @ui.Tester::new(
     fn(c) {
       let id = c.id("b")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         taps.val += 1
-      }
+      })
       if take.val && c.pressed(id) {
         c.take_press()
       }

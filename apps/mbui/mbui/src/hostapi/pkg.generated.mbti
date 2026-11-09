@@ -133,6 +133,8 @@ pub fn frame_awaiting(Int32, String) -> Unit
 
 pub fn frame_late() -> Double
 
+pub fn frames_paced(Double) -> Unit
+
 pub fn from_base64(String) -> String
 
 pub fn full_screen() -> Bool
@@ -525,6 +527,8 @@ pub fn wheel_kept(Bool) -> Unit
 
 pub fn window_act(Int32) -> Unit
 
+pub fn window_buttons_down(Double, Double) -> Unit
+
 pub fn window_corner() -> Double
 
 pub fn window_corner_at(Int32) -> Double
@@ -779,6 +783,7 @@ pub(open) trait Host {
   fn wheel_kept(Self, Bool) -> Unit = _
   fn window_setup(Self, Double, Double, Double, Double, Bool) -> Unit = _
   fn window_inset(Self) -> Bool = _
+  fn window_buttons_down(Self, Double, Double) -> Unit = _
   fn window_hold(Self) -> Unit = _
   fn window_show(Self) -> Unit = _
   fn full_screen(Self) -> Bool = _
@@ -810,6 +815,7 @@ pub(open) trait Host {
   fn platform(Self) -> Int32 = _
   fn request_frame(Self) -> Unit = _
   fn request_frame_on(Self) -> Unit = _
+  fn frames_paced(Self, Double) -> Unit = _
   fn wake_after(Self, Double) -> Unit = _
   fn font_metrics(Self, Double, Int32, Int32, FixedArray[Double]) -> Unit = _
   fn shape(Self, String, Double, Int32, Int32, FixedArray[Double]) -> Int32 = _

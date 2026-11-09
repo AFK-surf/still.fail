@@ -860,6 +860,26 @@ sim("a_station_whose_pings_come_back_late_keeps_its_one_link", async (s) => {
   await close(s, station, mesh);
 });
 
+/// 2026-11-09: devices in China, stations in Tokyo, their one connection through still.fail's own relay, which from
+/// there came to lose most of what went. Its pings unanswered, it was let go and dialled again through the same relay,
+/// every 15–40 s for an evening, while another relay reached the station at once. Dialled again on every relay's own
+/// endpoint too, the requests go on through the other.
+sim("a_link_let_go_on_a_relay_losing_its_packets_is_dialled_anew_on_the_others_too", async (s) => {
+  const a = s.relay("https://a.relay.test/", { device: { ms: 20 }, station: { ms: 5 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 40 }, station: { ms: 60 } });
+  const { station, mesh, id } = await onRelays(s, [a, b]);
+  const link = await s.run(mesh.link(id, grants("ok", { n: 0 })));
+  assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+  assert.ok(sameRelay(via(mesh, id), a), `through ${via(mesh, id)}`);
+  s.net.leg(a, "device").loss = 0.95;
+  await s.time.pass(12 * TICK_MS);
+  assert.ok(sameRelay(via(mesh, id), b), `through ${via(mesh, id)}`);
+  const now = mesh.current(id)!;
+  assert.notEqual(now, link);
+  assert.equal((await request(s, now, head("/admin/api/overview"))).status, 200);
+  await close(s, station, mesh);
+});
+
 /// 2026-10-30: a phone on a slow mobile network (nomofu's, round trips of 2–4 s to every relay), back from the
 /// background: getting onto the relays again and the handshake took past CONNECT_TIMEOUT_MS, and the connection that
 /// came a moment later was closed as too late and dialled anew, the station shown as coming back all the while. The

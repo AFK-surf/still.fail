@@ -36,9 +36,9 @@ fn islands() -> Islands {
   let view_b = fn(c : Ctx) {
     builds_b.val = builds_b.val + 1
     let id = c.id("b")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       taps_b.val = taps_b.val + 1
-    }
+    })
     // (wider than its room: cut to it)
     c.box(w=Px(400.0), h=Fill(1.0), bg=islands_red, id~, fn() { c.text(b.get(), size=12.0) |> ignore }) |> ignore
   }
@@ -154,10 +154,10 @@ fn islands_read_late(where_read : String, in_row? : Bool = false) -> Unit raise 
   let view_b = fn(c : Ctx) {
     let pressed = fn() {
       let id = c.id("b")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         taps.val = taps.val + 1
         colour.set(islands_red)
-      }
+      })
       c.box(w=Fill(1.0), h=Px(800.0), id~, fn() {  }) |> ignore
     }
     if in_row {

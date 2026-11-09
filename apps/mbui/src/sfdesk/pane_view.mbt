@@ -347,7 +347,7 @@ fn fold_goes_reset() -> Unit {
 ///|
 /// What is committed of the block's move told.
 fn fold_said() -> Unit {
-  fold_goes.said.set(@signals.untracked(fn() { fold_goes.said.get() }) + 1)
+  fold_goes.said.set(fold_goes.said.untracked() + 1)
 }
 
 ///|
@@ -439,7 +439,7 @@ fn fold_built(c : @ui.Ctx, now : FoldLook) -> FoldLook {
   fold_goes.said.get() |> ignore
   fold_goes.way.said()
   if fold_goes.way.goes_at(c.moment()) {
-    fold_goes.way.get() |> ignore
+    fold_goes.way.get(c) |> ignore
     fold_along(c.moment(), now)
   } else {
     // (at rest, as the state has it now: what it is worked out from that no move follows, the theme, the window's
@@ -600,8 +600,11 @@ pub fn pane_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     block.val = dock_node(
       b,
       fn() { pane_side_at(src, b) },
-      fn(c) { pane_block_built(c, src, b) },
+      fn(r) { rail_node(r, src, tips, fn() { pane_rail_at(src, b) }) },
       fn(c, bar) { pane_side_built(c, src, bar) },
+      // (what the page's bars and the sidebar's parts work out from where the block's move has got, said before the
+      // sidebar's old view builds)
+      before=fn(c) { pane_block_built(c, src, b) },
     )
   })
   |> ignore
@@ -821,19 +824,41 @@ fn fold_bars(c : @ui.Ctx, f : FoldLook) -> Unit {
 }
 
 ///|
-/// The rail off the tape (its old view in the block's nodes: dock_node) where the block's move has got, the frame's
-/// node `n`: what the page's bars and the sidebar's parts work out from said as it is built (fold_bars), the block
-/// closed to the bar or not, crowded or not.
+/// What the frame off the tape says of the block as its sidebar's old view builds, the frame's node `n` (dock_node's
+/// `before`): what the page's bars and the sidebar's parts work out from where the block's move has got (fold_bars),
+/// the block closed to the bar or not, crowded or not.
 fn pane_block_built(c : @ui.Ctx, src : Source, n : @view.View) -> Unit {
-  let (now, all, _, _) = @sfbase.workspace_in_view(src)
+  let (now, _, _, _) = @sfbase.workspace_in_view(src)
   guard now is Some(w) else { return }
   let (r, target) = fold_target(src, w, n.window().0)
   let f = fold_built(c, target)
   fold_bars(c, f)
   wide.closed.set(r.bar)
   wide.crowded = r.crowded
-  if !@sf.native_on() {
-    rail(c, src, w, all, r.bar, moving=if fold_going(c.moment()) { Some(f) } else { None })
+}
+
+///|
+/// 更新 off the tape with the sidebar closed, where its first row is not shown: where the bar's start leaves room for it
+/// (its old view, the window's whole).
+fn pane_update_built(c : @ui.Ctx, src : Source) -> Unit {
+  let (now, _, _, _) = @sfbase.workspace_in_view(src)
+  guard now is Some(w) else { return }
+  let r = pane_room(src, w, c.width)
+  if !r.gated && update_shown() && r.bar && !r.peek {
+    update_button(c, src, @ui.window_inset(), r.top)
+  }
+}
+
+///|
+/// Where the rail off the tape is drawn as node `n` (over all of the window) is drawn: where the block's move has got
+/// then (fold_along at what `n` is drawn at), in the workspace in view.
+fn pane_rail_at(src : Source, n : @view.View) -> RailAt {
+  match @sfbase.workspace_in_view(src).0 {
+    Some(w) => {
+      let (r, now) = fold_target(src, w, n.window().0)
+      rail_at_fold(r.bar, fold_along(fold_drawn_at(n), now))
+    }
+    None => rail_at_tape(dock_ground(false))
   }
 }
 
@@ -847,18 +872,6 @@ fn pane_side_built(c : @ui.Ctx, src : Source, bar : Bool) -> Unit {
   wide.in_bar = bar
   sidebar(c, src, w, c.width)
   wide.in_bar = false
-}
-
-///|
-/// 更新 off the tape with the sidebar closed, where its first row is not shown: where the bar's start leaves room for it
-/// (its old view, the window's whole).
-fn pane_update_built(c : @ui.Ctx, src : Source) -> Unit {
-  let (now, _, _, _) = @sfbase.workspace_in_view(src)
-  guard now is Some(w) else { return }
-  let r = pane_room(src, w, c.width)
-  if !r.gated && update_shown() && r.bar && !r.peek {
-    update_button(c, src, @ui.window_inset(), r.top)
-  }
 }
 
 ///|

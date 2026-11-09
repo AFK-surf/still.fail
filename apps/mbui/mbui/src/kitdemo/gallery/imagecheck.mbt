@@ -27,7 +27,7 @@ let image_check_at : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 fn image_check_step(path : String, scale : Double) -> Unit {
-  match @signals.untracked(fn() { image_check_at.get() }) {
+  match image_check_at.untracked() {
     0 =>
       if image_check_told.val >= 1 && @ui.image_state(image_check_key) == 1 {
         if !@hostapi.drive(10, "") {

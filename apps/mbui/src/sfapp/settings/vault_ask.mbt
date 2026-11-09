@@ -571,12 +571,12 @@ pub fn vault_foot(
             // (the button the same before and after, the card as wide (it fills its column): what was picked fades in
             // beside it, the row no higher)
             c.box(style=ask_file, fn() {
-              if @sf.button(c, words, key="vault/" + request + "/file", tone=Plain, disabled=under) {
+              @sf.button(c, words, key="vault/" + request + "/file", tone=Plain, disabled=under, on_press=fn() {
                 match @ui.pick(Files) {
                   Some(p) => vault_file_picks[request] = p
                   None => ()
                 }
-              }
+              })
               match vault_files.get(request) {
                 Some((content, name)) => {
                   secret = content
@@ -584,7 +584,7 @@ pub fn vault_foot(
                   // (faded in as it is drawn)
                   let shown = @kit.presence(c, "vault/" + request + "/file/" + name, true).t
                   let i = c.rich([@ui.span(name + " · " + file_size(content), color=@sf.theme().p.text)], style=ask_file_name)
-                  c.look_by(i, fn() { @ui.look(alpha=@sf.dmax(0.0, @sf.dmin(1.0, shown.get()))) })
+                  c.look_by(i, fn() { @ui.look(alpha=@sf.dmax(0.0, @sf.dmin(1.0, shown.get(c)))) })
                 }
                 None => ()
               }
@@ -683,7 +683,7 @@ pub fn vault_foot(
             if duration.val != "once" {
               @sf.field(pc, tr("android-settings.vault.timeout.method"), fn() {
                 for k in ["idle", "fixed"] {
-                  if @sf.choice_row(pc, "vault-timeout-kind/" + k, chosen.val == k, tr("android-settings.vault.timeout." + k), note=tr("android-settings.vault.timeout.detail." + k)) { chosen.val = k }
+                  @sf.choice_row(pc, "vault-timeout-kind/" + k, chosen.val == k, tr("android-settings.vault.timeout." + k), note=tr("android-settings.vault.timeout.detail." + k), on_press=fn() { chosen.val = k })
                 }
               })
             }
@@ -693,11 +693,11 @@ pub fn vault_foot(
             if field.text().length() > 5 { 0 } else { int_of(field.text(), 0) * (if unit.val == "hours" { 60 } else { 1 }) }
           } else { int_of(duration.val, 0) }
           let once = duration.val == "once"
-          if @sf.button(pc, tr("android-settings.vault.timeout.done"), key="vault-timeout-done", tone=Primary, disabled=!once && (n < 1 || n > max_minutes)) {
+          @sf.button(pc, tr("android-settings.vault.timeout.done"), key="vault-timeout-done", tone=Primary, disabled=!once && (n < 1 || n > max_minutes), on_press=fn() {
             vault_picked[request] = if once { "once" } else { chosen.val }
             if !once { vault_timeout_minutes[request] = n }
             close()
-          }
+          })
         })
       }
       @sf.chooser(c, "vault/" + request + "/scope", words, [], fn() { false }, fn(on) { if on { open_panel() } }, disabled=under) |> ignore
@@ -714,13 +714,12 @@ pub fn vault_foot(
     c.box(style=@sf.ask_foot, id=acts_id, fn() {
       if answer is SetUp {
         // kept only in a vault that is on here: the way to turn it on first
-        if @sf.button(c, tr("android-settings.vault.turnOn"), key="vault/" + request + "/on", tone=Primary) {
+        @sf.button(c, tr("android-settings.vault.turnOn"), key="vault/" + request + "/on", tone=Primary, on_press=fn() {
           (core.push)(Route::Vault)
-        }
+        })
       } else {
         let yes = if save { "android-settings.vault.act.save" } else { "android-settings.vault.act.allow" }
-        let pressed = @sf.button(c, tr(yes), key="vault/" + request + "/yes", tone=Primary, busy=busy(true), disabled=under || empty || !valid_time)
-        if pressed || (entered && !under && !empty && valid_time) {
+        let approve = fn() {
           let what = tr(if save { "android-settings.vault.act.saveWhat" } else { "android-settings.vault.act.allowWhat" })
           let chosen_scope = if !timed || scope == "once" { if save { "once" } else { scope } } else if minutes <= 60 { "hour" } else { "chat" }
           let params : Array[(String, Json)] = [("workspace", str(ws)), ("request", str(request)), ("scope", str(chosen_scope))]
@@ -730,14 +729,18 @@ pub fn vault_foot(
           if given is Some(g) {
             params.push(("typed", g))
           }
+          act(true, "vault.approve", what, obj(params))
+        }
+        @sf.button(c, tr(yes), key="vault/" + request + "/yes", tone=Primary, busy=busy(true), disabled=under || empty || !valid_time, on_press=approve)
+        if entered && !under && !empty && valid_time {
           // (told once the frame's builds are over: Enter in the field is seen by the build it came to)
-          c.tell("vault/" + request + "/approve", fn() { act(true, "vault.approve", what, obj(params)) })
+          c.tell("vault/" + request + "/approve", approve)
         }
       }
       let no = if save { "android-settings.vault.act.dontSave" } else { "android-settings.vault.act.deny" }
-      if @sf.button(c, tr(no), key="vault/" + request + "/no", tone=Ghost, busy=busy(false), disabled=under) {
+      @sf.button(c, tr(no), key="vault/" + request + "/no", tone=Ghost, busy=busy(false), disabled=under, on_press=fn() {
         act(false, "vault.deny", tr("android-settings.vault.act.denyWhat"), obj([("workspace", str(ws)), ("request", str(request))]))
-      }
+      })
     })
     |> ignore
   }

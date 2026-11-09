@@ -153,6 +153,8 @@ priv struct Drawn {
   /// (start, top, end, foot: Ctx::fade_to)
   mut fade_of : Int
   mut fades : (Double, Double, Double, Double)
+  /// those worked out as it is painted (Ctx::fade_to_by), in place of `fades`
+  mut fades_by : (() -> (Double, Double, Double, Double))?
   /// how far before where it is cut it fades out to the cut (0: cut hard)
   mut cut_soft : Double
   /// its own ground (its colour, glass, shadow, border and corners) drawn in this box (x, y, w, h, its corners: top
@@ -169,6 +171,8 @@ priv struct Drawn {
   mut bg_by : (() -> Int64)?
   /// each glyph of the words it holds drawn with what this gives as it is painted (Ctx::glyphs_by)
   mut glyphs_by : ((GlyphAt) -> GlyphLook)?
+  /// the ink its words, lines and shapes are drawn in, worked out as it is painted (Ctx::ink_by), in place of theirs
+  mut ink_by : (() -> Int64)?
   /// its notch (Ctx::box notch_y, notch_r, notch_fillet) worked out as it is painted (Ctx::notch_by), in place of its own
   mut notch_by : (() -> (Double, Double, Double))?
   /// where across it is drawn, worked out as it is painted (Ctx::cut_across_by): from and to, in its own terms
@@ -417,6 +421,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     left: -1.0,
     fade_of: -1,
     fades: (0.0, 0.0, 0.0, 0.0),
+    fades_by: None,
     cut_soft: 0.0,
     ground: None,
     ground_bg: None,
@@ -424,6 +429,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     look_by: None,
     bg_by: None,
     glyphs_by: None,
+    ink_by: None,
     notch_by: None,
     cut_by: None,
   }
@@ -547,6 +553,16 @@ pub fn Ctx::glyphs_by(self : Ctx, i : Int, f : (GlyphAt) -> GlyphLook) -> Unit {
 /// nothing built or laid out (frame_watch.mbt). `f` works out the same for the same state and time.
 pub fn Ctx::bg_by(self : Ctx, i : Int, f : () -> Int64) -> Unit {
   self.drawn_of(i).bg_by = Some(f)
+}
+
+///|
+/// What node `i` holds drawn in the ink `f` gives as it is painted (RRGGBBAA): its words' glyphs (not a colour emoji's),
+/// its lines and its shapes (an icon's), in place of the ink each was built with; its grounds, edges, shadows and
+/// pictures as they are. Read as it is drawn, not as it is built, as Ctx::bg_by (words or an icon easing to another ink
+/// as the pointer comes and goes, motion in what is made once): what `f` reads paints the frame again as it changes,
+/// nothing built or laid out; `f` works out the same for the same state and time.
+pub fn Ctx::ink_by(self : Ctx, i : Int, f : () -> Int64) -> Unit {
+  self.drawn_of(i).ink_by = Some(f)
 }
 
 ///|
@@ -716,11 +732,19 @@ pub fn Ctx::cut_to_bottom(self : Ctx, i : Int, h : Double, soft? : Double = 0.0)
 
 ///|
 /// Node `i` drawn only as its top `h` (what is below cut off, as something unrolling from its top shows it), and tapped
-/// whole, where it is laid out. `soft`: as cut_to_bottom's.
+/// whole, where it is laid out. `soft`: as cut_to_bottom's. One laid out as nothing (a room shut, what it holds drawn
+/// past it as it goes) has what it holds drawn only as far as `h` below its top.
 pub fn Ctx::cut_to_top(self : Ctx, i : Int, h : Double, soft? : Double = 0.0) -> Unit {
   let e = self.drawn_of(i)
   e.top = dmax(h, 0.0)
   e.cut_soft = soft
+}
+
+///|
+/// Whether a cut `top` down from a node's top (Ctx::cut_to_top; < 0 none) cuts what a node `fh` tall draws: above its
+/// foot, or anywhere where it is laid out as nothing (what it holds drawn past it).
+fn cuts_foot(top : Double, fh : Double) -> Bool {
+  top >= 0.0 && (top < fh || fh <= 0.5)
 }
 
 ///|
@@ -745,6 +769,16 @@ pub fn Ctx::fade_to(
     e.fade_of = -1
     e.fades = (0.0, 0.0, 0.0, 0.0)
   }
+  e.fades_by = None
+}
+
+///|
+/// Node `i` faded out towards the edges of node `of` as Ctx::fade_to has it, how far before each (start, top, end,
+/// foot) worked out by `f` as it is painted: what moves with nothing built (a box scrolled sideways, Ctx::sideways).
+fn Ctx::fade_to_by(self : Ctx, i : Int, of : Int, f : () -> (Double, Double, Double, Double)) -> Unit {
+  let e = self.drawn_of(i)
+  e.fade_of = of
+  e.fades_by = Some(f)
 }
 
 ///|
@@ -974,7 +1008,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   }
   let cutting = cut_empty ||
     (e.bottom >= 0.0 && e.bottom < self.nodes[i].fh) ||
-    (e.top >= 0.0 && e.top < self.nodes[i].fh) ||
+    cuts_foot(e.top, self.nodes[i].fh) ||
     (cut_right >= 0.0 && cut_right < self.nodes[i].fw) ||
     (cut_left >= 0.0 && cut_left < self.nodes[i].fw)
   if look.is_still() && e.z < z_flying && !keep && !e.only && !cutting && e.fade_of < 0 {
@@ -1137,7 +1171,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     self.flat_from(i0)
     let a = self.inst
     let top = e.bottom >= 0.0 && e.bottom < n.fh
-    let foot = e.top >= 0.0 && e.top < n.fh
+    let foot = cuts_foot(e.top, n.fh)
     let start = cut_right >= 0.0 && cut_right < n.fw
     let end = cut_left >= 0.0 && cut_left < n.fw
     for k in i0..<self.ninst {
@@ -1169,7 +1203,10 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     self.flat_from(i0)
     let a = self.inst
     let o = self.nodes[e.fade_of]
-    let (start, top, end, foot) = e.fades
+    let (start, top, end, foot) = match e.fades_by {
+      Some(f) => f()
+      None => e.fades
+    }
     for k in i0..<self.ninst {
       let b = k * inst_size
       inst_fade(a, b, o.y, top, o.y + o.fh, foot)

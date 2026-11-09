@@ -101,7 +101,7 @@ fn pointing_said_by_host(by : Int) -> Unit {
   // (told now, as the event it came with is taken: what reads the hand of the moment (pointing) follows it from this
   // event on, not from the next frame's)
   let now = @signals.untracked(fn() { pointing() })
-  if @signals.untracked(fn() { hand.pointing.get() }) != now {
+  if hand.pointing.untracked() != now {
     hand.pointing.set(now)
   }
 }
@@ -205,16 +205,19 @@ pub fn window_keys_own() -> Bool {
 }
 
 ///|
-/// Whether the window is maximized now (@hostapi.window_zoomed; a Tester's as set_window_zoomed made it).
+/// Whether the window is maximized now (@hostapi.window_zoomed; a Tester's as set_window_zoomed made it), as the frame
+/// has it, followed (host_said.mbt): what read it is built again as it changes.
 pub fn window_zoomed() -> Bool {
-  @hostapi.window_zoomed()
+  zoomed_said.now()
 }
 
 ///|
 /// How the pointer stands on the window's maximize button the app draws, which only its host sees (0 not on it, 1 on
-/// it, 2 pressing it: @hostapi.window_snap_state; a Tester's as set_window_snap made it).
+/// it, 2 pressing it: @hostapi.window_snap_state; a Tester's as set_window_snap made it), as the frame has it, followed
+/// (host_said.mbt): what read it is built again as it changes (the button lit and held as the host says, not when
+/// something else builds it again).
 pub fn window_snap_state() -> Int {
-  @hostapi.window_snap_state()
+  snap_said.now()
 }
 
 ///|
@@ -301,6 +304,13 @@ pub fn Tester::set_dark(self : Tester, dark : Bool) -> Unit {
 pub fn Tester::set_font_scale(self : Tester, scale : Double) -> Unit {
   self.fake.font_scale = scale
   self.fake.wants = true
+}
+
+///|
+/// How much lower than centred on the app's top row's first 44 the app last moved the window's buttons, and over how
+/// many ms (@hostapi.window_buttons_down).
+pub fn Tester::window_buttons_down(self : Tester) -> (Double, Double) {
+  self.fake.buttons_down
 }
 
 ///|

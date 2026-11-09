@@ -1,5 +1,6 @@
-// A list's rows of the window's tree drawn again as kept, moved (view_ride.mbt): what a frame scrolled by whole pixels
-// draws is what drawing each of them anew draws there; one changed since, or moved by part of a pixel, drawn anew.
+// A page's list of the window's tree drawn again as kept, moved (view_ride.mbt): what a frame scrolled by whole pixels
+// draws, by the header of the group the host keeps of it, is what drawing each of its rows anew draws there; one
+// changed since drawn anew.
 
 ///|
 /// A page's list 300 tall scrolling 20 rows, each 50 tall, round, edged and clipping: its words, an icon and a box of its
@@ -65,34 +66,39 @@ fn ride_tester(at : @view.Scroll, third : @signals.Signal[String]) -> Tester {
 }
 
 ///|
-/// What is drawn scrolled to `to` with nothing of the rows kept: each drawn anew there (first drawn a quarter of a pixel
-/// off it, kept there, then moved by part of a pixel: drawn anew).
-fn ride_fresh(t : Tester, at : @view.Scroll, to : Double) -> String raise {
-  at.put(to + 0.125)
-  t.draw()
+/// What is drawn scrolled to `to` with nothing of the rows kept: a window's tree as `third` says made anew, scrolled
+/// there before it is first drawn, each row drawn anew there.
+fn ride_fresh(to : Double, third : @signals.Signal[String]) -> String {
+  let at = @view.Scroll::list()
   at.put(to)
-  let again = ride_drawn.val
-  t.draw()
-  assert_eq(ride_drawn.val, again, msg="moved by part of a pixel: drawn anew")
-  t.drawn_text()
+  ride_tester(at, third).drawn_text()
 }
 
 ///|
-test "rows scrolled by whole pixels drawn as kept, moved: as each drawn anew there" {
-  let at = @view.Scroll::list()
+test "a page's list scrolled by whole pixels drawn by its group's header, moved: as each row drawn anew there" {
   let third = @signals.signal("row 2")
-  let t = ride_tester(at, third)
-  for to in [20.0, 57.5, 150.0, 151.0] {
-    let again = ride_drawn.val
-    let heads = ride_heads.val
-    at.put(to)
-    t.draw()
-    assert_true(ride_drawn.val > again, msg="scrolled to \{to}: rows drawn as kept")
-    // (by a header of what the host keeps, drawn out as the paint ends as a host draws it)
-    assert_true(ride_heads.val > heads, msg="scrolled to \{to}: rows said by their groups' headers")
+  let steps = [20.0, 30.0, 57.5, 140.0, 145.0]
+  for k in 0..<steps.length() {
+    // (scrolled on to each step in turn, each drawn: what the last draws as it was kept)
+    let at = @view.Scroll::list()
+    let t = ride_tester(at, third)
+    let mut alone = 0
+    for i in 0..=k {
+      alone = t.looks_alone()
+      at.put(steps[i])
+      // (a frame as a host's: a test's draw is an event from outside, built whole: Tester::frame)
+      t.frame()
+    }
+    let to = steps[k]
+    // (by the header of what the host keeps of it, drawn out as the paint ends as a host draws it)
+    assert_true(!list_heads.is_empty(), msg="scrolled to \{to}: the list said by its group's header")
     assert_true(ride_spans.is_empty(), msg="scrolled to \{to}: the Tester's frame drawn out")
+    // (no row come into its window: nothing painted, the header moved alone)
+    if to == 30.0 || to == 145.0 {
+      assert_eq(t.looks_alone(), alone + 1, msg="scrolled to \{to}: drawn of its looks alone, not: \{t.built_why()}\{t.painted_why()}")
+    }
     let kept = t.drawn_text()
-    assert_eq(kept, ride_fresh(t, at, to), msg="scrolled to \{to}: as drawn anew")
+    assert_eq(kept, ride_fresh(to, third), msg="scrolled to \{to}: as drawn anew")
   }
 }
 
@@ -106,6 +112,41 @@ test "a row changed since it was kept drawn anew, as it is now" {
   third.set("the third row")
   at.put(30.0)
   t.draw()
+  // (the list drawn again for it: the rows kept said in its group by their own groups' headers, drawn out in their
+  // places)
+  assert_true(ride_drawn.val > 0, msg="its other rows drawn as kept")
+  assert_true(ride_groups.values().any(fn(g) { g.heads }), msg="the list's group holds its rows' headers")
   let kept = t.drawn_text()
-  assert_eq(kept, ride_fresh(t, at, 30.0), msg="its words as they are now")
+  assert_eq(kept, ride_fresh(30.0, third), msg="its words as they are now")
+}
+
+///|
+/// What a page's list keeps of its rows past where it shows is cut away by its group's header's clip, its column's,
+/// though what is cut is clipped round of its own and has no outer (a row's words in its round box: the history's
+/// commands scrolled past its top, drawn over its details' figures, 2026-11-09): cut as the square clip it is in cuts
+/// a round one, never by an outer with no corner's radius, which is none (scene.mbt 40-51), what it cut drawn whole.
+test "a page's list's rows past its top cut by its clip where they are round and have no outer, as where they are square" {
+  let at = @view.Scroll::list()
+  at.put(60.0)
+  let t = ride_tester(at, @signals.signal("row 2"))
+  assert_true(!list_heads.is_empty(), msg="the list said by its group's header")
+  let mut round = 0
+  for a in t.drawn_instances() {
+    // (a shape's pieces, kind 12, are none drawn: its band's numbers)
+    if a[2] <= 0.0 || a[3] <= 0.0 || a[5] == 12.0 {
+      continue
+    }
+    if a[5] == 1.0 && (a[24] > 0.0 || a[25] > 0.0 || a[26] > 0.0 || a[27] > 0.0) {
+      round += 1
+    }
+    // (where it may be seen, as the renderers cut it: its clip, and its outer where that has a corner's radius)
+    let outer = a[44] > 0.0 || a[45] > 0.0 || a[46] > 0.0 || a[47] > 0.0
+    let y0 = if outer { dmax(a[17], a[41]) } else { a[17] }
+    let y1 = if outer { dmin(a[19], a[43]) } else { a[19] }
+    assert_true(
+      y1 <= y0 || (y0 >= 0.0 && y1 <= 300.0),
+      msg="kind \{a[5]} at (\{a[0]}, \{a[1]}) seen from \{y0} to \{y1}: past the list's column (0 to 300)",
+    )
+  }
+  assert_true(round > 0, msg="words clipped round of their own in the rows drawn")
 }

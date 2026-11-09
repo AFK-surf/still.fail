@@ -89,9 +89,9 @@ pub fn picking(
           if find_chat() == here.list.unwrap().rk {
             // (⌘F's: every match coloured in, the stroke over it the current one's alone)
             found_scribbles(c, "pick/" + at, marked, x, y)
-            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(), x, y, only=if rd.found_at == ts { find_k() } else { -1 })
+            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(c), x, y, only=if rd.found_at == ts { find_k() } else { -1 })
           } else {
-            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(), x, y, faint=rd.found_at != ts)
+            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(c), x, y, faint=rd.found_at != ts)
           }
         }
       }
@@ -216,9 +216,10 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
                 if f.placed && lands < @double.infinity && c.moment() >= lands {
                   let a = @motion.anim(c, "time-in/" + m.ts, 0.0, global=true)
                   if a.target() != 1.0 {
-                    a.animate(1.0, @motion.tween(@sf.enter_ms, ease=Out), start_at=lands)
+                    a.animate(c, 1.0, @motion.tween(@sf.enter_ms, ease=Out), start_at=lands)
                   }
-                  c.look(at, @ui.look(alpha=a.get()))
+                  // (faded in as it is drawn)
+                  c.look_by(at, fn() { @ui.look(alpha=a.get(c)) })
                 } else {
                   // (built again as they land)
                   if f.placed && lands < @double.infinity {
@@ -1020,29 +1021,29 @@ pub fn quotes(
         Some(f) => @sfbase.flight_quote_words(c, f, @sfbase.quote_key(i))
         None => ("", None)
       }
-      let done = @sf.quote_card(
+      // (the passage it quotes lit there alone, where that message's words have it)
+      let jump = match here.go {
+        Some(go) if q.ts != "" => Some(fn() { if seq >= 0.0 { go(seq, q.text) } })
+        _ => None
+      }
+      let card = @sf.quote_card(
         c,
         "msg-quote/" + q.ts + "/" + i.to_string(),
         q.author,
         q.text,
         role=q.role,
         comment=q.comment,
-        jump=q.ts != "" && here.go is Some(_),
+        on_jump?=jump,
         words_key~,
         words_width?,
         // (its own box, as the message's files have theirs: at most as wide as the card has room; its corner concentric
         // with the card's)
         picture?=own.map(fn(a) { fn() { message_files(c, src, here, [a], false, landing_key=@sfbase.quote_picture_key(i), corner=@sf.quote_picture_corner, at=if at == "" { "" } else { at + "/q:" + i.to_string() }) } }),
       )
-      // (the passage it quotes lit there alone, where that message's words have it)
-      match here.go {
-        Some(go) if done.jumped && seq >= 0.0 => go(seq, q.text)
-        _ => ()
-      }
       // sent from the composer: it flies here from its card there
       match flight {
         Some(f) =>
-          flight_quote_landing(c, f, done.card, @sfbase.quote_key(i), @sf.quote_sent_shift(q.author, q.role))
+          flight_quote_landing(c, f, card, @sfbase.quote_key(i), @sf.quote_sent_shift(q.author, q.role))
         None => ()
       }
     }

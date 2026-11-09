@@ -38,9 +38,10 @@ pub let waiting_in : @motion.Trans = @motion.trans(fade=0.0, dy=enter_rise, spec
 
 ///|
 /// A page over the whole window, a picture to share: faded in over 140 ms on
-/// the ease-out; gone by kit's pop_out, as a dialog.
+/// the ease-out, its ground first, whole before its words begin over what it is put over (ground_first: none of the
+/// page's words over the chat's under it); gone by kit's pop_out, as a dialog.
 // kept across runs: a value (no field of it changes)
-pub let window_page_in : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.tween(140.0, ease=Out))
+pub let window_page_in : @motion.Trans = @motion.trans(fade=0.0, spec=@motion.tween(140.0, ease=Out), ground_first=true)
 
 ///|
 /// The composer's hint, gone at once as words sent leave its field, back once they are out of it (madeChat.css.ts:

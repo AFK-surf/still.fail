@@ -239,6 +239,11 @@ fn pane_made(
       made("changelog", fn(a, core, _here, _stint, frame, width) {
         @sfpages.changelog_node(a, core, on_back=core.pop, frame~, width~)
       })
+    // (the profiles' place: the profile picked in its list, made once as its page is; none to pick yet, the first to add)
+    Place("profiles") =>
+      made("place/profiles", fn(a, core, here, stint, frame, width) {
+        profiles_place_node(a, src, core, here, stint, frame, width, tips~)
+      })
     // (a place of the rail's whose page is one of those: that page, at the stack's root (no back over it, place_page's),
     // made under its own kind)
     Place(name) =>
@@ -288,9 +293,23 @@ fn pane_made(
       })
     Setting(Appearance) =>
       made("appearance", fn(a, core, _here, _stint, frame, width) { @sfpages.appearance_node(a, core, on_back=core.pop, frame~, width~) })
+    // (by its station and id: another's another page)
+    Setting(Profile(address, id)) =>
+      made("profile/" + address + "/" + id, fn(a, core, here, stint, frame, width) {
+        @sfpages.profile_node(a, core, here, address, id, on_back=core.pop, frame~, width~, tips~, stint~)
+      })
+    Setting(NewProfile(address)) =>
+      made("new-profile/" + address, fn(a, core, here, _stint, frame, width) {
+        @sfpages.new_profile_node(a, core, here, address, on_back=core.pop, frame~, width~, tips~)
+      })
     Setting(LocalStation) =>
       made("local-station", fn(a, core, _here, _stint, frame, width) {
         @sfpages.local_station_node(a, core, on_back=core.pop, frame~, width~)
+      })
+    // (by its station: another station's another page, not this one become it)
+    Setting(Station(address)) =>
+      made("station/" + address, fn(a, core, here, stint, frame, width) {
+        @sfpages.station_node(a, core, here, address, on_back=core.pop, frame~, width~, stint~)
       })
     Setting(Permissions) =>
       made("permissions", fn(a, core, _here, _stint, frame, width) {
@@ -312,6 +331,15 @@ fn pane_made(
       made("vault-items", fn(a, core, here, _stint, frame, width) {
         @sfpages.vault_items_node(a, core, here, on_back=core.pop, frame~, width~, tips~)
       })
+    // (by its station and id: another's another page)
+    Setting(Connects(only)) =>
+      made("connects/" + only, fn(a, core, here, stint, frame, width) {
+        @sfpages.connects_node(a, src, core, here, only, on_back=core.pop, frame~, stint~, width~, tips~)
+      })
+    Setting(Connect(station, id)) =>
+      made("connect/" + station + "/" + id, fn(a, core, here, stint, frame, width) {
+        @sfpages.connect_node(a, src, core, here, station, id, on_back=core.pop, frame~, stint~, width~, tips~)
+      })
     Setting(AutoCompletion) =>
       made("auto-completion", fn(a, core, here, _stint, frame, width) {
         @sfpages.completion_node(a, core, here, on_back=core.pop, frame~, width~, tips~)
@@ -331,7 +359,17 @@ fn pane_made(
       Some(
         (
           "chat",
-          fn(v, _page, _under, _stint, k) { @sfbase.chat_page_made(v, src, k, pane_page_one, key=tape_island_key) },
+          fn(v, _page, _under, _stint, k) {
+            // (beside it its side panel, the tree's, reading by the page's source, let go with it: side_panel_node)
+            v.row(Is(true)).grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+            let page_src : Ref[Source] = Ref(src)
+            v.box(fn(p) {
+              p.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))) |> ignore
+              page_src.val = @sfbase.chat_page_made(p, src, k, pane_page_one, key=tape_island_key)
+            })
+            |> ignore
+            side_panel_node(v, page_src.val, k, tips)
+          },
         ),
       )
     _ => None
@@ -356,15 +394,7 @@ fn pane_made_host(p : @view.View, src : Source, k : Int) -> Unit {
   p
   .grow(Is(1.0))
   .min_height(Is(Some(0.0)))
-  .offset(By(fn() {
-    match @sfbase.workspace_in_view(src).0 {
-      Some(w) => {
-        let (_, now) = fold_target(src, w, p.window().0)
-        (fold_along(fold_drawn_at(p), now).aside, 0.0)
-      }
-      None => (0.0, 0.0)
-    }
-  }))
+  .offset(By(fn() { (pane_aside_at(src, p), 0.0) }))
   |> ignore
   context_node(p)
   fold_goes.made[k] = p
@@ -383,4 +413,31 @@ fn pane_made_host(p : @view.View, src : Source, k : Int) -> Unit {
     .moves_window(Is(true))
     |> ignore
   })
+}
+
+///|
+/// How far the page in the pane off the tape is moved aside as node `n` is drawn (the folded block shown a while over
+/// it), where the block's move has it then.
+fn pane_aside_at(src : Source, n : @view.View) -> Double {
+  match @sfbase.workspace_in_view(src).0 {
+    Some(w) => {
+      let (_, now) = fold_target(src, w, n.window().0)
+      fold_along(fold_drawn_at(n), now).aside
+    }
+    None => 0.0
+  }
+}
+
+///|
+/// How wide the pane off the tape is as node `n` is drawn: the window's less the block's column, where the block's move
+/// has it then.
+fn pane_w_at(src : Source, n : @view.View) -> Double {
+  let ww = n.window().0
+  match @sfbase.workspace_in_view(src).0 {
+    Some(w) => {
+      let (_, now) = fold_target(src, w, ww)
+      ww - fold_along(fold_drawn_at(n), now).col
+    }
+    None => ww
+  }
 }

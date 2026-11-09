@@ -65,7 +65,7 @@ fn scaled_hosting(s : @signals.Signal[Double], hosted : @signals.Signal[Bool]) -
     fn(root) {
       root.box(fn(n) {
         n.over(Is(true)).width(Is(Some(100.0))).height(Is(Some(40.0))).scale(By(fn() { s.get() })) |> ignore
-        n.show(fn() { hosted.get() }, fn(h) { h.width(Is(Some(60.0))).height(Is(Some(20.0))).hosted() |> ignore })
+        n.show(at_once=true, fn() { hosted.get() }, fn(h) { h.width(Is(Some(60.0))).height(Is(Some(20.0))).hosted() |> ignore })
       })
       |> ignore
     },

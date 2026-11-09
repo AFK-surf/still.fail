@@ -116,8 +116,8 @@ fn covered(t : @ui.Tester, label : String) -> (Double, Double)? {
 
 ///|
 test "on the tape with the window's buttons in the app's top row (a Mac's) what shows at the window's left holds them, as much room past them as before them from the window's edge; the strip at the right as before" {
-  // (the host's buttons: 16 from the window's left, 54 across: mbui's mac_app.m)
-  let (buttons_in, buttons_w) = (16.0, 54.0)
+  // (the host's buttons: 16 from the window's left, 60 across on macOS 27: mbui's mac_app.m)
+  let (buttons_in, buttons_w) = (16.0, 60.0)
   for w in [600.0, 720.0, 839.0] {
     let at = "\{w}"
     let t = tape_chat(0, w, 840.0)
@@ -140,6 +140,60 @@ test "on the tape with the window's buttons in the app's top row (a Mac's) what 
     t.run_for(@ui.move_most_ms)
     assert_true(near_at(covered(t, "打开侧栏").map(fn(e) { e.0 }), w - @sfdesk.tape_shows), msg=at)
   }
+}
+
+///|
+test "on a Mac's tape the sidebar's first row stands under the window's buttons as far as they stand under its panel's top, the rail's first place beside it" {
+  let t = tape_chat(0, 720.0, 840.0)
+  t.set_window_inset(true)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+  // (the buttons 14 high, centred on the top row's 44 and as much lower as the panel stands under the window's top;
+  // the panel's content under its 6 and its line)
+  let down = @sfdesk.closed_bar_in
+  let top = (44.0 - 14.0) / 2.0 + down
+  let bottom = top + 14.0
+  let content_top = down + 1.0
+  // the bell's icon (20) its top as far under the buttons as they stand under the panel's top: its middle there
+  let mid = bottom + (top - content_top) + 10.0
+  guard words_middle(t, "新建对话") is Some(y) else { fail("no 新建对话") }
+  // (its words' box a point over the row's middle)
+  assert_true((y - mid).abs() <= 1.0, msg="新建对话's middle \{y}, \{mid} wanted")
+  // the rail's first place (the bell) on that line, under the buttons
+  let first = t.all(Button).filter(fn(n) { !n.hidden && n.rect.0 < 40.0 && n.rect.1 > 0.0 }).iter().fold(
+    init=None,
+    fn(acc : @ui.SemNode?, n) {
+      match acc {
+        Some(a) if a.rect.1 <= n.rect.1 => acc
+        _ => Some(n)
+      }
+    },
+  )
+  guard first is Some(bell) else { fail("no rail place") }
+  let bell_mid = bell.rect.1 + bell.rect.3 / 2.0
+  assert_true((bell_mid - y).abs() < 1.0, msg="the bell's middle \{bell_mid}, the row's \{y}")
+  assert_true(bell.rect.1 >= bottom, msg="the bell \{bell.rect} under the buttons' \{bottom}")
+}
+
+///|
+test "on the tape the window's buttons stand as far lower as its panels stand under the window's top, back off it" {
+  let t = tape_chat(0, 720.0, 840.0)
+  t.set_window_inset(true)
+  t.run_for(@ui.move_most_ms)
+  // (the strip at the window's left its panel's top 6 under the window's: the buttons 16 under it, as 16 in from the
+  // window's side)
+  // (moved there as a Move that far: none seen as the window opens, the host's)
+  let moved = (@sfdesk.closed_bar_in, @ui.move_ms(@sfdesk.closed_bar_in))
+  assert_eq(t.window_buttons_down(), moved)
+  // off the tape (Large), centred on the top row's first 44 again, moved back
+  t.resize(1280.0, 840.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(!@sfdesk.wide.tape)
+  assert_eq(t.window_buttons_down(), (0.0, moved.1))
+  // and on it again
+  t.resize(720.0, 840.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.window_buttons_down(), moved)
 }
 
 ///|
@@ -1108,10 +1162,10 @@ test "on the tape the sidebar's rows stand in a side column's line, their words 
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
   // the sidebar's panel 6 from the window's edge, its list from 8 into the rail, the rail as much wider as its places
   // stand further in than its 8 (concentric with the panel's corner): a row's ground as far in as 新建对话's (band_in),
-  // its words without a mark before them as far from it (band_pad)
+  // its words without a mark before them as far from it (band_pad_in: the tape's, as before #3806)
   let l = @sf.theme().chat_list
   let (x, _, _, _) = t.rect_of("Slack 里问的报销流程").unwrap()
-  assert_eq(x, @sfdesk.closed_bar_in + @sfdesk.rail_w - 8.0 + (@sf.rail_in_tape() - 8.0) + l.band_in + l.band_pad)
+  assert_eq(x, @sfdesk.closed_bar_in + @sfdesk.rail_w - 8.0 + (@sf.rail_in_tape() - 8.0) + l.band_in + @sf.band_pad_in(Tape))
   let p = tape_chat(2, 390.0, 844.0, width="compact", height="medium")
   p.run_for(@ui.move_most_ms)
   p.back()

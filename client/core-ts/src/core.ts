@@ -61,7 +61,7 @@ import { Loads } from "./preview-load.ts";
 import { Asks } from "./asks.ts";
 import { Adb } from "./adb.ts";
 import { PersonalLock } from "./personal-lock.ts";
-import { bindPerson, keepToPerson, lockSeen, tellStations } from "./views/lock.ts";
+import { bindPerson, keepToPerson, lockSeen, personalStations, refusedAgain, tellStations } from "./views/lock.ts";
 import { personalBegin, personalCancel, personalPairState, personalProve } from "./views/pair.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
@@ -270,7 +270,17 @@ export class Core {
       inner.forms = installForms(inner);
       const asks = new Asks(inner.host, (from, to) => inner.changelog.brings(from, to));
       asks.follow(inner.accounts);
-      inner.cloudSync.onRelease = () => asks.released();
+      // A release may be out (still.fail cloud said one is, or its events socket opened again: what it said while closed
+      // is not said again): the newest of each feed read again when next asked, and the app told (the `releases`
+      // topic's `told`) so the build it gets ready is the newest, not one read before.
+      let told = 0;
+      const releaseOut = () => {
+        asks.released();
+        told += 1;
+        inner.store.invalidate({ topic: "releases" });
+      };
+      inner.router.owners.push({ owns: (topic) => topic.topic === "releases", compute: () => ({ ok: { told } }) });
+      inner.cloudSync.onRelease = releaseOut;
       inner.adb = new Adb({
         host: inner.host,
         runner: inner.runner,
@@ -293,9 +303,11 @@ export class Core {
               lockSeen(inner).touch(`lock ${ws}`);
               inner.runner.fork(bindPerson(inner, ws));
               inner.runner.fork(keepToPerson(inner, ws));
+              refusedAgain(inner, ws);
             }
           },
           told: (sub, chain) => tellStations(inner, sub, chain),
+          stations: personalStations(inner),
         }),
         subOf: (workspace) => inner.workspaces.owner(workspace),
         subs: () => inner.accounts.list().map((a) => ({ sub: a.sub, email: a.email })),
@@ -401,9 +413,13 @@ export class Core {
       inner.viewCalls.resume();
       inner.downloads.resume();
       inner.fill.start();
-      // What changed in still.fail: read now, and again each time an account's events socket opens.
+      // What changed in still.fail: read now, and again each time an account's events socket opens (a release missed
+      // while it was closed too).
       inner.scheduler.enqueue("cloud", "changelog", Priority.background, inner.changelog.read());
-      inner.cloudSync.onOpen = () => inner.scheduler.enqueue("cloud", "changelog", Priority.background, inner.changelog.read());
+      inner.cloudSync.onOpen = () => {
+        inner.scheduler.enqueue("cloud", "changelog", Priority.background, inner.changelog.read());
+        inner.cloudSync.onRelease();
+      };
       return new Core(inner);
     });
   }
@@ -458,7 +474,7 @@ export class Core {
     const inner = this.inner;
     switch (message.kind) {
       case "subscribe":
-        return inner.store.subscribe(client, message.id, message.subscribe, message.keyed === true);
+        return inner.store.subscribe(client, message.id, message.subscribe, message.keyed === true, message.from);
       case "unsubscribe":
         return inner.store.unsubscribe(client, message.id);
       case "cancel": {

@@ -7,7 +7,7 @@ test "a node leaving: its leaving's end waited for (next_wake), not idle before 
   let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
   t.check_looks(false)
   set_view_app(fn(root) {
-    root.show(fn() { on.get() }, fn(v) {
+    root.show(at_once=true, fn() { on.get() }, fn(v) {
       v.width(Is(Some(80.0))).height(Is(Some(40.0))).ground(Is(0xFF7F7FFFL)) |> ignore
     }, leave=wake_leave_ms)
   })
@@ -74,7 +74,7 @@ fn due_tester(on : @signals.Signal[Bool], when : (Double) -> Double, due : Ref[D
   let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
   t.check_looks(false)
   set_view_app(fn(root) {
-    root.show(fn() { on.get() }, fn(v) {
+    root.show(at_once=true, fn() { on.get() }, fn(v) {
       v.width(Is(Some(40.0))).height(Is(Some(40.0))) |> ignore
       due.val = when(v.cause_at())
       v.at_moment(due.val, fn() { done.val = done.val + 1 }, later=true) |> ignore

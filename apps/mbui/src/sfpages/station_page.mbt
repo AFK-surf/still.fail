@@ -130,7 +130,7 @@ fn station_head(c : @ui.Ctx, core : Core, here : Here, s : Json?, manager : Bool
       // its mark: its managers pick it, by what it is called (图标)
       let mid = c.id("station-mark/" + address)
       if manager {
-        if hit(c, mid) {
+        c.on_press(mid, fn() {
           open_mark_pick(core, name, text(s, "emoji"), text(s, "icon"), @sf.t("android-settings.station.emojiWhat"), fn(
             emoji,
             icon,
@@ -142,7 +142,7 @@ fn station_head(c : @ui.Ctx, core : Core, here : Here, s : Json?, manager : Bool
               done,
             )
           })
-        }
+        })
       }
       let mb = c.box(
         style=@ui.style(w=Fixed(side), h=Fixed(side), align=ACenter, justify=JCenter),
@@ -269,12 +269,16 @@ fn station_start(c : @ui.Ctx, core : Core, local : Json?, address : String) -> U
 /// online (its launcher hands over, its sessions go on, what its advanced settings saved taking effect), removing it
 /// from the workspace (asked first).
 fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
+  let key = "station-more/" + text(s, "station")
+  @sf.icon_action(c, "more", key, @sf.t("common.more"), on_press=fn() {
+    @sf.menu(station_menu_items(core, here, s), from=Of(c.id(key)), along=End)
+  })
+}
+
+///|
+/// What its ⋯ holds (station_menu's): renaming it, restarting it while it is online, removing it (asked first).
+fn station_menu_items(core : Core, here : Here, s : Json?) -> Array[@sf.MenuItem?] {
   let address = text(s, "station")
-  let key = "station-more/" + address
-  if !@sf.icon_action(c, "more", key, @sf.t("common.more")) {
-    return
-  }
-  let mid = c.id(key)
   let remove = fn() {
     confirm(
       @sf.t("web-pages.settings.stations.removeConfirm", args=[("name", text(s, "name"))]),
@@ -294,8 +298,7 @@ fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
       },
     )
   }
-  @sf.menu(
-    [
+  [
       Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { station_rename(core, here, s) })),
       if flag(s, "online") {
         Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.restart"), icon="power", fn() {
@@ -306,10 +309,7 @@ fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
         None
       },
       Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.remove"), icon="trash", danger=true, remove)),
-    ],
-    from=Of(mid),
-    along=End,
-  )
+  ]
 }
 
 ///|
@@ -458,7 +458,7 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
               trouble=if attention > 0 { @sf.t("web-mobile.settings.profilesShort", args=[("n", attention.to_string())]) } else { "" },
               lead=fn() { @settings.group_mark(c, kind) },
               on_press=fn() {
-                station_profiles_panel(core, here, address, kind, name, from, ids.length() >= @sf.pick_search_from)
+                station_profiles_panel(core, here, address, kind, name, Of(from), ids.length() >= @sf.pick_search_from)
               },
             ) |> ignore
           }
@@ -514,9 +514,9 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
             @sf.t("web-pages.drive.title"),
             count=roots.length(),
             actions=fn() {
-              if @sf.action(c, "station-files/" + address, @sf.t("web-pages.stations.page.openFiles"), icon="folder") {
+              @sf.action(c, "station-files/" + address, @sf.t("web-pages.stations.page.openFiles"), icon="folder", on_press=fn() {
                 @sfbase.open_page(Drive({ station: address, root: None, path: "" }))
-              }
+              })
             },
             fn() {
               @sf.group(c, fn() {
@@ -569,7 +569,15 @@ let st_row_glyph : Double = 16.0
 
 ///|
 /// One account kind, with its live profiles and their allowances. A long kind can be searched without leaving it.
-fn station_profiles_panel(core : Core, here : Here, address : String, kind : String, title : String, from : Int, many : Bool) -> Unit {
+fn station_profiles_panel(
+  core : Core,
+  here : Here,
+  address : String,
+  kind : String,
+  title : String,
+  from : @sf.Anchor,
+  many : Bool,
+) -> Unit {
   let search_key = "station-profiles-search/" + address + "/" + kind
   let query = @ui.Field::new()
   @sf.panel(
@@ -612,7 +620,7 @@ fn station_profiles_panel(core : Core, here : Here, address : String, kind : Str
         }) |> ignore
       }
     },
-    from=Of(from),
+    from~,
     field=if many { search_key } else { "" },
     tall=if many { 0.85 } else { 0.0 },
     grows=many,
@@ -986,7 +994,7 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
     draft.source = Some(now)
     if pending == Some(now) {
       c.tell("env-ack/" + form, fn() {
-        if @signals.untracked(fn() { draft.pending.get() }) == Some(now) {
+        if draft.pending.untracked() == Some(now) {
           draft.pending.set(None)
           draft.sent = None
         }
@@ -1005,7 +1013,7 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
   // finishes. An older acknowledgement never clears or resends a newer value.
   if pending is Some(words) && d is Some(Object(_)) && !flag(d, "pending") && text(d, "text") != words && draft.sent != Some(words) {
     c.tell("env-edit/" + form, fn() {
-      if @signals.untracked(fn() { draft.pending.get() }) == Some(words) && draft.sent != Some(words) {
+      if draft.pending.untracked() == Some(words) && draft.sent != Some(words) {
         draft.sent = Some(words)
         station_env_edit(core, address, form, words)
       }
@@ -1060,7 +1068,7 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
           @signals.start_batch()
           draft.pending.set(None)
           draft.sent = None
-          draft.reset.set(@signals.untracked(fn() { draft.reset.get() }) + 1)
+          draft.reset.set(draft.reset.untracked() + 1)
           @signals.end_batch()
           @settings.act(
             core,
@@ -1171,9 +1179,9 @@ fn station_context(c : @ui.Ctx, core : Core, address : String, context : Json?, 
   let actions : (() -> Unit)? = match cost {
     Some(value) if on && manager =>
       Some(fn() {
-        if @sf.action(c, "context-cost/" + address, @sf.t("web-pages.stations.context.customAmount"), disabled=busy) {
+        @sf.action(c, "context-cost/" + address, @sf.t("web-pages.stations.context.customAmount"), disabled=busy, on_press=fn() {
           station_cold_custom(core, address, value)
-        }
+        })
       })
     _ => None
   }

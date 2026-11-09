@@ -988,6 +988,12 @@ void *mb_app_hwnd(void) { return hwnd; }
 
 double mb_app_scale(void) { return scale; }
 
+// A frame for what moves on by the clock that needs fewer (@hostapi.frames_paced): not paced here, the next drawn.
+void mb_host_frames_paced(double hz) {
+  (void)hz;
+  mb_host_request_frame();
+}
+
 void mb_host_wake_after(double ms) {
   double t = mb_now_ms() + ms;
   if (wake_at < 0 || t < wake_at) wake_at = t;
@@ -1355,6 +1361,7 @@ int32_t mb_host_window_inset(void) { return setup_inset; }
 // A window filling the screen (@hostapi.full_screen): not one of this host's.
 int32_t mb_host_full_screen(void) { return 0; }
 void mb_host_set_full_screen(int32_t on) { (void)on; }
+void mb_host_window_buttons_down(double by, double ms) { (void)by; (void)ms; }
 
 // How round the system draws the window's corners (@hostapi.window_corner): Windows 11's 8 (its build 22000 on: the
 // rounding DWM gives every window that does not ask otherwise), none maximised; Windows 10's are square.

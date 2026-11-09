@@ -370,7 +370,9 @@ pub fn dv_beside_name(
 /// A file whose name was taken in its folder kept beside it (保留两者: dv_beside_name over the others going up there),
 /// then on its way again.
 pub fn dv_keep_both(src : Source, u : DvUpload) -> Unit {
-  let others = ups.uploads.filter(fn(x) { x.serial != u.serial && x.station == u.station && x.root == u.root && x.dir == u.dir })
+  let others = ups.uploads.filter(fn(x) {
+    x.serial != u.serial && x.station == u.station && x.root == u.root && x.dir == u.dir && x.state.get() != "done"
+  })
   u.state.set("naming")
   dv_beside_name(src, u.station, u.root, u.dir, u.name.get(), others.map(fn(x) { x.name.get() }), fn(r) {
     match r {

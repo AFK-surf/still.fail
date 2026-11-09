@@ -61,15 +61,15 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   // 600 × 400 in 390 × 844 with 12 round it: (390 - 24) / 600
   assert_true((shown_scale(t, v.zoom) - 366.0 / 600.0).abs() < 0.001)
   t.tap(195.0, 422.0)
-  t.advance(double_tap_ms / 2.0)
+  t.advance(@ui.double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
   // (its glide: @ui.move_most_ms from the tap)
   t.run_for(@ui.move_most_ms)
   assert_true((shown_scale(t, v.zoom) - 1.525).abs() < 0.01)
   // (the next two taps a double tap of their own)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_tap_ms)
   t.tap(195.0, 422.0)
-  t.advance(double_tap_ms / 2.0)
+  t.advance(@ui.double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
   // (its glide: @ui.move_most_ms from the tap)
   t.run_for(@ui.move_most_ms)
@@ -765,7 +765,7 @@ test "a swipe past a fifth of the stage goes to the next; a short one comes back
 ///|
 test "a swipe carries the picture under the finger from where it went down; a second finger takes it back, not left between two" {
   let t = preview_tester("step")
-  let (x, y, w, h) = viewer.get().unwrap().zoom.rect().unwrap()
+  let (x, y, w, h) = viewer.get().unwrap().zoom.rect(t.ctx()).unwrap()
   let at = fn(dx : Double) {
     drawn_pictures(t).any(fn(d) {
       (d.0 - (x + dx)).abs() < 0.001 && (d.1 - y).abs() < 0.001 && (d.2 - w).abs() < 0.001 && (d.3 - h).abs() < 0.001
@@ -788,7 +788,7 @@ test "a swipe carries the picture under the finger from where it went down; a se
 test "a step keeps the bars as they were: hidden by a tap, the next comes without them" {
   let t = preview_tester("step")
   t.tap(195.0, 422.0)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_tap_ms)
   assert_true(!viewer.get().unwrap().awake)
   t.drag(300.0, 422.0, 100.0, 422.0)
   assert_eq(viewer.get().unwrap().file.name, "第二版.png")
@@ -880,10 +880,10 @@ test "the frame a swipe is let go in shows both pictures where the finger left t
 /// to go either way across), the next taps a double tap of their own.
 fn zoom_in_middle(t : @ui.Tester) -> @kit.Zoom raise {
   t.tap(195.0, 422.0)
-  t.advance(double_tap_ms / 2.0)
+  t.advance(@ui.double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
   t.run_for(@ui.move_most_ms)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_tap_ms)
   let z = viewer.get().unwrap().zoom
   assert_true(z.zoomed_at(t.time()))
   z
@@ -913,10 +913,10 @@ test "zoomed in, let go moving it goes on that way, slowing, to its edge; a fing
   // flung harder: it stops at its edge (its right edge at the stage's), when its way said it ends
   t.drag(250.0, 422.0, 130.0, 422.0, steps=3)
   t.run_for(z.fling_ends() - t.time())
-  let (x, _, w, _) = z.rect().unwrap()
+  let (x, _, w, _) = z.rect(t.ctx()).unwrap()
   assert_true((x + w - 390.0).abs() < 0.001)
   t.run_for(@kit.zoom_fling_ms)
-  assert_true((z.rect().unwrap().0 - x).abs() < 0.001)
+  assert_true((z.rect(t.ctx()).unwrap().0 - x).abs() < 0.001)
 }
 
 ///|
@@ -927,7 +927,7 @@ test "zoomed in, dragged on past its edge the next comes in; a quick move that c
   t.drag(385.0, 422.0, 5.0, 422.0, steps=4)
   t.run_for(strip_rest(t))
   assert_eq(viewer.get().unwrap().file.name, "界面草图.png")
-  let (x, _, w, _) = z.rect().unwrap()
+  let (x, _, w, _) = z.rect(t.ctx()).unwrap()
   assert_true((x + w - 390.0).abs() < 0.001)
   // from its edge, a short quick move on: the next
   t.drag(300.0, 422.0, 260.0, 422.0, steps=2)
@@ -941,7 +941,7 @@ test "zoomed in, dragged slowly far past its edge it stops there, nothing beside
   t.drag(385.0, 422.0, 5.0, 422.0, steps=20)
   t.run_for(strip_rest(t))
   assert_eq(viewer.get().unwrap().file.name, "界面草图.png")
-  let (x, _, w, _) = z.rect().unwrap()
+  let (x, _, w, _) = z.rect(t.ctx()).unwrap()
   assert_true((x + w - 390.0).abs() < 0.001)
   t.drag(385.0, 422.0, 5.0, 422.0, steps=20)
   assert_eq(viewer.get().unwrap().file.name, "第二版.png")
@@ -953,7 +953,7 @@ test "marking: a box drawn on the picture is numbered, its note kept, its quote 
   marks_start()
   t.draw()
   let v = viewer.get().unwrap()
-  let (x, y, w, _) = v.zoom.rect().unwrap()
+  let (x, y, w, _) = v.zoom.rect(t.ctx()).unwrap()
   let k = w / v.zoom.nw
   // from (100, 100) to (300, 200) in the picture's pixels
   t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
@@ -1009,7 +1009,7 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   assert_true(viewer.get() is None)
   assert_true(pv_leaving.get() is Some(_))
   assert_true(v.flies && v.fly_back)
-  let to = v.zoom.rect().unwrap()
+  let to = v.zoom.rect(t.ctx()).unwrap()
   // each frame of the way back the picture is drawn where its flight is, nearer the thumbnail than the frame before,
   // the last one on it
   let mut last = 1.0e9
@@ -1018,7 +1018,7 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   let end = t.time() + @ui.move_most_ms
   while t.time() < end {
     t.frame()
-    let p = v.flying()
+    let p = v.flying(t.ctx())
     let ex = th.x + (to.0 - th.x) * p + (th.w + (to.2 - th.w) * p) / 2.0
     let ey = th.y + (to.1 - th.y) * p + (th.h + (to.3 - th.h) * p) / 2.0
     let drawn = t
@@ -1084,7 +1084,7 @@ test "marking: a box's pin up and right of its corner wherever the marks before 
   marks_start()
   t.draw()
   let v = viewer.get().unwrap()
-  let (x, y, w, _) = v.zoom.rect().unwrap()
+  let (x, y, w, _) = v.zoom.rect(t.ctx()).unwrap()
   let k = w / v.zoom.nw
   // a line drawn by hand first, then a box from (100, 100) to (300, 200) in the picture's pixels
   marking.tool = Pen
@@ -1167,7 +1167,7 @@ test "marking: a note written and done, the picture put in the chat: its quote t
   marks_start()
   t.draw()
   let v = viewer.get().unwrap()
-  let (x, y, w, _) = v.zoom.rect().unwrap()
+  let (x, y, w, _) = v.zoom.rect(t.ctx()).unwrap()
   let k = w / v.zoom.nw
   t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
   t.run_for(note_pop_ms)

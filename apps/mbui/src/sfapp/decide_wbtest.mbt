@@ -106,7 +106,7 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
 test "the chat's \"…\": the menu a row has, pinning it from it" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-actions")
-  assert_true(t.find("复制会话链接") is Some(_))
+  assert_true(t.find("分享…") is Some(_))
   assert_true(t.find("重命名") is Some(_))
   t.tap_text("固定")
   let pinned = named(calls, "chat.pin")
@@ -145,6 +145,8 @@ test "the history: a group opens to its steps, a step to its call and what came 
   assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is Some(_))
   // a step closed again
   t.tap_text("跑一遍列表的测试")
+  // (its room closed on its way)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("moon test -p ui -f list_test.mbt") is None)
   t.tap_text("详情")
   assert_true(t.find("Claude Code 2.1.3") is Some(_))
@@ -179,15 +181,18 @@ test "the desk's history beside a chat: a group opens to its steps, a step to it
   let t = decide_core(calls, "chat-history-side", wide=true)
   assert_true(t.find("moon test -p ui -f list_test.mbt") is None)
   t.tap_text("读了 src/ui/list.mbt 等 2 个文件，跑了测试")
+  // (the group's room opened on its steps)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("跑一遍列表的测试")
-  // what the core made of the call and what came back (history.tool, answered as it was asked after that frame): the
-  // next frame shows the command, its timeout, its output
-  t.frame()
+  // what the core made of the call and what came back (history.tool, answered as it was asked after that frame), its
+  // room opened on its way (reveal_node): the command, its timeout, its output
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("moon test -p ui -f list_test.mbt") is Some(_))
   assert_true(t.find("120000") is Some(_))
   assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is Some(_))
-  // a step closed again
+  // a step closed again, its room closed on its way
   t.tap_text("跑一遍列表的测试")
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is None)
 }
 
@@ -305,6 +310,7 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
   open_fixture_over("chat-actions", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
+  open_share(t)
   t.tap_text("接力到频道…")
   assert_eq(named(calls, "chat.relayPlaces").length(), 1)
   // (the chat's menu goes, the relay's sheet comes up, to where it rests: the presenters')

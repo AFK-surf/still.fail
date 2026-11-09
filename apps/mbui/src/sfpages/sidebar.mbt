@@ -44,22 +44,9 @@ priv enum Line {
 }
 
 ///|
-/// The lists first shown once with their rows (scrolled past what is tucked over them).
-// kept across runs: put back by sidebar_reset (reset)
-let placed : Map[String, Bool] = {}
-
-///|
-/// How far each list made once is scrolled to tuck its search out of view, by its key, as it was first placed: the room
-/// its foot keeps so it goes that far with fewer rows than it is tall.
-// kept across runs: put back by sidebar_reset (reset)
-let tucked_by : Map[String, Double] = {}
-
-///|
 fn sidebar_reset() -> Unit {
   list_scrolls.clear()
-  tucked_by.clear()
   rows_rest_at.val = -1.0
-  placed.clear()
   rows_laid.clear()
   list_rows.clear()
   lists_had.clear()
@@ -178,7 +165,7 @@ pub fn filter_menu(from : @sf.Beside, shown : String, go : (String) -> Unit) -> 
     along=End,
   )
   filter_menu_serial.val = @sf.last_presented()
-  filter_menu_opened.set(@signals.untracked(fn() { filter_menu_opened.get() }) + 1)
+  filter_menu_opened.set(filter_menu_opened.untracked() + 1)
 }
 
 ///|

@@ -72,6 +72,9 @@ export function learn(models: unknown): number {
   return next.size;
 }
 
+/// The keys of the models the catalog names.
+export const named = (): string[] => [...told.keys()];
+
 /// What the catalog says of a model, however a profile spells it (anthropic/claude-opus-5-5[1m] is claude-opus-5-5);
 /// null for one it does not name.
 export function facts(model: string): Facts | null {

@@ -66,8 +66,11 @@ fn pick_menu_of(choices : Array[Choice], search : Bool) -> Bool {
 
 ///|
 /// What of the presented the window's tree draws, in `root` (over all of it the root holds: each at its place in the
-/// window's stack of layers), made as one is presented and let go once it has gone.
+/// window's stack of layers), made as one is presented and let go once it has gone; and under them the reader's
+/// layout's panel while one is open (reader_layout_nodes).
 pub fn presented_nodes(root : @view.View) -> Unit {
+  // (the reader's layout's panel, laid over it: under what is presented, which stands in the window's stack of layers)
+  reader_layout_nodes(root)
   root.each(
     fn() {
       presented_said.get() |> ignore
@@ -76,7 +79,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
     },
     fn(serial) { serial },
     fn(row, item) {
-      let serial = @signals.untracked(fn() { item.get() })
+      let serial = item.untracked()
       guard presented_now.search_by(fn(q) { q.serial == serial }) is Some(i) else { return }
       let p = presented_now[i]
       // (the root's node it is in at its place in the window's stack of layers: its serial, as the host's presented are)
@@ -176,6 +179,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
             p.from,
             shown~,
             gone~,
+            covered_by=fn() { sheet_over(serial) },
           )
         Panel(x) if x.stage =>
           stage_node(
@@ -304,6 +308,11 @@ fn menu_anchor_now(from : Anchor) -> ((@view.View) -> @view.View, Bool, Double, 
       let by_key = c.focus_shown(id)
       (fn(layer) { @ui.old_anchor(layer, id, (0.0, 0.0, 0.0, 0.0)) }, by_key, panel_offset, keep && !by_key)
     }
+    // (a node of the window's tree: beside it where it is drawn)
+    Node(v) => {
+      let by_key = v.focus_shown()
+      (fn(_) { v }, by_key, panel_offset, keep && !by_key)
+    }
     At(x, y, w, h) =>
       (
         fn(layer) { fixed_anchor(layer, (x, y, w, h)) },
@@ -325,4 +334,50 @@ pub fn presented_tree(page : (@ui.Ctx) -> Unit) -> (@view.View) -> Unit {
     @ui.old(root, page).grow(Is(1.0)) |> ignore
     presented_nodes(root)
   }
+}
+
+///|
+/// How far in from the column a panel's body is given node `v`'s words go (panel_words_in's, where the body is nodes:
+/// panel_nodes); none outside a panel.
+pub fn panel_words_in_node(v : @view.View) -> @ui.Style {
+  @ui.style(px=room(panel_words_at_node(v)))
+}
+
+///|
+/// The same, in points (panel_words_in_node's).
+pub fn panel_words_at_node(v : @view.View) -> Double {
+  match v.lent(panel_in_lent) {
+    Some(p) => p.words
+    None => 0.0
+  }
+}
+
+///|
+/// Node `v` of a panel's body clear of an untitled dialog's close button at its end (untitled_clear's, where the body is
+/// nodes); none elsewhere.
+pub fn untitled_clear_node(v : @view.View) -> @ui.Style {
+  @ui.style(pr=room(panel_clear_at_node(v)))
+}
+
+///|
+/// How far clear of an untitled dialog's close button node `v` of a panel's body is (untitled_clear_node's), in points.
+fn panel_clear_at_node(v : @view.View) -> Double {
+  match v.lent(panel_in_lent) {
+    Some(p) => p.clear
+    None => 0.0
+  }
+}
+
+///|
+/// Whether what a node is in is a sheet's foot whose buttons go across it, each its share (foot_fills, as nodes): lent by
+/// sheet_node to its foot's row; read by button_node and foot_spacer_node.
+// kept across runs: what each sheet lends its foot, let go with it
+let foot_fills_lent : @view.Lent[Bool] = @view.Lent::new()
+
+///|
+/// What stands between a foot's buttons at its start and those at its end (Ctx::spacer's, as a node) in `parent`: the
+/// room left between them; at a sheet's foot, a share of it as each button's (foot_fills: the old spacer's Fill there).
+#callsite(autofill(loc))
+pub fn foot_spacer_node(parent : @view.View, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(s) { s.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore }) |> ignore
 }

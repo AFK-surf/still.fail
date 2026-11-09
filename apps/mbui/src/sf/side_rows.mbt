@@ -23,8 +23,8 @@ pub fn nav_ground_by(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : 
   let h = @motion.told(c, key + "/hover", if hover { 1.0 } else { 0.0 }, spec=nav_fade)
   let o = @motion.told(c, key + "/on", if on { 1.0 } else { 0.0 }, spec=nav_fade)
   fn() {
-    let h = h.get()
-    let o = o.get()
+    let h = h.get(c)
+    let o = o.get(c)
     if h <= 0.0 && o <= 0.0 {
       0L
     } else {
@@ -41,7 +41,8 @@ pub let nav_fade : @motion.Spec = @motion.tween(dur_ms, ease=Out)
 ///|
 /// A row of one line of a sidebar's list (Sidebar.css.ts navRow; touch's SidebarList.css.ts phone: the theme's
 /// chats' list's `side_row`): the pointer's ground on hover, the selected one's ground when it is the page in view;
-/// `more`, another row under it (nav_apart). True on the frame after a press.
+/// `more`, another row under it (nav_apart); `on_press`, what a press on it does; `at`, where its list stands (its
+/// words' room: side_row_at).
 pub fn nav_row(
   c : @ui.Ctx,
   key : String,
@@ -49,16 +50,17 @@ pub fn nav_row(
   body : () -> Unit,
   align? : @ui.Align = ACenter,
   more? : Bool = false,
-) -> Bool {
-  let l = theme().chat_list
+  at? : ListAt = Side,
+  on_press~ : () -> Unit,
+) -> Unit {
   let id = c.id(key)
-  let look = l.side_row.then(@ui.style(align~))
+  c.on_press(id, on_press)
+  let look = side_row_at(at).then(@ui.style(align~))
   let hover = c.lit(id) || c.pressed(id)
   nav_apart(c, more, fn() {
     let i = c.box(style=look.then(row_least_h()), id~, body)
     nav_ground_on(c, i, key, hover, on)
   })
-  c.clicked(id)
 }
 
 ///|
@@ -78,15 +80,23 @@ pub fn nav_apart(c : @ui.Ctx, more : Bool, row : () -> Unit) -> Unit {
 /// An action in a sidebar's band over its list (新建对话, Pin 文件夹, 待处理: Sidebar.css.ts navNew's row): not one of the
 /// list's rows but the band's, on one line with what else stands over the list (the search's field): its height, its
 /// words' room and its words the theme's chats' list's band's; its corner a sidebar row's; the pointer's ground on
-/// hover, the selected one's when it is the page in view. True on the frame after a press.
-pub fn band_row(c : @ui.Ctx, key : String, on : Bool, body : () -> Unit) -> Bool {
+/// hover, the selected one's when it is the page in view; `on_press`, what a press on it does; `at`, where its list
+/// stands (its words' room: band_pad_in).
+pub fn band_row(
+  c : @ui.Ctx,
+  key : String,
+  on : Bool,
+  body : () -> Unit,
+  at? : ListAt = Side,
+  on_press~ : () -> Unit,
+) -> Unit {
   let l = theme().chat_list
   let id = c.id(key)
+  c.on_press(id, on_press)
   let hover = c.lit(id) || c.pressed(id)
-  let look = band_row_look.then(@ui.style(min_h=Fixed(l.band_h), px=room_of(l.band_pad)))
+  let look = band_row_look.then(@ui.style(min_h=Fixed(l.band_h), px=room_of(band_pad_in(at))))
   let i = c.box(style=look, id~, body)
   nav_ground_on(c, i, key, hover, on)
-  c.clicked(id)
 }
 
 ///|
@@ -127,8 +137,16 @@ pub fn nav_words(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
 /// The action over a list (SidebarList.tsx NavAction, in its band: Sidebar.css.ts navNew, 6 over it, 8 at its sides, 2
 /// under, the list's own 4 then): its ＋ (16, the row's mark column, ICON) and words, with an optional key beside it.
 /// `band` places both where the frame needs them. No band where neither action is present. Pressed, `run` goes on with
-/// it as what opened what it puts up.
-pub fn nav_action(c : @ui.Ctx, key : String, label : String, run : ((Beside) -> Unit)?, trailing? : () -> Unit, band? : @ui.Style) -> Unit {
+/// it as what opened what it puts up. `at`: where its list stands (band_row's).
+pub fn nav_action(
+  c : @ui.Ctx,
+  key : String,
+  label : String,
+  run : ((Beside) -> Unit)?,
+  trailing? : () -> Unit,
+  band? : @ui.Style,
+  at? : ListAt = Side,
+) -> Unit {
   let t = theme()
   if run is None && trailing is None {
     return
@@ -137,11 +155,12 @@ pub fn nav_action(c : @ui.Ctx, key : String, label : String, run : ((Beside) -> 
     c.box(style=nav_action_main, fn() {
       match run {
         Some(go) =>
-          if band_row(c, key, false, fn() {
+          {
+            let id = c.id(key)
+            band_row(c, key, false, fn() {
               band_mark(c, "plus", t.p.muted)
               band_words(c, label)
-            }) {
-            go(Of(c.id(key)))
+            }, at~, on_press=fn() { go(Of(id)) })
           }
         None => ()
       }
@@ -218,8 +237,8 @@ pub let nav_mark_side : Double = 16.0
 /// row, laid out as a chat's (list_row): its `mark` beside its first line, its `title` (nav_title) with what is at
 /// that line's `end` (muted, never cut: the title gives way), then the `lines` under them (list_row_line each; `keep_lines` of
 /// them always, empty where it says none: list_row `lines`); the pointer's
-/// ground on hover, the selected one's when it is the page in view; `more`, another row under it (nav_apart). True
-/// when pressed. `foot` is a last line across the row; `foot_capsule` places a capsule on it at its foot corner's
+/// ground on hover, the selected one's when it is the page in view; `more`, another row under it (nav_apart);
+/// `on_press`, what a press on it does. `foot` is a last line across the row; `foot_capsule` places a capsule on it at its foot corner's
 /// inset (list_row's).
 pub fn nav_item(
   c : @ui.Ctx,
@@ -233,14 +252,17 @@ pub fn nav_item(
   more? : Bool = false,
   foot? : () -> Unit,
   foot_capsule? : Double,
-) -> Bool {
+  at? : ListAt = Side,
+  on_press~ : () -> Unit,
+) -> Unit {
   let id = c.id(key)
+  c.on_press(id, on_press)
   let ground = nav_ground_by(c, key, c.lit(id) || c.pressed(id), on)
   nav_apart(c, more, fn() {
     list_row(
       c,
       id,
-      Side,
+      at,
       0L,
       ground_by=ground,
       mark~,
@@ -263,7 +285,6 @@ pub fn nav_item(
     )
     |> ignore
   })
-  c.clicked(id)
 }
 
 ///|

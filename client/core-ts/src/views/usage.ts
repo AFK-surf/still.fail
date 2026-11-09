@@ -160,7 +160,7 @@ export function priceTables(sources: Source[], first: string, last: string): J[]
         ? t("core-views.usage.prices.missing")
         : typeof get(table, "note") === "string"
           ? table.note
-          : t("core-views.usage.prices.unit");
+          : t("station.usage.priceNote");
     const used = new Set<string>();
     for (const r of arr(get(value, "rows"))) {
       const day = get(r, "day");
@@ -359,7 +359,8 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
 
       entry(chats, chatKey, () => {
         const known = thread !== null ? get(threads, String(thread)) : undefined;
-        const title = typeof get(known, "title") === "string" ? known.title : t("core-views.usage.deleted_chat");
+        // ("" where its station leaves its name to the client: a chat with no name)
+        const title = typeof get(known, "title") === "string" ? known.title || t("core-views.new_chat") : t("core-views.usage.deleted_chat");
         const archived = get(known, "archived") === true;
         const surface = get(known, "surface");
         const slack = typeof surface === "string" && !isOwnSurface(surface);

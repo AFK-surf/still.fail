@@ -305,8 +305,8 @@ test "pointer_at: each event by its own time, down, moved, up, not by the frames
 }
 
 ///|
-/// A list of rows that scrolls up and down, a pager over it across, and a thin drag area across to be held first (a
-/// column's edge) on the list's first row; what the area was moved by, its taps and the pager's page kept.
+/// A list of rows that scrolls up and down, and a thin drag area across to be held first (a column's edge) on the
+/// list's first row; what the area was moved by and its taps kept.
 fn held_edge_view(
   moved : Ref[Double],
   taps : Ref[Int],
@@ -432,9 +432,9 @@ fn panel_over_area(downs : Ref[Int], taps : Ref[Int], clicks : Ref[Int]) -> @ui.
         }
         None => ()
       }
-      if c.clicked(button) {
+      c.on_press(button, fn() {
         clicks.val += 1
-      }
+      })
       c.drag_area(area, axis=Free, w=Fill(1.0), h=Fill(1.0), fn() {
         c.layer(fn() {
           let panel = c.box(id=c.id("panel"), w=Px(100.0), h=Px(100.0), fn() {

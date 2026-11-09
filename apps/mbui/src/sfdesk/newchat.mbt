@@ -20,7 +20,7 @@ fn new_frame(src : Source, w : Workspace) -> @sfpages.NewChatFrame {
 /// A new chat in the workspace (NewChat): the pages', the 文件 tab beside it where the stations lend their files
 /// (useStationDrive: as the view has its stations), on a station it can start on.
 pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  new_keys(c, src)
+  new_keys(c, src, w)
   let v = src.topic("newChat", { "scope": Json::string(w.id) }).get().value
   let frame = new_frame(src, w)
   let station = field(v, "station")
@@ -78,13 +78,15 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// The new chat's own key, as a chat's (chat_keys): Space with no field focused, its composer (composer.focus), as its
-/// hint 按空格输入 says.
-fn new_keys(c : @ui.Ctx, src : Source) -> Unit {
-  let prefs = src.topic("prefs", {}).get().value
-  if !c.field_focused() && @settings.action_pressed(c, prefs, "composer.focus") && !switcher_open() {
-    c.focus_editor(@sfpages.composer_field_key)
-  }
+/// The new chat's own key, as a chat's (chat_keys: the keymap's Chat), an action as it is built: Space with no field
+/// focused, its composer (composer.focus), as its hint 按空格输入 says.
+fn new_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  c.key_context("Chat")
+  c.on_action("composer.focus", fn() {
+    guard !switcher_open() else { return false }
+    c.focus_field(writing(src, "new:" + w.id).field)
+    true
+  })
 }
 
 ///|
@@ -107,7 +109,7 @@ fn new_drive_station(src : Source, w : Workspace) -> String? {
 ///|
 /// The new chat of view `v` as it is left (`up`, `fade`: sfpages new_chat_left), as wide as it was: with its 文件 tab
 /// open, beside where the panel is (the chat it became has the panel now, the chat it was left for its own).
-fn new_left(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, up : Double, fade : Double) -> Unit {
+fn new_left(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, up : @motion.Anim, fade : @motion.Anim) -> Unit {
   let frame = new_frame(src, w)
   let files = new_files_open(src, w.id)
   let left = fn() { @sfpages.new_chat_left(c, src, w, frame, v, up, fade) }
@@ -135,7 +137,7 @@ fn new_sent(src : Source, w : Workspace, r : ChatRef) -> Unit {
 /// sidebar, fading over it (switch.mbt). Drawn over the chat's page, after it.
 pub fn new_chat_after(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   if @sfbase.new_chat_leaving_of(c, r) {
-    let l = c.layer(fn() { new_left(c, src, w, fresh.scene.get(), new_leave(c).get(), new_fade(c).get()) })
+    let l = c.layer(fn() { new_left(c, src, w, fresh.scene.get(), new_leave(c), new_fade(c)) })
     // (drawn only, while it leaves)
     c.draw_only(l)
   }
@@ -190,11 +192,11 @@ fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -
     c.box(style=side_pane, fn() { files_tab(c, src, w.id, "new:" + w.id, address) }) |> ignore
   })
   |> ignore
-  // (panel.close: the panel closed)
-  let prefs = src.topic("prefs", {}).get().value
-  if @settings.action_pressed(c, prefs, "panel.close") {
+  // (panel.close: the panel closed, at its key's moment)
+  c.on_action("panel.close", fn() {
     new_files_set(src, w.id, false)
-  }
+    true
+  })
 }
 
 ///|

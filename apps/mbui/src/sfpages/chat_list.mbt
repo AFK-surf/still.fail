@@ -45,6 +45,22 @@ pub fn chat_list(
     src.images.again(r.station)
   }
   src.images.seen(r.station, !v.offline)
+  // the way the composer's ground under the rows last set out on, as it declared it (opened, a line more, let go by
+  // words sent, each from the moment it came: composer's reshape), the room the list keeps under them with it as
+  // drawn: that way the Foot row's change and the list's while it has not ended, as the list is told, so that what else
+  // changes the rows' heights then (a row closing over it) goes with it, one way (list_size.mbt; rows_steady.mbt holds
+  // it); not a room the page gave otherwise (a new chat's, the least a phone's foot keeps)
+  let foot_way = if (room - composer_room(c, draft)).abs() < 0.01 {
+    @motion.reshape_way(c, "composer/box")
+  } else {
+    None
+  }
+  // (on that way at this moment, till its declared end; not while words sent hold its room, which is theirs then, as
+  // tall as it was till they let go of it and down on their flight's clock: composer_hold, sfbase's shown_rows)
+  let on_foot_way = match foot_way {
+    Some((at, ms)) => c.moment() < at + ms && !composer_held(c, draft)
+    None => false
+  }
   let lf = list_frame(
     c,
     r,
@@ -56,8 +72,9 @@ pub fn chat_list(
     top=list_top,
     in_front=app_in_front(),
     // (narrow or not, and on a way the width it is kept at: each row another version as that changes, from then)
-    laid=(if narrow { "|narrow" } else { "" }) + (if held { "|" + lay_w.to_string() } else { "" }),
+    laid=(if narrow { "|narrow" } else { "" }) + laid_at_w(key, held, lay_w),
     laid_at~,
+    foot_way?,
   )
   let (rd, rk, em, turns, list, keys, flight) = (lf.rd, lf.rk, lf.em, lf.turns, lf.list, lf.keys, lf.flight)
   let n = list.length()
@@ -72,7 +89,8 @@ pub fn chat_list(
   // `askClear`), which shows whenever the end does, no bell over it
   let ask_clear = if @sfbase.ask_clears(v) { float_lift + float_side } else { 0.0 }
   // (the composer's room as it comes to stand once words sent let go of it: the list takes it there on its way)
-  let foot_room = composer_foot_room(c, draft, room, let_go=@sfbase.sent_let_go(rd, flight))
+  let let_go = @sfbase.sent_let_go(rd, flight)
+  let foot_room = composer_foot_room(c, draft, room, let_go~)
   let side = row_side(lay_w)
   // the sides are only the page's margin either way: wide, the pictures out in it stand by their heads' line, not by
   // the words under it, so a table scrolls out over it to the pane's edges as it does narrow
@@ -104,14 +122,17 @@ pub fn chat_list(
   // (and what the chat says: what came on its way is shown as it comes, the rows built anew for it)
   let rows_key = way.id +
     " " +
-    [list_w, c.height, list_top, foot_room, foot, ask_clear, bar].map(fn(x) { x.to_string() }).join(" ") +
+    [list_w, c.height, list_top, foot_room, foot, ask_clear, bar, room, lit.1].map(fn(x) { x.to_string() }).join(" ") +
+    // (and what else of the frame its rows are built from: the composer's room on its way, the message lit, words
+    // sent flying)
+    " \{on_foot_way} \{lit.0} \{whole} \{flight is Some(_)}" +
     " " +
     n.to_string() +
     " " +
     rows_said(key, v, read).to_string()
   let list_style = if held { chat_list_box.then(@ui.style(w=Fixed(list_w))) } else { chat_list_box }
   let list_box_id = c.id("search-pane/" + key)
-  let list_box = c.box(style=list_style, id=list_box_id, tx=(frame_w - list_w) / 2.0, fn() {
+  let list_box = c.box(style=list_style, id=list_box_id, tx=list_shift(key, frame_w, list_w), fn() {
     c.sized(list_w, c.height, fn() {
     let rows = fn() {
     c.list(
@@ -124,15 +145,36 @@ pub fn chat_list(
         let mk = key + "\u{1}" + keys[i]
         match e {
           Top => c.box(style=@ui.style(h=Fixed(list_top)), fn() {  }) |> ignore
-          Foot => c.box(style=@ui.style(h=Fixed(foot_room + foot + ask_clear)), fn() {  }) |> ignore
+          Foot => {
+            // going with the composer's ground on its declared way: as drawn, its own on the rows' way, the list
+            // closing only what was off as its cause came (Ctx::row_way); else where it comes to stand, on the list's
+            // way
+            if on_foot_way {
+              ignore(c.row_way())
+            }
+            let h = if on_foot_way { room } else { foot_room }
+            c.box(style=@ui.style(h=Fixed(h + foot + ask_clear)), fn() {  }) |> ignore
+          }
           Working(a) => {
             // coming in, it comes where it is as its room opens, and leaves where it is, as any row
-            // (ListRows::enter, leave); its turn over, it stays a moment (Activity) first
+            // (ListRows::enter, leave); its turn over, it stays while its messages come out of its avatar (chat_tick)
             rd.fresh.remove(keys[i]) |> ignore
             let leaving = rd.rows.went(keys[i]) is Some(_)
             let here = here_of(r, v, rk, turns, em, None, core, inline=narrow, gutter~)
             let came = rd.rows.came(keys[i])
-            let ri = row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving, came) })
+            // (a turn begun and over between two ticks, nothing of it coming out: no room, unseen, chat_tick)
+            let unseen = rd.answered_unseen.contains(a.key) ||
+              (match rd.linger.get(a.key) {
+                Some(l) => l.unseen
+                None => false
+              })
+            let ri = if unseen {
+              c.box(style=@ui.style(h=S0, clip=true, opacity=O0), fn() {
+                activity_row(c, src, here, a, em, rk, leaving, came)
+              })
+            } else {
+              row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving, came) })
+            }
             @motion.keyed(c, ri, mk, by=makes_way(lf, keys[i]))
             rd.rows.enter(c, ri, keys[i], lead=top, grown=false)
             rd.rows.leave(c, ri, keys[i], lead=top)
@@ -160,10 +202,10 @@ pub fn chat_list(
               Said(m) => {
                 let on = @sfbase.message_menu_on("m:" + m.ts)
                 let a = @motion.told(c, "msg-menu/" + m.ts, if on { 1.0 } else { 0.0 }, spec=@sf.nav_fade)
-                if on || !a.over() {
+                if on || !a.over(c) {
                   let hover = @sf.theme().p.hover
                   // (the last message's as far under it as over it: the list's foot under it, no row to meet)
-                  (Some((1.0, top / 2.0, if under > 0.0 { under } else { top / 2.0 })), Some(fn() { @sf.alpha(hover, a.get()) }))
+                  (Some((1.0, top / 2.0, if under > 0.0 { under } else { top / 2.0 })), Some(fn() { @sf.alpha(hover, a.get(c)) }))
                 } else {
                   (None, None)
                 }
@@ -230,11 +272,9 @@ pub fn chat_list(
     )
     |> ignore
     }
-    if held {
-      c.kept_part(c.id(key + "/rows"), rows_key, rows, read_out=true, rows_stay=true)
-    } else {
-      rows()
-    }
+    // (its rows a part of their own: on a page's way, going on as they are (`rows_stay`); and through what is typed into
+    // the composer beside them, the composer alone built for each word, mbui's typed_part)
+    c.kept_part(c.id(key + "/rows"), rows_key, rows, read_out=true, rows_stay=held, typed_stays=true)
     let found_now = Ref(false)
     let la = list_after(
       c,
@@ -248,7 +288,7 @@ pub fn chat_list(
       room~,
       finding=find_chat() == chat_key(r),
       on_found=fn(rd) {
-        found_start(rd, find_chat() == rk)
+        found_start(c, rd, find_chat() == rk)
         found_now.val = true
       },
       find_around~,
@@ -426,12 +466,16 @@ fn to_latest(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, shown : Bool,
   let coming = core_doing(src, ["chat.latest"], on)
   let count = if v.newer && v.unread > 0.0 { Some(v.unread.to_int()) } else { None }
   let id = c.id("chat-jump")
-  if shown && !coming && c.clicked(id) {
-    if !v.newer {
-      c.list_to_end(list_key(r))
-    } else {
-      @sfbase.chat_latest(c, src, r, v, @sf.t("web-main.chat.toLatest"))
-    }
+  if shown && !coming {
+    // (the list by its id here: the press is outside the scope it is built in)
+    let list = c.list_reader(list_key(r))
+    c.on_press(id, fn() {
+      if !v.newer {
+        list.to_end()
+      } else {
+        @sfbase.chat_latest(c, src, r, v, @sf.t("web-main.chat.toLatest"))
+      }
+    })
   }
   @sf.tip(c, "chat-jump", id, @sf.t("web-main.chat.toLatest"), shortcut="chat.latest")
   c.layer(fn() {
@@ -483,11 +527,13 @@ fn to_ask(
     None => return shown
   }
   let id = c.id("chat-ask")
-  if shown && c.clicked(id) {
-    let k = chat_key(r)
-    let turn = ask_turns.get(k).unwrap_or(0)
-    @sfbase.go_to(r, asks[turn % asks.length()])
-    ask_turns[k] = turn + 1
+  if shown {
+    c.on_press(id, fn() {
+      let k = chat_key(r)
+      let turn = ask_turns.get(k).unwrap_or(0)
+      @sfbase.go_to(r, asks[turn % asks.length()])
+      ask_turns[k] = turn + 1
+    })
   }
   @sf.tip(c, "chat-ask", id, @sf.t("web-main.chat.asks.go"))
   c.layer(fn() {
@@ -601,6 +647,7 @@ pub fn find_forget() -> Unit {
 /// What the list keeps of its own, let go (the package's reset).
 fn list_reset() -> Unit {
   lists_set_off.clear()
+  lists_held_w.clear()
   flashing_now.val = ("", 0.0)
   ask_turns.clear()
   find_around.val = -1.0
@@ -619,10 +666,13 @@ fn native_row_inset() -> Double {
 /// whichever frame that is); else now. On the page's way to another width (@sfbase.page_way: a side panel sliding beside it, the sidebar opening or
 /// folding) across one at which its rows are laid out otherwise (chat_narrow_w: 20 between messages, not 28, each
 /// picture inline; or the composer under it reaching across the pane, its room under the last row 8 less:
-/// composer_foot_in), as the narrower of where it set off and where it goes, from the frame it sets off till the one it
-/// is there: so they are laid out anew only as the way sets off and as it is there, whichever frames are drawn on the
-/// way, each row another version then (sfbase's shown_rows), its room going on the list's way from that frame, not as
-/// a frame drawn first finds the pane past that width. On a way across none of them, as wide as where it goes once
+/// composer_foot_in), as where it goes, from the frame it sets off till the one it is there: so they are laid out anew
+/// only as the way sets off, whichever frames are drawn on the way, each row another version then (sfbase's
+/// shown_rows), its room going on the list's way from that frame, not as a frame drawn first finds the pane past that
+/// width; standing where they stood as it set off and going from there to where they come to stand as the pane goes
+/// (list_shift). Laid out at the narrower end the whole way and in the pane's middle, they were narrow at once and
+/// slid across the pane as a panel came in, and went on narrow to be wide at once as it was gone (the user,
+/// 2026-11-09: 「打开关闭右侧面板，中间的变化不对」). On a way across none of them, as wide as where it goes once
 /// both are wide enough for its column (the rows as wide either way), else as wide as it is. Not beside the system's
 /// bars (native_on): each frame as it is.
 fn laid_w(c : @ui.Ctx, key : String) -> (Double, Bool, Double) {
@@ -649,12 +699,52 @@ fn laid_w(c : @ui.Ctx, key : String) -> (Double, Bool, Double) {
   lists_set_off[key] = (way.id, from, way.ends, now)
   let to = way.to
   if (from <= chat_narrow_w) != (to <= chat_narrow_w) || composer_across(from) != composer_across(to) {
-    return (dmin(dmin(from, to), c.width), true, now)
+    return (to, true, now)
   }
   if to > chat_narrow_w && dmin(c.width, to) >= chat_column_w + 2.0 * row_side_least {
     return (to, true, now)
   }
   (c.width, false, now)
+}
+
+///|
+/// The width chat list `key`'s rows are another version for (shown_rows' `laid`): held at one on a page's way
+/// (laid_w), that one still once the way is there and the pane as wide, so that its rows are not another version again
+/// as nothing of them changed (all of them on the list's way for nothing then, a way set off over it while that goes
+/// on from there: a side panel closed again as soon as it is open); "" once the pane is another width.
+fn laid_at_w(key : String, held : Bool, w : Double) -> String {
+  if held {
+    lists_held_w[key] = w
+    return "|" + w.to_string()
+  }
+  match lists_held_w.get(key) {
+    Some(at) if (at - w).abs() < 0.5 => "|" + at.to_string()
+    Some(_) => {
+      lists_held_w.remove(key) |> ignore
+      ""
+    }
+    None => ""
+  }
+}
+
+///|
+/// The width each chat list's rows were last held at on a page's way (laid_at_w).
+let lists_held_w : Map[String, Double] = {}
+
+///|
+/// How far from the left of a pane `frame_w` wide chat list `key`, laid out `list_w` wide, stands: in its middle; on a
+/// page's way across the width it is laid out otherwise at (laid_w: as where it goes), its rows' words where they stood
+/// in the pane as it set off, going as far as the pane has gone to where they stand once it is there (its left edge),
+/// not sliding across it in its middle nor stepping as it sets off.
+fn list_shift(key : String, frame_w : Double, list_w : Double) -> Double {
+  let way = @sfbase.page_way
+  match lists_set_off.get(key) {
+    Some((id, from, _, _)) if id != "" && id == way.id && list_w == way.to && from != way.to => {
+      let gone = dmax(0.0, dmin(1.0, (from - frame_w) / (from - way.to)))
+      (row_side(from) - row_side(way.to)) * (1.0 - gone)
+    }
+    _ => (frame_w - list_w) / 2.0
+  }
 }
 
 ///|

@@ -472,7 +472,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   // breathing gently, a page's bones' breath (the user, 2026-10-30: 整个 placeholder 的轻微加载动态), back to whole over
   // dur_ms once it is here
   let asked = key == "" && !going_up
-  let breath = @motion.animate(c, "msg-breath/" + thumb, if asked { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
+  let breath = @motion.told(c, "msg-breath/" + thumb, if asked { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
   let b = c.box(style=image_box_style(w, h, key != "!" || letterbox, corner), id=open, fn() {
     if key == "!" {
       media_content(c, p, w, h, fit, 0.0)
@@ -733,7 +733,8 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ 
   let place = @sfbase.thumb_occurrence(here.station, here.session, at)
   let key = "msg-card/" + place + "/" + @sfbase.file_key(a)
   file_menu(c, c.id(key), "", quote=quote_of(here, a, owner, by), more=[download_option(src, here, a, owner)])
-  let done = @sf.file_card(
+  let id = text(dl, "id")
+  @sf.file_card(
     c,
     key,
     a.name,
@@ -745,15 +746,15 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ 
     open=true,
     remove_label=if kept is Some(_) { @sf.t("web-pages.files.stopKeeping") } else { @sf.t("web-main.file.cancelDownload") },
     retry_label=@sf.t("web-main.file.retryDownload"),
+    on_press=fn(on) {
+      match on {
+        Remove => if kept is Some(_) { keeping_stop(src, id) } else { download_cancel(src, id) }
+        Retry => download_retry(src, id)
+        Open => open_file(here, a, at~)
+        Restore => ()
+      }
+    },
   )
-  let id = text(dl, "id")
-  if done.removed {
-    c.tell(key + "/cancel", fn() { if kept is Some(_) { keeping_stop(src, id) } else { download_cancel(src, id) } })
-  } else if done.retried {
-    c.tell(key + "/retry", fn() { download_retry(src, id) })
-  } else if done.opened {
-    open_file(here, a, at~)
-  }
 }
 
 ///|
@@ -827,9 +828,9 @@ pub fn image_reveal(
   let p = match way {
     Some(a) if ready => {
       if a.target() == 0.0 {
-        a.animate(1.0, @motion.tween(reveal_ms, ease=Linear))
+        a.animate(c, 1.0, @motion.tween(reveal_ms, ease=Linear))
       }
-      a.get()
+      a.get(c)
     }
     Some(_) => 0.0
     None => 1.0

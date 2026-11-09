@@ -5,7 +5,7 @@ test "a retained editor is found by its changing hint as an old editor is, even 
   let f = Field::new()
   let visible = @signals.signal(true)
   set_view_app(fn(root) {
-    root.show(fn() { visible.get() }, fn(p) {
+    root.show(at_once=true, fn() { visible.get() }, fn(p) {
       field(p, f, placeholder_by=fn() { hint.get() }) |> ignore
     })
   })

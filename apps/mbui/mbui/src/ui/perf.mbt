@@ -144,6 +144,13 @@ pub fn Tester::frames_on(self : Tester) -> Int {
 }
 
 ///|
+/// How many frames a second the last frame said what moves on by the clock needs, as a host is told (frame_pace.mbt,
+/// @hostapi.frames_paced); 0 where it said none (the display's every frame, or no frame by the clock asked for).
+pub fn Tester::frames_paced(self : Tester) -> Double {
+  self.fake.paced
+}
+
+///|
 /// Why the app asks for a frame (Tester::wanted_after), in words: the display's next frame's, else its wake's; "" when
 /// it asks for none.
 pub fn Tester::wanted_why(self : Tester) -> String {
@@ -196,18 +203,47 @@ pub fn Tester::wanted_why(self : Tester) -> String {
 }
 
 ///|
+/// What a bench is told as the measured frame being drawn has been drawn by the app (Tester::bench's `around`)
+// kept across runs: set by a bench as each measured frame begins, taken as it ends
+let bench_frame_end : Ref[(() -> Unit)?] = Ref(None)
+
+///|
+fn bench_frame_ends() -> Unit {
+  if bench_frame_end.val is Some(f) {
+    bench_frame_end.val = None
+    f()
+  }
+}
+
+///|
 /// `script` run (Tester::drive's steps) on the display's frames at `fps` a second, a frame drawn at one only where the
 /// app asks for it there, as a host draws (Tester::wanted_after): `each` told, at each of the display's frames from the
 /// script's step `log measure` on (what comes before it, the app opening, not measured), whether one was drawn there.
-/// Until the script ends or `max` of the display's frames went by. What the Tester logged.
+/// `around` told as each measured frame drawn begins (false) and as the app has drawn it (true: the Tester's own
+/// checks of it after, which a device runs not), with the display's frame it is at: what counts a frame's work from
+/// outside (mbui/film's mark, a profiled run's). Its frames keep not who drew each thing nor the lines of words drawn,
+/// as a device's (the Tester's words-over check, words_over.mbt, finds nothing in them; Tester::text_runs none). Until
+/// the script ends or `max` of the display's frames went by. What the Tester logged.
 pub fn Tester::bench(
   self : Tester,
   script : String,
   fps? : Double = 120.0,
   max? : Int = 20000,
   each~ : (Tester, Bool) -> Unit,
+  around? : (Int, Bool) -> Unit,
 ) -> Array[String] {
   self.fake.logs.clear()
+  // (who drew each instance not kept, as a device keeps it not: the Tester's words-over check's, each instance's owner
+  // noted as it is drawn and copied as a list's rows are kept, ~7% of a frame's instructions; from the script's start,
+  // the rows it keeps made so before what is measured)
+  let tracked = inst_owners.track
+  inst_owners.track = false
+  inst_owners_clear()
+  // (nor the lines of words drawn, as a device keeps them not: Tester::text_runs's, each line of words noted as it is
+  // drawn and copied as a list's rows are kept again)
+  let runs = text_runs.on
+  text_runs.on = false
+  text_runs.runs.clear()
   drive_start(script, "")
   let step = 1000.0 / fps
   let mut tick = self.fake.time
@@ -218,7 +254,13 @@ pub fn Tester::bench(
     let due = self.wanted_after()
     let frame = due <= tick + 1.0e-9 || (measuring && bench_whole.val)
     if frame {
+      if measuring && around is Some(f) {
+        f(n, false)
+        bench_frame_end.val = Some(fn() { f(n, true) })
+      }
       self.frame_at(tick)
+      // (a frame that drew nothing of the app's: ended here)
+      bench_frame_ends()
     } else {
       // (no frame: the time goes on)
       self.fake.time = tick
@@ -232,6 +274,8 @@ pub fn Tester::bench(
     n = n + 1
   }
   bench_measuring.val = false
+  inst_owners.track = tracked
+  text_runs.on = runs
   self.fake.logs.copy()
 }
 

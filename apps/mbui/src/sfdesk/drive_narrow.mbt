@@ -114,19 +114,18 @@ let read_whole : Double = 0.995
 
 ///|
 /// How far a file of the drive has come while it is downloaded (FillChip's `progress`): a rounded box, its ground filled
-/// in the accent from the left as it comes (moving to each new share over 500 ms), n% on it.
+/// in the accent from the left as it comes (moving to each new share over 500 ms), n% on it. The fill is laid out
+/// across the whole track and drawn narrowed from its left to its share as it is painted (a square-cornered rect, cut to
+/// the capsule by the track: narrowed, it is the rect as wide as its share), nothing built as it goes.
 fn download_chip(c : @ui.Ctx, key : String, percent : Int) -> Unit {
   let p = if percent < 0 { 0 } else if percent > 100 { 100 } else { percent }
-  let drawn = @motion.animate(c, "files/narrow/fetch/" + key, p.to_double(), spec=chip_fill)
+  let drawn = @motion.told(c, "files/narrow/fetch/" + key, p.to_double(), spec=chip_fill)
   c.box(style=chip_box, fn() {
-    if drawn > 0.0 {
+    if p > 0 || !drawn.over(c) {
       c.layer(fn() {
         c.box(style=chip_track, fn() {
-          c.box(style=chip_done.then(@ui.style(w=Grow(drawn))), fn() {  }) |> ignore
-          let rest = chip_whole - drawn
-          if rest > 0.0 {
-            c.box(style=@ui.style(h=Full, w=Grow(rest)), fn() {  }) |> ignore
-          }
+          let fill = c.box(style=chip_done, fn() {  })
+          c.look_by(fill, fn() { @ui.look(sx=dmax(0.0, drawn.get(c)) / chip_whole, sy=1.0, ox=0.0) })
         })
         |> ignore
       })
@@ -163,7 +162,7 @@ let chip_track : @ui.Style = @ui.css("row w=Full h=Full radius=Full clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chip_done : @ui.Style = @ui.css("h=Full bg=A(Accent,O20)")
+let chip_done : @ui.Style = @ui.css("w=Full h=Full bg=A(Accent,O20)")
 
 ///|
 // kept across runs: a value (no field of it changes)

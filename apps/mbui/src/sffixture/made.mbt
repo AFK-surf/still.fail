@@ -28,7 +28,9 @@ pub fn fixture_reset() -> Unit {
   new_fix.presets_late = false
   new_fix.liked.clear()
   new_fix.providers = false
+  new_fix.borrow = false
   fix_presets_said.val = 0
+  fix_job_more.val = 0
   new_fix.presets.clear()
   new_fix.presets.push_iter([fix_preset_design(), fix_preset("p-tc", "web-app + backend", ["web-app", "backend"], "")].iter())
   fix_chats.clear()
@@ -44,6 +46,9 @@ pub fn fixture_reset() -> Unit {
   fix_xshared.clear()
   fix_decided.clear()
   fix_replied.clear()
+  fix_card_replies.clear()
+  fix_pace.val = (fix_deliver_ms, fix_answer_ms, fix_turn_end_ms)
+  fix_sent_for.val = -1.0
   fix_vault.val = ""
   fix_phone.val = ""
   fix_phone_link.val = ""

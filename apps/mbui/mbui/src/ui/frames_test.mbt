@@ -11,10 +11,10 @@ fn counting() -> (@ui.Ctx) -> Unit {
   let taps : Ref[Int] = Ref::new(0)
   let at : Ref[Double] = Ref::new(-1.0)
   fn(c) {
-    if c.button("加一") {
+    c.button("加一", on_press=fn() {
       taps.val = taps.val + 1
       at.val = c.moment()
-    }
+    })
     c.text("按了 \{taps.val} 次") |> ignore
     // (counted from the tap's moment: built again at the moment it comes, Ctx::every, no clock followed)
     if at.val >= 0.0 && c.every(counting_later_ms, from=at.val) >= 1 {

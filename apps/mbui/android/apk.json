@@ -37,13 +37,13 @@
     "monoid": {
       "applicationId": "build.monoid.android",
       "minify": true,
-      "res": ["app/src/stable/res"],
+      "res": ["app/src/stable/res", "app/src/monoid/res"],
       "placeholders": {"appHost": "app.monoid.build", "appLabel": "monoid", "mbuiEnv": "MBUI_UPDATE_FEED=android;MBUI_OWN=1;MBUI_CLOUD=https://app.monoid.build;MBUI_PRODUCT=monoid"}
     },
     "monoid-beta": {
       "applicationId": "build.monoid.android.beta",
       "minify": true,
-      "res": ["app/src/beta/res"],
+      "res": ["app/src/beta/res", "app/src/monoid/res"],
       "placeholders": {"appHost": "app.monoid.build", "appLabel": "monoid.zone", "mbuiEnv": "MBUI_UPDATE_FEED=android;MBUI_BETA=1;MBUI_OWN=1;MBUI_CLOUD=https://app.monoid.build;MBUI_PRODUCT=monoid"}
     },
     "debug": {

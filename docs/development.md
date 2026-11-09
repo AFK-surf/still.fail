@@ -3,13 +3,13 @@
 > Machine names in examples and measurements are anonymized; they are not requirements for the reader’s environment.
 
 
-The commands below run from the repository root unless noted. The station, the client core, the web UI and the Cloudflare Workers are TypeScript (Node.js); a few native parts are Rust, prebuilt. Start with cloud tests if you do not need to build a client.
+The commands below run from the repository root unless noted. The station, the client core and the Cloudflare Workers are TypeScript (Node.js); the app on every platform, the web's included, is MoonBit (`apps/mbui/`); a few native parts are Rust, prebuilt. Start with cloud tests if you do not need to build a client.
 
 ## Prerequisites
 
 - Git, Python 3, Node.js 24 or later, and pnpm 10.33.0 (every `package.json` names it in `packageManager`).
 - Rust is optional for everyday work: the native parts the TypeScript station and clients use are prebuilt (`scripts/native.ts`). To change one of them you need rustup (the parts are built with the toolchain pinned in `scripts/native.ts`, which rustup installs on first use), plus, per part: the `wasm32-unknown-unknown` target, `wasm-bindgen-cli` matching `wasm-bindgen` in `client/Cargo.lock` (currently 0.2.129) and LLVM's `clang`/`llvm-ar` with WebAssembly support for the browser's iroh; the NDK below for Android's shell and engine; zig and cargo-zigbuild for the Linux station parts from a Mac.
-- Android additionally needs JDK 17 and the Android SDK (NDK 28.2.13676358 to build its shell or engine, or to strip them when packing); the apps (`apps/mbui/`) need MoonBit and their platform's toolchain, as [its README](../apps/mbui/README.md) says.
+- Android additionally needs JDK 17 and the Android SDK (NDK 28.2.13676358 to build its shell or engine, or to strip them when packing); the apps (`apps/mbui/`), the web app included, need MoonBit and their platform's toolchain, as [its README](../apps/mbui/README.md) says.
 
 ```sh
 git clone https://github.com/AFK-surf/still.fail.git
@@ -59,12 +59,13 @@ Never a retry, a longer deadline or a looser bound to make a test pass.
 `client/iroh-wasm/build.sh` (what builds the `iroh-wasm` part) uses `LLVM_BIN` when set, otherwise checks Homebrew LLVM installations and then `clang`/`llvm-ar` on `PATH`. It checks for WebAssembly support before compiling. To choose a particular LLVM installation, set `LLVM_BIN` to its `bin` directory.
 
 ```sh
+bash apps/mbui/scripts/web-app.sh
 STILLFAIL_PREVIEW_ORIGIN=http://127.0.0.1:8790 pnpm run build:cloud
 (cd station && pnpm install --frozen-lockfile)
 sh scripts/station-bundle.sh /tmp/station   # [darwin-arm64|linux-x64|linux-arm64]
 ```
 
-The first command gets the browser's iroh (WebAssembly, prebuilt; the core itself is TypeScript, client/core-ts) and builds the local cloud's web/admin/preview assets, with previews pointing at the local preview host. This variable is read at build time; changing it requires rebuilding the web assets. If you change the development server's `PORT`, use its preview port (`PORT + 3`) here. Without this variable, the web build uses the hosted preview service.
+The first command builds the app for the browser into `web/public/mbui` (MoonBit; without it the web app's page has no app to draw). The second gets the browser's iroh (WebAssembly, prebuilt; the core itself is TypeScript, client/core-ts) and builds the local cloud's web/admin/preview assets, with previews pointing at the local preview host. This variable is read at build time; changing it requires rebuilding the web assets. If you change the development server's `PORT`, use its preview port (`PORT + 3`) here. Without this variable, the web build uses the hosted preview service.
 
 The last one lays out a station release in `/tmp/station/stillfail` (the layout `scripts/station-bundle.sh` describes): the station bundled, its Node, its native parts (prebuilt) and `bin/stillfail`, as the installer has it.
 

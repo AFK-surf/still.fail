@@ -16,10 +16,11 @@ pub(all) struct ChangeLine {
 /// What a page says in place of what it lists (waiting over, nothing there, what went wrong), `words` as it says it now:
 /// narrow, 12 in, 8 over and under, the meta's muted (mNote); wide, as it is, the UI's muted; in red where it says what
 /// is wrong (`bad`).
-pub fn page_said_node(parent : @view.View, words : () -> String, bad? : Bool = false) -> Unit {
+#callsite(autofill(loc))
+pub fn page_said_node(parent : @view.View, words : () -> String, bad? : Bool = false, loc~ : SourceLoc) -> Unit {
   match look_node(parent) {
     Narrow =>
-      parent.box(fn(n) {
+      parent.box(made_for=loc, fn(n) {
         n.padding(Is((said_narrow_x, said_narrow_y, said_narrow_x, said_narrow_y))) |> ignore
         words_node(n, words, fn() { if bad { said_narrow_bad } else { said_narrow } }) |> ignore
       })
@@ -32,14 +33,20 @@ pub fn page_said_node(parent : @view.View, words : () -> String, bad? : Bool = f
 /// A day of a record, `label` as it is now, its rows (`rows` makes them: change_node's) under it: narrow, a heading
 /// over them on a list card (heading_node, group_node); wide, its label (10 in, the meta's medium muted) over them, 20
 /// over it all, 2 apart.
-pub fn day_group_node(parent : @view.View, label : () -> String, rows : (@view.View) -> Unit) -> Unit {
+#callsite(autofill(loc))
+pub fn day_group_node(
+  parent : @view.View,
+  label : () -> String,
+  rows : (@view.View) -> Unit,
+  loc~ : SourceLoc,
+) -> Unit {
   match look_node(parent) {
     Narrow => {
       heading_node(parent, label)
       group_node(parent, rows)
     }
     Wide =>
-      parent.box(fn(d) {
+      parent.box(made_for=loc, fn(d) {
         d.padding(Is((0.0, day_top, 0.0, 0.0))).gap(Is(day_gap)) |> ignore
         d.box(fn(h) {
           h.padding(Is((change_in, 0.0, change_in, 0.0))) |> ignore
@@ -59,28 +66,32 @@ pub fn day_group_node(parent : @view.View, label : () -> String, rows : (@view.V
 /// and the note, 10 apart; 16 by 10 in, its lines 2 apart. Wide: each line with its kind before it in a room of 52 (a
 /// small label; none: its room kept), 10 apart, its words, its version at the end of the first; under them the note,
 /// as far in as the words; 10 by 8 in, its lines 4 apart.
+#callsite(autofill(loc))
 pub fn change_node(
   parent : @view.View,
   lines : () -> Array[ChangeLine],
   version : () -> String,
   note : () -> String,
   coming : () -> Bool,
+  loc~ : SourceLoc,
 ) -> Unit {
   match look_node(parent) {
-    Narrow => change_narrow_node(parent, lines, version, note, coming)
+    Narrow => change_narrow_node(loc~, parent, lines, version, note, coming)
     Wide => change_wide_node(parent, lines, version, note, coming)
   }
 }
 
 ///|
+#callsite(autofill(loc))
 fn change_narrow_node(
   parent : @view.View,
   lines : () -> Array[ChangeLine],
   version : () -> String,
   note : () -> String,
   coming : () -> Bool,
+  loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(fn(c) {
+  parent.box(made_for=loc, fn(c) {
     c.padding(Is((change_narrow_x, change_narrow_y, change_narrow_x, change_narrow_y))).gap(Is(change_narrow_gap))
     |> ignore
     c.each(fn() { lines().mapi(fn(i, l) { (i, l) }) }, fn(il) { il.0 }, fn(row, il) {
@@ -131,14 +142,16 @@ fn change_kind_runs(l : ChangeLine) -> Array[@ui.Run] {
 }
 
 ///|
+#callsite(autofill(loc))
 fn change_wide_node(
   parent : @view.View,
   lines : () -> Array[ChangeLine],
   version : () -> String,
   note : () -> String,
   coming : () -> Bool,
+  loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(fn(c) {
+  parent.box(made_for=loc, fn(c) {
     c.padding(Is((change_in, change_y, change_in, change_y))).gap(Is(change_wide_gap)) |> ignore
     let row_of = fn(r : @view.View) { r.row(Is(true)).gap(Is(change_gap)).lines_up(Is(Some(Start))) |> ignore }
     let kind_room = fn(r : @view.View, make : (@view.View) -> Unit) {

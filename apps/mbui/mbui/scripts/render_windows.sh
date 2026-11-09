@@ -43,6 +43,9 @@ case "${1:-run}" in
     MBUI_DL_FROM="$(cygpath -w "$PWD/$O/partial-a.dl")" MBUI_DL="$(cygpath -w "$PWD/$O/partial-b.dl")" \
       MBUI_DL_PNG="$(cygpath -w "$PWD/$O/partial.png")" ./$EXE
     render_partial windows
+    MBUI_DL="$(cygpath -w "$PWD/$O/strips.dl")" MBUI_DL_PNG="$(cygpath -w "$PWD/$O/strips.png")" ./$EXE
+    MBUI_STRIPS=0 MBUI_DL="$(cygpath -w "$PWD/$O/strips.dl")" MBUI_DL_PNG="$(cygpath -w "$PWD/$O/strips.whole.png")" ./$EXE
+    render_strips windows
     for k in matte-fill matte-fill-reference matte-contain matte-contain-reference matte-inset matte-inset-reference; do
       MBUI_DL="$(cygpath -w "$PWD/$O/$k.dl")" MBUI_DL_PNG="$(cygpath -w "$PWD/$O/$k.png")" ./$EXE
     done

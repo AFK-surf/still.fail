@@ -324,10 +324,9 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   @sfbase.held_build()
   c.after_build("held/end", fn() { @sfbase.held_end() })
   shell.val = pages_shell(src)
-  // the Mac's menu bar, in the app's words (menu_bar.mbt); an item of the pages' chosen is read as its keys by the
-  // frame after the menu said it (@settings.ask_action), and asked no more once that frame is built
+  // the Mac's menu bar, in the app's words (menu_bar.mbt); an item of the pages' chosen is done as its action is, at
+  // that moment (@settings.ask_action)
   menu_bar(c, src)
-  c.after_build("menu-asked", fn() { @settings.action_asked_done() })
   @sfdesk.window_zoom_keys(c, src)
   appearance(c, src, page_dark(src))
   faces(src, @sfdesk.is_wide(c))
@@ -457,6 +456,10 @@ pub fn app_tree(src : Source) -> (@view.View) -> Unit {
     @sf.set_words(fill)
     // Keep the prefs reader with the tree from its first read, including before the first frame is built.
     root.reacts(fn() { src.topic("prefs", {}).get().value }, @sfbase.language_from_prefs)
+    // (the window's keys as the core's prefs keep them on this device, changed as they are: settings' keymap.mbt)
+    root.keymap(By(fn() { @settings.keymap_of(src.topic("prefs", {}).get().value) })) |> ignore
+    // (the window's size from the menu bar, in every state: sfdesk's window_zoom.mbt)
+    @sfdesk.zoom_actions(root, src)
     // (pictures by their address as the core gives them, said before any page of nodes is made: what one shows on its
     // first frame asks the core, not the library's stand-in; the old frame says it each build, the same)
     @sf.picture_of.val = fn(url, frame) { (src.picture)(url, frame) }
@@ -520,6 +523,11 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
         // (tape_shell.mbt); the ways in, the splash, a window of its own; nothing before the window has a width
         v.pick(fn() { shell_is(src, v.window().0) }, fn(s, shell) {
           s.grow(Is(1.0)) |> ignore
+          // the app's keys, in every tier with a workspace in view (sfdesk's keys.mbt): what is the wide frame's alone
+          // passes the key on laid out Small
+          if shell is (Stacked | Taped | Paned) {
+            @sfdesk.frame_actions(s, src)
+          }
           match shell {
             Stacked => narrow_shell(s, src)
             Taped => taped_shell(s, src)
@@ -631,17 +639,15 @@ fn page_view(
 ) -> Unit {
   // a place switched to on the bar comes in from the side the ball goes to, fading in (220 ms; 180 from no side); the
   // page at the stack's root is so with a page sliding in over it or back off it too (where it stands, not how deep
-  // the stack is: Nav::under), its place's top bar kept
+  // the stack is: Nav::under), its place's top bar kept. How far it has come is read as it is painted (moved there,
+  // tapped there too, and faded), not as it is built: nothing built as it comes in
   let root = app.nav.under() is None
-  let e = if root { place_switch.get() } else { 1.0 }
   if root {
     bar_built(c, page)
   }
-  c.box(
+  let at = c.box(
     w=Fill(1.0),
     h=Fill(1.0),
-    tx=app.switch_way.to_double() * switch_slide * (1.0 - e),
-    opacity=e,
     fn() {
       match page {
         // a device waiting to be confirmed in the workspace's safe mode sees that instead of the chats (its
@@ -692,7 +698,10 @@ fn page_view(
       }
     },
   )
-  |> ignore
+  if root {
+    c.moved_by(at, fn(_, _) { (app.switch_way.to_double() * switch_slide * (1.0 - place_switch.get(c)), 0.0) })
+    c.look_by(at, fn() { @ui.look(alpha=place_switch.get(c)) })
+  }
 }
 
 ///|
@@ -746,42 +755,31 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -
 }
 
 ///|
-/// Whether the workspace's pages are shown: not while this device waits to be confirmed in its safe mode, whose page is
-/// drawn instead. `bar` (whether invitations wait): on a phone, under Home's top bar, settings
-/// and the workspace's name, its switcher (Security.kt SecurityWaitingScreen: with no bottom bar either, a phone had no
-/// way out of the workspace, 2026-10-23); none beside the wide screen's rail, which has them.
-fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace, bar? : Bool) -> Bool {
-  let core = settings_core(src, w)
-  if !@settings.lock_waiting(core, w.id) {
-    return true
-  }
-  // (sfpages' page, in the box the frame gives it: over the navigation bar)
-  let page = fn() {
-    c.box(style=gate_fill, fn() {
-      c.box(style=@ui.style(w=Full, h=@sf.grow), fn() {
-        @sfpages.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name))
+/// What a device waiting to be confirmed in the workspace's safe mode sees in Home's place, in `q` (all of the page's
+/// room): sfpages' page over the navigation bar, Home's top bar over it (settings and the workspace's switcher: with no
+/// bottom bar either, a phone had no way out of the workspace, Security.kt SecurityWaitingScreen, 2026-10-23).
+fn lock_gate_node(q : @view.View, src : Source, core : @settings.Core) -> Unit {
+  let workspace = fn() { workspace_in_view(src).0 }
+  q.box(fn(page) {
+    page.over(Is(true)) |> ignore
+    page.box(fn(held) {
+      held.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+      held.show(fn() { workspace() is Some(_) }, fn(p) {
+        let w = @signals.untracked(workspace).unwrap()
+        p.grow(Is(1.0)) |> ignore
+        @sfpages.lock_wait_node(p, core, @settings.here_of(core, w.id, w.name)) |> ignore
       })
-      |> ignore
-      c.box(style=@ui.style(w=Full, h=Fixed(nav_foot())), fn() {  }) |> ignore
     })
     |> ignore
-  }
-  match bar {
-    None => page()
-    Some(invited) =>
-      c.box(style=gate_fill, fn() {
-        c.layer(page) |> ignore
-        c.layer(fn() { top_bar(c, src, w, None, "all", invited) }) |> ignore
-      })
-      |> ignore
-  }
-  false
+    page.box(fn(foot) { foot.height(By(fn() { Some(nav_foot()) })) |> ignore }) |> ignore
+  })
+  |> ignore
+  q.box(fn(bar) {
+    bar.over(Is(true)).lies_along(Is(Start)) |> ignore
+    home_top_bar_node(bar, src, workspace, fn() { None }, bell=false)
+  })
+  |> ignore
 }
-
-///|
-/// The waiting page and Home's top bar over it, the screen's whole.
-// kept across runs: a value (no field of it changes)
-let gate_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// How long a place switched to on the bar takes to come in: fading in from no side, from the side the ball goes to.
@@ -1016,7 +1014,12 @@ fn page_ready(src : Source, w : Workspace, p : Page) -> Bool {
   match p {
     Chat(r) => chat_answered(src, r)
     History(r, key, _) => chat_answered(src, r) && answered(src.topic("history", history_params(r, key)).get().snapshot())
-    Home => list_ready(src, w) && answered(src.topic("changelog", Map::new()).get().snapshot())
+    // (and what is left up long under the list, as Home's own read has it: not waited for, it slid in under a list
+    // already shown)
+    Home =>
+      list_ready(src, w) &&
+      answered(src.topic("changelog", Map::new()).get().snapshot()) &&
+      !@sfbase.held_unanswered("longJobs", { "scope": Json::string(w.id) })
     _ => true
   }
 }

@@ -60,12 +60,12 @@ fn notices_reset() -> Unit {
 fn notices_arrive() -> Unit {
   let opened = @hostapi.notice_opened()
   if opened != "" {
-    let (n, _) = @signals.untracked(fn() { notices_said.opened.get() })
+    let (n, _) = notices_said.opened.untracked()
     notices_said.opened.set((n + 1, opened))
   }
   match @hostapi.notice_answer() {
     Some(yes) => {
-      let (n, _) = @signals.untracked(fn() { notices_said.answer.get() })
+      let (n, _) = notices_said.answer.untracked()
       notices_said.answer.set((n + 1, yes))
     }
     None => ()

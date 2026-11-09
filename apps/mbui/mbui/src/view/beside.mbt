@@ -169,10 +169,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
   let state : Map[Int, Int] = {}
   fn refused(at : Int) -> Unit {
     state[at] = 3
-    // (on no side of anything: View::went_told says none)
-    if self.nodes[at].went is Some(_) {
-      self.sizes_due = true
-    }
+    // (on no side of anything)
     self.nodes[at].went = None
     // (where it is laid out, as if it went beside nothing: never where it went last)
     let n = self.nodes[at]
@@ -181,6 +178,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
     if n.lx != lx || n.ly != ly {
       self.work.composed = self.work.composed + 1
       self.composed.push({ at, gen: n.gen })
+      self.places_rev = self.places_rev + 1
       self.hits = self.hits + 1
     }
   }
@@ -206,6 +204,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
             n.lpy = py
             self.work.composed = self.work.composed + 1
             self.composed.push({ at, gen: n.gen })
+            self.places_rev = self.places_rev + 1
             self.hits = self.hits + 1
           }
         None => ()
@@ -296,6 +295,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       n.lpy = py
       self.work.composed = self.work.composed + 1
       self.composed.push({ at, gen: n.gen })
+      self.places_rev = self.places_rev + 1
       self.hits = self.hits + 1
     }
     state[at] = 2
@@ -400,9 +400,24 @@ pub fn View::drawn_scale(self : View) -> Double {
 /// what takes it): one change at that moment, told to what follows the window's presses (View::window_downs).
 pub fn Tree::went_down(self : Tree, at : Double, x? : Double = -1.0, y? : Double = -1.0) -> Unit {
   self.event(at, fn() {
-    let (count, _, _) = @signals.untracked(fn() { self.pressed_anywhere.get() })
+    let (count, _, _) = self.pressed_anywhere.untracked()
     self.pressed_anywhere.set((count + 1, x, y))
+    self.held_anywhere.set(true)
   })
+}
+
+///|
+/// What went down in the window let go (or called off) at `at`, wherever it is: nothing held anywhere from then, told to
+/// what follows it (View::window_held).
+pub fn Tree::went_up(self : Tree, at : Double) -> Unit {
+  self.event(at, fn() { self.held_anywhere.set(false) })
+}
+
+///|
+/// Whether a finger or a button is down anywhere in the window now (an old view's `c.press().down`), followed: what
+/// waits for the hand to carry no press (a hover card opens only on a pointer carrying none, from when it was let go).
+pub fn View::window_held(self : View) -> Bool {
+  self.tree.held_anywhere.get()
 }
 
 ///|
@@ -424,7 +439,7 @@ pub fn View::window_down_point(self : View) -> (Double, Double) {
 /// press let go without dragging, not taken by what it went down on), told after what it landed on took it: one change
 /// at that moment, told to what follows the window's taps (View::window_taps).
 pub fn Tree::tapped(self : Tree, at : Double) -> Unit {
-  self.event(at, fn() { self.tapped_anywhere.set(@signals.untracked(fn() { self.tapped_anywhere.get() }) + 1) })
+  self.event(at, fn() { self.tapped_anywhere.set(self.tapped_anywhere.untracked() + 1) })
 }
 
 ///|
@@ -466,7 +481,7 @@ pub fn Tree::words_again(self : Tree) -> Unit {
       self.look_marked_at(at)
     }
   }
-  self.words_redone.set(@signals.untracked(fn() { self.words_redone.get() }) + 1)
+  self.words_redone.set(self.words_redone.untracked() + 1)
 }
 
 ///|
@@ -480,8 +495,9 @@ pub fn View::words_redone(self : View) -> Int {
 /// What it draws called by name, as it changes (an icon's: "/icon/copy/", as an old view's icon is called), for what
 /// finds things on screen by what they show (a test's, a scripted run's: Tester::locate's icon:NAME); drawn and read
 /// out as ever.
-pub fn View::drawn_as(self : View, name : Live[String]) -> View {
-  self.bind(DrawnAs, name, Said, fn(s) { self.tree.nodes[self.at].look.drawn_as = s })
+#callsite(autofill(loc))
+pub fn View::drawn_as(self : View, name : Live[String], loc~ : SourceLoc) -> View {
+  self.bind(loc~, DrawnAs, name, Said, fn(s) { self.tree.nodes[self.at].look.drawn_as = s })
   self
 }
 
@@ -502,9 +518,15 @@ pub fn Tree::drawn_name(self : Tree, id : NodeId) -> String {
 /// theme, the size of words), how wide it is laid out as of that change's own moment (View::laid_size), kept as its
 /// least width, no more than `most` says it may be as that changes. Whatever frames are drawn between two changes, the
 /// same: what is kept is what each change laid it out at, never what a frame happened to see.
-pub fn[T : Eq] View::keeps_width(self : View, by : () -> T, most? : () -> Double = fn() { @double.infinity }) -> View {
+#callsite(autofill(loc))
+pub fn[T : Eq] View::keeps_width(
+  self : View,
+  by : () -> T,
+  most? : () -> Double = fn() { @double.infinity },
+  loc~ : SourceLoc,
+) -> View {
   let widest : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
-  self.min_width(
+  self.min_width(loc~,
     By(fn() {
       let w = widest.get()
       let m = most()
@@ -534,31 +556,10 @@ pub fn[T : Eq] View::keeps_width(self : View, by : () -> T, most? : () -> Double
       guard self.live() is Some(n) else { return }
       self.tree.measured_now()
       let w = n.flex.width
-      if w > @signals.untracked(fn() { widest.get() }) {
+      if w > widest.untracked() {
         widest.set(w)
       }
     })
   })
   self
-}
-
-///|
-/// The side of what it goes beside (View::beside) it went on (the side it was said to go on, or the other where it had
-/// not the room: place_beside's flip), followed: told once all of the layout is done, as the sizes followed are
-/// (View::laid_size_told), what reads it told again only as it goes to the other side; none till the first layout after
-/// it is first asked, or where it goes beside nothing.
-pub fn View::went_told(self : View) -> Side? {
-  guard self.live() is Some(n) else { return None }
-  let cell = match n.went_cell {
-    Some(c) => c
-    None => {
-      let c : @signals.Signal[Side?] = @signals.signal(None, same=fn(a, b) { a == b })
-      n.went_cell = Some(c)
-      self.tree.sized.push(self.at)
-      self.tree.sizes_due = true
-      self.tree.marked()
-      c
-    }
-  }
-  cell.get()
 }

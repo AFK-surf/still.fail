@@ -40,6 +40,8 @@ fn ffi_platform() -> Int = "mbhost" "mb_host_platform"
 
 fn ffi_request_frame() = "mbhost" "mb_host_request_frame"
 
+fn ffi_frames_paced(hz : Double) = "mbhost" "mb_host_frames_paced"
+
 fn ffi_wake_after(ms : Double) = "mbhost" "mb_host_wake_after"
 
 fn mbw_mb_host_font_metrics(size : Double, weight : Int, style : Int, out : Int) = "mbhost" "mb_host_font_metrics"
@@ -406,6 +408,9 @@ fn ffi_full_screen() -> Int = "mbhost" "mb_host_full_screen"
 fn ffi_set_full_screen(on : Int) = "mbhost" "mb_host_set_full_screen"
 
 ///|
+fn ffi_window_buttons_down(by : Double, ms : Double) = "mbhost" "mb_host_window_buttons_down"
+
+///|
 fn ffi_window_corner() -> Double = "mbhost" "mb_host_window_corner"
 
 ///|
@@ -501,6 +506,12 @@ fn full_screen() -> Bool {
 /// The window made to fill the screen, or back (macOS's full screen).
 fn set_full_screen(on : Bool) -> Unit {
   ffi_set_full_screen(if on { 1 } else { 0 })
+}
+
+///|
+/// The window's buttons moved `by` lower in the app's top row over `ms` (macOS's).
+fn window_buttons_down(by : Double, ms : Double) -> Unit {
+  ffi_window_buttons_down(by, ms)
 }
 
 ///|
@@ -680,6 +691,12 @@ fn platform() -> Int {
 ///|
 fn request_frame() -> Unit {
   ffi_request_frame()
+}
+
+///|
+/// The frame asked for what moves on by the clock needs only `hz` frames a second (@hostapi.frames_paced).
+fn frames_paced(hz : Double) -> Unit {
+  ffi_frames_paced(hz)
 }
 
 ///|

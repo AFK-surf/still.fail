@@ -22,7 +22,7 @@ fn said_tester(on : @signals.Signal[Bool], before : Ref[Int], after : Ref[Int]) 
       v.width(Is(Some(120.0))) |> ignore
       old(v, fn(c) {
         let id = c.id("old")
-        c.clicked(id) |> ignore
+        c.takes_presses(id)
         c.box(w=Px(80.0), h=Px(40.0), id~, label="旧的", fn() {  }) |> ignore
       }).grow(Is(1.0))
       |> ignore
@@ -177,7 +177,7 @@ test "a layer of the old frame's over everything, modal: the tree's buttons unde
         if open.get() {
           c.overlay("menu", modal=true, fn() {
             let id = c.id("item")
-            c.clicked(id) |> ignore
+            c.takes_presses(id)
             c.box(w=Px(80.0), h=Px(40.0), id~, label="菜单项", fn() {  }) |> ignore
           })
           |> ignore
@@ -313,9 +313,9 @@ fn old_said(hidden : @signals.Signal[Bool], modal : @signals.Signal[Bool], click
       old(v, fn(c) {
         let b = c.id("old")
         id.val = b
-        if c.clicked(b) {
+        c.on_press(b, fn() {
           clicks.val = clicks.val + 1
-        }
+        })
         c.box(w=Px(80.0), h=Px(40.0), id=b, label="旧的", fn() {  }) |> ignore
       }).grow(Is(1.0))
       |> ignore
@@ -375,9 +375,9 @@ fn old_in_node(
         old(v, fn(c) {
           let b = c.id("old")
           id.val = b
-          if c.clicked(b) {
+          c.on_press(b, fn() {
             clicks.val = clicks.val + 1
-          }
+          })
           c.box(w=Px(80.0), h=Px(40.0), id=b, label="旧的", fn() {  }) |> ignore
         }).grow(Is(1.0))
         |> ignore

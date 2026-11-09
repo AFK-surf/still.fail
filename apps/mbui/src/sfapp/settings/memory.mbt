@@ -83,5 +83,5 @@ pub fn builtin_open_of(address : String) -> Bool {
 /// Station `address`'s built-in skills folded open, or shut where they were open: told what follows them.
 pub fn builtin_turn(address : String) -> Unit {
   builtin_open[address] = !builtin_open.get(address).unwrap_or(false)
-  builtin_turned.set(@signals.untracked(fn() { builtin_turned.get() }) + 1)
+  builtin_turned.set(builtin_turned.untracked() + 1)
 }

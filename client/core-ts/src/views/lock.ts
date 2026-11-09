@@ -25,7 +25,7 @@
 //
 // A station that refuses this device for the lock (`lock_unconfirmed`) is not asked again until the lock moves on
 // (someone confirmed something): what waits for it then is tried at once.
-import { Deferred, Effect, Schedule } from "effect";
+import { Deferred, Effect, type Result, Schedule } from "effect";
 import type { Inner } from "../core.ts";
 import { handlers, hooks } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
@@ -43,6 +43,8 @@ import { type Checked, checkLock, signerIn } from "../vault/lock-check.ts";
 import { unsealOwn, vaultAsks, vaultCome, writePlain } from "./vault.ts";
 import { laterSleep } from "../runtime.ts";
 import { Marks } from "../reactive.ts";
+import { ofAddress } from "../workspace.ts";
+import type { PersonalEnv } from "../personal-lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -59,8 +61,60 @@ const LIMITED_WAIT = "10 seconds";
 export const BEHIND_MS = 3_000;
 /// How many times it is, for one head of the lock.
 export const BEHIND_TRIES = 5;
+/// How long what is signed waits for one of the stations serving the lock to take it, before the cloud is what does.
+export const TAKEN_MS = 15_000;
 /// A device of the person's own added this recently is pointed out on their other devices.
 const RECENT_SECS = 7 * 86400;
+/// Once one station answered a read of the locks, how much longer the others are waited for.
+export const OTHERS_MS = 2_000;
+
+/// Each of `asks` (one a station) at once, and what they answered once all have; or once one answered and the rest
+/// had what `after` says of that answer more (null: as if none came); or by TAKEN_MS whatever came. A station gone
+/// silent (its machine asleep, its network gone: no answer, no close, until its link gives up) is not waited on; nor
+/// is the person, who would wait with it to be let in, to approve a device, to see one taken off. A refusal is an
+/// answer too: a device the others refuse waits no longer on the silent one. What it says later it tells as it comes
+/// back. `at`: the stations asked (`ws/id`, each ask's): one that did not answer in time is not waited for again, the
+/// others' answers taken as they all came, until it answers something (an asleep machine's every read waited
+/// OTHERS_MS more, twice for each device approved).
+export function answersOf<A, E>(inner: Inner, asks: Effect.Effect<A, E>[], after: (r: Result.Result<A, E>) => number | null, at?: string[]): Effect.Effect<Result.Result<A, E>[]> {
+  return Effect.gen(function* () {
+    if (asks.length === 0) return [];
+    const got: (Result.Result<A, E> | undefined)[] = asks.map(() => undefined);
+    const all = Deferred.makeUnsafe<void>();
+    const enough = Deferred.makeUnsafe<void>();
+    let silent = silentOf.get(inner);
+    if (silent === undefined) silentOf.set(inner, (silent = new Set()));
+    const quiet = silent;
+    // Those not gone silent, all answered: done (all of them, when every one asked is).
+    const skipped = asks.map((_, i) => at !== undefined && quiet.has(at[i]!));
+    if (skipped.every((s) => s)) skipped.fill(false);
+    let left = asks.length;
+    let waited = skipped.filter((s) => !s).length;
+    asks.forEach((ask, i) =>
+      inner.runner.fork(Effect.flatMap(Effect.result(ask), (r) => Effect.gen(function* () {
+        got[i] = r;
+        if (at !== undefined) quiet.delete(at[i]!);
+        if (--left === 0 || (!skipped[i] && --waited === 0)) Deferred.doneUnsafe(all, Effect.void);
+        const more = after(r);
+        if (more === null) return;
+        if (more > 0) yield* Effect.sleep(more); // timer: a deadline
+        Deferred.doneUnsafe(enough, Effect.void);
+      }))),
+    );
+    yield* Effect.raceAllFirst([
+      Deferred.await(all),
+      Deferred.await(enough),
+      Effect.sleep(TAKEN_MS), // timer: a deadline
+    ]);
+    if (at !== undefined) got.forEach((r, i) => r === undefined && quiet.add(at[i]!));
+    return got.filter((r): r is Result.Result<A, E> => r !== undefined);
+  });
+}
+/// The stations that did not answer a read in time (answersOf `at`), until they answer one.
+const silentOf = new WeakMap<Inner, Set<string>>();
+
+/// Of a station's answer to what is brought: done once one took it, the others waited for OTHERS_MS once one refused.
+export const tookOrRefused = (r: Result.Result<unknown, unknown>): number => (r._tag === "Success" ? 0 : OTHERS_MS);
 
 /// What the cloud keeps of a workspace's lock, as held here (the `lock` record of the workspace). `seen`: the devices
 /// that asked the cloud for credentials in the last 31 days, as far as the viewer may see them (owners and admins all,
@@ -82,6 +136,8 @@ type Part = {
   /// How far each station's own lock goes, as it last said this run (its GET /lock, or its refusal of this device);
   /// null: it keeps none.
   heads: Map<string, Head | null>;
+  /// The stations that said they serve the lock to devices (`serves`): what is signed waits on one of them taking it.
+  serving: Set<string>;
   /// The base key of this device (the mesh's), once known.
   base: string | null;
 };
@@ -197,7 +253,7 @@ export function fold(entries: Entry[]): Folded {
 }
 
 const part = (inner: Inner, ws: string): Part =>
-  inner.workspaces.of(ws).part<Part>("lock", () => ({ refused: new Map(), behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), heads: new Map(), base: bases.get(inner) ?? null }));
+  inner.workspaces.of(ws).part<Part>("lock", () => ({ refused: new Map(), behind: new Map(), excluded: new Set(), devices: null, probes: new Map(), heads: new Map(), serving: new Set(), base: bases.get(inner) ?? null }));
 
 /// This device's base key known: kept for every workspace.
 const knowBase = (inner: Inner, ws: string, base: string) => {
@@ -293,21 +349,62 @@ export function install(inner: Inner): void {
     lockSeen(inner).touch("prompts");
     const says = cloudSays(view(inner, ws));
     if (says === undefined) return;
-    let at = readAt.get(inner);
-    if (!at) readAt.set(inner, (at = new Map()));
-    if (at.get(ws) === says && held(inner, ws) !== null) return;
-    at.set(ws, says);
-    inner.scheduler.enqueue("cloud", `lock/${ws}`, Priority.background, read(inner, ws));
-    pairs.reading(inner, ws);
+    readSaid(inner, ws, says);
   });
   inner.router.owners.push(owner(inner));
+  // The stations tell their locks' changes (station/src/mesh/lock-events.ts): the workspace's read of the one that told
+  // (and of each as its link opens), the person's own of their stations.
+  inner.stations.also.push({
+    // (only where there is a lock: one turned on meanwhile is told by the cloud's view as before)
+    read: (address) => (inner.provider.kind === "stillfail" && held(inner, ofAddress(address))?.head ? Effect.asVoid(readLockOf(inner, ofAddress(address), [address.slice(ofAddress(address).length + 1)])) : Effect.void),
+    event: (address, name, data) => {
+      if (inner.provider.kind !== "stillfail") return;
+      const ws = ofAddress(address);
+      if (name === "lock" && get(data, "workspace") === ws) {
+        const station = address.slice(ws.length + 1);
+        inner.scheduler.enqueue(address, `lock/${ws}/${station}`, Priority.background, Effect.ignore(readLockOf(inner, ws, [station])));
+      } else if (name === "person") {
+        const sub = inner.workspaces.owner(ws);
+        if (sub !== null) inner.scheduler.enqueue(address, `personal/${sub}`, Priority.background, Effect.ignore(inner.adb.personal().refresh(sub, address)));
+      }
+    },
+    resume: true,
+  });
 }
 
-/// The lock and the waiting devices, read from the cloud and held; a lock that moved on lets the stations that refused
-/// this device be tried again.
+/// The lock read as the workspace view says it moved on (`says`, how far): once for each. One the cloud turned away for
+/// too many asks is not taken as read: it is read again a little later, else it stayed behind until the lock moved on
+/// again (a device put in the lock while its person's devices asked a lot was not let in for minutes).
+function readSaid(inner: Inner, ws: string, says: string): void {
+  let at = readAt.get(inner);
+  if (!at) readAt.set(inner, (at = new Map()));
+  if (at.get(ws) === says && held(inner, ws) !== null) return;
+  // Held as far already (a station told it first).
+  if (says !== "" && held(inner, ws)?.head?.hash === says) return;
+  at.set(ws, says);
+  const forget = () => Effect.sync(() => void (at.get(ws) === says && at.delete(ws)));
+  const again = Effect.andThen(Effect.sleep(LIMITED_WAIT), Effect.sync(() => { const now = cloudSays(view(inner, ws)); if (now !== undefined) readSaid(inner, ws, now); })); // timer: a retry after a failure (429)
+  inner.scheduler.enqueue("cloud", `lock/${ws}`, Priority.background, Effect.tapError(read(inner, ws), (e) => Effect.andThen(forget(), e.code === "rate_limited" ? Effect.sync(() => void inner.runner.fork(again)) : Effect.void)));
+  pairs.reading(inner, ws);
+}
+
+/// The lock and the devices that came, read from the workspace's stations and held (from the cloud only when none of
+/// them answers: older ones, offline, or refusing this device; the root AGENTS.md, The cloud is the account system); a
+/// lock that moved on lets the stations that refused this device be tried again.
 export function read(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
   // What changed while it read is read again: an ask made meanwhile under the same key was folded into this one.
   return Effect.gen(function* () {
+    if (inner.provider.kind === "stillfail") {
+      const said = { refused: false };
+      if (yield* readLockOf(inner, ws, lockStations(inner, ws), said)) return;
+      // Refused by the stations it reached, a lock held: each refusal tells the lock's last entries (refusedFor), so
+      // it is not read of the cloud (each of a person's refused devices did, as each entry was signed, and used up the
+      // account's budget: enrolling a station was turned away). They are asked again instead, which tells it again.
+      if (said.refused && held(inner, ws)?.head) {
+        refusedAgain(inner, ws);
+        return;
+      }
+    }
     for (let round = 0; round < 3; round++) {
       const before = cloudSays(view(inner, ws));
       yield* readOnce(inner, ws);
@@ -330,6 +427,96 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     let entries = same ? [...was!.entries, ...more.filter((e) => e.seq > was!.head!.seq)] : more;
     if (!same && head && (more.length === 0 || more[0]!.seq !== 0)) entries = arr(get(yield* cloud("/lock"), "entries")) as Entry[];
     const seen = head === null ? null : yield* Effect.orElseSucceed(Effect.map(cloud("/devices"), (r) => arr(get(r, "devices"))), () => was?.seen ?? null);
+    yield* hold(inner, ws, sub, was, head, entries, seen);
+  });
+}
+
+/// The stations a lock is read of: those it names, then the workspace's others.
+function lockStations(inner: Inner, ws: string): string[] {
+  const h = held(inner, ws);
+  const f = fold(h?.entries ?? []);
+  const named = h?.head && !f.disabled ? [...f.stations.keys()] : [];
+  const all = arr(get(view(inner, ws), "stations")).map((s) => s?.id).filter((id): id is string => typeof id === "string");
+  return [...new Set([...named, ...all])];
+}
+
+/// The lock read of `stations` (each one's GET /lock, and the devices that came to it): held when one of them answered,
+/// as the longest chain that goes on from the one held (one that keeps another lock or none says so, and is not taken);
+/// false when none did (nothing held then; `said.refused`: one refused this device for the lock).
+function readLockOf(inner: Inner, ws: string, stations: string[], said?: { refused: boolean }): Effect.Effect<boolean, CoreError> {
+  return Effect.gen(function* () {
+    const sub = inner.workspaces.owner(ws);
+    if (sub === null || stations.length === 0) return false;
+    const p = part(inner, ws);
+    const was = held(inner, ws);
+    const off = was?.head ? fold(was.entries).disabled : true;
+    const ask = (id: string, path: string) => Effect.result(inner.stations.requests.call(new StationAddr(ws, id), "GET", path, null, { quiet: true }));
+    const answers = yield* answersOf(
+      inner,
+      stations.map((id) =>
+        Effect.gen(function* () {
+          const r = yield* ask(id, `/lock?after=${was?.head && !off ? was.head.seq : -1}`);
+          if (r._tag === "Failure" && r.failure.code === "lock_unconfirmed" && said) said.refused = true;
+          // One from before this was read of serves none of it (its devices read the cloud).
+          if (r._tag === "Success" && arr(get(r.success, "serves")).includes("told")) p.serving.add(id);
+          else p.serving.delete(id);
+          if (r._tag !== "Success" || !p.serving.has(id)) return null;
+          const head = readHead(get(r.success, "head"));
+          p.heads.set(id, head);
+          const more = arr(get(r.success, "entries")) as Entry[];
+          let entries: Entry[] | null = null;
+          if (head === null) entries = [];
+          else if (was?.head && !off && head.genesis === was.head.genesis) entries = head.seq <= was.head.seq ? null : [...was.entries, ...more.filter((e) => e.seq > was.head!.seq)];
+          else if (more[0]?.seq === 0) entries = more;
+          else {
+            const all = yield* ask(id, "/lock");
+            entries = all._tag === "Success" ? (arr(get(all.success, "entries")) as Entry[]) : null;
+          }
+          const devices = yield* ask(id, "/lock/devices");
+          return { head, entries, seen: devices._tag === "Success" ? arr(get(devices.success, "devices")) : [] };
+        }),
+      ),
+      () => OTHERS_MS,
+      stations.map((id) => `${ws}/${id}`),
+    );
+    const served = answers.flatMap((r) => (r._tag === "Success" && r.success !== null ? [r.success] : []));
+    if (served.length === 0) return false;
+    // The longest chain that goes on from the one held (all of them agree on it as far as they go, or it is another
+    // lock); none longer, what is held stays.
+    let head = was?.head ?? null;
+    let entries = was?.entries ?? [];
+    for (const a of served) {
+      if (a.head === null || a.entries === null || a.entries.length !== a.head.seq + 1) continue;
+      if (head !== null && !off && (a.head.genesis !== head.genesis || a.head.seq <= head.seq || entryHash(a.entries[head.seq]!) !== head.hash)) continue;
+      if (head !== null && off && a.head.genesis === head.genesis) continue;
+      head = a.head;
+      entries = a.entries;
+    }
+    // None keeps a lock (and none was held, or every one says so): none.
+    if (served.every((a) => a.head === null) && (was?.head == null || served.length === stations.length)) {
+      head = null;
+      entries = [];
+    }
+    yield* hold(inner, ws, sub, was, head, entries, mergeSeen(served.map((a) => a.seen)));
+    return true;
+  });
+}
+
+/// The devices each station said came to it, as one list: each device once, as it was last seen.
+function mergeSeen(lists: J[][]): J[] {
+  const by = new Map<string, J>();
+  for (const r of lists.flat()) {
+    const k = `${r?.sub}\0${r?.device}`;
+    const had = by.get(k);
+    if (had === undefined) by.set(k, r);
+    else by.set(k, { ...had, ...r, base: r.base ?? had.base, kind: r.kind ?? had.kind, label: r.label ?? had.label, first_seen: Math.min(had.first_seen ?? Infinity, r.first_seen ?? Infinity), last_seen: Math.max(had.last_seen ?? 0, r.last_seen ?? 0) });
+  }
+  return [...by.values()];
+}
+
+/// The lock as read (of the cloud or the stations) held, and what follows from it.
+function hold(inner: Inner, ws: string, sub: string, was: Held | null, head: Head | null, entries: Entry[], seen: J[] | null): Effect.Effect<void> {
+  return Effect.gen(function* () {
     if (head !== null && inner.provider.kind === "stillfail") yield* Effect.ignore(new Lock(inner, ws, sub, null).base());
     inner.data.put("lock", ws, { head, entries: head === null ? [] : entries, ...(seen ? { seen } : {}) });
     // checked as it comes, in a turn of its own (views/vault.ts vaultCome)
@@ -349,18 +536,28 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
 function moved(inner: Inner, ws: string): void {
   const p = part(inner, ws);
   p.behind.clear();
+  refusedAgain(inner, ws);
+  pairs.moved(inner, ws);
+}
+
+/// The stations of the workspace that refused this device tried again now: the lock moved on, or the person's own lock
+/// did (this device put on it, which the stations of a lock bound to it go by).
+export function refusedAgain(inner: Inner, ws: string): void {
+  const p = inner.workspaces.get(ws)?.own.get("lock") as Part | undefined;
+  if (!p) return;
   for (const station of [...p.refused.keys()]) {
     p.refused.delete(station);
     inner.stations?.cameOnline(`${ws}/${station}`);
   }
-  pairs.moved(inner, ws);
 }
 
 /// A station refused this device for the lock: noted, not asked again until the lock moves on. What the refusal says
 /// then: which workspace, and where to approve it.
-function refused(inner: Inner, ws: string, station: string, theirs: unknown): CoreError | null {
+function refused(inner: Inner, ws: string, station: string, theirs: unknown, told?: { person?: unknown; entries?: unknown }): CoreError | null {
   if (inner.provider.kind !== "stillfail") return null;
   const p = part(inner, ws);
+  heardRefused(inner, ws, told?.person);
+  heardTail(inner, ws, told?.entries);
   const h = held(inner, ws);
   const base = p.base ?? bases.get(inner) ?? null;
   const f = fold(h?.entries ?? []);
@@ -375,7 +572,7 @@ function refused(inner: Inner, ws: string, station: string, theirs: unknown): Co
   // In the lock as this device holds it: the station has not heard of it yet (from the cloud, or the device that
   // signed it), and is tried again shortly rather than once the lock moves on, which it may not again for long.
   // A few times, each a little later (each try asks the station anew); after that, as any station not reached.
-  if (base !== null && h?.head != null && !f.disabled && live(f.devices.get(base), now(inner)) !== undefined) {
+  if (base !== null && h?.head != null && !f.disabled && live(f.devices.get(base), now(inner)) !== undefined && !offOwnLock(inner, ws)) {
     const tries = p.behind.get(station) ?? 0;
     if (tries < BEHIND_TRIES) {
       p.behind.set(station, tries + 1);
@@ -404,6 +601,9 @@ function waiting(inner: Inner, ws: string, station: string): CoreError | null {
 function unconfirmed(inner: Inner, ws: string): CoreError {
   const base = part(inner, ws).base ?? bases.get(inner) ?? null;
   const name = nameOf(inner, ws);
+  // Its person bound a lock of their own here, which this device is not on: the stations let their app devices in on
+  // that alone, so no approval in this one helps; it is put on their own lock, face to face.
+  if (offOwnLock(inner, ws)) return new CoreError("lock_unconfirmed", t("core-misc.lock.offOwnLock", { name }));
   return new CoreError("lock_unconfirmed", base ? t("core-misc.lock.unconfirmed", { name, code: shortCode(base) }) : t("core-misc.lock.unconfirmedNoCode", { name }));
 }
 
@@ -441,6 +641,14 @@ export function onBoundPerson(inner: Inner, ws: string): boolean {
   return personal.standing(sub) === "member" && personal.root(sub) === fold(h.entries).persons.get(sub);
 }
 
+/// Whether this app device's person bound a lock of their own in the workspace's, and this device is not on it.
+function offOwnLock(inner: Inner, ws: string): boolean {
+  const sub = inner.workspaces.owner(ws);
+  const h = held(inner, ws);
+  if (sub === null || !h?.head || !inner.host.appKeys) return false;
+  return fold(h.entries).persons.has(sub) && !onBoundPerson(inner, ws);
+}
+
 /// What a hello brings of the person's own lock: its chain, wherever its member bound it here, this device in the
 /// workspace's lock as well or not: a station that goes by the person's own lock alone for them lets it in on that.
 function carriedPerson(inner: Inner, ws: string): Entry[] | null {
@@ -468,6 +676,10 @@ export function bindPerson(inner: Inner, ws: string): Effect.Effect<void> {
     const base = part(inner, ws).base ?? bases.get(inner) ?? null;
     const me = base === null ? undefined : live(f.devices.get(base), now(inner));
     if (me === undefined || me.sub !== sub || me.sign_key !== signer) return;
+    // Not while an app device of theirs here is off their own lock: bound, the stations would let it in no more (the
+    // user, 2026-11-09: a Mac left off a lock opened for debugging a phone was shut out of every station).
+    const on = new Set([...(personal.chain(sub)?.devices.values() ?? [])].map((d) => d.id));
+    for (const d of f.devices.values()) if (d.sub === sub && d.kind === "app" && !on.has(d.id) && live(d, now(inner)) !== undefined) return;
     // Once at a time.
     let tried = binding.get(inner);
     if (tried === undefined) binding.set(inner, (tried = new Set()));
@@ -576,6 +788,82 @@ export function tellStations(inner: Inner, sub: string, chain: Entry[]): void {
     for (const id of f.stations.keys())
       inner.runner.fork(Effect.ignore(inner.stations.requests.call(new StationAddr(ws, id), "POST", "/lock", { person: chain }, { quiet: true }), { log: "Unhandled", message: "personal lock told" }));
   }
+}
+
+/// The chains of each person's own lock the stations that refused this device told (`person`), the latest: what a
+/// device not let in anywhere knows of its person's lock with no cloud (who may let it in face to face).
+const refusedChains = new WeakMap<Inner, Map<string, Entry[][]>>();
+function heardRefused(inner: Inner, ws: string, person: unknown): void {
+  const sub = inner.workspaces.owner(ws);
+  if (sub === null || !Array.isArray(person)) return;
+  const chains = person.map((c) => arr(get(c, "entries")) as Entry[]).filter((c) => c.length > 0);
+  let m = refusedChains.get(inner);
+  if (!m) refusedChains.set(inner, (m = new Map()));
+  m.set(sub, chains);
+  inner.runner.fork(Effect.ignore(inner.adb.personal().heardFrom(sub, chains), { log: "Unhandled", message: "personal lock heard of a refusal" }));
+}
+
+/// The last entries of the lock a station refusing this device told: held, as they go on from the lock held here (the
+/// station took each), so a device taken out hears so with no cloud to read it of.
+function heardTail(inner: Inner, ws: string, raw: unknown): void {
+  const sub = inner.workspaces.owner(ws);
+  const was = held(inner, ws);
+  const tail = arr(raw) as Entry[];
+  if (sub === null || !was?.head || tail.length === 0) return;
+  const first = tail[0]!.seq;
+  if (!Number.isSafeInteger(first) || first < 0 || first > was.head.seq + 1) return;
+  for (let i = 0; i < tail.length; i++) {
+    const prev = i === 0 ? (first === 0 ? undefined : was.entries[first - 1]) : tail[i - 1];
+    if (tail[i]!.seq !== first + i || (prev !== undefined && tail[i]!.prev !== entryHash(prev))) return;
+  }
+  const entries = [...was.entries.slice(0, first), ...tail];
+  if (entries.length <= was.entries.length || entryHash(entries[0]!) !== was.head.genesis) return;
+  const last = entries[entries.length - 1]!;
+  inner.runner.fork(hold(inner, ws, sub, was, { seq: last.seq, hash: entryHash(last), genesis: was.head.genesis }, entries, was.seen ?? null));
+}
+
+/// The stations of `sub`'s workspaces here, each once (one in two of them is asked in the first).
+function personStations(inner: Inner, sub: string): StationAddr[] {
+  const out = new Map<string, StationAddr>();
+  for (const [ws, owner] of inner.workspaces.owned()) {
+    if (owner !== sub) continue;
+    for (const s of arr(get(view(inner, ws), "stations"))) if (typeof s?.id === "string" && !out.has(s.id)) out.set(s.id, new StationAddr(ws, s.id));
+  }
+  return [...out.values()];
+}
+
+/// A person's own lock as their stations keep it (personal-lock.ts `stations`), not the cloud: read of each station of
+/// their workspaces this device reaches, and brought to each.
+export function personalStations(inner: Inner): NonNullable<PersonalEnv["stations"]> {
+  return {
+    read: (sub, only) => {
+      const asked = personStations(inner, sub).filter((at) => only === undefined || at.toString() === only);
+      return Effect.map(
+        answersOf(inner, asked.map((at) => inner.stations.requests.call(at, "GET", "/lock/person", null, { quiet: true })), () => OTHERS_MS, asked.map(String)),
+        (answers) => {
+          const ok = answers.filter((r) => r._tag === "Success");
+          // Refused by them all (this device not let in yet): what their refusals told of it, not the cloud's.
+          const told = refusedChains.get(inner)?.get(sub);
+          if (ok.length === 0) return told !== undefined && answers.some((r) => r._tag === "Failure" && r.failure.code === "lock_unconfirmed") ? told : null;
+          return ok.flatMap((r) => arr(get(r.success, "chains")).map((c) => arr(get(c, "entries")) as Entry[]));
+        },
+      );
+    },
+    bring: (sub, chain) => {
+      const asked = personStations(inner, sub);
+      return Effect.flatMap(
+        // (done once one took it: the others are brought it all the same, and keep each other level)
+        answersOf(inner, asked.map((at) => inner.stations.requests.call(at, "POST", "/lock/person", { chain }, { quiet: true })), tookOrRefused, asked.map(String)),
+        (answers) => {
+          const took = answers.filter((r) => r._tag === "Success").length;
+          if (took > 0) return Effect.succeed(took);
+          // Refused where it was heard (another device's entry got there first): said so, as the cloud's refusal was.
+          const refused = answers.find((r) => r._tag === "Failure" && r.failure.status === 409);
+          return refused !== undefined && refused._tag === "Failure" ? Effect.fail(new CoreError("lock_refused", refused.failure.message, 409)) : Effect.succeed(null);
+        },
+      );
+    },
+  };
 }
 
 /// What a control plane that keeps no lock shows.
@@ -826,26 +1114,35 @@ export const pairs: {
   run(inner: Inner, name: string, ws: string, params: Record<string, unknown>): Effect.Effect<unknown, CoreError>;
 } = { shown: () => [], mine: () => null, deny: () => {}, hide: () => {}, moved: () => {}, reading: () => {}, run: () => Effect.fail(CoreError.invalid("no face-to-face approval here")) };
 
-/// The draft of turning it on: the devices that asked for credentials, the stations asked whether they understand a
-/// lock (GET /lock: one from before answers 404).
+/// The draft of turning it on: the devices that came to the stations (that asked the cloud for credentials, where no
+/// station says), the stations asked whether they understand a lock (GET /lock: one from before answers 404).
 function draft(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
   return Effect.gen(function* () {
     const sub = inner.workspaces.owner(ws);
     if (sub === null) return;
     const p = part(inner, ws);
-    const answer = yield* Effect.result(inner.provider.request(sub, "GET", `/v1/workspaces/${encodeURIComponent(ws)}/devices`, null));
-    p.devices = answer._tag === "Success" ? arr(get(answer.success, "devices")) : [];
-    lockSeen(inner).touch(`draft ${ws}`);
+    // The devices that came to the stations (each says those that came to it); of the cloud only when none says.
+    const came: J[][] = [];
     yield* Effect.forEach(
       arr(get(view(inner, ws), "stations")),
       (s) =>
-        Effect.map(Effect.result(inner.stations.requests.call(new StationAddr(ws, s.id), "GET", "/lock", null, { quiet: true })), (r) => {
+        Effect.gen(function* () {
+          const r = yield* Effect.result(inner.stations.requests.call(new StationAddr(ws, s.id), "GET", "/lock", null, { quiet: true }));
           // One that answers with a lock of its own keeps another (turned on before, not off there): reset first.
           p.probes.set(s.id, r._tag === "Success" ? (readHead(get(r.success, "head")) === null ? "ok" : "other") : r.failure.status === 404 || /404|no route/.test(r.failure.message) ? "old" : "offline");
           lockSeen(inner).touch(`draft ${ws}`);
+          if (r._tag !== "Success" || !arr(get(r.success, "serves")).includes("devices")) return;
+          const d = yield* Effect.result(inner.stations.requests.call(new StationAddr(ws, s.id), "GET", "/lock/devices", null, { quiet: true }));
+          if (d._tag === "Success") came.push(arr(get(d.success, "devices")));
         }),
       { concurrency: 4, discard: true },
     );
+    if (came.length > 0) p.devices = mergeSeen(came);
+    else {
+      const answer = yield* Effect.result(inner.provider.request(sub, "GET", `/v1/workspaces/${encodeURIComponent(ws)}/devices`, null));
+      p.devices = answer._tag === "Success" ? arr(get(answer.success, "devices")) : [];
+    }
+    lockSeen(inner).touch(`draft ${ws}`);
   });
 }
 
@@ -1060,9 +1357,27 @@ export class Lock {
     return this.#inner.host.appKeys ? "app" : "web";
   }
 
-  /// The chain as the cloud keeps it.
+  /// The chain as the stations keep it (the longest that goes on from the one held), read now; as the cloud does when
+  /// none of them answers.
   #chain(): Effect.Effect<{ head: Head | null; entries: Entry[] }, CoreError> {
-    return Effect.map(this.#cloud("GET", "/lock"), (r) => ({ head: readHead(get(r, "head")), entries: arr(get(r, "entries")) as Entry[] }));
+    const self = this;
+    return Effect.gen(function* () {
+      if (yield* readLockOf(self.#inner, self.ws, lockStations(self.#inner, self.ws))) {
+        const h = held(self.#inner, self.ws);
+        return { head: h?.head ?? null, entries: h?.entries ?? [] };
+      }
+      const r = yield* self.#cloud("GET", "/lock");
+      return { head: readHead(get(r, "head")), entries: arr(get(r, "entries")) as Entry[] };
+    });
+  }
+
+  /// Entries brought to the cloud, for the stations and devices from before that read the lock there: waited on only
+  /// when no station took them (`took`), else not (a failure there is no failure of this).
+  #toCloud(entries: Entry[], took: boolean): Effect.Effect<void, CoreError> {
+    const asked = Effect.asVoid(this.#cloud("POST", "/lock", { entries }));
+    if (!took) return asked;
+    this.#inner.runner.fork(Effect.ignore(asked));
+    return Effect.void;
   }
 
   /// How far the lock goes, as a station of it this device reaches says (it checked every entry), else as the cloud
@@ -1123,8 +1438,8 @@ export class Lock {
       const genesis = signer.sign(next(self.ws, null, inner.host.nowMs() / 1000, "genesis", {
         owner: self.sub, origins: [u.origin], rp_id: u.hostname, cloud_keys: cloudKeys, members, devices, passkeys: [], stations, gateways: [],
       }));
-      yield* self.#cloud("POST", "/lock", { entries: [genesis] });
       const pinned = yield* self.#bring([genesis], stations.map((s) => s.key));
+      yield* self.#toCloud([genesis], Object.values(pinned).some((h) => readHead(h) !== null));
       p.excluded.clear();
       return { head: { seq: 0, hash: entryHash(genesis), genesis: entryHash(genesis) }, stations: stations.map((s) => ({ id: s.key, name: s.name, pinned: pinned[s.key] ?? null })), devices: devices.length, members: members.length };
     });
@@ -1186,11 +1501,11 @@ export class Lock {
     });
   }
 
-  /// One more entry, signed by this app's key, after the chain as the cloud keeps it: to the cloud, which is when it is
-  /// done (the cloud tells the stations at once, and one offline asks it once back), then to each station of the lock
-  /// this device reaches, after the call answers: one offline held an approval up until asking it gave up, some ten
-  /// seconds to minutes. `waitFor`: the stations whose answers the call waits for (one just taken in pins only what this
-  /// device brings it).
+  /// One more entry, signed by this app's key, after the chain as the stations keep it: to each station of the lock,
+  /// done once one of them took it (they bring each other level, lock-sync.ts), the call not waiting on the rest: one
+  /// offline held an approval up until asking it gave up, some ten seconds to minutes. To the cloud too, for the stations
+  /// and devices from before that read it there, waited on only when no station took it. `waitFor`: the stations whose
+  /// answers the call waits for (one just taken in pins only what this device brings it).
   append(kind: string, body: unknown, waitFor: string[] = []): Effect.Effect<unknown, CoreError> {
     const self = this;
     return Effect.gen(function* () {
@@ -1205,19 +1520,42 @@ export class Lock {
       // it refused there too (2026-10-28: a device the lock names without its key approved one, and a station kept
       // turning the devices approved after it away for days).
       yield* checkSigned(entries, chain, signer.id, now(self.#inner));
+      const stations = [...fold(chain).stations.keys()];
+      const pinned = yield* self.#bring(chain, stations.filter((s) => waitFor.includes(s)));
+      const taken = (h: unknown) => (readHead(h)?.seq ?? -1) >= entry.seq;
+      // (waited on only of those that serve it: one from before, or not answering, hears of it in the background)
+      const serving = part(self.#inner, self.ws).serving;
+      const others = stations.filter((s) => !waitFor.includes(s));
+      const later = others.filter((s) => !serving.has(s));
+      if (later.length > 0) self.#inner.runner.fork(Effect.ignore(self.#bring(chain, later), { log: "Unhandled", message: "lock chain brought" }));
+      const took = Object.values(pinned).some(taken) || (yield* self.#firstTaken(chain, others.filter((s) => serving.has(s)), taken));
       // Not taken as far as this device heard: the cloud may have kept it all the same, its answer lost on the way
       // back (a gateway's 502, the line gone). Then it is done: asked again, it would say it failed while it went.
-      yield* Effect.catch(self.#cloud("POST", "/lock", { entries: [entry] }), (e) =>
-        Effect.flatMap(Effect.orElseSucceed(self.#chain(), () => null), (kept) => {
-          const there = kept?.entries.find((x) => x.seq === entry.seq);
+      yield* Effect.catch(self.#toCloud([entry], took), (e) =>
+        Effect.flatMap(Effect.orElseSucceed(Effect.map(self.#cloud("GET", "/lock"), (r) => arr(get(r, "entries")) as Entry[]), () => null), (kept) => {
+          const there = kept?.find((x) => x.seq === entry.seq);
           return there !== undefined && entryHash(there) === entryHash(entry) ? Effect.void : Effect.fail(e);
         }),
       );
-      const stations = [...fold(chain).stations.keys()];
-      const later = stations.filter((s) => !waitFor.includes(s));
-      if (later.length > 0) self.#inner.runner.fork(Effect.ignore(self.#bring(chain, later), { log: "Unhandled", message: "lock chain brought" }));
-      const pinned = yield* self.#bring(chain, stations.filter((s) => waitFor.includes(s)));
       return { head: { seq: entry.seq, hash: entryHash(entry), genesis: head.genesis }, stations: pinned };
+    });
+  }
+
+  /// Entries brought to each of `stations`, each on its own (one offline hears of them later): whether one of them
+  /// took them (`taken`, as its answer says), as soon as one did; false once none did, there are none, or none
+  /// answered by TAKEN_MS (the cloud then is what takes them, as before).
+  #firstTaken(entries: Entry[], stations: string[], taken: (head: unknown) => boolean): Effect.Effect<boolean> {
+    const self = this;
+    return Effect.gen(function* () {
+      if (stations.length === 0) return false;
+      const done = Deferred.makeUnsafe<boolean>();
+      let left = stations.length;
+      for (const id of stations)
+        self.#inner.runner.fork(Effect.flatMap(Effect.result(self.#station(id, "POST", "/lock", { entries })), (r) => Effect.sync(() => {
+          if (r._tag === "Success" && taken(get(r.success, "head"))) Deferred.doneUnsafe(done, Effect.succeed(true));
+          else if (--left === 0) Deferred.doneUnsafe(done, Effect.succeed(false));
+        })));
+      return yield* Effect.map(Effect.timeoutOption(Deferred.await(done), TAKEN_MS), (o) => o._tag === "Some" && o.value); // timer: a deadline
     });
   }
 

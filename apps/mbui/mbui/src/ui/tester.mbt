@@ -16,8 +16,16 @@ pub struct Tester {
   mut period : Double
   /// the display's frames to come, as a run's tape had them (Tester::set_frame_times): after the last, on its period
   mut times : Array[Double]
-  /// whether run_for draws the display's frames on its way (MBUI_TEST_FPS), or goes straight to its end
-  between : Bool
+  /// how far apart the frames run_for draws on its way are (ms; MBUI_TEST_FPS's), or 0: none, straight to its end;
+  /// drawn while the app asks for frames (not at rest), as a host draws them.
+  /// Only on run_for's way: what the test draws itself (an input's frames, `frame()`, a moment it says) is on the
+  /// display's frames as ever, so a run at another rate walks the same moments, only more or fewer frames between
+  between : Double
+  /// whether the frame being drawn is one of those (or what it left owed): how a motion goes frame to frame is not
+  /// judged on it (Tester::judges_motion), so a run at a rate judges the frames the default run does, no more
+  mut on_way : Bool
+  /// whether how what moves goes is judged on those frames too (MBUI_TEST_MOTION: test_motion_judged)
+  motion : MotionJudged
   /// a host's frames as its run had them (set_frame_times, set_frame_period): every frame on them, as the host drew
   /// it (an input's, a draw's, run_for's), not at the moments the test says
   mut host_frames : Bool
@@ -79,6 +87,7 @@ pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
 /// forgotten here fails the next Tester at once rather than a test somewhere else.
 fn reset_globals() -> Unit {
   window_zoom_reset()
+  journal_reset()
   run_let_go()
   // A run can end with a frame's resource handover still queued. Finish it before resetting the next run.
   frame_afters_run()
@@ -86,6 +95,7 @@ fn reset_globals() -> Unit {
   the_ctx.val.let_go()
   the_ctx.val = Ctx::new()
   looks_reset()
+  pace_none()
   notices_reset()
   hand_reset()
   corners_hold.val = true
@@ -141,7 +151,6 @@ fn reset_globals() -> Unit {
   update_asked.clear()
   answers_waiting.clear()
   views_told.clear()
-  pagers.clear()
   code_fields.clear()
   code_clears.clear()
   bars_hand.clear()
@@ -212,7 +221,6 @@ fn leaked_state() -> Array[String] {
   check("image_cache", image_cache.length())
   check("image_data", image_data.length())
   check("image_vector_drawers", image_vector_drawers.length())
-  check("pagers", pagers.length())
   check("code_fields", code_fields.length() + code_clears.length())
   check("open_views", open_views.length() + stacked_views.length())
   check("streams", open_streams.length() + stream_nodes.length())
@@ -271,6 +279,8 @@ fn leaked_state() -> Array[String] {
 /// `nav_able`: whether the system lays out the app's tabs itself (an iPhone Duo's: @hostapi.nav_bar_able), as a host
 /// says it from the app's first frame on; Tester::set_nav_able changes it later.
 /// `before`: a live renderer's frame setup, called before every frame including the first (a film's offscreen target).
+/// `keeps_sources`: whether the window's tree keeps where in the source each node was made (Tester::sources_at); off
+/// for a run measured as a device runs it.
 /// `loc`: where it is made, said where a check of its frames fails (frame_watch.mbt, words_over.mbt).
 #callsite(autofill(loc))
 pub fn Tester::new(
@@ -304,6 +314,7 @@ pub fn Tester::new(
   nav_able? : Bool = false,
   tree? : (@view.View) -> Unit,
   before? : () -> Unit,
+  keeps_sources? : Bool = true,
   loc~ : SourceLoc,
 ) -> Tester {
   let f = {
@@ -315,6 +326,7 @@ pub fn Tester::new(
     scale,
     wants: false,
     frames_on: 0,
+    paced: 0.0,
     wake: -1.0,
     instances: 0,
     ime_active: false,
@@ -384,6 +396,7 @@ pub fn Tester::new(
     dark,
     inset: window_inset,
     full: false,
+    buttons_down: (0.0, 0.0),
     window_corner,
     window_corners,
     font_scale: 1.0,
@@ -391,6 +404,8 @@ pub fn Tester::new(
     nav_said: "",
     a11y: false,
     a11y_said: "",
+    a11y_told: A11yMirror::new(),
+    a11y_held: 0,
     env: Map::from_array(env),
     app_version,
     notices: [],
@@ -421,6 +436,7 @@ pub fn Tester::new(
     marks_next: None,
     marks_by_hand: false,
     rows_on_pixels: false,
+    keeps_sources,
     shares: [],
     perf: -1,
     perf_sets: [],
@@ -477,12 +493,12 @@ pub fn Tester::new(
   // (each frame painted alone or of its looks alone built whole after it and the two compared: tester_looks.mbt)
   frame_look.val = Some(looks_looked)
   // (each shot taken kept, what it says, how big a picture it makes and what it drew: Tester::shot_drawn)
-  shot_watch.val = Some(fn(c, node, s) {
-    let n = c.nodes[node]
-    f.shots.push(c.shot_words(node))
-    let sc = if s.scale > 0.0 { s.scale } else { c.scale }
-    f.shot_sizes.push(((n.fw * sc).round().to_int(), (n.fh * sc).round().to_int()))
-    f.shot_drawn.push(shot_drawn_of(s.inst, s.ninst, n.x, n.y))
+  shot_watch.val = Some(fn(words, s) {
+    let (x, y, w, h) = s.rect
+    f.shots.push(words)
+    let sc = if s.scale > 0.0 { s.scale } else { g().scale }
+    f.shot_sizes.push(((w * sc).round().to_int(), (h * sc).round().to_int()))
+    f.shot_drawn.push(shot_drawn_of(s.inst, s.ninst, x, y))
   })
   corners_hold.val = corners_held
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
@@ -490,6 +506,7 @@ pub fn Tester::new(
   looks_made_at.val = loc.to_string()
   words_over_begin(loc.to_string(), words_over_held)
   rows_steady_begin(loc.to_string(), words_over_held)
+  sizes_steady_begin(loc.to_string(), words_over_held)
   seen_whole.val = ""
   said_log.on = false
   frame_said.val = None
@@ -517,8 +534,8 @@ pub fn Tester::new(
     Some(make) => set_view_app(make, around=view)
     None => set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
   }
-  let (period, between) = test_frame_period()
-  let t = { fake: f, w, h, frames: 0, seed, origin: time, period, times: [], between, host_frames: false, each: None, before }
+  let between = test_frames_between()
+  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, motion: test_motion_judged(loc.to_string()), host_frames: false, each: None, before }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
   // there; else the display's first frame after `time`
   match run.bind(run_first_frame) {
@@ -645,14 +662,64 @@ pub fn Tester::finish_all(self : Tester) -> Unit {
 }
 
 ///|
-/// The display's frame period a Tester starts with, and whether run_for draws the display's frames on the way: by
-/// default frame_period_default and none (run_for goes straight to its end); MBUI_TEST_FPS (frames a second) that
-/// rate's, each drawn: a run of the tests at a frame rate, which must come out the same (scripts/fps_check.sh).
-fn test_frame_period() -> (Double, Bool) {
-  let fps = @hostapi.env("MBUI_TEST_FPS")
-  match (try Some(@json.parse(fps)) catch { _ => None }) {
-    Some(Number(n, ..)) if n > 0.0 => (1000.0 / n, true)
-    _ => (frame_period_default, false)
+/// Whether how what moves goes from frame to frame is judged on the frame being drawn (words_over.mbt, rows_steady.mbt,
+/// sizes_steady.mbt: a step, a dead stop, words over words): on a display's own, 60 a second or more, and not on a
+/// frame of a run at a rate (MBUI_TEST_FPS, scripts/fps_check.sh), whose frames are not the default run's. Such a run holds only that what a
+/// test asserts at its moments is the same however many frames came between; its judging is the default run's, on the
+/// same frames (the user, 2026-11-09: 7/24 帧只比结果；fps 跑法只比结果，平滑度另开一条线).
+/// A run that judges motion (MBUI_TEST_MOTION, test_motion_judged) judges those too, at a display's rate (60 a second
+/// or more): every frame a host at that rate draws while something moves.
+pub fn Tester::judges_motion(self : Tester) -> Bool {
+  if self.between > 0.0 {
+    // (a run at a rate: none of its frames where it holds results only, its other frames (an input's, what is due)
+    // not the default run's either; every one where it judges motion)
+    self.motion != Results && self.between <= frame_period_default + 1.0e-9 && self.period <= frame_period_default + 1.0e-9
+  } else {
+    self.period <= frame_period_default + 1.0e-9
+  }
+}
+
+///|
+/// Whether this test program runs at a rate (MBUI_TEST_FPS, scripts/fps_check.sh): frames drawn on run_for's way. A
+/// test that walks its frames itself (`frame()`, the display's at any rate) to judge how what moves goes from frame to
+/// frame (send_steady_wbtest.mbt) is the default run's alone: at a rate it draws the very same frames and would only
+/// repeat itself (the user, 2026-11-09: 逐帧平滑度测试只在默认帧率跑).
+pub fn test_at_a_rate() -> Bool {
+  test_frames_between() > 0.0
+}
+
+///|
+/// How far apart the frames motion is judged on are (ms): the display's, or a run's that judges motion on its frames
+/// on run_for's way, closer (Tester::judges_motion).
+fn Tester::motion_period(self : Tester) -> Double {
+  if self.motion != Results && self.between > 0.0 && self.between < self.period {
+    self.between
+  } else {
+    self.period
+  }
+}
+
+///|
+/// What a run at a frame rate holds of a motion (test_motion_judged): only results, the default's; how it goes frame to
+/// frame on run_for's way too, a fault failing its test; or that, each fault said and none failing.
+pub enum MotionJudged {
+  Results
+  Judge
+  Count
+} derive(Eq)
+
+///|
+/// The files whose Testers a run that counts motion only counts (test_motion_judged), not judges.
+// kept across runs: said once as a test program starts (its packages' `init`)
+let motion_counted_files : Set[String] = Set::new()
+
+///|
+/// The files whose Testers still show faults of how what moves goes at 60 or 120 a second (MBUI_TEST_MOTION `count`,
+/// what CI's runs counted): only counted there, every other file judged. Said by a test package as it starts
+/// (`fn init`); only shrinks: a file mended to none leaves the list.
+pub fn motion_counted(files : Array[String]) -> Unit {
+  for f in files {
+    motion_counted_files.add(f)
   }
 }
 
@@ -840,11 +907,22 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   }
   self.fake_pages_run()
   on_frame(self.w, self.h, self.fake.scale, if shown > at { shown } else { at })
+  // (a bench's measured frame ends here: what follows is the Tester's own checks of it, which a device runs not)
+  bench_frame_ends()
+  self.hold_a11y_whole()
   self.frames = self.frames + 1
   // (each box's presses said to be another's that one's to take, where the box is: presses.mbt)
   g().check_press_owners()
-  self.hold_words_over()
-  self.hold_rows_steady()
+  // (how what moves goes from frame to frame, judged on a display's own frames: Tester::judges_motion)
+  if self.judges_motion() {
+    self.hold_words_over()
+    self.hold_rows_steady()
+    self.hold_sizes_steady()
+  } else if !words_over.held && !self.on_way && self.period <= frame_period_default + 1.0e-9 {
+    // (where a test does not hold the rule but reads which frames show words over words: kept on a run at a rate's
+    // frames as on the default's, but for those on run_for's way)
+    self.hold_words_over()
+  }
   self.hold_seen_whole_now()
   self.hold_corners()
   match self.each {
@@ -935,6 +1013,15 @@ pub let input_step_ms : Double = 1000.0 / 60.0
 pub fn Tester::wheel(self : Tester, x : Double, y : Double, dy : Double) -> Unit {
   finger_wheel(x, y, 0.0, dy, 0)
   self.drawn_now()
+}
+
+///|
+/// What the hand does through what a press runs, done here by the test straight (`f`: a panel closed by the call its ×
+/// makes): taken as the hand's at this moment, as a press is (rows_steady.mbt: what the rows do after it is its answer).
+pub fn Tester::by_hand(self : Tester, f : () -> Unit) -> Unit {
+  ignore(self)
+  rows_steady_hand()
+  f()
 }
 
 ///|
@@ -1825,6 +1912,16 @@ pub fn Tester::hold_drag(
 }
 
 ///|
+/// The finger held down (Tester::hold_drag) moved on to (x, y), a gesture's move later (input_step_ms), drawn as it
+/// comes: one frame.
+pub fn Tester::hold_move(self : Tester, x : Double, y : Double) -> Unit {
+  let at = self.fake.time + input_step_ms
+  self.fake.time = at
+  finger(1, x, y)
+  self.frame_at(at)
+}
+
+///|
 /// The finger let go at (x, y).
 pub fn Tester::release(self : Tester, x : Double, y : Double) -> Unit {
   finger(2, x, y)
@@ -2017,7 +2114,8 @@ pub fn Tester::drawn_rect_corners(
 
 ///|
 /// The shadows drawn in the last frame (a blurred shape, kind 2): (x, y, w, h, its corner, its blur, colour
-/// RRGGBBAA with its opacity applied).
+/// RRGGBBAA with its opacity applied). One of no opacity left (under half a step of 255) draws nothing and is none: a
+/// shadow's last frame as what casts it goes, the frame its card was gone in.
 pub fn Tester::drawn_shadows(self : Tester) -> Array[(Double, Double, Double, Double, Double, Double, Int64)] {
   ignore(self)
   let c = g()
@@ -2030,7 +2128,9 @@ pub fn Tester::drawn_shadows(self : Tester) -> Array[(Double, Double, Double, Do
         (ch(c.inst[b + 9]) << 16) |
         (ch(c.inst[b + 10]) << 8) |
         ch(c.inst[b + 11])
-      out.push((c.inst[b], c.inst[b + 1], c.inst[b + 2], c.inst[b + 3], c.inst[b + 4], c.inst[b + 7], color))
+      if (color & 0xFFL) != 0L {
+        out.push((c.inst[b], c.inst[b + 1], c.inst[b + 2], c.inst[b + 3], c.inst[b + 4], c.inst[b + 7], color))
+      }
     }
   }
   out
@@ -2761,8 +2861,9 @@ pub fn Tester::tab(self : Tester, back? : Bool = false) -> Unit {
 /// The semantics tree as it is read now (Ctx::semantics_tree): the old views' as the last frame built them, the window's
 /// tree's nodes as they say they are now.
 pub fn Tester::semantics(self : Tester) -> Array[SemNode] {
-  ignore(self)
-  g().semantics_tree()
+  let tree = g().semantics_tree()
+  self.hold_named(tree)
+  tree
 }
 
 ///|
@@ -2773,30 +2874,159 @@ pub fn Tester::semantics_dump(self : Tester) -> String {
 }
 
 ///|
-/// The nodes of `role` not hidden (under a modal, in a hidden part), labelled `label` exactly unless it is "".
-pub fn Tester::all(self : Tester, role : Role, label? : String = "") -> Array[SemNode] {
-  self.semantics().filter(fn(s) { s.role == role && !s.hidden && (label == "" || s.label == label) })
+/// What a test finds a node of the semantics tree by (Testing Library's queries by role and name, their options):
+/// its role; its name exactly (`label`, "" any) or holding `has`; its state where one is given; in what `within` holds
+/// (one of the tree's, Tester::all's: what it holds, not it).
+pub(all) struct Find {
+  role : Role
+  label : String
+  has : String
+  checked : Check?
+  selected : Bool?
+  expanded : Bool?
+  disabled : Bool?
+  within : SemNode?
 }
 
 ///|
-/// The node of `role` labelled `label` (Testing Library's getByRole with its name, Compose's onNode): the one not
-/// hidden; the test fails when there is none, or more than one.
-pub fn Tester::get(self : Tester, role : Role, label? : String = "") -> SemNode raise {
-  let found = self.all(role, label~)
+/// Whether `s` is what `f` finds (its role, name and state; not where it is).
+fn Find::takes(self : Find, s : SemNode) -> Bool {
+  s.role == self.role &&
+  !s.hidden &&
+  (self.label == "" || s.label == self.label) &&
+  (self.has == "" || s.label.contains(self.has)) &&
+  (self.checked is None || s.check == self.checked) &&
+  (self.selected is None || s.selected.unwrap_or(false) == self.selected.unwrap_or(false)) &&
+  (self.expanded is None || s.expanded == self.expanded) &&
+  (self.disabled is None || Some(s.disabled) == self.disabled)
+}
+
+///|
+/// What `f` finds, said in a line (for what a test fails with).
+fn Find::said(self : Find) -> String {
+  let sb = StringBuilder()
+  sb.write_string(self.role.to_string())
+  if self.label != "" {
+    sb.write_string(" \{self.label.escape()}")
+  }
+  if self.has != "" {
+    sb.write_string(" holding \{self.has.escape()}")
+  }
+  match self.checked {
+    Some(c) => sb.write_string(" checked=\{c}")
+    None => ()
+  }
+  match self.selected {
+    Some(v) => sb.write_string(" selected=\{v}")
+    None => ()
+  }
+  match self.expanded {
+    Some(v) => sb.write_string(" expanded=\{v}")
+    None => ()
+  }
+  match self.disabled {
+    Some(v) => sb.write_string(" disabled=\{v}")
+    None => ()
+  }
+  match self.within {
+    Some(w) => sb.write_string(" within \{w.describe()}")
+    None => ()
+  }
+  sb.to_string()
+}
+
+///|
+/// The nodes not hidden (under a modal, in a hidden part) that `f` finds, in the tree's order.
+fn Tester::found(self : Tester, f : Find) -> Array[SemNode] {
+  let tree = self.semantics()
+  // (in what `within` holds: the nodes after it deeper than it, up to the next as deep or shallower)
+  let (from, until) = match f.within {
+    Some(w) => {
+      let mut at = -1
+      for k, s in tree {
+        if s.id == w.id && s.role == w.role && s.label == w.label && s.rect == w.rect && s.depth == w.depth {
+          at = k
+          break
+        }
+      }
+      if at < 0 {
+        (0, 0)
+      } else {
+        let mut end = at + 1
+        while end < tree.length() && tree[end].depth > tree[at].depth {
+          end = end + 1
+        }
+        (at + 1, end)
+      }
+    }
+    None => (0, tree.length())
+  }
+  let out = []
+  for k in from..<until {
+    if f.takes(tree[k]) {
+      out.push(tree[k])
+    }
+  }
+  out
+}
+
+///|
+/// The nodes of `role` not hidden (under a modal, in a hidden part), named `label` exactly unless it is "", holding
+/// `has` in their names, in the state each of `checked`, `selected`, `expanded`, `disabled` says where it is given, in
+/// what `within` holds where it is (Find).
+pub fn Tester::all(
+  self : Tester,
+  role : Role,
+  label? : String = "",
+  has? : String = "",
+  checked? : Check,
+  selected? : Bool,
+  expanded? : Bool,
+  disabled? : Bool,
+  within? : SemNode,
+) -> Array[SemNode] {
+  self.found({ role, label, has, checked, selected, expanded, disabled, within })
+}
+
+///|
+/// The node of `role` named `label` (Testing Library's getByRole with its name, Compose's onNode; the rest of what
+/// Tester::all takes too): the one not hidden; the test fails when there is none, or more than one.
+pub fn Tester::get(
+  self : Tester,
+  role : Role,
+  label? : String = "",
+  has? : String = "",
+  checked? : Check,
+  selected? : Bool,
+  expanded? : Bool,
+  disabled? : Bool,
+  within? : SemNode,
+) -> SemNode raise {
+  let f : Find = { role, label, has, checked, selected, expanded, disabled, within }
+  let found = self.found(f)
   if found.length() == 1 {
     return found[0]
   }
-  let what = if label == "" { "\{role}" } else { "\{role} \{label.escape()}" }
   if found.is_empty() {
-    fail("no \{what} in the semantics tree:\n\{self.semantics_dump()}")
+    fail("no \{f.said()} in the semantics tree:\n\{self.semantics_dump()}")
   }
-  fail("\{found.length()} of \{what} in the semantics tree:\n\{self.semantics_dump()}")
+  fail("\{found.length()} of \{f.said()} in the semantics tree:\n\{self.semantics_dump()}")
 }
 
 ///|
-/// The node of `role` labelled `label`, if there is one not hidden (the first).
-pub fn Tester::query(self : Tester, role : Role, label? : String = "") -> SemNode? {
-  let found = self.all(role, label~)
+/// The node of `role` named `label` (and the rest of what Tester::all takes), if there is one not hidden (the first).
+pub fn Tester::query(
+  self : Tester,
+  role : Role,
+  label? : String = "",
+  has? : String = "",
+  checked? : Check,
+  selected? : Bool,
+  expanded? : Bool,
+  disabled? : Bool,
+  within? : SemNode,
+) -> SemNode? {
+  let found = self.found({ role, label, has, checked, selected, expanded, disabled, within })
   if found.is_empty() {
     None
   } else {
@@ -2805,17 +3035,34 @@ pub fn Tester::query(self : Tester, role : Role, label? : String = "") -> SemNod
 }
 
 ///|
-/// A tap on the middle of the node of `role` labelled `label` (Tester::get), settled.
-pub fn Tester::click(self : Tester, role : Role, label? : String = "") -> Unit raise {
-  let s = self.get(role, label~)
+/// A tap on the middle of the node of `role` named `label` (Tester::get, what it takes), settled.
+pub fn Tester::click(
+  self : Tester,
+  role : Role,
+  label? : String = "",
+  has? : String = "",
+  checked? : Check,
+  selected? : Bool,
+  expanded? : Bool,
+  disabled? : Bool,
+  within? : SemNode,
+) -> Unit raise {
+  let s = self.get(role, label~, has~, checked?, selected?, expanded?, disabled?, within?)
   let (x, y, w, h) = s.rect
   self.tap(x + w / 2.0, y + h / 2.0)
 }
 
 ///|
-/// `action` asked of the node of `role` labelled `label` (as a screen reader asks it), settled.
-pub fn Tester::act(self : Tester, role : Role, action : Action, label? : String = "") -> Unit raise {
-  let s = self.get(role, label~)
+/// `action` asked of the node of `role` named `label` (Tester::get, what it takes) as a screen reader asks it, settled.
+pub fn Tester::act(
+  self : Tester,
+  role : Role,
+  action : Action,
+  label? : String = "",
+  has? : String = "",
+  within? : SemNode,
+) -> Unit raise {
+  let s = self.get(role, label~, has~, within?)
   if s.id == 0 {
     fail("\{s.describe()} takes no action")
   }

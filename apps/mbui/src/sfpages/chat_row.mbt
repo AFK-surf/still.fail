@@ -206,9 +206,10 @@ pub fn chat_row(
         Some(f) => f(r)
         None => {
           // pressed on its state line while the core says which message that is about, nothing in it unread: its
-          // chat goes there as it opens
+          // chat goes there as it opens (Enter on the row, or a reader's Activate, presses the row itself: opened
+          // as it is)
           match item.state_about {
-            Some(seq) if c.clicked_on(id, line) && !item.unread && item.thread is Some(_) =>
+            Some(seq) if c.press_within(line) && !item.unread && item.thread is Some(_) =>
               @sfbase.go_to(r, seq)
             _ => ()
           }
@@ -218,7 +219,8 @@ pub fn chat_row(
       match reader { Some(reader) => @sfbase.handoff_chat_open(r, reader); None => () }
     }
   })
-  if !down && row_held.val.0 == id && !menu_on && !c.clicked(id) {
+  // (let go held, no press of it taken: a press taken let it go as it ran, above)
+  if !down && row_held.val.0 == id && !menu_on {
     row_held.val = (0, false)
     if finger {
       let reader = row_primed.val
@@ -269,7 +271,7 @@ pub fn chat_row(
     spec=if lit_on { @motion.Snap(0.0) } else { @motion.tween(left_fade_ms, ease=Leave) },
   )
   // (the same motion says its end for the row to forget it: no clock read as it is built)
-  if left && !lit_on && lit.over() {
+  if left && !lit_on && lit.over(c) {
     row_left.val = ("", false)
   }
   let draw = fn(tx : Double, apart : Bool) -> Int {
@@ -278,7 +280,7 @@ pub fn chat_row(
       if held || menu_on || (pressed && tx == 0.0 && !found) {
         @sf.alpha(t.p.text, 0.05)
       } else {
-        let share = lit.get()
+        let share = lit.get(c)
         if share > 0.0 {
           @sf.alpha(t.p.selected, share)
         } else if lifted >= 0.0 {
@@ -307,7 +309,7 @@ pub fn chat_row(
     }
     // (in a side column who is in it stands in the row's foot's end corner, placed there by the corner rule; across
     // the whole screen at its second line's end; the row pointed at says when instead)
-    let cornered = at == Side && !shows_time && row_aside_shows(item, lead)
+    let cornered = at != Whole && !shows_time && row_aside_shows(item, lead)
     let place = if apart { @sf.list_more(at) } else { row_last }
     let row_box = c.box(
       style=if lifted_ink > 0.0 { place.then(row_lifted(lifted_ink)) } else { place },
@@ -341,7 +343,7 @@ pub fn chat_row(
               c.box(style=mark_slot, fn() { row_mark(c, key, tone) }) |> ignore
             }
             if renaming {
-              row_rename(c, src, item)
+              row_rename(c, src, item, at)
             } else {
               let title = if item.unread { look.title_unread } else { look.title }
               let named = if item.hidden == Some(true) { item.title + " · " + @sf.t("web-main.filter.hidden") } else { item.title }
@@ -463,9 +465,9 @@ pub fn chat_row(
       // 归档, at the row's top right while a mouse points at it (concentric with the row's corner: @sf.row_corner_keys)
       if archive_key {
         @sf.row_corner_keys(c, fn() {
-          if c.clicked(archive) {
+          c.on_press(archive, fn() {
             archive_row(src, item)
-          }
+          })
           let b = c.box(style=@sf.row_key_box, id=archive, fn() {
             @sf.icon(c, "archive", size=row_icon, color=if c.lit(archive) { t.p.text } else { t.p.muted }) |> ignore
           })
@@ -651,14 +653,14 @@ let row_icon : Double = 16.0
 ///|
 /// A row's menu, from row `id` at (`x`, `y`): 固定 / 取消固定 (a
 /// station from before pins says nothing: none), 重命名, 保留 / 取消保留 (a chat of its own: a thread; pinned, none: a
-/// pin keeps it out of the archive already), 归档; 打开「…」 (one an agent opened: the chat it opened it from), 复制会话链接,
-/// 转到频道 (a thread with an agent), 分享给其他 workspace, 分享图片, 在 Slack／飞书打开 (share_items): two groups, a line
-/// between. Held by a finger, felt as it
-/// opens and from the row (a sheet, or under it); right clicked, at the pointer.
+/// pin keeps it out of the archive already), 归档; 打开「…」 (one an agent opened: the chat it opened it from), 分享…
+/// (chat_menu_items): two groups, a line between. Held by a finger, felt as it opens and from the row (a sheet, or under
+/// it); right clicked, at the pointer.
 fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y : Double) -> Unit {
   // (held by a finger: the press is the menu's, felt; the menu from the row)
   let finger = @sf.menu_held(c, "row")
-  @sf.menu(chat_menu_items(src, item), from=if finger { Of(id) } else { @sf.at_point(x, y) })
+  let from : @sf.Beside = if finger { Of(id) } else { @sf.at_point(x, y) }
+  @sf.menu(chat_menu_items(src, item, share_from=fn() { from }), from~)
   rows.menu_for = @sfbase.row_name(item)
   rows.menu_serial = @sf.last_presented()
 }
@@ -666,8 +668,15 @@ fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y 
 ///|
 /// What a chat's menu offers (a row's, and the "…" of the chat's page, one and the same, 2026-11-06 Peng Xiao: 「这里的...和
 /// 侧边栏右键点击 chat，我感觉需要统一一下」). `page`: the page's own of share_items (chat_extra_items, from its view, which it
-/// has read already), in place of the row's.
-fn chat_menu_items(src : Source, item : ChatItem, page? : Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?] {
+/// has read already), in place of the row's. What shares it or takes it elsewhere (复制会话链接, 接力到频道 for a thread with an
+/// agent, and share_items: 分享给其他 workspace, 分享图片, 在 Slack／飞书打开) is one item, 分享…, its own menu from
+/// `share_from` (where the menu was opened), where there are two or more of them (左子健, 2026-11-09: 菜单有点太多了，只把分享收进一个).
+fn chat_menu_items(
+  src : Source,
+  item : ChatItem,
+  share_from~ : () -> @sf.Beside,
+  page? : Array[@sf.MenuItem?],
+) -> Array[@sf.MenuItem?] {
   let r = row_ref(item)
   let items : Array[@sf.MenuItem?] = []
   match item.pinned {
@@ -787,9 +796,11 @@ fn chat_menu_items(src : Source, item : ChatItem, page? : Array[@sf.MenuItem?]) 
       )
     None => ()
   }
+  // what shares it or takes it elsewhere: one 分享… where there are two or more
+  let shared : Array[@sf.MenuItem?] = []
   let link = @sfbase.chat_link(item.station, item.session)
   if link != "" {
-    items.push(
+    shared.push(
       Some(
         @sf.menu_item_of(@sf.t("web-main.chat.copyLink"), icon="copy", fn() {
           @sfbase.copy_chat_link(item.title, link)
@@ -800,7 +811,7 @@ fn chat_menu_items(src : Source, item : ChatItem, page? : Array[@sf.MenuItem?]) 
   // relayed to a channel: a chat with an agent to go on there
   match item.thread {
     Some(th) if item.agents.length() > 0 =>
-      items.push(
+      shared.push(
         Some(
           @sf.menu_item_of(@sf.t("web-main.relay.action"), icon="arrow-up-right", fn() {
             open_relay(src, r, th, from=Unanchored)
@@ -810,7 +821,7 @@ fn chat_menu_items(src : Source, item : ChatItem, page? : Array[@sf.MenuItem?]) 
     _ => ()
   }
   // shared, a picture of it, it in Slack or Feishu: the page's and a row's alike (share_items)
-  items.append(
+  shared.append(
     match page {
       Some(own) => own
       None =>
@@ -826,6 +837,7 @@ fn chat_menu_items(src : Source, item : ChatItem, page? : Array[@sf.MenuItem?]) 
         )
     },
   )
+  items.append(share_menu(shared, share_from))
   // (no line closing the menu: nothing after the chat's own group)
   if items.last() is Some(None) {
     items.pop() |> ignore
@@ -879,8 +891,8 @@ fn rename(src : Source, item : ChatItem, title : String) -> Unit {
 
 ///|
 /// A row's title as a field (from a mouse's 重命名): Enter saves it (`chat.rename`), Esc or
-/// leaving it lets it be.
-fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
+/// leaving it lets it be; as far in as where its list stands (`at`) has it (rename_box).
+fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem, at : @sf.ListAt) -> Unit {
   let key = "row/rename"
   let whose = @sfbase.row_name(item)
   let press = c.press()
@@ -906,7 +918,7 @@ fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
     stop_rename()
     return
   }
-  c.box(style=rename_box().then(@ui.style(border_color=Data(@sf.theme().p.line_strong))), fn() {
+  c.box(style=rename_box(at).then(@ui.style(border_color=Data(@sf.theme().p.line_strong))), fn() {
     let res = c.editor(
       key,
       font_size=rename_size,
@@ -947,10 +959,16 @@ fn stop_rename() -> Unit {
 /// height's) standing where it is concentric with both (@sf.capsule_in: the row's 18 its distance and its half, 6), as
 /// far from the row's top as from its sides; all four corners alike, not the row's followed in two and its own 6 in the
 /// others (the user, 2026-10-26). Its words its half in from its end, as a capsule field's are (@sf.input's), not 6 in
-/// where the title's were (the user, 2026-10-26: 离首字太近).
-fn rename_box() -> @ui.Style {
+/// where the title's were (the user, 2026-10-26: 离首字太近). Its sides where its list stands (`at`): in a side column a
+/// row's words' (band_pad_in); across the whole screen the ladder's inset, 8, as #3806 (5b8b71713d) made it (the user,
+/// 2026-11-09, asked a phone's search fields back to 12, not this).
+fn rename_box(at : @sf.ListAt) -> @ui.Style {
   let d = @ui.capsule_in(@sf.row_corner, rename_h)
-  let side = @sf.theme().chat_list.band_pad - d
+  let words_in = match at {
+    Side | Tape => @sf.band_pad_in(at)
+    Whole => @sf.corner_inset
+  }
+  let side = words_in - d
   let over = @sf.row_top_in_y - d
   rename_look.then(
     @ui.style(
@@ -1111,17 +1129,17 @@ fn swipe_to_archive(
   let id = c.id(key)
   let width = dmax(c.width, 1.0)
   let off = @motion.anim(c, key, 0.0, global=true)
-  let back = fn(v : Double) { off.animate(0.0, @motion.move_spring, velocity=v) }
+  let back = fn(v : Double) { off.animate(c, 0.0, @motion.move_spring, velocity=v) }
   let going = rows.swiped_off.contains(key)
   match c.drag_of(id) {
     // (gone off already: nothing more to swipe)
     Some(d) if !going => {
       let (dx, _) = d.take_move()
       if dx != 0.0 {
-        off.snap(dclamp(off.get() + dx, -width, 0.0))
+        off.snap(c, dclamp(off.get(c) + dx, -width, 0.0))
       }
       if d.take_end() {
-        let at = off.get()
+        let at = off.get(c)
         let v = d.vx * 1000.0
         if swipe_archives(at, width, d.vx) {
           if busy {
@@ -1133,7 +1151,7 @@ fn swipe_to_archive(
             // off to the left, then archived (no copy of it left behind as it leaves the list: it is out of sight)
             rows.swiped_off[key] = true
             unghost(true)
-            off.animate(-width, @motion.move(), velocity=v)
+            off.animate(c, -width, @motion.move(), velocity=v)
           }
         } else {
           back(v)
@@ -1142,15 +1160,15 @@ fn swipe_to_archive(
     }
     _ => ()
   }
-  let moved = off.get()
+  let moved = off.get(c)
   // gone off: archived (the call once the row has gone, as declared as it set off), drawn off this frame and its place
   // forgotten, so the row asked back (its toast's 撤销) is where it rests; refused, it comes back from off to the left
-  if going && off.over() {
+  if going && off.over(c) {
     rows.swiped_off.remove(key)
-    off.snap(0.0)
+    off.snap(c, 0.0)
     archive_row(src, item, failed=fn() {
       unghost(false)
-      off.snap(-width)
+      off.snap(c, -width)
       back(0.0)
     })
   }
@@ -1213,13 +1231,13 @@ pub fn renaming() -> Bool {
 }
 
 ///|
-/// Esc to a row's title being written in place: let be. Whether there was one.
-pub fn rename_escape(c : @ui.Ctx) -> Bool {
-  if row_renaming.get() == "" {
+/// Esc to a row's title being written in place: let be, the keyboard let go (`blur`). Whether there was one.
+pub fn rename_escape(blur : () -> Unit) -> Bool {
+  if row_renaming.untracked() == "" {
     return false
   }
   stop_rename()
-  c.blur()
+  blur()
   true
 }
 
@@ -1233,14 +1251,20 @@ pub fn open_chat_menu(
   from~ : @sf.Beside,
   along? : @ui.Along = Start,
 ) -> Unit {
-  @sf.menu(chat_menu_of(src, scope, r, extra), from~, along~)
+  @sf.menu(chat_menu_of(src, scope, r, extra, share_from=fn() { from }), from~, along~)
 }
 
 ///|
 /// What the chat in view's "…" offers: what a row's menu offers (chat_menu_items) for the row the core's list has of
 /// it, else (an archived one, one it does not list) its link alone; `extra` the page's own (chat_extra_items). Apart
 /// from showing them: the system's bars take them as a menu of their own (rail_native.mbt bar_chat).
-pub fn chat_menu_of(src : Source, scope : String, r : ChatRef, extra : Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?] {
+pub fn chat_menu_of(
+  src : Source,
+  scope : String,
+  r : ChatRef,
+  extra : Array[@sf.MenuItem?],
+  share_from~ : () -> @sf.Beside,
+) -> Array[@sf.MenuItem?] {
   let mut found : ChatItem? = None
   match @sfbase.chats_of(src, scope, "all").0 {
     Some(view) =>
@@ -1267,12 +1291,12 @@ pub fn chat_menu_of(src : Source, scope : String, r : ChatRef, extra : Array[@sf
     }
   }
   let items : Array[@sf.MenuItem?] = match found {
-    Some(item) => chat_menu_items(src, item, page=extra)
+    Some(item) => chat_menu_items(src, item, share_from~, page=extra)
     None => {
       let link = @sfbase.chat_link(r.station, r.session)
-      let items : Array[@sf.MenuItem?] = []
+      let shared : Array[@sf.MenuItem?] = []
       if link != "" {
-        items.push(
+        shared.push(
           Some(
             @sf.menu_item_of(@sf.t("web-main.chat.copyLink"), icon="copy", fn() {
               @sfbase.copy_chat_link(r.title, link)
@@ -1280,11 +1304,27 @@ pub fn chat_menu_of(src : Source, scope : String, r : ChatRef, extra : Array[@sf
           ),
         )
       }
-      items.append(extra)
-      items
+      shared.append(extra)
+      share_menu(shared, share_from)
     }
   }
   items
+}
+
+///|
+/// What shares a chat or takes it elsewhere (`shared`), in its menu: one item, 分享…, its own menu from `share_from`, where
+/// there are two or more; else as they are.
+fn share_menu(shared : Array[@sf.MenuItem?], share_from : () -> @sf.Beside) -> Array[@sf.MenuItem?] {
+  if shared.length() < 2 {
+    return shared
+  }
+  [
+    Some(
+      @sf.menu_item_of(@sf.t("web-main.chat.share"), icon="share", fn() {
+        @sf.menu(shared, from=share_from(), title=@sf.t("web-main.chat.share.title"))
+      }),
+    ),
+  ]
 }
 
 ///|

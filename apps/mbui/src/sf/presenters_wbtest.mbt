@@ -59,7 +59,7 @@ fn beside_of(from : Anchor) -> Beside {
   match from {
     Anchor::Of(id) => Of(id)
     Anchor::At(x, y, w, h) => At(x, y, w, h)
-    Unanchored => abort("a menu or a pick is opened beside what opened it")
+    Unanchored | Node(_) => abort("a menu or a pick is opened beside what opened it")
   }
 }
 
@@ -273,11 +273,15 @@ test "a long pick with a mouse at Large: its search over it finds by the words, 
   assert_eq(presented_how, [AsPopover])
   assert_true(t.find("第2项") is Some(_))
   t.type_text("第11")
+  // (what no longer matches closing its room, gone once it has)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("第2项") is None)
   assert_true(t.find("第11项") is Some(_))
   t.type_text("x")
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("common.noMatch") is Some(_))
   t.backspace()
+  t.run_for(@ui.move_most_ms)
   assert_true(t.key_named("enter"))
   assert_eq(chosen.val, "c11")
   assert_true(!presenting())

@@ -12,6 +12,9 @@ import { Store } from "../src/store/store.ts";
 function fixture() {
   const dir = mkdtempSync(join(tmpdir(), "session-up-jobs-"));
   const store = Store.open(join(dir, "stillfail.db")), db = store.db;
+  for (const row of db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'workspace_up_%'").all() as { name: string }[])
+    db.exec(`DROP TRIGGER ${row.name}`);
+  db.exec("DROP TABLE workspace_up_session_replaced; DROP TABLE workspace_up_sessions; DROP TABLE workspace_up_meta");
   for (const row of db.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'session_up_job_%'").all() as { name: string }[])
     db.exec(`DROP TRIGGER ${row.name}`);
   db.exec("DROP TABLE session_up_job_rows; DROP TABLE session_up_job_replaced; DROP TABLE session_up_job_scopes; DROP TABLE session_up_job_meta");

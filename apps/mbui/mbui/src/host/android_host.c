@@ -3,6 +3,7 @@
 // GLES3 renderer and forwards between Java and the MoonBit callbacks. All
 // MoonBit code runs on the GL thread. Built by scripts/android.sh.
 #include <sys/resource.h>
+#include <dlfcn.h>
 #include <jni.h>
 #include <GLES3/gl3.h>
 #include <android/log.h>
@@ -41,7 +42,7 @@ static jclass host_cls, text_cls, images_cls, login_cls, picks_cls, views_cls, p
 static jmethodID m_reduce_motion;
 static jmethodID m_text_menu;
 static jmethodID m_posted;
-static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
+static jmethodID m_request_frame, m_wake_after, m_frames_paced, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_glyph_put, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes, m_pk_info,
     m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key, m_v_open, m_v_place, m_v_close,
@@ -91,6 +92,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_request_frame = (*env)->GetStaticMethodID(env, host_cls, "requestFrame", "()V");
   m_posted = (*env)->GetStaticMethodID(env, host_cls, "posted", "()V");
   m_wake_after = (*env)->GetStaticMethodID(env, host_cls, "wakeAfter", "(D)V");
+  m_frames_paced = (*env)->GetStaticMethodID(env, host_cls, "framesPaced", "(D)Z");
   m_set_ime = (*env)->GetStaticMethodID(env, host_cls, "setIme", "(ZDDDDLjava/lang/String;II)V");
   m_clipboard = (*env)->GetStaticMethodID(env, host_cls, "clipboardSet", "(Ljava/lang/String;)V");
   m_text_menu = (*env)->GetStaticMethodID(env, host_cls, "textMenu", "(ZDDDDI)V");
@@ -380,11 +382,28 @@ void mb_render_init_offscreen(double w, double h, double scale) {
 }
 
 void mb_render_draw_timed(const double *inst, int32_t count, double r, double g, double b, double *out) {
+  // the GPU's time where the driver measures it (GL_EXT_disjoint_timer_query's GL_TIME_ELAPSED_EXT)
+  static int timer = -1;
+  static GLuint q;
+  if (timer < 0) {
+    const char *ext = (const char *)glGetString(GL_EXTENSIONS);
+    timer = ext && strstr(ext, "GL_EXT_disjoint_timer_query") != NULL;
+    if (timer) glGenQueries(1, &q);
+  }
   double t0 = mb_host_now();
+  if (timer) glBeginQuery(0x88BF, q);
   mb_host_present((double *)inst, count, r, g, b);
+  if (timer) glEndQuery(0x88BF);
   glFinish();
   out[0] = mb_host_now() - t0;
   out[1] = -1;
+  if (timer) {
+    GLuint ns = 0;
+    glGetQueryObjectuiv(q, GL_QUERY_RESULT, &ns);
+    GLint disjoint = 0;
+    glGetIntegerv(0x8FBB, &disjoint);
+    if (!disjoint) out[1] = ns / 1e6;
+  }
 }
 
 // the images decoded meanwhile uploaded here (Images.pump), then a while for more
@@ -732,6 +751,16 @@ void mb_host_wake_after(double ms) {
   (*env)->CallStaticVoidMethod(env, host_cls, m_wake_after, ms);
 }
 
+// A frame for what moves on by the clock that needs only `hz` frames a second (@hostapi.frames_paced, said in the
+// frame): MBView's to wake for and to say of the display (Host.framesPaced); the next vsync's, as any frame asked for,
+// where it paces none (the display's rate no more than it), in a run to a declared moment (its frames are its clock's:
+// MBView's shotFrame) and where the frame asks for one besides.
+void mb_host_frames_paced(double hz) {
+  JNIEnv *env = env_();
+  if (own_clock || want_frame || !(*env)->CallStaticBooleanMethod(env, host_cls, m_frames_paced, hz))
+    mb_host_request_frame();
+}
+
 void mb_host_font_metrics(double size, int32_t weight, int32_t style, double *out) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, text_cls, m_metrics, size, weight, style, small_buf);
@@ -884,8 +913,8 @@ void mb_host_clipboard_secret_off(void) {
   (*env)->CallStaticVoidMethod(env, host_cls, m_clipboard_secret_off);
 }
 
-// The last lines the program said that a crash's report says again (wasm_shell.c report_depth): its PERF lines, each kept
-// as it is said, the oldest let go
+// The last lines the program said that a crash's report says again (wasm_shell.c report_depth): its PERF lines and its
+// HANG lines (src/ui/journal.mbt), each kept as it is said, the oldest let go
 #define MB_RECENT 12
 static char mb_recent[MB_RECENT][240];
 static int mb_recent_at, mb_recent_n;
@@ -899,7 +928,9 @@ static void recent_keep(moonbit_string_t s) {
   if (n < 4) return;
   int perf = 0;
   for (int32_t k = 0; k + 3 < n && k < 16; k++)
-    if (s[k] == 'P' && s[k + 1] == 'E' && s[k + 2] == 'R' && s[k + 3] == 'F') perf = 1;
+    if ((s[k] == 'P' && s[k + 1] == 'E' && s[k + 2] == 'R' && s[k + 3] == 'F') ||
+        (s[k] == 'H' && s[k + 1] == 'A' && s[k + 2] == 'N' && s[k + 3] == 'G'))
+      perf = 1;
   if (!perf) return;
   char *out = mb_recent[mb_recent_at];
   int32_t m = n < (int32_t)sizeof mb_recent[0] - 1 ? n : (int32_t)sizeof mb_recent[0] - 1;
@@ -998,6 +1029,54 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   jint r = (*env)->CallStaticIntMethod(env, host_cls, m_drive, (jint)kind, s);
   (*env)->DeleteLocalRef(env, s);
   return r;
+}
+
+// Input to the screen measured (Latency.java): the frame the next swap presents, and what the system says of it
+// (EGL_ANDROID_get_frame_timestamps: when the GPU finished it, when the compositor latched it, composited it, and when
+// the display showed it, CLOCK_MONOTONIC's ns as System.nanoTime's; -1 none, -2 not yet). EGL is GLSurfaceView's,
+// in the process already: its calls looked up there, nothing linked for them. A frame with no id says why: -2 no EGL,
+// -3 no such extension, -4 the surface keeps no timestamps, -5 the system gave no id.
+typedef unsigned long long lat_u64;
+static unsigned (*lat_next_id)(void *, void *, lat_u64 *);
+static unsigned (*lat_times)(void *, void *, lat_u64, int, const int *, long long *);
+static void *(*lat_display)(void);
+static void *(*lat_surface)(int);
+static unsigned (*lat_attrib)(void *, void *, int, int);
+static void *lat_kept_on;
+
+JNIEXPORT jlong JNICALL Java_dev_mbui_Native_latencyFrame(JNIEnv *env, jclass c) {
+  if (!lat_next_id) {
+    void *egl = dlopen("libEGL.so", RTLD_NOW);
+    if (!egl) return -2;
+    void *(*proc)(const char *) = (void *(*)(const char *))dlsym(egl, "eglGetProcAddress");
+    lat_display = (void *(*)(void))dlsym(egl, "eglGetCurrentDisplay");
+    lat_surface = (void *(*)(int))dlsym(egl, "eglGetCurrentSurface");
+    lat_attrib = (unsigned (*)(void *, void *, int, int))dlsym(egl, "eglSurfaceAttrib");
+    if (!proc || !lat_display || !lat_surface || !lat_attrib) return -2;
+    lat_times = (unsigned (*)(void *, void *, lat_u64, int, const int *, long long *))proc("eglGetFrameTimestampsANDROID");
+    lat_next_id = (unsigned (*)(void *, void *, lat_u64 *))proc("eglGetNextFrameIdANDROID");
+    if (!lat_times || !lat_next_id) {
+      lat_next_id = NULL;
+      return -3;
+    }
+  }
+  void *d = lat_display(), *s = lat_surface(0x3059 /* EGL_DRAW */);
+  // (EGL_TIMESTAMPS_ANDROID: kept for the surface's frames from now on)
+  if (s != lat_kept_on) {
+    if (!lat_attrib(d, s, 0x3430, 1)) return -4;
+    lat_kept_on = s;
+  }
+  lat_u64 id;
+  return lat_next_id(d, s, &id) ? (jlong)id : -5;
+}
+
+JNIEXPORT jint JNICALL Java_dev_mbui_Native_latencyTimes(JNIEnv *env, jclass c, jlong id, jlongArray out) {
+  // rendering complete, composition latch, first composition start, display present
+  static const int names[] = {0x3435, 0x3436, 0x3437, 0x343A};
+  long long v[4];
+  if (!lat_times || !lat_times(lat_display(), lat_surface(0x3059), (lat_u64)id, 4, names, v)) return 0;
+  (*env)->SetLongArrayRegion(env, out, 0, 4, (const jlong *)v);
+  return 1;
 }
 
 // MainActivity sets the intent's `env` extras as the process's environment before the app starts. A release build
@@ -1747,6 +1826,7 @@ int32_t mb_host_window_inset(void) { return 0; }
 // A window filling the screen (@hostapi.full_screen): not one of this host's.
 int32_t mb_host_full_screen(void) { return 0; }
 void mb_host_set_full_screen(int32_t on) { (void)on; }
+void mb_host_window_buttons_down(double by, double ms) { (void)by; (void)ms; }
 // How round the window's corners are (@hostapi.window_corner): the app fills the screen, whose own corners (40 and
 // more) are rounder than anything by them could follow within the corner rule's ranges: said as none.
 double mb_host_window_corner(void) { return 0; }

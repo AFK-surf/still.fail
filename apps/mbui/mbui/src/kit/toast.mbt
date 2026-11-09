@@ -236,7 +236,7 @@ pub fn toast_look(c : @ui.Ctx, s : ToastState, action : () -> Unit, close : () -
   )
   // (coming in, faded and risen; going, slid away: as it is drawn, nothing built for it)
   c.look_by(b, fn() {
-    let k = dmax(0.0, dmin(1.0, s.t.get()))
+    let k = dmax(0.0, dmin(1.0, s.t.get(c)))
     @ui.look(alpha=k, dx=(1.0 - k) * s.away, dy=(1.0 - k) * 12.0)
   })
 }

@@ -285,10 +285,10 @@ pub fn viz_frame(
     if tall.target() != said {
       match c.row_way() {
         Some(way) => on_row_way(c, tall, said, way)
-        None => tall.animate(said, @motion.move(over=(said - tall.get()).abs()))
+        None => tall.animate(c, said, @motion.move(over=(said - tall.get(c)).abs()))
       }
     }
-    let h = tall.get()
+    let h = tall.get(c)
     // till it has drawn itself, its place as while its file came (the line's grey, breathing, its corners the
     // placeholder's, the view's hole cut to them): not an empty gap (the user, 2026-10-29)
     let waiting = !f.shown || !f.view.host_done()
@@ -337,9 +337,9 @@ fn viz_reveal(c : @ui.Ctx, f : VizFrame, w : Double, h : Double, waited : (Doubl
     return
   }
   if a.target() == 0.0 {
-    a.animate(1.0, @motion.tween(viz_reveal_ms, ease=Linear))
+    a.animate(c, 1.0, @motion.tween(viz_reveal_ms, ease=Linear))
   }
-  let p = a.get()
+  let p = a.get(c)
   if p >= 1.0 {
     f.reveal = None
     return
@@ -655,7 +655,7 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
     Some(Ok((html, state))) => {
       // (while this one is open, built again or not)
       let native = @sf.native_over_up(v.name, alive=fn() {
-        match @signals.untracked(fn() { viz_full.get() }) {
+        match viz_full.untracked() {
           Some(now) => physical_equal(now, v)
           None => false
         }

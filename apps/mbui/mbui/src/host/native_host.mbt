@@ -56,6 +56,11 @@ impl @hostapi.Host for Native with set_full_screen(_, on) {
 }
 
 ///|
+impl @hostapi.Host for Native with window_buttons_down(_, by, ms) {
+  window_buttons_down(by, ms)
+}
+
+///|
 impl @hostapi.Host for Native with window_corner(_) {
   window_corner()
 }
@@ -217,6 +222,11 @@ let layers_said : Ref[Int?] = Ref(None)
 ///|
 impl @hostapi.Host for Native with request_frame(_) {
   request_frame()
+}
+
+///|
+impl @hostapi.Host for Native with frames_paced(_, hz) {
+  frames_paced(hz)
 }
 
 ///|

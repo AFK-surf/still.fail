@@ -4,7 +4,9 @@
 // its last one leaves; its value stays cached until then. `set` stores a value and schedules its emission; emissions
 // are coalesced over COALESCE_MS, one window for all topics, so topics changed together go out together, in the order
 // they changed; a topic's first value goes out on the next turn instead. A subscriber's first message is the whole
-// value, the next ones only what changed (delta.ts), and an unchanged value sends nothing. Code inside the core can
+// value, the next ones only what changed (delta.ts), and an unchanged value sends nothing; one subscribed `from` another
+// of its subscriptions to the same topic (a list's first rows, more of them asked now) gets its first value as what
+// changed from that one's, not the whole of it again (#firstFrom). Code inside the core can
 // `watch` a topic; a derived topic is `invalidate`d and computed by its source when its emission goes out. While no page
 // is in view (`inView`), what changed is kept from the subscribers and goes out as one difference per topic once one is.
 import { Effect } from "effect";
@@ -128,6 +130,8 @@ export class Store {
   readonly runner: Runner;
   readonly #topics = new Map<string, Entry>();
   readonly #subscriptions = new Map<string, Topic>();
+  /// A keyed subscriber's `from` (`client/id` to the id of the client's other subscription), till its first value goes.
+  readonly #from = new Map<string, RequestId>();
   #source: Source | null = null;
   #idleCount = 0;
   #watchCount = 0;
@@ -197,10 +201,11 @@ export class Store {
   }
 
   /// Adds a subscriber; sends the cached value at once if there is one, and starts the topic if it was not live.
-  subscribe(client: ClientId, id: RequestId, topic: Topic, keyed = false): void {
+  subscribe(client: ClientId, id: RequestId, topic: Topic, keyed = false, from?: RequestId): void {
     this.unsubscribe(client, id);
     const key = topicKey(topic);
     this.#subscriptions.set(`${client}/${id}`, topic);
+    if (keyed && from !== undefined) this.#from.set(`${client}/${id}`, from);
     let entry = this.#topics.get(key);
     const started = entry === undefined;
     if (!entry) {
@@ -219,7 +224,7 @@ export class Store {
       this.#firstPending.set(key, entry);
       this.#wakePending(true);
     }
-    if (cached !== undefined) this.host.emit(client, to(whole(cached), id));
+    if (cached !== undefined) this.host.emit(client, this.#firstFrom(client, id, topic, cached) ?? to(whole(cached), id));
     else {
       if (entry.waiting === true) this.host.emit(client, { id, waiting: true });
       if (entry.opening === undefined && this.#tracer !== null && OPENED.has(topic.topic)) {
@@ -308,6 +313,7 @@ export class Store {
     const topic = this.#subscriptions.get(at);
     if (!topic) return;
     this.#subscriptions.delete(at);
+    this.#from.delete(at);
     const entry = this.#topics.get(topicKey(topic));
     if (!entry) return;
     entry.subscribers = entry.subscribers.filter(([c, i]) => !(c === client && i === id));
@@ -719,8 +725,31 @@ export class Store {
     for (const w of changed) w();
     for (const [client, id, keyed] of subscribers) {
       const o = keyed ? keyedOut : out;
-      if (o) this.host.emit(client, to(o, id));
+      // (its first value: what changed from its `from`'s, where it has one)
+      const first = sent === undefined && keyed ? this.#firstFrom(client, id, topic, value) : null;
+      if (first) this.host.emit(client, first);
+      else if (o) this.host.emit(client, to(o, id));
     }
+  }
+
+  /// The first value `value` of topic `topic` going to subscriber `id` of `client` as what changed from what its
+  /// `from` has: that subscription's topic's value as last sent, which the client holds, the messages to it going in
+  /// order. None when it has no `from`, or that one is gone, has another topic's name, has no value, or the difference
+  /// would be heavier than the value: it goes whole then. Its `from` is forgotten either way, its first value gone.
+  #firstFrom(client: ClientId, id: RequestId, topic: Topic, value: Value): CoreMessage | null {
+    const at = `${client}/${id}`;
+    const from = this.#from.get(at);
+    if (from === undefined) return null;
+    this.#from.delete(at);
+    const other = this.#subscriptions.get(`${client}/${from}`);
+    if (!other || other.topic !== topic.topic || !("ok" in value)) return null;
+    const entry = this.#topics.get(topicKey(other));
+    const base = entry?.sent;
+    if (!entry || !base || !("ok" in base) || !entry.subscribers.some(([c, i, k]) => c === client && i === from && k)) return null;
+    const spec = specOf(topic);
+    if (!spec) return null;
+    const ops = diffKeyed(base.ok, value.ok, spec);
+    return heavier(ops, value.ok) ? null : { id, delta: ops, from };
   }
 
   #evict(topic: Topic, idle: number): void {

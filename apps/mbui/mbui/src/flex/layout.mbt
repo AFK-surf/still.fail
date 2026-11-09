@@ -448,6 +448,25 @@ pub fn measured_height(node : Node, width : Double) -> Double {
 }
 
 ///|
+/// How wide `node` comes to with no bound on its width, `height` tall where that is known (undef: as tall as it comes
+/// to), as its subtree stands since the last compute(): measured only, as measured_height is.
+pub fn measured_width(node : Node, height : Double) -> Double {
+  let b = box_of(node.style, undef, height)
+  let h = or_else(b.h, height)
+  size_node(node, undef, h, undef, h, undef, h, false)
+}
+
+///|
+/// Whether the room a node is told (its `room`'s measure, layout_flex) is the room it is laid out in, not one it is
+/// measured in first.
+pub fn performing() -> Bool {
+  performing_now.val
+}
+
+///|
+let performing_now : Ref[Bool] = { val: false }
+
+///|
 /// The offset of a relatively positioned box from its insets.
 fn inset_offset(s : Style, cb_w : Double, cb_h : Double, horizontal : Bool) -> Double {
   if s.position != Relative {
@@ -549,8 +568,9 @@ fn size_node(
       node.p_ok &&
       same(node.p_kw, kw) &&
       same(node.p_kh, kh) &&
-      same(node.p_cbw, cb_w) &&
-      same(node.p_cbh, cb_h) {
+      laid_in_cb(node, kw, kh, cb_w, cb_h) {
+      node.p_cbw = cb_w
+      node.p_cbh = cb_h
       node.skip_gen = generation.val
       counters[1] = counters[1] + 1
       out_h.val = node.p_h
@@ -639,6 +659,26 @@ fn size_node(
 }
 
 ///|
+/// Whether `node`'s last layout, asked `kw` × `kh` again, holds in the containing block `cb_w` × `cb_h`: the one it was
+/// laid out in, or, given both its sizes, another its box takes nothing from (of_cb_w, of_cb_h), as a size measured in
+/// one holds in another (size_node). Given both, nothing else of its layout reads the containing block: what it holds
+/// is laid out in its own content box, its insets are moved by what holds it, what is absolute in it by its own
+/// containing block (not given them, a root, the containing block is the room it has). A list's column growing as a row
+/// comes in gives every row in it a containing block as tall, which none of them reads.
+fn laid_in_cb(node : Node, kw : Double, kh : Double, cb_w : Double, cb_h : Double) -> Bool {
+  let w_same = same(node.p_cbw, cb_w)
+  let h_same = same(node.p_cbh, cb_h)
+  if w_same && h_same {
+    return true
+  }
+  if !known(kw) || !known(kh) {
+    return false
+  }
+  let b = box_for(node, cb_w, cb_h)
+  (w_same || !b.of_cb_w) && (h_same || !b.of_cb_h)
+}
+
+///|
 fn size_uncached(
   node : Node,
   kw : Double,
@@ -650,6 +690,21 @@ fn size_uncached(
   perform : Bool,
 ) -> Double {
   let s = node.style
+  // an item coming or going: as tall as its way has got of what it comes to (as its style says, or what it holds comes
+  // to), what it holds laid out whole from its top in that (Style's come_*); not where what lays it out gives it its
+  // height
+  if known(s.come_now) && !known(kh) {
+    let now = s.come_now
+    s.come_now = undef
+    let fw = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, false)
+    s.come_now = now
+    let tall = come_height(s, out_h.val)
+    if known(tall) {
+      return size_uncached(node, if known(kw) { kw } else { fw }, tall, aw, ah, cb_w, cb_h, perform)
+    }
+  } else if !known(s.come_now) {
+    s.come_k = 1.0
+  }
   let b = box_for(node, cb_w, cb_h)
   // (its max-sizes only what it asks: given a size, it takes it; Style's stretch_past_max)
   let b = if s.stretch_past_max && ((known(kw) && known(b.max_w)) || (known(kh) && known(b.max_h))) {
@@ -684,7 +739,7 @@ fn size_uncached(
   let pbh = b.pbh()
   // leaves measured from their content
   match node.measure {
-    Some(m) =>
+    Some(m) if !node.room =>
       if node.children.length() == 0 {
         if known(w) && known(h) {
           out_h.val = h
@@ -746,6 +801,8 @@ fn size_uncached(
           clamp_size(pbw, b.min_w, b.max_w) - pbw + pbw
         }
       }
+    // (told its room: laid out by what it holds, below)
+    Some(_) => ()
   }
   // as tall as its share of what it holds comes to at its width, what it holds laid out whole in that (Style's
   // content_share): what it holds sized first, then laid out in the height that comes to
@@ -1061,6 +1118,42 @@ fn layout_flex(
   // percentages of children resolve against this content box
   let cb_w = inner_w
   let cb_h = inner_h
+  // one told its room (its `room`) told the room its content box gives what it holds, before that is laid out (the
+  // view's View::by_room, which makes what it holds by that room): what that made or changed in it laid out in this
+  // same layout, below; where it came out otherwise (its first answer more than 0), nothing it was measured to come to
+  // before kept (another room's, or what it held before)
+  match node.measure {
+    Some(m) if node.room => {
+      let wm = if known(inner_w) {
+        Exactly
+      } else if known(avail_inner_w) {
+        AtMost
+      } else {
+        Undefined
+      }
+      let hm = if known(inner_h) {
+        Exactly
+      } else if known(avail_inner_h) {
+        AtMost
+      } else {
+        Undefined
+      }
+      let was_performing = performing_now.val
+      performing_now.val = perform
+      let (changed, _) = m(
+        if known(avail_inner_w) { avail_inner_w } else { 0.0 },
+        wm,
+        if known(avail_inner_h) { avail_inner_h } else { 0.0 },
+        hm,
+      )
+      performing_now.val = was_performing
+      if changed > 0.0 {
+        node.pre_gen = -1
+        node.cache_n = 0
+      }
+    }
+    _ => ()
+  }
   // flex items, from the pool of this depth
   let d = depth.val
   depth.val = d + 1
@@ -1273,6 +1366,7 @@ fn layout_flex(
         declared = basis
         basis = undef
       }
+      let said_main = known(basis)
       if !known(basis) {
         // size from content: cross known if fixed or stretched in a known line
         let mut kc = cross_style
@@ -1314,8 +1408,22 @@ fn layout_flex(
       let pb_main = if row { cb.pbw() } else { cb.pbh() }
       f.unsafe_set(i + PB_MAIN, pb_main)
       basis = fmax(basis, pb_main)
+      // (coming or going down a column, as tall as its way has got of what it comes to, however tall it is said to be,
+      // its least too: Style's come_*; as what it holds comes to, worked out so as it was sized above)
+      if !row && known(cs.come_now) {
+        if said_main {
+          let tall = come_height(cs, basis)
+          if known(tall) {
+            basis = tall
+          }
+        }
+        if cs.come_k < 1.0 {
+          f.unsafe_set(i + MIN_MAIN, undef)
+          f.unsafe_set(i + PB_MAIN, 0.0)
+        }
+      }
       f.unsafe_set(i + BASIS, basis)
-      f.unsafe_set(i + HYP, clamp_size(basis, min_main, max_main))
+      f.unsafe_set(i + HYP, clamp_size(basis, f.unsafe_get(i + MIN_MAIN), max_main))
     }
     // (no more items: their numbers stay where they are)
     let f = pool.f
@@ -1323,6 +1431,18 @@ fn layout_flex(
     let count = pool.count
     let at = pool.at
     let aligns = pool.aligns
+    // (the gap before each item where one comes or goes in a column: as much of it as that one is there and some before
+    // it is (Style's come_k); none such, none worked out)
+    let mut comes = false
+    if !row {
+      for k in 0..<count {
+        if flow.unsafe_get(at.unsafe_get(k)).style.come_k < 1.0 {
+          comes = true
+          break
+        }
+      }
+    }
+    let gap_before : Array[Double] = if comes { Array::make(count, gap_main) } else { [] }
     // lines
     let lines = pool.lines
     let wrap = s.wrap != NoWrap
@@ -1357,7 +1477,22 @@ fn layout_flex(
     let mut max_line_main = 0.0
     for ln in lines {
       let n = ln.end - ln.start
-      let gaps = if n > 1 { gap_main * (n - 1).to_double() } else { 0.0 }
+      let gaps = if comes {
+        let mut seen = 0.0
+        let mut all = 0.0
+        for k in ln.start..<ln.end {
+          let here = flow.unsafe_get(at.unsafe_get(k)).style.come_k
+          let g = if k == ln.start { 0.0 } else { gap_main * fmin(here, seen) }
+          gap_before.unsafe_set(k, g)
+          all = all + g
+          seen = fmax(seen, here)
+        }
+        all
+      } else if n > 1 {
+        gap_main * (n - 1).to_double()
+      } else {
+        0.0
+      }
       let mut sum_hyp = gaps
       // (and without them, for resolve_flexible)
       let mut items_hyp = 0.0
@@ -1609,6 +1744,10 @@ fn layout_flex(
       let mut p = lead
       for k in ln.start..<ln.end {
         let i = k * ITEM
+        // (the gap before it its share of it where one comes or goes: gap_before)
+        if comes && k > ln.start {
+          p = p - gap_main + gap_before.unsafe_get(k)
+        }
         let fl = flags.unsafe_get(k)
         let m_start = f.unsafe_get(i + MAR_MAIN_START)
         let m_end = f.unsafe_get(i + MAR_MAIN_END)

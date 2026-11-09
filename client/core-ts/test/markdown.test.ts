@@ -59,8 +59,10 @@ test("markdown_a_tight_list_holds_its_words_a_loose_one_its_paragraphs", () => {
   assert.deepEqual(read("- 外\n  - 内"), [["list", [["li", ["外", ["list", [["li", ["内"]]]]]]]]]);
 });
 
-test("markdown_strikes_through_with_one_tilde_or_two_as_github_does_and_not_three", () => {
-  assert.deepEqual(read("~一~ 和 ~~二~~ 和 ~~~三~~~"), [["p", [["s", ["一"]], " 和 ", ["s", ["二"]], " 和 ~~~三~~~"]]]);
+test("markdown_strikes_through_with_two_tildes_and_not_one_or_three", () => {
+  assert.deepEqual(read("~一~ 和 ~~二~~ 和 ~~~三~~~"), [["p", ["~一~ 和 ", ["s", ["二"]], " 和 ~~~三~~~"]]]);
+  // ranges written with one tilde stay as written
+  assert.deepEqual(read("有 12~20 个，每天 $100~$300"), [["p", ["有 12~20 个，每天 $100~$300"]]]);
   // a run closes one of as many
   assert.deepEqual(read("~~不~ 配"), [["p", ["~~不~ 配"]]]);
   assert.deepEqual(read("3~5 天"), [["p", ["3~5 天"]]]);

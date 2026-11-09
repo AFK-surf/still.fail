@@ -96,7 +96,7 @@ pub fn open_cards_fixture(mode : String) -> Unit {
 pub fn open_fixture(mode : String) -> Unit {
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   match mode {
-    "history" | "history-reading" | "history-details" => {
+    "history" | "history-reading" | "history-failed" | "history-older" | "history-older-failed" | "history-details" => {
       app.nav.push(Chat(r))
       app.nav.push(History(r, "s-c1", None))
       if mode == "history-details" {
@@ -233,7 +233,8 @@ pub fn open_drive_fixture(mode : String) -> Unit {
         r.contents_put = false
       }
       if mode == "reader-layout" {
-        r.panel = @sf.ReaderPanel::Layout
+        // (the layout's panel, nodes of the window's tree, told it is open)
+        @sf.reader_panel_set(r, @sf.ReaderPanel::Layout)
         r.contents_put = false
       }
     }
@@ -489,6 +490,10 @@ pub fn fixture_json(json : String) -> Source {
 /// What a fixture mode opens over Home at the start (src/sffix): a new chat, with one of its sheets; the bar's panel;
 /// a place.
 pub fn open_mode(mode : String) -> Unit {
+  // (a connect's page whose model is drafted another station's: 借用 at its panel's foot)
+  if mode == "settings-connect-borrow" {
+    @sffixture.new_fix.borrow = true
+  }
   if mode.has_prefix("newchat") {
     app.nav.rise(NewChat)
     if mode.has_prefix("newchat-crowded") || mode.has_prefix("newchat-providers") || mode == "newchat-tall-model" {

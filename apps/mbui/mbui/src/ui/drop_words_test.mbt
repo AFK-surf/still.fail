@@ -56,7 +56,7 @@ test "words let go beside a field go into it only on a box that takes them for i
       c.column(w=Fill(1.0), fn() {
         // a box pressed for its field (a composer's capsule): words let go on it beside the field are the field's
         let cap = c.id("cap")
-        c.clicked(cap) |> ignore
+        c.takes_presses(cap)
         if takes.val {
           c.words_into(cap, "e")
         }
@@ -206,7 +206,7 @@ test "files let go on a box that takes words go in as their paths; on a box that
     fn(c) {
       c.column(w=Fill(1.0), fn() {
         let cap = c.id("cap")
-        c.clicked(cap) |> ignore
+        c.takes_presses(cap)
         c.words_into(cap, "e")
         c.box(id=cap, w=Fill(1.0), pad=40.0, fn() {
           c.editor("e", field=f, placeholder="the field", font_size=10.0, plain=true, enter_sends=false) |> ignore
@@ -214,7 +214,7 @@ test "files let go on a box that takes words go in as their paths; on a box that
         |> ignore
         // a folder of a files page: what is let go on it goes up there
         let folder = c.id("folder")
-        c.clicked(folder) |> ignore
+        c.takes_presses(folder)
         c.on_files(folder, held=fn(at) { held.push(at is Some(_)) }, take=fn(_, _) { Some(fn(pick) { took.push(pick) }) })
         c.box(id=folder, w=Fill(1.0), pad=20.0, fn() { c.text("a folder") |> ignore }) |> ignore
       })
@@ -255,7 +255,7 @@ test "files let go where nothing takes them as they come are let go, not taken b
   let t = @ui.Tester::new(
     fn(c) {
       let here = c.id("here")
-      c.clicked(here) |> ignore
+      c.takes_presses(here)
       if takes.val {
         c.on_files(here, held=fn(_) {  }, take=fn(_, _) { Some(fn(pick) { took.push(pick) }) })
       }
@@ -283,7 +283,7 @@ test "a box that takes files by their paths takes those let go on it and on its 
   let t = @ui.Tester::new(
     fn(c) {
       let cap = c.id("cap")
-      c.clicked(cap) |> ignore
+      c.takes_presses(cap)
       match c.paths_into(cap, "e") {
         Some(paths) => took.push(paths)
         None => ()
@@ -345,9 +345,9 @@ test "files let go beside a box that takes files only on its folders are left to
       })
       c.box(id=page, w=Fill(1.0), taps=false, points=true, fn() {
         c.column(w=Fill(1.0), fn() {
-          c.clicked(folder) |> ignore
+          c.takes_presses(folder)
           c.box(id=folder, w=Fill(1.0), pad=20.0, fn() { c.text("a folder") |> ignore }) |> ignore
-          c.clicked(cap) |> ignore
+          c.takes_presses(cap)
           c.words_into(cap, "e")
           c.box(id=cap, w=Fill(1.0), pad=40.0, fn() {
             c.editor("e", field=f, placeholder="the field", font_size=10.0, plain=true, enter_sends=false) |> ignore

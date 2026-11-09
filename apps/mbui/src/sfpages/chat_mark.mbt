@@ -46,15 +46,15 @@ pub fn row_mark(c : @ui.Ctx, key : String, tone : String) -> Unit {
     Some(was) if was != tone => {
       marks_seen[key] = tone
       if tone != "" && !@ui.reduced_motion() {
-        pop.snap(0.0)
-        pop.animate(1.0, @motion.tween(mark_pop_ms, ease=Out))
+        pop.snap(c, 0.0)
+        pop.animate(c, 1.0, @motion.tween(mark_pop_ms, ease=Out))
       }
     }
     None => marks_seen[key] = tone
     _ => ()
   }
   let mark = chat_mark(c, tone)
-  let v = pop.get()
+  let v = pop.get(c)
   if mark != 0 && v < 1.0 {
     c.look(mark, @ui.look(alpha=@sf.seen_at(pop_scale(v)), scale=pop_scale(v)))
   }

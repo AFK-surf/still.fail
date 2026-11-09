@@ -26,24 +26,24 @@ class AlreadySaid extends Error {
 
 /// The older process only knows the other database. Reject while it is still alive rather than letting a timed-out
 /// request take effect later, after its caller has already been told it failed.
-export function routerSaysAfter(hub: Hub, stats: CommaStats, home: () => string | null, previousExited: Promise<void>) {
+export function routerSaysAfter(hub: Hub, stats: CommaStats, previousExited: Promise<void>) {
   let ready = false;
   void previousExited.then(() => { ready = true; }, () => {});
-  return (w: { thread: number; text: string; key: string; requester: string; connect: string }): number => {
+  return (workspace: string | null, w: { thread: number; text: string; key: string; requester: string; connect: string }): number => {
     if (!ready) throw new Error("the previous station is still handing over; retry the write");
-    return routerSays(hub, stats, home(), w);
+    return routerSays(hub, stats, workspace, w);
   };
 }
 
 /// A chat's messages and title for the Router, only after the station holding the chat confirms its workspace.
-export async function routerReads(stats: CommaStats, reads: Pick<WorkspaceReads, "home" | "here" | "there">, ref: string, after: number, limit: number): Promise<Json> {
+export async function routerReads(stats: CommaStats, reads: Pick<WorkspaceReads, "of" | "here" | "there">, ref: string, after: number, limit: number): Promise<Json> {
   const chat = chatOf(ref);
   if (chat === null) throw new Error("no such chat");
-  const home = reads.home();
+  const of = reads.of();
   const read = async (position: number, count: number): Promise<Json> => {
     const args = { thread: chat.thread, after: position, limit: count, messagesOnly: true };
     const got = JSON.parse(chat.station === null
-      ? await reads.here("outflowMessages", home === null ? args : { ...args, ws: { workspace: home, home: true } })
+      ? await reads.here("outflowMessages", of === null ? args : { ...args, ws: of })
       : await reads.there(chat.station, "outflowMessages", args));
     if (got === null) throw new Error("no such chat of the workspace");
     if (!Array.isArray(got.messages) || !Number.isSafeInteger(got.last) || got.last < 0 ||
@@ -86,8 +86,8 @@ export async function routerReads(stats: CommaStats, reads: Pick<WorkspaceReads,
 }
 
 /// The Router's message in chat `thread` of this station, as `requester` of the Comma connect `connect` (named so in
-/// the chat, as a person of that connect is), once per `key`: its `n`. Only a chat of the home workspace on the
-/// station's pages; a Slack or Feishu chat is answered where it is.
+/// the chat, as a person of that connect is), once per `key`: its `n`. Only a chat of workspace `home` (one of the
+/// station's, the connect's) on the station's pages; a Slack or Feishu chat is answered where it is.
 export function routerSays(hub: Hub, stats: CommaStats, home: string | null, w: { thread: number; text: string; key: string; requester: string; connect: string }): number {
   try { return routerSaysOnce(hub, stats, home, w); }
   catch (error) {

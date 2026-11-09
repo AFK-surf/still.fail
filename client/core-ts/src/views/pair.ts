@@ -885,12 +885,16 @@ export function personalBegin(inner: Inner, subs: string[]): Effect.Effect<unkno
   return Effect.gen(function* () {
     const personal = inner.adb.personal();
     const key = yield* personal.makeKey();
+    // (the key it signs the workspaces' locks with, made now as `begin` makes it: a new device has none yet, and
+    // without one the device that approves it puts it in none of them)
+    const signer = yield* Effect.mapError(Signer.make(inner.host), (e) => CoreError.plainly("lock_key", e, t("core-misc.lock.keyNotKept", { error: asCoreError(e).message })));
+    signerKnown(inner, signer.id);
     const before = tryings.get(inner);
     if (before) drop(before);
     const y = trying(inner, subs.map(personOf));
     const trusted = [...new Set(subs.flatMap((sub) => personal.approvers(sub).map((d) => d.id)))];
     // (the key it signs the workspaces' locks with: a device on the person's lock puts it in those where they bound it)
-    const hello = { t: "hello", v: 1, workspaces: [], kind: "app", label: prefs.deviceName(inner.data) ?? "", sign_key: signerOf(inner), personal: { subs, key } };
+    const hello = { t: "hello", v: 1, workspaces: [], kind: "app", label: prefs.deviceName(inner.data) ?? "", sign_key: signer.id, personal: { subs, key } };
     y.searching = true;
     inner.runner.fork(
       Effect.gen(function* () {

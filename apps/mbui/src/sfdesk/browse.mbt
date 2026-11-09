@@ -161,7 +161,7 @@ pub fn Browse::arrangement(self : Browse) -> Arrangement {
 /// The folder `folder`'s entries in the order shown, as the core says them; None while it has not.
 pub fn Browse::arranged(self : Browse, folder : String, entries : Array[DvEntry]) -> Array[DvEntry]? {
   match self.shown {
-    Some(v) => dv_in_order(v.folders.get(folder), entries)
+    Some(v) => @sfbase.dv_in_order_held(self.key + "|" + folder, v.folders.get(folder), entries)
     None => None
   }
 }

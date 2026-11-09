@@ -76,7 +76,7 @@ pub(all) struct Wide {
   /// the rail's menu (from its right click): the place right clicked ("" the rail), where; a place dragged to another
   /// place in it: which, where the pointer went down, how far it went; the rail being changed (自定义侧边条); the ＋'s
   /// menu over the workspaces open
-  rail_menu : @signals.Signal[(String, Double, Double)?]
+  rail_menu : @signals.Signal[(String, (Double, Double, Double, Double)?)?]
   rail_drag : @signals.Signal[(String, Double, Double)?]
   editing : @signals.Signal[Bool]
   /// 待处理's panel, the services' panel from the lists' foot, ⌘/'s shortcuts open
@@ -213,6 +213,9 @@ fn wide_reset() -> Unit {
   wide.landed.set("")
   wide.rail_menu.set(None)
   wide.rail_drag.set(None)
+  attention_from.val = None
+  workspace_add_from.val = None
+  transfers_from.val = None
   wide.editing.set(false)
   wide.attention_open.set(false)
   wide.jobs_open.set(false)
@@ -457,16 +460,18 @@ fn dock_edge_node(n : @view.View, at : () -> SideAt) -> Unit {
 ///|
 /// The block (shell.css.ts dock: the rail and the sidebar on one ground) as nodes in `n` (as large as what holds the
 /// block, over it), where `at` says it is: a node with its ground and its shadow, as round as its corners are
-/// (dock_round_node), holding, cut to it, one old view: the rail (`rail`, as wide as the rail is drawn: as narrow as a
-/// point beside the system's tabs, where it holds nothing but what its build says of the block) and beside it the
-/// sidebar of a place not made once over the block (side_made: `side`, as wide as the sidebar is laid out, built only
-/// while what is in it is drawn). Its line is drawn over all it holds by dock_edge_node, its chats' lists by side_node.
-/// That old view's node (what a list's thumb of it is shown by: pane_edge).
+/// (dock_round_node), holding, cut to it, the rail (`rail`'s nodes: rail_node, as wide as the rail is drawn; none
+/// beside the system's tabs) and the sidebar of a place not made once over the block (side_made: `side`'s old view, as
+/// wide as the sidebar is laid out, built only while what is in it is drawn; `before` built in it first, each build,
+/// whether or not the sidebar is: what the frame works out of the block before its sidebar builds). Its line is drawn
+/// over all it holds by dock_edge_node, its chats' lists by side_node. The sidebar's old view's node (what a list's
+/// thumb of it is shown by: pane_edge).
 fn dock_node(
   n : @view.View,
   at : () -> SideAt,
-  rail : (@ui.Ctx) -> Unit,
+  rail : (@view.View) -> Unit,
   side : (@ui.Ctx, Bool) -> Unit,
+  before? : (@ui.Ctx) -> Unit = fn(_) {  },
 ) -> @view.View {
   let held : Ref[@view.View?] = Ref(None)
   n.box(fn(o) {
@@ -485,34 +490,52 @@ fn dock_node(
       .row(Is(true))
       |> ignore
       dock_round_node(g, at)
-      // the rail and the sidebar of a place not made once over the block, one old view as yet (as the block's was): as
-      // wide as the rail is drawn (its box's own width: rail's) and the sidebar is laid out (held_w, the same through
-      // the block's move between showing it and not), the block's height, cut to the block; in it the rail, then the
-      // sidebar beside it, built only while what is in it is drawn
-      g.box(fn(i) {
-        i
+      // (whether the pointer is on it, for the closed bar's peek: block_pointed)
+      dock_made.val = Some(g)
+      g.owns(fn() {
+        match dock_made.val {
+          Some(d) if physical_equal(d, g) => dock_made.val = None
+          _ => ()
+        }
+      })
+      |> ignore
+      // the rail, as wide as it is drawn (its box's own width: rail_node's), the block's height; its places' marks
+      // reach past it under the sidebar (nothing of it cut there)
+      g.box(fn(r) {
+        r
         .width(By(fn() {
           let a = at()
-          // (beside the system's tabs no rail: only as wide as that margin, its build what it says of the block)
-          Some(a.box.0 - a.block.0 + a.held_w)
+          Some(a.box.0 - a.block.0)
         }))
         .height(By(fn() { Some(at().block.3) }))
         .shrink(Is(0.0))
         |> ignore
+        // (beside the system's tabs none; else all of its height)
+        r.show(fn() { !@sf.native_on() }, fn(m) {
+          m.grow(Is(1.0)) |> ignore
+          rail(m)
+        })
+      })
+      |> ignore
+      // the sidebar of a place not made once over the block, as wide as it is laid out, beside the rail
+      g.box(fn(s) {
+        s
+        .width(By(fn() { Some(at().held_w) }))
+        .height(By(fn() { Some(at().block.3) }))
+        .shrink(Is(0.0))
+        // (where the rail is drawn narrower than nothing, under the sidebar: from where the sidebar starts)
+        .margin(By(fn() {
+          let a = at()
+          (dmin(0.0, a.box.0 - a.block.0), 0.0, 0.0, 0.0)
+        }))
+        |> ignore
         held.val = Some(
-          @ui.old(i, fn(c) {
+          @ui.old(s, fn(c) {
+            before(c)
             let a = at()
-            let rail_w = a.box.0 - a.block.0
-            c.box(style=dock_row, fn() {
-              c.box(style=@ui.style(w=Fixed(rail_w), h=Full), fn() { rail(c) }) |> ignore
-              c.box(style=@ui.style(w=Fixed(a.held_w), h=Full), fn() {
-                if a.shown && !side_made(side_place()) {
-                  side(c, a.bar)
-                }
-              })
-              |> ignore
-            })
-            |> ignore
+            if a.shown && !side_made(side_place()) {
+              side(c, a.bar)
+            }
           }, key=tape_island_key)
           .over(Is(true))
           |> @ui.old_takes_own,
@@ -525,11 +548,6 @@ fn dock_node(
   |> ignore
   held.val.unwrap_or(n)
 }
-
-///|
-/// The block's old view: the rail and the sidebar side by side, its whole height (dock_node).
-// kept across runs: a value (no field of it changes)
-let dock_row : @ui.Style = @ui.css("row h=Full")
 
 ///|
 /// Node `v` as round as the block where `at` says it is (dock_radius): its corners linked as the block's are, to the
@@ -565,6 +583,28 @@ priv struct SideAt {
   band : Double
   bar : Bool
   tape : Bool
+}
+
+///|
+/// Where the lists of a sidebar laid out `at` stand: in the tape's side column on the tape (its words as before #3806:
+/// @sf.band_pad_in), else in a side column beside the page.
+fn side_list_at(at : SideAt) -> @sf.ListAt {
+  if at.tape {
+    Tape
+  } else {
+    Side
+  }
+}
+
+///|
+/// Where the sidebar's lists stand as the frame draws its old views now: in the tape's side column while the frame is
+/// the tape (wide.tape: laid out Medium, with a sidebar to show), else in a side column beside the page.
+fn side_at() -> @sf.ListAt {
+  if wide.tape {
+    Tape
+  } else {
+    Side
+  }
 }
 
 ///|
@@ -605,19 +645,29 @@ fn pane_finger() -> Bool {
 ///|
 /// The sidebar's top row's height (Sidebar.css.ts brand: none in the closed bar), the bars `top` high: beside the
 /// window's buttons where they are the system's at its left (macOS's), from the window's top where it is as high as the
-/// window beside the system's tabs (rail_native.mbt).
+/// window beside the system's tabs (rail_native.mbt); else beside the rail's first place (rail_top_corner).
 fn side_brand_h(bar : Bool, top : Double) -> Double {
   if bar {
     0.0
   // (followed: as the window's buttons come into the app's top row or leave it, what reads it told)
+  } else if @ui.window_keys_left_now() && wide.tape {
+    tape_brand_under_buttons()
   } else if @ui.window_keys_left_now() {
     dmax(side_top_inset, @ui.window_points_to_content_now(side_top_inset))
   } else if side_full_height(bar) {
     side_top_web + top
-  } else {
+  } else if wide.tape {
     side_top_web
+  } else {
+    // (beside the rail's first place, in the window's corner: its row as far over that place's 38 as ever, the bell and
+    // 新建对话 on one line, pengxiao, 2026-10-25)
+    rail_top_corner() - side_over_rail
   }
 }
+
+///|
+/// How far the sidebar's top row stands over the rail's first place (its 38) beside it, off the tape.
+let side_over_rail : Double = 3.0
 
 ///|
 /// Back on the wide frame (the tiers' table): what is over the whole window (a screen, a file
@@ -695,11 +745,34 @@ pub fn tape_shows_right() -> Double {
 
 ///|
 /// The window's buttons in the app's top row (mbui's mac_app.m: 16 from the window's left, centred on its 44, as far
-/// apart as the system has them): from 16, the three 54 across (each 14, 20 apart).
+/// apart as the system has them): from 16, the three 60 across (macOS 27's: each 14, 23 from one's middle to the next's;
+/// measured on the user's screenshot, 2026-11-09).
 let window_buttons_in : Double = 16.0
 
 ///|
-let window_buttons_w : Double = 54.0
+let window_buttons_w : Double = 60.0
+
+///|
+/// How tall each of the window's buttons is (macOS 27's 14) and how high their row is in the app's top row (mbui's
+/// mac_app.m: centred on its first 44).
+let window_buttons_side : Double = 14.0
+
+///|
+let window_buttons_row : Double = 44.0
+
+///|
+/// The sidebar's top row on the tape with the window's buttons in it (side_brand_h): as tall as puts the middle of its
+/// first row, the bell's and 新建对话's (tape_first_row_mid), as far under the buttons as they stand under the panel's
+/// top edge, the bell's icon's top there; the buttons as the host has them on the tape (tape_view: as much lower as the
+/// panel stands under the window's top). The user, 2026-11-09: 中屏侧边栏顶部空太多 (its row stood 44 under the
+/// panel's content, the band the buttons have in a window with no panel, 31 under the buttons).
+fn tape_brand_under_buttons() -> Double {
+  let content_top = bar_in_now() + dock_line
+  let top = @ui.window_points_to_content_now((window_buttons_row - window_buttons_side) / 2.0) + bar_in_now()
+  let bottom = top + @ui.window_points_to_content_now(window_buttons_side)
+  let mid = bottom + (top - content_top) + rail_icon_size / 2.0 - content_top
+  mid - band_new_top - band_row_h() / 2.0
+}
 
 ///|
 /// How wide a panel is on the tape with one beside it, a window `width` wide: what the window leaves in use past what
@@ -1175,15 +1248,37 @@ fn side_peek(c : @ui.Ctx, bar_x : Double, bar_y : Double, bar_r : Double, bar_b 
     }
     return
   }
-  // on it, or on its edge at its right (the edge, what pops up from it)
-  let over = (px >= bar_x && px < bar_r && py >= bar_y && py < bar_b) ||
+  // on it, or on its edge at its right (the edge, what pops up from it); the block and its rail nodes of the window's
+  // tree, where the old views are not told the pointer: whether it is within them, as the tree has it
+  let (on_block, on_rail) = block_pointed()
+  let over = on_block ||
+    (px >= bar_x && px < bar_r && py >= bar_y && py < bar_b) ||
     (wide.peeking.get() && px >= bar_r - 2.0 && px < bar_r + 10.0)
-  if over && !wide.peeking.get() && px < bar_x + rail_closed_w {
+  if over && !wide.peeking.get() && (on_rail || (px >= 0.0 && px < bar_x + rail_closed_w)) {
     wide.peeking.set(true)
   }
   if @kit.after(c, "side/peek-away", wide.peeking.get() && !over && !held, peek_leave_ms) {
     wide.peeking.set(false)
   }
+}
+
+///|
+/// The block's ground as dock_node made it last, while it is: what the closed bar's peek asks the pointer of
+/// (block_pointed).
+// kept across runs: let go with the node it holds
+let dock_made : Ref[@view.View?] = Ref(None)
+
+///|
+/// Whether the pointer (a mouse's) is within the block's ground and within its rail, as the window's tree has it
+/// (View::pointer_within: followed, what reads it built again as it comes in or goes out).
+fn block_pointed() -> (Bool, Bool) {
+  let within = fn(v : @view.View?) {
+    match v {
+      Some(n) if n.alive() => n.pointer_within()
+      _ => false
+    }
+  }
+  (within(dock_made.val), within(rail_col.val))
 }
 
 ///|

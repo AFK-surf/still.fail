@@ -399,6 +399,7 @@
     "other": "visited {n} pages"
   },
   "core-logic.history.edge.earlier": "Loading earlier history",
+  "core-logic.history.edge.earlier_failed": "Couldn't load earlier history: {why}. Trying again shortly",
   "core-logic.history.edge.loading": "Loading history",
   "core-logic.history.edge.missing": "Runtime record not found; it may have been archived",
   "core-logic.history.edge.not_started": "Session not started yet",

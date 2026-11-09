@@ -205,7 +205,7 @@ pub let pop_out : @motion.Trans
 
 pub let pop_out_ms : Double
 
-pub fn popover(@ui.Ctx, String, Bool, Int32, side? : @view.Side, along? : @view.Along, offset? : Double, label? : String, modal? : Bool, focus? : Bool, look? : (@ui.Ctx, PopState, () -> Unit) -> Unit, at? : (Double, Double, Double, Double), enter? : @motion.Trans, exit? : @motion.Trans, () -> Unit) -> @ui.Changed[Bool]
+pub fn popover(@ui.Ctx, String, Bool, Int32, side? : @view.Side, along? : @view.Along, offset? : Double, label? : String, modal? : Bool, focus? : Bool, look? : (@ui.Ctx, PopState, () -> Unit) -> Unit, at? : (Double, Double, Double, Double), anchor_node? : @view.View, enter? : @motion.Trans, exit? : @motion.Trans, () -> Unit) -> @ui.Changed[Bool]
 
 pub fn popover_look(@ui.Ctx, PopState, () -> Unit) -> Unit
 
@@ -259,6 +259,8 @@ pub fn sheet(@ui.Ctx, String, Bool, () -> Unit, h? : Double, share? : Double, de
 pub fn sheet_grabber(@ui.Ctx) -> Unit
 
 pub fn sheet_look(@ui.Ctx, SheetState, () -> Unit) -> Unit
+
+pub fn sheet_place(@ui.Ctx) -> (Double, Double)?
 
 pub fn sheet_rest(String) -> Double
 
@@ -648,6 +650,7 @@ pub fn Presence::leaving(Self) -> Bool
 pub(all) struct ProgressState {
   t : Double?
   known : Double
+  key : String
 }
 
 pub(all) struct RadioState {

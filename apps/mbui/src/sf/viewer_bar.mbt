@@ -44,12 +44,14 @@ pub fn viewer_bar(
   capsule_end? : Bool = false,
   on_back? : () -> Unit = fn() {  },
 ) -> Unit {
-  let gone = @motion.animate(c, key + "/gone", if hidden { 1.0 } else { 0.0 }, spec=@motion.tween(
+  // (gone up as it is drawn: told as it is built, read where it is painted)
+  let gone = @motion.told(c, key + "/gone", if hidden { 1.0 } else { 0.0 }, spec=@motion.tween(
       viewer_bar_ms,
       ease=Out,
     ))
   let bar = c.id(key)
-  let live = gone < 1.0 && !hidden
+  // (it takes presses from the moment it is told to come, gone or going it takes none: as its node does)
+  let live = !hidden
   if live && @ui.window_inset() {
     c.window_drag(bar)
   }
@@ -123,7 +125,10 @@ pub fn viewer_bar(
     })
     |> ignore
   })
-  c.look(node, @ui.look(alpha=1.0 - gone, dy=-(viewer_bar_h + top) * gone))
+  c.look_by(node, fn() {
+    let gone = gone.get(c)
+    @ui.look(alpha=1.0 - gone, dy=-(viewer_bar_h + top) * gone)
+  })
 }
 
 ///|

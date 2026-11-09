@@ -3,8 +3,8 @@
 // them old views (islands) in it:
 //
 //   - under all of it, what the frame does in every tier before its pages (signed_in_frame: what is told as the frame
-//     ends, the icon's number, the keys, whether the first page waits: narrow_under), and the back of the stack's root
-//     a node said as what it reads changes (narrow_takes_back);
+//     ends, the icon's number, whether the first page waits: narrow_under; the keys are the shell node's actions:
+//     sfdesk's keys.mbt), and the back of the stack's root a node said as what it reads changes (narrow_takes_back);
 //   - the pages: the stack (app.nav) a node, each page on it a node of its own made as it is put on and let go as it
 //     leaves (what it made forgotten), the page in it built while it shows (an island), where it is drawn bound to its
 //     slide, which sets out at its cause's moment, once the core has given what the page shows (mbui's nav_view.mbt);
@@ -215,7 +215,7 @@ fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page, barre
 
 ///|
 /// What the frame does with the app signed in and workspace `w` in view, in every tier, before its frame: what is
-/// told as the frame ends, the icon's number, links, updates, what was shared in, the keys, whether the first page waits.
+/// told as the frame ends, the icon's number, links, updates, what was shared in, whether the first page waits.
 fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // The folder and its player both need the same entries. Keep them while moving between the two and when
   // replacing one film with the next, until the new page has its own reader.
@@ -252,12 +252,12 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   update_first(src)
   // and again while it stays open (one never shown again asks no more otherwise)
   update_again(c, src)
+  // and as soon as a release may be out
+  update_on_release(c, src)
   // what another app shared in (share.mbt)
   share_in_frame(c)
   // files being kept on the device, said once kept (keep.mbt)
   keeps_frame(c)
-  // the app's keys, in every tier (sfdesk's keys.mbt): what is the wide frame's alone does nothing laid out Small
-  @sfdesk.keys(c, src, w)
   // the first page built as it opens, asking for all it shows, and shown once it has it (first_page_ms at most), as a
   // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later
   first_waiting.val = !first_page_shown(c, src, w)
@@ -427,7 +427,7 @@ fn narrow_made_as(
               page_actions.set(Some((make, gen)))
             }
             p.owns(fn() {
-              if @signals.untracked(fn() { page_actions.get() }) is Some((_, g)) && g == gen {
+              if page_actions.untracked() is Some((_, g)) && g == gen {
                 page_actions.set(None)
               }
             })
@@ -508,11 +508,12 @@ fn narrow_made_as(
               over=chat_bar_node,
               stint~,
             )
+            |> ignore
           },
         ),
       )
     // the chats' lists under Home's top bar (home_node); a device waiting to be confirmed in the workspace's safe mode
-    // sees that instead (lock_gate, its old view)
+    // sees that instead (lock_gate_node)
     Home =>
       made("home", fn(p, core, _here, _frame, stint, _acts) {
         let tips = @sf.TipLayer::new(fn() { None })
@@ -531,14 +532,7 @@ fn narrow_made_as(
           // (all of the page's room, the lock's page and Home alike)
           q.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
           if waiting {
-            @ui.old(q, fn(c) {
-              match workspace_in_view(src).0 {
-                Some(w) => lock_gate(c, src, w, bar=workspace_in_view(src).3) |> ignore
-                None => ()
-              }
-            })
-            .grow(Is(1.0))
-            |> ignore
+            lock_gate_node(q, src, core)
           } else {
             home_node(q, src, tips, stint)
           }
@@ -606,6 +600,21 @@ fn narrow_made_as(
       made("workspace", fn(p, core, here, frame, stint, _acts) { @sfpages.workspace_node(p, core, here, on_back=core.pop, frame~, stint~) })
     Setting(VaultItems) =>
       made("vault-items", fn(p, core, here, frame, _stint, _acts) { @sfpages.vault_items_node(p, core, here, on_back=core.pop, frame~) })
+    // (by its station: another station's another page; as a place of the bottom bar's, its ＋ the bar's notch:
+    // connects_add)
+    Setting(Connects(only)) =>
+      made("connects/" + only, fn(p, core, here, frame, stint, _acts) {
+        @sfpages.connects_node(p, src, core, here, only, on_back=core.pop, frame~, stint~)
+      })
+    Setting(Connect(station, id)) =>
+      made("connect/" + station + "/" + id, fn(p, core, here, frame, stint, _acts) {
+        @sfpages.connect_node(p, src, core, here, station, id, on_back=core.pop, frame~, stint~)
+      })
+    // (by its station: another station's another page, not this one become it)
+    Setting(Station(address)) =>
+      made("station/" + address, fn(p, core, here, frame, stint, _acts) {
+        @sfpages.station_node(p, core, here, address, on_back=core.pop, frame~, stint~)
+      })
     Setting(UsagePrices(days)) =>
       made("usage-prices/" + days.to_string(), fn(p, core, here, frame, _stint, _acts) {
         @sfpages.usage_prices_node(p, core, here, days, on_back=core.pop, frame~)
@@ -621,6 +630,14 @@ fn narrow_made_as(
     History(r, key, entry) =>
       made_at("history/" + r.station + "/" + key, place, fn(p, _core, _here, frame, _stint, _acts, serial) {
         history_node(p, src, r, key, entry, frame, serial)
+      })
+    Setting(Profile(address, id)) =>
+      made("profile/" + address + "/" + id, fn(p, core, here, frame, stint, _acts) {
+        @sfpages.profile_node(p, core, here, address, id, on_back=core.pop, frame~, stint~)
+      })
+    Setting(NewProfile(address)) =>
+      made("new-profile/" + address, fn(p, core, here, frame, _stint, _acts) {
+        @sfpages.new_profile_node(p, core, here, address, on_back=core.pop, frame~)
       })
     _ => None
   }
@@ -638,7 +655,7 @@ fn place_comes_in(v : @view.View) -> Unit {
   v.reacts(fn() { w.said(); w.ends_at() }, fn(end) {
     (due.val)()
     due.val = if end >= 0.0 {
-      v.at_moment(end, fn() { ended.set(@signals.untracked(fn() { ended.get() }) + 1) })
+      v.at_moment(end, fn() { ended.set(ended.untracked() + 1) })
     } else {
       fn() {  }
     }

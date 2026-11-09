@@ -13,7 +13,7 @@ import { Runner } from "../src/runtime.ts";
 import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
 import { attention, choices, runnableOn } from "../src/views/models.ts";
-import { Views, betaOffered, blockedUnder, chatDerive, down, noticeOf, shownMessage, stationOn } from "../src/views/views.ts";
+import { Views, answeredAt, betaOffered, blockedUnder, chatDerive, down, noticeOf, shownMessage, stationOn } from "../src/views/views.ts";
 import { localDay } from "../src/views/usage.ts";
 import { installView, profile as presentProfile } from "../src/present.ts";
 import { markdown } from "../src/markdown.ts";
@@ -2082,7 +2082,13 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   await t.read(u, 1);
   agents = u.value.agents;
   assert.deepEqual(agents.map((a: J) => a.session.key), ["k", "n"]);
+  // Not in the threads read again: still the chat held (one made since the list was asked is not in it either); gone
+  // only as its station says.
   t.set(threads("ws/a"), [thread(3, ["k"], now)]);
+  await t.read(u, 1);
+  assert.equal(u.error?.status, undefined, "not said to be gone");
+  assert.deepEqual(u.value.agents.map((a: J) => a.session.key), ["k", "n"]);
+  t.fail(pageOf("ws/a", 7), new CoreError("http_404", "对话不存在", 404));
   await t.read(u, 1);
   assert.equal(u.error.status, 404);
 });
@@ -2244,6 +2250,11 @@ test("a_message_going_up_says_how_far_its_files_are_together", async () => {
   t.views.local.uploadChanged("u1", { sent: 300 });
   await t.read(u, 1);
   assert.deepEqual(shown(), ["正在上传 87%", 350 / 400]);
+  // Every byte gone, the station not yet saying it has them: waiting for it, not 100% (a picture's answer came 9 s
+  // after its bytes and it read as stuck, 2026-11-09).
+  t.views.local.uploadChanged("u2", { sent: 100 });
+  await t.read(u, 1);
+  assert.deepEqual(shown(), ["等待 station 确认收到", 1]);
   const copied = t.views.outboxAdd("ws/a", 7, { text: "再看", attachments: [], quotes: [], uploads: [
     { id: "u3", name: "a.png", size: 10, sent: 5 },
     { id: "u4", name: "b.zip", size: 10 },
@@ -2534,6 +2545,26 @@ test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_nothing_under
   // Archived from its bar or the list: nothing offers it under its last all-done post, nor says what the check made of it.
   assert.equal(v.archiveOffered, undefined);
   assert.deepEqual(v.messages.map((m: J) => [m.archive, m.archiveCheck]), [[undefined, undefined], [undefined, undefined], [undefined, undefined]]);
+});
+
+test("a_done_chats_page_not_read_yet_says_where_it_stands_from_its_first_value_not_once_its_read_is_told", async () => {
+  // Opening a chat only raises what is brought first (the user, 2026-11-09): its page is what it will be once read, at
+  // once, not its end line and archive a moment after, as the read the opening told comes back.
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: [entry(1, "看看"), { ...entry(2, "好了"), authorKind: "agent", author: "k", declared: "final", ending: "all_done" }], thread: null });
+  const unread = { ...row("k", now), thread: 7, unread: true };
+  unread.agents[0].lastTurn = { kind: "message", declared: "final", ending: "all_done", outcome: "completed", startedAt: 1, endedAt: 1 };
+  t.set(rows("ws/a"), [unread]);
+  await t.read(u, 1);
+  const v = u.value;
+  assert.deepEqual([v.stateText, v.stateLead, v.archivable], ["已完成", "done", true]);
+  // (the list's row is as it was: not read, nothing said for it yet)
+  assert.equal(unread.unread, true);
 });
 
 test("a_chats_page_says_at_the_end_of_its_messages_what_its_agent_needs_as_its_row_does", async () => {
@@ -2966,4 +2997,32 @@ test("a_slack_threads_row_has_its_link_there_as_its_page_does_for_its_menu", asy
   t.set(overview("ws/st"), overviewOf([{ ...connect("c1", "Slack"), connection: connected }], []));
   await t.read(chats, 1);
   assert.deepEqual([of("k").slackUrl, of("k").slackApp, of("7").slackUrl], ["https://afk.slack.com/archives/C1/p12", "slack://channel?team=T1&id=C1&message=1.2", undefined]);
+});
+
+test("an_agent_whose_card_is_answered_from_here_is_at_work_from_the_answer_on_till_its_turn_after_it_begins", () => {
+  const agent = (status: string, startedAt: number | null) => ({
+    status,
+    session: { key: "s-1", lastTurn: startedAt === null ? null : { startedAt } },
+  });
+  const card = { seq: 5, ts: "t-5", by: { name: "Claude", agent: "s-1" }, card: { type: "options" }, createdAt: 100 };
+  const quotes = [{ author: "Claude", text: "换吗？", comment: "", role: "agent", ts: "t-5" }];
+  // on its way: at work at once
+  assert.equal(answeredAt([agent("final", 50)], [card], [{ id: "o-1", state: "sending", quotes }])[0].status, "queued");
+  // not sent: as it was
+  assert.equal(answeredAt([agent("final", 50)], [card], [{ id: "o-1", state: "failed", quotes }])[0].status, "final");
+  // here, its turn not begun since: still at work
+  const answer = { seq: 6, ts: "t-6", mine: true, quotes, createdAt: 200 };
+  assert.equal(answeredAt([agent("final", 50)], [card, answer], [])[0].status, "queued");
+  // its turn after it begun (and over): as the station says
+  assert.equal(answeredAt([agent("final", 250)], [card, answer], [])[0].status, "final");
+  // words sent under the card, the chat's last word: they answer it as a pick does
+  const said = { seq: 6, ts: "t-6", mine: true, quotes: [], createdAt: 200 };
+  assert.equal(answeredAt([agent("final", 50)], [card], [{ id: "o-1", state: "sending", quotes: [] }])[0].status, "queued");
+  assert.equal(answeredAt([agent("final", 50)], [card, said], [])[0].status, "queued");
+  // words under something said after it, quoting no card: as they are
+  const after = { seq: 6, ts: "t-6", by: { name: "Claude", agent: "s-1" }, createdAt: 150 };
+  const later = { seq: 7, ts: "t-7", mine: true, quotes: [], createdAt: 200 };
+  assert.equal(answeredAt([agent("final", 50)], [card, after, later], [])[0].status, "final");
+  // at work already: as it is
+  assert.equal(answeredAt([agent("running", 50)], [card], [{ id: "o-1", state: "sending", quotes }])[0].status, "running");
 });

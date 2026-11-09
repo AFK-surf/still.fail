@@ -292,10 +292,10 @@ fn peek_ways(c : @ui.Ctx, core : Core, address : String, s : Json?, close : () -
     }
     _ => ()
   }
-  if @sf.menu_item(c, tr("android-chat.station.details"), key="peek-station/" + address, end="panel-open") {
+  @sf.menu_item(c, tr("android-chat.station.details"), key="peek-station/" + address, end="panel-open", on_press=fn() {
     close()
     (core.push)(Station(address))
-  }
+  })
 
 }
 

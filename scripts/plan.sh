@@ -19,8 +19,9 @@ decide() {
   static=()
   # A reviewed stable release gets a fresh, pinned web artifact even when only its notes changed.
   if has '^docs/releases/'; then static+=(web-beta); fi
-  # (the app's page, each of the web app's pages: the app and mbui's web host built into it, apps/mbui/scripts/web-app.sh)
-  if has '^(web/|client/|rules/js/|apps/mbui/(src|mbui/src|mbui/web|assets)/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.web-beta\.jsonc)$)' && [ ${#static[@]} = 0 ]; then static+=(web-beta); fi
+  # (the app's page, each of the web app's pages: the app and mbui's web host built into it, apps/mbui/scripts/web-app.sh;
+  # the Worker that serves them, cloud/src/web.ts)
+  if has '^(web/|client/|rules/js/|apps/mbui/(src|mbui/src|mbui/web|assets)/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.web-beta\.jsonc|src/(web|compat)\.ts)$|apps/mbui/scripts/web-app\.sh$)' && [ ${#static[@]} = 0 ]; then static+=(web-beta); fi
   if has '^(web/|client/|rules/js/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.admin\.jsonc)$)'; then static+=(admin); fi
   if has '^cloud/(src/preview\.ts|build-static\.ts|wrangler\.preview\.jsonc)$'; then static+=(preview); fi
   # (the official site, website/, with the legal pages it serves from web/public)

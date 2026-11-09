@@ -105,15 +105,11 @@ fn phone_foot(c : @ui.Ctx, core : Core, station : String, request : String, last
   }
   @sf.ask_buttons(c, fn() {
     if lacks is Some(_) {
-      if @sf.button(c, if flag(row, "join") { tr("android-misc.personal.open") } else { tr("android-misc.adb.ask.how") }, key="phone/" + request + "/how", tone=Primary) {
-        how()
-      }
-    } else if @sf.button(c, tr("android-settings.vault.act.allow"), key="phone/" + request + "/yes", tone=Primary, busy=pending == Some(true), disabled=under) {
-      decide(true)
+      @sf.button(c, if flag(row, "join") { tr("android-misc.personal.open") } else { tr("android-misc.adb.ask.how") }, key="phone/" + request + "/how", tone=Primary, on_press=how)
+    } else {
+      @sf.button(c, tr("android-settings.vault.act.allow"), key="phone/" + request + "/yes", tone=Primary, busy=pending == Some(true), disabled=under, on_press=fn() { decide(true) })
     }
-    if @sf.button(c, tr("android-settings.vault.act.deny"), key="phone/" + request + "/no", tone=Ghost, busy=pending == Some(false), disabled=under) {
-      decide(false)
-    }
+    @sf.button(c, tr("android-settings.vault.act.deny"), key="phone/" + request + "/no", tone=Ghost, busy=pending == Some(false), disabled=under, on_press=fn() { decide(false) })
     // (nothing to allow yet: no length to choose)
     if scopes.length() < 2 || lacks is Some(_) {
       return

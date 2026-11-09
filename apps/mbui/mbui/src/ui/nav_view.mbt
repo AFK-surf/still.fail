@@ -25,7 +25,7 @@ priv struct NavHosted {
 ///|
 /// What shows of the stack changed (which pages, how they move): what reads it told.
 fn[P] Nav::shown_told(self : Nav[P]) -> Unit {
-  self.shown.set(@signals.untracked(fn() { self.shown.get() }) + 1)
+  self.shown.set(self.shown.untracked() + 1)
 }
 
 ///|
@@ -199,7 +199,7 @@ pub fn[P] nav_view(
       },
       fn(k) { k },
       fn(pv, serial) {
-        let k = @signals.untracked(fn() { serial.get() })
+        let k = serial.untracked()
         let entry = nav.entry(k)
         pv
           .over(Is(true))
@@ -230,6 +230,7 @@ pub fn[P] nav_view(
         // fields' words, how far they scroll, as they were), its data what it becomes in place followed by them; another
         // kind of page come in its place (Nav::become) the one handed to the other)
         pv.pick(
+          at_once=true,
           fn() {
             nav.said.get() |> ignore
             match nav.entry(k).map(fn(e) { made(e.page) }) {
@@ -245,6 +246,7 @@ pub fn[P] nav_view(
                 // a frame shows it makes nothing; kept from then)
                 let shown = Ref(false)
                 b.show(
+                  at_once=true,
                   fn() {
                     if nav.shows(k) {
                       shown.val = true
@@ -258,7 +260,7 @@ pub fn[P] nav_view(
                 )
               }
               _ =>
-                b.show(fn() { nav.shows(k) }, fn(o) {
+                b.show(at_once=true, fn() { nav.shows(k) }, fn(o) {
                   o.grow(Is(1.0)) |> ignore
                   let draw_page = draw_for(o)
                   let key = fn() {
@@ -718,7 +720,7 @@ fn[P] Nav::backs_over(
     }
   })
   |> ignore
-  m.show(fn() { backs(false) }, back_node)
+  m.show(at_once=true, fn() { backs(false) }, back_node)
   build()
-  m.show(fn() { backs(true) }, back_node)
+  m.show(at_once=true, fn() { backs(true) }, back_node)
 }

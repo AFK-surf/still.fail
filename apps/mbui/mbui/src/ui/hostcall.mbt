@@ -18,6 +18,9 @@ struct FakeHost {
   /// how many times the app asked for the host's next frame for what goes on by the clock (h_request_frame_on): owed
   /// no frame at this moment, as a host draws one at its next display frame (Tester::frames_on)
   mut frames_on : Int
+  /// how many frames a second what moves on by the clock was last said to need (@hostapi.frames_paced), as a host is
+  /// told it after the frame it asked for (0: none said since a frame was last asked for: the display's every frame)
+  mut paced : Double
   mut wake : Double
   mut instances : Int
   mut ime_active : Bool
@@ -144,6 +147,9 @@ struct FakeHost {
   mut inset : Bool
   /// the window filling the screen (Ctx::set_full_screen), as last made to
   mut full : Bool
+  /// how much lower the window's buttons go in the app's top row and over how long (@hostapi.window_buttons_down), as
+  /// last told
+  mut buttons_down : (Double, Double)
   /// how round the system draws the window's corners (Tester::new's `window_corner`; none filling the screen), and
   /// each of them where they differ (Tester::new's `window_corners`: top left, then round it)
   window_corner : Double
@@ -154,9 +160,12 @@ struct FakeHost {
   /// handed it last (@hostapi.nav_bar's JSON; "" none yet)
   mut nav_able : Bool
   mut nav_said : String
-  /// something reading the widgets out (a11y_on), and what it was last told they are (a11y.mbt)
+  /// something reading the widgets out (a11y_on), the last update it was told (a11y.mbt), what it has of them as the
+  /// updates left it, and how many times the app had told it as the Tester last held that to what is read out
   mut a11y : Bool
   mut a11y_said : String
+  a11y_told : A11yMirror
+  mut a11y_held : Int
   env : Map[String, String]
   app_version : Int
   /// the system's notifications the app shows, oldest first (notify.mbt), and the one tapped, not yet taken
@@ -207,6 +216,9 @@ struct FakeHost {
   /// a list's rows set on its pixels (rows_on_pixels): every platform's host does; a Tester's only where its test says
   /// so (Tester::set_rows_on_pixels), its frames' layout else as it always was
   mut rows_on_pixels : Bool
+  /// the window's tree keeps where in the source each node was made (keeps_sources): a Tester's does, unless what it
+  /// runs is measured as a device runs it (Tester::new's `keeps_sources`)
+  keeps_sources : Bool
   /// the marks' drawings answered as the test says (Tester::marks_by_hand, Tester::marks_answer), not by the frame
   /// after each is asked
   mut marks_by_hand : Bool
@@ -471,6 +483,7 @@ let feel_over : Ref[Int] = { val: -1 }
 
 ///|
 fn h_request_frame() -> Unit {
+  journal_wants()
   // (asked from outside a frame: what asked changed what the view is built from, frame_watch.mbt)
   if !in_frame.val && !frame_running.val {
     outside_counted()
@@ -481,6 +494,7 @@ fn h_request_frame() -> Unit {
 ///|
 /// The host's next frame asked for what the frames' watch saw change (frame_watch.mbt): nothing come from outside.
 fn h_frame_owed() -> Unit {
+  journal_wants()
   @hostapi.request_frame()
 }
 
@@ -488,6 +502,7 @@ fn h_frame_owed() -> Unit {
 /// The host's next frame asked for what moves on by the clock (a motion going on, a cycle shown:
 /// @hostapi.request_frame_on).
 fn h_request_frame_on() -> Unit {
+  journal_wants()
   @hostapi.request_frame_on()
 }
 
@@ -597,18 +612,30 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
   let (r, gg, b) = c.clear
   // what of it differs from the frame presented before, the part a host that keeps its picture draws again
   let t0 = h_now()
-  let parts = presented.next(
-    buf,
-    count,
-    c.window_w,
-    c.window_h,
-    c.scale,
-    r,
-    gg,
-    b,
-    groups=!ride_spans.is_empty(),
-    known=damage_known,
-  )
+  // (a frame of its looks alone with only lists moved by their headers (looks_frame): those headers compared alone)
+  let moved = if looks_heads_only.val {
+    presented.moved(buf, count, c.window_w, c.window_h, c.scale, r, gg, b, list_heads.map(fn(h) { h.at }), known=damage_known)
+  } else {
+    None
+  }
+  looks_heads_only.val = false
+  let heads_moved = moved is Some(_)
+  let parts = match moved {
+    Some(parts) => parts
+    None =>
+      presented.next(
+        buf,
+        count,
+        c.window_w,
+        c.window_h,
+        c.scale,
+        r,
+        gg,
+        b,
+        groups=!ride_spans.is_empty(),
+        known=damage_known,
+      )
+  }
   damage_known.clear()
   presented_ms.val = h_now() - t0
   if presented.telling() && presented.why() == 5 {
@@ -630,7 +657,18 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
   } else {
     0.0
   }
-  @hostapi.present(buf, count, r, gg, b)
+  // (what of it cannot be seen left out: drawn the same, to the byte, with less to draw; where only its lists' headers
+  // moved, those alone asked again)
+  let occluded = if heads_moved {
+    presented.occlude_moved(buf, count, c.window_w, c.window_h, list_heads.map(fn(h) { h.at }))
+  } else {
+    None
+  }
+  let (shown, n) = match occluded {
+    Some(o) => o
+    None => presented.occlude(buf, count, c.window_w, c.window_h)
+  }
+  @hostapi.present(shown, n, r, gg, b)
   ride_groups_told()
 }
 
@@ -938,7 +976,7 @@ let answers_waiting : Map[Int64, Bool] = Map::new()
 /// An answer of `kind` came (the host's event; under a Tester, a frame: its fake host's answers come by the frame).
 fn answer_told(kind : Int) -> Unit {
   let s = answers_told[kind]
-  s.set(@signals.untracked(fn() { s.get() }) + 1)
+  s.set(s.untracked() + 1)
 }
 
 ///|

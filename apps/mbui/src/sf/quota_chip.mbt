@@ -74,15 +74,16 @@ pub fn quota_chips(
 /// A sidebar row's allowance starts with its text. If full chips need more room, they may extend under the mark. Where
 /// even those do not fit, each window's mark stands over its figure, keeping the figures together in one line. More
 /// windows form balanced rows, each still whole. Its nav_item gives it the whole row as `foot` and says
-/// foot_capsule=fill_chip_small_h so the capsules are at the same inset from the row's foot.
-pub fn nav_quota_chips(c : @ui.Ctx, q : Json?, key? : String = "quota") -> Unit {
+/// foot_capsule=fill_chip_small_h so the capsules are at the same inset from the row's foot. `at`: where its row's list
+/// stands (its words' room: band_pad_in).
+pub fn nav_quota_chips(c : @ui.Ctx, q : Json?, key? : String = "quota", at? : ListAt = Side) -> Unit {
   guard has_quota(q) else { return }
   let windows = match chip_field(q, "windows") {
     Some(Array(a)) => a
     _ => []
   }
   let inset = @ui.capsule_in(row_corner, fill_chip_small_h)
-  let side = theme().chat_list.band_pad
+  let side = band_pad_in(at)
   // A capsule reaches the corner until it is past the outer corner's circle-equivalent radius.
   let clear = dmax(0.0, inset + fill_chip_small_h / 2.0 - side)
   // A line that starts with the words is in past the mark and the row's gap (item's S2).

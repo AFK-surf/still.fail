@@ -16,7 +16,7 @@ import type { CommaChats } from "./surface.ts";
 import { READ, SAY, type WorkspaceReads, answerText, peerRead, workspaceRead } from "./peer.ts";
 import { routerReads, routerSaysAfter } from "./chats.ts";
 import { CommaStats, RevIndex, chatOf } from "./stats.ts";
-import { homeIndex } from "./home-index.ts";
+import { workspaceIndex } from "./workspace-index.ts";
 
 type Json = any;
 
@@ -31,19 +31,23 @@ export const CommaLive = Layer.effectDiscard(
     const store = yield* Store;
     const previous = yield* Previous;
     const cloud = (yield* ControlPlane).state;
-    let indexHome = cloud.home(), homeVersion = 0;
+    // The station's workspaces, its home one first: what each connect's index and Router are of. Any change of them
+    // moves `scopeVersion`, so that what was read or written before it is not used after.
+    const workspaces = () => JSON.stringify([cloud.home(), ...cloud.memberships().map((m) => m.workspace).sort()]);
+    const within = (workspace: string) => cloud.membership(workspace) !== null;
+    let indexed = workspaces(), scopeVersion = 0;
     yield* Effect.acquireRelease(
       Effect.sync(() => cloud.listen(() => {
-        const home = cloud.home();
-        if (home !== indexHome) { indexHome = home; homeVersion++; }
+        const now = workspaces();
+        if (now !== indexed) { indexed = now; scopeVersion++; }
       })),
       (stop) => Effect.sync(stop),
     );
     // Another station of the workspace reading this one's statistics, for the Comma connect there.
     bus.on(READ, peerRead((op, args, lang) => readers.read(op, args, lang), () => cloud.home(), stationLang,
-      () => homeVersion, (peer, workspace) => { member(cloud, peer, workspace); }));
+      () => scopeVersion, (peer, workspace) => { member(cloud, peer, workspace); }));
     const readsFor = (workspace: string): WorkspaceReads => ({
-      home: () => workspace,
+      of: () => ({ workspace, home: workspace === cloud.home() }),
       here: (op, args) => readers.read(op, { ...args, lang: stationLang() }, stationLang(), { background: true }),
       others: async () => {
         const roster = await bus.ask("", { method: "peers", workspace });
@@ -60,8 +64,8 @@ export const CommaLive = Layer.effectDiscard(
       Effect.sync(() => CommaStats.at(data, async () => ({ stations: [], unread: [] }), usage)),
       (s) => Effect.sync(() => s.close()),
     );
-    // A joined workspace must not receive the home's index. Send an empty epoch so Comma also removes rows that an
-    // older station already sent to this connect; the regular Task protocol remains available there.
+    // A connect of no workspace the station is in now must not receive another's index. Send an empty epoch so Comma
+    // also removes rows that an older station already sent to this connect; the regular Task protocol remains there.
     const empty = yield* Effect.acquireRelease(
       Effect.sync(() => {
         const db = new DatabaseSync(":memory:");
@@ -71,31 +75,31 @@ export const CommaLive = Layer.effectDiscard(
       (index) => Effect.sync(() => index.db.close()),
     );
     // The general handover timeout can take sessions up before the older process really exits.
-    const said = routerSaysAfter(agents.hub, legacy, () => cloud.home(), previous.exited);
+    const said = routerSaysAfter(agents.hub, legacy, previous.exited);
     // Another station of the workspace writing in one of this one's chats, for the Router of the Comma connect there.
     bus.on(SAY, async (_peer: string, request: Json, workspace?: string) => {
-      if (typeof workspace !== "string" || workspace !== cloud.home()) throw new Error("not this workspace");
+      if (typeof workspace !== "string" || !within(workspace)) throw new Error("not this workspace");
       const w = request?.say;
       if (typeof w?.thread !== "number" || typeof w?.text !== "string" || w.text.trim() === "") throw new Error("no such write");
-      return { seq: said({ thread: w.thread, text: w.text, key: String(w.key ?? ""), requester: String(w.requester ?? "Router"), connect: String(w.connect ?? "comma") }) };
+      return { seq: said(workspace, { thread: w.thread, text: w.text, key: String(w.key ?? ""), requester: String(w.requester ?? "Router"), connect: String(w.connect ?? "comma") }) };
     });
     const scopes = yield* Effect.acquireRelease(
-      Effect.sync(() => new Map<string, { indexes: ReturnType<typeof homeIndex>["indexes"]; stats: CommaStats; chats: CommaChats }>()),
+      Effect.sync(() => new Map<string, { indexes: ReturnType<typeof workspaceIndex>["indexes"]; stats: CommaStats; chats: CommaChats }>()),
       (all) => Effect.sync(() => { for (const scope of all.values()) scope.stats.close(); }),
     );
     const scope = (workspace: string) => {
       const had = scopes.get(workspace);
       if (had !== undefined) return had;
       const reads = readsFor(workspace);
-      const index = homeIndex(data, workspace, () => cloud.home(), () => homeVersion, workspaceRead(reads), usage);
+      const index = workspaceIndex(data, workspace, () => within(workspace), () => scopeVersion, workspaceRead(reads), usage);
       const chats: CommaChats = {
         read: (ref, after, limit) => routerReads(index.stats, reads, ref, after, limit),
         say: async (ref, text, key, requester, connect) => {
-          if (cloud.home() !== workspace) throw new Error("the workspace changed while writing");
+          if (!within(workspace)) throw new Error("the workspace changed while writing");
           const chat = chatOf(ref);
           if (chat === null) throw new Error("no such chat");
           const w = { thread: chat.thread, text, key: key === "" ? "" : `${connect}:${key}`, requester, connect };
-          if (chat.station === null) return { seq: said(w) };
+          if (chat.station === null) return { seq: said(workspace, w) };
           const got = await bus.ask(chat.station, { method: SAY, workspace, say: w });
           return { seq: got?.seq };
         },
@@ -104,12 +108,12 @@ export const CommaLive = Layer.effectDiscard(
       scopes.set(workspace, created);
       return created;
     };
-    const onHomeChange = (changed: () => void) => {
-      let seen = homeVersion;
-      return cloud.listen(() => { if (seen !== homeVersion) { seen = homeVersion; changed(); } });
+    const onScopeChange = (changed: () => void) => {
+      let seen = scopeVersion;
+      return cloud.listen(() => { if (seen !== scopeVersion) { seen = scopeVersion; changed(); } });
     };
-    yield* connectsPart((options) => makeComma({ ...options, scope, empty, home: () => cloud.home(),
-      homeVersion: () => homeVersion, onHomeChange, previousExited: previous.exited,
+    yield* connectsPart((options) => makeComma({ ...options, scope, empty, home: () => cloud.home(), within,
+      scopeVersion: () => scopeVersion, onScopeChange, previousExited: previous.exited,
       name: (ws) => {
         const m = cloud.membership(ws ?? cloud.home() ?? "");
         return m === null ? hostname() : `${m.workspace_name} · ${m.name === "" ? hostname() : m.name}`;

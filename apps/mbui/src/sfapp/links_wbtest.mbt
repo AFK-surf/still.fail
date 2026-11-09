@@ -281,7 +281,7 @@ test "a history's link with an entry: its page over the chat, that entry's item 
     _ => fail("not the history")
   }
   t.run_for(@ui.move_most_ms)
-  // entries 11–15: the third item (h3), marked (sfpages' history_steps.mbt), its mark gone after
+  // entries 11–15: the third item (h3), marked (sfpages' history_steps_node.mbt), its mark gone after
   assert_eq(@sfpages.history_marked().1, "h3")
   t.run_for(@sfpages.steps_marked_ms)
   t.assert_idle()

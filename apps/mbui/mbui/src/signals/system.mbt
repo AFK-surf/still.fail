@@ -22,6 +22,10 @@ pub struct ReactiveNode {
   priv update : ((ReactiveNode) -> Bool)?
   /// an effect's cleanup, as its fn returned it (EffectNode.cleanup)
   priv mut cleanup : (() -> Unit)?
+  /// not alien-signals': whether what it reads, or it, holds something outside while it is read (a resource told as
+  /// its last reader leaves: Signal::on_unwatched, computed_scoped), once it has; so what reads it does (holds_up). For
+  /// rest: what holds nothing keeps what it read at rest
+  priv mut holds : Bool
 }
 
 ///|
@@ -98,11 +102,15 @@ fn ReactiveNode::new(
   own? : Own = NoOwn,
   update? : (ReactiveNode) -> Bool,
 ) -> ReactiveNode {
-  { deps: None, deps_tail: None, subs: None, subs_tail: None, flags, kind, own, update, cleanup: None }
+  { deps: None, deps_tail: None, subs: None, subs_tail: None, flags, kind, own, update, cleanup: None, holds: false }
 }
 
 ///|
 fn link(dep : ReactiveNode, sub : ReactiveNode, version : Int) -> Unit {
+  // (not alien-signals': what reads what holds, holds)
+  if dep.holds && !sub.holds {
+    holds_up(sub)
+  }
   let prev_dep = sub.deps_tail
   if prev_dep is Some(p) && physical_equal(p.dep, dep) {
     return
@@ -134,6 +142,19 @@ fn link(dep : ReactiveNode, sub : ReactiveNode, version : Int) -> Unit {
   match prev_sub {
     Some(p) => p.next_sub = Some(new_link)
     None => dep.subs = Some(new_link)
+  }
+}
+
+///|
+/// Not alien-signals': `node` holds (ReactiveNode's `holds`), and so does what reads it, and what reads that.
+fn holds_up(node : ReactiveNode) -> Unit {
+  node.holds = true
+  let mut l = node.subs
+  while l is Some(link) {
+    if !link.sub.holds {
+      holds_up(link.sub)
+    }
+    l = link.next_sub
   }
 }
 

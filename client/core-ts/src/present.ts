@@ -3,6 +3,7 @@
 import { conform, type Ty } from "./conform.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
+import { authorNameOf } from "./entries.ts";
 import type { Topic } from "./protocol.ts";
 import * as brand from "./brand.ts";
 import * as decisions from "./decisions.ts";
@@ -1210,7 +1211,7 @@ function messagePeek(answer: J, c: Clock): J | null {
   if (entry === undefined) return null;
   const text = format.cleanText(format.plainText(str(entry.text) ?? ""));
   const at = entry.at;
-  return { author: str(entry.authorName) ?? "", text: text === "" ? t("core-views.file") : text, ...(typeof at === "number" && at > 0 ? { time: { at: stamp(at, c) } } : {}) };
+  return { author: str(authorNameOf(entry.authorKind, entry.author, entry.authorName)) ?? "", text: text === "" ? t("core-views.file") : text, ...(typeof at === "number" && at > 0 ? { time: { at: stamp(at, c) } } : {}) };
 }
 
 function overview(value: J, c: Clock, station: string | null): J {

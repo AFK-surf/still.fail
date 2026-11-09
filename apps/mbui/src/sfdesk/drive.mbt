@@ -429,12 +429,20 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
     if write && c.shortcut('n', shift=true) {
       b.new_folder(c, src, at.path)
     }
-    // (the keymap's files.preview: ⌘⇧P, as Finder's preview pane, or as changed)
-    if @settings.action_pressed(c, src.topic("prefs", {}).get().value, "files.preview") {
+    // (the keymap's files.preview: ⌘⇧P, as Finder's preview pane, or as changed; at its key's moment)
+    c.key_context("Files")
+    c.on_action("files.preview", fn() {
       set_preview_shown(src, "page", !previewing)
-    }
+      true
+    })
   }
-  let ups_here = ups.uploads.filter(fn(u) { u.station == at.station && u.root == root && u.dir == at.path })
+  // (one up stays till its folder's own row of it comes: the one row in the other's place, dv_up_done)
+  let ups_here = ups.uploads.filter(fn(u) {
+    u.station == at.station &&
+    u.root == root &&
+    u.dir == at.path &&
+    !(u.state.get() == "done" && entries.iter().any(fn(e) { e.name == u.name.get() }))
+  })
   let empty = fn() {
     folder_empty(c, if write { Some(fn() { dv_upload(c, at) }) } else { None })
   }
@@ -1058,24 +1066,29 @@ fn name_field(c : @ui.Ctx, key : String, b : Browse, e : DvEntry, row : RowProps
     if !r.focused && !held.naming_had {
       c.focus_editor(key)
     }
-    if c.key_pressed(@ui.key_escape, in_field=true) {
-      held.naming.set("")
-      (row.rename)(None)
-    } else {
-      match r.submitted {
-        Some(words) => {
-          held.naming.set("")
-          (row.rename)(Some(words))
-        }
-        None =>
-          if r.focused {
-            held.naming_had = true
-          } else if held.naming_had {
-            // left: kept
-            held.naming.set("")
-            (row.rename)(Some(r.text))
-          }
+    // (Escape gives up the new name, as it comes, before the field sees it: Ctx::on_key)
+    c.on_key(c.id(key), fn(code, mods) {
+      if code == @ui.key_escape && mods == 0 {
+        held.naming.set("")
+        (row.rename)(None)
+        true
+      } else {
+        false
       }
+    })
+    match r.submitted {
+      Some(words) => {
+        held.naming.set("")
+        (row.rename)(Some(words))
+      }
+      None =>
+        if r.focused {
+          held.naming_had = true
+        } else if held.naming_had {
+          // left: kept
+          held.naming.set("")
+          (row.rename)(Some(r.text))
+        }
     }
   })
   |> ignore

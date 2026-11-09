@@ -16,7 +16,7 @@ const until = async (f: () => boolean) => {
   assert.ok(f());
 };
 
-test("a joined workspace clears the old home index and cannot use the home's Router", async () => {
+test("a joined workspace's connect sends that workspace's index, never the home's, and its Router reads there", async () => {
   const server = createServer((_req, res) => res.writeHead(404).end());
   const wss = new WebSocketServer({ noServer: true });
   const sockets = new Map<string, WebSocket>(), metadata = new Set<string>(), replies = new Map<string, Json>();
@@ -64,6 +64,8 @@ test("a joined workspace clears the old home index and cannot use the home's Rou
   const stats = new CommaStats(":memory:", async () => ({ stations: rows, unread: [] }), () => () => {});
   const otherRows = [{ usage: { rows: [], people: {} }, chats: [{ thread: 18, title: "new home title", surface: "stillfail", createdAt: 1, lastActiveAt: 2, agents: [] }] }];
   const otherStats = new CommaStats(":memory:", async () => ({ stations: otherRows, unread: [] }), () => () => {});
+  const joinedRows = [{ usage: { rows: [], people: {} }, chats: [{ thread: 19, title: "joined title", surface: "stillfail", createdAt: 1, lastActiveAt: 2, agents: [] }] }];
+  const joinedStats = new CommaStats(":memory:", async () => ({ stations: joinedRows, unread: [] }), () => () => {});
   const emptyDb = new DatabaseSync(":memory:");
   emptyDb.exec("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
   const empty = { stats: new RevIndex(emptyDb, "stats_index"), tasks: new RevIndex(emptyDb, "task_index"), start: () => {} };
@@ -72,12 +74,15 @@ test("a joined workspace clears the old home index and cannot use the home's Rou
   let reads = 0, writes = 0, scopesOpened = 0, finishRead!: (value: Json) => void;
   const waitingRead = new Promise<Json>((resolve) => { finishRead = resolve; });
   const chats = { read: async () => (reads++, await waitingRead), say: async () => (writes++, { seq: 1 }) };
+  let joinedReads = 0;
+  const joinedChats = { read: async () => (joinedReads++, { title: "joined title", messages: [] }), say: async () => ({ seq: 1 }) };
   const homeListeners = new Set<() => void>();
   const connects = makeComma({ data: dir, config, store: rig.store, receive: async () => {}, bound: () => true,
     inWorkspace: (ws) => ws === null || ws === "joined-workspace",
-    scope: (ws) => (scopesOpened++, { indexes: ws === "home-workspace" ? stats : otherStats, chats }), empty,
-    home: () => home, homeVersion: () => version,
-    onHomeChange: (changed) => { homeListeners.add(changed); return () => homeListeners.delete(changed); }, previousExited: previous });
+    scope: (ws) => (scopesOpened++, ws === "joined-workspace" ? { indexes: joinedStats, chats: joinedChats }
+      : { indexes: ws === "home-workspace" ? stats : otherStats, chats }), empty,
+    home: () => home, within: (ws) => ws === home || ws === "joined-workspace", scopeVersion: () => version,
+    onScopeChange: (changed) => { homeListeners.add(changed); return () => homeListeners.delete(changed); }, previousExited: previous });
   const request = async (who: string, id: string, method: string, params: Json) => {
     sockets.get(who)!.send(JSON.stringify({ id, type: "request", method, params }));
     await until(() => replies.has(id));
@@ -90,12 +95,15 @@ test("a joined workspace clears the old home index and cannot use the home's Rou
     assert.equal(scopesOpened, 0, "the scoped database is not opened while the previous station can still use it");
     assert.equal((await request("joined", "read-joined", "task.read", { task: "17" })).type, "error");
     assert.equal((await request("joined", "write-joined", "task.say", { task: "17", text: "hello" })).type, "error");
-    assert.deepEqual([reads, writes], [0, 0]);
+    assert.deepEqual([reads, writes, joinedReads], [0, 0, 0]);
     previousExited();
     await until(() => copies.joined!["stats.index"]!.epoch !== "old" && copies.joined!["task.index"]!.epoch !== "old");
     await until(() => [...copies.home!["task.index"]!.rows.values()].some((row) => row.title === "home-only title"));
-    assert.equal(copies.joined!["stats.index"]!.rows.size, 0);
-    assert.equal(copies.joined!["task.index"]!.rows.size, 0);
+    await until(() => [...copies.joined!["task.index"]!.rows.values()].some((row) => row.title === "joined title"));
+    const titles = (who: string) => [...copies[who]!["task.index"]!.rows.values()].map((row) => row.title);
+    assert.deepEqual(titles("joined"), ["joined title"], "the old home rows are gone and the home's never come");
+    assert.equal((await request("joined", "read-joined-after", "task.read", { task: "19" })).type, "response");
+    assert.deepEqual([reads, joinedReads], [0, 1], "the joined connect's Router reads in its own workspace");
 
     sockets.get("home")!.send(JSON.stringify({ id: "read-home", type: "request", method: "task.read", params: { task: "17" } }));
     await until(() => reads === 1);
@@ -110,8 +118,8 @@ test("a joined workspace clears the old home index and cannot use the home's Rou
     // An edit that moves a connect between workspaces must recreate it even when its token is unchanged.
     const oldEpoch = copies.home!["task.index"]!.epoch;
     config.update((raw) => { raw.connects.find((c: Json) => c.id === "home").workspace = "joined-workspace"; });
-    await until(() => copies.home!["task.index"]!.epoch !== oldEpoch && copies.home!["task.index"]!.rows.size === 0);
-    assert.equal((await request("home", "read-after-edit", "task.read", { task: "17" })).type, "error");
+    await until(() => copies.home!["task.index"]!.epoch !== oldEpoch && titles("home").includes("joined title"));
+    assert.equal(titles("home").includes("home-only title"), false);
 
     config.update((raw) => { delete raw.connects.find((c: Json) => c.id === "home").workspace; });
     await until(() => [...copies.home!["task.index"]!.rows.values()].some((r) => r.title === "home-only title"));
@@ -119,10 +127,10 @@ test("a joined workspace clears the old home index and cannot use the home's Rou
     for (const changed of homeListeners) changed();
     await until(() => [...copies.home!["task.index"]!.rows.values()].some((r) => r.title === "new home title"));
     assert.equal([...copies.home!["task.index"]!.rows.values()].some((r) => r.title === "home-only title"), false);
-    assert.equal(copies.joined!["task.index"]!.rows.size, 0);
+    assert.deepEqual(titles("joined"), ["joined title"]);
   } finally {
     previousExited(); finishRead({});
-    await connects.close(); stats.close(); otherStats.close(); emptyDb.close(); wss.close();
+    await connects.close(); stats.close(); otherStats.close(); joinedStats.close(); emptyDb.close(); wss.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await rig.close();
     if (priorConfig === undefined) delete process.env.STILLFAIL_CONFIG; else process.env.STILLFAIL_CONFIG = priorConfig;

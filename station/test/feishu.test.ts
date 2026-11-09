@@ -498,6 +498,7 @@ test("hub: a Feishu connect's chat is one session, its threads on the connect's 
     assert.ok(rig.store.getSession(key));
     const thread = rig.store.threadAt("feishu:fs", "oc_g", "om_a")!;
     assert.deepEqual(rig.said(thread.id).map((m) => m.text), ["@Bot 帮忙", "没 @ 也算"]);
+    rig.claude.last().reads();
     const answer = await rig.call(key, "chat_post", { to: "oc_g/om_a", text: "选哪个", card: { type: "options", options: [{ label: "A" }, { label: "B" }] }, kind: "need_human", need: "选 A 或 B" });
     assert.ok(answer.startsWith("Posted to oc_g/om_a"), answer);
     const card = r.fake.calls("POST", "/open-apis/im/v1/messages").map((c) => JSON.parse(c.body.content)).find((c) => JSON.stringify(c).includes("button"));

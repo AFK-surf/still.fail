@@ -476,8 +476,6 @@ pub let kept_places : Map[String, @sfbase.KeptPlace]
 
 pub let left_pages : Array[@sfbase.Page]
 
-pub let linger_ms : Double
-
 pub fn linger_tick(@ui.Ctx, @sfbase.Source, in_front~ : Bool) -> Unit
 
 pub fn link_headers(@json.Json?) -> Array[(String, String)]?
@@ -979,6 +977,8 @@ pub fn update_from_menu(@sfbase.Source) -> Unit
 pub fn update_go(@sfbase.Source) -> Unit
 
 pub fn update_now() -> @sfbase.UpdateNow
+
+pub fn update_on_release(@ui.Ctx, @sfbase.Source) -> Unit
 
 pub fn update_reset() -> Unit
 

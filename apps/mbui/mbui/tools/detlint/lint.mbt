@@ -231,6 +231,55 @@ fn lint_mbt(
       add("build-clock", k, f.line_text(k))
     }
   }
+  // a part of the app's component library made in a node it is given (its first parameter a @view.View it makes a box
+  // in) that takes no place of its caller's (`loc~ : SourceLoc`, its outside made as what was asked for there,
+  // `made_for=loc`): what is found in it is not traced back to the app's line that asked for it (view's source.mbt)
+  if under(f.rel, cfg.library) && !f.test_file {
+    for it in f.items {
+      if it.kind != "fn" {
+        continue
+      }
+      // (its parameters: the first bracket after its name)
+      let mut open = it.start
+      while open <= it.end && toks[open].text != "(" {
+        open += 1
+      }
+      if open > it.end || toks[open].end < 0 || open + 5 > it.end {
+        continue
+      }
+      let close = toks[open].end
+      let name = toks[open + 1]
+      let given = name.kind == "ident" &&
+        toks[open + 2].text == ":" &&
+        toks[open + 3].text == "@view" &&
+        toks[open + 4].text == "." &&
+        toks[open + 5].text == "View" &&
+        (toks[open + 6].text == "," || toks[open + 6].text == ")")
+      if !given {
+        continue
+      }
+      let mut placed = false
+      for k in open..<close {
+        if toks[k].kind == "ident" && toks[k].text == "SourceLoc" {
+          placed = true
+        }
+      }
+      let mut boxed = false
+      for k in (close + 1)..<(it.end - 2) {
+        if toks[k].kind == "ident" &&
+          toks[k].text == name.text &&
+          toks[k + 1].text == "." &&
+          toks[k + 2].text == "box" &&
+          toks[k + 3].text == "(" {
+          boxed = true
+          break
+        }
+      }
+      if boxed && !placed {
+        add("part-place", it.start, f.line_text(it.start))
+      }
+    }
+  }
   // a click read by a build (`c.clicked(id)`, `clicked_on`, `double_clicked`: a Bool the frame after it) outside mbui's
   // ui and kit, which take presses, and outside the tests: what a press does is its handler's (Ctx::on_press, a part's
   // on_press / on_pick / on_change)
@@ -244,6 +293,22 @@ fn lint_mbt(
         toks[k + 1].text == "(" &&
         !f.in_test(k) {
         add("click-read", k, f.line_text(k))
+      }
+    }
+  }
+  // a key read by a build (`c.key_pressed(code)`, `c.keys_came()`, `@settings.action_pressed(…)`: a Bool the frame
+  // after it) outside mbui's ui and kit, which take keys, and outside the tests: what a key does is an action's
+  // (View::on_action) or a node's own (View::on_key)
+  if !f.rel.has_prefix("src/ui/") && !f.rel.has_prefix("src/kit/") {
+    for k, tk in toks {
+      if tk.kind == "ident" &&
+        (tk.text == "key_pressed" || tk.text == "keys_came" || tk.text == "action_pressed") &&
+        k > 0 &&
+        toks[k - 1].text == "." &&
+        k + 1 < toks.length() &&
+        toks[k + 1].text == "(" &&
+        !f.in_test(k) {
+        add("key-read", k, f.line_text(k))
       }
     }
   }
@@ -421,6 +486,11 @@ fn lint_mbt(
     if layout_read_back.contains(c.name) && c.kind == "method" && app && !in_t {
       add("layout-read-back", c.at, f.line_text(c.at))
     }
+    // what the layout came to told back as a change to make things by: the framework's (the view's own, src/view, as
+    // what it lays out) not counted, its tests not
+    if layout_told.contains(c.name) && c.kind == "method" && !under(f.rel, ["src/view"]) && !in_t {
+      add("layout-told", c.at, f.line_text(c.at))
+    }
     // a motion following what the layout measured: a place or a size moves for its cause, not because what it was
     // laid out at changed (the app's sf/motion.mbt)
     match follow_target(f, c, returns) {
@@ -495,8 +565,8 @@ fn lint_mbt(
     if !in_t && build_clock_read(f, c, returns) && !painting(c.at) {
       add("build-clock", c.at, f.line_text(c.at))
     }
-    // an animated value read as it is built (build-motion): @motion.animate's, an Anim's, a Way's, a Value's read
-    // (`get`, `sample`) outside what a frame's paint is given; not in the tests, nor in the readers themselves
+    // an animated value read as it is built (build-motion): @motion.animate's, an Anim's, a Way's read (`get`)
+    // outside what a frame's paint is given; not in the tests, nor in the readers themselves
     if !in_t && motion_read_built(f, c, returns, motion_fields) && !painting(c.at) {
       add("build-motion", c.at, f.line_text(c.at))
     }
@@ -1049,7 +1119,7 @@ fn literal_time(f : MbtFile, idx : Array[Int]) -> Bool {
 }
 
 ///|
-/// Which positional argument of call `c` is the target a motion follows: an Anim's or a Value's `follow(target, …)`,
+/// Which positional argument of call `c` is the target a motion follows: an Anim's `follow(target, …)`,
 /// `@motion.animate(c, key, target)`, `Ctx::spring(key, target)`; None for any other call.
 fn follow_target(f : MbtFile, c : Call, returns : Map[String, String]) -> Int? {
   if c.kind == "method" && c.name == "follow" {
@@ -1739,7 +1809,7 @@ let build_clock_methods : Array[String] = ["now_before", "now_of", "shows_motion
 /// What a frame's paint is given to read as it paints, a closure each (Ctx::look_by and the rest): what is read in it
 /// is read as the frame is painted, not built (build-clock)
 let paint_takers : Array[String] = [
-  "look_by", "moved_by", "bg_by", "notch_by", "cut_across_by", "glyphs_by", "cycle_look",
+  "look_by", "moved_by", "bg_by", "ink_by", "notch_by", "cut_across_by", "glyphs_by", "cycle_look",
 ]
 
 ///|
@@ -1842,18 +1912,16 @@ fn paint_fns(files : Array[MbtFile]) -> Map[String, Unit] {
 
 ///|
 /// The types whose value moves by the clock, read as they are (build-motion)
-let motion_types : Array[String] = ["Anim", "Way", "Value"]
+let motion_types : Array[String] = ["Anim", "Way"]
 
 ///|
 /// What @motion's functions give that moves by the clock, by their name, where no file linted says (build-motion: the
 /// app's run, @motion not among its files)
-let motion_returns : Array[(String, String)] = [("anim", "Anim"), ("told", "Anim"), ("value", "Value")]
+let motion_returns : Array[(String, String)] = [("anim", "Anim"), ("told", "Anim")]
 
 ///|
 /// The readers themselves, and what they read in to give it (build-motion): not counted inside them
-let motion_readers : Array[String] = [
-  "Anim::get", "Anim::moving", "Way::get", "Value::get", "Value::sample", "animate", "pressing",
-]
+let motion_readers : Array[String] = ["Anim::get", "Way::get", "animate", "pressing"]
 
 ///|
 /// The fields of the files' structs of a type that moves by the clock (`fade : @motion.Anim`), by their name
@@ -1881,8 +1949,8 @@ fn motion_fields(files : Array[MbtFile]) -> Map[String, Unit] {
 
 ///|
 /// Whether the call `c` reads an animated value as it is built (build-motion): @motion.animate (its value this
-/// frame; motion's own `animate` in motion), or `get` / `sample` on an Anim, a Way or a Value (told by its type where
-/// the receiver is said, by its field where it is one: motion_fields)
+/// frame; motion's own `animate` in motion), or `get` on an Anim or a Way (told by its type where the receiver is
+/// said, by its field where it is one: motion_fields)
 fn motion_read_built(
   f : MbtFile,
   c : Call,
@@ -1899,7 +1967,7 @@ fn motion_read_built(
     ((c.kind == "pkg" && c.qual == "@motion") || (c.kind == "bare" && under(f.rel, ["src/motion"]))) {
     return true
   }
-  if c.kind != "method" || (c.name != "get" && c.name != "sample") {
+  if c.kind != "method" || c.name != "get" {
     return false
   }
   let r = c.at - 2

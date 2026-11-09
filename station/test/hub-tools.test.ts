@@ -345,13 +345,15 @@ test("a newer card remains pending when an unread clarification ended the earlie
     await r.call(key, "chat_post", { to, text: "第一版可以合并吗？", card: { type: "options", options: [{ label: "合并" }] } });
     const old = r.said(thread.id).at(-1)!;
     sayIn(r.hub, thread.id, "ada@x.com", "测试过了吗？");
-    await r.call(key, "chat_post", { to, text: "第二版可以合并吗？", card: { type: "options", options: [{ label: "合并第二版" }] } });
-    const current = r.said(thread.id).at(-1)!;
+    const held = await r.call(key, "chat_post", { to, text: "第二版可以合并吗？", card: { type: "options", options: [{ label: "合并第二版" }] } });
+    assert.ok(held.startsWith("Not posted"), held);
     agent.complete();
     await settle();
     const prompt = agent.prompts.at(-1)!;
     assert.ok(prompt.includes(old.ts) && prompt.includes("no longer pending"), prompt);
-    assert.ok(prompt.includes(current.ts) && prompt.includes("newer card") && prompt.includes("pending"), prompt);
+    await r.call(key, "chat_post", { to, send: held.match(/Held as (held-\d+)/)![1]! });
+    const current = r.said(thread.id).at(-1)!;
+    assert.equal(current.text, "第二版可以合并吗？");
     assert.equal(r.store.pendingCard(thread.id)?.[0].n, current.n);
     const history = await r.call(key, "chat_history", { to });
     assert.ok(history.includes("Answer card: no longer pending") && history.includes("Answer card: pending"), history);
@@ -401,7 +403,7 @@ test("a closed authorization card tells its agent how to reask the same request"
   }
 });
 
-test("a message sent before a card was posted does not cancel that card", async () => {
+test("a message the agent had not read holds a card back; sent after it, the card is pending", async () => {
   const r = new Rig();
   try {
     const [key, thread] = newSession(r.hub, web());
@@ -411,15 +413,14 @@ test("a message sent before a card was posted does not cancel that card", async 
     const agent = r.claude.last();
     agent.unsteerable = true;
     sayIn(r.hub, thread.id, "ada@x.com", "先告诉我测试结果");
-    await r.call(key, "chat_post", { to, text: "可以合并吗？", card: { type: "options", options: [{ label: "合并" }] } });
-    const card = r.said(thread.id).at(-1)!;
-    assert.ok(r.store.pendingCard(thread.id) !== null);
+    const held = await r.call(key, "chat_post", { to, text: "可以合并吗？", card: { type: "options", options: [{ label: "合并" }] } });
+    assert.ok(held.startsWith("Not posted"), held);
+    assert.equal(r.store.pendingCard(thread.id), null, "held: no card yet");
     agent.complete();
     await settle();
-    const prompt = agent.prompts.at(-1)!;
-    assert.ok(prompt.includes(`before=\"${card.ts}\"`), prompt);
-    assert.ok(!prompt.includes("no longer pending"), prompt);
-    assert.ok(r.store.pendingCard(thread.id) !== null);
+    assert.ok(agent.prompts.at(-1)!.includes("先告诉我测试结果"));
+    await r.call(key, "chat_post", { to, send: held.match(/Held as (held-\d+)/)![1]! });
+    assert.equal(r.store.pendingCard(thread.id)?.[0].ts, r.said(thread.id).at(-1)!.ts);
   } finally {
     await r.close();
   }
@@ -510,6 +511,8 @@ test("a card is pending until a person writes, and a newer one replaces it", asy
   // Any person's message after it answers it, quoting it or not.
   sayIn(r.hub, thread.id, "bob@x.com", "都不要，换个思路");
   assert.equal(pending(), null);
+  await settle();
+  r.claude.last().reads();
   await r.call(key, "chat_post", { to, text: "那这样？", kind: "need_decision", options: [{ label: "好" }] });
   assert.ok(pending() !== null);
   // A text card replaces it as well, on a post with no kind.
@@ -779,6 +782,7 @@ test("a title that waits is given once nobody has the chat open", async (t) => {
   for (let n = 0; n < 5; n++) sayIn(r.hub, thread.id, "local", `再看 ${n}`);
   r.store.setRead("local", thread.id, r.store.lastEntry(thread.id));
   await settle();
+  r.claude.last().reads();
   assert.ok((await r.call(key, "chat_post", { to, text: "ok", title: "部署" })).includes("once nobody has it open"));
   t.mock.timers.tick(60_000);
   await settle();
@@ -805,6 +809,7 @@ test("a Slack agent names its list entry, with the same rename limits and a manu
   for (let change = 0; change < 3; change++) {
     for (let n = 0; n < 5; n++) await r.accept(reply(m, `${20000 + change * 5 + n}.000100`, "继续排查"));
     await settle();
+    r.claude.last().reads();
     const said = await post(`新话题 ${change}`);
     assert.ok(said.includes(change < 2 ? "Titled the chat" : "changed as often as it may be"), said);
   }
@@ -1758,6 +1763,7 @@ test("a login card in Slack: only for a login here waiting for its page's code; 
   Object.assign(r.chat, { cards: true, loginCards: true });
   const m = message();
   await r.accept(m);
+  await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
   const to = `C1/${m.threadTs}`;
   const answered: [string, string, unknown][] = [];

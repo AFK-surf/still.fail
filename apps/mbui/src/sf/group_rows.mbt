@@ -62,11 +62,11 @@ pub fn group_rows(c : @ui.Ctx, key : String, rows : Array[(String, () -> Unit)])
     let name = "group-rows/" + key + "/" + k
     let a = @motion.anim(c, name, if shown { 1.0 } else { 0.0 }, global=true)
     if shown && !was.contains(k) {
-      a.snap(if first { 1.0 } else { 0.0 })
+      a.snap(c, if first { 1.0 } else { 0.0 })
     }
     // (a share of its room: a Move as long as the room is tall, as what is under a post goes)
-    a.follow(if shown { 1.0 } else { 0.0 }, @motion.move().per_unit(@motion.reveal_height(c, name)))
-    let share = a.get()
+    a.follow(c, if shown { 1.0 } else { 0.0 }, @motion.move().per_unit(@motion.reveal_height(c, name)))
+    let share = a.get(c)
     if !shown && share <= 0.0 {
       continue
     }

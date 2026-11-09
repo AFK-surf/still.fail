@@ -97,6 +97,7 @@ test("the line Comma shows reads as its server and token; anything else does not
   assert.equal(commaLine("comma ftp://x salix_conn_abcdef123"), null);
   assert.equal(commaLine("comma https://api.comma.surf short"), null);
   assert.equal(connectUrl("https://api.comma.surf", "mac").replace(/&os=.*/, ""), "wss://api.comma.surf/v1/connect?name=mac");
+  assert.equal(new URL(connectUrl("https://api.comma.surf", "mac", "ws_1")).searchParams.get("stillfail_workspace"), "ws_1");
 });
 
 test("an options card is Comma's question card, the recommended one marked; a text card or one option is words alone", () => {
@@ -159,6 +160,7 @@ test("a Comma Task is a thread its agent works in: invited, its Messages heard f
     assert.equal(surface.knownPerson("u_ada")?.name, "Ada");
 
     // What the agent says, and a card, go into the Task; the card as Comma's question.
+    rig.claude.last().reads();
     const answer = await rig.call(key, "chat_post", { to: `TASK/${ts}`, text: "用哪个分支？", card: { type: "options", options: [{ label: "main" }, { label: "dev", recommended: true }] }, kind: "need_human", need: "选分支" });
     assert.ok(answer.startsWith(`Posted to TASK/${ts}`), answer);
     const post = fake.posts().at(-1);

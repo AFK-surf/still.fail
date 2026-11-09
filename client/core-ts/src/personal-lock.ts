@@ -6,7 +6,7 @@
 // The key is sealed so that each use asks the person (`user: true`: biometrics or the screen lock). Web pages have none:
 // their code is the cloud's.
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { Effect } from "effect";
+import { Effect, Schedule } from "effect";
 // @ts-ignore: the MoonBit build's JS, untyped
 import * as rules from "../../../rules/js/rules.js";
 import { CoreError, asCoreError } from "./error.ts";
@@ -25,6 +25,10 @@ export const personOf = (sub: string) => `person:${sub}`;
 export const isPerson = (where: string) => where.startsWith("person:");
 
 const KEY = "personal-signer";
+/// What a person does here (an entry they sign) waits out the cloud's "too many requests": the account's devices share
+/// one budget a minute, which their reads as a lock moves can use up (as views/lock.ts `Lock` waits, by hand).
+const LIMITED_TRIES = 6;
+const LIMITED_WAIT = "10 seconds";
 /// The key's public half, read without asking anyone.
 const KEY_ID = "personal-signer-id";
 const keptAs = (sub: string) => `personal-lock-${hex(utf8(sub))}`;
@@ -109,6 +113,13 @@ export type PersonalEnv = {
   changed: () => void;
   /// A device taken off: the stations where this lock is bound told, so an older chain brought there counts for nothing.
   told?: (sub: string, chain: Entry[]) => void;
+  /// The person's stations, where the lock is read and brought (the root AGENTS.md, The cloud is the account system):
+  /// `read` the chains they keep of it (null when none this device reaches keeps any: older, offline or refusing it),
+  /// `bring` the chain as it is now, how many took it (null: none could be asked; a refusal fails).
+  stations?: {
+    read: (sub: string, at?: string) => Effect.Effect<Entry[][] | null>;
+    bring: (sub: string, chain: Entry[]) => Effect.Effect<number | null, CoreError>;
+  };
 };
 
 const PATH = "/v1/me/personal-lock";
@@ -130,8 +141,10 @@ export class PersonalLock {
     return checkChain(this.#pinned.get(sub) ?? [], sub);
   }
 
-  /// Read from the device once, then from the cloud: what extends the pinned one is taken, anything else only noted.
-  refresh(sub: string): Effect.Effect<void, CoreError> {
+  /// Read from the device once, then from the person's stations (the cloud only when none of them keeps it: older,
+  /// offline, or refusing this device): what extends the pinned one is taken, anything else only noted.
+  /// `at`: a station just reached (its address): read of that one alone.
+  refresh(sub: string, at?: string): Effect.Effect<void, CoreError> {
     const env = this.#env;
     return Effect.gen({ self: this }, function* () {
       if (!this.#loaded.has(sub)) {
@@ -143,13 +156,37 @@ export class PersonalLock {
         this.#loaded.add(sub);
         env.changed();
       }
+      const kept = env.stations ? yield* env.stations.read(sub, at) : null;
+      if (kept !== null) return yield* this.#heard(sub, this.#best(sub, kept), true);
       const said = (yield* env.cloud(sub, "GET", PATH, null)) as { entries?: Entry[] } | null;
       yield* this.#heard(sub, Array.isArray(said?.entries) ? said.entries : []);
     });
   }
 
-  #heard(sub: string, entries: Entry[]): Effect.Effect<void, CoreError> {
+  /// The chains a station told (refusing this device): taken as a read of them is, once what is pinned here was read
+  /// (before, the next read takes them: the stations' refusals are what it reads then).
+  heardFrom(sub: string, chains: Entry[][]): Effect.Effect<void, CoreError> {
+    return chains.length === 0 || !this.#loaded.has(sub) ? Effect.void : this.#heard(sub, this.#best(sub, chains), true);
+  }
+
+  /// Of the chains the stations keep (each one a person's lock begun anew): the longest that goes on from the one pinned
+  /// here; none such, the one a station kept last (its latest), as the cloud's would be.
+  #best(sub: string, chains: Entry[][]): Entry[] {
+    const pinned = this.#pinned.get(sub) ?? [];
+    const root = pinned[0] === undefined ? null : entryHash(pinned[0]);
+    let best: Entry[] | null = null;
+    for (const c of chains) {
+      if (root === null || c[0] === undefined || entryHash(c[0]) !== root || checkChain(c, sub) === null) continue;
+      if (best === null || c.length > best.length) best = c;
+    }
+    if (best !== null) return best;
+    for (const c of chains) if (c.length > 0 && checkChain(c, sub) !== null) best = c;
+    return best ?? [];
+  }
+
+  #heard(sub: string, entries: Entry[], stations = false): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      const was = this.#stands(sub);
       const pinned = this.#pinned.get(sub) ?? [];
       const holds = checkChain(entries, sub) !== null;
       const grows = pinned.length > 0 && holds && entries.length >= pinned.length && pinned.every((e, i) => entryHash(e) === entryHash(entries[i]!));
@@ -157,12 +194,21 @@ export class PersonalLock {
         this.#seen.delete(sub);
         if (entries.length > pinned.length) yield* this.#pin(sub, entries);
       } else if (pinned.length > 0 && entries.length === 0) {
-        // (the cloud lost it, or never had it: brought back)
-        yield* this.#env.cloud(sub, "POST", PATH, { entries: pinned });
+        // (the cloud, or the stations, lost it, or never had it: brought back)
+        if (stations) yield* Effect.ignore(this.#env.stations!.bring(sub, pinned));
+        else yield* this.#env.cloud(sub, "POST", PATH, { entries: pinned });
       } else if (holds && entries.length > 0) this.#seen.set(sub, entries);
       else this.#seen.delete(sub);
-      this.#env.changed();
+      // Told only when it changed: what is told retries the stations that refused this device, and each refusal brings
+      // this same chain again (views/lock.ts heardRefused), so telling it unchanged would ask them again at once, endlessly.
+      if (this.#stands(sub) !== was) this.#env.changed();
     });
+  }
+
+  /// What is held of `sub`'s lock: the chain pinned and one seen that does not go on from it, by their last entries.
+  #stands(sub: string): string {
+    const last = (c: Entry[] | undefined) => (c === undefined || c.length === 0 ? "" : `${c.length}:${entryHash(c[c.length - 1]!)}`);
+    return `${last(this.#pinned.get(sub))}|${last(this.#seen.get(sub))}`;
   }
 
   #pin(sub: string, entries: Entry[]): Effect.Effect<void, CoreError> {
@@ -218,11 +264,16 @@ export class PersonalLock {
     return { ...e, sig: { key, alg: "Ed25519", sig: hex(ed25519.sign(signedBytes(entryHash(e)), seed)) } };
   }
 
-  /// One entry more, signed here, told to the cloud and pinned once it took it.
+  /// One entry more, signed here, brought to the person's stations and pinned once one took it; to the cloud too, for
+  /// the stations and devices from before that read it there, not waited on. Only when no station could be asked
+  /// (older ones, offline), the cloud is what takes it.
   #append(sub: string, seed: Uint8Array, kind: string, body: unknown): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const e = this.#entry(sub, seed, this.#myKey!, kind, body);
-      yield* this.#env.cloud(sub, "POST", PATH, { entries: [e] });
+      const toCloud = this.#env.cloud(sub, "POST", PATH, { entries: [e] });
+      const taken = this.#env.stations ? yield* this.#env.stations.bring(sub, [...(e.seq === 0 ? [] : (this.#pinned.get(sub) ?? [])), e]) : null;
+      if (taken !== null && taken > 0) this.#env.runner.fork(Effect.ignore(toCloud));
+      else yield* Effect.retry(toCloud, { times: LIMITED_TRIES, schedule: Schedule.spaced(LIMITED_WAIT), while: (e) => e.code === "rate_limited" }); // timer: a retry after a failure (429)
       yield* this.#pin(sub, [...(this.#pinned.get(sub) ?? []), e]);
       this.#seen.delete(sub);
       this.#env.changed();
@@ -253,7 +304,9 @@ export class PersonalLock {
   /// A chat's grant signed: the lock begun first where there is none, refused on a device outside it.
   signGrant(sub: string, body: Omit<GrantBody, "v" | "sub">, reason: string): Effect.Effect<SignedGrant, CoreError> {
     return Effect.gen({ self: this }, function* () {
-      const read = yield* Effect.result(this.refresh(sub));
+      // (read of the grant's own station alone: every station of the person's asked, one offline held the person's
+      // fingerprint back until it timed out, 2026-11-09)
+      const read = yield* Effect.result(this.refresh(sub, body.station));
       const standing = this.standing(sub);
       // Not heard from the cloud, no lock known here is not no lock: one begun now would take its place.
       if (read._tag === "Failure" && standing === "none") return yield* Effect.fail(read.failure);

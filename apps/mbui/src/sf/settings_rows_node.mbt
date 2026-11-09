@@ -1,10 +1,11 @@
 // The settings pages' small parts made once (the web's parts.tsx StatusDot; a note with its way after it; a station's
-// row's lead), laid out by the width the page's frame gives it (look_node): the page gives what they say, these how.
+// row's lead; the first of something to add, EmptyState's), laid out by the width the page's frame gives it (look_node): the page gives what they say, these how.
 
 ///|
 /// How something stands, at a glance (status_dot's, as a node): a dot 7 round, online the online green, busy amber,
 /// error red, waiting the muted ink, else (offline) a ring 1.5 in it; `state` as it is now.
-pub fn state_dot_node(parent : @view.View, state : () -> String) -> Unit {
+#callsite(autofill(loc))
+pub fn state_dot_node(parent : @view.View, state : () -> String, loc~ : SourceLoc) -> Unit {
   let look = fn() {
     let p = theme().p
     match state() {
@@ -15,7 +16,7 @@ pub fn state_dot_node(parent : @view.View, state : () -> String) -> Unit {
       _ => (no_ground, p.muted)
     }
   }
-  parent.box(fn(d) {
+  parent.box(made_for=loc, fn(d) {
     d
     .width(Is(Some(dot_across)))
     .height(Is(Some(dot_across)))
@@ -77,15 +78,17 @@ let station_lead_gap : Double = 8.0
 /// note's room (12 in, 8 over, 4 under), its words the note's, the way under them, or `inline` on their line after them
 /// (one line, the secondary's); wide, 8 over its words (the meta's muted, 624 at most) and the way under them, or
 /// `inline` beside them on one line. The way in the link's ink, 12, pressed `press`. As each says it now.
+#callsite(autofill(loc))
 pub fn note_link_node(
   parent : @view.View,
   words : () -> String,
   link : () -> String,
   press : () -> Unit,
   inline? : Bool = false,
+  loc~ : SourceLoc,
 ) -> Unit {
   let narrow = look_node(parent) is Narrow
-  parent.box(fn(n) {
+  parent.box(made_for=loc, fn(n) {
     if narrow {
       n.padding(Is((note_link_x, note_link_top, note_link_x, note_link_foot))) |> ignore
     } else if !inline {
@@ -148,8 +151,15 @@ let note_link_inline_wide : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5
 /// A row on a group's card that undoes what is not got back (关闭安全模式: a page's narrow foot), as an old view's row of
 /// the body's words in red: lit under the hand, rippling under a finger, `press` done as it is pressed; while `busy`
 /// says, a spinner after its words and pressed none, lit none. Read out a button named `title`.
-pub fn danger_row_node(parent : @view.View, title : () -> String, press : () -> Unit, busy? : () -> Bool = fn() { false }) -> Unit {
-  parent.box(fn(r) {
+#callsite(autofill(loc))
+pub fn danger_row_node(
+  parent : @view.View,
+  title : () -> String,
+  press : () -> Unit,
+  busy? : () -> Bool = fn() { false },
+  loc~ : SourceLoc,
+) -> Unit {
+  parent.box(made_for=loc, fn(r) {
     style_node(r, fn() { pg_row })
     let live = fn() { !busy() }
     let go = fn() {
@@ -168,8 +178,13 @@ pub fn danger_row_node(parent : @view.View, title : () -> String, press : () -> 
     let on_it = fn(d : @view.Drag) { r.finger_target(d.wx, d.wy) }
     r.gesture(
       @ui.touch_slop(),
-      press=fn(d) { if @signals.untracked(live) { rippled(d) } },
-      tap=fn(d) { if on_it(d) { go() } },
+      press=fn(d) { if @signals.untracked(live) { (rippled.down)(d) } },
+      tap=fn(d) {
+        (rippled.tapped)(d)
+        if on_it(d) {
+          go()
+        }
+      },
       drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) { go() } },
     )
     |> ignore
@@ -186,3 +201,44 @@ let danger_row_words : @ui.TextStyle = body.then(bad)
 
 ///|
 let danger_row_spin : Double = 14.0
+
+///|
+/// The first of something to add (first_one's, as a node: StationsFirst, ProfilesFirst) in `parent`: `art` over its
+/// `title` and what it is for (`lead`), the ways to add it (`actions`) under them, all in the middle of the room, as wide
+/// as first_most at most.
+#callsite(autofill(loc))
+pub fn first_one_node(
+  parent : @view.View,
+  title : () -> String,
+  actions : (@view.View) -> Unit,
+  art? : (@view.View) -> Unit,
+  lead? : () -> String = fn() { "" },
+  loc~ : SourceLoc,
+) -> Unit {
+  parent.box(made_for=loc, fn(r) {
+    style_node(r, fn() { first_room })
+    r.box(fn(b) {
+      style_node(b, fn() { first_box })
+      match art {
+        Some(f) => f(b)
+        None => ()
+      }
+      b.box(fn(t) {
+        style_node(t, fn() { first_title_at })
+        words_node(t, title, fn() { first_title }) |> ignore
+      })
+      |> ignore
+      b.show(fn() { lead() != "" }, fn(l) {
+        style_node(l, fn() { first_lead_box })
+        words_node(l, lead, fn() { first_lead }) |> ignore
+      })
+      b.box(fn(a) {
+        style_node(a, fn() { first_actions })
+        actions(a)
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}

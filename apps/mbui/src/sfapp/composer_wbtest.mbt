@@ -820,3 +820,17 @@ test "lines typed while words sent let go of the composer: the list's foot goes 
   assert_eq(foot() - @sfpages.composer_room(t.ctx(), "ws1/st1:s-c1"), over)
   t.assert_idle()
 }
+
+///|
+test "send pressed before a frame has shown the words typed: they go all the same" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  t.tap_text("发消息")
+  // (the words told by the input method and send pressed before the composer was built again: the button as it was
+  // with the field empty, as a scripted run's type and tap a few milliseconds apart)
+  t.text_told("马上发出去", t.time())
+  tap_send(t)
+  let sent = named(calls, "chat.send")
+  assert_eq(sent.length(), 1)
+  assert_eq(text(Some(sent[0].params), "text"), "马上发出去")
+}

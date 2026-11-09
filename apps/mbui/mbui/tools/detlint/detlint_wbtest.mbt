@@ -2080,6 +2080,33 @@ test "layout-read-back" {
 }
 
 ///|
+test "layout-told" {
+  // what the layout came to told back, read by what is made (the framework's outside the view too); the view's own and a
+  // test's not counted
+  let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/ui\"]}}"))
+  let fs = found(
+    [
+      (
+        "src/app/card.mbt",
+        "fn v(p : @view.View) -> Unit {\n" +
+        "  let w = p.laid_size_told().map(fn(s) { s.0 }).unwrap_or(0.0)\n" +
+        "  let side = p.went_told()\n" +
+        "  let at = p.pointer_here_told()\n" +
+        "  let h = room.tall(p)\n" +
+        "}\n",
+      ),
+      ("src/app/card_wbtest.mbt", "test \"t\" {\n  v.laid_size_told() |> ignore\n}\n"),
+      ("src/ui/links.mbt", "fn w(v : @view.View) -> Unit {\n  v.pointer_here_told() |> ignore\n}\n"),
+      ("src/view/scroll.mbt", "fn w(v : View) -> Unit {\n  v.laid_size_told() |> ignore\n}\n"),
+    ],
+    "layout-told",
+    4,
+    cfg~,
+  )
+  assert_eq(lines(fs), [2, 2, 3, 4])
+}
+
+///|
 test "tester-branch" {
   let cfg = Config::new(
     @rjson.parse(
@@ -2237,6 +2264,22 @@ test "click-read" {
 }
 
 ///|
+test "key-read" {
+  // a key read by a build outside mbui's ui and kit: counted (a call each); in ui, in a test, its own `fn`, not
+  found(
+    [
+      ("src/sfdesk/x.mbt", "fn d(c : Ctx) -> Unit {\n  if c.key_pressed(1) && c.keys_came() {\n    go()\n  }\n  let a = @settings.action_pressed(c, p, \"chat.new\")\n}\n"),
+      ("src/ui/desktop.mbt", "pub fn Ctx::key_pressed(self : Ctx, code : Int) -> Bool {\n  self.keys_came()\n}\n"),
+      ("src/sfapp/settings/keymap.mbt", "pub fn action_pressed(c : Ctx) -> Bool {\n  false\n}\n"),
+      ("src/sfapp/y_wbtest.mbt", "test \"t\" {\n  ignore(c.key_pressed(1))\n}\n"),
+    ],
+    "key-read",
+    3,
+  )
+  |> ignore
+}
+
+///|
 test "build-clock: what a frame's paint reads is not counted" {
   // read in what a paint taker is given, in a function only that calls, in one only paint's root calls: not counted;
   // in a function also called as it is built: counted
@@ -2259,7 +2302,7 @@ test "build-clock: what a frame's paint reads is not counted" {
 
 ///|
 test "build-motion" {
-  // an animated value read as it is built: @motion.animate's, an Anim's, a Way's, a Value's `get` (told by the type
+  // an animated value read as it is built: @motion.animate's, an Anim's, a Way's `get` (told by the type
   // said, by what made it, by a field of that type); read in what a paint taker is given, a signal's get, in a test,
   // not
   let fs = found(
@@ -2306,4 +2349,31 @@ test "build-motion: each way a closure goes on to a paint taker, one at a time" 
   ] {
     found([("src/kit/p.mbt", head + rest)], "build-motion", 0) |> ignore
   }
+}
+
+///|
+test "part-place" {
+  // a library's part made in the node it is given: counted where it takes no place of its caller's; one that takes it,
+  // one that makes nothing in it (it only sets what it looks like), a page's, and a test's not
+  let cfg = Config::new(
+    @rjson.parse(
+      #|{"mbt": {"roots": ["src"]}, "library": {"roots": ["src/sf"]}}
+      ,
+    ) catch {
+      _ => panic()
+    },
+  )
+  let fs = lint_of(
+    [
+      (
+        "src/sf/parts.mbt",
+        "pub fn a_node(parent : @view.View, label : () -> String) -> Unit {\n  parent.box(fn(b) { b.words(By(label)) |> ignore }) |> ignore\n}\n\n#callsite(autofill(loc))\npub fn b_node(parent : @view.View, loc~ : SourceLoc) -> Unit {\n  parent.box(made_for=loc, fn(_) {  }) |> ignore\n}\n\nfn c_look(v : @view.View) -> Unit {\n  v.ground(Is(0L)) |> ignore\n}\n\nfn d_node(p : @view.View) -> @view.View {\n  p.box(fn(_) {  })\n}\n",
+      ),
+      ("src/sfpages/page.mbt", "fn p(parent : @view.View) -> Unit {\n  parent.box(fn(_) {  }) |> ignore\n}\n"),
+      ("src/sf/x_wbtest.mbt", "fn t(parent : @view.View) -> Unit {\n  parent.box(fn(_) {  }) |> ignore\n}\n"),
+    ],
+    rule="part-place",
+    cfg~,
+  )
+  assert_eq(fs.map(fn(f) { f.line }), [1, 14])
 }

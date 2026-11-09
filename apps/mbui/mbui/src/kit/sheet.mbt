@@ -136,7 +136,7 @@ pub fn sheet(
       s.h.go_at(c, target)
     }
     s.below.go_at(c, 0.0)
-    s.fade.animate(1.0, scrim_fade())
+    s.fade.animate(c, 1.0, scrim_fade())
     s.shown = true
     s.asked = target
     s.rising = true
@@ -218,7 +218,7 @@ pub fn sheet(
     let at = s.h.value_at(c)
     s.h.put(at)
     s.below.go_at(c, dmax(at + raised, sinks))
-    s.fade.animate(0.0, scrim_fade())
+    s.fade.animate(c, 0.0, scrim_fade())
   } else if !now && sinks > s.below.target() {
     // (told how far after it closed, as one under it closed with it: on as far as that, as fast as it goes)
     s.below.go_at(c, sinks)
@@ -234,10 +234,10 @@ pub fn sheet(
   // then from what it is; sunk as far as it was told to go, not less: one closing with it gone first, the furthest they
   // went no more what it sinks to, it still goes on to where it set out for, not ending where the others' going leaves
   // it)
-  if !now && bx >= dmax(dmax(hx + raised, sinks), s.below.target()) - 0.5 && s.fade.over() {
+  if !now && bx >= dmax(dmax(hx + raised, sinks), s.below.target()) - 0.5 && s.fade.over(c) {
     // sunk away
     s.shown = false
-    s.fade.snap(0.0)
+    s.fade.snap(c, 0.0)
     s.was_open = false
     return { open: false, shown: false, dragged }
   }
@@ -250,11 +250,12 @@ pub fn sheet(
       // (its look given the scrim's share as it is built: the sheet's own glass drawn solid darkens with it, a colour
       // with no form read as it is drawn; the sheet is laid out again as it goes anyway, its height and place its
       // springs' as they are built)
-      look(c, { t: s.fade.get(), h: hx, below: bx }, fn() {
+      look(c, { t: s.fade.get(c), h: hx, below: bx }, fn() {
         // behind what it shows (its buttons take their taps), over the sheet (it takes the drags): what lies on it
         // (its title, its grabber) pressed through it, while it takes presses (not as it sinks away, nor raised under
-        // another, which takes them: its top may be past the window's then)
-        if now && raised <= 0.0 {
+        // another, which takes them: its top may be past the window's then; nor while what it drags by is above the
+        // window, the sheet pulled past its most and giving way, springing back: nothing of it there to press)
+        if now && raised <= 0.0 && total - hx + bx - raised + drag_h > 0.0 {
           c.presses_to(top_id)
         }
         c.layer(fn() { c.drag_area(top_id, axis=Vertical, w=Fill(1.0), h=Px(drag_h), fn() {  }) |> ignore }) |> ignore
@@ -266,14 +267,14 @@ pub fn sheet(
     @motion.measure(c, i, sheet_measured)
   })
   if o.scrim >= 0 {
-    c.bg_by(o.scrim, fn() { @ui.alpha(scrim, s.fade.get()) })
+    c.bg_by(o.scrim, fn() { @ui.alpha(scrim, s.fade.get(c)) })
   }
   if now && o.dismissed is Some(_) {
     now = false
     s.held = -1.0
     s.h.put(hx)
     s.below.go_at(c, dmax(hx + raised, sinks))
-    s.fade.animate(0.0, scrim_fade())
+    s.fade.animate(c, 0.0, scrim_fade())
   }
   s.was_open = now
   { open: now, shown: true, dragged }
@@ -302,6 +303,16 @@ let sheet_give : Double = 0.55
 pub fn sheet_top(c : @ui.Ctx) -> Double? {
   match @motion.measured_rect(c, sheet_measured) {
     Some((_, y, _, _)) => Some(y)
+    None => None
+  }
+}
+
+///|
+/// Where the top of the sheet up is in the window this frame and how tall it is, as it is laid out (None where none is
+/// up): sheet_top's, with how far it has to come up (for what keeps clear of it once it is all the way up).
+pub fn sheet_place(c : @ui.Ctx) -> (Double, Double)? {
+  match @motion.measured_rect(c, sheet_measured) {
+    Some((_, y, _, h)) => Some((y, h))
     None => None
   }
 }

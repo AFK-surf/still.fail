@@ -1,6 +1,7 @@
 // Markdown read in the engine the apps run (Hermes, no JIT): `parse` (markdown.ts) over agents' replies (replies.ts,
 // given as TEXTS by whoever bundles it), timed, and markdown-it's part of it apart (mdRead.ts). Bundled as the core is
 // and run by Hermes's own command: apps/mbui/scripts/core.sh md-parse.
+import "../src/hosts/hermes-globals.ts";
 import { parse } from "../src/markdown.ts";
 import { read } from "../src/mdRead.ts";
 

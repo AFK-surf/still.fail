@@ -165,3 +165,10 @@ pub fn step(db : @sql.Db, thread : Int64, limit? : Int = 128) -> Bool raise {
   db.exec("COMMIT")
   next == 2
 }
+
+///|
+/// Whether a chat's card posts are all in the index (card-post-index.ts `cardPostsReady`): the index's version checked.
+pub fn ready(db : @sql.Db, thread : Json) -> Bool raise {
+  check(db)
+  phase(scope_of(db, thread)) == 2
+}

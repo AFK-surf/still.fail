@@ -72,7 +72,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     app-level things, and the shared machinery. It imports the library and the settings' routes, nothing of the pages.
   - `src/sfdesk` holds the pages ported from the web, and the Medium and Large frame.
   - `src/sfapp` holds the phone's first pages and the Small frame. It takes `sfbase`'s names in by
-    `pub using` (`sfapp/base.mbt`) and calls `sfdesk`'s as `@sfdesk.…`.
+    `pub using` (`src/sfapp/base.mbt`) and calls `sfdesk`'s as `@sfdesk.…`.
   - `src/sfpages` holds the pages already merged, one for every screen; `sfdesk` and `sfapp` import it.
 - **What doesn't change:**
   - Something both need moves down into `sfbase` or the library, once.
@@ -88,9 +88,19 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   - A page is designed once from what it is for; the web's two are read for their reasons, not copied or picked
     between. The merged page is no worse on either screen than its copy was there, shown before and after.
 
+## Made once, as nodes
+
+- The app is moving off the old immediate-mode view (`Ctx`, built again each frame) onto the window's tree, made once
+  (mbui's `mbui/src/view`; `mbui/AGENTS.md`, Two views). What is new or rewritten is nodes: a page is `@sf.page_node`, a
+  panel `@sf.panel_nodes` (drawn on 小屏 as a sheet from the foot), a long list `View::each` in what scrolls
+  (`View::scrolls_window`); the library's parts are its `*_node.mbt` ones. A press does its work in its handler (`on_press`, `on_pick`, `on_change`).
+- What is left of the old is counted by detlint and only falls: `old-island` (`@ui.old` hosting a Ctx in a node),
+  `old-list` (`Ctx::list`), `old-panel`, `click-read`, `key-read`, `build-motion`, `layout-read-back`, `ui-current`.
+  A change never adds one; one it touches it moves over. A node-made part is never wrapped back into a Ctx.
+
 ## Motion
 
-- `sf/motion.mbt` says what moves and how; read it before adding or changing a motion. In short (the user,
+- `src/sf/motion.mbt` says what moves and how; read it before adding or changing a motion. In short (the user,
   2026-10-25):
   - Every motion is one of nine kinds (in the hand, coming and going, moved or reshaped, flying, another page,
     scrolled to, a control answering, waiting, emphasis), each set off one way, with the kind's presets.
@@ -111,10 +121,17 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   only when it changed; the app compiled here for the device and put in its files), an iOS simulator's app (which reads
   the app where it lies on the Mac), a Windows program (Git Bash with MSVC). `e2e/run.sh android|ios` run it outside
   CI. `scripts/android.sh`, `ios.sh`, `win.sh` build the native apps, CI's and the releases'.
+- On a person's phone (lent to a chat by `phone_use`), a build of work in progress goes in as the dev build,
+  `fail.still.android.dev` (`scripts/android.sh`'s `VARIANT` left as it is), installed over the one there, whichever
+  chat put it: never a package of a chat's own, never in place of their stable or beta (the user, 2026-11-09). Its
+  test hooks (`env`, a drive script, a fixture) open with `adb shell setprop debug.mbui.hooks 1`.
 
 ## What is checked, and where
 
 - The app's screens are tested in the Tester: its draw list at the declared moment.
+- A screen changed is checked by `t.audit()` (every rule at once, each fault saying where what it names was made), not
+  by judging a picture; what people point at (their words on a screenshot) is found back to its line by
+  `t.sources_of(words)` or `t.sources_at(x, y)` on the same screen in the Tester (mbui's AGENTS.md: What is seen).
 - For development stills, prepare a `scripts/media-job.sh picture` job for each source state and reuse its Wasm
   renderer across scenes; use a `film` job for video (`scripts/media-job.sh` says how).
 - No check runs the whole app on a device, an emulator, a simulator or a desktop window and compares its picture
@@ -122,11 +139,13 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   contracts (`mbui-host-*`), the render contracts, and a few end-to-end smoke flows that wait for named events; their
   pictures are for people, not compared. detlint's `device-shot` counts each picture taken off a device: a new one
   fails.
+- How long input takes to show (`scripts/latency.sh`: a Mac's window, a phone) is measured for people on a real host,
+  never a check: its runs differ with the window server's state, so it says medians of several, two builds in turn.
 
 ## The host is asked through mbui/hostapi
 
-- App code asks its host through `@hostapi` (or `@ui`), never imports `mbui/host`: only a main (`src/stillfail`,
-  the demos) does, for the platform's host. A test's program links no host's code, so the native tests run on Linux
+- App code asks its host through `@hostapi` (or `@ui`), never imports mbui's host package (`mbui/src/host`): only a
+  main (`src/stillfail`, the demos) does, for the platform's host. A test's program links no host's code, so the native tests run on Linux
   (`TARGETS=native scripts/test.sh`, CI's check-mbui native). detlint's `host-import` holds it.
 
 ## Time is declared
@@ -134,6 +153,27 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - What the app shows is tested in the Tester (`src/sfapp`, `src/sfreplay` replaying recorded core tapes): walk to it,
   say the moment, assert, as mbui's rules say. `detlint.json` (run with `mbui/scripts/detlint`) counts the waits left
   and only lets them fall.
+
+## Where the tests run (the user, 2026-11-08)
+
+- The whole suite (`scripts/test.sh`, `mbui/scripts/test.sh`) is the PR's CI's: native, side by side, five minutes.
+  On Studio or a laptop it is wasm-gc in a row, half an hour and more, with every other agent queued behind it, so
+  both scripts refuse outside CI. There run `check`, detlint and the test files the change touches
+  (`moon test --target wasm-gc --release src/sfapp/<file>_wbtest.mbt`), and a bench when it is a speed change.
+- A speed change is measured by `scripts/instrbench.sh`: what each frame runs, counted by kind of instruction, the same
+  every run (its `compare` sets two checkouts' runs side by side). It says numbers, each kind's and weighted, never a
+  verdict: what they say of the change is weighed and told as it is (the user, 2026-11-09). A device's or the native
+  build's time (`scripts/appbench.sh`) is what a frame takes there.
+- What the builds weigh (the web's `app.js` raw, gzip and brotli, the APK, the Mac app) and the memory the Mac and
+  Android apps take once idle are recorded, never a gate (the user, 2026-11-09): `.github/workflows/mbui-size.yml`
+  after each pipeline run on main that built them (`scripts/size.sh`, `scripts/idlemem.sh`), a line per commit on the
+  branch `mbui-size`. A change meant to make the app smaller or lighter says those numbers before and after.
+- A push starts CI. Push when the work is meant to merge (the change done, its files' tests and the bench passed),
+  not after each small change: Studio's runs take the worktree by `station_task`'s `dir`, no push needed.
+- A PR pushed has its CI watched by the stillfail-github-ci skill's `ci-wait.sh` run in the background, whose end
+  brings you back; meanwhile go on with the next step, not watching it yourself (the user, 2026-11-09). A failed check
+  is read from its log, fixed and pushed again; the work is done once all of it passed.
+- A brief that sends an agent to work here says the same; it never asks for a full run before the PR.
 
 ## Before a PR
 

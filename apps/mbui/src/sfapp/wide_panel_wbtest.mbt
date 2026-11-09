@@ -333,5 +333,6 @@ test "wide: a chat of a Slack thread alone has its \"…\" too: where it is, its
   assert_true(t.find("在 Slack 中打开") is None)
   t.click(Button, label="更多")
   t.run_for(@ui.move_most_ms)
+  open_share(t)
   assert_true(t.find("在 Slack 中打开") is Some(_))
 }

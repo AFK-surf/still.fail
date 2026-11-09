@@ -1053,6 +1053,9 @@ web-main.shortcuts.moved
 web-main.shortcuts.recording
 web-main.shortcuts.reset
 web-main.shortcuts.resetAll
+web-main.shortcuts.sendNote
+web-main.shortcuts.sendWith
+web-main.shortcuts.sending
 web-main.shortcuts.title
 web-main.shortcuts.unset
 web-main.usage.showAll

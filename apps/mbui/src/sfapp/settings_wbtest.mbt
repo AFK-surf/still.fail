@@ -813,14 +813,14 @@ test "a subscription signing in: its page's address copied from the ⋯ beside �
 ///|
 test "adding an Anthropic subscription asks before opening its authorization page" {
   let t = settings_tester("new-profile:ws1/st1", shows="settings-new-profile-login", platform=2)
-  t.tap_text("打开授权页面")
+  t.click(Button, label="打开授权页面")
   sheet_rested(t, "sf-present")
   assert_true(t.find("打开 Claude 授权页面？") is Some(_))
   assert_true(t.opened().is_empty(), msg="nothing opened before confirmation")
   t.back()
   sheet_rested(t, "sf-present")
   assert_true(t.opened().is_empty(), msg="cancelling leaves the page closed")
-  t.tap_text("打开授权页面")
+  t.click(Button, label="打开授权页面")
   sheet_rested(t, "sf-present")
   t.tap_text("继续打开")
   assert_eq(t.opened().length(), 1)
@@ -1123,13 +1123,12 @@ test "a station's permissions: each grant's mark across the middle of its title'
         }
         None => fail("no \{g.1} at \{w}")
       }
-      // (its mark: the one just before its title, not the settings' side's of the same name)
-      let marks = t
-        .shape_boxes()
-        .filter(fn(b) { b.0.has_prefix("sf/icon/" + g.0 + "/") && b.1 < title.0 && b.1 > title.0 - 48.0 })
+      // (its mark: the one just before its title, not the settings' side's of the same name; by what it is drawn as,
+      // its middle, as the page's nodes draw it)
+      let marks = t.locate("icon:" + g.0).filter(fn(p) { p.0 < title.0 && p.0 > title.0 - 48.0 })
       assert_true(marks.length() == 1, msg="\{g.1}'s mark at \{w}")
       let mark = marks[0]
-      let off = (mark.2 + mark.4 / 2.0 - (title.1 + title.3 / 2.0)).abs()
+      let off = (mark.1 - (title.1 + title.3 / 2.0)).abs()
       assert_true(off < 1.0, msg="\{g.1}'s mark \{off} off its title's middle at \{w}")
     }
   }

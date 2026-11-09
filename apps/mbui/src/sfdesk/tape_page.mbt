@@ -317,7 +317,7 @@ fn tape_made(
             }
             p.owns(fn() {
               let tb = tape_bar_of(k)
-              if @signals.untracked(fn() { tb.page_actions.get() }) is Some((_, _, g)) && g == gen {
+              if tb.page_actions.untracked() is Some((_, _, g)) && g == gen {
                 tb.page_actions.set(None)
               }
             })
@@ -356,6 +356,13 @@ fn tape_made(
       made("changelog", fn(p, core, _here, _stint, told, _acts) {
         context_node(p)
         @sfpages.changelog_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
+      })
+    // (the profiles' place: the profile picked in its list, made once as its page is, none to pick yet the first to add;
+    // made in every case, as it has no old view)
+    Place("profiles") =>
+      made("place/profiles", fn(p, core, here, stint, told, _acts) {
+        context_node(p)
+        profiles_place_node(p, src, core, here, stint, fn() { tape_made_frame }, width, said=told, tips~)
       })
     // (a place of the rail's whose page is one of those: that page as the settings open it, at the stack's root, made
     // under its own kind)
@@ -399,10 +406,27 @@ fn tape_made(
       made("appearance", fn(p, core, _here, _stint, told, _acts) {
         @sfpages.appearance_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
+    // (by its station and id: another's another page; made in every case, as it has no old view)
+    Setting(Profile(address, id)) =>
+      made("profile/" + address + "/" + id, fn(p, core, here, stint, told, _acts) {
+        context_node(p)
+        @sfpages.profile_node(p, core, here, address, id, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~, stint~)
+      })
+    Setting(NewProfile(address)) =>
+      made("new-profile/" + address, fn(p, core, here, _stint, told, _acts) {
+        context_node(p)
+        @sfpages.new_profile_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
+      })
     Setting(LocalStation) if pane_makes.val =>
       made("local-station", fn(p, core, _here, _stint, told, _acts) {
         context_node(p)
         @sfpages.local_station_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
+      })
+    // (by its station: another station's another page, not this one become it)
+    Setting(Station(address)) if pane_makes.val =>
+      made("station/" + address, fn(p, core, here, stint, told, _acts) {
+        context_node(p)
+        @sfpages.station_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~, stint~)
       })
     Setting(Permissions) if pane_makes.val =>
       made("permissions", fn(p, core, _here, _stint, told, _acts) {
@@ -428,6 +452,15 @@ fn tape_made(
       made("vault-items", fn(p, core, here, _stint, told, _acts) {
         context_node(p)
         @sfpages.vault_items_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
+      })
+    // (by its station and id: another's another page; 添加连接 in the bar)
+    Setting(Connects(only)) if pane_makes.val =>
+      made("connects/" + only, fn(p, core, here, stint, told, acts) {
+        @sfpages.connects_node(p, src, core, here, only, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told, width~, tips~, bar_actions=acts)
+      })
+    Setting(Connect(station, id)) if pane_makes.val =>
+      made("connect/" + station + "/" + id, fn(p, core, here, stint, told, _acts) {
+        @sfpages.connect_node(p, src, core, here, station, id, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told, width~, tips~)
       })
     Setting(AutoCompletion) if pane_makes.val =>
       made("auto-completion", fn(p, core, here, _stint, told, acts) {
@@ -464,7 +497,7 @@ fn tape_made(
       Some(
         (
           "chat",
-          fn(v, _page, _under, _stint, k) { @sfbase.chat_page_made(v, src, k, tape_page_one, key=tape_island_key) },
+          fn(v, _page, _under, _stint, k) { @sfbase.chat_page_made(v, src, k, tape_page_one, key=tape_island_key) |> ignore },
         ),
       )
     _ => None

@@ -131,13 +131,13 @@ fn panel_node(
         .presses(Is(true))
         .on_press(fn() {  })
         |> ignore
-        // (the side of what opened it it went on, as the tree placed it (View::went_told: flipped there for want of room,
-        // told as it goes to the other): what its parts keep nearest what opened it is by that side (panel_opens_up), read
-        // as each is built, so built again as it goes to the other side, never as it only moves; what was told before
-        // given back after, for no other panel to read)
+        // (the side of what opened it it went on, as the tree placed it (@ui.old_went: flipped there for want of room,
+        // its old views built again as it goes to the other): what its parts keep nearest what opened it is by that side
+        // (panel_opens_up), read as each is built, never as it only moves; what was told before given back after, for no
+        // other panel to read)
         let opened = fn() {
           let was = beside_given.val
-          beside_given.val = { side: p.went_told().unwrap_or(x.side), room: 1.0e9, panel: 0 }
+          beside_given.val = { side: @ui.old_went().unwrap_or(x.side), room: 1.0e9, panel: 0 }
           was
         }
         // (each part of it out to the panel's edges it stands by, the panel's padding round what it holds inside it: what
@@ -155,7 +155,7 @@ fn panel_node(
         // (a live one headed only while it has a title, what stands at its head's end with it, as small_panel heads it;
         // what it is presented with headed by a head's end alone too)
         let headed_now : @signals.Computed[Bool] = @signals.computed(
-          fn(_) { !x.heads_itself && (title() != "" || (x.live is None && x.head_end is Some(_))) },
+          fn(_) { !x.heads_itself && title() != "" },
           same=fn(a, b) { a == b },
         )
         let headed = fn() { headed_now.get() }
@@ -167,13 +167,25 @@ fn panel_node(
         let under = if !footed || ruled_foot { panel_pad } else { 0.0 }
         // (out to the panel's edge under it where nothing is under it; over a ruled foot, the room its own, in it)
         let out_under = if footed { 0.0 } else { panel_pad }
-        // (its title, panel_head's: out to the panel's edges over it, on `v`'s node)
+        // (its title, panel_head's: out to the panel's edges over it, on `v`'s node; where what it holds is nodes
+        // (panel_nodes), nodes too, its words as faint as the panel's look says: nothing of the old frame in it)
         let head = fn(v : @view.View) {
-          @ui.old(v, natural=true, fits?=fits(0), key=fn() { key + "/head" }, fn(c) {
-            let was = opened()
-            let held = c.box(style=panel_part_in(panel_pad, 0.0), fn() { panel_head(c, title(), end?=x.head_end) })
-            beside_given.val = was
-            words_look(c, held)
+          if x.nodes is None {
+            return @ui.old(v, natural=true, fits?=fits(0), key=fn() { key + "/head" }, fn(c) {
+              let was = opened()
+              let held = c.box(style=panel_part_in(panel_pad, 0.0), fn() { panel_head(c, title()) })
+              beside_given.val = was
+              words_look(c, held)
+            })
+          }
+          v.box(fn(h) {
+            style_node(h, fn() { panel_part_in(panel_pad, 0.0) })
+            h.alpha(By(fn() { look().words })) |> ignore
+            h.box(fn(b) {
+              style_node(b, fn() { panel_head_box })
+              words_node(b, title, fn() { panel_title }) |> ignore
+            })
+            |> ignore
           })
         }
         match x.live {
@@ -199,6 +211,8 @@ fn panel_node(
                 b.box(fn(col) {
                   style_node(col, fn() { panel_grows.then(panel_part_in(over(), under)) })
                   col.grow(Is(1.0)).alpha(By(fn() { look().words })) |> ignore
+                  // (laid out as a small panel's old body is: wide, its words a row's padding in)
+                  panel_in_lend(col, Wide, text_in, small=true)
                   (n.body)(col, close)
                 })
                 |> ignore
@@ -245,6 +259,8 @@ fn panel_node(
                   s.box(fn(col) {
                     style_node(col, fn() { held_in().then(@ui.style(pt=room(over()), pb=room(under))) })
                     col.margin(By(fn() { (0.0, -over(), 0.0, -out_under) })).alpha(By(fn() { look().words })) |> ignore
+                    // (laid out as a small panel's old body is: wide, its words a row's padding in)
+                    panel_in_lend(col, Wide, text_in, small=true)
                     (n.body)(col, close)
                   })
                   |> ignore

@@ -117,7 +117,7 @@ test "wide: a row's menu from its right click pins it (chat.pin) and closes" {
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
   t.right_click(x, y)
   assert_true(t.find("重命名") is Some(_))
-  assert_true(t.find("复制会话链接") is Some(_))
+  assert_true(t.find("分享…") is Some(_))
   match t.find("固定") {
     Some(_) => {
       t.tap_text("固定")
@@ -127,7 +127,7 @@ test "wide: a row's menu from its right click pins it (chat.pin) and closes" {
     None => ()
   }
   t.key(@ui.key_escape)
-  assert_true(t.find("复制会话链接") is None)
+  assert_true(t.find("分享…") is None)
 }
 
 ///|
@@ -136,6 +136,8 @@ test "wide: a row's menu offers what its page's \"…\" does besides (分享给�
   let t = wide_tester(calls, mode="home-share")
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
   t.right_click(x, y)
+  // (in its 分享…, with the rest of what shares it)
+  open_share(t)
   assert_true(t.query(MenuItem, label="分享给其他 workspace") is Some(_), msg=t.drawn_text())
   assert_true(t.query(MenuItem, label="在 Slack 中打开") is Some(_), msg=t.drawn_text())
   t.click(MenuItem, label="分享图片")
@@ -146,6 +148,7 @@ test "wide: a row's menu offers what its page's \"…\" does besides (分享给�
   t.key(@ui.key_escape)
   let (x, y) = t.find("给设置页加一个深色模式开关").unwrap()
   t.right_click(x, y)
+  open_share(t)
   assert_true(t.query(MenuItem, label="复制会话链接") is Some(_))
   assert_true(t.query(MenuItem, label="分享图片") is None)
   assert_true(t.query(MenuItem, label="分享给其他 workspace") is None)
@@ -477,7 +480,7 @@ test "wide: next and previous move the stroke between occurrences in one message
   t.frame()
   t.frame()
   assert_eq(@sfpages.find_k(), 1)
-  assert_true(reading_of("ws1/st1\u{1}s-c1").found_drawn.get() < @sf.stroke_ms, msg="the stroke draws in again for the next occurrence")
+  assert_true(reading_of("ws1/st1\u{1}s-c1").found_drawn.get(t.ctx()) < @sf.stroke_ms, msg="the stroke draws in again for the next occurrence")
   assert_true(coloured(first) && coloured(second), msg="the colouring in is still, as the reader moves")
   t.run_for(@sf.stroke_ms)
   assert_true(!strong_under(first) && strong_under(second), msg="the second occurrence is current")
@@ -2852,11 +2855,11 @@ test "wide: Esc goes to what the frame opened first (a row's menu), then to the 
   assert_true(@sfpages.find_chat() != "")
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
   t.right_click(x, y)
-  assert_true(t.find("复制会话链接") is Some(_))
+  assert_true(t.find("分享…") is Some(_))
   // the menu closed, the bar still open
   t.key(@ui.key_escape)
   t.frame()
-  assert_true(t.find("复制会话链接") is None)
+  assert_true(t.find("分享…") is None)
   assert_true(@sfpages.find_chat() != "")
   // then the bar
   t.key(@ui.key_escape)

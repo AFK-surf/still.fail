@@ -720,6 +720,7 @@ common.save
 common.search
 common.telemetry.note
 common.telemetry.title
+common.uploadConfirming
 common.uploading
 core-logic.accounts.login.failed
 desktop.contextMenu.copy
@@ -855,6 +856,8 @@ web-main.chat.regenerateTitle.start
 web-main.chat.regenerateTitle.verb
 web-main.chat.resendFailed
 web-main.chat.sending
+web-main.chat.share
+web-main.chat.share.title
 web-main.chat.toLatest
 web-main.chat.transcriptCopied
 web-main.chat.unkeep
@@ -2502,6 +2505,7 @@ web-pages.slackApp.allOn
 web-pages.slackApp.apply
 web-pages.slackApp.approve
 web-pages.slackApp.approveNote
+web-pages.slackApp.color
 web-pages.slackApp.descriptionPlaceholder
 web-pages.slackApp.drawFailed
 web-pages.slackApp.foldNote

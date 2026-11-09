@@ -408,8 +408,11 @@ fn doing_mark_node(
 }
 
 ///|
-/// doing_mark's mark beside a row's words (inline: 12).
+/// doing_mark's mark and spinner beside a row's words (inline: 12), and at its end (14).
 let doing_mark_inline : Double = 12.0
+
+///|
+let doing_mark_end : Double = 14.0
 
 ///|
 /// What a station says of its rule, made up, for what is shown while it is read (form_rows in its bones): it may be
@@ -603,7 +606,8 @@ fn policy_body_node(v : @view.View, core : Core, station : String, policy : () -
 ///|
 /// A part of the policy edited in a dialog (PolicyDialog): its words (`id` and `key` ""), an option of the station's
 /// (`id`, with what the checks put there: `ov`), or a new one (`key`, its draft's). 保存 closes it and saves on under the
-/// policy (a spinner, or what went wrong); 取消 and closing put the draft back.
+/// policy (a spinner, or what went wrong); 取消 and closing put the draft back. What it holds and its buttons are nodes
+/// of the window's tree (open_dialog_nodes), made once as it opens: what they show follows the draft as it changes.
 fn policy_dialog(core : Core, station : String, form : String, policy : Json?, id : String, key : String, ov : Json?) -> Unit {
   let edit = fn(input : Array[(String, Json)]) {
     (core.call)("automaticDecisions.policy.edit", obj([("station", str(station)), ("form", str(form)), ("input", obj(input))]), fn(_) {  })
@@ -629,115 +633,165 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
     }
     f
   }
+  // what is typed in `f` told to `edited` as it changes (at its cause's moment), not the words it was given
+  let on_typed = fn(n : @view.View, f : @ui.Field, edited : (String) -> Unit) {
+    let was = Ref(@signals.untracked(fn() { f.text() }))
+    n.reacts(fn() { f.text() }, fn(words) {
+      if words != was.val {
+        was.val = words
+        edited(words)
+      }
+    })
+  }
   // `remove`: the option of the station's (its id) 删除 takes out and saves; "" none
   let foot = fn(remove : String) {
-    fn(c : @ui.Ctx, shut : () -> Unit) {
+    fn(v : @view.View, shut : () -> Unit) {
       if remove != "" {
-        @sf.button(c, @sf.t("web-pages.archivePolicy.remove"), key="policy-remove", tone=GhostDanger, on_press=fn() {
-          shut()
-          (core.call)("automaticDecisions.policy.edit", obj([("station", str(station)), ("form", str(form)), ("input", obj([("remove", str(remove))]))]), fn(
-            _,
-          ) {
-            save()
-          })
-        })
+        @sf.button_node(
+          v,
+          fn() { @sf.t("web-pages.archivePolicy.remove") },
+          fn() {
+            shut()
+            (core.call)("automaticDecisions.policy.edit", obj([("station", str(station)), ("form", str(form)), ("input", obj([("remove", str(remove))]))]), fn(
+              _,
+            ) {
+              save()
+            })
+          },
+          tone=GhostDanger,
+        )
         |> ignore
       }
-      c.spacer()
-      @sf.button(c, @sf.t("web-pages.archivePolicy.cancel"), key="policy-cancel", tone=Ghost, on_press=fn() {
-        c.blur()
-        shut()
-        edit([("reset", Json::boolean(true))])
-      })
+      @sf.foot_spacer_node(v)
+      @sf.button_node(
+        v,
+        fn() { @sf.t("web-pages.archivePolicy.cancel") },
+        fn() {
+          v.focus_let_go()
+          shut()
+          edit([("reset", Json::boolean(true))])
+        },
+        tone=Ghost,
+      )
       |> ignore
-      @sf.button(c, @sf.t("web-pages.archivePolicy.save"), key="policy-save", tone=Primary, disabled=!flag(draft(), "dirty"), on_press=fn() {
-        c.blur()
-        shut()
-        save()
-      })
+      @sf.button_node(
+        v,
+        fn() { @sf.t("web-pages.archivePolicy.save") },
+        fn() {
+          v.focus_let_go()
+          shut()
+          save()
+        },
+        tone=Primary,
+        disabled=fn() { !flag(draft(), "dirty") },
+      )
       |> ignore
     }
   }
   if id == "" && key == "" {
-    open_dialog(
+    open_dialog_nodes(
       @sf.t("web-pages.archivePolicy.title"),
       description=@sf.t("web-pages.archivePolicy.textLead"),
       wide=true,
-      fn(c, _) {
-        let d = draft()
-        let f = words_of("policy", text(d, "policy"))
-        @sf.textarea(c, "policy/" + serial + "/policy", rows=8, field=f, on_change=fn(words) {
-          if draft() is Some(Object(_)) {
+      fn(v, _) {
+        let f = words_of("policy", text(@signals.untracked(draft), "policy"))
+        let area = @sf.textarea_node(v, f, rows=8, label=@sf.t("web-pages.archivePolicy.title"))
+        on_typed(area, f, fn(words) {
+          if @signals.untracked(draft) is Some(Object(_)) {
             edit([("policy", str(words))])
           }
         })
-        |> ignore
       },
       foot(""),
     )
     return
   }
   let fresh = key != ""
-  open_dialog(
+  open_dialog_nodes(
     if fresh {
       @sf.t("web-pages.archivePolicy.newOption")
     } else {
       text(ov, "name")
     },
-    fn(c, shut) {
-      let d = draft()
-      let o = items(d, "options").iter().find_first(fn(x) { if fresh { text(Some(x), "key") == key } else { text(Some(x), "id") == id } })
-      guard o is Some(oj) else { return }
-      let o = Some(oj)
-      let okey = text(o, "key")
-      @sf.field(c, @sf.t("web-pages.archivePolicy.name"), fn() {
-        @sf.input(c, "policy/" + serial + "/name", field=words_of("name", text(o, "name")), on_change=fn(n) {
-          edit([("option", str(okey)), ("name", str(n))])
+    fn(v, shut) {
+      // (the option as the draft has it now: none while it is read, nothing shown till then)
+      let o = fn() {
+        items(draft(), "options").iter().find_first(fn(x) { if fresh { text(Some(x), "key") == key } else { text(Some(x), "id") == id } })
+      }
+      let has = fn() { o() is Some(_) }
+      // (its parts each shown once it is there, each made as the draft has it then: in the column the dialog gives
+      // them, apart as it has them)
+      let okey = fn() { text(@signals.untracked(o), "key") }
+      v.show(has, fn(p) {
+        @sf.field_node(p, fn() { @sf.t("web-pages.archivePolicy.name") }, fn(b) {
+          let f = words_of("name", text(@signals.untracked(o), "name"))
+          let line = @sf.input_node(b, f, label=@sf.t("web-pages.archivePolicy.name"))
+          on_typed(line, f, fn(n) { edit([("option", str(okey())), ("name", str(n))]) })
         })
-        |> ignore
       })
-      @sf.field(c, @sf.t("web-pages.archivePolicy.rubric"), fn() {
-        @sf.textarea(c, "policy/" + serial + "/rubric", rows=3, field=words_of("rubric", text(o, "rubric")), on_change=fn(r) {
-          edit([("option", str(okey)), ("rubric", str(r))])
+      v.show(has, fn(p) {
+        @sf.field_node(p, fn() { @sf.t("web-pages.archivePolicy.rubric") }, fn(b) {
+          let f = words_of("rubric", text(@signals.untracked(o), "rubric"))
+          let area = @sf.textarea_node(b, f, rows=3, label=@sf.t("web-pages.archivePolicy.rubric"))
+          on_typed(area, f, fn(r) { edit([("option", str(okey())), ("rubric", str(r))]) })
         })
-        |> ignore
       })
-      @sf.field(c, @sf.t("web-pages.archivePolicy.counts"), fn() {
-        @sf.segmented(
-          c,
-          "policy/" + serial + "/archive",
-          [@sf.t("web-pages.archivePolicy.archive"), @sf.t("web-pages.archivePolicy.keep")],
-          if flag(o, "archive") { 0 } else { 1 },
-          on_pick=fn(i) { edit([("option", str(okey)), ("archive", Json::boolean(i == 0))]) },
-        )
-        |> ignore
+      v.show(has, fn(p) {
+        @sf.field_node(p, fn() { @sf.t("web-pages.archivePolicy.counts") }, fn(b) {
+          // (the one pressed chosen at once, the draft's from then on as it says it)
+          let picked : @signals.Signal[Int?] = @signals.signal(None)
+          let drafted = fn() { if flag(o(), "archive") { 0 } else { 1 } }
+          b.reacts(drafted, fn(_) { picked.set(None) })
+          b.box(fn(line) {
+            line.row(Is(true)) |> ignore
+            line.box(fn(slot) {
+              @sf.segmented_node(
+                slot,
+                fn() { [@sf.t("web-pages.archivePolicy.archive"), @sf.t("web-pages.archivePolicy.keep")] },
+                fn() { picked.get().unwrap_or(drafted()) },
+                fn(i) {
+                  picked.set(Some(i))
+                  edit([("option", str(okey())), ("archive", Json::boolean(i == 0))])
+                },
+              )
+            })
+            |> ignore
+          })
+          |> ignore
+        })
       })
       // the chats the checks put there, each to its chat
       if count(ov, "count") > 0 {
-        c.box(style=pol_chats, fn() {
-          c.text(@sf.t("web-pages.archivePolicy.chats", args=[("days", count(policy, "days").to_string())]), style=pol_group_name) |> ignore
+        v.show(has, fn(p) {
+          @sf.style_node(p, fn() { pol_chats })
+          @sf.words_node(p, fn() { @sf.t("web-pages.archivePolicy.chats", args=[("days", count(policy, "days").to_string())]) }, fn() {
+            pol_group_name
+          })
+          |> ignore
           for ch in items(ov, "chats") {
-            let cid = c.id("policy-chat/" + text(Some(ch), "session"))
-            c.on_press(cid, fn() {
-              shut()
-              edit([("reset", Json::boolean(true))])
-              (core.open_chat)(station, text(Some(ch), "session"), text(Some(ch), "title"))
+            let chv = Some(ch)
+            p.box(fn(b) {
+              @sf.style_node(b, fn() { pol_chat_box })
+              @sf.presses_node(b, fn() {
+                shut()
+                edit([("reset", Json::boolean(true))])
+                (core.open_chat)(station, text(chv, "session"), text(chv, "title"))
+              })
+              @sf.words_node(b, fn() { text(chv, "title") }, fn() { pol_chat }) |> ignore
             })
-            c.box(id=cid, style=pol_chat_box, fn() { c.text(text(Some(ch), "title"), style=pol_chat) |> ignore }) |> ignore
+            |> ignore
           }
           let more = count(ov, "count") - items(ov, "chats").length()
           if more > 0 {
-            c.text(@sf.t("web-pages.archivePolicy.more", args=[("n", more.to_string())]), style=pol_more) |> ignore
+            @sf.words_node(p, fn() { @sf.t("web-pages.archivePolicy.more", args=[("n", more.to_string())]) }, fn() { pol_more })
+            |> ignore
           }
         })
-        |> ignore
       }
     },
     foot(if fresh { "" } else { id }),
   )
 }
-
-
 
 ///|
 /// (policyWords: 8 above and under, 10 out to each side with its ground, the field's corner, the list's ground pointed

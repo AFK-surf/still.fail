@@ -2,7 +2,7 @@
 // page or the hover's where the hand is on it (dur_ms, eased out, from the moment that changed); faded while it cannot
 // be pressed; at work, a spinner's room opening before its words (a Move as far as that room) and the spinner turning
 // in it, coming in as it opens; its words changed, its ground and its words going together to where they are laid out
-// (moves_together: the same cause, one length); read out a button, pressed where it is laid out.
+// (moves_for: the same cause, one length); read out a button, pressed where it is laid out.
 
 ///|
 /// The button in `parent`: `label` its words, `tone` its look, `busy` while what it does is under way (not pressed
@@ -12,6 +12,7 @@
 /// words changing go to their place for that cause. `card_words`: in a card's foot corner, its words where the card's
 /// begin (card_foot_words's: its padding as far in as that corner leaves them; one with an icon keeps its ends).
 /// The node.
+#callsite(autofill(loc))
 pub fn button_node(
   parent : @view.View,
   label : () -> String,
@@ -22,11 +23,45 @@ pub fn button_node(
   across? : Bool = false,
   icon? : String = "",
   card_words? : Bool = false,
+  loc~ : SourceLoc,
+) -> @view.View {
+  button_by(loc~, parent, label, fn(_) { press() }, tone, busy, disabled, across, icon, card_words)
+}
+
+///|
+/// button_node's button that opens what goes beside it (a menu under it): `open` given the button itself as it is
+/// pressed, where it is placed then.
+#callsite(autofill(loc))
+pub fn button_opens_node(
+  parent : @view.View,
+  label : () -> String,
+  open : (@view.View) -> Unit,
+  tone? : Tone = Plain,
+  icon? : String = "",
+  loc~ : SourceLoc,
+) -> @view.View {
+  button_by(loc~, parent, label, open, tone, fn() { false }, fn() { false }, false, icon, false)
+}
+
+///|
+/// button_node's button, `press` given the button itself as it is pressed.
+#callsite(autofill(loc))
+fn button_by(
+  parent : @view.View,
+  label : () -> String,
+  press : (@view.View) -> Unit,
+  tone : Tone,
+  busy : () -> Bool,
+  disabled : () -> Bool,
+  across : Bool,
+  icon : String,
+  card_words : Bool,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let live = fn() { !disabled() && !busy() }
   let solid = tone == Primary || tone == DangerSolid
   let height = button_height()
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     // (the hand on it, or pressing it: how far its ground has gone towards its lit one; at work, how far its spinner is
     // in and how far its room is open; how faded it is)
     let lit = fn() {
@@ -90,13 +125,16 @@ pub fn button_node(
     .says(By(fn() { Some(@view.said(Button, label=label())) }))
     .on_press(fn() {
       if @signals.untracked(live) {
-        press()
+        press(v)
       }
     })
     |> ignore
     if across {
       // (as wide as what holds it, whichever way that lays out: its own height kept)
       v.width_share(Is(1.0)) |> ignore
+    } else if v.lent(foot_fills_lent).unwrap_or(false) {
+      // (at a sheet's foot, in a thumb's reach: its share of the foot's width, as the old button's there, foot_fills)
+      v.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore
     }
     // (what it holds in its middle, however wide it is laid out (as wide as a column, stretched by what holds it): as
     // the old one's justify=JCenter)
@@ -142,8 +180,8 @@ pub fn button_node(
     v.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
     // (its words changed: its ground from the shape it had, its words from where they were, together: reshape and
     // layout by its words)
-    let g = @motion.moves_together(v, label, spec=button_reshape)
-    g.add(v, reshapes=true)
-    g.add(words)
+    let m = @motion.moves_for(v, label, spec=button_reshape)
+    m.reshapes(v)
+    m.moves_with(words)
   })
 }

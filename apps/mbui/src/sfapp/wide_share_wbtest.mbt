@@ -19,6 +19,7 @@ test "wide: 分享给其他 workspace from the chat's info: a dialog lists the w
   t.click(Button, label="更多")
   t.frame()
   t.frame()
+  open_share(t)
   t.tap_text("分享给其他 workspace")
   // (the dialog come in, @kit.dialog_in, and still: the corner rule holds every frame drawn so, its tick rows' boxes
   // clear of their corners)

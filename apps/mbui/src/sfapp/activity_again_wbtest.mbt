@@ -24,8 +24,8 @@ test "an agent's line comes in each turn as in its first: its room opening, carr
   let t = linger_core()
   let (from1, mid1, end1) = activity_opening(t, "看一下列表")
   assert_true(mid1 < from1 - 1.0 && mid1 > end1 + 1.0, msg="\{from1} \{mid1} \{end1}")
-  // its answer out of its avatar, its turn over, its line stayed its moment and gone
-  t.run_for(fix_answer_ms + fix_turn_end_ms + emit_all_ms() + linger_ms)
+  // its answer out of its avatar, its turn over, its line gone as the answer came into the list
+  t.run_for(fix_answer_ms + fix_turn_end_ms + emit_all_ms() + @ui.move_most_ms)
   assert_true(t.find(tr("android-chat.chat.working")) is None)
   // words sent again: its agent at work again, its line coming in as it did the first time
   t.tap_text("发消息")

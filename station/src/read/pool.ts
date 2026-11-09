@@ -23,10 +23,12 @@ import { SESSION_LIST_PENDING } from "../store/session-list-index.ts";
 import { SessionBindingsBuilder } from "./session-bindings-builder.ts";
 import { ArchiveMarkBuilder } from "./archive-mark-builder.ts";
 import { SessionUpJobsBuilder } from "./session-up-jobs-builder.ts";
+import { WorkspaceUpJobsBuilder } from "./workspace-up-jobs-builder.ts";
 import { WidgetSourcesBuilder } from "./widget-sources-builder.ts";
 import { CcIndexBuilder } from "./cc-index-builder.ts";
 import { CardPostsBuilder, ClosedCardsBuilder, PeopleSinceBuilder } from "./card-posts-builder.ts";
 import { CC_SESSIONS_PENDING } from "../store/cc-thread-index.ts";
+import { JOB_NAME_FIRST_PENDING } from "../store/job-name-first.ts";
 import { CARD_POSTS_PENDING } from "../store/card-post-index.ts";
 import { CLOSED_CARDS_PENDING } from "../store/legacy-closed-cards.ts";
 import { PEOPLE_TIME_PENDING } from "../store/legacy-people-since.ts";
@@ -107,6 +109,9 @@ function filling(op: string, args: unknown): boolean {
 /// of every Claude and Codex project there, 14 s on a station, 2026-11-03), each of the files on the disk rather than the
 /// database.
 const PAGES = new Set(["timeline", "machineSessions"]);
+/// The reads the MoonBit reader answers itself (station/mb src/readops), on readers of their own (`moved`) where its
+/// program is there; every other read is a worker's.
+const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile"]);
 
 export class Readers {
   /// What devices ask, and what the station tells (`told`), each answered by readers of its own.
@@ -118,6 +123,8 @@ export class Readers {
   private told: Line;
   /// The store's log written into the database (CHECKPOINT), by a reader of its own.
   private log: Line;
+  /// The reads the MoonBit reader answers (MOVED), for devices and streams alike.
+  private moved: Line;
   /// The reader each session's history was last read in (`timeline`).
   private homes = new Map<string, Slot>();
   private next = 0;
@@ -135,6 +142,9 @@ export class Readers {
   private sessionBindings: SessionBindingsBuilder | null = null;
   private archiveMarks: ArchiveMarkBuilder | null = null;
   private sessionUpJobs: SessionUpJobsBuilder | null = null;
+  private workspaceUpJobs: WorkspaceUpJobsBuilder | null = null;
+  private jobNameFirst: RequestedBuilder<string> | null = null;
+  private preparingWorkspaceUpJobs = false;
   /// Reads of the same old session share one unattended preparation, including during handover.
   private preparingUpJobs = new Set<string>();
   private widgetSources: WidgetSourcesBuilder | null = null;
@@ -169,6 +179,7 @@ export class Readers {
     this.pages = { told: false, size: 2, room: false, slots: [], waiting: [] };
     this.told = { told: true, size: tellers, room: false, slots: [], waiting: [] };
     this.log = { told: true, size: 1, room: false, slots: [], waiting: [] };
+    this.moved = { told: false, size, room: true, slots: [], waiting: [] };
   }
 
   /// Check statistical coverage without occupying a device reader or writing old history.
@@ -182,7 +193,7 @@ export class Readers {
     // From source: worker.ts beside this; bundled (this inside dist/main.js): dist/read/worker.js.
     const file = this.workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./read/worker.js", import.meta.url);
     // A reader's heap stays small: what it builds is answered and dropped.
-    const worker: ReaderLike = line === this.log && this.mbReader !== null ? new MbReader(this.mbReader, this.data)
+    const worker: ReaderLike = (line === this.log || line === this.moved) && this.mbReader !== null ? new MbReader(this.mbReader, this.data)
       : new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
     const slot: Slot = { worker, held: null };
     const begun = wall.now();
@@ -191,7 +202,7 @@ export class Readers {
       // a station short of memory, 2026-11-03, a reader started for it).
       if ("ready" in answer) {
         const ms = wall.now() - begun;
-        if (ms >= 1_000) log.warn("readers", "a reader started slowly", { ms, line: line === this.asked ? "asked" : line === this.pages ? "pages" : line === this.log ? "log" : "told", ...answer.ready });
+        if (ms >= 1_000) log.warn("readers", "a reader started slowly", { ms, line: line === this.asked ? "asked" : line === this.pages ? "pages" : line === this.log ? "log" : line === this.moved ? "moved" : "told", ...answer.ready });
         return;
       }
       // An abandoned read may finish while its worker is being stopped. Do not give that worker another read until it exits.
@@ -212,6 +223,12 @@ export class Readers {
             void this.prepareSessionUpJobs([session]).catch((error) => {
               if (!this.closed) log.warn("readers", "preparing a session's up jobs failed", { error: (error as Error).message });
             }).finally(() => this.preparingUpJobs.delete(session));
+          }
+          if (answer.prepareWorkspaceUpJobs && !this.preparingWorkspaceUpJobs) {
+            this.preparingWorkspaceUpJobs = true;
+            void this.prepareWorkspaceUpJobs().catch((error) => {
+              if (!this.closed) log.warn("readers", "preparing workspace up jobs failed", { error: (error as Error).message });
+            }).finally(() => { this.preparingWorkspaceUpJobs = false; });
           }
           asked.resolve(answer.text);
         }
@@ -351,6 +368,22 @@ export class Readers {
     return this.covered(this.sessionUpJobs.ready(sessions, signal), signal);
   }
 
+  /// Prepare old up jobs without holding the reader that supplied a fallback answer.
+  prepareWorkspaceUpJobs(signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    this.workspaceUpJobs ??= new WorkspaceUpJobsBuilder(join(this.data, "stillfail.db"), this.backfill);
+    return this.covered(this.workspaceUpJobs.ready(["all"], signal), signal);
+  }
+
+  /// Prepare a requested own chat's first member after handover, sharing and cancelling its bounded batches.
+  prepareJobNameFirst(owner: string, thread: number, signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    const file = new URL(import.meta.url.endsWith(".ts") ? "./session-up-jobs-worker.ts" : "./read/session-up-jobs-worker.js", import.meta.url);
+    this.jobNameFirst ??= new RequestedBuilder(join(this.data, "stillfail.db"), this.backfill, file, "scope", "job name first member",
+      (key, cancel) => { const [session, first] = JSON.parse(key) as [string, number]; return { session, first, ...(cancel ? { cancel: true } : {}) }; });
+    return this.covered(this.jobNameFirst.ready([JSON.stringify([owner, thread])], signal), signal);
+  }
+
   /// Prepare only old threads whose widget sources a delivery needs.
   prepareWidgetSources(threads: readonly number[], signal?: AbortSignal): Promise<void> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
@@ -436,6 +469,13 @@ export class Readers {
           try { sessions = JSON.parse(error.message.slice(CC_SESSIONS_PENDING.length)); } catch { throw error; }
           if (!Array.isArray(sessions) || sessions.length === 0 || !sessions.every((key) => typeof key === "string")) throw error;
           await this.prepareCcSessions(sessions, signal);
+          continue;
+        }
+        if (error.message.startsWith(JOB_NAME_FIRST_PENDING)) {
+          let key: unknown;
+          try { key = JSON.parse(error.message.slice(JOB_NAME_FIRST_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(key) || key.length !== 2 || typeof key[0] !== "string" || !Number.isSafeInteger(key[1])) throw error;
+          await this.prepareJobNameFirst(key[0], key[1], signal);
           continue;
         }
         if (error.message.startsWith(CARD_POSTS_PENDING)) {
@@ -581,7 +621,7 @@ export class Readers {
   private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false, signal?: AbortSignal): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     if (signal?.aborted) return Promise.reject(cancelled());
-    const line = op === CHECKPOINT ? this.log : told ? this.told : PAGES.has(op) ? this.pages : this.asked;
+    const line = op === CHECKPOINT ? this.log : this.mbReader !== null && MOVED.has(op) ? this.moved : told ? this.told : PAGES.has(op) ? this.pages : this.asked;
     // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
     // reads it from disk (read/transcripts.ts).
     const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
@@ -688,7 +728,7 @@ export class Readers {
 
   /// Each running reader's JS heap in use, in bytes (for the memory log).
   heaps(): Promise<number[]> {
-    return Promise.all([...this.asked.slots, ...this.told.slots, ...this.log.slots, ...this.pages.slots].map((s) => s.worker.getHeapStatistics().then((h) => h.used_heap_size, () => 0)));
+    return Promise.all([...this.asked.slots, ...this.told.slots, ...this.log.slots, ...this.pages.slots, ...this.moved.slots].map((s) => s.worker.getHeapStatistics().then((h) => h.used_heap_size, () => 0)));
   }
 
   close() {
@@ -706,12 +746,14 @@ export class Readers {
     if (this.sessionBindings !== null) void this.sessionBindings.close();
     if (this.archiveMarks !== null) void this.archiveMarks.close();
     if (this.sessionUpJobs !== null) void this.sessionUpJobs.close();
+    if (this.workspaceUpJobs !== null) void this.workspaceUpJobs.close();
+    if (this.jobNameFirst !== null) void this.jobNameFirst.close();
     if (this.widgetSources !== null) void this.widgetSources.close();
     if (this.cardPosts !== null) void this.cardPosts.close();
     if (this.closedCards !== null) void this.closedCards.close();
     if (this.peopleSince !== null) void this.peopleSince.close();
     if (this.ccIndex !== null) void this.ccIndex.close();
-    for (const line of [this.asked, this.told, this.log, this.pages]) {
+    for (const line of [this.asked, this.told, this.log, this.pages, this.moved]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();
     }

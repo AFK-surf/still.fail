@@ -461,6 +461,8 @@ fn Ctx::bar_where(self : Ctx, n : Node) -> BarAt? {
           self.across_seen.push((n.id, n.x, n.fw))
           None
         } else {
+          // (where it is as it is painted: Ctx::sideways_drawn, followed)
+          st.said.get() |> ignore
           // (along the view it is for: `bar_in` in from either side, what it holds as wide less that)
           let b = dclamp(st.bar_in, 0.0, dmax(0.0, n.fw / 2.0 - scroll_bar_least))
           let shows = (dmax(x0, n.x + b), y0, dmin(x1, n.x + n.fw - b), y1)
@@ -538,6 +540,7 @@ fn Ctx::across_found(self : Ctx, n : Node, from : Int) -> Array[BarAt] {
     done.push(id)
     match sideways.get(id) {
       Some(st) => {
+        st.said.get() |> ignore
         let shows = (dmax(x, cx0), dmax(n.y, cy0), dmin(x + w, cx1), dmin(n.y + n.fh, cy1))
         match foot_bar(id, x, w, w + st.max, st.x, shows, r_bl, r_br) {
           Some(b) => found.push(b)
@@ -786,12 +789,17 @@ fn Ctx::bar_let_go(self : Ctx) -> Unit {
 
 ///|
 /// As a frame ends, its bars drawn: what holds a thumb gone, it is let go; the pointer's bar found again where it
-/// rests (what moved under it).
+/// rests (what moved under it), once what moves has come to rest: found on the way, it was found by whichever frames
+/// came (a page sliding back under a still pointer drew its list's bar near it at 24 frames a second and not at 60,
+/// nav_test, MBUI_TEST_FPS=24), not by where things are at a moment.
 fn Ctx::bars_frame_end(self : Ctx) -> Unit {
   if self.bar_drag != 0 {
     if self.bar_drawn(self.bar_drag) is None {
       self.bar_let_go()
     }
+    return
+  }
+  if self.motion_owed() || self.motion_read {
     return
   }
   self.bar_pointer(self.px, self.py)
