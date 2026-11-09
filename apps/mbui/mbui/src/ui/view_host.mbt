@@ -1319,7 +1319,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       } else {
         match old_box_of.get(c.id) {
           // (in a node that clips: cut by it, as what else it holds is; else by the window)
-          Some(i) =>
+          Some(i) => {
             if clipping.length() > 0 {
               // (what of it is drawn: within that clip, as the corner rule reads it, Ctx::corner_faults; said where its
               // nodes are laid out, the island drawn at (px, py) as big as `s` from where it is laid out at (ox, oy))
@@ -1337,6 +1337,8 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
             } else {
               self.island_painted(c, fn() { self.in_window(fn() { self.paint(i, a) }) })
             }
+            self.island_in_list(k0)
+          }
           None => ()
         }
       }

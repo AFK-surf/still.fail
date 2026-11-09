@@ -210,10 +210,11 @@ pub fn way_in_button_node(
       @ui.touch_slop(),
       press=fn(d) {
         if @signals.untracked(live) {
-          rippled(d)
+          (rippled.down)(d)
         }
       },
       tap=fn(d) {
+        (rippled.tapped)(d)
         if v.finger_target(d.wx, d.wy) && @signals.untracked(live) {
           press()
         }

@@ -21,21 +21,34 @@ priv struct PressRipple {
 }
 
 ///|
+/// What a press's look is told by its gesture: its press as it goes down (View::gesture's `press`), and a tap
+/// (`tap`'s), which shows a press a finger let go before it showed.
+priv struct PressLook {
+  down : (@view.Drag) -> Unit
+  tapped : (@view.Drag) -> Unit
+}
+
+///|
 /// A press's ripple and sink over node `v`, as big as the press says it is laid out as it goes down (Drag's `w`, `h`:
 /// nothing read back of its layout), its corners
 /// `corner`, the disc in `ink` (black at .1 by default, @motion.ripple_ink); sunk while pressed where `grounded` (a
-/// ground of its own). What its gesture's press is told (View::gesture's `press`): the press's where, when and how big
-/// it is then. Its letting go is the node's (View::pressed).
+/// ground of its own). Told the press's where, when and how big it is then; its letting go is the node's
+/// (View::pressed). A finger's press in what scrolls shows once it has stayed tap_indication_ms (Ctx::pressed's, Compose's
+/// clickable in a scrollable container): one that goes on to scroll shows nothing; a tap quicker than that shows
+/// as it is let go.
 fn press_look(
   v : @view.View,
   corner : @view.Live[Double],
   grounded : () -> Bool,
   ink? : Int64 = @motion.ripple_ink,
-) -> (@view.Drag) -> Unit {
+) -> PressLook {
   // (the ripples going, by their numbers, in the order they began)
   let ripples : @signals.Signal[Array[Int]] = @signals.signal([], same=fn(a, b) { a == b })
   let made : Map[Int, PressRipple] = Map([])
   let next = Ref(0)
+  // (a finger's press in what scrolls not shown yet, and its showing, due)
+  let late : Ref[@view.Drag?] = Ref(None)
+  let late_due : Ref[() -> Unit] = Ref(fn() {  })
   // (sunk while down, back as it is let go, from where it is then; how far, by how big it is as it goes down)
   let sink = @motion.Way::new(0.0)
   let sink_most = Ref(0.0)
@@ -45,13 +58,8 @@ fn press_look(
     1.0 - sink_most.val * s
   }))
   |> ignore
-  // (let go: each ripple not yet let go on its way out once its way in is over; the sink back)
-  v.reacts(fn() { v.pressed() }, fn(down) {
-    let at = v.cause_at()
-    // (sunk as the press goes down, by how big it is then: the press's own)
-    if down {
-      return
-    }
+  // (let go at `at`: each ripple not yet let go on its way out once its way in is over; the sink back)
+  let lift = fn(at : Double) {
     sink.go(0.0, @motion.lift_spring, at~)
     for n in @signals.untracked(fn() { ripples.get() }) {
       guard made.get(n) is Some(r) else { continue }
@@ -71,6 +79,16 @@ fn press_look(
         )
       }
     }
+  }
+  v.reacts(fn() { v.pressed() }, fn(down) {
+    // (sunk as the press goes down, by how big it is then: the press's own)
+    if down {
+      return
+    }
+    // (not shown yet: shown now only by a tap, told as it is let go)
+    (late_due.val)()
+    late_due.val = fn() {  }
+    lift(v.cause_at())
   })
   // (the discs, over what it holds, cut to its corners)
   v.box(fn(over) {
@@ -84,6 +102,7 @@ fn press_look(
   })
   |> ignore
   v.owns(fn() {
+    (late_due.val)()
     for _, r in made {
       for f in r.due {
         f()
@@ -91,19 +110,49 @@ fn press_look(
     }
   })
   |> ignore
-  fn(d) {
+  // (press `d` shown from `at`)
+  let show = fn(d : @view.Drag, at : Double) {
     if @signals.untracked(grounded) {
       sink_most.val = dmin(press_sink_most, @motion.press_sink / dmax(dmax(d.w, d.h), 1.0))
-      sink.go(1.0, @motion.lift_spring, at=d.at)
+      sink.go(1.0, @motion.lift_spring, at~)
     }
     let way = @motion.Way::new(0.0)
-    way.go(0.5, @motion.tween(@motion.ripple_enter_ms, ease=Out), at=d.at)
+    way.go(0.5, @motion.tween(@motion.ripple_enter_ms, ease=Out), at~)
     let n = next.val
     next.val = n + 1
-    made[n] = { x: d.x, y: d.y, w: d.w, h: d.h, way, at: d.at, lifted: None, due: [] }
+    made[n] = { x: d.x, y: d.y, w: d.w, h: d.h, way, at, lifted: None, due: [] }
     let now = @signals.untracked(fn() { ripples.get() }).copy()
     now.push(n)
     ripples.set(now)
+  }
+  {
+    down: fn(d) {
+      (late_due.val)()
+      late_due.val = fn() {  }
+      late.val = None
+      if @ui.pointing() is Finger && v.scroll_holding() is Some(_) {
+        late.val = Some(d)
+        let due = d.at + @ui.tap_indication_ms
+        late_due.val = v.at_moment(due, fn() {
+          late.val = None
+          late_due.val = fn() {  }
+          show(d, due)
+        })
+      } else {
+        show(d, d.at)
+      }
+    },
+    tapped: fn(t) {
+      guard late.val is Some(d) else { return }
+      late.val = None
+      (late_due.val)()
+      late_due.val = fn() {  }
+      show(d, t.at)
+      // (let go already: on its way out as its way in ends)
+      if !@signals.untracked(fn() { v.pressed() }) {
+        lift(t.at)
+      }
+    },
   }
 }
 

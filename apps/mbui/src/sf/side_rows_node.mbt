@@ -127,8 +127,13 @@ pub fn update_key_node(
       let on_it = fn(d : @view.Drag) { k.finger_target(d.wx, d.wy) }
       k.gesture(
         @ui.touch_slop(),
-        press=fn(d) { if able() { rippled(d) } },
-        tap=fn(d) { if on_it(d) && able() { press() } },
+        press=fn(d) { if able() { (rippled.down)(d) } },
+        tap=fn(d) {
+          (rippled.tapped)(d)
+          if on_it(d) && able() {
+            press()
+          }
+        },
         drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) && able() { press() } },
       )
       |> ignore

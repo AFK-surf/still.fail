@@ -108,8 +108,13 @@ fn pressed_node(
   let on_it = fn(d : @view.Drag) { v.finger_target(d.wx, d.wy) }
   v.gesture(
     @ui.touch_slop(),
-    press=rippled,
-    tap=fn(d) { if on_it(d) { press() } },
+    press=rippled.down,
+    tap=fn(d) {
+      (rippled.tapped)(d)
+      if on_it(d) {
+        press()
+      }
+    },
     drag=fn(d) {
       // (a mouse's moved on it past the slop: still a press as it is let go on it, as a click is)
       if d.kind == Up && @ui.pointing() is Mouse && on_it(d) {
