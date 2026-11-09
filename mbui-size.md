@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [1f9a46795](https://github.com/AFK-surf/still.fail/commit/1f9a467957240cc436f9b420ec84ce873a967b91) Vault keyed anew: a device back meanwhile given th | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.01 | 129.53 |
 | [dda4bb55e](https://github.com/AFK-surf/still.fail/commit/dda4bb55e1f81beae1692721244c9f0094ae5ea7) mbui: a bench keeps not the lines of words drawn,  | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.49 | 168.57 |
 | [c751a3031](https://github.com/AFK-surf/still.fail/commit/c751a3031afcb76ec2d38c195e4dd77dad01db56) mbui: ⌘F in a chat tested: its bar, looked for aft | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.55 | 146.44 |
 | [744b542c4](https://github.com/AFK-surf/still.fail/commit/744b542c4659695d615707041921bf884b03c0df) mbui: the Tester's tests at other frame rates in C | 1.72 | 2.3 | 9.55 | 28.06 | 33.29 | 25.06 | 45.78 | 93.59 | 170.49 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [044441224](https://github.com/AFK-surf/still.fail/commit/0444412244e3595f87169ed66b0e048e386e3444) sfpages: a day's heading in the chats list of a ki | 1.66 | 2.21 | 9.11 | 27.86 | 32.28 | 24.87 | 44.81 | 93.06 | 156.81 |
 | [241a3b0b4](https://github.com/AFK-surf/still.fail/commit/241a3b0b450ae976b3c03e84a0e743fa7a2bc2b2) mbui: a list's block put by left in its slot out o | 1.66 | 2.21 | 9.11 | 27.86 | 32.28 | 24.87 | 44.81 | 93.08 | 161.8 |
 | [9914a5e47](https://github.com/AFK-surf/still.fail/commit/9914a5e478c18956927f74cb53f0181a487b3456) mbui app: an agent's card opens each part as what  | 1.66 | 2.21 | 9.11 | 27.85 | 32.28 | 24.86 | 44.81 | 93.47 | 180.56 |
-| [7f38f3c7b](https://github.com/AFK-surf/still.fail/commit/7f38f3c7bde8f5cf1c6c8bc0c5758485e794a5a1) mbui: a screen reader told what changed, node by n | 1.66 | 2.21 | 9.11 | 27.84 | 32.27 | 24.86 | 44.79 | 92.75 | 128.54 |
