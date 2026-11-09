@@ -597,18 +597,29 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
   let (r, gg, b) = c.clear
   // what of it differs from the frame presented before, the part a host that keeps its picture draws again
   let t0 = h_now()
-  let parts = presented.next(
-    buf,
-    count,
-    c.window_w,
-    c.window_h,
-    c.scale,
-    r,
-    gg,
-    b,
-    groups=!ride_spans.is_empty(),
-    known=damage_known,
-  )
+  // (a frame of its looks alone with only lists moved by their headers (looks_frame): those headers compared alone)
+  let moved = if looks_heads_only.val {
+    presented.moved(buf, count, c.window_w, c.window_h, c.scale, r, gg, b, list_heads.map(fn(h) { h.at }), known=damage_known)
+  } else {
+    None
+  }
+  looks_heads_only.val = false
+  let parts = match moved {
+    Some(parts) => parts
+    None =>
+      presented.next(
+        buf,
+        count,
+        c.window_w,
+        c.window_h,
+        c.scale,
+        r,
+        gg,
+        b,
+        groups=!ride_spans.is_empty(),
+        known=damage_known,
+      )
+  }
   damage_known.clear()
   presented_ms.val = h_now() - t0
   if presented.telling() && presented.why() == 5 {
