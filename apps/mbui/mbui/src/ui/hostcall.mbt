@@ -18,6 +18,9 @@ struct FakeHost {
   /// how many times the app asked for the host's next frame for what goes on by the clock (h_request_frame_on): owed
   /// no frame at this moment, as a host draws one at its next display frame (Tester::frames_on)
   mut frames_on : Int
+  /// how many frames a second what moves on by the clock was last said to need (@hostapi.frames_paced), as a host is
+  /// told it after the frame it asked for (0: none said since a frame was last asked for: the display's every frame)
+  mut paced : Double
   mut wake : Double
   mut instances : Int
   mut ime_active : Bool

@@ -988,6 +988,12 @@ void *mb_app_hwnd(void) { return hwnd; }
 
 double mb_app_scale(void) { return scale; }
 
+// A frame for what moves on by the clock that needs fewer (@hostapi.frames_paced): not paced here, the next drawn.
+void mb_host_frames_paced(double hz) {
+  (void)hz;
+  mb_host_request_frame();
+}
+
 void mb_host_wake_after(double ms) {
   double t = mb_now_ms() + ms;
   if (wake_at < 0 || t < wake_at) wake_at = t;

@@ -333,13 +333,10 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
   t.on_glides(
     fn(column, ends) {
       let who = match tree_glide_movers.get(column) {
-        Some(m) => m
-        None => {
-          let m = Mover::new()
-          tree_glide_movers[column] = m
-          m
-        }
+        Some((m, _)) => m
+        None => Mover::new()
       }
+      tree_glide_movers[column] = (who, ends)
       g().moving(who, ({ ends, } : TreeGlide) as &Moving, what="a list's fling, the tree's")
     },
     fn(column) { tree_glide_movers.remove(column) },
@@ -5613,9 +5610,23 @@ impl Moving for TreeGlide with rest_at(self, _now, _frame) {
 
 ///|
 /// Who tells each of the tree's columns' glides, by its number (view_host's on_glides): one each, as an old view's list
-/// is its own; let go with it.
+/// is its own, with how to ask when its glide ends; let go with it.
 // kept across runs: put back as each column is let go
-let tree_glide_movers : Map[Int, Mover] = {}
+let tree_glide_movers : Map[Int, (Mover, () -> Double?)] = {}
+
+///|
+/// Whether a column of the window's tree glides on by itself at `t` (a fling, a wheel's notches easing in, what shows
+/// past an end going back): drawn at every frame however slowly it goes (frame_pace.mbt).
+fn tree_gliding(t : Double) -> Bool {
+  tree_glide_movers
+  .values()
+  .any(fn(g) {
+    match @signals.untracked(g.1) {
+      Some(end) => end > t
+      None => false
+    }
+  })
+}
 
 ///|
 /// Content `c`'s picture not seen yet (drawn `s` times as big) asked for all the same, for the pixels it is laid out at,

@@ -40,6 +40,8 @@ fn ffi_platform() -> Int = "mbhost" "mb_host_platform"
 
 fn ffi_request_frame() = "mbhost" "mb_host_request_frame"
 
+fn ffi_frames_paced(hz : Double) = "mbhost" "mb_host_frames_paced"
+
 fn ffi_wake_after(ms : Double) = "mbhost" "mb_host_wake_after"
 
 fn mbw_mb_host_font_metrics(size : Double, weight : Int, style : Int, out : Int) = "mbhost" "mb_host_font_metrics"
@@ -689,6 +691,12 @@ fn platform() -> Int {
 ///|
 fn request_frame() -> Unit {
   ffi_request_frame()
+}
+
+///|
+/// The frame asked for what moves on by the clock needs only `hz` frames a second (@hostapi.frames_paced).
+fn frames_paced(hz : Double) -> Unit {
+  ffi_frames_paced(hz)
 }
 
 ///|

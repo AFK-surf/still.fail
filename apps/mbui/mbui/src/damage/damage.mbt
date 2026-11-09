@@ -196,6 +196,12 @@ pub struct Damage {
   /// and in the frame being given
   priv mut kept_seg : Int
   priv mut seg_now : Int
+  /// what the frame compared last moved by, its changes each an instance against the same one before it (pair_step):
+  /// how far at most (points) and how much its colours at most (0 to 1); `step_known` false where a change was none
+  /// such (one come or gone, a picture or a shape's pieces changed, a part known drawn anew, the frame drawn whole)
+  priv mut step_far : Double
+  priv mut step_ink : Double
+  priv mut step_known : Bool
 }
 
 ///|
@@ -247,6 +253,9 @@ pub fn Damage::new() -> Damage {
     kept_glass: [],
     kept_seg: -1,
     seg_now: -1,
+    step_far: 0.0,
+    step_ink: 0.0,
+    step_known: false,
   }
 }
 
@@ -296,6 +305,9 @@ pub fn Damage::next(
   }
   // (where the pieces of shapes start in it, where it is compared: kept with it, the next frame compared there)
   self.seg_now = -1
+  self.step_far = 0.0
+  self.step_ink = 0.0
+  self.step_known = same_frame && known.is_empty()
   let out = if same_frame {
     self.changed(inst, count, w, h, known)
   } else {
@@ -437,6 +449,9 @@ pub fn Damage::moved(
   self.stamp = self.stamp + 1
   self.why = 0
   self.seen.clear()
+  self.step_far = 0.0
+  self.step_ink = 0.0
+  self.step_known = known.is_empty()
   let window = { x0: 0.0, y0: 0.0, x1: w, y1: h }
   let parts : Array[Rect] = []
   let most_area = whole_share * w * h
@@ -453,6 +468,7 @@ pub fn Damage::moved(
     if same_pair(prev, u, inst, k) {
       continue
     }
+    self.pair_step(prev, u, inst, k)
     was.clear()
     now.clear()
     self.reach_of(prev, u, was)
@@ -496,6 +512,7 @@ pub fn Damage::moved(
   }
   if parts_area(parts) > most_area {
     self.why = 5
+    self.step_known = false
     return Some([(0.0, 0.0, -1.0, -1.0)])
   }
   Some(parts.map(fn(p) { (p.x0, p.y0, p.x1 - p.x0, p.y1 - p.y0) }))
@@ -591,6 +608,141 @@ fn Damage::keep(
   self.g = g
   self.b = b
   self.has = true
+}
+
+///|
+/// What the frame compared last moved by (Damage::next, Damage::moved), where every change of it was an instance
+/// against the same one before it: how far any of their pixels went at most (points), and how much any of their colours
+/// or opacities changed at most (0 to 1). None where a change was none such: an instance come or gone, a picture or a
+/// shape's pieces changed under it, a header moved (a list's rows), a part known drawn anew, the frame drawn whole or
+/// not compared. What moves on by
+/// the clock is drawn as often as that asks (src/ui/frame_pace.mbt), not by what it is.
+pub fn Damage::step(self : Damage) -> (Double, Double)? {
+  if self.step_known {
+    Some((self.step_far, self.step_ink))
+  } else {
+    None
+  }
+}
+
+///|
+/// What the slots of an instance of `kind` (src/ui/scene.mbt) are, for how far a change of them goes (pair_step): 0 a
+/// length or a place (points), 1 a colour, an opacity or a share of 0 to 1, 2 what pair_step works out of several (its
+/// rect, its turn, a line's ends), 3 what is the same or another thing drawn (its kind, its picture, a glyph, a flag).
+fn slot_is(kind : Int, j : Int) -> Int {
+  if j < 4 || j == 32 {
+    2
+  } else if j == 5 || j == 20 || j == 35 {
+    3
+  } else if j == 6 && kind == 11 {
+    3
+  } else if j < 8 {
+    0
+  } else if j < 12 {
+    1
+  } else if j < 16 {
+    match kind {
+      0 => 1
+      2 => 0
+      10 => 2
+      _ => 3
+    }
+  } else if j < 20 {
+    0
+  } else if j < 24 {
+    match kind {
+      0 | 5 | 6 => 0
+      4 => if j == 22 { 3 } else { 1 }
+      _ => 3
+    }
+  } else if (j >= 28 && j < 32) || (j >= 48 && j < 52) {
+    1
+  } else {
+    0
+  }
+}
+
+///|
+/// Instance `ka` of `a` against `kb` of `b`, which differ (Damage::changed's, Damage::moved's pairs): how far it moved
+/// and how much its colours changed, added to the frame's (Damage::step), or the step not known where it is another
+/// thing drawn.
+fn Damage::pair_step(self : Damage, a : FixedArray[Double], ka : Int, b : FixedArray[Double], kb : Int) -> Unit {
+  let oa = ka * inst_size
+  let ob = kb * inst_size
+  let kind = kind_at(b, kb)
+  // (a header moved is a list's rows moved by it, scrolled: drawn at every frame, src/ui/frame_pace.mbt)
+  if kind_at(a, ka) != kind || kind == 12 || kind == 13 {
+    self.step_known = false
+    return
+  }
+  let mut far = 0.0
+  let mut ink = 0.0
+  let mut any = false
+  for j in 0..<inst_size {
+    let u = a[oa + j]
+    let v = b[ob + j]
+    if u == v {
+      continue
+    }
+    any = true
+    match slot_is(kind, j) {
+      0 => {
+        // (none of a clip's sides: "no edge" is far off, past any window)
+        if u.abs() > 1.0e6 || v.abs() > 1.0e6 {
+          self.step_known = false
+          return
+        }
+        far = dmax(far, (v - u).abs())
+      }
+      1 => ink = dmax(ink, (v - u).abs())
+      2 => ()
+      _ => {
+        self.step_known = false
+        return
+      }
+    }
+  }
+  // (no number of it changed: a stream's picture, or a band whose pieces did; nothing known of how far)
+  if !any {
+    self.step_known = false
+    return
+  }
+  // its rect's sides
+  let x0 = (b[ob] - a[oa]).abs()
+  let y0 = (b[ob + 1] - a[oa + 1]).abs()
+  let x1 = (b[ob] + b[ob + 2] - a[oa] - a[oa + 2]).abs()
+  let y1 = (b[ob + 1] + b[ob + 3] - a[oa + 1] - a[oa + 3]).abs()
+  far = dmax(far, dmax(dmax(x0, y0), dmax(x1, y1)))
+  // a line's ends, shares of its rect (scene.mbt), and how far from where it is turned about its farthest is
+  let (w, h) = (b[ob + 2], b[ob + 3])
+  let mut reach = 0.0
+  if kind == 10 {
+    for e in 0..<2 {
+      let sx = b[ob + 12 + 2 * e]
+      let sy = b[ob + 13 + 2 * e]
+      far = dmax(
+        far,
+        dmax(((sx - a[oa + 12 + 2 * e]) * w).abs(), ((sy - a[oa + 13 + 2 * e]) * h).abs()),
+      )
+      let dx = b[ob] + sx * w - b[ob + 33]
+      let dy = b[ob + 1] + sy * h - b[ob + 34]
+      reach = dmax(reach, (dx * dx + dy * dy).sqrt() + b[ob + 4])
+    }
+  } else {
+    let dx = dmax((b[ob] - b[ob + 33]).abs(), (b[ob] + w - b[ob + 33]).abs())
+    let dy = dmax((b[ob + 1] - b[ob + 34]).abs(), (b[ob + 1] + h - b[ob + 34]).abs())
+    reach = (dx * dx + dy * dy).sqrt()
+  }
+  // turned: as far round as its farthest pixel goes, the arc of its turn
+  // (the short way round: a turn by the clock goes on from a whole turn to none)
+  let round = 2.0 * 3.141592653589793
+  let turn = (b[ob + 32] - a[oa + 32]).abs()
+  if turn > 0.0 {
+    let t = turn - (turn / round).floor() * round
+    far = dmax(far, dmin(t, round - t) * reach)
+  }
+  self.step_far = dmax(self.step_far, far)
+  self.step_ink = dmax(self.step_ink, ink)
 }
 
 ///|
@@ -944,6 +1096,7 @@ fn Damage::changed(
     p.cut_to(window)
     if add_part(parts, p) && parts_area(parts) > most_area {
       self.why = 5
+      self.step_known = false
       return [(0.0, 0.0, -1.0, -1.0)]
     }
   }
@@ -973,6 +1126,11 @@ fn Damage::changed(
   let changed = fn(k_old : Int, k : Int) {
     if self.telling && self.seen.length() < 400 && k >= 0 {
       self.seen.push("#\{k} kind \{inst[k * inst_size + 5]} at \{inst[k * inst_size]},\{inst[k * inst_size + 1]}")
+    }
+    if k_old < 0 || k < 0 {
+      self.step_known = false
+    } else if self.step_known {
+      self.pair_step(prev, k_old, inst, k)
     }
     was.clear()
     now.clear()
@@ -1088,6 +1246,7 @@ fn Damage::changed(
   }
   if whole {
     self.why = 5
+    self.step_known = false
     return [(0.0, 0.0, -1.0, -1.0)]
   }
   if parts.is_empty() {
@@ -1117,6 +1276,7 @@ fn Damage::changed(
   }
   if parts_area(parts) > most_area {
     self.why = 5
+    self.step_known = false
     return [(0.0, 0.0, -1.0, -1.0)]
   }
   parts.map(fn(p) { (p.x0, p.y0, p.x1 - p.x0, p.y1 - p.y0) })

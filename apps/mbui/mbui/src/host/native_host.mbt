@@ -225,6 +225,11 @@ impl @hostapi.Host for Native with request_frame(_) {
 }
 
 ///|
+impl @hostapi.Host for Native with frames_paced(_, hz) {
+  frames_paced(hz)
+}
+
+///|
 impl @hostapi.Host for Native with wake_after(_, ms) {
   wake_after(ms)
 }

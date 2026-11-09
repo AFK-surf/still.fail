@@ -144,6 +144,13 @@ pub fn Tester::frames_on(self : Tester) -> Int {
 }
 
 ///|
+/// How many frames a second the last frame said what moves on by the clock needs, as a host is told (frame_pace.mbt,
+/// @hostapi.frames_paced); 0 where it said none (the display's every frame, or no frame by the clock asked for).
+pub fn Tester::frames_paced(self : Tester) -> Double {
+  self.fake.paced
+}
+
+///|
 /// Why the app asks for a frame (Tester::wanted_after), in words: the display's next frame's, else its wake's; "" when
 /// it asks for none.
 pub fn Tester::wanted_why(self : Tester) -> String {
