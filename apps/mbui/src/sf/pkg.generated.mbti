@@ -796,7 +796,7 @@ pub fn ink_runs(String, String, Bool) -> Array[@text.Run]
 
 pub fn input(@ui.Ctx, String, placeholder? : String, shorter? : Array[String], secret? : Bool, disabled? : Bool, small? : Bool, solid? : Bool, leaves? : Array[Int32], field? : @ui.Field, on_submit? : (String) -> Unit, on_change? : (String) -> Unit) -> @kit.Field
 
-pub fn input_node(@view.View, @ui.Field, placeholder? : String, shorter? : Array[String], secret? : Bool, placeholder_by? : () -> String, disabled? : () -> Bool, small? : Bool, leaves? : Array[Int32], submitted? : (String) -> Unit) -> @view.View
+pub fn input_node(@view.View, @ui.Field, placeholder? : String, shorter? : Array[String], secret? : Bool, placeholder_by? : () -> String, disabled? : () -> Bool, small? : Bool, leaves? : Array[Int32], submitted? : (String) -> Unit, edited? : (String) -> Unit) -> @view.View
 
 pub let inset_room : @ui.Space
 
@@ -2090,7 +2090,7 @@ pub fn text_toggle_node(@view.View, () -> String, () -> Unit) -> Unit
 
 pub fn textarea(@ui.Ctx, String, rows? : Int32, most? : Int32, placeholder? : String, field? : @ui.Field, corner? : Double, solid? : Bool, on_change? : (String) -> Unit) -> String
 
-pub fn textarea_node(@view.View, @ui.Field, rows? : Int32, most? : Int32, placeholder? : String, corner? : Double, placeholder_by? : () -> String, disabled? : () -> Bool) -> @view.View
+pub fn textarea_node(@view.View, @ui.Field, rows? : Int32, most? : Int32, placeholder? : String, corner? : Double, placeholder_by? : () -> String, disabled? : () -> Bool, edited? : (String) -> Unit) -> @view.View
 
 pub fn theme() -> Theme
 

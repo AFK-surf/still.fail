@@ -76,8 +76,10 @@ fn view_words_found(d : @view.Drawn) -> String {
 /// Ctx::field_files), as tall as
 /// its words lay out between `min_lines` (one unless said) and `max_lines` (Field::laid), read out as a field of its words. `submitted`: what
 /// is told its words as they are given up (Enter, where it gives them up), once, at that key's moment; `pasted`, a
-/// paste of `paste_limit` characters or more, not put in, once, at that paste's. `placeholder_by`: its placeholder as it
-/// is now, followed (in place of `placeholder`). The node made.
+/// paste of `paste_limit` characters or more, not put in, once, at that paste's; `edited`: its words as the person's
+/// edit changes them (a key, the input method's words, a paste, an undo: Ctx::editor's `on_change`), once, at that
+/// edit's moment, never as the app puts words in it (Field::set, Field::follow). `placeholder_by`: its placeholder as
+/// it is now, followed (in place of `placeholder`). The node made.
 pub fn field(
   parent : @view.View,
   field : Field,
@@ -100,6 +102,7 @@ pub fn field(
   look? : (String) -> (String, Array[(Int, Int, Int64)]),
   submitted? : (String) -> Unit = fn(_) {  },
   pasted? : (String) -> Unit = fn(_) {  },
+  edited? : (String) -> Unit,
   files? : (Array[(String, Bytes)]) -> Unit,
   size_by? : () -> Double,
   colors_by? : () -> (Int64, Int64, Int64),
@@ -153,6 +156,9 @@ pub fn field(
     st.words = words
     st.look = look
     st.looked = None
+    // (the person's edit of its words told as it is made, EditorState::typed_told: what an old view's editor is told
+    // as `on_change`)
+    st.on_change = edited
     tree_fields[id] = {
       st,
       font_size: size,
@@ -328,6 +334,8 @@ fn tree_field_gone(id : @view.NodeId) -> Unit {
       }
       if tf.st.tree_node == Some(id) {
         tf.st.tree_node = None
+        // (what it told of the person's edits let go with it)
+        tf.st.on_change = None
       }
       if tree_field_hovered.val == Some(id) {
         tree_field_hovered.val = None
