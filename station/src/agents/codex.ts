@@ -18,6 +18,7 @@ import { AgentProcess, ackedOffset, debug, findRunner, linesWithin, outFile, run
 import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profileFast, profileModel, profileVia } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, failureOf, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import { liveRunners, listening, type RunnerInfo } from "./runner.ts";
+import { REPO_RULES_COMMAND } from "./repo-rules.ts";
 import { wall } from "../ops/fibers.ts";
 import { Said, stationLang, tr } from "../ops/i18n.ts";
 import { findCommand, run } from "../updates/runtimes.ts";
@@ -951,6 +952,14 @@ export class CodexDriver implements AgentDriver {
     } : {
       "mcp_servers.stillfail.url": options.mcpUrl,
       "mcp_servers.stillfail.http_headers": { Authorization: `Bearer ${options.mcpToken}` },
+      // A repository's rules told as its tools first touch it, and again after a compaction (./repo-rules.ts: Codex
+      // reads AGENTS.md only from where it starts up). Hooks run only once trusted, which a thread's config may say
+      // it needs not (an app-server takes no --dangerously-bypass-hook-trust); hooks it knows no more are ignored.
+      hooks: {
+        PostToolUse: [{ matcher: "*", hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
+        PostCompact: [{ hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
+      },
+      bypass_hook_trust: true,
     };
     if (options.textOnly) {
       // An empty table is merged with the profile's configured servers. Read their names without config/read, whose

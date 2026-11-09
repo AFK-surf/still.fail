@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// (the file claude.ts names as REPO_RULES_HOOK: test/claude.test.ts holds that it is the one started)
+// (the file repo-rules.ts names as REPO_RULES_HOOK: test/claude.test.ts and codex.test.ts hold that it is the one started)
 const REPO_RULES_HOOK = fileURLToPath(new URL("../src/agents/repo-rules-hook.mjs", import.meta.url));
 
 const root = mkdtempSync(join(tmpdir(), "repo-rules-"));
@@ -73,4 +73,7 @@ test("a rules file the tool itself wrote is not told again; after a compaction e
   assert.equal(told({ source: "compact" }, "s4", undefined, "SessionStart"), "");
   assert.match(told({ tool_name: "Bash", tool_input: { command: "ls wt/apps/x" } }, "s4"), /HERON[\s\S]*MERLIN/);
   assert.equal(told({ tool_name: "Bash", tool_input: { command: "ls wt/apps/x" } }, "s4", "agent-2"), "");
+  // Codex's: its compaction is a PostCompact of its own.
+  assert.equal(told({ trigger: "manual" }, "s4", undefined, "PostCompact"), "");
+  assert.match(told({ tool_name: "Bash", tool_input: { command: "ls wt/apps/x" } }, "s4"), /HERON[\s\S]*MERLIN/);
 });

@@ -13,6 +13,7 @@ import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { CodexDriver, classifyCodexError, type CodexDriverOptions } from "../src/agents/codex.ts";
+import { REPO_RULES_COMMAND } from "../src/agents/repo-rules.ts";
 import { ackedOffset, outFile, runnerId } from "../src/agents/process.ts";
 import { allLeft, existingRunners, type RunnerInfo } from "../src/agents/runner.ts";
 import type { OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
@@ -168,6 +169,7 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(start.params.config["features.view_image"], false);
     assert.equal(start.params.config["features.goals"], false);
     assert.deepEqual(start.params.config.mcp_servers, {});
+    assert.equal(start.params.config.hooks, undefined, "no tools, no rules to tell");
     assert.ok(stdin(p.dump).some((m) => m.method === "mcpServerStatus/list"));
     assert.ok(!stdin(p.dump).some((m) => m.method === "config/read"), "MCP credentials are not read into the runner log");
     await session.dispose();
@@ -321,6 +323,12 @@ describe("the Codex driver", { concurrency: true }, () => {
         config: {
           "mcp_servers.stillfail.url": "http://127.0.0.1:4750/mcp",
           "mcp_servers.stillfail.http_headers": { Authorization: "Bearer tok" },
+          // A repository's rules told as its tools first touch it (test/repo-rules-hook.test.ts), trusted as given.
+          hooks: {
+            PostToolUse: [{ matcher: "*", hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
+            PostCompact: [{ hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
+          },
+          bypass_hook_trust: true,
           model_reasoning_effort: "high",
           "skills.config": [{ path: join(skills, "mine", "SKILL.md"), enabled: false }],
         },

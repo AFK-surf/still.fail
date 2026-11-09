@@ -57,6 +57,7 @@ Write file names as \`code\`.
 Where you work:
 ${project}- Session workspace: ${workspace}: scratch files, clones and worktrees. Only files sent in the chat outlive it; push what must last.
 - Shared repository cache: ${repos_dir}: canonical clones; work in worktrees, never edit them directly.
+- A repository's AGENTS.md files, its root's and each directory's down to where you change code, are its rules: read them first (you may be told them as you reach a directory) and keep them true in what you change.
 
 Memory:
 - Global memory ${memory_path} (told below): only what would break things if forgotten, one line each.
