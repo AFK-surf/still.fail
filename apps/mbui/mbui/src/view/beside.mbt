@@ -178,6 +178,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
     if n.lx != lx || n.ly != ly {
       self.work.composed = self.work.composed + 1
       self.composed.push({ at, gen: n.gen })
+      self.places_rev = self.places_rev + 1
       self.hits = self.hits + 1
     }
   }
@@ -203,6 +204,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
             n.lpy = py
             self.work.composed = self.work.composed + 1
             self.composed.push({ at, gen: n.gen })
+            self.places_rev = self.places_rev + 1
             self.hits = self.hits + 1
           }
         None => ()
@@ -293,6 +295,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
       n.lpy = py
       self.work.composed = self.work.composed + 1
       self.composed.push({ at, gen: n.gen })
+      self.places_rev = self.places_rev + 1
       self.hits = self.hits + 1
     }
     state[at] = 2

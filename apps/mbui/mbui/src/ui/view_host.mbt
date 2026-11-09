@@ -473,6 +473,7 @@ fn view_forget() -> Unit {
   old_islands.clear()
   old_placed.clear()
   old_placed_off.clear()
+  old_place_seen.val = None
   old_hits.clear()
   next_old_hits.clear()
   layer_hits.clear()
@@ -765,6 +766,15 @@ let view_window : Ref[(Double, Double)] = Ref((0.0, 0.0))
 /// Where each old view of `tree` is placed now (as it was last laid out), and whether the one is the whole window.
 fn old_place(tree : @view.Tree) -> Unit {
   let (w, h) = view_window.val
+  // (where nothing that places them changed since they were placed (the tree's places_rev, the old views, the window)
+  // and none is drawn off by a column at a moment: placed where they were, nothing told; one the whole window placed
+  // again each time, what else the tree draws deciding it)
+  let seen = (tree.places_rev(), old_islands.length(), w, h)
+  match old_place_seen.val {
+    Some((t, was)) if physical_equal(t, tree) && was == seen && !old_whole.val => return
+    _ => ()
+  }
+  old_place_seen.val = None
   let was = old_placed.copy()
   let was_off = was.map(fn(p) { old_placed_off.get(p.0) })
   // (each placed before let go of by its index, the room kept: what was set is what was placed)
@@ -809,7 +819,16 @@ fn old_place(tree : @view.Tree) -> Unit {
   if !same {
     old_placed_said.set(@signals.untracked(fn() { old_placed_said.get() }) + 1)
   }
+  if !old_placed.iter().any(fn(p) { tree.placed_by_clock(p.0) }) {
+    old_place_seen.val = Some((tree, seen))
+  }
 }
+
+///|
+/// The tree and what placed its old views as old_place last placed them, where none of them is drawn off by a column at
+/// a moment: placed again only once that is otherwise.
+// kept across runs: put back as a run begins (view_forget)
+let old_place_seen : Ref[(@view.Tree, (Int, Int, Double, Double))?] = Ref(None)
 
 ///|
 /// The old views hosted in `tree` as the scene's walk finds them (Tree::drawn_one), in its order: found each where it is,

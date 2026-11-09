@@ -624,6 +624,7 @@ fn Tree::lift_marked(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
   self.look_marked_at(at)
   self.composed.push({ at, gen: n.gen })
+  self.places_rev = self.places_rev + 1
   self.hits = self.hits + 1
 }
 
@@ -638,6 +639,7 @@ fn Tree::flight_over(self : Tree, f : Flying) -> Unit {
   stop()
   if self.alive_id(f.node) {
     self.nodes[f.node.at].lift = None
+    self.places_rev = self.places_rev + 1
     self.look_marked_at(f.node.at)
     self.place_marked_at(f.node.at)
   }
@@ -711,5 +713,6 @@ fn Tree::share_let_go(self : Tree, at : Int) -> Unit {
       None => ()
     }
     n.lift = None
+    self.places_rev = self.places_rev + 1
   }
 }
