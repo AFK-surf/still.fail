@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [0490574ec](https://github.com/AFK-surf/still.fail/commit/0490574ece26e7de539d2ea290ab95aa6ccb042c) app: what is worked out of a topic kept by the sou | 1.73 | 2.3 | 9.58 | 28.09 | 33.42 | 25.1 | 45.86 | 92.78 | 139.51 |
 | [048c87d3f](https://github.com/AFK-surf/still.fail/commit/048c87d3f25c4fcfe3db3c3b78e335b2b19dd61a) A station gone silent is not waited for again unti | 1.73 | 2.3 | 9.58 | 28.09 | 33.39 | 25.09 | 45.86 | 93.73 | 179.8 |
 | [84701dbdb](https://github.com/AFK-surf/still.fail/commit/84701dbdbef2700684a21f03900066a76a5dfa86) mbui: what is put by to be another's lets go at re | 1.72 | 2.3 | 9.56 | 28.08 | 33.32 | 25.07 | 45.8 | 93.68 | 161.13 |
 | [5907d0475](https://github.com/AFK-surf/still.fail/commit/5907d0475554896c0706210dc95c9bf18cb62021) wasmgas: focus= and callers=, what a function's ca | 1.72 | 2.3 | 9.56 | 28.08 | 33.32 | 25.07 | 45.8 | 93.39 | 168.71 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [10ac53813](https://github.com/AFK-surf/still.fail/commit/10ac538137a990210997c29f6f4acb37414d596e) Enable Android pushes for monoid (#5002) | 1.71 | 2.28 | 9.51 | 28.01 | 33.17 | 25.02 | 45.7 | 93.06 | 156.81 |
 | [5b0de1fd8](https://github.com/AFK-surf/still.fail/commit/5b0de1fd86222b34f16e25c584c515eb6fca5899) mbui: a row held for its menu lifted whole and cle | 1.71 | 2.28 | 9.51 | 28.01 | 33.17 | 25.02 | 45.7 | 93.06 | 156.81 |
 | [c3fd8fdc2](https://github.com/AFK-surf/still.fail/commit/c3fd8fdc2948850a6b3f210299dc4ad6181f2252) app: the reader's layout takes its caller's place, | 1.71 | 2.28 | 9.51 | 28.01 | 33.16 | 25.01 | 45.7 | 93.06 | 156.81 |
-| [6c009b70b](https://github.com/AFK-surf/still.fail/commit/6c009b70bf6933ed92ef6746b64aea4865c45c05) app: a chat's rows beside a sliding side panel lai | 1.71 | 2.28 | 9.51 | 28.01 | 33.16 | 24.88 | 44.81 | 93.06 | 156.81 |
