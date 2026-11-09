@@ -2245,7 +2245,11 @@ export class Views implements Owner {
     if (watch !== null) view.watch = watch;
     const card = row !== undefined ? decisions.ofRow(row) : null;
     if (card !== null && open(card)) view.decision = decisions.shown(card);
-    if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
+    // Its row as this page has it: read, for showing it reads it. Whether it was read before it was opened changes
+    // nothing here (where it stands, its archive): opening a chat only raises what is brought first, so the page is
+    // as it would be at once, not a moment after its read is told (the user, 2026-11-09).
+    const seen = row !== undefined ? { ...row, unread: false } : undefined;
+    if (seen !== undefined && present.archivable(seen) && view.archived !== true) view.archivable = true;
     // Where it stands, as its row's second line says it (what an agent needs, why it stopped, what it waits on, done):
     // said at the end of its messages too. A card waiting is not: it shows in the chat itself; nor what an agent waits
     // on: its activity under the messages says it, with how long it has waited. An agent this page's summary has at
@@ -2257,7 +2261,7 @@ export class Views implements Owner {
       const status = s !== undefined ? present.shownStatus(s) : null;
       return status === "queued" || (status === "running" && present.waiting(s) === null) ? s : present.session(a);
     };
-    const shown = row !== undefined && Array.isArray(row.agents) && !sending ? { ...row, agents: row.agents.map(held) } : null;
+    const shown = seen !== undefined && Array.isArray(seen.agents) && !sending ? { ...seen, agents: seen.agents.map(held) } : null;
     const line = shown !== null ? present.rowStateLine(shown, false, (agent) => {
       const status = present.shownStatus(agent);
       // A stop is already announced in the conversation; its status still remains on the list row.
