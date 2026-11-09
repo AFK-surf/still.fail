@@ -731,6 +731,8 @@ let zh : Map[String, String] = {
   "common.uploadConfirming": "等待 station 确认收到",
   "common.uploading": "正在上传",
   "core-logic.accounts.login.failed": "登录失败",
+  "core-logic.decisions.replied": "{name} 回复了",
+  "core-logic.decisions.you": "你",
   "desktop.contextMenu.copy": "复制",
   "desktop.contextMenu.copyImage": "复制图片",
   "desktop.contextMenu.copyLink": "复制链接",
