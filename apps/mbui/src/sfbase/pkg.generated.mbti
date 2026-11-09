@@ -3024,8 +3024,10 @@ pub(all) struct Reading {
   mut floor_was : Double
   running : Map[String, Agent]
   answered : Map[String, String]
+  answered_unseen : Map[String, Bool]
   last_turns : Map[String, String]
   turn_from : Map[String, Double]
+  idle_here : Map[String, Double]
   mut flash : String
   flash_lit : @motion.Anim
   mut flash_n : Int32

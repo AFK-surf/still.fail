@@ -851,6 +851,12 @@ pub let fix_turn_end_ms : Double = 700.0
 pub let fix_pace : Ref[(Double, Double, Double)] = Ref((fix_deliver_ms, fix_answer_ms, fix_turn_end_ms))
 
 ///|
+/// How long the fixture's station has a message sent before the chat's entries reach it (views/local.ts outboxSent:
+/// its outbox row `sent`, its time under it, till its message takes its place); less than 0, none (the message at once).
+// kept across runs: put back as a fixture is made (made.mbt)
+pub let fix_sent_for : Ref[Double] = Ref(-1.0)
+
+///|
 /// The status its agent at work on what was sent has: "queued" as the station has its words and it has not taken them
 /// yet (or a summary read before it took them said so).
 // kept across runs: put back as a fixture is made (made.mbt)
@@ -989,6 +995,25 @@ pub fn fix_deliver(session : String, id : String) -> Unit {
     fc.outbox.push(outgoing_json(id, params, "failed", "Willow 没有回应（假数据：带「失败」的消息先发不出去）"))
     return
   }
+  // (taken by the station, the chat's entries yet to reach it: sent a while first, as the core says it)
+  if fix_sent_for.val >= 0.0 && text(Some(params), "state") != "sent" {
+    for i, o in fc.outbox {
+      if text(Some(o), "id") == id {
+        match outgoing_json(id, params, "sent", "") {
+          Object(m) => {
+            let m = m.copy()
+            m["seq"] = Json::number((100 + fix_serial.val + 1).to_double())
+            // (its time under it, as the core says an outgoing one's: Outgoing.time)
+            m["time"] = ago("刚刚", "10/19 09:12:00")
+            fc.outbox[i] = Json::object(m)
+          }
+          j => fc.outbox[i] = j
+        }
+      }
+    }
+    fix_later(fix_sent_for.val, fn() { fix_deliver(session, id) })
+    return
+  }
   fc.outbox.retain(fn(o) { text(Some(o), "id") != id })
   fix_serial.val += 1
   let seq = 100 + fix_serial.val
@@ -1041,12 +1066,13 @@ pub fn fix_deliver(session : String, id : String) -> Unit {
       }
       "收到：「" + cut + "」。我先看一下，有结果再告诉你。"
     }
-    fix_chat(session).sent.push(
-      msg(100 + fix_serial.val, "agent", by_agent("anthropic", "claude", session), said, "刚刚", {
-        "ts": Json::string("reply\{fix_serial.val}"),
-        "said": true,
-      }),
-    )
+    // (its turn ended by the answer, as an agent's post with its state: words with 「进度」 answered by one saying how
+    // far it got, its turn going on after it)
+    let reply : Map[String, Json] = { "ts": Json::string("reply\{fix_serial.val}"), "said": true }
+    if !words.contains("进度") {
+      reply["ending"] = Json::string("all_done")
+    }
+    fix_chat(session).sent.push(msg(100 + fix_serial.val, "agent", by_agent("anthropic", "claude", session), said, "刚刚", reply))
   })
 }
 
@@ -1629,6 +1655,7 @@ pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Js
           msg(300 + fix_serial.val, "agent", by_agent("anthropic", "claude", "s-c1"), "好，按「" + label + "」来。", "刚刚", {
             "ts": Json::string("card-reply\{fix_serial.val}"),
             "said": true,
+            "ending": "all_done",
             "createdAt": Json::number(1.0e9),
           }),
         )

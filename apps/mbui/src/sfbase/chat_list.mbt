@@ -172,10 +172,16 @@ pub(all) struct Reading {
   /// agents at work whose answer has come out of their avatars this turn, by their last turn then (Agent.last_turn):
   /// their line gone with it till that turn is over (chat_tick)
   answered : Map[String, String]
+  /// agents whose answer was here as they were first seen at work: their line kept taking no room, unseen, till it is
+  /// gone, what it is subscribed to as it was (with_lingering); till their next turn
+  answered_unseen : Map[String, Bool]
   /// each agent's last turn as last ticked (Agent.last_turn)
   last_turns : Map[String, String]
   /// each agent at work, the last message here as it was first seen at work: what of its own comes past it is its answer
   turn_from : Map[String, Double]
+  /// each agent not at work, the last message here as it was last ticked so: what of its own came past it came with
+  /// its turn (turn_from)
+  idle_here : Map[String, Double]
   /// a message gone to (a notification's) and how lit it is (flash_of)
   mut flash : String
   flash_lit : @motion.Anim
@@ -289,8 +295,10 @@ pub fn reading_of(key : String) -> Reading {
         floor_was: 0.0,
         running: {},
         answered: {},
+        answered_unseen: {},
         last_turns: {},
         turn_from: {},
+        idle_here: {},
         flash: "",
         flash_lit: @motion.Anim::new(0.0),
         flash_n: 0,
@@ -782,11 +790,14 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   // at work still, its answer out of its avatar (the last of what it said: none waiting after it), its line goes as the
   // answer's room opens (Float), on the list's one way: the answer takes its place, never the list up and back down
   // again (2026-11-09 the user, 「点一个决策后上下摇晃」: 「处理中」跟回复同一次换位). It does not come back this turn.
+  // Only a post that ends its turn (its `ending`) is the answer: after one saying how far it got the agent works on,
+  // and its line stays (2026-11-09 the user: 「agent 发完消息 activity 不出现」).
   match em.current {
     Some(t) if t.pose != Fold &&
       running.contains(t.agent) &&
       !rd.answered.contains(t.agent) &&
-      !keeps.contains(t.agent) => {
+      !keeps.contains(t.agent) &&
+      ends_turn(v, t.seq) => {
       rd.answered[t.agent] = running.get(t.agent).map(fn(a) { a.last_turn }).unwrap_or("")
       linger_told(rd)
     }
@@ -796,19 +807,43 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   // the words sent: emit_take): its line goes as that answer's room opens, the same, not closed alone as its turn ends
   // (2026-11-09 the user, 「现在发个消息都抖了」)
   for k, a in running {
-    if !rd.turn_from.contains(k) {
-      rd.turn_from[k] = here
+    // (from the last message there before: its answer may come in the same read as the words it answers, the agent
+    // first seen at work with it already here, said while the chat shows; one of its own there as the chat opened, or
+    // seen while it was not at work, is from before)
+    let first = !rd.turn_from.contains(k)
+    if first {
+      // (one from a turn before, its line gone by now)
+      rd.answered_unseen.remove(k) |> ignore
+      let idle = rd.idle_here.get(k).unwrap_or(-1.0)
+      rd.turn_from[k] = v.messages
+        .iter()
+        .filter(fn(m) { !(m.author_kind == "agent" && m.by.agent == k && m.said && m.seq > idle) })
+        .fold(init=-1.0, fn(n, m) { if m.seq > n { m.seq } else { n } })
     }
     if rd.answered.contains(k) || keeps.contains(k) {
       continue
     }
     let from = rd.turn_from[k]
     let came = v.messages.iter().any(fn(m) {
-      m.seq > from && m.author_kind == "agent" && m.by.agent == k && !m.mine && !m.system && !emit_goes(em, m.seq)
+      m.seq > from &&
+      m.author_kind == "agent" &&
+      m.by.agent == k &&
+      !m.mine &&
+      !m.system &&
+      m.ending != "" &&
+      !emit_goes(em, m.seq)
     })
     if came {
       rd.answered[k] = a.last_turn
+      if first {
+        rd.answered_unseen[k] = true
+      }
       linger_told(rd)
+    }
+  }
+  for a in v.agents {
+    if !running.contains(a.key) {
+      rd.idle_here[a.key] = here
     }
   }
   let gone_by = rd.turn_from.keys().filter(fn(k) { !running.contains(k) }).collect()
@@ -865,6 +900,18 @@ fn linger_told(rd : Reading) -> Unit {
 }
 
 ///|
+/// Whether the message `seq` is a post that ended its agent's turn (all_done, need_help, waiting), not one saying how
+/// far it got. (From the end: what comes out of an avatar is among the newest.)
+fn ends_turn(v : ChatView, seq : Double) -> Bool {
+  for i = v.messages.length() - 1; i >= 0; i = i - 1 {
+    if v.messages[i].seq == seq {
+      return v.messages[i].ending != ""
+    }
+  }
+  false
+}
+
+///|
 /// The list with the activities of agents whose turn just ended, kept while their messages come out of their avatars.
 pub fn with_lingering(rd : Reading, list : Array[Entry]) -> Array[Entry] {
   rd.linger_said.get() |> ignore
@@ -872,7 +919,7 @@ pub fn with_lingering(rd : Reading, list : Array[Entry]) -> Array[Entry] {
   let list = if rd.answered.is_empty() {
     list
   } else {
-    list.filter(fn(e) { !(e is Working(a) && rd.answered.contains(a.key)) })
+    list.filter(fn(e) { !(e is Working(a) && rd.answered.contains(a.key) && !rd.answered_unseen.contains(a.key)) })
   }
   if rd.linger.is_empty() {
     return acts_in_order(rd, list)
