@@ -61,7 +61,7 @@ let lift_clear : Double = 12.0
 
 ///|
 /// What of the window's tree is lifted over the scrim (View::over_scrim: a chat's row) kept clear of the sheet up, as
-/// lift_over keeps an old view's.
+/// lift_over keeps an old view's, and clear of it all the way once it is up (where it is and how tall).
 fn init {
-  @ui.over_scrim_floor.val = fn(c) { @kit.sheet_top(c) }
+  @ui.over_scrim_floor.val = fn(c) { @kit.sheet_place(c) }
 }

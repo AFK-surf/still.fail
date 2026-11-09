@@ -422,7 +422,7 @@ pub fn over(Int64, Int64) -> Int64
 
 pub fn over_done(open_app~ : Bool) -> Unit
 
-pub let over_scrim_floor : @ref.Ref[(Ctx) -> Double?]
+pub let over_scrim_floor : @ref.Ref[(Ctx) -> (Double, Double)?]
 
 pub let own_arrows : Int32
 
