@@ -2656,8 +2656,16 @@ fn Viewer::video_target(self : Viewer, src : Source, width : Double, height : Do
 /// Esc closes the viewer, while nothing in it reads Esc of its own first (the player's menus and its list, once it is
 /// up; marking's marks).
 fn Viewer::shut_on_escape(self : Viewer, c : @ui.Ctx) -> Unit {
-  if !self.closing && c.key_pressed(@ui.key_escape) {
-    self.shut(c)
+  // (the keymap's viewer.escape where it is up, at its key's moment)
+  if !self.closing {
+    c.key_context("Viewer")
+    c.on_action("viewer.escape", fn() {
+      if self.closing {
+        return false
+      }
+      self.shut(c)
+      true
+    })
   }
 }
 

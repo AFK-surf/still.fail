@@ -177,6 +177,14 @@ pub fn keymap_of(prefs : Json?) -> @view.Keymap {
   bindings.append(@sf.reader_bindings())
   // (the files' own where they are: sfdesk's files.mbt)
   bindings.append(files_bindings())
+  // (Escape where a search is up, with the cursor in a field too, or a picture's old viewer, not in a field: sfpages'
+  // search.mbt, sfbase's viewer.mbt)
+  bindings.push({ keys: [stroke(@ui.key_escape, 0)], action: "search.escape", when: In("Search") })
+  bindings.push({
+    keys: [stroke(@ui.key_escape, 0)],
+    action: "viewer.escape",
+    when: All([In("Viewer"), Not(In("Field"))]),
+  })
   for a in key_actions(prefs) {
     let action = text(Some(a), "action")
     let group : @view.KeyWhen = match text(Some(a), "group") {
