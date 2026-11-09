@@ -93,3 +93,21 @@ test "what is left up long, a group of five: three shown, the rest under 还有 
   assert_true(t.find("模拟器 4") is Some(_))
   assert_true(t.find("还有 2 个") is None)
 }
+
+///|
+test "what is left up long, a long name and where it is: cut short on their lines, the row and its stop within the window" {
+  let job = match @sffixture.long_job() {
+    Object(m) => m.copy()
+    _ => {}
+  }
+  job["name"] = Json::string("CFT local stack for mail mode screenshots and the rest of a long name")
+  job["whereText"] = Json::string("tokyo-mac-studio-0-vm · Review 邮件权限 PR #5033 · and more of where it is")
+  let t = open_jobs_tester({ "groups": [{ "key": "services", "head": "长时间运行的网页服务 · 1", "jobs": [Json::object(job)] }], "lit": true })
+  guard t.query(Button, label="停止") is Some(stop) else { fail("no stop") }
+  let (sx, _, sw, _) = stop.rect
+  // (its stop in the window, at the row's end)
+  assert_true(sx + sw <= 390.0)
+  // (no glyph of its words past where its stop begins)
+  let past = t.glyph_clips().filter(fn(g) { g.0.1 > 40.0 && g.0.1 < 200.0 && g.0.2 > sx && g.0.0 < sx + sw && g.0.0 > 40.0 })
+  assert_eq(past.length(), 0)
+}
