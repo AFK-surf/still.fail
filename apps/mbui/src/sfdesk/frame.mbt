@@ -586,6 +586,28 @@ priv struct SideAt {
 }
 
 ///|
+/// Where the lists of a sidebar laid out `at` stand: in the tape's side column on the tape (its words as before #3806:
+/// @sf.band_pad_in), else in a side column beside the page.
+fn side_list_at(at : SideAt) -> @sf.ListAt {
+  if at.tape {
+    Tape
+  } else {
+    Side
+  }
+}
+
+///|
+/// Where the sidebar's lists stand as the frame draws its old views now: in the tape's side column while the frame is
+/// the tape (wide.tape: laid out Medium, with a sidebar to show), else in a side column beside the page.
+fn side_at() -> @sf.ListAt {
+  if wide.tape {
+    Tape
+  } else {
+    Side
+  }
+}
+
+///|
 /// How round the block's corners are (dock's), where its look does not leave them square: on the tape (open, apart
 /// from the page) a panel's corners, the tape's sidebar's; on its way between, as round as its move has it; the closed
 /// bar its own; each in the window's the window's less its 6 from it where it follows it.

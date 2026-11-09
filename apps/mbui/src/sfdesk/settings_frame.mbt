@@ -137,14 +137,14 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     }
     // Without the back row, keep the field below the sidebar's upper corners.
     let search_band = if @sf.native_on() { settings_search_native_band } else { settings_search_band }
-    c.box(style=@sf.side_list().then(search_band), fn() { @sfpages.settings_search(c) }) |> ignore
+    c.box(style=@sf.side_list().then(search_band), fn() { @sfpages.settings_search(c, side_at()) }) |> ignore
     side_scroll(c, "settings-nav", fn() {
       // (a row's page in place of the one open; on the tape brought over to show it)
       @sfpages.settings_side_rows(c, core, here, lit, fn(r) {
         @sfbase.history_push()
         app.nav.replace_above(1, [Setting(r)])
         @sfbase.show_chosen()
-      })
+      }, side_at())
     })
   })
   |> ignore
@@ -165,9 +165,9 @@ fn settings_back(c : @ui.Ctx, band : Bool) -> Unit {
     wide.landed.set("")
   }
   if band {
-    band_row(c, "settings-nav/back", false, body, on_press=back)
+    band_row(c, "settings-nav/back", false, body, at=side_at(), on_press=back)
   } else {
-    nav_row(c, "settings-nav/back", false, body, on_press=back)
+    nav_row(c, "settings-nav/back", false, body, at=side_at(), on_press=back)
   }
 }
 

@@ -263,10 +263,11 @@ let search_field_box : @ui.Style = search_field_ground.then(search_field_in)
 
 ///|
 /// One field, in the list and come up from it alike (search_field, search_page): what it holds as high as the theme's
-/// band (what stands over a sidebar's list: 38 with touch) and its words as far in from its ends (12), its mark and
-/// its words the band's too.
-fn search_field_room(band : @sf.ChatList) -> @ui.Style {
-  @ui.style(h=Fixed(band.band_h), px=@sf.room_of(band.band_pad))
+/// band (what stands over a sidebar's list: 38 with touch) and its words as far in from its ends as where its list
+/// stands has them (`at`: band_pad_in, 12 with a finger on the tape and across a phone's screen), its mark and its
+/// words the band's too.
+fn search_field_room(band : @sf.ChatList, at : @sf.ListAt) -> @ui.Style {
+  @ui.style(h=Fixed(band.band_h), px=@sf.room_of(@sf.band_pad_in(at)))
 }
 
 ///|
@@ -313,13 +314,13 @@ fn search_field_node(line : @view.View, at : @sf.ListAt) -> @view.View {
     @sf.style_node(l, fn() {
       let band = @sf.theme().chat_list
       match at {
-        Side => search_field_line
+        Side | Tape => search_field_line
         Whole => search_field_line.then(@ui.style(px=@sf.room_of(band.band_in)))
       }
     })
     l.box(fn(f) {
       field.val = Some(f)
-      @sf.style_node(f, fn() { search_field_box.then(search_field_room(@sf.theme().chat_list)) })
+      @sf.style_node(f, fn() { search_field_box.then(search_field_room(@sf.theme().chat_list, at)) })
       f.alpha(By(fn() { if search_read().open { 0.0 } else { 1.0 } })) |> ignore
       @sf.presses_node(f, fn() {
         let (_, y, w, _) = f.placed_window_now()
@@ -417,7 +418,7 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
           // what it holds laid out where it rests from the first, over its ground on its way there: its words said
           // the way that fits there (search_field_shorter) all the way up, not changed on the way
           c.layer(fn() {
-            let f = c.box(style=search_field_in.then(search_field_room(band)), fn() {
+            let f = c.box(style=search_field_in.then(search_field_room(band, at)), fn() {
               @sf.icon(c, "search", size=band.band_icon, color=t.p.muted) |> ignore
               c.box(style=search_grow, fn() {
                 let res = c.editor(
@@ -579,7 +580,7 @@ pub fn search_page_node(
       .offset(By(fn() { (0.0, (search.from - inset() - search_bar_top) * (1.0 - u())) }))
       |> ignore
       slot.box(fn(f) {
-        @sf.style_node(f, fn() { search_field_box.then(search_field_room(@sf.theme().chat_list)) })
+        @sf.style_node(f, fn() { search_field_box.then(search_field_room(@sf.theme().chat_list, at)) })
         f.height(By(fn() { Some(@sf.theme().chat_list.band_h) })) |> ignore
         @sf.icon_node(f, "search", @sf.theme().chat_list.band_icon, By(fn() { @sf.theme().p.muted })) |> ignore
         let field = @ui.field(

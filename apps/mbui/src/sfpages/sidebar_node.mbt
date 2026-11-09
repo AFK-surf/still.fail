@@ -252,7 +252,7 @@ fn chats_pane_node(
       placed[key] = true
       // (what covers the list's top: Home's top bar to its foot; a side column's band, the room over the list)
       let cover = match frame.at {
-        Side => (frame.top)()
+        Side | Tape => (frame.top)()
         Whole => (frame.under)()
       }
       // (not scrolled yet: where it is in the list is where it is laid out in it)
@@ -445,7 +445,7 @@ fn list_empty_node(v : @view.View, read : () -> (ChatsView?, String?), filter : 
     }
   }
   v.pick(fn() {
-    if at == Side {
+    if at != Whole {
       0
     } else if stations() == 0 && filter == "all" {
       1

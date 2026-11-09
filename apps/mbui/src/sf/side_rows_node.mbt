@@ -39,12 +39,13 @@ pub fn nav_ground_node(v : @view.View, on : () -> Bool, lit? : Int64) -> Unit {
 /// An action in a sidebar's band over its list as a node (band_row's: 返回对话 beside the update): not one of the
 /// list's rows but the band's, its height and its words' room the theme's band's, its corner a sidebar row's; its ground
 /// as nav_ground_by has it, the selected one's while `on()`; pressed, `press`; read out a link named `label()`. What it
-/// holds `body` makes.
+/// holds `body` makes. `at`: where its list stands (its words' room: band_pad_in).
 pub fn band_row_node(
   parent : @view.View,
   on : () -> Bool,
   label : () -> String,
   press : () -> Unit,
+  at : ListAt,
   body : (@view.View) -> Unit,
 ) -> Unit {
   parent.box(fn(r) {
@@ -56,7 +57,7 @@ pub fn band_row_node(
     .radius(By(fn() { @ui.tree_theme().corner(side_row_radius) }))
     .min_height(By(fn() { Some(theme().chat_list.band_h) }))
     .padding(By(fn() {
-      let x = theme().chat_list.band_pad
+      let x = band_pad_in(at)
       (x, 0.0, x, 0.0)
     }))
     |> ignore

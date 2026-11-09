@@ -118,7 +118,7 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let picked = place_route(src, w, "stations")
   c.box(style=place_side, fn() {
     side_top(c)
-    nav_action(c, "stations/add", @sf.t("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"), trailing?=update_trailing(c, src), band=update_band())
+    nav_action(c, "stations/add", @sf.t("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"), trailing?=update_trailing(c, src), band=update_band(), at=side_at())
     side_scroll(c, "stations-nav/" + w.id, fn() {
       let listed = stations_listed(src, w)
       for i, s in listed {
@@ -143,6 +143,7 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, more : Bool
   let t = @sf.theme()
   nav_item(
       c,
+      at=side_at(),
       "stations/" + text(s, "station"),
       on,
       fn() { @sf.station_icon(c, text(s, "emoji"), text(s, "icon"), nav_mark_side, t.p.text) },
@@ -168,7 +169,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let list = items(src.topic("profiles", { "scope": Json::string(w.id) }).get().value, "items")
   c.box(style=place_side, fn() {
     side_top(c)
-    nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"), trailing?=update_trailing(c, src), band=update_band())
+    nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"), trailing?=update_trailing(c, src), band=update_band(), at=side_at())
     side_scroll(c, "profiles-nav/" + w.id, fn() {
       let mut group = ""
       for i, e in list {
@@ -177,7 +178,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let more = i + 1 < list.length() && text(Some(list[i + 1]), "group") == text(e, "group")
         if text(e, "group") != group {
           group = text(e, "group")
-          @sf.list_heading(c, text(e, "groupTitle"), Side)
+          @sf.list_heading(c, text(e, "groupTitle"), side_at())
         }
         let p = field(e, "profile")
         let route = profile_route(e)
@@ -204,6 +205,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let credits = ok && !windows && text(quota, "creditsText") != ""
         nav_item(
             c,
+            at=side_at(),
             "profiles/" + text(e, "key"),
             picked == Some(route),
             fn() { @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), nav_mark_side, text(p, "providerMark")) },
@@ -240,7 +242,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             },
             more~,
             foot?=if windows {
-              Some(fn() { @sf.nav_quota_chips(c, quota, key="profiles/" + text(e, "key")) })
+              Some(fn() { @sf.nav_quota_chips(c, quota, key="profiles/" + text(e, "key"), at=side_at()) })
             } else {
               None
             },
@@ -264,11 +266,12 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         if offers.length() == 0 {
           continue
         }
-        @sf.list_heading(c, @sf.t("web-pages.profiles.machineSignedIn", args=[("station", text(s, "name"))]), Side)
+        @sf.list_heading(c, @sf.t("web-pages.profiles.machineSignedIn", args=[("station", text(s, "name"))]), side_at())
         for j, l in offers {
           let l = Some(l)
           nav_item(
               c,
+              at=side_at(),
               "profiles/machine/" + station + "/" + text(l, "runtime"),
               false,
               fn() { @sf.maker_mark(c, "", text(l, "runtime"), nav_mark_side) |> ignore },

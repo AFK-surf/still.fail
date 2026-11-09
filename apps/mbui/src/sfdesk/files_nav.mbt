@@ -52,7 +52,7 @@ pub fn files_nav(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     side_top(c)
     let stations = favorite_stations(src, ws)
     let pin = if stations.length() > 0 { Some(fn(_) { add_favorite_folder(src, ws, stations) }) } else { None }
-    nav_action(c, "files/pin", @sf.t("web-pages.files.addFavorite"), pin, trailing?=update_trailing(c, src), band=update_band())
+    nav_action(c, "files/pin", @sf.t("web-pages.files.addFavorite"), pin, trailing?=update_trailing(c, src), band=update_band(), at=side_at())
     // (a folder chosen there in the page, on the tape brought over to show it; what the page left read handed to the
     // one opened, as a press opens it outside any build: open_handing_held)
     files_places(c, src, ws, top=nav_top, foot=@sf.list_foot_in(Side), go=fn(at) {
@@ -192,16 +192,16 @@ pub fn files_places(
           PReading => @sf.waiting(c, fn() { places_sample(c) })
           PNone =>
             c.box(style=nav_note, fn() { c.text(@sf.t("web-main.rail.filesNone"), style=nav_meta()) |> ignore }) |> ignore
-          PFavoriteHead => favorite_drop(c, src, ws, "head", fn() { @sf.list_heading(c, @sf.t("web-pages.files.favorites"), Side) })
+          PFavoriteHead => favorite_drop(c, src, ws, "head", fn() { @sf.list_heading(c, @sf.t("web-pages.files.favorites"), side_at()) })
           PFavoriteHint => favorite_drop(c, src, ws, "hint", fn() {
-            c.box(style=@sf.theme().chat_list.side_hint, fn() {
+            c.box(style=@sf.side_hint_at(side_at()), fn() {
               @sf.icon(c, "star", size=nav_icon, color=@sf.theme().p.subtle) |> ignore
               c.text(@sf.t("web-pages.files.favoritesHint"), style=nav_meta()) |> ignore
             })
             |> ignore
           })
           PFavorite(f, s, more) => favorite_row(c, src, ws, f, s, more, go)
-          PHeading(h) => @sf.list_heading(c, h, Side)
+          PHeading(h) => @sf.list_heading(c, h, side_at())
           PStation(s) => {
             let more = i + 1 < rows.length() && rows[i + 1] is PStation(_)
             station_row(c, src, s, s.station == here, dv_rights(src, ws, Some(s)).write, more, go)
@@ -281,6 +281,7 @@ fn favorite_row(
       c.on_press(rid, fn() { favorite_remove(src, ws, f.station, f.root, f.path) })
       nav_row(
           c,
+          at=side_at(),
           key,
           place_lit(f.station, into.root.unwrap_or(""), into.path),
           fn() {
@@ -333,6 +334,7 @@ fn station_row(
   let row = fn() {
     nav_row(
         c,
+        at=side_at(),
         "files/station/" + s.station,
         match start {
           Some(r) => place_lit(s.station, r, "")
@@ -389,7 +391,7 @@ fn station_row(
 /// The stations to come while they are read (the library's Waiting, in its bones): their heading and two made-up
 /// stations' rows, as station_row draws them.
 fn places_sample(c : @ui.Ctx) -> Unit {
-  @sf.list_heading(c, "Station", Side)
+  @sf.list_heading(c, "Station", side_at())
   for i, n in [5, 3] {
     let s = @sfbase.dv_station({
       "station": Json::string("sample/" + i.to_string()),
@@ -444,6 +446,7 @@ fn station_places(
       fdrag_side_row(c, src, "place/" + s.station + "/" + path, into, name, write, s.transfers, fn() {
         nav_row(
             c,
+            at=side_at(),
             "files/place/" + s.station + "/" + path,
             place_lit(s.station, path, ""),
             fn() {
@@ -532,14 +535,14 @@ let keep_on : @ui.Style = keep_off.then(@ui.css("border=B1 border_color=Accent")
 fn favorite_remove_key() -> @ui.Style {
   let corner = @sf.row_least() / 2.0
   let inset = @ui.capsule_in(corner, @sf.row_keys_room(1), room=corner)
-  @sf.row_key_box.then(@ui.style(mr=@sf.room_of(inset - @sf.theme().chat_list.band_pad)))
+  @sf.row_key_box.then(@ui.style(mr=@sf.room_of(inset - @sf.band_pad_in(side_at()))))
 }
 
 ///|
 /// A station's disclosure: its chevron 16 across, its box as wide as makes it a press's room inside its row (whose sides
 /// are the band's pad in: 20 with touch), the chevron in its middle.
 fn disclosure() -> @ui.Style {
-  let w = dmax(disclosure_side, @ui.room_least() - 2.0 * @sf.theme().chat_list.band_pad)
+  let w = dmax(disclosure_side, @ui.room_least() - 2.0 * @sf.band_pad_in(side_at()))
   disclosure_look.then(@ui.style(w=Fixed(w)))
 }
 

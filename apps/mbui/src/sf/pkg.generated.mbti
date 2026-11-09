@@ -124,11 +124,13 @@ pub let bad : @ui.TextStyle
 
 pub fn band_mark(@ui.Ctx, String, Int64) -> Unit
 
+pub fn band_pad_in(ListAt) -> Double
+
 pub fn band_row(@ui.Ctx, String, Bool, () -> Unit) -> Bool
 
 pub fn band_row_h() -> Double
 
-pub fn band_row_node(@view.View, () -> Bool, () -> String, () -> Unit, (@view.View) -> Unit) -> Unit
+pub fn band_row_node(@view.View, () -> Bool, () -> String, () -> Unit, ListAt, (@view.View) -> Unit) -> Unit
 
 pub fn band_words(@ui.Ctx, String) -> Unit
 
@@ -728,6 +730,8 @@ pub fn head_end(@ui.Ctx, () -> Unit) -> Unit
 
 pub fn heading(@ui.Ctx, String, note? : String, actions? : () -> Unit) -> Unit
 
+pub fn heading_in_at(ListAt) -> Double
+
 pub fn heading_node(@view.View, () -> String) -> Unit
 
 pub fn held_in() -> @ui.Style
@@ -1184,7 +1188,7 @@ pub fn native_over_up(String, alive~ : () -> Bool, owner? : String, over? : Int3
 
 pub fn native_side() -> Bool
 
-pub fn nav_action(@ui.Ctx, String, String, ((Beside) -> Unit)?, trailing? : () -> Unit, band? : @ui.Style) -> Unit
+pub fn nav_action(@ui.Ctx, String, String, ((Beside) -> Unit)?, trailing? : () -> Unit, band? : @ui.Style, at? : ListAt) -> Unit
 
 pub fn nav_apart(@ui.Ctx, Bool, () -> Unit) -> Unit
 
@@ -1210,7 +1214,7 @@ pub fn nav_meta() -> @ui.TextStyle
 
 pub fn nav_new() -> @ui.Style
 
-pub fn nav_quota_chips(@ui.Ctx, @json.Json?, key? : String) -> Unit
+pub fn nav_quota_chips(@ui.Ctx, @json.Json?, key? : String, at? : ListAt) -> Unit
 
 pub fn nav_row(@ui.Ctx, String, Bool, () -> Unit, align? : @ui.Align, more? : Bool) -> Bool
 
@@ -1922,7 +1926,11 @@ pub fn shortcut_keys(String) -> String
 
 pub let side_face_step : @ui.Len
 
+pub fn side_hint_at(ListAt) -> @ui.Style
+
 pub fn side_list() -> @ui.Style
+
+pub fn side_row_at(ListAt) -> @ui.Style
 
 pub let side_row_h : @ui.Len
 
@@ -2521,6 +2529,7 @@ pub(all) struct ChatList {
   side_foot_in : Double
   band_in : Double
   band_pad : Double
+  own_band_pad : Double
   band_icon : Double
   band_h : Double
   band_words : @ui.TextStyle
@@ -2683,6 +2692,7 @@ pub fn LinkTo::is_card(Self) -> Bool
 #derive(Eq)
 pub(all) enum ListAt {
   Side
+  Tape
   Whole
 }
 
