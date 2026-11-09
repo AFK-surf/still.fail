@@ -144,6 +144,9 @@ struct FakeHost {
   mut inset : Bool
   /// the window filling the screen (Ctx::set_full_screen), as last made to
   mut full : Bool
+  /// how much lower the window's buttons go in the app's top row and over how long (@hostapi.window_buttons_down), as
+  /// last told
+  mut buttons_down : (Double, Double)
   /// how round the system draws the window's corners (Tester::new's `window_corner`; none filling the screen), and
   /// each of them where they differ (Tester::new's `window_corners`: top left, then round it)
   window_corner : Double

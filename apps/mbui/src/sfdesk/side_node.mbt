@@ -73,7 +73,16 @@ fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () ->
       list_top_h()
     },
     foot: fn() { 0.0 },
-    ground: fn() { if side_folded() || wide.tape { apart_ground() } else { @sf.theme().p.sidebar } },
+    // (on the tape the block's, a step darker behind the panel in use: tape_side_at)
+    ground: fn() {
+      if wide.tape {
+        at().ground
+      } else if side_folded() {
+        apart_ground()
+      } else {
+        @sf.theme().p.sidebar
+      }
+    },
     before: fn(_, _) { [] },
     after: fn(_, _) { [] },
     others: [
@@ -172,7 +181,12 @@ fn lists_band_node(
     }
   }
   o.box(fn(band) {
-    band.ground(By(fn() { @sf.mix(apart_ground(), band_at().band, @sf.theme().p.sidebar) })) |> ignore
+    // (on the tape the block's ground, a step darker behind the panel in use as the lists under it are: tape_side_at)
+    band.ground(By(fn() {
+      let a = at()
+      @sf.mix(if a.tape { a.ground } else { apart_ground() }, a.band, @sf.theme().p.sidebar)
+    }))
+    |> ignore
     side_top_node(band, fn() { band_at().brand })
     band.box(fn(line) {
       @sf.style_node(line, fn() {

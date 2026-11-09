@@ -2767,6 +2767,7 @@ int32_t mb_host_window_inset(void) { return 0; }
 // A window filling the screen (@hostapi.full_screen): not one of this host's.
 int32_t mb_host_full_screen(void) { return 0; }
 void mb_host_set_full_screen(int32_t on) { (void)on; }
+void mb_host_window_buttons_down(double by, double ms) { (void)by; (void)ms; }
 void mb_host_window_drag(void) {}
 
 // The window's own buttons, the app's to draw where the system draws none (@hostapi.window_act, window_zoomed,

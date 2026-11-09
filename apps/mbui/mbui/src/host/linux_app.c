@@ -1255,6 +1255,9 @@ void mb_host_set_full_screen(int32_t on) {
   else gtk_window_unfullscreen(GTK_WINDOW(win));
 }
 
+// The app's own top row draws Linux's buttons (window_keys_own): nothing of the system's to move.
+void mb_host_window_buttons_down(double by, double ms) { (void)by; (void)ms; }
+
 // How round the system draws the window's corners (@hostapi.window_corner): its content's are square under the title
 // bar.
 double mb_host_window_corner(void) { return 0; }

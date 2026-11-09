@@ -56,6 +56,11 @@ impl @hostapi.Host for Native with set_full_screen(_, on) {
 }
 
 ///|
+impl @hostapi.Host for Native with window_buttons_down(_, by, ms) {
+  window_buttons_down(by, ms)
+}
+
+///|
 impl @hostapi.Host for Native with window_corner(_) {
   window_corner()
 }

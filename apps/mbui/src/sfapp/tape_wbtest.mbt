@@ -116,8 +116,8 @@ fn covered(t : @ui.Tester, label : String) -> (Double, Double)? {
 
 ///|
 test "on the tape with the window's buttons in the app's top row (a Mac's) what shows at the window's left holds them, as much room past them as before them from the window's edge; the strip at the right as before" {
-  // (the host's buttons: 16 from the window's left, 54 across: mbui's mac_app.m)
-  let (buttons_in, buttons_w) = (16.0, 54.0)
+  // (the host's buttons: 16 from the window's left, 60 across on macOS 27: mbui's mac_app.m)
+  let (buttons_in, buttons_w) = (16.0, 60.0)
   for w in [600.0, 720.0, 839.0] {
     let at = "\{w}"
     let t = tape_chat(0, w, 840.0)
@@ -140,6 +140,27 @@ test "on the tape with the window's buttons in the app's top row (a Mac's) what 
     t.run_for(@ui.move_most_ms)
     assert_true(near_at(covered(t, "打开侧栏").map(fn(e) { e.0 }), w - @sfdesk.tape_shows), msg=at)
   }
+}
+
+///|
+test "on the tape the window's buttons stand as far lower as its panels stand under the window's top, back off it" {
+  let t = tape_chat(0, 720.0, 840.0)
+  t.set_window_inset(true)
+  t.run_for(@ui.move_most_ms)
+  // (the strip at the window's left its panel's top 6 under the window's: the buttons 16 under it, as 16 in from the
+  // window's side)
+  // (moved there as a Move that far: none seen as the window opens, the host's)
+  let moved = (@sfdesk.closed_bar_in, @ui.move_ms(@sfdesk.closed_bar_in))
+  assert_eq(t.window_buttons_down(), moved)
+  // off the tape (Large), centred on the top row's first 44 again, moved back
+  t.resize(1280.0, 840.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(!@sfdesk.wide.tape)
+  assert_eq(t.window_buttons_down(), (0.0, moved.1))
+  // and on it again
+  t.resize(720.0, 840.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.window_buttons_down(), moved)
 }
 
 ///|

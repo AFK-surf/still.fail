@@ -307,6 +307,13 @@ pub fn Tester::set_font_scale(self : Tester, scale : Double) -> Unit {
 }
 
 ///|
+/// How much lower than centred on the app's top row's first 44 the app last moved the window's buttons, and over how
+/// many ms (@hostapi.window_buttons_down).
+pub fn Tester::window_buttons_down(self : Tester) -> (Double, Double) {
+  self.fake.buttons_down
+}
+
+///|
 /// The window's buttons in the app's top row, or not (full screen), from the next frame on.
 pub fn Tester::set_window_inset(self : Tester, inset : Bool) -> Unit {
   self.fake.inset = inset

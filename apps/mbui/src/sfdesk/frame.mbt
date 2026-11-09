@@ -743,11 +743,12 @@ pub fn tape_shows_right() -> Double {
 
 ///|
 /// The window's buttons in the app's top row (mbui's mac_app.m: 16 from the window's left, centred on its 44, as far
-/// apart as the system has them): from 16, the three 54 across (each 14, 20 apart).
+/// apart as the system has them): from 16, the three 60 across (macOS 27's: each 14, 23 from one's middle to the next's;
+/// measured on the user's screenshot, 2026-11-09).
 let window_buttons_in : Double = 16.0
 
 ///|
-let window_buttons_w : Double = 54.0
+let window_buttons_w : Double = 60.0
 
 ///|
 /// How wide a panel is on the tape with one beside it, a window `width` wide: what the window leaves in use past what

@@ -2794,6 +2794,7 @@ pub fn Tester::wheel_phase(Self, Double, Double, Double, Int32) -> Unit
 pub fn Tester::wheel_told(Self, Double, Double, Double, Double, Int32, Double) -> Unit
 pub fn Tester::wheel_with(Self, Double, Double, Double, Double, Int32) -> Unit
 pub fn Tester::window_acts(Self) -> Array[Int32]
+pub fn Tester::window_buttons_down(Self) -> (Double, Double)
 pub fn Tester::window_drags(Self) -> Int32
 pub fn Tester::window_shows(Self) -> Int32
 pub fn Tester::window_snap_rect(Self) -> (Double, Double, Double, Double)

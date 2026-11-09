@@ -973,17 +973,22 @@ static bool full_screen_on;
 // AppKit itself, each time it lays their title bar out (the window resized, its appearance set, in and out of full
 // screen): the window's frame (NSThemeFrame) asks itself how high the bar is (_titlebarHeight), how far in from the
 // left its buttons start (_minXTitlebarWidgetInset) and whether they are centred in it (_shouldCenterTrafficLights),
-// and the window's is one of ours (MBWindow) that says 44, 16 and yes, as Chrome's has its buttons in its tab strip.
-// Moved there after AppKit had put them in its own place, they were in that place for a frame each time: shaking as
-// the window was resized, wrong as it came out of full screen. Not while the window is full screen or on its way
-// there (full_screen_on: the system's own bar there): AppKit's own answers. Where AppKit's frame has none of these, the
-// buttons stay in AppKit's own place.
+// and the window's is one of ours (MBWindow) that says 44 (taller where the app has them lower: buttons_down), 16 and
+// yes, as Chrome's has its buttons in its tab strip. Moved there after AppKit had put them in its own place, they were
+// in that place for a frame each time: shaking as the window was resized, wrong as it came out of full screen. Not
+// while the window is full screen or on its way there (full_screen_on: the system's own bar there): AppKit's own
+// answers. Where AppKit's frame has none of these, the buttons stay in AppKit's own place.
 static Class frame_base;
 
 static bool buttons_inset(void) { return setup_inset && !full_screen_on; }
 
+// How much lower than centred on the first 44 the app has its buttons (mb_host_window_buttons_down): its top row that
+// far under the window's top. The bar AppKit centres them in twice that taller.
+static double buttons_down;
+
 static double frame_bar_height(id self, SEL s) {
-  return buttons_inset() ? 44 : ((double (*)(id, SEL))class_getMethodImplementation(frame_base, s))(self, s);
+  return buttons_inset() ? 44 + 2 * buttons_down
+                         : ((double (*)(id, SEL))class_getMethodImplementation(frame_base, s))(self, s);
 }
 
 static double frame_buttons_left(id self, SEL s) {
@@ -1083,6 +1088,61 @@ int32_t mb_host_window_inset(void) {
 // button does).
 int32_t mb_host_full_screen(void) {
   return the_view.window && full_screen_on ? 1 : 0;
+}
+
+// The window's buttons moved to `by` lower than centred on the app's top row's first 44 (@hostapi.window_buttons_down),
+// from where they are, over `ms` on a Move's way (mbui's Ease::Move: a critically damped spring's, move_k 7.4), each
+// display frame their title bar laid out again as AppKit lays it out itself (full_screen_going's). At once where there
+// is no way to see them go: `ms` none, the window not on the screen or held out of sight as it opens.
+static double buttons_from, buttons_to, buttons_t0, buttons_ms;
+static CADisplayLink *buttons_link;
+
+static void buttons_tile(void) {
+  NSView *frame = the_view.window.contentView.superview;
+  SEL tile = NSSelectorFromString(@"_tileTitlebarAndRedisplay:");
+  if (buttons_inset() && [frame respondsToSelector:tile]) ((void (*)(id, SEL, BOOL))objc_msgSend)(frame, tile, YES);
+}
+
+static double buttons_way(double t) {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  double k = 7.4, x = k * t;
+  return (1 - (1 + x) * exp(-x)) / (1 - (1 + k) * exp(-k));
+}
+
+@interface MBButtonsMove : NSObject
+@end
+@implementation MBButtonsMove
+- (void)tick:(CADisplayLink *)link {
+  double t = (CACurrentMediaTime() - buttons_t0) * 1000 / buttons_ms;
+  buttons_down = buttons_from + (buttons_to - buttons_from) * buttons_way(t);
+  if (t >= 1) {
+    buttons_down = buttons_to;
+    [link invalidate];
+    buttons_link = nil;
+  }
+  buttons_tile();
+}
+@end
+
+void mb_host_window_buttons_down(double by, double ms) {
+  if (by == buttons_to && (buttons_link || buttons_down == by)) return;
+  NSWindow *w = the_view.window;
+  [buttons_link invalidate];
+  buttons_link = nil;
+  buttons_to = by;
+  if (ms <= 0 || !w || !w.visible || (window_held && !window_shown)) {
+    buttons_down = by;
+    buttons_tile();
+    return;
+  }
+  static MBButtonsMove *mover;
+  if (!mover) mover = [MBButtonsMove new];
+  buttons_from = buttons_down;
+  buttons_t0 = CACurrentMediaTime();
+  buttons_ms = ms;
+  buttons_link = [the_view displayLinkWithTarget:mover selector:@selector(tick:)];
+  [buttons_link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
 }
 
 void mb_host_set_full_screen(int32_t on) {

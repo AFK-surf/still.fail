@@ -16,6 +16,7 @@ pub(open) trait Host {
   wheel_kept(Self, Bool) -> Unit = _
   window_setup(Self, Double, Double, Double, Double, Bool) -> Unit = _
   window_inset(Self) -> Bool = _
+  window_buttons_down(Self, Double, Double) -> Unit = _
   window_hold(Self) -> Unit = _
   window_show(Self) -> Unit = _
   full_screen(Self) -> Bool = _
@@ -274,6 +275,11 @@ impl Host with window_setup(_, _, _, _, _, _) {
 ///|
 impl Host with window_inset(_) {
   false
+}
+
+///|
+impl Host with window_buttons_down(_, _, _) {
+  ()
 }
 
 ///|
@@ -1454,6 +1460,15 @@ pub fn window_show() -> Unit {
 /// leaves them there.
 pub fn window_inset() -> Bool {
   current.val.window_inset()
+}
+
+///|
+/// The window's buttons in the app's top row (window_inset) moved to `by` lower than centred on its first 44, where the
+/// app's top row starts that much under the window's top (macOS's; a panel inset from the window's edges): from where
+/// they are, over `ms` on a Move's way (Ease::Move), at once where the window is not seen yet. Nothing where the system
+/// has no such buttons there.
+pub fn window_buttons_down(by : Double, ms : Double) -> Unit {
+  current.val.window_buttons_down(by, ms)
 }
 
 ///|
