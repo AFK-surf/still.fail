@@ -40,6 +40,11 @@ pub fn[K : Hash + Eq] Keyed::peek(self : Keyed[K], k : K) -> Bool {
 /// It holds `ks` now, and nothing else: what read a key that came in or left is told, once, as all of them have
 /// changed. The keys nothing reads any more are let go as they leave.
 pub fn[K : Hash + Eq] Keyed::set(self : Keyed[K], ks : Array[K]) -> Unit {
+  // (the keys it holds already, as each frame says them again (the hand's: what is pointed at, pressed): told nothing,
+  // nothing made to find that out; a few, each once, each in it)
+  if ks.length() == self.members.length() && ks.length() <= 8 && keys_held(self.members, ks) {
+    return
+  }
   let now : Map[K, Bool] = {}
   for k in ks {
     now[k] = true
@@ -80,6 +85,22 @@ pub fn[K : Hash + Eq] Keyed::set(self : Keyed[K], ks : Array[K]) -> Unit {
       self.said.remove(k)
     }
   }
+}
+
+///|
+/// Whether each of `ks` is in `members` and none is said twice (so, as many as `members` holds, they are all of them).
+fn[K : Hash + Eq] keys_held(members : Map[K, Bool], ks : Array[K]) -> Bool {
+  for i, k in ks {
+    if !members.contains(k) {
+      return false
+    }
+    for j in 0..<i {
+      if ks[j] == k {
+        return false
+      }
+    }
+  }
+  true
 }
 
 ///|
