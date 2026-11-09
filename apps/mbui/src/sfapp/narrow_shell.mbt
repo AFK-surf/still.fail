@@ -508,6 +508,7 @@ fn narrow_made_as(
               over=chat_bar_node,
               stint~,
             )
+            |> ignore
           },
         ),
       )

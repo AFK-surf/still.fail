@@ -102,7 +102,7 @@ fn side_col(src : Source, n : @view.View, key : String, open : Bool) -> Double {
 
 ///|
 /// The side panel of the chat page `serial` of the stack (a chat's, or the new chat's once it becomes one) in node `v`,
-/// the row its page is in, after it: its column (side_col), moved aside with the page; in it, while it shows anything,
+/// the row its page is in, after it, read by `src` (the page's, chat_page_made's: what it reads let go with the page): its column (side_col), moved aside with the page; in it, while it shows anything,
 /// the panel as wide as it is at rest (cut to the column while it slides beside the page) and its edge.
 fn side_panel_node(v : @view.View, src : Source, serial : Int, tips : @sf.TipLayer) -> Unit {
   let chat = fn() {

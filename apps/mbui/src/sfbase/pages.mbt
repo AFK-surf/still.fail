@@ -74,7 +74,8 @@ pub fn page_chat_reader(src : Source, entry : @view.View, serial : Int) -> (Page
 /// built by `build` as the stack built it before (a chat from the source it keeps while its entry is on the stack, its
 /// reader held: page_entry_source, page_chat_reader; a new chat from the node's own), again as `key` changes. Over it
 /// a picture flying from its list while under its bar (viewer_flight_slot), and over that what of it is nodes already (`over`: given a node over the island, the chat's source, what the page is now and its
-/// time on top, `stint`).
+/// time on top, `stint`). What it reads by, the source it keeps (its reads the page's, let go with it), given back:
+/// what is beside it reads by it too.
 pub fn chat_page_made(
   v : @view.View,
   src : Source,
@@ -83,7 +84,7 @@ pub fn chat_page_made(
   key? : () -> String = fn() { "" },
   over? : (@view.View, Source, () -> Page?, () -> Int) -> Unit,
   stint? : () -> Int = fn() { 0 },
-) -> Unit {
+) -> Source {
   let retained = page_entry_source(src, v, serial)
   let page_read = page_chat_reader(retained, v, serial)
   let shown = src.owned_by(v)
@@ -111,6 +112,7 @@ pub fn chat_page_made(
       })
     None => ()
   }
+  retained
 }
 
 ///|

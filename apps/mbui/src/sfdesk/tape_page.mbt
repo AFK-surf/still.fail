@@ -464,7 +464,7 @@ fn tape_made(
       Some(
         (
           "chat",
-          fn(v, _page, _under, _stint, k) { @sfbase.chat_page_made(v, src, k, tape_page_one, key=tape_island_key) },
+          fn(v, _page, _under, _stint, k) { @sfbase.chat_page_made(v, src, k, tape_page_one, key=tape_island_key) |> ignore },
         ),
       )
     _ => None

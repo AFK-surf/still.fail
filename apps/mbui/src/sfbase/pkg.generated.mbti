@@ -145,7 +145,7 @@ pub fn chat_open_is_pending(Int32) -> Bool
 
 pub fn chat_page_is(Page) -> Bool
 
-pub fn chat_page_made(@view.View, Source, Int32, (@ui.Ctx, Source, Page) -> Unit, key? : () -> String, over? : (@view.View, Source, () -> Page?, () -> Int32) -> Unit, stint? : () -> Int32) -> Unit
+pub fn chat_page_made(@view.View, Source, Int32, (@ui.Ctx, Source, Page) -> Unit, key? : () -> String, over? : (@view.View, Source, () -> Page?, () -> Int32) -> Unit, stint? : () -> Int32) -> Source
 
 pub fn chat_params(ChatRef) -> Map[String, @json.Json]
 

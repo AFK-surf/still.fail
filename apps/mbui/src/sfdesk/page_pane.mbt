@@ -332,14 +332,15 @@ fn pane_made(
         (
           "chat",
           fn(v, _page, _under, _stint, k) {
-            // (beside it its side panel, the tree's: side_panel_node)
+            // (beside it its side panel, the tree's, reading by the page's source, let go with it: side_panel_node)
             v.row(Is(true)).grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+            let page_src : Ref[Source] = Ref(src)
             v.box(fn(p) {
               p.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))) |> ignore
-              @sfbase.chat_page_made(p, src, k, pane_page_one, key=tape_island_key)
+              page_src.val = @sfbase.chat_page_made(p, src, k, pane_page_one, key=tape_island_key)
             })
             |> ignore
-            side_panel_node(v, src, k, tips)
+            side_panel_node(v, page_src.val, k, tips)
           },
         ),
       )

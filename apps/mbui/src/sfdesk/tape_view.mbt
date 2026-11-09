@@ -1174,7 +1174,8 @@ fn tape_side_node(pane : @view.View, src : Source) -> Unit {
     .padding(By(fn() { (0.0, 0.0, tape_room_now().under, 0.0) }))
     |> ignore
     @ui.tree_corners_linked(q, fn() { Some(tape_pane_corners(Panel, true)) })
-    side_history_node(q, src, r, agent, tips, fn(n, build, natural) {
+    // (what it reads its own, let go as the history leaves the front or the panel goes)
+    side_history_node(q, src.owned_by(q), r, agent, tips, fn(n, build, natural) {
       island(
         n,
         fn(c) {
