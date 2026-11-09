@@ -73,6 +73,8 @@ pub fn fix_browse_with_drive(Fixture, Json?, String) -> Json?
 
 pub fn fix_candidates() -> Json
 
+pub let fix_card_replies : Array[Json]
+
 pub fn fix_chat(String) -> FixChat
 
 pub fn fix_chat_jobs() -> Json

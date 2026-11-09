@@ -126,7 +126,7 @@ test "an answer said once its agent's turn is over: no avatar to come out of, it
   fix_later(1.0, fn() { fix_chat("s-c1").working = -1.0 })
   fix_clock_set(clock, clock.val + 1.0)
   t.draw()
-  t.run_for(linger_ms + @ui.move_most_ms)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find(tr("android-chat.chat.working")) is None)
   fix_later(1.0, fn() {
     fix_chat("s-c1").sent.push(

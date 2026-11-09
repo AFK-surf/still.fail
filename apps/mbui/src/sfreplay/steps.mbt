@@ -26,6 +26,9 @@ pub struct Flow {
   priv one_by_one : Ref[Bool]
   /// what moved as the last step that acts was taken (Tester::moving's lines): not what it began
   priv at_step : Array[String]
+  /// the words followed down the screen (Flow::follow; "": none), and where their middle was drawn each frame since
+  priv followed : Ref[String]
+  priv follow_ys : Array[(Double, Double)]
 }
 
 ///|
@@ -125,10 +128,18 @@ pub fn Flow::start(
   // (the last of the run's frames given to the Tester's display)
   let frames_to = Ref::new(-@double.infinity)
   let said : Array[String] = []
+  let followed = Ref::new("")
+  let follow_ys : Array[(Double, Double)] = []
   // (and when the next is due, a frame drawn then however the clock is run on: what came at a time came at it)
   // (what the run's host said comes before the frame it was said for: given as a frame ends, it is the next one's, by
   // that frame's time, as a host's events before a vsync are that frame's)
   t.between_frames(fn() {
+    if followed.val != "" {
+      match t.find(followed.val) {
+        Some((_, y)) => follow_ys.push((t.time(), y))
+        None => ()
+      }
+    }
     for m in t.moving() {
       if !said.contains(m) {
         said.push(m)
@@ -186,6 +197,8 @@ pub fn Flow::start(
     one_by_one,
     said,
     at_step: [],
+    followed,
+    follow_ys,
   }
   // each step the test says taken when the run took it, at this pace (at once: as soon as the test takes it), what
   // came after it in the run let come (Replay::step_taken)
@@ -1070,4 +1083,36 @@ pub fn Flow::share_in(self : Flow, text : String, title? : String = "") -> Unit 
   self.t.share_in(text, title~)
   self.t.draw()
   self.core()
+}
+
+///|
+/// From here, where `what` (words on screen, as Tester::find finds them) is drawn down the screen each frame, till
+/// Flow::followed: what the reader sees of the list carrying it, whatever moved it.
+pub fn Flow::follow(self : Flow, what : String) -> Unit {
+  self.followed.val = what
+  self.follow_ys.clear()
+}
+
+///|
+/// How many times what was followed (Flow::follow) turned back since, more than `least` points each way: 0 where the
+/// screen took it one way only (2026-11-09 the user, of a card's option picked and the agent answering at once, the
+/// list up and then down: 「点一个决策后上下摇晃」). Following it stops.
+pub fn Flow::turns_followed(self : Flow, least? : Double = 1.0) -> Int {
+  self.followed.val = ""
+  let ys = self.follow_ys
+  let mut turns = 0
+  let mut way = 0.0
+  let mut from = if ys.length() > 0 { ys[0].1 } else { 0.0 }
+  for p in ys {
+    let d = p.1 - from
+    if d.abs() < least {
+      continue
+    }
+    if way != 0.0 && d * way < 0.0 {
+      turns += 1
+    }
+    way = d
+    from = p.1
+  }
+  turns
 }

@@ -126,6 +126,33 @@ test "list: a row going closes its room at once, what it holds in its middle, fa
 }
 
 ///|
+test "list: two rows going one after the other, side by side: each closes where it stood, neither put over the other" {
+  // (an agent's line going as the chat's state line over it still goes: the state line stepped under it at once and
+  // back up, 2026-11-09, sfreplay's 29-glass)
+  let n = [20]
+  let t = @ui.Tester::new(
+    sized_rows(fn() { Array::makei(n[0], fn(i) { if n[0] == 18 { i } else if n[0] == 19 && i >= 18 { i + 1 } else { i } }) }, in_place=true),
+    w=300.0,
+    h=400.0,
+  )
+  // row 18 goes; a little later row 19, under it, goes too
+  n[0] = 19
+  t.draw()
+  t.run_for(@ui.row_size_ms / 4.0)
+  let (_, y18, _, h18) = t.row(18).unwrap()
+  n[0] = 18
+  t.draw()
+  // (18 still where it was, 19 under it, the rows end to end)
+  let w18 = t.words().filter(fn(w) { w.0 == "Row 18" })
+  let w19 = t.words().filter(fn(w) { w.0 == "Row 19" })
+  guard (w18, w19) is ([a, ..], [b, ..]) else { fail("rows 18 and 19 not both drawn: \{w18} \{w19}") }
+  assert_true(a.2 < b.2, msg="row 18 at \{a.2}, row 19 at \{b.2}")
+  let (_, y18b, _, _) = t.row(18).unwrap()
+  assert_true((y18b - y18).abs() < h18, msg="row 18 from \{y18} to \{y18b}")
+  rows_end_to_end(t, 12, 20)
+}
+
+///|
 /// What is drawn of row `i`'s words, each as many times as it is: how far it is seen.
 fn row_seen(t : @ui.Tester, i : Int) -> Array[Double] {
   t.words().filter(fn(w) { w.0 == "Row \{i}" }).map(fn(w) { w.5 })

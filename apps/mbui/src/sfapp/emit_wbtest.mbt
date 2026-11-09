@@ -88,7 +88,11 @@ fn landing_faces(t : @ui.Tester) -> (Double, Double) raise {
   guard em.current is Some(turn) && turn.pose == Spit else {
     fail("not landing: \{em.current.map(fn(c) { c.pose })}")
   }
-  let face = @motion.measured_rect(t.ctx(), "emit-avatar/" + rk + "/" + turn.agent).unwrap()
+  // (its line gone as the answer left it: where it was last drawn)
+  let face = match @motion.measured_rect(t.ctx(), "emit-avatar/" + rk + "/" + turn.agent) {
+    Some(r) => (r.0, r.1)
+    None => em.home.unwrap()
+  }
   let lands = @motion.measured_rect(t.ctx(), "emit-landing/" + rk + "/" + seq_s(turn.seq)).unwrap()
   (face.0, lands.0)
 }

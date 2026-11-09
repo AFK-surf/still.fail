@@ -181,7 +181,7 @@ test "the viewer's own message taller than the list is followed to the end: its 
 }
 
 ///|
-test "its avatar is back in its activity once a message has come out of it, the agent still at work" {
+test "its line gone with the answer that came out of its avatar, the agent still at work: not back this turn" {
   let clock = Ref::new(0.0)
   let t = emit_core(clock)
   let em = emits_of("ws1/st1\u{1}s-c1")
@@ -190,7 +190,9 @@ test "its avatar is back in its activity once a message has come out of it, the 
   t.run_for(emit_all_ms())
   assert_true(em.watched)
   assert_true(em.current is None)
-  assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
+  // (2026-11-09 the user: the answer takes its place, 「处理中」跟回复同一次换位)
+  assert_true(readings.get("ws1/st1\u{1}s-c1").unwrap().running.length() > 0)
+  assert_true(t.find(tr("android-chat.chat.working")) is None)
   // (the copy that flew is gone: the activity's own avatar shows again)
   assert_eq(em.copied, "")
   emit_restore()

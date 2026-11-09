@@ -785,8 +785,6 @@ pub fn let_go(Source, String) -> Unit
 
 pub fn lift_of(Thumb) -> Double
 
-pub let linger_ms : Double
-
 pub fn linger_tick(@ui.Ctx, Source, in_front~ : Bool) -> Unit
 
 pub let link_card : @ui.Style
@@ -2526,8 +2524,8 @@ pub(all) struct Leaving {
 
 pub(all) struct Lingering {
   agent : Agent
-  id : Int32
-  mut n : Int32
+  mut once : Bool
+  unseen : Bool
 }
 
 pub(all) struct LinkMark {
@@ -3012,7 +3010,6 @@ pub(all) struct Reading {
   sent_as : Map[String, String]
   sent_as_told : @signals.Signal[Int32]
   linger : Map[String, Lingering]
-  mut lingered : Int32
   act_order : Map[String, Int32]
   mut acts_seen : Int32
   linger_said : @signals.Signal[Int32]
@@ -3024,6 +3021,7 @@ pub(all) struct Reading {
   mut floor_counted : Bool
   mut floor_was : Double
   running : Map[String, Agent]
+  answered : Map[String, String]
   last_turns : Map[String, String]
   mut flash : String
   flash_lit : @motion.Anim

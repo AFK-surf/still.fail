@@ -806,18 +806,47 @@ pub fn[T] ListRows::rows(
   {
     let order = self.going.to_array()
     order.sort_by(fn(a, b) { a.1.at.compare(b.1.at) })
-    for g in order {
-      let (k, go) = g
-      let mut at = 0
-      if go.after != "" {
-        for i, kk in all_keys {
-          if kk == go.after {
-            at = i + 1
+    // (each once the row it came after is in, itself gone too maybe, as it went before this one: a row put before all
+    // where that was never found)
+    let mut pending = order
+    while !pending.is_empty() {
+      let later : Array[(String, GoingRow[T])] = []
+      for g in pending {
+        let (k, go) = g
+        let mut at = -1
+        if go.after == "" {
+          at = 0
+        } else {
+          for i, kk in all_keys {
+            if kk == go.after {
+              at = i + 1
+            }
           }
         }
+        if at < 0 {
+          later.push(g)
+          continue
+        }
+        // (after those gone before it that came after the same row: it stood after them, only not given with them as
+        // it went, they being gone already; else it is put over them, they and it each a step the other way at once)
+        while at < all_keys.length() &&
+              (match self.going.get(all_keys[at]) {
+                Some(o) => o.after == go.after && o.at <= go.at
+                None => false
+              }) {
+          at = at + 1
+        }
+        all_keys.insert(at, k)
+        all_items.insert(at, go.item)
       }
-      all_keys.insert(at, k)
-      all_items.insert(at, go.item)
+      if later.length() == pending.length() {
+        for g in later {
+          all_keys.insert(0, g.0)
+          all_items.insert(0, g.1.item)
+        }
+        break
+      }
+      pending = later
     }
   }
   self.causes.told(all_keys, moved)

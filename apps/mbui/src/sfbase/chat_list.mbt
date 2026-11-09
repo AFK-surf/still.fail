@@ -146,10 +146,8 @@ pub(all) struct Reading {
   sent_as : Map[String, String]
   /// Told when a local row is taken over, so a viewer opened before that can follow its new core identity.
   sent_as_told : @signals.Signal[Int]
-  /// agents whose turn ended, still shown a moment (then fading 220): Lingering
+  /// agents whose turn ended, still shown while their messages come out of their avatars: Lingering
   linger : Map[String, Lingering]
-  /// how many have lingered (Lingering.id)
-  mut lingered : Int
   /// the agents' lines in the order they first came to the list, by their keys: they stand so, one whose turn ended
   /// lingering where it was, not put after the others (a line gone past another at once, 2026-11-03)
   act_order : Map[String, Int]
@@ -171,6 +169,9 @@ pub(all) struct Reading {
   mut floor_was : Double
   /// the agents running as last drawn
   running : Map[String, Agent]
+  /// agents at work whose answer has come out of their avatars this turn, by their last turn then (Agent.last_turn):
+  /// their line gone with it till that turn is over (chat_tick)
+  answered : Map[String, String]
   /// each agent's last turn as last ticked (Agent.last_turn)
   last_turns : Map[String, String]
   /// a message gone to (a notification's) and how lit it is (flash_of)
@@ -276,7 +277,6 @@ pub fn reading_of(key : String) -> Reading {
         linger: {},
         act_order: {},
         acts_seen: 0,
-        lingered: 0,
         linger_said: @signals.signal(0),
         floor: 0.0,
         floor_takers: {},
@@ -286,6 +286,7 @@ pub fn reading_of(key : String) -> Reading {
         floor_counted: false,
         floor_was: 0.0,
         running: {},
+        answered: {},
         last_turns: {},
         flash: "",
         flash_lit: @motion.Anim::new(0.0),
@@ -618,27 +619,23 @@ fn message_key(m : Json) -> String {
 }
 
 ///|
-/// An activity whose agent's turn ended stays this long, then is gone from the list, leaving it as any row does
-/// (ListRows::leave: fading where it is, then its room closing).
-pub let linger_ms : Double = 600.0
-
-///|
-/// An agent whose turn ended, its activity still shown (with_lingering): its moment's count (anew each time its
-/// messages stop coming out of its avatar).
+/// An agent whose turn ended, its activity still shown (with_lingering) while its messages come out of its avatar.
 pub(all) struct Lingering {
   agent : Agent
-  /// which of the chat's lingerings it is (Reading.lingered): its timers its own, never an earlier one's run out
-  id : Int
-  mut n : Int
+  /// a turn begun and over between two ticks: there in the one tick that found it, as one seen running is
+  mut once : Bool
+  /// there taking no room and unseen, its activity read as a seen one's is (its answer, if any, out of where its avatar
+  /// would be): never coming in and going a moment after (the list down and up again)
+  unseen : Bool
 }
 
 ///|
 /// Each frame, before any page is built, whatever page shows: from each chat kept's own data (its agents running, its
-/// messages coming out of an avatar), whose activity stays a moment as its turn ends, and how long, counted by the
-/// framework (@kit.after) from the build that sees the turn over; a chat under another page lingers on the time that
-/// goes by, as Chat.kt's. The chat's page draws what it says. `in_front`: the app shown (what is said then is
-/// watched). As each build begins (here, before any page): whether each chat's list was shown in the one before
-/// (Reading's `was_shown`), and not yet in this one; its data not taken in this one yet, nor its floor counted.
+/// messages coming out of an avatar), whose activity stays as its turn ends (while its messages come out of its avatar,
+/// no longer: chat_tick); a chat under another page lets them go meanwhile. The chat's page draws what it says.
+/// `in_front`: the app shown (what is said then is watched). As each build begins (here, before any page): whether each
+/// chat's list was shown in the one before (Reading's `was_shown`), and not yet in this one; its data not taken in this
+/// one yet, nor its floor counted.
 pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
   for rk, rd in readings {
     rd.was_shown = rd.shown
@@ -650,7 +647,7 @@ pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
     if !rd.was_shown {
       rd.view_read = false
     }
-    // every chat kept whose data the page read: its activities linger on the time that goes by, its page shown or not
+    // every chat kept whose data the page read: its activities whose turn is over let go, its page shown or not
     // (not one a message of it drawn elsewhere keeps: its topic never asked for)
     let (station, session) = match rk.find("\u{1}") {
       Some(i) => (rk.view(end_offset=i).to_owned(), rk.view(start_offset=i + 1).to_owned())
@@ -670,7 +667,7 @@ pub fn linger_tick(c : @ui.Ctx, src : Source, in_front~ : Bool) -> Unit {
 
 ///|
 /// A chat's own data, once a build, before its page is built (linger_tick; its page the first build it shows in):
-/// what comes out of its avatars played on, whose activity stays a moment and how long.
+/// what comes out of its avatars played on, whose activity stays as its turn ends.
 pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : Bool, in_front~ : Bool) -> Unit {
   let lingered = rd.ticked
   let played = rd.played
@@ -732,16 +729,20 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     return
   }
   rd.ticked = true
-  // its turn over: it stays a moment
+  // its turn over: it stays only while its messages come out of its avatar (they need it to come out of), and goes as
+  // the last of them leaves it, its room opening in the list (Float), on the list's way with it: no moment after, which closed
+  // its room alone and took the list back the other way from where what its turn said had just moved it (2026-11-09
+  // the user, of an answer at once to a card picked: 「点一个决策后上下摇晃」; 「处理中」不再单独收一次).
+  let keeps = emit_keeps(em)
   for k, a in rd.running {
-    if !running.contains(k) && !rd.linger.contains(k) {
-      rd.lingered += 1
-      rd.linger[k] = { agent: a, id: rd.lingered, n: 0 }
+    if !running.contains(k) && !rd.linger.contains(k) && keeps.contains(k) {
+      rd.linger[k] = { agent: a, once: false, unseen: false }
       linger_told(rd)
     }
   }
-  // a turn begun and over between two ticks, its agent never seen running, stays a moment all the same: that a frame
-  // fell inside it is the moment's (how what came was taken), not the chat's
+  // a turn begun and over between two ticks, its agent never seen running, as if it had been, for that tick (and on
+  // while its messages come out of its avatar): that a frame fell inside it is the moment's (how what came was
+  // taken), not the chat's
   if !v.newer {
     for a in v.agents {
       match rd.last_turns.get(a.key) {
@@ -750,8 +751,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
           !running.contains(a.key) &&
           !rd.running.contains(a.key) &&
           !rd.linger.contains(a.key) => {
-          rd.lingered += 1
-          rd.linger[a.key] = { agent: a, id: rd.lingered, n: 0 }
+          rd.linger[a.key] = { agent: a, once: true, unseen: true }
           linger_told(rd)
         }
         _ => ()
@@ -759,27 +759,47 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
       rd.last_turns[a.key] = a.last_turn
     }
   }
+  // at work still, its answer out of its avatar (the last of what it said: none waiting after it), its line goes as the
+  // answer's room opens (Float), on the list's one way: the answer takes its place, never the list up and back down
+  // again (2026-11-09 the user, 「点一个决策后上下摇晃」: 「处理中」跟回复同一次换位). It does not come back this turn.
+  match em.current {
+    Some(t) if t.pose != Fold &&
+      running.contains(t.agent) &&
+      !rd.answered.contains(t.agent) &&
+      !keeps.contains(t.agent) => {
+      rd.answered[t.agent] = running.get(t.agent).map(fn(a) { a.last_turn }).unwrap_or("")
+      linger_told(rd)
+    }
+    _ => ()
+  }
+  // (its turn over, or over and another begun between two ticks: its line back for the next)
+  let done = rd.answered
+    .iter()
+    .filter(fn(e) {
+      match running.get(e.0) {
+        Some(a) => a.last_turn != e.1
+        None => true
+      }
+    })
+    .map(fn(e) { e.0 })
+    .collect()
+  for k in done {
+    rd.answered.remove(k)
+  }
+  if !done.is_empty() {
+    linger_told(rd)
+  }
   rd.running.clear()
   for k, a in running {
     rd.running[k] = a
   }
-  // while its messages still come out of its avatar it stays whole (ChatMotion.keeps): each build they are still coming
-  // it takes a new count (`n`, its timers' keys), so the count it keeps, asked first in the last of those builds, runs
-  // from there (linger_wbtest: gone 600 ms after the last frame they came)
-  let keeps = emit_keeps(em)
   let over : Array[String] = []
   for k, l in rd.linger {
-    if running.contains(k) {
-      over.push(k)
+    if l.once && !running.contains(k) {
+      l.once = false
       continue
     }
-    if keeps.contains(k) {
-      l.n += 1
-    }
-    let at = "linger/" + rk + "/" + k + "/\{l.id}/\{l.n}"
-    let held = keeps.contains(k)
-    // (asked while held too: its count starts at the last build they were still coming)
-    if @kit.after(c, at + "/gone", true, linger_ms) && !held {
+    if running.contains(k) || !keeps.contains(k) {
       over.push(k)
     }
   }
@@ -798,9 +818,15 @@ fn linger_told(rd : Reading) -> Unit {
 }
 
 ///|
-/// The list with the activities of agents whose turn just ended, kept a moment (then fading 220).
+/// The list with the activities of agents whose turn just ended, kept while their messages come out of their avatars.
 pub fn with_lingering(rd : Reading, list : Array[Entry]) -> Array[Entry] {
   rd.linger_said.get() |> ignore
+  // (an agent at work whose answer came out of its avatar: its line gone, chat_tick)
+  let list = if rd.answered.is_empty() {
+    list
+  } else {
+    list.filter(fn(e) { !(e is Working(a) && rd.answered.contains(a.key)) })
+  }
   if rd.linger.is_empty() {
     return acts_in_order(rd, list)
   }

@@ -29,7 +29,7 @@ pub fn Pose::ms(self : Pose) -> Double {
 
 ///|
 /// What is left of a message's coming out once it shows in the list (it comes out as the avatar lands: Spit), to the
-/// avatar home again (Return): its activity stays till then (ChatMotion.keeps), its turn's linger counted after.
+/// avatar home again (Return).
 pub let emit_out_ms : Double = Spit.ms() + Return.ms()
 
 ///|
@@ -238,7 +238,8 @@ pub fn emit_folded(e : Emits, agent : String) -> Bool {
 }
 
 ///|
-/// Agents whose activity must stay while their messages come out.
+/// Agents whose activity must stay while their messages come out: till the last of them leaves its avatar (Float), its
+/// room opening in the list as the activity's closes, on the list's one way.
 pub fn emit_keeps(e : Emits) -> Map[String, Bool] {
   e.read()
   let out : Map[String, Bool] = {}
@@ -246,8 +247,8 @@ pub fn emit_keeps(e : Emits) -> Map[String, Bool] {
     out[q.1] = true
   }
   match e.current {
-    Some(t) => out[t.agent] = true
-    None => ()
+    Some(t) if t.pose == Fold => out[t.agent] = true
+    _ => ()
   }
   out
 }
@@ -538,9 +539,11 @@ pub fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String])
     Some(t) if t.pose != Fold => t
     _ => return None
   }
-  let avatar = match @motion.measured_rect(c, "emit-avatar/" + key + "/" + t.agent) {
-    Some(r) => (r.0, r.1)
-    None => return None
+  // (its line gone as the answer left it, at work still or not (chat_tick): from where it was last drawn)
+  let avatar = match (@motion.measured_rect(c, "emit-avatar/" + key + "/" + t.agent), e.home) {
+    (Some(r), _) => (r.0, r.1)
+    (None, Some(h)) => h
+    _ => return None
   }
   e.home = Some(avatar)
   // before the message is in the list: where its avatar will be, the first activity's place (the message comes in

@@ -1343,6 +1343,10 @@ pub let fix_decided : Map[Int, Json] = {}
 pub let fix_replied : Map[Int, String] = {}
 
 ///|
+/// The agent's answers to those answers, after them (fixture_card_call).
+pub let fix_card_replies : Array[Json] = []
+
+///|
 /// How chat-vault's request to keep a password, at the chat's end, went once decided here ("": waiting).
 pub let fix_vault : Ref[String] = Ref("")
 
@@ -1531,6 +1535,9 @@ pub fn with_cards(f : Fixture, v : Json, session : String) -> Json {
           msg(100 + seq, "person", by_person("林"), label, "刚刚", { "mine": true, "said": true, "createdAt": Json::number(1.0e9) }),
         )
       }
+      for x in fix_card_replies {
+        all.push(x)
+      }
       o["messages"] = Json::array(all)
       // what waits to be decided: the cards still not answered
       o["asks"] = Json::array(
@@ -1567,6 +1574,20 @@ pub fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Js
       }
       fix_decided[seq] = decided_json(label)
       fix_replied[seq] = label
+      // its agent takes the answer up as it takes words sent (fix_deliver): at work at once, its answer a moment
+      // later out of its avatar, its turn over a moment after that
+      fix_chat("s-c1").working = 0.0
+      fix_later(fix_answer_ms, fn() {
+        fix_serial.val += 1
+        fix_later(fix_turn_end_ms, fn() { fix_chat("s-c1").working = -1.0 })
+        fix_card_replies.push(
+          msg(300 + fix_serial.val, "agent", by_agent("anthropic", "claude", "s-c1"), "好，按「" + label + "」来。", "刚刚", {
+            "ts": Json::string("card-reply\{fix_serial.val}"),
+            "said": true,
+            "createdAt": Json::number(1.0e9),
+          }),
+        )
+      })
       f.changed()
       Some(Ok(Json::object({})))
     }
