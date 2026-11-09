@@ -11,6 +11,10 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     base=$(git merge-base "$local_sha" origin/main 2>/dev/null || git rev-list --max-parents=0 "$local_sha" | tail -1)
   else
     base=$remote_sha
+    # A branch brought up to main since its remote's (main merged into it, or rebased onto a later main): against where
+    # it leaves main now, as CI checks it. Against its remote's it would be all main got meanwhile, none of it this push's.
+    left=$(git merge-base "$local_sha" origin/main 2>/dev/null || true)
+    if [ -n "$left" ] && ! git merge-base --is-ancestor "$left" "$remote_sha" 2>/dev/null; then base=$left; fi
   fi
   echo "checking $local_ref ($(git rev-list --count "$base..$local_sha") commits)"
   sh "$root/scripts/check.sh" push "$base..$local_sha" || status=1
