@@ -601,7 +601,20 @@ export class CloudSync {
     else if (event.type === "release") this.onRelease();
     else if (event.type === "relays") this.onRelayLoad(sub);
     else if (event.type === "workspace" && typeof event.id === "string") {
-      if (core.workspaces.owner(event.id) !== null) core.scheduler.enqueue("cloud", `workspace/${event.id}`, Priority.shown, this.#workspace(event.id));
+      if (core.workspaces.owner(event.id) === null) return;
+      const lock = event.lock;
+      const topic = { topic: "workspace", workspace: event.id } as const;
+      // Only its lock moved on, as the event says: in place, no request (the lock itself is read of the stations,
+      // views/lock.ts; each entry signed had every device of its members ask for the workspace again, using up the
+      // account's budget).
+      if (isObject(lock) && "head" in lock && isObject(core.data.shared(topic))) {
+        const head = isObject(lock.head) ? lock.head : null;
+        core.data.update(topic, (w) => {
+          if (!isObject(w)) return w;
+          const { locked: _, ...rest } = w;
+          return { ...rest, lock: head, ...(lock.locked === true ? { locked: true } : {}) };
+        });
+      } else core.scheduler.enqueue("cloud", `workspace/${event.id}`, Priority.shown, this.#workspace(event.id));
     } else if (event.type === "station" && typeof event.workspace === "string" && typeof event.id === "string" && typeof event.online === "boolean") {
       // A station came online or went: in place, no request.
       const online = event.online;

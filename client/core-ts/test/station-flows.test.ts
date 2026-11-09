@@ -445,6 +445,27 @@ test("a_workspace_view_the_cloud_turns_away_for_too_many_asks_is_read_again_a_wh
   core.close();
 });
 
+test("a_workspace_whose_lock_alone_moved_on_as_its_event_says_is_not_asked_for_again", async () => {
+  const { host, core } = await started(base(), 0);
+  await host.time.pass(1_000, 100);
+  const reads = () => host.requests.filter((r) => r.url.endsWith("/v1/workspaces/ws")).length;
+  const before = reads();
+  const view = () => core.inner.data.shared({ topic: "workspace", workspace: "ws" }) as Record<string, unknown>;
+  const { lock: _l, locked: _k, ...rest } = view();
+  const head = { seq: 2, hash: "cd".repeat(32), genesis: "ef".repeat(32) };
+  host.socketSend("/v1/events", JSON.stringify({ type: "workspace", id: "ws", lock: { head, locked: true } }));
+  await host.time.pass(1_000, 100);
+  assert.equal(reads(), before, "not asked for again");
+  const { lock, locked, ...after } = view();
+  assert.deepEqual([lock, locked], [head, true], "its lock as said, in place");
+  assert.deepEqual(after, rest, "the rest as it was");
+  // Any other change (one from before says no more): asked for again.
+  host.socketSend("/v1/events", JSON.stringify({ type: "workspace", id: "ws" }));
+  await host.time.pass(1_000, 100);
+  assert.equal(reads(), before + 1);
+  core.close();
+});
+
 test("a_station_down_shows_it_is_tried_again_as_soon_as_a_person_asks", async () => {
   const { host, core, gate } = await started(base(), 0, undefined, (s) => (s.gate.stream = "fail"));
   const ui = core.connect();

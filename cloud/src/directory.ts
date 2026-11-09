@@ -304,10 +304,11 @@ export class Directory extends DurableObject<Env> {
    * A workspace changed: its members (and `also`) are told, with `workspaces`
    * too when what their lists show changed (a name, a role, a count).
    */
-  #changed(workspace: string, list: boolean, also: Iterable<string> = []): void {
+  #changed(workspace: string, list: boolean, also: Iterable<string> = [], lockOnly = false): void {
     for (const station of this.#stationsIn(workspace)) this.#sendState(station);
     const subs = [...this.#members(workspace), ...also];
-    this.#tell(subs, ...(list ? [LIST] : []), { type: "workspace", id: workspace });
+    const lock = lockOnly ? { lock: { head: this.#lockHead(workspace), locked: this.#locked(workspace) } } : {};
+    this.#tell(subs, ...(list ? [LIST] : []), { type: "workspace", id: workspace, ...lock });
   }
 
   /**
@@ -669,7 +670,8 @@ export class Directory extends DurableObject<Env> {
         }
         for (const { e, hash } of adding) this.#run("INSERT INTO lock_entries (workspace, seq, hash, entry) VALUES (?, ?, ?, ?)", workspace, e.seq, hash, JSON.stringify(e));
       });
-      this.#changed(workspace, false);
+      // (its lock alone moved on: said in the event, so the members' devices need not ask for the workspace again)
+      this.#changed(workspace, false, [], true);
     }
     return this.#lockHead(workspace);
   }

@@ -34,10 +34,12 @@ export interface DeviceView { sub: string; email: string; device: string; base: 
 export interface LockRequestView { base: string; sub: string; email: string; kind: string; label: string; sign_key: string | null; endpoints: string[]; code: string; created_at: number }
 
 /** What `/v1/events` pushes: what changed, for the device to refetch. `release`: a release is out (its feeds read
- * again); `relays`: still.fail's own relay's counters were sampled (the operator's 中继 page reads them again). */
+ * again); `relays`: still.fail's own relay's counters were sampled (the operator's 中继 page reads them again).
+ * `workspace` with `lock`: only its lock moved on (the view's `lock` and `locked` as they are now), nothing to refetch
+ * for a device that reads the lock of its stations; one from before refetches as for any change. */
 export type AccountEvent =
   | { type: "workspaces" }
-  | { type: "workspace"; id: string }
+  | { type: "workspace"; id: string; lock?: { head: LockHead | null; locked: boolean } }
   | { type: "release" }
   | { type: "relays" };
 

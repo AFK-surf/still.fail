@@ -3,6 +3,8 @@ import test from "node:test";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { harness } from "./harness.ts";
 import type { AccountEvent } from "../src/types.ts";
+import { entryHash } from "../src/lock.ts";
+import { signer } from "./lock-signer.ts";
 
 type Harness = Awaited<ReturnType<typeof harness>>;
 const hex = (bytes: ArrayBuffer) => Buffer.from(bytes).toString("hex");
@@ -423,6 +425,25 @@ test("a release out, as the repository's releasing workflows say, is told to eve
     assert.equal(await send(await token({})), 200);
     assert.equal(await send(await token({ workflow_ref: "o/r/.github/workflows/stable.yml@refs/heads/main" })), 200);
     await expect(on, { alice: [{ type: "release" }, { type: "release" }], bob: [{ type: "release" }, { type: "release" }] }, "told");
+  } finally {
+    await h.close();
+  }
+});
+
+test("a workspace whose lock alone moved on says so in its event, its head with it: nothing for a device to ask again", async () => {
+  const h = await harness();
+  try {
+    const token = await h.login("alice");
+    const alice = h.as(token);
+    const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
+    const on = { alice: await listen(h, token.access_token) };
+    const g = await signer("alice").genesis(w);
+    assert.equal((await alice("POST", `/v1/workspaces/${w}/lock`, { entries: [g] })).status, 200);
+    const hash = await entryHash(g);
+    await expect(on, { alice: [{ type: "workspace", id: w, lock: { head: { seq: 0, hash, genesis: hash }, locked: true } }] }, "lock turned on");
+    // What else changes is told as before, to be read again.
+    await alice("PATCH", `/v1/workspaces/${w}`, { name: "House" });
+    await expect(on, { alice: [{ type: "workspaces" }, { type: "workspace", id: w }] }, "rename");
   } finally {
     await h.close();
   }
