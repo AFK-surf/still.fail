@@ -107,7 +107,7 @@ test "a device's case: round the picture once its pictures have come, its button
   let r = case_rig(0)
   assert_eq(r.told("screen.chrome").length() >= 1, true)
   // the picture in the middle, the case's room kept round it
-  let shown = r.ui().shown()
+  let shown = r.ui().shown(r.t.ctx())
   assert_true(shown.w > 0.0)
   assert_true(r.ui().case_x > 0.0)
   assert_true(shown.x >= shown.w * r.ui().case_x - 0.5)

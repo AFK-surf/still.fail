@@ -895,10 +895,8 @@ fn marks_shapes_node(h : @view.View, vw : Viewer) -> Unit {
   h.each(
     fn() {
       marks_said()
-      let n = match vw.zoom.rect() {
-        Some(r) => marks_lines(r, vw.zoom.nw).1.length()
-        None => 0
-      }
+      // (how many: the picked mark's, wherever the picture is, once its size is known)
+      let n = if vw.zoom.sized() { marks_lines((0.0, 0.0, vw.zoom.nw, 0.0), vw.zoom.nw).1.length() } else { 0 }
       Array::makei(n, fn(i) { i })
     },
     fn(i) { i },

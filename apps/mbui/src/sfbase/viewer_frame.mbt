@@ -118,10 +118,10 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   }
   let z = v.zoom
   if !z.fitted {
-    @sf.native_over_act("fit", @sf.t("web-main.preview.fitKey"), "shrink", fn() { z.reset() })
+    @sf.native_over_act("fit", @sf.t("web-main.preview.fitKey"), "shrink", fn() { z.reset(at=c.moment()) })
   } else if z.fit() < 1.0 {
     @sf.native_over_act("actual", @sf.t("web-main.preview.actualKey"), "expand", fn() {
-      z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true)
+      z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true, at=c.moment())
     })
   }
   match v.bytes.get() {

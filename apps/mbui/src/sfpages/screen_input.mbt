@@ -257,9 +257,9 @@ fn screen_zoom() -> @kit.Zoom {
 let screen_max_zoom : Double = 5.0
 
 ///|
-/// Where the frame is drawn on the stage now (zoomed), nothing before its size is known.
-fn ScreenUi::shown(self : ScreenUi) -> SRect {
-  match self.zoom.rect() {
+/// Where the frame is drawn on the stage now (zoomed), as the old view `c` has it; nothing before its size is known.
+fn ScreenUi::shown(self : ScreenUi, c : @ui.Ctx) -> SRect {
+  match self.zoom.rect(c) {
     Some((x, y, w, h)) => cased_in({ x, y, w, h }, self.case_x, self.case_y)
     None => srect_zero
   }
@@ -267,9 +267,9 @@ fn ScreenUi::shown(self : ScreenUi) -> SRect {
 
 ///|
 /// The part of the frame in sight while it is zoomed in (0..1 of it each way); None while it is not (all of it is).
-fn ScreenUi::in_sight(self : ScreenUi) -> Part? {
-  let s = self.shown()
-  if !self.zoom.zoomed() || s.w <= 0.0 || s.h <= 0.0 || self.box_w.get() <= 0.0 || self.box_h.get() <= 0.0 {
+fn ScreenUi::in_sight(self : ScreenUi, c : @ui.Ctx) -> Part? {
+  let s = self.shown(c)
+  if !self.zoom.zoomed(c) || s.w <= 0.0 || s.h <= 0.0 || self.box_w.get() <= 0.0 || self.box_h.get() <= 0.0 {
     return None
   }
   let x0 = dmax(0.0, -s.x / s.w)

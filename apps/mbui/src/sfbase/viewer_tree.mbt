@@ -933,7 +933,7 @@ pub fn Viewer::picture_flat(self : Viewer) -> Bool {
 fn Viewer::marks_shown(self : Viewer) -> Bool {
   marks_said()
   self.zoom.told()
-  marking.on && !self.picture_failed() && self.zoom.rect() is Some(_)
+  marking.on && !self.picture_failed() && self.zoom.sized()
 }
 
 ///|
@@ -1793,7 +1793,7 @@ fn Viewer::player_flight(self : Viewer, src : Source, node : @view.View, t : Dou
   let width = player_width(w)
   let to = match vw.fly_to {
     Some(r) if vw.fly_back => Some(r)
-    _ => vw.video_target(src, width, h)
+    _ => vw.video_target(src, width, h, t)
   }
   match (vw.flight_from(@ui.current()), to) {
     (Some(from), Some(to)) => {
