@@ -1130,6 +1130,13 @@ pub fn View::scrolls(
 }
 
 ///|
+/// Whether node `id` holds a page's list's rows (View::scrolls as a list, Scroll::list): each of what it holds is a row,
+/// whose place is the list's, moved as the list moves it (what grows above kept where it is drawn: Scroll::grew_above).
+pub fn Tree::holds_rows(self : Tree, id : NodeId) -> Bool {
+  self.alive_id(id) && self.nodes[id.at].list_rows
+}
+
+///|
 /// Whether node `id` scrolls what it holds up and down or across (View::scrolls) and it can go that way, as last laid
 /// out (Scroll::goes: what it holds taller than it, or wider where it scrolls across, by more than half a point, as an old box kept to a height is, ui's scroll_still):
 /// what lies in it moves under its top and foot as it scrolls, never in its container's corners for good (ui's corner

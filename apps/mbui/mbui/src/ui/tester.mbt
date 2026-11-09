@@ -24,6 +24,8 @@ pub struct Tester {
   /// whether the frame being drawn is one of those (or what it left owed): how a motion goes frame to frame is not
   /// judged on it (Tester::judges_motion), so a run at a rate judges the frames the default run does, no more
   mut on_way : Bool
+  /// whether how what moves goes is judged on those frames too (MBUI_TEST_MOTION: test_motion_judged)
+  motion : MotionJudged
   /// a host's frames as its run had them (set_frame_times, set_frame_period): every frame on them, as the host drew
   /// it (an input's, a draw's, run_for's), not at the moments the test says
   mut host_frames : Bool
@@ -535,7 +537,7 @@ pub fn Tester::new(
     None => set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
   }
   let between = test_frames_between()
-  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, host_frames: false, each: None, before }
+  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, motion: test_motion_judged(), host_frames: false, each: None, before }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
   // there; else the display's first frame after `time`
   match run.bind(run_first_frame) {
@@ -664,11 +666,19 @@ pub fn Tester::finish_all(self : Tester) -> Unit {
 ///|
 /// Whether how what moves goes from frame to frame is judged on the frame being drawn (words_over.mbt, rows_steady.mbt,
 /// sizes_steady.mbt: a step, a dead stop, words over words): on a display's own, 60 a second or more, and not on a
-/// frame a run at a rate (MBUI_TEST_FPS, scripts/fps_check.sh) draws on run_for's way. Such a run holds only that what a
+/// frame of a run at a rate (MBUI_TEST_FPS, scripts/fps_check.sh), whose frames are not the default run's. Such a run holds only that what a
 /// test asserts at its moments is the same however many frames came between; its judging is the default run's, on the
 /// same frames (the user, 2026-11-09: 7/24 帧只比结果；fps 跑法只比结果，平滑度另开一条线).
+/// A run that judges motion (MBUI_TEST_MOTION, test_motion_judged) judges those too, at a display's rate (60 a second
+/// or more): every frame a host at that rate draws while something moves.
 pub fn Tester::judges_motion(self : Tester) -> Bool {
-  self.period <= frame_period_default + 1.0e-9 && !self.on_way
+  if self.between > 0.0 {
+    // (a run at a rate: none of its frames where it holds results only, its other frames (an input's, what is due)
+    // not the default run's either; every one where it judges motion)
+    self.motion != Results && self.between <= frame_period_default + 1.0e-9 && self.period <= frame_period_default + 1.0e-9
+  } else {
+    self.period <= frame_period_default + 1.0e-9
+  }
 }
 
 ///|
@@ -679,6 +689,26 @@ pub fn Tester::judges_motion(self : Tester) -> Bool {
 pub fn test_at_a_rate() -> Bool {
   test_frames_between() > 0.0
 }
+
+///|
+/// How far apart the frames motion is judged on are (ms): the display's, or a run's that judges motion on its frames
+/// on run_for's way, closer (Tester::judges_motion).
+fn Tester::motion_period(self : Tester) -> Double {
+  if self.motion != Results && self.between > 0.0 && self.between < self.period {
+    self.between
+  } else {
+    self.period
+  }
+}
+
+///|
+/// What a run at a frame rate holds of a motion (test_motion_judged): only results, the default's; how it goes frame to
+/// frame on run_for's way too, a fault failing its test; or that, each fault said and none failing.
+pub enum MotionJudged {
+  Results
+  Judge
+  Count
+} derive(Eq)
 
 ///|
 /// When a Tester's first frame is drawn, after its `time`: the app's first frame, as a 60 Hz display's first would be,
@@ -875,6 +905,10 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
     self.hold_words_over()
     self.hold_rows_steady()
     self.hold_sizes_steady()
+  } else if !words_over.held && !self.on_way && self.period <= frame_period_default + 1.0e-9 {
+    // (where a test does not hold the rule but reads which frames show words over words: kept on a run at a rate's
+    // frames as on the default's, but for those on run_for's way)
+    self.hold_words_over()
   }
   self.hold_seen_whole_now()
   self.hold_corners()

@@ -10,3 +10,17 @@ fn test_frames_between() -> Double {
     _ => 0.0
   }
 }
+
+///|
+/// Whether a run at a frame rate judges how what moves goes frame to frame on its frames on run_for's way too
+/// (Tester::judges_motion), not only the results: MBUI_TEST_MOTION `judge` (a fault fails its test, as on the default
+/// run's frames) or `count` (each said, `MOTION …`, none failing: what the tests show listed, mended down to none). At
+/// 60 and 120 a second, a display's own rates: the default run draws few frames in the middle of a motion, so a
+/// step half way through one went unseen (the user, 2026-11-09: 「动画执行到一半突变也算突变」).
+fn test_motion_judged() -> MotionJudged {
+  match @env.get_env_var("MBUI_TEST_MOTION").unwrap_or("") {
+    "judge" => Judge
+    "count" => Count
+    _ => Results
+  }
+}

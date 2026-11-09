@@ -102,6 +102,9 @@ jobs:
     env:
       MBC_STORE: ${{ github.workspace }}/apps/mbui/mbui/_build/native/release/mbc-store
       CACHE_PREFIX: mbui-ci-native-store-
+      # (at 60 and 120 how what moves goes is counted on every frame too, none failing: tester_fps.mbt)
+      MBUI_TEST_MOTION: ${{ (matrix.fps == '120' || matrix.fps == '60') && 'count' || '' }}
+      MOTION_OUT: ${{ github.workspace }}/motion.txt
       OWN: ${{ github.ref == 'refs/heads/main' && 'm-' || 'b-' }}
     steps:
       - uses: actions/checkout@v4
@@ -155,6 +158,15 @@ jobs:
         run: |
           touch "$RUNNER_TEMP/start"
           if [ -z "${{ matrix.fps }}" ]; then scripts/test_native.sh; else FPS="${{ matrix.fps }}" bash scripts/fps_check.sh; fi
+      - name: How what moves goes
+        if: always() && env.MBUI_TEST_MOTION == 'count'
+        shell: bash
+        run: |
+          bash scripts/motion_said.sh "$MOTION_OUT" "how what moves goes at ${{ matrix.fps }} fps" >> "$GITHUB_STEP_SUMMARY"
+          touch "$MOTION_OUT"
+      - if: always() && env.MBUI_TEST_MOTION == 'count'
+        uses: actions/upload-artifact@v4
+        with: { name: "motion-mbui-${{ matrix.fps }}", path: "${{ env.MOTION_OUT }}", retention-days: 7 }
       # (the units this run used, older ones gone (only after a run that went through: one stopped early used few), kept
       # under a key by what they are: main's, and a branch's for its next push)
       - name: The units kept

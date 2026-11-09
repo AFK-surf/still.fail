@@ -98,6 +98,8 @@ struct Node {
   /// how far its scroll was put in all for what came out another height over what shows (Tree::scroll_corrected): no
   /// move of it, what shows held where it was (sizes_steady.mbt takes the scroll out but for this)
   mut tree_corrected : Double
+  /// a node of the window's tree's, put among the frame's, that holds a page's list's rows (Tree::holds_rows)
+  mut tree_rows : Bool
   /// it floats over what scrolls under it (Ctx::floats_over): the frame's `floating` are found from the nodes
   mut floats : Bool
   /// it scrolls what it holds, as the scrolling box `scroller` is (sideways.mbt: its id, 0 none), what it holds its
@@ -424,6 +426,7 @@ fn Node::new() -> Node {
     island: None,
     tree_scrolls: false,
     tree_corrected: 0.0,
+    tree_rows: false,
     floats: false,
     scroller: 0,
     scroller_inner: false,
@@ -615,6 +618,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.island = None
   self.tree_scrolls = false
   self.tree_corrected = 0.0
+  self.tree_rows = false
   self.floats = false
   self.scroller = 0
   self.scroller_inner = false

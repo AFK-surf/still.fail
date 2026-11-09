@@ -5,3 +5,9 @@
 fn test_frames_between() -> Double {
   0.0
 }
+
+///|
+/// (none either: test_motion_judged, tester_fps.mbt)
+fn test_motion_judged() -> MotionJudged {
+  Results
+}
