@@ -14,9 +14,16 @@ fn news_reset() -> Unit {
 }
 
 ///|
+/// The changelog asked for its news alone (the core's `changelog` with `news`: no tab of it made or sent; the whole is
+/// the changelog page's, 125 KB on a phone where this is a few hundred bytes, 2026-11-10).
+pub fn news_params() -> Map[String, Json] {
+  { "news": Json::boolean(true) }
+}
+
+///|
 /// The news as the core has it, unless let go here.
 pub fn news_of(src : Source) -> Json? {
-  match field(src.topic("changelog", Map::new()).get().value, "news") {
+  match field(src.topic("changelog", news_params()).get().value, "news") {
     Some(Object(_)) as n if news_gone.get() != n => n
     _ => None
   }

@@ -964,6 +964,20 @@ fn Replay::out(self : Replay, text : String) -> Unit {
     return
   }
   let kind = kind_of(m)
+  // One asked twice now and let go of (a copy of the tape's one, given what comes for that: the changelog's page
+  // left, the chats' list's card still asking its news): no ask of the run's, whose one goes on.
+  match id_of(m) {
+    Some(now) if kind == "unsubscribe" =>
+      match self.back.get(now) {
+        Some(then) if self.copies.get(then).map_or(false, fn(more) { more.contains(now) }) => {
+          self.copies[then] = self.copies.get(then).unwrap_or([]).filter(fn(x) { x != now })
+          self.back.remove(now)
+          return
+        }
+        _ => ()
+      }
+    _ => ()
+  }
   // an unsubscription or a cancel names an ask by its id: the run's id for it
   let refers = match id_of(m) {
     Some(l) if kind == "unsubscribe" || kind == "cancel" => self.back.get(l)
@@ -994,9 +1008,9 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       }
     }
   }
-  // The stations asked brief (a page that only names them), and a chats' list asked for its first rows (`limit`), can
-  // be answered by the whole list in an older tape.
-  if found < 0 && kind == "subscribe" && (name_of(m) == "stations" || name_of(m) == "chats") {
+  // The stations asked brief (a page that only names them), a chats' list asked for its first rows (`limit`) and the
+  // changelog asked for its news alone can be answered by the whole in an older tape.
+  if found < 0 && kind == "subscribe" && twin_topic(name_of(m)) {
     let same = sig(m, refers, ignore_brief=true)
     for i in self.first_out..<self.evs.length() {
       let e = self.evs[i]
@@ -1008,7 +1022,7 @@ fn Replay::out(self : Replay, text : String) -> Unit {
   }
   // One asked after another the tape's one went to (the whole list after the brief, or the other way): given what
   // came for it so far, and what comes for it from now on, as the first is.
-  if found < 0 && kind == "subscribe" && (name_of(m) == "stations" || name_of(m) == "chats") {
+  if found < 0 && kind == "subscribe" && twin_topic(name_of(m)) {
     let same = sig(m, refers, ignore_brief=true)
     for i in 0..<self.evs.length() {
       let e = self.evs[i]
@@ -1081,7 +1095,7 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       (Some(then), Some(now)) => {
         self.ids[then] = now
         self.back[now] = then
-        if kind == "subscribe" && (name_of(m) == "stations" || name_of(m) == "chats") {
+        if kind == "subscribe" && twin_topic(name_of(m)) {
           self.twins[then] = true
         }
         if kind == "call" && self.answers(then) {
@@ -1177,6 +1191,14 @@ fn name_of(m : Map[String, Json]) -> String {
 }
 
 ///|
+/// Whether topic `name` is one a page may ask a part of (the stations brief, a chats' list's first rows, the changelog's
+/// news alone) where an older tape asked the whole, or both are asked in a run: answered by the tape's one (sig's
+/// `ignore_brief`).
+fn twin_topic(name : String) -> Bool {
+  name == "stations" || name == "chats" || name == "changelog"
+}
+
+///|
 /// What an ask is, whatever its id: its message without the id, keys in order; an unsubscription or a cancel with the
 /// run's id of what it names (`refers`).
 fn sig(
@@ -1191,10 +1213,13 @@ fn sig(
     if k != "id" {
       match (k, v) {
         ("subscribe", Object(t)) if ignore_brief &&
-          (t.get("topic") == Some(Json::string("stations")) || t.get("topic") == Some(Json::string("chats"))) => {
+          (t.get("topic") == Some(Json::string("stations")) ||
+          t.get("topic") == Some(Json::string("chats")) ||
+          t.get("topic") == Some(Json::string("changelog"))) => {
           let asked = t.copy()
           asked.remove("brief")
           asked.remove("limit")
+          asked.remove("news")
           copy[k] = Json::object(asked)
         }
         ("subscribe", Object(t)) if ignore_compact && (t.get("topic") == Some(Json::string("chat")) || t.get("topic") == Some(Json::string("chatJobs"))) => {
