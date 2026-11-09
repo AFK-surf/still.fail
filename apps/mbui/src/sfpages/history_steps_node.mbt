@@ -60,7 +60,10 @@ pub fn history_steps_node(v : @view.View, src : Source, station : String, key : 
                 "" => @sf.t("web-main.history.reading")
                 e => e
               },
-              failing: [],
+              failing: match head().failed {
+                "" => []
+                f => [f]
+              },
             }
           })
         })
@@ -156,16 +159,14 @@ fn steps_list_node(
           Some(i) => i <= 2
           None => false
         })
-      (h.more && (near || steps_own.focus.contains(fk)), h.first, steps_own.older.get())
+      // (not while the core reads it, nor while it waits after a read that failed: it says when to ask again)
+      (h.more && h.older == "" && (near || steps_own.focus.contains(fk)), h.first)
     },
     fn(now) {
-      let (ask, first, older) = now
-      guard ask && older != first else { return }
-      steps_own.older.set(first)
+      guard now.0 else { return }
       (src.call)("history.older", Json::object(params), fn(res) {
+        // (an entry asked for before what could be had: where it opens)
         if res is Err(_) {
-          steps_own.older.set("")
-          // (an entry asked for before what could be had: where it opens)
           steps_own.focus.remove(fk)
         }
       })
@@ -1348,13 +1349,12 @@ let h_step_hint_line : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wr
 ///|
 /// What the steps keep of their own (the rest is the core's): what the reader opened (folds, lines, groups, calls), by
 /// their keys; the entries read whole (by the step's key: when they came, -1 asked, -2 failed and why); what the core
-/// said each opened call is (`history.tool`, by its key); the first item the pages before were last asked above. What
+/// said each opened call is (`history.tool`, by its key). What
 /// a row shows of them it reads, followed (a row is kept while nothing it read changed: history_steps_node).
 priv struct StepsOwn {
   opened : @sf.LiveMap[String, Bool]
   detail : @sf.LiveMap[String, (Double, String)]
   tools : @sf.LiveMap[String, Json]
-  older : @signals.Signal[String]
   /// an entry asked to be brought into view, by history (`<station>\u{1}<key>`); the item gone to, marked a moment
   /// (its history's list, its key), and the histories gone to an entry, not following their newest since
   focus : @sf.LiveMap[String, Int]
@@ -1373,7 +1373,6 @@ let steps_own : StepsOwn = {
   opened: @sf.LiveMap::new(),
   detail: @sf.LiveMap::new(),
   tools: @sf.LiveMap::new(),
-  older: @signals.signal("", same=fn(a, b) { a == b }),
   focus: @sf.LiveMap::new(),
   marked: @signals.signal(("", ""), same=fn(a, b) { a == b }),
   went: {},
@@ -1387,7 +1386,6 @@ fn steps_reset() -> Unit {
   steps_own.opened.clear()
   steps_own.detail.clear()
   steps_own.tools.clear()
-  steps_own.older.set("")
   steps_own.focus.clear()
   steps_own.marked.set(("", ""))
   steps_own.went.clear()
@@ -1435,13 +1433,16 @@ priv enum StepsRow {
 }
 
 ///|
-/// How an agent's history's steps stand (what builds them reads of it): read yet, none, what its top says, whether
-/// there are pages before, how many rows and its first item's key.
+/// How an agent's history's steps stand (what builds them reads of it): read yet, why its read failed (read again),
+/// none, what its top says, whether there are pages before and how the page before stands (reading, failed, or ""),
+/// how many rows and its first item's key.
 priv struct StepsHead {
   waiting : Bool
+  failed : String
   empty : Bool
   edge : String
   more : Bool
+  older : String
   rows : Int
   first : String
 } derive(Eq)
@@ -1462,9 +1463,11 @@ fn steps_head_of(src : Source, params : Map[String, Json], lkey : String) -> Ste
       let (all, rows) = if waiting || empty { ([], []) } else { steps_rows_of_topic(src, params, lkey) }
       {
         waiting,
+        failed: text(h, "failed"),
         empty,
         edge: text(h, "edge"),
         more: flag(h, "more"),
+        older: text(h, "older"),
         rows: rows.length(),
         first: match all.get(0) {
           Some(i) => text(Some(i), "key")

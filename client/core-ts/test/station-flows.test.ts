@@ -19,7 +19,7 @@ import { merge } from "../src/entries.ts";
 import { apply, call, readsOf, subscribe, v } from "./helpers.ts";
 import { COALESCE_MS, EVICT_AFTER_MS } from "../src/store.ts";
 import { dayOf, usageHistoryRange } from "../src/station/usage-part.ts";
-import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, LONG_MISSES, OFFLINE_RETRY_MS, READ_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS } from "../src/station/sync.ts";
+import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, LONG_MISSES, OFFLINE_RETRY_MS, READ_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS, retryAfter } from "../src/station/sync.ts";
 import { digest } from "../src/digest.ts";
 import { Priority } from "../src/sync/scheduler.ts";
 import { card } from "../src/views/brief.ts";
@@ -3796,4 +3796,63 @@ test("json_idle_timeout_resets_as_bytes_arrive_on_a_slow_link", async () => {
     assert.equal(result._tag, "Success");
     assert.deepEqual(result._tag === "Success" && result.success, { entries: [] });
   } finally { core.close(); }
+});
+
+test("a_history_whose_first_read_fails_says_why_and_is_read_again_while_its_stream_stays_open", async () => {
+  // A station that follows the sessions at work itself tells nothing of one at rest: its stream staying open, nothing
+  // but the history itself asks again (it stayed in its loading bones for ever).
+  const answers: J = base();
+  const timeline = "GET /sessions/k1/timeline?before=1000000000000000&limit=200&brief=1";
+  answers[timeline] = status(502, { error: "busy" });
+  const s = await ui(answers, (st) => (st.gate.follows = true));
+  const { host, core, read } = s;
+  await read();
+  core.receive(s.ui, { kind: "subscribe", id: 1, subscribe: liveK });
+  await read();
+  assert.deepEqual([liveOf(core).loaded, liveOf(core).failed, liveOf(core).timeline], [false, "busy", []]);
+  const reads = () => host.requests.filter((r) => r.url.includes("/sessions/k1/timeline")).length;
+  const streams = streamPaths(host).length;
+  // Failing again: asked less often each time.
+  const first = reads();
+  await host.time.pass(retryAfter(0) + 50, 50);
+  await read();
+  assert.equal(reads(), first + 1);
+  await host.time.pass(retryAfter(0) + 50, 50);
+  await read();
+  assert.equal(reads(), first + 1, "the second retry waits twice as long");
+  answers[timeline] = { start: 0, entries: ["a", "b"], end: 2 };
+  await host.time.pass(retryAfter(1), 50);
+  await read();
+  assert.deepEqual([liveOf(core).loaded, liveOf(core).failed, liveOf(core).timeline], [true, undefined, ["a", "b"]]);
+  assert.equal(streamPaths(host).length, streams, "read again on its own, not by the stream opening again");
+  core.close();
+});
+
+test("the_page_before_a_history_is_read_once_at_a_time_and_a_failure_says_why_and_waits", async () => {
+  const items = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => `e${from + i}`);
+  const answers: J = base();
+  const s = await ui(answers);
+  const { host, core, read } = s;
+  core.receive(1, { kind: "subscribe", id: 1, subscribe: liveK });
+  await read();
+  await read();
+  s.push("live", { key: "k1", type: "timeline", start: 300, entries: items(300, 499), usage: {} });
+  await read();
+  const older = "GET /sessions/k1/timeline?before=300&limit=200&brief=1";
+  const asked = () => host.requests.filter((r) => r.url.includes("timeline?before=300&")).length;
+  answers[older] = status(502, { error: "busy" });
+  await assert.rejects(run(core.inner.stationTopics.historyOlder(ST, "k1")));
+  await read();
+  assert.deepEqual([liveOf(core).older, liveOf(core).olderFailed, liveOf(core).first], ["failed", "busy", 300]);
+  // Asked again before the while is up: nothing is read.
+  assert.equal(await run(core.inner.stationTopics.historyOlder(ST, "k1")), true);
+  assert.equal(asked(), 1);
+  await host.time.pass(retryAfter(0) + 50, 50);
+  await read();
+  assert.equal(liveOf(core).older, undefined);
+  answers[older] = { start: 100, entries: items(100, 299) };
+  assert.equal(await run(core.inner.stationTopics.historyOlder(ST, "k1")), true);
+  await read();
+  assert.deepEqual([liveOf(core).older, liveOf(core).first, asked()], [undefined, 100, 2]);
+  core.close();
 });
