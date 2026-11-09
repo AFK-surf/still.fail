@@ -135,11 +135,6 @@ fn chats_pane_node(
   let key = "chats/" + id + "/" + filter
   let read = fn() { @sfbase.chats_of(src, id, filter) }
   let scroll = list_scroll(key)
-  // how far it is put to tuck its search out of view, as it was first placed (tucked_by's); the room its foot keeps for
-  // that; whether it is to be put there still (the hand not on it since)
-  let tuck : @signals.Signal[Double?] = @signals.signal(tucked_by.get(key))
-  let slack : @signals.Signal[Double] = @signals.signal(0.0)
-  let owed = Ref(false)
   // (while the hand is on the list or it glides, its rows keep their places; a row the viewer moved goes at once)
   let held = fn() { v.pointed_in() || scroll.glides_till() is Some(_) }
   // its days in the order shown, and its rows by their names: worked out once as what is read, or the hand on it,
@@ -171,9 +166,6 @@ fn chats_pane_node(
     },
     fn(at) {
       let days = seen.val
-      if at.1 {
-        owed.val = false
-      }
       let hold = at.1 && !@sfbase.viewer_moved(key, days)
       let shown = @sfbase.held_order(key, days, hold)
       let by_name : Map[String, ChatItem] = {}
@@ -241,66 +233,8 @@ fn chats_pane_node(
       None => "agents"
     }
   }
-  // the list's first time with its rows: the search tucked over them out of view, the first line after it at the foot
-  // of what covers the list (frame.under: a phone's top bar, not the room under it), there once scrolled to (as far as
-  // the room over the list and the field's line come to past that foot)
-  // (where the field is laid out, as it is first: put by where it is, never by what it is said to be)
-  let search_line : Ref[@view.View?] = Ref(None)
-  let search_laid : @signals.Signal[Bool] = @signals.signal(false)
-  v.reacts(fn() { (search_tucked(read().0), search_laid.get()) }, fn(now) {
-    if now.0 && now.1 && !placed.contains(key) && search_line.val is Some(line) && line.alive() {
-      placed[key] = true
-      // (what covers the list's top: Home's top bar to its foot; a side column's band, the room over the list)
-      let cover = match frame.at {
-        Side | Tape => (frame.top)()
-        Whole => (frame.under)()
-      }
-      // (not scrolled yet: where it is in the list is where it is laid out in it)
-      let (_, fy, _, fh) = line.placed_window_now()
-      let (_, vy, _, _) = v.placed_window_now()
-      let at = fy - vy + fh - cover
-      tucked_by[key] = at
-      tuck.set(Some(at))
-      owed.val = true
-      scroll.put(at)
-    }
-  })
-  // (as far as it goes with fewer rows than it is tall: its foot keeps the room it lacks to go there, the search tucked
-  // all the same however few they are; put there again where it came short of it as it was laid out, till the hand is
-  // on it)
-  v.reacts(fn() { (tuck.get(), scroll.reach(), search_tucked(read().0)) }, fn(now) {
-    let had = @signals.untracked(fn() { slack.get() })
-    let want = match now {
-      (Some(at), most, true) => dmax(0.0, at - (most - had))
-      _ => 0.0
-    }
-    if (want - had).abs() >= 0.5 {
-      slack.set(want)
-      return
-    }
-    match now.0 {
-      Some(at) if owed.val && scroll.at(v.tree) < at - 0.5 && now.1 >= at - 0.5 => scroll.put(at)
-      _ => ()
-    }
-  })
-  // scrolled to within a screen and a half of its foot while the core has more of its rows: a page more asked for
   // (how many more the core has, read anew only as its list changes, not each time the column is scrolled)
   let more = @signals.computed(fn(_) { @sfbase.chats_more(src, id, filter) })
-  // (whether it has more and is within a screen and a half of its foot, told as that changes, not each time it is
-  // scrolled: how tall it is followed as it is told once laid out, View::laid_size_told)
-  let near_foot = @signals.computed(fn(_) {
-    let more = more.get()
-    let h = match v.laid_size_told() {
-      Some((_, h)) => h
-      None => 0.0
-    }
-    more > 0 && h > 0.0 && scroll.reach() - scroll.drawn(v.tree) < 1.5 * h
-  }, same=fn(a, b) { a == b })
-  v.reacts(fn() { (near_foot.get(), more.get()) }, fn(now) {
-    if now.0 {
-      @sfbase.chats_ask_more(src, id, filter, @signals.untracked(fn() { @sfbase.chats_limit(id, filter) }))
-    }
-  })
   v.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
   // (a chat's row in line `line`, its key as it is now (`key`: "r/" and its name, another's as the row is taken for
   // another, View::scrolls_window's reused): as its chat is now, the last it was where it is gone from the list)
@@ -337,7 +271,10 @@ fn chats_pane_node(
     est=@signals.untracked(fn() { @sf.theme().chat_list.row_h }),
     bar=@ui.tree_scroll_bar(),
     bar_clear=fn() { ((frame.top)(), (frame.foot)()) },
-    foot_room=fn() { slack.get() },
+    // scrolled to within a screen and a half of its foot while the core has more of its rows: a page more asked for
+    near_foot=(1.5, fn() { more.get() > 0 }, fn() {
+      @sfbase.chats_ask_more(src, id, filter, @signals.untracked(fn() { @sfbase.chats_limit(id, filter) }))
+    }),
     fn(b, k) {
     b.box(fn(line) {
       @sf.style_node(line, fn() { @sf.list_line(frame.at) })
@@ -346,13 +283,20 @@ fn chats_pane_node(
         "foot" => line.height(By(fn() { Some((frame.foot)() + @sf.list_foot_in(frame.at)) })) |> ignore
         "search" => {
           let field = search_field_node(line, frame.at)
-          // (told as it is first laid out: where it is then)
-          field.reacts(fn() { field.laid_size_told() is Some(_) }, fn(laid) {
-            if laid {
-              search_line.val = Some(field)
-              search_laid.set(true)
-            }
-          })
+          // the list's first time with its rows: the search tucked over them out of view, the first line after it at the
+          // foot of what covers the list (frame.under: a phone's top bar, not the room under it; a side column's band,
+          // the room over the list), there once scrolled to (Scroll::tucks: as far as the room over the list and the
+          // field's line come to past that foot)
+          scroll.tucks(
+            field,
+            fn() {
+              match frame.at {
+                Side | Tape => (frame.top)()
+                Whole => (frame.under)()
+              }
+            },
+            kept=fn() { search_tucked(read().0) },
+          )
         }
         "wait" => list_waiting_node(line, src, read, frame.at, tips, stint)
         "empty" => list_empty_node(line, read, filter, frame.at)

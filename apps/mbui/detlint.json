@@ -569,8 +569,7 @@
     "layout-told": {
       "src/sf/panel_node.mbt": 1,
       "src/sf/stage_node.mbt": 1,
-      "src/sfbase/viewer_marks_node.mbt": 2,
-      "src/sfpages/sidebar_node.mbt": 2
+      "src/sfbase/viewer_marks_node.mbt": 2
     }
   },
   "excused": {

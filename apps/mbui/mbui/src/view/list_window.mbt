@@ -32,7 +32,10 @@ priv struct Laid[K] {
 /// the block to bring to the middle of where the column shows as this comes to name it (its cause: what asks it, an
 /// entry gone to), its middle there as tall as it is counted then; held there as what is over it is laid out, till the
 /// column is moved otherwise (the hand, the wheel). `first_told`: told the first block that shows as that changes, the
-/// column moved first for what came or changed over it (how near its top the reader has got). `reused`: of a block
+/// column moved first for what came or changed over it (how near its top the reader has got). `near_foot`: (screens,
+/// wanting, ask): `ask` done as it is scrolled to within so many of its heights of its foot while `wanting()` holds, as
+/// that comes to be, and again as its keys change while it is (a page more asked of what has more): how far its foot is
+/// is its own, nothing laid out read by what asks. `reused`: of a block
 /// whose key it gives a kind, what shows is made by `make_reused` with its key as it is now, and as it no more shows put
 /// by, not let go: left in its slot out of sight, what it binds following nothing meanwhile (View::rests), so its going
 /// draws nothing again; the next of its kind to come to show takes it (moved into that one's slot: View::park,
@@ -52,6 +55,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   follows? : () -> Bool = fn() { false },
   centres? : () -> K? = fn() { None },
   first_told? : (K) -> Unit = fn(_) {  },
+  near_foot? : (Double, () -> Bool, () -> Unit),
   reused? : (K) -> Int?,
   make_reused? : (View, () -> K) -> Unit,
 ) -> View {
@@ -288,6 +292,20 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     anchor.val = if i < all.length() { Some((all[i].key, all[i].top, i)) } else { None }
   })
+  match near_foot {
+    Some((screens, wanting, ask)) => {
+      let near = @signals.computed(fn(_) {
+        guard self.laid_size_told() is Some((_, vh)) && vh > 0.0 else { return false }
+        s.reach() - at() < screens * vh
+      }, same=fn(a, b) { a == b })
+      self.reacts(fn() { (near.get() && wanting(), keys().length()) }, fn(now) {
+        if now.0 {
+          ask()
+        }
+      })
+    }
+    None => ()
+  }
   // (the block `centres` names brought to the middle of where it shows, once each time it names one: as soon as it is
   // among them and the column is laid out; held there then)
   let centred : Ref[K?] = Ref(None)
@@ -328,7 +346,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       Some((_, vh)) => vh
       None => 0.0
     }
-    if x >= foot + @signals.untracked(foot_room) - vh - 0.5 {
+    if x >= foot + @signals.untracked(foot_room) + @signals.untracked(fn() { s.tuck_room.get() }) - vh - 0.5 {
       s.to_foot()
     }
   })
@@ -393,7 +411,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     made(v)
   }
   let out = self.scrolls(s, slop?=slop, bar?=bar, bar_clear~, fn(held) {
-    held.padding(By(fn() { (0.0, 0.0, 0.0, foot_room()) })) |> ignore
+    held.padding(By(fn() { (0.0, 0.0, 0.0, foot_room() + s.tuck_room.get()) })) |> ignore
     held.each(keys, fn(k) { k }, fn(slot, item) {
       let k = @signals.untracked(fn() { item.get() })
       let cell = @signals.signal(@signals.untracked(fn() { window.get().contains(k) }), same=fn(a, b) { a == b })
