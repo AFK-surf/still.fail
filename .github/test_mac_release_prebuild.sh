@@ -29,7 +29,7 @@ case "$*" in
     fi
     ;;
   'hermes apple')
-    [ -e "$RUNNER_TEMP/mac-prebuild/packages" ] || exit 11
+    [ ! -e "$RUNNER_TEMP/mac-prebuild/packages-pending" ] || exit 11
     [ "${FAIL_HBC:-0}" = 0 ] || exit 9
     touch "$RUNNER_TEMP/bytecode-built"
     ;;
@@ -37,6 +37,12 @@ case "$*" in
 esac
 EOF
   cp "$app_mac" "$GITHUB_WORKSPACE/apps/mbui/scripts/mac.sh"
+  cat > "$GITHUB_WORKSPACE/apps/mbui/mbui/scripts/chk" <<'EOF'
+#!/bin/bash
+[ "$1" = logwait ] && [ "$2" = --gone ] || exit 12
+while [ -e "$3" ]; do sleep 0.1; done
+EOF
+  chmod +x "$GITHUB_WORKSPACE/apps/mbui/mbui/scripts/chk"
   cat > "$GITHUB_WORKSPACE/apps/mbui/mbui/scripts/mac.sh" <<'EOF'
 #!/bin/bash
 set -eu
