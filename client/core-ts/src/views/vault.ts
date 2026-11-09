@@ -705,6 +705,8 @@ export function vaultCome(inner: Inner, ws: string): void {
   // A device confirmed in the lock whose certificate came first: given the keys unsealed here; the prompts of every
   // workspace follow the lock too.
   giveKept(inner, ws);
+  // A device or member taken out who held a key of a vault of this person's own: the vault keyed anew without them.
+  if (able(inner)) inner.runner.fork(Effect.ignore(new Vaults(inner, ws, null).rekeyGone(), { log: "Unhandled", message: "vaults keyed anew" }));
   lockSeen(inner).touch("prompts");
 }
 
@@ -1176,6 +1178,92 @@ class Vaults {
         yield* Effect.ignore(self.#give(v.id, v.epoch, kept.key, null), { log: "Unhandled", message: "vault key given" });
       }
     });
+  }
+
+  /// The vaults of this person's own that a device or member taken out of the lock since holds a key of (so the
+  /// stations, and this core, take them no more: rules/src/vault/vault.mbt, a key for a device not in the lock) written
+  /// anew: a new key under the next epoch, sealed to the members' devices the lock still vouches for, and each item
+  /// written again under it, the one taken out holding no key to any of it. Only a version the lock took before (a
+  /// prefix of the chain vouching for it) is so carried on, and only its items that held then. The key unsealed here, or
+  /// read with this device's box key (the person asked). As the lock comes; nothing done when nothing was taken out.
+  rekeyGone(): Effect.Effect<void, CoreError> {
+    const self = this;
+    return Effect.gen(function* () {
+      const inner = self.#inner;
+      const lock = lockOf(inner, self.ws);
+      if (lock instanceof CoreError) return;
+      const who = me(lock, signerOf(inner));
+      if (who === null) return;
+      const entries = lockHeld(inner, self.ws)?.entries ?? [];
+      for (const v of Object.values(held(inner, self.ws).vaults)) {
+        if (v.deleted || v.owner !== who.sub || trusted(lock, v) || !v.keys.some((k) => k.cert.device === who.device)) continue;
+        const gone = v.keys.some((k) => !lock.devices.has(k.cert.device)) || v.members.some((m) => !lock.members.has(m));
+        if (!gone || !lock.members.has(v.owner)) continue;
+        // (the lock as it was when it took this version: the longest prefix of the chain that does)
+        let was: Checked | null = null;
+        for (let n = entries.length - 1; n > 0 && was === null; n--) {
+          try {
+            const at = checkLock(entries.slice(0, n) as Entry[], nowS(inner));
+            if (!at.disabled && trusted(at, v)) was = at;
+          } catch {
+            // (a prefix that does not check out: an earlier one may)
+          }
+        }
+        if (was === null) continue;
+        yield* Effect.ignore(self.#rekey(v.id, v.seq, was), { log: "Unhandled", message: "vault keyed anew" });
+      }
+    });
+  }
+
+  #rekey(id: string, seq: number, was: Checked): Effect.Effect<void, CoreError> {
+    const self = this;
+    const giving = mem(this.#inner).giving;
+    let one = giving.get(id);
+    if (one === undefined) giving.set(id, (one = Semaphore.makeUnsafe(1)));
+    return one.withPermits(1)(
+      Effect.gen(function* () {
+        const inner = self.#inner;
+        const { lock, signer, self: who } = yield* self.#ready();
+        const v = held(inner, self.ws).vaults[id];
+        // (written anew meanwhile, by another of the person's devices: nothing left to do here)
+        if (!v || v.seq !== seq || trusted(lock, v)) return;
+        const mine = v.keys.find((k) => k.cert.device === who.device)!;
+        const kept = mem(inner).keys.get(keyOf(v));
+        const old = kept && kept.until > inner.host.nowMs()
+          ? kept.key
+          : yield* Effect.flatMap(self.#boxKey(t("core-misc.vault.reason.rekey", { name: v.name })), (priv) =>
+            Effect.try({ try: () => openSeal(priv, mine.wrapped, keyContext(self.ws, v.id, v.epoch)), catch: asCoreError }));
+        const members = v.members.filter((m) => lock.members.has(m));
+        const to = certs(inner, self.ws, lock).filter((c) => members.includes(c.sub));
+        const epoch = v.epoch + 1;
+        const key = new Uint8Array(32);
+        inner.host.randomBytes(key);
+        const context = keyContext(self.ws, v.id, epoch);
+        const seal = (pub: string) => {
+          const eph = new Uint8Array(32);
+          inner.host.randomBytes(eph);
+          return sealWith(pub, key, context, eph);
+        };
+        const recovery = to.find((c) => c.sub === v.owner && c.recovery)?.recovery;
+        const { sig: _, recovery: _r, ...rest } = v;
+        const next = sign({ ...rest, seq: v.seq + 1, members, epoch, keys: to.map((c) => ({ cert: bare(c), wrapped: seal(c.box) })), ...(recovery ? { recovery: seal(recovery) } : {}), at: nowS(inner) }, TAG.vault, signer);
+        const nv = yield* self.#putVault(next, held(inner, self.ws).at[v.id] ?? "");
+        mem(inner).keys.delete(keyOf(v));
+        self.#keep(nv, key);
+        // Its items, as they held when the lock took the version before, written again under the new key.
+        for (const i of Object.values(items(inner, self.ws, v.id))) {
+          if (i.deleted || i.epoch !== v.epoch || rules.item_ok_js(was, v, null, i, true, rulesCrypto) !== null) continue;
+          const plain = yield* Effect.try({ try: () => decrypt(old, i.ct, itemContext(self.ws, v.id, i.id, i.version, i.epoch)), catch: asCoreError });
+          const nonce = new Uint8Array(12);
+          inner.host.randomBytes(nonce);
+          const version = i.version + 1;
+          const ct = encryptWith(key, plain, itemContext(self.ws, v.id, i.id, version, epoch), nonce);
+          const item = sign({ v: 1 as const, ws: self.ws, vault: v.id, id: i.id, version, epoch, ct, ...(i.listing ? { listing: i.listing } : {}), at: nowS(inner) }, TAG.item, signer);
+          yield* Effect.ignore(self.#putItem(item, nv), { log: "Unhandled", message: "vault item keyed anew" });
+        }
+        changed(inner, self.ws);
+      }),
+    );
   }
 
   /// A vault's key kept unsealed UNLOCK_MS from now, then forgotten (and the pages told).

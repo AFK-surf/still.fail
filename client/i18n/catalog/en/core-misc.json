@@ -272,6 +272,7 @@
   "core-misc.vault.reason.approve": "Let an agent use “{name}”",
   "core-misc.vault.reason.save": "Save “{name}” to Secrets",
   "core-misc.vault.reason.delete": "Delete the vault “{name}”",
+  "core-misc.vault.reason.rekey": "Change the key of the vault “{name}” after a device was removed",
   "core-misc.vault.notSealedHere": "This device had no vault when this was asked. Approve it on a device that did",
   "core-misc.vault.typedEmpty": "Type in the secret to keep first",
   "core-misc.vault.fileTooBig": "The file is too big: a file in the vault is at most {most}",
