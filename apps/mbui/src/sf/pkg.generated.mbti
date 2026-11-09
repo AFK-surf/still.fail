@@ -1438,6 +1438,8 @@ pub fn panel_note_node(@view.View, () -> String) -> Unit
 
 pub let panel_offset : Double
 
+pub fn panel_opens_on_node(@view.View) -> Unit
+
 pub fn panel_opens_up() -> Bool
 
 pub let panel_pad : Double
@@ -2473,6 +2475,8 @@ pub fn words_node(@view.View, () -> String, () -> @ui.TextStyle) -> @view.View
 pub fn words_told_count() -> Int32
 
 pub fn workspace_badge(@ui.Ctx, String, String, String, Double, still? : Bool) -> Unit
+
+pub fn workspace_badge_node(@view.View, () -> String, () -> String, () -> String, Double, stint? : () -> Int) -> Unit
 
 pub let workspace_letter : @ui.TextStyle
 

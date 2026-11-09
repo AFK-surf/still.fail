@@ -156,3 +156,30 @@ pub fn station_mark_node(
   })
   |> ignore
 }
+
+///|
+/// A workspace before its name where it is named among other words (workspace_badge's, as a node) in `parent`: its
+/// mark `size` across (station_mark_node's, in the ink; a picture of it asked for on `stint`), else its `name`'s first
+/// letter, semibold and muted in a meta's size, in a square as large. Each as it changes.
+#callsite(autofill(loc))
+pub fn workspace_badge_node(
+  parent : @view.View,
+  name : () -> String,
+  emoji : () -> String,
+  icon : () -> String,
+  size : Double,
+  stint? : () -> Int = fn() { 0 },
+  loc~ : SourceLoc,
+) -> Unit {
+  let marked = fn() { has_station_mark(emoji(), icon()) }
+  parent.box(made_for=loc, fn(b) {
+    // (one in the other's place, in a line of words: at once)
+    b.show(marked, at_once=true, fn(m) { station_mark_node(m, emoji, icon, size, fn() { theme().p.text }, stint) })
+    b.show(fn() { !marked() }, at_once=true, fn(tile) {
+      style_node(tile, fn() { workspace_badge_tile })
+      tile.width(Is(Some(size))).height(Is(Some(size))) |> ignore
+      words_node(tile, fn() { initial(name()) }, fn() { workspace_badge_letter }) |> ignore
+    })
+  })
+  |> ignore
+}

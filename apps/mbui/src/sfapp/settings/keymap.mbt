@@ -180,6 +180,8 @@ pub fn keymap_of(prefs : Json?) -> @view.Keymap {
   // (Escape where a search is up, with the cursor in a field too, or a picture's old viewer, not in a field: sfpages'
   // search.mbt, sfbase's viewer.mbt)
   bindings.push({ keys: [stroke(@ui.key_escape, 0)], action: "search.escape", when: In("Search") })
+  // (Enter where a message's sharing is asked, whatever has the focus under it: sfpages' outside.mbt)
+  bindings.push({ keys: [stroke(@ui.key_code_enter, 0)], action: "outside.yes", when: In("OutsideAsk") })
   bindings.push({
     keys: [stroke(@ui.key_escape, 0)],
     action: "viewer.escape",
