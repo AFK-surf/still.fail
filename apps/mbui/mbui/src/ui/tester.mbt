@@ -950,6 +950,15 @@ pub fn Tester::wheel(self : Tester, x : Double, y : Double, dy : Double) -> Unit
 }
 
 ///|
+/// What the hand does through what a press runs, done here by the test straight (`f`: a panel closed by the call its ×
+/// makes): taken as the hand's at this moment, as a press is (rows_steady.mbt: what the rows do after it is its answer).
+pub fn Tester::by_hand(self : Tester, f : () -> Unit) -> Unit {
+  ignore(self)
+  rows_steady_hand()
+  f()
+}
+
+///|
 /// Text committed by the input method (or typed on a hardware keyboard).
 pub fn Tester::type_text(self : Tester, s : String) -> Unit {
   on_text(0, s, 0, 0)

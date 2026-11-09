@@ -436,7 +436,13 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
       true
     })
   }
-  let ups_here = ups.uploads.filter(fn(u) { u.station == at.station && u.root == root && u.dir == at.path })
+  // (one up stays till its folder's own row of it comes: the one row in the other's place, dv_up_done)
+  let ups_here = ups.uploads.filter(fn(u) {
+    u.station == at.station &&
+    u.root == root &&
+    u.dir == at.path &&
+    !(u.state.get() == "done" && entries.iter().any(fn(e) { e.name == u.name.get() }))
+  })
   let empty = fn() {
     folder_empty(c, if write { Some(fn() { dv_upload(c, at) }) } else { None })
   }

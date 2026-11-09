@@ -889,6 +889,10 @@ fn input_came() -> Unit {
 
 ///|
 fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
+  // (a press or a let-go, a mouse's or a finger's: what the list does after it is its answer, rows_steady.mbt)
+  if kind == 0 || kind == 2 || kind == 10 || kind == 12 {
+    rows_steady_hand()
+  }
   // a touch screen's finger as the host has it, by the system's id for it (touches.mbt)
   if kind >= 10 && kind <= 13 {
     touch_in(kind - 10, button, x, y)
@@ -1730,6 +1734,7 @@ fn Ctx::edge_move(self : Ctx, x : Double, y : Double, t : Double) -> Bool {
 /// with no gesture. Its steps are the hand's events but where it is as it goes: that is where what follows it reads it
 /// (Nav's `finger`), as a pointer moved is (inputrec.mbt).
 fn on_back(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
+  rows_steady_hand()
   // (one event, at its own moment: view_host.mbt)
   view_event(fn() { on_back_now(kind, x, progress, edge) }, what="back")
 }
@@ -1795,6 +1800,7 @@ fn on_back_now(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
 
 ///|
 fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
+  rows_steady_hand()
   // (one event, at its own moment: view_host.mbt)
   zoom_wheel_kept.val = false
   view_event(fn() { on_wheel_now(x, y, dx, dy, phase) }, what="wheel")
@@ -1989,6 +1995,7 @@ fn wheel_taken() -> Unit {
 
 ///|
 fn on_key(code : Int, mods : Int) -> Unit {
+  rows_steady_hand()
   // (one event, at its own moment: view_host.mbt)
   view_event(fn() {
     if !window_key_taken(code, mods) {
@@ -2118,6 +2125,7 @@ fn key_in(code : Int, mods : Int) -> Unit {
 
 ///|
 fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
+  rows_steady_hand()
   // (one event, at its own moment: view_host.mbt)
   view_event(fn() {
     on_text_now(kind, s, a, b)

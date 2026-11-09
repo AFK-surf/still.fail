@@ -78,7 +78,8 @@ test "wide: a web service's panel sliding in beside a chat, its tabs coming late
   let widths = t.list_row_boxes().map(fn(rows) { rows.map(fn(b) { b.2 }) }).filter(fn(ws) { ws.length() > 3 })
   assert_true(widths.length() > 0 && widths[0][0] <= @sfpages.chat_narrow_w, msg="\{widths}")
   // and out again, the tabs closed coming late as well
-  side_change(r, "close", Some("service:j-web"))
+  // (closed by its ×: the hand's)
+  t.by_hand(fn() { side_change(r, "close", Some("service:j-web")) })
   t.frame()
   t.frame()
   client.receive_json({ "id": Json::number(chat_id.to_double()), "value": Json::object(chat_value) })
@@ -189,7 +190,8 @@ test "wide: a web service's panel sliding in beside a chat and out, no file in i
   // and out again, the tabs closed coming late as well
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   let stop = rows_held(t, 7.5)
-  side_change(r, "close", Some("service:j-web"))
+  // (closed by its ×: the hand's)
+  t.by_hand(fn() { side_change(r, "close", Some("service:j-web")) })
   t.run_as_host(2.0 * 1000.0 / 60.0)
   client.receive_json({ "id": Json::number(chat_id.to_double()), "value": Json::object(chat_value) })
   t.run_as_host(@ui.move_most_ms)
@@ -242,7 +244,8 @@ fn panel_way_seen(every : Double) -> Array[String] raise {
   client.receive_json({ "id": Json::number(chat_id.to_double()), "value": Json::object(with_tabs) })
   look("in")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
-  side_change(r, "close", Some("service:j-web"))
+  // (closed by its ×: the hand's)
+  t.by_hand(fn() { side_change(r, "close", Some("service:j-web")) })
   client.receive_json({ "id": Json::number(chat_id.to_double()), "value": Json::object(chat_value) })
   look("out")
   @ui.run_let_go()

@@ -6,11 +6,7 @@
 ///|
 fn init {
   @ui.rows_steady_known([
-    ("src/sfapp/decide_wbtest.mbt", 1),
+    ("src/sfapp/cards_wbtest.mbt", 1),
     ("src/sfapp/desk_service_wbtest.mbt", 1),
-    ("src/sfapp/drive_wbtest.mbt", 1),
-    ("src/sfapp/settings_wbtest.mbt", 1),
-    ("src/sfapp/tape.mbt", 1),
-    ("src/sfapp/wide_wbtest.mbt", 1),
   ])
 }

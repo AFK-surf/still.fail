@@ -1,10 +1,3 @@
-// The Service transition has one known row jolt in the PR baseline, checked separately against the same input.
-
-///|
-fn init {
-  @ui.rows_steady_known([("src/sfapp/page_scope_wide_pop_wbtest.mbt", 1)])
-}
-
 ///|
 fn independent_wide_pop_case(pop : Bool, intermediate : Bool, legacy : Bool, cover : Bool, other_kind? : Int = 0, render_cover? : Bool = false) -> Unit raise {
   new_run()

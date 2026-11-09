@@ -728,6 +728,7 @@ pub fn reset() -> Unit {
   // the drive's files going up and being fetched (drive_upload.mbt, drive_keep.mbt)
   ups_reset()
   dv_fetches.clear()
+  dv_orders_reset()
   keepings.clear()
   // what was worked out of the core's topics (derived.mbt)
   kept_reset()
