@@ -27,7 +27,7 @@ for (const file of tracked.filter((f) => f === "AGENTS.md" || f.endsWith("/AGENT
       if (!word.includes("/") || !PATH.test(word) || word.startsWith("@")) continue;
       const path = word.replace(/\/$/, "");
       const from = [normalize(join(dir, path)), normalize(path)];
-      const first = path.split("/")[0];
+      const first = path.split("/")[0] ?? "";
       const named = /\.\w+$/.test(path);
       if (!named && !there.has(normalize(join(dir, first))) && !there.has(first)) continue;
       if (!from.some((p) => there.has(p))) missing.push(`${file}:${i + 1}: \`${word}\` is not in the repository`);
