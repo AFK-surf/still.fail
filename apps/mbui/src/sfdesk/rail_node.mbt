@@ -131,7 +131,7 @@ fn rail_node(n : @view.View, src : Source, tips : @sf.TipLayer, at : () -> RailA
     .gap(Is(rail_gap))
     // (its menu asked of the rail itself: beside its first place)
     .on_menu(fn(_) {
-      if @signals.untracked(fn() { wide.rail_menu.get() }) is None {
+      if wide.rail_menu.untracked() is None {
         wide.rail_menu.set(Some(("", rail_menu_from("", src))))
       }
     })
@@ -181,7 +181,7 @@ fn rail_node(n : @view.View, src : Source, tips : @sf.TipLayer, at : () -> RailA
               }
             },
             fn(p) { p },
-            fn(item, place) { rail_place_node(item, src, tips, @signals.untracked(fn() { place.get() }), at) },
+            fn(item, place) { rail_place_node(item, src, tips, place.untracked(), at) },
           )
         })
         |> ignore
@@ -380,7 +380,7 @@ fn rail_place_node(item : @view.View, src : Source, tips : @sf.TipLayer, place :
   // dragged up or down past the slop while the rail is changed or with ⌘ held as it was pressed: the hold taken over
   // from its key (whose press is called off), to another place in the rail, the others as they were until let go
   .claims(fn(_, dy) {
-    let takes = dy.abs() > rail_slop && (@signals.untracked(fn() { wide.editing.get() }) || cmd_down.val)
+    let takes = dy.abs() > rail_slop && (wide.editing.untracked() || cmd_down.val)
     if takes {
       claimed.val = true
       claimed_dy.val = dy
@@ -533,11 +533,11 @@ fn rail_place_node(item : @view.View, src : Source, tips : @sf.TipLayer, place :
     if down {
       cmd_down.val = (@ui.mods_held() & @ui.mod_cmd) != 0
       claimed.val = false
-      if @signals.untracked(fn() { wide.editing.get() }) || cmd_down.val {
+      if wide.editing.untracked() || cmd_down.val {
         wide.rail_drag.set(Some((place, 0.0, 0.0)))
       }
     } else if !claimed.val {
-      match @signals.untracked(fn() { wide.rail_drag.get() }) {
+      match wide.rail_drag.untracked() {
         Some((p, _, _)) if p == place => wide.rail_drag.set(None)
         _ => ()
       }
@@ -647,7 +647,7 @@ fn rail_card_node(anchor : @view.View, src : Source, tips : @sf.TipLayer, place 
     let at = anchor.cause_at()
     stop()
     if rests || held {
-      if !@signals.untracked(fn() { open.get() }) {
+      if !open.untracked() {
         due.val = Some(
           anchor.at_moment(at + @sfpages.hover_open_ms, fn() {
             let (rests, _) = @signals.untracked(state)
@@ -660,7 +660,7 @@ fn rail_card_node(anchor : @view.View, src : Source, tips : @sf.TipLayer, place 
           }),
         )
       }
-    } else if @signals.untracked(fn() { open.get() }) {
+    } else if open.untracked() {
       due.val = Some(
         anchor.at_moment(at + @sfpages.hover_close_ms, fn() {
           let (rests, held) = @signals.untracked(state)
@@ -807,7 +807,7 @@ fn rail_workspaces_node(r : @view.View, src : Source, tips : @sf.TipLayer, at : 
           fn() { @sfbase.workspace_in_view(src).1.map(fn(x) { x.id }) },
           fn(id) { id },
           fn(row, item) {
-            let id = @signals.untracked(fn() { item.get() })
+            let id = item.untracked()
             let it = fn() { @sfbase.workspace_in_view(src).1.iter().find_first(fn(x) { x.id == id }) }
             let here = fn() { ws().map(fn(w) { w.id == id }).unwrap_or(false) }
             let marked = fn() { it().map(@sfpages.workspace_marked).unwrap_or(false) }

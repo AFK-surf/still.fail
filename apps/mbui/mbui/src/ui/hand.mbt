@@ -100,7 +100,7 @@ fn hand_arrive(c : Ctx) -> Unit {
 /// A discrete event of the hand came (a key, words typed, a press going down or up, a back, a menu, a reader's action):
 /// what reads what comes (Ctx::keys, menu_asked, action_asked, tapped_anywhere) is built again.
 fn hand_event() -> Unit {
-  hand.events.set(@signals.untracked(fn() { hand.events.get() }) + 1)
+  hand.events.set(hand.events.untracked() + 1)
 }
 
 ///|
@@ -108,7 +108,7 @@ fn hand_event() -> Unit {
 /// built again (hand_keys_read), and the field (Ctx::editor), not what reads how a press goes or a menu asked for (a
 /// row's button elsewhere in the page).
 fn hand_typed() -> Unit {
-  hand.typed.set(@signals.untracked(fn() { hand.typed.get() }) + 1)
+  hand.typed.set(hand.typed.untracked() + 1)
 }
 
 ///|
@@ -130,7 +130,7 @@ fn hand_keys_read() -> Unit {
 /// A press of the pointer went down or up (or was called off, or a second finger came): what reads how a press goes
 /// built again (hand_presses_read), what reads the clicks by its own (a part's Response: hand's `clicked`) as it is one.
 fn hand_pressed() -> Unit {
-  hand.presses.set(@signals.untracked(fn() { hand.presses.get() }) + 1)
+  hand.presses.set(hand.presses.untracked() + 1)
 }
 
 ///|
@@ -155,7 +155,7 @@ fn hand_reset() -> Unit {
 /// what read it told, so a build again of the frame sees it as this one left it.
 fn hand_focus_said(c : Ctx) -> Unit {
   @signals.start_batch()
-  if @signals.untracked(fn() { hand.focus_id.get() }) != c.focus {
+  if hand.focus_id.untracked() != c.focus {
     hand.focus.set(if c.focus != 0 { [c.focus] } else { [] })
     hand.focus_id.set(c.focus)
   }

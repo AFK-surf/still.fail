@@ -490,7 +490,7 @@ let pv_first_told : @signals.Signal[Int] = @signals.signal(0)
 ///|
 /// A first frame come to what it is, told (pv_first_told).
 fn first_told() -> Unit {
-  pv_first_told.set(@signals.untracked(fn() { pv_first_told.get() }) + 1)
+  pv_first_told.set(pv_first_told.untracked() + 1)
 }
 
 ///|
@@ -804,7 +804,7 @@ pub let viewer : @signals.Signal[Viewer?] = @signals.signal(None)
 ///|
 /// Whether this viewer is still the one open and not closing (what it said in the system's bars still its own).
 pub fn Viewer::up_still(self : Viewer) -> Bool {
-  match @signals.untracked(fn() { viewer.get() }) {
+  match viewer.untracked() {
     Some(v) => physical_equal(v, self) && !self.closing
     None => false
   }
@@ -1817,7 +1817,7 @@ pub fn Viewer::left_with_frame(self : Viewer, src : Source, at : Double, window 
 fn Viewer::grab_set(self : Viewer, on : Bool) -> Unit {
   if self.leaving_grab != on {
     self.leaving_grab = on
-    self.grab_told.set(@signals.untracked(fn() { self.grab_told.get() }) + 1)
+    self.grab_told.set(self.grab_told.untracked() + 1)
   }
 }
 
@@ -1838,7 +1838,7 @@ pub fn Viewer::wake(self : Viewer) -> Unit {
 
 ///|
 fn Viewer::awake_said(self : Viewer) -> Unit {
-  self.awake_told.set(@signals.untracked(fn() { self.awake_told.get() }) + 1)
+  self.awake_told.set(self.awake_told.untracked() + 1)
 }
 
 ///|
@@ -2014,7 +2014,7 @@ pub fn Viewer::ask_install(self : Viewer) -> Unit {
       self.error.set(None)
       self.asked = true
       self.install_after = true
-      self.asked_told.set(@signals.untracked(fn() { self.asked_told.get() }) + 1)
+      self.asked_told.set(self.asked_told.untracked() + 1)
     }
   }
 }
@@ -2030,13 +2030,13 @@ pub fn Viewer::ask_save(self : Viewer, c : @ui.Ctx) -> Unit {
     Some(b) => keep_bytes(c, self.file.name, self.mime, b)
     None if self.chat_file() => {
       self.download_asked = true
-      self.asked_told.set(@signals.untracked(fn() { self.asked_told.get() }) + 1)
+      self.asked_told.set(self.asked_told.untracked() + 1)
     }
     None => {
       self.error.set(None)
       self.asked = true
       self.save_after = true
-      self.asked_told.set(@signals.untracked(fn() { self.asked_told.get() }) + 1)
+      self.asked_told.set(self.asked_told.untracked() + 1)
     }
   }
 }
@@ -3244,7 +3244,7 @@ pub fn video_still_node(v : @view.View, src : Source, station : String, owner : 
   // (its first frame's, asked as the station is known to have made none: then, once)
   let first : @signals.Signal[(() -> String)?] = @signals.signal(None, same=fn(x, y) { physical_equal(x, y) })
   v.reacts(fn() { known() == "!" }, fn(none) {
-    if none && @signals.untracked(fn() { first.get() }) is None {
+    if none && first.untracked() is None {
       first.set(Some(first_frame_node(v, src, station, owner, a, thumb)))
     }
   })
@@ -3289,5 +3289,5 @@ pub fn Viewer::set_source(self : Viewer, on : Bool) -> Unit {
     }
     self.page = None
   }
-  self.source_told.set(@signals.untracked(fn() { self.source_told.get() }) + 1)
+  self.source_told.set(self.source_told.untracked() + 1)
 }

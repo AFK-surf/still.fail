@@ -470,7 +470,7 @@ fn NotePop::again(self : NotePop, n : @view.View) -> Unit {
   (self.due)()
   self.way.put(0.0)
   self.way.go(1.0, @motion.tween(note_pop_ms, ease=Out), at=n.cause_at())
-  self.due = n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+  self.due = n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
 }
 
 ///|
@@ -903,7 +903,7 @@ fn marks_shapes_node(h : @view.View, vw : Viewer) -> Unit {
     fn(d, i) {
       let at = fn() {
         let (_, handles) = laid(d)
-        match handles.get(@signals.untracked(fn() { i.get() })) {
+        match handles.get(i.untracked()) {
           Some((x, y)) => (x - 6.0, y - 6.0)
           None => (0.0, 0.0)
         }

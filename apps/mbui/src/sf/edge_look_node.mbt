@@ -28,7 +28,7 @@ pub fn EdgeWay::go(self : EdgeWay, n : @view.View, to : Double, ms : Double, eas
   (self.due)()
   self.way.go(to, @motion.tween(ms, ease~), at=n.cause_at())
   self.due = if self.way.ends_at() >= 0.0 {
-    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
     fn() {  }
   }
@@ -51,7 +51,7 @@ pub fn EdgeWay::go_by(
   (self.due)()
   self.way.go(to, spec, at=n.cause_at(), velocity?)
   self.due = if self.way.ends_at() >= 0.0 {
-    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
     fn() {  }
   }
@@ -65,7 +65,7 @@ pub fn EdgeWay::go_from(self : EdgeWay, n : @view.View, from : Double, to : Doub
   self.way.put(from)
   self.way.go(to, spec, at=n.cause_at())
   self.due = if self.way.ends_at() >= 0.0 {
-    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
     fn() {  }
   }

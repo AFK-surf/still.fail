@@ -63,7 +63,7 @@ fn press_look(
   // (let go at `at`: each ripple not yet let go on its way out once its way in is over; the sink back)
   let lift = fn(at : Double) {
     sink.go(0.0, @motion.lift_spring, at~)
-    for n in @signals.untracked(fn() { ripples.get() }) {
+    for n in ripples.untracked() {
       guard made.get(n) is Some(r) else { continue }
       if r.lifted is None {
         r.lifted = Some(at)
@@ -74,7 +74,7 @@ fn press_look(
             r.due.push(
               v.at_moment(r.way.end(), fn() {
                 made.remove(n)
-                ripples.set(@signals.untracked(fn() { ripples.get() }).filter(fn(o) { o != n }))
+                ripples.set(ripples.untracked().filter(fn(o) { o != n }))
               }),
             )
           }),
@@ -96,7 +96,7 @@ fn press_look(
   v.box(made_for=loc, fn(over) {
     over.over(Is(true)).radius(corner).clips(Is(true)) |> ignore
     over.each(fn() { ripples.get() }, fn(n) { n }, fn(d, n) {
-      match made.get(@signals.untracked(fn() { n.get() })) {
+      match made.get(n.untracked()) {
         Some(r) => ripple_disc(d, r, ink)
         None => ()
       }
@@ -123,7 +123,7 @@ fn press_look(
     let n = next.val
     next.val = n + 1
     made[n] = { x: d.x, y: d.y, w: d.w, h: d.h, way, at, lifted: None, due: [] }
-    let now = @signals.untracked(fn() { ripples.get() }).copy()
+    let now = ripples.untracked().copy()
     now.push(n)
     ripples.set(now)
   }

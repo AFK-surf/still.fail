@@ -146,7 +146,7 @@ fn md_node_blocks(text : String, tree : Json?) -> Array[MdBlock] {
 fn md_blocks_node(col : @view.View, md : MdNode, blocks : () -> Array[MdBlock], tight : Bool) -> Unit {
   let count = fn() { Array::makei(blocks().length(), fn(i) { i }) }
   col.each(count, fn(i) { i }, fn(slot, i) {
-    let i = @signals.untracked(fn() { i.get() })
+    let i = i.untracked()
     let block = fn() { blocks().get(i) }
     slot
     .padding(By(fn() {
@@ -490,7 +490,7 @@ fn md_block_node(
         },
         fn(i) { i },
         fn(slot, i) {
-          let i = @signals.untracked(fn() { i.get() })
+          let i = i.untracked()
           let part = fn() {
             match block() {
               Some(Paragraph(xs)) => md_placed_runs(md, xs).get(i)
@@ -607,7 +607,7 @@ fn md_list_node(p : @view.View, md : MdNode, list : () -> MdList?, depth : Int) 
   }
   let count = fn() { Array::makei(list().map(fn(l) { l.items.length() }).unwrap_or(0), fn(i) { i }) }
   p.each(count, fn(i) { i }, fn(row, i) {
-    let i = @signals.untracked(fn() { i.get() })
+    let i = i.untracked()
     let item = fn() { list().bind(fn(l) { l.items.get(i) }) }
     // (as far under the item before as the larger of their margins: stack's)
     row
@@ -667,7 +667,7 @@ fn md_list_node(p : @view.View, md : MdNode, list : () -> MdList?, depth : Int) 
       let bs = fn() { item().map(fn(it) { it.blocks }).unwrap_or([]) }
       let count = fn() { Array::makei(bs().length(), fn(k) { k }) }
       blocks.each(count, fn(k) { k }, fn(slot, k) {
-        let k = @signals.untracked(fn() { k.get() })
+        let k = k.untracked()
         let b = fn() { bs().get(k) }
         slot
         .padding(By(fn() {
@@ -976,7 +976,7 @@ fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String,
       out
     }
     p.each(fn() { rows().mapi(fn(i, _) { i }) }, fn(i) { i }, fn(line, i) {
-      let i = @signals.untracked(fn() { i.get() })
+      let i = i.untracked()
       line.row(Is(true)).gap(Is(image_row_gap)) |> ignore
       let row = fn() { rows().get(i).unwrap_or([]) }
       let h = fn() {
@@ -985,7 +985,7 @@ fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String,
         if ratios <= 0.0 { 0.0 } else { dmin(image_row_most, (room() - image_row_gap * (all.length() - 1).to_double()) / ratios) }
       }
       line.each(fn() { row().map(fn(im) { im.0 }) }, fn(k) { k }, fn(cell, k) {
-        let k = @signals.untracked(fn() { k.get() })
+        let k = k.untracked()
         let at = fn() { row().search_by(fn(im) { im.0 == k }) }
         let width = fn() {
           match at() {

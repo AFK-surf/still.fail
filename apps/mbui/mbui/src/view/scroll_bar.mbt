@@ -242,7 +242,7 @@ fn View::scroll_bar(
         bar.woke(b, self, t)
         bar.near.set(true)
         bar.rested_at(b, self)
-      } else if @signals.untracked(fn() { bar.near.get() }) {
+      } else if bar.near.untracked() {
         bar.near.set(false)
         bar.near_left.set(t)
         bar.rested_at(b, self)

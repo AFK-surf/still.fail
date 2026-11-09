@@ -79,7 +79,7 @@ let max_fling : Double = 8.0
 /// The hand moved the list between frames (a finger dragging it, a wheel): what lays it out (Ctx::place_list) is told,
 /// so that the next frame lays it out again, nothing built for it.
 fn ListState::hand_moved(self : ListState) -> Unit {
-  self.hand_said.set(@signals.untracked(fn() { self.hand_said.get() }) + 1)
+  self.hand_said.set(self.hand_said.untracked() + 1)
 }
 
 ///|

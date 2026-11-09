@@ -66,6 +66,7 @@ pub fn[T] Computed::invalidate(Self[T]) -> Unit
 pub fn[T, U] Computed::lend(Self[T], Self[U]) -> Unit
 pub fn[T] Computed::peek(Self[T]) -> T?
 pub fn[T, U] Computed::reading(Self[T], () -> U) -> U
+pub fn[T] Computed::untracked(Self[T]) -> T
 pub fn[T] Computed::watched(Self[T]) -> Bool
 
 pub struct Keyed[K] {
@@ -91,6 +92,7 @@ pub fn[T] Signal::get(Self[T]) -> T
 pub fn[T] Signal::on_unwatched(Self[T], () -> Unit) -> Unit
 #callsite(autofill(loc))
 pub fn[T] Signal::set(Self[T], T, loc~ : SourceLoc) -> Unit
+pub fn[T] Signal::untracked(Self[T]) -> T
 pub fn[T] Signal::watched(Self[T]) -> Bool
 
 pub struct Watch {

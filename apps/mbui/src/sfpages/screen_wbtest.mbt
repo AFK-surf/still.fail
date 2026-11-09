@@ -150,7 +150,7 @@ fn screen_rig(
         },
         fn(k) { k },
         fn(row, k) {
-          let (station, screen) = @signals.untracked(fn() { k.get() })
+          let (station, screen) = k.untracked()
           row.owns(fn() { screen_left(src, station, screen) }) |> ignore
         },
       )

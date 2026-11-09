@@ -165,7 +165,7 @@ pub fn filter_menu(from : @sf.Beside, shown : String, go : (String) -> Unit) -> 
     along=End,
   )
   filter_menu_serial.val = @sf.last_presented()
-  filter_menu_opened.set(@signals.untracked(fn() { filter_menu_opened.get() }) + 1)
+  filter_menu_opened.set(filter_menu_opened.untracked() + 1)
 }
 
 ///|

@@ -25,7 +25,7 @@ fn[T : Eq] host_said(first : T, ask : () -> T, told? : () -> Unit = fn() { () })
 /// Asked of the host: its signal set where it changed (what read it told), and what else is told so.
 fn[T : Eq] HostSaid::arrive(self : HostSaid[T]) -> Unit {
   let now = (self.ask)()
-  if @signals.untracked(fn() { self.said.get() }) != now {
+  if self.said.untracked() != now {
     self.said.set(now)
     (self.told)()
   }

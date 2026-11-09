@@ -371,7 +371,7 @@ fn new_profile_plan_node(
             fn() { text(field(d(), "signIn"), "provider") },
             fn() { is_doing(core, ["login.code"], on()) },
             fn(code, sent) {
-              let id = @signals.untracked(fn() { n.login.get() })
+              let id = n.login.untracked()
               if id != "" {
                 @settings.act(
                   core,
@@ -384,7 +384,7 @@ fn new_profile_plan_node(
             },
             copied,
             in_station=(fn() { text(s(), "name") }, fn() { is_doing(core, ["login.browser"], on()) }, fn(what) {
-              let id = @signals.untracked(fn() { n.login.get() })
+              let id = n.login.untracked()
               if id != "" {
                 @settings.act(core, what, "login.browser", obj([("station", str(station)), ("id", str(id))]), then=fn(v) {
                   (core.open_screen)(station, text(Some(v), "screen"))

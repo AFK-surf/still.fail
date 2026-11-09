@@ -994,7 +994,7 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
     draft.source = Some(now)
     if pending == Some(now) {
       c.tell("env-ack/" + form, fn() {
-        if @signals.untracked(fn() { draft.pending.get() }) == Some(now) {
+        if draft.pending.untracked() == Some(now) {
           draft.pending.set(None)
           draft.sent = None
         }
@@ -1013,7 +1013,7 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
   // finishes. An older acknowledgement never clears or resends a newer value.
   if pending is Some(words) && d is Some(Object(_)) && !flag(d, "pending") && text(d, "text") != words && draft.sent != Some(words) {
     c.tell("env-edit/" + form, fn() {
-      if @signals.untracked(fn() { draft.pending.get() }) == Some(words) && draft.sent != Some(words) {
+      if draft.pending.untracked() == Some(words) && draft.sent != Some(words) {
         draft.sent = Some(words)
         station_env_edit(core, address, form, words)
       }
@@ -1068,7 +1068,7 @@ fn station_env_editor(c : @ui.Ctx, core : Core, address : String) -> Unit {
           @signals.start_batch()
           draft.pending.set(None)
           draft.sent = None
-          draft.reset.set(@signals.untracked(fn() { draft.reset.get() }) + 1)
+          draft.reset.set(draft.reset.untracked() + 1)
           @signals.end_batch()
           @settings.act(
             core,

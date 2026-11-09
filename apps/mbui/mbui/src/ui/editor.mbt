@@ -2025,7 +2025,7 @@ pub fn Field::set(self : Field, text : String, caret? : Int) -> Unit {
   st.blink_again = true
   // (told as the whole of it is so: its words, its caret, nothing composed)
   st.words_told()
-  st.written.set(@signals.untracked(fn() { st.written.get() }) + 1)
+  st.written.set(st.written.untracked() + 1)
   field_written()
 }
 
@@ -2052,7 +2052,7 @@ pub fn Field::pick(self : Field, from : Int, to : Int) -> Unit {
   st.blink_again = true
   // (what is composed shown at the caret where it is now: told so, Field::composed_said)
   st.words_told()
-  st.written.set(@signals.untracked(fn() { st.written.get() }) + 1)
+  st.written.set(st.written.untracked() + 1)
   field_written()
 }
 

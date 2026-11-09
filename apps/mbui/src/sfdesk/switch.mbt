@@ -32,7 +32,7 @@ fn page_switch_reset() -> Unit {
 fn page_switch_to(top : Page) -> Unit {
   let switched = match (page_switch.was, top) {
     (Some(NewChat), Chat(r)) =>
-      match @signals.untracked(fn() { fresh.became.get() }) {
+      match fresh.became.untracked() {
         Some(b) if b == r => false
         _ => true
       }

@@ -221,7 +221,7 @@ pub fn redraw_vector_pictures() -> Unit {
       e.px = 0
     }
     let said = image_said(src)
-    said.decodes.set(@signals.untracked(fn() { said.decodes.get() }) + 1)
+    said.decodes.set(said.decodes.untracked() + 1)
     sizes_told(src, said)
   }
   @signals.end_batch()
@@ -915,7 +915,7 @@ fn image_done(src : String, e : ImageEntry, at : Double) -> Unit {
   if e.state == 1 {
     said.size.set(Some((e.ow, e.oh)))
   }
-  said.decodes.set(@signals.untracked(fn() { said.decodes.get() }) + 1)
+  said.decodes.set(said.decodes.untracked() + 1)
   sizes_told(src, said)
   @signals.end_batch()
 }

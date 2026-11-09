@@ -655,7 +655,7 @@ pub fn viz_full_layer(c : @ui.Ctx, src : Source) -> Unit {
     Some(Ok((html, state))) => {
       // (while this one is open, built again or not)
       let native = @sf.native_over_up(v.name, alive=fn() {
-        match @signals.untracked(fn() { viz_full.get() }) {
+        match viz_full.untracked() {
           Some(now) => physical_equal(now, v)
           None => false
         }

@@ -2416,7 +2416,7 @@ fn measure_changed(said : Map[Int, @signals.Signal[Int]], key : Int, why : Strin
       if @ui.perf_counting() && s.watched() {
         measure_count(key, why)
       }
-      s.set(@signals.untracked(fn() { s.get() }) + 1)
+      s.set(s.untracked() + 1)
     }
     None => ()
   }

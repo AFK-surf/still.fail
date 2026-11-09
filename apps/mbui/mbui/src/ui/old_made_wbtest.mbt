@@ -12,7 +12,7 @@ test "an old view made as another old view is built, in a layer of the tree's: b
       old(h, fn(c) {
         c.text("页") |> ignore
         // (as a page builds: what it asks for presented, a layer opened)
-        if ask.get() && !@signals.untracked(fn() { shown.get() }) {
+        if ask.get() && !shown.untracked() {
           shown.set(true)
         }
       }).grow(Is(1.0))

@@ -603,7 +603,7 @@ fn profile_sign_in_node(
               // (the short words, the phone's: beside 登录 on a card's foot they fit a phone, the long ones ran past its
               // edge)
               fn() { if open.command.get() { @sf.t("web-pages.profiles.collapse") } else { @sf.t("android-settings.login.manualShort") } },
-              fn() { open.command.set(!@signals.untracked(fn() { open.command.get() })) },
+              fn() { open.command.set(!open.command.untracked()) },
               tone=Ghost,
             )
             |> ignore
@@ -1758,7 +1758,7 @@ fn profile_env_node(b : @view.View, core : Core, address : String, id : String, 
       @sf.link_row_node(
         g,
         fn() { if open.env.get() { @sf.t("web-pages.profiles.collapse") } else { @sf.t("android-settings.env.edit") } },
-        fn() { open.env.set(!@signals.untracked(fn() { open.env.get() })) },
+        fn() { open.env.set(!open.env.untracked()) },
         chevron=false,
         tail=fn(t) { doing_mark_node(t, busy, fn() { failed_of(core, ["profile.put"], on) }, tips?) },
       )
@@ -1807,12 +1807,12 @@ fn env_editor_node(k : @view.View, core : Core, address : String, id : String, p
       })
       |> ignore
       @sf.button_node(r, fn() { @sf.t("common.delete") }, fn() {
-        rows.set(@signals.untracked(fn() { rows.get() }).filter(fn(x) { !physical_equal(x, row) }))
+        rows.set(rows.untracked().filter(fn(x) { !physical_equal(x, row) }))
       }, tone=Ghost)
       |> ignore
     })
     @sf.button_node(t, fn() { @sf.t("web-pages.profiles.envAdd") }, fn() {
-      rows.set(@signals.untracked(fn() { rows.get() }) + [row_of("", "", "")])
+      rows.set(rows.untracked() + [row_of("", "", "")])
     }, tone=Ghost, icon="plus")
     |> ignore
   })
@@ -1820,7 +1820,7 @@ fn env_editor_node(k : @view.View, core : Core, address : String, id : String, p
   @sf.card_foot_node(k, at_end=true, fn(f) {
     @sf.button_node(f, fn() { @sf.t("common.save") }, fn() {
       // what changed: a name gone or renamed null, a secret left blank kept as it is
-      let now = @signals.untracked(fn() { rows.get() })
+      let now = rows.untracked()
       let patch : Map[String, Json] = {}
       let kept = now.map(fn(r) { r.key.text().trim(chars=" \t\n").to_owned() })
       for e in env {

@@ -61,7 +61,7 @@ fn made_stack() -> (Tester, Nav[String], MadeLog, Array[String]) {
                   .height(Is(Some(60.0)))
                   .words(By(fn() { page() + " " + taps.get().to_string() }), look={ ..@view.words_plain, size: 12.0 })
                   .presses(Is(true))
-                  .on_press(fn() { taps.set(@signals.untracked(fn() { taps.get() }) + 1) })
+                  .on_press(fn() { taps.set(taps.untracked() + 1) })
                   |> ignore
                 })
                 |> ignore

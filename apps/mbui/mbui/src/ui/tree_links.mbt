@@ -105,7 +105,7 @@ pub fn runs_links(
           // (a mouse's click let go on the link it went down on, however long held: as a tap)
           if pointing() is Mouse && !was_held.val {
             match piece_at(d.x, d.y) {
-              Some(p) if p.0 == @signals.untracked(fn() { held.get() }) => tap(href(p.0))
+              Some(p) if p.0 == held.untracked() => tap(href(p.0))
               _ => ()
             }
           }

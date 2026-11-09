@@ -227,7 +227,7 @@ pub fn Ctx::shows_until(self : Ctx, t : Double) -> Unit {
 /// read a moment come.
 fn clock_frame_start(t : Double) -> Unit {
   @signals.start_batch()
-  kept_clock.frame.set(@signals.untracked(fn() { kept_clock.frame.get() }) + 1)
+  kept_clock.frame.set(kept_clock.frame.untracked() + 1)
   let dues = kept_clock.dues
   let mut n = 0
   while n < dues.length() && dues[n].at <= t {

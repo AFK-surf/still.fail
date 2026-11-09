@@ -35,7 +35,7 @@ fn chat_page_reset() -> Unit {
 ///|
 /// The chat's services' popover opened or closed (its keys, ⌘K's 服务和后台任务).
 pub fn toggle_jobs_pop() -> Unit {
-  chat_own.jobs_open.set(!@signals.untracked(fn() { chat_own.jobs_open.get() }))
+  chat_own.jobs_open.set(!chat_own.jobs_open.untracked())
 }
 
 ///|
@@ -335,7 +335,7 @@ fn chat_bar(
             let archivable = view.archivable && !view.archived
             let archive = fn() { c.tell("chat/archive", fn() { archive_asked(src, w, r, view, chat) }) }
             // (a chat of a Slack or Feishu thread alone too: where it is and its agents, chat_info)
-            let info = fn() { chat_own.info_open.set(!@signals.untracked(fn() { chat_own.info_open.get() })) }
+            let info = fn() { chat_own.info_open.set(!chat_own.info_open.untracked()) }
             // its "…": what is done with it, the menu a row of the sidebar has (from the mark where it was chosen in the
             // system's bars, rail_native.mbt bar_anchor)
             let extra = @sfpages.chat_extra_items(src, r, chat)
@@ -701,7 +701,7 @@ fn jobs_trigger(c : @ui.Ctx, view : Json?) -> Unit {
 ///|
 /// The chat's services' popover opened or closed by its button.
 fn jobs_toggle() -> Unit {
-  chat_own.jobs_open.set(!@signals.untracked(fn() { chat_own.jobs_open.get() }))
+  chat_own.jobs_open.set(!chat_own.jobs_open.untracked())
 }
 
 ///|

@@ -9,7 +9,7 @@
 pub fn toasts_node(parent : @view.View, bottom : () -> Double) -> @view.View {
   // (the saying a toast is of, by its id)
   let of = fn(id : String) -> ToastSaid? {
-    let s = @signals.untracked(fn() { app.toast.get() })
+    let s = app.toast.untracked()
     if s.words != "" && "t\{s.n}" == id {
       Some(s)
     } else {

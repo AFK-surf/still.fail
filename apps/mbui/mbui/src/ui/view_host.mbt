@@ -393,7 +393,7 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
     }
   })
   view_app.val = Some(t)
-  view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
+  view_due.set(view_due.untracked() + 1)
   // (the tree in place of the one before, whole: whether the app takes back, as it has it, told the host now, as a change
   // to it is: what it takes it by said as it was made, before what tells of its changes was set)
   g().back_told_host()
@@ -732,7 +732,7 @@ fn view_brought(tree : @view.Tree, told? : Bool = true) -> Unit {
     return
   }
   if changed {
-    view_due.set(@signals.untracked(fn() { view_due.get() }) + 1)
+    view_due.set(view_due.untracked() + 1)
   } else if !tree.told_since() {
     view_due_at.val = ""
   }
@@ -796,7 +796,7 @@ fn old_place(tree : @view.Tree) -> Unit {
     match old_islands.iter().find_first(fn(o) { o.id == c.id }) {
       Some(o) => {
         let went = tree.went_over(c.id)
-        if @signals.untracked(fn() { o.went.get() }) != went {
+        if o.went.untracked() != went {
           o.went.set(went)
         }
       }
@@ -821,7 +821,7 @@ fn old_place(tree : @view.Tree) -> Unit {
     }
   }
   if !same {
-    old_placed_said.set(@signals.untracked(fn() { old_placed_said.get() }) + 1)
+    old_placed_said.set(old_placed_said.untracked() + 1)
   }
   if !old_placed.iter().any(fn(p) { tree.placed_by_clock(p.0) }) {
     old_place_seen.val = Some((tree, seen))
@@ -980,7 +980,7 @@ fn old_frame(c : Ctx) -> Unit {
             }
             o.room.val = (room_w, room_h)
             // (how big its node is placed, for its build to give way to (old_given): told as it changes, built again)
-            if o.gives && @signals.untracked(fn() { o.given.get() }) != Some((w, h)) {
+            if o.gives && o.given.untracked() != Some((w, h)) {
               o.given.set(Some((w, h)))
             }
             let put = fn() { owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) }) }
@@ -5058,14 +5058,14 @@ fn old_natural_after_layout(c : Ctx) -> Unit {
         // (one that gives way: as tall as what it holds is laid out with no bound on its height, not the height it was
         // given and laid out in)
         let h = if o.gives { c.asked_height(o.held_box) } else { c.nodes[o.held_box].fh }
-        if @signals.untracked(fn() { s.get() }) != Some(h) {
+        if s.untracked() != Some(h) {
           s.set(Some(h))
           c.read_changed("an old view's height, what it holds laid out")
         }
         match o.fits {
           Some((_, f)) => {
             let w = c.nodes[o.held_box].fw
-            if @signals.untracked(fn() { f.get() }) != Some(w) {
+            if f.untracked() != Some(w) {
               f.set(Some(w))
               c.read_changed("an old view's width, what it holds laid out")
             }
@@ -5605,7 +5605,7 @@ fn anchors_published(c : Ctx) -> Unit {
   for p in old_anchor_rects.to_array() {
     let (id, e) = p
     match c.rect_of(id) {
-      Some(r) if @signals.untracked(fn() { e.0.get() }) != r => e.0.set(r)
+      Some(r) if e.0.untracked() != r => e.0.set(r)
       _ => ()
     }
   }

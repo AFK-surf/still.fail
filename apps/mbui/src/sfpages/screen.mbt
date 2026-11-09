@@ -990,7 +990,7 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
       if moved {
         self.pointer_moved()
       } else {
-        self.said.set(@signals.untracked(fn() { self.said.get() }) + 1)
+        self.said.set(self.said.untracked() + 1)
       }
     }
     _ => ()
@@ -1162,7 +1162,7 @@ let clip_png_max : Int = 8 * 1024 * 1024
 
 ///|
 fn ScreenSess::toggle_audio(self : ScreenSess) -> Unit {
-  let muted = !@signals.untracked(fn() { self.audio_muted.get() })
+  let muted = !self.audio_muted.untracked()
   self.audio_muted.set(muted)
   if muted { match self.stream { Some(st) => st.audio(Bytes::new(0)); None => () } }
 }

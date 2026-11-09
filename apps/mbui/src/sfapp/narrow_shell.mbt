@@ -427,7 +427,7 @@ fn narrow_made_as(
               page_actions.set(Some((make, gen)))
             }
             p.owns(fn() {
-              if @signals.untracked(fn() { page_actions.get() }) is Some((_, g)) && g == gen {
+              if page_actions.untracked() is Some((_, g)) && g == gen {
                 page_actions.set(None)
               }
             })
@@ -655,7 +655,7 @@ fn place_comes_in(v : @view.View) -> Unit {
   v.reacts(fn() { w.said(); w.ends_at() }, fn(end) {
     (due.val)()
     due.val = if end >= 0.0 {
-      v.at_moment(end, fn() { ended.set(@signals.untracked(fn() { ended.get() }) + 1) })
+      v.at_moment(end, fn() { ended.set(ended.untracked() + 1) })
     } else {
       fn() {  }
     }

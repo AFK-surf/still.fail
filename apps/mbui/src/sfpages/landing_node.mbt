@@ -221,7 +221,7 @@ fn invitation_node(row : @view.View, src : Source, p : () -> (Json?, Json)) -> U
       b,
       fn() { @sf.t("android-misc.invite.join") },
       fn() {
-        if @signals.untracked(fn() { landing.accepting.get() }) == "" {
+        if landing.accepting.untracked() == "" {
           let (account, _) = @signals.untracked(p)
           accept_invitation(src, account, @signals.untracked(id))
         }

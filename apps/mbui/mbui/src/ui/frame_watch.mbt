@@ -376,7 +376,7 @@ pub fn Ctx::now_of(self : Ctx, who : Mover, loc~ : SourceLoc) -> Double {
 ///|
 /// What came from outside and is no signal: what each frame's build reads (outside_said) built again.
 fn outside_counted() -> Unit {
-  outside_said.set(@signals.untracked(fn() { outside_said.get() }) + 1)
+  outside_said.set(outside_said.untracked() + 1)
 }
 
 ///|
@@ -913,7 +913,7 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // takes one is built anew, its rows too: what took one changes as it is built what built before it read)
   // (the pointer's presses among them: hand_pressed)
   let events = @signals.untracked(fn() { hand.events.get() + hand.presses.get() })
-  let typed = @signals.untracked(fn() { hand.typed.get() })
+  let typed = hand.typed.untracked()
   let evented = events != events_seen.val || typed != typed_seen.val
   // (what was typed into a field of an old view, and nothing else of the hand's: a part kept through it, built anew
   // for anything else that came, Ctx::kept_part's `typed_stays`)

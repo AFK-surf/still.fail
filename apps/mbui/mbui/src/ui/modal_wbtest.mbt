@@ -146,7 +146,7 @@ test "modal layers drawn in another order, no frame between: the one drawn last 
   let t = Tester::new(fn(_c) {  }, platform=0)
   set_view_app(fn(root) {
     root.each(fn() { order.get() }, fn(k) { k }, fn(l, k) {
-      let name = @signals.untracked(fn() { k.get() })
+      let name = k.untracked()
       modal_layer(l, name, if name == "A" { 0.0 } else { 100.0 }, pressed)
     })
   })
@@ -403,7 +403,7 @@ test "rows of modal layers, one more put before the topmost, no frame between: t
   let t = Tester::new(fn(_c) {  }, platform=0)
   set_view_app(fn(root) {
     root.each(fn() { order.get() }, fn(k) { k }, fn(l, k) {
-      let name = @signals.untracked(fn() { k.get() })
+      let name = k.untracked()
       modal_layer(l, name, if name == "A" { 0.0 } else { 100.0 }, pressed)
     })
   })

@@ -306,7 +306,7 @@ fn lists_band_node(
         @sf.style_node(t, fn() { todo_box })
         let n = fn() { workspace().map(fn(w) { todo_all(src, w) }).unwrap_or(0) }
         @sf.band_row_node(t, fn() { wide.attention_open.get() }, fn() { @sf.t("web-main.attention.entry") }, fn() {
-          attention_set(!@signals.untracked(fn() { wide.attention_open.get() }))
+          attention_set(!wide.attention_open.untracked())
         }, list_at, fn(r) {
           @sf.icon_node(r, "bell", @sf.theme().chat_list.band_icon, By(fn() { @sf.theme().p.muted })) |> ignore
           @sf.nav_words_node(r, fn() { @sf.t("web-main.attention.entry") })

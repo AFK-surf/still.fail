@@ -75,7 +75,7 @@ pub fn shortcuts_node(
   }
   // (the next key press, while one records: none of it anything else's (pressed, window_zoom's stand aside))
   v.on_key(fn(k) {
-    let recording = @signals.untracked(fn() { keys_recording.get() })
+    let recording = keys_recording.untracked()
     if recording == "" || keys_recorder.val != me {
       return false
     }
@@ -131,7 +131,7 @@ pub fn shortcuts_node(
               r,
               a,
             ) {
-              let action = text(Some(@signals.untracked(fn() { a.get() })), "action")
+              let action = text(Some(a.untracked()), "action")
               @sf.keys_row_node(
                 r,
                 fn() { text(Some(a.get()), "name") },
@@ -139,7 +139,7 @@ pub fn shortcuts_node(
                 fn() { strings(Some(a.get()), "keys").length() == 0 },
                 fn() { keys_recording.get() == action && keys_recorder.val == me },
                 fn() {
-                  if @signals.untracked(fn() { keys_recording.get() }) == action && keys_recorder.val == me {
+                  if keys_recording.untracked() == action && keys_recorder.val == me {
                     stop()
                   } else {
                     record(action)

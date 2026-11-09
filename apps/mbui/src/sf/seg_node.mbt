@@ -455,7 +455,7 @@ pub fn seg_fill_node(
         let cover : @signals.Signal[(Array[(Int, Double)], Int)] = @signals.signal(([(first, 1.0)], first))
         let way = EdgeWay::new(1.0)
         strip.reacts(at, fn(k) {
-          let (from, to) = @signals.untracked(fn() { cover.get() })
+          let (from, to) = cover.untracked()
           if k != to {
             let p = way.way.value_at(strip.cause_at())
             cover.set((@ui.cover_set_out(from, to, p), k))
@@ -569,7 +569,7 @@ pub fn seg_fill_node(
             o.reacts(fn() { o.pressed() && @ui.pointing() is Finger }, fn(down) {
               if down {
                 fingered.set(k)
-              } else if @signals.untracked(fn() { fingered.get() }) == k {
+              } else if fingered.untracked() == k {
                 fingered.set(-1)
               }
             })

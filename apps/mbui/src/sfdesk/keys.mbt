@@ -48,7 +48,7 @@ pub fn frame_actions(v : @view.View, src : Source) -> Unit {
     true
   })
   act("shortcuts", fn(_) {
-    wide.keys_open.set(!@signals.untracked(fn() { wide.keys_open.get() }))
+    wide.keys_open.set(!wide.keys_open.untracked())
     true
   })
   // ⌘[ / ⌘] back and forward (history.forward): back as the system's back is, whose it is deciding (@ui.go_back; the
@@ -93,7 +93,7 @@ pub fn frame_actions(v : @view.View, src : Source) -> Unit {
 /// else closed), ⌘/, 待处理's panel, a row's title renamed (what is presented over the frame has Escape before it:
 /// overlay.mbt); the keyboard let go (`blur`) where what had it closes. Whether it took it.
 fn frame_escape(blur : () -> Unit) -> Bool {
-  let open = fn(s : @signals.Signal[Bool]) { @signals.untracked(fn() { s.get() }) }
+  let open = fn(s : @signals.Signal[Bool]) { s.untracked() }
   if open(wide.editing) {
     wide.editing.set(false)
   } else if switcher_escape(blur) {

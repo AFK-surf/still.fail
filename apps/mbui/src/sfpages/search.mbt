@@ -45,7 +45,7 @@ let search : Search = {
 ///|
 /// The search opened, gone back or closed: what reads it told.
 fn search_told() -> Unit {
-  search.said.set(@signals.untracked(fn() { search.said.get() }) + 1)
+  search.said.set(search.said.untracked() + 1)
 }
 
 ///|

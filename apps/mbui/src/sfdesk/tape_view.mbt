@@ -346,7 +346,7 @@ fn tape_put(to : TapeTo) -> Unit {
 ///|
 /// What is committed of the tape's move told (tape_moves_from, tape_put).
 fn tape_said() -> Unit {
-  tape_goes.said.set(@signals.untracked(fn() { tape_goes.said.get() }) + 1)
+  tape_goes.said.set(tape_goes.said.untracked() + 1)
 }
 
 ///|
@@ -714,7 +714,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
         Chat(r) | History(r, _, _) => chat_key(r)
         // a chat's detail asked as a page, on its way to its chat's side panel (main_page): still that chat, not another
         // come (its panel, opening, comes over)
-        p if laid_beside(p) => @signals.untracked(fn() { wide.tape_chat.get() })
+        p if laid_beside(p) => wide.tape_chat.untracked()
         _ => ""
       }
       let open = match (tape_goes.panel_of)() {

@@ -46,7 +46,7 @@ pub fn appearance_node(
     fn() { if wide() { ["settings"] } else { keys() } },
     fn(b, key) {
       if key == "settings" {
-        @sf.group_node(b, fn(g) { g.each(keys, fn(k) { k }, fn(r, k) { appearance_setting(r, core, @signals.untracked(fn() { k.get() })) }) })
+        @sf.group_node(b, fn(g) { g.each(keys, fn(k) { k }, fn(r, k) { appearance_setting(r, core, k.untracked()) }) })
       } else {
         appearance_setting(b, core, key)
       }

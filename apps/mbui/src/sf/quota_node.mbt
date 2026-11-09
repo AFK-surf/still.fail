@@ -106,7 +106,7 @@ pub fn quota_chips_node(
       style_node(r, fn() { quota_chips_row.then(@ui.style(gap=room(gap))) }, in_row=true)
       r.shrink(Is(0.0)) |> ignore
       r.each(fn() { Array::makei(windows().length(), fn(i) { i }) }, fn(i) { i }, fn(c, i) {
-        let k = @signals.untracked(fn() { i.get() })
+        let k = i.untracked()
         let w = fn() { windows().get(k) }
         fill_chip_node(
           c,
@@ -149,7 +149,7 @@ pub fn dials_node(
       r.wraps(Is(Some(dl_lines))) |> ignore
     }
     r.each(fn() { Array::makei(dials().length(), fn(i) { i }) }, fn(i) { i }, fn(d, i) {
-      dial(d, @signals.untracked(fn() { i.get() }), short)
+      dial(d, i.untracked(), short)
     })
   }
   parent.box(made_for=loc, fn(b) {
@@ -157,7 +157,7 @@ pub fn dials_node(
       style_node(b, fn() { dl_rows })
       // (a line a `columns` of them, the last one's room kept where it has fewer)
       b.each(fn() { Array::makei((dials().length() + columns - 1) / columns, fn(k) { k }) }, fn(k) { k }, fn(r, k) {
-        let start = @signals.untracked(fn() { k.get() }) * columns
+        let start = k.untracked() * columns
         style_node(r, fn() { dl_row_narrow })
         for i in start..<(start + columns) {
           r.pick(fn() { i < dials().length() }, fn(d, there) {

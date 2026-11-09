@@ -215,7 +215,7 @@ pub fn Tree::looks_of(self : Tree, id : NodeId) -> Array[String] {
 /// here, -1 none) and the node of the root's it is in (its layer: two in different ones never meet).
 pub fn Tree::press_boxes(self : Tree) -> Array[(NodeId, (Double, Double, Double, Double), Int, Int)] {
   let found : Array[(NodeId, (Double, Double, Double, Double))] = []
-  let (ww, wh) = @signals.untracked(fn() { self.room.get() })
+  let (ww, wh) = self.room.untracked()
   self.each_drawn_scaled(fn(c, cx, cy, alpha, s) {
     let n = self.nodes[c.id.at]
     if alpha <= 0.01 || n.hosted || (n.on_press is None && n.on_drag is None) || self.pressless_at(c.id.at) {

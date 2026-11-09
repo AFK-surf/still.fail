@@ -6,7 +6,7 @@ fn inputs_differ(t : Tree) -> Array[String] {
   for i, n in t.nodes {
     match n.input_cell {
       Some(s) if n.live => {
-        let told = @signals.untracked(fn() { s.get() })
+        let told = s.untracked()
         let now = !t.pressless_at(i)
         if told != now {
           out.push("node \{i}: told \{told}, takes \{now}")

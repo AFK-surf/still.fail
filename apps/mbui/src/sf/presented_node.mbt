@@ -79,7 +79,7 @@ pub fn presented_nodes(root : @view.View) -> Unit {
     },
     fn(serial) { serial },
     fn(row, item) {
-      let serial = @signals.untracked(fn() { item.get() })
+      let serial = item.untracked()
       guard presented_now.search_by(fn(q) { q.serial == serial }) is Some(i) else { return }
       let p = presented_now[i]
       // (the root's node it is in at its place in the window's stack of layers: its serial, as the host's presented are)

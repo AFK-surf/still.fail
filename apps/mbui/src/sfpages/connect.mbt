@@ -547,7 +547,7 @@ fn cd_sessions_node(b : @view.View, core : Core, station : String, item : () -> 
             }
           },
           fn() {
-            let now = !@signals.untracked(fn() { all.get() })
+            let now = !all.untracked()
             cd_all_sessions[me] = now
             all.set(now)
           },

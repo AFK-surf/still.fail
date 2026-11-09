@@ -758,7 +758,7 @@ pub fn settings_home_node(
       block.show(fn() { heading() != "" }, fn(h) { @sf.heading_node(h, heading) })
       @sf.group_node(block, fn(g) {
         g.each(fn() { card_of(id).map(fn(c) { c.2 }).unwrap_or([]) }, fn(k) { k }, fn(rb, key) {
-          let key = @signals.untracked(fn() { key.get() })
+          let key = key.untracked()
           settings_row_node(rb, core, here, key, row_of, open, stint)
         })
       })

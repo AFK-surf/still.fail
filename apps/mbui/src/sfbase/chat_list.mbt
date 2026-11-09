@@ -936,7 +936,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
 ///|
 /// One came to linger or went: told to what reads which do (with_lingering).
 fn linger_told(rd : Reading) -> Unit {
-  rd.linger_said.set(@signals.untracked(fn() { rd.linger_said.get() }) + 1)
+  rd.linger_said.set(rd.linger_said.untracked() + 1)
 }
 
 ///|
@@ -1386,7 +1386,7 @@ pub fn row_keys(
         // (the row goes on by the key it was sent as)
         came = "o:" + l.row.id
         rd.sent_as[k] = came
-        rd.sent_as_told.set(@signals.untracked(fn() { rd.sent_as_told.get() }) + 1)
+        rd.sent_as_told.set(rd.sent_as_told.untracked() + 1)
         all_keys[i] = came
         taken[k] = true
         break

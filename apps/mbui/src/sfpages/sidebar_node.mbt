@@ -78,7 +78,7 @@ pub fn chats_lists_node(
       }
     })
     // (the filter's menu opened: the three lists read and made by the time one is picked, kept from then)
-    let opened_before = @signals.untracked(fn() { filter_menu_opened.get() })
+    let opened_before = filter_menu_opened.untracked()
     p.reacts(fn() { filter_menu_opened.get() }, fn(n) {
       if n > opened_before {
         for k in 0..<list_filters.length() {
@@ -181,7 +181,7 @@ fn chats_pane_node(
       motion.said(v, shown, by_name, @signals.untracked(current) && @signals.untracked(frame.watched))
       ordered.set(shown)
       rows.set(by_name)
-      revision.set(@signals.untracked(fn() { revision.get() }) + 1)
+      revision.set(revision.untracked() + 1)
     },
   )
   let days = fn() { ordered.get() }
@@ -643,10 +643,10 @@ fn RowsMotion::said(
         self.moving.remove(k)
         self.going.remove(k)
       }
-      self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
+      self.told.set(self.told.untracked() + 1)
     })
     |> ignore
-    self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
+    self.told.set(self.told.untracked() + 1)
   }
   self.had = self.had || !lines.is_empty()
   self.last = lines

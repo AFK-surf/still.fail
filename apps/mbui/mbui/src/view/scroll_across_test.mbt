@@ -35,7 +35,7 @@ fn across_case(bar? : Bool = false, now? : Ref[Double] = Ref(0.0)) -> AcrossCase
               rh.row(Is(true)) |> ignore
               rh.each(at_once=true, fn() { Array::makei(cells.get(), fn(i) { i }) }, fn(i) { i }, fn(c, i) {
                 c.width(Is(Some(60.0))).height(Is(Some(40.0))).ground(Is(0x101010FFL)) |> ignore
-                if @signals.untracked(fn() { i.get() }) == 9 {
+                if i.untracked() == 9 {
                   c.focusable(Is(true)) |> ignore
                   focus.val = Some(c.id())
                 }

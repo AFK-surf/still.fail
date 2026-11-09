@@ -152,7 +152,7 @@ pub fn history_settled() -> Unit {
   }
   history_acting.val = false
   // (where it went is noted as the change it is in is committed: history_note, an entry there or none)
-  history_ended.set(@signals.untracked(fn() { history_ended.get() }) + 1)
+  history_ended.set(history_ended.untracked() + 1)
 }
 
 ///|

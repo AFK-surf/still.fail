@@ -143,7 +143,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   // for before it was here saved as its whole comes; each once (Viewer::ask_save)
   n.reacts(fn() { (vw.asked_told.get(), vw.bytes.get() is Some(_)) }, fn(_) {
     download_told(src, vw)
-    if vw.save_after && @signals.untracked(fn() { vw.bytes.get() }) is Some(_) {
+    if vw.save_after && vw.bytes.untracked() is Some(_) {
       vw.save_after = false
       vw.ask_save(@ui.current())
     }
@@ -1314,7 +1314,7 @@ fn image_tools(
       ink,
       corner,
       fn() {
-        match @signals.untracked(fn() { vw.bytes.get() }) {
+        match vw.bytes.untracked() {
           Some(b) => {
             @ui.current().copy_image(b)
             vw.copied += 1
@@ -1596,7 +1596,7 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
   // 下载 asked on it (Viewer::ask_save): the core told at that change, on by itself whatever becomes of this viewer;
   // 安装 asked before its bytes came, done as they come (Viewer::ask_install)
   n.reacts(fn() { (vw.asked_told.get(), vw.bytes.get() is Some(_)) }, fn(_) {
-    if vw.install_after && @signals.untracked(fn() { vw.bytes.get() }) is Some(_) {
+    if vw.install_after && vw.bytes.untracked() is Some(_) {
       vw.install_after = false
       vw.ask_install()
     }

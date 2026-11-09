@@ -93,10 +93,10 @@ fn stage_node(
           stage_gives.val = was.1
           // (as wide as it is drawn: told as that changes, the column laid out again)
           let (w, lw) = (stage_drawn_w.val, stage_laid_w.val)
-          if @signals.untracked(fn() { body_w.get() }) != Some(w) {
+          if body_w.untracked() != Some(w) {
             body_w.set(Some(w))
           }
-          if @signals.untracked(fn() { laid_w.get() }) != Some(lw) {
+          if laid_w.untracked() != Some(lw) {
             laid_w.set(Some(lw))
           }
           words_look(c, held)

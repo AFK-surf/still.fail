@@ -62,7 +62,7 @@ pub fn sign_in_now() -> SignIn {
 ///|
 /// `state` changed: told.
 fn told() -> Unit {
-  changed.set(@signals.untracked(fn() { changed.get() }) + 1)
+  changed.set(changed.untracked() + 1)
 }
 
 ///|

@@ -102,7 +102,7 @@ pub fn native_capsule_h() -> Double? {
 /// Whether it is another than the last frame's (what was kept of the cards, drawn cut by their corners, is drawn anew).
 /// `keyboard`: how far it is up; the corner it left, kept for what stays as it was under it (pane_foot_rest).
 pub fn native_foot_set(foot : Double, keyboard? : Double = 0.0) -> Bool {
-  let was = @signals.untracked(fn() { native_foot_made.get() })
+  let was = native_foot_made.untracked()
   let made = match (native_capsule_h(), @ui.system_nav_action()) {
     (Some(h), Some((_, y, _, _))) => {
       let d = foot - (y + h)

@@ -1691,7 +1691,7 @@ pub fn Tree::resident_read(self : Tree) -> Bool {
   }
   // (as last said, where nothing it reads changed since: the order, what is drawn, what is left out, the readers, the
   // step)
-  let now = @signals.untracked(fn() { self.resident.get() })
+  let now = self.resident.untracked()
   let (dr, hits, step, rr, said) = self.resident_said
   if !self.order_due &&
     !self.outs_changed &&
@@ -1797,7 +1797,7 @@ fn Tree::resident_found(self : Tree, now : Double) -> Bool {
 ///|
 /// The resident clock's next step after the moment drawn now (Tree::drawn_at's).
 pub fn Tree::resident_next(self : Tree) -> Double {
-  resident_of(@signals.untracked(fn() { self.clock.get() })) + resident_step_ms
+  resident_of(self.clock.untracked()) + resident_step_ms
 }
 
 ///|
@@ -1850,7 +1850,7 @@ pub fn View::drawn_past(self : View, t : Double) -> Bool {
   let cell = match self.tree.drawn_marks.iter().find_first(fn(m) { m.0 == id && m.1 == t }) {
     Some(m) => m.2
     None => {
-      let now = @signals.untracked(fn() { self.tree.clock.get() })
+      let now = self.tree.clock.untracked()
       let c = @signals.signal(now >= t, same=fn(a, b) { a == b })
       self.tree.drawn_marks.push((id, t, c))
       c
@@ -3561,7 +3561,7 @@ pub fn View::moved_by(
     By(fn() {
       let (w, h) = self.laid_size_told().unwrap_or((0.0, 0.0))
       let t = if self.drawn_past(ends(w, h)) {
-        @signals.untracked(fn() { tree.clock.get() })
+        tree.clock.untracked()
       } else {
         tree.clock.get()
       }
@@ -4066,7 +4066,7 @@ fn Tree::measured_now(self : Tree) -> Unit {
   // (asked in a change holding its boxes: those put first)
   self.boxes_flushed()
   let at = self.logic_at()
-  let shown = @signals.untracked(fn() { self.clock.get() })
+  let shown = self.clock.untracked()
   // (its clock set to the moment and back: what that tells is no change of its own to settle after)
   let was_standing = self.standing
   self.standing = true
@@ -4408,7 +4408,7 @@ fn Tree::top_last(self : Tree) -> Unit {
 /// What the root holds put at another place in the window's stack of layers: told to what read where they are
 /// (Tree::places_read).
 fn Tree::places_told(self : Tree) -> Unit {
-  self.places.set(@signals.untracked(fn() { self.places.get() }) + 1)
+  self.places.set(self.places.untracked() + 1)
 }
 
 ///|
@@ -5512,7 +5512,7 @@ fn Tree::takes_off(self : Tree, n : Node) -> Unit {
   n.takes_units = []
   self.hits = self.hits + 1
   match n.takes_ver {
-    Some(v) => v.set(@signals.untracked(fn() { v.get() }) + 1)
+    Some(v) => v.set(v.untracked() + 1)
     None => ()
   }
 }
@@ -5614,7 +5614,7 @@ fn Tree::laid_now(self : Tree) -> Unit {
     return
   }
   let at = self.logic_at()
-  let shown = @signals.untracked(fn() { self.clock.get() })
+  let shown = self.clock.untracked()
   // (its clock set to the moment and back: what that tells is no change of its own to settle after)
   let was_standing = self.standing
   self.standing = true
@@ -6805,7 +6805,7 @@ fn Tree::cause_now(self : Tree) -> Double {
 /// What reads how far node `n` is gone told (it started or stopped leaving or coming back).
 fn told_going(n : Node) -> Unit {
   match n.going {
-    Some(s) => s.set(@signals.untracked(fn() { s.get() }) + 1)
+    Some(s) => s.set(s.untracked() + 1)
     None => ()
   }
 }
@@ -6961,7 +6961,7 @@ fn View::comes(self : View, v : View, from : Double, to : Double) -> Bool {
       s
     }
   }
-  said.set(@signals.untracked(fn() { said.get() }) + 1)
+  said.set(said.untracked() + 1)
   tree.layout_marked_at(v.at)
   tree.look_marked_at(v.at)
   if to >= 1.0 {
@@ -7452,7 +7452,7 @@ fn Tree::settle_now(self : Tree, at : Double) -> Unit {
   }
   self.standing = true
   self.work.settles = self.work.settles + 1
-  let shown = @signals.untracked(fn() { self.clock.get() })
+  let shown = self.clock.untracked()
   @signals.untracked(fn() {
     self.clock_to(at)
     self.beat.set(at)
@@ -7621,7 +7621,7 @@ fn Tree::advance_logic(self : Tree, upto : Double) -> Unit {
 
 ///|
 fn Tree::advance_clock(self : Tree, upto : Double) -> Unit {
-  if !self.advancing && upto > @signals.untracked(fn() { self.clock.get() }) {
+  if !self.advancing && upto > self.clock.untracked() {
     self.at(upto)
   }
 }
@@ -7786,7 +7786,7 @@ pub fn Tree::frame(self : Tree, w : Double, h : Double, now? : Double) -> Bool {
   // when the frame is to be shown, Tree::at); none given, the clock's)
   let upto = match now {
     Some(n) => n
-    None => @signals.untracked(fn() { self.clock.get() })
+    None => self.clock.untracked()
   }
   self.changed.clear()
   self.composed.clear()
@@ -8016,7 +8016,7 @@ fn Tree::sizes_told(self : Tree) -> Bool {
       match n.size_cell {
         Some(cell) => {
           let size = Some((n.flex.width, n.flex.height))
-          if @signals.untracked(fn() { cell.get() }) != size {
+          if cell.untracked() != size {
             told.val = true
             cell.set(size)
           }
@@ -8162,7 +8162,7 @@ fn Tree::outs_told(self : Tree) -> Unit {
     }
   }
   self.modals_marked()
-  self.outs_said.set(@signals.untracked(fn() { self.outs_said.get() }) + 1)
+  self.outs_said.set(self.outs_said.untracked() + 1)
   @signals.end_batch()
 }
 
@@ -10416,7 +10416,7 @@ fn Tree::withins_told(self : Tree) -> Bool {
     match n.within_cell {
       Some(cell) => {
         let now = self.within(at)
-        if @signals.untracked(fn() { cell.get() }) != now {
+        if cell.untracked() != now {
           changed = true
           cell.set(now)
         }
@@ -10426,7 +10426,7 @@ fn Tree::withins_told(self : Tree) -> Bool {
     match n.piece_cell {
       Some((cell, piece)) => {
         let now = self.piece_in(at, piece)
-        if @signals.untracked(fn() { cell.get() }) != now {
+        if cell.untracked() != now {
           changed = true
           cell.set(now)
         }
@@ -10526,7 +10526,7 @@ fn Tree::bars_near_told(self : Tree) -> Bool {
     match n.bar_near_cell {
       Some(cell) if n.live && n.gen == gen => {
         let now = at == Some(i)
-        if @signals.untracked(fn() { cell.get() }) != now {
+        if cell.untracked() != now {
           changed = true
           cell.set(now)
         }

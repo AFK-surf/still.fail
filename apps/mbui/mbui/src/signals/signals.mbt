@@ -826,6 +826,24 @@ pub fn[T] untracked(f : () -> T) -> T {
 }
 
 ///|
+/// The signal's value as `untracked(fn() { s.get() })` reads it, with no function made to read it in.
+pub fn[T] Signal::untracked(self : Signal[T]) -> T {
+  let prev_sub = set_active_sub(None)
+  let v = self.get()
+  run.active_sub = prev_sub
+  v
+}
+
+///|
+/// The computed's value as `untracked(fn() { c.get() })` reads it, with no function made to read it in.
+pub fn[T] Computed::untracked(self : Computed[T]) -> T {
+  let prev_sub = set_active_sub(None)
+  let v = self.get()
+  run.active_sub = prev_sub
+  v
+}
+
+///|
 /// The computed worked out again as it is next read, whatever it read (what reads it told, as a signal set tells it):
 /// for one built again for what is no signal (a part kept, Ctx::kept_part: its key, the pointer over it).
 pub fn[T] Computed::invalidate(self : Computed[T]) -> Unit {

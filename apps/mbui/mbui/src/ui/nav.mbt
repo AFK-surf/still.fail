@@ -238,7 +238,7 @@ fn[P] Nav::entry_left(self : Nav[P], entry : NavPage[P]) -> Unit {
 ///|
 /// Its pages changed: what reads them told.
 fn[P] Nav::told(self : Nav[P]) -> Unit {
-  self.said.set(@signals.untracked(fn() { self.said.get() }) + 1)
+  self.said.set(self.said.untracked() + 1)
 }
 
 ///|
@@ -755,7 +755,7 @@ pub fn[P] Nav::replace_above(self : Nav[P], keep : Int, pages : Array[P]) -> Uni
 /// (stacks_said: a part kept as its nodes that holds one, built again).
 fn wake() -> Unit {
   if !building.val {
-    stacks_said.set(@signals.untracked(fn() { stacks_said.get() }) + 1)
+    stacks_said.set(stacks_said.untracked() + 1)
   }
   g().read_changed("a stack changed")
 }

@@ -96,7 +96,7 @@ pub(all) struct Emits {
 /// It changed (a message come to wait, a pose on to the next, one let go, where it flies from or lands): what read it
 /// is told.
 pub fn Emits::changed(self : Emits) -> Unit {
-  self.said.set(@signals.untracked(fn() { self.said.get() }) + 1)
+  self.said.set(self.said.untracked() + 1)
 }
 
 ///|

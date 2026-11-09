@@ -82,7 +82,7 @@ pub fn Room::tall(self : Room, v : View) -> Double {
   self.measured.push((v, cell))
   // (first asked as it is made in the layout: measured there; else as it is next laid out)
   if self.tree.rooming == self.at {
-    self.measure_one(v, cell, @signals.untracked(fn() { self.wide.get() }))
+    self.measure_one(v, cell, self.wide.untracked())
     return cell.get()
   }
   self.tree.layout_marked_at(self.at)
@@ -108,9 +108,9 @@ fn Room::measure(self : Room, w : Double) -> Unit {
     let (v, cell) = m
     if v.alive() {
       let h = self.height_at(v, w)
-      if h != @signals.untracked(fn() { cell.get() }) {
+      if h != cell.untracked() {
         abort(
-          "Room::tall: what reads how tall a node made by its room comes to changed that (\{h} for \{@signals.untracked(fn() { cell.get() })}): say it outside what is measured",
+          "Room::tall: what reads how tall a node made by its room comes to changed that (\{h} for \{cell.untracked()}): say it outside what is measured",
         )
       }
     }
