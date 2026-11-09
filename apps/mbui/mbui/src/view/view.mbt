@@ -600,6 +600,10 @@ pub struct Tree {
   pulls_marked : Array[Int]
   mut layout_due : Bool
   mut order_due : Bool
+  /// where what is held changed since the order was last worked out (Tree::order_marked_in): the order made again from
+  /// what holds each there, the rest of it as it was; none, or `order_whole`, all of it (Tree::order_again)
+  order_in : Array[Int]
+  mut order_whole : Bool
   mut due : Bool
   /// the host is being told that a frame is due (Tree::marked)
   mut telling_due : Bool
@@ -897,6 +901,8 @@ pub fn Tree::new(
     logic: start,
     layout_due: true,
     order_due: true,
+    order_in: [],
+    order_whole: true,
     due: true,
     telling_due: false,
     due_frame_taken: false,
@@ -1304,7 +1310,12 @@ fn Tree::made(self : Tree, parent : Int) -> View {
   n.stop = Some(@signals.effect_scope(fn() { n.owner = @signals.active_sub() }))
   @signals.set_active_sub(was) |> ignore
   @signals.set_owner(was_owner) |> ignore
-  self.order_marked()
+  // (an index given back and made again: in no order yet, of no top, whatever the one let go of there was)
+  if at < self.order_of.length() {
+    self.order_of[at] = -1
+    self.tops[at] = -2
+  }
+  self.order_marked_in(parent)
   self.handle(at)
 }
 
@@ -1612,6 +1623,8 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.order_end.clear()
   self.order_of.clear()
   self.tops.clear()
+  self.order_in.clear()
+  self.order_whole = true
   // (a walk going on keeps what it walks with till it ends; none kept for the next, its room given back with it)
   self.walks = []
   self.changed.clear()
@@ -1838,9 +1851,115 @@ fn Tree::place_marked_at(self : Tree, at : Int) -> Unit {
 ///|
 /// The order the nodes are drawn in to be made again (one made, let go or moved among its siblings).
 fn Tree::order_marked(self : Tree) -> Unit {
+  self.order_whole = true
   self.order_due = true
   self.hits = self.hits + 1
   self.marked()
+}
+
+///|
+/// The order to be made again where node `at` holds something otherwise (one made in it, let go of, moved among what
+/// it holds): from what holds it there (Tree::order_again), the rest as it is.
+fn Tree::order_marked_in(self : Tree, at : Int) -> Unit {
+  self.order_in.push(at)
+  self.order_due = true
+  self.hits = self.hits + 1
+  self.marked()
+}
+
+///|
+/// The order the nodes are drawn in made again (Tree::ordered): from each in it that holds what changed in it
+/// (Tree::order_marked_in), what it holds put in its place and the rest moved past it, all of it where the root's
+/// changed, where that is not known, or where more than a few did.
+fn Tree::order_again(self : Tree) -> Unit {
+  let n = self.nodes.length()
+  while self.order_of.length() < n {
+    self.order_of.push(-1)
+    self.tops.push(-2)
+  }
+  let from = if self.order_whole || self.order.is_empty() { None } else { self.order_holders() }
+  self.order_whole = false
+  self.order_in.clear()
+  match from {
+    Some(hs) => for h in hs {
+      self.order_from(h)
+    }
+    None => {
+      self.order.clear()
+      self.order_holder.clear()
+      self.order_end.clear()
+      for i in 0..<n {
+        self.tops[i] = -2
+        self.order_of[i] = -1
+      }
+      self.ordered(0, -1, -1)
+    }
+  }
+}
+
+///|
+/// What holds each change since the order was last worked out (Tree::order_in) there: the first of it in the order,
+/// none held by another of them; none where that is the root's or more than a few (all of it again).
+fn Tree::order_holders(self : Tree) -> Array[Int]? {
+  let hs : Array[Int] = []
+  for r in self.order_in {
+    // (let go of since: its going said by what held it as it went)
+    guard r >= 0 && r < self.nodes.length() && self.nodes[r].live else { continue }
+    let mut h = r
+    while h > 0 && (self.nodes[h].slot || self.order_of[h] < 0) {
+      h = self.nodes[h].parent
+    }
+    // (held by nothing: in no order)
+    guard h >= 0 else { continue }
+    guard h > 0 && self.order_of[h] < self.order.length() && self.order[self.order_of[h]] == h else { return None }
+    if !hs.contains(h) {
+      hs.push(h)
+    }
+  }
+  guard hs.length() <= 4 else { return None }
+  let firsts = hs.filter(fn(h) {
+    let i = self.order_of[h]
+    !hs.iter().any(fn(g) {
+      let o = self.order_of[g]
+      g != h && i >= o && i < self.order_end[o]
+    })
+  })
+  // (the last in the order first: what one made again let go of is gone from it before one made earlier in it moves
+  // all after it, each where it is then, an index let go of there and made again in another taken for none of its)
+  firsts.sort_by(fn(a, b) { self.order_of[b].compare(self.order_of[a]) })
+  Some(firsts)
+}
+
+///|
+/// The order made again from node `h` in it (Tree::order_again): what it holds worked out again in its place, what
+/// comes after it moved by as many as that is longer or shorter, what holds it ending that much later.
+fn Tree::order_from(self : Tree, h : Int) -> Unit {
+  let p = self.order_of[h]
+  let e = self.order_end[p]
+  let holder = self.order_holder[p]
+  for j in p..<e {
+    self.order_of[self.order[j]] = -1
+  }
+  let after = self.order[e:].to_array()
+  let after_holder = self.order_holder[e:].to_array()
+  let after_end = self.order_end[e:].to_array()
+  self.order.truncate(p)
+  self.order_holder.truncate(p)
+  self.order_end.truncate(p)
+  self.ordered(h, holder, self.tops[h])
+  let d = self.order.length() - e
+  for j, at in after {
+    let hd = after_holder[j]
+    self.order_of[at] = self.order.length()
+    self.order.push(at)
+    self.order_holder.push(if hd >= e { hd + d } else { hd })
+    self.order_end.push(after_end[j] + d)
+  }
+  let mut j = holder
+  while j >= 0 {
+    self.order_end[j] = self.order_end[j] + d
+    j = self.order_holder[j]
+  }
 }
 
 ///|
@@ -5383,8 +5502,9 @@ fn View::let_go(self : View) -> Unit {
   }
   n.flex.measure = None
   n.flex.children.clear()
-  if n.parent >= 0 {
-    self.tree.touched(n.parent)
+  let parent = n.parent
+  if parent >= 0 {
+    self.tree.touched(parent)
   }
   n.parent = -1
   n.content = None
@@ -5393,7 +5513,7 @@ fn View::let_go(self : View) -> Unit {
   }
   self.tree.removed.push({ at: self.at, gen: self.gen })
   self.tree.free.push(self.at)
-  self.tree.order_marked()
+  self.tree.order_marked_in(parent)
   self.tree.work.let_go = self.tree.work.let_go + 1
   self.tree.hits = self.tree.hits + 1
 }
@@ -5459,7 +5579,7 @@ fn View::box_appended(self : View, child : Int) -> Unit {
   // (what it holds changed, not what it asks of what holds it: where it lays out alone, laid out again from it, as
   // boxes_put does)
   self.tree.layout_marked_at(at, within=true)
-  self.tree.order_marked()
+  self.tree.order_marked_in(at)
   self.tree.modals_told()
 }
 
@@ -5497,7 +5617,7 @@ fn Tree::boxes_put(self : Tree, at : Int) -> Unit {
     n.flex.children.push(b)
   }
   self.layout_marked_at(at, within=true)
-  self.order_marked()
+  self.order_marked_in(at)
   // (what is drawn over what, among what holds it, changed: whether a modal layer is over what is held)
   self.modals_told()
 }
@@ -6601,16 +6721,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   let ordered = self.order_due
   if ordered {
     self.order_due = false
-    self.order.clear()
-    self.order_holder.clear()
-    self.order_end.clear()
-    self.order_of.clear()
-    self.tops.clear()
-    for _ in 0..<self.nodes.length() {
-      self.tops.push(-2)
-      self.order_of.push(-1)
-    }
-    self.ordered(0, -1, -1)
+    self.order_again()
     self.work.orders = self.work.orders + 1
   }
   self.work.changes = self.work.changes + self.changed.length() + self.composed.length()
