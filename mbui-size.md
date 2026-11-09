@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [47e090362](https://github.com/AFK-surf/still.fail/commit/47e090362e411e4fda8af08bc196f938b0f8bf72) mbui: an icon's parts in an ink made once, not cut | 1.72 | 2.3 | 9.56 | 28.08 | 33.32 | 25.07 | 45.8 | 93.52 | 165.14 |
 | [f8f8ffc06](https://github.com/AFK-surf/still.fail/commit/f8f8ffc068c7974b6fecfbfbc23ab09f38b6f60b) core: a link let go for its pings unanswered is di | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.34 | 136.23 |
 | [33f5b60b7](https://github.com/AFK-surf/still.fail/commit/33f5b60b7149e60d9f197f99255390a65794e09a) app: the bar's ball fading and growing in read as  | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.73 | 162.72 |
 | [6d5e5a4af](https://github.com/AFK-surf/still.fail/commit/6d5e5a4af588f37a999f3895144eec1f994604d8) mbui: send_steady runs at the default rate alone,  | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.19 | 138.67 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [62394cde3](https://github.com/AFK-surf/still.fail/commit/62394cde3d5707a1c6c8a97f12d83fa709f0c690) core: the person's own lock waits out the cloud's  | 1.66 | 2.21 | 9.12 | 27.86 | 32.28 | 24.88 | 44.81 | 93.06 | 156.81 |
 | [ee1fa3094](https://github.com/AFK-surf/still.fail/commit/ee1fa309406514c255f81abc5e25e1ec3e10f3c2) core: a vault keyed anew when a device or member h | 1.66 | 2.21 | 9.12 | 27.86 | 32.28 | 24.88 | 44.81 | 93.06 | 156.81 |
 | [60ce27ae5](https://github.com/AFK-surf/still.fail/commit/60ce27ae52714997b6e02c543a73feb52d3aafc3) mbui: iOS and Linux told the app's widgets for the | 1.66 | 2.21 | 9.12 | 27.86 | 32.28 | 24.87 | 44.81 | 93.06 | 156.81 |
-| [b879f8ff2](https://github.com/AFK-surf/still.fail/commit/b879f8ff2e4cfad46c57b65549661d3f010cdf35) mbui: the Tester finds by role and name, and holds | 1.66 | 2.21 | 9.12 | 27.86 | 32.28 | 24.87 | 44.81 | 93.06 | 156.81 |
