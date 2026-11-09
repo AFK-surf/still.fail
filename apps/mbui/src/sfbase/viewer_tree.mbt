@@ -1607,31 +1607,37 @@ fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
 }
 
 ///|
-/// What viewer `vw` shows of a film or a song, in node `n`: the player (@sf.player_view: its picture, its bars and
-/// controls, its keys, the full screen and turning sideways), an old view hosted on the stage (Viewer::player_stage), as
-/// far in as its fade has come and, while the picture flies, as far as its bars come with it (bars_share: none till
-/// its ground is whole); in flight its still the tree's (Viewer::player_flight): from the thumbnail to where the player
-/// draws its picture and back, the black and the still one frame cut once (View::image_in), what the thumbnail draws
-/// over it (its capsule) going as it leaves and back as it lands; going, the page's presses theirs. Back is the
-/// player's first (its 全屏 left, beside the system's bars), then the viewer's: the viewer's said before the player's,
-/// the last said taking it.
-fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
-  // (the moment what follows its flight and fade reads them at: as each frame draws it while either goes; else as it
-  // is, the clock read no more)
-  let at = fn(node : @view.View) {
-    vw.fly.said()
-    vw.fade.said()
-    let now = node.logic_at()
-    if vw.fly.goes_at(now) || vw.fade.goes_at(now) {
-      node.drawn_at()
+/// The moment what follows film `vw`'s flight and fade in `node` reads them at: as each frame draws it while either
+/// goes; else as it is, the clock read no more.
+fn film_at(vw : Viewer, node : @view.View) -> Double {
+  vw.fly.said()
+  vw.fade.said()
+  let now = node.logic_at()
+  if vw.fly.goes_at(now) || vw.fade.goes_at(now) {
+    node.drawn_at()
+  } else {
+    @double.infinity
+  }
+}
+
+///|
+/// Film `vw`'s flight (Viewer::player_flight), in `parent` laid out over all of the window: the box it is cut to, its
+/// box round, its still on the black, what its thumbnail draws over it; drawn at the moments `mine` says (its own
+/// layer's, or the slot of the page it flies from under that page's bar: viewer_flight_slot), as image_flight is.
+fn film_flight(parent : @view.View, src : Source, vw : Viewer, mine : (Double) -> Bool) -> Unit {
+  let at = fn(node) { film_at(vw, node) }
+  let mine_flight = fn(node : @view.View) -> (FlightBox, Double)? {
+    let t = at(node)
+    if mine(t) {
+      vw.player_flight(src, node, t)
     } else {
-      @double.infinity
+      None
     }
   }
   // its flight: the box it is cut to, its box round (the thumbnail's corners as far as the flight leaves them), the
   // still in it on the black where it is letterboxed or not decoded yet (one frame), what the thumbnail draws over it
-  let flight = fn(node : @view.View) -> FlightBox? { vw.player_flight(src, node, at(node)).map(fn(f) { f.0 }) }
-  n.box(fn(cut) {
+  let flight = fn(node : @view.View) -> FlightBox? { mine_flight(node).map(fn(f) { f.0 }) }
+  parent.box(fn(cut) {
     cut
     .over(Is(true))
     // (a picture alone: no press taken anywhere in it, whatever is under it its own (it covers the window as it waits
@@ -1707,7 +1713,7 @@ fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
         o
         .over(Is(true))
         .alpha(By(fn() {
-          match vw.player_flight(src, o, at(o)) {
+          match mine_flight(o) {
             Some((_, p)) => dmax(0.0, 1.0 - flight_over_gone * p)
             None => 0.0
           }
@@ -1724,6 +1730,22 @@ fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// What viewer `vw` shows of a film or a song, in node `n`: the player (@sf.player_view: its picture, its bars and
+/// controls, its keys, the full screen and turning sideways), an old view hosted on the stage (Viewer::player_stage), as
+/// far in as its fade has come and, while the picture flies, as far as its bars come with it (bars_share: none till
+/// its ground is whole); in flight its still the tree's (Viewer::player_flight): from the thumbnail to where the player
+/// draws its picture and back, the black and the still one frame cut once (View::image_in), what the thumbnail draws
+/// over it (its capsule) going as it leaves and back as it lands; going, the page's presses theirs. Back is the
+/// player's first (its 全屏 left, beside the system's bars), then the viewer's: the viewer's said before the player's,
+/// the last said taking it.
+fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
+  let at = fn(node) { film_at(vw, node) }
+  // its flight, in its own layer once it is out from under the bar of the page it flies from (that page's slot draws
+  // it till then, the bar over it: viewer_flight_slot)
+  film_flight(n, src, vw, fn(t) { vw.flies_from_page() == 0 || vw.lifted_at(t) >= 1.0 })
   // (the player over its flight, its bars coming as its ground is whole)
   n.box(fn(s) {
     s
@@ -2130,6 +2152,10 @@ pub fn viewer_flight_slot(slot : @view.View, src : Source, serial : Int, stage :
   slot.pick(fn() { { from: flying() } }, fn(f, which) {
     guard which.from is Some(vw) else { return }
     f.over(Is(true)).presses(Is(false)) |> ignore
-    image_flight(f, src, vw, stage, fn(t) { vw.lifted_at(t) < 1.0 })
+    if vw.played() {
+      film_flight(f, src, vw, fn(t) { vw.lifted_at(t) < 1.0 })
+    } else {
+      image_flight(f, src, vw, stage, fn(t) { vw.lifted_at(t) < 1.0 })
+    }
   })
 }
