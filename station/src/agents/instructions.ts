@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import type { MessageRow, PendingMessage, WidgetModel } from "../store/store.ts";
 import type { BackgroundTask } from "./runtime.ts";
-import { STILLFAIL_SURFACE } from "../store/rows.ts";
+import { type CardChoice, STILLFAIL_SURFACE } from "../store/rows.ts";
 import { STATION_AUTHOR } from "../store/rows.ts";
 
 
@@ -233,6 +233,38 @@ export function formatInbound(messages: PendingMessage[], newThreads: Set<number
   return lines.join("\n");
 }
 
+/// How long ago, in words an agent reads: minutes up to an hour, hours and minutes up to a day, then days and hours.
+function agoWords(ms: number): string {
+  const minutes = Math.floor(Math.max(0, ms) / 60_000);
+  if (minutes < 1) return "less than a minute";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return minutes % 60 === 0 ? `${hours} h` : `${hours} h ${minutes % 60} min`;
+  return hours % 24 === 0 ? `${Math.floor(hours / 24)} d` : `${Math.floor(hours / 24)} d ${hours % 24} h`;
+}
+
+/// One line of a card's question, cut to what recalls it.
+const recalled = (text: string) => {
+  const line = [...text.replace(/\s+/g, " ").trim()];
+  return line.length > 200 ? `${line.slice(0, 200).join("")}…` : line.join("");
+};
+
+/// What people chose on the agent's cards with an option that closes them (no message was sent then), said before what
+/// it is handed now (`now`, ms): when each was chosen, so it is not read as what the new messages are about. Empty
+/// when none.
+export function formatCardChoices(choices: CardChoice[], names: Map<string, string>, now: number): string {
+  if (choices.length === 0) return "";
+  const lines = choices.map((c) => {
+    const name = names.get(c.by);
+    const by = name !== undefined ? `${name} (${c.by})` : c.by;
+    const thread = c.where === null ? "" : ` thread="${escapeAttr(threadAddress(c.where[0], c.where[1]))}"`;
+    const card = c.ts === null ? "" : ` card="${escapeAttr(c.ts)}"`;
+    const asked = c.question === null || c.question.trim() === "" ? "" : `Asked: ${recalled(c.question)}\n`;
+    return `<card-choice${thread}${card} by="${escapeAttr(by)}" at="${(c.at / 1000).toFixed(6)}" ago="${agoWords(now - c.at)}">\n${asked}Chosen: ${c.option}\n</card-choice>`;
+  });
+  return `[Earlier choices on your cards, told to you now. Each closed its card when it was made (at, ago) without sending you a message, so this is the first you hear of it. They are settled and not new: what you are handed after them is not about them unless it says so. Do not answer a choice by itself or ask it again.]\n${lines.join("\n")}`;
+}
+
 /// What people chose in widgets the agent posted, riding along with messages it is handed anyway; empty when none.
 export function formatWidgetModels(models: WidgetModel[]): string {
   if (models.length === 0) return "";
@@ -242,7 +274,7 @@ export function formatWidgetModels(models: WidgetModel[]): string {
 
 /// A thread's messages for chat_history: people by name, this session's own posts as "you", other agents and the
 /// station marked as bots.
-export function formatHistory(messages: MessageRow[], surface: string, address: string, selfKey: string, names: Map<string, string>, cards: Map<number, { card: any; pending: boolean }> = new Map()): string {
+export function formatHistory(messages: MessageRow[], surface: string, address: string, selfKey: string, names: Map<string, string>, cards: Map<number, { card: any; pending: boolean; chose?: { by: string; option: string } }> = new Map()): string {
   return messages
     .map((m) => {
       const from = m.authorKind === "agent" && m.author === selfKey ? "you" : m.authorKind === STATION_AUTHOR ? "station" : names.has(m.author) ? `${names.get(m.author)} (${m.author})` : m.author;
@@ -257,7 +289,9 @@ export function formatHistory(messages: MessageRow[], surface: string, address: 
           ...(typeof found.card?.signin?.site === "string" ? { site: found.card.signin.site } : {}),
           ...(typeof found.card?.login === "string" ? { login: found.card.login } : {}),
           ...(typeof found.card?.station === "string" ? { station: found.card.station } : {}) };
-        card = `\n[Answer card: ${found.pending ? "pending" : "no longer pending"}; ${JSON.stringify(facts)}]`;
+        // Closed by a choice that sent no message: nothing else in the thread says what was chosen.
+        const chose = found.chose === undefined ? "" : `; ${found.chose.by} chose ${JSON.stringify(found.chose.option)}, which closed it without a message`;
+        card = `\n[Answer card: ${found.pending ? "pending" : "no longer pending"}${chose}; ${JSON.stringify(facts)}]`;
       }
       return `<message via="${via(surface)}" thread="${address}" from="${escapeAttr(from)}"${bot}${clientAttr(m)} ts="${m.ts}">\n${messageForAgent(m)}${card}\n</message>`;
     })

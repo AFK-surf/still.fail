@@ -10,7 +10,7 @@ import { sessionSkills } from "./agent-home.ts";
 import { dirname, join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, FailureReason, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { BACKGROUND_STOPPED_WAITING, GO_ON_AFTER_AUTH, GO_ON_AFTER_CODEX_UPDATE, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, nameUntitled, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { BACKGROUND_STOPPED_WAITING, GO_ON_AFTER_AUTH, GO_ON_AFTER_CODEX_UPDATE, GO_ON_AFTER_LOST, GO_ON_AFTER_OVERLOADED, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, TOOLS_LOST, afresh as afreshNote, backgroundStopped, cleared, continuedHere, formatCardChoices, formatInbound, formatWidgetModels, nameUntitled, resumeLost, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { CONNECTION_LOST } from "../agents/sandbox.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
@@ -20,7 +20,7 @@ import { Places } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { Said, tr, stationLang } from "../ops/i18n.ts";
 import { failureOf, modelLimitOf, runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
-import { type DeliveryCardState, type Handed, type MessageRow, type PendingMessage, type RunChange, handedOf } from "../store/rows.ts";
+import { type CardChoice, type DeliveryCardState, type Handed, type MessageRow, type PendingMessage, type RunChange, handedOf } from "../store/rows.ts";
 import { runChangeWords } from "./run-change.ts";
 import { PostBlocksUnavailable } from "../store/post-blocks.ts";
 import { WidgetSourcesUnavailable } from "../store/widget-sources.ts";
@@ -70,6 +70,8 @@ export type SessionStore = {
   markUndelivered(key: string, handed: Handed[]): void;
   untoldWidgetModels(key: string): any[];
   markWidgetModelsTold(key: string, pairs: [string, string][]): void;
+  untoldCardChoices(key: string): CardChoice[];
+  markCardChoicesTold(key: string, told: readonly CardChoice[]): void;
   heardThreads(key: string, threads: number[]): Set<number> | number[];
   postsAfter(key: string, messages: readonly { thread: number; n: number }[]): (string | null)[];
   cardEndedByMessage(thread: number, n: number): [MessageRow, any] | null;
@@ -1069,8 +1071,10 @@ export class SessionActor {
     if (this.agent?.session.busy()) {
       const text = this.takeNotices();
       if (text === null) return;
+      const [handed, told] = await this.withChoices(text);
       // Not now: after the running turn.
-      if (!(await this.agent.session.steer(text))) this.notices.unshift(text);
+      if (await this.agent.session.steer(handed)) told();
+      else this.notices.unshift(text);
       return;
     }
     const text = this.takeNotices();
@@ -1093,7 +1097,9 @@ export class SessionActor {
     if (agent?.busy()) {
       // So it is read now, not when a long command ends; what it waited on goes on.
       if (this.deps.backgroundOnMessage(this.key)) await agent.backgroundTools();
-      if (await agent.steer(text)) {
+      const [handed, told] = await this.withChoices(text);
+      if (await agent.steer(handed)) {
+        told();
         this.workFor(pending);
         this.delivered(pending, widgets);
         this.steered.push(...pending.map(handedOf));
@@ -1240,6 +1246,23 @@ export class SessionActor {
     return [told === "" ? text : text === "" ? told : `${text}\n\n${told}`, widgets];
   }
 
+  /// `text` as the agent is handed it, after what people chose on its cards with an option that closes them (no message
+  /// was sent then, so it has not heard: store.ts closeCard), and what marks those told once it has been handed.
+  private async withChoices(text: string): Promise<[string, () => void]> {
+    const store = this.deps.store;
+    const chose = store.untoldCardChoices(this.key);
+    if (chose.length === 0) return [text, () => {}];
+    const names = new Map<string, string>();
+    for (const c of chose) {
+      if (names.has(c.by)) continue;
+      const via = store.threadSessions(c.thread).find((m) => m.session === this.key)?.connect;
+      const name = via === undefined ? undefined : await this.deps.chat(via)?.userName?.(c.by);
+      if (name) names.set(c.by, name);
+    }
+    const said = formatCardChoices(chose, names, this.now());
+    return [text === "" ? said : `${said}\n\n${text}`, () => store.markCardChoicesTold(this.key, chose)];
+  }
+
   /// What another agent goes by in a thread: the bot of the connect it posts there through, with its mention; in the
   /// station's own chats, its runtime and model.
   private agentName(key: string, thread: number): string {
@@ -1281,7 +1304,9 @@ export class SessionActor {
       const continued = row && row.cwd && !store.hasTurns(this.key) ? continuedHere(sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key))) : null;
       const lost = this.resumeLost;
       this.resumeLost = false;
-      let prompt = lost ? `${this.deps.resumeLost?.(this.key) ?? resumeLost(this.key, [])}\n\n${text}` : text;
+      // What people chose on its cards without a message since it was last handed anything: before what it is handed.
+      const [handed, toldChoices] = await this.withChoices(text);
+      let prompt = lost ? `${this.deps.resumeLost?.(this.key) ?? resumeLost(this.key, [])}\n\n${handed}` : handed;
       const stopped = this.stoppedNote;
       this.stoppedNote = null;
       if (stopped !== null) prompt = `${stopped}\n\n${prompt}`;
@@ -1310,7 +1335,7 @@ export class SessionActor {
       }
       await this.deps.toSandbox?.(this.key).catch((error) => log.warn("session", "files not copied to its sandbox", { session: this.key, error: (error as Error).message }));
       // The runtime may have started a turn on its own (late input became a turn); join it.
-      if (agent.busy() && (await agent.steer(prompt))) return;
+      if (agent.busy() && (await agent.steer(prompt))) return toldChoices();
       this.steered = [];
       this.steeredFor = [];
       this.unread = [];
@@ -1326,6 +1351,7 @@ export class SessionActor {
         agent = await this.ensureAgent();
         await agent.prompt(prompt);
       }
+      toldChoices();
     } catch (error) {
       const message = (error as Error).message;
       const turn = this.turn;

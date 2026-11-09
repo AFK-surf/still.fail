@@ -381,6 +381,74 @@ test("a card withdrawn before a message is not attributed to that message", asyn
   }
 });
 
+test("a choice that closes a card is told to its agent once, before what it is next handed, as an earlier choice", async () => {
+  const r = new Rig();
+  try {
+    const [key, thread] = newSession(r.hub, web());
+    const to = `CHAT/${thread.threadTs}`;
+    sayIn(r.hub, thread.id, "ada@x.com", "做这个");
+    await settle();
+    await r.call(key, "chat_post", { to, text: "要部署吗？", kind: "need_human", need: "选是否部署",
+      card: { type: "options", options: [{ label: "部署" }, { label: "不需要部署", action: "close" }] } });
+    const card = r.said(thread.id).at(-1)!;
+    r.claude.last().complete();
+    await settle();
+    const handed = () => r.claude.sessions.flatMap((s) => [...s.prompts, ...s.steers]);
+    const before = handed().length;
+    assert.equal(r.store.closeCard("ada@x.com", thread.id, card.n, "不需要部署"), true);
+    await settle();
+    assert.equal(handed().length, before, "the choice itself sends nothing and wakes no one");
+    assert.deepEqual(r.store.untoldCardChoices(key).map((c) => [c.ts, c.by, c.option, c.question]), [[card.ts, "ada@x.com", "不需要部署", "要部署吗？"]]);
+
+    sayIn(r.hub, thread.id, "ada@x.com", "另外看下日志");
+    await settle();
+    const prompt = handed().at(-1)!;
+    assert.ok(prompt.includes(`<card-choice thread="${to}" card="${card.ts}" by="ada@x.com (ada@x.com)" at="`), prompt);
+    assert.ok(prompt.includes("Asked: 要部署吗？\nChosen: 不需要部署\n</card-choice>"), prompt);
+    assert.ok(prompt.includes("not about them unless it says so"), prompt);
+    assert.ok(prompt.indexOf("<card-choice") < prompt.indexOf("另外看下日志"), "the earlier choice comes before the new message");
+    assert.ok(!prompt.includes("<card-state"), prompt);
+    assert.deepEqual(r.store.untoldCardChoices(key), []);
+
+    r.claude.last().complete();
+    await settle();
+    sayIn(r.hub, thread.id, "ada@x.com", "好了吗");
+    await settle();
+    assert.ok(!handed().at(-1)!.includes("<card-choice"), "told once");
+    const history = await r.call(key, "chat_history", { to });
+    assert.ok(history.includes('Answer card: no longer pending; ada@x.com (ada@x.com) chose "不需要部署", which closed it without a message;'), history);
+  } finally {
+    await r.close();
+  }
+});
+
+test("a choice that closes a card comes with a station notice too, and waits when the notice cannot be handed", async () => {
+  const r = new Rig();
+  try {
+    const [key, thread] = newSession(r.hub, web());
+    const to = `CHAT/${thread.threadTs}`;
+    sayIn(r.hub, thread.id, "ada@x.com", "做这个");
+    await settle();
+    const agent = r.claude.last();
+    await r.call(key, "chat_post", { to, text: "CI 过了要合并吗？", card: { type: "options", options: [{ label: "合并" }, { label: "先不合", action: "close" }] } });
+    const card = r.said(thread.id).at(-1)!;
+    // Chosen while the turn that asked still runs, and it takes no steer: nothing is told, nothing is lost.
+    assert.equal(r.store.closeCard("ada@x.com", thread.id, card.n, "先不合"), true);
+    agent.unsteerable = true;
+    r.hub.notify(key, "the CI watch ended");
+    await settle();
+    assert.equal(r.store.untoldCardChoices(key).length, 1);
+    agent.unsteerable = false;
+    r.hub.notify(key, "the CI watch ended again");
+    await settle();
+    const steer = agent.steers.at(-1)!;
+    assert.ok(steer.includes("Chosen: 先不合") && steer.indexOf("<card-choice") < steer.indexOf("the CI watch ended again"), steer);
+    assert.deepEqual(r.store.untoldCardChoices(key), []);
+  } finally {
+    await r.close();
+  }
+});
+
 test("a closed authorization card tells its agent how to reask the same request", async () => {
   for (const [extra, action] of [
     [{ vault: { request: "r_test" } }, 'secret_reask {request: "r_test"}'],

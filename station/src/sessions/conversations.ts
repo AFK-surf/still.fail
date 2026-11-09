@@ -784,7 +784,7 @@ export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, co
     const name = (await chat?.userName?.(m.author)) ?? null;
     if (name !== null) names.set(m.author, name);
   }
-  const cards = new Map<number, { card: Json; pending: boolean }>();
+  const cards = new Map<number, { card: Json; pending: boolean; chose?: { by: string; option: string } }>();
   for (const e of hub.store.messagePageEntries(thread.id, messages.map((m) => m.n))) {
     if (e.kind !== "message") continue;
     const card = e.card ?? (e.options != null ? { type: "options", options: e.options } : null);
@@ -794,6 +794,11 @@ export async function threadHistory(hub: Hub, key: string, thread: ThreadRow, co
     const pending = hub.historyPendingCard ? await hub.historyPendingCard(thread.id) : hub.store.pendingCard(thread.id)?.[0].n;
     const current = pending == null ? undefined : cards.get(pending);
     if (current) current.pending = true;
+    // A choice that closed a card sent no message: said on the card, as nothing else in the thread says it.
+    for (const [n, c] of hub.store.cardChoices(thread.id, [...cards.keys()])) {
+      const name = (await chat?.userName?.(c.by)) ?? null;
+      cards.get(n)!.chose = { by: name !== null ? `${name} (${c.by})` : c.by, option: c.option };
+    }
   }
   return formatHistory(messages, thread.surface, threadAddress(thread.channel, thread.threadTs), key, names, cards);
 }
