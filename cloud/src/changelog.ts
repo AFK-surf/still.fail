@@ -69,9 +69,9 @@ async function entries(bucket: Bucket, key: string): Promise<ChangelogEntry[]> {
   }
 }
 
-/** n of a version said as 0.1.<n> (or a bare n). */
+/** n of a version said as 0.<m>.<n> (or a bare n). */
 function build(said: unknown): number | null {
-  const m = /^(?:0\.1\.)?(\d+)$/.exec(typeof said === "number" || typeof said === "string" ? String(said).trim() : "");
+  const m = /^(?:0\.\d+\.)?(\d+)$/.exec(typeof said === "number" || typeof said === "string" ? String(said).trim() : "");
   return m ? Number(m[1]) : null;
 }
 const json = (text: string | null): Record<string, unknown> => {

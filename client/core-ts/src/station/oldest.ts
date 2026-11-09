@@ -21,9 +21,10 @@ export function setOwnBuild(build: string): void {
 
 export const ownBuild = (): string => own;
 
-/// The build in `0.1.<n>` (or `<n>`), null for none.
+/// The build in `0.<m>.<n>` (or `<n>`), null for none: n, the commits up to it; m, the stable releases up to it, only
+/// said (`0.1.` until it was counted, the user, 2026-11-09).
 export function buildOf(said: string | undefined): number | null {
-  const m = /^(?:0\.1\.)?(\d+)$/.exec(said?.trim() ?? "");
+  const m = /^(?:0\.\d+\.)?(\d+)$/.exec(said?.trim() ?? "");
   return m ? Number(m[1]) : null;
 }
 

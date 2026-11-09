@@ -49,7 +49,7 @@ export async function planUpdate(o: { base: string; channel: Channel; app: strin
   const { release, why } = verifiedOrNull(await readFeed(o.channel, o.base), o.trusted);
   if (release === null) throw new Error(tr(o.lang, "station.updates.unverified", { why }));
   const version = stationVersion(o.app) ?? null;
-  const current = version === null ? null : Number(version.slice("0.1.".length));
+  const current = version === null ? null : Number(/^0\.\d+\.(\d+)$/.exec(version)?.[1] ?? NaN);
   if (!allowed(release, current, o.channel, o.installed)) throw new Error(tr(o.lang, "station.updates.older", { version: release.version, current: version }));
   let build;
   try {

@@ -221,6 +221,11 @@ describe("updates", { concurrency: true }, () => {
     assert.deepEqual(offer("0.1.12", "0.1.12", "stable", "beta"), [false, false]);
     assert.deepEqual(offer(null, "0.1.10", "stable", "beta"), [false, false]);
     assert.deepEqual(offer("0.1.12", null, "stable", "beta"), [false, false]);
+    // 0.<m>.<n> by n alone: a release branch's stable 0.35.11 (m one more) is not newer than the beta's 0.34.12.
+    assert.deepEqual(offer("0.34.10", "0.35.12", "stable", "stable"), [true, false]);
+    assert.deepEqual(offer("0.1.10", "0.34.12", "stable", "stable"), [true, false]);
+    assert.deepEqual(offer("0.34.12", "0.35.11", "beta", "beta"), [false, false]);
+    assert.deepEqual(offer("0.34.12", "0.35.11", "stable", "beta"), [false, true]);
   });
 
   test("an update started before a handover is followed to its end", async (t) => {
