@@ -840,6 +840,9 @@ pub struct Tree {
   /// how many times what a point would hit may have changed (a layout, a place, the order, a node made or let go, what
   /// takes presses or holds a layer): what is pointed at worked out again only past one (Tree::hits_said)
   mut hits : Int
+  /// how many of its nodes are drawn in their bones themselves (Node's `bones` not 0): none, and no node is in them,
+  /// nothing walked to its root to learn it (Tree::bones_of_at)
+  mut bones_set : Int
   /// the fingers down on it (each by its id: Drag's `finger`), in the order they went down
   downs : Array[Int]
   /// what the last frame changed: the nodes whose content it made again, those placed or faded otherwise
@@ -1071,6 +1074,7 @@ pub fn Tree::new(
     inputs_whole: false,
     point_said: 0,
     hits: 0,
+    bones_set: 0,
     downs: [],
     changed: [],
     composed: [],
@@ -1191,6 +1195,9 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
       n.look.shadow = (0.0, 0.0, 0L)
       n.said = None
       n.said_hidden = false
+      if n.bones != 0L {
+        self.bones_set -= 1
+      }
       n.bones = 0L
       n.bone_whole = false
       n.cut = false
@@ -5974,6 +5981,9 @@ fn View::let_go(self : View) -> Unit {
   }
   n.said = None
   n.said_hidden = false
+  if n.bones != 0L {
+    self.tree.bones_set -= 1
+  }
   n.bones = 0L
   n.bone_whole = false
   n.cut = false

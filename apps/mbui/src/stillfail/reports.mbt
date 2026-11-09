@@ -12,12 +12,19 @@
 let reported : Ref[Bool] = Ref(false)
 
 ///|
-/// How many hangs this run has sent, and the most it sends: a phone slow throughout says so in its first, and in
-/// each summary.
+/// How many hangs have been sent in the ten minutes from `hangs_since` (the work clock's ms; below 0 none yet), and the
+/// most sent in each: a phone slow throughout says so in each ten minutes' first and in each summary, not only in its
+/// run's first twenty (a run of hours told nothing of its later stutters, 2026-11-09).
 let hangs_sent : Ref[Int] = Ref(0)
 
 ///|
+let hangs_since : Ref[Double] = Ref(-1.0)
+
+///|
 let hangs_most : Int = 20
+
+///|
+let hangs_span_ms : Double = 600000.0
 
 ///|
 /// The subscriptions a switch being timed took on (by their ids), until their first message.
@@ -50,10 +57,14 @@ fn reports_start() -> Unit {
       }),
     )
   }
-  // the window thread's hangs (mbui's src/ui/journal.mbt), each at once while this run has sent fewer than
-  // hangs_most; what the app did while shown as it is hidden, its hangs all counted: hangs per hour shown
+  // the window thread's hangs (mbui's src/ui/journal.mbt), each at once while fewer than hangs_most were sent in its
+  // ten minutes; what the app did while shown as it is hidden, its hangs all counted: hangs per hour shown
   @ui.hangs_told(
     Some(fn(h) {
+      if hangs_since.val < 0.0 || h.end - hangs_since.val >= hangs_span_ms {
+        hangs_since.val = h.end
+        hangs_sent.val = 0
+      }
       if hangs_sent.val < hangs_most {
         hangs_sent.val += 1
         host_tell("hang", h.json().stringify(), "", 0, 0) |> ignore

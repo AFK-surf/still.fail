@@ -28,6 +28,11 @@ pub fn View::bones(self : View, color : Live[Int64]) -> View {
     }
     let was = n.bones
     n.bones = k
+    if was == 0L {
+      self.tree.bones_set += 1
+    } else if k == 0L {
+      self.tree.bones_set -= 1
+    }
     self.tree.said_marked(self.at, state=true, kids=true)
     self.tree.bones_marked_below(self.at)
     // (into them or out: what takes input in it is not there, or is again)
@@ -74,6 +79,10 @@ pub fn View::in_bones(self : View) -> Bool {
 ///|
 /// What node `at` is drawn in as its bones: its own, else the nearest of what holds it's; 0 none.
 fn Tree::bones_of_at(self : Tree, at : Int) -> Int64 {
+  // (none in their bones: nothing walked up)
+  if self.bones_set == 0 {
+    return 0L
+  }
   let mut i = at
   while i >= 0 {
     let k = self.nodes[i].bones
