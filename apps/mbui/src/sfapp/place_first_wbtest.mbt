@@ -40,9 +40,10 @@ test "each place comes in the same way the first time and again" {
 }
 
 ///|
-/// The hosted page islands' positions during a transition, including a page rising from the foot.
+/// The pages' positions during a transition, including a page rising from the foot: what is drawn as wide as the window
+/// (a page, whether an old view hosts it or it is made as nodes).
 fn first_open_islands() -> Array[(Double, Double, Double, Double)] {
-  @ui.view_tree().unwrap().drawn().filter(fn(d) { d.hosted }).map(fn(d) { (d.x, d.y, d.w, d.h) })
+  @ui.view_tree().unwrap().drawn().filter(fn(d) { d.hosted || d.w >= 389.0 }).map(fn(d) { (d.x, d.y, d.w, d.h) })
 }
 
 ///|

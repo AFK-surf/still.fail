@@ -261,3 +261,115 @@ test "words sent, the core's row of them late: the list goes up only, never down
   }
   assert_eq(bad.length(), 0)
 }
+
+///|
+/// Words sent `soon` after the words sent before them were out of the field (flight_out; before it with `soon` under
+/// 0: that long after they were sent), those still on their way to their row: the furthest the words sent first went
+/// in one frame past twice what they went the frame before and the frame after (what goes on a way goes on at about
+/// its pace; what is put somewhere at once goes far in one frame between two it hardly moved in), from the frame the
+/// next were sent, and when.
+fn sent_soon_step(soon : Double, deliver : Double) -> (Double, Double) raise {
+  new_run()
+  fix_pace.val = (deliver, 30000.0, fix_turn_end_ms)
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  t.type_text("再看一下")
+  tap_send(t)
+  let sent = t.time()
+  if soon >= 0.0 {
+    while send_flight.get().map(fn(f) { !@sfbase.flight_out(t.ctx(), f) }).unwrap_or(false) {
+      t.frame()
+    }
+    assert_true(send_flight.get() is Some(_), msg="the words sent first landed before they were out of the field")
+  }
+  let till = if soon >= 0.0 { t.time() + soon } else { sent - soon }
+  while t.time() < till {
+    t.frame()
+  }
+  t.type_text("看一下列表")
+  let at = fn() { t.drawn_of("再看一下").map(fn(p) { p.1 }).unwrap_or(-1.0) }
+  let ys : Array[Double] = [at()]
+  let ts : Array[Double] = [t.time()]
+  t.frame()
+  ys.push(at())
+  ts.push(t.time())
+  tap_send(t)
+  ys.push(at())
+  ts.push(t.time())
+  let end_at = t.time() + @sfbase.flight_most_ms + @ui.move_most_ms
+  while t.time() < end_at {
+    t.frame()
+    ys.push(at())
+    ts.push(t.time())
+  }
+  let mut worst = 0.0
+  let mut when = -1.0
+  for i in 2..<(ys.length() - 1) {
+    let d = (ys[i] - ys[i - 1]).abs()
+    let by = dmax((ys[i - 1] - ys[i - 2]).abs(), (ys[i + 1] - ys[i]).abs())
+    if d - 2.0 * by > worst {
+      worst = d - 2.0 * by
+      when = ts[i] - sent
+    }
+  }
+  (worst, when)
+}
+
+///|
+test "words sent while the words sent before them still fly: those go on to their row, put nowhere at once" {
+  // (judged frame to frame on frame()'s, the display's own: the default run's alone, @ui.test_at_a_rate)
+  if @ui.test_at_a_rate() {
+    return
+  }
+  // (one flight at a time, the next words sent dropped the one before: its words stood in their row in that frame,
+  // 26 points from where they were with the next sent 300 ms after them; and their row, no flight's any more, was
+  // put in the middle of its room as it opened, what it holds 14 down in a frame with 500. Found looking into
+  // 2026-11-10 the user, 「现在偶现发消息动效都会抖」)
+  let bad : Array[String] = []
+  for soon in [0.0, 50.0, 100.0, 200.0, 400.0] {
+    for deliver in [100.0, 700.0] {
+      let (step, when) = sent_soon_step(soon, deliver) catch {
+        e => {
+          let said = e.to_string()
+          let cut = if said.length() > 900 { said.view(end_offset=900).to_string() } else { said }
+          bad.push("soon \{soon} deliver \{deliver}: " + cut.replace_all(old="\n", new=" "))
+          continue
+        }
+      }
+      if step > 6.0 {
+        bad.push("soon \{soon} deliver \{deliver}: the words sent first went \{step} past their pace in a frame, \{when} ms after they were sent")
+      }
+    }
+  }
+  for b in bad {
+    println("SENDSOON " + b)
+  }
+  assert_eq(bad.length(), 0)
+}
+
+///|
+test "words sent before the words sent before them are out of the field: never drawn over those" {
+  if @ui.test_at_a_rate() {
+    return
+  }
+  // (still where they were typed, they would lie under the words now sent, drawn there as typed till their row is
+  // laid out (words_over.mbt): in their row at once, the frame those are sent)
+  let bad : Array[String] = []
+  for soon in [-17.0, -50.0, -100.0, -150.0] {
+    let _ = sent_soon_step(soon, 100.0) catch {
+      e => {
+        let said = e.to_string()
+        let cut = if said.length() > 900 { said.view(end_offset=900).to_string() } else { said }
+        bad.push("\{-soon} ms after: " + cut.replace_all(old="\n", new=" "))
+        continue
+      }
+    }
+  }
+  for b in bad {
+    println("SENDUNDER " + b)
+  }
+  assert_eq(bad.length(), 0)
+}

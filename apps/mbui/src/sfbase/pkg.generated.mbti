@@ -605,6 +605,8 @@ pub fn flight_ms_of(SendFlight) -> Double
 
 pub fn flight_of(String) -> SendFlight?
 
+pub fn flight_out(@ui.Ctx, SendFlight) -> Bool
+
 pub fn flight_p(@ui.Ctx, SendFlight) -> Double
 
 pub fn flight_pieces(@ui.Ctx, SendFlight) -> (Array[FlightPiece], @ui.WordsPiece)?
@@ -627,6 +629,10 @@ pub fn flight_start(@ui.Ctx, String, String, String, String, Double, Array[Flyin
 
 pub fn flight_takes(String, String) -> Bool
 
+pub fn flight_to(String, String) -> SendFlight?
+
+pub fn flight_to_key(SendFlight, String) -> String
+
 pub fn flight_up(Double, Bool) -> Double
 
 pub fn flight_up_of(@ui.Ctx, SendFlight) -> Double
@@ -637,7 +643,9 @@ pub fn flight_waiting(@ui.Ctx, String) -> Unit
 
 pub fn flight_way_ms(Bool, Double) -> Double
 
-pub let flight_words_key : String
+pub fn flight_words_key(SendFlight) -> String
+
+pub fn flights_reset() -> Unit
 
 pub fn floor_of(@ui.Ctx, Reading, String, Array[String]) -> Double
 
@@ -3136,6 +3144,7 @@ pub(all) struct SearchView {
 }
 
 pub(all) struct SendFlight {
+  n : Int
   mut chat : String
   mut turns : String
   text : String

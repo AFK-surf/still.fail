@@ -557,10 +557,11 @@ test "the same picture quoted twice flies to each quote's own place" {
   tap_send(t)
   t.draw()
   t.draw()
-  let pictures = send_flight.get().unwrap().files.filter(fn(f) { f.picture == Some("mem:fixture/twice.png") })
+  let flight = send_flight.get().unwrap()
+  let pictures = flight.files.filter(fn(f) { f.picture == Some("mem:fixture/twice.png") })
   assert_eq(pictures.length(), 2)
-  let first = @motion.measured_rect(t.ctx(), "flight/to/" + pictures[0].key).unwrap()
-  let second = @motion.measured_rect(t.ctx(), "flight/to/" + pictures[1].key).unwrap()
+  let first = @motion.measured_rect(t.ctx(), @sfbase.flight_to_key(flight, pictures[0].key)).unwrap()
+  let second = @motion.measured_rect(t.ctx(), @sfbase.flight_to_key(flight, pictures[1].key)).unwrap()
   assert_true((first.1 - second.1).abs() > 0.5, msg="both pictures fly to the same place: \{first}, \{second}")
 }
 

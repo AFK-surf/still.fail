@@ -133,6 +133,7 @@ export const NOTES: [number, string][] = [
   [126, "all_done only when nothing people asked for in the chat is left, not when a step of a longer goal is done; a post that says what you do next means you go on doing it in this turn; need_human is not for what people already decided."],
   [127, "A choice on a card's action=close option still sends no message and does not wake you, but you are now told it: a <card-choice> block before what you are next handed (a message, a notice), with when it was chosen (at, ago). It is an earlier, settled choice, not what the new messages are about; chat_history shows it on the card as well."],
   [128, "A station's queue no longer holds station_task tasks back for busy CPUs: a task waits only for memory pressure, the screen, or the small-task slot (queue.why memory, screen, person or small; no cause, and decision has only memoryPressure)."],
+  [129, "A station_task started beside others is no longer given STILLFAIL_CPUS, MAKEFLAGS, CARGO_BUILD_JOBS or CMAKE_BUILD_PARALLEL_LEVEL by the station (the count came out as one on a busy machine): builds take the cores the system gives them. Only a small task is still told one CPU."],
 ];
 
 /// The last note that replaces every one before it (the instructions rewritten whole): a session behind it hears only

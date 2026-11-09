@@ -63,7 +63,10 @@ fn panel_centred_node(
       f()
       words_in_now.val = was
     }
+    // (which of what it holds takes the focus as it opens, where what it holds says one: panel_opens_on_node)
+    let opens_on : Ref[@view.View?] = Ref(None)
     across.box(fn(d) {
+      d.lends(panel_opens_lent, opens_on) |> ignore
       d
       .width(By(fn() { Some(w()) }))
       // (no taller than the window leaves it, dialog_room: what it holds scrolls in itself past that)
@@ -446,8 +449,11 @@ fn panel_centred_node(
     |> ignore
     // (the focus on its own ground as it opens, the first of what it holds that takes it once that is built
     // (first_stop; not one in steps, whose steps keep it on its ground as they come), as kit's dialog's: back to what
-    // had it as it goes)
-    layer
+    // had it as it goes; on the one of what it holds that said so, where one did: panel_opens_on_node)
+    match opens_on.val {
+      Some(first) => first
+      None => layer
+    }
   })
 }
 
