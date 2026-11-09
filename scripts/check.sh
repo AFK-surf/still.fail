@@ -31,8 +31,12 @@ export CARGO_INCREMENTAL=0
 
 mode=${1:-commit}
 full=0
+# A commit that concludes a merge (main merged into a branch) is checked against what is merged in: what the branch has
+# that main does not, as CI checks it. Against HEAD it would be all main got meanwhile, none of it this commit's.
+against=HEAD
+if [ "$mode" = commit ] && git rev-parse -q --verify MERGE_HEAD > /dev/null; then against=MERGE_HEAD; fi
 case "$mode" in
-  commit) changed=$(git diff --cached --name-only --diff-filter=ACMRD) ;;
+  commit) changed=$(git diff --cached --name-only --diff-filter=ACMRD "$against" 2>/dev/null || git diff --cached --name-only --diff-filter=ACMRD) ;;
   push) range=${2:?push needs a range}; changed=$(git diff --name-only "$range") ;;
   full) full=1; range=${2:?full needs a range}; changed=$(git diff --name-only "$range") ;;
   all) full=1; changed=$(git ls-files) ;;
@@ -46,7 +50,7 @@ touches() { printf '%s\n' "$changed" | grep -qE "$1"; }
 # it only moves (taken out of one of them, put in another as it was: a part moved into web/ui) is not added.
 added() {
   case "$mode" in
-    commit) git diff --cached -U0 -- "$@" ;;
+    commit) git diff --cached -U0 "$against" -- "$@" 2>/dev/null || git diff --cached -U0 -- "$@" ;;
     push|full) git diff -U0 "$range" -- "$@" ;;
     *) ;;
   esac > "$tmp/diff"
