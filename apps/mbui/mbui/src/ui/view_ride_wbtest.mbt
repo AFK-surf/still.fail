@@ -115,3 +115,34 @@ test "a row changed since it was kept drawn anew, as it is now" {
   let kept = t.drawn_text()
   assert_eq(kept, ride_fresh(30.0, third), msg="its words as they are now")
 }
+
+///|
+/// What a page's list keeps of its rows past where it shows is cut away by its group's header's clip, its column's,
+/// though what is cut is clipped round of its own and has no outer (a row's words in its round box: the history's
+/// commands scrolled past its top, drawn over its details' figures, 2026-11-09): cut as the square clip it is in cuts
+/// a round one, never by an outer with no corner's radius, which is none (scene.mbt 40-51), what it cut drawn whole.
+test "a page's list's rows past its top cut by its clip where they are round and have no outer, as where they are square" {
+  let at = @view.Scroll::list()
+  at.put(60.0)
+  let t = ride_tester(at, @signals.signal("row 2"))
+  assert_true(!list_heads.is_empty(), msg="the list said by its group's header")
+  let mut round = 0
+  for a in t.drawn_instances() {
+    // (a shape's pieces, kind 12, are none drawn: its band's numbers)
+    if a[2] <= 0.0 || a[3] <= 0.0 || a[5] == 12.0 {
+      continue
+    }
+    if a[5] == 1.0 && (a[24] > 0.0 || a[25] > 0.0 || a[26] > 0.0 || a[27] > 0.0) {
+      round += 1
+    }
+    // (where it may be seen, as the renderers cut it: its clip, and its outer where that has a corner's radius)
+    let outer = a[44] > 0.0 || a[45] > 0.0 || a[46] > 0.0 || a[47] > 0.0
+    let y0 = if outer { dmax(a[17], a[41]) } else { a[17] }
+    let y1 = if outer { dmin(a[19], a[43]) } else { a[19] }
+    assert_true(
+      y1 <= y0 || (y0 >= 0.0 && y1 <= 300.0),
+      msg="kind \{a[5]} at (\{a[0]}, \{a[1]}) seen from \{y0} to \{y1}: past the list's column (0 to 300)",
+    )
+  }
+  assert_true(round > 0, msg="words clipped round of their own in the rows drawn")
+}

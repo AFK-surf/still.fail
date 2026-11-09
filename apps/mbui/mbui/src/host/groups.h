@@ -9,8 +9,8 @@
 // (a band's 12, kind 11) are among the frame's; 16-19 a clip they are all cut to (x0, y0, x1, y1; all 0: none), a list's
 // column's whole (mbui/src/ui/view_ride.mbt's ListRiding). Each of the group's instances moved: its rect (0, 1) always;
 // its clip (16-19), its outer (40-43) and its turn's point (33, 34) as its `moves` bits say; then cut to the header's
-// clip: its own where that is square (no corner's radius, 24-27), else its outer, the header's its outer where it has
-// none.
+// clip: its own where that is square (no corner's radius, 24-27) or it has no outer, a corner the cut moves square;
+// else its outer.
 //
 // Included once, by the file that defines mb_host_present.
 #ifndef MB_GROUPS_H
@@ -150,19 +150,19 @@ static const double *mb_groups_draw_out(const double *buf, int32_t count) {
         }
       }
       if (!cut) continue;
-      if (d[24] == 0.0 && d[25] == 0.0 && d[26] == 0.0 && d[27] == 0.0) {
-        // (a square clip: cut to it)
+      if ((d[24] == 0.0 && d[25] == 0.0 && d[26] == 0.0 && d[27] == 0.0) ||
+          (d[40] == 0.0 && d[41] == 0.0 && d[42] == 0.0 && d[43] == 0.0)) {
+        // (a square clip, or a round one with no outer: it cut to it, a corner the cut moves square, as
+        // mbui/src/ui/scene.mbt's clamp_inst_clip; never it as its outer, which with no corner's radius is none)
+        double m0 = d[16], m1 = d[17], m2 = d[18], m3 = d[19];
         if (d[16] < h0) d[16] = h0;
         if (d[17] < h1) d[17] = h1;
         if (d[18] > h2) d[18] = h2;
         if (d[19] > h3) d[19] = h3;
-      } else if (d[40] == 0.0 && d[41] == 0.0 && d[42] == 0.0 && d[43] == 0.0) {
-        // (a round one with no outer: it its outer)
-        d[40] = h0;
-        d[41] = h1;
-        d[42] = h2;
-        d[43] = h3;
-        for (int j = 44; j < 52; j++) d[j] = 0.0;
+        if (d[16] != m0 || d[17] != m1) d[24] = d[28] = 0.0;
+        if (d[18] != m2 || d[17] != m1) d[25] = d[29] = 0.0;
+        if (d[18] != m2 || d[19] != m3) d[26] = d[30] = 0.0;
+        if (d[16] != m0 || d[19] != m3) d[27] = d[31] = 0.0;
       } else {
         if (d[40] < h0) d[40] = h0;
         if (d[41] < h1) d[41] = h1;
