@@ -1,5 +1,7 @@
-// A box's border is its own edge: drawn over what it holds (after it), so what reaches the edge never covers it (CSS's
-// border is outside what a box holds; here it takes no room). With nothing in it, it is drawn with its ground.
+// A box's border is a line drawn inside its shape, taking no room: what is in it measured from its outer edge, its
+// corners concentric with its shape whether it has a line or not (Figma's inside stroke, SwiftUI's strokeBorder; the
+// user, 2026-11-09). It is drawn over everything the box draws (after what it holds, its words, its shapes, its
+// picture), in one colour all along it, so nothing is ever over it. With nothing over its ground, it is drawn with it.
 
 ///|
 /// The instances of the last frame that are a box's ground or border: (x, y, w, h, its ground's colour's alpha, its
@@ -101,4 +103,45 @@ test "a box holding nothing draws its border with its ground, once" {
   assert_eq(gs.length(), 1)
   assert_eq(gs[0].5, 1.0)
   assert_eq(gs[0].4, 1.0)
+}
+
+///|
+test "a see-through border is one colour all along it, over a row's ground as over the box's own" {
+  let t = Tester::new(
+    fn(c) {
+      c.box(w=Px(100.0), h=Px(40.0), bg=0xFFFFFFFFL, border=1.0, border_color=0x0000003FL, fn() {
+        c.box(w=Fill(1.0), h=Px(20.0), bg=0x2233AAFFL, fn() {  }) |> ignore
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=100.0,
+  )
+  ignore(t)
+  let gs = grounds()
+  let c = g()
+  // (the last drawn its line alone: as it shows over the box's white, whole, whatever is under it)
+  let last = (0).until(c.ninst).iter().filter(fn(k) { c.inst[k * inst_size + 5] == 0.0 }).collect().last().unwrap()
+  assert_eq(gs[gs.length() - 1].5, 1.0)
+  assert_eq(c.inst[last * inst_size + 15], 1.0)
+  assert_true(c.inst[last * inst_size + 12] < 1.0)
+}
+
+///|
+test "a node of the window's tree with an edge and words of its own draws its edge after its words" {
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    root.box(fn(n) {
+      n.width(Is(Some(120.0))).height(Is(Some(40.0))).ground(Is(0xFFFFFFFFL)).edge(Is((1.0, 0xD2D2D7FFL))).words(Is("words"))
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let c = g()
+  let glyphs = (0).until(c.ninst).iter().filter(fn(k) { c.inst[k * inst_size + 5] != 0.0 }).collect()
+  guard glyphs.last() is Some(word) else { fail("its words not drawn") }
+  let edge = (0).until(c.ninst).iter().filter(fn(k) { c.inst[k * inst_size + 5] == 0.0 && c.inst[k * inst_size + 6] == 1.0 }).collect().last()
+  guard edge is Some(edge) else { fail("its edge not drawn") }
+  assert_true(edge > word, msg="its edge at \{edge}, its words up to \{word}")
 }

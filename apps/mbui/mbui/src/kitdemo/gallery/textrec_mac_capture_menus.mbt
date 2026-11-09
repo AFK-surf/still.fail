@@ -123,4 +123,4 @@ let run_mac_capture_menus : String =
   #|TEXTREC {"g":67,"r":[763,0,9,10,-1,-8,0]}
   #|TEXTREC {"g":80,"r":[773,0,9,11,-1,-10,0]}
   #|ENV {"motion":0,"glass":0,"dark":1,"inset":0}
-  #|DRAWHASH 1 0 960 720 1 8455073732357248966 1
+  #|DRAWHASH 1 0 960 720 1 -1758312170066823674 1
