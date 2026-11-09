@@ -2,5 +2,7 @@ import {
   "station/host",
   "station/wire",
   "station/sql",
+  "station/cards",
+  "station/jsjson",
   "moonbitlang/core/json",
 }
