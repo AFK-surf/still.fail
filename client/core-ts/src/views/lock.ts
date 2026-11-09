@@ -293,14 +293,23 @@ export function install(inner: Inner): void {
     lockSeen(inner).touch("prompts");
     const says = cloudSays(view(inner, ws));
     if (says === undefined) return;
-    let at = readAt.get(inner);
-    if (!at) readAt.set(inner, (at = new Map()));
-    if (at.get(ws) === says && held(inner, ws) !== null) return;
-    at.set(ws, says);
-    inner.scheduler.enqueue("cloud", `lock/${ws}`, Priority.background, read(inner, ws));
-    pairs.reading(inner, ws);
+    readSaid(inner, ws, says);
   });
   inner.router.owners.push(owner(inner));
+}
+
+/// The lock read as the workspace view says it moved on (`says`, how far): once for each. One the cloud turned away for
+/// too many asks is not taken as read: it is read again a little later, else it stayed behind until the lock moved on
+/// again (a device put in the lock while its person's devices asked a lot was not let in for minutes).
+function readSaid(inner: Inner, ws: string, says: string): void {
+  let at = readAt.get(inner);
+  if (!at) readAt.set(inner, (at = new Map()));
+  if (at.get(ws) === says && held(inner, ws) !== null) return;
+  at.set(ws, says);
+  const forget = () => Effect.sync(() => void (at.get(ws) === says && at.delete(ws)));
+  const again = Effect.andThen(Effect.sleep(LIMITED_WAIT), Effect.sync(() => { const now = cloudSays(view(inner, ws)); if (now !== undefined) readSaid(inner, ws, now); })); // timer: a retry after a failure (429)
+  inner.scheduler.enqueue("cloud", `lock/${ws}`, Priority.background, Effect.tapError(read(inner, ws), (e) => Effect.andThen(forget(), e.code === "rate_limited" ? Effect.sync(() => void inner.runner.fork(again)) : Effect.void)));
+  pairs.reading(inner, ws);
 }
 
 /// The lock and the waiting devices, read from the cloud and held; a lock that moved on lets the stations that refused
@@ -349,11 +358,19 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
 function moved(inner: Inner, ws: string): void {
   const p = part(inner, ws);
   p.behind.clear();
+  refusedAgain(inner, ws);
+  pairs.moved(inner, ws);
+}
+
+/// The stations of the workspace that refused this device tried again now: the lock moved on, or the person's own lock
+/// did (this device put on it, which the stations of a lock bound to it go by).
+export function refusedAgain(inner: Inner, ws: string): void {
+  const p = inner.workspaces.get(ws)?.own.get("lock") as Part | undefined;
+  if (!p) return;
   for (const station of [...p.refused.keys()]) {
     p.refused.delete(station);
     inner.stations?.cameOnline(`${ws}/${station}`);
   }
-  pairs.moved(inner, ws);
 }
 
 /// A station refused this device for the lock: noted, not asked again until the lock moves on. What the refusal says

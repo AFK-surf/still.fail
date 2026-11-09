@@ -22,6 +22,7 @@ import { dayOf, usageHistoryRange } from "../src/station/usage-part.ts";
 import { CHANGES_RETRY_MS, EVENTS_COALESCE_MS, LINK_KEY, LONG_MISSES, OFFLINE_RETRY_MS, READ_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS, retryAfter } from "../src/station/sync.ts";
 import { digest } from "../src/digest.ts";
 import { Priority } from "../src/sync/scheduler.ts";
+import { LIMITED_MS } from "../src/sync/cloud.ts";
 import { card } from "../src/views/brief.ts";
 import * as present from "../src/present.ts";
 import { t } from "../src/i18n.ts";
@@ -425,6 +426,22 @@ test("a_station_the_cloud_lists_online_again_is_tried_at_once_though_its_event_w
   await host.time.pass(1_000, 100);
   assert.equal(tries(), before + 1);
   assert.equal(core.inner.data.record("link", ST), "online");
+  core.close();
+});
+
+test("a_workspace_view_the_cloud_turns_away_for_too_many_asks_is_read_again_a_while_later", async () => {
+  const { host, core, cloud } = await started(base(), 0);
+  // Its lock moved on, told; the account's asks this minute spent (its other devices read at once): turned away once.
+  cloud.also = { lock: { seq: 1, hash: "ab".repeat(32) } };
+  let limited = 1;
+  stationLater(host, (req) => (req.url.endsWith("/v1/workspaces/ws") && limited-- > 0 ? Promise.resolve(jsonResponse(429, { error: "rate_limited" })) : undefined));
+  host.socketSend("/v1/events", JSON.stringify({ type: "workspace", id: "ws" }));
+  await host.time.pass(1_000, 100);
+  assert.equal(limited, 0, "turned away once");
+  const lock = () => (core.inner.data.shared({ topic: "workspace", workspace: "ws" }) as { lock?: { seq: number } }).lock?.seq;
+  assert.equal(lock(), undefined, "not read yet");
+  await host.time.pass(LIMITED_MS, 1_000);
+  assert.equal(lock(), 1, "read again");
   core.close();
 });
 
