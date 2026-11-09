@@ -9,7 +9,7 @@ type Json = any;
 /// are claude-opus-4-5), each with the model that came after it in its series; null where no one model did. A model not
 /// here is not known to be outdated and is left as it is. Add a line when a newer model comes out.
 export const OUTDATED = new Map<string, string | null>([
-  // Claude: Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.1 and Mythos 5.1 the newest (Anthropic's model list, 2026-10-09).
+  // Claude: Opus 5.5, Sonnet 5.5, Haiku 5.5, Fable 5.2 and Mythos 5.1 the newest (Anthropic's model list, 2026-11-09).
   ["claude-opus-5", "claude-opus-5-5"],
   ["claude-opus-4-8", "claude-opus-5"],
   ["claude-opus-4-7", "claude-opus-4-8"],
@@ -28,6 +28,7 @@ export const OUTDATED = new Map<string, string | null>([
   ["claude-haiku-4-5", "claude-haiku-5-5"],
   ["claude-3-5-haiku", "claude-haiku-4-5"],
   ["claude-3-haiku", "claude-3-5-haiku"],
+  ["claude-fable-5-1", "claude-fable-5-2"],
   ["claude-fable-5", "claude-fable-5-1"],
   ["claude-mythos-5", "claude-mythos-5-1"],
   // OpenAI: GPT-6 Astra (09-03), Sol and Luna (09-22), GPT-6.1 Sol (09-29). GPT-6 has no Terra.
