@@ -151,6 +151,13 @@ priv struct Moving {
 /// What a keyed node was, kept from frame to frame: where it was laid out (in its list's content, or the window),
 /// when, its offset on the way to its place, its entrance, and how it was last drawn (for its copy when it leaves).
 priv struct Rec {
+  /// the speed its ground's way set off with as it was last reshaped for a cause, and the moment: built again in that
+  /// moment, it sets off as fast again
+  mut g_set_v : Double
+  mut g_set_at : Double
+  /// the same of its place's ways (across, down), as it was last set off again for a cause
+  mut p_set_v : (Double, Double)
+  mut p_set_at : Double
   mut x : Double
   mut y : Double
   mut w : Double
@@ -311,6 +318,10 @@ fn Rec::new() -> Rec {
     was_hp: 1.0,
     g_carry: false,
     g_carried_y: 0.0,
+    g_set_v: 0.0,
+    g_set_at: @double.neg_infinity,
+    p_set_v: (0.0, 0.0),
+    p_set_at: @double.neg_infinity,
     was_g_carried_y: 0.0,
     was_g_carry: false,
     on: 0,
@@ -1464,13 +1475,21 @@ fn foot_moved_in(by : String, frame : Int) -> Double {
 
 ///|
 /// `a` off to `to` by `spec` (said to go `far`), for cause `by` ("" none: on its own).
-fn moves_with(by : String, far : Double, a : Anim, to : Double, spec : Spec, start_at? : Double) -> Unit {
+fn moves_with(
+  by : String,
+  far : Double,
+  a : Anim,
+  to : Double,
+  spec : Spec,
+  start_at? : Double,
+  velocity? : Double,
+) -> Unit {
   // (from the moment its cause came, where one was said: cause_at)
   let start_at = match start_at {
     Some(t) => Some(t)
     None => if by != "" { cause_at.get(by) } else { None }
   }
-  a.animate(to, spec, start_at?)
+  a.animate(to, spec, start_at?, velocity?)
   guard by != "" && spec is Moved(_, _, _) else { return }
   match together.get(by) {
     Some((most, all)) => {
@@ -1484,6 +1503,74 @@ fn moves_with(by : String, far : Double, a : Anim, to : Double, spec : Spec, sta
 }
 
 ///|
+/// How fast a ground's way must go as it is set off again (its share a second) for it to go on from that speed.
+let reshape_moving : Double = 0.05
+
+///|
+/// Whether `spec` sets out from rest whatever it is told (a tween on a curve that starts slow): set off again so while
+/// it went, it would stop dead; a Move or a spring goes on from its speed as it is.
+fn sets_out_from_rest(spec : Spec) -> Bool {
+  match spec {
+    Tween(len, Move | InOut | Leave | Flight, _) => len > 0.0
+    _ => false
+  }
+}
+
+///|
+/// How long (seconds) what is set off again at speed goes on at that speed in the length its way is given.
+let carry_stop_s : Double = 0.2
+
+///|
+/// How far a way said for what is set off again `ox`, `oy` off its end going `vx`, `vy` (points a second) toward it
+/// goes: as far as it has to, or as far as its speed carries it, the further.
+fn carried_way(ox : Double, vx : Double, oy : Double, vy : Double) -> Double {
+  dmax(dmax(ox.abs(), oy.abs()), dmax(vx.abs(), vy.abs()) * carry_stop_s)
+}
+
+///|
+/// How fast a part must go (points a second) as it is set off again for it to go on from that speed (half a point a
+/// frame).
+let part_moving : Double = 30.0
+
+///|
+/// How far (points) a ground's way from where it is drawn to shape `to` goes, along what changes most of it.
+fn ground_way(r : Rec, to : (Double, Double, Double, Double)) -> Double {
+  dmax(dmax((to.0 - r.gx).abs(), (to.1 - r.gy).abs()), dmax((to.2 - r.gw).abs(), (to.3 - r.gh).abs()))
+}
+
+///|
+/// How fast (its share a second) a ground's way from shape `from` to `to` goes as it sets off, carrying on what its
+/// way from `was_from` to `was_to` went at `v` (its share a second): along the side of it that changes most now.
+fn ground_speed_carried(
+  was_from : (Double, Double, Double, Double),
+  was_to : (Double, Double, Double, Double),
+  from : (Double, Double, Double, Double),
+  to : (Double, Double, Double, Double),
+  v : Double,
+) -> Double {
+  if v == 0.0 {
+    return 0.0
+  }
+  let sides = [
+    (was_to.0 - was_from.0, to.0 - from.0),
+    (was_to.1 - was_from.1, to.1 - from.1),
+    (was_to.2 - was_from.2, to.2 - from.2),
+    (was_to.3 - was_from.3, to.3 - from.3),
+  ]
+  let mut most = sides[0]
+  for s in sides {
+    if s.1.abs() > most.1.abs() {
+      most = s
+    }
+  }
+  if most.1.abs() < 0.5 {
+    0.0
+  } else {
+    v * most.0 / most.1
+  }
+}
+
+///|
 /// Each cause's motions as long as the furthest of them (moves_with): told again from where they set out this frame.
 fn moved_together() -> Unit {
   together.each(fn(_, g) {
@@ -1493,10 +1580,14 @@ fn moved_together() -> Unit {
     }
     for m in all {
       let (a, to, spec, start_at) = m
-      // (all said `far` by this layout: told again as long as the furthest)
+      // (all said `far` by this layout: told again as long as the furthest; a way said longer for its own speed
+      // (carried_way) kept as it was said)
+      if spec is Moved(_, over, _) && over > most {
+        continue
+      }
       let s = spec.over(most)
       if s != spec {
-        a.animate(to, s, start_at?)
+        a.animate(to, s, start_at?, velocity=a.v0)
       }
     }
   })
@@ -1904,16 +1995,33 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
               Some(l) if c.moment() <= l.close_until && !l.lifted.contains(e.key) => 100.0
               _ => 0.0
             }
-            let spec = spec.delayed(delay)
+            // (how fast it went as it was set off: as it was set off before in this moment where it was built again
+            // in it)
+            let (vx, vy) = if r.p_set_at == c.moment() { r.p_set_v } else { (r.ox.velocity, r.oy.velocity) }
+            r.p_set_v = (vx, vy)
+            r.p_set_at = c.moment()
+            // (set off again while it went: a Move on from that speed, as its shape's ground does, as long as how far
+            // it has to go or how far its speed carries it, the further)
+            // (only toward where it goes: turned back by its cause (sent words let the composer go as it grew), it sets
+            // out from rest, not thrown past and turned in a frame (the user, 2026-11-09: 「发送反向时不带速度」))
+            let toward = (cx + dx) * vx <= 0.0 && (cy + dy) * vy <= 0.0
+            let carried = sets_out_from_rest(spec) && toward && (vx.abs() > part_moving || vy.abs() > part_moving)
+            let spec = if carried {
+              move(over=carried_way(cx + dx, vx, cy + dy, vy))
+            } else {
+              spec.delayed(delay)
+            }
+            // (carried on from where it is now and how fast it goes now: from now, not from its cause's moment before)
+            let start_at = if carried { Some(c.moment()) } else { None }
             r.driven = false
             r.moved_now = true
             ignore(r.ox.tells_now())
             r.ox.value = cx + dx
-            moves_with(group, far, r.ox, 0.0, spec)
+            moves_with(group, far, r.ox, 0.0, spec, start_at?, velocity=vx)
             ignore(r.oy.tells_now())
             r.oy.value = cy + dy
-            moves_with(group, far, r.oy, 0.0, spec)
-          }
+            moves_with(group, far, r.oy, 0.0, spec, start_at?, velocity=vy)
+              }
         }
       }
       // grown for its cause (its words a line more), not in a list (whose rows make room for each other: makes_room):
@@ -2017,13 +2125,31 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
             foot_moved[e.by] = (frame, moved)
           }
           r.gr = corners_mix(r.was_gr, wr, p0)
+          // (as fast as its ground went on the way it was on, in this way's terms: along what changes most of it)
+          let v = if r.g_set_at == c.moment() {
+            r.g_set_v
+          } else {
+            ground_speed_carried(was_g, was, (r.gx, r.gy, r.gw, r.gh), laid, r.gp.velocity)
+          }
+          r.g_set_v = v
+          r.g_set_at = c.moment()
           r.gp.snap(0.0)
           // (its cause's moment said by what changes it, come by now: from then, it and what moves with it)
           let said_at = e.at > @double.neg_infinity && e.at <= c.moment()
           if said_at && group != "" {
             cause_at[group] = e.at
           }
-          moves_with(group, far, r.gp, 1.0, spec, start_at?=if said_at { Some(e.at) } else { None })
+          // (set off again while it went: a Move on from that speed (move_path), past its new shape a little where it
+          // went toward it fast and back, not from rest on its curve, stopped dead (the user, 2026-11-09: 「冲过一点再弹回」))
+          // (only toward its new shape: turned back, from rest, as its parts are)
+          let v = if v > 0.0 { v } else { 0.0 }
+          let spec = if sets_out_from_rest(spec) && v > reshape_moving {
+            let way = ground_way(r, laid)
+            move(points=way, over=carried_way(-way, v * way, 0.0, 0.0))
+          } else {
+            spec
+          }
+          moves_with(group, far, r.gp, 1.0, spec, start_at?=if said_at { Some(e.at) } else { None }, velocity=v)
           r.g_now = true
           r.g_carry = e.carry
         } else {
@@ -2038,9 +2164,11 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           r.gr = r.was_gr
           if r.g_now {
             r.g_now = false
+            // (as fast as it set off then)
+            let v = r.gp.v0
             r.gp.snap(p0)
             if p0 < 1.0 {
-              moves_with(group, far, r.gp, 1.0, spec)
+              moves_with(group, far, r.gp, 1.0, spec, velocity=v)
             }
           }
         }
