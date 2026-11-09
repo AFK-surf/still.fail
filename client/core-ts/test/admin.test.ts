@@ -207,6 +207,32 @@ test("the_relays_page_says_each_relays_load_now_and_over_the_range", () => {
   assert.ok(w.relays[0].ticks.every((tick: J) => /^\d+\/\d+$/.test(tick.label)));
 });
 
+test("the_relays_page_has_a_card_of_the_directorys_own_load_its_calls_an_hour_and_the_sockets_still_on_it", () => {
+  const now = NOW - (NOW % 3600);
+  const hours = (f: (i: number) => number) => Array.from({ length: 168 }, (_, i) => f(i));
+  const directory = {
+    at: now,
+    calls: { start: now - 167 * 3600, step: 3600, families: { workspaces: hours((i) => i), sockets: hours(() => 2), push: hours(() => 0) } },
+    held: { devices: 3, stations: 0 }, live: { accounts: 40, stations: 7 }, waiting: 0, bytes: 5 * 1024 ** 2,
+  };
+  const card = relays({ relays: [], directory }, null, now, 480).relays.at(-1)!;
+  assert.deepEqual([card.name, card.state], ["目录对象 primary", "online"]);
+  assert.deepEqual(card.numbers, [
+    { label: "近一小时调用", value: String(167 + 2) },
+    { label: "仍在它上面的连接", value: "设备 3 · 站点 0", tone: "amber" },
+    { label: "持有连接的对象", value: "账号 40 · 站点 7" },
+    { label: "待重试的通知", value: "0" },
+    { label: "存储", value: "5.0 MB" },
+  ]);
+  // A family that served nothing is not charted; the day is the last 24 hours, marked every six.
+  assert.deepEqual(card.charts[0].series.map((s: J) => [s.id, s.values.length, s.values.at(-1)]), [["workspaces", 24, 167], ["sockets", 24, 2]]);
+  assert.equal(card.ticks.length, 4);
+  const week = relays({ relays: [], directory }, "week", now, 480).relays.at(-1)!;
+  assert.equal(week.charts[0].series[0].values.length, 168);
+  // A still.fail cloud from before says nothing of it: no card.
+  assert.equal(relays({ relays: [] }, null, now, 480).relays.length, 0);
+});
+
 test("a_bug_making_a_view_is_thrown_for_the_store_to_report_and_a_core_error_is_the_views", () => {
   const view = (list: string, id?: string) => ({ topic: "adminItem", account: "a", list, ...(id ? { id } : {}) });
   // The page's own error (no such user) is the view's value.
