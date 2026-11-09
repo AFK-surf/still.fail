@@ -16,11 +16,22 @@ fn test_frames_between() -> Double {
 /// (Tester::judges_motion), not only the results: MBUI_TEST_MOTION `judge` (a fault fails its test, as on the default
 /// run's frames) or `count` (each said, `MOTION …`, none failing: what the tests show listed, mended down to none). At
 /// 60 and 120 a second, a display's own rates: the default run draws few frames in the middle of a motion, so a
-/// step half way through one went unseen (the user, 2026-11-09: 「动画执行到一半突变也算突变」).
-fn test_motion_judged() -> MotionJudged {
+/// step half way through one went unseen (the user, 2026-11-09: 「动画执行到一半突变也算突变」). `count` counts only the
+/// Testers made in the files still counted (motion_counted) and judges the rest, so a file mended to none stays so.
+fn test_motion_judged(loc : String) -> MotionJudged {
   match @env.get_env_var("MBUI_TEST_MOTION").unwrap_or("") {
     "judge" => Judge
-    "count" => Count
+    "count" => {
+      let file = match loc.find(":") {
+        Some(i) => loc.unsafe_substring(start=0, end=i)
+        None => loc
+      }
+      if motion_counted_files.contains(file) {
+        Count
+      } else {
+        Judge
+      }
+    }
     _ => Results
   }
 }

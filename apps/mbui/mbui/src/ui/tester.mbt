@@ -537,7 +537,7 @@ pub fn Tester::new(
     None => set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
   }
   let between = test_frames_between()
-  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, motion: test_motion_judged(), host_frames: false, each: None, before }
+  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [], between, on_way: false, motion: test_motion_judged(loc.to_string()), host_frames: false, each: None, before }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
   // there; else the display's first frame after `time`
   match run.bind(run_first_frame) {
@@ -709,6 +709,21 @@ pub enum MotionJudged {
   Judge
   Count
 } derive(Eq)
+
+///|
+/// The files whose Testers a run that counts motion only counts (test_motion_judged), not judges.
+// kept across runs: said once as a test program starts (its packages' `init`)
+let motion_counted_files : Set[String] = Set::new()
+
+///|
+/// The files whose Testers still show faults of how what moves goes at 60 or 120 a second (MBUI_TEST_MOTION `count`,
+/// what CI's runs counted): only counted there, every other file judged. Said by a test package as it starts
+/// (`fn init`); only shrinks: a file mended to none leaves the list.
+pub fn motion_counted(files : Array[String]) -> Unit {
+  for f in files {
+    motion_counted_files.add(f)
+  }
+}
 
 ///|
 /// When a Tester's first frame is drawn, after its `time`: the app's first frame, as a 60 Hz display's first would be,
