@@ -168,6 +168,26 @@ test("a person's devices read and bring their lock at their stations, the cloud 
   }
 });
 
+test("a new device refused by every station finds who may let it in of what their refusals told, not the cloud", async () => {
+  const c = cloud();
+  const st = stations();
+  const a = device(c, "a", st);
+  const n = device(c, "n", st);
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    c.say.down = true;
+    // Read once (nothing pinned here, the stations refusing it: none said), then told by a refusal.
+    st.say.up = false;
+    await n.runner.run(Effect.result(n.lock.refresh(SUB)));
+    await n.runner.run(n.lock.heardFrom(SUB, [...st.kept.values()]));
+    assert.deepEqual(n.lock.approvers(SUB).map((d) => d.label), ["a"]);
+    assert.equal(n.lock.standing(SUB), "outside");
+  } finally {
+    a.runner.shutdown();
+    n.runner.shutdown();
+  }
+});
+
 test("a grant holds only for what was signed, by a key on the lock, in its time, for this person", async () => {
   const c = cloud();
   const a = device(c, "a");

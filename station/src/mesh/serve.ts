@@ -177,12 +177,21 @@ function leftOutFor(cloud: Cloud, hello: any, device: string, accepted?: Accepte
 
 /// What a hello this station refused (`e`, why) is answered: a lock's refusal with the code the device asks to be
 /// approved by and how far the lock goes here; a workspace left out for a lock, why (`lock_station`); else the reason.
-export function refusalOf(cloud: Cloud, hello: any, device: string, e: unknown, accepted?: Accepted): Record<string, unknown> {
-  if (e instanceof LockRefusal) return { error: e.message, code: e.code, lock: lockHead(cloud, joinedOf(cloud, claimed(hello))) };
+/// `sub`: whose credential checked out, refused for the lock: told the chains of their own lock this station keeps, so a
+/// device of theirs not on it yet (a new one) finds the devices that may let it in with no cloud (a few, as fit in a line).
+export function refusalOf(cloud: Cloud, hello: any, device: string, e: unknown, accepted?: Accepted, sub: string | null = null): Record<string, unknown> {
+  if (e instanceof LockRefusal) {
+    const chains = sub === null ? [] : personChainsOf(cloud).of(sub).map(([genesis, entries]) => ({ genesis, entries }));
+    const person = chains.length > 0 && JSON.stringify(chains).length <= REFUSAL_PERSON_BYTES ? { person: chains } : {};
+    return { error: e.message, code: e.code, lock: lockHead(cloud, joinedOf(cloud, claimed(hello))), ...person };
+  }
   const left = leftOutFor(cloud, hello, device, accepted);
   if (left !== null) return { error: LEFT_OUT[left], code: "lock_station", why: left };
   return { error: (e as Error).message };
 }
+
+/// How much of a person's own lock a refusal tells at most (a core reads a line of 64 KiB at most).
+const REFUSAL_PERSON_BYTES = 32 * 1024;
 
 /// The workspace a hello's credential names, as it says (checked by verifyMember: only to say which lock refused it).
 function claimed(hello: any): string {
@@ -402,10 +411,13 @@ export async function serve(m: Members, conn: Connection) {
   const proof = lockProof(hello?.lock);
   // The role the credential names: the control plane's word, which the lock may lower but not raise.
   let named = "";
+  // Whose credential checked out (refused then for the lock alone).
+  let whose: string | null = null;
   const check = (line: any) => {
     // Of any workspace the station is in: the viewer's is the one its requests are answered for.
     const admitted = verifyMemberOf(typeof line?.credential === "string" ? line.credential : "", (ws: string) => m.cloud.grantKeys(ws === m.cloud.home() ? null : ws), m.cloud.memberships(), device, m.accepted?.());
     named = admitted.viewer.role;
+    whose = admitted.viewer.sub;
     if (proof) admitted.viewer.lockDevice = proof;
     // Which devices came, for a lock's owner to name (seen-devices.ts): what it says of itself with its lock proof
     // (`lock.kind`, `lock.label`), its base key.
@@ -418,7 +430,7 @@ export async function serve(m: Members, conn: Connection) {
   try {
     current = check(hello);
   } catch (e) {
-    await writeLine(first, refusalOf(m.cloud, hello, device, e, m.accepted?.())).catch(() => {});
+    await writeLine(first, refusalOf(m.cloud, hello, device, e, m.accepted?.(), whose)).catch(() => {});
     await first.finish().catch(() => {});
     wall.after(200, () => conn.close(1, e instanceof LockRefusal ? "lock_unconfirmed" : "credential_refused"));
     throw e;

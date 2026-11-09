@@ -388,7 +388,7 @@ class Control {
         const reason = typeof answer.error === "string" ? answer.error : JSON.stringify(answer.error);
         if (answer.code === "client_upgrade_required") return yield* Effect.fail(new CoreError("client_upgrade_required", reason));
         // A station with a workspace lock that does not know this device yet: it waits to be confirmed (lock.ts).
-        if (answer.code === "lock_unconfirmed") return yield* Effect.fail(new LockUnconfirmed(t("core-logic.mesh.lock_unconfirmed", { reason }), answer.lock ?? null));
+        if (answer.code === "lock_unconfirmed") return yield* Effect.fail(new LockUnconfirmed(t("core-logic.mesh.lock_unconfirmed", { reason }), answer.lock ?? null, answer.person));
         // A station that takes none of this workspace's members for a security mode, its own or this workspace's not
         // brought to it yet (station/src/cloud/state.ts `leftOut`): why, as it said.
         if (answer.code === "lock_station") return yield* Effect.fail(new CoreError("lock_station", lockStationWords(answer.why, reason)));
@@ -403,12 +403,15 @@ class Control {
   }
 }
 
-/// A station's refusal of this device for its workspace lock, with how far its own lock goes (`lock`, as it said).
+/// A station's refusal of this device for its workspace lock, with how far its own lock goes (`lock`, as it said) and
+/// the chains of the person's own lock it keeps (`person`: a device not on it yet finds who may let it in).
 export class LockUnconfirmed extends CoreError {
   readonly lock: unknown;
-  constructor(message: string, lock: unknown) {
+  readonly person: unknown;
+  constructor(message: string, lock: unknown, person?: unknown) {
     super("lock_unconfirmed", message);
     this.lock = lock;
+    this.person = person;
   }
 }
 
@@ -2282,8 +2285,8 @@ export type MeshWireEnv = {
   off?: (workspace: string) => string[];
   status: (workspace: string) => import("./status.ts").Status;
   /// The workspace lock (views/lock.ts): a station refused this device for it (`theirs`: how far its own lock goes, as
-  /// it said); why a station is not asked now.
-  lockRefused?: (workspace: string, station: string, theirs: unknown) => CoreError | null;
+  /// it said; `person`: the chains of the person's own lock it keeps, as it told them); why a station is not asked now.
+  lockRefused?: (workspace: string, station: string, theirs: unknown, person?: unknown) => CoreError | null;
   lockWaiting?: (workspace: string, station: string) => CoreError | null;
 };
 
@@ -2308,7 +2311,7 @@ export class MeshWire implements StationWire {
     const waits = env.lockWaiting?.(workspace, id);
     if (waits) return Effect.fail(waits);
     // Refused for it: noted (this device asks to be confirmed), and said as the lock has it (which workspace, where).
-    const refusedFor = (e: CoreError) => (e.code === "lock_unconfirmed" ? (env.lockRefused?.(workspace, id, e instanceof LockUnconfirmed ? e.lock : null) ?? e) : e);
+    const refusedFor = (e: CoreError) => (e.code === "lock_unconfirmed" ? (env.lockRefused?.(workspace, id, e instanceof LockUnconfirmed ? e.lock : null, e instanceof LockUnconfirmed ? e.person : undefined) ?? e) : e);
     return Effect.mapError(Effect.gen(function* () {
       const status = env.status(workspace);
       const credentials = env.credentials(workspace);
@@ -2530,7 +2533,7 @@ export function meshWire(inner: Inner): StationWire {
     relays: (workspace) => inner.cloudSync.workspaceRelays(workspace),
     off: (workspace) => inner.cloudSync.workspaceOff(workspace),
     status: (workspace) => inner.workspaces.of(workspace).status,
-    lockRefused: (workspace, station, theirs) => hooks.lockRefused?.(inner, workspace, station, theirs) ?? null,
+    lockRefused: (workspace, station, theirs, person) => hooks.lockRefused?.(inner, workspace, station, theirs, person) ?? null,
     lockWaiting: (workspace, station) => hooks.lockWaiting?.(inner, workspace, station) ?? null,
   });
 }

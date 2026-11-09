@@ -7,13 +7,13 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { type Entry, entryHash, signedBytes } from "../src/cloud/lock.ts";
+import { type Entry, LockRefusal, entryHash, signedBytes } from "../src/cloud/lock.ts";
 import type { Cloud } from "../src/cloud/state.ts";
 import { CHAINS_A_PERSON, PersonChains } from "../src/mesh/person-chains.ts";
 import { answerPerson, followPersons, personSyncWith } from "../src/mesh/person-sync.ts";
 import { tellLocks } from "../src/mesh/lock-events.ts";
 import { SEEN_SECS, SeenDevices } from "../src/mesh/seen-devices.ts";
-import { lockPartRoute } from "../src/mesh/serve.ts";
+import { lockPartRoute, refusalOf } from "../src/mesh/serve.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 
 function ed() {
@@ -193,4 +193,15 @@ test("the devices that came are listed for the workspace's owners and admins, a 
   // The route: an owner or admin sees everyone's, a member their own.
   const cloud = fakeCloud(mkdtempSync(join(tmpdir(), "seen-route-")));
   assert.equal(lockPartRoute(cloud, "devices", "GET", Buffer.alloc(0), viewer("carol"))[0], 200);
+});
+
+test("a device refused for the lock is told its person's own lock, for a new one to find who may let it in with no cloud", () => {
+  const cloud = fakeCloud(mkdtempSync(join(tmpdir(), "refusal-person-")), { locked: () => null, home: () => null });
+  const carol = personal("carol");
+  lockPartRoute(cloud, "person", "POST", body({ chain: carol.chain }), viewer("carol"));
+  const said = refusalOf(cloud, {}, "ee".repeat(32), new LockRefusal("this device is not on the lock its person bound in this workspace"), undefined, "carol");
+  assert.deepEqual((said.person as any[]).map((c) => [c.genesis, c.entries.length]), [[carol.genesis, 1]]);
+  // Whose credential did not check out, or another's: nothing of it.
+  assert.equal(refusalOf(cloud, {}, "ee".repeat(32), new LockRefusal("x"), undefined, null).person, undefined);
+  assert.equal(refusalOf(cloud, {}, "ee".repeat(32), new LockRefusal("x"), undefined, "bob").person, undefined);
 });

@@ -163,6 +163,12 @@ export class PersonalLock {
     });
   }
 
+  /// The chains a station told (refusing this device): taken as a read of them is, once what is pinned here was read
+  /// (before, the next read takes them: the stations' refusals are what it reads then).
+  heardFrom(sub: string, chains: Entry[][]): Effect.Effect<void, CoreError> {
+    return chains.length === 0 || !this.#loaded.has(sub) ? Effect.void : this.#heard(sub, this.#best(sub, chains), true);
+  }
+
   /// Of the chains the stations keep (each one a person's lock begun anew): the longest that goes on from the one pinned
   /// here; none such, the one a station kept last (its latest), as the cloud's would be.
   #best(sub: string, chains: Entry[][]): Entry[] {
