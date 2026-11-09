@@ -2,7 +2,11 @@
 // again moved, its nodes not gone through, where nothing of it changed since (Tree::drawn_rev) and it is only moved
 // by whole pixels within the clip it is drawn in, as Android's RenderNode is drawn again offset, Chrome's layer
 // scrolled. Where it was drawn otherwise than its instances moved say (its picture, decoded or fading in since; one
-// not seen asked for), that part drawn anew in its place among them.
+// not seen asked for), that part drawn anew in its place among them. So too what else holds others (a top bar, a
+// card, a row's parts), in a row or in none: kept once it is gone through again and again with nothing of it changed
+// (ride_holder), drawn again as kept from then on while nothing of it changes; what is gone through, so, is what
+// changed and what holds it, down to it and no further, the rest drawn again as kept (a row whose icon turns: the
+// icon and what holds it).
 
 ///|
 /// A part of a row drawn anew each time it is drawn again (a picture, or one not seen yet asked for): where among its
@@ -166,12 +170,58 @@ priv struct Riding {
   kept : Array[Array[(Int, Double, Double)]]
   /// an old view hosted (island_rides): drawn again only where it was
   island : Bool
+  /// not a list's row nor an old view: what holds others (ride_holder), kept whether it is wholly within its clip or
+  /// not
+  holder : Bool
 }
 
 ///|
 /// What each row drew last, by its root (kept while it is drawn so: let go with the node, view_forget).
 // kept across runs: emptied as a run begins (view_forget), each let go with its node (view_changes_taken)
 let ride_kept : ByNode[RideKept] = ByNode::new()
+
+///|
+/// Each node as it was last gone through to paint it, by its index (ride_holder).
+// kept across runs: emptied as a run begins (view_forget); one let go is another's at its index made again (RideWalk's
+// `gen`)
+let ride_walked : Array[RideWalk] = []
+
+///|
+/// A node as it was last gone through to paint it (ride_walked): which made at its index, the count of changes then,
+/// where it was drawn and how opaque, and how many times running it was gone through so with nothing of it changed.
+priv struct RideWalk {
+  mut gen : Int
+  mut rev : Int
+  mut x : Double
+  mut y : Double
+  mut a : Double
+  mut same : Int
+}
+
+///|
+/// Node `id` gone through to paint it as of the count of changes `rev`, drawn at (x, y) as opaque as `a`, its count of
+/// changes `now`: how many times running it was so with nothing of it changed, this one counted (0: it changed, or is
+/// drawn otherwise than it was).
+fn ride_walked_by(id : @view.NodeId, rev : Int, now : Int, x : Double, y : Double, a : Double) -> Int {
+  let at = id.at
+  while ride_walked.length() <= at {
+    ride_walked.push({ gen: -1, rev: -1, x: 0.0, y: 0.0, a: 0.0, same: 0 })
+  }
+  let w = ride_walked.unsafe_get(at)
+  w.same = if w.gen == id.gen && now <= w.rev && x == w.x && y == w.y && a == w.a { w.same + 1 } else { 0 }
+  w.gen = id.gen
+  w.rev = rev
+  w.x = x
+  w.y = y
+  w.a = a
+  w.same
+}
+
+///|
+/// What holds others found holding a row, an old view or what a column scrolls by its offset alone as it was being drawn
+/// to be kept (ride_holder_out), by its node: never begun again.
+// kept across runs: emptied as a run begins (view_forget), each let go with its node (view_changes_taken)
+let ride_unkept : ByNode[Bool] = ByNode::new()
 
 ///|
 /// The rows kept whose instances the host keeps (RideKept's `group`), by their group: what a header among the frame's
@@ -236,6 +286,8 @@ fn ride_let_go(id : @view.NodeId) -> Unit {
 ///|
 /// All the rows kept let go (view_forget).
 fn ride_let_go_all() -> Unit {
+  ride_walked.clear()
+  ride_unkept.clear()
   for g, _ in ride_groups {
     ride_groups_gone.push(g)
   }
@@ -422,9 +474,21 @@ fn Ctx::spans_cut(self : Ctx) -> Unit {
 }
 
 ///|
-/// The row being drawn now, as the tree is painted (none between paints).
+/// What is being drawn to be kept now, as the tree is painted, the innermost last (none between paints): a row or an old
+/// view (none inside another), what holds others in it or in none, each holding what is drawn.
 // kept across runs: none between paints
-let riding : Ref[Riding?] = Ref(None)
+let ridings : Array[Riding] = []
+
+///|
+/// How many of ridings are a list's row or an old view hosted (not Riding's `holder`): 0 or 1.
+// kept across runs: none between paints
+let ridings_rows : Ref[Int] = Ref(0)
+
+///|
+/// The innermost of what is being drawn to be kept.
+fn riding_now() -> Riding? {
+  ridings.last()
+}
 
 ///|
 /// How many rows were drawn as kept, moved (Ctx::ride_again): for a test.
@@ -508,8 +572,12 @@ fn Ctx::ride_begin(
   clips : Int,
   rings : Int,
   island? : Bool = false,
+  holder? : Bool = false,
 ) -> Unit {
-  riding.val = Some({
+  if !holder {
+    ridings_rows.val = ridings_rows.val + 1
+  }
+  ridings.push({
     id: c.id,
     rev,
     k0: self.ninst,
@@ -531,25 +599,51 @@ fn Ctx::ride_begin(
     nodes: 0,
     kept: [],
     island,
+    holder,
   })
 }
 
 ///|
-/// The row being drawn ended, all of it drawn: kept where nothing of it is drawn otherwise than moving it would draw
-/// it, wholly within its clip one way at least; else what was kept of it let go.
+/// What holds what was being drawn to be kept (`r`, ended now) kept with all it drew, as were it drawn there: what
+/// spoiled it spoils that (an old view is never kept but as its own); as many nodes, as far as it reaches, what of it
+/// is drawn anew each time, the glyphs it draws from.
+fn ride_into_outer(r : Riding) -> Unit {
+  guard riding_now() is Some(p) && !p.spoiled else { return }
+  if r.spoiled || r.island {
+    p.spoiled = true
+    return
+  }
+  p.nodes = p.nodes + r.nodes
+  p.x0 = dmin(p.x0, r.x0)
+  p.y0 = dmin(p.y0, r.y0)
+  p.x1 = dmax(p.x1, r.x1)
+  p.y1 = dmax(p.y1, r.y1)
+  p.spots.push_iter(r.spots.iter())
+  p.kept.push_iter(r.kept.iter())
+}
+
+///|
+/// The innermost being drawn to be kept ended, all of it drawn: kept where nothing of it is drawn otherwise than
+/// moving it would draw it, a row wholly within its clip one way at least; else what was kept of it let go. Kept inside
+/// another, never the host's group (drawn again there, it is copied: Ctx::ride_copy).
 fn Ctx::ride_end(self : Ctx) -> Unit {
-  guard riding.val is Some(r) else { return }
-  riding.val = None
+  guard ridings.pop() is Some(r) else { return }
+  if !r.holder {
+    ridings_rows.val = ridings_rows.val - 1
+  }
+  ride_into_outer(r)
   let k = r.clip_at
   let side_x = ride_side(r.x0, r.x1, clip_stack[k], clip_stack[k + 2])
   let side_y = ride_side(r.y0, r.y1, clip_stack[k + 1], clip_stack[k + 3])
   let n = self.ninst - r.k0
-  if r.spoiled || (!r.island && side_x != 0 && side_y != 0) {
+  if r.spoiled || (!r.island && !r.holder && side_x != 0 && side_y != 0) {
     ride_let_go(r.id)
     return
   }
   let e = ride_clip_at(k)
-  if !ride_clip_square(e) {
+  // (what holds others in a clip not square kept to be drawn again only where it was: Ctx::ride_kept_for)
+  let square = ride_clip_square(e)
+  if !square && !r.holder {
     ride_let_go(r.id)
     return
   }
@@ -580,7 +674,7 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
   let segs = self.segs[r.seg0 * 4:].to_array()
   // (kept by the host where it keeps groups and nothing of them is worked on as the frame ends; in a list drawn whole
   // as one as well, its header in that list's group where it is drawn again: ListRiding)
-  let group = if groups_on() && ride_groupable(inst, n) {
+  let group = if ridings.is_empty() && groups_on() && ride_groupable(inst, n) {
     ride_groups_made.val = ride_groups_made.val + 1
     ride_groups_made.val
   } else {
@@ -606,8 +700,8 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
     spots: r.spots.map(fn(s) { { ..s, at: s.at - r.k0, end: s.end - r.k0 } }),
     owners,
     reach: (r.x0, r.y0, r.x1, r.y1),
-    inside_x: side_x == 0,
-    inside_y: side_y == 0,
+    inside_x: square && side_x == 0,
+    inside_y: square && side_y == 0,
     nodes: r.nodes,
     kept: r.kept,
     group,
@@ -638,7 +732,8 @@ fn ride_node(c : @view.Content, x : Double, y : Double, s : Double, moved_not : 
     }
     None => ()
   }
-  guard riding.val is Some(r) else { return }
+  // (the innermost alone: what holds it takes what it holds as it ends, ride_into_outer)
+  guard riding_now() is Some(r) && !r.spoiled else { return }
   r.nodes = r.nodes + 1
   if moved_not ||
     s != 1.0 ||
@@ -666,7 +761,7 @@ fn Ctx::ride_spot(
   seen : Bool,
 ) -> Unit {
   list_drawn_anew()
-  match riding.val {
+  match riding_now() {
     Some(r) => {
       let at = self.ninst
       let k = clip_top()
@@ -758,11 +853,23 @@ fn Ctx::ride_again(self : Ctx, k : RideKept, dx : Double, dy : Double) -> Unit {
   ride_caps.clear()
   let seg_by = (self.segs.length() / 4 - k.seg0).to_double()
   self.segs_put(k.segs, k.pack)
+  // (in what is being drawn to be kept, all of it that one's as well, as were it drawn anew: ride_into_outer)
+  let outer = match riding_now() {
+    Some(r) if !r.spoiled => Some(r)
+    _ => None
+  }
   let mut from = 0
   for sp in k.spots {
     self.ride_copy(k, from, sp.at, dx, dy, seg_by)
+    let at = self.ninst
     match sp.clip {
-      None => self.view_unseen(sp.c, sp.s)
+      None => {
+        self.view_unseen(sp.c, sp.s)
+        match outer {
+          Some(r) => r.spots.push({ ..sp, at, end: self.ninst, x: sp.x + dx, y: sp.y + dy })
+          None => ()
+        }
+      }
       Some(cl) => {
         // (the clip it was drawn in, moved where it is the row's own)
         let e = k.clip
@@ -781,12 +888,36 @@ fn Ctx::ride_again(self : Ctx, k : RideKept, dx : Double, dy : Double) -> Unit {
         clip_say_apart(sp.apart)
         clip_say_window(sp.window)
         self.view_picture(sp.c, sp.x + dx, sp.y + dy, sp.s, sp.a)
+        match outer {
+          Some(r) =>
+            r.spots.push({
+              ..sp,
+              at,
+              end: self.ninst,
+              x: sp.x + dx,
+              y: sp.y + dy,
+              clip: Some(ride_clip_at(clip_top())),
+            })
+          None => ()
+        }
         pop_clip()
       }
     }
     from = sp.end
   }
   self.ride_copy(k, from, k.inst.length() / inst_size, dx, dy, seg_by)
+  match outer {
+    Some(r) => {
+      let (x0, y0, x1, y1) = k.reach
+      r.nodes = r.nodes + k.nodes
+      r.x0 = dmin(r.x0, x0 + dx)
+      r.y0 = dmin(r.y0, y0 + dy)
+      r.x1 = dmax(r.x1, x1 + dx)
+      r.y1 = dmax(r.y1, y1 + dy)
+      r.kept.push_iter(k.kept.iter())
+    }
+    None => ()
+  }
 }
 
 ///|
@@ -806,7 +937,7 @@ fn Ctx::ride_copy(self : Ctx, k : RideKept, i0 : Int, i1 : Int, dx : Double, dy 
     self.grow()
   }
   let at = self.ninst
-  if k.group >= 0 && dr.mode == 0 && !shooting.val {
+  if k.group >= 0 && dr.mode == 0 && !shooting.val && ridings.is_empty() {
     self.ride_head(k.group, i0, n, at, dx, dy, seg_by)
   } else if k.heads {
     ride_put_out(k, self.inst, at, dx, dy, seg_by, 0.0, 0.0, 0.0, 0.0) |> ignore
@@ -928,11 +1059,70 @@ fn ride_put(
 }
 
 ///|
-/// The row being drawn draws what moving it would not draw again: not kept.
+/// What is drawn now draws what moving it would not draw again: the innermost being drawn to be kept not kept, nor what
+/// holds it (ride_into_outer).
 fn ride_spoil() -> Unit {
-  match riding.val {
+  match riding_now() {
     Some(r) => r.spoiled = true
     None => ()
+  }
+}
+
+///|
+/// Whether node `c`, not a list's row, is begun to be kept with what it holds as it is drawn (Riding's `holder`), at
+/// (x, y) as opaque as `a`, as of the count of changes `rev` it is drawn at: gone through to paint it ride_holder_after
+/// times running with nothing of it changed, where it was and as opaque (it would be drawn as it was; what changes or
+/// moves each time it is drawn never kept, its recording never drawn again), holding others; not an old view, in its
+/// bones, glass, what a column scrolls by its offset alone, nor what was found holding such (ride_unkept). Each node
+/// gone through is marked so; one that changed lets go of what it kept.
+fn ride_holder(
+  tree : @view.Tree,
+  c : @view.Content,
+  rev : Int,
+  x : Double,
+  y : Double,
+  a : Double,
+) -> Bool {
+  let id = c.id
+  let now = tree.drawn_rev(id)
+  let same = ride_walked_by(id, rev, now, x, y, a)
+  if same < ride_holder_after {
+    if same == 0 && ride_kept.contains(id) {
+      ride_let_go(id)
+    }
+    return false
+  }
+  !ride_unkept.contains(id) &&
+  !c.hosted &&
+  c.bones == 0L &&
+  c.glass is None &&
+  tree.held_count(id) >= 2 &&
+  tree.scroll_off_by(id) < 0
+}
+
+///|
+/// How many times running what holds others is gone through with nothing of it changed, drawn where it was as opaque,
+/// before it is kept as it is drawn (ride_holder): what changed once (a row come in, its text set) not kept for a frame
+/// it is drawn as kept in whole.
+let ride_holder_after : Int = 2
+
+///|
+/// What holds others `id` kept, not drawn as kept though nothing of it changed (in another clip, its glyphs let go): let
+/// go, begun again only once it is gone through so ride_holder_after times running again.
+fn ride_holder_moved(id : @view.NodeId) -> Unit {
+  ride_let_go(id)
+  ride_walked.unsafe_get(id.at).same = 0
+}
+
+///|
+/// What holds others being drawn to be kept (Riding's `holder`), the innermost up to a row, let be as a row, an old view
+/// or what a column scrolls by its offset alone is come to in it (each kept as its own: in nothing else kept, or as
+/// ListRiding draws it whole as one), never begun again.
+fn ride_holder_out() -> Unit {
+  while riding_now() is Some(r) && r.holder {
+    ridings.pop() |> ignore
+    ride_let_go(r.id)
+    ride_unkept[r.id] = true
   }
 }
 
@@ -1007,7 +1197,7 @@ fn island_still(id : @view.NodeId, built : Int) -> Bool {
 /// (as the frame's paint follows what it reads: a frame asked for as it changes, that paint read anew), and the glyphs
 /// it draws from kept for it (held in the atlas while it is drawn again: view_glyphs_held).
 fn Ctx::island_painted(self : Ctx, c : @view.Content, paint : () -> Unit) -> Unit {
-  guard riding.val is Some(r) && r.island && r.id == c.id else { return paint() }
+  guard riding_now() is Some(r) && r.island && r.id == c.id else { return paint() }
   let w = match island_watches.get(c.id) {
     Some(w) => w
     None => {
@@ -1102,7 +1292,7 @@ fn list_drawn_anew() -> Unit {
 ///|
 /// The glyphs a block drawn now draws from (ViewBlock's `kept`), held for the row and the list being drawn (view_glyphs_held).
 fn ride_glyphs_kept(kept : Array[(Int, Double, Double)]) -> Unit {
-  match riding.val {
+  match riding_now() {
     Some(r) => r.kept.push(kept)
     None => ()
   }

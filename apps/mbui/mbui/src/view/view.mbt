@@ -8146,6 +8146,15 @@ pub fn Tree::drawn_rev(self : Tree, id : NodeId) -> Int {
 }
 
 ///|
+/// How many nodes node `id` holds in the order it is drawn in (Tree's `order`): none where it is in none.
+pub fn Tree::held_count(self : Tree, id : NodeId) -> Int {
+  guard self.alive_id(id) && id.at < self.order_of.length() else { return 0 }
+  let i = self.order_of.unsafe_get(id.at)
+  guard i >= 0 && i < self.order.length() else { return 0 }
+  self.order_end.unsafe_get(i) - i - 1
+}
+
+///|
 /// The count of changes now, taken by what draws the tree as it draws it: each change after it counted past it.
 pub fn Tree::drawn_rev_taken(self : Tree) -> Int {
   let r = self.drawn_revs

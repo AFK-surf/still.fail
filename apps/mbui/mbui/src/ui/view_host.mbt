@@ -485,7 +485,8 @@ fn view_forget() -> Unit {
   view_shape_bands.clear()
   ride_let_go_all()
   island_watches_clear()
-  riding.val = None
+  ridings.clear()
+  ridings_rows.val = 0
   view_pictures.clear()
   inst_owners.tree_words.clear()
   view_paint_work.made = 0
@@ -737,6 +738,7 @@ fn view_changes_taken(tree : @view.Tree) -> Bool {
   for id in removed {
     view_blocks.remove(id)
     ride_let_go(id)
+    ride_unkept.remove(id)
     island_watch_gone(id)
     view_shape_bands.remove(id)
     view_pictures.remove(id)
@@ -1164,7 +1166,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       clip_stack[k + 6] == 0.0 &&
       clip_stack[k + 7] == 0.0 &&
       !clip_has_outer(k)
-    let whole = riding.val is None &&
+    // (what holds others being drawn to be kept round it let be: it moves as nothing of theirs tells)
+    ride_holder_out()
+    let whole = ridings.is_empty() &&
       list_riding.val is None &&
       grouping.val is None &&
       fading.length() == 0 &&
@@ -1219,13 +1223,11 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     None => ()
   }
   tree.each_drawn_laid_or_past(fn(c, x, y, a, s, ux, uy) {
-    // (the row being drawn, all of it drawn as what is next is none of it: ended before anything round it is closed)
-    match riding.val {
-      Some(r) if !tree.holds_in_order(r.id, c.id) => {
-        close_down(r.clips0, r.rings0)
-        self.ride_end()
-      }
-      _ => ()
+    // (what is being drawn to be kept, all of each drawn as what is next is none of it: ended, the innermost first,
+    // before anything round it is closed)
+    while riding_now() is Some(r) && !tree.holds_in_order(r.id, c.id) {
+      close_down(r.clips0, r.rings0)
+      self.ride_end()
     }
     // (the list being drawn whole as one, all of it drawn: ended after its last row, before what is round it closes)
     match list_riding.val {
@@ -1281,18 +1283,42 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       )
     }
     // (a list's row: drawn as kept, moved, where nothing of it changed since and it is only moved (Ctx::ride_kept_for),
-    // all it holds passed over; else drawn, and kept as it ends where it can be drawn so again)
-    if riding.val is None &&
-      fading.length() == 0 &&
-      stretching.length() == 0 &&
-      ((ride_may(c, x, y) && tree.rides_scroll(c.id)) || island_rides(c)) {
-      match self.ride_kept_for(tree, c, x, y, a, s, ux, uy) {
-        Some(k) => {
-          self.ride_again(k, x - k.x, y - k.y)
-          view_paint_work.copied = view_paint_work.copied + k.nodes
-          return true
+    // all it holds passed over; else drawn, and kept as it ends where it can be drawn so again. So too what else holds
+    // others, gone through again and again with nothing of it changed (ride_holder), in a row or in none, not in a list
+    // drawn whole as one but in its rows; one found holding a row or an old view let be, never begun again)
+    if fading.length() == 0 && stretching.length() == 0 {
+      let row = ridings_rows.val == 0 &&
+        ((ride_may(c, x, y) && tree.rides_scroll(c.id)) || island_rides(c))
+      if row {
+        ride_holder_out()
+      }
+      let holder = !row &&
+        (!ridings.is_empty() || list_riding.val is None) &&
+        ride_holder(tree, c, paint_rev, x, y, a)
+      if row || holder {
+        match self.ride_kept_for(tree, c, x, y, a, s, ux, uy) {
+          Some(k) => {
+            self.ride_again(k, x - k.x, y - k.y)
+            view_paint_work.copied = view_paint_work.copied + k.nodes
+            return true
+          }
+          // (what holds others kept, not drawn as kept though nothing of it changed: let go, ride_holder_moved)
+          None if holder && ride_kept.contains(c.id) => ride_holder_moved(c.id)
+          None =>
+            self.ride_begin(
+              c,
+              paint_rev,
+              x,
+              y,
+              a,
+              ux,
+              uy,
+              clipping.length(),
+              rings.length(),
+              island=c.hosted,
+              holder~,
+            )
         }
-        None => self.ride_begin(c, paint_rev, x, y, a, ux, uy, clipping.length(), rings.length(), island=c.hosted)
       }
     }
     ride_node(c, x, y, s, false)
@@ -1445,12 +1471,9 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
     }
     false
   }, draws=view_draws, offsets~, draws_rev=tree_fields_rev.val)
-  match riding.val {
-    Some(r) => {
-      close_down(r.clips0, r.rings0)
-      self.ride_end()
-    }
-    None => ()
+  while riding_now() is Some(r) {
+    close_down(r.clips0, r.rings0)
+    self.ride_end()
   }
   match list_riding.val {
     Some(l) => {
@@ -1734,6 +1757,15 @@ fn Ctx::view_ring_take(self : Ctx, k : Int) -> (FixedArray[Double], (Int, (Doubl
   for h in list_heads {
     if h.at > k {
       h.at = h.at - 1
+    }
+  }
+  // (what is drawn anew each time after it, of what is being drawn to be kept, one back with it)
+  for r in ridings {
+    for i in 0..<r.spots.length() {
+      let sp = r.spots[i]
+      if sp.at > k {
+        r.spots[i] = { ..sp, at: sp.at - 1, end: sp.end - 1 }
+      }
     }
   }
   if k < o.length() {
