@@ -72,6 +72,30 @@ pub fn Tracker::reset(self : Tracker) -> Unit {
 }
 
 ///|
+/// What a tracker holds as of a moment, kept as it was (its samples copied): its velocity as of then worked out only
+/// where it is asked (Drag::vx, Drag::vy), as Tracker::velocity_at would have then, whatever the tracker took since.
+pub struct TrackerSaid {
+  priv times : FixedArray[Double]
+  priv vals : FixedArray[Double]
+  priv index : Int
+  priv n : Int
+  priv t : Double
+} derive(Eq, Show, Debug)
+
+///|
+/// What it holds now, kept for its velocity as of `t` (Tracker::velocity_at).
+pub fn Tracker::said_at(self : Tracker, t : Double) -> TrackerSaid {
+  { times: self.times.copy(), vals: self.vals.copy(), index: self.index, n: self.n, t }
+}
+
+///|
+/// Its velocity as of its moment, as the tracker said it then (Tracker::velocity_at).
+pub fn TrackerSaid::velocity(self : TrackerSaid) -> Double {
+  let tr : Tracker = { times: self.times, vals: self.vals, index: self.index, n: self.n, fit: None }
+  tr.velocity_at(self.t)
+}
+
+///|
 /// A sample: the coordinate `v` at `t` (ms).
 pub fn Tracker::add(self : Tracker, t : Double, v : Double) -> Unit {
   self.index = (self.index + 1) % track_size

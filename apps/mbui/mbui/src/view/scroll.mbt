@@ -946,7 +946,7 @@ pub fn View::scrolls(
   // (held, its own terms: what it holds moved as far as the hand, as big as it is drawn)
   .on_drag(fn(d) {
     // (where the hand is along it, in its own terms and the window's, and how fast: across, along the row)
-    let (hy, hwy, hvy) = if across { (d.x, d.wx, d.vx) } else { (d.y, d.wy, d.vy) }
+    let (hy, hwy) = if across { (d.x, d.wx) } else { (d.y, d.wy) }
     match d.kind {
       Down => {
         // (what shows past an end of a page's list caught where it shows: held by the finger from there)
@@ -982,6 +982,8 @@ pub fn View::scrolls(
       // no faster than a fling goes in the window's points, then in its own terms)
       Up => {
         let (_, _, sc) = self.tree.placed(self.at)
+        // (how fast it went, worked out as it is let go: none of its moves asked it)
+        let hvy = if across { d.vx() } else { d.vy() }
         s.hand_v = dclamp(-hvy, -scroll_most_v, scroll_most_v) / (if sc > 0.0 { sc } else { 1.0 })
         if s.as_list {
           s.let_go(self, d.at)
