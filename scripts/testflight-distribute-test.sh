@@ -12,6 +12,7 @@ method=GET
 for a in "$@"; do [ "$a" = POST ] && method=POST; done
 echo "$method ${url#https://api.appstoreconnect.apple.com/v1/}" >> "$FAKE/calls"
 case $url in
+  */apps/*) echo "{\"data\":{\"type\":\"apps\",\"id\":\"${ANSWER_APP:-$IOS_ASC_APP_ID}\",\"attributes\":{\"bundleId\":\"${ANSWER_BUNDLE:-$IOS_BUNDLE_ID}\"}}}" ;;
   */builds\?*)
     n=$(cat "$FAKE/polls" 2>/dev/null || echo 0); echo $((n + 1)) > "$FAKE/polls"
     state=$(sed -n "$((n + 1))p" "$FAKE/states")
@@ -35,6 +36,7 @@ C
 chmod +x "$W/bin/curl" "$W/bin/gh"
 export PATH=$W/bin:$PATH RUNNER_TEMP=$W GITHUB_STEP_SUMMARY=$W/summary ASC_POLL_SECONDS=0 ASC_POLL_TRIES=6 GITHUB_REPOSITORY=AFK-surf/still.fail
 export RELEASE_BUILD=5 RELEASE_VERSION=0.1.0 ASC_KEY_ID=ABCDE12345 ASC_ISSUER_ID=issuer
+export RELEASE_PRODUCT=stillfail
 export ASC_PRIVATE_KEY_B64=$(openssl ecparam -name prime256v1 -genkey -noout | openssl base64 -A)
 good_internal='{"data":[{"id":"gi","attributes":{"isInternalGroup":true}}]}'
 good_external='{"data":[{"id":"ge","attributes":{"isInternalGroup":false}}]}'
@@ -46,7 +48,7 @@ run() {
   echo "${EXTERNAL_ANSWER:-$good_external}" > "$FAKE/external"
   [ -z "${REFUSE:-}" ] || touch "$FAKE/refuse"
   touch "$FAKE/calls"
-  RELEASE_ROUND=${ROUND:-1} RELEASE_EXTERNAL=${2:-false} bash "$D/testflight-distribute.sh" > "$W/out" 2>&1
+  RELEASE_ROUND=${ROUND:-1} RELEASE_EXTERNAL=${2:-false} bash -c '. "$1/../apps/mbui/scripts/testflight-product.sh"; export IOS_ASC_APP_ID IOS_BUNDLE_ID; bash "$1/testflight-distribute.sh"' _ "$D" > "$W/out" 2>&1
 }
 posts() { grep '^POST' "$FAKE/calls" || true; }
 expect_posts() { [ "$(posts)" = "$1" ] || { echo "expected posts: $1"$'\n'"got: $(posts)" >&2; cat "$W/out" >&2; exit 1; }; }
@@ -77,4 +79,15 @@ EXTERNAL_ANSWER='{"data":[]}' refuses VALID true; expect_posts 'POST betaGroups/
 # Apple refusing the addition fails the job.
 REFUSE=1 refuses VALID
 grep -q refused "$W/out"
+# monoid's build lookup and subsequent wait rounds stay on monoid; another app's record refuses before any write.
+export RELEASE_PRODUCT=monoid MONOID_ASC_APP_ID=6999999999
+run VALID true
+grep -qF 'GET builds?filter[app]=6999999999&filter[version]=5' "$FAKE/calls"
+expect_posts 'POST betaGroups/gi/relationships/builds
+POST betaGroups/ge/relationships/builds
+POST betaAppReviewSubmissions'
+run PROCESSING true
+grep -q 'product=monoid' "$FAKE/dispatched"
+ANSWER_BUNDLE=fail.still.iphone refuses VALID; expect_posts ''
+ANSWER_APP=6818750243 refuses VALID; expect_posts ''
 echo 'testflight-distribute: ok'

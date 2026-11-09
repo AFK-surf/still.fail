@@ -33,6 +33,20 @@ app_bundle() {
   mkdir -p $APPDIR/Frameworks
   rm -rf $APPDIR/Frameworks/hermes.framework
   cp -R $HERMES_SLICE/hermes.framework $APPDIR/Frameworks/
+  # One monoid identity for TestFlight and App Store. iOS has no macOS LSEnvironment: the app reads these two signed
+  # values before the core starts (src/sfcore/apple_engine.m), so sign-in and accounts go to monoid's cloud.
+  case ${MBUI_IOS_PRODUCT:-stillfail} in
+    stillfail) ;;
+    monoid)
+      for p in "$APPDIR/Info.plist" "$APPDIR/PlugIns/Share.appex/Info.plist"; do
+        plutil -replace CFBundleName -string monoid "$p"
+        plutil -replace CFBundleDisplayName -string monoid "$p"
+      done
+      plutil -replace MBUIShareTaken -string '已收下。打开 monoid，选要发到的对话。' "$APPDIR/PlugIns/Share.appex/Info.plist"
+      plutil -replace MBUIEnvironment -json '{"MBUI_CLOUD":"https://app.monoid.build","MBUI_PRODUCT":"monoid"}' "$APPDIR/Info.plist"
+      ;;
+    *) echo 'ios-core: MBUI_IOS_PRODUCT must be stillfail or monoid' >&2; return 1 ;;
+  esac
   if [ -n "${STILLFAIL_POSTHOG:-}" ]; then
     local host key
     host=$(plutil -extract host raw -o - "$STILLFAIL_POSTHOG") && key=$(plutil -extract key raw -o - "$STILLFAIL_POSTHOG") \
