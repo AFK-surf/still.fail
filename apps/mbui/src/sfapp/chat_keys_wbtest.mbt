@@ -4,7 +4,14 @@
 
 ///|
 /// The fixture's chat on 大屏 with a Mac's keys, its calls kept in `calls` and answered; its agents' `status` as given.
-fn keyed_chat(calls : Array[Made], status? : String = "idle", mode? : String = "chat", watch? : String = "") -> @ui.Tester {
+fn keyed_chat(
+  calls : Array[Made],
+  status? : String = "idle",
+  mode? : String = "chat",
+  watch? : String = "",
+  newer? : Bool = false,
+  h? : Double = 800.0,
+) -> @ui.Tester {
   new_run()
   let base = fixture(mode)
   let src : Source = {
@@ -20,6 +27,11 @@ fn keyed_chat(calls : Array[Made], status? : String = "idle", mode? : String = "
     topic_read: fn(name, params) {
       let tp = base.topic(name, params).get().snapshot()
       match tp.value {
+        Some(Object(m)) if name == "chat" && newer => {
+          let o = m.copy()
+          o["newer"] = Json::boolean(true)
+          { ..tp, value: Some(Json::object(o)) }
+        }
         Some(Object(m)) if name == "chat" && watch != "" => {
           let o = m.copy()
           o["watch"] = { "ask": Json::string(watch) }
@@ -47,7 +59,7 @@ fn keyed_chat(calls : Array[Made], status? : String = "idle", mode? : String = "
   }
   decide_src.val = Some(src)
   open_fixture_over(mode, src)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h~, platform=0)
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -176,4 +188,37 @@ test "Escape with ⌘F's bar open closes that bar and nothing else (no panel ask
   t.draw()
   assert_eq(@sfpages.find_chat(), "")
   assert_eq(named(calls, "chat.tabs.clear").length(), 0)
+}
+
+///|
+test "⌘↓ in a chat short of its end asks the core for its latest page (chat.latest by its thread)" {
+  let calls : Array[Made] = []
+  let t = keyed_chat(calls, newer=true)
+  t.key(@ui.key_code_down, mods=@ui.mod_cmd)
+  t.draw()
+  let made = named(calls, "chat.latest")
+  assert_eq(made.length(), 1)
+  assert_eq(number(Some(made[0].params), "thread"), 7.0)
+}
+
+///|
+test "⌘↓ in a chat scrolled up from its end takes the list back to its end, asking the core nothing" {
+  let calls : Array[Made] = []
+  // (a window lower than the chat: it scrolls)
+  let t = keyed_chat(calls, h=480.0)
+  let last = "做完了：列表、跳到最新的按钮、加载更早的消息都好了，截图也换了。"
+  t.move(640.0, 240.0)
+  t.wheel(640.0, 240.0, -1200.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find(last) is None, msg="still at the end")
+  t.key(@ui.key_code_down, mods=@ui.mod_cmd)
+  t.draw()
+  // (back at its end by the list's own rest: a glide solved in time)
+  let rest = t.rest_of("a list")
+  assert_true(rest < @double.infinity, msg="no glide set off")
+  if rest > t.time() {
+    t.run_for(rest - t.time())
+  }
+  assert_true(t.find(last) is Some(_))
+  assert_eq(named(calls, "chat.latest").length(), 0)
 }
