@@ -595,6 +595,11 @@ pub struct Tree {
   /// has read the step it is on (each reading it is worked out again as it passes a step); its steps woken for only
   /// while one such is drawn
   resident_readers : Map[Int, (Int, Double)]
+  /// what Tree::resident_read last said, and what it said it of: how many times the order or what is drawn changed
+  /// (`draws_rev`), what is hit (`hits`: one left out of its row, or back), the step, and how many times a reader came
+  /// or read another step (`resident_rev`): said again only past one of them
+  priv mut resident_said : (Int, Int, Double, Int, Bool)
+  priv mut resident_rev : Int
   /// its keymap, the contexts and actions its nodes say, and a sequence of keys under way (keymap.mbt)
   keyed : KeyBook
   /// told each time what the root holds is put at another place in the window's stack of layers (View::stacked,
@@ -948,6 +953,8 @@ pub fn Tree::new(
     beat: @signals.signal(start, same=fn(a, b) { a == b }),
     resident: @signals.signal(resident_of(start), same=fn(a, b) { a == b }),
     resident_readers: {},
+    resident_said: (-1, -1, -1.0, -1, false),
+    resident_rev: 0,
     keyed: KeyBook::new(),
     places: @signals.signal(0),
     room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
@@ -1556,7 +1563,11 @@ fn Tree::beat_set(self : Tree, ms : Double) -> Unit {
 /// not a frame after each frame.
 pub fn View::cycle_resident(self : View, period : Double) -> Double {
   let t = self.tree.resident.get()
-  self.tree.resident_readers[self.at] = (self.gen, t)
+  let read = (self.gen, t)
+  if self.tree.resident_readers.get(self.at) != Some(read) {
+    self.tree.resident_readers[self.at] = read
+    self.tree.resident_rev = self.tree.resident_rev + 1
+  }
   if period <= 0.0 {
     return 0.0
   }
@@ -1571,8 +1582,28 @@ pub fn Tree::resident_read(self : Tree) -> Bool {
   if !self.resident.watched() {
     return false
   }
-  // (those let go, or no longer reading it (the step they last read not this one: a mark that stopped), dropped)
+  // (as last said, where nothing it reads changed since: the order, what is drawn, what is left out, the readers, the
+  // step)
   let now = @signals.untracked(fn() { self.resident.get() })
+  let (dr, hits, step, rr, said) = self.resident_said
+  if !self.order_due &&
+    !self.outs_changed &&
+    dr == self.draws_rev &&
+    hits == self.hits &&
+    step == now &&
+    rr == self.resident_rev {
+    return said
+  }
+  let said = self.resident_found(now)
+  self.resident_said = (self.draws_rev, self.hits, now, self.resident_rev, said)
+  said
+}
+
+///|
+/// Whether an endless decoration reads the resident clock's step `now` where it is drawn now (Tree::resident_read),
+/// found.
+fn Tree::resident_found(self : Tree, now : Double) -> Bool {
+  // (those let go, or no longer reading it (the step they last read not this one: a mark that stopped), dropped)
   let gone = []
   for at, r in self.resident_readers {
     let (gen, read) = r
