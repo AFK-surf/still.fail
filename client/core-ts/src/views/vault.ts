@@ -107,6 +107,10 @@ type Held = {
   /// The devices whose prompt for a key was put away here (`vault.hidePrompt`), by device: the certificate's `at` it
   /// was put away at (one published since, asking again, is shown).
   hidden: Record<string, number>;
+  /// A later version of a vault a station told than the one held, that the lock as held here does not take yet, by
+  /// vault: this device's lock behind the station's (a device let in again, given the key in the version written for it
+  /// before it heard it was in the lock). Taken as the lock comes (`vaultCome`); nothing else would tell it again.
+  later?: Record<string, Vault>;
 };
 
 /// A vault's version a station holds, and its items' versions; the signatures of those (`sig`, `sigs`): which of two of
@@ -409,9 +413,37 @@ function holds(h: Held, v: Vault, station: string, items: Item[] | null, fit: Fi
   // Its host the first of the stations holding it by id, the same on every device: what each writes there follows on
   // from the same version (one written to another meanwhile is refused, not a second of its seq).
   h.at[v.id] = Object.keys(on).sort()[0]!;
-  // Two versions of one seq (written on two stations at once): the one every station and device keeps.
+  take(h, v, fit);
+}
+
+/// Vault `v` held over the version held where the rules say so (of one seq, written on two stations at once: the one
+/// every station and device keeps); a later one the lock does not take yet kept aside (`later`).
+function take(h: Held, v: Vault, fit: Fits): void {
   const had = h.vaults[v.id];
-  if (had === undefined || over(fit.vault(v), () => fit.vault(had), rules.vault_supersedes_js(v, had))) h.vaults[v.id] = v;
+  const later = had !== undefined && rules.vault_supersedes_js(v, had);
+  if (had === undefined || over(fit.vault(v), () => fit.vault(had), later)) {
+    h.vaults[v.id] = v;
+    if (h.later?.[v.id] !== undefined && !rules.vault_supersedes_js(h.later[v.id], v)) delete h.later[v.id];
+  } else if (later && (h.later?.[v.id] === undefined || rules.vault_supersedes_js(v, h.later[v.id]))) (h.later ??= {})[v.id] = v;
+}
+
+/// The versions kept aside (`later`) that the lock as it is now takes, held: their items read again of the station
+/// holding them (one heard before its vault was taken here was not held either).
+function takeLater(inner: Inner, ws: string): void {
+  const fit = fits(inner, ws);
+  const now = Object.values(held(inner, ws).later ?? {}).filter((v) => fit.vault(v));
+  if (now.length === 0) return;
+  change(inner, ws, (h) => {
+    for (const v of now) {
+      delete h.later![v.id];
+      take(h, v, fit);
+    }
+  });
+  const h = held(inner, ws);
+  for (const v of now) {
+    const station = Object.entries(h.on[v.id] ?? {}).find(([, at]) => at.seq === v.seq)?.[0] ?? h.at[v.id];
+    if (station !== undefined) inner.scheduler.enqueue(`${ws}/${station}`, `${ws}/${station} vault/${v.id}`, Priority.background, readItems(inner, `${ws}/${station}`, v.id));
+  }
 }
 
 /// `station` no longer holds vault `id` (the version held kept, whoever holds it): its host another that does.
@@ -701,6 +733,8 @@ export function askAnswers(inner: Inner, ws: string, asks: { request: string; sa
 /// a chat's vault cards are answered by is there as the chat opens, not checked then (a chat opens by looking up what
 /// it shows: test/chat-open-lookup.test.ts).
 export function vaultCome(inner: Inner, ws: string): void {
+  // A version told before the lock that takes it came (this device let in again): held now.
+  takeLater(inner, ws);
   timed("vault.come", () => askAnswers(inner, ws, [{ request: "", save: true }]));
   // A device confirmed in the lock whose certificate came first: given the keys unsealed here; the prompts of every
   // workspace follow the lock too.
