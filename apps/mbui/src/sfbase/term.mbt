@@ -107,7 +107,7 @@ pub fn job_output_lines(
   job_ink.set(ink)
   job_dark.set(dark)
   Some(
-    job_outputs.read(Json::object(params).stringify(), fn(_) {
+    job_outputs.read(src, Json::object(params).stringify(), fn(_) {
       let v = src.topic("jobLog", params).get().value
       let words = text(v, "text")
       let runs = items(v, "runs")
