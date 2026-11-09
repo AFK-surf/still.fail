@@ -1485,6 +1485,28 @@ impl Inner {
             self.texts.lock().map_err(|_| "the readers are gone".to_string())?.remove(&id_of(a)?);
             return Ok(Value::Null);
         }
+        // A path's size and when it was last written (ms, none before 1970), links followed, as Node's statSync with
+        // `bigint` says them; null when it cannot be.
+        if op == "fs.meta" {
+            let Ok(meta) = std::fs::metadata(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let modified = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
+            return Ok(json!({ "size": meta.len(), "mtimeMs": modified }));
+        }
+        // The end of a file, at most `bytes` of it (up to its size when opened), decoded as TextDecoder("utf-8") does
+        // (what is not UTF-8 replaced, a leading byte order mark dropped); null when it does not open.
+        if op == "fs.tail" {
+            use std::io::{Read, Seek, SeekFrom};
+            let Ok(mut file) = std::fs::File::open(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let most = a.get("bytes").and_then(Value::as_u64).unwrap_or(64 * 1024);
+            let size = file.metadata().map(|m| m.len()).unwrap_or(most);
+            let from = size.saturating_sub(most);
+            let mut bytes = Vec::new();
+            if file.seek(SeekFrom::Start(from)).is_ok() {
+                let _ = file.take(size - from).read_to_end(&mut bytes);
+            }
+            let body = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes);
+            return Ok(json!(String::from_utf8_lossy(body)));
+        }
         if op == "fs.read" {
             let Ok(bytes) = std::fs::read(str_of(a, "path")?) else { return Ok(Value::Null) };
             if a.get("strict").and_then(Value::as_bool).unwrap_or(false) {

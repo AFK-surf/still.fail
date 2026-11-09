@@ -9,6 +9,8 @@ struct Reader {
   host : @host.Host
   db : String
   mut writer : Int64?
+  /// The connection reads are made on, made at the first.
+  mut reading : @sql.Db?
 }
 
 ///|
@@ -56,8 +58,41 @@ fn Reader::answer(self : Reader, line : String) -> Json {
       } catch {
         e => { "id": id, "status": 500, "error": Json::string(message(e)) }
       }
+    { "op": String(op), .. } if moved(op) =>
+      try {
+        { "id": id, "text": Json::string(self.read(op, ask.value("args").unwrap_or(Json::null())).stringify()) }
+      } catch {
+        @readops.Refused(status, m) => { "id": id, "status": Json::number(status.to_double()), "error": Json::string(m) }
+        e => { "id": id, "status": 500, "error": Json::string(message(e)) }
+      }
     { "op": String(op), .. } => { "id": id, "status": 500, "error": Json::string("no read \{op}") }
     _ => { "id": id, "status": 400, "error": Json::string("no op") }
+  }
+}
+
+///|
+/// The reads moved here from read/worker.ts (read/pool.ts `MOVED`).
+fn moved(op : String) -> Bool {
+  op == "job" || op == "jobLog"
+}
+
+///|
+/// A read, in one snapshot as read/worker.ts makes it (a transaction around it).
+fn Reader::read(self : Reader, op : String, args : Json) -> Json raise {
+  let db = match self.reading {
+    Some(db) => db
+    None => {
+      let db = @sql.Db::attach(self.host, self.db, wait=5000)
+      self.reading = Some(db)
+      db
+    }
+  }
+  db.exec("BEGIN")
+  defer (db.exec("COMMIT") catch { _ => () })
+  match op {
+    "job" => @readops.job(db, self.host, args)
+    "jobLog" => @readops.job_log(db, self.host, args)
+    _ => fail("no read \{op}")
   }
 }
 
@@ -658,7 +693,7 @@ fn main {
       }))
     (None, _, Some(data)) =>
       @host.run(shell_dir=data + "/shell", host => {
-        let reader = { host, db: data + "/stillfail.db", writer: None }
+        let reader = { host, db: data + "/stillfail.db", writer: None, reading: None }
         let ready : Json = { "ready": { "loadedMs": 0, "openedMs": 0 } }
         host.say(ready.stringify())
         while host.line() is Some(line) {
