@@ -146,6 +146,15 @@ pub struct Damage {
   /// how far each group a host keeps reaches (Damage::group_set), wherever it is moved to: what a header of it (kind
   /// 13, src/ui/scene.mbt) covers, moved by its 0, 1
   priv groups : Map[Int, Rect]
+  /// what of each group a header of it reads of what is under it: whether it holds glass, and the groups whose headers
+  /// it holds (Damage::occlude)
+  priv group_reads : Map[Int, (Bool, Array[Int])]
+  /// Damage::occlude's: its covers (cover_most, four numbers each), where each unit of the frame starts, which are
+  /// hidden, and the frame without them
+  priv covers : FixedArray[Double]
+  priv mut unit_at : FixedArray[Int]
+  priv mut hidden : FixedArray[Bool]
+  priv mut shown : FixedArray[Double]
   /// a frame with headers, each instance once and each header once, its group's room after it left out (Damage::next)
   priv mut units : FixedArray[Double]
   // each instance's hash (inst_hash) as it was worked out, the kept frame's and this one's, by the frame it was worked
@@ -184,6 +193,11 @@ pub fn Damage::new() -> Damage {
     seen: [],
     telling: false,
     groups: {},
+    group_reads: {},
+    covers: FixedArray::make(cover_most * 4, 0.0),
+    unit_at: FixedArray::make(0, 0),
+    hidden: FixedArray::make(0, false),
+    shown: FixedArray::make(0, 0.0),
     units: FixedArray::make(0, 0.0),
     prev_hash: FixedArray::make(0, 0L),
     prev_at: FixedArray::make(0, -1),
@@ -261,20 +275,26 @@ pub fn Damage::next(
 /// place of it) as far as its own group reaches, moved where it says.
 pub fn Damage::group_set(self : Damage, id : Int, inst : FixedArray[Double], n : Int) -> Unit {
   let r = Rect::none()
+  let mut glass = false
+  let heads = []
   for k in 0..<n {
     if kind_at(inst, k) == 13 {
       self.reach_of(inst, k, r)
+      heads.push(inst[k * inst_size + 12].to_int())
     } else {
       reach(inst, k, r, cut=false)
+      glass = glass || is_glass(kind_at(inst, k))
     }
   }
   self.groups[id] = r
+  self.group_reads[id] = (glass, heads)
 }
 
 ///|
 /// Group `id` let go.
 pub fn Damage::group_drop(self : Damage, id : Int) -> Unit {
   self.groups.remove(id)
+  self.group_reads.remove(id)
 }
 
 ///|

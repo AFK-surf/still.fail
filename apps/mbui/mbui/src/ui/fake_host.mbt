@@ -1382,11 +1382,13 @@ impl @hostapi.Host for FakeHost with clipboard_set_image(self, data) {
 /// A frame presented: its instances counted, what a host that keeps its picture is handed kept for a test that
 /// records it (tester_host.mbt).
 /// Drawn out where a header stands for a group it keeps, as a host draws them (Ctx::flat_from): what a test reads of
-/// the frame reads the instances drawn.
-impl @hostapi.Host for FakeHost with present(self, buf, count, _, _, _) {
-  g().flat_from(0)
-  self.instances = count
-  host_presented_now(buf, count)
+/// the frame reads the instances drawn. Those are the frame's, every one: what a host is handed leaves out what
+/// cannot be seen (h_present, @damage's Damage::occlude), which draws the same.
+impl @hostapi.Host for FakeHost with present(self, _, _, _, _, _) {
+  let c = g()
+  c.flat_from(0)
+  self.instances = c.ninst
+  host_presented_now(c.inst, c.ninst)
 }
 
 ///|
