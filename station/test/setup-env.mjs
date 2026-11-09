@@ -1,8 +1,16 @@
 import { afterEach, beforeEach } from "node:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import fs, { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+// What is written is not waited onto the disk (fsync): no test can tell (a file is the same to every reader before it
+// reaches the disk; only a machine losing power could), and a test's time would be the disk's, shared with whatever
+// else the machine does: lock-world.test.ts syncs 889 times, 4 s here and minutes on a CI machine busy writing.
+fs.fsyncSync = () => {};
+fs.fdatasyncSync = () => {};
+syncBuiltinESMExports();
 
 // A test that needs a custom CA sets it itself. Host trust overrides must not leak into the fake agents' environments.
 for (const key of ["SSL_CERT_FILE", "SSL_CERT_DIR", "CODEX_CA_CERTIFICATE"]) delete process.env[key];
