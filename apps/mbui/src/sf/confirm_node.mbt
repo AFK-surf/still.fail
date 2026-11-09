@@ -64,6 +64,7 @@ fn dialog_layer_node(
   first_stop? : Bool = false,
   scrim? : () -> Int64 = fn() { @ui.tree_theme().scrim },
   ground_ms? : Double = confirm_ground_ms,
+  night_with_ground? : Bool = false,
 ) -> Unit {
   parent.show(
     open,
@@ -106,7 +107,17 @@ fn dialog_layer_node(
       // (a back gesture under way as it opens goes on to what it began on, as the old frame's layers let it: chosen as
       // it began; the next its)
       .held_back_goes_on()
-      .ground(By(fn() { if dims() { confirm_faded(scrim(), dim.shown(layer)) } else { 0L } }))
+      // (`night_with_ground`: as far in as what it shows' ground (its look's, ground first): the night whole as its words
+      // begin, gone only after they have, never words over the page's seen through a night not yet in)
+      .ground(By(fn() {
+        if !dims() {
+          0L
+        } else if night_with_ground {
+          confirm_faded(scrim(), look().alpha)
+        } else {
+          confirm_faded(scrim(), dim.shown(layer))
+        }
+      }))
       // (a press outside its panel its own, nothing under it pressed: closing it as it goes down where it is a dialog's,
       // as the old frame's layer is dismissed then (Ctx::overlay's outside), whatever the finger does after; nothing
       // where an alert's)
