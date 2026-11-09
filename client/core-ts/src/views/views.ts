@@ -2945,7 +2945,8 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
 /// names the upload), as its message draws it once up, not a card that turns into it then; any other a card saying how
 /// far, as it is a card once up. While any goes up, 正在上传 under it (`waits`), unless something else holds it, and how far all
 /// of them together are (`progress`, 正在上传 42%) once each says how much of it the station has (a station's file
-/// copied across says nothing until it is there).
+/// copied across says nothing until it is there). Every byte gone and its station not yet saying it has them all (its
+/// answer can take seconds more), 等待 station 确认收到, not 100% (it read as stuck, zuozijian 2026-11-09).
 function goingUp(o: J): J {
   const { uploads, ...rest } = o as Record<string, unknown>;
   const going = arr(uploads).filter((u) => isObject(u));
@@ -2961,7 +2962,9 @@ function goingUp(o: J): J {
     attachments: [...arr(o.attachments), ...shown],
     ...(cards.length > 0 ? { uploads: cards } : {}),
     ...(o.state === "sending" && typeof o.waits !== "string"
-      ? progress !== null ? { waits: t("core-views.outbox.uploading", { percent: Math.floor(progress * 100) }), progress } : { waits: t("common.uploading") }
+      ? progress === null ? { waits: t("common.uploading") }
+        : progress >= 1 ? { waits: t("common.uploadConfirming"), progress }
+        : { waits: t("core-views.outbox.uploading", { percent: Math.floor(progress * 100) }), progress }
       : {}),
   };
 }

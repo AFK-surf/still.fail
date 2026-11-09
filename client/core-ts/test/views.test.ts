@@ -2244,6 +2244,11 @@ test("a_message_going_up_says_how_far_its_files_are_together", async () => {
   t.views.local.uploadChanged("u1", { sent: 300 });
   await t.read(u, 1);
   assert.deepEqual(shown(), ["正在上传 87%", 350 / 400]);
+  // Every byte gone, the station not yet saying it has them: waiting for it, not 100% (a picture's answer came 9 s
+  // after its bytes and it read as stuck, 2026-11-09).
+  t.views.local.uploadChanged("u2", { sent: 100 });
+  await t.read(u, 1);
+  assert.deepEqual(shown(), ["等待 station 确认收到", 1]);
   const copied = t.views.outboxAdd("ws/a", 7, { text: "再看", attachments: [], quotes: [], uploads: [
     { id: "u3", name: "a.png", size: 10, sent: 5 },
     { id: "u4", name: "b.zip", size: 10 },

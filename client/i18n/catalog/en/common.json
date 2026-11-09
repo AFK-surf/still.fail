@@ -16,6 +16,7 @@
   "common.opening": "Opening",
   "common.saving": "Saving",
   "common.uploading": "Uploading",
+  "common.uploadConfirming": "Waiting for the station to confirm",
   "common.downloading": "Downloading",
   "common.confirm": "OK",
   "common.back": "Back",
