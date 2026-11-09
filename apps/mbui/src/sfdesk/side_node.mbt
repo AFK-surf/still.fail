@@ -206,25 +206,14 @@ fn lists_band_node(
         })
       })
       |> ignore
-      // catching up on what changed while away (its old view)
+      // catching up on what changed while away
       line.show(fn() { view().map(fn(v) { v.syncing is Some(_) }).unwrap_or(false) }, fn(k) {
-        // (as wide as it is laid out, told by the old frame)
-        let wide : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
-        k.shrink(Is(0.0)).width(By(fn() { wide.get() })) |> ignore
-        @ui.old(
-          k,
-          fn(c) {
-            let said = match view() {
-              Some({ syncing: Some(y), .. }) => y
-              _ => ""
-            }
-            @sf.sync_key(c, "side/syncing", update_key_side, update_key_mark, true, said)
-          },
-          natural=true,
-          fits=(update_key_side, wide),
-        )
-        |> @ui.old_takes_own
-        |> ignore
+        @sf.sync_key_node(k, tips, update_key_side, update_key_mark, fn() {
+          match view() {
+            Some({ syncing: Some(y), .. }) => Some(y)
+            _ => None
+          }
+        })
       })
       // 更新 before the filter where one is offered (brand.mbt update_in_row)
       line.show(update_shown, fn(k) {

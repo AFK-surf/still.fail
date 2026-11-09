@@ -334,6 +334,14 @@ fn icon_traced(
   color? : Int64,
 ) -> Int {
   let color = color.unwrap_or(theme().p.text)
+  let data = icon_traced_data(name, trace)
+  c.shapes(icon_shapes(data, size / 24.0, color), w=Px(size), h=Px(size), name="sf/icon/\{name}/\{size}/\{color}")
+}
+
+///|
+/// Icon `name`'s numbers with its lines as `trace` gives them (icon_traced's), for icon_shapes: a mark drawn on or back
+/// along its strokes, in an old view or a node (sync_key_node).
+fn icon_traced_data(name : String, trace : (Int, Array[Double]) -> Array[Array[Double]]) -> Array[Double] {
   let data : Array[Double] = []
   match icon_numbers(name) {
     Some(d) => {
@@ -361,7 +369,7 @@ fn icon_traced(
     }
     None => ()
   }
-  c.shapes(icon_shapes(data, size / 24.0, color), w=Px(size), h=Px(size), name="sf/icon/\{name}/\{size}/\{color}")
+  data
 }
 
 ///|
