@@ -32,6 +32,10 @@ yet and you can add one, add it.
 - `Ctx` is going: no new code is built on it. What is left is counted by detlint (`old-island`, `old-list`,
   `click-read`, `key-read`, `build-motion`, `layout-read-back`, `ui-current`, `build-clock`) and those counts only
   fall; an API goes from mbui once its count is none.
+- What a screen reader is told is what changed (the user, 2026-11-09: AccessKit's way; `src/ui/a11y.mbt`'s head), found
+  where it changed (`Tree::said_marked`, `Tree::said_pass`), never the whole tree compared each frame. A change to
+  what a node is, where it is or whether it is read out marks it; a Tester whose host reads (`set_a11y`) holds what the
+  host was told to the whole tree after every frame that told it.
 
 ## Time in a test is declared, never waited for
 

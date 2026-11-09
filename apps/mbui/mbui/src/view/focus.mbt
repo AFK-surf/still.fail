@@ -53,6 +53,7 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
     guard self.live() is Some(n) else { return }
     let was = (n.focusable, n.focus_keys, n.focus_tab)
     n.focusable = on
+    self.tree.said_marked(self.at, words=false, state=true)
     n.focus_keys = keys
     // (Tab's stop on it View::tab_stop's where that was said after this: not undone as whether it takes the focus
     // changes)

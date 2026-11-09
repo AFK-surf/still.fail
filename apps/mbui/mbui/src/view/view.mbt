@@ -432,6 +432,15 @@ struct Node {
   /// the tree's count of changes as it or anything it holds last changed how it is drawn in its place (Tree::touched):
   /// what is drawn of all of it is what it was then, wherever it is moved
   mut drawn_rev : Int
+  /// the tree's count of what is read out as it, or anything it holds, last changed in any way (`said`), in its words or what
+  /// says itself in it (`words`), in what of it is read out in what holds it (`kids`: the nearest that is read out, or
+  /// the root, marked), and as it changed itself (`own`; `state`: whether it takes presses, what it is said to be):
+  /// what is read out of it gone through again only where these are past the last pass (Tree::said_pass)
+  mut said_rev : Int
+  mut words_rev : Int
+  mut kids_rev : Int
+  mut own_rev : Int
+  mut state_rev : Int
   /// whether what it scrolls it scrolls across (View::scrolls with Scroll::across): which way Tree::scrolls_now asks
   /// whether it can go
   mut scroll_across : Bool
@@ -779,6 +788,14 @@ pub struct Tree {
   scrolled_ats : Array[NodeId]
   /// the count of changes to how its nodes are drawn, each node's drawn_rev one of them (Tree::touched)
   mut drawn_revs : Int
+  /// the count of changes to what is read out (each node's said_rev and the rest one of them: Tree::said_marked), the last
+  /// pass's (Tree::said_pass), the modal layers it went through as (Tree::said_pass), and what it reads out again each
+  /// pass: what names itself or holds by what hosts an old view (by index, its making), what moves as it scrolls
+  mut said_revs : Int
+  mut said_seen : Int
+  mut said_modal : (Int, Int, Int, Int)
+  said_again : Map[Int, Int]
+  said_helds : Map[Int, Int]
   /// the nodes let go since the host last took them (Tree::take_removed): what it keeps for them to let go too
   removed : Array[NodeId]
   /// the nodes whose content was made again since the host last took them (Tree::take_changed), and whether anything
@@ -975,6 +992,11 @@ pub fn Tree::new(
     scrolled_now: false,
     scrolled_ats: [],
     drawn_revs: 1,
+    said_revs: 1,
+    said_seen: 0,
+    said_modal: (-3, -3, -3, -3),
+    said_again: {},
+    said_helds: {},
     removed: [],
     pending: [],
     drawn_due: false,
@@ -1162,6 +1184,11 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.claims_scroll = false
       n.scroll_held = -1
       n.drawn_rev = 0
+      n.said_rev = 0
+      n.words_rev = 0
+      n.kids_rev = 0
+      n.own_rev = 0
+      n.state_rev = 0
       n.scroll_across = false
       n.scroll_off = None
       n.scroll_by = -1
@@ -1263,6 +1290,11 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         claims_scroll: false,
         scroll_held: -1,
         drawn_rev: 0,
+        said_rev: 0,
+        words_rev: 0,
+        kids_rev: 0,
+        own_rev: 0,
+        state_rev: 0,
         scroll_across: false,
         scroll_off: None,
         scroll_by: -1,
@@ -1848,7 +1880,7 @@ fn Tree::look_marked_at(self : Tree, at : Int) -> Unit {
 /// Its place (how far it is drawn off, how opaque) to be worked out again, what it holds with it.
 fn Tree::place_marked_at(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
-  self.touched(at)
+  self.touched(at, words=false)
   if !n.place_due {
     n.place_due = true
     self.places_due.push(at)
@@ -2526,7 +2558,12 @@ fn Tree::bound_marked(self : Tree, at : Int, phase : Phase) -> Unit {
       self.layout_marked_at(at)
       self.look_marked_at(at)
     }
-    Said => self.marked()
+    Said => {
+      // (what it is, whether it is hidden: it read out again, and what holds it, as it may come or go from what is read
+      // out there)
+      self.said_marked(at, state=true, kids=true)
+      self.marked()
+    }
   }
 }
 
@@ -3743,6 +3780,7 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
   let set = fn(on : Bool) {
     guard self.live() is Some(n) else { return }
     n.inert = !on
+    self.tree.said_marked(self.at, words=false, state=true)
     self.tree.hits = self.tree.hits + 1
     if !on {
       self.tree.hold_lost_in(self.at)
@@ -3783,6 +3821,8 @@ pub fn View::over_all(self : View, on : Live[Bool]) -> View {
     guard self.live() is Some(n) else { return }
     n.over_all = on
     self.tree.top_last()
+    // (read out among the root's at its place, over what a modal layer holds or not: Tree::said_pass)
+    self.tree.said_marked(self.at, words=false, state=true, kids=true)
     self.tree.places_told()
     self.tree.hits = self.tree.hits + 1
     self.tree.modals_told()
@@ -3846,6 +3886,8 @@ pub fn View::stacked(self : View, stack : Live[Int]) -> View {
   self.bind(Stacked, stack, Layout, fn(k) {
     self.tree.nodes[self.at].stack = k
     self.tree.top_last()
+    // (read out among the root's at its place, over what a modal layer holds or not: Tree::said_pass)
+    self.tree.said_marked(self.at, words=false, state=true, kids=true)
     self.tree.places_told()
     self.tree.hits = self.tree.hits + 1
     self.tree.modals_told()
@@ -4739,6 +4781,7 @@ fn Tree::asked_at(
 pub fn View::on_press(self : View, f : () -> Unit) -> View {
   guard self.live() is Some(n) else { return self }
   n.on_press = Some(f)
+  self.tree.said_marked(self.at, words=false, state=true)
   self.tree.hits = self.tree.hits + 1
   self
 }
@@ -5634,7 +5677,7 @@ fn View::let_go(self : View) -> Unit {
   n.flex.children.clear()
   let parent = n.parent
   if parent >= 0 {
-    self.tree.touched(parent)
+    self.tree.marked_up(parent, true, true, false, false, true)
   }
   n.parent = -1
   n.content = None
@@ -5966,7 +6009,7 @@ fn each_place(slot : View, sn : Node, order : Array[Int]) -> Unit {
   let moved = order.length() != kids.length() || order.mapi(fn(i, v) { kids[i] != v }).contains(true)
   if moved {
     kids.clear()
-    tree.touched(slot.at)
+    tree.marked_up(slot.at, true, true, false, false, true)
     for v in order {
       kids.push(v)
     }
@@ -6131,6 +6174,7 @@ fn View::leave(self : View, v : View, ms : Double) -> Unit {
   let p = gone_at(n, now)
   n.span = ms
   n.left_at = now - p * ms
+  self.tree.said_marked(v.at, words=false, state=true)
   n.back_at = -1.0
   told_going(n)
   // (leaving, it takes no input: a finger held on it or in it let go of now)
@@ -6151,6 +6195,7 @@ fn View::come_back(self : View, v : View) -> Unit {
   n.back_from = gone_at(n, now)
   n.back_at = now
   n.left_at = -1.0
+  self.tree.said_marked(v.at, words=false, state=true)
   told_going(n)
   // (beside its anchor again, where that is now: View::beside)
   if n.beside is Some(_) {
@@ -7382,6 +7427,9 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   // (left out of its row: laid out nowhere; told once all of it is laid out, View::left_out)
   let out = n.flex.left_out()
   let went = !n.placed || x != n.lx || y != n.ly || a != n.la || s != n.ls || px != n.lpx || py != n.lpy || out != n.out
+  // (first placed, or left out of its row or back in it: what holds it reads out another set, what it holds takes presses
+  // otherwise: Tree::said_marked)
+  let came = !n.placed || out != n.out
   if out != n.out {
     n.out = out
     self.outs_changed = true
@@ -7416,7 +7464,7 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   n.lpx = px
   n.lpy = py
   if went || sized {
-    self.touched(at)
+    self.touched(at, words=came, state=came, kids=came)
   }
   if went {
     self.work.composed = self.work.composed + 1
@@ -7624,13 +7672,90 @@ pub fn Tree::take_scrolled_nodes(self : Tree) -> Array[NodeId] {
 ///|
 /// Node `at` changed how it is drawn in its place (its content, where it is in what holds it, how opaque or big, what
 /// it holds: one come, gone, moved among them): it and each that holds it marked with the count of changes now, what
-/// is drawn of each no longer what it was (Tree::drawn_rev).
-fn Tree::touched(self : Tree, at : Int) -> Unit {
+/// is drawn of each no longer what it was (Tree::drawn_rev). And what is read out of it marked so (Tree::said_marked):
+/// where it is alone (`words` false: moved or faded), else its words or what it holds too.
+fn Tree::touched(
+  self : Tree,
+  at : Int,
+  words? : Bool = true,
+  state? : Bool = false,
+  kids? : Bool = false,
+) -> Unit {
+  self.marked_up(at, true, words, state, kids, false)
+}
+
+///|
+/// What is read out of node `at` changed (Tree::said_pass goes through it again): it and each that holds it marked
+/// with the count of changes now, its words where `words` (what names what holds it), it itself, whether it takes
+/// presses or what it says where `state` (what it holds read out so too), and where `kids` what of what holds it is read
+/// out in the nearest of those that is read out (or the root): it come, gone, hidden or shown; `holds` the same of what
+/// `at` holds (one let go of, moved among them), from `at` itself.
+fn Tree::said_marked(
+  self : Tree,
+  at : Int,
+  words? : Bool = true,
+  state? : Bool = false,
+  kids? : Bool = false,
+  holds? : Bool = false,
+) -> Unit {
+  self.marked_up(at, false, words, state, kids, holds)
+}
+
+///|
+/// Node `at` and each that holds it marked as Tree::touched (`drawn`) and Tree::said_marked say, in one way up: no
+/// further than one marked so already with these counts (each that holds one marked is: what marks one marks all
+/// above it, and a node never moves to another holder).
+fn Tree::marked_up(
+  self : Tree,
+  at : Int,
+  drawn : Bool,
+  words : Bool,
+  state : Bool,
+  kids : Bool,
+  holds : Bool,
+) -> Unit {
+  guard at >= 0 && at < self.nodes.length() else { return }
   let r = self.drawn_revs
-  let mut i = at
+  let sr = self.said_revs
+  let me = self.nodes.unsafe_get(at)
+  me.own_rev = sr
+  if state {
+    me.state_rev = sr
+  }
+  // (the nearest that is read out, or the root, marked as what of it is read out changed: none yet where none is)
+  let mut seek = kids || holds
+  let mut i = if holds { at } else { me.parent }
+  if kids && !holds {
+    // (it itself marked as below, the way up from what holds it)
+    me.said_rev = sr
+    if words {
+      me.words_rev = sr
+    }
+    if drawn {
+      me.drawn_rev = r
+    }
+  } else {
+    i = at
+  }
   while i >= 0 && i < self.nodes.length() {
     let n = self.nodes.unsafe_get(i)
-    n.drawn_rev = r
+    if seek && (i == 0 || self.said_entry_at(i)) {
+      n.kids_rev = sr
+      seek = false
+    }
+    if !seek &&
+      n.said_rev == sr &&
+      (!words || n.words_rev == sr) &&
+      (!drawn || n.drawn_rev == r) {
+      break
+    }
+    n.said_rev = sr
+    if words {
+      n.words_rev = sr
+    }
+    if drawn {
+      n.drawn_rev = r
+    }
     i = n.parent
   }
 }
@@ -8238,6 +8363,7 @@ pub fn View::hosted(self : View, make? : (View) -> Unit = fn(v) { v.grow(Is(1.0)
   let tree = self.tree
   self.box(fn(v) {
     tree.nodes[v.at].hosted = true
+    tree.said_marked(v.at, kids=true)
     tree.hosting = v.at
     make(v)
   })
@@ -8643,6 +8769,7 @@ pub fn Tree::activate_at(self : Tree, id : NodeId, at : Double) -> Bool {
 pub fn View::on_step(self : View, f : (Int) -> Unit) -> View {
   guard self.live() is Some(n) else { return self }
   n.on_step = Some(f)
+  self.tree.said_marked(self.at, words=false, state=true)
   self
 }
 

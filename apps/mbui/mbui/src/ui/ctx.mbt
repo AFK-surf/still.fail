@@ -636,8 +636,8 @@ pub struct Ctx {
   mut sem_hide : Int
   asked_actions : Array[(Int, Action)]
   actions : Array[(Int, Action)]
-  // what the system's accessibility was last told the widgets are (a11y.mbt; "" nothing yet, or it is off)
-  mut a11y_sent : String
+  // what the system's accessibility was told the widgets are, as it has them (a11y.mbt; nothing while it is off)
+  a11y : A11yTold
   // the keyboard's focus beyond a field's (focus.mbt): whether it shows (it came by the keyboard), what had it as the
   // frame started; what can take it, as this frame builds it and as the last one did; roving groups' state, and the
   // group being built
@@ -890,7 +890,7 @@ fn Ctx::new() -> Ctx {
     sem_hide: 0,
     asked_actions: [],
     actions: [],
-    a11y_sent: "",
+    a11y: A11yTold::new(),
     focus_visible: false,
     focus_roved: false,
     focus_before: 0,

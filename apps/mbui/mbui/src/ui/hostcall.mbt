@@ -154,9 +154,12 @@ struct FakeHost {
   /// handed it last (@hostapi.nav_bar's JSON; "" none yet)
   mut nav_able : Bool
   mut nav_said : String
-  /// something reading the widgets out (a11y_on), and what it was last told they are (a11y.mbt)
+  /// something reading the widgets out (a11y_on), the last update it was told (a11y.mbt), what it has of them as the
+  /// updates left it, and how many times the app had told it as the Tester last held that to what is read out
   mut a11y : Bool
   mut a11y_said : String
+  a11y_told : A11yMirror
+  mut a11y_held : Int
   env : Map[String, String]
   app_version : Int
   /// the system's notifications the app shows, oldest first (notify.mbt), and the one tapped, not yet taken

@@ -2075,21 +2075,22 @@ pub fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {
 
 ///|
 /// Whether something reads the app's widgets out (Android: an accessibility service on, TalkBack's or another's): the
-/// app then tells the host what its widgets are as they change (`a11y_tree`, @ui's semantics.mbt).
+/// app then tells the host what of its widgets changed (`a11y_tree`, @ui's a11y.mbt).
 pub fn a11y_on() -> Bool {
   current.val.a11y_on()
 }
 
 ///|
-/// What the app's widgets are now, for the system's accessibility (@ui's semantics.mbt says the lines). What is asked
-/// of one comes back on the channel `a11y_channel`.
+/// What of the app's widgets changed, for the system's accessibility: an update of what the host keeps of them (@ui's
+/// a11y.mbt's head says it: the nodes that changed, each whole, and the focus). What is asked of one comes back on the
+/// channel `a11y_channel`.
 pub fn a11y_tree(tree : String) -> Unit {
   current.val.a11y_tree(tree)
 }
 
 ///|
-/// The channel what the system's accessibility asks of a widget is posted on (`{"id": widget, "action": name}`): the
-/// framework's own (@ui takes it).
+/// The channel what the system's accessibility asks of a widget is posted on (`{"id": widget, "action": name}`; a host
+/// that lost what it kept, `{"action": "resend"}`): the framework's own (@ui takes it).
 pub let a11y_channel : String = "a11y"
 
 ///|
