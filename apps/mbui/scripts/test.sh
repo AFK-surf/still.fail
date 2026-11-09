@@ -278,10 +278,12 @@ for t in $targets; do
       else [ "$(app_group_of "${APP_GROUP#*/}" $r)" = "${APP_GROUP%/*}" ] && mine+=("$r"); fi
     done
     runs=("${mine[@]}")
-    # (APP_PART=k/m: the k-th of m shares of this group's pages' files, every m-th of them: a group too long for one
-    # runner's five minutes at a rate's frames (mbui-check's at 120 a second) on m)
+    # (APP_PART=k/m: the k-th of m shares of this group's pages' files, every m-th of them, and of its other runs: a
+    # group too long for one runner's five minutes at a rate's frames (mbui-check's at 120 a second) on m. Its other
+    # runs were all the first's: kept_rows' three runs and half the pages 228 s, the pages' 70 s of it beside them, the
+    # second's same number of pages alone 18 s, main c1c5a1b0, 42653215101, 2026-11-10)
     if [ -n "${APP_PART:-}" ]; then
-      mine=()
+      mine=() o=0
       for r in "${runs[@]}"; do
         if [ "${r%% *}" = @pages ]; then
           read -r -a words <<< "$r"
@@ -291,8 +293,9 @@ for t in $targets; do
             i=$((i + 1))
           done
           [ ${#kept[@]} = 0 ] || mine+=("${words[0]} ${words[1]} ${words[2]} ${kept[*]}")
-        elif [ "${APP_PART%/*}" = 1 ]; then
-          mine+=("$r")
+        else
+          [ $((o % ${APP_PART#*/})) = $((${APP_PART%/*} - 1)) ] && mine+=("$r")
+          o=$((o + 1))
         fi
       done
       runs=("${mine[@]}")
