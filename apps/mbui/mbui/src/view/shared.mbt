@@ -669,6 +669,7 @@ fn Tree::lifted_order(self : Tree) -> Unit {
   self.order_due = true
   self.hits = self.hits + 1
   self.draws_rev = self.draws_rev + 1
+  self.draws_any_rev = self.draws_any_rev + 1
   self.marked()
 }
 
