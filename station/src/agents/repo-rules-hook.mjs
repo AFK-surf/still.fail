@@ -3,7 +3,10 @@
 // Claude Code reads them itself only from its working directory up and, below it, when its Read tool opens a file
 // there; a station session works in its workspace, its clones and worktrees below it, and mostly through the shell,
 // so it read a repository's rules only now and then (25 of 55 subagents on mbui, 2026-11-08).
-import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+// As a SessionStart hook after a compaction it forgets what the session was told: the summary keeps little of it, so
+// the next tool to touch a directory tells its rules again. A rules file a tool itself names (the agent editing it)
+// is not told again for that change: the agent has just written it.
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 
@@ -69,22 +72,32 @@ function rulesFor(dir) {
 const who = `${input.session_id ?? "none"}-${input.agent_id ?? "main"}`.replace(/[^\w.-]/g, "_");
 const stateDir = join(tmpdir(), "stillfail-repo-rules");
 const stateFile = join(stateDir, `${who}.json`);
+if (input.hook_event_name === "SessionStart") {
+  if (input.source === "compact") rmSync(stateFile, { force: true });
+  process.exit(0);
+}
 let seen = {};
 try {
   seen = JSON.parse(readFileSync(stateFile, "utf8"));
 } catch {}
+const kept = JSON.stringify(seen);
 
 const told = [];
 let size = 0;
-const dirs = new Set(paths().map(dirOf).filter((d) => d !== null));
+const named = paths();
+const dirs = new Set(named.map(dirOf).filter((d) => d !== null));
+/// The files the tool named itself, as they are on the disk.
+const own = new Set(named.map((p) => { try { return realpathSync(isAbsolute(p) ? p : resolve(cwd, p)); } catch { return null; } }).filter((p) => p !== null));
 for (const dir of dirs) {
   for (const file of rulesFor(dir)) {
     let text;
     try {
       const mtime = statSync(file).mtimeMs;
       if (seen[file] === mtime) continue;
-      text = readFileSync(file, "utf8");
+      const before = seen[file];
       seen[file] = mtime;
+      if (before !== undefined && own.has(file)) continue;
+      text = readFileSync(file, "utf8");
     } catch {
       continue;
     }
@@ -96,9 +109,11 @@ for (const dir of dirs) {
     if (size >= MAX) break;
   }
 }
+if (JSON.stringify(seen) !== kept) {
+  try {
+    mkdirSync(stateDir, { recursive: true });
+    writeFileSync(stateFile, JSON.stringify(seen));
+  } catch {}
+}
 if (told.length === 0) process.exit(0);
-try {
-  mkdirSync(stateDir, { recursive: true });
-  writeFileSync(stateFile, JSON.stringify(seen));
-} catch {}
 process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: told.join("\n\n---\n\n") } }));

@@ -1,6 +1,52 @@
 # Working on still.fail (for agents)
 
-The apps have their own rules in `apps/mbui/AGENTS.md`; these apply to the whole repository.
+These apply to the whole repository; each part has its own AGENTS.md beside its code, told to you as your tools first
+touch its directory (a station session's hook) and read by Claude Code as it opens a file there.
+
+## The parts
+
+still.fail is a coding-agent service in team chats: people talk to agents in Slack, Feishu, Comma or still.fail's own
+chats, each conversation an agent session on a **station** (a machine of theirs), driven by Claude Code, Codex and others.
+
+- `station/`: the station (TypeScript on its own Node, Effect), with prebuilt native parts (`station/native`) and a
+  MoonBit reader (`station/mb`). Holds the chats, sessions, agents, jobs, accounts; serves devices over the mesh.
+- `cloud/`: still.fail cloud on Cloudflare Workers: accounts, workspaces, members' credentials, the relays. Only people.
+- `client/core-ts/`: the client core every app runs (TypeScript, Effect): accounts, links to stations, everything kept
+  on the device, the views. The UIs only render it. `client/shell` (Rust) is its IO in the native apps,
+  `client/iroh-wasm` iroh for the browser, `client/i18n/catalog` the words of every part (zh and en, the same keys).
+- `apps/mbui/`: the app on every platform (Android, iOS, macOS, Windows, Linux, and the web), in MoonBit on mbui, the
+  UI framework at `apps/mbui/mbui`.
+- `web/`: the web's host of that app, a few pages of its own (Preact) and the design system `web/ui`.
+- `website/`: the official site. `rules/`: rules shared by the station, cloud and core, in MoonBit, built to JS.
+- `scripts/`: checks, releases, the CI plan. `vendor/`: patched upstream code (its README says each patch).
+- `docs/`: only how to build, run and operate (development.md, operations.md) and the release notes. Design is in the
+  code's comments and in these files; nothing else explains it.
+
+## These files are kept true
+
+- When a change makes what an AGENTS.md says untrue (a path, a command, a rule, how a part works), the same change
+  corrects it. `scripts/check.sh` refuses a path written in one that is not there.
+- A rule the owner gives that is not checked, and anything an agent would get wrong from the code alone, goes in the
+  AGENTS.md of the narrowest directory it is about, said once, in a few lines. What the code or its comments already
+  say is not written again; a decision says why and, where it was the owner's, when (`the user, 2026-11-09`).
+- A new directory with rules of its own gets an AGENTS.md and a CLAUDE.md of one line, `@AGENTS.md`.
+
+## Changes, checks and CI
+
+- One pull request per piece of work, from `origin/main`. Merging to main deploys the beta (`.github/workflows/pipeline.yml`,
+  `scripts/plan.sh`: what each path deploys), so main is always releasable.
+- `sh scripts/check.sh full origin/main..HEAD` checks what the range changed (the git hooks run its quick part);
+  `STILLFAIL_CHECK_PART` narrows it. Run the part you changed before a PR; the whole of it is CI's.
+- Older stations and newer cores coexist: what is kept for older versions goes 7 days after its replacement ships, and
+  that change raises the floor (`OLDEST_CORE` in `station/src/api/oldest.ts`, `OLDEST_STATION` in
+  `client/core-ts/src/station/oldest.ts`). Databases migrate forward only. Existing commands and shared links keep
+  working.
+- New data, a new third party or a changed retention period: both privacy policies (`web/public/privacy.html`,
+  `web/public/en/privacy.html`) change in the same pull request.
+- Tests are deterministic: time is a test's clock, networks are simulated; never a sleep, a retry or a longer deadline
+  to make one pass (`docs/development.md`, Tests). What cannot be made so is the side run's (`scripts/side.sh`). A
+  check that fails and then passes on the same commit let something uncontrolled in: find it and take it out, never
+  rerun it green or call it flaky.
 
 ## No polling between still.fail's own parts
 

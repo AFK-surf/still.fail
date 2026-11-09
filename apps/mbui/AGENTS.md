@@ -72,7 +72,7 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
     app-level things, and the shared machinery. It imports the library and the settings' routes, nothing of the pages.
   - `src/sfdesk` holds the pages ported from the web, and the Medium and Large frame.
   - `src/sfapp` holds the phone's first pages and the Small frame. It takes `sfbase`'s names in by
-    `pub using` (`sfapp/base.mbt`) and calls `sfdesk`'s as `@sfdesk.…`.
+    `pub using` (`src/sfapp/base.mbt`) and calls `sfdesk`'s as `@sfdesk.…`.
   - `src/sfpages` holds the pages already merged, one for every screen; `sfdesk` and `sfapp` import it.
 - **What doesn't change:**
   - Something both need moves down into `sfbase` or the library, once.
@@ -88,9 +88,19 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   - A page is designed once from what it is for; the web's two are read for their reasons, not copied or picked
     between. The merged page is no worse on either screen than its copy was there, shown before and after.
 
+## Made once, as nodes
+
+- The app is moving off the old immediate-mode view (`Ctx`, built again each frame) onto the window's tree, made once
+  (mbui's `mbui/src/view`; `mbui/AGENTS.md`, Two views). What is new or rewritten is nodes: a page is `@sf.page_node`, a
+  panel `@sf.panel_nodes` (drawn on 小屏 as a sheet from the foot), a long list `View::each` in what scrolls
+  (`View::scrolls_window`); the library's parts are its `*_node.mbt` ones. A press does its work in its handler (`on_press`, `on_pick`, `on_change`).
+- What is left of the old is counted by detlint and only falls: `old-island` (`@ui.old` hosting a Ctx in a node),
+  `old-list` (`Ctx::list`), `old-panel`, `click-read`, `build-motion`, `layout-read-back`, `ui-current`. A change
+  never adds one; one it touches it moves over. A node-made part is never wrapped back into a Ctx.
+
 ## Motion
 
-- `sf/motion.mbt` says what moves and how; read it before adding or changing a motion. In short (the user,
+- `src/sf/motion.mbt` says what moves and how; read it before adding or changing a motion. In short (the user,
   2026-10-25):
   - Every motion is one of nine kinds (in the hand, coming and going, moved or reshaped, flying, another page,
     scrolled to, a control answering, waiting, emphasis), each set off one way, with the kind's presets.
@@ -125,8 +135,8 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 
 ## The host is asked through mbui/hostapi
 
-- App code asks its host through `@hostapi` (or `@ui`), never imports `mbui/host`: only a main (`src/stillfail`,
-  the demos) does, for the platform's host. A test's program links no host's code, so the native tests run on Linux
+- App code asks its host through `@hostapi` (or `@ui`), never imports mbui's host package (`mbui/src/host`): only a
+  main (`src/stillfail`, the demos) does, for the platform's host. A test's program links no host's code, so the native tests run on Linux
   (`TARGETS=native scripts/test.sh`, CI's check-mbui native). detlint's `host-import` holds it.
 
 ## Time is declared
