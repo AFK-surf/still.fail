@@ -14,8 +14,8 @@
 //   tables, in its halves: the first the program's, the second what the functions counted apart (`apart`, below) run;
 // - each kind's (KINDS, below) in an exported i64 global `__k<i>`, i its place in KINDS: how many of each kind the run
 //   holds. Their sum is `__gas`.
-// The functions counted apart (by their names: a test's stand-in for the host, the work a device's host does in its
-// own code, not the program's): each call of one of them counted as one call of the host's (its own, all inside it,
+// The functions counted apart (by their names: a test's own, not the program's: its stand-in for the host, the work a
+// device's host does in its own code; its driver looking for what is on screen, a device's runs outside the app): each call of one of them counted as one call of the host's (its own, all inside it,
 // its call: one each), what it runs inside left out of the above: `__gas` and the kinds as they were before it, the
 // functions it calls counted in the second table; what it ran in the exported i64 global `__a`, the calls the rest of
 // the program made of them in `__ac`.
@@ -867,8 +867,8 @@ fn wrapper(s : Shape, k : Int, gas : Int, pb : Int) -> @buffer.Buffer {
 }
 
 ///|
-/// The wrapper of a function counted apart (profile's `apart`: a test's stand-in for the host, what a device's host
-/// does in its own code): each of its calls one call of the host's, its own, all inside it and its calls one each in
+/// The wrapper of a function counted apart (profile's `apart`: a test's own, its stand-in for the host or its driver's
+/// looking): each of its calls one call of the host's, its own, all inside it and its calls one each in
 /// the table in use; what it runs inside counted in `__a` (its calls in `__ac`) and the other table, the counts as
 /// they were before it (its calls in `__ac` where the app made them, not one of those)
 fn apart_wrapper(s : Shape, k : Int, gas : Int, nk : Int, pb : Int, apart_at : Int) -> @buffer.Buffer {

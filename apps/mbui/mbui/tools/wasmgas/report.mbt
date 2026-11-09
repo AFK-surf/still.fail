@@ -21,7 +21,7 @@ priv struct Run {
   incl : Map[Int, Int64]
   names : Map[Int, String]
   imported : Int
-  // what the functions counted apart (the test's host) ran over all frames, and their calls
+  // what the functions counted apart (the test's own: its host, its driver's looking) ran over all frames, and their calls
   mut apart : Int64
   mut apart_calls : Int64
 }
@@ -311,7 +311,7 @@ fn report(run : Run, top : Int) -> Unit {
   }
   row([("all", 9), (k(run.all()), 10), ("", 6), (k(run.weighted()), 10)])
   @sys.println_out(
-    "apart, not counted above (the test's stand-in for the host, a device's host's own code): \{k(run.per_frame(run.apart))} a frame, in \{tenths(run.per_frame(run.apart_calls))} calls (each one host call above)",
+    "apart, not counted above (the test's own: its stand-in for the host, a device's host's own code; its driver looking for what is on screen): \{k(run.per_frame(run.apart))} a frame, in \{tenths(run.per_frame(run.apart_calls))} calls (each one host call above)",
   )
   @sys.println_out("")
   @sys.println_out("by their own instructions, a frame on average:")
@@ -360,7 +360,7 @@ fn compare(a : Run, b : Run, top : Int) -> Unit {
   let (x, y) = (a.per_frame(a.apart), b.per_frame(b.apart))
   row([("apart", 9), (k(x), 10), (k(y), 10), (signed(k(y - x), y - x), 10), (pct(x, y), 7)])
   @sys.println_out(
-    "(apart: not in the counts above, what the test's stand-in for the host ran, a device's host's own code; its calls \{tenths(a.per_frame(a.apart_calls))} before, \{tenths(b.per_frame(b.apart_calls))} after, each one host call above)",
+    "(apart: not in the counts above, what the test's own ran: its stand-in for the host, a device's host's own code; its driver looking for what is on screen; its calls \{tenths(a.per_frame(a.apart_calls))} before, \{tenths(b.per_frame(b.apart_calls))} after, each one host call above)",
   )
   // each function's own a frame, by its name (the two programs number them apart)
   let own_a = by_name(a)
