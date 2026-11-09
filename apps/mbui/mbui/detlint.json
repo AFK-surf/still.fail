@@ -224,9 +224,7 @@
     "frame-number": {
       "src/motion/layer.mbt": 2
     },
-    "ui-current": {
-      "src/kit/toast_node.mbt": 1
-    },
+    "ui-current": {},
     "build-clock": {
       "src/kit/progress.mbt": 1,
       "src/kit/zoom.mbt": 1,
