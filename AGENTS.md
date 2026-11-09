@@ -86,3 +86,15 @@ own: a station serves it, reaching the others over the mesh.
 
 `scripts/check.sh` refuses a socket a station listens on that does not say 127.0.0.1 (or the fd, the path) on its line,
 and any tunnel's name in the station or the cloud.
+
+## The cloud is the account system and nothing else
+
+Only the account system depends on still.fail cloud (the user, 2026-11-09): accounts and sign-in, workspaces, their
+members, roles and invitations, the list of a workspace's stations, and the member credentials it signs. Nothing else
+does. What devices and stations keep, decide or tell each other goes between them over the mesh, and keeps working
+with the cloud down, slow, rate-limited or holding something back.
+
+Signatures the cloud cannot forge are not enough: what the cloud only carries, it can still hold back, delay or lose.
+A new feature puts nothing else in the cloud. What is still there, the workspace lock and the personal lock (kept and
+carried by the cloud) and the devices a lock's owner approves (listed by it), is being moved to the stations; while
+older stations still read it there, a core sends it to the cloud too, but never waits on the cloud for it.
