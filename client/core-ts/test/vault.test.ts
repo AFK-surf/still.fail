@@ -19,7 +19,7 @@ import { type Entry, Signer, entryHash, next } from "../src/lock.ts";
 import { hex, utf8 } from "../src/util.ts";
 import {
   type BoxCert, type Item, type Request, type Vault, TAG, boxPublic, decrypt, encryptWith, fromWords, grantContext, itemContext, keyContext,
-  openSeal, recoveryPair, saveContext, sealWith, sign, signedOk, toWords, verifies,
+  openSeal, recoveryPair, rulesCrypto, saveContext, sealWith, sign, signedOk, toWords, verifies,
 } from "../src/vault/crypto.ts";
 import { checkLock } from "../src/vault/lock-check.ts";
 import { checkWith, forgetVerifiedHere, keepVerified } from "../src/vault/verified.ts";
@@ -1061,6 +1061,41 @@ test("one vault of one's own: a device set up later makes none, and is given its
   const before = r.host.secureAsked.length;
   await fails(r.ask("vault.approve", { request: rid, scope: "once" }), "vault_no_key");
   assert.deepEqual([r.host.secureAsked.length, r.st.vaults.size, r.st.items.has(save.item)], [before, 1, false]);
+  r.core.close();
+});
+
+test("a device taken out of the lock that held a vault's key: the owner's device keys the vault anew without it, every item written again under the new key; the vault and its items shown and opened as before", async () => {
+  const r = await rig();
+  r.putLock();
+  const { made: id, words } = await r.ask("vault.setup", {});
+  const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "GitHub", fields: { value: "ghp_x" } }, listing: { name: "gh", kind: "token", modes: ["proxy"], hosts: ["api.github.com"] } });
+  // The phone set up and given the key (as the vault was unsealed here): its version is the one the stations hold.
+  const phoneBox = fill(7);
+  const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(phoneBox), at: 2000 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, phoneCert);
+  r.push("vault-box", phoneCert);
+  await r.host.time.pass(500);
+  r.take();
+  const keyed = r.st.vaults.get(id)!;
+  assert.deepEqual([keyed.seq, keyed.epoch, keyed.keys.some((k) => k.cert.device === r.phone.hex)], [1, 0, true]);
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  // The phone taken out of the lock, the lock read as the cloud tells of it.
+  stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock") ? r.lock : r.st.reply(req)));
+  grow(r, "device.remove", { id: r.phone.hex });
+  const asked = r.host.secureAsked.length;
+  await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+  await r.host.time.pass(500, 10);
+  r.take();
+  const v = r.st.vaults.get(id)!;
+  assert.deepEqual([v.seq, v.epoch, v.keys.map((k) => k.cert.device)], [2, 1, ["ab".repeat(32)]], "a new epoch, sealed to this device alone");
+  assert.equal(rules.vault_ok_js(checkLock(r.lock.entries, 4000), keyed, v, false, rulesCrypto), null, "as the stations take it");
+  assert.equal(r.host.secureAsked.length, asked, "the key unsealed here: the person not asked");
+  const fresh = openSeal(recoveryPair(fromWords(words)).priv, v.recovery!, keyContext("ws", id, 1));
+  const item = r.st.items.get(put.id)!;
+  assert.deepEqual([item.version, item.epoch], [1, 1]);
+  assert.equal(JSON.parse(new TextDecoder().decode(decrypt(fresh, item.ct, itemContext("ws", id, item.id, 1, 1)))).fields.value, "ghp_x", "written again under the new key");
+  assert.equal(vaults().vaults.length, 1, "shown still");
+  assert.equal((await r.ask("vault.open", { item: put.id })).plain.fields.value, "ghp_x");
   r.core.close();
 });
 

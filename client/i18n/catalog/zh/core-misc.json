@@ -272,6 +272,7 @@
   "core-misc.vault.reason.approve": "批准 agent 使用「{name}」",
   "core-misc.vault.reason.save": "将「{name}」存入密钥库",
   "core-misc.vault.reason.delete": "删除密钥库「{name}」",
+  "core-misc.vault.reason.rekey": "移除设备后为密钥库「{name}」换新密钥",
   "core-misc.vault.notSealedHere": "此申请提出时此设备尚未开启密钥库，请在已开启的设备上批准",
   "core-misc.vault.typedEmpty": "请先填入要存的密钥",
   "core-misc.vault.fileTooBig": "文件太大：密钥库里的文件最大 {most}",
