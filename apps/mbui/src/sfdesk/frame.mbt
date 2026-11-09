@@ -650,6 +650,8 @@ fn side_brand_h(bar : Bool, top : Double) -> Double {
   if bar {
     0.0
   // (followed: as the window's buttons come into the app's top row or leave it, what reads it told)
+  } else if @ui.window_keys_left_now() && wide.tape {
+    tape_brand_under_buttons()
   } else if @ui.window_keys_left_now() {
     dmax(side_top_inset, @ui.window_points_to_content_now(side_top_inset))
   } else if side_full_height(bar) {
@@ -743,11 +745,34 @@ pub fn tape_shows_right() -> Double {
 
 ///|
 /// The window's buttons in the app's top row (mbui's mac_app.m: 16 from the window's left, centred on its 44, as far
-/// apart as the system has them): from 16, the three 54 across (each 14, 20 apart).
+/// apart as the system has them): from 16, the three 60 across (macOS 27's: each 14, 23 from one's middle to the next's;
+/// measured on the user's screenshot, 2026-11-09).
 let window_buttons_in : Double = 16.0
 
 ///|
-let window_buttons_w : Double = 54.0
+let window_buttons_w : Double = 60.0
+
+///|
+/// How tall each of the window's buttons is (macOS 27's 14) and how high their row is in the app's top row (mbui's
+/// mac_app.m: centred on its first 44).
+let window_buttons_side : Double = 14.0
+
+///|
+let window_buttons_row : Double = 44.0
+
+///|
+/// The sidebar's top row on the tape with the window's buttons in it (side_brand_h): as tall as puts the middle of its
+/// first row, the bell's and 新建对话's (tape_first_row_mid), as far under the buttons as they stand under the panel's
+/// top edge, the bell's icon's top there; the buttons as the host has them on the tape (tape_view: as much lower as the
+/// panel stands under the window's top). The user, 2026-11-09: 中屏侧边栏顶部空太多 (its row stood 44 under the
+/// panel's content, the band the buttons have in a window with no panel, 31 under the buttons).
+fn tape_brand_under_buttons() -> Double {
+  let content_top = bar_in_now() + dock_line
+  let top = @ui.window_points_to_content_now((window_buttons_row - window_buttons_side) / 2.0) + bar_in_now()
+  let bottom = top + @ui.window_points_to_content_now(window_buttons_side)
+  let mid = bottom + (top - content_top) + rail_icon_size / 2.0 - content_top
+  mid - band_new_top - band_row_h() / 2.0
+}
 
 ///|
 /// How wide a panel is on the tape with one beside it, a window `width` wide: what the window leaves in use past what

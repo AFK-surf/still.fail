@@ -286,6 +286,9 @@ extern "C" fn ffi_full_screen() -> Int = "mb_host_full_screen"
 extern "C" fn ffi_set_full_screen(on : Int) -> Unit = "mb_host_set_full_screen"
 
 ///|
+extern "C" fn ffi_window_buttons_down(by : Double, ms : Double) -> Unit = "mb_host_window_buttons_down"
+
+///|
 extern "C" fn ffi_window_corner() -> Double = "mb_host_window_corner"
 
 ///|
@@ -369,6 +372,12 @@ fn full_screen() -> Bool {
 /// The window made to fill the screen, or back (macOS's full screen).
 fn set_full_screen(on : Bool) -> Unit {
   ffi_set_full_screen(if on { 1 } else { 0 })
+}
+
+///|
+/// The window's buttons moved `by` lower in the app's top row over `ms` (macOS's).
+fn window_buttons_down(by : Double, ms : Double) -> Unit {
+  ffi_window_buttons_down(by, ms)
 }
 
 ///|

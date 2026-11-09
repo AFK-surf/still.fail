@@ -388,6 +388,7 @@ pub fn Tester::new(
     dark,
     inset: window_inset,
     full: false,
+    buttons_down: (0.0, 0.0),
     window_corner,
     window_corners,
     font_scale: 1.0,

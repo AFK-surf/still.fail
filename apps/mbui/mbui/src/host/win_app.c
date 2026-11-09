@@ -1355,6 +1355,7 @@ int32_t mb_host_window_inset(void) { return setup_inset; }
 // A window filling the screen (@hostapi.full_screen): not one of this host's.
 int32_t mb_host_full_screen(void) { return 0; }
 void mb_host_set_full_screen(int32_t on) { (void)on; }
+void mb_host_window_buttons_down(double by, double ms) { (void)by; (void)ms; }
 
 // How round the system draws the window's corners (@hostapi.window_corner): Windows 11's 8 (its build 22000 on: the
 // rounding DWM gives every window that does not ask otherwise), none maximised; Windows 10's are square.

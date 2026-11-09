@@ -167,6 +167,10 @@ fn list_place(mode : Int) -> String {
 fn rail_top_h(bar : Bool) -> Double {
   if bar {
     0.0
+  } else if @ui.window_keys_left() && wide.tape {
+    // (its first place's middle on the line of the sidebar's first row beside it, under the window's buttons: worked
+    // out as that row's is, not read back from the frame's)
+    tape_brand_under_buttons() + band_new_top + band_row_h() / 2.0 - rail_item_side / 2.0
   } else if @ui.window_keys_left() {
     dmax(rail_top_inset + rail_gap, @ui.window_points_to_content(side_top_inset))
   } else if wide.tape {

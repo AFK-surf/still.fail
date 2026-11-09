@@ -1308,6 +1308,12 @@ impl @hostapi.Host for FakeHost with set_full_screen(self, on) {
 }
 
 ///|
+/// The window's buttons moved lower: kept (Tester::window_buttons_down).
+impl @hostapi.Host for FakeHost with window_buttons_down(self, by, ms) {
+  self.buttons_down = (by, ms)
+}
+
+///|
 /// How round the window's corners are (Tester::new's `window_corner`, the roundest of its `window_corners`): none
 /// while it fills the screen.
 impl @hostapi.Host for FakeHost with window_corner(self) {

@@ -1248,6 +1248,13 @@ fn set_full_screen(on : Bool) -> Unit {
 }
 
 ///|
+/// A browser's page: no window's buttons in it.
+fn window_buttons_down(by : Double, ms : Double) -> Unit {
+  ignore(by)
+  ignore(ms)
+}
+
+///|
 /// A browser's page: its corners square (@hostapi.window_corner).
 fn window_corner() -> Double {
   0.0

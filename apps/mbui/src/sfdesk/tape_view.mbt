@@ -640,6 +640,10 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   // (where the system lays out the app's tabs, its bars handed what the tape's frame has for them each frame it shows:
   // rail_native.mbt nav_frame)
   nav_hold(src)
+  // (the window's buttons, a Mac's, as far lower as its panels stand under the window's top: as far below the panel
+  // showing at the window's left as they are in from the window's side, the side panel's edge out of the window there;
+  // the user, 2026-11-09: 红绿灯位置不对. Back where they were as the tape goes; each way moved, not put there: 不要瞬移.)
+  @hostapi.window_buttons_down(bar_in_now(), @ui.move_ms(bar_in_now()))
   // (at rest where it is in use as it is made: no move from wherever another frame left it)
   tape_goes.way.put(1.0)
   tape_goes.rest.set(true)
@@ -661,6 +665,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     wide.tape_drag.set(0.0)
     wide.tape_backing = false
     wide.tape = false
+    @hostapi.window_buttons_down(0.0, @ui.move_ms(bar_in_now()))
   })
   |> ignore
   // what the page's panel shows as the page on top changes, at its cause's moment (page_wait.mbt)

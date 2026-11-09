@@ -525,6 +525,8 @@ pub fn wheel_kept(Bool) -> Unit
 
 pub fn window_act(Int32) -> Unit
 
+pub fn window_buttons_down(Double, Double) -> Unit
+
 pub fn window_corner() -> Double
 
 pub fn window_corner_at(Int32) -> Double
@@ -779,6 +781,7 @@ pub(open) trait Host {
   fn wheel_kept(Self, Bool) -> Unit = _
   fn window_setup(Self, Double, Double, Double, Double, Bool) -> Unit = _
   fn window_inset(Self) -> Bool = _
+  fn window_buttons_down(Self, Double, Double) -> Unit = _
   fn window_hold(Self) -> Unit = _
   fn window_show(Self) -> Unit = _
   fn full_screen(Self) -> Bool = _
