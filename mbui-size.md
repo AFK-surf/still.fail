@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [f4874d328](https://github.com/AFK-surf/still.fail/commit/f4874d32855e3ca64bc80e4dfbc61f3a6409f83f) mbui: an agent's line gives its place to its answe | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
 | [70d70273b](https://github.com/AFK-surf/still.fail/commit/70d70273b99aa83c5d937c10b1b416ad3fb495da) app: 快捷键 lets a person choose how the composer sen | 1.72 | 2.29 | 9.53 | 28.02 | 33.2 | 25.03 | 45.72 | 93.06 | 156.81 |
 | [7582e5326](https://github.com/AFK-surf/still.fail/commit/7582e53263e9803ebba40596785683332afe72f6) feat(ios): configure monoid TestFlight and APNs id | 1.71 | 2.28 | 9.52 | 28.01 | 33.18 | 25.02 | 45.7 | 93.06 | 156.81 |
 | [857ada016](https://github.com/AFK-surf/still.fail/commit/857ada016ff4dd68978e863ca62228353a111232) core: a station's stream silent past its keepalive | 1.72 | 2.29 | 9.52 | 28.01 | 33.19 | 25.02 | 45.72 | 93.06 | 156.81 |
