@@ -10,7 +10,7 @@ fn init {
     ("src/sfreplay/flows/answer_option_test.mbt", 2),
     ("src/sfreplay/flows/appearance_kept_test.mbt", 4),
     ("src/sfreplay/flows/archive_restore_test.mbt", 2),
-    ("src/sfreplay/flows/card_motion_test.mbt", 2),
+    ("src/sfreplay/flows/card_motion_test.mbt", 3),
     ("src/sfreplay/flows/chinese_enter_test.mbt", 2),
     ("src/sfreplay/flows/close_option_test.mbt", 2),
     ("src/sfreplay/flows/dismiss_test.mbt", 1),
