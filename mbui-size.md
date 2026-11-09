@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [044441224](https://github.com/AFK-surf/still.fail/commit/0444412244e3595f87169ed66b0e048e386e3444) sfpages: a day's heading in the chats list of a ki | 1.66 | 2.21 | 9.11 | 27.86 | 32.28 | 24.87 | 44.81 | 93.06 | 156.81 |
 | [241a3b0b4](https://github.com/AFK-surf/still.fail/commit/241a3b0b450ae976b3c03e84a0e743fa7a2bc2b2) mbui: a list's block put by left in its slot out o | 1.66 | 2.21 | 9.11 | 27.86 | 32.28 | 24.87 | 44.81 | 93.08 | 161.8 |
 | [9914a5e47](https://github.com/AFK-surf/still.fail/commit/9914a5e478c18956927f74cb53f0181a487b3456) mbui app: an agent's card opens each part as what  | 1.66 | 2.21 | 9.11 | 27.85 | 32.28 | 24.86 | 44.81 | 93.47 | 180.56 |
 | [7f38f3c7b](https://github.com/AFK-surf/still.fail/commit/7f38f3c7bde8f5cf1c6c8bc0c5758485e794a5a1) mbui: a screen reader told what changed, node by n | 1.66 | 2.21 | 9.11 | 27.84 | 32.27 | 24.86 | 44.79 | 92.75 | 128.54 |
