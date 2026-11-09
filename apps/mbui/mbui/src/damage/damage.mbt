@@ -614,7 +614,8 @@ fn Damage::keep(
 /// What the frame compared last moved by (Damage::next, Damage::moved), where every change of it was an instance
 /// against the same one before it: how far any of their pixels went at most (points), and how much any of their colours
 /// or opacities changed at most (0 to 1). None where a change was none such: an instance come or gone, a picture or a
-/// shape's pieces changed under it, a part known drawn anew, the frame drawn whole or not compared. What moves on by
+/// shape's pieces changed under it, a header moved (a list's rows), a part known drawn anew, the frame drawn whole or
+/// not compared. What moves on by
 /// the clock is drawn as often as that asks (src/ui/frame_pace.mbt), not by what it is.
 pub fn Damage::step(self : Damage) -> (Double, Double)? {
   if self.step_known {
@@ -669,7 +670,8 @@ fn Damage::pair_step(self : Damage, a : FixedArray[Double], ka : Int, b : FixedA
   let oa = ka * inst_size
   let ob = kb * inst_size
   let kind = kind_at(b, kb)
-  if kind_at(a, ka) != kind || kind == 12 {
+  // (a header moved is a list's rows moved by it, scrolled: drawn at every frame, src/ui/frame_pace.mbt)
+  if kind_at(a, ka) != kind || kind == 12 || kind == 13 {
     self.step_known = false
     return
   }

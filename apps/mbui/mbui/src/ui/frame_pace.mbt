@@ -10,8 +10,9 @@
 // It is how often the host draws, never what: a frame at a moment is that moment's whatever came before it, so the
 // picture and the state at any moment are the same at any rate (mbui/AGENTS.md, Time in a test is declared). What else
 // asks for a frame (an input, a change of what is built, a fiber stepping a frame at a time) is drawn at the display's
-// next, and a frame whose changes are not each an instance moved or recoloured (one come or gone, a list scrolled, a
-// picture's frames, the frame drawn whole) asks for the display's every frame: its motion is not known.
+// next, and so is a frame whose changes are not each an instance moved or recoloured (one come or gone, a picture's
+// frames, the frame drawn whole): its motion is not known. What scrolls is drawn at every frame however slowly it
+// goes: a glide's slow end at a lower rate is felt under the finger that let it go (the user, 2026-11-09).
 
 ///|
 /// The rates what moves on by the clock is drawn at below the display's own (frames a second), each a 120 Hz display's
@@ -52,7 +53,10 @@ let pace : Pace = { at: -1.0, rung: -1 }
 /// at once (one speeding up: its next frame at the rate its speed asks).
 fn pace_by_clock(t : Double) -> Double {
   let dt = t - pace.at
+  // (what scrolls (moved by the hand, or gliding on by itself to its end; a list's rows moved by their header, Damage::step)
+  // at every frame however slowly it goes, the user, 2026-11-09)
   let rung = match presented.step() {
+    _ if scroll_paint_uncompared.val || tree_gliding(t) => -1
     Some((far, ink)) if pace.at >= 0.0 && dt > 0.0 && dt <= pace_span => {
       // the frames a second it needs: a step of `pace_far` or `pace_ink` each
       let need = dmax(far / pace_far, ink / pace_ink) * 1000.0 / dt
