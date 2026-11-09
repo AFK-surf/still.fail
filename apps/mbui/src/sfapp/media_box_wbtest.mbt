@@ -175,6 +175,7 @@ test "a strip sent flies to its picture's place in the message, letterboxed ther
   new_run()
   let path = "uploads/fx/line.png"
   let f : SendFlight = {
+    n: 1,
     chat: "ws1/st1:s-c1",
     turns: "ws1/st1:s-c1",
     text: "",
@@ -237,6 +238,7 @@ test "a tall sent picture moves its crop to the top as it lands" {
   new_run()
   let path = "uploads/fx/tall.png"
   let f : SendFlight = {
+    n: 1,
     chat: "ws1/st1:s-c1",
     turns: "ws1/st1:s-c1",
     text: "",
@@ -313,6 +315,7 @@ test "an image sent while it goes up flies on to its place once it is up: its me
   }
   let faced = Ref(0)
   let f : SendFlight = {
+    n: 1,
     chat: "ws1/st1:s-c1",
     turns: "ws1/st1:s-c1",
     text: "",

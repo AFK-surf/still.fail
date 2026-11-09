@@ -781,7 +781,7 @@ test "files sent fly from their tiles to their places in the message, then are i
   // its row in the list (the outbox's, at once): the picture goes to where the message has it
   t.draw()
   t.draw()
-  match @motion.measured_rect(t.ctx(), "flight/to/" + ff.key) {
+  match @motion.measured_rect(t.ctx(), @sfbase.flight_to_key(f, ff.key)) {
     Some((_, _, w, _)) => assert_true(w > 56.0)
     None => fail("the message's picture is not where the flight can see it")
   }
