@@ -29,6 +29,7 @@ case "$*" in
     fi
     ;;
   'hermes apple')
+    [ ! -e "$RUNNER_TEMP/mac-prebuild/packages-pending" ] || exit 11
     [ "${FAIL_HBC:-0}" = 0 ] || exit 9
     touch "$RUNNER_TEMP/bytecode-built"
     ;;
@@ -36,6 +37,12 @@ case "$*" in
 esac
 EOF
   cp "$app_mac" "$GITHUB_WORKSPACE/apps/mbui/scripts/mac.sh"
+  cat > "$GITHUB_WORKSPACE/apps/mbui/mbui/scripts/chk" <<'EOF'
+#!/bin/bash
+[ "$1" = logwait ] && [ "$2" = --gone ] || exit 12
+while [ -e "$3" ]; do sleep 0.1; done
+EOF
+  chmod +x "$GITHUB_WORKSPACE/apps/mbui/mbui/scripts/chk"
   cat > "$GITHUB_WORKSPACE/apps/mbui/mbui/scripts/mac.sh" <<'EOF'
 #!/bin/bash
 set -eu
@@ -74,6 +81,7 @@ read -r ready < "$RUNNER_TEMP/core-signal"
 [ "$ready" = ready ]
 [ -f "$RUNNER_TEMP/core-finished" ] && [ ! -e "$RUNNER_TEMP/app-built" ]
 bash "$script" ready
+bash "$script" packages
 bash "$script" wait
 [ -f "$RUNNER_TEMP/app-built" ]
 [ -f "$RUNNER_TEMP/bytecode-built" ] || { echo 'core bytecode was not prepared before packaging' >&2; exit 1; }
@@ -95,6 +103,7 @@ echo 12.0 > "$GITHUB_WORKSPACE/apps/mbui/_build/.macos-min"
 export FAIL_APP=1
 bash "$script" start
 bash "$script" ready
+bash "$script" packages
 if bash "$script" wait; then echo 'app failure was not reported' >&2; exit 1; fi
 unset FAIL_APP
 
@@ -103,6 +112,7 @@ echo 12.0 > "$GITHUB_WORKSPACE/apps/mbui/_build/.macos-min"
 export FAIL_HBC=1
 bash "$script" start
 bash "$script" ready
+bash "$script" packages
 if bash "$script" wait; then echo 'bytecode failure was not reported' >&2; exit 1; fi
 unset FAIL_HBC
 echo 'Mac prebuild ordering and failure handling passed'
