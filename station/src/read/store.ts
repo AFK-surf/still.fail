@@ -14,7 +14,7 @@ import { compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage } f
 import { type UsageChatCoverage, usageCardOutcomesComplete, usageChatStatsReady } from "../store/usage-chat-stats.ts";
 import { REMOTE_RUNS_ALL, REMOTE_RUNS_OF } from "../store/remote-runs.ts";
 import { hasRuntimeOrderIndex } from "../store/schema.ts";
-import { CC_SESSIONS_PENDING, CcSessionsUnavailable, ccSessionReady, indexedCcThreads } from "../store/cc-thread-index.ts";
+import { CC_INDEX_VERSION, CC_SESSIONS_PENDING, CcSessionsUnavailable, ccSessionReady, indexedCcThreads } from "../store/cc-thread-index.ts";
 import { CARD_POSTS_PENDING, CARD_POST_BEFORE, CARD_POST_LATEST, CARD_POST_NEXT, CARD_POST_SAMPLE, cardPostsReady } from "../store/card-post-index.ts";
 import { CLOSED_CARDS_INDEXED, CLOSED_CARDS_PENDING, CLOSED_CHAT_SAMPLE, CLOSED_SAMPLE_LIMIT, CLOSED_TIME_SAMPLE,
   LEGACY_CLOSED_CARDS, closedCardsReady, hasClosedCardsTimeIndex, hasLegacyClosedCards, hasNativeClosedCards } from "../store/legacy-closed-cards.ts";
@@ -474,9 +474,52 @@ export const HAS_NAMING_ORIGIN = `SELECT 1 FROM thread_sessions origin
     WHERE member.thread = t.id
   ) LIMIT 1`;
 
+// An existing copy-destination index already separates external memberships. Its order is different from naming
+// order, but existence needs no order. A live member itself makes each of its external threads visible.
+export const HAS_NAMING_ORIGIN_PREPARED = `SELECT 1 FROM cc_session_rows INDEXED BY cc_session_order
+  WHERE session = ?1 AND surface != 'ember' LIMIT 1`;
+// A short membership list is cheaper to check directly than to verify the prepared projection's journals.
+export const HAS_NAMING_ORIGIN_POSSIBLE = `SELECT 1 FROM cc_sessions c CROSS JOIN sessions live ON live.key = c.session
+      WHERE c.session = ?1 AND c.complete = 1 AND EXISTS (
+        SELECT 1 FROM thread_sessions INDEXED BY thread_sessions_session WHERE session = c.session LIMIT 1 OFFSET 8
+      )`;
+
+const missingOriginIndex = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : "";
+  return /^no such (?:table|index): (?:main\.)?(?:cc_index_meta|cc_sessions|cc_session_rows|cc_session_dirty|cc_order_dispatch|cc_session_order|thread_sessions_session)$/.test(message);
+};
+
 export function namingOriginProbe(s: Store): (session: string) => boolean {
   const lookup = s.db.prepare(HAS_NAMING_ORIGIN);
-  return (session) => lookup.get(session, STILLFAIL_SURFACE) !== undefined;
+  const original = (session: string) => lookup.get(session, STILLFAIL_SURFACE) !== undefined;
+  let possible: ReturnType<DatabaseSync["prepare"]>;
+  let prepared: ReturnType<DatabaseSync["prepare"]>;
+  try {
+    // A missing thread has a NULL surface in cc_session_rows. Older schemas that also permit a real thread with a
+    // NULL surface cannot distinguish those cases in the partial index, so they retain the original check.
+    const surface = s.db.prepare(`SELECT "notnull" AS required FROM pragma_table_info('threads') WHERE name = 'surface'`).get();
+    if (surface?.required !== 1) return original;
+    const version = s.db.prepare("SELECT version FROM cc_index_meta WHERE id = 1").get();
+    if (version?.version !== CC_INDEX_VERSION) return original;
+    possible = s.db.prepare(HAS_NAMING_ORIGIN_POSSIBLE);
+    prepared = s.db.prepare(HAS_NAMING_ORIGIN_PREPARED);
+  } catch (error) {
+    if (missingOriginIndex(error)) return original;
+    throw error;
+  }
+  return (session) => {
+    if (possible.get(session) === undefined) return original(session);
+    // A direct caller need not already hold a read transaction. Check the live member and index readiness again
+    // under the same snapshot as the answer, since a writer may change either after the initial fast-path probe.
+    s.db.exec("SAVEPOINT naming_origin_probe");
+    try {
+      if (possible.get(session) === undefined || !ccSessionReady(s.db, session)) return original(session);
+      return prepared.get(session) !== undefined;
+    } catch (error) {
+      if (missingOriginIndex(error) || (error instanceof Error && error.message.startsWith("copy destination index version "))) return original(session);
+      throw error;
+    } finally { s.db.exec("RELEASE naming_origin_probe"); }
+  };
 }
 
 /// Each session's external origin in the order of threadsForChatNames, excluding missing-only origins as in
