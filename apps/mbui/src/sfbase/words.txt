@@ -855,6 +855,8 @@ web-main.chat.regenerateTitle.start
 web-main.chat.regenerateTitle.verb
 web-main.chat.resendFailed
 web-main.chat.sending
+web-main.chat.share
+web-main.chat.share.title
 web-main.chat.toLatest
 web-main.chat.transcriptCopied
 web-main.chat.unkeep

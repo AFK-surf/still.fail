@@ -79,7 +79,7 @@ pub fn chat_mark(@ui.Ctx, String) -> Int32
 
 pub fn chat_mark_node(@view.View, () -> String) -> Unit
 
-pub fn chat_menu_of(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?]
+pub fn chat_menu_of(@sfbase.Source, String, @sfbase.ChatRef, Array[@sf.MenuItem?], share_from~ : () -> @sf.Beside) -> Array[@sf.MenuItem?]
 
 pub fn chat_messages_sample(@ui.Ctx, Double) -> Unit
 

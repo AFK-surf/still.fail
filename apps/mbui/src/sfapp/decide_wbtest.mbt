@@ -106,7 +106,7 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
 test "the chat's \"…\": the menu a row has, pinning it from it" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-actions")
-  assert_true(t.find("复制会话链接") is Some(_))
+  assert_true(t.find("分享…") is Some(_))
   assert_true(t.find("重命名") is Some(_))
   t.tap_text("固定")
   let pinned = named(calls, "chat.pin")
@@ -310,6 +310,7 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
   open_fixture_over("chat-actions", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
+  open_share(t)
   t.tap_text("接力到频道…")
   assert_eq(named(calls, "chat.relayPlaces").length(), 1)
   // (the chat's menu goes, the relay's sheet comes up, to where it rests: the presenters')

@@ -653,14 +653,14 @@ let row_icon : Double = 16.0
 ///|
 /// A row's menu, from row `id` at (`x`, `y`): 固定 / 取消固定 (a
 /// station from before pins says nothing: none), 重命名, 保留 / 取消保留 (a chat of its own: a thread; pinned, none: a
-/// pin keeps it out of the archive already), 归档; 打开「…」 (one an agent opened: the chat it opened it from), 复制会话链接,
-/// 转到频道 (a thread with an agent), 分享给其他 workspace, 分享图片, 在 Slack／飞书打开 (share_items): two groups, a line
-/// between. Held by a finger, felt as it
-/// opens and from the row (a sheet, or under it); right clicked, at the pointer.
+/// pin keeps it out of the archive already), 归档; 打开「…」 (one an agent opened: the chat it opened it from), 分享…
+/// (chat_menu_items): two groups, a line between. Held by a finger, felt as it opens and from the row (a sheet, or under
+/// it); right clicked, at the pointer.
 fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y : Double) -> Unit {
   // (held by a finger: the press is the menu's, felt; the menu from the row)
   let finger = @sf.menu_held(c, "row")
-  @sf.menu(chat_menu_items(src, item), from=if finger { Of(id) } else { @sf.at_point(x, y) })
+  let from : @sf.Beside = if finger { Of(id) } else { @sf.at_point(x, y) }
+  @sf.menu(chat_menu_items(src, item, share_from=fn() { from }), from~)
   rows.menu_for = @sfbase.row_name(item)
   rows.menu_serial = @sf.last_presented()
 }
@@ -668,8 +668,15 @@ fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y 
 ///|
 /// What a chat's menu offers (a row's, and the "…" of the chat's page, one and the same, 2026-11-06 Peng Xiao: 「这里的...和
 /// 侧边栏右键点击 chat，我感觉需要统一一下」). `page`: the page's own of share_items (chat_extra_items, from its view, which it
-/// has read already), in place of the row's.
-fn chat_menu_items(src : Source, item : ChatItem, page? : Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?] {
+/// has read already), in place of the row's. What shares it or takes it elsewhere (复制会话链接, 接力到频道 for a thread with an
+/// agent, and share_items: 分享给其他 workspace, 分享图片, 在 Slack／飞书打开) is one item, 分享…, its own menu from
+/// `share_from` (where the menu was opened), where there are two or more of them (左子健, 2026-11-09: 菜单有点太多了，只把分享收进一个).
+fn chat_menu_items(
+  src : Source,
+  item : ChatItem,
+  share_from~ : () -> @sf.Beside,
+  page? : Array[@sf.MenuItem?],
+) -> Array[@sf.MenuItem?] {
   let r = row_ref(item)
   let items : Array[@sf.MenuItem?] = []
   match item.pinned {
@@ -789,9 +796,11 @@ fn chat_menu_items(src : Source, item : ChatItem, page? : Array[@sf.MenuItem?]) 
       )
     None => ()
   }
+  // what shares it or takes it elsewhere: one 分享… where there are two or more
+  let shared : Array[@sf.MenuItem?] = []
   let link = @sfbase.chat_link(item.station, item.session)
   if link != "" {
-    items.push(
+    shared.push(
       Some(
         @sf.menu_item_of(@sf.t("web-main.chat.copyLink"), icon="copy", fn() {
           @sfbase.copy_chat_link(item.title, link)
@@ -802,7 +811,7 @@ fn chat_menu_items(src : Source, item : ChatItem, page? : Array[@sf.MenuItem?]) 
   // relayed to a channel: a chat with an agent to go on there
   match item.thread {
     Some(th) if item.agents.length() > 0 =>
-      items.push(
+      shared.push(
         Some(
           @sf.menu_item_of(@sf.t("web-main.relay.action"), icon="arrow-up-right", fn() {
             open_relay(src, r, th, from=Unanchored)
@@ -812,7 +821,7 @@ fn chat_menu_items(src : Source, item : ChatItem, page? : Array[@sf.MenuItem?]) 
     _ => ()
   }
   // shared, a picture of it, it in Slack or Feishu: the page's and a row's alike (share_items)
-  items.append(
+  shared.append(
     match page {
       Some(own) => own
       None =>
@@ -828,6 +837,7 @@ fn chat_menu_items(src : Source, item : ChatItem, page? : Array[@sf.MenuItem?]) 
         )
     },
   )
+  items.append(share_menu(shared, share_from))
   // (no line closing the menu: nothing after the chat's own group)
   if items.last() is Some(None) {
     items.pop() |> ignore
@@ -1241,14 +1251,20 @@ pub fn open_chat_menu(
   from~ : @sf.Beside,
   along? : @ui.Along = Start,
 ) -> Unit {
-  @sf.menu(chat_menu_of(src, scope, r, extra), from~, along~)
+  @sf.menu(chat_menu_of(src, scope, r, extra, share_from=fn() { from }), from~, along~)
 }
 
 ///|
 /// What the chat in view's "…" offers: what a row's menu offers (chat_menu_items) for the row the core's list has of
 /// it, else (an archived one, one it does not list) its link alone; `extra` the page's own (chat_extra_items). Apart
 /// from showing them: the system's bars take them as a menu of their own (rail_native.mbt bar_chat).
-pub fn chat_menu_of(src : Source, scope : String, r : ChatRef, extra : Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?] {
+pub fn chat_menu_of(
+  src : Source,
+  scope : String,
+  r : ChatRef,
+  extra : Array[@sf.MenuItem?],
+  share_from~ : () -> @sf.Beside,
+) -> Array[@sf.MenuItem?] {
   let mut found : ChatItem? = None
   match @sfbase.chats_of(src, scope, "all").0 {
     Some(view) =>
@@ -1275,12 +1291,12 @@ pub fn chat_menu_of(src : Source, scope : String, r : ChatRef, extra : Array[@sf
     }
   }
   let items : Array[@sf.MenuItem?] = match found {
-    Some(item) => chat_menu_items(src, item, page=extra)
+    Some(item) => chat_menu_items(src, item, share_from~, page=extra)
     None => {
       let link = @sfbase.chat_link(r.station, r.session)
-      let items : Array[@sf.MenuItem?] = []
+      let shared : Array[@sf.MenuItem?] = []
       if link != "" {
-        items.push(
+        shared.push(
           Some(
             @sf.menu_item_of(@sf.t("web-main.chat.copyLink"), icon="copy", fn() {
               @sfbase.copy_chat_link(r.title, link)
@@ -1288,11 +1304,27 @@ pub fn chat_menu_of(src : Source, scope : String, r : ChatRef, extra : Array[@sf
           ),
         )
       }
-      items.append(extra)
-      items
+      shared.append(extra)
+      share_menu(shared, share_from)
     }
   }
   items
+}
+
+///|
+/// What shares a chat or takes it elsewhere (`shared`), in its menu: one item, 分享…, its own menu from `share_from`, where
+/// there are two or more; else as they are.
+fn share_menu(shared : Array[@sf.MenuItem?], share_from : () -> @sf.Beside) -> Array[@sf.MenuItem?] {
+  if shared.length() < 2 {
+    return shared
+  }
+  [
+    Some(
+      @sf.menu_item_of(@sf.t("web-main.chat.share"), icon="share", fn() {
+        @sf.menu(shared, from=share_from(), title=@sf.t("web-main.chat.share.title"))
+      }),
+    ),
+  ]
 }
 
 ///|

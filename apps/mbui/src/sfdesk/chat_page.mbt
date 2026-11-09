@@ -345,7 +345,11 @@ fn chat_bar(
             }
             // (each its own in the system's bars where it has them, the "…" a menu of the system's: rail_native.mbt
             // bar_chat)
-            let rows = if @sf.native_on() { @sfpages.chat_menu_of(src, w.id, r, extra) } else { [] }
+            let rows = if @sf.native_on() {
+              @sfpages.chat_menu_of(src, w.id, r, extra, share_from=fn() { bar_menu_from(c, c.id("chat-more")).0 })
+            } else {
+              []
+            }
             let screens = view.screens
             let screen = if screens.length() > 0 {
               Some(

@@ -1224,7 +1224,7 @@ test "an iPhone Duo: the chat's … in the system's bars is a menu of the system
   let t = native_chat(951.0, 669.0, true, side=84.0)
   let said = t.nav_said()
   // (its rows as the page's menu has them: the chat's own group, a line, where else it goes; no line closing it)
-  for s in ["\"id\":\"page/chat/more/0\",\"title\":\"" + @sf.t("web-main.chat.rename") + "\"", "\"id\":\"-\"", @sf.t("web-main.chat.copyLink")] {
+  for s in ["\"id\":\"page/chat/more/0\",\"title\":\"" + @sf.t("web-main.chat.rename") + "\"", "\"id\":\"-\"", @sf.t("web-main.chat.share")] {
     if !said.contains(s) {
       fail("the chat's … handed holds no \{s}: \{said}")
     }
