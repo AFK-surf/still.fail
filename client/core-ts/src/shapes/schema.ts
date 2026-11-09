@@ -3443,6 +3443,8 @@ export const SHAPES: Record<string, Shape> = {
     ["elsewhere", vec("ChatSentElsewhere"), { default: true, doc: "What its agents said in Slack and were given from it before its first message (not in this chat): what came\nafter a message is that message's `elsewhere`. Not kept in it." }],
     ["more", "bool"],
     ["firstEntry", opt("i64"), { client: opt("I54"), doc: "The first entry loaded (letters and edits are not messages): the cursor for loading older pages." }],
+    ["older", opt("String"), { doc: "The page before what it shows (`chat.older`): reading | failed." }],
+    ["olderFailed", opt("String"), { doc: "Why the page before was not read (it is asked for again a while after)." }],
     ["lastEntry", opt("i64"), { client: opt("I54"), doc: "The last entry loaded: the cursor for loading newer pages." }],
     ["letters", opt("i64"), { client: opt("I54"), doc: "How many letters its agents and other chats' wrote each other (not in `messages`; the `chatLetters` view shows\nthem). Absent when none." }],
     ["newer", "bool", { default: true, doc: "Entries after those loaded: the chat shows a window short of its end (`chat.newer` loads the next page,\n`chat.latest` goes to the end). What is said meanwhile waits there, counted in its thread's `unread`." }],

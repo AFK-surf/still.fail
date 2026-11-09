@@ -5,9 +5,12 @@
 - Processes: the launcher (`native/launcher`, Rust) keeps the pid, the data directory's lock and the ports, and on an
   update starts the next Node before letting the old one go; each agent process runs under a runner
   (`native/runner`), so a turn goes on while the station restarts or crashes and the next one takes it up
-  (`src/agents/runner.ts`, `adopt`). iroh is a Node addon (`native/mesh`). The native parts are prebuilt by their
-  sources (`scripts/native.ts`): even a comment changed in one makes every machine and CI build it again, so touch
-  them only for what they do.
+  (`src/agents/runner.ts`; `adopt` in `src/agents/process.ts`). iroh is a Node addon (`native/mesh`). The native
+  parts are prebuilt by their sources (`scripts/native.ts`): even a comment changed in one makes every machine and
+  CI build it again, so touch them only for what they do.
+- What still.fail draws outside the app (the Helper's windows, `native/helper`) is in still.fail's design (the
+  colours of `web/ui/src/palette.ts`, its corners, capsule buttons, the s. mark), never the system's default controls
+  (the user, 2026-10-28).
 - `src/main.ts` is the composition root: every part is a Layer made there and given what it needs
   (`src/services.ts`); nothing registers itself, there is no global state. Async work is Effect 4: fibers in their
   part's scope, `Schedule` for backoff, streams for what is pushed. Pure computation stays plain functions.
@@ -28,6 +31,12 @@
 - A thread is a log: entries are appended, an edit is an entry of its own, nothing is deleted (a Slack delete is
   ignored); readers merge. The schema migrates forward only.
 - What changes is told: the store's change, then `GET /events` (`src/api/events.ts`) to devices. A device never polls.
+- Nothing in a workspace is hidden from its members: there is no permission system (the user, 2026-10-25). Every
+  chat, a private one too, is open to every member and every agent of the workspace. The station is its server and
+  the agents run as one system user, reading its database and every session's directory, so what is hidden from one
+  person or one chat would not stay hidden without encryption. Do not propose or build visibility by person or by
+  chat; a report of seeing another's private chat is answered that it is meant, and changing it is the owner's to
+  decide. Only workspaces are kept apart from each other.
 
 ## Agents
 

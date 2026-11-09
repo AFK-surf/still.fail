@@ -440,18 +440,7 @@ export class StationTopics implements Owner {
   historyOlder(station: string, key: string): Effect.Effect<boolean, CoreError> {
     const topic: Topic = { topic: "live", station, key };
     const tk = topicKey(topic);
-    return Effect.suspend(() => this.#older(station, key, topic, tk));
-  }
-
-  #older(station: string, key: string, topic: Topic, tk: string): Effect.Effect<boolean, CoreError> {
-    const state = this.#olders.get(tk) ?? { reading: false, failed: null, misses: 0 };
-    if (state.reading || state.failed !== null) return Effect.succeed(true);
-    const said = (next: typeof state | null) => {
-      if (next === null) this.#olders.delete(tk);
-      else this.#olders.set(tk, next);
-      this.#core.store.invalidate(topic);
-    };
-    const work = Effect.gen({ self: this }, function* () {
+    return Effect.suspend(() => this.#older(topic, tk, Effect.gen({ self: this }, function* () {
       const before = this.#firsts.get(tk);
       if (before === undefined || before === 0) return false;
       const data = this.#core.data;
@@ -467,7 +456,21 @@ export class StationTopics implements Owner {
       while (first > from && items.has(first - 1)) first--;
       this.#firsts.set(tk, first);
       return first > 0;
-    });
+    })));
+  }
+
+  /// The page before what topic `topic` shows, read by `work` (whether there are pages before it still), one at a time
+  /// (asked again while it is read: nothing more); one that fails is said on the topic (`older`, `olderFailed`), and
+  /// not asked for again till a while after (less often each time it fails in a row), when the UI asks again if it is
+  /// still near the top.
+  #older(topic: Topic, tk: string, work: Effect.Effect<boolean, CoreError>): Effect.Effect<boolean, CoreError> {
+    const state = this.#olders.get(tk) ?? { reading: false, failed: null, misses: 0 };
+    if (state.reading || state.failed !== null) return Effect.succeed(true);
+    const said = (next: typeof state | null) => {
+      if (next === null) this.#olders.delete(tk);
+      else this.#olders.set(tk, next);
+      this.#core.store.invalidate(topic);
+    };
     said({ ...state, reading: true });
     return work.pipe(
       Effect.tap(() => Effect.sync(() => said(null))),
@@ -651,6 +654,10 @@ export class StationTopics implements Owner {
     // A window kept to the chat's end is at its end even while the summary is ahead of what is held (a message just
     // said, its entry on its way): what comes joins it as it does, not a page to load after it.
     const value: Record<string, unknown> = { first: window.first, last, caught: Math.min(window.caught, last), entries, thread: summary, title: row === undefined ? null : (get(row, "title") ?? null), end: window.last === null };
+    // The page before, being read or why it was not (#older).
+    const older = this.#olders.get(tk);
+    if (older?.reading) value.older = "reading";
+    else if (older?.failed) Object.assign(value, { older: "failed", olderFailed: older.failed });
     if (window.at !== null) value.at = window.at;
     if (window.atOffset !== null) value.atOffset = window.atOffset;
     return { ok: value };
@@ -717,23 +724,29 @@ export class StationTopics implements Owner {
   /// The page before a chat's window into it (`chat.older`): from the device, else read now. Answers whether still
   /// older ones exist.
   older(station: string, id: number): Effect.Effect<boolean, CoreError> {
-    return Effect.gen({ self: this }, function* () {
+    return Effect.suspend(() => {
       const found = this.#window(station, id);
-      if (!found) return false;
-      const [, window] = found;
-      const before = window.first;
-      if (before <= 1) return false;
-      yield* this.#sync.channels.older(entriesOf(station, id), before, { quiet: false });
-      const held = this.#core.data.logRange("entry", station, String(id), Math.max(1, before - PAGE), before - 1);
-      let first = before;
-      while (first > Math.max(1, before - PAGE) && held.has(first - 1)) first--;
-      if (first === before) return false;
-      window.first = first;
-      // What shows past WINDOW goes at the other end: the window is short of its end from then on.
-      const end = this.#shownTo(station, id, first, window.last ?? this.#latest(station, id));
-      if (end !== null) window.last = end;
-      this.#core.store.invalidate({ topic: "thread", station, thread: id });
-      return first > 1;
+      if (!found) return Effect.succeed(false);
+      const [tk, window] = found;
+      return this.#older({ topic: "thread", station, thread: id }, tk, Effect.gen({ self: this }, function* () {
+        const before = window.first;
+        if (before <= 1) return false;
+        const from = Math.max(1, before - PAGE);
+        const held = () => this.#core.data.logRange("entry", station, String(id), from, before - 1);
+        // Read now unless all held; its station not reached and it not held: not had now (said, not a page that never
+        // comes).
+        if (held().size < before - from && (!this.#sync.link(station) || !this.#sync.reachable(station))) return yield* Effect.fail(new CoreError("offline", downWords(this.#sync.link(station)?.state ?? { state: "offline" }, this.#core.views.stationName(station))));
+        yield* this.#sync.channels.older(entriesOf(station, id), before, { quiet: false });
+        const items = held();
+        let first = before;
+        while (first > from && items.has(first - 1)) first--;
+        if (first === before) return false;
+        window.first = first;
+        // What shows past WINDOW goes at the other end: the window is short of its end from then on.
+        const end = this.#shownTo(station, id, first, window.last ?? this.#latest(station, id));
+        if (end !== null) window.last = end;
+        return first > 1;
+      }));
     });
   }
 

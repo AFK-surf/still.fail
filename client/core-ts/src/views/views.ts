@@ -2220,6 +2220,8 @@ export class Views implements Owner {
       more: u64(page.first) !== null && page.first > 1,
       newer: page.end === false,
       firstEntry: u64(page.first),
+      ...(page.older === "reading" || page.older === "failed" ? { older: page.older } : {}),
+      ...(page.older === "failed" && typeof page.olderFailed === "string" ? { olderFailed: page.olderFailed } : {}),
       lastEntry: u64(page.last),
       at: page.at ?? null,
       atOffset: page.atOffset ?? null,

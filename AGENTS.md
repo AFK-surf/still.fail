@@ -19,8 +19,10 @@ chats, each conversation an agent session on a **station** (a machine of theirs)
 - `web/`: the web's host of that app, a few pages of its own (Preact) and the design system `web/ui`.
 - `website/`: the official site. `rules/`: rules shared by the station, cloud and core, in MoonBit, built to JS.
 - `scripts/`: checks, releases, the CI plan. `vendor/`: patched upstream code (its README says each patch).
-- `docs/`: only how to build, run and operate (development.md, operations.md) and the release notes. Design is in the
-  code's comments and in these files; nothing else explains it.
+- `docs/`: only how to build, run and operate (development.md, operations.md, two notes on a station's setup) and
+  the release notes. Design is in the code's comments and in these files; nothing else explains it. A comment naming
+  another `docs/` file means a design document deleted in #4614 (`git show ec9da461f6^:docs/<name>.md`): where the
+  comment leaves a format or a protocol to it, that is its spec.
 
 ## These files are kept true
 
@@ -35,6 +37,12 @@ chats, each conversation an agent session on a **station** (a machine of theirs)
 
 - One pull request per piece of work, from `origin/main`. Merging to main deploys the beta (`.github/workflows/pipeline.yml`,
   `scripts/plan.sh`: what each path deploys), so main is always releasable.
+- A bug's fix merges once its newest commit's checks passed; a change to the product or to what people see, when
+  the owner has said so (the user, 2026-10-31).
+- What people will notice of a change is said in its commit message's trailers: `Changelog:` a line for them, in
+  Chinese (`修复：…`, `新增：…`, `改进：…`); `Changelog-parts:` where they see it (`station`, `web`, `android`,
+  `desktop`, `cloud`); `Fixes: FB-<n>` a bug report it fixes. The apps' changelog and each stable release's notes
+  are written from these alone (`scripts/changelog.ts`); a change with nothing for people writes none.
 - `sh scripts/check.sh full origin/main..HEAD` checks what the range changed (the git hooks run its quick part);
   `STILLFAIL_CHECK_PART` narrows it. Run the part you changed before a PR; the whole of it is CI's.
 - A fix that cannot wait a day for the next stable release (a crash, data lost, people locked out, a release that does
