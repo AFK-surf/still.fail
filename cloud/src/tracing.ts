@@ -6,6 +6,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { clock, nowSeconds, readText, reply } from "./auth";
 import { header, publicOrigins, signedMessages } from "./compat";
+import { sockets } from "./directory";
 import type { Env } from "./env";
 import { validKeyHex, verifyAnySignature } from "./grants";
 import { TELEMETRY_BATCHES_PER_MINUTE } from "./limits";
@@ -131,7 +132,9 @@ export async function stationSender(request: Request, env: Env, body: string, ta
   const digest = hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)));
   const messages = signedMessages(tag, publicOrigins(env), `${station}:${ts}:${digest}`, former);
   if (!(await verifyAnySignature(station, header(request, "signature") ?? "", messages))) return null;
-  return (await env.DIRECTORY.getByName("primary").isStation(station)) ? station : null;
+  // Its own object says (station.ts), off the Directory, which every one of its requests went through before.
+  const enrolled = sockets.where(env) === "primary" ? env.DIRECTORY.getByName("primary").isStation(station) : env.STATIONS.getByName(station).isStation(station);
+  return (await enrolled) ? station : null;
 }
 
 /** POST /v1/telemetry/traces: a batch of spans (OTLP JSON), passed on to Axiom. `account` is the signed-in sender, if any. */

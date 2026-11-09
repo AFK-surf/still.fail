@@ -5,11 +5,19 @@ import type { Mailer } from "./mail";
 import type { RelayLoad } from "./relay-load";
 import type { ServiceStatus } from "./status";
 import type { Relay } from "./relay-worker";
+import type { Station } from "./station";
 import type { TelemetryLimiter } from "./tracing";
 
 export interface Env {
   ACCOUNTS: DurableObjectNamespace<Account>;
   DIRECTORY: DurableObjectNamespace<Directory>;
+  /** One per station, by its key: its presence socket, and whether it is enrolled (station.ts). */
+  STATIONS: DurableObjectNamespace<Station>;
+  /**
+   * "primary": devices' events sockets and stations' presence sockets open on the Directory again, as before their own
+   * objects (directory.ts `sockets`): the way back, deployed as a change of this variable alone. Unset: on their objects.
+   */
+  DIRECTORY_SOCKETS?: string;
   /** The stations' releases (scripts/release.sh). */
   RELEASES?: R2Bucket;
   /** Where the station's releases are read when the bucket has none of a file (releases.ts upstream): still.fail's

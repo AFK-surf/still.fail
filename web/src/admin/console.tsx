@@ -296,7 +296,8 @@ function RelayCard({ relay }: { relay: Relay }) {
           ))}
         </dl>
       )}
-      {relay.charts.map((c) => <LoadChart key={c.id} chart={c} ticks={relay.ticks} />)}
+      {relay.charts.slice(0, 1).map((c) => <LoadChart key={c.id} chart={c} ticks={relay.ticks} />)}
+      {relay.charts.length > 1 && <div className={css.relayCharts}>{relay.charts.slice(1).map((c) => <LoadChart key={c.id} chart={c} ticks={relay.ticks} />)}</div>}
     </section>
   );
 }

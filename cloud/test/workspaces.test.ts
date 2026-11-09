@@ -72,7 +72,10 @@ test("accounts own workspaces, invite each other, enroll stations and get creden
       let pong = () => {};
       socket.addEventListener("message", (event) => (event.data === "pong" ? pong() : frames.push(JSON.parse(event.data as string))));
       socket.accept();
-      const told = () => new Promise<any[]>((resolve) => { pong = () => resolve(frames); socket.send("ping"); });
+      const told = async () => {
+        await h.settled();
+        return new Promise<any[]>((resolve) => { pong = () => resolve(frames); socket.send("ping"); });
+      };
       return told;
     };
     const presence = await connect();

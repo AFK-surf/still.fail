@@ -61,8 +61,9 @@ async function connect(h: Harness, station: Station) {
   const closed = new Promise<number>((resolve) => ws.addEventListener("close", (event) => resolve(event.code), { once: true }));
   ws.addEventListener("message", (event) => (event.data === "pong" ? pong?.() : frames.push(JSON.parse(event.data as string))));
   ws.accept();
-  /** Everything it was told since the last time (a pong comes after everything sent before it). */
+  /** Everything it was told since the last time (once what was told its object got there, a pong comes after everything sent before it). */
   const told = async () => {
+    await h.settled();
     await new Promise<void>((resolve) => {
       pong = resolve;
       ws.send("ping");
