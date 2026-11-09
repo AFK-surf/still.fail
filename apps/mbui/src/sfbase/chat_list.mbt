@@ -355,6 +355,46 @@ fn at_work(a : Agent) -> Bool {
 }
 
 ///|
+/// The agents of view `v` whose card an answer on its way from here quotes (`all`'s outgoing rows: the core's outbox
+/// and what was sent from here before the core has it), not at work by the view nor in `all` yet: at work from the
+/// frame the answer is sent, as the core says them once it has it (views.ts answeredAt), so the agent's line comes in
+/// with the answer, the card folding and the answer coming on one way of the list, not a moment after it (the user,
+/// 2026-11-09: 「点选项时「处理中」立刻出来」).
+fn answered_at(v : ChatView, all : Array[Entry]) -> Array[Agent] {
+  let out : Array[Agent] = []
+  let take = fn(by : String) {
+    match v.agents.search_by(fn(a) { a.key == by }) {
+      Some(i) => {
+        let a = v.agents[i]
+        let shown = all.iter().any(fn(x) { x is Working(w) && w.key == a.key })
+        if !at_work(a) && !shown && !out.iter().any(fn(x) { x.key == a.key }) {
+          out.push({ ..a, status: "queued", started: true })
+        }
+      }
+      None => ()
+    }
+  }
+  // (the chat's last word a card, answered by what is on its way: words sent under it answer it as a pick does)
+  let last = v.messages.rev_iter().find_first(fn(m) { !m.system })
+  for e in all {
+    guard e is Out(o) && o.state != "failed" else { continue }
+    for q in o.quotes {
+      guard q.role == "agent" && q.ts != "" else { continue }
+      match v.messages.search_by(fn(m) { m.ts == q.ts && m.card is Some(_) }) {
+        Some(i) => take(v.messages[i].by.agent)
+        None => ()
+      }
+    }
+    match last {
+      Some(m) if m.card is Some(_) && m.by.agent != "" && (m.decision is Some(d) && d.resolved && !d.dismissed) =>
+        take(m.by.agent)
+      _ => ()
+    }
+  }
+  out
+}
+
+///|
 /// The entries and where their messages end, before the live rows at the foot.
 fn chat_entries(v : ChatView) -> (Array[Entry], Int) {
   let out : Array[Entry] = [Top]
@@ -1384,6 +1424,13 @@ pub fn row_keys(
       all.insert(at + j, Out(l.row))
       all_keys.insert(at + j, "o:" + l.row.id)
     }
+  }
+  // an agent whose card was just answered from here: at work from the frame the answer is sent, its line coming with
+  // the answer (answered_at)
+  for a in answered_at(v, all) {
+    let at = all.length() - (if all.length() > 0 && all[all.length() - 1] is Foot { 1 } else { 0 })
+    all.insert(at, Working(a))
+    all_keys.insert(at, "act:" + a.key)
   }
   // a row gone from the chat's end as its turns go: an agent's line (its turn over, its moment stayed), where the chat
   // stands (a person wrote, an agent took it up). An agent's line is new to the list again: its next turn comes in as
