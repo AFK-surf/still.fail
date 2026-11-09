@@ -521,6 +521,8 @@ pub fn finder_dragged(Source, Array[@ui.DroppedPath]) -> Array[Dragged]
 
 pub fn first_frame(@ui.Ctx, Source, String, String, Attachment, String) -> String
 
+pub fn first_frame_node(@view.View, Source, String, String, Attachment, String) -> () -> String
+
 pub fn first_line(String) -> String
 
 pub let first_page_waits : @signals.Signal[Bool]
@@ -1717,6 +1719,8 @@ pub let video_peeks : @ref.Ref[Int32]
 pub let video_peeks_most : Int32
 
 pub fn video_still(@ui.Ctx, Source, String, String, Attachment, String) -> String
+
+pub fn video_still_node(@view.View, Source, String, String, Attachment, String) -> () -> String
 
 pub fn view_of_chat(Source, ChatRef) -> (ChatView?, Array[Entry], @json.Json?)
 

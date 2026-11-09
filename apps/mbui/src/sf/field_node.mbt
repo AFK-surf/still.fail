@@ -150,3 +150,21 @@ fn field_frame(
 ///|
 /// How far a disabled field is seen (input_box's `disabled{opacity=O55}`).
 let field_disabled_alpha : Double = 0.55
+
+///|
+/// A field (field's, as nodes) in `parent`: its `label` (13, 500) over what `body` makes in it (the input), 6 apart; on
+/// a wide page not in a panel as wide as what is typed in it needs (field_box_wide), else as wide as where it is.
+pub fn field_node(parent : @view.View, label : () -> String, body : (@view.View) -> Unit) -> Unit {
+  parent.box(fn(f) {
+    // (in a panel's body: lent where it is, panel_in_lent)
+    let wide_page = look_node(f) is Wide && f.lent(panel_in_lent) is None
+    style_node(f, fn() { if wide_page { field_box_wide } else { field_box } })
+    f.box(fn(top) {
+      style_node(top, fn() { field_top })
+      words_node(top, label, fn() { field_label }) |> ignore
+    })
+    |> ignore
+    body(f)
+  })
+  |> ignore
+}

@@ -29,6 +29,7 @@ pub fn fixture_reset() -> Unit {
   new_fix.liked.clear()
   new_fix.providers = false
   fix_presets_said.val = 0
+  fix_job_more.val = 0
   new_fix.presets.clear()
   new_fix.presets.push_iter([fix_preset_design(), fix_preset("p-tc", "web-app + backend", ["web-app", "backend"], "")].iter())
   fix_chats.clear()

@@ -411,7 +411,9 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
     "jobLog" =>
       Some(
         Some({
-          "text": "✓ build (1m 12s)\n✓ unit tests (48s)\n✓ step 3: screenshots\n… waiting for deploy",
+          "text": Json::string(
+            "✓ build (1m 12s)\n✓ unit tests (48s)\n✓ step 3: screenshots\n… waiting for deploy" + fix_job_more_text(),
+          ),
           "said": "最后输出 · 3 分钟前",
           "last": "… waiting for deploy",
         }),
@@ -802,4 +804,20 @@ pub fn fix_letters() -> Json {
       },
     ],
   }
+}
+
+///|
+/// How many lines a job's output (jobLog) has come to have past its made-up four (more said by fix_now, as a running
+/// job's come), each `deploy check N`.
+// kept across runs: put back by fixture_reset
+pub let fix_job_more : Ref[Int] = Ref(0)
+
+///|
+/// The lines past the four, each on a line of its own after them.
+fn fix_job_more_text() -> String {
+  let out = StringBuilder::new()
+  for k in 1..=fix_job_more.val {
+    out.write_string("\ndeploy check \{k}")
+  }
+  out.to_string()
 }

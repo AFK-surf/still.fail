@@ -18,6 +18,12 @@ pub fn lit_node(v : @view.View) -> Bool {
 }
 
 ///|
+/// Whether a mouse is over `v` (an old view's `hovered`: a pointer's alone, no finger's).
+pub fn hovered_node(v : @view.View) -> Bool {
+  @ui.pointing() is Mouse && v.pointed()
+}
+
+///|
 /// Whether the hand is on `v` or on what it holds (lit_node's, a mouse over any of it: as an old view's row is hovered
 /// by any of its parts, its keys among them).
 pub fn lit_in_node(v : @view.View) -> Bool {
@@ -112,6 +118,13 @@ fn pressed_node(
     },
   )
   |> ignore
+}
+
+///|
+/// `v` pressed as pressed_node has it (a tap, a mouse's click, Enter or Space with the focus, a screen reader's press),
+/// `press` done then, rippling round its `corner` (@motion.ripple's, as nodes); read out a button named `label`.
+pub fn rippled_node(v : @view.View, press : () -> Unit, corner : Double, label : () -> String) -> Unit {
+  pressed_node(v, press, Is(corner), Button, label)
 }
 
 ///|

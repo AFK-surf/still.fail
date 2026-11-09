@@ -82,6 +82,9 @@ pub(all) struct Look {
   mut image_for : (Double, Double)
   /// its picture covering it, cut where it is not as wide for as tall (View::image_covers); else filling it
   mut image_cover : Bool
+  /// its picture contained in it, all of it shown as wide for as tall as it is, in its middle (View::image_contains);
+  /// else filling it (covering it said, covering it)
+  mut image_contain : Bool
   /// its picture fading in as it is decoded (View::image_fades); else there at once
   mut image_fade : Bool
   /// where in it its picture lies (x, y, w, h, in its own terms) and the matte filling the rest of it, drawn with the
@@ -163,6 +166,8 @@ pub(all) struct Content {
   image_for : (Double, Double)
   /// its picture covering it, not stretched to it (View::image_covers)
   image_cover : Bool
+  /// its picture contained in it, not stretched to it (View::image_contains)
+  image_contain : Bool
   /// its picture fading in as it is decoded (View::image_fades)
   image_fade : Bool
   /// where in it its picture lies and the matte round it (View::image_in)
@@ -235,6 +240,8 @@ pub(all) struct Drawn {
   image_for : (Double, Double)
   /// its picture covering it, not stretched to it (View::image_covers)
   image_cover : Bool
+  /// its picture contained in it, not stretched to it (View::image_contains)
+  image_contain : Bool
   /// its picture fading in as it is decoded (View::image_fades)
   image_fade : Bool
   /// where in it its picture lies and the matte round it (View::image_in)
@@ -598,6 +605,8 @@ pub struct Tree {
   room : @signals.Signal[(Double, Double)]
   /// Each window press, with its number and window coordinates (Tree::went_down).
   pressed_anywhere : @signals.Signal[(Int, Double, Double)]
+  /// Whether a finger or a button is down anywhere in the window now (Tree::went_down, Tree::went_up).
+  held_anywhere : @signals.Signal[Bool]
   /// how many taps there have been anywhere in the window, as the host tells each (Tree::tapped): what a tap anywhere
   /// lets go of follows it
   tapped_anywhere : @signals.Signal[Int]
@@ -845,6 +854,7 @@ pub fn Tree::new(
     places: @signals.signal(0),
     room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
     pressed_anywhere: @signals.signal((0, -1.0, -1.0), same=fn(a, b) { a == b }),
+    held_anywhere: @signals.signal(false, same=fn(a, b) { a == b }),
     tapped_anywhere: @signals.signal(0, same=fn(a, b) { a == b }),
     words_redone: @signals.signal(0, same=fn(a, b) { a == b }),
     outs_said: @signals.signal(0, same=fn(a, b) { a == b }),
@@ -1030,6 +1040,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.image = None
       n.look.image_for = (0.0, 0.0)
       n.look.image_cover = false
+      n.look.image_contain = false
       n.look.image_fade = false
       n.look.image_in = None
       n.look.glass = None
@@ -1152,7 +1163,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         gen: 0,
         live: true,
         flex: @flex.Node::new(),
-        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: ground_as_laid, cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
+        look: { ground: 0L, ink: 0L, words: "", words_drawn: None, words_look: words_plain, runs: [], runs_look: runs_plain, runs_pressed: -1, runs_picked: (0, 0), shadow: (0.0, 0.0, 0L), shapes: [], tint: 0L, lines: [], edge: (0.0, 0L), image: None, image_for: (0.0, 0.0), image_cover: false, image_contain: false, image_fade: false, stretch: 0.0, image_in: None, radius: 0.0, corners: None, glass: None, alpha: 1.0, dx: 0.0, dy: 0.0, sx: 0.0, sy: 0.0, scale: 1.0, pivot: At(0.5, 0.5), turn: 0.0, turn_drawn: false, fades: (0.0, 0.0, 0.0, 0.0), drawn_off: (0.0, 0.0), ground_drawn: ground_as_laid, cut_soft: false, drawn_as: "", clips: false, words_center: false, ellipsis_past: false, picture: None },
         parent,
         allow_ellipsis: false,
         kids: [],
@@ -2087,6 +2098,7 @@ priv enum Prop {
   Image
   ImageFor
   ImageCover
+  ImageContain
   ImageFade
   ImageIn
   Corners
@@ -2736,6 +2748,15 @@ pub fn View::image(self : View, image : Live[(String, String, Int)?]) -> View {
 /// for as tall (an old view's FitCover: a face, a mark put up); else, as said none, filling it; paint's.
 pub fn View::image_covers(self : View, on : Live[Bool]) -> View {
   self.bind(ImageCover, on, Paint, fn(on) { self.tree.nodes[self.at].look.image_cover = on })
+  self
+}
+
+///|
+/// Its picture (View::image) contained in it as it changes: all of it shown, as wide for as tall as it is, in its
+/// middle, what it does not fill left bare (an old view's FitContain: a site's icon in its square); else, as said none,
+/// filling it; covering it said too, covering it. Paint's.
+pub fn View::image_contains(self : View, on : Live[Bool]) -> View {
+  self.bind(ImageContain, on, Paint, fn(on) { self.tree.nodes[self.at].look.image_contain = on })
   self
 }
 
@@ -7021,6 +7042,7 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     image: n.look.image,
     image_for: n.look.image_for,
     image_cover: n.look.image_cover,
+    image_contain: n.look.image_contain,
     image_fade: n.look.image_fade,
     image_in: n.look.image_in,
     glass: n.look.glass,
@@ -7504,6 +7526,7 @@ fn unfolded(c : Content, x : Double, y : Double, a : Double, s : Double) -> Draw
     image: c.image,
     image_for: c.image_for,
     image_cover: c.image_cover,
+    image_contain: c.image_contain,
     image_fade: c.image_fade,
     image_in: c.image_in,
     glass: c.glass,

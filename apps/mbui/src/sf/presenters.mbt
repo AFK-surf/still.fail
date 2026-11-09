@@ -500,8 +500,8 @@ pub fn panel(
 }
 
 ///|
-/// A panel as @sf.panel's (`title`, `from`, `w`, `description`, `wide`, `gone`, `focus`, `ruled`, `form`, `grows`, `side`,
-/// `along`, `offset` as there), what it holds (`body`) and what is at its foot (`foot`) made once as nodes of the window's
+/// A panel as @sf.panel's (`title`, `from`, `w`, `description`, `wide`, `live`, `gone`, `tall`, `focus`, `ruled`, `form`,
+/// `grows`, `side`, `along`, `offset` as there), what it holds (`body`) and what is at its foot (`foot`) made once as nodes of the window's
 /// tree, each in the node the panel gives it, laid out there as the old frame's body and foot are (beside what opened
 /// it: panel_node; in the middle of the window, opened by nothing or a form: panel_centred_node), given what closes it.
 /// The window's tree draws it on every screen: on 小屏 a sheet from the window's foot (sheet_node), as the host draws an
@@ -515,7 +515,9 @@ pub fn panel_nodes(
   description? : String = "",
   foot? : (@view.View, () -> Unit) -> Unit,
   wide? : Bool = false,
+  live? : () -> (String, String, String),
   gone? : () -> Unit = fn() {  },
+  tall? : Double = 0.0,
   focus? : Bool = true,
   ruled? : Bool = false,
   form? : Bool = false,
@@ -533,8 +535,8 @@ pub fn panel_nodes(
       w,
       fits: false,
       wide,
-      live: None,
-      tall: 0.0,
+      live,
+      tall,
       grows,
       focus,
       ruled,
@@ -1323,6 +1325,20 @@ fn dialog_covered(serial : Int) -> Bool {
       presented_now[i].open &&
       presented_now[i + 1:].iter().any(fn(q) { q.open && how_of(q.shows, q.from, false) == AsDialog })
     None => false
+  }
+}
+
+///|
+/// How tall the topmost sheet open over the one presented as `serial` is, while it is open and one is (present_sheet's
+/// covered, its `over`'s height): None otherwise.
+fn sheet_over(serial : Int) -> Double? {
+  presented_said.get() |> ignore
+  match presented_now.search_by(fn(q) { q.serial == serial }) {
+    Some(i) if presented_now[i].open =>
+      presented_now[i + 1:].iter().filter(fn(q) { q.open && how_of(q.shows, q.from, true) == AsSheet }).last().map(fn(q) {
+        q.sheet_h.get()
+      })
+    _ => None
   }
 }
 

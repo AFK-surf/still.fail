@@ -380,20 +380,120 @@ pub fn first_frame(c : @ui.Ctx, src : Source, station : String, key : String, a 
   if !pv_first.contains(id) && (a.size <= 0.0 || a.size > big_file) {
     return ""
   }
+  grab_first(c, id, a.name, fn() { first_player(src, station, key, a) })
+}
+
+///|
+/// A player of chat video `a` (on `station`, kept by session `key`) reading it from the station a part at a time, for
+/// its first frame (first_frame's, first_frame_node's).
+fn first_player(src : Source, station : String, key : String, a : Attachment) -> @ui.NativeView {
   let (_, mime, _) = preview_kind(a.name)
-  grab_first(c, id, a.name, fn() {
-    @ui.NativeView::video(mime, fn(offset, length, answer) {
-      let p : Map[String, Json] = {
-        "station": Json::string(station),
-        "key": Json::string(key),
-        "name": Json::string(base_name(a.path)),
-        "offset": Json::number(offset),
-        "length": Json::number(length.to_double()),
-      }
-      chat_keep(p, a.size)
-      stream_part(src, "station.file.part", p, a.size, answer)
-    })
+  @ui.NativeView::video(mime, fn(offset, length, answer) {
+    let p : Map[String, Json] = {
+      "station": Json::string(station),
+      "key": Json::string(key),
+      "name": Json::string(base_name(a.path)),
+      "offset": Json::number(offset),
+      "length": Json::number(length.to_double()),
+    }
+    chat_keep(p, a.size)
+    stream_part(src, "station.file.part", p, a.size, answer)
   })
+}
+
+///|
+/// The first frame of chat video `a` as first_frame has it, for a node of the window's tree `v` (a chat's things'
+/// tile): what it shows read as it comes (an image's key, "" while it comes or where it is too big to read for it, "!"
+/// when it could not be). The same grab as first_frame's (pv_first, by `id`): asked once at its moment, as an old
+/// view's is once its frame is built; its answer taken as the host tells it (NativeView::grabs_told), none to be had as
+/// the host says it has no player or one that cannot read it, or once its decoder has waited media_decode_wait_ms
+/// from when all its bytes came (@kit.media_decode_stalled's): first_frame's rule, followed as it is told, not asked
+/// each frame.
+pub fn first_frame_node(v : @view.View, src : Source, station : String, key : String, a : Attachment, id : String) -> () -> String {
+  let picture = fn() {
+    pv_first_told.get() |> ignore
+    match pv_first.get(id) {
+      Some(f) => f.picture
+      None => ""
+    }
+  }
+  if !pv_first.contains(id) {
+    if a.size <= 0.0 || a.size > big_file {
+      return picture
+    }
+    let f : FirstFrame = { view: None, picture: "" }
+    pv_first[id] = f
+    let n = first_player(src, station, key, a)
+    if !n.here() {
+      f.picture = "!"
+      return picture
+    }
+    f.view = Some(n)
+    v.at_moment(v.cause_at(), fn() { n.grab_frame(0.0) }) |> ignore
+  }
+  // (its decoder's wait, as it stands: let go as another is set or it is settled)
+  let stall : Ref[() -> Unit] = Ref(fn() {  })
+  let waiting = fn() {
+    match pv_first.get(id) {
+      Some(f) => f.view
+      None => None
+    }
+  }
+  v.reacts(
+    fn() { waiting().map(fn(n) { (n.grabs_told(), n.state()) }) },
+    fn(told) {
+      guard told is Some(_) && pv_first.get(id) is Some(f) && f.view is Some(n) else { return }
+      match n.grabbed() {
+        Some(png) => first_settled(f, n, id, a.name, png)
+        None =>
+          if n.state() < 0 && !n.grabbing() {
+            first_settled(f, n, id, a.name, b"")
+          } else if n.state() == 2 && n.decode_since() >= 0.0 {
+            (stall.val)()
+            stall.val = v.at_moment(n.decode_since() + @kit.media_decode_wait_ms, fn() {
+              if f.view is Some(m) && physical_equal(m, n) {
+                first_settled(f, n, id, a.name, b"")
+              }
+            })
+          }
+      }
+    },
+  )
+  picture
+}
+
+///|
+/// What a first frame came to (first_frame_node's): `png` its picture's (an image's key kept by `id`, as grab_first
+/// keeps it), none: "!"; its player closed, what shows it told.
+fn first_settled(f : FirstFrame, n : @ui.NativeView, id : String, name : String, png : Bytes) -> Unit {
+  f.view = None
+  if png.length() > 0 {
+    let k = first_key(id, name)
+    @ui.add_image(k, png)
+    f.picture = k
+  } else {
+    f.picture = "!"
+  }
+  n.close()
+  first_told()
+}
+
+///|
+/// The key a first frame's picture is kept by (grab_first's).
+fn first_key(id : String, name : String) -> String {
+  "mem:pv-first/\{@ui.stable_hash(id)}/\{id.length()}/\{name}"
+}
+
+///|
+/// How many first frames have come to what they are (grab_first's, first_frame_node's): what a node showing one reads,
+/// told as any is.
+// kept across runs: a count, only what changed is read of it
+let pv_first_told : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// A first frame come to what it is, told (pv_first_told).
+fn first_told() -> Unit {
+  pv_first_told.set(@signals.untracked(fn() { pv_first_told.get() }) + 1)
 }
 
 ///|
@@ -434,13 +534,16 @@ fn grab_first(c : @ui.Ctx, id : String, name : String, open : () -> @ui.NativeVi
             Some(png) => {
               f.view = None
               if png.length() > 0 {
-                let k = "mem:pv-first/\{@ui.stable_hash(id)}/\{id.length()}/\{name}"
+                let k = first_key(id, name)
                 @ui.add_image(k, png)
                 f.picture = k
               } else {
                 f.picture = "!"
               }
-              c.tell("pv-first-close/" + id, fn() { n.close() })
+              c.tell("pv-first-close/" + id, fn() {
+                n.close()
+                first_told()
+              })
             }
             None => ()
           }
@@ -3121,16 +3224,46 @@ pub fn file_viewer_reset() -> Unit {
 /// station's poster (or its first frame drawn here when the station made none): its image's key ("" none). `thumb`:
 /// its thumbnail's id.
 pub fn video_still(c : @ui.Ctx, src : Source, station : String, owner : String, a : Attachment, thumb : String) -> String {
+  match video_still_known(src, station, owner, a, thumb) {
+    "!" => first_frame(c, src, station, owner, a, thumb)
+    k => k
+  }
+}
+
+///|
+/// video_still for a node of the window's tree `v` (a chat's things' tile), read as it comes: the station's still, or
+/// where it made none, the first frame drawn here (first_frame_node).
+pub fn video_still_node(v : @view.View, src : Source, station : String, owner : String, a : Attachment, thumb : String) -> () -> String {
+  let known = fn() { video_still_known(src, station, owner, a, thumb) }
+  // (its first frame's, asked as the station is known to have made none: then, once)
+  let first : @signals.Signal[(() -> String)?] = @signals.signal(None, same=fn(x, y) { physical_equal(x, y) })
+  v.reacts(fn() { known() == "!" }, fn(none) {
+    if none && @signals.untracked(fn() { first.get() }) is None {
+      first.set(Some(first_frame_node(v, src, station, owner, a, thumb)))
+    }
+  })
+  fn() {
+    match known() {
+      "!" =>
+        match first.get() {
+          Some(f) => f()
+          None => ""
+        }
+      k => k
+    }
+  }
+}
+
+///|
+/// The same as far as it is known without drawing a frame of it here (what a node shows: the viewer's still, one sent
+/// from here, the station's poster): "!" where the station made none.
+fn video_still_known(src : Source, station : String, owner : String, a : Attachment, thumb : String) -> String {
   match pv_frames.get(thumb) {
     Some((k, _)) => k
     None =>
       match sent_picture(station, a) {
         Some(k) => k
-        None =>
-          match (src.poster)(station, owner, base_name(a.path)) {
-            "!" => first_frame(c, src, station, owner, a, thumb)
-            k => k
-          }
+        None => (src.poster)(station, owner, base_name(a.path))
       }
   }
 }

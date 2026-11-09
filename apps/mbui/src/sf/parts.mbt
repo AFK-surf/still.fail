@@ -2210,6 +2210,17 @@ pub fn empty(c : @ui.Ctx, body : () -> Unit) -> Unit {
 }
 
 ///|
+/// What a list with nothing in it shows (empty's, as a node) in `parent`: what `body` makes, in the middle of the room
+/// left, 40 in.
+pub fn empty_node(parent : @view.View, body : (@view.View) -> Unit) -> Unit {
+  parent.box(fn(b) {
+    style_node(b, fn() { empty_box })
+    body(b)
+  })
+  |> ignore
+}
+
+///|
 // kept across runs: a value (no field of it changes)
 let empty_box : @ui.Style = @ui.css("w=Full h=Grow(1.0) p=S10 gap=S1_5 align=ACenter justify=JCenter")
 

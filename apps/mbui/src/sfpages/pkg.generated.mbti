@@ -615,6 +615,8 @@ pub fn things_body(@ui.Ctx, @sfbase.Source, @sfbase.ChatRef, Double, Bool, (Doub
 
 pub fn things_choose(@sfbase.ChatRef, String) -> Unit
 
+pub fn things_node(@view.View, @sfbase.Source, @sfbase.ChatRef, Double, (Double) -> Unit) -> Unit
+
 pub fn things_now(@sfbase.Source, String, Double) -> (Int32, Array[@json.Json])
 
 pub fn things_params(String, Double, q? : String) -> Map[String, @json.Json]
@@ -660,6 +662,8 @@ pub let video_least : Double
 pub let vt_actions : @ui.Style
 
 pub fn web_peek(@ui.Ctx, @sfbase.Source, String, String, String, Int32, side? : @view.Side, peek? : String) -> Unit
+
+pub fn web_peek_node(@view.View, @sfbase.Source, String, () -> String, () -> String, side? : @view.Side, peek? : () -> String) -> Unit
 
 pub fn work_mark(@ui.Ctx, @sfbase.Source, String, String, @ui.TextStyle, @ui.TextStyle, lead? : String, smallest? : Bool) -> Unit
 
