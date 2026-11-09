@@ -339,15 +339,17 @@ fn Tree::inputs_told(self : Tree) -> Unit {
   if !self.inputs_whole {
     let todo = self.inputs_in.copy()
     self.inputs_in.clear()
-    while todo.pop() is Some(at) {
-      guard at >= 0 && at < self.nodes.length() else { continue }
-      let n = self.nodes[at]
-      guard n.live else { continue }
-      match n.input_cell {
-        Some(s) => s.set(!self.pressless_at(at))
-        None => ()
+    // (no modal layer, the old frame's or the tree's: whether each takes input is what holds it says, worked out once
+    // for each change's node and carried down what it holds, not asked again of each all the way up)
+    let plain = self.modals.is_empty() && self.held_under_now() == -2
+    for at in todo {
+      guard at >= 0 && at < self.nodes.length() && self.nodes[at].live else { continue }
+      if plain {
+        let p = self.nodes[at].parent
+        self.inputs_down(at, p >= 0 && self.pressless_own_at(p))
+      } else {
+        self.inputs_each(at)
       }
-      todo.push_iter(n.kids.iter())
     }
     return
   }
@@ -361,6 +363,39 @@ fn Tree::inputs_told(self : Tree) -> Unit {
       Some(s) => s.set(!self.pressless_at(at))
       None => ()
     }
+  }
+}
+
+///|
+/// Node `at` and what it holds told whether each takes input (Tree::inputs_told), no modal layer said: none where what
+/// holds it takes no press (`above`: leaving, said to take none, left out, in its bones), else as it says itself.
+fn Tree::inputs_down(self : Tree, at : Int, above : Bool) -> Unit {
+  let n = self.nodes[at]
+  guard n.live else { return }
+  let off = above || n.left_at >= 0.0 || n.inert || n.out || n.bones != 0L
+  match n.input_cell {
+    Some(s) => s.set(!off)
+    None => ()
+  }
+  let kids = n.kids
+  for i in 0..<kids.length() {
+    self.inputs_down(kids[i], off)
+  }
+}
+
+///|
+/// Node `at` and what it holds told whether each takes input (Tree::inputs_told), each asked of all that holds it and
+/// of the modal layers.
+fn Tree::inputs_each(self : Tree, at : Int) -> Unit {
+  let n = self.nodes[at]
+  guard n.live else { return }
+  match n.input_cell {
+    Some(s) => s.set(!self.pressless_at(at))
+    None => ()
+  }
+  let kids = n.kids
+  for i in 0..<kids.length() {
+    self.inputs_each(kids[i])
   }
 }
 
