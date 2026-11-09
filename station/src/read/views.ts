@@ -333,7 +333,12 @@ function needView(api: Api, thread: number, agents: Json[], dismissed: Set<strin
 /// ids of the items it can change (an item's id is its first agent's key: the sessions changed, and the agents of the
 /// threads changed or theirs); `sessions` and `threads`, what those items are made of (their chats' agents, and the
 /// threads those take part in, the Slack ones they came from among them).
-export type Scope = { rows: Set<string>; sessions: Set<string>; threads: number[] };
+export type Scope = {
+  rows: Set<string>; sessions: Set<string>; threads: number[];
+  // Only a job-name scope keeps these, for the duration of its reader's snapshot.
+  jobNameMembers?: Map<number, store.Membership[]>;
+  jobNameThreads?: ReturnType<typeof store.threadsForChatNames>;
+};
 
 /// How many of the archive's items a page of it has (`archivedPage`).
 export const ARCHIVE_PAGE = 50;
@@ -368,6 +373,7 @@ export function scopeOf(s: Store, sessions: string[], threads: number[]): Scope 
 /// standalone session actually needs a name from them. A shared chat can take its name from any of its members.
 export function scopeOfJobNames(s: Store, keys: string[]): Scope {
   const rows = new Set(keys), agents = new Set(keys), origins = new Set<string>(), hasChat = new Set<string>();
+  const jobNameMembers = new Map<number, store.Membership[]>();
   const target = new Map(keys.map((key) => [key, store.getSession(s, key)]));
   const chats = store.threadsOfSessionsOnSurface(s, keys, true);
   const checked = new Map<string, boolean>();
@@ -376,6 +382,7 @@ export function scopeOfJobNames(s: Store, keys: string[]): Scope {
     const thread = store.getThread(s, id);
     if (thread === null) continue;
     const members = store.threadSessions(s, id);
+    jobNameMembers.set(id, members);
     for (const member of members) {
       rows.add(member.session);
       agents.add(member.session);
@@ -397,8 +404,12 @@ export function scopeOfJobNames(s: Store, keys: string[]): Scope {
   }
   const external = new Set(store.latestNamingOrigins(s, [...origins]));
   // An origin can include a missing member; its other members still make it visible to the shared reader.
-  for (const id of external) for (const member of store.threadSessions(s, id)) agents.add(member.session);
-  return { rows, sessions: agents, threads: [...chats, ...external] };
+  for (const id of external) {
+    const members = store.threadSessions(s, id);
+    jobNameMembers.set(id, members);
+    for (const member of members) agents.add(member.session);
+  }
+  return { rows, sessions: agents, threads: [...chats, ...external], jobNameMembers };
 }
 
 /// The sidebar items of `viewer` a change of `sessions` and `threads` can touch (`scopeOf`), as the whole sidebar has
@@ -610,8 +621,10 @@ export function sharedChats(station: Store, archived: boolean, scope: Scope | nu
   };
   // The sidebar's own threads alone; the archive's, all of them.
   const of = scope !== null ? scope.threads : archived ? null : store.threadsOfShown(s);
+  const jobNameThreads = () => scope?.jobNameMembers === undefined ? store.threadsForChatNames(s, of)
+    : (scope.jobNameThreads ??= store.threadsForChatNames(s, of, scope.jobNameMembers));
   const selected: ListedThread[] = titlesOnly
-    ? store.threadsForChatNames(s, of).map((t) => ({ ...t, summary: null }))
+    ? jobNameThreads().map((t) => ({ ...t, summary: null }))
     : store.listThreads(s, "", null, of, "none").map((t) => ({ thread: t.thread, sessions: t.sessions, lastAt: t.lastMessage?.createdAt ?? 0, summary: t }));
   const threads = selected.filter((t) => t.sessions.some((m) => all.has(m.session)));
   const titleTexts = new Map<number, string | null>();
