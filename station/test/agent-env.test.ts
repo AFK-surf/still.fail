@@ -1,5 +1,5 @@
 // The variables a station's owners set for what it starts for its agents (src/ops/agent-env.ts, routes/agent-env.ts;
-// docs/agent-env.md): what config.json may hold, the environment the runtimes, logins and jobs get (over the station's
+//): what config.json may hold, the environment the runtimes, logins and jobs get (over the station's
 // own, scrubbed as before, this machine kept out of a proxy), the station's requests on a profile's behalf going through
 // the proxy named (and not for this machine), and the page's PUT: owners and admins only, null removing one, one left
 // out staying, a secret's value masked, the sessions told once something changed. The proxy is a local server noting

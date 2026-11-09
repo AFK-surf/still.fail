@@ -156,11 +156,37 @@ test "style" {
         #|    Exact(v) => v
         #|  }
         #|}
+        #|fn Space::said(self : Space?) -> Double {
+        #|  match self {
+        #|    Some(Exact(v)) => v
+        #|    Some(Exact(v)) if v > 0.0 => v
+        #|    Some(S4) | Some(Exact(_)) => 1.0
+        #|    _ => 0.0
+        #|  }
+        #|}
         #|
       ),
     ),
   ]
   found(decl, "style-exact", 0) |> ignore
+  // (one made in an arm, its guard or what it gives, made all the same, however it is wrapped)
+  let made = [
+    (
+      "src/ui/style_made.mbt",
+      (
+        #|
+        #|fn Space::again(self : Space?) -> Space? {
+        #|  match self {
+        #|    Some(S4) => Some(Exact(16.0))
+        #|    Some(v) if v == Exact(2.0) => None
+        #|    _ => Some(Exact(0.0))
+        #|  }
+        #|}
+        #|
+      ),
+    ),
+  ]
+  assert_eq(lines(lint_of(made, rule="style-exact")), [4, 5, 6])
 }
 
 ///|
@@ -1160,6 +1186,7 @@ test "build-effect" {
         #|  n.reload()
         #|  @hostapi.set_dark(true)
         #|  c.after_build("seen", fn() { (src.call)("seen", Json::null(), fn(_) {  }); n.seek(1.0) })
+        #|  c.after_build_or_scroll("place", fn() { (src.call)("place", Json::null(), fn(_) {  }) })
         #|  if c.clicked(7) {
         #|    send(src)
         #|    n.play()
@@ -1182,7 +1209,7 @@ test "build-effect" {
   // the core's calls (the ask itself, not its answer), a helper doing one, the native view's reload, the host's
   // effect, and the box's children's (built as the frame builds): not what after_build, an input, a handler or an
   // answer does, nor the Ctx's own
-  assert_eq(got.map(fn(f) { f.line }), [9, 10, 11, 12, 22, 24])
+  assert_eq(got.map(fn(f) { f.line }), [9, 10, 11, 12, 23, 25])
   assert_true(got[2].what.contains(".reload"))
 }
 
@@ -1204,15 +1231,20 @@ test "after-build-input: what an input took told by after_build, not what every 
         #|  if button(c, "go") {
         #|    c.tell("go", fn() { (src.call)("go", Json::null(), fn(_) {  }) })
         #|  }
+        #|  c.after_build_or_scroll("place", fn() { (src.call)("place", Json::null(), fn(_) {  }) })
+        #|  if c.clicked(8) {
+        #|    c.after_build_or_scroll("pin", fn() { (src.call)("pin", Json::null(), fn(_) {  }) })
+        #|  }
         #|}
         #|
       ),
     ),
   ]
-  let got = found(files, "after-build-input", 2)
+  let got = found(files, "after-build-input", 3)
   got.sort_by(fn(a, b) { a.line.compare(b.line) })
-  // under the click and under the switch used; not what every build says, nor what tell tells
-  assert_eq(got.map(fn(f) { f.line }), [5, 8])
+  // under the click and under the switch used, and under the click told by after_build_or_scroll; not what every
+  // build says, nor what tell tells
+  assert_eq(got.map(fn(f) { f.line }), [5, 8, 15])
 }
 
 ///|
@@ -1293,6 +1325,54 @@ test "build-effect: what a presenter keeps runs later, and so does what is hande
 }
 
 ///|
+test "build-effect: what is handed on to a press's handler runs as it is pressed" {
+  let files = [
+    (
+      "src/app/view.mbt",
+      (
+        #|
+        #|fn key(c : @ui.Ctx, id : Int, does : () -> Unit) -> Unit {
+        #|  c.on_press(id, does)
+        #|}
+        #|fn plain(c : @ui.Ctx, does : () -> Unit) -> Unit {
+        #|  does()
+        #|}
+        #|fn view(c : @ui.Ctx, src : Source) -> Unit {
+        #|  key(c, 1, fn() { (src.call)("go", Json::null(), fn(_) {  }) })
+        #|  plain(c, fn() { (src.call)("built", Json::null(), fn(_) {  }) })
+        #|}
+        #|
+      ),
+    ),
+  ]
+  // given to the Ctx's own handler whole: done as the press comes; called where it is given: as it builds
+  assert_eq(lines(found(files, "build-effect", 1)), [10])
+}
+
+///|
+test "build-effect: a closure given to the Ctx's handler" {
+  let files = [
+    (
+      "src/app/view.mbt",
+      (
+        #|
+        #|fn send(src : Source) -> Unit {
+        #|  (src.call)("send", Json::null(), fn(_) {  })
+        #|}
+        #|fn view(c : @ui.Ctx, src : Source) -> Unit {
+        #|  c.on_press(1, fn() { send(src) })
+        #|  c.on_key(2, fn(_, _) { send(src); true })
+        #|  c.box(fn() { send(src) }) |> ignore
+        #|}
+        #|
+      ),
+    ),
+  ]
+  // what c.on_press / on_key is given runs as the press or the key comes; a box's children as it builds
+  assert_eq(lines(found(files, "build-effect", 1)), [8])
+}
+
+///|
 test "build-effect: a stream's callbacks are its events" {
   let files = [
     (
@@ -1366,9 +1446,13 @@ test "given-up interfaces are forbidden" {
         "src/app/view.mbt",
         "fn v(c : @ui.Ctx) -> Unit {\n  c.animating_until(at + d)\n  if c.animating() { () }\n  @ui.run_animations(c)\n}\n",
       ),
+      (
+        "src/app/drop.mbt",
+        "fn v(c : @ui.Ctx) -> Unit {\n  if @ui.files_held() is Some(_) { () }\n  match @ui.take_drop() { _ => () }\n}\n",
+      ),
     ],
     "retired-api",
-    4,
+    6,
   )
   |> ignore
   // motion_end: the framework's own, not a test's nor the app's
@@ -1993,4 +2077,303 @@ test "layout-read-back" {
     cfg~,
   )
   assert_eq(lines(fs), [2, 3, 4])
+}
+
+///|
+test "layout-told" {
+  // what the layout came to told back, read by what is made (the framework's outside the view too); the view's own and a
+  // test's not counted
+  let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/ui\"]}}"))
+  let fs = found(
+    [
+      (
+        "src/app/card.mbt",
+        "fn v(p : @view.View) -> Unit {\n" +
+        "  let w = p.laid_size_told().map(fn(s) { s.0 }).unwrap_or(0.0)\n" +
+        "  let side = p.went_told()\n" +
+        "  let at = p.pointer_here_told()\n" +
+        "  let h = room.tall(p)\n" +
+        "}\n",
+      ),
+      ("src/app/card_wbtest.mbt", "test \"t\" {\n  v.laid_size_told() |> ignore\n}\n"),
+      ("src/ui/links.mbt", "fn w(v : @view.View) -> Unit {\n  v.pointer_here_told() |> ignore\n}\n"),
+      ("src/view/scroll.mbt", "fn w(v : View) -> Unit {\n  v.laid_size_told() |> ignore\n}\n"),
+    ],
+    "layout-told",
+    4,
+    cfg~,
+  )
+  assert_eq(lines(fs), [2, 2, 3, 4])
+}
+
+///|
+test "tester-branch" {
+  let cfg = Config::new(
+    @rjson.parse(
+      "{\"tester\": {\"names\": [\"fake\", \"looks_check\"], \"files\": [\"src/ui/tester*.mbt\", \"src/ui/fake_host.mbt\"]}}",
+    ),
+  )
+  // what runs in the app asking for the fake host or a Tester's switch; the Tester's own files, a test's, a field of
+  // that name and another name not counted
+  found(
+    [
+      ("src/ui/hostcall.mbt", "fn h_now() -> Double {\n  match fake.val {\n    Some(f) => f.time\n    None => 0.0\n  }\n}\n"),
+      ("src/ui/frame.mbt", "fn f() -> Unit {\n  if looks_check.val {\n    ()\n  }\n  let x = c.fake.val\n  let y = other.val\n}\n"),
+      ("src/ui/tester.mbt", "fn t() -> Unit {\n  fake.val = None\n}\n"),
+      ("src/ui/fake_host.mbt", "fn h() -> Unit {\n  fake.val = None\n}\n"),
+      ("src/ui/hostcall_wbtest.mbt", "test \"t\" {\n  assert_true(fake.val is Some(_))\n}\n"),
+    ],
+    "tester-branch",
+    2,
+    cfg~,
+  )
+  |> ignore
+}
+
+///|
+test "frame-number" {
+  // a frame's or a build's number asked outside mbui's ui: counted; in ui, in a test, a field of that name not
+  found(
+    [
+      ("src/sfdesk/drag.mbt", "fn d(c : Ctx) -> Unit {\n  if f.frame == c.frame_number() {\n    return\n  }\n  let b = c.build_number()\n}\n"),
+      ("src/ui/draw.mbt", "fn n(c : Ctx) -> Int {\n  c.frame_number()\n}\n"),
+      ("src/kit/x_wbtest.mbt", "test \"t\" {\n  ignore(c.frame_number())\n}\n"),
+      ("src/kit/y.mbt", "fn y() -> Int {\n  s.frame_number\n}\n"),
+    ],
+    "frame-number",
+    2,
+  )
+  |> ignore
+}
+
+///|
+test "ui-current" {
+  // the frame's context reached through the global outside mbui's ui: counted (a call each); in ui, in a test, a
+  // method or a name of its own called `current`, and @ui.current not called, not
+  let fs = found(
+    [
+      (
+        "src/sfbase/viewer_tree.mbt",
+        "fn v(n : @view.View) -> Unit {\n  n.on_press(fn() { @ui.current().blur() })\n  let c = @ui.current()\n  let k = @ui.current\n}\n",
+      ),
+      ("src/ui/draw.mbt", "pub fn current() -> Ctx {\n  g()\n}\nfn h() -> Unit {\n  current().blur()\n}\n"),
+      ("src/kit/x_wbtest.mbt", "test \"t\" {\n  @ui.current().blur()\n}\n"),
+      ("src/kit/y.mbt", "fn y(s : Scroll) -> Unit {\n  s.current()\n  current()\n  @view.current()\n}\n"),
+    ],
+    "ui-current",
+    2,
+  )
+  assert_eq(lines(fs), [2, 3])
+}
+
+///|
+test "build-clock" {
+  // the frames' clock read followed: a Ctx's now and cycle (on a Ctx, or on `c` not typed), a motion's reads, ui's
+  // own and its signal read; a View's cycle, the runtime's now, a moment, a test's, the signal set, not
+  let fs = found(
+    [
+      (
+        "src/kit/p.mbt",
+        "fn p(c : @ui.Ctx) -> Unit {\n  let f = c.cycle(period)\n  c.shows_motion(m, true)\n  let g = fn(c, s) { c.now() }\n  v.cycle(period)\n  rt.now()\n  c.moment()\n}\n",
+      ),
+      (
+        "src/ui/frame_watch.mbt",
+        "fn Ctx::now(self : Ctx) -> Double {\n  clock_read(loc)\n  frame_clock.get() |> ignore\n  frame_clock.set(t)\n  self.now_before(e)\n}\n",
+      ),
+      ("src/kit/x_test.mbt", "test \"t\" {\n  ignore(c.now())\n}\n"),
+    ],
+    "build-clock",
+    6,
+  )
+  assert_eq(lines(fs), [2, 2, 3, 3, 4, 5])
+}
+
+///|
+test "old-list" {
+  // a long list laid out by the old view (a call of a `list` method with four arguments or more): counted (a call
+  // each); in a test, in the framework (src/host here), a list method of fewer (a Markdown writer's) not
+  let fs = found(
+    [
+      (
+        "src/sfpages/page.mbt",
+        "fn p(c : @ui.Ctx) -> Unit {\n  c.list(\"k\", 3, 40.0, fn(i) { row(i) }) |> ignore\n  self.list(l, 1)\n  c.list(\"k\", 1, 9.0, sized?, fn(_) {  })\n}\n",
+      ),
+      ("src/kit/x_wbtest.mbt", "test \"t\" {\n  c.list(\"k\", 3, 40.0, fn(i) { row(i) }) |> ignore\n}\n"),
+      ("src/host/y.mbt", "fn y(c : Ctx) -> Unit {\n  c.list(\"k\", 3, 40.0, fn(i) { row(i) }) |> ignore\n}\n"),
+    ],
+    "old-list",
+    2,
+  )
+  assert_eq(lines(fs), [2, 4])
+}
+
+///|
+test "old-island" {
+  // an old view hosted in a node (`@ui.old(v, build)`): counted (a call each); in a test, in the framework (src/host
+  // here), another of ui's calls of a like name (old_views_here) not
+  let fs = found(
+    [
+      (
+        "src/sfpages/page.mbt",
+        "fn p(v : @view.View) -> Unit {\n  @ui.old(v, fn(c) { draw(c) }) |> ignore\n  @ui.old_views_here(c)\n  @ui.old(v, natural=true, fn(c) { draw(c) }) |> ignore\n}\n",
+      ),
+      ("src/kit/x_wbtest.mbt", "test \"t\" {\n  @ui.old(v, fn(c) { draw(c) }) |> ignore\n}\n"),
+      ("src/host/y.mbt", "fn y(v : @view.View) -> Unit {\n  @ui.old(v, fn(c) { draw(c) }) |> ignore\n}\n"),
+    ],
+    "old-island",
+    2,
+  )
+  assert_eq(lines(fs), [2, 4])
+}
+
+///|
+test "old-panel" {
+  // a panel presented with an old body (@sf.panel): counted (a call each); one whose body is nodes (@sf.panel_nodes),
+  // one in a test, the library's own name for something else (a bare `panel`), and the framework's not
+  let fs = found(
+    [
+      (
+        "src/sfpages/page.mbt",
+        "fn p() -> Unit {\n  @sf.panel(\"t\", fn(c, _) { body(c) }, from=Unanchored)\n  @sf.panel_nodes(\"t\", fn(v, _) { body(v) }, from=Unanchored)\n  panel(across, layer)\n  @sf.panel(\"u\", from=Unanchored, fn(c, _) {  })\n}\n",
+      ),
+      ("src/sfapp/x_wbtest.mbt", "test \"t\" {\n  @sf.panel(\"t\", fn(c, _) {  }, from=Unanchored)\n}\n"),
+      ("src/host/y.mbt", "fn y() -> Unit {\n  @sf.panel(\"t\", fn(c, _) {  }, from=Unanchored)\n}\n"),
+    ],
+    "old-panel",
+    2,
+  )
+  assert_eq(lines(fs), [2, 5])
+}
+
+///|
+test "click-read" {
+  // a click read by a build outside mbui's ui and kit: counted (a call each); in ui, in kit, in a test, a field of that
+  // name, not
+  found(
+    [
+      ("src/sfdesk/x.mbt", "fn d(c : Ctx) -> Unit {\n  if c.clicked(id) {\n    go()\n  }\n  let a = c.clicked_on(id, p)\n  let b = c.double_clicked(id)\n}\n"),
+      ("src/ui/ctx.mbt", "fn n(c : Ctx) -> Bool {\n  c.clicked(1)\n}\n"),
+      ("src/kit/button.mbt", "fn n(c : Ctx) -> Bool {\n  c.clicked(1)\n}\n"),
+      ("src/sfapp/y_wbtest.mbt", "test \"t\" {\n  ignore(c.clicked(1))\n}\n"),
+      ("src/sfapp/z.mbt", "fn z() -> Bool {\n  r.clicked\n}\n"),
+    ],
+    "click-read",
+    3,
+  )
+  |> ignore
+}
+
+///|
+test "key-read" {
+  // a key read by a build outside mbui's ui and kit: counted (a call each); in ui, in a test, its own `fn`, not
+  found(
+    [
+      ("src/sfdesk/x.mbt", "fn d(c : Ctx) -> Unit {\n  if c.key_pressed(1) && c.keys_came() {\n    go()\n  }\n  let a = @settings.action_pressed(c, p, \"chat.new\")\n}\n"),
+      ("src/ui/desktop.mbt", "pub fn Ctx::key_pressed(self : Ctx, code : Int) -> Bool {\n  self.keys_came()\n}\n"),
+      ("src/sfapp/settings/keymap.mbt", "pub fn action_pressed(c : Ctx) -> Bool {\n  false\n}\n"),
+      ("src/sfapp/y_wbtest.mbt", "test \"t\" {\n  ignore(c.key_pressed(1))\n}\n"),
+    ],
+    "key-read",
+    3,
+  )
+  |> ignore
+}
+
+///|
+test "build-clock: what a frame's paint reads is not counted" {
+  // read in what a paint taker is given, in a function only that calls, in one only paint's root calls: not counted;
+  // in a function also called as it is built: counted
+  let fs = found(
+    [
+      (
+        "src/kit/p.mbt",
+        "fn p(c : @ui.Ctx) -> Unit {\n  c.look_by(n, fn() { look(c.now()) })\n  c.look_by(n, fn() { shown(c) })\n  both(c)\n}\nfn shown(c : @ui.Ctx) -> Double {\n  c.shows_motion(m, true)\n}\nfn both(c : @ui.Ctx) -> Unit {\n  c.shows_motion(m, true)\n}\nfn q(c : @ui.Ctx) -> Unit {\n  c.look_by(n, fn() { both(c) })\n}\n",
+      ),
+      (
+        "src/ui/draw.mbt",
+        "fn frame_paint(c : Ctx) -> Unit {\n  c.paint_bar(b)\n}\nfn Ctx::paint_bar(self : Ctx, b : Int) -> Unit {\n  self.now() |> ignore\n}\nfn Ctx::build_bar(self : Ctx) -> Unit {\n  self.now() |> ignore\n}\n",
+      ),
+    ],
+    "build-clock",
+    2,
+  )
+  assert_eq(lines(fs), [8, 10])
+}
+
+///|
+test "build-motion" {
+  // an animated value read as it is built: @motion.animate's, an Anim's, a Way's `get` (told by the type
+  // said, by what made it, by a field of that type); read in what a paint taker is given, a signal's get, in a test,
+  // not
+  let fs = found(
+    [
+      (
+        "src/kit/p.mbt",
+        "struct S {\n  fade : @motion.Anim\n}\nfn p(c : @ui.Ctx, s : S, w : @motion.Way) -> Unit {\n  let v = @motion.animate(c, \"k\", 1.0)\n  let a = @motion.told(c, \"t\", 1.0)\n  let x = a.get()\n  c.look_by(n, fn() { look(alpha=a.get()) })\n  let y = s.fade.get()\n  let z = w.get()\n  let n = sig.get()\n  c.bg_by(n, fn() { ink(s.fade.get()) })\n}\n",
+      ),
+      ("src/kit/x_test.mbt", "test \"t\" {\n  let a = @motion.told(c, \"t\", 1.0)\n  ignore(a.get())\n}\n"),
+      // (a function of the files' own named as @motion's: what @motion's makes is still told by its let)
+      ("src/kit/q.mbt", "fn told() -> Unit {\n  ()\n}\n"),
+    ],
+    "build-motion",
+    4,
+  )
+  assert_eq(lines(fs), [5, 7, 9, 10])
+}
+
+///|
+test "build-motion: what flows to a paint taker is not counted" {
+  // a closure handed on by a paint label (`ground_by=`, `lit_by?=`), let to a name that goes only there (through
+  // another let, a tuple's name): not counted; one also called as it is built, a let of a value read now: counted
+  let fs = found(
+    [
+      (
+        "src/kit/p.mbt",
+        "fn p(c : @ui.Ctx, a : @motion.Anim) -> Unit {\n  let g = fn() { ink(a.get()) }\n  let h = if on { g } else { other }\n  let ground_by : (() -> Int64)? = Some(h)\n  row(c, ground_by?=ground_by)\n  let (band, band_by) = match e {\n    _ => (1, Some(fn() { ink(a.get()) }))\n  }\n  row(c, lit=band, lit_by=band_by)\n  row(c, ground_by=fn() { ink(a.get()) })\n  let d = fn() { a.get() }\n  c.bg_by(n, d)\n  d()\n  let v = a.get()\n  c.bg_by(n, fn() { v })\n}\n",
+      ),
+    ],
+    "build-motion",
+    2,
+  )
+  assert_eq(lines(fs), [11, 14])
+}
+
+///|
+test "build-motion: each way a closure goes on to a paint taker, one at a time" {
+  // a closure let and handed on: by a paint label (`ground_by?=`, `ground_by=`), through an if's arms, through Some in
+  // a let of its own type; each not counted
+  let head = "fn p(c : @ui.Ctx, a : @motion.Anim) -> Unit {\n  let g = fn() { ink(a.get()) }\n"
+  for rest in [
+    "  row(c, ground_by?=g)\n}\n", "  row(c, ground_by=g)\n}\n", "  let h = if on { g } else { other }\n  row(c, ground_by=h)\n}\n",
+    "  let gb : (() -> Int64)? = Some(g)\n  row(c, ground_by?=gb)\n}\n",
+  ] {
+    found([("src/kit/p.mbt", head + rest)], "build-motion", 0) |> ignore
+  }
+}
+
+///|
+test "part-place" {
+  // a library's part made in the node it is given: counted where it takes no place of its caller's; one that takes it,
+  // one that makes nothing in it (it only sets what it looks like), a page's, and a test's not
+  let cfg = Config::new(
+    @rjson.parse(
+      #|{"mbt": {"roots": ["src"]}, "library": {"roots": ["src/sf"]}}
+      ,
+    ) catch {
+      _ => panic()
+    },
+  )
+  let fs = lint_of(
+    [
+      (
+        "src/sf/parts.mbt",
+        "pub fn a_node(parent : @view.View, label : () -> String) -> Unit {\n  parent.box(fn(b) { b.words(By(label)) |> ignore }) |> ignore\n}\n\n#callsite(autofill(loc))\npub fn b_node(parent : @view.View, loc~ : SourceLoc) -> Unit {\n  parent.box(made_for=loc, fn(_) {  }) |> ignore\n}\n\nfn c_look(v : @view.View) -> Unit {\n  v.ground(Is(0L)) |> ignore\n}\n\nfn d_node(p : @view.View) -> @view.View {\n  p.box(fn(_) {  })\n}\n",
+      ),
+      ("src/sfpages/page.mbt", "fn p(parent : @view.View) -> Unit {\n  parent.box(fn(_) {  }) |> ignore\n}\n"),
+      ("src/sf/x_wbtest.mbt", "fn t(parent : @view.View) -> Unit {\n  parent.box(fn(_) {  }) |> ignore\n}\n"),
+    ],
+    rule="part-place",
+    cfg~,
+  )
+  assert_eq(fs.map(fn(f) { f.line }), [1, 14])
 }

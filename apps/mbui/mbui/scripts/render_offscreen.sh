@@ -6,6 +6,7 @@
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
+. "$D/render_dl.sh"
 cd "$D/.."
 O=out/render
 rm -rf $O; mkdir -p $O
@@ -26,7 +27,12 @@ MBUI_DL_PRINT=shapes moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>
 [ -s $O/shapes.dl ] || { echo "render_offscreen: no shapes draw list"; exit 1; }
 MBUI_DL=$PWD/$O/shapes.dl MBUI_DL_PNG=$PWD/$O/shapes.png ./_build/native/release/build/render/render.exe
 "$D/chk" shapes $O/shapes.png
-# partial redraw (docs/partial-redraw.md): a spinner's two moments (src/kitdemo/gallery/dl_print_wbtest.mbt
+MBUI_DL_PRINT=contained moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
+  awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > $O/contained.dl
+[ -s $O/contained.dl ] || { echo "render_offscreen: no contained draw list"; exit 1; }
+MBUI_DL=$PWD/$O/contained.dl MBUI_DL_PNG=$PWD/$O/contained.png ./_build/native/release/build/render/render.exe
+"$D/chk" contained $O/contained.png
+# partial redraw: a spinner's two moments (src/kitdemo/gallery/dl_print_wbtest.mbt
 # partial_shown), the second drawn only where it differs from the first, the same picture as the second drawn whole,
 # to the byte
 for k in partial-a partial-b; do
@@ -54,6 +60,15 @@ else
   echo "render_offscreen: what a rounded clip cuts is not the box's own rounded ground ($O/clip-cut.png, clip-box.png)"
   exit 1
 fi
+render_strips_dl "$O"
+MBUI_DL=$PWD/$O/strips.dl MBUI_DL_PNG=$PWD/$O/strips.png ./_build/native/release/build/render/render.exe
+MBUI_STRIPS=0 MBUI_DL=$PWD/$O/strips.dl MBUI_DL_PNG=$PWD/$O/strips.whole.png ./_build/native/release/build/render/render.exe
+render_strips offscreen "$O"
+render_matte_dl "$O"
+for k in matte-fill matte-fill-reference matte-contain matte-contain-reference matte-inset matte-inset-reference; do
+  MBUI_DL="$PWD/$O/$k.dl" MBUI_DL_PNG="$PWD/$O/$k.png" ./_build/native/release/build/render/render.exe
+done
+render_matte mac "$O"
 {
   echo "draw list $(md5 -q $O/controls.dl)"
   echo "picture $(md5 -q $O/controls.png)"

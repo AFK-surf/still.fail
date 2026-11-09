@@ -52,3 +52,36 @@ test "a player playing: read only as its host says it moved, each time drawn, fr
   assert_true(t.find("at 2 s") is Some(_))
   assert_eq(t.fake.view_reads, reads + 1)
 }
+
+///|
+// A video's frames' times are said once, all of them (a long film's tens of thousands): read once as they are here, not
+// again in each frame it plays (a 4K film's frames' times read anew every frame held Android's GL thread at 100%).
+test "a video's frames' times read once, as they are here" {
+  let cell : Ref[NativeView?] = { val: None }
+  let t = Tester::new(
+    fn(c) {
+      let v = match cell.val {
+        Some(v) => v
+        None => {
+          let v = NativeView::video("video/mp4", fn(_o, _l, answer) {
+            answer(b"", -1.0, false)
+            fn() {  }
+          })
+          cell.val = Some(v)
+          v
+        }
+      }
+      c.native(v, h=Px(120.0)) |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  t.draw()
+  let v = cell.val.unwrap()
+  assert_eq(v.frames(), None)
+  t.fake.view_texts[(v.id(), 1)] = "0,40,80"
+  assert_eq(v.frames(), Some([0.0, 40.0, 80.0]))
+  // (what the host says after is not read again)
+  t.fake.view_texts[(v.id(), 1)] = "0"
+  assert_eq(v.frames(), Some([0.0, 40.0, 80.0]))
+}

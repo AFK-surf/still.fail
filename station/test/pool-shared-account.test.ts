@@ -6,7 +6,38 @@ import { test } from "node:test";
 import { Accounts } from "../src/accounts/index.ts";
 import { ConfigFile } from "../src/ops/config.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
+import { GO_ON_AFTER_REFILL } from "../src/agents/instructions.ts";
 import { Rig, message, settle } from "./hub-fakes.ts";
+
+test("redeeming a reset through Accounts resumes a session waiting in the real hub", async () => {
+  const r = new Rig();
+  r.edit((raw) => { raw.profiles.find((p: any) => p.id === "cx").access = { kind: "subscription" }; });
+  const config = new ConfigFile(r.dir);
+  config.update((raw) => Object.assign(raw, r.raw));
+  let used = 100;
+  const accounts = new Accounts({
+    data: r.dir, config, store: r.store, hub: r.hub, machine: null, checkOnStart: false,
+    quota: async () => ({ state: "ok", windows: [{ label: "week", usedPercent: used, resetsAt: Date.now() + 7200_000 }], detail: null, checkedAt: 0 }),
+    resetQuota: async (_profile, key) => { assert.equal(key, "reset-1"); used = 5; return { outcome: "reset" }; },
+  });
+  accounts.start();
+  try {
+    await accounts.refreshQuota("cx");
+    await r.accept(message(), "gpt");
+    await settle();
+    const agent = r.codex.last();
+    agent.end({ kind: "failed", reason: "rate_limit", message: "usage limit reached" });
+    await settle();
+    assert.equal(agent.prompts.length, 1);
+    assert.deepEqual(await accounts.resetQuota("cx", "reset-1"), { outcome: "reset" });
+    await settle();
+    assert.equal(agent.prompts[1], GO_ON_AFTER_REFILL);
+    assert.equal(r.hub.accounts.healthOf("cx").spent, undefined);
+  } finally {
+    await accounts.close();
+    await r.close();
+  }
+});
 
 async function withSharedAccount(run: (r: Rig, key: string) => Promise<void>) {
   const r = new Rig();
@@ -52,6 +83,20 @@ test("the newest successful allowance belongs to the account, even if another pr
     }));
     const profiles = r.config.profiles.filter((p) => p.runtime === "codex");
     assert.equal(r.hub.accounts.pick(profiles, "gpt-6.1-terra", true).id, "other");
+  });
+});
+
+test("a revoked login check remains specific when another profile shares its account's allowance", async () => {
+  await withSharedAccount(async (r) => {
+    r.hub.accounts.setHealth((id) => ({
+      account: id === "other" ? "account-b" : "account-a",
+      check: { state: id === "borrowed" ? "login" : "ok" },
+      quota: id === "borrowed" ? { state: "unavailable", windows: [], checkedAt: 3 } : { state: "ok", checkedAt: 4, windows: [{ usedPercent: 10 }] },
+    }));
+    const health = r.hub.accounts.healthOf("borrowed");
+    assert.equal(health.check.state, "login");
+    const profiles = r.config.profiles.filter((p) => ["borrowed", "other"].includes(p.id));
+    assert.equal(r.hub.accounts.pick(profiles, null, true).id, "other");
   });
 });
 

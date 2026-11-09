@@ -11,7 +11,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { Clock, Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
-import { GRACE, PORTS, RETRY, SETTLE, Shares, answerAdb, bind, isPackage, text } from "../src/adb/link.ts";
+import { GRACE, PORTS, RETRY, SETTLE, SILENT_MS, Shares, answerAdb, bind, isPackage, keepTcp, text } from "../src/adb/link.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 import type { Connection, Stream } from "../src/mesh/native.ts";
 import { Reader, writeLine } from "../src/mesh/serve.ts";
@@ -232,6 +232,32 @@ test("without adb the offer says missing; a phone the station cannot reach says 
   await time.close();
 });
 
+test("a phone whose connection answers nothing for SILENT_MS is let go; one that answers is kept", async () => {
+  const time = testClock();
+  const shares = new Shares({ adb: () => null, clock: time.clock });
+  let answering = true;
+  const quiet = { ...nowhere, isClosed: () => false, answers: async () => answering } as unknown as Connection;
+  const stream = new Memory();
+  const offered = answerAdb(shares, quiet, viewer, asking({ op: "share", phone: PHONE }), stream as unknown as Stream);
+  await until(() => stream.lines().find((l) => l.adb === "missing"));
+  const beat = async () => {
+    await time.asleep(SILENT_MS / 3);
+    await time.adjust(SILENT_MS / 3);
+    await turn();
+  };
+  for (let i = 0; i < 3; i++) await beat();
+  answering = false;
+  await beat();
+  await beat();
+  assert.equal(shares.list().length, 1, "not before SILENT_MS");
+  await beat();
+  await time.asleep(GRACE);
+  await time.adjust(GRACE);
+  await offered;
+  assert.deepEqual(shares.list(), []);
+  await time.close();
+});
+
 test("Wireless debugging off: adb is not left trying, and the offer says so", async () => {
   const adb = fakeAdb();
   const time = testClock();
@@ -445,7 +471,7 @@ async function link(shares: Shares) {
   const tunnels: string[] = [];
   /// `heard`: each line the phone's adbd read; `hold`: what a pairing tunnel waits on after its first answer before it
   /// reads on (a phone far away, its reads late).
-  const phoneSide = { refuse: null as string | null, unpaired: false, heard: [] as string[], hold: null as Promise<void> | null };
+  const phoneSide = { refuse: null as string | null, unpaired: false, heard: [] as string[], hold: null as Promise<void> | null, holdRefusal: null as Promise<void> | null };
   void (async () => {
     for (let s = await toStation.acceptBi(); s; s = await toStation.acceptBi()) {
       const stream = s;
@@ -454,7 +480,10 @@ async function link(shares: Shares) {
         const head = await reader.line();
         tunnels.push(head.tunnel);
         if (phoneSide.refuse !== null) {
-          await writeLine(stream, phoneSide.unpaired ? { error: phoneSide.refuse, unpaired: true } : { error: phoneSide.refuse });
+          const refusal = phoneSide.refuse;
+          const unpaired = phoneSide.unpaired;
+          if (phoneSide.holdRefusal) await phoneSide.holdRefusal;
+          await writeLine(stream, unpaired ? { error: refusal, unpaired: true } : { error: refusal });
           return stream.finish();
         }
         await writeLine(stream, { ok: true });
@@ -549,8 +578,10 @@ test("a phone offered over the mesh: adb connects through its tunnel, asks reach
     while (state.adb !== "connected");
     // Held, it is made to keep lending with no one at it: the app may turn Wireless debugging on itself (after the
     // phone starts again), and Android's idling leaves its connection be; no one asked
-    await until(() => adb.calls().some((c) => c.join(" ") === `-s ${serial} shell cmd deviceidle whitelist +fail.still.android`));
-    assert.ok(adb.calls().some((c) => c.join(" ") === `-s ${serial} shell pm grant fail.still.android android.permission.WRITE_SECURE_SETTINGS`));
+    await until(() => adb.calls().some((c) => c.join(" ") === `-s ${serial} shell STILLFAIL_ADB_KEEP=1 cmd deviceidle whitelist +fail.still.android`));
+    assert.ok(adb.calls().some((c) => c.join(" ") === `-s ${serial} shell STILLFAIL_ADB_KEEP=1 pm grant fail.still.android android.permission.WRITE_SECURE_SETTINGS`));
+    // and adbd's plain port is turned on, once a boot, for the phone to be held on off Wi-Fi
+    await until(() => adb.calls().some((c) => c.join(" ") === `-s ${serial} tcpip 5555`));
     const wrong = await mesh.answer({ op: "pair", code: "12345", phone: PHONE }, { "stillfail-lang": "en" });
     assert.deepEqual(wrong, { head: { status: 422, headers: { "content-type": "application/json" } }, body: { message: "The pairing code is 6 digits" } });
     const granted = await mesh.answer({ op: "grant", phone: PHONE });
@@ -645,3 +676,105 @@ test("over the mesh: a phone pairing itself says it is not paired yet, in its ow
     await time.close();
   }
 });
+
+test("a phone paired with its own adb is connected when it offers itself again", async () => {
+  const adb = fakeAdb();
+  const time = testClock();
+  const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock });
+  const mesh = await link(shares);
+  try {
+    mesh.phoneSide.refuse = "not paired on the phone";
+    mesh.phoneSide.unpaired = true;
+    const first = await mesh.ask({ op: "share", phone: PHONE, connect: 5555 });
+    await first.reader.line();
+    let state;
+    do state = await first.reader.line();
+    while (state.adb === "connecting");
+    assert.equal(state.adb, "unpaired");
+    const share = [...shares.byKey.values()][0]!;
+    await until(() => share.connecting === null);
+
+    // The phone pairs locally and offers the same ports again. The station never sees its pairing port.
+    mesh.phoneSide.refuse = null;
+    const again = await mesh.ask({ op: "share", phone: PHONE, connect: 5555 });
+    await again.reader.line();
+    await turn();
+    assert.ok(share.connecting !== null || share.state.adb === "connected", "the new offer starts a connection attempt");
+    do state = await again.reader.line();
+    while (state.adb !== "connected");
+    assert.equal(state.serial, share.serial());
+    assert.equal(adb.calls().filter((c) => c[0] === "connect").length, 2);
+    await first.stream.reset(0);
+    await again.stream.reset(0);
+  } finally {
+    await shares.close();
+    await mesh.close();
+    await time.close();
+  }
+});
+
+test("a phone paired while the previous connection is pending is tried again", async () => {
+  const adb = fakeAdb();
+  const time = testClock();
+  const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock });
+  const mesh = await link(shares);
+  const release = Promise.withResolvers<void>();
+  try {
+    mesh.phoneSide.refuse = "not paired on the phone";
+    mesh.phoneSide.unpaired = true;
+    mesh.phoneSide.holdRefusal = release.promise;
+    const first = await mesh.ask({ op: "share", phone: PHONE, connect: 5555 });
+    await first.reader.line();
+    await until(() => mesh.tunnels.length === 1);
+    const share = [...shares.byKey.values()][0]!;
+    assert.equal(share.state.adb, "connecting");
+
+    // The first attempt's refusal is still on its way as the phone pairs and offers the same ports again.
+    mesh.phoneSide.refuse = null;
+    const again = await mesh.ask({ op: "share", phone: PHONE, connect: 5555 });
+    await again.reader.line();
+    await turn();
+    assert.equal(share.again, true, "the new offer is remembered while the first attempt is under way");
+    release.resolve();
+    let state;
+    do state = await again.reader.line();
+    while (state.adb !== "connected");
+    assert.equal(adb.calls().filter((c) => c[0] === "connect").length, 2);
+    await first.stream.reset(0);
+    await again.stream.reset(0);
+  } finally {
+    release.resolve();
+    await shares.close();
+    await mesh.close();
+    await time.close();
+  }
+});
+
+test("adbd's plain port is asked for once a boot, and not where the phone is held on it already", async () => {
+  const adb = fakeAdb({ "tcp-kept": "no" });
+  const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED });
+  const share = { info: { connect: 40001 }, serial: () => "127.0.0.1:7000", conn: {} } as any;
+  const tcpips = () => adb.calls().filter((c) => c[2] === "tcpip").length;
+  try {
+    await keepTcp(shares, share, adb.path, []);
+    assert.deepEqual(adb.calls().at(-1), ["-s", "127.0.0.1:7000", "tcpip", "5555"]);
+    // A phone that does not keep it is not restarted again in the same boot.
+    await keepTcp(shares, share, adb.path, []);
+    assert.equal(tcpips(), 1);
+    // Started again, it is asked again; one that kept it is not.
+    adb.say("boot", "boot-2");
+    adb.say("tcp-kept", "yes");
+    await keepTcp(shares, share, adb.path, []);
+    assert.equal(tcpips(), 2);
+    adb.say("boot", "boot-3");
+    await keepTcp(shares, share, adb.path, []);
+    assert.equal(tcpips(), 2);
+    // Held on it (off Wi-Fi), nothing is asked of it.
+    const calls = adb.calls().length;
+    await keepTcp(shares, { ...share, info: { connect: 5555 } }, adb.path, []);
+    assert.equal(adb.calls().length, calls);
+  } finally {
+    await shares.close();
+  }
+});
+

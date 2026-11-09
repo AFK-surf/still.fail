@@ -12,7 +12,7 @@ fn sent_back(ahead : Double) -> (Array[Double], Double) {
   if ahead >= 0.0 {
     t.frame_at(ahead)
     // (read where that frame has it)
-    w.get() |> ignore
+    w.get(@ui.current()) |> ignore
   }
   w.go(0.0, @motion.tween(way_ms, ease=Linear), at=back_at)
   (looks.map(fn(at) { w.value_at(at) }), w.ends_at())
@@ -59,23 +59,15 @@ let odd_ms : Double = 200.5
 let odd_delay : Double = 10.25
 
 ///|
-/// A way from 0 to 1 over `way_ms` set out at `at`: when it set out and ends, and where it is a quarter and half way and
-/// a hair before its end, each at a moment `frac` into its ms.
-fn set_out_at_fraction(at : Double, frac : Double) -> (Double, Double, Array[Double]) {
+test "a way set out a fraction into a ms: its time counted from that moment in whole ms, as an Anim's (way_anim_test): its end its length after it" {
+  // (set out at 1000.7: from there, ending its length after; read at a moment a fraction into a ms of its own time, where
+  // it is at that ms's start, as an Anim told at 1000.7 is)
   let w = @motion.Way::new(0.0)
-  w.go(1.0, @motion.tween(way_ms, ease=Linear), at~)
-  let s = w.starts_at()
-  (s, w.ends_at(), [0.25, 0.5].map(fn(k) { w.value_at(s + way_ms * k + frac) }) + [w.value_at(w.ends_at() - 1.0 + frac)])
-}
-
-///|
-test "a way set out a fraction into a ms: its time goes on the one clock's whole ms from that ms, as any motion's (where a moment falls in its ms changes nothing)" {
-  // (set out at 1000.7: from 1000, ending at 1000 + its length; read at any fraction of a ms, as at its start)
-  let whole = set_out_at_fraction(1000.0, 0.0)
-  assert_eq(set_out_at_fraction(1000.7, 0.0), whole)
-  assert_eq(set_out_at_fraction(1000.7, 0.6), whole)
-  assert_eq(set_out_at_fraction(1000.0, 0.999), whole)
-  assert_eq(whole, (1000.0, 1000.0 + way_ms, [0.25, 0.5, (way_ms - 1.0) / way_ms]))
+  w.go(1.0, @motion.tween(way_ms, ease=Linear), at=1000.7)
+  assert_eq(
+    (w.starts_at(), w.ends_at(), [w.value_at(1050.7), w.value_at(1051.3), w.value_at(1050.6), w.value_at(w.ends_at() - 0.4)]),
+    (1000.7, 1000.7 + way_ms, [0.25, 0.25, 49.0 / way_ms, (way_ms - 1.0) / way_ms]),
+  )
 }
 
 ///|
@@ -118,7 +110,7 @@ let asked_going : Array[(Bool, Bool)] = [(true, true), (true, true), (false, fal
 ///|
 /// A box as wide as the way says, built from it.
 fn built_from(w : @motion.Way) -> @ui.Tester {
-  @ui.Tester::new(fn(c) { c.box(w=Px(10.0 + 100.0 * w.get()), h=Px(10.0), fn() {  }) |> ignore })
+  @ui.Tester::new(fn(c) { c.box(w=Px(10.0 + 100.0 * w.get(c)), h=Px(10.0), fn() {  }) |> ignore })
 }
 
 ///|
@@ -131,7 +123,7 @@ test "a way read as the view is painted alone (a look worked out as it is painte
   let painted = fn(w : @motion.Way) {
     @ui.Tester::new(fn(c) {
       let i = c.box(w=Px(10.0), h=Px(10.0), bg=0x3366CCFFL, fn() {  })
-      c.look_by(i, fn() { @ui.look(dx=100.0 * w.get()) })
+      c.look_by(i, fn() { @ui.look(dx=100.0 * w.get(c)) })
     })
   }
   assert_eq(asked_on(painted, going_then_end), asked_going)
@@ -141,10 +133,10 @@ test "a way read as the view is painted alone (a look worked out as it is painte
 test "a way read by an old view kept in the window's tree, its parts kept as their nodes: the same" {
   let island = fn(w : @motion.Way) {
     let t = @ui.Tester::new(fn(_c) {  })
-    t.keep_parts(true)
+    t.set_rows_on_pixels(true)
     @ui.set_view_app(fn(root) {
       root.box(fn(v) {
-        @ui.old(v, fn(c) { c.box(w=Px(10.0 + 100.0 * w.get()), h=Px(10.0), fn() {  }) |> ignore }).grow(Is(1.0))
+        @ui.old(v, fn(c) { c.box(w=Px(10.0 + 100.0 * w.get(c)), h=Px(10.0), fn() {  }) |> ignore }).grow(Is(1.0))
         |> ignore
       })
       |> ignore
@@ -191,7 +183,7 @@ test "a way going read by nothing, or by what is let go as it goes: no frame ask
     fn(w) {
       @ui.Tester::new(fn(c) {
         if shown.get() {
-          c.box(w=Px(10.0 + 100.0 * w.get()), h=Px(10.0), fn() {  }) |> ignore
+          c.box(w=Px(10.0 + 100.0 * w.get(c)), h=Px(10.0), fn() {  }) |> ignore
         }
       })
     },

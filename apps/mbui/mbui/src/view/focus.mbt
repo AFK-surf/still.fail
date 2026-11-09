@@ -24,27 +24,43 @@ pub(all) struct FocusAt {
 /// It can take the keyboard's focus while `on` holds (Tab goes to it in the tree's order), pressed as it has it by
 /// `keys` (focus_enter, focus_space: its on_press, as a press on it runs it). Not on, the focus on it let go of then;
 /// what it holds takes it or not by its own saying (what holds a node said to take no press, View::presses, keeps it
-/// from it).
-pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter | focus_space) -> View {
+/// from it). `tab`: whether Tab stops on it (false: it takes the focus as it is given it, a layer's own ground as it
+/// opens, Tab passing it by).
+pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter | focus_space, tab? : Bool = true) -> View {
   // (whether it takes the focus is the logic's, as whether it takes presses is (View::presses): said at the moment it
   // changes, as the change saying it is committed, the focus on it let go of then; said anew, what was said before let
   // go of)
   guard self.live() is Some(n) else { return self }
-  match n.props.get(19) {
+  match n.props.get(Prop::Focusable.ord()) {
     Some(stop) => {
-      n.props.remove(19)
+      n.props.remove(Prop::Focusable.ord())
       stop()
     }
     None => ()
   }
+  // (its `tab` the last said of Tab's stop on it: View::tab_stop said before let go of)
+  match n.props.get(Prop::TabStop.ord()) {
+    Some(stop) => {
+      n.props.remove(Prop::TabStop.ord())
+      stop()
+    }
+    None => ()
+  }
+  n.tab_by_stop = false
   // (`tell`: said by this call, not as what a binding read changed (Tree::structured marks the tree for that):
   // what is read out of it told by the frame then owed, where it changed)
   let set = fn(on : Bool, tell : Bool) {
     guard self.live() is Some(n) else { return }
-    let was = (n.focusable, n.focus_keys)
+    let was = (n.focusable, n.focus_keys, n.focus_tab)
     n.focusable = on
+    self.tree.said_marked(self.at, words=false, state=true)
     n.focus_keys = keys
-    if tell && was != (on, keys) {
+    // (Tab's stop on it View::tab_stop's where that was said after this: not undone as whether it takes the focus
+    // changes)
+    if !n.tab_by_stop {
+      n.focus_tab = tab
+    }
+    if tell && was != (on, keys, tab) {
       self.tree.marked()
     }
     // (its own focus let go of, not what it holds: whether they take it is their own, View::presses what holds them
@@ -63,7 +79,7 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
           self.owning(fn() { set(v, first.val) })
           first.val = false
         })
-        n.props[19] = stop
+        n.props[Prop::Focusable.ord()] = stop
       })
   }
   self
@@ -114,10 +130,10 @@ pub fn Tree::focus_order(self : Tree) -> Array[FocusAt] {
     if !n.live {
       return
     }
-    if (n.hosted || n.focusable) && !self.pressless_at(at) {
+    if (n.hosted || (n.focusable && n.focus_tab)) && !self.pressless_at(at) {
       out.push({ id: { at, gen: n.gen }, hosted: n.hosted, keys: n.focus_keys })
     }
-    for k in n.kids {
+    for k in self.kids_in_order(at) {
       walk(k)
     }
   }
@@ -193,11 +209,40 @@ pub fn Tree::on_focus_lost(self : Tree, f : (NodeId) -> Unit) -> Unit {
 }
 
 ///|
+/// What hosts the tree gives the node that asks for the focus (View::ask_focus): its own focus moved to it, `visible`
+/// or not, and the tree told back of it as any move of that focus is (one focus, read on either side).
+pub fn Tree::on_focus_asked(self : Tree, f : (NodeId, Bool) -> Unit) -> Unit {
+  self.on_focus_asked = Some(f)
+}
+
+///|
+/// The focus asked for by it (a menu's row the menu's keys or the pointer come to), shown or not as `visible`
+/// says: what hosts the tree moves its own focus there (Tree::on_focus_asked), the tree told back; where nothing
+/// hosts it, the tree's alone (Tree::focus_to). Whether it has it then.
+pub fn View::ask_focus(self : View, visible? : Bool = false) -> Bool {
+  match self.tree.on_focus_asked {
+    Some(f) => {
+      f(self.id(), visible)
+      @signals.untracked(fn() { self.focused() })
+    }
+    None => self.tree.focus_to(Some(self.id()), visible~)
+  }
+}
+
+///|
 fn Tree::focus_set(self : Tree, id : NodeId?, visible : Bool) -> Unit {
+  // (come to another: what waited for its node no longer does)
+  if id is Some(_) {
+    self.focus_parked = None
+  }
   let was = self.focused
   let shown_was = self.focus_visible
   self.focused = id
   self.focus_visible = visible
+  // (a sequence of keys under way ends as the focus moves: keymap.mbt)
+  if was != id {
+    self.keys_end(FocusMoved)
+  }
   // (told as one change: what reads both never sees one half of it)
   @signals.start_batch()
   if was != id {
@@ -208,7 +253,24 @@ fn Tree::focus_set(self : Tree, id : NodeId?, visible : Bool) -> Unit {
     self.hand_told(was, fn(n) { n.focus_shown_cell }, false)
     self.hand_told(id, fn(n) { n.focus_shown_cell }, visible)
   }
+  // (come to one: brought into sight by what holds it, once laid out: Tree::show_in_sight)
+  match id {
+    Some(to) if was != id => self.show_in_sight(to)
+    _ => ()
+  }
   @signals.end_batch()
+}
+
+///|
+/// What brings a part of what it holds into its sight (Tree::show_in_sight: the focus come to it): `f` given where that
+/// is in its own terms (its top, its foot; `across`, its start, its end), answering how far it moved what it holds to
+/// (down, or `across` along it: a column that scrolls, a row that scrolls sideways, View::scrolls), all of it laid out,
+/// before it is drawn.
+pub fn View::shows(self : View, f : (Double, Double) -> Double, across? : Bool = false) -> View {
+  guard self.live() is Some(n) else { return self }
+  n.shows = Some(f)
+  n.shows_across = across
+  self
 }
 
 ///|
@@ -273,6 +335,26 @@ pub fn View::takes_input(self : View) -> Bool {
 /// Each node whose taking input is read told it as it is now (View::takes_input): as what decides it changes (a modal
 /// layer, a node leaving, said to take no press), once the change is committed whole. Those let go dropped.
 fn Tree::inputs_told(self : Tree) -> Unit {
+  // (where only what changed and what it holds may take input otherwise (Tree::modals_told's `within`): those alone)
+  if !self.inputs_whole {
+    let todo = self.inputs_in.copy()
+    self.inputs_in.clear()
+    // (no modal layer, the old frame's or the tree's: whether each takes input is what holds it says, worked out once
+    // for each change's node and carried down what it holds, not asked again of each all the way up)
+    let plain = self.modals.is_empty() && self.held_under_now() == -2
+    for at in todo {
+      guard at >= 0 && at < self.nodes.length() && self.nodes[at].live else { continue }
+      if plain {
+        let p = self.nodes[at].parent
+        self.inputs_down(at, p >= 0 && self.pressless_own_at(p))
+      } else {
+        self.inputs_each(at)
+      }
+    }
+    return
+  }
+  self.inputs_whole = false
+  self.inputs_in.clear()
   let live = self.inputs_at.filter(fn(at) { self.nodes[at].live && self.nodes[at].input_cell is Some(_) })
   self.inputs_at.clear()
   self.inputs_at.append(live)
@@ -282,4 +364,202 @@ fn Tree::inputs_told(self : Tree) -> Unit {
       None => ()
     }
   }
+}
+
+///|
+/// Node `at` and what it holds told whether each takes input (Tree::inputs_told), no modal layer said: none where what
+/// holds it takes no press (`above`: leaving, said to take none, left out, in its bones), else as it says itself.
+fn Tree::inputs_down(self : Tree, at : Int, above : Bool) -> Unit {
+  let n = self.nodes[at]
+  guard n.live else { return }
+  let off = above || n.left_at >= 0.0 || n.inert || n.out || n.bones != 0L
+  match n.input_cell {
+    Some(s) => s.set(!off)
+    None => ()
+  }
+  let kids = n.kids
+  for i in 0..<kids.length() {
+    self.inputs_down(kids[i], off)
+  }
+}
+
+///|
+/// Node `at` and what it holds told whether each takes input (Tree::inputs_told), each asked of all that holds it and
+/// of the modal layers.
+fn Tree::inputs_each(self : Tree, at : Int) -> Unit {
+  let n = self.nodes[at]
+  guard n.live else { return }
+  match n.input_cell {
+    Some(s) => s.set(!self.pressless_at(at))
+    None => ()
+  }
+  let kids = n.kids
+  for i in 0..<kids.length() {
+    self.inputs_each(kids[i])
+  }
+}
+
+///|
+/// A layer (a node over others, modal or not) that gives the keyboard's focus to `to`, a node it holds, as it opens,
+/// and gives it back to what had it then as it goes (leaving, or let go), where the focus is in it or nowhere then, as
+/// the old frame's layers do (Ctx::overlay's initial_focus and return_focus). Both done once the change that opened or
+/// closed it is committed whole, as what a modal layer says is (Tree::modals_now): the layers opened in one change
+/// each in turn from the lowest, as they are drawn, the focus on the topmost's `to`, each giving it back to what the
+/// one under it gave it to (Tree::on_layers_focus).
+pub fn View::focus_opens(self : View, to : View) -> View {
+  self.layer_focus(Some(to.id()))
+}
+
+///|
+/// A layer that gives the focus, as it opens, to the first of what it holds that takes it (as Tab goes: its nodes and
+/// what the old views it hosts take, as those are built), as the old frame's trapping layers do (Ctx::overlay's
+/// initial_focus, by default); to its own ground while none does; given back as it goes (View::focus_opens's). Given
+/// once: what the person or the app does with the focus after that its own. Its ground takes the focus (View::focusable,
+/// no keys, no Tab stop: a dialog's), given it as it opens.
+pub fn View::focus_opens_first(self : View) -> View {
+  guard self.live() is Some(_) else { return self }
+  let layer = self.id()
+  let tree = self.tree
+  tree.focus_firsts.add(layer)
+  self.owns(fn() { tree.focus_firsts.remove(layer) }) |> ignore
+  self.layer_focus(Some(layer))
+}
+
+///|
+/// Whether layer `layer` gives the focus to the first of what it holds that takes it as it opens
+/// (View::focus_opens_first).
+pub fn Tree::opens_first(self : Tree, layer : NodeId) -> Bool {
+  self.focus_firsts.contains(layer)
+}
+
+///|
+/// A layer that gives back the focus as it goes (View::focus_opens's), giving it nothing as it opens: the focus left
+/// where it is (a field a finger opened a menu beside: kit's dropdown_menu's initial focus none), what had it as it
+/// opened, or what that one under it gives back, given it back as it goes where the focus is in it then or nowhere;
+/// what opens over it in the same change gives back what had it before this one, as though this one were not there.
+pub fn View::focus_returns(self : View) -> View {
+  self.layer_focus(None)
+}
+
+///|
+/// Layer `self` told as giving the focus to `target` as it opens (none: nothing), giving back as it goes.
+fn View::layer_focus(self : View, target : NodeId?) -> View {
+  guard self.live() is Some(_) else { return self }
+  let layer = self.id()
+  let tree = self.tree
+  // (gone: told once as it goes; come back as it leaves (the same node, shown again), opened again)
+  let gone = Ref(false)
+  let went = fn() {
+    if !gone.val {
+      gone.val = true
+      tree.focus_gone.push(layer)
+      tree.modals_told()
+    }
+  }
+  tree.focus_opened.push((layer, target))
+  tree.modals_told()
+  self.reacts(fn() { self.leaving() }, fn(leaving) {
+    if leaving {
+      went()
+    } else if gone.val {
+      gone.val = false
+      tree.focus_opened.push((layer, target))
+      tree.modals_told()
+    }
+  })
+  self.owns(went) |> ignore
+  self
+}
+
+///|
+/// What hosts the tree told, as a change is committed whole, of the layers that give the focus (View::focus_opens):
+/// those gone since (`gone`: the focus given back from each, where it is in it or nowhere), then those opened, the
+/// lowest first as they are drawn, each with the node it gives the focus to (`opened`: the focus to the topmost's,
+/// where it can take it; each giving it back to what had it before it, the one under it's; none: View::focus_returns,
+/// the focus left where it is, what is over it giving back what had it before it).
+pub fn Tree::on_layers_focus(self : Tree, f : (Array[NodeId], Array[(NodeId, NodeId?)]) -> Unit) -> Unit {
+  self.on_layers_focus = f
+}
+
+///|
+/// The layers that give the focus opened and gone since last told, told what hosts the tree (Tree::on_layers_focus):
+/// those opened that still are and are not leaving, as they are drawn, the lowest first.
+fn Tree::layers_focus_told(self : Tree) -> Unit {
+  if self.focus_opened.is_empty() && self.focus_gone.is_empty() {
+    return
+  }
+  let gone : Array[NodeId] = []
+  for l in self.focus_gone {
+    if !gone.contains(l) {
+      gone.push(l)
+    }
+  }
+  self.focus_gone.clear()
+  // (those open as the change leaves them: not let go, not leaving; one gone and come back in it, open)
+  let opened : Array[(NodeId, NodeId?)] = []
+  for o in self.focus_opened {
+    if self.alive_id(o.0) && !self.leaving_at(o.0.at) && !opened.iter().any(fn(p) { p.0 == o.0 }) {
+      opened.push(o)
+    }
+  }
+  self.focus_opened.clear()
+  let by : Array[((NodeId, NodeId?), Array[Int])] = []
+  for o in opened {
+    match self.layer_path(o.0.at) {
+      Some(p) => {
+        let mut j = by.length()
+        while j > 0 && drawn_after(by[j - 1].1, p) {
+          j = j - 1
+        }
+        by.insert(j, (o, p))
+      }
+      None => ()
+    }
+  }
+  (self.on_layers_focus)(gone, by.map(fn(e) { e.0 }))
+}
+
+///|
+/// Whether Tab stops on it, as `on` says as it changes (View::focusable's `tab`, said once there): a roving group one
+/// stop of, its current one's (Radix's roving focus: Tab to the group, its arrows within it). The last said of it is
+/// what holds: said again, what was said before let go of; View::focusable said after it, its `tab` (said before it,
+/// whether that takes the focus changing leaves this alone).
+pub fn View::tab_stop(self : View, on : Live[Bool]) -> View {
+  guard self.live() is Some(n) else { return self }
+  match n.props.get(Prop::TabStop.ord()) {
+    Some(stop) => {
+      n.props.remove(Prop::TabStop.ord())
+      stop()
+    }
+    None => ()
+  }
+  n.tab_by_stop = true
+  let set = fn(v : Bool, tell : Bool) {
+    guard self.live() is Some(n) else { return }
+    let was = n.focus_tab
+    n.focus_tab = v
+    if tell && was != v {
+      self.tree.marked()
+    }
+  }
+  match on {
+    Is(v) => set(v, true)
+    By(f) =>
+      self.owning(fn() {
+        let first = Ref(true)
+        let stop = self.tree.structured(f, fn(v) {
+          self.owning(fn() { set(v, first.val) })
+          first.val = false
+        })
+        n.props[Prop::TabStop.ord()] = stop
+      })
+  }
+  self
+}
+
+///|
+/// What waited for its node to come back for the focus (laid out nowhere as it had it: Tree::outs_told) waits no more:
+/// the focus come to something of what hosts the tree (an old view's field or button) meanwhile, that keeps it.
+pub fn Tree::focus_parked_drop(self : Tree) -> Unit {
+  self.focus_parked = None
 }

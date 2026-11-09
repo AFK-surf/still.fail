@@ -1,7 +1,7 @@
 # The side run (scripts/side.sh, docs/development.md "Tests"): the tests that are not the same every run (real time,
 # real processes and sockets, networks made up at random), on main every four hours and on demand, blocking nothing.
-# On mini1, CI's own Mac, each part on a runner of its own (the station's native parts are darwin's, the launcher's
-# tests run a Mac's Node), not on a machine people and agents share (on the Mac Studio, another agent load-testing it
+# On macos-ci, CI's own Mac, each part on a runner of its own (the station's native parts are darwin's, the launcher's
+# tests run a Mac's Node), not on a machine people and agents share (on the Mac test station, another agent load-testing it
 # made the real relays' round trips slow enough to fail, 2026-10-08). A failure is for an agent to reproduce as a test
 # CI runs and fix; one it cannot reproduce is let be.
 name: side
@@ -18,10 +18,13 @@ jobs:
   side:
     strategy:
       fail-fast: false
+      # One at a time: the mesh's tests compare real round trips, and the station's boot simulators beside them on this one
+      # Mac; beside those the mesh's measured too unevenly to move, or 109 ms for a line of nothing (side run 41798988101).
+      max-parallel: 1
       matrix:
-        part: [core-ts, station, rust]
-    runs-on: [self-hosted, mini1]
-    timeout-minutes: 5
+        part: [core-ts, station, rust, locks]
+    runs-on: [self-hosted, macos-ci]
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-mac
@@ -32,3 +35,39 @@ jobs:
         run: pnpm install --frozen-lockfile && cd station && pnpm install --frozen-lockfile
       - name: side (${{ matrix.part }})
         run: sh scripts/side.sh ${{ matrix.part }}
+      # A job stopped at its timeout leaves its simulators booted, each slowing the next run and holding this Mac's little disk.
+      - if: always() && matrix.part == 'station'
+        name: simulators left
+        run: |
+          S=/Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/Resources/bin/simctl
+          for u in $($S list devices | grep "still.fail side" | grep -oE "[0-9A-F-]{36}"); do $S shutdown "$u" 2>/dev/null; $S delete "$u"; done
+        # (the simulators' pictures as the tests took them, kept when one fails: a tap on the Duo's inner panel that opened
+        # nothing for a minute could not be told from its log alone, 41636490524)
+        env: { SIM_OUT: "${{ runner.temp }}/sim" }
+      - if: failure() && matrix.part == 'station'
+        uses: actions/upload-artifact@v4
+        with: { name: "side-sim-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/sim", retention-days: 3, if-no-files-found: ignore }
+  # The station's X11 screens on a real X server (Xvfb, ffmpeg's x11grab, xdotool): a display that would not open
+  # failed main's check once (Cannot open display :99, 41459527166), so here, not on every push.
+  x11:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/natives
+      - name: Linux X11 capture and input
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg xdotool xvfb xauth x11-utils x11-xkb-utils x11-xserver-utils python3-gi gir1.2-gtk-3.0 gir1.2-gstreamer-1.0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good libxtst6
+          pnpm --dir station install --frozen-lockfile
+          export STILLFAIL_TEST_X11=1 STILLFAIL_TEST_X11_REAL_MESH=1 XDG_SESSION_TYPE=x11
+          unset WAYLAND_DISPLAY
+          cd station
+          for test in test/x11-desktop.test.ts test/x11-desktop-real.test.ts test/x11-h264.test.ts test/x11-desktop-lifecycle.test.ts; do
+            node ../scripts/native.ts run mesh -- xvfb-run -a -s '-screen 0 1280x800x24' node --import ./test/setup-env.mjs --test "$test"
+          done
+          /usr/bin/python3 test/linux-portal-text.py
+          /usr/bin/python3 test/linux-portal-frames.py
+          xvfb-run -a -s '-screen 0 800x600x24' /usr/bin/python3 test/linux-x11-gstreamer.py
+          STILLFAIL_TEST_X11_APT=1 xvfb-run -a -s '-screen 0 1280x800x24' node --import ./test/setup-env.mjs --test --test-name-pattern='private APT pair' test/linux-screen-tools.test.ts

@@ -1,7 +1,4 @@
-// 15-drive-lend (e2e/traces/drive-lend.trace: Studio against the local still.fail): 文件 over Home, the files' places
-// (个人收藏, the station); ＋ pins another folder through the folder picker (Pin 文件夹: the station's home, its
-// folders), the run's own e2e-082940: drive.setRoots with it (Flow::end has it asked as the run asked it), said in a
-// toast, then listed under 团队共享.
+// 15-drive-lend: 文件 over Home, the add-favorite picker, and the run's folder in the personal list.
 
 ///|
 test "15-drive-lend" {
@@ -11,16 +8,12 @@ test "15-drive-lend" {
     f.see("个人收藏")
     f.tap("icon:plus")
     f.run_for(@kit.presence_in_ms)
-    f.see("Pin 这个文件夹")
+    f.see("收藏此文件夹")
     f.tap("e2e-082940")
     f.see("子文件夹")
-    f.tap("=Pin 这个文件夹")
-    // pinned, said at once (its toast's time its own: looked at as it shows)
-    f.see("已 pin「e2e-082940」")
+    f.tap("=收藏此文件夹")
     f.run_for(@kit.presence_out_ms)
     f.see("=e2e-082940")
-    // the toast gone by itself
-    f.run_for(@sfapp.toast_ms)
     f.end()
   })
 }

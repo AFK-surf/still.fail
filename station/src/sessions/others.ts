@@ -4,12 +4,13 @@
 import { parseThreadAddress, threadAddress } from "../agents/instructions.ts";
 import { iso, type TimelineEntry } from "../read/transcript.ts";
 import { LAPSED } from "../store/rows.ts";
-import { type Attachment, STILLFAIL_SURFACE, type SessionRow, type SessionThread, type ThreadRow } from "../store/store.ts";
+import { type Attachment, STILLFAIL_SURFACE, type SessionThread, type ThreadRow } from "../store/store.ts";
 import { type Args, jsNumber, jsString } from "./args.ts";
 import { threadHistory } from "./conversations.ts";
 import type { Hub } from "./hub.ts";
 import { Refused } from "./neighbours.ts";
 import { fetchAttachments, type Listed } from "./peer-files.ts";
+import { percentDecode } from "../api/request.ts";
 
 type Json = any;
 
@@ -20,21 +21,7 @@ export const READ = "session.read";
 export type Named = { type: "thread"; thread: ThreadRow } | { type: "session"; key: string; entry: number | null };
 
 /// admin/mod.rs `percent_decode`: %XX a byte, `+` a space, the rest as it is (UTF-8, lossy).
-export function percentDecode(s: string): string {
-  const bytes = Buffer.from(s, "utf8");
-  const out: number[] = [];
-  for (let i = 0; i < bytes.length; ) {
-    const hex = bytes.subarray(i + 1, i + 3).toString("latin1");
-    if (bytes[i] === 0x25 && /^[0-9A-Fa-f]{2}$/.test(hex)) {
-      out.push(parseInt(hex, 16));
-      i += 3;
-    } else if (bytes[i] === 0x2b) {
-      out.push(0x20);
-      i++;
-    } else out.push(bytes[i++]!);
-  }
-  return new TextDecoder("utf-8").decode(Buffer.from(out));
-}
+export { percentDecode };
 
 /// A session key a reference holds, in whichever form people pass chats around: a chat's page (…/chats/<key>), a
 /// still.fail link (…/o/<workspace>/<station>/<key>), a link to execution history (?history=<key>&entry=<n>).
@@ -98,7 +85,7 @@ const chatKeyOf = (hub: Hub, t: ThreadRow) => t.home ?? hub.store.threadSessions
 /// The chats session `key` is in, by the keys they are shared by.
 const chatsOf = (hub: Hub, key: string) => new Set([key, ...hub.store.sessionThreads(key).map((t) => chatKeyOf(hub, t.thread))]);
 
-/// Whether workspace `ws` may reach session `key`'s chat (docs/multi-workspace.md): one of that workspace's, or one
+/// Whether workspace `ws` may reach session `key`'s chat: one of that workspace's, or one
 /// another workspace of this station shares with it (to write in: shared to write), whose share goes on from now. `ws`
 /// null: any.
 export function reachable(hub: Hub, key: string, ws: string | null, write = false): boolean {
@@ -119,13 +106,13 @@ export function threadIn(hub: Hub, thread: ThreadRow, ws: string | null): boolea
   return keys.length === 0 ? hub.wsOf(null) === ws : keys.some((k) => hub.inWorkspace(k, ws));
 }
 
-/// The workspace whose chats and stations session `key` reaches (docs/multi-workspace.md): its chat's; null (any) on
+/// The workspace whose chats and stations session `key` reaches: its chat's; null (any) on
 /// a station in no workspace, where there is no telling.
 export function scopeOf(hub: Hub, key: string): string | null {
   return hub.workspaces().length === 0 ? null : hub.wsOf(key);
 }
 
-/// The station transport as session `key` asks it: in its chat's workspace (docs/multi-workspace.md), whose stations
+/// The station transport as session `key` asks it: in its chat's workspace, whose stations
 /// alone it reaches (and those sharing chats with that workspace); null while there is none.
 export function peersOf(hub: Hub, key: string): ((station: string, request: Json) => Promise<Json>) | null {
   const call = hub.peers();
@@ -287,7 +274,7 @@ export function named(hub: Hub, given: string, ws: string | null = null, write =
 
 /// The conversation a session is best read in: its own chat on the pages, else the one it last heard from.
 export function sessionThreadOf(hub: Hub, key: string): SessionThread {
-  const home = hub.store.sessionThreads(key).find((t) => t.thread.home === key);
+  const home = hub.store.sessionHomeThread(key);
   if (home) return home;
   const latest = hub.store.latestThread(key);
   if (!latest) throw new Error(`session ${key} has no conversation yet`);
@@ -296,30 +283,36 @@ export function sessionThreadOf(hub: Hub, key: string): SessionThread {
 
 /// chat_list: the station's conversations of session `key`'s workspace, the latest first, each with its agents
 /// (session keys).
-export async function chatList(hub: Hub, key: string, args: Args): Promise<string> {
+export async function chatList(hub: Hub, key: string, args: Args, signal?: AbortSignal): Promise<string> {
   const given = args.limit === undefined ? null : jsNumber(args.limit);
   const limit = given === null ? 20 : Number.isNaN(given) ? 0 : Math.trunc(Math.min(100, Math.max(1, given)));
   const query = (args.query === undefined ? "" : jsString(args.query)).trim().toLowerCase();
-  const sessions = new Map<string, SessionRow>(hub.store.listSessions().map((s) => [s.key, s]));
-  // Its workspace's only (docs/multi-workspace.md): a thread is its own session's, else its agents'.
+  // Its workspace's only: a thread is its own session's, else its agents'.
   const ws = scopeOf(hub, key);
   const home = hub.wsOf(null);
+  // The reader counts and selects before returning the page. A search still checks each scoped chat's titles and words.
+  const listed = query === ""
+    ? hub.recentChatList != null ? await hub.recentChatList(ws, home, limit, signal)
+      : hub.threadList == null ? hub.store.recentChatList(ws, home, limit) : null
+    : hub.searchChatList != null ? await hub.searchChatList(ws, home, limit, query)
+      : hub.threadList == null ? hub.store.searchChatList(ws, home, limit, query) : null;
+  const sessions = new Map((listed?.sessions ?? hub.store.listSessions()).map((s) => [s.key, s]));
   const inWs = (k: string) => (sessions.get(k)?.ws ?? home) === ws;
   const ours = (t: { thread: ThreadRow; sessions: { session: string }[] }) =>
     ws === null || (t.thread.home !== null ? inWs(t.thread.home) : t.sessions.length === 0 ? home === ws : t.sessions.some((m) => inWs(m.session)));
-  const threads = (hub.threadList ? await hub.threadList() : hub.store.listThreads("", null, null)).filter(ours);
+  const threads = listed?.threads ?? (hub.threadList ? await hub.threadList() : hub.store.listThreads("", null, null, "none")).filter(ours);
   const when = (t: (typeof threads)[number]) => t.lastMessage?.createdAt ?? t.thread.createdAt;
   threads.sort((a, b) => when(b) - when(a));
   const lines: string[] = [];
-  let matched = 0;
+  let matched = listed?.total ?? 0;
   for (const t of threads) {
     const titles = [t.thread.title, t.thread.autoTitle, t.firstText, ...t.sessions.map((m) => sessions.get(m.session)?.title ?? null)].filter((x): x is string => x !== null);
     const last = t.lastMessage?.text ?? "";
-    if (query !== "") {
+    if (query !== "" && listed === null) {
       const haystack = `${titles.join(" ")} ${last} ${t.sessions.map((m) => m.session).join(" ")}`.toLowerCase();
       if (!haystack.includes(query)) continue;
     }
-    matched++;
+    if (listed === null) matched++;
     if (lines.length >= limit) continue;
     const address = threadAddress(t.thread.channel, t.thread.threadTs);
     const place = t.thread.surface === STILLFAIL_SURFACE ? "still.fail chat" : "Slack thread";

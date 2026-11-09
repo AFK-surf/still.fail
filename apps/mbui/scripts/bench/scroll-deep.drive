@@ -1,0 +1,32 @@
+# 小屏, a finger: a long account's chats flung down past page after page of them, each page more asked for as the
+# list comes within a screen and a half of its foot (scrolls_window's near_foot), till well past the first few.
+timeout 60000
+until 整理发布清单
+wait 500
+log measure
+drag 195 700 0 -600 600
+wait 400
+drag 195 700 0 -600 600
+wait 400
+drag 195 700 0 -600 600
+wait 400
+drag 195 700 0 -600 600
+wait 400
+drag 195 700 0 -600 600
+wait 400
+drag 195 700 0 -600 600
+wait 400
+drag 195 700 0 -600 600
+wait 400
+drag 195 700 0 -600 600
+wait 400
+drag 195 700 0 -600 600
+wait 400
+drag 195 700 0 -600 600
+wait 400
+drag 195 700 0 -600 600
+wait 400
+drag 195 700 0 -600 600
+wait 1500
+gone 整理发布清单
+exit

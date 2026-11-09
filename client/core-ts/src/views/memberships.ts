@@ -1,4 +1,4 @@
-// One station in several workspaces (docs/multi-workspace.md), as the clients show it: which stations of the viewer's
+// One station in several workspaces, as the clients show it: which stations of the viewer's
 // other workspaces could be added to this one, the workspaces a station is in, and `station.join`, which adds one.
 //
 // Topics:
@@ -96,6 +96,7 @@ export function joinable(inner: Inner, workspace: string): J {
       if (id === null || here.has(id) || seen.has(id)) continue;
       seen.add(id);
       // As its link finds it, as every list of stations says it: still.fail cloud lists no `online` of its own.
+      inner.stations.seen.read(`${p.id}/${id}`, "link");
       const online = !down(inner.stations.link(`${p.id}/${id}`)?.state ?? { state: "offline" });
       items.push({
         station: `${p.id}/${id}`,
@@ -228,12 +229,11 @@ export function install(inner: Inner): void {
   handlers.stationJoin = (_inner, call, _progress, _at, ctx) => join(inner, call as Of, ctx);
   // The stations whose workspaces a page shows.
   const live = new Set<string>();
-  // What is listed in each workspace changed: which stations could be added, who manages which (one shown that was not
-  // known to be managed is read now), a station's home's name in a list.
+  // What is listed in each workspace changed: who manages which (one shown that was not known to be managed is read
+  // now). What shows the workspaces reads them as it is made.
   inner.data.onChange((topic) => {
     if (topic.topic !== "workspace") return;
     for (const address of live) if (inner.data.record(RECORD, address) === undefined && !failed(inner).has(address) && manages(inner, address)) readSoon(inner, address);
-    inner.store.invalidateAll((t) => t.topic === "joinable" || t.topic === "memberships" || t.topic === "stations");
   });
   inner.router.owners.push(owner(inner, live));
 }

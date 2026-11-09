@@ -114,51 +114,24 @@ test "a corner is as smooth as it has room for" {
 }
 
 ///|
-test "concentric: a curve moved in is drawn as much smaller, a corner drawn a quarter larger than it is given" {
-  assert_eq(concentric(26.0, 10.0), 18.0)
-  assert_eq(concentric_out(18.0, 10.0), 26.0)
+test "concentric: a corner moved in is as much smaller, whole numbers kept whole (the user, 2026-11-03: 边距应该是整数)" {
+  assert_eq(concentric(26.0, 10.0), 16.0)
+  assert_eq(concentric_out(16.0, 10.0), 26.0)
   assert_eq(concentric(6.0, 10.0), 0.0)
   // the middle of a corner of 20 (wholly smooth): on the curve, as far in from both edges
   let m = smooth_middle(20.0)
   assert_true(sd_corner(300.0 - m, 200.0 - m, 300.0, 200.0, 20.0, 1.0).abs() < 1.0e-3)
-  // the inner box's corner drawn about the outer's corner's own centre: the same curve, as much smaller as it is in
-  assert_eq(10.0 + concentric(26.0, 10.0) * smooth_scale, 26.0 * smooth_scale)
 }
 
-///|
-/// The most a circle `r` round, centred `centre` in from both edges of a wholly smooth corner of 28 (a 300 by 200 box's
-/// top right), is off an even gap from it (its distance from its edges, centre less r) anywhere along its quarter.
-fn circle_off_even(centre : Double, r : Double) -> Double {
-  let d = centre - r
-  let mut most = 0.0
-  for i in 0..=90 {
-    let a = i.to_double() * 1.5707963267948966 / 90.0
-    let x = centre - r * @dmath.cos(a)
-    let y = centre - r * @dmath.sin(a)
-    let gap = -sd_corner(300.0 - x, 200.0 - y, 300.0, 200.0, 28.0, 1.0)
-    most = dmax(most, (gap - d).abs())
-  }
-  most
-}
 
 ///|
-test "a circle in a smooth corner follows it as round_like's round corner: an even gap within 1.25% of its radius" {
-  // (the user, 2026-10-27: 中型屏的单行 composer 跟圆角还是对不上: a capsule 48 high 4 in from a corner of 28)
-  let k = round_like(28.0)
-  assert_true((k - 28.0 * smooth_round).abs() < 1.0e-12)
-  for r in [8.0, 16.0, 22.0] {
-    assert_true(circle_off_even(k, r) < 0.0125 * 28.0, msg="a circle \{r} round: \{circle_off_even(k, r)}")
-    // centred the corner's whole radius in, as in a round one: off by over twice as much at the curve's middle
-    assert_true(circle_off_even(28.0, r) > 0.025 * 28.0)
-  }
-  // a capsule's end (no room to be smooth) is round: itself; between, as smooth as its box has room for
-  assert_eq(round_like(20.0, room=20.0), 20.0)
-  assert_true(round_like(20.0, room=22.5) > round_like(20.0) && round_like(20.0, room=22.5) < 20.0)
-  // and back
-  for c in [(28.0, 1.0e30), (20.0, 20.0), (20.0, 22.5), (34.0, 1.0e30)] {
-    let (r, room) = c
-    assert_true((round_like_out(round_like(r, room~), room~) - r).abs() < 1.0e-9)
-  }
+test "a circle in a corner stands its corner's whole radius in, as in a round one: the smoothing is the drawing's alone" {
+  // (the user, 2026-11-03: 平滑圆角没道理影响这个; 平滑圆角只是在原有圆角的描述上做平滑: what lies in a corner is laid out by
+  // the corner said, no smooth scale in the arithmetic)
+  assert_eq(capsule_in(28.0, 20.0), 18.0)
+  // a capsule's end is itself; in a box short of the corner, its half
+  assert_eq(capsule_in(20.0, 20.0, room=20.0), 10.0)
+  assert_eq(capsule_in(28.0, 20.0, room=20.0), 10.0)
 }
 
 ///|
@@ -240,46 +213,73 @@ fn capsule_drop(hx : Double, u : Double) -> Double {
 }
 
 ///|
-test "a capsule's end is Apple's: the circle's at its middle, easing into the long edges until 2 r from the tip" {
-  // (the user, 2026-10-31: 苹果的那个按钮就看不出直线和半圆的接点) measured off iOS 26's alert button 144 high, top and
-  // bottom of both ends: how far below the edge its outline lies, in r, u r from the tip
-  let apple = [
-    (0.325, 0.2628),
-    (0.525, 0.1225),
-    (0.725, 0.0507),
-    (0.825, 0.0328),
-    (0.925, 0.0183),
-    (1.025, 0.0134),
-    (1.125, 0.0097),
-    (1.225, 0.0046),
-    (1.325, 0.0035),
-    (1.525, 0.0004),
+/// How sharply the top edge of a capsule 300 by 80 bends `u` r from its right tip, in 1/r: from its drops a step either
+/// side.
+fn capsule_bend(u : Double) -> Double {
+  let h = 0.002
+  let a = capsule_drop(150.0, u - h)
+  let b = capsule_drop(150.0, u)
+  let c = capsule_drop(150.0, u + h)
+  let slope = (c - a) / (2.0 * h)
+  let w = 1.0 + slope * slope
+  (a - 2.0 * b + c) / (h * h) / (w * w.sqrt())
+}
+
+///|
+test "a capsule's end is Apple's: the circle's at its middle, easing into the long edges, how much it bends never jumping or turning at once" {
+  // (the user, 2026-11-01: 量一下这个) measured off the capsule they sent, 288 high: how far below the edge its outline
+  // lies, in r, u r from the tip
+  let measured = [
+    (0.4, 0.1987),
+    (0.5, 0.1361),
+    (0.6, 0.0890),
+    (0.7, 0.0569),
+    (0.8, 0.0361),
+    (0.9, 0.0200),
+    (1.0, 0.0130),
+    (1.1, 0.0068),
+    (1.2, 0.0035),
+    (1.3, 0.0020),
+    (1.5, 0.0),
   ]
-  for p in apple {
+  for p in measured {
     let (u, want) = p
     let got = capsule_drop(150.0, u)
-    assert_true((got - want).abs() < 0.005, msg="at \{u} r: \{got}, Apple's \{want}")
+    assert_true((got - want).abs() < 0.009, msg="at \{u} r: \{got}, measured \{want}")
   }
-  // the circle's at its middle, the edge's from 2 r in; a circle met the edge at r with nothing left
+  // the circle's at its middle, the edge's from 1.4 r in; a circle met the edge at r with nothing left
   for u in [0.1, 0.2, 0.3] {
     let circle = 1.0 - (u * (2.0 - u)).sqrt()
     assert_true((capsule_drop(150.0, u) - circle).abs() < 1.0e-9, msg="at \{u}: \{capsule_drop(150.0, u)}, the circle \{circle}")
   }
-  assert_true(capsule_drop(150.0, 1.0) > 0.01)
-  assert_true(capsule_drop(150.0, 2.0) < 1.0e-9)
-  // it only ever comes nearer the edge, and bends less and less into it: no bump, no second turn
-  let mut last = capsule_drop(150.0, 0.0)
-  let mut last_slope = -1.0e9
-  for i in 1..=200 {
-    let u = i.to_double() * 0.01
-    let d = capsule_drop(150.0, u)
-    assert_true(d <= last + 1.0e-9, msg="back out at \{u}")
-    if u > 1.2 {
-      let slope = (d - last) / 0.01
-      assert_true(slope >= last_slope - 1.0e-6, msg="bends back at \{u}")
-      last_slope = slope
+  assert_true(capsule_drop(150.0, 1.0) > 0.005)
+  assert_true(capsule_drop(150.0, 1.4) < 1.0e-9)
+  // how sharply it bends, from the edge in to the tip: none, then rising once to at most 1.15 the circle's and back to
+  // the circle's, by no step (a half circle's goes from none to all at once at r; the quintic's before turned at once
+  // where it left the circle, and twice on the way)
+  let mut last = 0.0
+  let mut rises = true
+  let mut most = 0.0
+  for i in 0..=140 {
+    let u = 1.45 - i.to_double() * 0.01
+    let b = capsule_bend(u)
+    assert_true(b > -1.0e-3, msg="bends back at \{u}")
+    assert_true((b - last).abs() < 0.03, msg="a step at \{u}: \{last} to \{b}")
+    if rises && b < last - 1.0e-4 {
+      rises = false
+    } else {
+      assert_true(rises || b <= last + 1.0e-4, msg="rises again at \{u}")
     }
-    last = d
+    most = dmax(most, b)
+    last = b
+  }
+  assert_true(most < 1.15, msg="at most \{most}")
+  assert_true((last - 1.0).abs() < 1.0e-3, msg="at the middle \{last}")
+  // nor does the rate it bends at turn at once: where it leaves the circle and where it meets the edge
+  for u in [0.325, 1.4] {
+    let before = capsule_bend(u - 0.02) - capsule_bend(u - 0.01)
+    let after = capsule_bend(u) - capsule_bend(u + 0.01)
+    assert_true((before - after).abs() < 0.01, msg="turns at \{u}: \{before}, \{after}")
   }
   // along the straight edge and round the tip the distance is the edge's and the circle's
   for off in [-0.5, 0.5] {
@@ -289,7 +289,17 @@ test "a capsule's end is Apple's: the circle's at its middle, easing into the lo
 }
 
 ///|
-test "how far a capsule's end eases in goes with the room it has: a circle round, none at once as it grows" {
+test "a capsule's end is the same curve however long it is: only a box too short to hold it has less, a circle none" {
+  // (the user, 2026-11-07: 这跟长度有个屁的关系) a button 58 by 36 and a bar 600 by 36: their ends alike, with 0.4 r
+  // past the circle's and no more of room
+  for i in 0..=140 {
+    let d = i.to_double() * 0.01 * 18.0
+    for y in [12.0, 16.0, 17.5, 18.5] {
+      for hx in [25.2, 29.0, 300.0] {
+        assert_true((sd_box(hx - d, y, hx, 18.0, 18.0) - sd_box(300.0 - d, y, 300.0, 18.0, 18.0)).abs() < 1.0e-9, msg="\{hx} at \{d}, \{y}")
+      }
+    }
+  }
   // a circle 80 across: a circle's distance
   for j in 0..=40 {
     let a = 1.5707963267948966 * j.to_double() / 40.0

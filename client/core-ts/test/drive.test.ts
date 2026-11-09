@@ -1,4 +1,4 @@
-// A station's drive in the core (docs/drive.md): a folder read as it is shown and kept on the device, said refused
+// A station's drive in the core: a folder read as it is shown and kept on the device, said refused
 // when the station refuses it, said why where it could not be read and nothing is held (the station down, no answer in
 // time, failing), read again after a change of it and as its station is back; parts of a file written with what the
 // station has.
@@ -278,6 +278,9 @@ test("what a press on an entry does, by its kind: entered, read, played, preview
   assert.deepEqual(["notes.txt", "README", "a.md", "film.mkv", "song.flac", "shot.png", "doc.pdf", "main.rs", "data.csv", "page.html", "a.srt", "archive.zip"].map(of),
     ["read", "read", "read", "play", "play", "preview", "preview", "preview", "preview", "preview", "preview", "save"]);
   assert.equal(opensOf("folder"), "folder");
+  for (const video of ["clip.ogv", "clip.3GP", "clip.3g2"]) assert.equal(of(video), "play");
+  assert.equal(of("song.ogg"), "play");
+  assert.equal(kindOf("song.ogg"), "audio");
 });
 
 test("a name typed for a file or folder: empty, a slash, . or .. said in words; anything else none", () => {

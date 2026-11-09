@@ -1,4 +1,4 @@
-// The relay with keyboard and mouse (sfpages relay.mbt, Relay.tsx RelayDialog: the presenters' dialog): from a row's menu, the places the station's
+// The relay with keyboard and mouse (sfpages relay.mbt): from a row's menu, the places the station's
 // bots are in as the core offers them, one picked with its note, relayed there.
 
 ///|
@@ -31,6 +31,7 @@ test "wide: 接力到频道… from a row's menu: the dialog lists the bot's pla
   let (x, y) = t.find("整理发布清单").unwrap()
   t.right_click(x, y)
   t.frame()
+  open_share(t)
   t.tap_text("接力到频道…")
   t.frame()
   assert_eq(named(calls, "chat.relayPlaces").length(), 1)
@@ -58,6 +59,9 @@ test "wide: 接力到频道… from a row's menu: the dialog lists the bot's pla
   assert_eq(text(Some(relayed[0].params), "channel"), "C1")
   // the dialog gone, where it went said
   assert_true(t.find("开头附一句（可选）") is None)
+  // (said at once, read out: seen as it has come in, toast_said)
+  assert_true(toast_said(t, "已接力到 #dev"))
+  t.run_for(@kit.presence_in_ms)
   assert_true(t.find("已接力到 #dev") is Some(_))
 }
 
@@ -95,6 +99,7 @@ test "wide: an @ typed in the relay's note offers the people there in a popover 
   let (x, y) = t.find("整理发布清单").unwrap()
   t.right_click(x, y)
   t.frame()
+  open_share(t)
   t.tap_text("接力到频道…")
   t.frame()
   t.frame()

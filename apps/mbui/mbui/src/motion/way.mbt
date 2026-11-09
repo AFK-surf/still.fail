@@ -12,7 +12,8 @@ pub struct Way {
   priv mut v0 : Double
   priv mut to : Double
   priv mut spec : Spec
-  /// when it set out (ms, the one clock: its whole ms, the grid every motion's time goes on), and how long it goes
+  /// when it set out (ms, the one clock: its cause's moment, its time counted from there in whole ms as an Anim's),
+  /// and how long it goes
   priv mut start : Double
   priv mut dur : Double
   priv mover : @ui.Mover
@@ -48,9 +49,9 @@ pub fn Way::at(self : Way, t : Double) -> (Double, Double) {
   } else if t <= self.start {
     (self.from, self.v0)
   } else {
-    // (its time in whole ms of the one clock: where it is at a moment the same whatever fraction of a ms the moment
-    // or its cause came at, as any motion's, Run's)
-    self.spec.value_at(@ui.whole_ms(t) - self.start, self.dur, self.from, self.to, self.v0)
+    // (its time from its start in whole ms, as an Anim's (Spec::value_at): told alike at the same moment, where each is
+    // at a moment the same, whatever fraction of a ms its cause came at)
+    self.spec.value_at(t - self.start, self.dur, self.from, self.to, self.v0)
   }
 }
 
@@ -102,16 +103,27 @@ pub fn Way::goes_at(self : Way, t : Double) -> Bool {
 /// Off to `target` by `spec` from the moment `at` (its cause's), from where it is then and as fast (or at `velocity`,
 /// per second). With motion reduced (Ctx::still), there at once, as any motion is. What reads it asks for the frames
 /// it needs as it reads it (Way::get, Way::said): nothing of its own goes on.
-pub fn Way::go(self : Way, target : Double, spec : Spec, at~ : Double, velocity? : Double) -> Unit {
+#callsite(autofill(loc))
+pub fn Way::go(
+  self : Way,
+  target : Double,
+  spec : Spec,
+  at~ : Double,
+  velocity? : Double,
+  loc~ : SourceLoc,
+) -> Unit {
   let (x, v) = self.at(at)
   self.from = x
   self.v0 = velocity.unwrap_or(v)
   self.to = target
   self.spec = spec
-  self.start = @ui.whole_ms(at)
-  self.dur = if @ui.current().still() { 0.0 } else { spec.duration(x, target, self.v0) }
+  self.start = at
+  // (motion reduced: there at once, the setting's, whoever tells it)
+  self.dur = if @ui.reduced_motion() { 0.0 } else { spec.duration(x, target, self.v0) }
   self.mover.changed()
-  self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
+  // (who it is for the performance record: who sent it, not where to)
+  self.mover.told_as("a Way", loc)
+  self.told.set(self.told.untracked() + 1)
 }
 
 ///|
@@ -128,7 +140,7 @@ pub fn Way::put(self : Way, v : Double) -> Unit {
   self.spec = Snap(0.0)
   self.start = 0.0
   self.dur = 0.0
-  self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
+  self.told.set(self.told.untracked() + 1)
 }
 
 ///|
@@ -139,11 +151,10 @@ pub fn Way::said(self : Way) -> Unit {
 }
 
 ///|
-/// Where it is as what is built or drawn now reads it (the frame's moment): read again each frame while it goes, as a
-/// motion's value is (Anim::get).
-pub fn Way::get(self : Way) -> Double {
+/// Where it is as what the old view `c` builds or draws now reads it (its frame's moment): read again each frame while
+/// it goes, as a motion's value is (Anim::get). A node of the window's tree reads value_at its own moment instead.
+pub fn Way::get(self : Way, c : @ui.Ctx) -> Double {
   self.said()
-  let c = @ui.current()
   let t = c.moment()
   c.shows_motion(self.mover, self.goes_at(t))
   self.value_at(t)

@@ -149,7 +149,7 @@ async function turn(text) {
     const call = (id, method, params) =>
       fetch(server.url, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${process.env.STILLFAIL_MCP_TOKEN}` }, body: JSON.stringify({ jsonrpc: "2.0", id, method, params }) }).then((r) => r.json());
     await call(1, "initialize", { protocolVersion: "2025-06-18" });
-    const answer = await call(2, "tools/call", { name: "chat_post", arguments: { to, text: said, kind: "all_done", done: "answered the question that was asked" } });
+    const answer = await call(2, "tools/call", { name: "chat_post", arguments: { to, text: said, title: "the question", kind: "all_done", done: "answered the question that was asked" } });
     result({ result: await message([answer.result.content[0].text], 0) });
   } else if (text === "exit") {
     await message(["partial"], 0);

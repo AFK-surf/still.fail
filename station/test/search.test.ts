@@ -1,4 +1,4 @@
-// The station's search (docs/search.md): what of the station's data a query finds, as it is then, and for whom.
+// The station's search: what of the station's data a query finds, as it is then, and for whom.
 import assert from "node:assert/strict";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,7 +8,7 @@ import { after, test } from "node:test";
 import { Store, newMessage } from "../src/store/store.ts";
 import { openStore } from "../src/read/store.ts";
 import { type Asker, excerpt, pick, terms } from "../src/search/match.ts";
-import { historyHits, profileDocs, profilesOf, stationDocs, threadDocs } from "../src/search/sources.ts";
+import { historyHits, profileDocs, profilesOf, stationDocSteps, stationDocs, threadDocs } from "../src/search/sources.ts";
 
 const dirs: string[] = [];
 const closing: { close(): void }[] = [];
@@ -53,13 +53,24 @@ const say = (store: Store, thread: number, ts: string, text: string, kind: "pers
 
 const kinds = (groups: { kind: string; hits: { key: string }[] }[]) => Object.fromEntries(groups.map((g) => [g.kind, g.hits.map((h) => h.key)]));
 
+test("a search result keeps an older message's runtime after its chat switches", () => {
+  const s = station();
+  const t = chat(s.store, "k1", null);
+  s.store.ranIn("k1", "old-session", "cc");
+  s.store.insertMessage({ ...newMessage(t, "1", "agent", "k1", "earlier"), agentIdentity: { model: "opus", effort: null } });
+  s.store.db.prepare("UPDATE sessions SET runtime = ?, model = ? WHERE key = ?").run("codex", "gpt-5", "k1");
+  const read = s.read();
+  assert.deepEqual(threadDocs(read, t).find((d) => d.kind === "message")?.ref.agentIdentity, { model: "opus", effort: null, runtime: "claude" });
+  read.db.close();
+});
+
 test("a chat's messages are found by any part of their words, in any script, case aside, as they read now", () => {
   const s = station();
   const t = chat(s.store, "k1", null);
   say(s.store, t, "1", "我们用 DuckDB 做分析");
   say(s.store, t, "2", "sqlite 的全文索引", "agent");
-  // The chat too: it is called by what was first said in it.
-  assert.deepEqual(kinds(find(s, "duckdb", home)), { chat: [`c:${t}`], message: [`m:${t}:1`] });
+  // Not the chat: never named, it is 新对话 as the chat list calls it (read/views.ts titleOf), not what was first said.
+  assert.deepEqual(kinds(find(s, "duckdb", home)), { message: [`m:${t}:1`] });
   assert.deepEqual(kinds(find(s, "uckD", home, { kinds: ["message"] })), { message: [`m:${t}:1`] });
   assert.deepEqual(kinds(find(s, "索引", home)), { message: [`m:${t}:2`] });
   // Every word must be there.
@@ -68,8 +79,10 @@ test("a chat's messages are found by any part of their words, in any script, cas
   assert.equal(hit!.chat, "k1");
   assert.equal(hit!.seq, 1);
   assert.equal(hit!.text, "我们用 DuckDB 做分析");
-  // A chat's hit says where in its title the words are.
-  assert.equal(find(s, "duckdb", home, { kinds: ["chat"] })[0]!.hits[0]!.text, "我们用 DuckDB 做分析");
+  // Named by its agent, it is found by that; its hit says where in its title the words are.
+  s.store.setAutoTitle(t, "DuckDB 分析", true);
+  assert.deepEqual(kinds(find(s, "duckdb", home)), { chat: [`c:${t}`], message: [`m:${t}:1`] });
+  assert.equal(find(s, "duckdb", home, { kinds: ["chat"] })[0]!.hits[0]!.text, "DuckDB 分析");
   // Cased letters beyond ASCII's.
   say(s.store, t, "3", "Über die ЖУРНАЛ");
   assert.deepEqual(kinds(find(s, "über журнал", home)), { message: [`m:${t}:3`] });
@@ -80,6 +93,20 @@ test("a chat's messages are found by any part of their words, in any script, cas
   s.store.setArchived("k1", true, "a@x");
   const read = s.read();
   assert.ok(threadDocs(read, t).every((d) => d.ref.archived === true));
+  read.db.close();
+});
+
+test("the archive's search looks through archived chats alone", () => {
+  const s = station();
+  const put = chat(s.store, "k1", null);
+  const live = chat(s.store, "k2", null);
+  say(s.store, put, "1", "the needle went away");
+  say(s.store, live, "1", "the needle is here");
+  s.store.setArchived("k1", true, "a@x");
+  const read = s.read();
+  const found = (only: boolean) => [...stationDocSteps(read, ".", {}, new Set(["message"]), home, only)].flatMap((d) => (d === undefined ? [] : [d.key]));
+  assert.deepEqual(found(false), [`m:${put}:1`, `m:${live}:1`]);
+  assert.deepEqual(found(true), [`m:${put}:1`]);
   read.db.close();
 });
 
@@ -116,13 +143,13 @@ test("skills, memory, jobs and profiles are found", () => {
   const s = station();
   const agent = join(s.data, "agent");
   mkdirSync(join(agent, "skills/deploy"), { recursive: true });
-  writeFileSync(join(agent, "MEMORY.md"), "the studio has 64 GB\n");
+  writeFileSync(join(agent, "MEMORY.md"), "the willow has 32 GB\n");
   writeFileSync(join(agent, "skills/deploy/SKILL.md"), "---\nname: deploy\ndescription: 项目记忆：how releases go out\n---\nrun release.sh\n");
   const key = "k1";
   chat(s.store, key, null);
   s.store.insertJob({ id: "j1", sessionKey: key, name: "web preview", command: "pnpm dev --port 5173", cwd: "/w/k1", port: 5173, token: "t", state: "running", pgid: null, exitCode: null, startedAt: 5, endedAt: null, restarts: 0, log: "", watch: false });
   assert.deepEqual(kinds(find(s, "releases", home)), { skill: ["k::deploy"] });
-  assert.deepEqual(kinds(find(s, "64 GB", home)), { memory: ["k::"] });
+  assert.deepEqual(kinds(find(s, "32 GB", home)), { memory: ["k::"] });
   assert.deepEqual(kinds(find(s, "5173", home)), { job: ["j:j1"] });
   const profiles = profileDocs(profilesOf({ profiles: [{ id: "studio-max", home: "p/cc", runtime: "claude", model: "claude-opus-5-5" }] }, s.data));
   assert.deepEqual(kinds(pick(profiles, ["opus"], other)), { profile: ["p:studio-max"] });

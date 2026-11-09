@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * The device beyond the window (src/hostapi/device.mbt; android_device.h calls these): a key catcher's keyboard (the
  * focus with no text of its own: MBView asks catchKey while `catching`), the soft keyboard's height, the clipboard
- * read (its words, its picture made a PNG, as still.fail's ScreenClips.kt: readyImage, asPng, encodePng) and written
+ * read (its words, its picture made a PNG, asPng, encodePng) and written
  * (words with a label; a PNG kept as a file of the cache's screen-clips, the newest KEEP, that the clip points at
  * through Shares.Files), the screen kept on, haptics.
  */
@@ -342,7 +342,7 @@ final class Device {
     }
 
     /**
-     * The input method's action for the field about to type (hostapi ime_action: 0 none, 1 search, 2 an address's go, 3 a number's done), read as the view
+     * The input method's action for the field about to type (hostapi ime_action: 0 none, 1 search, 2 an address's go, 3 a number's done, 4 a secret's), read as the view
      * makes its input connection (MBView); another than before, the input method is started again with it.
      */
     static volatile int imeAction;

@@ -1,4 +1,4 @@
-// How a thing answers the hand (docs/architecture.md: the input only says how a thing answers it, never what is shown
+// How a thing answers the hand (the input only says how a thing answers it, never what is shown
 // where): what a pointer over a thing shows, a press's ripple, a menu held. The pages ask these, never @ui.pointing().
 
 ///|
@@ -20,7 +20,7 @@ pub fn pointed_or_finger(c : @ui.Ctx, pointed : Bool) -> Bool {
 
 ///|
 /// Whether what a row's ⋯ would offer is had by holding the row, its ⋯ not drawn (touch's: the native input,
-/// docs/architecture.md, what only a pointer's hover would show), else by its ⋯ under the pointer or a right click.
+/// what only a pointer's hover would show), else by its ⋯ under the pointer or a right click.
 /// The same for either hand on one screen: the boxes never follow the hand (hand_layout_wbtest).
 pub fn more_held() -> Bool {
   (native_input() is Finger)
@@ -28,7 +28,7 @@ pub fn more_held() -> Bool {
 
 ///|
 /// Whether this device types on a keyboard raised on asking and short of a computer's keys (Esc, Tab, the arrows, ⌘
-/// held), and points with a finger resting on nothing (touch's: the native input, docs/architecture.md). What drives
+/// held), and points with a finger resting on nothing (touch's: the native input). What drives
 /// another machine's screen from it makes up for both: a keyboard to raise, a keys row, a finger as a trackpad, its
 /// tools under the thumb, and a page of the machine's browser laid out as this device's own browser would lay it out.
 /// With keyboard and mouse none of that: the keyboard types into the screen as it is, the mouse is its pointer, and its
@@ -40,8 +40,17 @@ pub fn soft_keyboard() -> Bool {
 ///|
 /// Whether Enter in a box of lines sends what is in it (⇧Enter a new line), as where the keyboard is at hand (the web's
 /// `hover: hover`), or is a new line, as on the screen's keyboard (its send is the page's button): the native input's.
-pub fn enter_sends() -> Bool {
-  !soft_keyboard()
+/// `command`: the person chose ⌘Enter (Ctrl+Enter elsewhere) to send, Enter a new line (command_sends).
+pub fn enter_sends(command? : Bool = false) -> Bool {
+  !soft_keyboard() && !command
+}
+
+///|
+/// Whether ⌘Enter (Ctrl+Enter elsewhere) sends where Enter is a new line: as the person chose (`command`, the keymap's
+/// `send`), where the keyboard is at hand; the screen's keyboard has no ⌘ and its send is the page's button, so not
+/// there.
+pub fn command_sends(command : Bool) -> Bool {
+  !soft_keyboard() && command
 }
 
 ///|
@@ -64,7 +73,7 @@ pub fn keys_at_foot(width : Double) -> Bool {
 /// How far an edge standing in a gap `gap` wide between two panels (the tape's, sfdesk's tape_edge) takes presses past
 /// the gap, into the panel it sizes and into the one beside it: with touch none of its own (a row there is swiped
 /// across) and edge_finger_reach of the other, the gap and that as wide as a finger aims at a thing that thin; with
-/// keyboard and mouse as much of each as makes the wide frame's edge's 12 (S3: Rail.css.ts edge). The native input's:
+/// keyboard and mouse as much of each as makes the wide frame's edge's 12. The native input's:
 /// the boxes never follow the hand.
 pub fn edge_reach(gap : Double) -> (Double, Double) {
   if native_input() is Finger {
@@ -93,25 +102,26 @@ pub fn menu_held(c : @ui.Ctx, key : String) -> Bool {
   }
   c.take_press()
   let at = c.press().frame
-  if held_felt.get(key) != Some(at) {
-    held_felt[key] = at
-    c.after_build("haptic/hold/" + key, fn() { @ui.haptic(LongPress) })
-  }
+  // (told once the frame's builds are over, whichever build took the hold: one built again sees the press taken)
+  c.tell("haptic/hold/" + key, fn() {
+    if held_felt.get(key) != Some(at) {
+      held_felt[key] = at
+      @ui.haptic(LongPress)
+    }
+  })
   true
+}
+
+///|
+/// A menu asked by a node's hold (presses_held_node's `held`), as menu_held's is: felt as it opens where a finger held
+/// it (the press already the hold's: lifting it opens nothing).
+pub fn menu_held_node() -> Unit {
+  if @ui.pointing() is Finger {
+    @ui.haptic(LongPress)
+  }
 }
 
 ///|
 /// The press each menu held was last felt for (menu_held), by what it is of.
 // kept across runs: let go as the app begins anew (parts_reset)
 let held_felt : Map[String, Int] = {}
-
-///|
-/// Where a menu asked of a thing on a line opens along it (`mid`: the line's middle): under the finger that held it,
-/// or, right clicked (a pointer, whose press is not the click's), at the line's middle.
-pub fn menu_along(c : @ui.Ctx, mid : Double) -> Double {
-  if pointer_rests() {
-    mid
-  } else {
-    c.press().x
-  }
-}

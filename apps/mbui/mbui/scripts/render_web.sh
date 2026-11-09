@@ -33,8 +33,14 @@ case "${1:-run}" in
     "$D/chk" lines $O/lines.png
     node scripts/render_web.mjs $S $O/shapes.dl $O/shapes.png >/dev/null
     "$D/chk" shapes $O/shapes.png
+    node scripts/render_web.mjs $S $O/contained.dl $O/contained.png >/dev/null
+    "$D/chk" contained $O/contained.png
     node scripts/render_web.mjs $S $O/partial-b.dl $O/partial.png $O/partial-a.dl
     render_partial web
+    for k in matte-fill matte-fill-reference matte-contain matte-contain-reference matte-inset matte-inset-reference; do
+      node scripts/render_web.mjs "$S" "$O/$k.dl" "$O/$k.png" >/dev/null
+    done
+    render_matte web
     md5sum $O/controls-1.png $O/controls-2.png
     if ! cmp -s $O/controls-1.png $O/controls-2.png; then
       echo "render_web: the two runs' pictures differ"

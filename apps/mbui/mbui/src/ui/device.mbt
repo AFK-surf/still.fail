@@ -49,71 +49,47 @@ fn Haptic::code(self : Haptic) -> Int {
 }
 
 ///|
-/// A haptic of `kind` (@hostapi.haptic); a Tester's host keeps it (Tester::haptics).
+/// A haptic of `kind` (@hostapi.haptic). None while the app has them off (set_haptics).
 pub fn haptic(kind : Haptic) -> Unit {
-  match fake.val {
-    Some(f) => f.dev.haptics.push(kind)
-    None => @hostapi.haptic(kind.code())
+  if !haptics_on.val {
+    return
   }
+  @hostapi.haptic(kind.code())
 }
 
 ///|
-/// The screen kept on while the app is in front (`on`), or let sleep again (@hostapi.keep_awake); a Tester's host keeps
-/// what it was last told (Tester::awake).
+/// Haptics on (the default) or off, as the app's person chose: off, `haptic` does nothing.
+pub fn set_haptics(on : Bool) -> Unit {
+  haptics_on.val = on
+}
+
+///|
+// kept across runs: the app sets it each frame from its settings (set_haptics)
+let haptics_on : Ref[Bool] = { val: true }
+
+///|
+/// The screen kept on while the app is in front (`on`), or let sleep again (@hostapi.keep_awake).
 pub fn keep_awake(on : Bool) -> Unit {
-  match fake.val {
-    Some(f) => f.dev.awake = on
-    None => @hostapi.keep_awake(on)
-  }
+  @hostapi.keep_awake(on)
 }
 
 ///|
-/// Words put on the clipboard, `label` what the system shows of where they came from (a screen's title); a Tester's
-/// host holds them (Tester::clipboard, clipboard_label).
+/// Words put on the clipboard, `label` what the system shows of where they came from (a screen's title).
 pub fn clipboard_set(text : String, label? : String = "") -> Unit {
-  match fake.val {
-    Some(f) => {
-      f.clipboard = text
-      f.dev.clip_png = None
-      f.dev.clip_label = label
-    }
-    None => @hostapi.clip_set_text(text, label)
-  }
+  @hostapi.clip_set_text(text, label)
 }
 
 ///|
-/// A picture (PNG's bytes) put on the clipboard (@hostapi.clip_set_png), in place of what it held; a Tester's host holds
-/// it (Tester::clipboard_png).
+/// A picture (PNG's bytes) put on the clipboard (@hostapi.clip_set_png), in place of what it held.
 pub fn clipboard_set_png(png : Bytes, label? : String = "") -> Unit {
-  match fake.val {
-    Some(f) => {
-      f.clipboard = ""
-      f.dev.clip_png = Some(png)
-      f.dev.clip_label = label
-    }
-    None => @hostapi.clip_set_png(png, label)
-  }
+  @hostapi.clip_set_png(png, label)
 }
-
-///|
-/// The real host's word on whether it says a copy itself, asked once (a Tester never reads it: its own is
-/// Tester::new's `copy_shown`).
-// kept across runs: the real host's (asked once); a Tester answers from its fake host
-let host_copy_shown : Ref[Int] = { val: -1 }
 
 ///|
 /// Whether the system says itself that something was put on the clipboard (Android 13 and later show it, with a
-/// preview): then the app does not say it again. Kept on the run's tape (ENV's `copy`); a Tester's is its `copy_shown`.
+/// preview): then the app does not say it again. Kept on the run's tape (ENV's `copy`).
 pub fn copy_shown() -> Bool {
-  match fake.val {
-    Some(f) => f.dev.copy_shown
-    None => {
-      if host_copy_shown.val < 0 {
-        host_copy_shown.val = if @hostapi.copy_shown() { 1 } else { 0 }
-      }
-      host_copy_shown.val == 1
-    }
-  }
+  @hostapi.copy_shown()
 }
 
 ///|
@@ -141,8 +117,7 @@ pub(all) struct Clipboard {
 ///|
 /// A read of the clipboard under way (clipboard_read), waited on (an outside ticket) until it is taken.
 pub struct ClipboardRead {
-  priv host : @hostapi.ClipRead?
-  priv fake : Int
+  priv host : @hostapi.ClipRead
   priv taken : Ref[Bool]
 }
 
@@ -178,6 +153,8 @@ priv struct FakeDevice {
 
 ///|
 fn FakeDevice::new(copy_shown : Bool) -> FakeDevice {
+  // (a test's own: on, as an app starts, whatever one before it set)
+  haptics_on.val = true
   {
     awake: false,
     haptics: [],
@@ -200,37 +177,20 @@ fn FakeDevice::new(copy_shown : Bool) -> FakeDevice {
 /// (ClipboardRead::got). None where the host cannot. Under a Tester, what the test gives (Tester::clipboard_gives…):
 /// until it does, the read is waited on (the app is not at rest).
 pub fn clipboard_read() -> ClipboardRead? {
-  match fake.val {
-    Some(f) => {
-      let ask = { frame: g().frame_no, answer: None }
-      if f.dev.held.length() > 0 {
-        ask.answer = Some((f.dev.held.remove(0), g().frame_no))
-        f.wants = true
-      }
-      f.dev.reads.push(ask)
-      let r : ClipboardRead = { host: None, fake: f.dev.reads.length() - 1, taken: Ref::new(false) }
+  match @hostapi.clip_read() {
+    Some(h) => {
+      let r : ClipboardRead = { host: h, taken: Ref::new(false) }
       outside_start(outside_clip, r.outside_id(), "the clipboard read \{r.outside_id()}")
       Some(r)
     }
-    None =>
-      match @hostapi.clip_read() {
-        Some(h) => {
-          let r : ClipboardRead = { host: Some(h), fake: -1, taken: Ref::new(false) }
-          outside_start(outside_clip, r.outside_id(), "the clipboard read \{r.outside_id()}")
-          Some(r)
-        }
-        None => None
-      }
+    None => None
   }
 }
 
 ///|
-/// Its id as the host's event names it (outside_clip), a Tester's its ask's place, from 1.
+/// Its id as the host's event names it (outside_clip; a Tester's its ask's place, from 1).
 fn ClipboardRead::outside_id(self : ClipboardRead) -> Int {
-  match self.host {
-    Some(h) => h.id()
-    None => self.fake + 1
-  }
+  self.host.id()
 }
 
 ///|
@@ -239,18 +199,7 @@ pub fn ClipboardRead::got(self : ClipboardRead) -> Clipboard? {
   if self.taken.val || !answer_here(outside_clip, self.outside_id()) {
     return None
   }
-  let got = match self.host {
-    Some(h) => h.got().map(clipboard_of)
-    None =>
-      match fake.val {
-        Some(f) if self.fake >= 0 && self.fake < f.dev.reads.length() =>
-          match f.dev.reads[self.fake].answer {
-            Some((c, at)) if g().frame_no > at => Some(c)
-            _ => None
-          }
-        _ => None
-      }
-  }
+  let got = self.host.got().map(clipboard_of)
   if got is Some(c) {
     self.taken.val = true
     answer_taken(outside_clip, self.outside_id())
@@ -436,9 +385,12 @@ pub fn Tester::keyboard_gone(self : Tester) -> Unit {
 /// The keyboard's trackpad (iOS's floating cursor) begins at (`x`, `y`), moves to (`x1`, `y1`) and is let go; the
 /// frames it causes drawn.
 pub fn Tester::ime_trackpad(self : Tester, x : Int, y : Int, x1 : Int, y1 : Int) -> Unit {
-  on_text(text_float_begin, "", x, y)
+  let u = text_float_unit.to_int()
+  on_text(text_float_begin, "", x * u, y * u)
   self.draw()
-  on_text(text_float_move, "", x1, y1)
+  on_text(text_float_move, "", x1 * u, y1 * u)
+  self.draw()
+  on_text(text_float_end, "", 0, 0)
   self.draw()
 }
 
@@ -481,36 +433,36 @@ let text_paste = 8
 
 ///|
 /// The host's text event saying the keyboard's trackpad (iOS's floating cursor: a long press on the space bar) begins,
-/// at (`a`, `b`) in the window, in points.
+/// at (`a`, `b`) in the window, in text_float_unit of a point.
 let text_float_begin = 9
 
 ///|
-/// The host's text event saying the keyboard's trackpad moved to (`a`, `b`) in the window, in points: the caret goes as
-/// far from where it was when it began as that is from where it began.
+/// The host's text event saying the keyboard's trackpad moved to (`a`, `b`) in the window, in text_float_unit of a
+/// point: the caret goes as far from where it was when it began as that is from where it began.
 let text_float_move = 10
 
 ///|
+/// The host's text event saying the keyboard's trackpad was let go: the caret stays where it went.
+let text_float_end = 11
+
+///|
+/// What the keyboard's trackpad's points are counted in (text_float_begin, text_float_move): a 64th of a point, the
+/// finger's way as finely as the host has it (whole points would step the caret it draws 3 pixels at a time).
+let text_float_unit : Double = 64.0
+
+///|
 fn h_ime_action(kind : Int) -> Unit {
-  match fake.val {
-    Some(f) => f.dev.ime_action = kind
-    None => @hostapi.ime_action(kind)
-  }
+  @hostapi.ime_action(kind)
 }
 
 ///|
 fn h_key_catch(on : Bool) -> Unit {
-  match fake.val {
-    Some(f) => f.dev.key_catch = on
-    None => @hostapi.key_catch(on)
-  }
+  @hostapi.key_catch(on)
 }
 
 ///|
 fn h_ime_inset() -> Double {
-  match fake.val {
-    Some(f) => f.dev.ime_inset
-    None => @hostapi.ime_inset()
-  }
+  @hostapi.ime_inset()
 }
 
 ///|
@@ -567,6 +519,8 @@ struct Catcher {
   /// the old view it was last built in (view_host.mbt's island_allows), none in a layer of its own: whether its focus
   /// may take input now (Ctx::focus_allowed)
   mut island : @view.NodeId?
+  /// where the input method's own windows go, in the window's points (x, y, h of a caret); none: the window's foot
+  mut place : (Double, Double, Double)?
 }
 
 ///|
@@ -574,7 +528,7 @@ fn Ctx::catcher_of(self : Ctx, id : Int) -> Catcher {
   match self.dev.catchers.get(id) {
     Some(st) => st
     None => {
-      let st = { composing: "", came: [], keys: [], frame: -1, island: None }
+      let st = { composing: "", came: [], keys: [], frame: -1, island: None, place: None }
       self.dev.catchers[id] = st
       st
     }
@@ -610,6 +564,13 @@ pub fn Ctx::catch_keys(self : Ctx, key : String, on : Bool) -> Unit {
   } else if self.focus == id {
     self.focus_on(0)
   }
+}
+
+///|
+/// Where key catcher `key` says its input goes on the window: a caret at x, y, h points tall, the input method's own
+/// windows put by it (the keys go on elsewhere; what the catcher knows of the caret there is the app's).
+pub fn Ctx::key_catcher_place(self : Ctx, key : String, x : Double, y : Double, h : Double) -> Unit {
+  self.catcher_of(self.id(key)).place = Some((x, y, h))
 }
 
 ///|

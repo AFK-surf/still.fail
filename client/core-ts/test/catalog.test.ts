@@ -42,3 +42,21 @@ test("a key is in the part its name starts with", () => {
   }
   assert.deepEqual(wrong, []);
 });
+
+test("a key is written once in its part", () => {
+  // (JSON.parse keeps a key's last value: the screen's keys row heading, 常用键, put under the key the web's box of
+  // keys sent to the screen was named by, 发给屏幕的按键, took its name from it, 2026-10-29, #2651)
+  const wrong: string[] = [];
+  for (const lang of ["zh", "en"]) {
+    for (const file of parts(lang)) {
+      const text = readFileSync(new URL(`${lang}/${file}`, CATALOG), "utf8");
+      const seen = new Set<string>();
+      for (const m of text.matchAll(/^ {2}"((?:[^"\\]|\\.)*)":/gm)) {
+        if (seen.has(m[1]!)) wrong.push(`${lang}/${file}: ${m[1]}`);
+        seen.add(m[1]!);
+      }
+      if (seen.size !== Object.keys(part(lang, file)).length) wrong.push(`${lang}/${file}: not one key a line, two spaces in`);
+    }
+  }
+  assert.deepEqual(wrong, []);
+});

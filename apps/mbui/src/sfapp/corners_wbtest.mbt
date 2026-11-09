@@ -1,4 +1,4 @@
-// The corner rule (mbui's Tester::corner_faults; still.fail's docs/ui-panels.md「所有带圆角的东西」「圆角阶梯」: what
+// The corner rule (mbui's Tester::corner_faults; mbui's ui/corners.mbt: what
 // lies in a rounded container's corner as far from both its edges and concentric with it, the corners of both the
 // ladder's) on every screen sffix opens, in the narrowest window of each layout and a wide desktop's, in both of the
 // app's languages, over the Tester's own text (the faults a screen has its own, the same on every machine). Each keeps
@@ -25,54 +25,63 @@ let corner_windows : Array[(String, Double, Double, Int, String)] = [
 ]
 
 ///|
-/// The screens: every mode sffix opens (fixture.mbt open_fixture_mode, settings/fixture.mbt fixture_page).
-let corner_modes : Array[String] = [
-  // (webdemo: the web's demo workspace, its chats' rows with people's faces, which chat's fixture has none)
-  "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "rail-menu", "landing", "landing-invited", "blocked", "place",
-  "switcher", "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
-  "chat-agent-unsaid", "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose", "chat-download", "chat-failed",
-  "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine", "chat-history-side", "chat-info", "chat-job",
-  "chat-jobs", "chat-jobs-pop", "chat-jobs-side", "chat-letters", "chat-letters-info", "chat-letters-open",
-  "chat-letters-pop", "chat-letters-side", "chat-things", "chat-things-side", "chat-info-pulls", "chat-link-menu", "chat-loading", "chat-login", "chat-long", "chat-md",
-  "chat-model-pop", "chat-need", "chat-peek", "chat-pick", "chat-preview-apk", "chat-preview-audio",
-  "chat-preview-code", "chat-preview-csv", "chat-preview-html", "chat-preview-image", "chat-preview-md",
-  "chat-preview-none", "chat-preview-pdf", "chat-preview-step", "chat-preview-swipe", "chat-preview-video",
-  "chat-publish", "chat-quote", "chat-screens", "chat-sending", "chat-service-side", "chat-station-file", "chat-station-files",
-  "chat-station-ref", "chat-station-sheet", "chat-tabs-side", "chat-update", "chat-vault-typed", "chat-viz", "chat-working", "archived",
-  "history", "history-details", "drive", "drive-roots", "drive-download", "drive-empty", "drive-loading", "drive-sub", "drive-upload",
-  "files", "files-add-folder", "files-clash", "files-columns", "files-list", "files-preview", "files-split", "files-transfers",
-  "files-tree", "place-stations", "place-profiles", "reader", "reader-bars", "reader-contents", "reader-layout", "reader-md", "newchat", "newchat-files", "newchat-lend", "share-card", "share-card-dark", "share-card-poster", "share-card-receipt", "share-card-terminal",
-  "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station", "player-audio", "player-ended",
-  "player-failed", "player-opening", "player-video", "service", "service-restart", "service-sized", "service-stopped", "share-in",
-  "share-in-files", "share-in-stations", "lock-checking", "lock-code", "lock-failed", "lock-finding", "lock-nocode",
-  "lock-none", "lock-refused", "lock-security", "lock-waiting", "lock-wrong", "screen-agent-driving",
-  "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",
-  "screen-denied", "screen-ended", "screen-failed", "screen-files-done", "screen-files-going", "screen-full",
-  "screen-full-tools", "screen-gone", "screen-live", "screen-login-fill", "screen-login-pick", "screen-not-drivable", "screen-outdated", "screen-read-only",
-  "screen-reconnecting", "screen-trackpad", "screen-trackpad-command", "settings-home", "settings-appearance",
-  "settings-me", "settings-me-reading", "settings-workspace", "settings-security", "settings-vault",
-  "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station", "settings-station-offline", "settings-station-env", "settings-station-processes",
-  "settings-station-mark", "settings-station-lower", "settings-station-versions", "settings-station-network", "settings-stations-add",
-  "settings-stations-existing", "settings-stations-command", "settings-first-station", "settings-adb", "settings-adb-unpaired", "settings-adb-pairing", "settings-adb-connected", "settings-adb-failed",
-  "settings-profiles", "settings-profiles-monthly", "settings-profile", "settings-profile-quota", "settings-profile-models",
-  "settings-profile-lower", "settings-profile-login", "settings-profile-login-failed", "settings-profile-quota-failed",
-  "settings-profile-blocked", "settings-profile-signin", "settings-profile-key", "settings-new-profile",
-  "settings-connects", "settings-connect", "settings-connect-menu", "settings-connect-mode", "settings-connect-run",
-  "settings-new-connect", "settings-new-connect-platform", "settings-new-connect-scan", "settings-new-connect-app",
-  "settings-slack-app", "settings-memory", "settings-memory-doc", "settings-usage", "settings-archive", "settings-kept",
-  "settings-kept-many", "settings-vault-off", "settings-vault-plain", "settings-vault-words", "settings-vault-add",
-  "settings-vault-editor", "settings-vault-recover", "settings-lock-prompt", "settings-add-people",
-  "settings-workspace-mark", "settings-local-fonts", "settings-policy", "settings-policy-text",
-  "settings-policy-option", "settings-security-confirm", "settings-security-join", "settings-security-off",
-  "settings-run", "settings-run-models", "settings-run-accounts", "settings-fonts", "settings-fonts-code",
-  "settings-decisions", "settings-completion", "settings-bars", "settings-about", "settings-changelog", "settings-prices",
-  "settings-notify-off", "settings-notify-denied",
-]
+/// The screens: every mode sffix opens (fixture.mbt open_fixture_mode, settings/fixture.mbt fixture_page). The other
+/// failure reasons on the player's page are checked against player-failed separately below.
+let corner_modes : Array[String] = {
+  let modes = [
+    // (webdemo: the web's demo workspace, its chats' rows with people's faces, which chat's fixture has none)
+    "webdemo", "home", "home-bars", "home-jobs", "home-sheet", "home-news", "rail-menu", "landing", "landing-invited", "blocked", "place",
+    "switcher", "switcher-found", "keys-dialog", "search", "search-jobs", "search-results", "chat", "chat-agent",
+    "chat-agent-unsaid", "chat-answering", "chat-attach", "chat-attach-row", "chat-cards", "chat-compose", "chat-download", "chat-failed",
+    "chat-file-links", "chat-find", "chat-flash", "chat-flash-mine", "chat-history-side", "chat-info", "chat-job",
+    "chat-jobs", "chat-jobs-pop", "chat-jobs-side", "chat-letters", "chat-letters-info", "chat-letters-open",
+    "chat-letters-pop", "chat-letters-side", "chat-things", "chat-things-side", "chat-info-pulls", "chat-link-menu", "chat-loading", "chat-login", "chat-long", "chat-md",
+    "chat-model-pop", "chat-model-accounts", "chat-need", "chat-peek", "chat-pick", "chat-preview-apk", "chat-preview-audio",
+    "chat-preview-code", "chat-preview-csv", "chat-preview-html", "chat-preview-image", "chat-preview-md",
+    "chat-preview-none", "chat-preview-pdf", "chat-preview-step", "chat-preview-swipe", "chat-preview-video",
+    "chat-publish", "chat-quote", "chat-screens", "chat-sending", "chat-service-side", "chat-station-file", "chat-station-files",
+    "chat-station-ref", "chat-station-sheet", "chat-tabs-side", "chat-update", "chat-vault-typed", "chat-viz", "chat-working", "archived",
+    "history", "history-details", "drive", "drive-roots", "drive-download", "drive-empty", "drive-loading", "drive-sub", "drive-upload",
+    "files", "files-add-folder", "files-clash", "files-columns", "files-list", "files-preview", "files-split", "files-transfers",
+    "files-tree", "place-stations", "place-profiles", "reader", "reader-bars", "reader-contents", "reader-layout", "reader-md", "newchat", "newchat-files", "newchat-lend", "share-card", "share-card-dark",
+    "newchat-model", "newchat-profiles", "newchat-reading", "newchat-station", "player-audio", "player-ended",
+    "player-failed", "player-opening", "player-video", "service", "service-restart", "service-sized", "service-stopped", "share-in",
+    "share-in-files", "share-in-stations", "lock-checking", "lock-code", "lock-failed", "lock-finding", "lock-nocode",
+    "lock-none", "lock-security", "lock-waiting", "lock-wrong", "screen-agent-driving",
+    "screen-agent-paused", "screen-clipboard-driving", "screen-clipboard-old-station", "screen-connecting",
+    "screen-denied", "screen-ended", "screen-failed", "screen-files-done", "screen-files-going", "screen-full",
+    "screen-full-tools", "screen-gone", "screen-live", "screen-login-fill", "screen-login-pick", "screen-not-drivable", "screen-outdated", "screen-read-only",
+    "screen-reconnecting", "screen-trackpad", "screen-trackpad-command", "settings-home", "settings-appearance",
+    "settings-me", "settings-me-reading", "settings-workspace", "settings-security", "settings-vault",
+    "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station", "settings-station-offline", "settings-station-env", "settings-station-processes",
+    "settings-station-mark", "settings-station-lower", "settings-station-versions", "settings-station-network", "settings-stations-add",
+    "settings-stations-existing", "settings-stations-command", "settings-first-station", "settings-adb", "settings-adb-unpaired", "settings-adb-pairing", "settings-adb-connected", "settings-adb-failed", "settings-adb-chats", "settings-adb-chats-long",
+    "settings-profiles", "settings-profiles-monthly", "settings-profile", "settings-profile-quota",
+    "settings-profile-lower", "settings-profile-login", "settings-profile-login-failed", "settings-profile-quota-failed",
+    "settings-profile-blocked", "settings-profile-signin", "settings-profile-key", "settings-new-profile",
+    "settings-connects", "settings-connect", "settings-connect-menu", "settings-connect-mode", "settings-connect-run",
+    "settings-new-connect", "settings-new-connect-platform", "settings-new-connect-scan", "settings-new-connect-app",
+    "settings-slack-app", "settings-memory", "settings-memory-doc", "settings-usage", "settings-archive", "settings-kept",
+    "settings-kept-many", "settings-vault-off", "settings-vault-plain", "settings-vault-words", "settings-vault-add",
+    "settings-vault-editor", "settings-vault-recover", "settings-lock-prompt", "settings-add-people",
+    "settings-workspace-mark", "settings-local-fonts", "settings-policy", "settings-policy-text",
+    "settings-policy-option", "settings-security-join", "settings-security-off",
+    "settings-run", "settings-run-models", "settings-run-accounts", "settings-fonts", "settings-fonts-code",
+    "settings-decisions", "settings-completion", "settings-bars", "settings-about", "settings-changelog", "settings-prices",
+    "settings-notify-off", "settings-notify-denied",
+  ]
+  // (and the card to share in each of its other looks: share_looks.mbt)
+  for k in @sfpages.share_look_keys()[1:] {
+    modes.push("share-card-" + k)
+  }
+  modes
+}
 
 ///|
-/// `lang`'s screens in every window, each against its bars: the corners' and, the squeeze's ones, the squeeze's; or
-/// (`press_room`, Chinese) a press's room and the light theme's contrast instead. Apart, a sweep each: the two together were
-/// one test of 92 s alone on CI against English's 49, the longest of the app part's runs on four runners (2026-10-27).
+/// `lang`'s screens in every window, each against its bars: the corners' and, the squeeze's ones, the squeeze's; and
+/// (`press_room`, Chinese) a press's room and the light theme's contrast too, on the same screen opened once. (Apart, a
+/// sweep each, Chinese's screens were opened twice: of a sweep's 1939 screens, opening them was some seven tenths of
+/// its time, the checks the rest, none of them long (27 ms each at the median, 0.3 s the longest), 2026-11-05.)
 fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
   let wrong : Array[String] = []
   let gaps : Array[String] = []
@@ -96,7 +105,6 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
           Some(w) => wrong.push(w)
           None => ()
         }
-        continue
       }
       let faults = t.corner_faults()
       for f in t.gap_faults() {
@@ -139,10 +147,6 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
       Some(w) => wrong.push(w)
       None => ()
     }
-    if wrong.length() > 0 {
-      fail(wrong.join("\n"))
-    }
-    return
   }
   match gaps_wrong(lang, gaps) {
     Some(w) => wrong.push(w)
@@ -162,8 +166,8 @@ fn corners_check(lang : String, press_room~ : Bool = false) -> Unit raise {
 }
 
 ///|
-test "corners and squeeze: every screen in every window keeps the corner rule and fits, in Chinese" {
-  corners_check("zh")
+test "corners and squeeze, a press's room and the light theme's contrast: every screen in every window, in Chinese" {
+  corners_check("zh", press_room=true)
 }
 
 ///|
@@ -172,6 +176,41 @@ test "corners and squeeze: every screen in every window keeps the corner rule an
 }
 
 ///|
-test "a press's room and the light theme's contrast: every screen in every window, in Chinese" {
-  corners_check("zh", press_room=true)
+/// A fault's node numbers differ when a player card has no button. The boxes and what they hold must still match.
+fn gap_without_nodes(s : String) -> String {
+  let mut rest = s
+  let mut out = ""
+  while rest.find(", node ") is Some(i) {
+    let after = rest.view(start_offset=i + 7)
+    guard after.find(")") is Some(j) else { return out + rest }
+    out = out + rest.view(end_offset=i).to_owned() + ")"
+    rest = after.view(start_offset=j + 1).to_owned()
+  }
+  out + rest
+}
+
+///|
+test "each player failure reason fits without adding a spacing or corner fault" {
+  for win in corner_windows {
+    for lang in ["zh", "en"] {
+      // The player's existing header has a known gap fault on a small screen. These are states of that same page,
+      // so compare their actual faults with it rather than counting that same fault once per message.
+      // (and its corners with it: the player-failed screen's own, known to corners_everywhere_known, the rail's on the
+      // tape)
+      let failed = screen_in("player-failed", win, lang)
+      let baseline = failed.gap_faults().map(gap_without_nodes)
+      let corners = failed.corner_faults().map(gap_without_nodes)
+      let lit = failed.lit_all_faults().map(gap_without_nodes)
+      for mode in ["player-damaged", "player-unplayable", "player-unsupported"] {
+        let t = screen_in(mode, win, lang)
+        let at = "\{win.0}-\{lang} \{mode}"
+        assert_eq(t.gap_faults().map(gap_without_nodes), baseline, msg=at)
+        assert_eq(t.corner_faults().map(gap_without_nodes), corners, msg=at)
+        assert_eq(t.lit_all_faults().map(gap_without_nodes), lit, msg=at)
+        if squeeze_windows.contains(win.0) {
+          assert_true(t.squeeze_faults().is_empty(), msg=at)
+        }
+      }
+    }
+  }
 }

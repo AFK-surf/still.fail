@@ -1,4 +1,4 @@
-// Corners linked (docs/style.md「Corners linked」): a corner says where its radius comes from, not a number worked out
+// Corners linked: a corner says where its radius comes from, not a number worked out
 // in each place that needs it. The roots are the window's corner, as the system draws it (@hostapi.window_corner: 0 for
 // a square window, one maximized or filling the screen), and numbers of one's own (a theme's ladder); every other corner
 // follows another, `inset` in from its edges: concentric with it where the theme's ranges let a corner be so round and
@@ -21,8 +21,7 @@ pub(all) enum CornerOf {
 } derive(Eq, Show, Debug)
 
 ///|
-/// What lies in a rounded container's corner and what the corner rule may make of it to be concentric with it (still.fail's
-/// docs/ui-panels.md 圆角阶梯, 适应范围): its corner `least` at least and `most` at most, standing `near` to `far` from
+/// What lies in a rounded container's corner and what the corner rule may make of it to be concentric with it : its corner `least` at least and `most` at most, standing `near` to `far` from
 /// the container's edges. The outermost container is the window, its corner the system's (@hostapi.window_corner: a
 /// Mac's 16, Windows 11's 8, square full screen): where none of these makes a thing concentric with what it lies in
 /// (the container too square for it, or too round: a window's 8, a phone's screen), it stands as it would alone, its
@@ -93,13 +92,12 @@ pub fn CornerOf::source(self : CornerOf, at : CornerRoots) -> Double? {
 }
 
 ///|
-/// Where a capsule or a circle `height` high stands in it to be concentric with it (its radius as a circle reads it,
-/// less the capsule's half: smooth.mbt round_like, a panel's wholly smooth, the window's as round as the system draws
-/// it), where the theme's ranges let it stand there; None where they do not (it too square for the capsule, or too
+/// Where a capsule or a circle `height` high stands in it to be concentric with it (its radius less the capsule's half:
+/// capsule_in), where the theme's ranges let it stand there; None where they do not (it too square for the capsule, or too
 /// round).
 pub fn CornerOf::capsule_at(self : CornerOf, height : Double, at : CornerRoots) -> Double? {
   let r = self.radius(at)
-  let d = (if self is Window { r } else { round_like(r) }) - height / 2.0
+  let d = capsule_in(r, height)
   if place_fit_ok(at.fit, d) {
     Some(d)
   } else {
@@ -110,10 +108,12 @@ pub fn CornerOf::capsule_at(self : CornerOf, height : Double, at : CornerRoots) 
 ///|
 /// Whether a corner `k` round, `d` in from what it follows, is one ranges `fit` let it have (any where there are none).
 /// A window does not zoom with its contents: for its linked corners, the smallest visible radius is judged after the
-/// content zoom, so an enlarged but still visibly round corner does not suddenly fall back to its unrelated own radius.
+/// content zoom, so an enlarged but still visibly round corner does not suddenly fall back to its unrelated own radius
+/// (worked out there, the window's less how far in that stands, both as drawn: a Mac's 16 at 1.75, 6 in, 5.5, not
+/// 5.4999… out of a corner taken apart by the zoom and put back).
 fn corner_fit_ok(fit : CornerFit?, k : Double, d : Double, zoom : Double) -> Bool {
   match fit {
-    Some(f) => k * zoom >= f.least - 0.5 && k <= f.most + 0.5 && d >= f.near - 0.5 && d <= f.far + 0.5
+    Some(f) => (k * zoom * 1.0e6).round() / 1.0e6 >= f.least - 0.5 && k <= f.most + 0.5 && d >= f.near - 0.5 && d <= f.far + 0.5
     None => k >= 0.0
   }
 }

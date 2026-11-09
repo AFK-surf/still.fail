@@ -49,10 +49,7 @@ pub fn Stream::pointer_image(
     return
   }
   told.key = key_at_zoom
-  match fake.val {
-    Some(f) => fake_fed(f, self.id, "pointer \{key} \{w}x\{h} hot=\{hx},\{hy}")
-    None => @hostapi.stream_pointer(self.id, png(), w * z, h * z, hx * z, hy * z)
-  }
+  @hostapi.stream_pointer(self.id, key, png, w * z, h * z, hx * z, hy * z)
 }
 
 ///|
@@ -67,17 +64,9 @@ pub fn Stream::pointer_at(self : Stream, at : (Double, Double)?) -> Unit {
     return
   }
   told.at = at
-  match fake.val {
-    Some(f) =>
-      fake_fed(f, self.id, match at {
-        Some((x, y)) => "pointer at \{x} \{y}"
-        None => "pointer none"
-      })
-    None =>
-      match at {
-        Some((x, y)) => @hostapi.stream_pointer_at(self.id, x, y, true)
-        None => @hostapi.stream_pointer_at(self.id, 0.0, 0.0, false)
-      }
+  match at {
+    Some((x, y)) => @hostapi.stream_pointer_at(self.id, x, y, true)
+    None => @hostapi.stream_pointer_at(self.id, 0.0, 0.0, false)
   }
 }
 

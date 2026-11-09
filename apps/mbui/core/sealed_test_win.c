@@ -1,5 +1,5 @@
 // src/host/win_electron_sealed.h: what still.fail's desktop app kept sealed on Windows, opened by the app built in its
-// place. Built and run by `scripts/win.sh sealed` (mbui.yml's windows job). A userData made here as Electron's
+// place. Built and run by `scripts/win.sh sealed` (preview.yml's windows job). A userData made here as Electron's
 // safeStorage leaves one (its key sealed by DPAPI in Local State as os_crypt.encrypted_key, a value sealed by it in
 // sealed\<its name>: "SFS1", the user byte, "v10", the nonce, AES-256-GCM's text and tag of "<user>:<base64url>"); exit 0
 // when the value comes back, one kept with the other `user` and a key that is not there are none, and a file whose tag

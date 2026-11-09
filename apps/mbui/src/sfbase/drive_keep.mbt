@@ -6,15 +6,15 @@
 // 正在下载「名字」 as it starts, 已保存到「下载」 or 下载失败 once the host has answered, 无法获取「名字」：… when the
 // station could not give it. A folder is zipped on the station first (`drive.zip`: where the zip is, read as any file
 // of the drive). Several chosen are fetched side by side, each said. The chat's preview keeps its file the same
-// way (preview.mbt).
+// way.
 
 ///|
-/// The part of a file read at most (Calls.kt DRIVE_PART).
+/// The part of a file read at most.
 pub let drive_part : Int = 4 * 1024 * 1024
 
 ///|
 /// A drive's files being fetched to keep or hand to another app: how far each has come (0–100), by dv_fetch_key
-/// (DriveScreen.kt DriveFetches).
+/// .
 pub let dv_fetches : @sf.LiveMap[String, Int] = @sf.LiveMap::new()
 
 ///|
@@ -199,7 +199,7 @@ pub fn drive_fetch(
 }
 
 ///|
-/// A drive's file downloaded to the device (DriveScreen.kt saveToDownloads): asked of the core (downloads.mbt), which
+/// A drive's file downloaded to the device: asked of the core (downloads.mbt), which
 /// fetches it whatever becomes of the page, how far on its row, kept once all of it is here. `listed`: the file as
 /// its folder lists it (its mtime, its size), what is fetched kept in the core as that.
 pub fn download_drive_file(
@@ -222,7 +222,7 @@ pub fn download_drive_file(
 }
 
 ///|
-/// Several files downloaded, each at once and each said (DriveScreen.kt: a saveToDownloads each).
+/// Several files downloaded, each at once and each said.
 pub fn download_drive_files(
   c : @ui.Ctx,
   src : Source,
@@ -237,7 +237,7 @@ pub fn download_drive_files(
 }
 
 ///|
-/// A folder zipped on the station and downloaded (DriveScreen.kt saveZip): asked of the core, which has the station zip
+/// A folder zipped on the station and downloaded: asked of the core, which has the station zip
 /// it (`drive.zip`) and fetches the zip as any file; the folder's row shows how far meanwhile (正在打包 while the
 /// station zips it).
 pub fn download_drive_zip(c : @ui.Ctx, src : Source, station : String, root : String, path : String) -> Unit {

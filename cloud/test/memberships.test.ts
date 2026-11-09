@@ -1,4 +1,4 @@
-// One station in several workspaces (docs/multi-workspace.md): `stations` keeps the machine, `station_members` each
+// One station in several workspaces: `stations` keeps the machine, `station_members` each
 // workspace it is in. Enrolling moves a station as it always did; joining (/v1/stations/join) adds a workspace. Its
 // state says its home (the workspace it joined first) at the top, as before, and the others in `workspaces`.
 import assert from "node:assert/strict";
@@ -86,7 +86,7 @@ test("stations kept one row each, as before, are split into the machine and its 
     const alice = h.as(await h.login("alice"));
     const home = await create(alice, "Home");
     const x = await key(), y = await key();
-    assert.equal((await enroll(h, x, await token(alice, home, "studio"))).status, 200);
+    assert.equal((await enroll(h, x, await token(alice, home, "willow"))).status, 200);
     assert.equal((await enroll(h, y, await token(alice, home, "nas"))).status, 200);
     assert.equal((await alice("PATCH", `/v1/workspaces/${home}/stations/${x.id}`, { emoji: "🚀", icon: "glyph:rocket" })).status, 200);
     const before = await view(alice, home);
@@ -101,12 +101,12 @@ test("stations kept one row each, as before, are split into the machine and its 
     assert.equal(await count(alice, home), 2);
     const sx = await connect(h, x);
     const state = await sx.state();
-    assert.deepEqual([state.workspace, state.workspace_name, state.name, state.workspaces], [home, "Home", "studio", []]);
-    assert.deepEqual(state.peers.map((p: any) => [p.id, p.name, p.version]), [[x.id, "studio", "0.5.0"], [y.id, "nas", "0.5.0"]]);
+    assert.deepEqual([state.workspace, state.workspace_name, state.name, state.workspaces], [home, "Home", "willow", []]);
+    assert.deepEqual(state.peers.map((p: any) => [p.id, p.name, p.version]), [[x.id, "willow", "0.5.0"], [y.id, "nas", "0.5.0"]]);
 
     // Older still: a table from before emojis and icons.
     assert.deepEqual(await (await directory(h)).unsplitStations(false), ["id", "last_seen", "version"]);
-    assert.deepEqual((await view(alice, home)).stations.map((s: any) => [s.id, s.name, s.emoji, s.icon]), [[x.id, "studio", null, null], [y.id, "nas", null, null]]);
+    assert.deepEqual((await view(alice, home)).stations.map((s: any) => [s.id, s.name, s.emoji, s.icon]), [[x.id, "willow", null, null], [y.id, "nas", null, null]]);
     // And it goes on as any: removed, it is let go.
     assert.equal((await alice("DELETE", `/v1/workspaces/${home}/stations/${x.id}`)).status, 200);
     assert.equal(await sx.closed, 4004);
@@ -129,14 +129,14 @@ test("a station joins a second workspace: named there; its home's at the top of 
 
     // Enrolled as stations always were: in one workspace, its home.
     const x = await key(), y = await key();
-    const first = await enroll(h, x, await token(alice, home, "studio"));
+    const first = await enroll(h, x, await token(alice, home, "willow"));
     assert.equal(first.status, 200);
-    assert.deepEqual([first.body.workspace, first.body.workspace_name, first.body.name, first.body.home], [home, "Home", "studio", home]);
+    assert.deepEqual([first.body.workspace, first.body.workspace_name, first.body.name, first.body.home], [home, "Home", "willow", home]);
     assert.equal((await enroll(h, y, await token(alice, home, "nas"))).status, 200);
     const sx = await connect(h, x);
     const sy = await connect(h, y);
     const alone = await sx.state();
-    assert.deepEqual([alone.workspace, alone.workspace_name, alone.name, alone.workspaces], [home, "Home", "studio", []], "`workspaces` always, empty in one");
+    assert.deepEqual([alone.workspace, alone.workspace_name, alone.name, alone.workspaces], [home, "Home", "willow", []], "`workspaces` always, empty in one");
     assert.deepEqual(alone.relay_urls, [h.origin, "https://relay-a.example"]);
 
     // Joins the lab: in both now, named there as the lab named it; its home stays.
@@ -144,20 +144,20 @@ test("a station joins a second workspace: named there; its home's at the top of 
     assert.equal(joined.status, 200);
     assert.deepEqual([joined.body.workspace, joined.body.workspace_name, joined.body.name, joined.body.home], [lab, "Lab", "lab box", home]);
     const both = await sx.state();
-    assert.deepEqual([both.workspace, both.workspace_name, both.name, both.lock], [home, "Home", "studio", null], "the home's at the top, as before");
+    assert.deepEqual([both.workspace, both.workspace_name, both.name, both.lock], [home, "Home", "willow", null], "the home's at the top, as before");
     assert.deepEqual(both.peers.map((p: any) => p.id), [x.id, y.id]);
     assert.deepEqual(both.workspaces, [{ workspace: lab, workspace_name: "Lab", name: "lab box", peers: [{ id: x.id, name: "lab box", version: "0.5.0" }], revocations: [], lock: null }]);
     assert.deepEqual(both.relay_urls, [h.origin, "https://relay-a.example", "https://relay-b.example"], "every workspace's relays, each once");
     assert.equal((await sy.state())?.workspaces.length ?? 0, 0, "the home's other station hears nothing of the lab");
 
     // Each workspace lists it under its own name; the lab's says it is joined there.
-    assert.deepEqual((await view(alice, home)).stations.map((s: any) => [s.id, s.name, s.joined]), [[x.id, "studio", undefined], [y.id, "nas", undefined]]);
+    assert.deepEqual((await view(alice, home)).stations.map((s: any) => [s.id, s.name, s.joined]), [[x.id, "willow", undefined], [y.id, "nas", undefined]]);
     assert.deepEqual((await view(bob, lab)).stations.map((s: any) => [s.id, s.name, s.joined]), [[x.id, "lab box", true]]);
     assert.deepEqual([await count(bob, home), await count(bob, lab)], [2, 1]);
     // Renamed and marked in one, it stays as it is in the other.
     assert.equal((await bob("PATCH", `/v1/workspaces/${lab}/stations/${x.id}`, { name: "bench", emoji: "🔬" })).status, 200);
     const renamed = await sx.state();
-    assert.deepEqual([renamed.name, renamed.workspaces[0].name], ["studio", "bench"]);
+    assert.deepEqual([renamed.name, renamed.workspaces[0].name], ["willow", "bench"]);
     assert.equal((await view(alice, home)).stations[0].emoji, null);
     // Joining where it is already: only the name.
     const again = await enroll(h, x, await token(bob, lab, "bench 2"), true);
@@ -183,7 +183,7 @@ test("a station joins a second workspace: named there; its home's at the top of 
   }
 });
 
-test("joining a free workspace has no station limit; an explicit limit is the joined workspace's", async () => {
+test("joining and leaving workspaces keeps their memberships; an old custom station limit cannot lower the fixed cap", async () => {
   const h = await harness();
   try {
     const alice = h.as(await h.login("alice"));
@@ -192,7 +192,7 @@ test("joining a free workspace has no station limit; an explicit limit is the jo
     // Bob's is on the free plan.
     const lab = await create(bob, "Lab");
     const x = await key(), y = await key(), z = await key(), extra = await key();
-    assert.equal((await enroll(h, x, await token(alice, home, "studio"))).status, 200);
+    assert.equal((await enroll(h, x, await token(alice, home, "willow"))).status, 200);
     assert.equal((await enroll(h, y, await token(alice, home, "nas"))).status, 200);
     const late = await token(bob, lab, "late");
     const extraToken = await token(bob, lab, "extra");
@@ -201,9 +201,12 @@ test("joining a free workspace has no station limit; an explicit limit is the jo
     assert.equal((await enroll(h, y, late, true)).status, 200, "a third station can join the free workspace");
     const admin = h.as(await h.login("alice"), "admin");
     assert.equal((await admin("POST", `/v1/admin/workspaces/${lab}/limits`, { members: 1, stations: 3 })).status, 200);
-    // An explicit workspace limit still applies when a token is redeemed and when one is requested.
-    assert.deepEqual(Object.values(await enroll(h, extra, extraToken, true)), [429, { error: "too_many_stations" }]);
-    assert.equal((await bob("POST", `/v1/workspaces/${lab}/enrollments`, { name: "more" })).status, 429);
+    const namespace: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
+    const directory = namespace.get(namespace.idFromName("primary")) as { legacyStationLimit(workspace: string, limit: number): Promise<void> };
+    await directory.legacyStationLimit(lab, 3);
+    // An old custom cap of 3 no longer prevents another station joining.
+    assert.equal((await enroll(h, extra, extraToken, true)).status, 200);
+    assert.equal((await bob("DELETE", `/v1/workspaces/${lab}/stations/${extra.id}`)).status, 200);
     assert.deepEqual([await count(alice, home), await count(bob, lab)], [2, 3]);
 
     // Taken out of its home, it stays in the lab, its home now (at the top of its state, no longer `joined` there).
@@ -310,7 +313,7 @@ test("notices and reports are of the workspace the station names, one it is in; 
     const lab = await create(bob, "Lab");
     const other = await create(alice, "Other");
     const x = await key();
-    assert.equal((await enroll(h, x, await token(alice, home, "studio"))).status, 200);
+    assert.equal((await enroll(h, x, await token(alice, home, "willow"))).status, 200);
     assert.equal((await enroll(h, x, await token(bob, lab, "lab box"), true)).status, 200);
     for (const [tokens, device] of [[aliceTokens, "alice-token"], [bobTokens, "bob-token"]] as const) {
       assert.equal((await h.fetch("/v1/push", { method: "POST", headers: { authorization: `Bearer ${tokens.access_token}`, "content-type": "application/json" }, body: JSON.stringify({ kind: "fcm", token: device }) })).status, 204);
@@ -334,7 +337,7 @@ test("notices and reports are of the workspace the station names, one it is in; 
     assert.equal((await report("k2", lab)).status, 201);
     assert.equal((await report("k3", other)).status, 403);
     const listed = ((await (await h.as(aliceTokens, "admin")("GET", "/v1/admin/feedback")).json()) as any).feedback;
-    assert.deepEqual(listed.map((f: any) => [f.number, f.workspace?.id, f.station?.name]), [[2, lab, "lab box"], [1, home, "studio"]]);
+    assert.deepEqual(listed.map((f: any) => [f.number, f.workspace?.id, f.station?.name]), [[2, lab, "lab box"], [1, home, "willow"]]);
   } finally {
     await h.close();
   }

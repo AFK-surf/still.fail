@@ -3,8 +3,8 @@
 // reads are never answered: the player waits, as on a slow link, the same on every run), a song (its reads the same,
 // how its player stands pinned), a page of HTML, code,
 // Markdown, a table, and a file of no kind that can be shown; a second picture beside the first (the `imageNear` view:
-// chat-preview-step with the ways to it, chat-preview-swipe halfway to it under a finger). Its bytes are made here;
-// none is a real document.
+// chat-preview-step with the ways to it, chat-preview-swipe halfway to it under a finger, chat-preview-swipe-wide as
+// far on a wide window). Its bytes are made here; none is a real document.
 
 ///|
 /// The made-up files, by the name the preview fetches them by: the file as a message has it, and its bytes.
@@ -16,11 +16,15 @@ pub fn preview_files() -> Array[(Attachment, () -> Bytes)] {
     (at("界面草图.png", 18000.0, 600.0, 400.0), fn() { fixture_png(600, 400) }),
     (at("首页改版第三轮评审定稿前的对照截图（含深色与浅色两套）.png", 18000.0, 600.0, 400.0), fn() { fixture_png(600, 400) }),
     (at("第二版.png", 21000.0, 400.0, 560.0), fn() { fixture_png(400, 560) }),
+    // 界面草图.png mirrored, before it (fixture_image_near): one stepped from as big as the one stepped to, another
+    // picture
+    (at("对照草图.png", 18000.0, 600.0, 400.0), fn() { fixture_png(600, 400, mirrored=true) }),
     // the chat's own picture (chat_fixture.mbt rich_chat), opened from its thumbnail there: the same picture
     (at("compare.png", 402000.0, 1600.0, 900.0), fn() { fixture_file_png("compare.png") }),
     (at("设计说明.pdf", 2400.0, 0.0, 0.0), fn() { fixture_pdf() }),
     // what its message says of it, as the station read it from its header: 12.5 s, 375 frames
     ({ ..at("演示录屏.mp4", 5242880.0, 1280.0, 720.0), duration: 12500.0, frames: 375 }, fn() { b"" }),
+    ({ ..at("演示录屏.webm", 5242880.0, 1280.0, 720.0), duration: 12500.0, frames: 375 }, fn() { b"" }),
     (at("会议录音.m4a", 1489000.0, 0.0, 0.0), fn() { b"" }),
     (at("报告.html", 900.0, 0.0, 0.0), fn() { @utf8.encode(fixture_html) }),
     // the chat's visualization (chat_fixture.mbt MBUI_FIXTURE=chat-viz)
@@ -36,24 +40,29 @@ pub fn preview_files() -> Array[(Attachment, () -> Bytes)] {
 }
 
 ///|
-/// A picture coming, never whole (MBUI_FIXTURE=chat-preview-coming, -coming-part): its name, and what the core says of
+/// A file coming, never whole (MBUI_FIXTURE=chat-preview-coming, -coming-part, -apk-reading): its name, and what the core says of
 /// how much has come of it, once, as it is asked for (None: nothing); none coming (None): every file whole at once.
 pub let preview_coming : Ref[(String, Json?)?] = Ref(None)
+
+///|
+/// A picture whose bytes are no picture (MBUI_FIXTURE=chat-preview-broken): its name; none (None), each file's own.
+pub let preview_broken : Ref[String?] = Ref(None)
 
 ///|
 /// MBUI_FIXTURE=chat-preview-<what>: which file opens.
 pub fn fixture_preview(mode : String) -> Unit {
   let which = match mode {
-    "chat-preview-image" | "chat-preview-step" | "chat-preview-swipe" | "chat-preview-coming" | "chat-preview-coming-part" => "界面草图.png"
+    "chat-preview-image" | "chat-preview-step" | "chat-preview-swipe" | "chat-preview-swipe-wide" | "chat-preview-coming" | "chat-preview-coming-part" | "chat-preview-broken" => "界面草图.png"
     "chat-preview-pdf" => "设计说明.pdf"
     "chat-preview-video" => "演示录屏.mp4"
+    "chat-preview-webm" | "chat-preview-webm-unsupported" => "演示录屏.webm"
     "chat-preview-audio" => "会议录音.m4a"
     "chat-preview-html" => "报告.html"
     "chat-preview-code" => "list.ts"
     "chat-preview-md" => "说明.md"
     "chat-preview-csv" => "数据.csv"
     "chat-preview-none" => "备份.bin"
-    "chat-preview-apk" => "测试版.apk"
+    "chat-preview-apk" | "chat-preview-apk-reading" => "测试版.apk"
     // (a picture whose name is far longer than a phone's bar has room for: the name cut short, the tools whole)
     "chat-preview-long" => "首页改版第三轮评审定稿前的对照截图（含深色与浅色两套）.png"
     _ => return
@@ -64,15 +73,30 @@ pub fn fixture_preview(mode : String) -> Unit {
       preview_coming.val = match mode {
         "chat-preview-coming" => Some((which, None))
         "chat-preview-coming-part" => Some((which, Some({ "loaded": 6000.0, "total": 18000.0 })))
+        // (an APK asked to 安装, read as far as 25.7 MB of 40.9 MB)
+        "chat-preview-apk-reading" => Some((which, Some({ "loaded": 26948403.0, "total": 42886758.0 })))
         _ => None
       }
-      open_preview("ws1/st1", "s-c1", f.0, steps=if mode == "chat-preview-image" || mode.has_prefix("chat-preview-coming") {
+      // (its bytes read whole, no picture in them: the host says it cannot decode them)
+      preview_broken.val = if mode == "chat-preview-broken" { Some(which) } else { None }
+      open_preview("ws1/st1", "s-c1", f.0, steps=if mode == "chat-preview-image" || mode.has_prefix("chat-preview-coming") || mode == "chat-preview-broken" {
         NoSteps
       } else {
         InChat(Some(1.0), "s-c1")
       })
-      if mode == "chat-preview-swipe" {
-        pv_strip.pinned = Some(-150.0)
+      // (halfway to the next on a phone; on a wide window as far, the next come in: the strip put there, held there
+      // where an old view draws it, which puts it where it is pinned as it is built)
+      let aside = match mode {
+        "chat-preview-swipe" => Some(-150.0)
+        "chat-preview-swipe-wide" => Some(-700.0)
+        _ => None
+      }
+      match aside {
+        Some(x) => {
+          pv_strip.pinned = Some(x)
+          pv_strip.way.put(x)
+        }
+        None => ()
       }
       if viewer.get() is Some(v) {
         // the song paused at 0:31 of 1:35, the same on every run
@@ -82,6 +106,19 @@ pub fn fixture_preview(mode : String) -> Unit {
             duration: 95000.0,
             position: 31000.0,
             buffered: 95000.0,
+            playing: false,
+            buffering: false,
+            ended: false,
+            width: 0.0,
+            height: 0.0,
+          })
+        }
+        if mode == "chat-preview-webm-unsupported" {
+          v.pinned = Some({
+            state: -2,
+            duration: -1.0,
+            position: 0.0,
+            buffered: 0.0,
             playing: false,
             buffering: false,
             ended: false,
@@ -116,7 +153,7 @@ pub fn fixture_fetch(
   let mut found : Bytes? = None
   for f in preview_files() {
     if base_name(f.0.path) == file {
-      found = Some((f.1)())
+      found = Some(if preview_broken.val == Some(file) { Bytes::makei(18000, fn(i) { (i % 11).to_byte() }) } else { (f.1)() })
     }
   }
   let bytes = match found {
@@ -129,7 +166,7 @@ pub fn fixture_fetch(
   match name {
     "station.file" => done(Ok(({ "type": "" }, bytes)))
     "station.file.part" => {
-      if @sf.lower(file).has_suffix(".mp4") || @sf.lower(file).has_suffix(".m4a") {
+      if @sf.lower(file).has_suffix(".mp4") || @sf.lower(file).has_suffix(".webm") || @sf.lower(file).has_suffix(".m4a") {
         // the player waits on the network
         return
       }
@@ -171,8 +208,24 @@ pub fn fixture_named(path : String, p : Json?, done : (Result[(Json, Bytes), Jso
 }
 
 ///|
-/// The long log: 12000 lines, each saying which it is (and some Chinese, cut across parts' ends).
+// kept across runs: the log and the PDF as made once, the same bytes whoever asks (each is made of nothing else)
+let fixture_made : Map[String, Bytes] = {}
+
+///|
+/// The long log: 12000 lines, each saying which it is (and some Chinese, cut across parts' ends). Made once: it is read
+/// a part at a time, the whole of it asked for each part.
 pub fn fixture_log() -> Bytes {
+  match fixture_made.get("log") {
+    Some(b) => return b
+    None => ()
+  }
+  let b = fixture_log_made()
+  fixture_made["log"] = b
+  b
+}
+
+///|
+fn fixture_log_made() -> Bytes {
   let sb = StringBuilder()
   for i in 1..=12000 {
     sb.write_string("[build] 第 \{i} 行：编译 src/module_\{i % 97}.mbt 完成，用时 \{i % 13} ms\n")
@@ -181,13 +234,31 @@ pub fn fixture_log() -> Bytes {
 }
 
 ///|
-/// A picture of its own: a soft gradient with a few shapes on it, as a sketch of a screen.
-pub fn fixture_png(w : Int, h : Int) -> Bytes {
+// kept across runs: each picture as made once, the same bytes whoever asks (a picture is its size and side alone)
+let fixture_pngs : Map[(Int, Int, Bool), Bytes] = {}
+
+///|
+/// A picture of its own: a soft gradient with a few shapes on it, as a sketch of a screen. Made once for each size and
+/// side: every preview test opens these, and encoding one is a quarter-million pixels drawn and compressed again.
+pub fn fixture_png(w : Int, h : Int, mirrored? : Bool = false) -> Bytes {
+  match fixture_pngs.get((w, h, mirrored)) {
+    Some(b) => return b
+    None => ()
+  }
+  let b = fixture_png_made(w, h, mirrored)
+  fixture_pngs[(w, h, mirrored)] = b
+  b
+}
+
+///|
+fn fixture_png_made(w : Int, h : Int, mirrored : Bool) -> Bytes {
   let rgba = FixedArray::make(w * h * 4, b'\x00')
   for y in 0..<h {
-    for x in 0..<w {
+    for at in 0..<w {
+      // (mirrored: the same picture, its card and button on the other side)
+      let x = if mirrored { w - 1 - at } else { at }
       let k = (x + y).to_double() / (w + h - 2).to_double()
-      let i = (y * w + x) * 4
+      let i = (y * w + at) * 4
       let mut r = 245.0 + (91.0 - 245.0) * k
       let mut g = 243.0 + (123.0 - 243.0) * k
       let mut b = 239.0 + (178.0 - 239.0) * k
@@ -219,8 +290,20 @@ pub fn fixture_png(w : Int, h : Int) -> Bytes {
 }
 
 ///|
-/// A PDF of two pages (US Letter), shapes and a few lines in Helvetica, its cross-reference table counted exactly.
+/// A PDF of two pages (US Letter), shapes and a few lines in Helvetica, its cross-reference table counted exactly. Made
+/// once, as the log is.
 pub fn fixture_pdf() -> Bytes {
+  match fixture_made.get("pdf") {
+    Some(b) => return b
+    None => ()
+  }
+  let b = fixture_pdf_made()
+  fixture_made["pdf"] = b
+  b
+}
+
+///|
+fn fixture_pdf_made() -> Bytes {
   let page1 =
     #|0.898 0.439 0.290 rg 56 680 500 56 re f
     #|BT /F1 28 Tf 1 1 1 rg 72 700 Td (Design notes) Tj ET
@@ -317,7 +400,8 @@ pub let fixture_csv : String =
   #|"设置, 外观",web,0.66,否
 
 ///|
-/// The `imageNear` view of the made-up chat: 界面草图.png has 第二版.png after it, the first of the two.
+/// The `imageNear` view of the made-up chat: 界面草图.png has 第二版.png after it, the first of the two; 对照草图.png (no
+/// message of the chat's) has 界面草图.png after it, as big as it.
 pub fn fixture_image_near(params : Map[String, Json]) -> Json? {
   match params.get("path") {
     Some(String("uploads/fx/界面草图.png")) =>
@@ -338,6 +422,20 @@ pub fn fixture_image_near(params : Map[String, Json]) -> Json? {
         "index": 1,
         "count": 2,
         "before": {
+          "name": "界面草图.png",
+          "path": "uploads/fx/界面草图.png",
+          "size": 18000,
+          "width": 600,
+          "height": 400,
+          "owner": "s-c1",
+        },
+      })
+    // (as big as the one after it, 界面草图.png)
+    Some(String("uploads/fx/对照草图.png")) =>
+      Some({
+        "index": 0,
+        "count": 2,
+        "after": {
           "name": "界面草图.png",
           "path": "uploads/fx/界面草图.png",
           "size": 18000,

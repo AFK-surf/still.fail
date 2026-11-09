@@ -1,4 +1,4 @@
-// The agents' tool arguments as the station reads them (the Rust station's hub.rs, its argument functions): how a turn ends
+// The agents' tool arguments as the station reads them (its argument functions): how a turn ends
 // (`kind`, in today's words and those from before), what goes with it (`need`, `done`, `about`), the card a post carries
 // (`card`, or `options` from before cards; JSON text from a runtime whose tool list is older), and how posts with files
 // are kept. Every rule and every word of what an agent is told when it is refused is the Rust station's.
@@ -9,10 +9,10 @@ import type { Attachment } from "../store/store.ts";
 type Json = any;
 export type Args = Record<string, Json>;
 
-/// A value as JavaScript's String() writes it (hub.rs `js_string`), for arguments given as another type than asked.
+/// A value as JavaScript's String() writes it, for arguments given as another type than asked.
 export const jsString = (value: Json): string => (typeof value === "string" ? value : value === null ? "null" : JSON.stringify(value));
 
-/// A number, or a string holding one (hub.rs `js_number`).
+/// A number, or a string holding one.
 export function jsNumber(value: Json): number | null {
   if (typeof value === "number") return value;
   if (typeof value !== "string") return null;
@@ -194,7 +194,7 @@ export function cardArg(card: Json, options: Json): Json | null {
     kept = { type: "text" };
     if (placeholder !== "") kept.placeholder = placeholder;
   } else if (kind === "login") {
-    // A login a person finishes from the card (docs/remote-login.md): its id only; the page and code are the client's to
+    // A login a person finishes from the card: its id only; the page and code are the client's to
     // ask the station for, so they never travel with the message.
     const login = typeof given.login === "string" ? given.login.trim() : "";
     if (!/^[0-9a-z]{1,40}$/.test(login)) throw new Error('a login card names the login: {"type": "login", "login": "<the id login start answered>"}');
@@ -224,7 +224,7 @@ export function optionsSaid(options: Json): string {
     const label = `${i + 1}. ${typeof o?.label === "string" ? o.label : ""}`;
     return o?.recommended !== undefined ? `${label} (recommended)` : label;
   });
-  return ` People can pick, numbered as the card shows them: ${labels.join("; ")}; a reply option reaches you as their message quoting this one with the option's label (action=close ends the wait silently), and anything they write instead is their answer too.`;
+  return ` People can pick, numbered as the card shows them: ${labels.join("; ")}; a reply option reaches you as their message quoting this one with the option's label (action=close ends the wait silently: you are told the choice with what you are next handed). A message in the chat also closes the card, but may be a clarification rather than an answer.`;
 }
 
 /// What chat_post says of the card it posted.
@@ -233,7 +233,7 @@ export const cardSaid = (card: Json): string =>
     ? optionsSaid(card.options)
     : card?.type === "login"
       ? " People finish the login from the card (or its link) in their own browser; when it ends you get a station notice and the card closes."
-      : " People can write their answer in the card's field; it reaches you as their message quoting this one, and anything they write in the chat instead is their answer too.";
+      : " People can write their answer in the card's field; it reaches you as their message quoting this one. A message in the chat also closes the card, but may be a clarification rather than an answer.";
 
 const isHtml = (f: Attachment) => {
   const name = f.name.toLowerCase();
@@ -278,9 +278,6 @@ export function threadCommand(text: string): "stop" | "compact" | "clear" | null
   const word = rest.toLowerCase();
   return word === "-stop" ? "stop" : word === "-compact" ? "compact" : word === "-clear" ? "clear" : null;
 }
-
-/// `-stop`, alone or after mentions.
-export const isStopCommand = (text: string): boolean => threadCommand(text) === "stop";
 
 /// A Slack Web API method's shape: family.method, lower camel case.
 export function isSlackMethod(method: string): boolean {

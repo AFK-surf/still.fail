@@ -50,6 +50,10 @@ priv struct Config {
   // (`fixture.openers`) say it, of the app's pages and its library, outside their tests (fixture-import)
   fixture_pkg : String
   fixture_openers : Array[String]
+  // what only a Tester sets, read by what runs in the app (`tester.names`: `fake`, read as `fake.val`), outside the
+  // Tester's own files (`tester.files`, globs) and the tests (tester-branch)
+  tester_names : Array[String]
+  tester_files : Array[String]
 }
 
 ///|
@@ -104,6 +108,8 @@ fn Config::new(d : @rjson.Value) -> Config {
       _ => ""
     },
     fixture_openers: strs(sect(d, "fixture").get("openers"), []),
+    tester_names: strs(sect(d, "tester").get("names"), []),
+    tester_files: strs(sect(d, "tester").get("files"), []),
   }
 }
 
@@ -137,6 +143,8 @@ fn lint_mbt(
   out : Array[Finding],
   returns : Map[String, String],
   readers : Map[String, String],
+  painted : Map[String, Unit],
+  motion_fields : Map[String, Unit],
 ) -> Unit {
   let app = !under(f.rel, cfg.framework)
   let frame_core = under(f.rel, cfg.frame_core)
@@ -176,6 +184,131 @@ fn lint_mbt(
     for k, tk in toks {
       if tk.kind == "at" && tk.text == cfg.fixture_pkg && !f.in_test(k) {
         add("fixture-import", k, f.line_text(k))
+      }
+    }
+  }
+  // what only a Tester sets read by what runs in the app (`fake.val`), outside the Tester's own files and the tests
+  if cfg.tester_names.length() > 0 && !matches(f.rel, cfg.tester_files) {
+    for k, tk in toks {
+      if tk.kind == "ident" &&
+        cfg.tester_names.contains(tk.text) &&
+        !(k > 0 && toks[k - 1].text == ".") &&
+        k + 2 < toks.length() &&
+        toks[k + 1].text == "." &&
+        toks[k + 2].text == "val" &&
+        !f.in_test(k) {
+        add("tester-branch", k, f.line_text(k))
+      }
+    }
+  }
+  // a frame's or a build's number asked (`c.frame_number()`, `c.build_number()`) outside mbui's ui, which counts them,
+  // and outside the tests
+  if !f.rel.has_prefix("src/ui/") {
+    for k, tk in toks {
+      if tk.kind == "ident" &&
+        (tk.text == "frame_number" || tk.text == "build_number") &&
+        k > 0 &&
+        toks[k - 1].text == "." &&
+        k + 1 < toks.length() &&
+        toks[k + 1].text == "(" &&
+        !f.in_test(k) {
+        add("frame-number", k, f.line_text(k))
+      }
+    }
+  }
+  // the frames' clock read followed by its own signal (`frame_clock.get()`), outside the tests and what paints
+  // (build-clock)
+  let paint_at = paint_flows(f, paint_args(f))
+  let painting = fn(k : Int) { in_paint(f, k, paint_at, painted) }
+  for k, tk in toks {
+    if tk.kind == "ident" &&
+      tk.text == "frame_clock" &&
+      k + 2 < toks.length() &&
+      toks[k + 1].text == "." &&
+      toks[k + 2].text == "get" &&
+      !f.in_test(k) &&
+      !painting(k) {
+      add("build-clock", k, f.line_text(k))
+    }
+  }
+  // a part of the app's component library made in a node it is given (its first parameter a @view.View it makes a box
+  // in) that takes no place of its caller's (`loc~ : SourceLoc`, its outside made as what was asked for there,
+  // `made_for=loc`): what is found in it is not traced back to the app's line that asked for it (view's source.mbt)
+  if under(f.rel, cfg.library) && !f.test_file {
+    for it in f.items {
+      if it.kind != "fn" {
+        continue
+      }
+      // (its parameters: the first bracket after its name)
+      let mut open = it.start
+      while open <= it.end && toks[open].text != "(" {
+        open += 1
+      }
+      if open > it.end || toks[open].end < 0 || open + 5 > it.end {
+        continue
+      }
+      let close = toks[open].end
+      let name = toks[open + 1]
+      let given = name.kind == "ident" &&
+        toks[open + 2].text == ":" &&
+        toks[open + 3].text == "@view" &&
+        toks[open + 4].text == "." &&
+        toks[open + 5].text == "View" &&
+        (toks[open + 6].text == "," || toks[open + 6].text == ")")
+      if !given {
+        continue
+      }
+      let mut placed = false
+      for k in open..<close {
+        if toks[k].kind == "ident" && toks[k].text == "SourceLoc" {
+          placed = true
+        }
+      }
+      let mut boxed = false
+      for k in (close + 1)..<(it.end - 2) {
+        if toks[k].kind == "ident" &&
+          toks[k].text == name.text &&
+          toks[k + 1].text == "." &&
+          toks[k + 2].text == "box" &&
+          toks[k + 3].text == "(" {
+          boxed = true
+          break
+        }
+      }
+      if boxed && !placed {
+        add("part-place", it.start, f.line_text(it.start))
+      }
+    }
+  }
+  // a click read by a build (`c.clicked(id)`, `clicked_on`, `double_clicked`: a Bool the frame after it) outside mbui's
+  // ui and kit, which take presses, and outside the tests: what a press does is its handler's (Ctx::on_press, a part's
+  // on_press / on_pick / on_change)
+  if !f.rel.has_prefix("src/ui/") && !f.rel.has_prefix("src/kit/") {
+    for k, tk in toks {
+      if tk.kind == "ident" &&
+        (tk.text == "clicked" || tk.text == "clicked_on" || tk.text == "double_clicked") &&
+        k > 0 &&
+        toks[k - 1].text == "." &&
+        k + 1 < toks.length() &&
+        toks[k + 1].text == "(" &&
+        !f.in_test(k) {
+        add("click-read", k, f.line_text(k))
+      }
+    }
+  }
+  // a key read by a build (`c.key_pressed(code)`, `c.keys_came()`, `@settings.action_pressed(…)`: a Bool the frame
+  // after it) outside mbui's ui and kit, which take keys, and outside the tests: what a key does is an action's
+  // (View::on_action) or a node's own (View::on_key)
+  if !f.rel.has_prefix("src/ui/") && !f.rel.has_prefix("src/kit/") {
+    for k, tk in toks {
+      if tk.kind == "ident" &&
+        (tk.text == "key_pressed" || tk.text == "keys_came" || tk.text == "action_pressed") &&
+        k > 0 &&
+        toks[k - 1].text == "." &&
+        k + 1 < toks.length() &&
+        toks[k + 1].text == "(" &&
+        !f.in_test(k) {
+        add("key-read", k, f.line_text(k))
       }
     }
   }
@@ -295,6 +428,24 @@ fn lint_mbt(
     if c.name == "pointing" && c.kind == "pkg" && c.qual == "@ui" && !in_t && under(f.rel, cfg.pages) {
       add("page-hand", c.at, f.line_text(c.at))
     }
+    // the frame's context reached from anywhere (`@ui.current()`): outside mbui's ui, which keeps it, and the tests
+    if c.name == "current" && c.kind == "pkg" && c.qual == "@ui" && !in_t && !f.rel.has_prefix("src/ui/") {
+      add("ui-current", c.at, f.line_text(c.at))
+    }
+    // a long list laid out by the old immediate-mode view (`c.list(key, count, est, row)`): what is left of it, which
+    // only goes (a method of that name with fewer than four arguments, a Markdown writer's, not counted)
+    if c.name == "list" && c.kind == "method" && app && !in_t && c.args.length() >= 4 {
+      add("old-list", c.at, f.line_text(c.at))
+    }
+    // an old view hosted in a node of the window's tree (`@ui.old(v, build)`): what of the old view is left inside
+    // what is made once, waiting for its part as nodes, which only goes
+    if c.name == "old" && c.kind == "pkg" && c.qual == "@ui" && app && !in_t {
+      add("old-island", c.at, f.line_text(c.at))
+    }
+    // a panel presented with an old body (`@sf.panel(title, body, ...)`): what is left of them, which only goes
+    if c.name == "panel" && c.kind == "pkg" && c.qual == "@sf" && app && !in_t {
+      add("old-panel", c.at, f.line_text(c.at))
+    }
     // a page reading the native input (what the app was started with: touch, or keyboard and mouse)
     if c.name == "native_input" &&
       c.kind == "pkg" &&
@@ -326,7 +477,7 @@ fn lint_mbt(
       add("cursor-hand", c.at, f.line_text(c.at))
     }
     // what was built said by hand to be built again: what changed is a signal, and what read it is built again by
-    // itself (docs/incremental.md); the framework's own not counted
+    // itself; the framework's own not counted
     if built_by_hand.contains(c.name) && c.kind == "method" && app && !in_t {
       add("built-by-hand", c.at, f.line_text(c.at))
     }
@@ -335,8 +486,13 @@ fn lint_mbt(
     if layout_read_back.contains(c.name) && c.kind == "method" && app && !in_t {
       add("layout-read-back", c.at, f.line_text(c.at))
     }
+    // what the layout came to told back as a change to make things by: the framework's (the view's own, src/view, as
+    // what it lays out) not counted, its tests not
+    if layout_told.contains(c.name) && c.kind == "method" && !under(f.rel, ["src/view"]) && !in_t {
+      add("layout-told", c.at, f.line_text(c.at))
+    }
     // a motion following what the layout measured: a place or a size moves for its cause, not because what it was
-    // laid out at changed (the app's docs/motion.md)
+    // laid out at changed (the app's sf/motion.mbt)
     match follow_target(f, c, returns) {
       Some(n) if !in_t => {
         let pos = c.args.filter(fn(a) { a.0 is None })
@@ -360,14 +516,14 @@ fn lint_mbt(
       !moving_listed(f, c.at) {
       add("motion-read", c.at, f.line_text(c.at))
     }
-    // a spring of the app's own: each is one of @motion's (the app's docs/motion.md, Curves)
+    // a spring of the app's own: each is one of @motion's (the app's sf/motion.mbt, Curves)
     if (c.name == "spring" || c.name == "motion_spring") &&
       app &&
       !in_t &&
       ((c.kind == "pkg" && c.qual == "@motion") || c.kind == "method") {
       add("motion-spring", c.at, f.line_text(c.at))
     }
-    // a move of a length of its own: a thing moved takes as long as its way is far (the app's docs/motion.md, Curves)
+    // a move of a length of its own: a thing moved takes as long as its way is far (the app's sf/motion.mbt, Curves)
     if c.name == "tween" &&
       !in_t &&
       ((c.kind == "pkg" && c.qual == "@motion") || c.kind == "bare") &&
@@ -402,6 +558,17 @@ fn lint_mbt(
           break
         }
       }
+    }
+    // the frames' clock read followed (build-clock): a Ctx's (`now` and `cycle` on a Ctx, or on `c`/`ctx` whose type
+    // is not told), a motion's (`now_before`, `now_of`, `shows_motion`), ui's own (clock_read, clock_read_here); not
+    // in the tests
+    if !in_t && build_clock_read(f, c, returns) && !painting(c.at) {
+      add("build-clock", c.at, f.line_text(c.at))
+    }
+    // an animated value read as it is built (build-motion): @motion.animate's, an Anim's, a Way's read (`get`)
+    // outside what a frame's paint is given; not in the tests, nor in the readers themselves
+    if !in_t && motion_read_built(f, c, returns, motion_fields) && !painting(c.at) {
+      add("build-motion", c.at, f.line_text(c.at))
     }
     // 5. the app reads the clock
     if c.name == "now" &&
@@ -650,7 +817,7 @@ fn loose_look(name : String) -> Array[String]? {
 let style_makers : Array[String] = ["style", "patch", "text_style", "text_patch"]
 
 ///|
-/// style-literal, box-loose, style-exact (docs/style.md): tests are not counted
+/// style-literal, box-loose, style-exact (mbui's ui/style.mbt): tests are not counted
 fn lint_style(f : MbtFile, cfg : Config, out : Array[Finding]) -> Unit {
   if matches(f.rel, cfg.style_outside) {
     return
@@ -662,7 +829,44 @@ fn lint_style(f : MbtFile, cfg : Config, out : Array[Finding]) -> Unit {
     out.push(finding(rule, f.rel, toks[k].line, what))
   }
 
-  // an Exact(…) made (not the enum's own declaration, nor a match arm's pattern)
+  // each closing bracket's opening one (a pattern's groups stepped over whole, either way)
+  let opened : Map[Int, Int] = Map::new()
+  for i, t in toks {
+    if t.end >= 0 {
+      opened[t.end] = i
+    }
+  }
+  // the bracket that holds token `i` (-1: none)
+  fn holder(i : Int) -> Int {
+    let mut j = i - 1
+    while j >= 0 {
+      if toks[j].end > i {
+        return j
+      }
+      j = match opened.get(j) {
+        Some(o) => o - 1
+        None => j - 1
+      }
+    }
+    -1
+  }
+
+  // what a pattern is made of besides its groups: names (a constructor's, a binding's, `_`, a package's), literals, an
+  // or-pattern's |, a tuple's or a constructor's commas
+  fn in_pattern(t : Tok) -> Bool {
+    (t.kind == "ident" && t.text != "if" && t.text != "return") ||
+    t.kind == "at" ||
+    t.kind == "num" ||
+    t.kind == "str" ||
+    t.text == "|" ||
+    t.text == "," ||
+    t.text == "." ||
+    t.text == "::" ||
+    t.text == "-"
+  }
+
+  // an Exact(…) made (not the enum's own declaration, nor a match arm's pattern: what is left of an arm's =>, before its
+  // guard's if, the groups it is in included; one in a guard or in what the arm gives is made)
   fn exact_at(k : Int) -> Bool {
     if !(
         toks[k].kind == "ident" &&
@@ -676,12 +880,64 @@ fn lint_style(f : MbtFile, cfg : Config, out : Array[Finding]) -> Unit {
     if it >= 0 && f.items[it].kind == "enum" {
       return false
     }
-    let end = toks[k + 1].end
-    !(
-      end >= 0 &&
-      end + 1 < toks.length() &&
-      (toks[end + 1].text == "=>" || toks[end + 1].text == "|")
-    )
+    // (the whole of what it is in, up to the braces it is said in: Some(Exact(v)), (S4, Exact(v)))
+    let mut s = k
+    let mut e = toks[k + 1].end
+    while true {
+      let h = holder(s)
+      if h < 0 || !(toks[h].text == "(" || toks[h].text == "[") {
+        break
+      }
+      s = h
+      e = toks[h].end
+      // (its constructor's name before it, on its line: not what ends the arm before)
+      while s > 0 &&
+            toks[s - 1].line == toks[s].line &&
+            (toks[s - 1].kind == "ident" || toks[s - 1].kind == "at" || toks[s - 1].text == ".") {
+        s = s - 1
+      }
+    }
+    guard e >= 0 else { return true }
+    // (back to where its arm begins: a line begun, or the braces opened, over nothing but a pattern's)
+    let mut j = s - 1
+    let mut head = false
+    while j >= 0 {
+      let t = toks[j]
+      let broken = toks[j + 1].line > t.line && t.text != "|" && t.text != ","
+      if broken || t.text == "{" {
+        head = true
+        break
+      }
+      match opened.get(j) {
+        Some(o) => j = o - 1
+        None => {
+          if !in_pattern(t) {
+            break
+          }
+          j = j - 1
+        }
+      }
+    }
+    guard head || j < 0 else { return true }
+    // (on to the arm's => or its guard's if, over nothing but a pattern's, a line broken only after | or ,)
+    let mut n = e + 1
+    while n < toks.length() {
+      let t = toks[n]
+      if t.text == "=>" || (t.kind == "ident" && t.text == "if") {
+        return false
+      }
+      if t.line > toks[n - 1].line && toks[n - 1].text != "|" && toks[n - 1].text != "," {
+        return true
+      }
+      if t.end >= 0 {
+        n = t.end + 1
+      } else if in_pattern(t) {
+        n = n + 1
+      } else {
+        return true
+      }
+    }
+    true
   }
 
   for k in 0..<toks.length() {
@@ -863,12 +1119,12 @@ fn literal_time(f : MbtFile, idx : Array[Int]) -> Bool {
 }
 
 ///|
-/// Which positional argument of call `c` is the target a motion follows: an Anim's or a Value's `follow(target, …)`,
-/// `@motion.animate(c, key, target)` and `@kit.animate`'s, `Ctx::spring(key, target)`; None for any other call.
+/// Which positional argument of call `c` is the target a motion follows: an Anim's `follow(target, …)`,
+/// `@motion.animate(c, key, target)`, `Ctx::spring(key, target)`; None for any other call.
 fn follow_target(f : MbtFile, c : Call, returns : Map[String, String]) -> Int? {
   if c.kind == "method" && c.name == "follow" {
     Some(0)
-  } else if c.kind == "pkg" && c.name == "animate" && (c.qual == "@motion" || c.qual == "@kit") {
+  } else if c.kind == "pkg" && c.name == "animate" && c.qual == "@motion" {
     Some(2)
   } else if c.kind == "method" && c.name == "spring" && f.recv_type(c.at, returns) is Some("Ctx") {
     Some(1)
@@ -1474,7 +1730,7 @@ fn css_of_args(
 
 ///|
 /// style-text: a `style(…)` in a top-level `let` (a named style, a `.then(…)` of one) whose properties are all
-/// tokens and numbers is to be its text, `@ui.css("…")` (docs/style.md): moonc makes each such call ~5-10 KB of C in
+/// tokens and numbers is to be its text, `@ui.css("…")` (mbui's ui/style.mbt): moonc makes each such call ~5-10 KB of C in
 /// `moonbit_init`, run as the app starts, built again on every build (2026-10-24). One naming a variable, worked
 /// out, or in a function stays `style(…)`. Bare `style(` is counted where the `let` says `Style` (mbui's own
 /// package).
@@ -1524,4 +1780,449 @@ fn lint_style_text(f : MbtFile, out : Array[Finding]) -> Unit {
       None => ()
     }
   }
+}
+
+///|
+/// Whether the call `c` reads the frames' clock where it is followed (build-clock).
+fn build_clock_read(f : MbtFile, c : Call, returns : Map[String, String]) -> Bool {
+  if c.kind == "method" {
+    if build_clock_methods.contains(c.name) {
+      return true
+    }
+    if c.name == "now" || c.name == "cycle" {
+      return match f.recv_type(c.at, returns) {
+        Some(t) => t == "Ctx"
+        None => c.at >= 2 && (f.toks[c.at - 2].text == "c" || f.toks[c.at - 2].text == "ctx")
+      }
+    }
+    false
+  } else {
+    c.kind == "bare" && (c.name == "clock_read" || c.name == "clock_read_here")
+  }
+}
+
+///|
+/// A motion's reads of the frames' clock, followed (build-clock)
+let build_clock_methods : Array[String] = ["now_before", "now_of", "shows_motion"]
+
+///|
+/// What a frame's paint is given to read as it paints, a closure each (Ctx::look_by and the rest): what is read in it
+/// is read as the frame is painted, not built (build-clock)
+let paint_takers : Array[String] = [
+  "look_by", "moved_by", "bg_by", "ink_by", "notch_by", "cut_across_by", "glyphs_by", "cycle_look",
+]
+
+///|
+/// Where a frame's paint begins (mbui's ui: frame_paint, and Ctx::paint, which it and what keeps a row's drawing
+/// call): what only they call, and only what that calls, is read as the frame is painted (build-clock)
+let paint_roots : Array[String] = ["frame_paint", "paint"]
+
+///|
+/// The package paint's roots are in (paint_roots)
+let paint_root_pkg : String = "src/ui"
+
+///|
+/// The tokens of `f` given to a paint taker as what it reads as it paints (paint_takers' arguments)
+fn paint_args(f : MbtFile) -> Map[Int, Unit] {
+  let out : Map[Int, Unit] = Map::new()
+  for c in f.calls {
+    if c.kind == "method" && !c.is_def && paint_takers.contains(c.name) {
+      for a in c.args {
+        for i in a.1 {
+          out[i] = ()
+        }
+      }
+    }
+  }
+  out
+}
+
+///|
+/// Whether token `k` of `f` is read as a frame is painted: in what a paint taker is given, or in a function only
+/// paint calls (paint_fns)
+fn in_paint(f : MbtFile, k : Int, paint_at : Map[Int, Unit], painted : Map[String, Unit]) -> Bool {
+  if paint_at.contains(k) {
+    return true
+  }
+  let it = f.item_of[k]
+  it >= 0 &&
+  f.items[it].kind == "fn" &&
+  painted.contains(pkg_of(f.rel) + "|" + last_name(f.items[it].name))
+}
+
+///|
+/// The functions of each package called only as a frame is painted (by its name, package by package: `pkg|name`):
+/// paint's roots, and those every call of which (outside the tests) is in what a paint taker is given or in a function
+/// so called
+fn paint_fns(files : Array[MbtFile]) -> Map[String, Unit] {
+  // each function's calls in its package: where (the file, the token)
+  let sites : Map[String, Array[(MbtFile, Int)]] = Map::new()
+  let defined : Map[String, Unit] = Map::new()
+  let args : Map[String, Map[Int, Unit]] = Map::new()
+  for f in files {
+    if f.test_file {
+      continue
+    }
+    let pkg = pkg_of(f.rel)
+    args[f.rel] = paint_args(f)
+    for it in f.items {
+      if it.kind == "fn" && it.name != "" {
+        defined[pkg + "|" + last_name(it.name)] = ()
+      }
+    }
+    for c in f.calls {
+      if c.is_def || f.in_test(c.at) {
+        continue
+      }
+      let key = pkg + "|" + c.name
+      match sites.get(key) {
+        Some(a) => a.push((f, c.at))
+        None => sites[key] = [(f, c.at)]
+      }
+    }
+  }
+  let painted : Map[String, Unit] = Map::new()
+  for name in paint_roots {
+    if defined.contains(paint_root_pkg + "|" + name) {
+      painted[paint_root_pkg + "|" + name] = ()
+    }
+  }
+  let mut changed = true
+  while changed {
+    changed = false
+    for key, _ in defined {
+      if painted.contains(key) {
+        continue
+      }
+      match sites.get(key) {
+        Some(a) if a.length() > 0 &&
+          a.iter().all(fn(s) {
+            let (f, k) = s
+            in_paint(f, k, args.get(f.rel).unwrap_or(Map::new()), painted)
+          }) => {
+          painted[key] = ()
+          changed = true
+        }
+        _ => ()
+      }
+    }
+  }
+  painted
+}
+
+///|
+/// The types whose value moves by the clock, read as they are (build-motion)
+let motion_types : Array[String] = ["Anim", "Way"]
+
+///|
+/// What @motion's functions give that moves by the clock, by their name, where no file linted says (build-motion: the
+/// app's run, @motion not among its files)
+let motion_returns : Array[(String, String)] = [("anim", "Anim"), ("told", "Anim")]
+
+///|
+/// The readers themselves, and what they read in to give it (build-motion): not counted inside them
+let motion_readers : Array[String] = ["Anim::get", "Way::get", "animate", "pressing"]
+
+///|
+/// The fields of the files' structs of a type that moves by the clock (`fade : @motion.Anim`), by their name
+/// (build-motion: `s.fade.get()`)
+fn motion_fields(files : Array[MbtFile]) -> Map[String, Unit] {
+  let out : Map[String, Unit] = Map::new()
+  for f in files {
+    for it in f.items {
+      if it.kind != "struct" {
+        continue
+      }
+      for j in it.start..<(it.end - 1) {
+        let t = f.toks[j]
+        if t.kind == "ident" && f.toks[j + 1].text == ":" {
+          match f.type_at(j + 2) {
+            Some(ty) if motion_types.contains(ty) => out[t.text] = ()
+            _ => ()
+          }
+        }
+      }
+    }
+  }
+  out
+}
+
+///|
+/// Whether the call `c` reads an animated value as it is built (build-motion): @motion.animate (its value this
+/// frame; motion's own `animate` in motion), or `get` on an Anim or a Way (told by its type where the receiver is
+/// said, by its field where it is one: motion_fields)
+fn motion_read_built(
+  f : MbtFile,
+  c : Call,
+  returns : Map[String, String],
+  fields : Map[String, Unit],
+) -> Bool {
+  if c.is_def {
+    return false
+  }
+  if c.item >= 0 && motion_readers.contains(f.items[c.item].name) && under(f.rel, ["src/motion"]) {
+    return false
+  }
+  if c.name == "animate" &&
+    ((c.kind == "pkg" && c.qual == "@motion") || (c.kind == "bare" && under(f.rel, ["src/motion"]))) {
+    return true
+  }
+  if c.kind != "method" || c.name != "get" {
+    return false
+  }
+  let r = c.at - 2
+  if r < 0 {
+    return false
+  }
+  let rt = f.toks[r]
+  // (a field: `s.fade.get()`)
+  if rt.kind == "ident" && r > 0 && f.toks[r - 1].text == "." {
+    return fields.contains(rt.text)
+  }
+  // (made by @motion's own, said so: `let a = @motion.told(…)`, whatever the files linted name `told`)
+  if rt.kind == "ident" && motion_made(f, r) {
+    return true
+  }
+  f.recv_type(c.at, returns) is Some(t) && motion_types.contains(t)
+}
+
+///|
+/// Whether the name at `r` is let to what one of @motion's functions that give a moving value makes (`let a =
+/// @motion.told(…)`), the nearest such let before it in its item (build-motion)
+fn motion_made(f : MbtFile, r : Int) -> Bool {
+  let toks = f.toks
+  let name = toks[r].text
+  let it = f.item_of[r]
+  let lo = if it >= 0 { f.items[it].start } else { 0 }
+  let mut j = r - 1
+  while j >= lo {
+    if toks[j].kind == "ident" &&
+      toks[j].text == name &&
+      j > 0 &&
+      (toks[j - 1].text == "let" || toks[j - 1].text == "mut") &&
+      j + 1 < toks.length() &&
+      toks[j + 1].text == "=" {
+      return j + 4 < toks.length() &&
+        toks[j + 2].kind == "at" &&
+        toks[j + 2].text == "@motion" &&
+        toks[j + 3].text == "." &&
+        motion_returns.iter().any(fn(m) { m.0 == toks[j + 4].text })
+    }
+    j -= 1
+  }
+  false
+}
+
+///|
+/// The arguments, by their label, that hand what they are given to a paint taker (a list row's `ground_by`, a row's
+/// band's `lit_by`: Ctx::bg_by): what is read in them is read as the frame is painted (build-clock, build-motion)
+let paint_labels : Array[String] = ["ground_by", "lit_by"]
+
+///|
+/// What is given to a paint taker (`paint_at`), with what flows there: an argument of a paint label's
+/// (paint_labels), and each closure let to a name that goes only there, or only into another such let (`let ground =
+/// fn() { … }` handed on as `ground_by=ground`; `let (band, band_by) = …` with `lit_by=band_by`): the closures in
+/// its value read as the frame is painted (build-clock, build-motion)
+fn paint_flows(f : MbtFile, paint_at : Map[Int, Unit]) -> Map[Int, Unit] {
+  let toks = f.toks
+  let n = toks.length()
+  let out : Map[Int, Unit] = Map::new()
+  for k, _ in paint_at {
+    out[k] = ()
+  }
+  for c in f.calls {
+    if c.is_def {
+      continue
+    }
+    for a in c.args {
+      let labelled = match a.0 {
+        Some(l) => paint_labels.contains(l)
+        None =>
+          a.1.length() >= 3 &&
+          toks[a.1[0]].kind == "ident" &&
+          paint_labels.contains(toks[a.1[0]].text) &&
+          toks[a.1[1]].text == "?" &&
+          toks[a.1[2]].text == "="
+      }
+      if labelled {
+        for i in a.1 {
+          out[i] = ()
+        }
+      }
+    }
+  }
+  // each let: the names it binds, its value's tokens (to the end of its line, past what it opens), whether a closure is
+  // in it
+  let lets : Array[(Array[Int], Int, Int)] = []
+  for k, t in toks {
+    if t.kind != "ident" || t.text != "let" || f.in_test(k) {
+      continue
+    }
+    let mut j = k + 1
+    if j < n && toks[j].text == "mut" {
+      j += 1
+    }
+    if j >= n {
+      continue
+    }
+    let names : Array[Int] = []
+    if toks[j].kind == "ident" {
+      names.push(j)
+      j += 1
+    } else if toks[j].text == "(" && toks[j].end >= 0 {
+      for x in (j + 1)..<toks[j].end {
+        if toks[x].kind == "ident" {
+          names.push(x)
+        }
+      }
+      j = toks[j].end + 1
+    } else {
+      continue
+    }
+    // (its type, where said)
+    if j < n && toks[j].text == ":" {
+      while j < n && toks[j].text != "=" && toks[j].line == toks[k].line {
+        j = if is_open(toks[j]) && toks[j].end >= 0 { toks[j].end + 1 } else { j + 1 }
+      }
+    }
+    if j >= n || toks[j].text != "=" {
+      continue
+    }
+    let start = j + 1
+    let mut e = start
+    while e < n {
+      let next = if is_open(toks[e]) && toks[e].end >= 0 { toks[e].end + 1 } else { e + 1 }
+      if next >= n {
+        e = n
+        break
+      }
+      if toks[next].line > toks[next - 1].line && !value_goes_on(toks[next]) {
+        e = next
+        break
+      }
+      e = next
+    }
+    lets.push((names, start, e))
+  }
+  // the names let to a closure, or to what holds one of them (deferred): those whose every use is where it is painted,
+  // or in another such let's value, are painted. (Names by item and text: `item|name`.)
+  let key = fn(x : Int) { "\{f.item_of[x]}|\{toks[x].text}" }
+  let uses : Map[String, Array[Int]] = Map::new()
+  for x, t in toks {
+    // (a name's uses: not a field, nor an argument's label, `name=` or `name?=`, which is no use of a let of that name)
+    let label = x + 1 < n &&
+      (toks[x + 1].text == "=" || (toks[x + 1].text == "?" && x + 2 < n && toks[x + 2].text == "="))
+    if t.kind == "ident" && !(x > 0 && toks[x - 1].text == ".") && !label {
+      let k = key(x)
+      match uses.get(k) {
+        Some(a) => a.push(x)
+        None => uses[k] = [x]
+      }
+    }
+  }
+  let deferred : Array[Bool] = Array::make(lets.length(), false)
+  let deferred_names : Map[String, Unit] = Map::new()
+  let mut changed = true
+  while changed {
+    changed = false
+    for i, l in lets {
+      if deferred[i] {
+        continue
+      }
+      let (names, s0, e0) = l
+      let mut has = false
+      for x in s0..<e0 {
+        let t = toks[x]
+        if t.kind == "ident" &&
+          ((t.text == "fn" && x + 1 < n && toks[x + 1].text == "(") ||
+          (!(x > 0 && toks[x - 1].text == ".") && deferred_names.contains(key(x)))) {
+          has = true
+          break
+        }
+      }
+      if has {
+        deferred[i] = true
+        for m in names {
+          deferred_names[key(m)] = ()
+        }
+        changed = true
+      }
+    }
+  }
+  let painted : Array[Bool] = deferred.copy()
+  let mut shrunk = true
+  while shrunk {
+    shrunk = false
+    // (where a painted let's value is)
+    let in_value : Array[Bool] = Array::make(n, false)
+    for i, l in lets {
+      if painted[i] {
+        for x in l.1..<l.2 {
+          in_value[x] = true
+        }
+      }
+    }
+    for i, l in lets {
+      if !painted[i] {
+        continue
+      }
+      let (names, _, _) = l
+      // (painted where any name it binds goes only where it is painted, none of them called as it is built)
+      let mut any = false
+      let mut called = false
+      for m in names {
+        let mut only = true
+        // (one use at least: a closure let and never handed on is no paint's)
+        let mut used = false
+        for x in uses.get(key(m)).unwrap_or([]) {
+          if x <= m {
+            continue
+          }
+          used = true
+          if out.contains(x) || in_value[x] {
+            continue
+          }
+          only = false
+          if x + 1 < n && toks[x + 1].text == "(" {
+            called = true
+          }
+        }
+        if only && used {
+          any = true
+        }
+      }
+      if !any || called {
+        painted[i] = false
+        shrunk = true
+      }
+    }
+  }
+  // (the closures in a painted let's value: what is read in them is read as it is painted)
+  for i, l in lets {
+    if !painted[i] {
+      continue
+    }
+    let (_, s0, e0) = l
+    for x in s0..<e0 {
+      if toks[x].kind == "ident" && toks[x].text == "fn" && x + 1 < n && toks[x + 1].text == "(" && toks[x + 1].end >= 0 {
+        let mut b = toks[x + 1].end + 1
+        while b < e0 && !(toks[b].text == "{" && toks[b].end >= 0) {
+          b += 1
+        }
+        if b < e0 {
+          for y in x..=toks[b].end {
+            out[y] = ()
+          }
+        }
+      }
+    }
+  }
+  out
+}
+
+///|
+/// Whether a line starting with `t` goes on the expression of the line before it (a method chained, a pipe, an
+/// operator, an else)
+fn value_goes_on(t : Tok) -> Bool {
+  [".", "|>", "&&", "||", "+", "-", "*", "/", "else"].contains(t.text)
 }

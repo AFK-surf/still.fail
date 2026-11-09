@@ -1,5 +1,13 @@
-// Adding a profile on the desktop (sfdesk add_profile.mbt), a secret's page, a place's first,
+// Adding a profile on the desktop (sfpages new_profile.mbt, a wide page), a secret's page, a place's first,
 // over the whole app and the settings' fixture (a profile's own page: src/sfpages accounts_wbtest.mbt).
+
+///|
+test "wide: the profile list shows a subscription's tier" {
+  let t = wide_tester([], mode="settings")
+  app.nav.replace(Place("profiles"))
+  t.draw()
+  assert_true(t.find("Ultra") is Some(_), msg="the subscription's tier")
+}
 
 ///|
 /// The desk's page wheeled down until `words` shows on it (above the window's foot).
@@ -14,6 +22,30 @@ fn desk_shown(t : @ui.Tester, words : String) -> Unit {
 }
 
 ///|
+test "wide: Anthropic authorization in either browser waits for confirmation" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="settings-new-profile-login-station")
+  @settings.fixture_page("settings-new-profile-login-station") |> ignore
+  t.draw()
+  app.nav.push(Setting(@settings.Route::NewProfile("ws1/st1")))
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="打开授权页面")
+  sheet_rested(t, "sf-present")
+  assert_true(t.find("打开 Claude 授权页面？") is Some(_))
+  assert_true(t.opened().is_empty())
+  t.back()
+  sheet_rested(t, "sf-present")
+  t.click(Button, label="其他方式")
+  sheet_rested(t, "sf-present")
+  t.tap_text("在 Willow 的浏览器中打开")
+  sheet_rested(t, "sf-present")
+  assert_true(t.find("打开 Claude 授权页面？") is Some(_))
+  assert_true(named(calls, "login.browser").is_empty())
+  t.tap_text("继续打开")
+  assert_eq(named(calls, "login.browser").length(), 1)
+}
+
+///|
 test "wide: adding a profile picks its provider from the core's groups, the machine's own login offered first" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="settings")
@@ -24,7 +56,7 @@ test "wide: adding a profile picks its provider from the core's groups, the mach
   assert_true(t.find("选择服务商") is Some(_))
   assert_true(t.find("模型厂商") is Some(_) && t.find("中转站") is Some(_))
   assert_true(t.find("OpenRouter") is Some(_))
-  // Studio's own Codex login, used as it is
+  // Willow's own Codex login, used as it is
   assert_true(t.find("使用此账号") is Some(_), msg="the machine's login offered")
   // a provider picked: told to the core
   match t.find("DeepSeek") {
@@ -55,22 +87,6 @@ test "wide: the station's Hermes profile can be selected from its custom variabl
     calls.iter().any(fn(m) { m.name == "profile.flow.edit" && text(field(Some(m.params), "input"), "provider") == "env-hermes" }),
     msg="the selected Hermes profile told to the core",
   )
-}
-
-///|
-test "wide: a new profile's models chosen on a page of their own, then on to its page" {
-  let calls : Array[Made] = []
-  let t = wide_tester(calls, mode="settings")
-  t.draw()
-  app.nav.push(Setting(@settings.Route::PickModels("ws1/st1", "cc")))
-  t.run_for(@ui.move_most_ms)
-  assert_true(t.find("Opus 5.5") is Some(_) && t.find("Haiku 5") is Some(_), msg="its whole list to tick")
-  match t.find("完成") {
-    Some((x, y)) => t.tap(x, y)
-    None => abort("no 完成")
-  }
-  t.run_for(@ui.move_most_ms)
-  assert_true(app.nav.top() is Setting(@settings.Route::Profile("ws1/st1", "cc")), msg="on to its page")
 }
 
 ///|

@@ -1,5 +1,5 @@
 // What values the last frame's nodes take, by kind (Tester::census): how many sizes of words, paddings, corners and
-// colours a screen uses, which an app keeps few (its styles' tokens: docs/style.md), the window's tree's nodes with the
+// colours a screen uses, which an app keeps few (its styles' tokens: mbui's ui/style.mbt), the window's tree's nodes with the
 // old frame's (Tree::styled). Read only.
 
 ///|
@@ -87,7 +87,14 @@ pub fn Tester::census(self : Tester) -> Census {
     Some(tree) =>
       for n in tree.styled() {
         if n.words {
-          text[census_num(n.size) + "/" + census_num(n.line)] = true
+          // (its size, line and letters' spacing as it is drawn, as an old view's text says them: view_line's and
+          // view_spacing's, at the system's size of words)
+          let look : @view.WordsLook = { size: n.size, weight: 400, line: n.line, wrap: true, tracking: n.tracking, balance: false }
+          let spacing = view_spacing(c, look)
+          text[census_num(c.sp(n.size)) +
+            "/" +
+            census_num(view_line(c, look)) +
+            (if spacing != 0.0 { " " + census_num(spacing) } else { "" })] = true
           for w in n.weights {
             weight[w.to_string()] = true
           }
@@ -107,6 +114,10 @@ pub fn Tester::census(self : Tester) -> Census {
         }
         if (n.ground & 0xFFL) != 0L {
           color[census_hex(n.ground)] = true
+        }
+        // (the edge round it, as an old view's border is counted)
+        if (n.edge & 0xFFL) != 0L {
+          color[census_hex(n.edge)] = true
         }
       }
     None => ()

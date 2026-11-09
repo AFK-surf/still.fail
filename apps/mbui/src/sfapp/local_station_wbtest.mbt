@@ -79,7 +79,7 @@ test "添加这台 Mac refused by the cloud: said why, nothing installed" {
   let (x, y) = t.find("添加这台 Mac").unwrap()
   t.tap(x, y)
   t.frame()
-  assert_eq(app.toast.get(), "无法添加这台 Mac：只有 owner 和 admin 可以添加 station")
+  assert_eq(app.toast.get().words, "无法添加这台 Mac：只有 owner 和 admin 可以添加 station")
   assert_eq(t.local_acts(), [])
 }
 
@@ -109,7 +109,7 @@ test "添加 station's sheet: no 添加这台 Mac where this machine has a stati
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   t.set_local_station(
-    #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","name":"星火工作室","stationName":"Studio","removed":false}}
+    #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","name":"星火工作室","stationName":"Willow","removed":false}}
     ,
   )
   app.nav.replace(Place("stations"))
@@ -125,7 +125,7 @@ test "本机 Station: the one here brought up to the latest release from its car
   let calls : Array[Made] = []
   let t = wide_tester(calls)
   t.set_local_station(
-    #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","name":"星火工作室","stationName":"Studio","removed":false}}
+    #|{"data":"~/.stillfail","runner":"service","version":"0.1.4600","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","name":"星火工作室","stationName":"Willow","removed":false}}
     ,
   )
   app.nav.replace(Setting(@settings.Route::LocalStation))

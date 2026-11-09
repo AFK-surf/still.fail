@@ -1,0 +1,8 @@
+{
+  "name": "@acemir/cssom",
+  "version": "0.9.32-none",
+  "private": true,
+  "type": "module",
+  "description": "In place of the CSS parser linkedom reads a style element's `sheet` with (pnpm-workspace.yaml overrides): a sheet of no rules. The core's mermaid document (src/mermaidDom.ts) reads a chart's style sheet itself and never asks a style element for its `sheet`; the parser's own build is a script for a page's globals, which the web's bundler cannot import from.",
+  "exports": { ".": "./index.js" }
+}

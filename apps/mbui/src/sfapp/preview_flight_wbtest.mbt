@@ -1,6 +1,6 @@
-// The viewer's way in from a picture of the chat and back into it (sfbase viewer.mbt draw_flight, shown_picture): it
-// sets out as the chat draws its thumbnail, lands where the chat has the thumbnail then, and never shows a frame of
-// nothing as one picture of it takes another's place.
+// The viewer's way in from a picture of the chat and back into it (sfbase viewer_tree.mbt's flight nodes, viewer.mbt
+// shown_picture): it sets out as the chat draws its thumbnail, lands where the chat has the thumbnail then, and never
+// shows a frame of nothing as one picture of it takes another's place.
 
 ///|
 /// A photo the station keeps for chat s-c1, its size sent with it.
@@ -49,32 +49,43 @@ fn photo_sent(
       }
     },
   }
-  let t = @ui.Tester::new(
-    fn(c) {
-      // (in a card `cut` tall, its foot cutting the picture, where one is)
-      let card = if cut > 0.0 { @ui.style(w=Full, h=Fixed(cut), clip=true) } else { @ui.style(w=Full, h=Full) }
-      // (in a chat's list, the composer's room at its foot, where it is one)
-      let list = c.box(style=card, fn() {
-        c.box(style=@ui.style(h=Fixed(shift.val)), fn() {  }) |> ignore
-        chat_file(c, src, a, list=if listed { "test-list" } else { "" })
+  // (the chat an old view the window's tree hosts, the viewer beside it as the shells have it: sfbase's viewer_node,
+  // its stage the window; what the viewer shows of any other kind the old frame's, in the old view, as the shells have
+  // it)
+  let chat = fn(c : @ui.Ctx) {
+    // (in a card `cut` tall, its foot cutting the picture, where one is)
+    let card = if cut > 0.0 { @ui.style(w=Full, h=Fixed(cut), clip=true) } else { @ui.style(w=Full, h=Full) }
+    // (in a chat's list, the composer's room at its foot, where it is one)
+    let list = c.box(style=card, fn() {
+      c.box(style=@ui.style(h=Fixed(shift.val)), fn() {  }) |> ignore
+      chat_file(c, src, a, list=if listed { "test-list" } else { "" })
+    })
+    if listed {
+      note_list(c, list, "test-list", if head { flight_bar_h } else { 0.0 }, if bar { flight_bar_h } else { 0.0 })
+    }
+    // (a chat's bar over its top, as a chat's page has it)
+    if head {
+      let top = c.layer(fn() { c.box(style=flight_bar, fn() {  }) |> ignore })
+      over_flight(c, top)
+    }
+    // (a composer over the chat's foot, as a chat's page has it)
+    if bar {
+      let foot = c.layer(fn() {
+        c.spacer()
+        c.box(style=flight_bar, fn() {  }) |> ignore
       })
-      if listed {
-        note_list(c, list, "test-list", if head { flight_bar_h } else { 0.0 }, if bar { flight_bar_h } else { 0.0 })
-      }
-      // (a chat's bar over its top, as a chat's page has it)
-      if head {
-        let top = c.layer(fn() { c.box(style=flight_bar, fn() {  }) |> ignore })
-        over_flight(c, top)
-      }
-      // (a composer over the chat's foot, as a chat's page has it)
-      if bar {
-        let foot = c.layer(fn() {
-          c.spacer()
-          c.box(style=flight_bar, fn() {  }) |> ignore
-        })
-        over_flight(c, foot)
-      }
-      preview(c, src)
+      over_flight(c, foot)
+    }
+  }
+  let t = @ui.Tester::new(
+    fn(c) { @ui.old_views_here(c) },
+    tree=fn(root) {
+      root.box(fn(v) {
+        v.grow(Is(1.0)) |> ignore
+        @ui.old(v, chat).over(Is(true)) |> ignore
+        @sfbase.viewer_node(v, src, fn() { v.window() })
+      })
+      |> ignore
     },
     w=390.0,
     h=844.0,
@@ -137,10 +148,10 @@ test "a picture sent from here flies out as its message shows it: the picture pi
   t.tap(at[0].0, at[0].1)
   let v = viewer.get().unwrap()
   assert_true(v.flies && !v.fly_back)
-  assert_eq(pv_hidden.val, id)
+  assert_eq(pv_hidden.get(), id)
   // halfway: the same picture (the message's hidden under it), on its way to its place on the stage
   t.run_for(@ui.move_most_ms / 2.0)
-  let to = v.zoom.rect().unwrap()
+  let to = v.zoom.rect(t.ctx()).unwrap()
   assert_true(t.locate("img:sent-key").length() > 0)
   let on_way = t
     .drawn_images()
@@ -155,6 +166,93 @@ test "a picture sent from here flies out as its message shows it: the picture pi
 }
 
 ///|
+/// The share of a white, opaque video frame's partly covered corner that would come from a black box under it. A
+/// rounded edge is covered once; drawing another rounded black edge under it leaves black in those same pixels.
+fn video_corner_black(t : @ui.Tester) -> Double raise {
+  let insts = t.drawn_instances()
+  let pictures = insts.mapi(fn(k, a) { (k, a) }).filter(fn(p) {
+    let a = p.1
+    a[5] == 4.0 && a[11] > 0.99 && a[24] > 1.0 && a[2] > 100.0
+  })
+  assert_eq(pictures.length(), 1, msg="rounded video pictures: \{pictures}")
+  let (index, picture) = pictures[0]
+  let (x, y, right, foot) = (picture[16], picture[17], picture[18], picture[19])
+  let frame = picture.copy()
+  frame[0] = x
+  frame[1] = y
+  frame[2] = right - x
+  frame[3] = foot - y
+  frame[4] = 0.0
+  let blacks = insts.mapi(fn(k, a) { (k, a) }).filter(fn(p) {
+    let (k, a) = p
+    k < index && a[5] == 0.0 && a[8] == 0.0 && a[9] == 0.0 && a[10] == 0.0 && a[11] > 0.0 &&
+    (a[0] - x).abs() < 0.1 && (a[1] - y).abs() < 0.1 &&
+    (a[0] + a[2] - right).abs() < 0.1 && (a[1] + a[3] - foot).abs() < 0.1
+  })
+  let scale = 2.0
+  let side = picture[24] * 1.25
+  let n = (side * scale).ceil().to_int()
+  let mut partial = 0
+  let mut black = 0.0
+  for ix in 0..<n {
+    for iy in 0..<n {
+      let px = x + (ix.to_double() + 0.5) / scale
+      let py = y + (iy.to_double() + 0.5) / scale
+      let image = corner_cover(picture, px, py, scale)
+      // Only where the picture covers the frame as much as it can: a letterbox's black outside the picture is wanted.
+      if image > 0.0 && image < 1.0 && (image - corner_cover(frame, px, py, scale)).abs() < 0.000001 {
+        partial += 1
+        for (_, a) in blacks {
+          black = dmax(black, corner_cover(a, px, py, scale) * a[11] * (1.0 - image))
+        }
+      }
+    }
+  }
+  assert_true(partial > 0, msg="no partially covered corner pixels")
+  black
+}
+
+///|
+test "a video's fully shown poster leaves no black in its light rounded corners" {
+  let t = video_in_chat()
+  assert_eq(video_corner_black(t), 0.0)
+}
+
+///|
+test "a letterboxed video's light picture has no black rim where it meets its rounded frame" {
+  new_run()
+  let src : Source = { ..fixture("chat"), poster: fn(_, _, _) { "wide-still" } }
+  let a : Attachment = {
+    name: "wide.mp4", path: "uploads/fx/wide.mp4", size: 4096.0, width: 360.0, height: 95.0,
+    thumbhash: "", owner: "s-c1", upload: "", duration: 0.0, frames: 0, held: false,
+  }
+  let t = @ui.Tester::new(
+    fn(c) { chat_file(c, src, a) },
+    w=390.0,
+    h=844.0,
+    images=[("wide-still", 360, 95)],
+  )
+  t.draw()
+  t.run_for(@ui.image_fade_ms)
+  assert_eq(video_corner_black(t), 0.0)
+}
+
+///|
+test "a video's light rounded corners leave no black as it returns to its thumbnail" {
+  let t = video_in_chat()
+  tap_video(t, "演示录屏.mp4")
+  t.run_for(@ui.move_most_ms)
+  t.set_player(1, position=4000.0)
+  t.draw()
+  t.back()
+  assert_true(t.view_said("{\"still\":{\"view\":1},\"b\":\"\{hex_bytes(fixture_file_png("演示录屏.mp4"))}\"}"))
+  t.draw()
+  t.run_for(@ui.move_most_ms / 4.0)
+  assert_true(pv_leaving.get() is Some(v) && v.flies && v.fly_back)
+  assert_eq(video_corner_black(t), 0.0)
+}
+
+///|
 test "a picture's whole come once it is in takes its stand-in's place once decoded: never a frame of nothing there" {
   let held : Ref[(() -> Unit)?] = Ref(None)
   let t = photo_sent(Ref(0.0), held)
@@ -163,7 +261,7 @@ test "a picture's whole come once it is in takes its stand-in's place once decod
   let v = viewer.get().unwrap()
   t.run_for(@ui.move_most_ms)
   assert_true(!v.flies)
-  let to = v.zoom.rect().unwrap()
+  let to = v.zoom.rect(t.ctx()).unwrap()
   assert_true(drawn_at(t, to))
   // its whole comes: in the frame it is here and not yet decoded, what stood in for it is still drawn there
   match held.val {
@@ -172,13 +270,18 @@ test "a picture's whole come once it is in takes its stand-in's place once decod
   }
   t.frame()
   assert_true(drawn_at(t, to), msg="\{t.drawn_images()}")
-  // (the message's under the viewer, and the one standing in for its whole)
-  assert_eq(t.locate("img:sent-key").length(), 2)
+  // (the message's under the viewer, and the one standing in for its whole: drawn, the viewer's its node's, which the
+  // old views' images (Tester::locate) do not hold)
+  let stood = drawn_of(t, "sent-key")
+  assert_eq(stood.length(), 2, msg="\{stood}")
+  assert_true(stood.iter().any(fn(r) { at_rect(r, to.0, to.1, to.2, to.3) }), msg="what stands in, at \{to}: \{stood}")
   // decoded: the whole there in its place
   t.frame()
   assert_true(drawn_at(t, to))
-  assert_eq(t.locate("img:mem:preview/ws1/st1/s-c1/uploads/fx/photo.jpg").length(), 1)
-  assert_eq(t.locate("img:sent-key").length(), 1)
+  let whole = drawn_of(t, "mem:preview/ws1/st1/s-c1/uploads/fx/photo.jpg")
+  assert_eq(whole.length(), 1, msg="\{whole}")
+  assert_true(at_rect(whole[0], to.0, to.1, to.2, to.3), msg="the whole, at \{to}: \{whole}")
+  assert_eq(drawn_of(t, "sent-key").length(), 1, msg="\{drawn_of(t, "sent-key")}")
 }
 
 ///|
@@ -201,7 +304,7 @@ test "the chat moved under the viewer: the picture flies back to where its thumb
   t.run_for(@ui.move_most_ms)
   assert_true(drawn_at(t, (now.x, now.y, now.w, now.h)), msg="\{t.drawn_images()}")
   assert_true(pv_leaving.get() is None)
-  assert_eq(pv_hidden.val, "")
+  assert_eq(pv_hidden.get(), "")
   t.draw()
   assert_true(drawn_at(t, (now.x, now.y, now.w, now.h)))
   assert_eq(t.locate("img:sent-key").length(), 1)
@@ -218,7 +321,7 @@ test "the chat's bars under the viewer's ground while the picture is grown, the 
   // on its way back, grown still: the bar the page's, drawn under the picture (and under the ground over the page)
   t.run_for(@ui.move_most_ms / 4.0)
   let v = pv_leaving.get().unwrap()
-  assert_true(v.flies && v.flying() > 0.0 && v.flying() < 1.0)
+  assert_true(v.flies && v.flying(t.ctx()) > 0.0 && v.flying(t.ctx()) < 1.0)
   let order = t.drawn_order()
   let picture = order.search_by(fn(i) { i.0 == 4 && i.5 > 0.5 }).unwrap()
   let bar = order.search_by(fn(i) { i.0 == 0 && (i.4 - flight_bar_h).abs() < 0.5 && i.2 > 844.0 - flight_bar_h - 0.5 })
@@ -243,10 +346,10 @@ test "the way back is a move of its own: most of it as it sets out, at rest as i
   let back = t.time()
   // a quarter of its time out: over half of its way back, the bars over it as much
   t.run_for(@ui.move_most_ms / 4.0)
-  assert_true(v.flying() < 0.5, msg="\{v.flying()}")
+  assert_true(v.flying(t.ctx()) < 0.5, msg="\{v.flying(t.ctx())}")
   // its last tenth: hardly any of the way left, so the thumbnail and the bars come back by nothing at the end
   t.run_for(back + @ui.move_most_ms * 0.9 - t.time())
-  assert_true(v.flying() < 0.02, msg="\{v.flying()}")
+  assert_true(v.flying(t.ctx()) < 0.02, msg="\{v.flying(t.ctx())}")
   t.run_for(back + @ui.move_most_ms - t.time())
   assert_true(pv_leaving.get() is None)
 }
@@ -272,16 +375,16 @@ test "a picture under the composer goes out from under it at its own size first,
   // (a hair each side of where the going out ends: a fortieth of its time)
   let near = out * open_ms / 40.0
   t.run_for(out * open_ms - near)
-  assert_eq(v.flying(), 0.0)
-  assert_true(v.lifted() > 0.95, msg="\{v.lifted()}")
+  assert_eq(v.flying(t.ctx()), 0.0)
+  assert_true(v.lifted_at(t.ctx().moment()) > 0.95, msg="\{v.lifted_at(t.ctx().moment())}")
   assert_true(composer_over_picture(t))
   t.run_for(near * 2.0)
-  assert_true(v.flying() > 0.0 && v.lifted() == 1.0)
+  assert_true(v.flying(t.ctx()) > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
   // growing: the composer the page's, under the ground and the picture
   assert_true(!composer_over_picture(t))
   // then grown to its place on the stage
   t.run_for(start + open_ms - t.time())
-  let to = v.zoom.rect().unwrap()
+  let to = v.zoom.rect(t.ctx()).unwrap()
   assert_true(drawn_at(t, to))
   // back: shrunk, then in under the composer to its thumbnail, one move of its own on the same curve
   t.back()
@@ -289,11 +392,11 @@ test "a picture under the composer goes out from under it at its own size first,
   let lift = v.fly_lift
   let close_ms = fly_ms_of(t, v)
   t.run_for(way_at(1.0 - lift) * close_ms - near)
-  assert_true(v.flying() > 0.0 && v.lifted() == 1.0)
+  assert_true(v.flying(t.ctx()) > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
   assert_true(!composer_over_picture(t))
   t.run_for(near * 2.0)
-  assert_eq(v.flying(), 0.0)
-  assert_true(v.lifted() < 1.0)
+  assert_eq(v.flying(t.ctx()), 0.0)
+  assert_true(v.lifted_at(t.ctx().moment()) < 1.0)
   assert_true(composer_over_picture(t))
   t.run_for(back + close_ms - t.time())
   assert_true(pv_leaving.get() is None)
@@ -315,8 +418,8 @@ test "a picture going back in under the composer keeps its corners round: what i
   let v = pv_leaving.get().unwrap()
   let lift = v.fly_lift
   t.run_for(way_at(1.0 - lift / 2.0) * fly_ms_of(t, v))
-  assert_eq(v.flying(), 0.0)
-  assert_true(v.lifted() > 0.2 && v.lifted() < 0.8, msg="\{v.lifted()}")
+  assert_eq(v.flying(t.ctx()), 0.0)
+  assert_true(v.lifted_at(t.ctx().moment()) > 0.2 && v.lifted_at(t.ctx().moment()) < 0.8, msg="\{v.lifted_at(t.ctx().moment())}")
   let clips = t.drawn_image_clips()
   let flying = t.drawn_images().mapi(fn(k, i) { (i, clips[k]) }).filter(fn(p) { p.0[8] > 0.5 && p.0[2] > 0.0 })
   assert_true(flying.length() > 0)
@@ -387,7 +490,7 @@ test "a picture cut by its card's foot: what shows of it said as where it shows,
 ///|
 test "a video taken down and let go goes from where the finger left it: its picture stays there, then flies back from there" {
   let t = video_in_chat()
-  t.tap_text("演示录屏.mp4")
+  tap_video(t, "演示录屏.mp4")
   t.run_for(@ui.move_most_ms)
   t.set_player(1, position=4000.0)
   t.draw()
@@ -405,15 +508,12 @@ test "a video taken down and let go goes from where the finger left it: its pict
   let left = t.holes()
   assert_eq(left.length(), 1)
   assert_true((left[0].1 - down).abs() < 0.5, msg="\{left} taken down to \{down}")
-  // grabbed: flown back from there, on the black its box has
+  // grabbed: the frame flies back from where the finger left it
   let frame = fixture_file_png("演示录屏.mp4")
   assert_true(t.view_said("{\"still\":{\"view\":1},\"b\":\"\{hex_bytes(frame)}\"}"))
   t.draw()
   assert_eq(t.holes().length(), 0)
-  let black = t
-    .drawn_rects()
-    .filter(fn(r) { r.4 == 0x000000FFL && (r.0 - x).abs() < 0.5 && (r.2 - w).abs() < 0.5 && (r.3 - h).abs() < 0.5 })
-  assert_true(black.iter().any(fn(r) { (r.1 - down).abs() < 0.5 }), msg="\{t.drawn_rects()}")
+  assert_true(drawn_at(t, (x, down, w, h)), msg="\{t.drawn_images()}")
 }
 
 ///|
@@ -432,8 +532,8 @@ test "a picture under the chat's bar goes out from under it at its own size firs
   let near = way_at(lift) * open_ms / 40.0
   // halfway out from under the bar: at its own size, the bar over it, its corners round
   t.run_for(way_at(lift / 2.0) * open_ms)
-  assert_eq(v.flying(), 0.0)
-  assert_true(v.lifted() > 0.2 && v.lifted() < 0.8, msg="\{v.lifted()}")
+  assert_eq(v.flying(t.ctx()), 0.0)
+  assert_true(v.lifted_at(t.ctx().moment()) > 0.2 && v.lifted_at(t.ctx().moment()) < 0.8, msg="\{v.lifted_at(t.ctx().moment())}")
   assert_true(head_over_picture(t))
   let clips = t.drawn_image_clips()
   let flying = t.drawn_images().mapi(fn(k, i) { (i, clips[k]) }).filter(fn(p) { p.0[8] > 0.5 && p.0[2] > 0.0 })
@@ -444,15 +544,16 @@ test "a picture under the chat's bar goes out from under it at its own size firs
     // its box whole, moved down
     assert_true(top <= i[1] + 0.5 && foot >= i[1] + i[3] - 0.5 && i[1] > th.y + 0.5, msg="\{p}")
   }
-  // out: clear of the bar, at its own size
-  t.run_for(start + way_at(lift) * open_ms - near - t.time())
-  assert_true(v.lifted() > 0.95, msg="\{v.lifted()}")
-  assert_true(drawn_at(t, (th.x, flight_bar_h + 12.0, th.w, th.h)) || v.lifted() < 1.0, msg="\{t.drawn_images()}")
+  // out: clear of the bar, at its own size (a hair before, on the ms of its time a motion's is read at: its time from
+  // its start in whole ms, Spec::value_at)
+  t.run_for(start + (way_at(lift) * open_ms - near).ceil() - t.time())
+  assert_true(v.lifted_at(t.ctx().moment()) > 0.95, msg="\{v.lifted_at(t.ctx().moment())}")
+  assert_true(drawn_at(t, (th.x, flight_bar_h + 12.0, th.w, th.h)) || v.lifted_at(t.ctx().moment()) < 1.0, msg="\{t.drawn_images()}")
   t.run_for(near * 2.0)
-  assert_true(v.flying() > 0.0 && v.lifted() == 1.0)
+  assert_true(v.flying(t.ctx()) > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
   assert_true(!head_over_picture(t))
   t.run_for(start + open_ms - t.time())
-  let to = v.zoom.rect().unwrap()
+  let to = v.zoom.rect(t.ctx()).unwrap()
   assert_true(drawn_at(t, to))
   // back: shrunk, then in under the bar, its corners round halfway in
   t.back()
@@ -461,8 +562,8 @@ test "a picture under the chat's bar goes out from under it at its own size firs
   let lift = v.fly_lift
   let close_ms = fly_ms_of(t, v)
   t.run_for(way_at(1.0 - lift / 2.0) * close_ms)
-  assert_eq(v.flying(), 0.0)
-  assert_true(v.lifted() > 0.2 && v.lifted() < 0.8, msg="\{v.lifted()}")
+  assert_eq(v.flying(t.ctx()), 0.0)
+  assert_true(v.lifted_at(t.ctx().moment()) > 0.2 && v.lifted_at(t.ctx().moment()) < 0.8, msg="\{v.lifted_at(t.ctx().moment())}")
   assert_true(head_over_picture(t))
   let clips = t.drawn_image_clips()
   let flying = t.drawn_images().mapi(fn(k, i) { (i, clips[k]) }).filter(fn(p) { p.0[8] > 0.5 && p.0[2] > 0.0 })
@@ -520,8 +621,8 @@ test "a picture mostly under the chat's bar goes out from under it as quick as i
     m / step
   }
   let out = speed(joint - step * 2.0)
-  assert_true(v.flying() == 0.0)
+  assert_true(v.flying(t.ctx()) == 0.0)
   let grow = speed(joint + step)
-  assert_true(v.flying() > 0.0)
+  assert_true(v.flying(t.ctx()) > 0.0)
   assert_true(out < grow * 1.25 && grow < out * 1.25, msg="going out \{out}, growing \{grow}")
 }

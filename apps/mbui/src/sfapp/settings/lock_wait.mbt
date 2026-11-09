@@ -4,7 +4,7 @@
 ///|
 /// Whether this device waits to be confirmed in the workspace's lock (the lock's `me.waiting`).
 pub fn lock_waiting(core : Core, ws : String) -> Bool {
-  let lock = (core.topic)("lock", { "workspace": str(ws) }).value
+  let lock = (core.topic)("lock", { "workspace": str(ws) }).get().value
   flag(field(lock, "me"), "waiting")
 }
 

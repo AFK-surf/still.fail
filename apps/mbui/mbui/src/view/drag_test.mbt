@@ -6,7 +6,7 @@
 fn held_tree(seen : Array[@view.Drag], there : @signals.Signal[Bool]) -> @view.Tree {
   @view.Tree::new(
     fn(root) {
-      root.show(fn() { there.get() }, fn(v) {
+      root.show(at_once=true, fn() { there.get() }, fn(v) {
         v.box(fn(b) {
           b.width(Is(Some(100.0))).height(Is(Some(100.0))).on_drag(fn(d) { seen.push(d) }) |> ignore
         })
@@ -60,11 +60,11 @@ test "held node let go, another made in its place with nothing held on it: not h
   let seen : Array[Int] = []
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { which.get() == 0 }, fn(v) {
+      root.show(at_once=true, fn() { which.get() == 0 }, fn(v) {
         v.box(fn(b) { b.width(Is(Some(100.0))).height(Is(Some(100.0))).on_drag(fn(_) { seen.push(0) }) |> ignore })
         |> ignore
       })
-      root.show(fn() { which.get() == 1 }, fn(v) {
+      root.show(at_once=true, fn() { which.get() == 1 }, fn(v) {
         v.box(fn(b) { b.width(Is(Some(100.0))).height(Is(Some(100.0))) |> ignore }) |> ignore
       })
     },
@@ -280,6 +280,7 @@ fn held_then_lost(how : String, frames : Array[Double]) -> Array[String] {
   let t = @view.Tree::new(
     fn(root) {
       root.show(
+        at_once=true,
         fn() { how != "leaving" || on.get() },
         fn(v) {
           v.box(fn(p) {
@@ -413,7 +414,7 @@ fn read_in_event(ask : Bool) -> Array[Int] {
   let id = gesture_id(t)
   t.event(50.0, fn() {
     s.set(1)
-    node.val.unwrap().at_moment(50.0, fn() { read.push(@signals.untracked(fn() { s.get() })) }) |> ignore
+    node.val.unwrap().at_moment(50.0, fn() { read.push(s.untracked()) }) |> ignore
     if ask {
       t.drag_at(id, Down, 10.0, 10.0, 50.0) |> ignore
     }
@@ -435,7 +436,7 @@ test "a gesture ended mid-call (its node let go by what it told, its on_drag sai
   let node : Ref[@view.View?] = Ref(None)
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { there.get() }, fn(v) {
+      root.show(at_once=true, fn() { there.get() }, fn(v) {
         node.val = Some(
           v.box(fn(b) {
             b
@@ -480,7 +481,7 @@ fn far_up(how : String) -> Array[String] {
   let said : Array[String] = []
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { there.get() }, fn(v) {
+      root.show(at_once=true, fn() { there.get() }, fn(v) {
         v.box(fn(b) {
           b
           .width(Is(Some(100.0)))
@@ -784,4 +785,159 @@ fn activated_after_flip(on_first : Bool) -> Int {
 test "a node pressed as a screen reader asks at a moment, outside any event: what was due before it done first, as it is then" {
   assert_eq(activated_after_flip(true), 0)
   assert_eq(activated_after_flip(false), 1)
+}
+
+///|
+test "held by two fingers: each told how fast it goes by its own events alone, the other's far off none of it" {
+  let seen : Array[@view.Drag] = []
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(b) {
+        b.width(Is(Some(390.0))).height(Is(Some(844.0))).on_drag(fn(d) { seen.push(d) }, fingers=2) |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let id = match t.target_at(10.0, 400.0) {
+    Dragged(id) => id
+    _ => abort("not held")
+  }
+  t.drag_at(id, Down, 10.0, 400.0, 100.0, finger=0) |> ignore
+  t.drag_at(id, Down, 380.0, 800.0, 105.0, finger=1) |> ignore
+  t.drag_at(id, Moved, 10.0, 380.0, 110.0, finger=0) |> ignore
+  t.drag_at(id, Moved, 380.0, 700.0, 115.0, finger=1) |> ignore
+  t.drag_at(id, Moved, 10.0, 360.0, 120.0, finger=0) |> ignore
+  let last0 = seen.filter(fn(d) { d.finger == 0 }).last().unwrap()
+  // (20 up each 10 ms: 2 a ms up, nothing across)
+  assert_eq(((last0.vy() + 2.0).abs() < 0.01, last0.vx().abs() < 0.01), (true, true), msg="\{last0.vx()} \{last0.vy()}")
+}
+
+///|
+test "how fast a finger went as of an event, asked after it moved on, is what it was as that event was told" {
+  let seen : Array[@view.Drag] = []
+  let at_once : Array[Double] = []
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(b) {
+        b
+        .width(Is(Some(390.0)))
+        .height(Is(Some(844.0)))
+        .on_drag(fn(d) {
+          seen.push(d)
+          at_once.push(d.vy())
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let id = match t.target_at(10.0, 400.0) {
+    Dragged(id) => id
+    _ => abort("not held")
+  }
+  // (slow, then fast, then a pause and on: each event's speed another)
+  t.drag_at(id, Down, 10.0, 400.0, 100.0) |> ignore
+  t.drag_at(id, Moved, 10.0, 395.0, 110.0) |> ignore
+  t.drag_at(id, Moved, 10.0, 370.0, 120.0) |> ignore
+  t.drag_at(id, Moved, 10.0, 330.0, 130.0) |> ignore
+  t.drag_at(id, Moved, 10.0, 320.0, 200.0) |> ignore
+  t.drag_at(id, Up, 10.0, 300.0, 210.0) |> ignore
+  assert_eq(seen.map(fn(d) { d.vy() }), at_once)
+}
+
+///|
+test "held: the same finger down again while it holds: nothing told, how fast it goes as it was" {
+  let seen : Array[@view.Drag] = []
+  let there = @signals.signal(true, same=fn(a, b) { a == b })
+  let t = held_tree(seen, there)
+  t.frame(390.0, 844.0) |> ignore
+  let id = match t.target_at(10.0, 10.0) {
+    Dragged(id) => id
+    _ => abort("not held")
+  }
+  t.drag_at(id, Down, 10.0, 90.0, 100.0) |> ignore
+  t.drag_at(id, Moved, 10.0, 70.0, 110.0) |> ignore
+  t.drag_at(id, Down, 10.0, 70.0, 112.0) |> ignore
+  t.drag_at(id, Moved, 10.0, 50.0, 120.0) |> ignore
+  let last = seen.last().unwrap()
+  assert_eq((seen.length(), last.kind, (last.vy() + 2.0).abs() < 0.01), (3, Moved, true), msg="\{last.vy()}")
+}
+
+///|
+/// What a node takes a hold by raw events (View::on_drag) is told as it is let go (its `vy`), the hold on it from the
+/// first, or handed to it by a cover over it that drags only once held (View::gesture's `held_first`), moved past the
+/// slop before that: the same steps, unevenly, five moves.
+fn let_go_speed(covered : Bool) -> Double {
+  let ups : Array[Double] = []
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(u) {
+        u.over(Is(true)).on_drag(fn(d) { if d.kind == Up { ups.push(d.vy()) } }) |> ignore
+      })
+      |> ignore
+      if covered {
+        root.box(fn(c) {
+          c.over(Is(true)).gesture(6.0, held_first=fn(_) { true }, through=500.0, drag=fn(_) {  }) |> ignore
+        })
+        |> ignore
+      }
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let id = match t.target_at(10.0, 400.0) {
+    Dragged(id) => id
+    _ => abort("not held")
+  }
+  t.drag_at(id, Down, 10.0, 400.0, 0.0) |> ignore
+  let steps = [(398.0, 8.0), (380.0, 16.0), (350.0, 22.0), (300.0, 30.0), (240.0, 36.0)]
+  for s in steps {
+    let held = t.holder().unwrap()
+    t.drag_at(held, Moved, 10.0, s.0, s.1) |> ignore
+  }
+  t.drag_at(t.holder().unwrap(), Up, 10.0, 200.0, 40.0) |> ignore
+  ups.last().unwrap()
+}
+
+///|
+test "held through: what a cover hands on as the finger moves told as it is let go the speed it would have had held from the first" {
+  let direct = let_go_speed(false)
+  let handed = let_go_speed(true)
+  assert_eq((handed - direct).abs() < 1.0e-9, true, msg="\{direct} \{handed}")
+}
+
+///|
+test "a step asked of a node (a screen reader's Increment, Decrement): its on_step told up or down; none where its presses are off" {
+  let on = @signals.signal(true, same=fn(x, y) { x == y })
+  let steps : Array[Int] = []
+  let node : Ref[@view.View?] = Ref(None)
+  let t = @view.Tree::new(
+    fn(root) {
+      node.val = Some(
+        root.box(fn(b) {
+          b
+          .width(Is(Some(80.0)))
+          .height(Is(Some(40.0)))
+          .presses(By(fn() { on.get() }))
+          .on_step(fn(by) { steps.push(by) })
+          .says(Is(Some(@view.said(Slider, label="色相", actions=[Increment, Decrement]))))
+          |> ignore
+        }),
+      )
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let id = node.val.unwrap().id()
+  assert_true(t.step_at(id, 1, 10.0))
+  assert_true(t.step_at(id, -1, 20.0))
+  assert_eq(steps, [1, -1])
+  t.event(30.0, fn() { on.set(false) })
+  t.frame(390.0, 844.0) |> ignore
+  assert_false(t.step_at(id, 1, 40.0))
+  assert_eq(steps, [1, -1])
 }

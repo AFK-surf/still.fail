@@ -3,9 +3,6 @@ import {
   "mbui/host",
   "mbui/hostapi",
   "mbui/ui",
-  "stillfail/shelf",
-  "stillfail/gallery",
-  "stillfail/videos",
   "stillfail/sfcore",
 }
 

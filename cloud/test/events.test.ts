@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { harness } from "./harness.ts";
 import type { AccountEvent } from "../src/types.ts";
+import { entryHash } from "../src/lock.ts";
+import { signer } from "./lock-signer.ts";
 
 type Harness = Awaited<ReturnType<typeof harness>>;
 const hex = (bytes: ArrayBuffer) => Buffer.from(bytes).toString("hex");
@@ -83,7 +86,7 @@ async function enrollStation(h: Harness, owner: ReturnType<Harness["as"]>, works
   return station;
 }
 
-test("every change reaches exactly the accounts it affects", { timeout: 30000 }, async () => {
+test("every change reaches exactly the accounts it affects", async () => {
   const h = await harness();
   try {
     const tokens = { alice: await h.login("alice"), bob: await h.login("bob"), carol: await h.login("carol"), dave: await h.login("dave") };
@@ -138,7 +141,7 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     await aliceAdmin("POST", `/v1/admin/users/${bobSub}/beta`, { on: false });
     await expect(on, { bob: [list] }, "beta off");
 
-    const station = await enrollStation(h, alice, w, "studio");
+    const station = await enrollStation(h, alice, w, "willow");
     await expect(on, { alice: [list, ws], bob: [list, ws] }, "enroll");
 
     // A station's socket is what still.fail cloud tells it: whether it is up, devices find out over the mesh, so connecting
@@ -147,21 +150,21 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     assert.equal(first.status, 101);
     await expect(on, {}, "a station connecting tells no one");
     await first.ping!();
-    assert.deepEqual(first.frames![0], { type: "state", peers: [{ id: station.id, name: "studio", version: "0.2.0" }], workspace: w, workspace_name: "House", name: "studio", origin: first.frames![0].origin, relay_url: first.frames![0].relay_url, relay_urls: first.frames![0].relay_urls, relay_names: first.frames![0].relay_names, grant_keys: first.frames![0].grant_keys, revocations: first.frames![0].revocations, lock: null, workspaces: [] });
+    assert.deepEqual(first.frames![0], { type: "state", peers: [{ id: station.id, name: "willow", version: "0.2.0" }], workspace: w, workspace_name: "House", name: "willow", origin: first.frames![0].origin, relay_url: first.frames![0].relay_url, relay_urls: first.frames![0].relay_urls, relay_names: first.frames![0].relay_names, grant_keys: first.frames![0].grant_keys, revocations: first.frames![0].revocations, lock: null, workspaces: [] });
     // bob's role changed above: the credentials he held then are refused, as the station hears at once on connecting.
     assert.deepEqual(first.frames![0].revocations.map((r: any) => [r.kind, r.id]), [["sub", bobSub]]);
     let seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
     assert.deepEqual([seen.version, "online" in seen], ["0.2.0", false]);
 
-    await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { name: "big studio" });
+    await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { name: "big willow" });
     await expect(on, { alice: [ws], bob: [ws] }, "rename station");
     await first.ping!();
-    assert.equal(first.frames!.at(-1).name, "big studio", "the station learns its new name");
+    assert.equal(first.frames!.at(-1).name, "big willow", "the station learns its new name");
     // Its emoji: one, kept with it for everyone; "" takes it away; anything not an emoji is refused.
     await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { emoji: "🍎🍊" });
     await expect(on, { alice: [ws], bob: [ws] }, "station emoji");
     seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
-    assert.deepEqual([seen.name, seen.emoji], ["big studio", "🍎"]);
+    assert.deepEqual([seen.name, seen.emoji], ["big willow", "🍎"]);
     assert.equal((await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { emoji: "ab" })).status, 400);
     await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { emoji: "" });
     await expect(on, { alice: [ws], bob: [ws] }, "station emoji cleared");
@@ -213,6 +216,13 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
     assert.equal(seen.last_seen, h.now(), "last here at");
 
+    // A picture of its own put up or taken away (own-picture.test.ts): its `/v1/me` changed, and the members lists it
+    // is in.
+    await bob("PUT", "/v1/me/picture", { picture: `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xe0]).toString("base64")}` });
+    await expect(on, { alice: [ws], bob: [list, ws] }, "own picture");
+    await bob("DELETE", "/v1/me/picture");
+    await expect(on, { alice: [ws], bob: [list, ws] }, "own picture taken away");
+
     // A leaver and a removed member hear of it too.
     assert.equal((await bob("DELETE", `/v1/workspaces/${w}/members/${bobSub}`)).status, 200);
     await expect(on, { alice: [list, ws], bob: [list, ws] }, "leave");
@@ -244,14 +254,14 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
   }
 });
 
-test("a reconnect replaces the old station socket; a silent one is dropped", { timeout: 20000 }, async () => {
+test("a reconnect replaces the old station socket; a silent one is dropped", async () => {
   const h = await harness();
   try {
     const tokens = await h.login("alice");
     const alice = h.as(tokens);
     const events = await listen(h, tokens.access_token);
     const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
-    const station = await enrollStation(h, alice, w, "studio");
+    const station = await enrollStation(h, alice, w, "willow");
     await events.take();
 
     const first = await connectStation(h, station);
@@ -275,7 +285,7 @@ test("a reconnect replaces the old station socket; a silent one is dropped", { t
   }
 });
 
-test("sockets refuse bad credentials", { timeout: 20000 }, async () => {
+test("sockets refuse bad credentials", async () => {
   const h = await harness();
   try {
     const tokens = await h.login("alice");
@@ -291,7 +301,7 @@ test("sockets refuse bad credentials", { timeout: 20000 }, async () => {
 
     const alice = h.as(await h.login("alice"));
     const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
-    const station = await enrollStation(h, alice, w, "studio");
+    const station = await enrollStation(h, alice, w, "willow");
     const forged = await key();
     assert.equal((await connectStation(h, station, { signer: forged })).status, 401);
     assert.equal((await connectStation(h, station, { ts: h.now() - 600 })).status, 400);
@@ -328,7 +338,7 @@ test("station rosters stay workspace scoped and update when peers join or leave"
   } finally { await h.close(); }
 });
 
-test("a workspace's own relays: set by its managers, told to its stations and members after still.fail's, kept from others", { timeout: 20000 }, async () => {
+test("a workspace's own relays: set by its managers, told to its stations and members after still.fail's, kept from others", async () => {
   const h = await harness();
   try {
     const tokens = { alice: await h.login("alice"), bob: await h.login("bob") };
@@ -336,7 +346,7 @@ test("a workspace's own relays: set by its managers, told to its stations and me
     const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
     const other = ((await (await alice("POST", "/v1/workspaces", { name: "Lab" })).json()) as any).id as string;
     await alice("POST", `/v1/workspaces/${w}/members`, { role: "member", emails: ["bob@example.test"] });
-    const station = await enrollStation(h, alice, w, "studio");
+    const station = await enrollStation(h, alice, w, "willow");
     const socket = await connectStation(h, station);
     await socket.ping!();
     const ours = socket.frames![0].relay_urls as string[];
@@ -391,6 +401,49 @@ test("a workspace's own relays: set by its managers, told to its stations and me
     assert.deepEqual(((await (await alice("PUT", `/v1/workspaces/${w}/relays`, { relays: [] })).json()) as any).relays, []);
     await socket.ping!();
     assert.deepEqual(socket.frames!.at(-1).relay_urls, ours);
+  } finally {
+    await h.close();
+  }
+});
+
+test("a release out, as the repository's releasing workflows say, is told to every device; nobody else can say it", async () => {
+  const { publicKey, privateKey } = await generateKeyPair("RS256");
+  const jwk = { ...(await exportJWK(publicKey)), kid: "actions", alg: "RS256", use: "sig" };
+  const h = await harness({ statusRepo: "o/r", push: () => ({ status: 200, body: JSON.stringify({ keys: [jwk] }) }) });
+  try {
+    const token = (claims: Record<string, unknown>, audience = h.origin) => new SignJWT({ repository: "o/r", workflow_ref: "o/r/.github/workflows/pipeline.yml@refs/heads/main", ...claims })
+      .setProtectedHeader({ alg: "RS256", kid: "actions" }).setIssuer("https://token.actions.githubusercontent.com").setAudience(audience).setIssuedAt().setExpirationTime("10 years").sign(privateKey);
+    const send = async (bearer: string | null) => (await h.fetch("/v1/releases/out", { method: "POST", headers: bearer ? { authorization: `Bearer ${bearer}` } : {} })).status;
+    const on = { alice: await listen(h, (await h.login("alice")).access_token), bob: await listen(h, (await h.login("bob")).access_token) };
+    await expect(on, {}, "signed in");
+    assert.equal(await send(null), 401);
+    assert.equal(await send(await token({ repository: "fork/r" })), 401);
+    assert.equal(await send(await token({ workflow_ref: "o/r/.github/workflows/status-incidents.yml@refs/heads/main" })), 401);
+    assert.equal(await send(await token({ workflow_ref: "o/r/.github/workflows/pipeline.yml@refs/heads/mine" })), 401);
+    assert.equal(await send(await token({}, "https://elsewhere.example")), 401);
+    await expect(on, {}, "refused");
+    assert.equal(await send(await token({})), 200);
+    assert.equal(await send(await token({ workflow_ref: "o/r/.github/workflows/stable.yml@refs/heads/main" })), 200);
+    await expect(on, { alice: [{ type: "release" }, { type: "release" }], bob: [{ type: "release" }, { type: "release" }] }, "told");
+  } finally {
+    await h.close();
+  }
+});
+
+test("a workspace whose lock alone moved on says so in its event, its head with it: nothing for a device to ask again", async () => {
+  const h = await harness();
+  try {
+    const token = await h.login("alice");
+    const alice = h.as(token);
+    const w = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
+    const on = { alice: await listen(h, token.access_token) };
+    const g = await signer("alice").genesis(w);
+    assert.equal((await alice("POST", `/v1/workspaces/${w}/lock`, { entries: [g] })).status, 200);
+    const hash = await entryHash(g);
+    await expect(on, { alice: [{ type: "workspace", id: w, lock: { head: { seq: 0, hash, genesis: hash }, locked: true } }] }, "lock turned on");
+    // What else changes is told as before, to be read again.
+    await alice("PATCH", `/v1/workspaces/${w}`, { name: "House" });
+    await expect(on, { alice: [{ type: "workspaces" }, { type: "workspace", id: w }] }, "rename");
   } finally {
     await h.close();
   }

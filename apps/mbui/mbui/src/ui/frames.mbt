@@ -1,4 +1,4 @@
-// A run as data (PocketJS has it so: docs/DETERMINISM.md there): what each frame drew as one number, so two runs of
+// A run as data: what each frame drew as one number, so two runs of
 // the same steps are compared frame by frame (the same, or the first frame they part at) rather than by their last
 // screen alone, and a test that gives the same steps another order of what comes from outside (a seed, a replay's
 // pace) can say the frames that should not change did not.
@@ -58,6 +58,31 @@ fn drawn_text() -> String {
     sb.write_char('\n')
   }
   sb.to_string()
+}
+
+///|
+/// Every instance drawn in the last frame in the order drawn, as drawn_text says them: a shape's band (kind 11) its
+/// pieces by what they are (shape_pieces_key) in the place of where they stand among the frame's, the pieces' own
+/// instances (kind 12, none drawn) left out. What draws the same reads the same, whatever drew before it.
+pub fn Tester::drawn_instances_keyed(self : Tester) -> Array[Array[Double]] {
+  ignore(self)
+  let c = g()
+  let out = []
+  for k in 0..<c.ninst {
+    if c.inst[k * inst_size + 5] == 12.0 {
+      continue
+    }
+    out.push(
+      Array::makei(inst_size, fn(j) {
+        if j == 12 && c.inst[k * inst_size + 5] == 11.0 {
+          shape_pieces_key(c, k)
+        } else {
+          c.inst[k * inst_size + j]
+        }
+      }),
+    )
+  }
+  out
 }
 
 ///|

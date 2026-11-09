@@ -5,7 +5,7 @@
 test "wide: the chat's \"…\" opens under its button; agent 往来 from it opens beside the chat; the panel closes and opens" {
   new_run()
   let src = fixture("chat-letters-info")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.is_wide(t.ctx()))
@@ -38,7 +38,7 @@ test "wide: the chat's \"…\" opens under its button; agent 往来 from it open
 test "wide: an agent's history's head as the web's: its control, 只看收发 leaving its steps out, 详情 folding" {
   new_run()
   let src = fixture("chat")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
@@ -50,7 +50,7 @@ test "wide: an agent's history's head as the web's: its control, 只看收发 le
   t.frame()
   t.frame()
   // 详情 open to begin with: what runs it, its station, where its transcript is
-  assert_true(t.find("Studio") is Some(_))
+  assert_true(t.find("Willow") is Some(_))
   assert_true(t.query(Button, label="复制路径") is Some(_))
   t.click(Button, label="详情")
   t.frame()
@@ -77,8 +77,8 @@ test "wide: a quota running out beside an agent's history's control is whole how
   }
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       match (name, got.value) {
         ("chat", Some(Object(chat)) as v) => {
           let agents = items(v, "agents").map(fn(a) {
@@ -99,7 +99,7 @@ test "wide: a quota running out beside an agent's history's control is whole how
       }
     },
   }
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1600.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
@@ -130,7 +130,7 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
       (base.call)(name, params, done)
     },
   }
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
@@ -159,11 +159,11 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   t.tap_text("添加到消息")
   t.frame()
   t.frame()
-  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files }).unwrap_or([])
+  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get() }).unwrap_or([])
   assert_eq(refs.length(), 1)
   assert_eq(text(field(Some(refs[0]), "ref"), "path"), fix_docs + "/发布清单.md")
-  assert_eq(text(field(Some(refs[0]), "ref"), "stationName"), "Studio")
-  // another row dragged off the tab onto the chat (ChatSide.tsx useChatDrop): let go there, into its draft too
+  assert_eq(text(field(Some(refs[0]), "ref"), "stationName"), "Willow")
+  // another row dragged off the tab onto the chat: let go there, into its draft too
   let (x, y) = match t.find("长篇小说.txt") {
     Some(at) => at
     None => fail("no 长篇小说.txt in the tab")
@@ -171,7 +171,7 @@ test "wide: Station 文件 from the chat's \"…\" beside it (kept by the core: 
   t.drag(x, y, 400.0, 400.0)
   t.frame()
   t.frame()
-  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files }).unwrap_or([])
+  let refs = @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get() }).unwrap_or([])
   assert_eq(refs.length(), 2)
   assert_eq(text(field(refs.get(1), "ref"), "path"), fix_docs + "/长篇小说.txt")
 }
@@ -214,7 +214,7 @@ test "wide: a new chat's Station 文件 beside it (NewChat.tsx): kept open, clos
   t.tap_text("添加到消息")
   t.frame()
   t.frame()
-  let refs = @sfbase.writings.get("new:ws1").map(fn(d) { d.files }).unwrap_or([])
+  let refs = @sfbase.writings.get("new:ws1").map(fn(d) { d.files.get() }).unwrap_or([])
   assert_eq(refs.length(), 1)
   assert_eq(text(field(Some(refs[0]), "ref"), "path"), fix_docs + "/发布清单.md")
 }
@@ -223,7 +223,7 @@ test "wide: a new chat's Station 文件 beside it (NewChat.tsx): kept open, clos
 test "wide: the side panel's tabs are the core's (chat.tabs.*): an agent's history before 任务, the last left in front, the panel's switch closes them all" {
   new_run()
   let src = fixture("chat")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
@@ -249,7 +249,7 @@ test "wide: the side panel's tabs are the core's (chat.tabs.*): an agent's histo
 test "wide: the side panel slides in from the pane's right edge over 280 ms and out over 240, the chat narrowing and widening with it (useSidePanel)" {
   new_run()
   let src = fixture("chat")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
@@ -282,7 +282,7 @@ test "wide: the side panel slides in from the pane's right edge over 280 ms and 
 test "wide: an agent's history asked as a page (a link's ?history=…&entry=…) is its chat with the history beside it (ChatPage.tsx history)" {
   new_run()
   let src = fixture("chat")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
@@ -302,8 +302,8 @@ test "wide: an agent's history asked as a page (a link's ?history=…&entry=…)
 fn slack_only(base : Source) -> Source {
   {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       guard name == "chat" && got.value is Some(Object(v)) else { return got }
       let v = v.copy()
       v["thread"] = Json::null()
@@ -311,7 +311,7 @@ fn slack_only(base : Source) -> Source {
       v["slackUrl"] = Json::string("https://afk.slack.com/archives/C1/p12")
       v.remove("xshare")
       v.remove("publish")
-      @sfbase.topic_as_read(name, params, { ..got, value: Some(Json::object(v)) })
+      { ..got, value: Some(Json::object(v)) }
     },
   }
 }
@@ -320,14 +320,19 @@ fn slack_only(base : Source) -> Source {
 test "wide: a chat of a Slack thread alone has its \"…\" too: where it is, its agents, the way to it in Slack" {
   new_run()
   let src = slack_only(fixture("chat"))
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   t.click(Button, label="对话信息")
   t.frame()
   t.frame()
   assert_true(t.find("Slack · #ops") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
-  assert_true(t.find("在 Slack 中打开") is Some(_))
   // (what only a chat of its own here has: who started it, when)
   assert_true(t.find("发起") is None)
+  // the way to it in Slack is what is done with it: its "…"'s
+  assert_true(t.find("在 Slack 中打开") is None)
+  t.click(Button, label="更多")
+  t.run_for(@ui.move_most_ms)
+  open_share(t)
+  assert_true(t.find("在 Slack 中打开") is Some(_))
 }

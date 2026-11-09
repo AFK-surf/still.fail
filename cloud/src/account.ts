@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "./env";
 import { noted, type SpanNotes } from "./tracing";
+import { extendPersonal, type PersonalEntry } from "./personal-lock";
 import { ACCESS_TTL_SEC, REFRESH_RETRY_SEC, SESSION_IDLE_SEC, SESSION_TTL_SEC, bearerToken, denied, digest, limited, nowSeconds, randomSecret, readJson, reply, seal, signToken, unseal, validId, verifyToken, type Claims, type Identity, type Tokens } from "./auth";
 
 const LIMITS = { sessions: 16, requestsPerMinute: 120 };
@@ -41,6 +42,22 @@ export class Account extends DurableObject<Env> {
     quota.requests++;
     this.ctx.storage.kv.put("quota", quota);
     return true;
+  }
+
+  /** The person's own lock (personal-lock.ts): kept whole, read and written by themselves. */
+  personalLock(): PersonalEntry[] {
+    return this.ctx.storage.kv.get<PersonalEntry[]>("personal-lock") ?? [];
+  }
+
+  /** Entries brought to it; the code it refuses them with, or the whole lock now. */
+  appendPersonalLock(sub: string, entries: unknown): { entries: PersonalEntry[] } | { refused: string } {
+    try {
+      const next = extendPersonal(sub, this.personalLock(), entries);
+      this.ctx.storage.kv.put("personal-lock", next);
+      return { entries: next };
+    } catch (error) {
+      return { refused: (error as Error).message };
+    }
   }
 
   /** A new access credential for the session. */
@@ -119,7 +136,7 @@ export class Account extends DurableObject<Env> {
     const claims = await verifyToken(this.env, token, "refresh");
     if (!claims || !validId(requestId)) return denied();
     const hash = await digest(token);
-    // Its span says whose session it was and what became of the refresh (docs/telemetry.md, signing out).
+    // Its span says whose session it was and what became of the refresh (signing out).
     const notes: SpanNotes = { "stillfail.account": claims.sub, "stillfail.session": claims.sid, "stillfail.auth.presented_generation": claims.gen ?? -1 };
     const outcome = (response: Response, what: string, more: SpanNotes = {}) => noted(response, { ...notes, "stillfail.auth.outcome": what, ...more });
     return this.ctx.blockConcurrencyWhile(async () => {

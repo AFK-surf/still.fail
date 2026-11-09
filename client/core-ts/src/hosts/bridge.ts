@@ -14,20 +14,22 @@
 //   kept.read {at, start, end} → bytes or {none} — a file the app saved where the person keeps files, read back
 //     (`at` as the system named it: a path; on Android a content address), answered by the app (Apple: apple_core.mm;
 //     Android: CoreHost; Windows: win_core.c)
+//   kept.stage {name, offset} + bytes → {path, size} — a file a station sends this phone, written where its adb shell
+//     reads (Android: CoreHost); offset -1 only asks
 //   secure.get {key, user, reason?} → bytes or {none}; secure.set {key, user} + value; secure.delete {key};
 //     secure.ask {reason} — answered by the app (Kotlin: the Keystore, and the prompt when `user` or asked), not the
-//     shell (docs/vault.md, "设备上的钥匙")
+//     shell ("设备上的钥匙")
 //   db.read {table, from, to} → {keys, sizes} + the values one after another (the former records store, read once)
 //   tcp.open {port} → {id}; tcp.read {id} → bytes or {end}; tcp.write {id} + bytes; tcp.end {id}; tcp.close {id}
 //   adb.pair {port, code}; adb.hold {port} (fails `unpaired` while adbd does not take the key); adb.state {} → {port};
 //     adb.open {} → {id}, read and written as a tcp one: this device's own adb session (the shell's adb.rs)
 //   listen.open {port, host} → {id} (fails when the port is taken there); listen.next {id} → {request, method, path,
 //     headers: [[name, value]]} + the body, or {end}; listen.respond {id, request, status, headers} + body;
-//     listen.close {id} — a login's loopback listener (docs/remote-login.md), answered by the app (Kotlin:
-//     Loopback.kt, where the app keeps itself running while it listens), not the shell
+//     listen.close {id} — a login's loopback listener, answered by the app (Kotlin:
+//  Loopback.kt, where the app keeps itself running while it listens), not the shell
 //   picked.read {file, start, end} → bytes; picked.hash {file} → {sha256}; picked.release {file} — a file picked in
 //     the app, read a part at a time as it goes up (`composer.add` with `blob: {hostFile, size, type}`) and named by
-//     its content first (a station that has it already copies its own), answered by the app (Kotlin: PickedFiles.kt).
+//  its content first (a station that has it already copies its own), answered by the app.
 //     Or held whole by the app and handed over with the call, its bytes beside it (`blob: {hostBytes: [start,
 //     length], type, sha256}`: mbui's app, whose picked files are read whole), read from those as it goes up
 //   reset {} — the connections kept for requests are taken for gone
@@ -50,12 +52,12 @@
 //   conn.closeReason {id}; conn.paths {id}; conn.stats {id}; release {id} (a handle let go); text.collate {names} →
 //   each one's place in the order people read them (the system's collation; a shell without it: an error, and the
 //   core orders them by hand); ed25519.sign {seed, message} (hex) → {publicKey, signature} (hex; a shell without it:
-//   an error, and the core signs in JS: Host.ed25519Sign).
+//   an error, and the core signs in JS: Host.ed25519Sign); crypto.verify {alg, key, signature, message} (hex) → whether
+//   it is (libcrux's; a shell without it: an error, and the core checks in JS: Host.verify).
 import type { Recorder } from "../record.ts";
 import { Effect, type Scope } from "effect";
 import { Core } from "../core.ts";
 import { FileSource } from "../file-source.ts";
-import type { CoreModule } from "../module.ts";
 import { HostError } from "../error.ts";
 import type { CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohPath, IrohStream } from "../iroh.ts";
 import { accessOf } from "../iroh-bindings.ts";
@@ -194,6 +196,20 @@ export class BridgeHost implements Host {
     return null;
   }
 
+  /// The shell's signature check (`crypto.verify`: libcrux), until it says it has none.
+  #verifies = true;
+  verify(alg: "Ed25519" | "ES256" | "ES256-der", key: Uint8Array, signature: Uint8Array, message: Uint8Array): boolean | null {
+    if (!this.#verifies) return null;
+    try {
+      const out = this.#bridge.sync("crypto.verify", { alg, key: hex(key), signature: hex(signature), message: hex(message) });
+      if (typeof out === "boolean") return out;
+    } catch {
+      // A shell from before it.
+    }
+    this.#verifies = false;
+    return null;
+  }
+
   /// The shell's Ed25519 (`ed25519.sign`), until it says it has none.
   #signs = true;
   ed25519Sign(seed: Uint8Array, message: Uint8Array): { publicKey: Uint8Array; signature: Uint8Array } | null {
@@ -254,7 +270,7 @@ export class BridgeHost implements Host {
     return Effect.gen(function* () {
       const opened = yield* Effect.acquireRelease(bridge.call("ws.open", { url, protocols }), (a) => Effect.ignore(bridge.call("ws.close", { id: (a.json as J).id }), { log: "Unhandled", message: "socket closed" }));
       const id = (opened.json as J).id as number;
-      // The host's ping (host.rs SOCKET_PING_MS).
+      // The host's ping.
       yield* Effect.forkScoped(Effect.forever(laterSleep(SOCKET_PING_MS).pipe(Effect.andThen(Effect.ignore(bridge.call("ws.send", { id, text: SOCKET_PING }), { log: "Unhandled", message: "socket pinged" })))));
       return { take: Effect.map(bridge.call("ws.next", { id }), (a) => ((a.json as J)?.end === true ? null : String((a.json as J).text))) };
     });
@@ -277,7 +293,7 @@ export class BridgeHost implements Host {
     };
   }
 
-  /// A loopback listener (a login's browser coming back, docs/remote-login.md), the app's: a request at a time, each
+  /// A loopback listener (a login's browser coming back), the app's: a request at a time, each
   /// answered once (the app closes its connection then).
   listen(port: number, host: string): Effect.Effect<Pull<LoopbackRequest>, HostError, Scope.Scope> {
     const bridge = this.#bridge;
@@ -314,6 +330,9 @@ export class BridgeHost implements Host {
   savedRead(at: string, start: number, end: number): Effect.Effect<Uint8Array | null, HostError> {
     return Effect.map(this.#bridge.call("kept.read", { at, start, end }), (a) => ((a.json as J)?.none === true ? null : (a.bytes ?? new Uint8Array(0))));
   }
+  stage(name: string, offset: number, bytes: Uint8Array): Effect.Effect<{ path: string; size: number }, HostError> {
+    return Effect.map(this.#bridge.call("kept.stage", { name, offset }, bytes), (a) => ({ path: String((a.json as J)?.path ?? ""), size: Number((a.json as J)?.size ?? 0) }));
+  }
   storageDelete(key: string): Effect.Effect<void, HostError> {
     return Effect.asVoid(this.#bridge.call("storage.delete", { key }));
   }
@@ -339,6 +358,19 @@ export class BridgeHost implements Host {
   }
   secureDelete(key: string): Effect.Effect<void, HostError> {
     return Effect.asVoid(this.#bridge.call("secure.delete", { key }));
+  }
+  /// A host from before `secure.past` (and every one but Apple's, whose Keychain items were named by a home that moves)
+  /// fails it: none.
+  securePast(key: string): Effect.Effect<Uint8Array[], HostError> {
+    return Effect.orElseSucceed(
+      Effect.map(this.#bridge.call("secure.past", { key }), (a) => {
+        const sizes = ((a.json as J)?.sizes ?? []) as number[];
+        const bytes = a.bytes ?? new Uint8Array(0);
+        let at = 0;
+        return sizes.map((n) => bytes.slice(at, (at += n)));
+      }),
+      () => [],
+    );
   }
   secureAsk(reason: string): Effect.Effect<void, HostError> {
     return Effect.asVoid(this.#bridge.call("secure.ask", { reason }));
@@ -370,7 +402,8 @@ export class BridgeHost implements Host {
   }
 
   nowMs(): number {
-    return this.#bridge.native.now();
+    // Match Date.now() on web and Node: persisted and transmitted wall times use whole milliseconds.
+    return Math.floor(this.#bridge.native.now());
   }
   monotonicMs(): number {
     return this.#bridge.native.monotonic();
@@ -467,6 +500,7 @@ export function bridgeIroh(bridge: Bridge): Iroh {
     addAddr: (addr) => void bridge.sync("iroh.addAddr", { id, addr }),
     networkChange: () => Effect.ignore(bridge.call("iroh.networkChange", { id }), { log: "Unhandled", message: "network change told" }),
     relayStatus: () => (bridge.sync("iroh.relayStatus", { id }) as { url: string; connected: boolean }[]) ?? [],
+    dhtSaid: (keep) => (bridge.sync("dht.said", { keep }) as ReturnType<NonNullable<IrohEndpoint["dhtSaid"]>> | null) ?? { lines: [], dropped: 0 },
     setRelayEntries: (entries) => Effect.asVoid(bridge.call("iroh.setRelayEntries", { id, entries })),
     close: () => Effect.ignore(bridge.call("iroh.close", { id }), { log: "Unhandled", message: "endpoint closed" }),
   });
@@ -476,9 +510,8 @@ export function bridgeIroh(bridge: Bridge): Iroh {
 }
 
 /// A core on a shell: the API the Rust core's Node addon had (connect / receive(json) / disconnect). A bug that ends a fiber ends it as a
-/// panic ended the Rust core: `onFatal` (each UI is told `{"fatal": …}` by the shell, which starts another). `modules`:
-/// what the app adds to the core (module.ts).
-export function startBridged(native: Native, cloudOrigin: string, beta: boolean, os: string, onFatal: (reason: string) => void, extra: { modules?: readonly CoreModule[] } = {}) {
+/// panic ended the Rust core: `onFatal` (each UI is told `{"fatal": …}` by the shell, which starts another).
+export function startBridged(native: Native, cloudOrigin: string, beta: boolean, os: string, onFatal: (reason: string) => void) {
   service.name = "stillfail-native";
   service.os = os;
   const bridge = new Bridge(native);
@@ -489,7 +522,7 @@ export function startBridged(native: Native, cloudOrigin: string, beta: boolean,
     dead = true;
     onFatal(t("core-misc.host.crashed", { reason: error instanceof Error ? error.message : String(error) }));
   };
-  const ready = Core.create(host, { iroh: bridgeIroh(bridge), modules: extra.modules }).then((core) => {
+  const ready = Core.create(host, { iroh: bridgeIroh(bridge) }).then((core) => {
     // A database found damaged on the way is marked first: the core that follows makes it again (data.ts).
     core.inner.runner.onDefect = (error) => void core.inner.data.damageKept().then(() => fatal(error));
     core.keepTime();

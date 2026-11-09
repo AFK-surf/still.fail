@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bareLinks } from "../web/src/bareLinks.ts";
+import { bareLinks } from "../client/core-ts/src/bareLinks.ts";
 
 /** The addresses found in `text`. */
 const found = (text: string) => bareLinks(text).flatMap((p) => (typeof p === "string" ? [] : [p.url]));

@@ -1,4 +1,4 @@
-// The faces the app is set in, as this device chose them (docs/fonts.md; the Android app's ui/Fonts.kt rememberFonts
+// The faces the app is set in, as this device chose them (sf/faces.mbt; the Android app's ui/Fonts.kt rememberFonts
 // and FaceFiles): the prefs' `faces` say each place's (ui, text, code); one still.fail keeps is had from the core, which
 // keeps its files for this app (client/core-ts/src/font-files.ts: `fonts.file`, fetched first where it has none,
 // `fonts.fetch`), each unzipped here and checked by its hash (and given back unzipped: `fonts.keep`), and given to the
@@ -58,12 +58,21 @@ fn faces_reset() -> Unit {
   }
   previews.clear()
   share_face_asked.val = false
+  share_face_whole_asked.val = 0
+  looks_files_reset()
+  vector_cjk.set(CjkUnwanted)
 }
 
 ///|
 /// The app's words' own face in the wide frame (keyboard and mouse's window, as the desktop app's pages: Inter, inter_face.mbt),
 /// where none is chosen: its id in `faces_in`, its file unzipped once.
 pub let desktop_face : String = "\u{1}inter"
+
+///|
+/// The app's bundled UI face, for drawings made without an app source or a user's font preferences.
+pub fn bundled_ui_face() -> Bytes? {
+  inter_face()
+}
 
 ///|
 /// The places' faces as a visualization's page is set in them (viz_file.mbt viz_tokens), by host face (1 ui, 2 text,
@@ -80,8 +89,9 @@ let local_face : String = "local:"
 /// The places' faces as the prefs say them, given to the host as each is here (call each frame, before the pages):
 /// with none chosen for the app's words, the desktop app's in the wide frame (`wide`).
 pub fn faces(src : Source, wide : Bool) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   guard prefs is Some(_) else { return }
+  vector_cjk_had(src, prefs)
   let shown = field(prefs, "faces")
   let chosen = field(prefs, "fonts")
   let wanted : Array[String] = []
@@ -172,7 +182,7 @@ pub fn faces(src : Source, wide : Bool) -> Unit {
           if !read {
             @ui.face_clear(host_face)
             faces_had[now] = Asking
-            face_files(src, now, files, 0, [], false)
+            face_files(src, now, files, 0, [], false, fn(h) { faces_had[now] = h })
             faces_in[host_face] = ""
             continue
           }
@@ -215,7 +225,7 @@ fn face_had(src : Source, id : String, files : Array[Json]) -> Array[(FaceFile, 
     }
     None => {
       faces_had[id] = Asking
-      face_files(src, id, files, 0, [], false)
+      face_files(src, id, files, 0, [], false, fn(h) { faces_had[id] = h })
       // (all here at once where the core had them so)
       match faces_had.get(id) {
         Some(Whole(b)) => Some(b)
@@ -227,16 +237,24 @@ fn face_had(src : Source, id : String, files : Array[Json]) -> Array[(FaceFile, 
 
 ///|
 /// Face `id`'s files from the `at`th on, each from the core: unzipped and checked where it is as fetched; where the
-/// core has one not, the face fetched first (once).
-fn face_files(src : Source, id : String, files : Array[Json], at : Int, got : Array[(FaceFile, Int)], fetched : Bool) -> Unit {
+/// core has one not, the face fetched first (once). How far it got is told to `had`.
+fn face_files(
+  src : Source,
+  id : String,
+  files : Array[Json],
+  at : Int,
+  got : Array[(FaceFile, Int)],
+  fetched : Bool,
+  had : (FaceHad) -> Unit,
+) -> Unit {
   if at >= files.length() {
-    faces_had[id] = Whole(got)
+    had(Whole(got))
     return
   }
   let f = Some(files[at])
   let sha = text(f, "sha256")
   let weight = number(f, "weight").to_int()
-  (src.read_bytes)("fonts.file", Json::object({ "sha256": sha.to_json() }), fn(r) {
+  (src.read_bytes)("fonts.file", Json::object({ "sha256": ToJson::to_json(sha) }), fn(r) {
     match r {
       Ok((v, bytes)) => {
         let whole = if flag(Some(v), "zipped") { @zip.gunzip(bytes) } else { Some(bytes) }
@@ -244,24 +262,24 @@ fn face_files(src : Source, id : String, files : Array[Json], at : Int, got : Ar
           Some(b) if @zip.sha256(b) == sha => {
             // kept unzipped from now on
             if flag(Some(v), "zipped") {
-              (src.call_bytes)("fonts.keep", Json::object({ "sha256": sha.to_json() }), b, fn(_) {  })
+              (src.call_bytes)("fonts.keep", Json::object({ "sha256": ToJson::to_json(sha) }), b, fn(_) {  })
             }
             got.push((Held(b), weight))
-            face_files(src, id, files, at + 1, got, fetched)
+            face_files(src, id, files, at + 1, got, fetched, had)
           }
-          _ => faces_had[id] = NotHad(@sf.t("android-settings.fonts.damaged"))
+          _ => had(NotHad(@sf.t("android-settings.fonts.damaged")))
         }
       }
       Err(e) if text(Some(e), "code") == "not_found" && !fetched => {
-        faces_had[id] = Fetching
-        (src.call)("fonts.fetch", Json::object({ "id": id.to_json() }), fn(r) {
+        had(Fetching)
+        (src.call)("fonts.fetch", Json::object({ "id": ToJson::to_json(id) }), fn(r) {
           match r {
-            Ok(_) => face_files(src, id, files, 0, [], true)
-            Err(e) => faces_had[id] = NotHad(text(Some(e), "message"))
+            Ok(_) => face_files(src, id, files, 0, [], true, had)
+            Err(e) => had(NotHad(text(Some(e), "message")))
           }
         })
       }
-      Err(e) => faces_had[id] = NotHad(text(Some(e), "message"))
+      Err(e) => had(NotHad(text(Some(e), "message")))
     }
   })
 }
@@ -293,7 +311,7 @@ fn face_preview(src : Source, id : String, index : Int, variable : Bool) -> Int 
     Some(f) => if f > 0 { f } else { 0 }
     None => {
       previews[id] = 0
-      (src.read_bytes)("fonts.preview", Json::object({ "id": id.to_json() }), fn(r) {
+      (src.read_bytes)("fonts.preview", Json::object({ "id": ToJson::to_json(id) }), fn(r) {
         match r {
           Ok((_, bytes)) =>
             previews[id] = if @ui.face_add_bytes(host_face, bytes, weight=if variable { 0 } else { 400 }) {
@@ -332,6 +350,59 @@ pub fn share_face_given() -> Int {
     }
   }
   share_face
+}
+
+///|
+/// The share card's face as the app carries it, each weight's file gzipped and its weight (empty on the web until the
+/// page has it).
+pub fn share_face_carried() -> Array[(Bytes, Int)] {
+  share_files()
+}
+
+///|
+/// The drawing whose whole share face was given to the share face, 0 none.
+let share_face_whole_asked : Ref[Int] = Ref(0)
+
+///|
+/// The files of drawing `drawing`'s whole share face (share_face_whole), each with its weight.
+pub fn share_face_whole_files(drawing : Int) -> Array[(String, Int)] {
+  [("\{drawing}/face-400.gz", 400), ("\{drawing}/face-600.gz", 600)]
+}
+
+///|
+/// The share card's face with the characters of looks whose words the app's carried face has not (千恋＊万花's: the
+/// card's every word, sfpages/share_senren.mbt), had from still.fail's site as their pictures are
+/// (web/public/share-looks/<drawing>/face-<weight>.gz, each a file of the looks: looks_file; scripts/fonts.py --share
+/// makes both), so the app does not carry them: once each weight's is here, given to the share face in place of the
+/// carried one (each a superset of it). Until then the card's words are in the carried face, and the card is not
+/// handed out (its looks' files not all here: looks_stand). How they stand: looks_stand of share_face_whole_files.
+pub fn share_face_whole(src : Source, drawing : Int) -> Unit {
+  if share_face_whole_asked.val == drawing {
+    return
+  }
+  // (the carried one given first: asked for later, it would not be given over the whole one)
+  ignore(share_face_given())
+  let files = share_face_whole_files(drawing)
+  let got : Map[Int, Bytes] = Map::new()
+  for f in files {
+    let (file, weight) = f
+    looks_file(src, file, fn(gz) {
+      match @zip.gunzip(gz) {
+        Some(b) => {
+          got[weight] = b
+          if got.size() == files.length() && share_face_whole_asked.val != drawing {
+            share_face_whole_asked.val = drawing
+            @ui.face_clear(share_face)
+            for w in files {
+              ignore(@ui.face_add_bytes(share_face, got.get(w.1).unwrap(), weight=w.1))
+            }
+          }
+        }
+        None => ()
+      }
+    })
+    |> ignore
+  }
 }
 
 ///|

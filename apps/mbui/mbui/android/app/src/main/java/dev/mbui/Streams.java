@@ -27,7 +27,7 @@ import java.util.concurrent.Executors;
 
 /**
  * Streams (src/hostapi/stream.mbt, @ui's Stream): a picture decoded frame by frame, drawn by the app as an image. As
- * still.fail's Android app decodes a remote screen (its remote/Decoders.kt), with what is shown said by the app:
+ * still.fail's Android app decodes a remote screen, with what is shown said by the app:
  *
  * <p>H.264 by MediaCodec (asynchronous, its callbacks on a thread of the stream's own) onto a SurfaceTexture of the
  * app's GL context, driven by the framework (@ui's stream_feed.mbt, @hostapi.stream_feeds): what the decoder and the

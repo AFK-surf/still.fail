@@ -28,6 +28,8 @@ pub fn tr(key : String, args? : Array[(String, String)] = []) -> String {
         None => @settings.said(key, args).unwrap_or(key)
       }
   }
+  // (another product's cloud: its name for still.fail's)
+  s = @sf.branded(s)
   for a in args {
     s = s.replace_all(old="{" + a.0 + "}", new=a.1)
   }

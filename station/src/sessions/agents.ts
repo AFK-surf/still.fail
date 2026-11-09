@@ -1,7 +1,7 @@
 // The agents' side of the station (server.rs `App::start`): the hub with its drivers, background jobs, tasks for other
 // stations, the agents' tools and their door (/mcp). Made here and given to the rest; nothing else starts an agent.
 //
-// What the previous station process ran goes on (docs/station-ts.md, 已定 1): a station that stops hands its sessions
+// What the previous station process ran goes on (已定 1): a station that stops hands its sessions
 // over (run/handover.json) and the next takes them up, runtimes and all, from their runners. Under the launcher the
 // next process is up before the previous one hands over: it takes up only once that one is gone (run/hub.json says
 // which process holds the sessions), and opens the agents' door only then, so no call reaches a hub without its session.
@@ -15,9 +15,11 @@ import { DshDriver } from "../agents/dsh.ts";
 import { GrokDriver } from "../agents/grok.ts";
 import { CursorDriver } from "../agents/cursor.ts";
 import { HermesDriver } from "../agents/hermes.ts";
+import { AgyDriver } from "../agents/agy.ts";
 import { DevinDriver } from "../agents/devin.ts";
 import { Jobs, notifyEndpoint, screenEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
+import { WorkspaceWatch, workspaceSessionsToMeasure, workspaceWorking, type WorkspaceReading } from "../jobs/workspace-size.ts";
 import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
 import { DISK_EVERY_MS, DISK_LOW_BYTES, diskFree } from "../ops/disk.ts";
@@ -25,10 +27,9 @@ import { lentFile, placeIn, sandboxConfig, sandboxed } from "../agents/sandbox.t
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
 import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
-import { AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, Store, Up, AgentsSide, MeshSide } from "../services.ts";
+import { AdminHost, ControlPlane, Events, Grants, HelperFolders, Key, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, Store, Up, AgentsSide, MeshSide } from "../services.ts";
 import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.ts";
 import { permissionsView } from "../api/routes/permissions.ts";
-import { Gpus } from "../jobs/gpu.ts";
 import { Net, measure } from "../jobs/load.ts";
 import { Notifier } from "../cloud/notify.ts";
 import type { Cloud as CloudState } from "../cloud/state.ts";
@@ -47,42 +48,50 @@ import { Forwards } from "../mesh/peer-forward.ts";
 import { nameOf, peerNamed } from "../mesh/peer-http.ts";
 import { McpEndpoint, UNBOUND_REFUSAL } from "../tools/mcp.ts";
 import { remoteTools } from "../tools/remote.ts";
+import { workspaceSizeTools } from "../tools/workspace-size.ts";
 import { type Accounts, checkConfig, makeAccounts } from "../accounts/index.ts";
 import { Sharing } from "../share/index.ts";
 import { ChatShares } from "../xshare/index.ts";
+import { ChatShareIndexBuilder } from "../xshare/index-builder.ts";
 import { overview } from "../api/overview.ts";
 import type { ConnectKind } from "../connects/connections.ts";
 import { agentsRoutes } from "../api/admin.ts";
-import type { ChatSurface } from "./chat.ts";
+import type { ChatEvent, ChatSurface } from "./chat.ts";
+import type { NameBook } from "../connects/names.ts";
 import { rootViewThrough } from "../drive/drive.ts";
 import type { Viewer } from "../mesh/credential.ts";
-import type { Lang } from "../ops/i18n.ts";
+import { stationLang, tr, type Lang } from "../ops/i18n.ts";
 import { type Updates, makeUpdates } from "../updates/updates.ts";
-import { hubConfig } from "./config.ts";
+import { type Connect, hubConfig } from "./config.ts";
 import type { TailState } from "../read/tail.ts";
+import { followLatestThreadRequests } from "../read/latest-thread-requests.ts";
 import { ColdRooms } from "./cold.ts";
 import { Hub } from "./hub.ts";
+import { LiveLocator } from "./live-locator.ts";
+import { buildWorkspaceActivity } from "./workspace-activity-builder.ts";
+import { buildSessionCounts } from "./session-count-builder.ts";
+import { PostBlockBuilder } from "./post-block-builder.ts";
+import { roomOf } from "./footprint.ts";
 import { InternalChat } from "./internal.ts";
-import { autoArchive, expireArchived, relieveArchived } from "./lifecycle.ts";
+import { expireArchived, relieveArchived, startAutoArchiveTimer } from "./lifecycle.ts";
 import { fromPeer, sender } from "./messages.ts";
 import { CREATE, NOTICE, createForPeer, noticeForPeer } from "./opened.ts";
 import { chatsTouched, forPeer, READ } from "./others.ts";
 import { FILE, fileForPeer, PUT, putForPeer } from "./peer-files.ts";
 import { reviewUndecided, startReview } from "./review.ts";
 import { readAgentEnvFrom } from "../ops/agent-env.ts";
+import { CardOutcomeWorker } from "../store/card-outbox-worker.ts";
 
 /// server.rs `encode` (encodeURIComponent).
 const encode = encodeURIComponent;
 
 /// How often the sandboxes nothing runs in are looked for (hub.ts `sweepSandboxes`).
 const SWEEP_MS = 3 * 60_000;
-/// How many threads archived to files are brought back into the database at a time, a second apart (store.ts
-/// `bringInArchived`): each a file read and its entries written, the main thread's.
-const BRING_IN = 20;
 
 export type AgentsParts = {
   /// The agents' predecessor-exit wait, also used before binding the mesh socket.
   previousGone: Promise<void>;
+  cardOutcomes: CardOutcomeWorker;
   hub: Hub;
   jobs: Jobs;
   remote: Remote;
@@ -102,6 +111,19 @@ export type AgentsParts = {
   /// The connects' chats the hub takes and posts to (Slack's, slack/module.ts; Feishu's, feishu/module.ts): each part
   /// says those of its connects, and a connect's chat is whichever part has it.
   surfaces(chats: (connect: string) => ChatSurface | undefined): void;
+  /// Connects the hub has besides config.json's: those of other stations whose chats run here (connects/remote.ts).
+  connects(more: () => Connect[]): void;
+  /// Takes what a connect's platform says: the hub's, or the route a part set (`route`, connects/remote.ts: to the
+  /// station a chat of its thread runs on).
+  receive(connect: string, event: ChatEvent): Promise<void>;
+  route(f: (connect: string, event: ChatEvent) => Promise<void>): void;
+  /// Each platform's names book (connects/names.ts), by its kind, as its part made it.
+  nameBook(kind: string, book: NameBook): void;
+  nameBooks: Map<string, NameBook>;
+  /// The station of workspace `ws` a connect of `kind` with this part (its tokens) runs on already, by its name (null:
+  /// none): a connect runs on one station (connects/workspace.ts says how it is asked).
+  heldBy(ws: string | null, kind: string, own: unknown): Promise<string | null>;
+  connectHeld(f: (ws: string | null, kind: string, own: unknown) => Promise<string | null>): void;
   /// How a kind of connect (config.json's `kind`) shows, is edited and is connected again, as its part says
   /// (connects/part.ts); and those said.
   connectKind(kind: string, view: ConnectKind): void;
@@ -115,7 +137,7 @@ export type AgentsParts = {
   pageOf(key: string): string | undefined;
   /// Where the station is in its control plane while in a workspace.
   place(): { origin: string; workspace: string; station: string; name: string } | null;
-  /// Where the station stands with its control plane: the workspaces it is in (docs/multi-workspace.md).
+  /// Where the station stands with its control plane: the workspaces it is in.
   cloud: CloudState;
   /// Its relay as the mesh sees it, for what other stations are told of its load (jobs/load.ts).
   net: Net;
@@ -148,11 +170,17 @@ export const AgentsLive = (control: Control) =>
       const screens = yield* ScreenRegistry;
       const grants = yield* Grants;
       const host = yield* AdminHost;
-      const modules = yield* Modules;
       const own = yield* Own;
       const up = yield* Up;
       const parts = yield* Parts;
-      const previous = (yield* Previous).gone;
+      const prior = yield* Previous;
+      const previous = prior.gone;
+      const cardOutcomes = yield* Effect.acquireRelease(
+        Effect.sync(() => new CardOutcomeWorker(store, prior.exited,
+          (thread, target, before, signal) => readers.cardEditPage(thread, target, before, signal),
+          (thread, target, before, signal) => readers.cardMessagePage(thread, target, before, signal))),
+        (worker) => Effect.promise(() => worker.close()),
+      );
       const run = join(data, "run");
       const config = yield* StationConfig;
       // An edit is taken only if it checks out as config.rs `parse_config` would have it.
@@ -165,14 +193,22 @@ export const AgentsLive = (control: Control) =>
       };
       const bound = () => place() !== null;
       // Session pages are still.fail cloud's (`<origin>/o/…`); other control planes have none to link to.
-      // In the workspace its chat is in (docs/multi-workspace.md).
+      // In the workspace its chat is in.
       const pageOf = (key: string) => {
         const s = place();
         const ws = store.getSession(key)?.ws ?? s?.workspace;
         return s && plane.spec().pages && (ws === s.workspace || cloud.membership(ws!) !== null) ? `${s.origin}/o/${ws}/${s.station}/${encode(key)}` : undefined;
       };
 
-      const settings = () => hubConfig(config.raw(), data);
+      // Each profile running the models its last check found besides those config.json names (the accounts, once made).
+      let found = (_: string): readonly string[] | null => null;
+      // config.json's connects and those of other stations whose chats run here (connects/remote.ts), said by the parts.
+      const moreConnects: (() => Connect[])[] = [];
+      const settings = () => {
+        const read = hubConfig(config.raw(), data, (id) => found(id));
+        for (const more of moreConnects) read.connects.push(...more());
+        return read;
+      };
       // The folders macOS protects (Documents, Desktop, Downloads, disks) through still.fail Helper: the drive's and
       // the directories people and agents name (ops/places.ts), never touched on the station's thread.
       const helperFiles = yield* HelperFolders;
@@ -184,23 +220,37 @@ export const AgentsLive = (control: Control) =>
       // subscription's is (agents/sandbox.ts).
       const lentToSandbox = (p: any) => !borrowed(p) && p?.access?.kind === "subscription" && sandboxed(data);
       const hermes = new HermesDriver({ data });
+      const agy = new AgyDriver({ data });
+      // What the station before this one left, taken up (`start`): until then the codex app-servers its runners keep are
+      // the sessions' that ran on them (agents/codex.ts `takenUp`).
+      const takenUp = Promise.withResolvers<void>();
+      let codexIncomplete = () => {};
       const codex = new CodexDriver({
         data,
+        incompleteInstallation: () => codexIncomplete(),
+        takenUp: takenUp.promise,
+        taking: () => control.taking(),
         currentProfile: (id) => settings().profiles.find((p) => p.id === id),
         lent: {
           borrowed: (p) => borrowed(p) || lentToSandbox(p),
-          write: (p) => (borrowed(p) ? sharing!.lendCodex(p) : sharing!.lendOwnCodex(p, lentFile(data, p.home))),
+          write: (p) => (borrowed(p) ? sharing!.lendCodex(p, false, sandboxed(data) ? lentFile(data, p.home) : undefined) : sharing!.lendOwnCodex(p, lentFile(data, p.home))),
         },
       });
       // What the parts of the agents' side add (slack/module.ts): the connects' chats, their overview, and what they do
       // as the station takes its sessions up and as its workspaces change, in the order the agents need.
       const surfaceChats: ((connect: string) => ChatSurface | undefined)[] = [];
+      // What a connect's platform says goes to the hub, unless a part routes it elsewhere first (connects/remote.ts).
+      let receive = (connect: string, event: ChatEvent) => hub.receive(connect, event);
+      const nameBooks = new Map<string, NameBook>();
+      let connectHeld = async (_ws: string | null, _kind: string, _own: unknown): Promise<string | null> => null;
       const connectKinds = new Map<string, ConnectKind>();
       const along: Along[] = [];
       const cold = new ColdRooms(() => hub);
       const hub = new Hub({
         config: settings,
+        taking: () => control.taking(),
         store,
+        previous,
         // The connects' chats (Slack's: slack/module.ts, which says them below); the station's own chat is the hub's.
         chats: (id) => {
           for (const chats of surfaceChats) {
@@ -224,6 +274,7 @@ export const AgentsLive = (control: Control) =>
           new CursorDriver({ data }),
           new DevinDriver({ data }),
           hermes,
+          agy,
         ],
         mcpUrl: () => door?.url ?? "",
         internal: new InternalChat(),
@@ -232,6 +283,21 @@ export const AgentsLive = (control: Control) =>
         cold,
         places,
       });
+      const workspaceActivity = yield* Effect.acquireRelease(
+        Effect.sync(() => buildWorkspaceActivity(store, previous)),
+        (builder) => Effect.promise(() => builder.close()),
+      );
+      hub.waitForWorkspaceActivity = () => workspaceActivity.ready;
+      const sessionCounts = yield* Effect.acquireRelease(
+        Effect.sync(() => buildSessionCounts(store, previous)),
+        (builder) => Effect.promise(() => builder.close()),
+      );
+      hub.waitForSessionCounts = () => sessionCounts.ready;
+      const postBlocks = yield* Effect.acquireRelease(
+        Effect.sync(() => new PostBlockBuilder(store, previous)),
+        (builder) => Effect.promise(() => builder.close()),
+      );
+      hub.preparePostsAfter = (messages, signal) => postBlocks.ready(messages, signal);
       // No turn until the agents' door is open: a runtime started before has no MCP endpoint, and Codex does not
       // connect to it again for that thread.
       hub.hold("starting");
@@ -253,9 +319,41 @@ export const AgentsLive = (control: Control) =>
         },
       });
       const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text), places: hub.places, bus: yield* Peers });
+      // Measure only working chats, and only station-owned workspaces. A chat's remote workspaces are measured on the
+      // machines that hold them; an offline or older station supplies no reading until it can answer.
+      const working = (key: string): boolean => workspaceWorking(store, (session) => hub.processState(session), key);
+      const workspaceWatch: WorkspaceWatch = new WorkspaceWatch({
+        data,
+        clock: hub.clock,
+        working,
+        notify: (session, text) => hub.notify(session, text),
+        readings: async () => {
+          const workingSessions = workspaceSessionsToMeasure(store, (session) => hub.processState(session));
+          return (await Promise.all(workingSessions.map(async (s) => {
+            const found: WorkspaceReading[] = [];
+            if (roomOf(data, s.workspace) !== null) {
+              const size = remote.workspaceReader.size(s.workspace, workspaceWatch.limit(s.key, ""));
+              if (size !== null) found.push({ session: s.key, station: "", name: "this station", path: s.workspace, ...size });
+            }
+            const targets = remote.workspaceTargets(s.key);
+            if (targets) {
+              const others = await Promise.all(targets.stations.map(async (station): Promise<WorkspaceReading | null> => {
+                const size = await remote.workspaceSize(s.key, station, workspaceWatch.limit(s.key, station)).catch(() => null);
+                return size ? { session: s.key, station, name: nameOf(cloud, station), ...size } : null;
+              }));
+              found.push(...others.filter((r): r is WorkspaceReading => r !== null));
+            }
+            return found;
+          }))).flat();
+        },
+      });
+      workspaceWatch.start();
+      yield* Effect.addFinalizer(() => Effect.promise(() => workspaceWatch.close()));
       // What the agents run here, watched for the machine's memory (jobs/memory.ts): their agents told when it is much,
       // the largest stopped only when the machine is about to run out.
-      const memory = liveMemory({ data, store, jobs, notify: (session, text) => hub.notify(session, text), clock: hub.clock });
+      const memory = liveMemory({ data, store, jobs, notify: (session, text) => hub.notify(session, text),
+        clock: hub.clock, runnerNames: (runners) => hub.runnerNameSessions(runners), directory: (dir) => hub.sessionInDirectory(dir),
+        processJobs: hub.processJobLookup() });
       memory.start();
       yield* Effect.addFinalizer(() => Effect.promise(() => memory.close()));
       // Tasks of stations no longer in the workspace, or no longer allowed, stop: once the mesh is up, and as the roster
@@ -287,13 +385,14 @@ export const AgentsLive = (control: Control) =>
       });
       hub.onClose((session) => {
         remote.closeSession(session);
+        if (!store.getSession(session)) workspaceWatch.forget(session);
         computer.closeSession(session);
         forwards.closeSession(session);
         parts.endSession(session);
       });
       // How busy this station is, told to the others' station_list (`describe`): the host page's measurements, the
       // GPUs (looked at once now, so the first to ask need not wait), what runs here and the relay.
-      const gpus = new Gpus();
+      const gpus = host.gpus;
       void gpus.read().catch(() => null);
       const net = meshSide.net;
       remote.setLoad(() =>
@@ -325,25 +424,27 @@ export const AgentsLive = (control: Control) =>
             return fromPeer(hub, peer, request, ws);
         }
       };
-      // A station of the workspace asking for a session of another of its workspaces (`as`, docs/multi-workspace.md)
+      // A station of the workspace asking for a session of another of its workspaces (`as`)
       // reaches what is shared with that one only.
       const inbox = async (peer: string, request: any, workspace?: string) =>
         typeof request?.as === "string" && workspace !== undefined && request.as !== workspace ? xshare.outside(peer, request, workspace) : local(peer, request, workspace ?? null);
       remote.setInbox(inbox);
-      // Chats shared with other workspaces, and theirs shared with this one (docs/chat-share.md): their stations are
+      // Chats shared with other workspaces, and theirs shared with this one: their stations are
       // asked and heard through it, for those chats only.
+      const shareIndex = new ChatShareIndexBuilder(store, previous);
+      yield* Effect.addFinalizer(() => Effect.promise(() => shareIndex.close()));
       const xshare = new ChatShares({
         data, store, cloud,
+        prepareIndex: () => shareIndex.request(),
         ask: (station, request) => remote.ask(station, request),
         link: (chat) => hub.link(chat) ?? null,
-        // As its messages are headed; a chat not named yet by what was first said in it.
+        // As its messages are headed (sender: as the chat list calls it).
         title: (chat) => {
-          let named = chat;
           try {
-            named = sender(hub, chat)[0];
-          } catch {}
-          const first = named === chat ? (store.listThreads("", chat, null)[0]?.firstText ?? "") : "";
-          return first.trim() !== "" ? Array.from(first.trim().split(/\s+/u).join(" ")).slice(0, 80).join("") : named;
+            return sender(hub, chat)[0];
+          } catch {
+            return chat;
+          }
         },
         touches: (request) => chatsTouched(hub, request),
         inbox: (peer, request) => local(peer, request),
@@ -353,6 +454,13 @@ export const AgentsLive = (control: Control) =>
       hub.onOutsideChats((ws) => xshare.borrowed(ws));
       remote.setOutside({ inside: (peer, request, ws) => xshare.inside(peer, request, ws), outside: (peer, request, ws) => xshare.outside(peer, request, ws) });
 
+      const agentName = (session: string) => {
+        let title = session;
+        try {
+          title = sender(hub, session)[0];
+        } catch {}
+        return `agent: ${title}`;
+      };
       // The agents' own hands on the screens: a session's view of one shows among its people as its chat.
       const computer = new Computer({
         hub: screens,
@@ -360,13 +468,7 @@ export const AgentsLive = (control: Control) =>
           const s = place();
           return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
         },
-        name: (session) => {
-          let title = session;
-          try {
-            title = sender(hub, session)[0];
-          } catch {}
-          return `agent: ${title}`;
-        },
+        name: agentName,
       });
       // The profiles' homes elsewhere and the machine's runtime logins are the station's own too (ops/own.ts): never
       // reached through the drive, the device tools or a search.
@@ -375,12 +477,13 @@ export const AgentsLive = (control: Control) =>
         ...chatTools(hub),
         ...archiveTools(hub),
         ...remoteTools(remote),
+        ...workspaceSizeTools(workspaceWatch, remote),
         ...jobTools(jobs, (key) => store.getSession(key)?.workspace ?? null, hub.places),
         ...screenTools(screens, () => {
           const s = place();
           return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
-        }),
-        // What macOS lets still.fail Helper do here, and a grant asked of a person (docs/remote-screens.md "Grants").
+        }, agentName),
+        // What macOS lets still.fail Helper do here, and a grant asked of a person.
         ...permissionTools(grants, () => {
           const s = place();
           return s && plane.spec().pages ? `${s.origin}/w/${s.workspace}/s/${s.station}` : null;
@@ -388,8 +491,9 @@ export const AgentsLive = (control: Control) =>
         ...computerTools(computer),
         ...forwardTools(forwards),
       ];
-      // The station's and the runtimes' versions, read at start and every few hours; updated from the pages, or by
-      // itself while nothing runs and nothing is asked of it (auto update), watched or not.
+      // The station's and the runtimes' versions, read at start, the station's again as the cloud says a release is out
+      // and the runtimes' (other registries') every few hours; updated from the pages, or by itself while nothing runs
+      // and nothing is asked of it (auto update), watched or not.
       const updates = makeUpdates({
         app,
         data,
@@ -398,14 +502,14 @@ export const AgentsLive = (control: Control) =>
         origin: () => plane.releaseBase(),
         running: () => hub.running(),
       });
-      // The packages of the modules the station installs itself, read and updated with the rest (a line each).
-      updates.add(yield* ModulePackages);
+      codexIncomplete = () => { void updates.check().catch((error) => log.warn("updates", "Codex installation not checked", { error: String(error) })); };
       updates.start();
+      plane.told("release", () => void updates.check().catch((error) => log.warn("updates", "the release not read", { error: String(error) })));
       // `stillfail update --beta|--stable` asks a running station by SIGHUP (run/channel-ask).
       control.on("hup", () => updates.answerChannelAsk());
 
       // Outside a workspace its agents do not reach out of it: their outward tools are refused.
-      // So are those of a session of a workspace the station has left (docs/multi-workspace.md).
+      // So are those of a session of a workspace the station has left.
       const inItsWorkspace = (session: string) => {
         const ws = store.getSession(session)?.ws ?? null;
         return ws === null || cloud.membership(ws) !== null;
@@ -422,27 +526,31 @@ export const AgentsLive = (control: Control) =>
         return cloud.memberships().flatMap((m) => m.peers).find((x) => x?.id === host)?.name ?? host ?? null;
       };
       const accounts: Accounts = makeAccounts({
-        data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, hermes: () => hermes, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
+        data, store, config, hub, reviewUndecided: () => startReview(hub), codex: () => codex as any, hermes: () => hermes, agy: () => agy, following: () => events.inUse() || hub.anyRunning(), checkOnStart: true,
         workspaces: () => hub.workspaces(),
-        shared: { status: (p) => sharing!.status(p), view: (p) => sharing?.profileView(p) ?? null, hostName },
+        shared: { status: (p) => sharing!.status(p), lendCodex: (p, rejected) => sharing!.lendCodex(p, rejected), quotaReset: (p, key) => sharing!.quotaReset(p.id, key), loginUpdated: () => { void sharing?.reconcile(); }, view: (p) => sharing?.profileView(p) ?? null, hostName },
       });
+      found = accounts.found;
       accounts.start();
       sharing = new Sharing({
         data, config, cloud,
         ask: (station, workspace, request) => remote.ask(station, workspace === null ? request : { workspace, ...request }),
         agentHome: () => settings().agentHome,
         env: process.env as Record<string, string | undefined>,
+        machineEmail: (runtime) => accounts.machineLogins().find((login) => login.runtime === runtime && login.loggedIn)?.email ?? null,
         claudeToken: (p, rejected) => accounts.claudeToken(p, rejected),
         // In sandboxes no Codex here holds the refresh token: it is renewed here whenever it runs out.
         codexRenewRunning: async (id) => !sandboxed(data) && (await codex.renewLogin(id)),
         status: async (id) => { const h = await accounts.lentHealth(id); return { check: h.check ?? null, quota: h.quota ?? null }; },
         changed: () => events.overviewChanged(),
         recheck: () => accounts.recheckBorrowed(),
+        profileChanged: (id, reset) => accounts.sharedChanged(id, reset),
+        quotaReset: (id) => accounts.sharedQuotaReset(id),
       });
       remote.setShares((peer, request, workspace) => sharing!.handle(peer, request, workspace));
       sharing.start();
       xshare.start();
-      const platformView = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, connectKinds, rootView: (p) => rootViewThrough(p, helperFiles), modules: () => modules.listed(), ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
+      const platformView = (viewer: Viewer, lang: Lang) => overview({ store, hub, cloud, config: () => config.raw(), accounts, updates, connectKinds, rootView: (p) => rootViewThrough(p, helperFiles), ...(grants ? { permissions: (v: Viewer) => permissionsView(grants, v) } : {}) }, viewer, lang);
       // And the fields the station's parts add (parts.ts).
       const view = async (viewer: Viewer, lang: Lang) => ({ ...((await platformView(viewer, lang)) as object), ...(await parts.overviewOf(viewer, lang)) });
 
@@ -453,8 +561,49 @@ export const AgentsLive = (control: Control) =>
         state: async (key) => (JSON.parse(await readers.read("transcriptState", { key }, "zh")) as { states: TailState[] | null }).states,
         page: async (key, before, limit, brief) => JSON.parse(await readers.read("timeline", { key, before: String(before), limit: String(limit), lang: "zh", ...(brief ? { brief: "1" } : {}) }, "zh")),
       };
+      // Resolving a live session's older transcript files may take a while; keep it off the station's thread.
+      const liveLocator = new LiveLocator(data, (key) => store.getSession(key), () => hub.config().profiles);
+      hub.live.locateAsync = (key, signal) => liveLocator.locate(key, signal);
+      yield* Effect.addFinalizer(() => Effect.promise(() => liveLocator.close()));
+      // Not asked of them before the process before has handed over: what it carries says where each reading stands.
+      hub.live.handover = previous;
+      // Where each checklist was read to, for the next process to read on from (not back, at each update).
+      parts.carry("live.plans", () => hub.live.carriedPlans(), (what) => hub.live.takePlans(what));
+      // And where each transcript's reading stood, for it to read on from there (not ask the readers, at each update).
+      parts.carry("live.tails", () => hub.live.carriedTails(), (what) => hub.live.takeTails(what));
       hub.threadList = async () => JSON.parse(await readers.read("threadList", {}, "zh"));
+      hub.recentChatList = async (ws, home, limit, signal) => JSON.parse(await readers.read("recentChatList", { ws, home, limit }, "zh", { signal }));
+      hub.searchChatList = async (ws, home, limit, query) => JSON.parse(await readers.read("searchChatList", { ws, home, limit, query }, "zh"));
       hub.latestMessages = async (thread, limit) => JSON.parse(await readers.read("latestMessages", { thread, limit }, "zh"));
+      hub.openedChatSaid = async (thread, author, agentOnly) => JSON.parse(await readers.read("openedChatSaid", { thread, author, agentOnly }, "zh"));
+      hub.historyMessages = async (thread, before, limit) => JSON.parse(await readers.read("chatHistoryMessages", { thread, before, limit }, "zh"));
+      hub.historyPendingCard = async (thread) => JSON.parse(await readers.read("historyPendingCard", { thread }, "zh"));
+      hub.prepareCardPosts = (threads, signal) => readers.prepareCardPosts(threads, signal);
+      hub.prepareLegacyEdits = (signal) => readers.prepareLegacyEdits(signal);
+      hub.stateQuestion = async (key, threads, ts) => JSON.parse(await readers.read("stateQuestion", { key, threads, ts }, "zh"));
+      hub.statePendingCard = async (threads) => JSON.parse(await readers.read("statePendingCard", { threads }, "zh"));
+      hub.deliveryCardState = async (thread, n, signal) => JSON.parse(await readers.read("deliveryCardState", { thread, n }, "zh", { signal }));
+      hub.pendingDeliveries = async (key, signal) => JSON.parse(await readers.read("pendingDeliveries", { key }, "zh", { signal }));
+      hub.reviewPendingCard = async (thread) => JSON.parse(await readers.read("reviewPendingCard", { thread }, "zh", { background: true }));
+      hub.prepareSessionUpJobs = (session) => readers.prepareSessionUpJobs([session]);
+      hub.prepareWidgetSources = (threads, signal) => readers.prepareWidgetSources(threads, signal);
+      hub.prepareCcSessions = (sessions, signal) => readers.prepareCcSessions(sessions, signal);
+      hub.prepareSessionChatNames = (sessions, signal) => readers.prepareSessionChatNames(sessions, signal);
+      hub.prepareLatestThreads = (sessions, signal) => readers.prepareLatestThreads(sessions, signal);
+      const namesPreparing = new Set<string>();
+      const requestSessionChat = (session: string) => {
+        if (namesPreparing.has(session)) return;
+        namesPreparing.add(session);
+        void readers.prepareSessionChatNames([session]).catch((error: unknown) => {
+          log.warn("store", "a session's chat name could not be prepared", { session, error: String(error) });
+        }).finally(() => namesPreparing.delete(session));
+      };
+      store.requestSessionChat = requestSessionChat;
+      yield* Effect.addFinalizer(() => Effect.sync(() => {
+        if (store.requestSessionChat === requestSessionChat) store.requestSessionChat = null;
+      }));
+      const stopLatestThreadRequests = followLatestThreadRequests(store, readers);
+      yield* Effect.addFinalizer(() => Effect.sync(stopLatestThreadRequests));
       hub.followRunning();
       // The readers say what runs, and which chats clients made: the hub's.
       readers.processes = () => hub.processes();
@@ -472,13 +621,23 @@ export const AgentsLive = (control: Control) =>
         followed: () => accounts.followed(),
       });
       // A runtime installed or updated from the pages: the machine's logins read again.
-      updates.onRuntimeChanged((kind, installed) => {
+      updates.onRuntimeChanged((kind, installed, replaced) => {
         void accounts.machine?.refresh();
         // Installed: the sessions whose start found it missing take what waits.
         if (installed) hub.installed(kind);
         // Codex updated: its app-servers of the old version are replaced (their files are gone).
-        void codex.runtimeChanged().catch((error) => log.warn("agents::codex", "codex app-servers not checked after an update", { error: String(error) }));
+        void codex.runtimeChanged(kind === "codex" && replaced).catch((error) => log.warn("agents::codex", "codex app-servers not checked after an update", { error: String(error) }));
+        // Another runtime: each session's process of it is started again on the new one (a Claude Code updated from the
+        // page went on refusing a model its old processes did not support until each was restarted by hand, 2026-11-10).
+        if (kind !== "codex") hub.runtimeUpdated(kind);
       });
+      hub.deps.updateOldCodex = async (version) => {
+        // The sandbox has its own executables: updating the station's Codex would not change the one that failed.
+        if (sandboxed(data)) throw new Error(tr(stationLang(), "station.notice.codexUpdateSandbox"));
+        await updates.updateOldCodex(version);
+        // Wait until old hosts are marked before any conversation can retry; other turns keep running there.
+        await codex.runtimeChanged(version === null, true);
+      };
       // A session found its runtime not installed: the pages read it again (removed since they last did).
       hub.onRuntimeMissing((runtime) => updates.missing(runtime));
       // What the overview shows changes: told on the event streams.
@@ -491,7 +650,7 @@ export const AgentsLive = (control: Control) =>
         cloud.listen(() => events.overviewChanged()),
       ];
 
-      // In a workspace, or out of it, as cloud.json says, from now on; and in which of them (docs/multi-workspace.md).
+      // In a workspace, or out of it, as cloud.json says, from now on; and in which of them.
       let inWorkspace = bound();
       let joinedNow = new Set(cloud.memberships().filter((m) => !m.home).map((m) => m.workspace));
       let homeNow = cloud.home();
@@ -561,7 +720,11 @@ export const AgentsLive = (control: Control) =>
         mkdirSync(run, { recursive: true });
         writeFileSync(join(run, "hub.json"), JSON.stringify({ pid: process.pid }) + "\n");
         if (!inWorkspace) hub.hold("unbound");
-        await hub.takeUp();
+        try {
+          await hub.takeUp();
+        } finally {
+          takenUp.resolve();
+        }
         // The launcher's socket; on its own, as the launcher's ports.rs would: the port config.json names; else the one
         // remembered (the agents left running know it), 4750 on the machine's own data directory, any free one.
         const named = config.raw()?.http?.port;
@@ -620,16 +783,7 @@ export const AgentsLive = (control: Control) =>
 
       // Chats idle long enough go to the archive: looked at when the next one comes due, and every ten minutes for what
       // was idle but not done (a job up, unread, at a block) and is done since, or the setting changed.
-      const archiving = () => {
-        let next: number | null = null;
-        try {
-          next = autoArchive(hub, hub.now());
-        } catch (error) {
-          log.warn("hub", "auto-archiving failed", { error: (error as Error).message });
-        }
-        time.after(Math.min(600_000, next === null ? Infinity : next - hub.now()), archiving);
-      };
-      time.after(60_000, archiving);
+      const stopArchiving = startAutoArchiveTimer(hub, time, readers);
 
       // Chats archived long enough keep only their history and the files sent in them: looked at when the next one
       // comes due, and every hour for the setting changed.
@@ -666,26 +820,8 @@ export const AgentsLive = (control: Control) =>
       };
       time.after(DISK_EVERY_MS, relieving);
 
-      // The threads a station before wrote out to their archive files, back into the database a few at a time
-      // (store.ts `bringInArchived`), once the devices have come back from the start.
-      let broughtIn = 0;
-      const bringingIn = () => {
-        let left: number;
-        try {
-          const step = store.bringInArchived(BRING_IN);
-          broughtIn += step.brought;
-          left = step.left;
-        } catch (error) {
-          log.warn("store", "archived threads not brought back into the database", { error: (error as Error).message });
-          return;
-        }
-        if (left > 0) time.after(1_000, bringingIn);
-        else if (broughtIn > 0) log.info("store", "the threads archived to files are back in the database", { n: broughtIn });
-      };
-      time.after(120_000, bringingIn);
-
       // What the Rust station's archiving left (the transcripts kept twice): once, when the devices have come back.
-      time.after(180_000, () => cold.finishLegacyCopies());
+      time.after(180_000, () => cold.finishLegacyCopies().then(() => cold.segmentHistories()));
 
       // The archive review turned on, or given another model: the done chats no decision has answered are reviewed then,
       // not only the ones that end all_done from now on; and once after the start (the profiles' checks read by then).
@@ -714,6 +850,10 @@ export const AgentsLive = (control: Control) =>
         Effect.promise(async () => {
           if (handing) return;
           handing = true;
+          stopArchiving();
+          await postBlocks.close();
+          await workspaceActivity.close();
+          await sessionCounts.close();
           await time.close();
           await sharing?.close();
           await xshare.close();
@@ -738,7 +878,7 @@ export const AgentsLive = (control: Control) =>
           }
         }),
       );
-      const self = Agents.of({ pageOf, previousGone: previous, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, overview: view, surfaces: (chats) => void surfaceChats.push(chats), connectKind: (kind, view) => void connectKinds.set(kind, view), connectKinds, along: (a) => void along.push(a), taken: () => taken, bound, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
+      const self = Agents.of({ pageOf, previousGone: previous, cardOutcomes, hub, jobs, remote, mcp, config, updates, accounts, sharing: sharing!, xshare, peers, forwards, overview: view, surfaces: (chats) => void surfaceChats.push(chats), connects: (more) => void moreConnects.push(more), receive: (connect, event) => receive(connect, event), route: (f) => void (receive = f), nameBook: (kind, book) => void nameBooks.set(kind, book), nameBooks, heldBy: (ws, kind, own) => connectHeld(ws, kind, own), connectHeld: (f) => void (connectHeld = f), connectKind: (kind, view) => void connectKinds.set(kind, view), connectKinds, along: (a) => void along.push(a), taken: () => taken, bound, cloud, net, helperFiles, place: () => { const s = place(); return s ? { origin: s.origin, workspace: s.workspace, station: s.station, name: s.name } : null; } });
       // The admin API asks for the agents' side as a request comes (services.ts AgentsSide); its routes are a part.
       (yield* AgentsSide).current = self;
       // And what the mesh asks of it (services.ts MeshSide).

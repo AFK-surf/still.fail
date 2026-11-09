@@ -26,9 +26,9 @@ fn culled_tester(
             c.text("far words", wrap=false) |> ignore
           }
           let id = c.id("go")
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             clicks.val = clicks.val + 1
-          }
+          })
           c.box(w=Px(80.0), h=Px(40.0), id~, fn() {  }) |> ignore
         })
         |> ignore
@@ -166,4 +166,36 @@ test "words of the tree's own taller than the window, first drawn with their foo
   let whole = glyphs_in_top()
   assert_true(whole.length() > 0, msg="some of them within it")
   assert_eq(moved, whole, msg="what shows of them, where")
+}
+
+///|
+/// Words of the tree's own, a line 200 wide, in a box 100 tall that cuts what it holds, placed `dy` down in it and
+/// turned `r`: drawn. What the host was asked for and the last frame drew of their glyphs.
+fn cut_words(dy : Double, r : Double) -> (Int, Int) {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
+  t.check_looks(false)
+  let asked = glyphs_asked()
+  set_view_app(fn(root) {
+    root.box(fn(b) {
+      b.over(Is(true)).width(Is(Some(400.0))).height(Is(Some(100.0))).clips(Is(true)) |> ignore
+      b.box(fn(w) {
+        w.over(Is(true)).width(Is(Some(200.0))).words(Is("quixotic jugs vex")).offset(Is((0.0, dy))).turn(Is(r))
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  (glyphs_asked() - asked, glyphs_drawn())
+}
+
+///|
+test "words of the tree's own wholly below what cuts them: none of their glyphs drawn or asked of the host; moved into it, drawn; turned so that they reach into it from there, drawn" {
+  // (below it first: its glyphs asked of the host by nothing before)
+  assert_eq(cut_words(150.0, 0.0), (0, 0), msg="below it")
+  let (in_asked, in_drawn) = cut_words(0.0, 0.0)
+  assert_true(in_asked > 0 && in_drawn > 0, msg="in it: \{in_asked} asked, \{in_drawn} drawn")
+  let (_, turned) = cut_words(150.0, 1.5707963267948966)
+  assert_true(turned > 0, msg="turned upright about their middle, from 50 to 250 across its foot")
 }

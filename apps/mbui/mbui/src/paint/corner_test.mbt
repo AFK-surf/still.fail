@@ -16,7 +16,8 @@ test "a linked corner from the roots given: the window's corner changing, it fol
   // (one following that, 6 in again: as the chain has it under each)
   let inner : @paint.CornerOf = Follow(edge, 6.0, 10.0)
   assert_eq(inner.radius(full), @paint.concentric(34.0, 6.0))
-  assert_eq(inner.radius(mac), @paint.concentric(@paint.concentric(16.0, 6.0), 6.0))
+  // (under a Mac's 16 the edge's is 10: 6 in that, 4, squarer than the ranges let: alone)
+  assert_eq(inner.radius(mac), 10.0)
   // (no ranges: any corner, any place)
   let deep : @paint.CornerOf = Follow(Window, 14.0, 34.0)
   let none : @paint.CornerRoots = { window: 16.0, fit: None, zoom: 1.0 }
@@ -26,9 +27,9 @@ test "a linked corner from the roots given: the window's corner changing, it fol
 ///|
 test "a linked window corner is judged by its visible size after content zoom" {
   let edge : @paint.CornerOf = Follow(Window, 6.0, 28.0)
-  let enlarged : @paint.CornerRoots = { window: 8.0, fit: Some(ranges), zoom: 2.0 }
+  let enlarged : @paint.CornerRoots = { window: 10.0, fit: Some(ranges), zoom: 2.0 }
   assert_true(edge.follows(enlarged))
-  assert_eq(edge.radius(enlarged), @paint.concentric(8.0, 6.0))
+  assert_eq(edge.radius(enlarged), @paint.concentric(10.0, 6.0))
   // The same small logical corner without magnification remains below the theme's minimum.
   assert_false(edge.follows({ ..enlarged, zoom: 1.0 }))
 }

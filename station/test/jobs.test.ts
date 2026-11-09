@@ -4,11 +4,9 @@
 // run at once. No test waits a fixed time:
 // a job that must outlive something waits at a gate (a fifo) the test opens, and a service's pause is on a TestClock.
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
-import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, test } from "node:test";
@@ -20,9 +18,9 @@ import { openAgentsDoor } from "../src/tools/http.ts";
 import { McpEndpoint } from "../src/tools/mcp.ts";
 import { agentNice } from "../src/ops/nice.ts";
 import { jobTools } from "../src/tools/jobs.ts";
-import { Store } from "../src/store/store.ts";
+import { JOB_AT_PORT, Store } from "../src/store/store.ts";
 import { remoteRunsSince } from "../src/read/store.ts";
-import { WINDOWS, platform } from "../src/platform/index.ts";
+import { WINDOWS } from "../src/platform/index.ts";
 
 const dirs: string[] = [];
 const all: Jobs[] = [];
@@ -140,6 +138,56 @@ function restarted(before: Rig): Rig {
 }
 
 describe("jobs", { concurrency: true }, () => {
+  test("starting a service looks up its port without reading other active jobs", async () => {
+    const r = new Rig();
+    const recorded = (id: string, sessionKey: string, state: string, port: number, startedAt: number) => ({ id, sessionKey, name: id,
+      command: "true", cwd: r.work, port, token: id, state, pgid: null, exitCode: 0,
+      startedAt, endedAt: state === "running" ? null : 2, restarts: 0, log: "/dev/null", watch: false });
+    for (let i = 0; i < 200; i++) r.store.insertJob(recorded(`other-${i}`, `other-${i}`, "running", 10000 + i, i));
+    r.store.insertJob(recorded("old-claim", "s2", "exited", 5100, 1));
+    r.store.insertJob(recorded("new-claim", "s3", "running", 5100, 2));
+    r.store.insertJob(recorded("paused", "s4", "exited", 5101, 3));
+    r.store.insertJob(recorded("stopped", "s5", "stopped", 5102, 4));
+    let visited = 0;
+    r.store.db.function("visited_port", (_id) => { visited++; return 1; });
+    const measured = JOB_AT_PORT.replaceAll("port = ?1", "port = ?1 AND visited_port(id)");
+    assert.equal((r.store.db.prepare(measured).get(5100) as { id: string }).id, "new-claim");
+    assert.equal(visited, 2, "only jobs claiming that port were inspected");
+    visited = 0;
+    assert.equal(r.store.db.prepare(measured).get(5102), undefined);
+    assert.equal(visited, 0, "a stopped service and other ports were not inspected");
+    const list = r.store.jobsUp;
+    r.store.jobsUp = () => { throw new Error("unrelated running jobs were read"); };
+    try {
+      assert.throws(() => r.jobs.start("s1", "other", FOREVER, r.work, 5100, false), /new-claim/);
+      assert.throws(() => r.jobs.start("s1", "other", FOREVER, r.work, 5101, false), /paused/);
+      const job = r.jobs.start("s1", "free", FOREVER, r.work, 5102, false);
+      await r.jobs.stop(job.id);
+    } finally { r.store.jobsUp = list; }
+  });
+
+  test("starting a job checks the running limit without reading the session's job history", async () => {
+    const r = new Rig();
+    const recorded = (id: string, sessionKey: string, state: string) => ({ id, sessionKey, name: id,
+      command: "true", cwd: r.work, port: null, token: id, state, pgid: null, exitCode: 0,
+      startedAt: 1, endedAt: state === "running" ? null : 2, restarts: 0, log: "/dev/null", watch: false });
+    for (let i = 0; i < 200; i++) r.store.insertJob(recorded(`old-${i}`, "s1", "exited"));
+    const list = r.store.listJobs;
+    r.store.listJobs = function (session) {
+      if (session === "s1") throw new Error("job history was read");
+      return list.call(this, session);
+    };
+    try {
+      const job = r.jobs.start("s1", "run", FOREVER, r.work, null, false);
+      await r.jobs.stop(job.id);
+      for (let i = 0; i < 20; i++) r.store.insertJob(recorded(`active-${i}`, "s1", "running"));
+      r.store.insertJob(recorded("other", "s2", "running"));
+      assert.throws(() => r.jobs.start("s1", "over", FOREVER, r.work, null, false), /20 jobs already/);
+    } finally {
+      r.store.listJobs = list;
+    }
+  });
+
   test("a job runs apart, its output logged and its agent told how it ended", async () => {
     const r = new Rig();
     const job = r.jobs.start("s1", "build", "echo compiling; echo done >&2; exit 3", r.work, null, false);
@@ -186,65 +234,26 @@ describe("jobs", { concurrency: true }, () => {
     assert.equal(r.said().length, 2, "a stop asked for is no news");
   });
 
-  test("a job has its command under the new name and the old, and its variables under both", async () => {
+  test("a job has its command, and its variables", async () => {
     const r = new Rig();
     const job = r.jobs.start(
       "s1", "names",
-      `stillfail-job 2>&1; ember-job 2>&1; [ "$STILLFAIL_JOB_ID" = "$EMBER_JOB_ID" ] && [ "$STILLFAIL_JOB_TOKEN" = "$EMBER_JOB_TOKEN" ] && echo same`,
+      `stillfail-job 2>&1; [ -n "$STILLFAIL_JOB_ID" ] && [ -n "$STILLFAIL_JOB_TOKEN" ] && echo set`,
       r.work, null, false,
     );
     await until("it ends", () => r.state(job.id) !== "running");
     const ended = r.store.getJob(job.id)!;
     assert.equal(ended.state, "exited");
     const usage = "usage: stillfail-job notify <words> | stillfail-job screen <command>... | stillfail-job show <command>...";
-    assert.equal(tail(ended.log, 10), `${usage}\n${usage}\nsame`);
-    // Made again (a station starting over the same directory), the link stays one.
-    const bin = join(r.dir, "jobs", "bin");
-    jobsOn(r.dir, r.store, [], () => null);
-    assert.equal(readlinkSync(join(bin, "ember-job")), "stillfail-job");
-    // On Windows, stillfail-job.cmd beside them (for cmd and PowerShell).
-    assert.equal(readdirSync(bin).length, WINDOWS ? 3 : 2);
-  });
-
-  test("the job command reads the old variables of a job started before the rename", async () => {
-    const r = new Rig();
-    const bin = join(r.dir, "jobs", "bin");
-    // A /jobs/notify that says what it was asked (by the real curl).
-    const asked: { url?: string; authorization?: string; body: string }[] = [];
-    const server = createServer((req, res) => {
-      let body = "";
-      req.on("data", (chunk) => (body += chunk));
-      req.on("end", () => {
-        asked.push({ url: req.url, authorization: req.headers.authorization, body });
-        res.end("{}");
-      });
-    });
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const notify = `http://127.0.0.1:${(server.address() as AddressInfo).port}/jobs/notify`;
-    try {
-      // Windows runs no script by its #!: Git's sh runs it, with Windows' own PATH (curl is System32's or Git's).
-      const out = WINDOWS
-        ? spawn(platform.posixShell(), [join(bin, "ember-job"), "notify", "hi"], {
-            env: { ...platform.prependPath(process.env, bin), EMBER_JOB_TOKEN: "t0k", EMBER_JOB_NOTIFY: notify },
-            stdio: ["ignore", "ignore", "pipe"],
-          })
-        : spawn(join(bin, "ember-job"), ["notify", "hi"], {
-            env: { EMBER_JOB_TOKEN: "t0k", EMBER_JOB_NOTIFY: notify, PATH: `${bin}:/usr/bin:/bin` },
-            stdio: ["ignore", "ignore", "pipe"],
-          });
-      let said = "";
-      out.stderr.on("data", (chunk) => (said += chunk));
-      const code = await new Promise((resolve) => out.on("close", resolve));
-      assert.equal(code, 0, said);
-      assert.deepEqual(asked, [{ url: "/jobs/notify", authorization: "Bearer t0k", body: "hi" }]);
-    } finally {
-      server.closeAllConnections();
-      server.close();
-    }
+    assert.equal(tail(ended.log, 10), `${usage}\nset`);
+    // On Windows, stillfail-job.cmd beside it (for cmd and PowerShell).
+    assert.equal(readdirSync(join(r.dir, "jobs", "bin")).length, WINDOWS ? 2 : 1);
   });
 
   test("stillfail-job screen: one job's command has the screen at a time; the next waits, and has it once it is given back", { skip: WINDOWS && "a fifo for the gate" }, async () => {
     const r = new Rig();
+    sessionActive(r.store, "s1", 0);
+    sessionActive(r.store, "s2", 0);
     // The agents' door, as the station's: /jobs/screen to these jobs, asked by the real script and curl.
     const door = await openAgentsDoor(
       { port: 0 }, new McpEndpoint(() => undefined, []), (auth, body) => notifyEndpoint(r.jobs, auth, body), () => null, () => [],
@@ -258,8 +267,10 @@ describe("jobs", { concurrency: true }, () => {
       const next = r.jobs.start("s2", "more shots", `stillfail-job screen sh -c '[ -e first.out ] && touch next.after; exit 3'; echo "next $?"`, r.work, null, false);
       await until("the next waits for it", () => tail(r.store.getJob(next.id)!.log, 5).includes("waiting for the screen"));
       assert.equal(r.state(next.id), "running");
+      assert.deepEqual(r.said(), [], "neither running job is reported ended while the second waits for the screen");
       await go.open();
       await until("both end", () => r.state(first.id) !== "running" && r.state(next.id) !== "running");
+      await until("both ends are told", () => r.said().length === 2);
       assert.ok(existsSync(join(r.work, "next.after")), "the next's command ran once the first's had ended");
       assert.match(tail(r.store.getJob(first.id)!.log, 5), /first 0$/);
       assert.match(tail(r.store.getJob(next.id)!.log, 5), /next 3$/, "the command's own exit code");

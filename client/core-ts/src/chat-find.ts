@@ -1,4 +1,4 @@
-// A chat's own find (⌘F: web/src/ChatFind.tsx, the mbui app's sfdesk/find.mbt): which of the times the words are in the
+// A chat's own find (the mbui app's sfdesk/find.mbt): which of the times the words are in the
 // chat the reader is at, as they go along them. What the core found (`chat.find`) is its `hits`, the messages that
 // have the words (oldest first) with how many times each; the reader is at the `k`th time in message `seq`. What the
 // view knows is given: the messages showing (where the reader starts) and how many times a message's row draws the

@@ -2,8 +2,9 @@
 export type Role = "owner" | "admin" | "member";
 
 export interface UserView { sub: string; email: string; name: string; picture: string }
-/** The signed-in account, as `/v1/me` has it: `beta` only when the admin let it into the test channel. */
-export interface MeView extends UserView { beta?: true }
+/** The signed-in account, as `/v1/me` has it: `beta` only when the admin let it into the test channel; `own_picture` only
+ * when `picture` is one it put up for itself (PUT /v1/me/picture), not its sign-in's. */
+export interface MeView extends UserView { beta?: true; own_picture?: true }
 /** `relays`: the workspace's own relays, used besides still.fail's (absent from a cloud from before them). `ways_off`: the
  * ways its devices do not go to its stations (relay URLs, `lan`, `tailnet`, `direct`), only when some are turned off. */
 export interface WorkspaceSummary { id: string; name: string; emoji?: string; icon?: string; role: Role; created_at: number; stations: number; members: number; relays?: string[]; ways_off?: string[] }
@@ -13,7 +14,7 @@ export interface WayView { id: string; kind: "relay" | "lan" | "tailnet" | "dire
 /**
  * last_seen: when it last connected to still.fail cloud or left it (whether it is up, each device finds out over the mesh).
  * name, emoji, icon, enrolled_*: in this workspace. joined: the station is in another workspace too, which it joined
- * first (its home, whose owners and admins manage the machine: docs/multi-workspace.md); absent where this is its home.
+ * first (its home, whose owners and admins manage the machine); absent where this is its home.
  */
 export interface StationView { id: string; name: string; emoji: string | null; icon?: string | null; enrolled_at: number; enrolled_by: string; last_seen: number | null; version: string | null; joined?: true }
 export interface MemberView extends UserView { role: Role; added_at: number }
@@ -24,7 +25,7 @@ export interface PendingInvitation { id: string; workspace: string; name: string
 export interface AddedView { email: string; role: Role; added_by: string; added_at: number }
 export interface WorkspaceView { id: string; name: string; emoji?: string; icon?: string; role: Role; created_at: number; members: MemberView[]; stations: StationView[]; invitations: InvitationView[]; added: AddedView[]; relays?: string[]; ways_off?: string[]; /** Every way, on or off (setWay). */ ways?: WayView[]; lock?: LockHead | null; /** In security mode now: a lock not turned off. */ locked?: true; lock_requests?: number }
 
-/** How far the workspace's lock goes as the cloud keeps it (docs/workspace-lock.md): null, none. */
+/** How far the workspace's lock goes as the cloud keeps it: null, none. */
 export interface LockHead { seq: number; hash: string; genesis: string }
 /** A device that asked for a member credential in a workspace: its endpoint, and (a newer client) its base key, which
  * proved it holds the endpoint. What turning the lock on lists for its owner to check. */
@@ -32,10 +33,19 @@ export interface DeviceView { sub: string; email: string; device: string; base: 
 /** A device waiting to be confirmed into a locked workspace. */
 export interface LockRequestView { base: string; sub: string; email: string; kind: string; label: string; sign_key: string | null; endpoints: string[]; code: string; created_at: number }
 
-/** What `/v1/events` pushes: what changed, for the device to refetch. */
+/** What `/v1/events` pushes: what changed, for the device to refetch. `release`: a release is out (its feeds read
+ * again); `relays`: still.fail's own relay's counters were sampled (the operator's 中继 page reads them again).
+ * `workspace` with `lock`: only its lock moved on (the view's `lock` and `locked` as they are now), nothing to refetch
+ * for a device that reads the lock of its stations; one from before refetches as for any change. */
 export type AccountEvent =
   | { type: "workspaces" }
-  | { type: "workspace"; id: string };
+  | { type: "workspace"; id: string; lock?: { head: LockHead | null; locked: boolean } }
+  | { type: "release" }
+  | { type: "relays" };
+
+/** What a station's presence socket is told besides its state: a release is out (its feed, and its reporters' fixed
+ * reports, read again); the models' catalog changed (read again). */
+export type StationEvent = { type: "release" } | { type: "models"; etag: string };
 
 // ── the operator's console (/v1/admin/*, the admin account only) ──────────
 
@@ -81,9 +91,9 @@ export interface AdminWorkspace {
   invitations: (InvitationView & { inviter: string })[];
   /** How many people it may hold. Missing from a cloud from before. */
   seats?: number;
-  /** How many stations it may hold. Missing from a cloud from before, or when there is no limit. */
+  /** How many stations it may hold. Missing from older clouds. */
   station_seats?: number;
-  /** There is no station limit. Missing from a cloud from before. */
+  /** Older clouds said this when the free plan had no station limit. */
   stations_unlimited?: true;
   /** Its creator's plan, or `enterprise`: limits of its own, the admin made it for a company. Missing from a cloud from before. */
   plan?: PlanName | "enterprise";

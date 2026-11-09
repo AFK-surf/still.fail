@@ -5,7 +5,6 @@
 
 import { useTopic, useTopicSelect } from "./core/react.ts";
 import type { DoingItem, DoingView } from "./core/shapes.ts";
-import { t } from "./i18n.ts";
 
 type Words = Record<string, string | number | boolean | null | undefined>;
 
@@ -28,14 +27,6 @@ export function useDoingList(): DoingItem[] {
 }
 
 /** Whether one of `calls` is under way about what `on` names, e.g. `useDoing("job.stop", { station, id })`. */
-export function useDoing(calls: string | readonly string[], on: Words = {}): boolean {
+function useDoing(calls: string | readonly string[], on: Words = {}): boolean {
   return useTopicSelect<DoingView, boolean>(TOPIC, (s) => s.value?.doing.some((item) => !failed(item) && doingMatches(item, calls, on)) ?? false);
-}
-
-/** Why one of `calls` about what `on` names failed a moment ago (shown a few seconds); undefined when none did. */
-export function useDoingFailed(calls: string | readonly string[], on: Words = {}): string | undefined {
-  return useTopicSelect<DoingView, string | undefined>(TOPIC, (s) => {
-    const item = s.value?.doing.findLast((i) => failed(i) && doingMatches(i, calls, on));
-    return item ? (item.error ?? t("web-main.doing.failed")) : undefined;
-  });
 }

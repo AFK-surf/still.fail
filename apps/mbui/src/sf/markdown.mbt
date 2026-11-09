@@ -9,7 +9,7 @@
 // a copy button on a row of their own above the code (a finger has no
 // hover); inline code in the code face at 0.9 in its own colour, no box;
 // links in blue (a web address alone in code is one too); rules. A link to
-// another chat is a reference to it (Markdown.kt appendRef): `@` a little
+// another chat is a reference to it: `@` a little
 // lighter, then its words, in the accent. With `files`, a message's files
 // its text names (the core's `placed`) are drawn where it names them: a
 // paragraph of only a link to one, or its images, as the files themselves;
@@ -42,7 +42,7 @@ priv struct Md {
   /// the words' colour (a quote's are muted)
   mut ink : Int64
   on_link : (String) -> Unit
-  /// a link held: its menu (ui/Links.kt linkHold)
+  /// a link held: its menu
   on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?
   /// each link with its words and its id as it is drawn: what is shown over it while it is pointed at (a card: Peeks.tsx)
   on_link_shown : ((String, String, Int) -> Unit)?
@@ -50,7 +50,7 @@ priv struct Md {
   mut n : Int
   /// a placed file, by the file's name
   files : (String) -> Placed?
-  /// a search's words, bold wherever they are in it (TextMark.kt markWeight)
+  /// a search's words, bold wherever they are in it
   found : Array[String]
   /// a fenced block drawn another way than as code, by its language and its code (Markdown.kt: a ```mermaid one as a
   /// chart)
@@ -61,14 +61,14 @@ priv struct Md {
   chat_title : (String) -> String?
   /// the files its paths name are a session's (an agent's message): drawn as chips that tell of them (path_link)
   paths : Bool
-  /// the lines' height over the words' size (0: Markdown.kt's 1.65)
+  /// the lines' height over the words' size
   line : Double
   /// the words in the serif face (a reader's layout; code stays in the code face)
   serif : Bool
   /// Faces tried for prose and code (None: the chosen face; Some(0): the app's face for that kind).
   text_face : Int?
   code_face : Int?
-  /// a document's headings, as the web's reader has them (Reader.css.ts): levels 1 to 3 larger than the words (1.5,
+  /// a document's headings, as the web's reader has them: levels 1 to 3 larger than the words (1.5,
   /// 1.3, 1.12), as far above as they are high and half that below; a message's are at the words' size
   document : Bool
   /// how far past its column either side a table of it scrolls (Md::table): the page's margin where it has one, none
@@ -76,6 +76,8 @@ priv struct Md {
   mut bleed : Double
   /// its tables offer to be copied (table_copy.mbt): not in a picture of them
   copy : Bool
+  /// Fit a wide table whole in its column when the words are taken as a picture.
+  fit_tables : Bool
 }
 
 ///|
@@ -88,6 +90,28 @@ pub let markdown_read : Ref[((String, (Json?) -> Unit) -> Unit)?] = Ref(None)
 /// (src/sfkept: `markdown`, `code.ink`, `reader.*`), answered at once; None for a call that is not one of those. Bound
 /// once by such a run, never reset.
 pub let kept_call : Ref[((String, Json, Bytes?) -> Result[(Json, Bytes?), Json]?)?] = Ref(None)
+
+///|
+/// Whether a person's words may hold more than one run as the core reads them (refLinks.ts draftWords: an address, a
+/// composer's mark, a link to a chat): words holding none of `://`, `@[`, `](` are their own one run, asked of none.
+pub fn words_may_link(text : String) -> Bool {
+  text.contains("://") || text.contains("@[") || text.contains("](")
+}
+
+///|
+/// A person's `text` in the runs the real core reads it in (`ref.words`: refLinks.ts draftWords), kept (`kept_call`),
+/// if it was: for a run without a core, whose messages have no `words` of their own.
+pub fn kept_words(text : String) -> Json? {
+  guard words_may_link(text) else { return None }
+  match kept_call.val {
+    Some(kept) =>
+      match kept("ref.words", { "text": Json::string(text) }, None) {
+        Some(Ok((Object(m), _))) => m.get("runs")
+        _ => None
+      }
+    None => None
+  }
+}
 
 ///|
 /// `text`'s tree as the real core read it, kept (`kept_call`), if it was.
@@ -158,6 +182,8 @@ fn blocks_of(text : String, tree : Json?) -> Array[MdBlock] {
     parsed_order.remove(0) |> ignore
     if old != text { parsed_used.val -= parsed_cost.get(old).unwrap_or(0) }
     parsed.remove(old); parsed_cost.remove(old); core_parsed.remove(old); markdown_asked.remove(old)
+    // (what follows its answer gone with it, where nothing of the window's tree reads it now: md_let_go)
+    md_forgotten(old)
   }
   if !parsed.contains(text) { parsed_order.push(text) }
   parsed[text] = b
@@ -198,7 +224,7 @@ pub fn path_of_link(href : String) -> (String, Int?)? {
 let path_scheme : String = "stillfail-path:"
 
 ///|
-/// A file's chip in words (Hover.css.ts fileChip): its path as the core shortened it, and the line it points at, in the
+/// A file's chip in words: its path as the core shortened it, and the line it points at, in the
 /// code face at .88 of the words, on a quiet ground 6 round and 6 either side; the words' own colour, its link a file's
 /// (path_link).
 fn file_chip_run(path : String, line : Int?, shown : String) -> @ui.Run {
@@ -230,66 +256,13 @@ let file_chip_share : Double = 0.13
 // kept across runs: a value (no field of it changes)
 let file_chip_ground : @ui.Ground = { room: 6.0 / 13.2, height: 20.0 / 13.2, corner: 6.0 / 13.2, after: 0.0 }
 
-///|
-/// A link to a chat's page (Markdown.kt isChatLink): …/chats/<key>, or
-/// still.fail cloud's /o/<workspace>/<station>/<key>.
-pub fn is_chat_link(href : String) -> Bool {
-  // …/chats/<key> with nothing after it but a slash, a query or a fragment
-  match href.find("/chats/") {
-    Some(i) => {
-      let rest = href.view(start_offset=i + 7).to_string()
-      let mut k = 0
-      while k < rest.length() {
-        let ch = rest.at(k).to_int()
-        if ch == 47 || ch == 63 || ch == 35 || ch == 32 {
-          break
-        }
-        k = k + 1
-      }
-      if k > 0 {
-        let tail = rest.view(start_offset=k).to_string()
-        if tail == "" || tail == "/" || tail.has_prefix("?") || tail.has_prefix("#") ||
-          tail.has_prefix("/?") ||
-          tail.has_prefix("/#") {
-          return true
-        }
-      }
-    }
-    None => ()
-  }
-  // https://<host>/o/<workspace>/<station>/<key>
-  let scheme = if href.has_prefix("https://") {
-    8
-  } else if href.has_prefix("http://") {
-    7
-  } else {
-    return false
-  }
-  let after = href.view(start_offset=scheme).to_string()
-  let path = match after.find("/") {
-    Some(i) => after.view(start_offset=i).to_string()
-    None => return false
-  }
-  if !path.has_prefix("/o/") {
-    return false
-  }
-  let body = match path.find("#") {
-    Some(i) => path.view(end_offset=i).to_string()
-    None => path
-  }
-  let parts = body.view(start_offset=3).to_string().split("/").map(fn(v) { v.to_string() }).to_array()
-  let parts = if parts.length() == 4 && parts[3] == "" { parts[:3].to_array() } else { parts }
-  parts.length() == 3 && parts.iter().all(fn(x) { x != "" && !x.contains("?") })
-}
 
 ///|
 /// The file a link or an image names, by its name (the last part of its
-/// path): `shot.png`, `/w/shot.png`, `ember-file://…/shot.png`.
+/// path): `shot.png`, `/w/shot.png`, `file:///w/shot.png`.
 pub fn file_name_of(url : String) -> String {
   let mut u = url.trim(chars=" ").to_string()
-  if u.has_prefix("ember-file://") {
-    u = u.view(start_offset=13).to_string()
-  } else if u.has_prefix("file://") {
+  if u.has_prefix("file://") {
     u = u.view(start_offset=7).to_string()
   }
   let u = @codec.percent_decoded(u)
@@ -300,146 +273,30 @@ pub fn file_name_of(url : String) -> String {
   u.view(start_offset=i).to_string()
 }
 
-///|
-/// A link's path past its host (`https://still.fail/w/…`, or `/w/…` alone) cut
-/// at the slashes after `/w/`, as Markdown.kt's SCREEN_LINK and ADB_LINK read
-/// it: each part none of `/?#` and not empty, a slash at the end let be. None
-/// when it is no such path.
-fn w_parts(href : String) -> Array[String]? {
-  let mut rest = href
-  for scheme in ["https://", "http://"] {
-    if rest.has_prefix(scheme) {
-      let after = rest.view(start_offset=scheme.length()).to_string()
-      match after.find("/") {
-        Some(i) if i > 0 => rest = after.view(start_offset=i).to_string()
-        _ => return None
-      }
-      break
-    }
-  }
-  guard rest.has_prefix("/w/") else { return None }
-  let parts = rest.view(start_offset=3).to_string().split("/").map(fn(v) { v.to_string() }).to_array()
-  let parts = if parts.length() > 1 && parts[parts.length() - 1] == "" {
-    parts[:parts.length() - 1].to_array()
-  } else {
-    parts
-  }
-  if parts.iter().any(fn(p) { p == "" || p.contains("?") || p.contains("#") }) {
-    return None
-  }
-  Some(parts)
-}
-
-///|
-/// The screen a link names (Markdown.kt screenOfLink: a screen's page as its
-/// agents link to it, `/w/<workspace>/s/<station>/screen/<id>` after a host or
-/// alone): its station (`<workspace>/<station>`) and its id; None for any
-/// other link.
-pub fn screen_of_link(href : String) -> (String, String)? {
-  guard w_parts(href) is Some(p) && p.length() == 5 && p[1] == "s" && p[3] == "screen" else {
-    return None
-  }
-  guard @codec.decode_uri_component(p[0]) is Some(ws) && @codec.decode_uri_component(p[2]) is Some(st) && @codec.decode_uri_component(p[4]) is Some(id) else {
-    return None
-  }
-  Some((ws + "/" + st, id))
-}
-
-///|
-/// The station (`<workspace>/<station>`) a link to its 共享调试 names
-/// (Markdown.kt adbOfLink: `/w/<workspace>/s/<station>/adb`, after a host or
-/// alone); None for any other link.
-pub fn adb_of_link(href : String) -> String? {
-  guard w_parts(href) is Some(p) && p.length() == 4 && p[1] == "s" && p[3] == "adb" else {
-    return None
-  }
-  guard @codec.decode_uri_component(p[0]) is Some(ws) && @codec.decode_uri_component(p[2]) is Some(st) else { return None }
-  Some(ws + "/" + st)
-}
-
-///|
-/// The web service a link names (a chat's item with its service, as its agent
-/// links to it: `/o/<workspace>/<station>/<chat>?service=<job>`, after a host or
-/// alone): its station (`<workspace>/<station>`) and its job; None for any other
-/// link.
-pub fn service_of_link(href : String) -> (String, String)? {
-  let mut rest = href
-  for scheme in ["https://", "http://"] {
-    if rest.has_prefix(scheme) {
-      let after = rest.view(start_offset=scheme.length()).to_string()
-      match after.find("/") {
-        Some(i) if i > 0 => rest = after.view(start_offset=i).to_string()
-        _ => return None
-      }
-      break
-    }
-  }
-  guard rest.has_prefix("/o/") else { return None }
-  let (path, query) = match rest.find("?") {
-    Some(i) => (rest.view(start_offset=3, end_offset=i).to_string(), rest.view(start_offset=i + 1).to_string())
-    None => return None
-  }
-  let query = match query.find("#") {
-    Some(i) => query.view(end_offset=i).to_string()
-    None => query
-  }
-  let parts = path.split("/").map(fn(v) { v.to_string() }).to_array()
-  let parts = if parts.length() == 4 && parts[3] == "" { parts[:3].to_array() } else { parts }
-  guard parts.length() == 3 && parts.iter().all(fn(x) { x != "" && !x.contains("#") }) else { return None }
-  guard @codec.decode_uri_component(parts[0]) is Some(ws) && @codec.decode_uri_component(parts[1]) is Some(st) else {
-    return None
-  }
-  for kv in query.split("&") {
-    let kv = kv.to_string()
-    if kv.has_prefix("service=") {
-      match @codec.decode_uri_component(kv.view(start_offset=8).to_string()) {
-        Some(job) if job != "" => return Some((ws + "/" + st, job))
-        _ => return None
-      }
-    }
-  }
-  None
-}
-
-///|
-/// A link drawn as a card alone in a paragraph, and as its title bare in a
-/// sentence (Markdown.kt isCardLink): a screen's, a station's 共享调试, or a
-/// chat's web service's.
-pub fn is_card_link(href : String) -> Bool {
-  screen_of_link(href) is Some(_) || adb_of_link(href) is Some(_) || service_of_link(href) is Some(_)
-}
-
-///|
-/// A link written bare (Markdown.kt isBareLink): its words its address (as
-/// written, or decoded).
-pub fn is_bare_link(words : String, href : String) -> Bool {
-  let w = words.trim(chars=" \t\n").to_string()
-  w == href || @codec.decode_uri_component(href) == Some(w)
-}
 
 ///|
 /// Links to a station's screens and 共享调试 (is_card_link), as a chat draws
-/// them (Markdown.kt Screens): `card` one alone in a paragraph (its own words,
+/// them: `card` one alone in a paragraph (its own words,
 /// or None when it is bare); `title` the words a bare one within a sentence
 /// reads as (it still leads where it did).
 pub(all) struct Screens {
-  card : (String, String?) -> Unit
-  title : (String) -> String
+  card : (String, LinkTo, String?) -> Unit
+  title : (String, LinkTo) -> String
 }
 
 ///|
 /// A file the message places (`files`): `draw` it on a line of its own; an image's width over its height and its
 /// drawing in a box that wide (as tall as its proportion makes it), as a table's cell has it beside others
-/// (Markdown.kt CellImageRow; None for any other file, named in a cell by its words).
+/// (None for any other file, named in a cell by its words).
 pub(all) struct Placed {
   draw : () -> Unit
   image : (Double, (Double) -> Unit)?
 }
 
 ///|
-/// A paragraph of only a link with a card (Markdown.kt screenAlone): its
+/// A paragraph of only a link with a card: its
 /// address, and its words unless it is bare.
-fn screen_alone(xs : Array[MdInline]) -> (String, String?)? {
+fn screen_alone(xs : Array[MdInline]) -> (String, LinkTo, String?)? {
   let parts = xs.filter(fn(x) {
     match x {
       Text(t) => t.trim(chars=" \n\t").to_string() != ""
@@ -449,9 +306,9 @@ fn screen_alone(xs : Array[MdInline]) -> (String, String?)? {
   })
   guard parts.length() == 1 else { return None }
   match parts[0] {
-    Link(href, c) if is_card_link(href) => {
+    Link(href, c, to) if to.is_card() => {
       let words = md_plain(c)
-      Some((href, if is_bare_link(words, href) { None } else { Some(words) }))
+      Some((href, to, if to.bare { None } else { Some(words) }))
     }
     _ => None
   }
@@ -461,12 +318,12 @@ fn screen_alone(xs : Array[MdInline]) -> (String, String?)? {
 /// The links with cards written bare among these words (Markdown.kt
 /// bareScreens), which read as their titles; not within an image, nor a
 /// link's own words.
-fn bare_screens(xs : Array[MdInline], out : Array[String]) -> Unit {
+fn bare_screens(xs : Array[MdInline], out : Array[(String, LinkTo)]) -> Unit {
   for x in xs {
     match x {
-      Link(href, c) =>
-        if is_card_link(href) && is_bare_link(md_plain(c), href) && !out.contains(href) {
-          out.push(href)
+      Link(href, _, to) =>
+        if to.is_card() && to.bare && !out.iter().any(fn(o) { o.0 == href }) {
+          out.push((href, to))
         }
       Emph(c) | Strong(c) | Strike(c) => bare_screens(c, out)
       _ => ()
@@ -479,8 +336,8 @@ fn bare_screens(xs : Array[MdInline], out : Array[String]) -> Unit {
 fn bare_chats(xs : Array[MdInline], out : Array[String]) -> Unit {
   for x in xs {
     match x {
-      Link(href, c) =>
-        if is_chat_link(href) && is_bare_link(md_plain(c), href) && !out.contains(href) {
+      Link(href, _, to) =>
+        if to.chat && to.bare && !out.contains(href) {
           out.push(href)
         }
       Emph(c) | Strong(c) | Strike(c) => bare_chats(c, out)
@@ -506,7 +363,8 @@ fn web() -> Palette {
 /// leads, `on_link_shown` each link, its words and its id as it is drawn (its card over it); `files` and `screens` as
 /// the file's head says; `document`: its headings a document's (Md's `document`);
 /// `bleed`: how far past the column either side the page lets its tables scroll (Md::table: a chat's margin); `copy`
-/// false: its tables offer no copying (a picture of the words).
+/// false: its tables offer no copying (a picture of the words). `fit_tables`: show each table whole in the column,
+/// rather than leaving part of it to be scrolled to (a chat's shared picture).
 /// `line`: the lines' height over the size (0: Markdown's own); `one_line`: its first block's words alone, on one line
 /// as wide as they are, cut with an ellipsis where the column is narrower (a notice closed: Chat.css.ts
 /// `msgSystemBox:not([data-open])`). `chat_title`: the title of the chat a link written bare names, its reference
@@ -532,6 +390,7 @@ pub fn markdown(
   document? : Bool = false,
   bleed? : Double = 0.0,
   copy? : Bool = true,
+  fit_tables? : Bool = false,
   paths? : Bool = false,
   text_face? : Int? = None,
   code_face? : Int? = None,
@@ -564,6 +423,7 @@ pub fn markdown(
     document,
     bleed,
     copy,
+    fit_tables,
   }
   if tree is None && !core_parsed.contains(text) && !markdown_asked.contains(text) {
     if markdown_read.val is Some(read) {
@@ -571,11 +431,8 @@ pub fn markdown(
       c.tell("markdown/" + text, fn() { read(text, fn(value) {
         // Only publish content with its parsed hit regions. Showing raw Markdown first made a visible link
         // accept a tap on the unparsed paragraph before the core's answer supplied its link target.
-        let ready = match value {
-          Some(Array(_)) => value
-          _ => Some(Json::array([["p", [Json::string(text)]]]))
-        }
-        blocks_of(text,ready) |> ignore
+        // (kept, and told to whatever of the window's tree reads the same words: md_answered)
+        md_answered_now(text, value)
       }) })
     }
   }
@@ -591,7 +448,7 @@ pub fn markdown(
   }
   if one_line {
     let xs = first_words(blocks)
-    return c.box(fn() { c.scope(c.id(key), fn() { md.words(xs, md.size, 0, md.ink, None, wrap=false) }) })
+    return c.box(fn() { c.scope(c.id(key), fn() { md.words(xs, md.size, 0, md.ink, None, wrap=false, allow_ellipsis=true) }) })
   }
   md.column(key, md.pieces(blocks, false))
 }
@@ -685,6 +542,7 @@ pub fn markdown_part(
     document,
     bleed: 0.0,
     copy: true,
+    fit_tables: false,
   }
   let blocks = match parts.get(key) {
     Some(b) => b
@@ -757,11 +615,11 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
       // (none in a tight list's item: its words alone)
       let (top, bottom) = if tight { (0.0, 0.0) } else { (0.0, paragraph_after) }
       let ink = self.ink
-      // one that is only a link to a screen is its card (Markdown.kt paragraph)
+      // one that is only a link to a screen is its card
       match (self.screens, task) {
         (Some(sc), None) =>
           match screen_alone(xs) {
-            Some((href, words)) => return [{ top: 8.0, bottom: 8.0, draw: fn() { (sc.card)(href, words) } }]
+            Some((href, to, words)) => return [{ top: 8.0, bottom: 8.0, draw: fn() { (sc.card)(href, to, words) } }]
             None => ()
           }
         _ => ()
@@ -824,7 +682,7 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
     }
     CodeBlock(lang, code, colours) =>
       match (self.code)(lang, code) {
-        // (drawn another way: 4 under it, as Markdown.kt's chart)
+        // (drawn another way: 4 under it)
         Some(draw) => [{ top: 0.0, bottom: 4.0, draw }]
         None => [{ top: 0.0, bottom: 8.0, draw: fn() { code_block(c, code, lang, colours~, face=self.code_face) } }]
       }
@@ -872,7 +730,7 @@ fn Md::piece(self : Md, b : MdBlock, tight : Bool, task : Bool?) -> Array[Piece]
 }
 
 ///|
-/// A paragraph naming the message's files (Markdown.kt paragraph): one of
+/// A paragraph naming the message's files: one of
 /// only a link to one is that file (a line of its own); the files' images
 /// among words, each on a line of its own between the words around it.
 /// None when it names none of them.
@@ -885,7 +743,7 @@ fn Md::placed(
 ) -> Array[Piece]? {
   let file_of = fn(x : MdInline) -> (() -> Unit)? {
     match x {
-      Link(href, _) => (self.files)(file_name_of(href)).map(fn(p) { p.draw })
+      Link(href, _, _) => (self.files)(file_name_of(href)).map(fn(p) { p.draw })
       Image(src, _) => (self.files)(file_name_of(src)).map(fn(p) { p.draw })
       _ => None
     }
@@ -899,12 +757,19 @@ fn Md::placed(
   })
   if parts.length() == 1 && task is None {
     match parts[0] {
-      Link(_, _) =>
+      Link(_, _, _) =>
         match file_of(parts[0]) {
           Some(draw) => return Some([{ top: 8.0, bottom: 8.0, draw }])
           None => ()
         }
       _ => ()
+    }
+  }
+  // two or more of its images and nothing else: side by side
+  if task is None && parts.length() > 1 {
+    match self.cell_images(xs) {
+      Some(images) => return Some([{ top, bottom, draw: fn() { self.image_rows(images) } }])
+      None => ()
     }
   }
   let has_image = xs.iter().any(fn(x) { x is Image(_, _) && file_of(x) is Some(_) })
@@ -946,6 +811,68 @@ fn Md::placed(
   flush()
   Some(out)
 }
+
+///|
+/// A paragraph's images in rows, 8 apart either way and 8 over and under:
+/// each on the row at least 120 high, as many as fit the message's width, then they grow alike to fill it, 200 high at
+/// most; one wider than the message at 120 is as wide as the message. A row's images share one height.
+fn Md::image_rows(self : Md, images : Array[(Double, (Double) -> Unit)]) -> Unit {
+  let c = self.c
+  self.n = self.n + 1
+  let id = c.id("sf-md/images\{self.n}")
+  // det-ok(layout-read-back): a message's image is drawn at a width it is given (its box, its picture decoded that size), as message_files' rows are, so the rows are said in widths from the message's room as laid out
+  let room = match c.laid_size(id) {
+    Some((rw, _)) => rw
+    None => c.width
+  }
+  let rows : Array[Array[(Double, (Double) -> Unit)]] = [[]]
+  let mut used = 0.0
+  for im in images {
+    let row = rows[rows.length() - 1]
+    let w = im.0 * image_row_least + (if row.length() > 0 { image_row_gap } else { 0.0 })
+    if row.length() > 0 && used + w > room {
+      rows.push([im])
+      used = im.0 * image_row_least
+    } else {
+      row.push(im)
+      used = used + w
+    }
+  }
+  c.box(style=image_rows_box, id~, taps=false, fn() {
+    for row in rows {
+      let ratios = row.fold(init=0.0, fn(n, im) { n + im.0 })
+      let h = dmin(image_row_most, (room - image_row_gap * (row.length() - 1).to_double()) / ratios)
+      c.box(style=image_row, fn() {
+        for im in row {
+          (im.1)((im.0 * h).floor())
+        }
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+/// A paragraph's images' rows: at least this high while they fit, at most `image_row_most`.
+let image_row_least : Double = 120.0
+
+///|
+let image_row_most : Double = 200.0
+
+///|
+/// Between a paragraph's images, across and down.
+let image_row_gap : Double = 8.0
+
+///|
+/// A paragraph's images' rows: 8 over and under them, 8 between.
+// kept across runs: a value (no field of it changes)
+let image_rows_box : @ui.Style = @ui.css("w=Full gap=S2 py=S2")
+
+///|
+/// One row of them, 8 apart.
+// kept across runs: a value (no field of it changes)
+let image_row : @ui.Style = @ui.css("row gap=S2")
 
 ///|
 /// Items with their markers in the list's 20 of indent; numbers wider than that (a list past 9, words drawn larger)
@@ -1099,18 +1026,19 @@ fn Md::words(
   _task : Bool?,
   wrap? : Bool = true,
   breaks? : Bool = false,
+  allow_ellipsis? : Bool = false,
 ) -> Unit {
   let c = self.c
   let p = theme().p
   let runs = []
-  // a bare link to a screen reads as its title (Markdown.kt inline)
+  // a bare link to a screen reads as its title
   let titles : Map[String, String] = {}
   match self.screens {
     Some(sc) => {
       let bare = []
       bare_screens(xs, bare)
-      for href in bare {
-        titles[href] = (sc.title)(href)
+      for b in bare {
+        titles[b.0] = (sc.title)(b.0, b.1)
       }
     }
     None => ()
@@ -1146,6 +1074,7 @@ fn Md::words(
     size~,
     wrap~,
     breaks~,
+    allow_ellipsis~,
     weight=if weight > 0 { weight } else { 400 },
     color=ink,
     line?=if self.line > 0.0 { None } else { Some(self.lh(size)) },
@@ -1158,7 +1087,7 @@ fn Md::words(
     on_link=self.on_link,
     on_link_hold=self.on_link_hold,
     on_link_shown=self.on_link_shown,
-    // what people and agents wrote: in the face chosen for it (Markdown.kt's TextFont)
+    // what people and agents wrote: in the face chosen for it
     words=true,
   )
   |> ignore
@@ -1209,23 +1138,23 @@ fn runs_of(
       Emph(c) => runs_of(c, out, bold, true, strike, link, accent, titles, paths)
       Strong(c) => runs_of(c, out, true, italic, strike, link, accent, titles, paths)
       Strike(c) => runs_of(c, out, bold, italic, true, link, accent, titles, paths)
-      Link(href, c) if link == "" && is_chat_link(href) => {
+      Link(href, c, to) if link == "" && to.chat => {
         // a reference to another chat: `@` and its title (a bare link's as the message says it), in the accent's
         // ink (the `@` not lighter: at 70% it was 2.5 to 1)
         let words = md_plain(c)
         let shown = match titles.get(href) {
-          Some(title) if is_bare_link(words, href) => title
+          Some(title) if to.bare => title
           _ => words
         }
         out.push(@ui.span("@", bold~, italic~, strike~, link=href, color=accent))
         out.push(@ui.span(shown, bold~, italic~, strike~, link=href, color=accent))
       }
       // a bare link to a screen or a station's 共享调试: its title, leading where it does
-      Link(href, c) if link == "" && titles.get(href) is Some(title) && is_bare_link(md_plain(c), href) =>
+      Link(href, _, to) if link == "" && titles.get(href) is Some(title) && to.bare =>
         out.push(@ui.span(title, bold~, italic~, strike~, link=href))
-      Link(href, c) => runs_of(c, out, bold, italic, strike, href, accent, titles, paths)
+      Link(href, c, _) => runs_of(c, out, bold, italic, strike, href, accent, titles, paths)
       Image(src, alt) => {
-        // its file's name, as read (`web%2Dfolded.png` is web-folded.png: Markdown.kt fileNameOf)
+        // its file's name, as read
         let words = if alt != "" { alt } else { file_name_of(src) }
         out.push(@ui.span(words, bold~, italic~, strike~, link=src))
       }
@@ -1244,7 +1173,7 @@ let code_key_h : Double = 24.0
 let copied_at : LiveMap[Int, Bool] = LiveMap::new()
 
 ///|
-/// A code block as the web phone draws it (Markdown.kt CodeBlock): a quiet
+/// A code block as the web phone draws it: a quiet
 /// tinted block with no frame; above the code, on a row of its own, its
 /// language and a copy button; the code in the code face, 12 on 18 lines,
 /// in its colours as the core said them (ink.mbt), scrolled sideways rather than
@@ -1254,12 +1183,12 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
   let w = web()
   let id = c.id("sf-code/" + code)
   let copy_key = "sf-copied/\{id}"
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     c.copy_text(code)
     // pressed again while it says so: its time starts again
     @kit.after(c, copy_key, false, copied_ms) |> ignore
     copied_at[id] = true
-  }
+  })
   let copied = copied_at.contains(id) &&
     (if @kit.after(c, copy_key, true, copied_ms) {
       copied_at.remove(id)
@@ -1268,11 +1197,11 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
       true
     })
   // the copy key in the block's top right corner: a capsule, as far from both edges as makes it concentric with the
-  // block (a block of the ladder's: row_corner); to a mouse over the code, to a finger on a row of its own over it (it
-  // hovers over nothing: `pointer: coarse`), whatever the layout. Whole: quiet at 55% until pointed at, its words were
-  // 2.2 to 1 (docs/ui-panels.md 对比度)
+  // block (a block of the ladder's: row_corner), on a row of its own over the code with either input (the web's over
+  // the code's first line to a mouse: a long first line ran under its words). Whole: quiet at 55% until pointed at, its
+  // words were 2.2 to 1 (mbui ui/contrast.mbt)
   let block_radius = row_corner
-  let key_inset = capsule_in(block_radius, code_key_h)
+  let key_inset = @ui.capsule_in(block_radius, code_key_h)
   let over = native_input() is Mouse
   let bar = fn() {
     c.box(
@@ -1307,7 +1236,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
             icon(c, if copied { "check" } else { "copy" }, size=12.0, color=w.muted)
             |> ignore
             c.text(
-              // (common.copied, common.copy: the catalog's words, Markdown.kt's)
+              // (common.copied, common.copy: the catalog's words)
               if language() == "en" {
                 if copied { "Copied" } else { "Copy" }
               } else if copied {
@@ -1328,9 +1257,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
     )
   }
   c.box(w=Fill(1.0), bg=t.p.code_ground, radius=block_radius, clip=true, fn() {
-    if !over {
-      bar() |> ignore
-    }
+    bar() |> ignore
     // in the colours the core said (ink.mbt), scrolled sideways rather than wrapped (12 on 1.6 on a desktop's width)
     c.sideways("sf-code/" + code, padx=14.0, pady=12.0, fn() {
       c.rich(
@@ -1349,9 +1276,6 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String, colours? : String? 
       |> ignore
     })
     |> ignore
-    if over {
-      c.layer(fn() { bar() |> ignore }) |> ignore
-    }
   })
   |> ignore
 }
@@ -1399,52 +1323,37 @@ fn cell_widths(s : String, size : Double, weight : Int) -> (Double, Double) {
 }
 
 ///|
-/// A table as the web draws it (Markdown.kt Table): in the message, no card round it, its first column's words in line
-/// with the message's, small type (13), the head told by its words, muted (12, medium), rows ruled between them only,
-/// each cell 12 and 7 in (none past the first's and last's outer words), middle-aligned, at least 4em wide. Columns are as wide as their content until the message is
-/// full (the browser's automatic layout), then share what is left by how much more they would take, none narrower than
-/// its words on one line or 14em of them, whichever is less (its longest word if wider): a wrapped cell still reads as
-/// lines, not a word or two to each. Wider than the message, it scrolls sideways, the frame with it, out to `bleed`
-/// past the message either side (a chat's margin, to the screen's edges): at rest in line with the words, scrolled to
-/// its end its key's room in line with theirs; its bar runs under the message's words only, not out in that margin. Its
-/// copy key hangs past its right edge, in what scrolls (table_copy.mbt): beside it where the message has room, out in
-/// `bleed` where that has the key's whole room (a wide chat's margin), else past its end, scrolled to.
-fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
-  let c = self.c
-  let cols = t.head.length()
-  if cols == 0 {
-    return
-  }
-  let rows = [t.head]
-  rows.append(t.rows)
-  self.n = self.n + 1
-  let key = "sf-md/table\{self.n}"
-  let id = c.id(key)
-  // as wide as the message lays it out: its box less the margin it reaches over either side, not what of it shows (a
-  // page sliding in shows part of it, which had the columns squeezed)
-  let room = match c.laid_size(id) {
-    Some((rw, _)) => rw - 2.0 * bleed
-    None => c.width
-  }
-  let avail = room
+/// How narrow a table's cell (its words, `head` the head's: 12 medium, else 13) may be and its width on one line, at the
+/// system's size of words (`sp`): cell_widths of its words as they are set.
+fn table_words_extent(cell : Array[MdInline], head : Bool, sp : (Double) -> Double) -> (Double, Double) {
+  let (size, weight) = if head { (12.0, 500) } else { (13.0, 400) }
+  cell_widths(md_plain(cell), sp(size), weight)
+}
+
+///|
+/// A table's columns' widths and all of them together, its cells' extents `extents` (each row's, the head's first: how
+/// narrow it may be, its width on one line, whether it is images that keep their width) in `avail` (Md::table's rule,
+/// the one its frame and a node's table both lay out by): each at least 4em and its sides, as wide as its content
+/// until the room is full, then sharing what is left by how much more each would take, none narrower than its words
+/// on one line or 14em of them (`fit`: 4em, its words wrapping first, a picture's), whichever is less (its longest word
+/// if wider; images their width).
+fn table_widths(
+  extents : Array[Array[(Double, Double, Bool)]],
+  avail : Double,
+  fit : Bool,
+  sp : (Double) -> Double,
+) -> (Array[Double], Double) {
+  let cols = if extents.length() > 0 { extents[0].length() } else { 0 }
   let least = 4.0 * 13.0 + 24.0
-  // (14em of the rows' words, at the system's size of words)
-  let readable = 14.0 * c.sp(13.0)
+  // In a picture, let words wrap into narrower columns first; only a table that still cannot fit is scaled down.
+  let readable = (if fit { 4.0 } else { 14.0 }) * sp(13.0)
   let mins = Array::make(cols, least)
   let maxs = Array::make(cols, least)
-  for r, row in rows {
+  for row in extents {
     for k in 0..<cols {
-      let (size, weight) = if r == 0 { (12.0, 500) } else { (13.0, 400) }
-      let (lo, hi) = match self.cell_images(row[k]) {
-        // a cell of only images: as wide as their row
-        Some(images) => {
-          let w = cell_images_width(images)
-          (w, w)
-        }
-        // (measured as they are set: at the system's size of words)
-        None => cell_widths(md_plain(row[k]), c.sp(size), weight)
-      }
-      let floor = dmax(lo, dmin(hi, readable))
+      let (lo, hi, images) = row[k]
+      // Rich text can break an otherwise unbroken word when a cell is too narrow. Images must keep their width.
+      let floor = if fit && !images { dmin(hi, readable) } else { dmax(lo, dmin(hi, readable)) }
       let pad = table_cell_pad(k, cols)
       if floor + pad.0 + pad.1 > mins[k] {
         mins[k] = floor + pad.0 + pad.1
@@ -1480,6 +1389,64 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   for x in widths {
     total = total + x
   }
+  (widths, total)
+}
+
+///|
+/// A table as the web draws it: in the message, no card round it, its first column's words in line
+/// with the message's, small type (13), the head told by its words, muted (12, medium), rows ruled between them only,
+/// each cell 12 and 7 in (none past the first's and last's outer words), middle-aligned, at least 4em wide. Columns are as wide as their content until the message is
+/// full (the browser's automatic layout), then share what is left by how much more they would take, none narrower than
+/// its words on one line or 14em of them, whichever is less (its longest word if wider): a wrapped cell still reads as
+/// lines, not a word or two to each. Wider than the message, it scrolls sideways, the frame with it, out to `bleed`
+/// past the message either side (a chat's margin, to the screen's edges): at rest in line with the words, scrolled to
+/// its end its key's room in line with theirs; its bar runs under the message's words only, not out in that margin. Its
+/// copy key hangs past its right edge, in what scrolls (table_copy.mbt): beside it where the message has room, out in
+/// `bleed` where that has the key's whole room (a wide chat's margin), else past its end, scrolled to.
+fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
+  let c = self.c
+  let cols = t.head.length()
+  if cols == 0 {
+    return
+  }
+  let rows = [t.head]
+  rows.append(t.rows)
+  self.n = self.n + 1
+  let key = "sf-md/table\{self.n}"
+  let id = c.id(key)
+  // as wide as the message lays it out: its box less the margin it reaches over either side, not what of it shows (a
+  // page sliding in shows part of it, which had the columns squeezed)
+  let room = match c.laid_size(id) {
+    Some((rw, _)) => rw - 2.0 * bleed
+    None => c.width
+  }
+  let avail = room
+  // (each cell's extent: a cell of only images as wide as their row; else its words as they are set, at the system's
+  // size of words)
+  let extents = rows.mapi(fn(r, row) {
+    Array::makei(cols, fn(k) {
+      match self.cell_images(row[k]) {
+        Some(images) => {
+          let w = cell_images_width(images)
+          (w, w, true)
+        }
+        None => {
+          let (lo, hi) = table_words_extent(row[k], r == 0, fn(x) { c.sp(x) })
+          (lo, hi, false)
+        }
+      }
+    })
+  })
+  let (widths, total) = table_widths(extents, avail, self.fit_tables, fn(x) { c.sp(x) })
+  if self.fit_tables && total > avail && avail > 0.0 {
+    // Too many columns (or images that cannot wrap): size every part down before layout, so the table's own height
+    // holds the next block below it even on the first frame.
+    let scale = avail / total
+    c.box(style=@ui.style(w=Full), id~, taps=false, fn() {
+      self.table_frame(rows, widths.map(fn(w) { w * scale }), avail, key + "/head", scale~)
+    }) |> ignore
+    return
+  }
   // what scrolls: the message's width and `bleed` more either side (what is measured: the room the table has; named to
   // be measured, not pressed: what holds the message takes the presses on its room), the table in it as wide as its
   // columns, `bleed` in from its ends, its copy key past it
@@ -1492,7 +1459,7 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
       c.box(style=table_beside.then(@ui.style(mr=room_of(-hang))), id=c.id(key + "/beside"), taps=false, points=true, fn() {
         self.table_frame(rows, widths, total, key + "/head")
         if self.copy {
-          self.table_key(key, t)
+          self.table_key(key, table_shot(id), t)
         }
       })
       |> ignore
@@ -1503,7 +1470,7 @@ fn Md::table(self : Md, t : MdTable, bleed : Double) -> Unit {
   // its picture, while one is taken (table_copy.mbt): the table whole, as wide as its columns, on the page's ground (its
   // words' ids its own: the next block's as they were)
   let n = self.n
-  c.shot(table_shot(key), total + 2.0 * table_shot_in, fn() {
+  c.shot(table_shot(id), total + 2.0 * table_shot_in, fn() {
     c.box(style=table_shot_paper, fn() { self.table_frame(rows, widths, total, key + "/picture-head") }) |> ignore
   })
   self.n = n
@@ -1521,6 +1488,7 @@ fn Md::table_frame(
   widths : Array[Double],
   total : Double,
   head_at : String,
+  scale? : Double = 1.0,
 ) -> Unit {
   let c = self.c
   let w = web()
@@ -1533,14 +1501,18 @@ fn Md::table_frame(
         let row_box = c.box(dir=Row, align=AStretch, fn() {
           for k in 0..<cols {
             let (pl, pr) = table_cell_pad(k, cols)
-            c.box(w=Px(widths[k]), pl~, pr~, pady=table_cell_y, justify=JCenter, fn() {
+            let cell_style = @ui.style(w=Fixed(widths[k]), pl=room_of(pl * scale), pr=room_of(pr * scale), py=room_of(table_cell_y * scale), justify=JCenter)
+            c.box(style=cell_style, fn() {
               match self.cell_images(row[k]) {
                 Some(images) => {
                   // side by side, 6 apart, 4 over and under, each drawn as wide as cell_image_width says
-                  c.box(style=cell_image_row, fn() {
+                  let image_gap = 6.0 * scale
+                  let image_y = 4.0 * scale
+                  let image_row = if scale == 1.0 { cell_image_row } else { @ui.style(row=true, gap=room_of(image_gap), py=room_of(image_y)) }
+                  c.box(style=image_row, fn() {
                     for im in images {
                       let (r, draw) = im
-                      draw(cell_image_width(r))
+                      draw(cell_image_width(r) * scale)
                     }
                   })
                   |> ignore
@@ -1548,11 +1520,13 @@ fn Md::table_frame(
                 }
                 None => ()
               }
-              if head {
-                self.words(row[k], 12.0, 500, w.muted, None)
-              } else {
-                self.words(row[k], 13.0, 0, self.ink, None)
-              }
+              c.words_smaller(scale, fn() {
+                if head {
+                  self.words(row[k], 12.0, 500, w.muted, None)
+                } else {
+                  self.words(row[k], 13.0, 0, self.ink, None)
+                }
+              })
             })
             |> ignore
           }
@@ -1561,10 +1535,10 @@ fn Md::table_frame(
           @motion.measure(c, row_box, head_at)
         }
         // a rule under every row but the last, across the table from the first column's words to the last's, as
-        // faint as is seen on what it lies on (docs/ui-panels.md 对比度): the rows' words part them, the rule only marks
+        // faint as is seen on what it lies on (mbui ui/contrast.mbt): the rows' words part them, the rule only marks
         // where
         if r < rows.length() - 1 {
-          c.box(w=Px(total), h=Px(1.0), bg=rule, fn() {  }) |> ignore
+          c.box(style=@ui.style(w=Fixed(total), h=Fixed(scale), bg=Data(rule)), fn() {  }) |> ignore
         }
       }
     })
@@ -1629,4 +1603,47 @@ fn cell_images_width(images : Array[(Double, (Double) -> Unit)]) -> Double {
     w = w + cell_image_width(im.0) + (if i > 0 { 6.0 } else { 0.0 })
   }
   w
+}
+
+///|
+/// The links in an agent's words (`tree`, the core's reading of `text`), each once, with what the core says each is to
+/// (their `to`), for what is shown as a link is pointed at (a chat's card, a pull request's).
+pub fn md_links_to(text : String, tree : Json?) -> Map[String, LinkTo] {
+  let out : Map[String, LinkTo] = {}
+  fn inl(xs : Array[MdInline]) -> Unit {
+    for x in xs {
+      match x {
+        Link(href, c, to) => {
+          if !out.contains(href) {
+            out[href] = to
+          }
+          inl(c)
+        }
+        Emph(c) | Strong(c) | Strike(c) => inl(c)
+        _ => ()
+      }
+    }
+  }
+  fn blocks(bs : Array[MdBlock]) -> Unit {
+    for b in bs {
+      match b {
+        Paragraph(xs) | Heading(_, xs) => inl(xs)
+        Quote(inner) => blocks(inner)
+        List(l) => for item in l.items { blocks(item.blocks) }
+        Table(t) => {
+          for cell in t.head {
+            inl(cell)
+          }
+          for row in t.rows {
+            for cell in row {
+              inl(cell)
+            }
+          }
+        }
+        _ => ()
+      }
+    }
+  }
+  blocks(blocks_of(text, tree))
+  out
 }

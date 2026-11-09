@@ -1,5 +1,5 @@
 // What another app shares into still.fail (a link from a browser or a video app, some text): the chat it goes to
-// (docs/share-in.md). The `shareIn` view lists the chats it can go to (the workspace's own chats on still.fail's page,
+//. The `shareIn` view lists the chats it can go to (the workspace's own chats on still.fail's page,
 // as the sidebar has them, newest first), the one it went to last time from the same site first; `shareIn.open` puts
 // it in the composer of the one picked (or of a new chat on a station), where the person adds to it and sends it as
 // anything written there: the page opens that chat. One composer, not one of the sheet's own beside the chat's.
@@ -11,9 +11,9 @@ import { handlers } from "./core/execute.ts";
 import type { Owner } from "./core/routing.ts";
 import { asCoreError, CoreError } from "./error.ts";
 import { t } from "./i18n.ts";
-import { parseTopic, topicKey, type Topic } from "./protocol.ts";
+import { parseTopic, type Topic } from "./protocol.ts";
 import * as refs from "./refs.ts";
-import type { Value, Watch } from "./store.ts";
+import type { Value } from "./store.ts";
 import { arr as arrU, get as getU, isObject } from "./util.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -128,7 +128,6 @@ function keptRow(rows: J[], k: J): J | undefined {
 
 export class ShareIn implements Owner {
   readonly #inner: Inner;
-  readonly #watches = new Map<string, Watch[]>();
 
   constructor(inner: Inner) {
     this.#inner = inner;
@@ -136,18 +135,6 @@ export class ShareIn implements Owner {
 
   owns(topic: Topic): boolean {
     return topic.topic === "shareIn";
-  }
-
-  start(topic: Topic): void {
-    const store = this.#inner.store;
-    const scope = topic.scope as string;
-    const sources = [parseTopic({ topic: "chats", scope }), parseTopic({ topic: "stations", scope })].filter((x): x is Topic => x !== null);
-    this.#watches.set(topicKey(topic), sources.map((s) => store.watch(s, () => store.invalidate(topic))));
-  }
-
-  stop(topic: Topic): void {
-    for (const w of this.#watches.get(topicKey(topic)) ?? []) w.drop();
-    this.#watches.delete(topicKey(topic));
   }
 
   #rows(scope: string): J[] | null {
@@ -207,7 +194,6 @@ export class ShareIn implements Owner {
     if (shared.link !== null) this.#inner.composers.link(key, shared.link);
     if (row === undefined) return { station: target.station, key };
     this.#inner.data.put(TABLE, `ws:${scope}:shareIn:${siteOf(source) ?? ""}`, { station: target.station, id: row.id }, false);
-    this.#inner.store.invalidateAll((x) => x.topic === "shareIn" && x.scope === scope);
     return { station: target.station, key, session: row.session, ...(typeof row.thread === "number" ? { thread: row.thread } : {}), title: row.title };
   }
 }

@@ -1,4 +1,4 @@
-// A file and a quote as a message and the composer show them (ember web/src/Chat.tsx FileTile, FileName, FileCard,
+// A file and a quote as a message and the composer show them (still.fail web/src/Chat.tsx FileTile, FileName, FileCard,
 // QuoteCard; Chat.css.ts fileTile, fileCard…, quoteCard…, later.css.ts fileCard): a file's sheet with its extension on
 // it, its name cut in its middle, its card with its size or how far it has gone; a quote's card with whose it is, its
 // own picture and what is said about it.
@@ -213,29 +213,30 @@ pub fn file_name(c : @ui.Ctx, name : String) -> Unit {
 }
 
 ///|
-/// What was done with a file's card this frame: its ✕, its ↻ or its ✎ pressed, or (one that opens) the card itself.
-pub(all) struct FileCardDone {
-  removed : Bool
-  retried : Bool
-  restored : Bool
-  opened : Bool
-}
+/// What of a file's card a press was on: its ✕, its ↻ or its ✎, or (one that opens) the card itself.
+pub(all) enum FileCardPress {
+  Remove
+  Retry
+  Restore
+  Open
+} derive(Eq, Show, Debug)
 
 ///|
-/// A file as a card (FileCard; later.css.ts fileCard): its sheet, its name over its size (or how far it has gone up,
+/// A file as a card (FileCard): its sheet, its name over its size (or how far it has gone up,
 /// `pending`, `sent` of it; or what the core's `download` says while it comes down, its share filling the sheet; or why
 /// it failed, `error`, in red), 236 wide at most, 8 by 10 in and 7 at the sheet's side, rounded as the sheet stands in
-/// (13), on the neutral ground; its path (or its name) its tip. `remove` and `retry` its own ✕ and ↻ at its end (in a
+/// (13), on the neutral ground; `path` its tip where it says what the card does not (a path named, a link's address), else its name while cut short. `remove` and `retry` its own ✕ and ↻ at its end (in a
 /// message; what waits in the composer has its ✕ on its corner: with_corner_remove), `slot`
 /// room there for a button laid over it (a message's). `open`: pressing it opens the file (a message's: fileCardOpen),
 /// the hover ground under the pointer. `key` names it. Pasted words kept as a file (Chat.tsx PendingFile's pasted
 /// card): `title` in place of its name (what they begin with), `meta` in place of its size (how many characters), their
 /// own ✕'s `remove_label`, `restore` its ✎ putting them back as words. A message's file the core downloads: its ✕ and ↻
 /// said as calling that off and asking it again (`remove_label`, `retry_label`). `dir`: a folder's (file_tile).
-/// `named`: a file named where it is and not going (a station's file sent as its path: Chat.css.ts fileCard[data-named]),
+/// `named`: a file named where it is and not going,
 /// its card no ground, its edge dashed in the strong line. Going up and how far not known yet (`pending`, no `sent`),
 /// a spinner where its sheet is: what goes on is seen to (an empty sheet that stays so looks stuck). `composer`: waiting
-/// in the composer, on composer_card's ground.
+/// in the composer, on composer_card's ground. `on_press`: what a press on its ✕, ↻, ✎ or itself does (none: what
+/// it draws takes no press, a card flying).
 pub fn file_card(
   c : @ui.Ctx,
   key : String,
@@ -258,13 +259,33 @@ pub fn file_card(
   remove_label? : String = "",
   retry_label? : String = "",
   composer? : Bool = false,
-) -> FileCardDone {
+  on_press? : (FileCardPress) -> Unit,
+) -> Unit {
   let id = c.id(key)
   let x = c.id(key + "/remove")
   let again = c.id(key + "/retry")
   let back = c.id(key + "/restore")
+  match on_press {
+    Some(f) => {
+      if remove {
+        c.on_press(x, fn() { f(Remove) })
+      }
+      if retry {
+        c.on_press(again, fn() { f(Retry) })
+      }
+      if restore {
+        c.on_press(back, fn() { f(Restore) })
+      }
+      if open {
+        c.on_press(id, fn() { f(Open) })
+      }
+    }
+    None => ()
+  }
   let said = meta
   let going = match sent {
+    // every byte gone, its station not yet saying it has them: not 100% (read as stuck)
+    Some(s) if pending && size > 0.0 && s >= size => t("common.uploadConfirming")
     Some(s) if pending && size > 0.0 =>
       t(
         "web-main.file.uploadingPart",
@@ -300,6 +321,9 @@ pub fn file_card(
   } else {
     card_box
   }
+  // An end control concentric with the capsule's end (its words end further in where they are last), kept at that end
+  // even when pixel rounding leaves a fraction of a point after the words.
+  let ground = if !composer && (retry || restore || remove || slot) { ground.then(card_end_justified) } else { ground }
   let b = c.box(
     // (in the composer, pointed at: the hover's tint over its own ground, not in its place)
     style=if open && !(composer && !named) && c.hovered(id) { ground.then(card_hot) } else { ground },
@@ -361,25 +385,22 @@ pub fn file_card(
     },
   )
   c.semantics(b, Group, id~, label=if title != "" { title } else { name })
-  // (pasted words: all of what is said of them, a failure at length)
-  tip(c, key + "/tip", id, if path != "" { path } else if title != "" { meta } else { name })
-  let removed = remove && c.clicked(x)
-  let retried = retry && c.clicked(again)
-  let restored = restore && c.clicked(back)
-  { removed, retried, restored, opened: open && !removed && !retried && !restored && c.clicked(id) }
+  // (where it is; else what it says, whole where it is cut short: pasted words' meta, a failure at length)
+  tip(c, key + "/tip", id, if path != "" { path } else if title != "" { meta } else { name }, repeats=path == "")
 }
 
 ///|
 /// What waits to go with a message (a composer's picture, a file's card, a quote), `w` wide (none: the width it is
 /// given) and rounded `corner`, with its ✕
-/// hung on its top right corner (docs/ui-panels.md: the user, 2026-10-17, on the corner, not in it): 20 round, solid
+/// hung on its top right corner (sf/align.mbt: the user, 2026-10-17, on the corner, not in it): 20 round, solid
 /// (the ink's, the page's ✕ on it: part of it is on the ground round it), its centre on the corner's curve where it
 /// turns 45° (on_corner), reaching past the top as far as past the right edge. `w` wide, the room for that kept at its
 /// end, so what comes next in its row stands the row's gap past it; the width it is given (a quote: nothing beside it),
 /// none: it reaches past its right edge into the room round it as past its top, as far from that room's edge there as
 /// it is from its top (the user, 2026-10-26: 上边距和右边距不一致). `key` names it (its ✕ `key/remove`), `label` what a screen reader
 /// calls its ✕; `turn` how far its ✕ is turned (a quarter of a half turn: a ＋, which puts back what was taken out: a
-/// shared picture's attachments). Whether its ✕ was pressed.
+/// shared picture's attachments), read as it is drawn. `on_remove`: what a press on its ✕ does (none: a copy flying,
+/// taking no press).
 pub fn with_corner_remove(
   c : @ui.Ctx,
   key : String,
@@ -387,9 +408,14 @@ pub fn with_corner_remove(
   corner : Double,
   body : () -> Unit,
   w? : Double,
-  turn? : Double = 0.0,
-) -> Bool {
+  turn? : () -> Double,
+  on_remove? : () -> Unit,
+) -> Unit {
   let x = c.id(key + "/remove")
+  match on_remove {
+    Some(f) => c.on_press(x, f)
+    None => ()
+  }
   let reach = corner_remove_reach(corner)
   let outer = match w {
     Some(w) => @ui.style(w=Fixed(w + reach))
@@ -408,8 +434,9 @@ pub fn with_corner_remove(
           c.box(style=corner_remove_at, fn() {
             let b = c.box(style=corner_remove_box, id=x, tx=reach, ty=-reach, fn() {
               let m = c.box(fn() { corner_remove_mark(c) })
-              if turn != 0.0 {
-                c.look(m, @ui.look(rot=turn))
+              match turn {
+                Some(turn) => c.look_by(m, fn() { @ui.look(rot=turn()) })
+                None => ()
               }
             })
             c.semantics(b, Button, id=x, label~)
@@ -422,7 +449,6 @@ pub fn with_corner_remove(
     |> ignore
   })
   |> ignore
-  c.clicked(x)
 }
 
 ///|
@@ -506,19 +532,33 @@ pub let message_file_corner : Double = card_corner
 pub let message_file_radius : @ui.Radius = rounded(message_file_corner)
 
 ///|
+/// A picture's corner `corner` as a style's: a message's file's, or a quote's own picture's (quote_picture_corner).
+pub fn file_radius(corner : Double) -> @ui.Radius {
+  rounded(corner)
+}
+
+///|
 /// A file's card at its widest (fileCard: 236).
 pub let file_card_w : Double = 236.0
 
 ///|
-/// A file's card's width in a message (card_box: as wide as what it says): its sheet and its name or its size, the
-/// wider, with its room round them; file_card_w at most.
-pub fn file_card_across(c : @ui.Ctx, name : String, size : Double) -> Double {
+/// A file's card's width in a message (card_box: as wide as what it says): its sheet and its name or what is said
+/// under it (its size; `meta` in its place: how far its download has come, why it failed), the wider, with its room
+/// round them, and `ends` buttons at its end (its ✕, its ↻, each in a room 24 past the gap; the last concentric with
+/// the end, 14 in, as the mark is with the start; with none, the words' end further in: file_capsule_words_end);
+/// file_card_w at most.
+pub fn file_card_across(c : @ui.Ctx, name : String, size : Double, meta? : String = "", ends? : Int = 0) -> Double {
   let words = dmax(
-    @ui.text_advance(name, size=c.text_size(Ui).0),
-    @ui.text_advance(file_size(size), size=c.text_size(Caption).0),
+    c.words_across(name, card_name),
+    c.words_across(if meta != "" { meta } else { file_size(size) }, card_meta),
   )
-  let room = @ui.Space::px(S3_5) + card_mark_size + @ui.Space::px(S2) + @ui.Space::px(S3_5)
-  dmin(file_card_w, room + words)
+  let parts = [@ui.Space::px(S3_5), card_mark_size, @ui.Space::px(S2)]
+  for _ in 0..<ends {
+    parts.push(@ui.Space::px(S2))
+    parts.push(@ui.Space::px(S6))
+  }
+  parts.push(if ends > 0 { @ui.Space::px(S3_5) } else { file_capsule_words_end })
+  dmin(file_card_w, c.fitting_width(words, parts))
 }
 
 ///|
@@ -533,17 +573,25 @@ let card_box : @ui.Style = @ui.style(
   row=true,
   max_w=Fixed(file_card_w),
   // (a row high, a capsule, 52 (file_capsule_h): its mark, 24, concentric with its round end (14 from its
-  // end, its top and its foot), 8 from its words, their end 14 from the other end: file_card_across; as a screen's
-  // card, @sfbase's link_card. In the composer: card_waiting)
+  // end, its top and its foot), 8 from its words, their end where the other round end begins, 24 from that end
+  // (file_capsule_words_end; a button there concentric with it instead: card_end_justified): file_card_across; as a
+  // screen's card, @sfbase's link_card. In the composer: card_waiting)
   h=file_capsule_h,
   pl=S3_5,
-  pr=S3_5,
+  pr=room(file_capsule_words_end),
   gap=S2,
   bg=Neutral,
   // (in a corner of what holds it, a composer's box: as far in as from its edges, its corner concentric)
   radius=InnerOr(Full),
   align=ACenter,
 )
+
+///|
+/// A message's file card with a button at its end (its ✕, its ↻, a slot for one laid over it): that end's room its
+/// start's (14), so that the button there (in card_end_room's 24) stands concentric with it as the mark does with the
+/// start.
+// kept across runs: a value (no field of it changes)
+let card_end_justified : @ui.Style = @ui.css("pr=S3_5 justify=JBetween")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -649,20 +697,13 @@ let name_row : @ui.Style = @ui.css("row w=Full")
 let name_stem : @ui.Style = @ui.css("w=Hug")
 
 ///|
-/// What was done with a quote's card this frame: its source pressed (`jump`), its ✕ pressed; and the card's own box
-/// (its ground: what a quote sent flies from and to, sfbase's flight.mbt).
-pub(all) struct QuoteCardDone {
-  jumped : Bool
-  removed : Bool
-  card : Int
-}
-
-///|
 /// One quote (QuoteCard): the passage, two lines at most, small and quiet (the text's ink under the pointer when it
-/// leads to its message, `jump`), after a quote's mark and whose it is (a page's or an image's mark: its pin's number
+/// leads to its message: `on_jump`, what a press on it does), after a quote's mark and whose it is (a page's or an image's mark: its pin's number
 /// and its first line instead); its own `picture` under it; what is said about it (`comment`'s words, or `comment_field`
-/// where it is written: the composer's); ✕ at its corner where it can be let go (`remove`). In the composer
-/// (`composer`) its corner the composer's inner and its words further in. `key` names it.
+/// where it is written: the composer's); ✕ at its corner where it can be let go (`on_remove`, what a press on it does).
+/// The card's own box (its ground: what a quote sent flies from and to, sfbase's flight.mbt). In the composer
+/// (`composer`) its corner the composer's inner and its words further in. `key` names it. During a send, the words'
+/// width can follow the card's flight (`words_width`); `words_key` keeps their laid-out shape for that flight.
 pub fn quote_card(
   c : @ui.Ctx,
   key : String,
@@ -671,14 +712,22 @@ pub fn quote_card(
   role? : String = "",
   comment? : String = "",
   composer? : Bool = false,
-  jump? : Bool = false,
-  remove? : Bool = false,
+  on_jump? : () -> Unit,
+  on_remove? : () -> Unit,
   picture? : () -> Unit,
   comment_field? : () -> Unit,
-) -> QuoteCardDone {
+  words_width? : Double,
+  words_key? : String = "",
+) -> Int {
   let p = theme().p
   let source = c.id(key + "/source")
   let x = c.id(key + "/remove")
+  let jump = on_jump is Some(_)
+  let remove = on_remove is Some(_)
+  match on_jump {
+    Some(f) => c.on_press(source, f)
+    None => ()
+  }
   let pin = pin_of(author, role)
   if jump {
     tip(c, key + "/jump-tip", source, t("web-main.quote.jump"))
@@ -690,7 +739,8 @@ pub fn quote_card(
   let hung = composer && remove
   let node = Ref::new(-1)
   let card = fn() {
-    node.val = c.box(style=if composer { quote_box_composer().then(composer_card()) } else { quote_box_message }, fn() {
+    let look = if composer { quote_box_composer().then(composer_card()) } else { quote_box_message }
+    node.val = c.box(style=look.then(@ui.style(clip=words_width is None)), fn() {
     // (a pin in its top corner: there the ladder's inset from both its edges, concentric with it)
     let source_look = match (composer, pin != "") {
       (true, false) => if hung { quote_source_hung } else { quote_source_composer }
@@ -699,7 +749,7 @@ pub fn quote_card(
       (false, true) => quote_source_pin
     }
     c.box(style=source_look, id=source, fn() {
-      c.box(style=quote_words, fn() {
+      let text_box = c.box(style=quote_words, fn() {
         if pin != "" {
           c.box(style=quote_pin, fn() { c.text(pin, style=quote_pin_words) |> ignore }) |> ignore
           c.text(words.split("\n").next().map(fn(s) { s.to_string() }).unwrap_or(""), style=quote_text) |> ignore
@@ -711,11 +761,12 @@ pub fn quote_card(
               @ui.span(words),
             ],
             style=if hot { quote_text_hot } else { quote_text },
+            w?=words_width.map(fn(w) { Px(w) }),
           )
           |> ignore
         }
       })
-      |> ignore
+      if words_key != "" { c.words(text_box, words_key) }
     })
     |> ignore
     match picture {
@@ -743,13 +794,16 @@ pub fn quote_card(
     }
   })
   }
-  let removed = if hung {
-    with_corner_remove(c, key, t("web-main.quote.remove"), composer_inner(), card)
+  if hung {
+    with_corner_remove(c, key, t("web-main.quote.remove"), composer_inner(), card, on_remove?)
   } else {
+    match on_remove {
+      Some(f) => c.on_press(x, f)
+      None => ()
+    }
     card()
-    remove && c.clicked(x)
   }
-  { jumped: jump && c.clicked(source), removed, card: node.val }
+  node.val
 }
 
 ///|
@@ -794,13 +848,20 @@ let quote_box : @ui.Style = @ui.style(w=Full, radius=rounded(quote_corner), bg=O
 
 ///|
 /// In a message, as a message's bubble (sfpages message.mbt bubble: Xl2, its words 14 across and 8 over and under):
-/// what it holds the bubble's 8 in from its edges (its picture there, concentric with it), 6 apart; its words as far
+/// what it holds the bubble's 8 in from its edges (its picture the ladder's 10: quote_picture), 6 apart; its words as far
 /// in across as a bubble's.
 // kept across runs: a value (no field of it changes)
 let quote_box_message : @ui.Style = quote_box.then(@ui.style(p=room(quote_card_in), gap=S1_5))
 
 ///|
 let quote_card_in : Double = 8.0
+
+///|
+/// A quote's own picture in a message (an image, a video's still): in its card's foot corners, so as anything with a
+/// ground there, the ladder's inset in (quote_picture) and round by the ladder's next step, concentric with the card
+/// (its 18, so 10), all four corners alike; a message's file's 26 alone there is rounder than the card round it (the
+/// user, 2026-11-02).
+pub let quote_picture_corner : Double = @ui.concentric(quote_corner, corner_inset)
 
 ///|
 /// A quote's corner in a message: a message's bubble's.
@@ -879,10 +940,10 @@ let quote_source_composer : @ui.Style = @ui.style(
 ///|
 /// How far from a quote's top and start its pin (a capsule quote_pin_h high) stands, concentric with its corner
 /// (capsule_in); in the composer, with a row's.
-let quote_pin_in : Double = capsule_in(quote_corner, quote_pin_h)
+let quote_pin_in : Double = @ui.capsule_in(quote_corner, quote_pin_h)
 
 ///|
-let quote_pin_in_composer : Double = capsule_in(row_corner, quote_pin_h)
+let quote_pin_in_composer : Double = @ui.capsule_in(row_corner, quote_pin_h)
 
 ///|
 let quote_pin_h : Double = 16.0
@@ -941,9 +1002,14 @@ let quote_pin : @ui.Style = @ui.css("h=S4 min_w=S4 px=S1 radius=Full bg=Accent a
 let quote_pin_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=OnAccent, wrap=false)
 
 ///|
-/// Its picture in a message: at its card's padding (in the composer 6 over it, 16 in).
+/// Its picture in a message: in its card's foot corners the ladder's inset in from its sides and foot, past its card's
+/// padding (in the composer 6 over it, 16 in).
 // kept across runs: a value (no field of it changes)
-let quote_picture : @ui.Style = @ui.css("row")
+let quote_picture : @ui.Style = @ui.style(
+  row=true,
+  px=room(corner_inset - quote_card_in),
+  pb=room(corner_inset - quote_card_in),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)

@@ -1,0 +1,17 @@
+# A chat and a new chat switched on the tape (laid out Medium: MBUI_WIN=600x760 a Mac's): the chat opened by its row,
+# the sidebar brought back, 新建对话 pressed, the sidebar brought back, the chat again; the composer goes between their
+# places, a new chat left leaves by its own way.
+timeout 20000
+until 新建对话
+wait 600
+tap 整理发布清单
+wait 900
+back
+wait 900
+tap 新建对话
+wait 900
+back
+wait 900
+tap 整理发布清单
+wait 900
+exit

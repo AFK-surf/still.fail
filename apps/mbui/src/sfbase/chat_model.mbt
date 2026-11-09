@@ -135,10 +135,30 @@ pub(all) struct Card {
   ask : VaultAsk?
   /// an agent's request for its person's phone (MessageCard.phoneAsk), drawn in place of the post's words
   phone : PhoneAsk?
+  /// an agent's ask to sign in to a site (MessageCard.signinAsk), drawn in place of the post's words
+  signin : SignInAsk?
 }
 
 ///|
-/// An agent's request to debug its person's phone as its card says it (PhoneAsk, docs/adb-share.md): its id, the
+/// An agent's ask to sign in to a site as its card says it (SignInAsk 登录态): its id, the site,
+/// why, the chat's tab it is on (a screen of the chat's station), and how it goes (`status`: "" waiting, filling, code,
+/// person, left, done, denied, expired, ended; `why` a person is needed; what the agent `said` is left; whether it is
+/// to be kept, `keep`; the vault request keeping it, `save`, and how that went, `kept`).
+pub(all) struct SignInAsk {
+  id : String
+  site : String
+  reason : String
+  screen : String
+  status : String
+  why : String
+  said : String
+  keep : Bool
+  save : String
+  kept : String
+}
+
+///|
+/// An agent's request to debug its person's phone as its card says it (PhoneAsk): its id, the
 /// agent's reason, and once decided how (`status`: granted, denied, ended; `scope`: hour, chat; `why` it ended).
 pub(all) struct PhoneAsk {
   request : String
@@ -159,8 +179,15 @@ pub(all) struct PhoneAsk {
 /// types it in (`typed`); once decided, how (`status`, `scope`).
 pub(all) struct VaultAsk {
   name : String
+  reason : String
+  timeout_kind : String
+  timeout_seconds : Int
+  approved_timeout_kind : String
+  approved_timeout_seconds : Int
   mode : String
   command : String
+  /// How it is given, including the allowed hosts, as the core says it.
+  how_text : String
   save_kind : String
   username : String
   /// a file's name, where the agent gave one
@@ -301,6 +328,7 @@ pub(all) struct LinkedChat {
   title : String
   archived : Bool
   note : String
+  thread : Double?
 }
 
 ///|
@@ -309,11 +337,13 @@ pub(all) struct Message {
   seq : Double
   thread : Double
   ts : String
-  /// person | agent | ember
+  /// person | agent | the station (ember, as the station stores it)
   author_kind : String
   author : String
   text : String
   md : Json?
+  /// a person's words in runs, as the core reads them (refLinks.ts personWords: message_words.mbt words_runs)
+  words : Json?
   attachments : Array[Attachment]
   quotes : Array[Quote]
   created_at : Double
@@ -346,6 +376,14 @@ pub(all) struct Message {
   notice_words : String
   notice_link : Int
   notice_md : Json?
+  /// the agent whose capacity retry this notice can cancel, while that retry waits
+  notice_retry_session : String
+  /// a failure's own words, as what failed said them, shown under its words when the notice is opened
+  notice_detail : String
+  /// a chat's run changed: what it runs on now, said in place of its words where they have not the room on their line
+  /// ("": none), and how it ran and runs, whole, shown in place of its words once it is opened
+  notice_short : String
+  notice_lines : Array[String]
   /// the chats its words link to that their lists have (archived ones too)
   chats : Array[LinkedChat]
 }
@@ -361,6 +399,7 @@ pub fn message_of(m : Json) -> Message {
     author: text(s, "author"),
     text: text(s, "text"),
     md: field(s, "md"),
+    words: field(s, "words"),
     attachments: items(s, "attachments").map(attachment_of),
     quotes: items(s, "quotes").map(quote_of),
     created_at: number(s, "createdAt"),
@@ -389,8 +428,14 @@ pub fn message_of(m : Json) -> Message {
             Some(Object(_)) as a =>
               Some({
                 name: text(a, "name"),
+                reason: text(a, "reason"),
+                timeout_kind: text(a, "timeoutKind"),
+                timeout_seconds: count(a, "timeoutSeconds"),
+                approved_timeout_kind: text(a, "approvedTimeoutKind"),
+                approved_timeout_seconds: count(a, "approvedTimeoutSeconds"),
                 mode: text(a, "mode"),
                 command: text(a, "command"),
+                how_text: text(a, "howText"),
                 save_kind: text(field(a, "save"), "kind"),
                 username: text(field(a, "save"), "username"),
                 filename: text(field(a, "save"), "filename"),
@@ -400,6 +445,25 @@ pub fn message_of(m : Json) -> Message {
                 station: text(a, "station"),
                 answer: text(a, "answer"),
                 lasts: text(a, "lasts"),
+              })
+            _ => None
+          },
+          signin: match field(c, "signinAsk") {
+            Some(Object(_)) as a =>
+              Some({
+                id: text(a, "id"),
+                site: text(a, "site"),
+                reason: text(a, "reason"),
+                screen: text(a, "screen"),
+                status: text(a, "status"),
+                why: text(a, "why"),
+                said: text(a, "said"),
+                keep: match field(a, "keep") {
+                  Some(False) => false
+                  _ => true
+                },
+                save: text(a, "save"),
+                kept: text(a, "kept"),
               })
             _ => None
           },
@@ -448,9 +512,18 @@ pub fn message_of(m : Json) -> Message {
       None => -1
     },
     notice_md: field(field(s, "notice"), "md"),
+    notice_retry_session: text(field(s, "notice"), "retrySession"),
+    notice_detail: text(field(s, "notice"), "detail"),
+    notice_short: text(field(s, "notice"), "short"),
+    notice_lines: items(field(s, "notice"), "lines").filter_map(fn(l) {
+      match l {
+        String(l) => Some(l)
+        _ => None
+      }
+    }),
     chats: items(s, "chats").map(fn(c) -> LinkedChat {
       let c = Some(c)
-      { href: text(c, "href"), title: text(c, "title"), archived: flag(c, "archived"), note: text(c, "note") }
+      { href: text(c, "href"), title: text(c, "title"), archived: flag(c, "archived"), note: text(c, "note"), thread: opt_number(c, "thread") }
     }),
   }
 }
@@ -466,6 +539,8 @@ pub fn Message::linked(self : Message, href : String) -> LinkedChat? {
 pub(all) struct Outgoing {
   id : String
   text : String
+  /// its words in runs, as the core read them (refLinks.ts personWords; one sent from here: draftWords)
+  words : Json?
   attachments : Array[Attachment]
   quotes : Array[Quote]
   /// sending | sent (the station has it: `seq`) | failed
@@ -507,6 +582,9 @@ pub(all) struct Agent {
   started : Bool
   /// its last turn's id (its session's lastTurn), "" before it has had one
   last_turn : String
+  /// the message its last turn's state is about (lastTurn.about), by its seq: its answer, which a station may tell its
+  /// turn over before
+  about : Double?
 }
 
 ///|
@@ -527,6 +605,7 @@ pub fn agent_of(a : Json) -> Agent {
     },
     started: flag(s, "started"),
     last_turn: text(field(session, "lastTurn"), "id"),
+    about: opt_number(field(field(session, "lastTurn"), "about"), "seq"),
   }
 }
 
@@ -547,6 +626,10 @@ pub(all) struct ChatView {
   /// the first and last entries loaded (letters and edits are not messages): the cursors for loading pages
   first_entry : Double?
   last_entry : Double?
+  /// the page before, being read ("reading") or not read ("failed", why in `older_failed`, asked again a while after):
+  /// "" neither, when it may be asked for
+  older : String
+  older_failed : String
   /// how many letters its agents and other chats' wrote each other (not in `messages`: their own sheet)
   letters : Int
   at : Double?
@@ -554,6 +637,9 @@ pub(all) struct ChatView {
   unread_line : Double?
   unread_above : Bool
   outbox : Array[Outgoing]
+  /// till when (the core's time, its source's `now`) what the viewer sends here goes close under its last row, theirs,
+  /// that row's time under the new one (the core's `joinsUntil`); None: it would stand apart
+  joins_until : Double?
   offline : Bool
   /// its station down, the line over the composer (why, and that what is sent goes once it is reached)
   offline_note : String?
@@ -587,6 +673,11 @@ pub(all) struct ChatView {
   cc : Array[ChatCcTo]
   /// the screens of the station it runs on (the core's `screens`), its own display first: its bar's way to them
   screens : Array[ChatScreen]
+  /// the chat an agent opened it from: before its title in its bar, the way back there
+  opener : Opener?
+  /// the chats its agent made, the first first, and how many in words (创建了 3 个对话): its info's list of them
+  opened : Array[OpenedChat]
+  opened_text : String
 }
 
 ///|
@@ -601,7 +692,7 @@ pub(all) struct ChatScreen {
 }
 
 ///|
-/// A thread a chat's messages can be copied to (the chat view's `cc`, docs/relay.md "抄送"): its id (`chat.cc`'s `to`),
+/// A thread a chat's messages can be copied to (the chat view's `cc`): its id (`chat.cc`'s `to`),
 /// where it is (#channel, 私信, the Feishu group), its platform for its mark ("slack" or "feishu"), and whether it is
 /// ticked.
 pub(all) struct ChatCcTo {
@@ -653,6 +744,8 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
     newer: flag(s, "newer"),
     first_entry: opt_number(s, "firstEntry"),
     last_entry: opt_number(s, "lastEntry"),
+    older: text(s, "older"),
+    older_failed: text(s, "olderFailed"),
     letters: number(s, "letters").to_int(),
     at: opt_number(s, "at"),
     at_offset: opt_number(s, "atOffset"),
@@ -663,6 +756,7 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
       {
         id: text(s, "id"),
         text: text(s, "text"),
+        words: field(s, "words"),
         attachments: items(s, "attachments").map(attachment_of),
         quotes: items(s, "quotes").map(quote_of),
         state: text(s, "state"),
@@ -680,6 +774,7 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
         final: flag(s, "final"),
       }
     }),
+    joins_until: opt_number(s, "joinsUntil"),
     offline: flag(s, "offline"),
     offline_note: opt_text(s, "offlineNote"),
     updating: flag(s, "updating"),
@@ -712,7 +807,9 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
     screens: items(s, "screens").map(fn(o) {
       let o = Some(o)
       { id: text(o, "id"), kind: text(o, "kind"), title: text(o, "title"), line: text(o, "line"), agent: flag(o, "agent") }
-    }),
+    }),    opener: opener_of(s),
+    opened: opened_of(s),
+    opened_text: text(s, "openedText"),
   }
 }
 
@@ -747,9 +844,24 @@ pub fn stations_of(v : Json?) -> Array[Station] {
 }
 
 ///|
+/// The workspace's stations as a page that only names them shows them (`stations` `brief`: each one's mark and how it
+/// is reached, not its overview and profiles, nor their changes).
+pub fn station_marks(src : Source, scope : String) -> Array[Station] {
+  stations_of(src.topic("stations", { "scope": Json::string(scope), "brief": Json::boolean(true) }).get().value)
+}
+
+///|
 /// A chat's topics' params: its station and session.
 pub fn chat_params(r : ChatRef) -> Map[String, Json] {
   { "station": Json::string(r.station), "session": Json::string(r.session) }
+}
+
+///|
+/// The bar needs only whether there are jobs and whether its button has an alarm; the jobs sheet reads the whole list.
+pub fn chat_jobs_summary_params(r : ChatRef) -> Map[String, Json] {
+  let params = chat_params(r)
+  params["summary"] = Json::boolean(true)
+  params
 }
 
 ///|

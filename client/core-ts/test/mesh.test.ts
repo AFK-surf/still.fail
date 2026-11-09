@@ -14,7 +14,7 @@ import { CoreError, HostError } from "../src/error.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Iroh, IrohConnection } from "../src/iroh.ts";
-import { ALPN, clearlyBetter, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, FORMER_ALPN, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, MIN_STAY_MS, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, SPEED_SAID_MS, TAILNET, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
+import { ALPN, clearlyBetter, CONNECT_TIMEOUT_MS, cost, DEVICE_KEY, DIRECT_HOLD_MAX_MS, EXPLORE_MS, HEDGE_FLOOR_MS, KEEP_WAYS, LAN, Mesh, MeshWire, MIN_STAY_MS, PING_TIMEOUT_MS, PROBE_MS, REDIAL_MAIN_MS, RENEW_MS, RETIRE_MS, SPEED_FRESH_MS, SPEED_MIN_BYTES, SPEED_SAID_MS, TAILNET, TICK_MS, type CredentialSource, type Link } from "../src/mesh.ts";
 import { Runner } from "../src/runtime.ts";
 import { StationAddr } from "../src/station/addr.ts";
 import { readAll, type RequestHead } from "../src/station/wire.ts";
@@ -23,7 +23,7 @@ import { Status } from "../src/status.ts";
 import { FakeHost } from "../src/testing.ts";
 import { Tracer } from "../src/trace.ts";
 import { hex } from "../src/util.ts";
-import { Wake, Wakes } from "../src/wake.ts";
+import { Wake, WakingHost, Wakes } from "../src/wake.ts";
 import { Station } from "./mesh-station.ts";
 import { PATH_IDLE_MS, type RelaySpec, SimNet, SimTime } from "./sim-iroh.ts";
 import { seeds } from "./sim-seeds.ts";
@@ -241,7 +241,7 @@ sim("streams_a_reply_as_it_comes", async (s) => {
   await close(s, station, mesh);
 });
 
-/// A screen view over the mesh (docs/remote-screens.md): its head line carries `screen`, its frames come whole however
+/// A screen view over the mesh: its head line carries `screen`, its frames come whole however
 /// the network cuts them, and the station sends only as the client acknowledges (never more than 2 ahead).
 sim("a_screen_view_brings_frames_as_they_are_acknowledged", async (s) => {
   const { mesh, station } = await setup(s);
@@ -275,7 +275,7 @@ sim("a_screen_view_brings_frames_as_they_are_acknowledged", async (s) => {
       }),
     ),
   );
-  assert.deepEqual(station.views.map((v) => v.head), [{ method: "POST", path: "/admin/api/screens/desktop/view", headers: {}, screen: ask }]);
+  assert.deepEqual(station.views.map((v) => v.head), [{ method: "POST", path: "/admin/api/screens/desktop/view", headers: {}, screen: { ...ask, self: mesh.deviceId() } }]);
   assert.deepEqual(seen[0], { config: { codec: "jpeg", width: 640, height: 480, description: null, region: null } });
   const videos = seen.filter((f: J) => "video" in f).map((f: J) => f.video);
   assert.deepEqual(videos.map((v: J) => [v.key, v.ts, v.data.length]), station.screenFrames.map((f) => [f.key, f.ts, f.data.length]));
@@ -286,8 +286,8 @@ sim("a_screen_view_brings_frames_as_they_are_acknowledged", async (s) => {
   await close(s, station, mesh);
 });
 
-sim("reaches_stations_from_before_and_after_the_rename", async (s) => {
-  for (const [alpns, spoken] of [[[FORMER_ALPN], FORMER_ALPN], [[ALPN, FORMER_ALPN], ALPN]] as [Uint8Array[], Uint8Array][]) {
+sim("reaches_a_station_in_its_protocol", async (s) => {
+  for (const [alpns, spoken] of [[[ALPN], ALPN]] as [Uint8Array[], Uint8Array][]) {
     const { mesh, station } = await setup(s, await s.station(alpns));
     const link = await s.run(mesh.link(station.id(), grants("ok", { n: 0 })));
     assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
@@ -376,7 +376,7 @@ sim("a_dial_tells_the_station_its_trace", async (s) => {
   await close(s, st, mesh);
 });
 
-/// docs/multi-workspace.md: a station in two workspaces is reached in each on a link of its own (one station id, two
+/// a station in two workspaces is reached in each on a link of its own (one station id, two
 /// addresses), opened and renewed with that workspace's credential; one dropped leaves the other.
 sim("a_station_in_two_workspaces_has_a_link_in_each_with_its_own_credential", async (s) => {
   const { mesh, station } = await setup(s);
@@ -860,6 +860,26 @@ sim("a_station_whose_pings_come_back_late_keeps_its_one_link", async (s) => {
   await close(s, station, mesh);
 });
 
+/// 2026-11-09: devices in China, stations in Tokyo, their one connection through still.fail's own relay, which from
+/// there came to lose most of what went. Its pings unanswered, it was let go and dialled again through the same relay,
+/// every 15–40 s for an evening, while another relay reached the station at once. Dialled again on every relay's own
+/// endpoint too, the requests go on through the other.
+sim("a_link_let_go_on_a_relay_losing_its_packets_is_dialled_anew_on_the_others_too", async (s) => {
+  const a = s.relay("https://a.relay.test/", { device: { ms: 20 }, station: { ms: 5 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 40 }, station: { ms: 60 } });
+  const { station, mesh, id } = await onRelays(s, [a, b]);
+  const link = await s.run(mesh.link(id, grants("ok", { n: 0 })));
+  assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+  assert.ok(sameRelay(via(mesh, id), a), `through ${via(mesh, id)}`);
+  s.net.leg(a, "device").loss = 0.95;
+  await s.time.pass(12 * TICK_MS);
+  assert.ok(sameRelay(via(mesh, id), b), `through ${via(mesh, id)}`);
+  const now = mesh.current(id)!;
+  assert.notEqual(now, link);
+  assert.equal((await request(s, now, head("/admin/api/overview"))).status, 200);
+  await close(s, station, mesh);
+});
+
 /// 2026-10-30: a phone on a slow mobile network (nomofu's, round trips of 2–4 s to every relay), back from the
 /// background: getting onto the relays again and the handshake took past CONNECT_TIMEOUT_MS, and the connection that
 /// came a moment later was closed as too late and dialled anew, the station shown as coming back all the while. The
@@ -950,7 +970,7 @@ sim("ways_as_good_as_each_other_are_not_swapped", async (s) => {
 });
 
 /// Two large replies through b side by side, each coming at half its speed: b is taken to be as fast as the two came
-/// together, not as either did. Each alone held Beijing's way to ccvm at a third of its speed, and it lost to ways
+/// together, not as either did. Each alone held a relay path to a station at a third of its speed, and it lost to ways
 /// never tried (2026-10-28).
 sim("replies_side_by_side_tell_how_fast_their_way_is_together", async (s) => {
   const b = s.relay("https://b.relay.test/", { device: { ms: 20, bps: 256 * 1024 } });
@@ -966,8 +986,26 @@ sim("replies_side_by_side_tell_how_fast_their_way_is_together", async (s) => {
   await close(s, station, mesh);
 });
 
+/// A file's part of megabytes coming through a slow relay: the pings wait behind it on the line and come late, but the
+/// station is there, its reply still coming, and its one link is kept. A phone downloading through a slow relay had its
+/// link let go as dead every few seconds, each part cut (2026-11-07).
+sim("a_link_bringing_a_large_reply_slowly_is_not_let_go_for_its_late_pings", async (s) => {
+  const a = s.relay("https://a.relay.test/", { device: { ms: 20, bps: 128 * 1024 } });
+  const b = s.relay("https://b.relay.test/", { device: { ms: 60, bps: 128 * 1024 } });
+  const { station, mesh, id: bare } = await onRelays(s, [a, b]);
+  const id = `w/${bare}`;
+  await reach(s, mesh, id);
+  await s.time.pass(60_000);
+  const wire = wireOf(s, mesh);
+  const read = Effect.scoped(Effect.flatMap(wire.request(StationAddr.parse(id), { method: "GET", path: "/admin/api/big?mb=4", headers: [] }, new Uint8Array()), (r) => readAll(r.body)));
+  const got = await s.run(Effect.result(read), 10 * 60_000);
+  assert.equal(got._tag, "Success", got._tag === "Failure" ? `cut: ${got.failure.message}` : "");
+  assert.equal(got._tag === "Success" ? got.success.length : 0, 4 * 1024 * 1024);
+  await close(s, station, mesh);
+});
+
 /// Every relay's speed as devices get it is told (`mesh.speed`), with the relay and its paths: the relays are compared
-/// network by network from these (docs/telemetry.md), where before a way's speed was only kept on the device and told
+/// network by network from these, where before a way's speed was only kept on the device and told
 /// nowhere. Once a minute at most for a station and relay: a video's every part would be far too many.
 sim("a_ways_speed_is_told_once_a_minute", async (s) => {
   const b = s.relay("https://b.relay.test/", { device: { ms: 20, bps: 256 * 1024 } });
@@ -1022,7 +1060,7 @@ async function onLan(s: Sim, quietAfterMs?: number) {
   s.net.lan = { punchMs: 500, quietAfterMs };
   const a = s.relay("https://a.relay.test/", { device: { ms: 40 }, station: { ms: 40 } });
   const b = s.relay("https://b.relay.test/", { device: { ms: 10 }, station: { ms: 10 } });
-  const station = await s.stationBound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [a], discovery: false, bindAddr: "127.0.0.1:0" });
+  const station = await s.stationBound({ alpns: [Buffer.from(ALPN)], relayUrls: [a], discovery: false, bindAddr: "127.0.0.1:0" });
   await s.settle(station.endpoint.online());
   station.endpoint.keep([b]);
   const e = env(s);
@@ -1101,13 +1139,13 @@ sim("a_station_on_the_lan_is_dialled_at_its_lan_addresses_and_the_requests_stay_
   await close(s, station, mesh);
 });
 
-/// A station on the device's tailnet (docs/mesh-lan.md, Tailscale), at home on a (far) and held on b (near), its
+/// A station on the device's tailnet (Tailscale), at home on a (far) and held on b (near), its
 /// Tailscale address `ms` away: no hole punched, Tailscale carrying it.
 async function onTailnet(s: Sim, ms: number) {
   s.net.direct = { ms };
   const a = s.relay("https://a.relay.test/", { device: { ms: 40 }, station: { ms: 40 } });
   const b = s.relay("https://b.relay.test/", { device: { ms: 10 }, station: { ms: 10 } });
-  const station = await s.stationBound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [a], discovery: false, bindAddr: "127.0.0.1:0" });
+  const station = await s.stationBound({ alpns: [Buffer.from(ALPN)], relayUrls: [a], discovery: false, bindAddr: "127.0.0.1:0" });
   await s.settle(station.endpoint.online());
   station.endpoint.keep([b]);
   station.tailnet = station.addr().ips;
@@ -1129,6 +1167,27 @@ sim("a_station_said_tailnet_is_kept_and_reached_with_the_relays_down", async (s)
   const link = await s.run(next.link(id, grants("ok", { n: 0 })));
   assert.equal(link.path(), "direct");
   assert.ok(s.time.now() - started < 5_000, `reached ${s.time.now() - started} ms after it was asked`);
+  assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
+  await close(s, station, next);
+});
+
+/// 2026-11-03: a station in WSL with mirrored networking says the Windows machine's own addresses; the Windows app's
+/// packets to them reach it, its answers go back into WSL. Each dial given them went unanswered (CONNECT_TIMEOUT_MS,
+/// again and again for hours) while a phone came through a relay. After one such dial the next goes through the relays
+/// on their own endpoints too, and comes through.
+sim("a_station_said_addresses_that_answer_no_handshake_is_reached_through_a_relay", async (s) => {
+  const { station, mesh, id, a, b } = await onTailnet(s, 1);
+  s.net.oneWay = true;
+  station.tailnet = [];
+  station.lan = station.addr().ips;
+  await reach(s, mesh, id);
+  await s.run(mesh.close());
+  // The next run dials it at the addresses it said.
+  const next = await s.run(Mesh.make(env(s), [a, b]));
+  const started = s.time.now();
+  const link = await s.run(Effect.retry(next.link(id, grants("ok", { n: 0 })), { times: 3 }), 5 * 60_000);
+  assert.ok(s.time.now() - started <= 2 * CONNECT_TIMEOUT_MS + 5_000, `reached ${s.time.now() - started} ms after it was asked`);
+  assert.ok(s.net.tries.some((t) => t.to === id && t.ips), "the addresses it said were dialled");
   assert.equal((await request(s, link, head("/admin/api/overview"))).status, 200);
   await close(s, station, next);
 });
@@ -1179,7 +1238,7 @@ sim("each_tick_of_a_stations_ways_is_a_line_of_the_record_while_it_is_kept", asy
 sim("reaches_a_station_through_its_workspaces_own_relay", async (s) => {
   const a = s.relay("https://a.relay.test/", { device: { ms: 5 }, station: { ms: 5 } });
   const b = s.relay("https://ws.relay.test/", { device: { ms: 20 }, station: { ms: 5 } });
-  const station = await s.stationBound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [b], discovery: false, relayOnly: true });
+  const station = await s.stationBound({ alpns: [Buffer.from(ALPN)], relayUrls: [b], discovery: false, relayOnly: true });
   await s.settle(station.endpoint.online());
   const id = station.id();
   const mesh = await s.run(Mesh.make(env(s), [a]));
@@ -1199,6 +1258,7 @@ import { Adb } from "../src/adb.ts";
 import { parseAdb, MAX_MINUTES } from "../src/adb-parse.ts";
 import { Store } from "../src/store.ts";
 import type { TcpConnection } from "../src/host.ts";
+import { personalStub, takeAll } from "./adb-personal-stub.ts";
 
 /// adbd, as the host reaches it: says back what it hears.
 function echoTcp(_port: number) {
@@ -1212,7 +1272,7 @@ function echoTcp(_port: number) {
   });
 }
 
-/// A chat's grant of this person's phone (docs/adb-share.md): heard from its station, the phone lends itself there with the
+/// A chat's grant of this person's phone: heard from its station, the phone lends itself there with the
 /// ports its app found (`adb.ports`); the grant ended, it is let go. No switch: the grants decide.
 sim("a_grant_heard_lends_the_phone_to_its_station_and_its_end_lets_it_go", async (s) => {
   const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });
@@ -1232,17 +1292,18 @@ sim("a_grant_heard_lends_the_phone_to_its_station_and_its_end_lets_it_go", async
   const mesh = await s.run(Mesh.make(env(s), []));
   mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
   const store = new Store(s.host, s.runner);
-  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  const adb = new Adb({ ...personalStub(), host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  takeAll(adb);
   const station = `ws/${endpoint.id()}`;
   await s.run(adb.run({ kind: "ports", ports: { connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android" } }));
   // (its 共享调试 switch on: lent for the grants)
   await s.run(adb.run({ kind: "on", on: true }));
   // Asked, not yet granted: nothing lent.
   const exp = Math.floor(s.time.now() / 1000) + 3600;
-  adb.heard(station, { id: "p1", session: "k", chat: "EMBER/1.0", reason: "看首屏", status: "pending", at: 1 });
+  adb.heard(station, { id: "p1", session: "k", chat: "CHAT/1.0", reason: "看首屏", status: "pending", at: 1 });
   assert.deepEqual(adb.wanted(), []);
   assert.equal(adb.grants().length, 1);
-  adb.heard(station, { id: "p1", session: "k", chat: "EMBER/1.0", reason: "看首屏", status: "granted", scope: "hour", exp, at: 1 });
+  adb.heard(station, { id: "p1", session: "k", chat: "CHAT/1.0", reason: "看首屏", status: "granted", scope: "hour", exp, at: 1 });
   assert.deepEqual(adb.wanted(), [station]);
   await s.until(() => seen.offer !== undefined && adb.value().lends?.[0]?.adb === "connected");
   assert.equal(seen.offer.adb.connect, 5555);
@@ -1279,14 +1340,15 @@ sim("a_phone_lent_to_two_stations_says_the_one_waiting_to_be_paired", async (s) 
   const mesh = await s.run(Mesh.make(env(s), []));
   for (const e of [paired, waiting]) mesh.addAddr({ id: e.id(), ips: e.sockets() });
   const store = new Store(s.host, s.runner);
-  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  const adb = new Adb({ ...personalStub(), host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  takeAll(adb);
   await s.run(adb.run({ kind: "ports", ports: { connect: 5555, pair: 37115, device: "Pixel 8", android: "14", package: "fail.still.android" } }));
   await s.run(adb.run({ kind: "on", on: true }));
   const exp = Math.floor(s.time.now() / 1000) + 3600;
   const first = `ws/${paired.id()}`;
   const second = `ws/${waiting.id()}`;
-  adb.heard(first, { id: "p1", session: "k1", chat: "EMBER/1.0", reason: "看首屏", status: "granted", scope: "hour", exp, at: 1 });
-  adb.heard(second, { id: "p2", session: "k2", chat: "EMBER/2.0", reason: "装 mod", status: "granted", scope: "hour", exp, at: 2 });
+  adb.heard(first, { id: "p1", session: "k1", chat: "CHAT/1.0", reason: "看首屏", status: "granted", scope: "hour", exp, at: 1 });
+  adb.heard(second, { id: "p2", session: "k2", chat: "CHAT/2.0", reason: "装 mod", status: "granted", scope: "hour", exp, at: 2 });
   await s.until(() => adb.value().lends?.length === 2 && adb.value().lends.every((l: J) => l.adb !== null));
   assert.deepEqual(adb.value().lends.map((l: J) => [l.station, l.adb]), [[first, "connected"], [second, "unpaired"]]);
   const value = adb.value();
@@ -1330,7 +1392,8 @@ sim("offers_the_phone_and_tunnels_what_the_station_opens_to_its_adbd", async (s)
   const mesh = await s.run(Mesh.make(env(s), []));
   mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
   const store = new Store(s.host, s.runner);
-  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  const adb = new Adb({ ...personalStub(), host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  takeAll(adb);
   const station = `ws/${endpoint.id()}`;
   await s.run(adb.run({ kind: "share", offer: { station, connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));
   await s.until(() => seen.echoed !== undefined && adb.value().tunnels === 1 && adb.value().adb === "connected");
@@ -1377,7 +1440,8 @@ sim("the_same_offer_again_is_not_made_anew", async (s) => {
   const mesh = await s.run(Mesh.make(env(s), []));
   mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
   const store = new Store(s.host, s.runner);
-  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  const adb = new Adb({ ...personalStub(), host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  takeAll(adb);
   const station = `ws/${endpoint.id()}`;
   const offer = { station, connect: null, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 };
   await s.run(adb.run({ kind: "share", offer }));
@@ -1390,6 +1454,108 @@ sim("the_same_offer_again_is_not_made_anew", async (s) => {
   await s.until(() => offers.length === 2);
   assert.deepEqual(offers.map((o) => o.connect), [null, 5555]);
   await s.run(adb.run({ kind: "stop" }));
+  await s.run(mesh.close());
+  await s.settle(endpoint.close());
+});
+
+/// A file a station's agent sends (phone_send): fetched a part at a time as a chat's file is, written where adb's shell
+/// reads; cut short, asked again it goes on from what the phone has.
+sim("fetches_a_file_the_station_sends_and_goes_on_from_what_it_has", async (s) => {
+  const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });
+  const said: J[][] = [];
+  let fetch: (ask: J) => Promise<void> = async () => {};
+  void (async () => {
+    const conn = (await endpoint.accept())!;
+    const control = (await conn.acceptBi())!;
+    await Station.readLine(control, { bytes: Buffer.alloc(0) });
+    await control.write(Buffer.from(`${JSON.stringify({ ok: true, station: "测试" })}\n`));
+    const offer = (await conn.acceptBi())!;
+    await Station.readLine(offer, { bytes: Buffer.alloc(0) });
+    await offer.write(Buffer.from(`${JSON.stringify({ status: 200, headers: {} })}\n`));
+    await offer.write(Buffer.from(`${JSON.stringify({ serial: "127.0.0.1:37001", adb: "connected", message: "" })}\n`));
+    fetch = async (ask) => {
+      const stream = await conn.openBi();
+      await stream.write(Buffer.from(`${JSON.stringify(ask)}\n`));
+      await stream.finish();
+      const lines: J[] = [];
+      const carry = { bytes: Buffer.alloc(0) };
+      for (let line = await Station.readLine(stream, carry); line !== null; line = await Station.readLine(stream, carry)) lines.push(JSON.parse(line));
+      said.push(lines);
+    };
+  })().catch(() => {});
+  const file = Buffer.from("0123456789");
+  const asked: [string, string, number][] = [];
+  let failAt: number | null = 8;
+  const part = (station: StationAddr, key: string, name: string, offset: number, length: number) => {
+    asked.push([station.toString(), `${key}/${name}`, offset]);
+    if (offset === failAt) return Effect.fail(new CoreError("mesh", "the link went"));
+    return Effect.succeed({ total: file.length, bytes: new Uint8Array(file.subarray(offset, Math.min(offset + length, offset + 4))) });
+  };
+  let staged = Buffer.alloc(0);
+  (s.host as J).stage = (name: string, offset: number, bytes: Uint8Array) => Effect.sync(() => {
+    if (offset >= 0) staged = Buffer.concat([staged.subarray(0, offset), Buffer.from(bytes)]);
+    return { path: `/sdcard/Android/data/fail.still.android/files/station/${name}`, size: staged.length };
+  });
+  const mesh = await s.run(Mesh.make(env(s), []));
+  mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
+  const store = new Store(s.host, s.runner);
+  const adb = new Adb({ ...personalStub(), host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true, part });
+  takeAll(adb);
+  const station = `ws/${endpoint.id()}`;
+  await s.run(adb.run({ kind: "share", offer: { station, connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));
+  await s.until(() => adb.value().adb === "connected");
+  const ask = { fetch: { key: "k1", name: "ab12-app.apk", size: file.length } };
+  void fetch(ask);
+  await s.until(() => said.length === 1);
+  assert.deepEqual(said[0], [{ at: 4 }, { at: 8 }, { error: "the link went", at: 8 }]);
+  failAt = null;
+  void fetch(ask);
+  await s.until(() => said.length === 2);
+  assert.deepEqual(said[1], [{ at: 10 }, { path: "/sdcard/Android/data/fail.still.android/files/station/ab12-app.apk" }]);
+  assert.deepEqual(asked.map(([, , at]) => at), [0, 4, 8, 8]);
+  assert.deepEqual(asked[0]!.slice(0, 2), [station, "k1/ab12-app.apk"]);
+  assert.equal(staged.toString(), "0123456789");
+  // A name that would leave its folder is not written.
+  void fetch({ fetch: { key: "k1", name: "../x", size: 1 } });
+  await s.until(() => said.length === 3);
+  assert.deepEqual(said[2], [{ error: "invalid fetch" }]);
+  await s.run(adb.run({ kind: "stop" }));
+  await s.run(mesh.close());
+  await s.settle(endpoint.close());
+});
+
+/// 2026-11-04: a chat's own screen up on the phone (the station's displays.ts) is said with how the station holds it, and
+/// the notification names its chat; said no longer, it is gone.
+sim("the_chats_with_screens_up_on_the_phone_are_said", async (s) => {
+  const endpoint = s.net.bindStation({ secretKey: s.net.key(), alpns: [ALPN], relayUrls: [], bindAddr: "127.0.0.1:0" });
+  let say: (line: J) => Promise<void> = async () => {};
+  void (async () => {
+    const conn = (await endpoint.accept())!;
+    const control = (await conn.acceptBi())!;
+    await Station.readLine(control, { bytes: Buffer.alloc(0) });
+    await control.write(Buffer.from(`${JSON.stringify({ ok: true, station: "测试" })}\n`));
+    const offer = (await conn.acceptBi())!;
+    await Station.readLine(offer, { bytes: Buffer.alloc(0) });
+    await offer.write(Buffer.from(`${JSON.stringify({ status: 200, headers: {} })}\n`));
+    say = async (line) => void (await offer.write(Buffer.from(`${JSON.stringify(line)}\n`)));
+    await say({ serial: "127.0.0.1:37001", adb: "connected", message: "" });
+  })().catch(() => {});
+  const mesh = await s.run(Mesh.make(env(s), []));
+  mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
+  const store = new Store(s.host, s.runner);
+  const adb = new Adb({ ...personalStub(), host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  takeAll(adb);
+  const offer = { station: `ws/${endpoint.id()}`, connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 };
+  await s.run(adb.run({ kind: "share", offer }));
+  await s.until(() => adb.value().adb === "connected");
+  assert.deepEqual(adb.value().screens, []);
+  await say({ serial: "127.0.0.1:37001", adb: "connected", message: "", screens: ["修登录页"] });
+  await s.until(() => adb.value().screens.length === 1);
+  assert.deepEqual(adb.value().screens, ["修登录页"]);
+  await say({ serial: "127.0.0.1:37001", adb: "connected", message: "" });
+  await s.until(() => adb.value().screens.length === 0);
+  await s.run(adb.run({ kind: "stop" }));
+  assert.deepEqual(adb.value().screens, []);
   await s.run(mesh.close());
   await s.settle(endpoint.close());
 });
@@ -1422,7 +1588,8 @@ sim("a_connect_port_nothing_listens_on_is_said_so_the_app_looks_again", async (s
   const mesh = await s.run(Mesh.make(env(s), []));
   mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
   const store = new Store(s.host, s.runner);
-  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  const adb = new Adb({ ...personalStub(), host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  takeAll(adb);
   const station = `ws/${endpoint.id()}`;
   const offer = { station, connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 };
   await s.run(adb.run({ kind: "share", offer }));
@@ -1487,7 +1654,9 @@ sim("a_phone_with_its_own_adb_session_carries_the_station_on_it_and_pairs_itself
   const mesh = await s.run(Mesh.make(env(s), []));
   mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
   const store = new Store(s.host, s.runner);
-  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  // Core.make gives the adb part a WakingHost, not the native host itself.
+  const adb = new Adb({ ...personalStub(), host: new WakingHost(s.host, s.wakes), runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  takeAll(adb);
   const station = `ws/${endpoint.id()}`;
   await s.run(adb.run({ kind: "share", offer: { station, connect: 5555, pair: 37115, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));
   await s.until(() => answers.length === 1);
@@ -1516,7 +1685,7 @@ async function tunnelOn(s: Sim, conn: J): Promise<J> {
   return s.settle(opened, 10_000).catch(() => null);
 }
 
-/// 2026-10-17, a phone on ccvm's LAN: every tunnel the station opened went unanswered ("the phone did not answer"), adb
+/// 2026-10-17, a phone on a station's LAN: every tunnel the station opened went unanswered ("the phone did not answer"), adb
 /// connect and pair alike, while the phone's requests went on its LAN way. The phone answers each tunnel on the link its
 /// latest offer went on, whichever way that is, for as long as it is offered.
 sim("tunnels_are_answered_on_the_lan_way", async (s) => {
@@ -1524,7 +1693,8 @@ sim("tunnels_are_answered_on_the_lan_way", async (s) => {
   station.lan = station.addr().ips;
   s.host.tcpConnect = echoTcp;
   const store = new Store(s.host, s.runner);
-  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => grants("ok", { n: 0 }), relays: () => [], lends: () => true });
+  const adb = new Adb({ ...personalStub(), host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => grants("ok", { n: 0 }), relays: () => [], lends: () => true });
+  takeAll(adb);
   const addr = `ws/${id}`;
   await s.run(adb.run({ kind: "share", offer: { station: addr, connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 } }));
   await s.until(() => direct(mesh, addr) && station.offers.length > 0, 5 * 60_000);
@@ -1563,7 +1733,8 @@ sim("a_tunnel_opened_as_the_phone_offers_again_is_served", async (s) => {
   const mesh = await s.run(Mesh.make(env(s), []));
   mesh.addAddr({ id: endpoint.id(), ips: endpoint.sockets() });
   const store = new Store(s.host, s.runner);
-  const adb = new Adb({ host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  const adb = new Adb({ ...personalStub(), host: s.host, runner: s.runner, store, mesh: () => Effect.succeed(mesh), credentials: () => () => Effect.succeed({ credential: "ok", issued_at: 0, expires_at: 0, relay_url: "" } as Credential), relays: () => [], lends: () => true });
+  takeAll(adb);
   const station = `ws/${endpoint.id()}`;
   const offer = { station, connect: 5555, pair: null, device: "Pixel 8", android: "14", package: "fail.still.android", minutes: 60 };
   await s.run(adb.run({ kind: "share", offer }));

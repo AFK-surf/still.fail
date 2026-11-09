@@ -3,6 +3,60 @@
 // back with no gesture one step.
 
 ///|
+test "back follows the current order as rows move, leave, and are made again" {
+  let items = @signals.signal([1, 2, 3])
+  let told : Array[Int] = []
+  let t = @view.Tree::new(fn(root) {
+    root.each(at_once=true, fn() { items.get() }, fn(it) { it }, fn(row, item) {
+      let id = item.get()
+      row.takes_back(fn() { told.push(id) }) |> ignore
+    })
+  })
+  t.frame(390.0, 844.0) |> ignore
+  t.back_step(t.back_taker().unwrap(), Back, 1.0) |> ignore
+  items.set([3, 2, 1])
+  t.frame(390.0, 844.0) |> ignore
+  t.back_step(t.back_taker().unwrap(), Back, 2.0) |> ignore
+  items.set([])
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(t.back_taker(), None)
+  items.set([2])
+  t.frame(390.0, 844.0) |> ignore
+  t.back_step(t.back_taker().unwrap(), Back, 3.0) |> ignore
+  assert_eq(told, [3, 1, 2])
+  t.dispose()
+  assert_eq(t.back_taker(), None)
+}
+
+///|
+test "back can change how a node takes it, and a removed node cannot take it again" {
+  let shown = @signals.signal(true)
+  let node : Ref[@view.View?] = Ref(None)
+  let told : Array[String] = []
+  let t = @view.Tree::new(fn(root) {
+    root.show(at_once=true, fn() { shown.get() }, fn(a) {
+      node.val = Some(a)
+      a.takes_back(fn() { told.push("once") }) |> ignore
+    })
+  })
+  t.frame(390.0, 844.0) |> ignore
+  let old = node.val.unwrap()
+  old.follows_back(fn(_) { told.push("follow") }) |> ignore
+  t.back_step(t.back_taker().unwrap(), Back, 1.0) |> ignore
+  old.takes_back(fn() { told.push("once again") }) |> ignore
+  t.back_step(t.back_taker().unwrap(), Back, 2.0) |> ignore
+  shown.set(false)
+  t.frame(390.0, 844.0) |> ignore
+  old.follows_back(fn(_) { told.push("removed") }) |> ignore
+  assert_eq(t.back_taker(), None)
+  shown.set(true)
+  t.frame(390.0, 844.0) |> ignore
+  t.back_step(t.back_taker().unwrap(), Back, 3.0) |> ignore
+  assert_eq(told, ["follow", "once again", "once"])
+  t.dispose()
+}
+
+///|
 /// Two nodes, "A" under "B" (B there while `b_on`): A following back (told in `told`, as `a_on` says it is there, taking
 /// presses while `a_presses`), B taking it once; a modal layer over both while `modal`.
 fn backed(
@@ -11,16 +65,23 @@ fn backed(
   b_on : @signals.Signal[Bool],
   modal : @signals.Signal[Bool],
   told : Array[String],
+  lets? : Bool = false,
 ) -> @view.Tree {
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { a_on.get() }, fn(a) {
+      root.show(at_once=true, fn() { a_on.get() }, fn(a) {
         a.presses(By(fn() { a_presses.get() })).follows_back(fn(s) { told.push("A \{s}") }) |> ignore
       })
-      root.show(fn() { b_on.get() }, fn(b) {
+      root.show(at_once=true, fn() { b_on.get() }, fn(b) {
         b.over(Is(true)).takes_back(fn() { told.push("B done") }) |> ignore
       })
-      root.box(fn(m) { m.over(Is(true)).modal(By(fn() { modal.get() })) |> ignore }) |> ignore
+      root.box(fn(m) {
+        m.over(Is(true)).modal(By(fn() { modal.get() })) |> ignore
+        if lets {
+          m.held_back_goes_on() |> ignore
+        }
+      })
+      |> ignore
     },
     time=fn() { 0.0 },
   )
@@ -131,4 +192,21 @@ test "a gesture held by a node said anew to follow back: the rest of it to neith
   assert_false(t.back_step(a, LetGo(80.0, 30.0), 30.0))
   t.back_step(a, Back, 40.0) |> ignore
   assert_eq(told.copy(), ["first Began(0, 10)", "second Back"])
+}
+
+///|
+test "a gesture held by a node, a modal layer over it that lets a gesture under way go on: the rest of it the node's; said to take no press then, called off for it once; the next gesture none of its" {
+  let told : Array[String] = []
+  let (a_on, a_presses, b_on, modal) = back_signals()
+  let t = backed(a_on, a_presses, b_on, modal, told, lets=true)
+  let a = t.back_taker().unwrap()
+  t.back_step(a, Began(0.0, 10.0), 10.0) |> ignore
+  t.event(15.0, fn() { modal.set(true) })
+  let moved = t.back_step(a, Moved(40.0, 20.0), 20.0)
+  t.event(25.0, fn() { a_presses.set(false) })
+  let after = t.back_step(a, Moved(60.0, 30.0), 30.0)
+  a_presses.set(true)
+  let next = t.back_taker()
+  assert_eq((moved, after, next == Some(a)), (true, false, false))
+  assert_eq(told.copy(), ["A Began(0, 10)", "A Moved(40, 20)", "A CalledOff"])
 }

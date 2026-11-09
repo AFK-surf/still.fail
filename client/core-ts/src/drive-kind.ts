@@ -6,7 +6,7 @@ export type DriveKind = "folder" | "video" | "audio" | "image" | "markdown" | "t
 
 const EXT: Record<string, DriveKind> = {};
 const put = (kind: DriveKind, exts: string) => exts.split(" ").forEach((e) => (EXT[e] = kind));
-put("video", "mp4 m4v mov webm mkv avi ts m2ts flv wmv 3gp");
+put("video", "mp4 m4v mov webm ogv mkv avi ts m2ts flv wmv 3gp 3g2");
 put("audio", "mp3 m4a aac flac wav ogg opus wma");
 put("image", "png jpg jpeg gif webp svg heic bmp avif");
 put("markdown", "md markdown");
@@ -20,7 +20,7 @@ put("subtitle", "srt vtt ass ssa sub");
 /// How an entry is opened: entered, read in the reader, played, previewed as a chat's files are, or saved to the device.
 export type DriveOpener = "folder" | "read" | "play" | "preview" | "save";
 
-/// What a press on an entry of a kind does (every client's, docs/drive.md).
+/// What a press on an entry of a kind does (every client's).
 export function opensOf(kind: DriveKind): DriveOpener {
   switch (kind) {
     case "folder": return "folder";

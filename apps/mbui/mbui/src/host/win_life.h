@@ -12,7 +12,7 @@
 // - goes on with its window closed, put away to its icon in the notification area (its core, its notifications on):
 //   the icon clicked, or the app started again, brings it back; the icon's menu (the app's words: menu_setup's
 //   `"role": "tray"` menu) brings it back or quits;
-// - is opened with a link of its schemes (MBUI_SCHEMES, "stillfail,ember"): as it starts, or the one running is;
+// - is opened with a link of its schemes (MBUI_SCHEMES, "stillfail,stillfail-beta"): as it starts, or the one running is;
 //   built in still.fail's desktop app's place (MBUI_OWN), its schemes are claimed for it (links_claimed).
 // A program without one (a demo, a test app's scripted run) ends as its window closes, as before. So does a window of
 // the app's own (@hostapi.window_open: the program run again with MBUI_WINDOW): it runs beside the app's one run, not
@@ -167,7 +167,7 @@ static void say_shown(ULONGLONG at) {
   say_system(b, (size_t)n);
 }
 
-// a link of the app's schemes (MBUI_SCHEMES: "stillfail,ember"), else 0
+// a link of the app's schemes (MBUI_SCHEMES: "stillfail,stillfail-beta"), else 0
 static int app_link(const WCHAR *s) {
   const WCHAR *schemes = app_env(L"MBUI_SCHEMES");
   if (!schemes || !s) return 0;
@@ -378,8 +378,65 @@ static void life_identity(void) {
   if (*app_id()) SetCurrentProcessExplicitAppUserModelID(app_id());
 }
 
+// ---- its log files (win_logs.h) ----
+
+double mb_host_cpu_ms(void);
+
+// (on the window's thread, between its frames: what shows how much the record holds follows it)
+static volatile LONG life_perf_telling;
+static void life_perf_told(void *unused) {
+  (void)unused;
+  InterlockedExchange(&life_perf_telling, 0);
+  told_between(MB_OUTSIDE_PERF, 0);
+}
+
+// The record grown, told once for all the writes before it is delivered.
+static void life_perf_written(void) {
+  if (hwnd && !InterlockedExchange(&life_perf_telling, 1)) mb_app_call(life_perf_told, NULL);
+}
+
+// Each few seconds, whatever the window's thread is doing (the writer's thread): a line for the record of what the
+// process takes; and, record or none, the window no longer answering and answering again (the system's own test: its
+// messages unread for 5 s), so that a freeze has left its time in the log without anyone having caught it live.
+static void life_logs_tick(void) {
+  static double cpu_was = -1;
+  static ULONGLONG at_was, hung_at;
+  double cpu = mb_host_cpu_ms();
+  ULONGLONG at = GetTickCount64();
+  double share = cpu_was >= 0 && at > at_was ? (cpu - cpu_was) * 100.0 / (double)(at - at_was) : 0;
+  cpu_was = cpu;
+  at_was = at;
+  int hung = hwnd && IsHungAppWindow(hwnd);
+  char line[160];
+  int n = 0;
+  if (hung && !hung_at) {
+    hung_at = at;
+    n = snprintf(line, sizeof line, "win: the window is not answering: cpu=%.0f%% mem=%.0fMB", share, mb_host_mem_bytes() / 1048576.0);
+  } else if (!hung && hung_at) {
+    n = snprintf(line, sizeof line, "win: the window answers again, %.0f s on", (double)(at - hung_at) / 1000.0);
+    hung_at = 0;
+  }
+  if (n > 0) logs_line(LOGS_LOG, line, (size_t)n);
+  if (logs_perf_on) {
+    n = snprintf(line, sizeof line, "win: cpu=%.0f%% mem=%.0fMB hung=%d", share, mb_host_mem_bytes() / 1048576.0, hung);
+    logs_line(LOGS_PERF, line, (size_t)n);
+  }
+}
+
+// %LOCALAPPDATA%\<the app's id>\logs, for a program that is an app (a demo has none, and keeps nothing).
+static void life_logs(void) {
+  if (!*app_id()) return;
+  PWSTR local = NULL;
+  if (FAILED(SHGetKnownFolderPath(&FOLDERID_LocalAppData, 0, NULL, &local))) return;
+  WCHAR dir[MAX_PATH * 2];
+  _snwprintf(dir, MAX_PATH * 2, L"%ls\\%ls\\logs", local, app_id());
+  dir[MAX_PATH * 2 - 1] = 0;
+  CoTaskMemFree(local);
+  logs_begin(dir, life_logs_tick, life_perf_written);
+}
+
 // As the program starts, before main (the C runtime's initializers, .CRT$XCU): its console, whether it is the app's
-// one run (else it has handed over, and ends here), its identity.
+// one run (else it has handed over, and ends here), its identity, its log files.
 static void __cdecl life_begin(void) {
   life_console();
   if (!life_single()) {
@@ -387,6 +444,7 @@ static void __cdecl life_begin(void) {
     ExitProcess(0);
   }
   life_identity();
+  life_logs();
 }
 // (named outside the file and asked for by the link: nothing refers to it, and an optimizer would drop it)
 #pragma section(".CRT$XCU", read)
@@ -395,8 +453,54 @@ __declspec(allocate(".CRT$XCU")) void(__cdecl *mb_win_life_begins)(void) = life_
 
 // ---- windows of its own ----
 
+static VOID CALLBACK window_opener_ended(PVOID data, BOOLEAN timed) {
+  (void)data;
+  (void)timed;
+  ExitProcess(0);
+}
+
+// A window of the app's own ends with the run that opened it, however that ends (a window run by hand, with no
+// MBUI_WINDOW_OF, is its own). Its opener gone before this looked: at once.
+static void window_ends_with_opener(void) {
+  const WCHAR *of = _wgetenv(L"MBUI_WINDOW_OF");
+  DWORD pid = of ? wcstoul(of, NULL, 10) : 0;
+  if (!pid) return;
+  HANDLE opener = OpenProcess(SYNCHRONIZE, FALSE, pid);
+  if (!opener) {
+    if (GetLastError() == ERROR_INVALID_PARAMETER) ExitProcess(0);
+    return;
+  }
+  HANDLE wait;
+  if (!RegisterWaitForSingleObject(&wait, opener, window_opener_ended, NULL, INFINITE, WT_EXECUTEONLYONCE)) CloseHandle(opener);
+}
+
 // Another window of the app's (@hostapi.window_open): the program run again, its environment this one's with
-// MBUI_WINDOW=<what>; a run of its own beside this one (window_run), ending as its window closes.
+// MBUI_WINDOW=<what>; a run of its own beside this one (window_run), ending as its window closes or as this run ends
+// (MBUI_WINDOW_OF, this run's pid: window_ends_with_opener).
+typedef struct WindowOpened {
+  WCHAR *what;
+  HANDLE process;
+  DWORD pid;
+  struct WindowOpened *next;
+} WindowOpened;
+static WindowOpened *windows_opened;  // what each was started for, the last for each
+
+static WindowOpened **window_opened_at(const WCHAR *what, int n) {
+  WindowOpened **at = &windows_opened;
+  for (; *at; at = &(*at)->next) {
+    if ((int)wcslen((*at)->what) == n && !wmemcmp((*at)->what, what, n)) return at;
+  }
+  return at;
+}
+
+static void window_opened_drop(WindowOpened **at) {
+  WindowOpened *w = *at;
+  *at = w->next;
+  CloseHandle(w->process);
+  free(w->what);
+  free(w);
+}
+
 int32_t mb_host_window_opens(void) { return 1; }
 int32_t mb_host_window_open(moonbit_string_t what) {
   int wn = Moonbit_array_length(what);
@@ -410,7 +514,7 @@ int32_t mb_host_window_open(moonbit_string_t what) {
   if (!env) return 0;
   size_t have = 0;
   for (const WCHAR *e = env; *e; e += wcslen(e) + 1) have += wcslen(e) + 1;
-  WCHAR *block = (WCHAR *)calloc(have + (size_t)wn + 16, sizeof(WCHAR));
+  WCHAR *block = (WCHAR *)calloc(have + (size_t)wn + 64, sizeof(WCHAR));
   if (!block) {
     FreeEnvironmentStringsW(env);
     return 0;
@@ -428,6 +532,7 @@ int32_t mb_host_window_open(moonbit_string_t what) {
   memcpy(at, what, (size_t)wn * sizeof(WCHAR));
   at += wn;
   *at++ = 0;
+  at += _snwprintf(at, 40, L"MBUI_WINDOW_OF=%lu", GetCurrentProcessId()) + 1;
   *at = 0;
   WCHAR command[MAX_PATH * 2 + 4];
   _snwprintf(command, MAX_PATH * 2 + 4, L"\"%ls\"", exe);
@@ -444,7 +549,53 @@ int32_t mb_host_window_open(moonbit_string_t what) {
   // (its window to the front once it is there: it may take the foreground from this one)
   AllowSetForegroundWindow(pi.dwProcessId);
   CloseHandle(pi.hThread);
-  CloseHandle(pi.hProcess);
+  WindowOpened **before = window_opened_at((const WCHAR *)what, wn);
+  if (*before) window_opened_drop(before);
+  WindowOpened *w = (WindowOpened *)calloc(1, sizeof *w);
+  WCHAR *words = (WCHAR *)calloc((size_t)wn + 1, sizeof(WCHAR));
+  if (!w || !words) {
+    free(w);
+    free(words);
+    CloseHandle(pi.hProcess);
+    return 1;
+  }
+  memcpy(words, what, (size_t)wn * sizeof(WCHAR));
+  *w = (WindowOpened){words, pi.hProcess, pi.dwProcessId, windows_opened};
+  windows_opened = w;
+  return 1;
+}
+
+// its top-level window, of the run asked for (a tool window of its own has an owner)
+typedef struct {
+  DWORD pid;
+  HWND found;
+} WindowOfRun;
+static BOOL CALLBACK window_of_run(HWND h, LPARAM find) {
+  WindowOfRun *of = (WindowOfRun *)find;
+  DWORD pid = 0;
+  GetWindowThreadProcessId(h, &pid);
+  if (pid != of->pid || !IsWindowVisible(h) || GetWindow(h, GW_OWNER)) return TRUE;
+  of->found = h;
+  return FALSE;
+}
+
+// The window opened for `what` to the front, while it runs (@hostapi.window_front). (Not there yet, as it starts: it
+// takes the foreground itself, AllowSetForegroundWindow above.)
+int32_t mb_host_window_front(moonbit_string_t what) {
+  int wn = Moonbit_array_length(what);
+  WindowOpened **at = window_opened_at((const WCHAR *)what, wn);
+  if (!*at) return 0;
+  if (WaitForSingleObject((*at)->process, 0) != WAIT_TIMEOUT) {
+    window_opened_drop(at);
+    return 0;
+  }
+  WindowOfRun of = {(*at)->pid, NULL};
+  EnumWindows(window_of_run, (LPARAM)&of);
+  if (of.found) {
+    if (IsIconic(of.found)) ShowWindow(of.found, SW_RESTORE);
+    AllowSetForegroundWindow(of.pid);
+    SetForegroundWindow(of.found);
+  }
   return 1;
 }
 
@@ -663,6 +814,7 @@ static void network_look(void) {
 // once the window is there: its icon in the notification area, the one started again told it may hand over, the
 // network watched, the link it was started with to the app, what it is now
 static void life_start(const WCHAR *title) {
+  window_ends_with_opener();
   window_title = _wcsdup(title);
   taskbar_created = RegisterWindowMessageW(L"TaskbarCreated");
   tray_put();

@@ -1,4 +1,4 @@
-// Phones lent to this station's agents (docs/adb-share.md; the Rust station's adb.rs): a phone offers its adbd over its
+// Phones lent to this station's agents (the Rust station's adb.rs): a phone offers its adbd over its
 // member link, and the station reaches it at `127.0.0.1:<port>`, a listener of its own whose every TCP connection is a
 // stream it opens on the phone's connection (the phone's core takes it on to adbd). `adb connect` as the offer comes,
 // `adb disconnect` as it goes; `adb pair` through the phone's pairing port when its person types the code. The agents
@@ -24,6 +24,7 @@ import type { Viewer } from "../mesh/credential.ts";
 import type { Connection, Stream } from "../mesh/native.ts";
 import { Reader, writeLine } from "../mesh/serve.ts";
 import type { GrantServers } from "./servers.ts";
+import { AdbActivity, KEEP_LENDING, KEEP_TCP, TCP_PORT } from "./activity.ts";
 
 type Json = any;
 
@@ -38,6 +39,9 @@ const ADB_TIMEOUT = 30_000;
 /// How long a phone whose offer ended is kept for another offer of it (the pairing port opened, a new link): its port
 /// and what adb holds of it stay.
 export const GRACE = 5_000;
+/// A phone's connection silent this long ends its offer, as QUIC's idle timeout once did: the connection itself is now
+/// kept 10 minutes for an app frozen in the background (native/mesh CONNECTION_IDLE_MS), adb listing a phone gone.
+export const SILENT_MS = 30_000;
 /// How long a connected phone's state is looked at before it is taken as it is (adb says `offline` a moment first).
 export const SETTLE = 6_000;
 /// How long after adb failed to get in it is tried again, doubled each time it fails again (up to `RETRY_MOST`): what
@@ -66,6 +70,8 @@ export type SharesOptions = {
   /// How the station's adb holds a person's phone changed (its `AdbState`), or the phone is offered no longer (null):
   /// told to their chats' grants (adb/grants.ts `linked`), so that a granted card says whether it is reached yet.
   stated?: (email: string, state: AdbState | null) => void;
+  /// Actual commands or data on a grant's adb transport; not an automatic connection or maintenance.
+  used?: (grant: string, force: boolean) => void;
 };
 
 let nextOffer = 1;
@@ -86,11 +92,14 @@ export class Share {
   /// How the station's adb holds the phone, as the offer's stream is told; `version` counts its changes.
   state: AdbState;
   version = 0;
+  /// The titles of the chats whose own screens are up on the phone (displays.ts): said with the state, for its
+  /// notification.
+  screens: string[] = [];
   /// Told each time `state` is set (Shares' `stated`).
   onSet: ((state: AdbState) => void) | null = null;
   /// Why the phone last turned a tunnel down (its adbd not there, say): what adb not getting in is put down to.
   refused: string | null = null;
-  /// Whether it turned it down as not paired with its own adbd (a phone that holds its own adb session, docs/adb-share.md
+  /// Whether it turned it down as not paired with its own adbd (a phone that holds its own adb session
   /// 2026-10-31): it is paired on the phone, once, not by this station.
   refusedUnpaired = false;
   private refusalWaiters: (() => void)[] = [];
@@ -154,6 +163,21 @@ export class Share {
     for (const f of waiters) f();
   }
 
+  /// The chats whose screens are up changed: said to the phone with the state.
+  setScreens(titles: string[]) {
+    if (titles.length === this.screens.length && titles.every((t, i) => t === this.screens[i])) return;
+    this.screens = titles;
+    this.version++;
+    const waiters = this.waiters;
+    this.waiters = [];
+    for (const f of waiters) f();
+  }
+
+  /// What the offer's stream is told: the state, and the chats whose screens are up (none: not said).
+  line(): Json {
+    return this.screens.length === 0 ? this.state : { ...this.state, screens: this.screens };
+  }
+
   /// The phone turned a tunnel down, saying why.
   refuse(why: string, unpaired = false) {
     this.refused = why;
@@ -188,6 +212,8 @@ export class Share {
 /// The phones offered now, by whose and which (`key`).
 export class Shares {
   readonly byKey = new Map<string, Share>();
+  /// The phones' boots `adb tcpip` was asked in (keepTcp).
+  readonly tcpAsked = new Set<string>();
   /// When each person's phone was last offered no longer, and why (`stopped`: the phone ended it; else its link went):
   /// what phone_use says of a granted phone not lent now.
   readonly gone = new Map<string, { at: number; ended: string }>();
@@ -235,6 +261,11 @@ export class Shares {
 
   get isStopping() {
     return this.stopping;
+  }
+
+  /// The chats whose own screens are up on `email`'s phone (displays.ts), told to it.
+  screens(email: string, titles: string[]) {
+    for (const share of this.byKey.values()) if (share.owner.email.toLowerCase() === email.toLowerCase()) share.setScreens(titles);
   }
 
   /// `email`'s grants changed: their phones connected anew in the servers they are to be in now.
@@ -285,6 +316,25 @@ export async function answerAdb(shares: Shares, conn: Connection, viewer: Viewer
   return reply(400, tr(asked, "station.adb.unknownAsk"));
 }
 
+/// Resolves "silent" once `conn` has answered nothing for SILENT_MS (never, with an addon that cannot ask); `stop` ends
+/// the asking.
+function silent(shares: Shares, conn: Connection): { silent: Promise<"silent">; stop: () => void } {
+  let stopped = false;
+  const silent = new Promise<"silent">((resolve) => {
+    const answers = conn.answers?.bind(conn);
+    if (answers === undefined) return;
+    void (async () => {
+      for (let missed = 0; !stopped && !conn.isClosed(); ) {
+        await shares.run(Effect.sleep(SILENT_MS / 3)).catch(() => (stopped = true)); // timer: a heartbeat of the phone's connection
+        if (stopped) return;
+        missed = (await answers(SILENT_MS / 6).catch(() => true)) ? 0 : missed + 1;
+        if (missed >= 3) return resolve("silent");
+      }
+    })();
+  });
+  return { silent, stop: () => (stopped = true) };
+}
+
 /// An offer: the phone in `shares` (its listener up), adb told, and how adb holds it said down the stream until the
 /// phone stops it, its connection goes, or the station is removed. A later offer from the phone takes this one's place.
 async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: string, ask: Json, asked: Lang, stream: Stream) {
@@ -331,7 +381,10 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
   log.info("adb", "adb offer", { offer: number, ...about(conn), main: conn.remoteId() === ask.phone, adbd: info.adbd, pair: info.pair, connect: info.connect });
   // adbd's port changing (Wireless debugging turned off and on) is said by phones from 2026-10-26 on.
   const moved = before !== undefined && before.connect !== null && info.connect !== null && before.connect !== info.connect;
-  if (before === undefined || before.adbd !== info.adbd || moved || share.state.adb === "failed" || share.state.adb === "missing") {
+  // A phone paired with its own adbd offers again without changing its ports. Retry if it was unpaired, and remember
+  // the offer if the previous connection is still under way (its unpaired refusal may arrive after the new offer).
+  const waitingForPhone = share.state.adb === "unpaired" || (share.state.adb === "connecting" && share.connecting !== null);
+  if (before === undefined || before.adbd !== info.adbd || moved || share.state.adb === "failed" || share.state.adb === "missing" || waitingForPhone) {
     share.failures = 0;
     void connect(shares, share).catch(() => {});
   }
@@ -344,9 +397,11 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     if (cloud.removed()) return resolve("removed");
     unlisten = cloud.listen(() => cloud.removed() && resolve("removed"));
   });
+  const silence = silent(shares, conn);
   const ends = Promise.race([
     stream.stopped().then(() => "stopped" as const),
     conn.closed().then(() => "closed" as const),
+    silence.silent,
     removed,
     shares.stopped(),
   ]);
@@ -356,7 +411,7 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     if (share.version !== seen) {
       seen = share.version;
       try {
-        await writeLine(stream, share.state);
+        await writeLine(stream, share.line());
       } catch {
         ended = "stream";
         break;
@@ -371,6 +426,7 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     }
   }
   unlisten();
+  silence.stop();
   share.streams--;
   if (ended === "stopping") return;
   // Only the latest offer takes the phone away (one that came on another link has it now), and only if no other comes
@@ -398,13 +454,14 @@ function listen(shares: Shares, share: Share) {
     const ids = shares.options.granted?.(share.owner.email) ?? [];
     if (ids.length > 0 && shares.options.servers) {
       // Granted to chats: only their adb servers are let in (another chat's agent, knowing the port, is not).
-      void shares.options.servers.allowed(socket, ids).then((ok) => {
+      void shares.options.servers.owner(socket, ids).then((id) => {
         if (signal.aborted) return;
-        if (!ok) {
+        if (id === null) {
           log.info("adb", "a connection to a granted phone's port from no grant's adb server turned away", { port: share.port });
           return void socket.destroy();
         }
-        tunnel(conn, "connect", socket, signal).catch((error) => {
+        const activity = new AdbActivity(share.info.package, (force) => shares.options.used?.(id, force));
+        tunnel(conn, "connect", socket, signal, activity).catch((error) => {
           log.info("adb", "adb tunnel ended", { error: (error as Error).message, offer: share.offer, ...about(conn) });
           share.refuse((error as Error).message, error instanceof Unpaired);
         });
@@ -460,7 +517,7 @@ class Unpaired extends Error {}
 
 /// A stream to the phone for `socket`: `{"tunnel": kind}`, the phone's answer once it reached adbd (or why not), then
 /// the bytes both ways until either side ends. `signal` ends it at once (the pairing done).
-export async function tunnel(conn: Connection, kind: string, socket: net.Socket, signal?: AbortSignal): Promise<void> {
+export async function tunnel(conn: Connection, kind: string, socket: net.Socket, signal?: AbortSignal, activity?: AdbActivity): Promise<void> {
   socket.on("error", () => {});
   let stream: Stream | null = null;
   const abort = () => {
@@ -479,7 +536,10 @@ export async function tunnel(conn: Connection, kind: string, socket: net.Socket,
     const s = stream;
     const up = (async () => {
       try {
-        for await (const chunk of socket) await s.write(chunk as Buffer);
+        for await (const chunk of socket) {
+          activity?.take(chunk as Buffer);
+          await s.write(chunk as Buffer);
+        }
       } finally {
         await s.finish().catch(() => {});
       }
@@ -692,15 +752,30 @@ function keepLending(shares: Shares, share: Share, server: string[]): void {
   const adb = shares.adb();
   if (!pkg || !isPackage(pkg) || adb === null) return;
   const asks = [
-    ["shell", "pm", "grant", pkg, "android.permission.WRITE_SECURE_SETTINGS"],
-    ["shell", "cmd", "deviceidle", "whitelist", `+${pkg}`],
+    ["shell", KEEP_LENDING, "pm", "grant", pkg, "android.permission.WRITE_SECURE_SETTINGS"],
+    ["shell", KEEP_LENDING, "cmd", "deviceidle", "whitelist", `+${pkg}`],
   ];
   void (async () => {
     for (const ask of asks) {
       const said = await run(adb, [...server, "-s", share.serial(), ...ask], shares.limits.long).catch((error: Error) => error.message);
-      log.info("adb", "adb kept the phone lending", { ask: ask.slice(1, 3).join(" "), said: said.split("\n")[0]!.trim().slice(0, 160), ...about(share.conn) });
+      log.info("adb", "adb kept the phone lending", { ask: ask.slice(2, 4).join(" "), said: said.split("\n")[0]!.trim().slice(0, 160), ...about(share.conn) });
     }
+    await keepTcp(shares, share, adb, server);
   })();
+}
+
+/// adbd's plain port, `TCP_PORT`, on: what the app holds its session to once Wi-Fi is gone, which Wireless debugging
+/// goes with (on mobile data, the phone lent on). `adb tcpip` restarts adbd, the held session with it, and lasts until
+/// the phone starts again: asked once a boot (`/proc/sys/kernel/random/boot_id`), so a phone that does not keep it is
+/// not restarted again and again.
+export async function keepTcp(shares: Shares, share: Pick<Share, "info" | "serial" | "conn">, adb: string, server: string[]): Promise<void> {
+  if (share.info.connect === TCP_PORT) return;
+  const said = await run(adb, [...server, "-s", share.serial(), "shell", KEEP_TCP], shares.limits.long).catch(() => "");
+  const [boot, port] = said.split("\n").map((l) => l.trim());
+  if (port === String(TCP_PORT) || !boot || !/^[0-9a-z-]+$/.test(boot) || shares.tcpAsked.has(boot)) return;
+  shares.tcpAsked.add(boot);
+  const done = await run(adb, [...server, "-s", share.serial(), "tcpip", String(TCP_PORT)], shares.limits.long).catch((error: Error) => error.message);
+  log.info("adb", "adb asked for adbd's plain port", { said: done.split("\n")[0]!.trim().slice(0, 160), ...about(share.conn) });
 }
 
 /// Lets the app turn Wireless debugging on itself from now on (`WRITE_SECURE_SETTINGS`), as its person asked.
@@ -781,4 +856,3 @@ export function text(value: unknown, max: number): string {
 export function isPackage(name: string): boolean {
   return name.length > 0 && name.length <= 200 && /^[A-Za-z0-9._]+$/.test(name);
 }
-

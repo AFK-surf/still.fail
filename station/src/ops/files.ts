@@ -1,24 +1,25 @@
 // Files the station keeps: where its data directory is, and writing them whole (a reader never sees half a file).
 import { closeSync, fsyncSync, mkdirSync, openSync, opendirSync, readFileSync, renameSync, writeSync } from "node:fs";
+import { opendir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { tr, type Lang } from "./i18n.ts";
 import { wall } from "./fibers.ts";
 import { platform } from "../platform/index.ts";
 
-/// The data directory: `--data`, else $STILLFAIL_DATA, else $EMBER_DATA (before the rename), else ~/.stillfail.
+/// The data directory: `--data`, else $STILLFAIL_DATA, else ~/.stillfail.
 export function dataDir(args: string[]): string {
   const at = args.indexOf("--data");
   if (at >= 0 && args[at + 1]) return args[at + 1];
-  return process.env.STILLFAIL_DATA || process.env.EMBER_DATA || join(homedir(), ".stillfail");
+  return process.env.STILLFAIL_DATA || join(homedir(), ".stillfail");
 }
 
-/// Whether `data` is the machine's own data directory (~/.stillfail, or ~/.ember not moved yet), as the launcher's
+/// Whether `data` is the machine's own data directory (~/.stillfail), as the launcher's
 /// data.rs `is_default`: only its station takes the usual ports (4750, 4760); one on another directory (a test's, a
 /// development station's) takes free ones, so it never keeps the machine's station off them.
 export function ownData(data: string, home = homedir()): boolean {
   const key = (path: string) => platform.paths.key(platform.paths.clean(path));
-  return [".stillfail", ".ember"].some((d) => key(join(home, d)) === key(data));
+  return key(join(home, ".stillfail")) === key(data);
 }
 
 /// Where the MCP endpoint's port is remembered (the launcher's ports.rs writes it too): agents a station leaves running
@@ -72,6 +73,18 @@ export const nowSecs = () => Math.floor(wall.now() / 1000);
 export function unreadableDir(dir: string): boolean {
   try {
     opendirSync(dir).closeSync();
+    return false;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === "EPERM" || code === "EACCES";
+  }
+}
+
+/// `unreadableDir` off the main thread: opening a folder can wait for as long as what it is on does not answer (a
+/// network file system whose server is gone: OrbStack's when its machine is stopped), and the station's thread with it.
+export async function unreadableDirAsync(dir: string): Promise<boolean> {
+  try {
+    await (await opendir(dir)).close();
     return false;
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;

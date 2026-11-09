@@ -4,16 +4,16 @@
 
 ///|
 /// The room under a post going to its new height: a Move as long as its way is far, as every row's height in a chat's
-/// list goes (docs/list-motion.md: what changes together moves as one, on one curve from one moment).
+/// list goes (mbui's view/list_motion.mbt: what changes together moves as one, on one curve from one moment).
 // kept across runs: a curve, never written
 pub let close_gap : @motion.Spec = @motion.move()
 
 ///|
-/// How long the archive buttons take to come and go (Chat.kt ArchiveEase's 280 ms), 忽略 too.
+/// How long the archive buttons take to come and go, 忽略 too.
 pub let archive_ms : Double = 280.0
 
 ///|
-/// ArchiveEase (Chat.kt): a quick start, a soft landing.
+/// ArchiveEase: a quick start, a soft landing.
 // kept across runs: a curve, never written
 pub let archive_ease : @ui.Ease = Out
 
@@ -22,7 +22,7 @@ pub let archive_ease : @ui.Ease = Out
 pub let archive_scale : Double = 0.85
 
 ///|
-/// The archive buttons' curve and time (Chat.kt ArchiveEase, `archive_ms`): a quick start, a soft landing.
+/// The archive buttons' curve and time (`archive_ms`): a quick start, a soft landing.
 // kept across runs: a curve, never written
 pub let archive_tween : @motion.Spec = @motion.tween(archive_ms, ease=archive_ease)
 
@@ -30,6 +30,13 @@ pub let archive_tween : @motion.Spec = @motion.tween(archive_ms, ease=archive_ea
 /// The rooms under the posts as their motions were asked (under_post, by its key), kept to say when they are at rest.
 // kept across runs: put back by under_reset (sfbase's reset)
 pub let under_ends : Map[String, @motion.Anim] = {}
+
+///|
+/// The list's way each block under a post last went on (Ctx::row_way: its start and how long), by its key: the way set
+/// out again (another change in the list come while it goes), it goes on from where it is on the new one, as every row
+/// does, so that the rows' sum goes one way (mbui's view/list_motion.mbt)
+// kept across runs: put back by under_reset (sfbase's reset)
+let under_ways : Map[String, (Double, Double)] = {}
 
 ///|
 /// When what comes and goes under the posts (options, how a card went, 忽略, the archive buttons) is at rest, their
@@ -67,22 +74,25 @@ pub fn under_post(
     None => {
       // there at once as it comes; going, by `exit`
       if shown {
-        h.snap(1.0)
+        h.snap(c, 1.0)
       }
       @motion.presence(c, "under-look/" + key, shown, enter=@motion.trans(spec=@motion.Snap(0.0)), exit~, start_at?)
     }
   }
   // (a share of its room: a Move as long as the room is tall)
-  let spec = (if shown { open } else { close }).per_unit(@motion.reveal_height("under/" + key))
+  let spec = (if shown { open } else { close }).per_unit(@motion.reveal_height(c, "under/" + key))
   // (in a row of a list as what it shows changes: on the way its rows go then, from its start and as long, so that
   // what is over and under it moves one way with it: @ui.Ctx::row_way)
   match (c.row_way(), start_at) {
-    (Some(way), _) if h.target() != to => on_row_way(c, h, to, way)
-    (_, Some(at)) if h.target() != to => h.animate(to, spec, start_at=at)
-    _ => h.follow(to, spec)
+    (Some(way), _) if h.target() != to || (!h.over(c) && under_ways.get(key) is Some(w) && w != way) => {
+      under_ways[key] = way
+      on_row_way(c, h, to, way)
+    }
+    (_, Some(at)) if h.target() != to => h.animate(c, to, spec, start_at=at)
+    _ => h.follow(c, to, spec)
   }
   under_ends[key] = h
-  let share = h.get()
+  let share = h.get(c)
   let look = match look {
     Some(l) => l
     None => if share <= 0.0 { return } else { @ui.look(alpha=0.0) }
@@ -106,14 +116,14 @@ pub fn under_post(
 fn on_row_way(c : @ui.Ctx, a : @motion.Anim, to : Double, way : (Double, Double)) -> Unit {
   let (at, ms) = way
   let later = dmax(at - c.moment(), 0.0)
-  // det-ok(motion-length): the list's rows' way, timed by the list for all of them at once (docs/list-motion.md)
-  a.animate(to, @motion.tween(ms, ease=Move, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
+  // det-ok(motion-length): the list's rows' way, timed by the list for all of them at once (mbui's view/list_motion.mbt)
+  a.animate(c, to, @motion.tween(ms, ease=Move, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
 }
 
 // ── the cards in a chat ─────────────────────────────────────────────────
 
 ///|
-/// Options answered fade out in this long (Decisions.kt DecisionUnder); how it went fades in after them as long.
+/// Options answered fade out in this long; how it went fades in after them as long.
 pub let options_out_ms : Double = 200.0
 
 ///|
@@ -140,4 +150,5 @@ let under_room_lead : @ui.Style = @ui.css("w=Full pt=S1_5")
 /// What the rooms under the posts keep put back as the app begins anew (sfbase's reset).
 pub fn under_reset() -> Unit {
   under_ends.clear()
+  under_ways.clear()
 }

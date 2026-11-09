@@ -1,9 +1,9 @@
 // The made-up drive of the fixture's stations (the core's shapes: Overview.drive, the `drive` topic's DriveFolder,
-// `drivePlace`, `drive.read`'s parts), for the drive's screenshots (scripts/shots.sh drive) and tests: Studio lends
-// 文档 and a disk that is gone, its home browsable; MBA (away) lends 照片. Its folders take what the pages do to them
+// `drivePlace`, `drive.read`'s parts), for the drive's screenshots (scripts/shots.sh drive) and tests: Willow lends
+// 文档 and a disk that is gone, its home browsable; Maple (away) lends 照片. Its folders take what the pages do to them
 // (rename, delete, a new folder, a file put up) while the app runs. Every word in it is made up.
 //
-// MBUI_FIXTURE: files (文件), drive (Studio's 文档), drive-sub (a folder in it), drive-upload (files going up, one whose
+// MBUI_FIXTURE: files (文件), drive (Willow's 文档), drive-sub (a folder in it), drive-upload (files going up, one whose
 // name is taken, one failed), drive-download (a file and a folder being downloaded), drive-empty, reader
 // (a novel read), reader-bars (with its bars), reader-contents, reader-layout, reader-md (a Markdown file read);
 // chat-station-files (＋'s Station 文件 in a folder, a file ticked), chat-station-ref (a station's file in the draft),
@@ -16,7 +16,7 @@ pub let fix_home : String = "/Users/lin"
 pub let fix_docs : String = "/Users/lin/文档"
 
 ///|
-/// Studio's as a member sees it (drive-roots): its two folders pinned (备份盘 missing), nothing else browsed.
+/// Willow's as a member sees it (drive-roots): its two folders pinned (备份盘 missing), nothing else browsed.
 pub fn fixture_station_member() -> Json {
   {
     "viewer": { "via": "mesh", "role": "member" },
@@ -47,8 +47,8 @@ pub fn fixture_station_drive(up : Bool) -> Json {
         "watch": true,
         "zip": true,
       },
-      // its disk: 380 GB of 1 TB left
-      "disk": { "freeBytes": 380000000000.0, "totalBytes": 1000000000000.0 },
+      // its disk: 420 GB of 1 TB left
+      "disk": { "freeBytes": 420000000000.0, "totalBytes": 1000000000000.0 },
     }
   } else {
     {
@@ -220,15 +220,15 @@ pub fn fix_transfer(params : Json) -> Unit {
   fix_transfers.insert(0, {
     "id": Json::string("t\{fix_transfers.length() + 1}"),
     "station": Json::string(text(to, "station")),
-    "stationName": "MBA",
+    "stationName": "Maple",
     "fromStation": Json::string(text(from, "station")),
-    "fromStationName": "Studio",
+    "fromStationName": "Willow",
     "fromRoot": Json::string(text(from, "root")),
     "fromPath": Json::string(text(from, "path")),
     "names": Json::array(names.map(fn(n) { Json::string(n) })),
     "toRoot": Json::string(text(to, "root")),
     "toPath": Json::string(text(to, "path")),
-    "toText": Json::string("MBA › " + way),
+    "toText": Json::string("Maple › " + way),
     "title": Json::string(title),
     "move": Json::boolean(flag(p, "move")),
     "state": "copying",
@@ -425,7 +425,7 @@ pub fn fixture_markdown() -> String {
 }
 
 ///|
-/// Studio's 文档/`name` in draft `key` as ＋'s Station 文件 puts it there (writing_drop: composer.add, the file with
+/// Willow's 文档/`name` in draft `key` as ＋'s Station 文件 puts it there (writing_drop: composer.add, the file with
 /// where it is, `mode` how it goes: "path", named by it; "file", sent as one), up already (`done`, as the fixture's
 /// composer.add has it) or still going.
 pub fn fix_draft_ref(key : String, name : String, dir : Bool, size : Double, mode : String, done : Bool) -> Unit {
@@ -436,7 +436,7 @@ pub fn fix_draft_ref(key : String, name : String, dir : Bool, size : Double, mod
     "size": Json::number(size),
     "ref": {
       "station": "ws1/st1",
-      "stationName": "Studio",
+      "stationName": "Willow",
       "path": Json::string(path),
       "dir": Json::boolean(dir),
       "mode": Json::string(mode),

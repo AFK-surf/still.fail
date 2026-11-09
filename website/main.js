@@ -1,0 +1,810 @@
+// monoid · official site. No framework, no dependencies: everything here runs after the page has painted (defer).
+(() => {
+  "use strict";
+  const root = document.documentElement;
+  const $ = (s, el = document) => el.querySelector(s);
+  const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch { /* private window */ } },
+  };
+
+  const nav = $("#nav");
+  const sheet = $("#nav-list", nav);
+  const ind = $(".nav-ind", nav);
+
+  // ---- Words this script writes into the page: from #i18n-js, translated with the rest of the page ----
+  const say = (id) => $("#i18n-js")?.content.querySelector(`[data-js="${id}"]`)?.innerHTML ?? "";
+
+  // ---- Language: one page per language, chosen in the footer's menu ----
+  // A choice is remembered (the head script sends the reader back to it next time) and the reader taken to that page,
+  // at the same place (hash). The menu is a popover (light dismiss, Escape); arrows, Home and End move between the
+  // options, Enter or Space picks one, Tab closes it and moves on; a click with a modifier (or the middle button) opens
+  // the page in a new tab as the browser would, the choice still remembered. Where CSS anchor positioning is missing,
+  // it is placed here beside the button.
+  {
+    const trigger = $(".language-trigger"), menu = $("#languages");
+    const items = menu ? $$(".language-option", menu) : [];
+    const popover = menu && typeof menu.showPopover === "function";
+    const anchored = window.CSS?.supports?.("anchor-name: --x");
+    const isOpen = () => (popover ? menu.matches(":popover-open") : !menu.hidden);
+    const place = () => {
+      // Its layout size (offset*), not its box, which the entering scale shrinks.
+      const gap = 8;
+      menu.style.maxHeight = `${innerHeight - 2 * gap}px`;
+      const r = trigger.getBoundingClientRect(), w = menu.offsetWidth, h = menu.offsetHeight;
+      let top = r.top - gap - h;
+      if (top < gap) top = Math.min(r.bottom + gap, innerHeight - h - gap);
+      menu.style.top = `${Math.max(gap, top)}px`;
+      menu.style.left = `${Math.max(gap, Math.min(r.right - w, innerWidth - w - gap))}px`;
+      menu.dataset.placed = "";
+    };
+    const opened = (open) => {
+      trigger.setAttribute("aria-expanded", String(open));
+      if (!anchored) {
+        if (open) { place(); addEventListener("resize", place); addEventListener("scroll", place, { passive: true }); }
+        else { delete menu.dataset.placed; removeEventListener("resize", place); removeEventListener("scroll", place); }
+      }
+      if (open) {
+        // The links carry the place on the page too, so a new tab opens there as well.
+        for (const a of items) a.href = a.dataset.base + location.hash;
+        (items.find((a) => a.getAttribute("aria-checked") === "true") || items[0]).focus({ preventScroll: true });
+      }
+    };
+    const show = (open) => {
+      if (open === isOpen()) return;
+      if (popover) { if (open) menu.showPopover(); else menu.hidePopover(); }
+      else { menu.hidden = !open; opened(open); }
+    };
+    // Where Tab goes from the menu: the next stop after the button (Shift+Tab: the button, just before the menu).
+    const after = () => {
+      const stops = $$("a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex='-1'])")
+        .filter((el) => !menu.contains(el) && el.getClientRects().length && !el.closest("[inert], [hidden]"));
+      return stops[stops.indexOf(trigger) + 1] || trigger;
+    };
+    if (trigger && menu) {
+      for (const a of items) a.dataset.base = a.getAttribute("href");
+      if (popover) menu.addEventListener("toggle", (e) => opened(e.newState === "open"));
+      else {
+        // No popover (Safari before 17): a plain toggle, closed by a click elsewhere.
+        menu.hidden = true;
+        Object.assign(menu.style, { position: "fixed", zIndex: 100 });
+        trigger.addEventListener("click", () => show(menu.hidden));
+        document.addEventListener("click", (e) => { if (!menu.hidden && !menu.contains(e.target) && !trigger.contains(e.target)) show(false); });
+      }
+      trigger.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); show(true); }
+      });
+      menu.addEventListener("keydown", (e) => {
+        const i = items.indexOf(document.activeElement), n = items.length;
+        const to = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: n - 1 }[e.key];
+        if (to !== undefined) { e.preventDefault(); items[(to + n) % n].focus(); }
+        else if (e.key === " " && i >= 0) { e.preventDefault(); items[i].click(); }
+        else if (e.key === "Escape") { e.preventDefault(); show(false); trigger.focus(); }
+        else if (e.key === "Tab") { e.preventDefault(); const next = e.shiftKey ? trigger : after(); show(false); next.focus(); }
+      });
+      const remember = (a) => store.set("monoid.site.locale", a.dataset.locale);
+      for (const a of items) {
+        a.addEventListener("click", (e) => {
+          remember(a);
+          // Ctrl/Cmd/Shift/Alt-click: the browser's own (a new tab or window); this tab stays as it is.
+          if (e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+          e.preventDefault();
+          if (a.getAttribute("aria-checked") === "true") { show(false); trigger.focus(); return; }
+          location.href = a.dataset.base + location.hash;
+        });
+        a.addEventListener("auxclick", (e) => { if (e.button === 1) remember(a); });
+      }
+    }
+  }
+
+  // ---- Mobile menu: a sheet from under the bar. Escape or the dimmed page closes it; Tab stays inside while open ----
+  const menu = $(".menu-btn", nav);
+  const narrow = matchMedia("(max-width: 980px)");
+  const isOpen = () => nav.hasAttribute("data-open");
+  function setMenu(open, refocus) {
+    if (open === isOpen()) return;
+    nav.toggleAttribute("data-open", open);
+    root.classList.toggle("menu-open", open);
+    menu.setAttribute("aria-expanded", String(open));
+    if (open) $("a", sheet).focus({ preventScroll: true });
+    else if (refocus) menu.focus({ preventScroll: true });
+  }
+  menu.addEventListener("click", () => setMenu(!isOpen(), true));
+  $(".nav-scrim", nav).addEventListener("click", () => setMenu(false, true));
+  for (const a of $$("a", sheet)) a.addEventListener("click", () => setMenu(false, false));
+  narrow.addEventListener("change", () => setMenu(false, false));
+  document.addEventListener("keydown", (e) => {
+    if (!isOpen()) return;
+    if (e.key === "Escape") { e.preventDefault(); setMenu(false, true); return; }
+    if (e.key !== "Tab") return;
+    const stops = $$("a[href], button", nav).filter((el) => el.getClientRects().length);
+    const first = stops[0], last = stops[stops.length - 1];
+    if (!nav.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+
+  // ---- Links within the page land where they point ----
+  // Bands below the fold are laid out only as they come near (content-visibility), so their heights settle during a
+  // long smooth scroll and it would stop short (and the devices scene would snap it). So a far jump goes most of the
+  // way at once, lets the bands near the target settle, then glides the last stretch, and checks where it landed.
+  const targetY = (t) => t.id === "top" ? 0 : t.getBoundingClientRect().top + scrollY - (parseFloat(getComputedStyle(t).scrollMarginTop) || 0);
+  const frames = (n) => new Promise((ok) => { const f = () => (n-- ? requestAnimationFrame(f) : ok()); f(); });
+  // Tab into a band not yet laid out (content-visibility) scrolls to its placeholder's place; as the bands above get
+  // their real heights the control can end up off screen. For half a second (while they settle), a focused control
+  // that leaves the view is brought back.
+  document.addEventListener("focusin", (e) => {
+    const el = e.target;
+    if (!(el instanceof Element) || el.matches('body, :where(section, main)[tabindex="-1"]')) return;
+    const until = performance.now() + 600;
+    const check = () => {
+      if (document.activeElement !== el) return;
+      const r = el.getBoundingClientRect(), top = $("#nav")?.offsetHeight || 0;
+      if (r.bottom <= top || r.top >= innerHeight) el.scrollIntoView({ block: "center", behavior: "instant" });
+      if (performance.now() < until) requestAnimationFrame(check);
+    };
+    requestAnimationFrame(check);
+  });
+  const settle = () => new Promise((ok) => {
+    let done = false;
+    const end = () => { if (!done) { done = true; removeEventListener("scrollend", end); ok(); } };
+    addEventListener("scrollend", end);
+    setTimeout(end, 900);
+  });
+  async function go(t) {
+    const far = Math.abs(targetY(t) - scrollY) > innerHeight * 1.5;
+    if (reduce || far) {
+      const y = targetY(t);
+      scrollTo({ top: reduce ? y : y - Math.sign(y - scrollY) * innerHeight * 0.6, behavior: "instant" });
+      await frames(2);
+    }
+    if (!reduce) { scrollTo({ top: targetY(t), behavior: "smooth" }); await settle(); }
+    for (let i = 0; i < 4 && Math.abs(targetY(t) - scrollY) > 2; i++) { scrollTo({ top: targetY(t), behavior: "instant" }); await frames(2); }
+  }
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest?.('a[href^="#"]');
+    if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const id = decodeURIComponent(a.hash.slice(1));
+    const t = id && document.getElementById(id);
+    if (!t) return;
+    e.preventDefault();
+    if (isOpen()) setMenu(false, false);
+    history.pushState(null, "", id === "top" ? location.pathname + location.search : "#" + id);
+    go(t);
+    // Keyboard users continue from the section they jumped to.
+    if (!t.matches("a, button, input, [tabindex]")) t.setAttribute("tabindex", "-1");
+    t.focus({ preventScroll: true });
+  });
+  if (location.hash.length > 3) {
+    const t = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (t) addEventListener("load", () => frames(2).then(() => go(t)), { once: true });
+  }
+
+  // ---- Which section is on screen: its link is marked, and one indicator slides under it ----
+  // A thin stripe across the middle of the screen decides; a band with no link (the hero, the overview) clears it.
+  const links = new Map($$('a[href^="#"]', sheet).map((a) => [a.hash.slice(1), a]));
+  let current = null;
+  // box: the link's place, read before mark() writes (so the scroll spy forces no style recalc); else read here.
+  function placeInd(slide, box) {
+    const w = box ? box.w : current?.offsetWidth;
+    if (!current || !w) { ind.removeAttribute("data-on"); return; }
+    // Coming from nowhere, it appears in place; from another link, it slides.
+    ind.toggleAttribute("data-jump", !slide || !ind.hasAttribute("data-on"));
+    ind.style.setProperty("--x", (box ? box.x : current.offsetLeft) + "px");
+    ind.style.setProperty("--w", w);
+    ind.setAttribute("data-on", "");
+  }
+  function mark(a) {
+    if (a === current) return;
+    const box = a ? { x: a.offsetLeft, w: a.offsetWidth } : null;
+    current?.removeAttribute("aria-current");
+    current = a || null;
+    current?.setAttribute("aria-current", "true");
+    placeInd(true, box);
+  }
+  const seen = new Map();
+  const spy = new IntersectionObserver((entries) => {
+    for (const e of entries) seen.set(e.target, e.isIntersecting);
+    let on = null;
+    for (const [s, hit] of seen) if (hit) on = s;
+    mark(on && links.get(on.id));
+  }, { rootMargin: "-45% 0px -50% 0px" });
+  for (const s of $$("main > section")) spy.observe(s);
+  // The bar takes the tone of the band behind it, so its material reads as part of that band: dark over the dark band,
+  // paper elsewhere. One 1 px line decides: the bar's middle (data-under, what is behind it).
+  // The line is measured as the page scrolls, since they sit a few pixels from a band's edge: the search starts from
+  // the band found last, so a frame reads one or two boxes. Above the first band (the bar's own place at the top)
+  // there is no tone, and the bar is paper.
+  const bands = $$("main > section[data-tone], footer[data-tone]");
+  let barH = 0, bi = 0; // the bar's height, from the ResizeObserver below (no layout read while the page parses)
+  function at(y) {
+    let i = bi;
+    while (i > 0 && bands[i].getBoundingClientRect().top > y) i--;
+    while (i < bands.length - 1 && bands[i].getBoundingClientRect().bottom <= y) i++;
+    bi = i;
+    const r = bands[i].getBoundingClientRect();
+    return r.top <= y && r.bottom > y ? bands[i].dataset.tone : null;
+  }
+  const setTone = (k, t) => { if (t == null) delete nav.dataset[k]; else if (nav.dataset[k] !== t) nav.dataset[k] = t; };
+  const tone = () => setTone("under", at(barH / 2));
+  // Once more after the scroll settles, and when the bands' heights settle (content-visibility), which moves them
+  // without a scroll event.
+  let toneT;
+  addEventListener("scroll", () => { tone(); clearTimeout(toneT); toneT = setTimeout(tone, 120); }, { passive: true });
+  // The bar's height is read when its row is laid out (WebKit can run this before the imported sheets have styled it).
+  new ResizeObserver(() => { barH = nav.offsetHeight; tone(); }).observe($(".w", nav));
+  // The bands are watched one level in, not <main> itself: WebKit keeps a band's remembered size (contain-intrinsic-size:
+  // auto) with an observer of its own at the band's depth, and a shallower one that changes in that frame is left
+  // undelivered (a "ResizeObserver loop" error).
+  const bandsRO = new ResizeObserver(() => tone());
+  for (const s of $$("main > section")) for (const c of s.children) bandsRO.observe(c);
+  requestAnimationFrame(tone);
+  new ResizeObserver(() => placeInd(false)).observe(sheet);
+  document.fonts?.ready.then(() => placeInd(false));
+  placeInd(false);
+
+  // ---- Tabs (the product overview and the devices) ----
+  // data-tabs: panels are shown and hidden ([hidden]). data-tabs="stack" (the overview): the panels sit on top of one
+  // another and the active one is marked [data-on] (the others inert), so CSS can cross-fade them; each picture keeps
+  // its place in the list's order (earlier ones above, later ones below), so a switch moves the way the list does.
+  for (const group of $$("[data-tabs]")) {
+    // Real tabs (role=tab) keep one tab stop and arrow keys; the overview's accordion buttons (data-tab) are each a stop.
+    const tabs = $$('[role="tab"], [data-tab]', group);
+    const stack = group.dataset.tabs === "stack";
+    const select = (tab, focus) => {
+      for (const t of tabs) {
+        const on = t === tab;
+        if (t.hasAttribute("data-tab")) t.setAttribute("aria-expanded", String(on));
+        else { t.setAttribute("aria-selected", String(on)); t.tabIndex = on ? 0 : -1; }
+        t.closest(".ov-item")?.toggleAttribute("data-on", on);
+        const panel = document.getElementById(t.getAttribute("aria-controls"));
+        if (!panel) continue;
+        if (stack) { panel.toggleAttribute("data-on", on); panel.inert = !on; } else panel.hidden = !on;
+      }
+      if (focus) tab.focus();
+    };
+    const pick = (i, focus) => select(tabs[i], focus);
+    if (stack) {
+      // The overview turns to its next item on its own while nobody is using it, so a reader who only scrolls sees all
+      // three pictures. The active item's top rule fills as its timer (a CSS animation, so pausing is exact and costs
+      // no script); its end turns the page. It runs only on wide screens (on narrow ones the text above the picture
+      // would push it about), while at least half of it is on screen and the tab is visible; it pauses while the
+      // pointer or the focus is inside, and stops for good once the reader picks an item. Never with reduced motion.
+      const wide = matchMedia("(min-width: 961px)");
+      let stopped = reduce, seen = false, inside = false;
+      const sync = () => {
+        const auto = !stopped && wide.matches;
+        group.toggleAttribute("data-auto", auto);
+        group.toggleAttribute("data-run", auto && seen && !inside && !document.hidden);
+      };
+      new IntersectionObserver(([e]) => {
+        seen = e.intersectionRatio >= 0.5;
+        group.classList.toggle("play", e.isIntersecting); // the pictures' own loops run only while on screen
+        sync();
+      }, { threshold: [0, 0.5] }).observe(group);
+      const hold = () => { inside = group.matches(":hover") || group.contains(document.activeElement); sync(); };
+      for (const ev of ["pointerenter", "pointerleave", "focusin", "focusout"]) group.addEventListener(ev, () => setTimeout(hold));
+      document.addEventListener("visibilitychange", sync);
+      wide.addEventListener("change", sync);
+      group.addEventListener("animationend", (e) => {
+        if (e.animationName !== "ov-dwell" || stopped) return;
+        const i = tabs.findIndex((t) => t.getAttribute("aria-expanded") === "true");
+        pick((i + 1) % tabs.length);
+      });
+      tabs.forEach((t) => t.addEventListener("click", () => { stopped = true; sync(); }));
+      sync();
+
+      // Phones: the overview is a swiper, one card per item (30-overview.css). The browser owns the gesture and its
+      // momentum; the script only follows it. The card at the snap line is the active item (its event lands, its loops
+      // run), the dots' pill tracks the scroll (a custom property, once a frame while scrolling), and an item's name or
+      // a dot scrolls its card in.
+      const car = matchMedia("(max-width: 760px) and (min-height: 501px)"); // the same query as the CSS
+      const nav = group.nextElementSibling?.classList.contains("ov-nav") ? group.nextElementSibling : null;
+      const dots = nav ? $$("button", nav) : [], pill = nav && $(".ov-pill", nav);
+      const panes = tabs.map((t) => document.getElementById(t.getAttribute("aria-controls")));
+      const at = () => Math.max(0, tabs.findIndex((t) => t.getAttribute("aria-expanded") === "true"));
+      const slide = (i, smooth = true) => {
+        const pad = parseFloat(getComputedStyle(group).scrollPaddingLeft) || 0;
+        const x = group.scrollLeft + panes[i].getBoundingClientRect().left - group.getBoundingClientRect().left - pad;
+        group.scrollTo({ left: x, behavior: smooth && !reduce ? "smooth" : "auto" });
+      };
+      let frame = 0;
+      const follow = () => {
+        frame = 0;
+        if (!car.matches) return;
+        // The last card cannot reach the snap line (the row ends), so position is read against the full scroll range.
+        const max = group.scrollWidth - group.clientWidth;
+        const p = max > 0 ? Math.min(1, Math.max(0, group.scrollLeft / max)) * (tabs.length - 1) : 0;
+        pill?.style.setProperty("--p", p.toFixed(3));
+        const i = Math.round(p);
+        if (i !== at()) pick(i);
+      };
+      group.addEventListener("scroll", () => { frame ||= requestAnimationFrame(follow); }, { passive: true });
+      tabs.forEach((t, i) => t.addEventListener("click", () => { if (car.matches) slide(i); }));
+      dots.forEach((d, i) => d.addEventListener("click", () => slide(i)));
+      // Turning into a swiper (a phone rotated back upright), it opens on the item that was active.
+      car.addEventListener("change", () => { if (car.matches) { slide(at(), false); follow(); } });
+    }
+    tabs.forEach((t, i) => {
+      t.addEventListener("click", () => pick(i));
+      if (t.hasAttribute("data-tab")) return;
+      t.tabIndex = t.getAttribute("aria-selected") === "true" ? 0 : -1;
+      t.addEventListener("keydown", (e) => {
+        const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+        if (step) { e.preventDefault(); pick((i + step + tabs.length) % tabs.length, true); }
+        if (e.key === "Home") { e.preventDefault(); pick(0, true); }
+        if (e.key === "End") { e.preventDefault(); pick(tabs.length - 1, true); }
+      });
+    });
+  }
+
+  // ---- Every device, as a swiper (wherever the scene below does not play) ----
+  // The track is native scroll with snapping, so the browser owns the gesture and its momentum; the script only
+  // follows it. The dots' pill tracks the scroll position continuously (a transform, once a frame while scrolling);
+  // the card in view is marked [data-on] (its picture's loops run, the others pause), and the dots and arrows jump.
+  {
+    const swipe = $(".dv-swipe"), track = $("#dv-track"), cards = $$(".fpanel", track);
+    const dots = $$(".dv-dots button", swipe), pill = $(".dv-pill", swipe), count = $(".dv-count b", swipe);
+    const [prev, next] = $$(".dv-arrows button", swipe);
+    let on = -1, frame = 0, nearT = 0;
+    const left = (card) => card.offsetLeft - track.offsetLeft - parseFloat(getComputedStyle(track).scrollPaddingLeft || 0);
+    const go = (i) => track.scrollTo({ left: left(cards[Math.max(0, Math.min(cards.length - 1, i))]), behavior: reduce ? "auto" : "smooth" });
+    const follow = () => {
+      frame = 0;
+      // The last card cannot reach the snap line (the track ends), so position is read against the scroll's full range.
+      const max = track.scrollWidth - track.clientWidth;
+      const p = max > 0 ? Math.max(0, Math.min(1, track.scrollLeft / max)) * (cards.length - 1) : 0;
+      pill.style.setProperty("--p", p.toFixed(3));
+      const i = Math.round(p);
+      if (i === on) return;
+      on = i;
+      cards.forEach((c, k) => c.toggleAttribute("data-on", k === i));
+      // Only the card in view has its picture laid out at once (the first time, a frame after the section itself);
+      // its neighbours follow a moment later, so the four pictures never land in one frame (60-devices.css: [data-near]).
+      const first = !nearT;
+      clearTimeout(nearT);
+      const near = () => cards[on].setAttribute("data-near", "");
+      if (first) setTimeout(near, 50); else near();
+      nearT = setTimeout(() => cards.forEach((c, k) => { if (Math.abs(k - on) <= 1) c.setAttribute("data-near", ""); }), 300);
+      dots.forEach((d, k) => d.toggleAttribute("aria-current", k === i));
+      count.textContent = String(i + 1).padStart(2, "0");
+      prev.disabled = i === 0;
+      next.disabled = i === cards.length - 1;
+    };
+    track.addEventListener("scroll", () => { frame ||= requestAnimationFrame(follow); }, { passive: true });
+    dots.forEach((d, k) => d.addEventListener("click", () => go(k)));
+    for (const b of [prev, next]) b.addEventListener("click", () => go(on + Number(b.dataset.step)));
+    track.addEventListener("keydown", (e) => {
+      const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (step && e.target === track) { e.preventDefault(); go(on + step); }
+    });
+    new IntersectionObserver(([e]) => swipe.classList.toggle("play", e.isIntersecting)).observe(swipe);
+    new ResizeObserver(follow).observe(track); // also its first state, once the track is laid out (no forced layout)
+  }
+
+  // ---- Every device, as one scene played by scrolling (large screens with motion allowed: html.scrolly, set in the head) ----
+  // The stage stays on screen with CSS (position: sticky in a tall track, sized from the first paint, so nothing moves
+  // when the script arrives); GSAP's ScrollTrigger scrubs one timeline through it and snaps to each step. One device a
+  // step, upright and whole in the middle of the picture side: the Duo open on two panels, Android, the desktop app, the
+  // web app; between steps the words and the device cross-fade. GSAP is fetched only as the section comes near.
+  const loadScript = (src) => new Promise((ok, fail) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = ok; s.onerror = fail;
+    document.head.appendChild(s);
+  });
+  function initScrolly() {
+    const { gsap, ScrollTrigger } = window;
+    gsap.registerPlugin(ScrollTrigger);
+    const show = $(".dv-show"), stage = $(".dv-stage", show), view = $(".dv-view", show);
+    const steps = $$(".dv-step", show), rail = $$(".dv-rail li", show);
+    const devices = $$(".dv-view > .d", show);
+    const navH = () => $("#nav").offsetHeight;
+
+    // Each device at the size that fills the panel (a margin round it), never over 1:1, in its middle. Read as the
+    // trigger refreshes (after layout), never while the page parses.
+    const fit = () => {
+      const W = view.clientWidth, H = view.clientHeight, side = 40, edge = 40;
+      for (const d of devices) {
+        const k = Math.min((W - 2 * side) / d.offsetWidth, (H - 2 * edge) / d.offsetHeight, 1);
+        d.style.setProperty("--k", k.toFixed(3));
+      }
+    };
+    fit();
+    ScrollTrigger.addEventListener("refreshInit", fit);
+
+    gsap.set(steps.slice(1), { autoAlpha: 0, y: 12 });
+    gsap.set(devices.slice(1), { autoAlpha: 0, "--ty": "12px" });
+
+    const tl = gsap.timeline({ defaults: { ease: "power2.out" } });
+    const names = ["open", "android", "desktop", "web"], labels = [];
+    const stop = (name) => { tl.addLabel(name); labels.push(name); };
+    stop(names[0]);
+    for (let i = 1; i < names.length; i++) {
+      tl.to({}, { duration: 0.4 }); // each step holds a while before the next comes
+      const t = tl.duration();
+      // Out: a quick fade, up a little; in: a fade, up from a little below. Only opacity and a 12 px move.
+      tl.to(steps[i - 1], { autoAlpha: 0, y: -12, duration: 0.35, ease: "power1.out" }, t)
+        .to(devices[i - 1], { autoAlpha: 0, "--ty": "-12px", duration: 0.4, ease: "power1.out" }, t)
+        .fromTo(steps[i], { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: 0.5, immediateRender: false }, t + 0.3)
+        .fromTo(devices[i], { autoAlpha: 0, "--ty": "12px" }, { autoAlpha: 1, "--ty": "0px", duration: 0.55, immediateRender: false }, t + 0.3);
+      stop(names[i]);
+    }
+    tl.to({}, { duration: 0.4 });
+
+    const pos = (name) => tl.labels[name] / tl.duration();
+    const no = $(".dv-no b", show), bar = $(".dv-bar i", show);
+    let current = -1;
+    const mark = (i) => {
+      if (i === current) return;
+      current = i;
+      no.textContent = String(i + 1).padStart(2, "0");
+      rail.forEach((li, k) => {
+        li.toggleAttribute("data-on", k === i);
+        const b = $("button", li);
+        if (k === i) b.setAttribute("aria-current", "step"); else b.removeAttribute("aria-current");
+      });
+      steps.forEach((s, k) => s.setAttribute("aria-hidden", String(k !== i)));
+    };
+    const st = ScrollTrigger.create({
+      trigger: show,
+      start: () => `top top+=${navH() + 16}`,
+      end: () => `bottom top+=${navH() + 16 + stage.offsetHeight}`,
+      animation: tl,
+      scrub: 0.6,
+      // Snap to the nearest step, not to where a flick would carry: no screen is skipped unseen.
+      snap: { snapTo: labels.map(pos), inertia: false, duration: { min: 0.2, max: 0.6 }, delay: 0.1, ease: "power2.inOut" },
+      invalidateOnRefresh: true,
+      onUpdate(self) {
+        bar.style.transform = `scaleX(${self.progress})`;
+        const time = self.progress * tl.duration(); // where the scroll is, not where the scrub has got to
+        let i = 0;
+        labels.forEach((name, k) => { if (k && time >= tl.labels[labels[k - 1]] + (tl.labels[name] - tl.labels[labels[k - 1]]) * 0.5) i = k; });
+        mark(i);
+      },
+    });
+    mark(0);
+    // Each tween reads its start values the first time it renders: do that once while the reader is still above the
+    // scene and the browser is idle, not in the frames of the first scroll through it.
+    if (st.progress === 0) (window.requestIdleCallback || setTimeout)(() => {
+      if (st.progress === 0 && !st.isActive) { tl.progress(1, true); tl.progress(0, true); }
+    });
+    // The bands above the scene are laid out only as they come near (content-visibility), so their real heights can
+    // arrive after the trigger measured its start (a jump past them, a deep link): measure again once they settle.
+    let refreshT;
+    const settle = new ResizeObserver(() => { clearTimeout(refreshT); refreshT = setTimeout(() => ScrollTrigger.refresh(), 150); });
+    for (const s of $$("main > section")) if (s.compareDocumentPosition(show) & Node.DOCUMENT_POSITION_FOLLOWING) for (const c of s.children) settle.observe(c);
+    // A window made smaller than the scene's screen shows the swiper instead (60-devices.css): the trigger rests.
+    sceneMQ.addEventListener("change", (e) => { if (e.matches) { st.enable(); ScrollTrigger.refresh(); } else st.disable(false); });
+    // The rail scrolls to its device.
+    rail.forEach((li) => $("button", li).addEventListener("click", () => {
+      const i = Number(li.dataset.i);
+      scrollTo({ top: st.start + (st.end - st.start) * pos(labels[i]), behavior: "smooth" });
+    }));
+  }
+  // The same screen as the head script's test (and 60-devices.css), watched for a window that is resized.
+  const sceneMQ = matchMedia("(min-width: 1024px) and (min-height: 760px)");
+  if (root.classList.contains("scrolly")) {
+    let started = false;
+    const start = () => {
+      if (started) return;
+      started = true;
+      // The scene, from its template, into its placeholder (which already has its height: nothing moves). Not before:
+      // its four devices would be styled and laid out in the frames after the first paint, screens before they show.
+      $(".dv-show").append($("#dv-stage").content.cloneNode(true));
+      loadScript("assets/vendor/gsap.min.js")
+        .then(() => loadScript("assets/vendor/ScrollTrigger.min.js"))
+        .then(initScrolly)
+        .catch(() => root.classList.remove("scrolly")); // without GSAP: the plain tabs
+    };
+    const near = new IntersectionObserver(([e]) => { if (e.isIntersecting) { near.disconnect(); start(); } }, { rootMargin: "1600px 0px" });
+    near.observe($("#devices"));
+    addEventListener("load", () => setTimeout(start, 2500), { once: true });
+  }
+
+  // ---- Reveal on scroll ----
+  // Everything is visible at the first paint. Then only what starts below the fold is set to wait (.rv-wait), and it
+  // comes in as it reaches the screen (.rv-in, removed again once done so the element's own transitions return).
+  // Groups (.split-head, .head, [data-stagger]) bring their children in one after another, at most 6 steps.
+  {
+    const rvs = $$(".rv");
+    const STAGGER = 60, DUR = 520;
+    for (const g of rvs) if (g.matches(".split-head, .head, [data-stagger]")) [...g.children].forEach((c, i) => c.style.setProperty("--i", Math.min(i, 6)));
+    const show = (el) => { el.classList.add("in"); };
+    if (!("IntersectionObserver" in window)) rvs.forEach(show);
+    else {
+      const met = new WeakSet();
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          const el = e.target;
+          if (!met.has(el)) {
+            met.add(el);
+            // Already on screen (or above it, after a jump to an anchor): leave it be. A band not yet laid out
+            // (content-visibility) reports an empty box: it is far below.
+            const r = e.boundingClientRect;
+            if ((r.width || r.height) && r.top < innerHeight) { show(el); io.unobserve(el); continue; }
+            el.classList.add("rv-wait");
+          }
+          if (!e.isIntersecting) continue;
+          io.unobserve(el);
+          el.classList.add("rv-in");
+          el.classList.remove("rv-wait");
+          show(el);
+          const steps = el.matches(".split-head, .head, [data-stagger]") ? Math.min(el.children.length - 1, 6) : 0;
+          setTimeout(() => el.classList.remove("rv-in"), DUR + steps * STAGGER + 80);
+        }
+      }, { rootMargin: "0px 0px -8% 0px" });
+      rvs.forEach((el) => io.observe(el));
+    }
+  }
+
+  // ---- The teams grid: each picture tells its story in steps, only while its cell is on screen ----
+  // data-seq: how long each step holds (ms). An element with data-in="n" is .is-in from step n until its data-out
+  // (else to the end); the cell carries data-step for the moves that depend on it. Step 0 is the rest that also clears
+  // the last loop, so wrapping round plays the exits. CSS says how each thing enters and leaves (50-teams.css).
+  // A list marked data-follow scrolls, as a chat does, to keep its newest message in view.
+  // Reduced motion: the picture stands at its data-still step, the story told in one frame.
+  const cells = $$("#teams .cell[data-seq]");
+  for (const cell of cells) {
+    const hold = cell.dataset.seq.split(" ").map(Number), parts = $$("[data-in]", cell), follow = $("[data-follow]", cell);
+    let step = -1, timer = 0;
+    const set = (s) => {
+      step = s; cell.dataset.step = s;
+      for (const p of parts) p.classList.toggle("is-in", s >= +p.dataset.in && s < +(p.dataset.out ?? hold.length));
+      if (follow) {
+        const shown = parts.filter((p) => p.classList.contains("is-in") && follow.contains(p));
+        if (!shown.length) { follow.style.transform = "translateY(0px)"; return; } // nothing to follow: no measuring
+        let end = 0;
+        for (const p of shown) end = Math.max(end, p.offsetTop + p.offsetHeight);
+        follow.style.transform = `translateY(${-Math.max(0, follow.offsetTop + end + 12 - follow.parentElement.clientHeight)}px)`;
+      }
+    };
+    cell.show = set;
+    const tick = () => { set((step + 1) % hold.length); timer = setTimeout(tick, hold[step]); };
+    const still = +(cell.dataset.still ?? hold.length - 1);
+    cell.play = (on) => {
+      if (reduce) { if (on) set(still); return; } // laid out only now (content-visibility), so a list can follow
+      cell.classList.toggle("play", on);
+      if (!on) { clearTimeout(timer); timer = 0; } else if (!timer) timer = setTimeout(tick, hold[step] / 2);
+    };
+    requestAnimationFrame(() => set(reduce ? still : 0)); // measures (data-follow): in the frame, not while parsing
+  }
+  const play = new IntersectionObserver((entries) => { for (const e of entries) e.target.play(e.isIntersecting); }, { threshold: .35 });
+  for (const c of cells) play.observe(c);
+  // The pool's layers and the security picture loop only while on screen (40-pool.css: .play; 70-security.css: .off).
+  {
+    const loops = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.target.matches(".sec-net")) e.target.classList.toggle("off", !e.isIntersecting);
+        else e.target.classList.toggle("play", e.isIntersecting);
+      }
+    });
+    for (const el of $$(".pool-fig, .sec-net")) loops.observe(el);
+  }
+  // On a phone the grid is a swiper (native scroll, 50-teams.css). The script only follows it: the dots' pill tracks the
+  // scroll once a frame while it moves, the count names the card at the snap line, and a dot or an arrow key jumps.
+  {
+    const track = $("#teams .cells"), dots = $$("#teams .tm-dots button"), pill = $("#teams .tm-pill"), count = $("#teams .tm-count b");
+    let on = -1, frame = 0;
+    const swiper = () => track.scrollWidth > track.clientWidth + 1;
+    const go = (i) => {
+      const c = cells[Math.max(0, Math.min(cells.length - 1, i))];
+      track.scrollTo({ left: c.offsetLeft - track.offsetLeft - parseFloat(getComputedStyle(track).scrollPaddingLeft || 0), behavior: reduce ? "auto" : "smooth" });
+    };
+    const follow = () => {
+      frame = 0;
+      if (swiper()) track.tabIndex = 0; else track.removeAttribute("tabindex");
+      const max = track.scrollWidth - track.clientWidth; // the last card cannot reach the snap line: read the full range
+      const p = max > 1 ? Math.max(0, Math.min(1, track.scrollLeft / max)) * (cells.length - 1) : 0;
+      pill.style.setProperty("--p", p.toFixed(3));
+      const i = Math.round(p);
+      if (i === on) return;
+      on = i;
+      dots.forEach((d, k) => d.toggleAttribute("aria-current", k === i));
+      count.textContent = String(i + 1).padStart(2, "0");
+    };
+    track.addEventListener("scroll", () => { frame ||= requestAnimationFrame(follow); }, { passive: true });
+    dots.forEach((d, k) => d.addEventListener("click", () => go(k)));
+    track.addEventListener("keydown", (e) => {
+      const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (step && e.target === track && swiper()) { e.preventDefault(); go(on + step); }
+    });
+    new ResizeObserver(follow).observe(track); // also its first state, once the track is laid out (no forced layout)
+  }
+
+  // ---- Copy the install command ----
+  // The icon and label cross-fade to a check and "Copied" (.is-copied), and a status line tells a screen reader. If the
+  // clipboard is refused, the command itself is selected so a keyboard copy works.
+  for (const b of $$("[data-copy]")) {
+    const term = b.closest(".term"), live = term && $(".copy-live", term);
+    let t = 0;
+    b.addEventListener("click", async () => {
+      let ok = true;
+      try { await navigator.clipboard.writeText(b.dataset.copy); } catch { ok = false; }
+      if (!ok) {
+        const code = term && $("code", term);
+        if (code) { const r = document.createRange(); r.selectNodeContents(code); getSelection().removeAllRanges(); getSelection().addRange(r); }
+      }
+      if (live) live.innerHTML = say(ok ? "copied" : "selected");
+      b.classList.toggle("is-copied", ok);
+      clearTimeout(t);
+      t = setTimeout(() => { b.classList.remove("is-copied"); if (live) live.textContent = ""; }, 1800);
+    });
+  }
+
+  // ---- Downloads: the one for this device first, outlined in Ink and tagged as this device's ----
+  const ua = navigator.userAgent;
+  const platform = /Android/i.test(ua) ? "android"
+    : /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? "ios"
+    : /Macintosh/.test(ua) ? "mac" : /Windows/.test(ua) ? "windows" : /Linux|X11|CrOS/.test(ua) ? "web" : "mac";
+  const mine = $(`#dl [data-for="${platform}"]`);
+  if (mine) {
+    mine.classList.add("primary");
+    mine.parentElement.prepend(mine);
+    const tags = $(".tags", mine);
+    if (tags) tags.insertAdjacentHTML("afterbegin", `<span class="tag mine"><span>${say("this-device")}</span></span>`);
+  }
+
+  // ---- FAQ: details that open and close smoothly, and can be turned around mid-way ----
+  // The answer's height runs on a grid row (0fr to 1fr), a transition, so a second click reverses it from where it is.
+  // [open] is set at once on opening (so the content exists to grow into) and removed only once closing has finished.
+  // Keyboard (Enter, Space on the summary) goes through the same click; find-in-page opening an answer is followed.
+  // Closing waits as long as the CSS says (under reduced motion: the words' fade, then the room closes in one step).
+  {
+    for (const d of $$(".faq details")) {
+      const s = $("summary", d), a = $(".a", d);
+      if (!s || !a) continue;
+      d.classList.toggle("is-open", d.open);
+      let t = 0;
+      s.addEventListener("click", (e) => {
+        e.preventDefault();
+        clearTimeout(t);
+        if (!d.classList.contains("is-open")) {
+          if (!d.open) { d.open = true; void a.offsetHeight; }
+          d.classList.add("is-open");
+        } else {
+          d.classList.remove("is-open");
+          const dur = parseFloat(getComputedStyle(a).transitionDuration) * 1000 || 0;
+          t = setTimeout(() => { if (!d.classList.contains("is-open")) d.open = false; }, dur);
+        }
+      });
+      d.addEventListener("toggle", () => { if (d.open && !d.classList.contains("is-open")) d.classList.add("is-open"); if (!d.open) d.classList.remove("is-open"); });
+    }
+  }
+
+  // ---- The field: the mark taken apart ----
+  // Each cell holds one of the mark's parts, an eye (a dot) or a cheek (a pill), in diagonal runs of dot, dot, pill,
+  // drawn quietly in the band's greys (--f-eye, --f-cheek on the field's wrap, as "r g b"). A ripple runs out from one cell and, as it reaches each cell, that cell turns to the next part of its
+  // run: a dot closes to a pill, a pill opens to a dot. One ask, every device answering in turn. The ripple is an
+  // explanation, so it takes its time to cross (about 3 s), but each cell's own change is a blink of about 250 ms.
+  // The ripple starts from one cell in the band's strongest colour (--f-you: Ink on paper): you. It stays a dot and only swells as the ripple
+  // leaves it. Its place is fixed: a sixth of the way in, on the second row (the hero and the closing band share it).
+  const DOT = .17, PILL_W = .29, PILL_H = .1; // in cells; the pill is the mark's cheek (.59 of an eye high), a little longer
+  const SPEED = 9, BAND = 2.2, GAP = 5; // cells a second; cells over which one cell changes; seconds between ripples
+  const part = (c, r, s) => ((c + 2 * r + s) % 3 === 2 ? 1 : 0); // 0 an eye, 1 a cheek
+  const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+  const pill = (p, x, y, pw, ph) => { // into a path or a context; a dot when pw = ph
+    const r = ph / 2, dx = (pw - ph) / 2;
+    p.moveTo(x - dx, y - r);
+    p.arc(x + dx, y, r, -Math.PI / 2, Math.PI / 2);
+    p.arc(x - dx, y, r, Math.PI / 2, Math.PI * 1.5);
+    p.closePath();
+  };
+
+  function field(wrap, { loop, delay }) {
+    const canvas = $("canvas", wrap), ctx = canvas.getContext("2d");
+    let w = 0, h = 0, cols = 24, cell = 0, rows = 0, oc = 0, or = 0, far = 0;
+    let EYE = [201, 199, 193], CHEEK = [222, 220, 215], YOU = [28, 27, 26];
+    // at: seconds into the ripple under way, or null between ripples; wait: seconds until the next one.
+    let shift = 0, at = null, wait = loop ? delay : Infinity;
+    let running = !reduce, inView = false, ready = false, raf = 0, timer = 0, last = 0, drawn = 0;
+    const empty = new Set();
+    function size() {
+      w = canvas.clientWidth; h = canvas.clientHeight;
+      if (!w || !h) return;
+      const cs = getComputedStyle(wrap);
+      const rgb = (k, d) => { const v = cs.getPropertyValue(k).trim().split(/\s+/).map(Number); return v.length === 3 && v.every((n) => n >= 0) ? v : d; };
+      cols = parseInt(cs.getPropertyValue("--cols"), 10) || 24;
+      EYE = rgb("--f-eye", EYE); CHEEK = rgb("--f-cheek", CHEEK); YOU = rgb("--f-you", YOU);
+      cell = w / cols;
+      rows = Math.max(1, Math.floor(h / cell + .01));
+      const d = Math.min(devicePixelRatio || 1, 2);
+      canvas.width = Math.round(w * d); canvas.height = Math.round(h * d);
+      ctx.setTransform(d, 0, 0, d, 0, 0);
+      measure();
+      // Drawn: the hero fades the field in (CSS); until now the canvas was blank.
+      canvas.dataset.drawn = "";
+    }
+    // The cell under the pause button is left empty, so the button sits on clear ground. The ripple's origin is fixed
+    // (4 of 24 columns, 2 of 12 on a phone; the second row).
+    function measure() {
+      if (!cell) return;
+      empty.clear();
+      const box = wrap.getBoundingClientRect();
+      // A cell is left out when its dot would touch the ring (the ring's radius plus a third of a cell), so on a phone,
+      // where the 32 px ring is wider than a cell, it clears one cell, not the six its box grazes.
+      for (const el of $$(".fpause", wrap)) {
+        const b = el.getBoundingClientRect();
+        if (!b.width) continue;
+        const x = (b.left + b.right) / 2 - box.left, y = (b.top + b.bottom) / 2 - box.top, reach = b.width / 2 + cell / 3;
+        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++)
+          if (Math.hypot((c + .5) * cell - x, (r + .5) * cell - y) < reach) empty.add(r * cols + c);
+      }
+      oc = Math.floor(cols / 6); or = Math.min(1, rows - 1);
+      far = Math.max(Math.hypot(oc, or), Math.hypot(cols - 1 - oc, or), Math.hypot(oc, rows - 1 - or), Math.hypot(cols - 1 - oc, rows - 1 - or));
+      draw();
+    }
+    function draw() {
+      ctx.clearRect(0, 0, w, h);
+      const front = at === null ? -1 : at * SPEED;
+      // As the ripple reaches a cell, the cell swells slightly and settles (k: 0 before, 1 after) while it changes part.
+      // Cells in one colour go into one path; only the few between colours are filled one by one.
+      const still = [new Path2D(), new Path2D()];
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        if (empty.has(r * cols + c)) continue;
+        if (c === oc && r === or) continue; // you: drawn last, in its own colour
+        const a = part(c, r, shift), b = part(c, r, shift + 1);
+        const k = front < 0 ? 0 : Math.min(1, Math.max(0, (front - Math.hypot(c - oc, r - or)) / BAND));
+        const t = a + (b - a) * smooth(k), s = cell * (1 + .12 * Math.sin(Math.PI * k));
+        const x = (c + .5) * cell, y = (r + .5) * cell;
+        const pw = s * (DOT + (PILL_W - DOT) * t), ph = s * (DOT + (PILL_H - DOT) * t);
+        if (t === 0 || t === 1) { pill(still[t], x, y, pw, ph); continue; }
+        ctx.beginPath();
+        pill(ctx, x, y, pw, ph);
+        ctx.fillStyle = `rgb(${EYE.map((v, i) => Math.round(v + (CHEEK[i] - v) * t))})`;
+        ctx.fill();
+      }
+      ctx.fillStyle = `rgb(${EYE})`; ctx.fill(still[0]);
+      ctx.fillStyle = `rgb(${CHEEK})`; ctx.fill(still[1]);
+      const k0 = front < 0 ? 0 : Math.min(1, front / BAND), s0 = cell * DOT * (1 + .12 * Math.sin(Math.PI * k0));
+      ctx.beginPath(); pill(ctx, (oc + .5) * cell, (or + .5) * cell, s0, s0);
+      ctx.fillStyle = `rgb(${YOU})`; ctx.fill();
+    }
+    // At most 30 frames a second, only while a ripple is under way; between ripples nothing runs but one timer.
+    const active = () => running && inView && ready && !document.hidden;
+    function tick(now) {
+      raf = 0;
+      if (!active()) { last = 0; return; }
+      const dt = last ? Math.min((now - last) / 1000, .1) : 0;
+      last = now;
+      if (at === null) {
+        if (wait === Infinity) { last = 0; return; }
+        wait -= dt;
+        if (wait > 0) { last = 0; timer = setTimeout(() => { timer = 0; wait = 0; start(); }, wait * 1000); return; }
+        at = 0;
+      } else at += dt;
+      if (at * SPEED > far + BAND) { shift = (shift + 1) % 3; at = null; wait = loop ? GAP : Infinity; draw(); }
+      else if (now - drawn >= 32) { drawn = now; draw(); }
+      raf = requestAnimationFrame(tick);
+    }
+    const start = () => { if (active() && !raf && !timer) raf = requestAnimationFrame(tick); };
+    // The field is drawn still at once; the first ripple waits for the page to load and the browser to be idle, so it
+    // never competes with the first paint or the first tap.
+    const go = () => { ready = true; start(); };
+    const idle = () => ("requestIdleCallback" in window ? requestIdleCallback(go, { timeout: 2500 }) : setTimeout(go, 1200));
+    if (running) document.readyState === "complete" ? idle() : addEventListener("load", idle, { once: true });
+    new IntersectionObserver(([e]) => {
+      // The closing band ripples once each time it comes on screen.
+      if (e.isIntersecting && !inView && !loop && at === null) wait = delay;
+      inView = e.isIntersecting; start();
+    }, { threshold: .4 }).observe(wrap);
+    document.addEventListener("visibilitychange", start);
+    new ResizeObserver(size).observe(canvas);
+    return {
+      toggle() {
+        running = !running; last = 0;
+        if (running) start(); else { cancelAnimationFrame(raf); clearTimeout(timer); raf = timer = 0; }
+        return running;
+      },
+    };
+  }
+
+  // Pause: the hero's field moves on its own, so it can be stopped. Under reduced motion it never moves, and the button
+  // stays hidden. It is shown before the field is measured, so its cell is left empty.
+  const pause = $("#pause");
+  if (!reduce) pause.hidden = false;
+  const hero = field($(".hero .field-wrap"), { loop: true, delay: 1.2 });
+  field($(".band.end .field-wrap"), { loop: false, delay: .5 });
+  pause.addEventListener("click", () => pause.setAttribute("aria-pressed", String(!hero.toggle())));
+})();

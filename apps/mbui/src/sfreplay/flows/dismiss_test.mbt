@@ -1,6 +1,6 @@
 // 23-dismiss (e2e/traces/dismiss.trace): 忽略 under a question no one has decided is let go at once (decision.dismiss:
-// off alice's list, still waiting for others), fading where it is; the card's options stay as they were on screen,
-// none pressed (gone once out of sight: cards_wbtest.mbt).
+// off alice's list, still waiting for others), fading where it is; the options stay unpressed as they close
+// (cards_wbtest.mbt).
 
 ///|
 test "23-dismiss" {
@@ -8,7 +8,7 @@ test "23-dismiss" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("dismiss"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
-    f.see("=studio")
+    f.see("=willow")
     f.tap("发消息")
     f.type_text("再问一个 083209 card:先合并哪个分支 083209|先合 A 083209|先合 B 083209")
     f.tap("icon:arrow-up")
@@ -21,12 +21,18 @@ test "23-dismiss" {
     f.answered("decision.dismiss", 1)
     f.gone("=忽略")
     f.see("=先合 B 083209")
-    // (its options closing as it was let go: to their end, docs/list-motion.md)
-    let closing = @sfapp.under_rest()
-    if closing > f.t.time() {
-      f.run_to(closing)
+    // (its options closing as it was let go: to their end, mbui's view/list_motion.mbt)
+    // Dismissal closes first; the options and outcome can then move as the view update arrives.
+    for _ in 0..<4 {
+      let closing = @sfapp.under_rest()
+      if closing > f.t.time() && closing < @double.infinity {
+        f.run_to(closing)
+      } else {
+        break
+      }
     }
     f.check(@sfapp.under_rest() < 0.0, "something under the post moves: \{@sfapp.under_rest()}")
+    f.gone("=先合 B 083209")
     f.end()
   })
 }

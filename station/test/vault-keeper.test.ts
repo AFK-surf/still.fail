@@ -1,4 +1,4 @@
-// Agents using the vault's secrets (docs/vault.md, agent 用密钥; src/vault/keeper.ts, proxy.ts, ssh-agent.ts, scrub.ts,
+// Agents using the vault's secrets (agent 用密钥; src/vault/keeper.ts, proxy.ts, ssh-agent.ts, scrub.ts,
 // run.ts, secrets.ts): whose grant is taken and for what, the proxy putting the value in only for the granted hosts,
 // the ssh-agent's signatures, output with the value hidden, and a request from the tool to the grant. Servers listen on
 // loopback ports of the run's own; nothing waits on time (the keeper's clock is the test's).
@@ -68,12 +68,61 @@ function world() {
   return { alice, bob, carol, state, vault, item, plain };
 }
 
-const requestOf = (id: string, box: string, o: Partial<Request> = {}): Request => ({ id, ws: WS, vault: VAULT, item: ITEM, session: "s1", chat: "EMBER/1.0", mode: "proxy", reason: "test", box, at: 1000, status: "pending", ...o });
+const requestOf = (id: string, box: string, o: Partial<Request> = {}): Request => ({ id, ws: WS, vault: VAULT, item: ITEM, session: "s1", chat: "CHAT/1.0", mode: "proxy", reason: "test", box, at: 1000, status: "pending", ...o });
 
 function grantOf(r: Request, by: Person, secret: unknown, o: Partial<Grant> = {}): Grant {
   const g = { v: 1 as const, ws: WS, request: r.id, vault: VAULT, item: ITEM, mode: r.mode, hosts: ["api.github.com"], scope: "once" as const, exp: 1500, secret: seal(r.box, Buffer.from(JSON.stringify(secret)), grantContext(WS, r.id)), at: 1000, ...o };
   return signed(g, TAG.grant, by.signer);
 }
+
+test("a prepared grant checks its box and expiry again when it is taken", () => {
+  const w = world();
+  let now = 1000;
+  const keeper = new Keeper(() => now);
+  const old = requestOf("r_old_box", keeper.open("r_old_box"));
+  const takeOld = keeper.prepareAccept(w.state, w.vault, w.item, old, grantOf(old, w.alice, w.plain));
+  assert.equal(typeof takeOld, "function");
+  keeper.open(old.id);
+  assert.match((takeOld as () => string | null)()!, /no longer holds the request's box/);
+  assert.equal(typeof keeper.usable(old.session, old.id), "string");
+
+  const expiring = requestOf("r_expiring", keeper.open("r_expiring"));
+  const takeExpiring = keeper.prepareAccept(w.state, w.vault, w.item, expiring, grantOf(expiring, w.alice, w.plain));
+  assert.equal(typeof takeExpiring, "function");
+  now = 1500;
+  assert.match((takeExpiring as () => string | null)()!, /expiry/);
+  assert.equal(keeper.waiting(expiring.id), true);
+  assert.equal(typeof keeper.usable(expiring.session, expiring.id), "string");
+});
+
+test("idle grants renew on use while fixed grants expire at the approved deadline", () => {
+  const w = world();
+  let now = 1000;
+  const keeper = new Keeper(() => now);
+  const idle = requestOf("r_idle", keeper.open("r_idle"));
+  const fixed = requestOf("r_fixed", keeper.open("r_fixed"));
+  const policy = (kind: string) => ({ scope: "hour", exp: 4600, timeout: { kind, seconds: 3600 } }) as unknown as Partial<Grant>;
+  assert.equal(keeper.accept(w.state, w.vault, w.item, idle, grantOf(idle, w.alice, w.plain, policy("idle"))), null);
+  assert.equal(keeper.accept(w.state, w.vault, w.item, fixed, grantOf(fixed, w.alice, w.plain, policy("fixed"))), null);
+  now = 4000;
+  keeper.spend(idle.id);
+  keeper.spend(fixed.id);
+  keeper.renew("s1", idle.id);
+  keeper.renew("s1", fixed.id);
+  now = 4600;
+  assert.equal(typeof keeper.usable("s1", idle.id), "object");
+  assert.match(keeper.usable("s1", fixed.id) as string, /ran out/);
+  now = 7600;
+  assert.match(keeper.usable("s1", idle.id) as string, /ran out/);
+  keeper.renew("s1", idle.id);
+  assert.match(keeper.usable("s1", idle.id) as string, /no such grant/);
+  const tooLong = requestOf("r_long", keeper.open("r_long"));
+  assert.match(keeper.accept(w.state, w.vault, w.item, tooLong, grantOf(tooLong, w.alice, w.plain, {
+    scope: "chat", at: now, exp: now + 30 * 86400 + 1, timeout: { kind: "idle", seconds: 30 * 86400 + 1 },
+  }))!, /invalid grant timeout/);
+  const asked = requestOf("r_old_app", keeper.open("r_old_app"), { timeout: { kind: "idle", seconds: 3600 } });
+  assert.match(keeper.accept(w.state, w.vault, w.item, asked, grantOf(asked, w.alice, w.plain, { scope: "chat", at: now, exp: now + 3600 }))!, /update the app/);
+});
 
 test("hidden output: the value and its usual encodings, however the output is cut into chunks", () => {
   const forms = [TOKEN, Buffer.from(TOKEN).toString("base64"), encodeURIComponent(TOKEN), Buffer.from(`x-access-token:${TOKEN}`).toString("base64"), Buffer.from(`ab:${TOKEN}`).toString("base64url")];
@@ -216,13 +265,17 @@ test("the proxy: the value goes in only on HTTPS to a granted host; elsewhere th
   try {
     await proxy.start();
     const used: string[] = [];
-    const granted = proxy.admit({ hosts: ["localhost"], placeholder: placeholder("r_9"), value: TOKEN, used: (h) => used.push(h) });
+    let allowed = true;
+    const granted = proxy.admit({ hosts: ["localhost"], placeholder: placeholder("r_9"), value: TOKEN, used: (h) => used.push(h), allowed: () => allowed });
     const trustProxy = readFileSync(proxy.bundle, "utf8");
     // A granted host: the proxy's own certificate for it, the value in the header.
     assert.equal(await viaProxy(granted.url, "localhost", host.port, trustProxy, `Bearer ${placeholder("r_9")}`), `auth=Bearer ${TOKEN};host=localhost:${host.port}`);
     const basic = await viaProxy(granted.url, "localhost", host.port, trustProxy, `Basic ${Buffer.from(`x-access-token:${placeholder("r_9")}`).toString("base64")}`);
     assert.equal(Buffer.from(basic.slice("auth=Basic ".length).split(";")[0]!, "base64").toString(), `x-access-token:${TOKEN}`);
     assert.deepEqual(used, ["localhost", "localhost"]);
+    allowed = false;
+    assert.match(await viaProxy(granted.url, "localhost", host.port, trustProxy, `Bearer ${placeholder("r_9")}`), /grant expired/);
+    assert.equal(used.length, 2, "an expired command cannot use its already opened proxy");
     // Without the run's credentials: nothing.
     assert.equal(await viaProxy(`http://127.0.0.1:${new URL(granted.url).port}`, "localhost", host.port, trustProxy, "x"), "status 407");
     // A run whose grant is for other hosts: carried through unopened (the host's own certificate), placeholder as sent.
@@ -334,6 +387,77 @@ test("a command run with a grant in its environment: its output comes back with 
   }
 });
 
+for (const action of ["grant", "save"] as const) test(`a failed queued vault ${action} restores its box and can be accepted again`, () => {
+  const w = world(), db = new DatabaseSync(":memory:"), vaults = new VaultStore(db);
+  vaults.putVault(w.vault); vaults.putItem(w.item);
+  const hub = { store: { getSession: () => ({ archivedAt: null }), subscribe: () => () => {} }, notify: () => {} };
+  let fail = true;
+  const cardOutcomes = { save: (_item: unknown, save: () => void) => {
+    db.exec("SAVEPOINT test_outcome");
+    try {
+      save();
+      if (fail) throw new Error("queue failed");
+      db.exec("RELEASE test_outcome");
+      return "1";
+    } catch (error) { db.exec("ROLLBACK TO test_outcome; RELEASE test_outcome"); throw error; }
+  } };
+  const secrets = new Secrets({ db, vaults, plain: new PlainStore(db), home: () => WS, hub: hub as never,
+    cardOutcomes, proxy: {} as never, data: ".", lock: () => w.state, now: () => 1_000_000 });
+  const id = "r_01HZZZZZZZZZZZZZZZZZZBOX", request = requestOf(id, secrets.keeper.open(id), action === "save" ? {
+    owner: "alice@x.com", save: { kind: "token", name: "GitHub", modes: ["proxy", "env"], hosts: ["api.github.com"] },
+  } : {});
+  db.prepare("INSERT INTO vault_requests(ws,id,session,status,body,thread,card_ts) VALUES(?,?,?,?,?,1,'card')")
+    .run(request.ws, request.id, request.session, request.status, JSON.stringify(request));
+  const grant = grantOf(request, w.alice, w.plain);
+  const decide = () => action === "grant" ? secrets.grant(w.state, "alice", grant)
+    : secrets.saved(w.state, "alice", { request: id, vault: VAULT, grant });
+  try {
+    assert.throws(decide, /queue failed/);
+    assert.equal(secrets.keeper.waiting(id), true);
+    assert.equal(secrets.held("s1").length, 0);
+    assert.equal(db.prepare("SELECT status FROM vault_requests WHERE ws=? AND id=?").get(WS, id)?.status, "pending");
+    fail = false;
+    assert.equal(decide(), null);
+    assert.equal(secrets.keeper.waiting(id), false);
+    assert.equal(secrets.held("s1").length, 1);
+    assert.equal(db.prepare("SELECT status FROM vault_requests WHERE ws=? AND id=?").get(WS, id)?.status, "granted");
+  } finally { secrets.keeper.drop(id); db.close(); }
+});
+
+for (const action of ["grant", "save"] as const) for (const changed of ["vault", "item"] as const)
+  test(`a queued vault ${action} checks a changed ${changed} before committing`, () => {
+    const w = world(), dir = mkdtempSync(join(tmpdir(), "vault-decision-")), path = join(dir, "stillfail.db");
+    const db = new DatabaseSync(path), vaults = new VaultStore(db);
+    vaults.putVault(w.vault); vaults.putItem(w.item);
+    const other = new DatabaseSync(path), fromOther = new VaultStore(other);
+    const hub = { store: { getSession: () => ({ archivedAt: null }), subscribe: () => () => {} }, notify: () => {} };
+    const cardOutcomes = { save: (_item: unknown, save: () => void) => {
+      if (changed === "vault") fromOther.putVault({ ...w.vault, members: ["bob"] });
+      else fromOther.putItem({ ...w.item, deleted: true });
+      db.exec("BEGIN IMMEDIATE");
+      try { save(); db.exec("COMMIT"); return "1"; }
+      catch (error) { db.exec("ROLLBACK"); throw error; }
+    } };
+    const previous = Promise.withResolvers<void>();
+    const secrets = new Secrets({ db, vaults, plain: new PlainStore(db), home: () => WS, hub: hub as never,
+      cardOutcomes, proxy: {} as never, data: dir, lock: () => w.state, now: () => 1_000_000,
+      backfill: { previousGone: previous.promise } });
+    const id = "r_01HZZZZZZZZZZZZZZZZZZRACE", request = requestOf(id, secrets.keeper.open(id), action === "save" ? {
+      owner: "alice@x.com", save: { kind: "token", name: "GitHub", modes: ["proxy", "env"], hosts: ["api.github.com"] },
+    } : {});
+    db.prepare("INSERT INTO vault_requests(ws,id,session,status,body,thread,card_ts) VALUES(?,?,?,?,?,1,'card')")
+      .run(request.ws, request.id, request.session, request.status, JSON.stringify(request));
+    const grant = grantOf(request, w.alice, w.plain);
+    try {
+      const why = action === "grant" ? secrets.grant(w.state, "alice", grant)
+        : secrets.saved(w.state, "alice", { request: id, vault: VAULT, grant });
+      assert.match(why!, /vault or item changed/);
+      assert.equal(secrets.keeper.waiting(id), true);
+      assert.equal(secrets.held("s1").length, 0);
+      assert.equal(db.prepare("SELECT status FROM vault_requests WHERE ws=? AND id=?").get(WS, id)?.status, "pending");
+    } finally { other.close(); secrets.keeper.drop(id); db.close(); rmSync(dir, { recursive: true, force: true }); }
+  });
+
 test("a request from secret_use to the grant: listed for the chat's starter, decided by the vault's member, refused otherwise", async () => {
   const w = world();
   const db = new DatabaseSync(":memory:");
@@ -345,7 +469,7 @@ test("a request from secret_use to the grant: listed for the chat's starter, dec
   const hub = {
     store: {
       getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: "/tmp" } : null),
-      participants: (k: string) => new Map([[k, [starter]]]),
+      starter: () => starter.toLowerCase(),
       latestThread: () => null,
       withdrawCard: () => true,
       subscribe: () => () => {},
@@ -415,7 +539,7 @@ test("at a handover a vault's grants and the requests still waiting go over to t
   const hub = {
     store: {
       getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: "/tmp" } : null),
-      participants: (k: string) => new Map([[k, ["bob@x.com"]]]),
+      starter: () => "bob@x.com",
       latestThread: () => null,
       withdrawCard: () => true,
       subscribe: () => () => {},
@@ -431,7 +555,7 @@ test("at a handover a vault's grants and the requests still waiting go over to t
     const asked = before.ask("s1", { item: "github", reason: "rerun CI" });
     await new Promise((r) => setImmediate(r));
     const [first] = before.pending(w.state.ws, w.state, alice);
-    assert.equal(before.grant(w.state, "alice", grantOf(first!, w.alice, w.plain, { scope: "chat", exp: 1000 + 3600 })), null);
+    assert.equal(before.grant(w.state, "alice", grantOf(first!, w.alice, w.plain, { scope: "chat", exp: 1000 + 3600, timeout: { kind: "idle", seconds: 3600 } })), null);
     await asked;
     // Asked again, not decided yet as the process hands over.
     void before.ask("s1", { item: "github", reason: "and again" });
@@ -474,7 +598,7 @@ test("the plain library (no security mode): listed for its owner's chats, decide
   const hub = {
     store: {
       getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: "/tmp" } : null),
-      participants: (k: string) => new Map([[k, [starter]]]),
+      starter: () => starter.toLowerCase(),
       latestThread: () => null,
       withdrawCard: () => true,
       subscribe: () => () => {},
@@ -510,10 +634,10 @@ test("the plain library (no security mode): listed for its owner's chats, decide
     assert.equal(secrets.denyPlain(ws, bob.email, { request: second!.id }), null);
     await again;
     assert.match(notified.at(-1)![1], /refused/);
-    const uses = secrets.uses(ws, null, PLAIN, bob);
+    const uses = await secrets.uses(ws, null, PLAIN, bob);
     // Both asked in the same second: in either order.
     assert.deepEqual(uses.map((u) => [u.item, u.denied, u.chatTitle, u.command]).sort((x, y) => Number(x[1]) - Number(y[1])), [[item.id, false, "修 CI", "gh run rerun 1"], [item.id, true, "修 CI", null]]);
-    assert.deepEqual(secrets.uses(ws, null, PLAIN, { sub: "carol", email: "carol@x.com" }), [], "not carol's to see");
+    assert.deepEqual(await secrets.uses(ws, null, PLAIN, { sub: "carol", email: "carol@x.com" }), [], "not carol's to see");
 
     // Security mode on: the plain library is no longer offered, and nothing of it is granted.
     const third = secrets.ask("s1", { item: "GitHub", reason: "once more" });
@@ -542,7 +666,7 @@ test("a grant for the chat: offered as far as the item allows, kept across a res
   const hub = {
     store: {
       getSession: (k: string) => (sessions.has(k) ? { key: k, ws: null, workspace: "/tmp", ...sessions.get(k) } : null),
-      participants: (k: string) => new Map([[k, ["bob@x.com"]]]),
+      starter: () => "bob@x.com",
       latestThread: () => thread,
       withdrawCard: () => true,
       restateCard: () => true,
@@ -560,7 +684,7 @@ test("a grant for the chat: offered as far as the item allows, kept across a res
     const asked = secrets.ask(session, { item: "Slack", reason: "backfill" });
     await new Promise((r) => setImmediate(r));
     const [request] = secrets.pending(ws, null, { sub: "bob", email: "bob@x.com" });
-    const why = secrets.grantPlain(ws, null, "bob@x.com", { request: request!.id, scope });
+    const why = secrets.grantPlain(ws, null, "bob@x.com", { request: request!.id, scope, ...(scope === "once" ? {} : { timeout: { kind: "fixed", seconds: scope === "hour" ? 3600 : 30 * 86400 } }) });
     // Refused: turned down, so nothing is left waiting.
     if (why !== null) secrets.denyPlain(ws, "bob@x.com", { request: request!.id });
     await asked;
@@ -568,7 +692,7 @@ test("a grant for the chat: offered as far as the item allows, kept across a res
   };
   try {
     // The card offers every scope, the longest recommended; an item that stops at an hour, those up to it.
-    thread = { connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } };
+    thread = { connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: STILLFAIL_SURFACE } };
     let secrets = make();
     const [, first] = await grant(secrets, "s1", "chat");
     assert.deepEqual(cards[0]!.options.map((o) => [o.label, !!o.recommended]), [["仅本次", false], ["本对话 1 小时内", false], ["本对话直到归档", true], ["拒绝", false]]);
@@ -609,6 +733,19 @@ test("a grant for the chat: offered as far as the item allows, kept across a res
     const [, second] = await grant(secrets, "s1", "chat");
     now += 30 * 86400_000;
     assert.match(make().keeper.usable("s1", second) as string, /no such grant/);
+
+    const waiting = secrets.ask("s2", { item: "Slack", reason: "daily check", timeout: { kind: "idle", seconds: 3600 } });
+    await new Promise((r) => setImmediate(r));
+    const [idleRequest] = secrets.pending(ws, null, { sub: "bob", email: "bob@x.com" });
+    assert.equal(secrets.grantPlain(ws, null, "bob@x.com", { request: idleRequest!.id, scope: "hour", timeout: { kind: "idle", seconds: 3600 } }), null);
+    await waiting;
+    now += 3500_000;
+    secrets.keeper.renew("s2", idleRequest!.id);
+    now += 200_000;
+    const restored = make();
+    assert.equal(typeof restored.keeper.usable("s2", idleRequest!.id), "object", "renewed deadline survives a restart");
+    now += 3400_000;
+    assert.match(restored.keeper.usable("s2", idleRequest!.id) as string, /ran out/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -3,6 +3,7 @@ import type { Directory } from "./directory";
 import type { LoginAttempt, LoginLimiter } from "./login";
 import type { Mailer } from "./mail";
 import type { RelayLoad } from "./relay-load";
+import type { ServiceStatus } from "./status";
 import type { Relay } from "./relay-worker";
 import type { TelemetryLimiter } from "./tracing";
 
@@ -11,6 +12,9 @@ export interface Env {
   DIRECTORY: DurableObjectNamespace<Directory>;
   /** The stations' releases (scripts/release.sh). */
   RELEASES?: R2Bucket;
+  /** Where the station's releases are read when the bucket has none of a file (releases.ts upstream): still.fail's
+   * (https://app.still.fail/releases) for monoid's cloud, whose bucket holds its own apps' builds alone. */
+  RELEASES_UPSTREAM?: string;
   LOGINS: DurableObjectNamespace<LoginAttempt>;
   LOGIN_LIMITS: DurableObjectNamespace<LoginLimiter>;
   TELEMETRY_LIMITS: DurableObjectNamespace<TelemetryLimiter>;
@@ -42,14 +46,27 @@ export interface Env {
   RELAY_NAMES?: Record<string, string>;
   /** How loaded the relays are, for the console (relay-load.ts). */
   RELAY_LOAD: DurableObjectNamespace<RelayLoad>;
+  /** What was last found of each service, for still.fail/status (status.ts). */
+  SERVICE_STATUS: DurableObjectNamespace<ServiceStatus>;
+  /** The pages still.fail/status checks, by what the page calls them (status.ts). Unset: none. */
+  STATUS_PAGES?: Record<string, string>;
+  /** The GitHub repository whose issues labelled `incident` still.fail/status shows (status.ts). Unset: none. */
+  STATUS_REPO?: string;
   /** still.fail's own relay process, in the relay's Worker (relay-worker.ts): its counters, read by the cron. Unset: not read. */
   RELAY?: DurableObjectNamespace<Relay>;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   AUTH_SIGNING_KEY: string;
   ADMIN_TOKEN?: string;
+  /** Reads the console's bug reports and nothing else (POST /v1/admin/feedback/list): the team's feedback monitor's. Unset: nobody. */
+  FEEDBACK_TOKEN?: string;
   /** The console admin's Google email (wrangler.jsonc; the tests and the dev cloud set their own). Unset: no admin. */
   ADMIN_EMAIL?: string;
+  /** Cloudflare Access in front of the console's host (admin.ts accessAdmin): its team's domain
+   * (https://<team>.cloudflareaccess.com) and the console's application's audience tag. Set, whoever Access lets through
+   * is the console's admin, not ADMIN_EMAIL alone; unset (still.fail's), only ADMIN_EMAIL. */
+  ACCESS_TEAM_DOMAIN?: string;
+  ACCESS_AUD?: string;
   /** Ed25519 private JWK (JSON) that signs station grants. */
   GRANT_SIGNING_JWK: string;
   /** Axiom's ingest token and dataset for traces (tracing.ts); without a token nothing is sent. */

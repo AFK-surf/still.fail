@@ -1,4 +1,4 @@
-// Settings and the pages under it, as still.fail's Android app has them (ember apps/android: app/screens/SettingsHome.kt
+// Settings and the pages under it, as still.fail's Android app has them (still.fail apps/android: app/screens/SettingsHome.kt
 // and settings/*.kt: Me, Archive, Usage, Stations, Profiles, Connects, Vault, Security, Settings.kt's Workspace,
 // Memory), over the core's topics and calls. The app (src/sfapp) pushes them on its page stack and hands them `Core`:
 // what to read and call, and how to move between pages. Everything said is the core's (or the Chinese catalog's).
@@ -15,7 +15,7 @@ pub(all) struct Read {
 /// What the pages need of the app around them.
 pub(all) struct Core {
   /// the topic `name` with its params (the core's `subscribe`)
-  topic : (String, Map[String, Json]) -> Read
+  topic : (String, Map[String, Json]) -> @signals.Computed[Read]
   /// a call to the core, its answer or its error to `done`
   call : (String, Json, (Result[Json, Json]) -> Unit) -> Unit
   /// a page pushed over this one
@@ -35,11 +35,11 @@ pub(all) struct Core {
   open_folder : (String, String) -> Unit
   /// signing another account in (登录其他账号)
   sign_in : () -> Unit
-  /// a toast (Sheet.kt ToastHost)
+  /// a toast
   say : (String) -> Unit
   /// a person's picture by its URL: an image's key once it is here, "" until then
   picture : (String, Int) -> String
-  /// notifications turned on here: the system asked to allow them (Notices.kt rememberNotificationAsk)
+  /// notifications turned on here: the system asked to allow them
   notify_ask : () -> Unit
   /// this device's push registration as the core now wants it (Push.sync): what `notify.set` answered (`push`), or
   /// None for what the core's `notify` says
@@ -48,8 +48,13 @@ pub(all) struct Core {
   under : () -> String
   /// how this build's update stands (关于's version row, settings' 关于 row)
   version_now : () -> VersionNow
-  /// the version row pressed: a newer build installed, or still.fail cloud asked now; the update dialog saying how it goes
+  /// the update's row pressed (a newer build known): downloaded now, put in place now, or the update dialog saying how
+  /// it goes
   version_tap : () -> Unit
+  /// 检查更新 pressed: the update dialog, still.fail cloud asked now unless a newer build is known already
+  version_check : () -> Unit
+  /// 自动更新 turned on (the prefs' `appUpdate` kept by the page): the newer build known downloaded as one found by itself
+  update_auto_on : () -> Unit
   /// 本机 Station's installer run (the app's local_station.mbt): `true` a station downloaded and joined to this
   /// workspace (none here), `false` the one here brought up to the latest release and run as a service
   local_install : (Bool) -> Unit
@@ -62,7 +67,7 @@ pub(all) struct Core {
   /// the system's photo picker asked for a picture (false: this host has none); its bytes given as it answers (None:
   /// called off, nothing read)
   pick_picture : ((Bytes?) -> Unit) -> Bool
-  /// this device's bottom bars in the workspace in view, and the one shown (Places.kt's)
+  /// this device's bottom bars in the workspace in view, and the one shown
   bars : () -> (Array[Array[String]], Int)
   /// the bars changed (kept as the workspace's), the one shown
   set_bars : (Array[Array[String]], Int) -> Unit
@@ -94,19 +99,19 @@ pub(all) struct Core {
 }
 
 ///|
-/// A page of the settings (AppState.kt's Screen, the ones of these slices).
+/// A page of the settings (the ones of these slices).
 pub(all) enum Route {
-  /// settings itself, from the gear (SettingsHome.kt)
+  /// settings itself, from the gear
   Home
   Me
   Appearance
-  /// 外观 › 字体 (Fonts.kt FontsScreen)
+  /// 外观 › 字体
   Fonts
-  /// the workspace: its name, its people, its invitations (Settings.kt WorkspaceScreen)
+  /// the workspace: its name, its people, its invitations
   Workspace
-  /// security mode (Security.kt)
+  /// security mode
   Security
-  /// 安全 › 开启安全模式: what turning it on would sign (Security.tsx SecurityOpen)
+  /// 安全 › 开启安全模式: what turning it on would sign
   SecurityOpen
   Vault
   Stations
@@ -116,10 +121,6 @@ pub(all) enum Route {
   Profiles(String)
   /// a profile's page: its station's address, its id
   Profile(String, String)
-  /// the step right after a profile is added: its models chosen, or skipped (PickModelsScreen)
-  PickModels(String, String)
-  /// which of a profile's models may be used, from its page: its station's address, its id
-  ProfileModels(String, String)
   /// the connects, of every station ("") or of one
   Connects(String)
   /// a connect's page: its station's address, its id
@@ -133,8 +134,10 @@ pub(all) enum Route {
   Usage
   /// the archived chats (the list's filter menu, settings)
   Archive
-  /// this device's adb lent to a station's agents (AdbShare.kt), by the station's address
+  /// this device's adb lent to a station's agents, by the station's address
   AdbShare(String)
+  /// the person's own lock, from 安全
+  PersonalLock
   /// a new profile on a station (NewProfileScreen), by its address
   NewProfile(String)
   /// an account on several stations (ProfileAccountScreen), by its key in the workspace's profiles
@@ -154,7 +157,7 @@ pub(all) enum Route {
   KeptChat(String, Int)
   /// what changed in still.fail (ChangelogScreen)
   Changelog
-  /// about this app, from settings' 关于 (SettingsHome.kt AboutScreen): this build, the changelog, the terms
+  /// about this app, from settings' 关于: this build, the changelog, the terms
   About
   /// the web desktop's page, one for every frame (src/sfpages shortcuts.mbt): 快捷键, each action's keys changed here
   Shortcuts
@@ -173,11 +176,13 @@ pub(all) enum Route {
 } derive(Eq)
 
 ///|
-/// How this build's update stands, as 关于's version row says it (sfbase updates.mbt update_stands): what pressing it
-/// does (检查更新, 下载 …, 重启以更新到 …), the line under it ("" none), whether something is under way (a bar under
-/// them, how far as `part`: 0 to 1 where known), the newer build's version where one waits for the person's word ("":
-/// none), and whether newer builds are asked for here at all (not on iOS, nor run from the sources).
+/// How this build's update stands, as 关于's update row says it (sfbase updates.mbt update_stands): whether a newer
+/// build is known at all (the row shown only then, 检查更新 a row of its own), its stage in words (有新版本 …, 正在下载 …,
+/// 重启以更新到 …), the line under it ("" none), whether something is under way (a bar under them, how far as `part`: 0
+/// to 1 where known), the newer build's version where one waits for the person's word ("": none), and whether newer
+/// builds are asked for here at all (not on iOS, nor run from the sources).
 pub(all) struct VersionNow {
+  newer : Bool
   label : String
   note : String
   going : Bool
@@ -198,10 +203,10 @@ pub(all) struct Here {
 }
 
 // ---------------------------------------------------------------------------
-// Reading the core's JSON (as sfapp/model.mbt: a field left out reads as nothing)
+// Reading the core's JSON (a field left out reads as nothing): the app's one reading of it, sfbase passing it on
 
 ///|
-fn field(v : Json?, key : String) -> Json? {
+pub fn field(v : Json?, key : String) -> Json? {
   match v {
     Some(Object(m)) => m.get(key)
     _ => None
@@ -209,7 +214,7 @@ fn field(v : Json?, key : String) -> Json? {
 }
 
 ///|
-fn text(v : Json?, key : String) -> String {
+pub fn text(v : Json?, key : String) -> String {
   match field(v, key) {
     Some(String(s)) => s
     _ => ""
@@ -225,7 +230,7 @@ pub fn opt_text(v : Json?, key : String) -> String? {
 }
 
 ///|
-fn flag(v : Json?, key : String) -> Bool {
+pub fn flag(v : Json?, key : String) -> Bool {
   match field(v, key) {
     Some(True) => true
     _ => false
@@ -241,7 +246,7 @@ pub fn has(v : Json?, key : String) -> Bool {
 }
 
 ///|
-fn number(v : Json?, key : String) -> Double {
+pub fn number(v : Json?, key : String) -> Double {
   match field(v, key) {
     Some(Number(n, ..)) => n
     _ => 0.0
@@ -254,7 +259,7 @@ fn count(v : Json?, key : String) -> Int {
 }
 
 ///|
-fn items(v : Json?, key : String) -> Array[Json] {
+pub fn items(v : Json?, key : String) -> Array[Json] {
   match field(v, key) {
     Some(Array(a)) => a
     _ => []
@@ -317,24 +322,6 @@ pub fn join(parts : Array[String], sep : String) -> String {
   b.to_string()
 }
 
-///|
-fn dmin(a : Double, b : Double) -> Double {
-  if a < b {
-    a
-  } else {
-    b
-  }
-}
-
-///|
-fn dmax(a : Double, b : Double) -> Double {
-  if a > b {
-    a
-  } else {
-    b
-  }
-}
-
 // ---------------------------------------------------------------------------
 // What was set going (the core's `doing`: AppState.isDoing, failedOf, act)
 
@@ -363,7 +350,7 @@ pub fn failed_of(core : Core, calls : Array[String], on : Array[(String, String)
 
 ///|
 fn doing_items(core : Core) -> Array[Json] {
-  items((core.topic)("doing", Map::new()).value, "doing")
+  items((core.topic)("doing", Map::new()).get().value, "doing")
 }
 
 ///|
@@ -373,8 +360,8 @@ fn doing_matches(d : Json, calls : Array[String], on : Array[(String, String)]) 
 }
 
 ///|
-/// What a person did, let go on by itself (AppState.act): the call made; failed, `没能<what>：<why>` said; gone
-/// through, `done` (when there is one) said and `then` run.
+/// What a person did, let go on by itself (AppState.act): the call made; failed, `没能<what>：<why>` said (felt as
+/// something refused); gone through, `done` (when there is one) said (felt as something done) and `then` run.
 pub fn act(
   core : Core,
   what : String,
@@ -388,10 +375,12 @@ pub fn act(
       Ok(v) => {
         if done != "" {
           (core.say)(done)
+          @ui.haptic(Confirm)
         }
         then(v)
       }
-      Err(e) =>
+      Err(e) => {
+        @ui.haptic(Reject)
         (core.say)(
           fill(
             if text(Some(e), "code") == "unconfirmed" {
@@ -402,6 +391,7 @@ pub fn act(
             [("what", what), ("error", error_text(e))],
           ),
         )
+      }
     }
   })
 }
@@ -409,13 +399,13 @@ pub fn act(
 ///|
 /// The workspace's view (`workspace`, still.fail cloud's: its role, members, stations, added, invitations, relays).
 pub fn workspace_view(core : Core, here : Here) -> Read {
-  (core.topic)("workspace", { "workspace": str(here.workspace) })
+  (core.topic)("workspace", { "workspace": str(here.workspace) }).get()
 }
 
 ///|
 /// The workspace's stations (`stations`: StationView).
 pub fn stations_of(core : Core, here : Here) -> Read {
-  (core.topic)("stations", { "scope": str(here.workspace) })
+  (core.topic)("stations", { "scope": str(here.workspace) }).get()
 }
 
 ///|
@@ -433,7 +423,7 @@ fn manager_of(core : Core, here : Here) -> Bool? {
 }
 
 ///|
-/// A role in words (Accounts.kt ROLE_LABEL).
+/// A role in words.
 pub fn role_label(role : String) -> String {
   match role {
     "owner" => "Owner"
@@ -444,7 +434,7 @@ pub fn role_label(role : String) -> String {
 }
 
 ///|
-/// A station's name from its address (ChatInk.kt stationName): what is after the workspace.
+/// A station's name from its address: what is after the workspace.
 pub fn station_name(address : String) -> String {
   match address.find("/") {
     Some(i) => address.unsafe_substring(start=i + 1, end=address.length())
@@ -453,8 +443,8 @@ pub fn station_name(address : String) -> String {
 }
 
 ///|
-/// The workspace of an address (ws/st).
-fn workspace_of(address : String) -> String {
+/// The workspace an address (`<workspace>/<station>`) is of (the app's one reading of it: sfbase passes it on).
+pub fn workspace_of(address : String) -> String {
   match address.find("/") {
     Some(i) => address.unsafe_substring(start=0, end=i)
     None => address
@@ -464,7 +454,7 @@ fn workspace_of(address : String) -> String {
 ///|
 /// The workspace `id` and the account it is reached through, from the `workspaces` topic (AccountWorkspaces).
 pub fn here_of(core : Core, id : String, name : String) -> Here {
-  let ws = (core.topic)("workspaces", Map::new())
+  let ws = (core.topic)("workspaces", Map::new()).get()
   match ws.value {
     Some(Array(accounts)) =>
       for a in accounts {
@@ -537,6 +527,7 @@ pub fn reset() -> Unit {
   station_parts.clear()
   station_network_open.clear()
   lock_prompts_reset()
+  vault_prompts_reset()
   fonts_at.set(0)
   adb_reset()
   keyed_fields.clear()
@@ -565,6 +556,7 @@ pub fn reset() -> Unit {
   login_state.seen.clear()
   profile_forms.val = 0
   machine_sessions.clear()
+  machine_sessions_asked.clear()
   adding.existing.set(false)
   adding.made.set(None)
   adding.error.set("")
@@ -586,10 +578,10 @@ pub fn reset() -> Unit {
   versions_state.turning.clear()
   versions_state.failed.clear()
   recovery_words.clear()
+  recovery_words_turned.set(0)
   vault_serial.val = 0
   // the drafts each page opened of the core (a form a station, a new connect's, a profile's, a Slack app's): a run
   // opens its own
-  decision_forms.clear()
   policy_forms.clear()
   // what this device keeps, asked of a run's own core
   kept.chats.set(None)
@@ -608,6 +600,13 @@ pub fn reset() -> Unit {
   opened.shown.clear()
   left_core.val = None
   fixture_reset()
+}
+
+///|
+/// Whether every frame makes `r`'s page once as nodes of the window's tree (narrow_made, pane_made, tape_made), as a page
+/// of the stack and as a place: its old view gone.
+pub fn made_once(r : Route) -> Bool {
+  r is (About | Changelog | Memories | Memory(_) | MemoryDoc(_, _, _) | Archiving | StationArchiving(_) | AutoDecisions | Usage | UsagePrices(_) | Shortcuts | Notifications | AutoCompletion | Permissions | AutoPolicy(_) | Appearance | LocalStation | Security | SecurityOpen | Workspace | VaultItems | Connects(_) | Connect(_, _) | Profile(_, _) | NewProfile(_) | Station(_))
 }
 
 ///|
@@ -657,6 +656,7 @@ pub fn route_of(name : String) -> Route? {
           match what {
             "station" => Some(Station(arg))
             "adb" => Some(AdbShare(arg))
+            "personal-lock" => Some(PersonalLock)
             "new-profile" => Some(NewProfile(arg))
             "vault-item" => Some(VaultItem(address, id))
             "policy" => Some(AutoPolicy(arg))
@@ -667,8 +667,8 @@ pub fn route_of(name : String) -> Route? {
             "memory-doc" => Some(MemoryDoc(address, id, 0))
             "profiles" => Some(Profiles(arg))
             "profile" => Some(Profile(address, id))
-            "pick-models" => Some(PickModels(address, id))
-            "profile-models" => Some(ProfileModels(address, id))
+            // (the pages its models were ticked on, gone: every model it lists runs, 2026-11-02)
+            "pick-models" | "profile-models" => Some(Profile(address, id))
             "connects" => Some(Connects(arg))
             "connect" => Some(Connect(address, id))
             _ => None
@@ -677,12 +677,6 @@ pub fn route_of(name : String) -> Route? {
         None => None
       }
   }
-}
-
-///|
-/// Whether the thing `id` was tapped (what it changed is drawn in the next frame, which a handled click asks for).
-pub fn hit(c : @ui.Ctx, id : Int) -> Bool {
-  c.clicked(id)
 }
 
 ///|
@@ -705,5 +699,10 @@ fn int_of(s : String, or_else : Int) -> Int {
 /// `core` as what a page will show is drawn over it in its bones (@sf.waiting's `sample`: made of made-up words): its
 /// topics say nothing and its calls are never answered, so what is only shown asks the real core for nothing.
 pub fn Core::quiet(self : Core) -> Core {
-  { ..self, topic: fn(_, _) { { value: None, error: None, version: 0 } }, call: fn(_, _, _) {  }, picture: fn(_, _) { "" } }
+  { ..self, topic: fn(_, _) { @signals.computed(fn(_) { { value: None, error: None, version: 0 } }) }, call: fn(_, _, _) {  }, picture: fn(_, _) { "" } }
+}
+
+///|
+using @sf {
+  dmax,
 }

@@ -1,4 +1,4 @@
-// How the reader lays text out (web/ui viewer/readerStyle.ts): the page keeps it (the host's reader_style and
+// How the reader lays text out: the page keeps it (the host's reader_style and
 // set_reader_style: the core's prefs, `prefs.reader`), and its bounds.
 
 ///|

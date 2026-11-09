@@ -1,9 +1,9 @@
 // Only the test bundler imports this entry. Production exports no fixture routes.
-import worker, { Account as ProductionAccount, Directory as ProductionDirectory, LoginAttempt as ProductionLoginAttempt, LoginLimiter, RelayLoad, TelemetryLimiter } from "../src/index";
+import worker, { Account as ProductionAccount, Directory as ProductionDirectory, LoginAttempt as ProductionLoginAttempt, LoginLimiter, RelayLoad, ServiceStatus, TelemetryLimiter } from "../src/index";
 import { clock, signToken, nowSeconds, reply, readJson } from "../src/auth";
 import type { Env } from "../src/env";
 import type { MailMessage } from "../src/mail";
-export { LoginLimiter, RelayLoad, TelemetryLimiter };
+export { LoginLimiter, RelayLoad, ServiceStatus, TelemetryLimiter };
 
 // The moment the tests run at (harness.ts NOW_MS), unless they run on the machine's time (dev.ts). The Worker and its
 // objects share this isolate, and so the clock.
@@ -67,6 +67,15 @@ export class Directory extends ProductionDirectory {
     this.ctx.storage.sql.exec("UPDATE users SET admitted = ? WHERE sub = ?", admitted, sub);
     this.ctx.storage.sql.exec("DELETE FROM migrations WHERE name = 'free-plan'");
     this.migrateFreePlan();
+  }
+  /** A station limit from before the shared cap, kept as an existing workspace's setting. */
+  legacyStationLimit(workspace: string, limit: number) {
+    this.ctx.storage.sql.exec("UPDATE workspaces SET max_stations = ? WHERE id = ?", limit, workspace);
+  }
+  /** A station already enrolled before the shared cap was introduced. */
+  previouslyEnrolledStation(workspace: string, station: string, by: string) {
+    this.ctx.storage.sql.exec("INSERT INTO stations (id, last_seen, version) VALUES (?, ?, ?)", station, nowSeconds(), "0.3.1");
+    this.ctx.storage.sql.exec("INSERT INTO station_members (workspace, station, name, enrolled_at, enrolled_by) VALUES (?, ?, ?, ?, ?)", workspace, station, "earlier", nowSeconds(), by);
   }
   /**
    * The stations as they were kept before a station could be in several workspaces: one table, a row each (with
@@ -134,7 +143,7 @@ export class Directory extends ProductionDirectory {
           const station = `${"0".repeat(56)}${String(i * 4 + k).padStart(8, "0")}`;
           sql.exec("INSERT INTO stations (id, last_seen, version) VALUES (?, ?, ?)", station, seen, pick(["0.1.1212", "0.1.1212", "0.1.1212", "0.1.1190", "0.1.1104"]));
           sql.exec("INSERT INTO station_members (workspace, station, name, enrolled_at, enrolled_by) VALUES (?, ?, ?, ?, ?)",
-            id, station, `${pick(["mac-mini", "studio", "dev-box", "nas", "mbp"])}${k > 1 ? `-${k}` : ""}`, created, owner.sub);
+            id, station, `${pick(["cedar", "willow", "dev-box", "nas", "mbp"])}${k > 1 ? `-${k}` : ""}`, created, owner.sub);
         }
         if (random() < 0.15) {
           sql.exec("INSERT INTO invitations (id, workspace, token_hash, role, email, created_by, expires_at) VALUES (?, ?, ?, 'member', ?, ?, ?)",

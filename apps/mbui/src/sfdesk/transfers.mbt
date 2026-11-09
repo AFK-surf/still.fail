@@ -1,4 +1,4 @@
-// What comes to this device and goes between its stations (ember web/src/pages/Transfers.tsx, Files.css.ts
+// What comes to this device and goes between its stations (still.fail web/src/pages/Transfers.tsx, Files.css.ts
 // transfers): the copies between folders and stations, the files downloaded to this device (a chat's, a drive's) and
 // those opened and let go being brought after everything else (client/core-ts fill.ts). On the files' bar its 传输,
 // and in the chats' sidebar's foot (how many go, how far); its list (each copy's way, how it stands, stopped, tried
@@ -31,7 +31,7 @@ pub fn transfers_open() -> Unit {
 ///|
 /// The person's transfers into the workspace's stations (the `driveTransfers` topic), newest first.
 fn transfer_list(src : Source, ws : String) -> Array[Json] {
-  items((src.topic)("driveTransfers", { "workspace": Json::string(ws) }).value, "transfers")
+  items(src.topic("driveTransfers", { "workspace": Json::string(ws) }).get().value, "transfers")
 }
 
 ///|
@@ -82,8 +82,8 @@ fn coming_words(n : Int, percent : Int) -> String {
 }
 
 ///|
-/// Their list, while `ftransfers.open.get()`: the library's panel from `id` (beside it, or a sheet from the foot on a small
-/// screen), what is being brought first, then the downloads, then the copies (what is in it read as it is drawn);
+/// Their list, while `ftransfers.open.get()`: the library's panel from `from` (beside it, or a sheet from the foot on a
+/// small screen), what is being brought first, then the downloads, then the copies (what is in it read as it is drawn);
 /// closed once there is none. `go`: where a copy's folder is shown. `side`, `along`: where it stands beside `id` (the
 /// rail's key: beside the rail, `rail_menu_off` out, its foot level with the key's, as the workspaces' menu under it is;
 /// under it, it lay over the rail, the mark of the workspace in view showing at its edge).
@@ -91,7 +91,7 @@ fn transfers_list(
   c : @ui.Ctx,
   src : Source,
   ws : String,
-  id : Int,
+  from : @sf.Anchor,
   go : (DriveAt) -> Unit,
   none : Bool,
   side? : @ui.Side = Bottom,
@@ -115,7 +115,7 @@ fn transfers_list(
           transfer_row(c, src, x, go)
         }
       },
-      from=Of(id),
+      from~,
       w=ftransfers_w,
       side~,
       along~,
@@ -132,37 +132,21 @@ fn transfers_list(
   }
 }
 
-
 ///|
-/// In the rail of a medium or large screen, over the workspaces (as a small screen's home's key: transfers_key): what
-/// comes and goes, as far as it has come (@sf.coming_mark in its mark's place), red's dot when one failed; pressed, their list beside
-/// it. Nothing while there is none.
-fn rail_transfers(c : @ui.Ctx, src : Source, ws : String) -> Unit {
-  let all = coming(src, ws)
-  let id = c.id("rail/transfers")
-  let go = fn(at : DriveAt) { open_page(Drive(at)) }
-  if all.none() {
-    transfers_list(c, src, ws, id, go, true, side=Right, along=End)
-    return
+/// Their list from the rail's key of them (rail_transfers_node), drawn over the frame (rail_overlays): beside the key
+/// where it was as the list was opened from it (else where it is now), its foot level with the key's, as the
+/// workspaces' menu under it is.
+fn rail_transfers_list(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let all = coming(src, w.id)
+  let from : @sf.Anchor = match (transfers_from.val, rail_transfers_key.val) {
+    (Some((x, y, aw, ah)), _) => At(x, y, aw, ah)
+    (None, Some(v)) if v.alive() => {
+      let (x, y, aw, ah) = v.placed_window_now()
+      At(x, y, aw, ah)
+    }
+    _ => Unanchored
   }
-  let (n, percent, failed) = all.going()
-  if c.clicked(id) {
-    ftransfers.open.set(!ftransfers.open.get())
-  }
-  rail_ground(
-    c,
-    id,
-    ftransfers.open.get(),
-    fn(color) {
-      // (as the small screen's key's: @sf.progress_key)
-      @sf.coming_mark(c, "rail/transfers", Some(percent.to_double() / 100.0), rail_icon_size, color)
-      if failed {
-        rail_tone_mark(c, "alert")
-      }
-    },
-    label=coming_words(n, percent),
-  )
-  transfers_list(c, src, ws, id, go, false, side=Right, along=End)
+  transfers_list(c, src, w.id, from, fn(at) { open_page(Drive(at)) }, all.none(), side=Right, along=End)
 }
 
 ///|
@@ -175,28 +159,16 @@ pub fn transfers_key(c : @ui.Ctx, src : Source, ws : String, side : Double, mark
   let id = c.id("home/transfers")
   let go = fn(at : DriveAt) { open_page(Drive(at)) }
   if all.none() {
-    transfers_list(c, src, ws, id, go, true)
+    transfers_list(c, src, ws, Of(id), go, true)
     return
   }
   let (n, percent, failed) = all.going()
   let ring = if n > 0 { Some(percent.to_double() / 100.0) } else { None }
   let label = if n > 0 { coming_words(n, percent) } else { @sf.t("web-pages.files.transfers") }
-  if @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, failed~) {
+  @sf.progress_key(c, "home/transfers", side, mark, "download", label, ring, failed~, on_press=fn() {
     ftransfers.open.set(!ftransfers.open.get())
-  }
-  transfers_list(c, src, ws, id, go, false)
-}
-
-///|
-/// Whether a small screen's home's top bar has its key (transfers_key): what comes.
-pub fn transfers_key_shown(src : Source, ws : String) -> Bool {
-  transfers_shown(src, ws)
-}
-
-///|
-/// Whether there is anything that comes and goes (the sidebar's foot, a small screen's home show it then).
-pub fn transfers_shown(src : Source, ws : String) -> Bool {
-  !coming(src, ws).none()
+  })
+  transfers_list(c, src, ws, Of(id), go, false)
 }
 
 ///|
@@ -218,13 +190,14 @@ fn keeping_row(c : @ui.Ctx, src : Source, k : Json) -> Unit {
       // (its words say it is kept here as it comes: 后台缓存 …; pressed, it is opened again where it was)
       opened_title(c, j, "keeping/open/" + kid, None)
       @sf.progress(c, "keeping/" + kid, Some(number(j, "progress")))
-      c.text(text(j, "statusText"), style=ftransfer_status) |> ignore
+      c.text(text(j, "statusText"), style=ftransfer_status, allow_ellipsis=true) |> ignore
     })
     |> ignore
     c.box(style=ftransfer_actions, fn() {
-      if @sf.panel_icon_button(c, "keeping/stop/" + kid, "close", @sf.t("web-pages.files.stopKeeping")) {
-        c.tell("keeping/stop/" + kid, fn() { keeping_stop(src, kid) })
-      }
+      @sf.panel_icon_button(c, "keeping/stop/" + kid, "close", @sf.t("web-pages.files.stopKeeping"), on_press=fn() {
+        keeping_stop(src, kid)
+      })
+      |> ignore
     })
     |> ignore
   })
@@ -238,13 +211,15 @@ fn keeping_row(c : @ui.Ctx, src : Source, k : Json) -> Unit {
 fn opened_title(c : @ui.Ctx, j : Json?, key : String, way : String?) -> Unit {
   let id = c.id(key)
   let there = opens(j)
-  if there && c.clicked(id) {
-    open_coming(j)
-  }
+  c.on_press(id, fn() {
+    if there {
+      open_coming(j)
+    }
+  })
   let b = c.box(style=ftransfer_title, id=if there { id } else { 0 }, fn() {
-    c.text(text(j, "title"), style=ftransfer_title_words) |> ignore
+    c.text(text(j, "title"), style=ftransfer_title_words, allow_ellipsis=true) |> ignore
     match way {
-      Some(w) => c.text(w, style=ftransfer_way) |> ignore
+      Some(w) => c.text(w, style=ftransfer_way, allow_ellipsis=true) |> ignore
       None => ()
     }
   })
@@ -311,8 +286,8 @@ fn transfer_row(c : @ui.Ctx, src : Source, x : Json, go : (DriveAt) -> Unit) -> 
     c.box(style=ftransfer_mark, fn() { @sf.icon(c, mark, size=transfer_icon, color=ink) |> ignore }) |> ignore
     c.box(style=ftransfer_text, fn() {
       c.box(style=ftransfer_title, fn() {
-        c.text(text(j, "title"), style=ftransfer_title_words) |> ignore
-        c.text(if flag(j, "move") { @sf.t("web-pages.files.moving", args=[("way", way)]) } else { way }, style=ftransfer_way) |> ignore
+        c.text(text(j, "title"), style=ftransfer_title_words, allow_ellipsis=true) |> ignore
+        c.text(if flag(j, "move") { @sf.t("web-pages.files.moving", args=[("way", way)]) } else { way }, style=ftransfer_way, allow_ellipsis=true) |> ignore
       })
       |> ignore
       if state == "copying" {
@@ -325,19 +300,25 @@ fn transfer_row(c : @ui.Ctx, src : Source, x : Json, go : (DriveAt) -> Unit) -> 
         } else {
           ""
         })
-      c.text(status, style=if state == "failed" { ftransfer_failed } else { ftransfer_status }) |> ignore
+      c.text(status, style=if state == "failed" { ftransfer_failed } else { ftransfer_status }, allow_ellipsis=true) |> ignore
     })
     |> ignore
     c.box(style=ftransfer_actions, fn() {
-      if flag(j, "active") && @sf.panel_icon_button(c, "files/transfer/cancel/" + tid, "close", @sf.t("web-pages.files.cancelTransfer")) {
-        call("drive.transfer.cancel")
+      if flag(j, "active") {
+        @sf.panel_icon_button(c, "files/transfer/cancel/" + tid, "close", @sf.t("web-pages.files.cancelTransfer"), on_press=fn() {
+          call("drive.transfer.cancel")
+        }) |> ignore
       }
-      if state == "failed" && @sf.panel_icon_button(c, "files/transfer/retry/" + tid, "retry", @sf.t("web-pages.drive.retry")) {
-        call("drive.transfer.retry")
+      if state == "failed" {
+        @sf.panel_icon_button(c, "files/transfer/retry/" + tid, "retry", @sf.t("web-pages.drive.retry"), on_press=fn() {
+          call("drive.transfer.retry")
+        }) |> ignore
       }
-      if state == "done" && @sf.panel_button(c, "files/transfer/show/" + tid, @sf.t("web-pages.files.show")) {
-        ftransfers.open.set(false)
-        go({ station, root: Some(text(j, "toRoot")), path: text(j, "toPath") })
+      if state == "done" {
+        @sf.panel_button(c, "files/transfer/show/" + tid, @sf.t("web-pages.files.show"), on_press=fn() {
+          ftransfers.open.set(false)
+          go({ station, root: Some(text(j, "toRoot")), path: text(j, "toPath") })
+        }) |> ignore
       }
     })
     |> ignore
@@ -346,7 +327,7 @@ fn transfer_row(c : @ui.Ctx, src : Source, x : Json, go : (DriveAt) -> Unit) -> 
 }
 
 ///|
-/// A file of the drive (a folder zipped) downloaded to this device (Transfers.tsx DownloadRow): what, how far (a bar
+/// A file of the drive (a folder zipped) downloaded to this device: what, how far (a bar
 /// while it comes), how it stands; stopped while it comes, tried again once failed.
 fn download_row(c : @ui.Ctx, src : Source, d : Json) -> Unit {
   let t = @sf.theme()
@@ -364,15 +345,21 @@ fn download_row(c : @ui.Ctx, src : Source, d : Json) -> Unit {
       if flag(j, "active") {
         @sf.progress(c, "download/" + did, Some(number(j, "progress")))
       }
-      c.text(text(j, "statusText"), style=if failed { ftransfer_failed } else { ftransfer_status }) |> ignore
+      c.text(text(j, "statusText"), style=if failed { ftransfer_failed } else { ftransfer_status }, allow_ellipsis=true) |> ignore
     })
     |> ignore
     c.box(style=ftransfer_actions, fn() {
-      if flag(j, "active") && @sf.panel_icon_button(c, "files/download/cancel/" + did, "close", @sf.t("web-main.file.cancelDownload")) {
-        c.tell("files/download/cancel/" + did, fn() { download_cancel(src, did) })
+      if flag(j, "active") {
+        @sf.panel_icon_button(c, "files/download/cancel/" + did, "close", @sf.t("web-main.file.cancelDownload"), on_press=fn() {
+          download_cancel(src, did)
+        })
+        |> ignore
       }
-      if failed && @sf.panel_icon_button(c, "files/download/retry/" + did, "retry", @sf.t("web-main.file.retryDownload")) {
-        c.tell("files/download/retry/" + did, fn() { download_retry(src, did) })
+      if failed {
+        @sf.panel_icon_button(c, "files/download/retry/" + did, "retry", @sf.t("web-main.file.retryDownload"), on_press=fn() {
+          download_retry(src, did)
+        })
+        |> ignore
       }
     })
     |> ignore
@@ -383,13 +370,6 @@ fn download_row(c : @ui.Ctx, src : Source, d : Json) -> Unit {
 ///|
 /// The transfers' list (transfers: 360 wide).
 let ftransfers_w : Double = 360.0
-
-
-
-
-
-
-
 
 ///|
 /// A transfer (transfer: its mark 18, its words, its keys; 8 apart): what it holds as far in as a small panel's words
@@ -428,12 +408,6 @@ let ftransfer_failed : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger, w
 ///|
 // kept across runs: a value (no field of it changes)
 let ftransfer_actions : @ui.Style = @ui.css("row gap=SPx align=ACenter")
-
-
-
-
-
-
 
 ///|
 /// A row's mark (14).

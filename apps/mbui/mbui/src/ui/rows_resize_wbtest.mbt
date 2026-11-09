@@ -64,6 +64,10 @@ test "rows steady: the window made another size as frames come, its rows laid ou
 
 ///|
 test "rows steady: a row's height jumping, the window as it was: a jolt; and so after the window changed, measured on from there" {
+  // (frames it walks itself, judged by the default run alone: test_at_a_rate)
+  if test_at_a_rate() {
+    return
+  }
   assert_true(rows_across_resize(None, Some(300.0)) > 0)
   assert_true(rows_across_resize(Some(200.0), Some(400.0)) > 0)
 }

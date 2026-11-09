@@ -14,7 +14,6 @@ using @sfbase {
   app_in_front,
   open_link,
   screen_links,
-  file_viewer,
   followed_into,
   viz_close_full,
   viz_file_of,
@@ -22,7 +21,6 @@ using @sfbase {
   viz_frame,
   viz_full,
   viz_mermaid_block,
-  viz_mermaid_document,
   viz_open_full,
   drive_player,
   drive_reader,
@@ -30,7 +28,6 @@ using @sfbase {
   type Viewer,
   desk_whole,
   downloading,
-  file_progress,
   marking,
   marks_actions,
   marks_back,
@@ -87,7 +84,6 @@ using @sfbase {
   type Outgoing,
   type SendFlight,
   type Turns,
-  message_runs,
   message_of,
   download_of,
   absolute_times,
@@ -104,6 +100,7 @@ using @sfbase {
   type Person,
   agent_json,
   chat_params,
+  chat_jobs_summary_params,
   chat_view_made,
   type ChatView,
   type ChatScreen,
@@ -142,6 +139,7 @@ using @sfbase {
   long_jobs,
   long_jobs_lit,
   long_jobs_seen,
+  long_stop,
   held_order,
   chats_of,
   app,
@@ -267,20 +265,11 @@ using @sfbase {
 }
 
 ///|
-fn dmax(a : Double, b : Double) -> Double {
-  if a > b {
-    a
-  } else {
-    b
-  }
-}
-
-
-///|
 /// A sidebar's rows, the library's (src/sf side_rows.mbt).
 using @sf {
   nav_fade,
-  nav_ground,
+  nav_ground_by,
+  nav_ground_on,
   nav_row,
   nav_apart,
   nav_item,
@@ -300,17 +289,9 @@ using @sf {
 
 ///|
 using @sfpages {
-  login_steps,
-  pf_tag,
-  pf_tag_words,
-  profile_field,
-  quota_dials,
-  pf_card_foot,
-  pf_name_line,
   open_dialog,
   desk_dialogs,
   sec_section,
-  confirm_dialog,
   join_dialog,
   turn_off_dialog,
   chat_mark,
@@ -353,4 +334,10 @@ using @sfpages {
   unpremultiplied,
   usage_tiles,
   video_least,
+}
+
+///|
+using @sf {
+  dmin,
+  dmax,
 }

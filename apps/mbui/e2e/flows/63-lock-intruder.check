@@ -1,0 +1,2 @@
+check "the station refused the device the cloud signed in on its own" 'grep -q "INTRUDER REFUSED" $OUT/$name.log'
+check "nothing it said is in the chat" '[ -z "$(sql "select n from entries where text like \"%冒名消息 $TAG%\"")" ]'

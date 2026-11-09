@@ -1,4 +1,4 @@
-// Pictures as Android's has them (Parts.kt rememberPicture, PeopleStack; RowPicture.kt Faces): one that could not be
+// Pictures as Android's has them (PeopleStack): one that could not be
 // had asked again when its page is put up anew; people stacked with the first over the rest, a row's starter over the others.
 
 ///|
@@ -86,7 +86,7 @@ test "a row's people (sfpages' RowAside, a finger's 18): each 3 over the one bef
   new_run()
   let src = fixture("home")
   let person = fn(id : String, name : String) -> Json {
-    { "id": id.to_json(), "shown": { "name": name.to_json(), "display": name.to_json(), "mine": false.to_json() } }
+    { "id": ToJson::to_json(id), "shown": { "name": ToJson::to_json(name), "display": ToJson::to_json(name), "mine": ToJson::to_json(false) } }
   }
   let item = chat_item({
     "id": "c1",
@@ -105,7 +105,7 @@ test "a row's people (sfpages' RowAside, a finger's 18): each 3 over the one bef
   let lin = drawn_in(t, @sf.avatar_color("lin"))
   let mo = drawn_in(t, @sf.avatar_color("mo"))
   let kai = drawn_in(t, @sf.avatar_color("kai"))
-  // 18 each, 2 in, 3 over the one before; a pixel more after who started it (RowPicture.css.ts)
+  // 18 each, 2 in, 3 over the one before; a pixel more after who started it
   assert_eq([lin[0].1, mo[0].1, kai[0].1], [2.0, 17.0, 33.0])
   assert_eq([lin[0].3, mo[0].3, kai[0].3], [18.0, 18.0, 18.0])
   // Mo started it: over Lin and Kai
@@ -114,4 +114,36 @@ test "a row's people (sfpages' RowAside, a finger's 18): each 3 over the one bef
   let rings = drawn_in(t, ground)
   assert_eq(rings.length(), 3)
   assert_true(rings.iter().all(fn(r) { r.3 == 20.0 }))
+}
+
+///|
+test "a picture's answer told to all that read it: one that could not be had then had on another page put up, at once or later, read again by the first too" {
+  for later in [false, true] {
+    let answers : Array[Bytes?] = [None, Some(b"GIF89a")]
+    let waiting : Array[(Bytes?) -> Unit] = []
+    let picture = core_pictures(fn(_, done) {
+      let a = answers.remove(0)
+      if later && a is Some(_) {
+        waiting.push(done)
+      } else {
+        done(a)
+      }
+    })
+    let url = "https://pictures.example/lin.jpg"
+    // (a reader on page 1: could not be had, it stays up reading it)
+    let first = @signals.computed(fn(_) { picture(url, 1) })
+    let seen = []
+    let stop = @signals.effect(fn() { seen.push(first.get()) })
+    assert_eq(first.get(), "")
+    // (another on page 2, put up anew: asked again, had)
+    let second = @signals.computed(fn(_) { picture(url, 2) })
+    second.get() |> ignore
+    for done in waiting {
+      done(Some(b"GIF89a"))
+    }
+    assert_true(second.get().has_prefix("mem:picture/"), msg="the one that asked, later \{later}")
+    assert_true(first.get().has_prefix("mem:picture/"), msg="the first reader told too, later \{later}")
+    assert_true(seen.last().unwrap_or("").has_prefix("mem:picture/"), msg="followed by the first: \{seen}, later \{later}")
+    stop()
+  }
 }

@@ -1,10 +1,11 @@
-// The station calls (core/execute.rs, the station's part): operations, a chat's pages and place, what is read,
+// The station calls (the station's part): operations, a chat's pages and place, what is read,
 // files, uploads and previews.
 import { Deferred, Effect, Scope } from "effect";
 import type { Inner, Progress } from "../core.ts";
 import { handlers } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
 import { CoreError, asCoreError } from "../error.ts";
+import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import { base64, fromBase64 } from "../util.ts";
 import { Beside } from "../protocol.ts";
@@ -12,7 +13,6 @@ import { chatKeptId, keptId, sentKeptId } from "../drive-kept.ts";
 import { folderOf } from "../ops.ts";
 import * as looks from "../looks.ts";
 import { machineMeta } from "../views/models.ts";
-import { chatTitle } from "../views/views.ts";
 import { StationAddr } from "./addr.ts";
 import { readAll, replyHeader, takeFrames, encodeFrame, type Frame } from "./wire.ts";
 import type { SpanContext } from "../trace.ts";
@@ -39,7 +39,7 @@ const goingOf = new WeakMap<Inner, Map<string, Going>>();
 /// `read` once for every asker of the same file at once: one asked again while it is coming (its preview closed and
 /// opened again, its image put up anew) waits for the read going, told how far it has come, not brought again beside
 /// it. A whole file's read runs to its end whoever waits; each asked anew began another, and on a desktop app six images
-/// were coming fifteen times at once, each at a fifteenth of the line, until the app was restarted (ccvm, 2026-10-28).
+/// were coming fifteen times at once, each at a fifteenth of the line, until the app was restarted (a station, 2026-10-28).
 function once(inner: Inner, key: string, progress: Progress, read: (progress: Progress) => Effect.Effect<Beside, CoreError>): Effect.Effect<Beside, CoreError> {
   return Effect.suspend(() => {
     let all = goingOf.get(inner);
@@ -126,7 +126,8 @@ export function keptFirst<H extends { type: string; total: number }, G extends H
     return read(at, length, at - c.offset, (piece) => {
       pieces.push(piece);
       out.push(piece);
-      sink?.(piece);
+      // (what goes to the UI is the UI's, moved away on the web (its worker's toPage): a copy, this one kept here)
+      sink?.(piece.slice());
     }, (h) => {
       head = h;
     }).pipe(
@@ -193,7 +194,7 @@ export function install(): void {
     return Effect.andThen(
       parse((op.target as { station: string }).station),
       Effect.map(inner.stations.perform(op, ctx), (answer) => {
-        // The machine's own sessions, each in a line (choose.rs `machine_meta`).
+        // The machine's own sessions, each in a line.
         if (op.method === "GET" && op.path.startsWith("/machine-sessions") && answer !== null && typeof answer === "object") {
           const now = inner.host.nowMs();
           const offset = inner.host.utcOffsetMin(now);
@@ -478,7 +479,7 @@ export function install(): void {
     const c = call as Extract<Call, { kind: "driveRefresh" }>;
     return Effect.andThen(parse(c.station), Effect.as(inner.stations.driveRefresh(c.station, c.root, c.path), null));
   };
-  // A login's page to open (docs/remote-login.md): its device code's page, the page to open, or a loopback login's,
+  // A login's page to open: its device code's page, the page to open, or a loopback login's,
   // whose callback this device listens for first (on a host that can: the desktop app), unless the station is this
   // machine. Answers what to open; fails (the port taken here) before anything is.
   handlers.machineLoginOpen = (inner, call) => {
@@ -510,7 +511,7 @@ export function install(): void {
     Effect.gen(function* () {
       const drive = yield* inner.driveKept.usage();
       const kept = yield* inner.driveKept.chatFiles();
-      const chats = inner.data.cacheUsage().map(({ view, ...chat }) => ({ ...chat, title: view === null ? null : chatTitle(view), files: [] as { bytes: number }[] }));
+      const chats = inner.data.cacheUsage().map(({ view, ...chat }) => ({ ...chat, title: view === null ? null : format.chatTitle(view), files: [] as { bytes: number }[] }));
       const loose: unknown[] = [];
       for (const f of kept) {
         const shown = { key: f.key, name: f.name, size: f.size, bytes: f.bytes, opened: f.used };

@@ -1,8 +1,9 @@
-// Time in a test is said by the test (docs/determinism.md): an input is handed in and the frames it causes drawn, at
+// Time in a test is said by the test: an input is handed in and the frames it causes drawn, at
 // its own moment; time goes on by `run_for` (a declared duration: a motion's, a timer's), straight to its end, a frame
 // there (and at each wake the view asked for on the way); `frame()` draws the display's next frame (1000/60 ms apart
-// by default). How many frames come before a moment changes nothing of what is so at it: MBUI_TEST_FPS draws the
-// display's frames on run_for's way too, and the tests come out the same (scripts/fps_check.sh). At a test's end
+// by default). How many frames come before a moment changes nothing of what is so at it: MBUI_TEST_FPS draws frames
+// at its rate on run_for's way too (only there: the moments the test walks are its own), and the tests come out the
+// same (scripts/fps_check.sh). At a test's end
 // nothing may go on asking for frames (`assert_idle`). Nothing waits for motion to end: motion only draws what the
 // state already is, so what a test asserts of the state holds as the input is taken, and a picture is taken at a
 // moment the test names.
@@ -116,13 +117,16 @@ pub fn rest_of(name : String) -> Double {
 /// out the same) a frame at each of the display's frames too. None after it: what that frame leaves owed (an input's
 /// frame after, a host's event) is drawn by what the test does next.
 pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
-  // (what the test changed before it shows at its first frame: a step of the test's, frame_watch.mbt)
-  test_stepped()
   // (on the display's frame where it falls on one, to the bit: the same moment however it was summed)
   let end = self.on_grid(self.fake.time + ms)
   // (a host's run's frames: each of them on the way, the last the first at or past the end, as the host drew)
   if self.host_frames {
     while self.fake.time < end - 1.0e-9 {
+      self.clock_frame()
+    }
+    // (asked on by a hair, less than the same moment summed another way: on to the frame that is at or past it; not
+    // past a frame a hair short of the end, that frame the end's, as the loop above has it)
+    if ms > 0.0 && end > self.fake.time + 1.0e-9 {
       self.clock_frame()
     }
     return
@@ -136,18 +140,70 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
     // the next of: what is due (a wake the view asked for, a motion's end), the end, and with frames between
     // (MBUI_TEST_FPS) the display's next frame; each drawn at its own moment: what happens at a time happens at it,
     // at any frame rate or none, and the last frame is the end's
-    let mut next = if self.between { dmin(self.tick_after(self.fake.time), end) } else { end }
+    // (frames on the way only while the app asks for them, as a host draws them: something moving, a frame asked
+    // for; at rest, none till what is due)
+    let mut next = if self.between > 0.0 && self.asks_frames() {
+      dmin(self.between_after(self.fake.time), end)
+    } else {
+      end
+    }
     let due = self.on_grid(self.next_due())
     if due > self.fake.time + 1.0e-9 && due < next {
       next = due
     }
+    // (a frame on the way a hair from the end or from what is due is at that moment: the same moment summed another
+    // way (the 10th of 24's frames from the origin, 2e-13 short of a 416.67 ms run's end), drawn there and not a hair
+    // before it, where what changes at it has not)
+    if (end - next).abs() < 1.0e-6 {
+      next = end
+    } else if due > self.fake.time + 1.0e-9 && (due - next).abs() < 1.0e-6 {
+      next = due
+    }
+    // (one of the rate's own, on the way: neither the end nor what is due)
+    self.on_way = next < end && !(due > self.fake.time + 1.0e-9 && next == due)
     self.frame_at(next)
     // what that frame left owed (a host's answer posted, an input's frame after, a layout read back) drawn at its
     // moment, as Tester::draw draws it: what it sets off goes on from there, not from the next due moment
     if next < end - 1.0e-9 {
       self.draw_owed(1)
     }
+    self.on_way = false
   }
+  // (and asked on by a hair, less than the same moment summed another way: there, at what was asked, not left a hair
+  // short of it (a timer's moment summed as its cause's and a length, past the display's frame the clock is at))
+  if ms > 0.0 && end > self.fake.time {
+    self.frame_at(end)
+  }
+}
+
+///|
+/// Whether the app asks for frames after the last one, as a host is asked: something said to move, a frame asked for
+/// between frames, a message posted that no frame took (Tester::rest_why says which). Where run_for draws the frames
+/// on its way (MBUI_TEST_FPS): none while it asks none.
+fn Tester::asks_frames(self : Tester) -> Bool {
+  !g().frame_rest || self.fake.wants || posted_left() != ""
+}
+
+///|
+/// The first of run_for's frames on its way after `t` (MBUI_TEST_FPS): `between` apart, counted from the Tester's
+/// origin, as the display's are.
+fn Tester::between_after(self : Tester, t : Double) -> Double {
+  let hair = grid_hair * self.between
+  let mut k = ((t - self.origin) / self.between).floor() - 1.0
+  while self.origin + k * self.between <= t + hair {
+    k = k + 1.0
+  }
+  self.origin + k * self.between
+}
+
+///|
+/// Advance by exactly `ms`, drawing due wakes on the way and the requested moment itself, even when the tester is
+/// otherwise running on a display's frame grid. Afterwards it keeps the same display clock for subsequent inputs.
+pub fn Tester::run_for_exact(self : Tester, ms : Double) -> Unit {
+  let host_frames = self.host_frames
+  self.host_frames = false
+  self.run_for(ms)
+  self.host_frames = host_frames
 }
 
 ///|
@@ -237,8 +293,8 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
   if paint_left() {
     why.push("a frame asked for to paint (\{paint_said.val})")
   }
-  if c.wake_waited >= 0.0 {
-    why.push("a wake in \{(c.wake_waited - c.clock).ceil().to_int()} ms" + by_of(c.wake_by))
+  if c.waited_at() >= 0.0 {
+    why.push("a wake in \{(c.waited_at() - c.clock).ceil().to_int()} ms" + c.waited_by())
   }
   let rt = fx.val.unsettled()
   if rt != "" {
@@ -272,7 +328,7 @@ fn Ctx::at_rest(self : Ctx) -> Bool {
   !self.motion_left &&
   !self.wants_frame &&
   !paint_left() &&
-  self.wake_waited < 0.0 &&
+  self.waited_at() < 0.0 &&
   fx.val.unsettled() == ""
 }
 
@@ -301,8 +357,8 @@ fn Ctx::rest_why(self : Ctx) -> String {
   if self.motion_left {
     why.push("a motion said is not at rest: " + self.moving_now().join("; "))
   }
-  if self.wake_waited >= 0.0 {
-    why.push("a wake in \{(self.wake_waited - self.clock).ceil().to_int()} ms" + by_of(self.wake_by))
+  if self.waited_at() >= 0.0 {
+    why.push("a wake in \{(self.waited_at() - self.clock).ceil().to_int()} ms" + self.waited_by())
   }
   let rt = fx.val.unsettled()
   if rt != "" {
@@ -451,7 +507,8 @@ pub fn Tester::tap_notice(self : Tester, text : String) -> Bool {
 pub fn Tester::next_wake(self : Tester) -> (Double, String)? {
   ignore(self)
   let c = g()
-  let ui = if c.wake_waited < 0.0 { None } else { Some((c.wake_waited, by_of(c.wake_by))) }
+  let waited = c.waited_at()
+  let ui = if waited < 0.0 { None } else { Some((waited, c.waited_by())) }
   let rt = match fx.val.next_due() {
     Some((at, who)) => Some((at.to_double(), " (the runtime's: " + (if who == "" { "a timer" } else { who }) + ")"))
     None => None
@@ -460,5 +517,19 @@ pub fn Tester::next_wake(self : Tester) -> (Double, String)? {
     (Some(a), Some(b)) => if b.0 < a.0 { Some(b) } else { Some(a) }
     (Some(a), None) => Some(a)
     (None, b) => b
+  }
+}
+
+///|
+/// Who said what the app waits on next (Ctx::waited_at): an old view's wake, where it said it; the window's tree's.
+fn Ctx::waited_by(self : Ctx) -> String {
+  if self.wake_waited >= 0.0 && self.waited_at() == self.wake_waited {
+    by_of(self.wake_by)
+  } else {
+    // (which of the tree's timers: where it was said, so that each that comes once is told from one saying itself again)
+    match view_app.val {
+      Some(tree) if tree.wake_waited_by() != "" => " (the window's tree's, said at \{tree.wake_waited_by()})"
+      _ => " (the window's tree's)"
+    }
   }
 }

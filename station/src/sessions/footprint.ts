@@ -1,7 +1,7 @@
-// Workspace file helpers for automatic cleanup of archived sessions (the Rust station's footprint.rs).
+// Workspace file helpers for automatic cleanup of archived sessions.
 import { execFile } from "node:child_process";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
-import { lstat, readdir } from "node:fs/promises";
+import { lstat, readdir, realpath } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { fileName, samePath, segments, within } from "../ops/paths.ts";
 
@@ -21,14 +21,23 @@ const canonical = (path: string): string | null => {
 export function roomOf(dataDir: string, workspace: string): string | null {
   const sessions = canonical(join(dataDir, "sessions"));
   if (sessions === null) return null;
-  let path = canonical(workspace);
-  if (path === null) {
-    if (fileName(workspace) !== "workspace") return null;
-    const parent = canonical(dirname(workspace));
-    if (parent === null) return null;
-    path = join(parent, "workspace");
-  }
-  if (!within(path, sessions) || samePath(path, sessions)) return null;
+  return roomIn(sessions, canonical(workspace) ?? (fileName(workspace) === "workspace" ? beside(canonical(dirname(workspace))) : null));
+}
+
+/// `roomOf`, its paths followed off this thread.
+export async function roomOfSoon(dataDir: string, workspace: string): Promise<string | null> {
+  const real = (path: string) => realpath(path).catch(() => null);
+  const sessions = await real(join(dataDir, "sessions"));
+  if (sessions === null) return null;
+  return roomIn(sessions, (await real(workspace)) ?? (fileName(workspace) === "workspace" ? beside(await real(dirname(workspace))) : null));
+}
+
+/// A workspace not there (yet, or any more) as it would be in its directory `parent` (followed), if that is there.
+const beside = (parent: string | null) => (parent === null ? null : join(parent, "workspace"));
+
+/// The room of the workspace at `path` (followed) under the station's sessions directory (followed).
+function roomIn(sessions: string, path: string | null): string | null {
+  if (path === null || !within(path, sessions) || samePath(path, sessions)) return null;
   // Only the station layout sessions/<connect>/<session>/workspace, never an arbitrary nested project.
   const relative = segments(path.slice(sessions.length)).filter((p) => p !== "");
   if (relative.length !== 3 || fileName(path) !== "workspace") return null;
@@ -95,23 +104,37 @@ export const rebuildBytes = (room: Room) => room.rebuild.reduce((sum, [, b]) => 
 /// Counts files once each however many links they have.
 class Seen {
   private seen = new Set<string>();
+  private total = 0;
+  private readonly stopAfter: number | undefined;
+  constructor(stopAfter?: number) { this.stopAfter = stopAfter; }
   bytes(meta: import("node:fs").BigIntStats): number {
     if (meta.nlink > 1n) {
       const id = `${meta.dev}:${meta.ino}`;
       if (this.seen.has(id)) return 0;
       this.seen.add(id);
     }
-    return Number(meta.blocks) * 512;
+    const bytes = Number(meta.blocks) * 512;
+    this.total += bytes;
+    if (this.stopAfter !== undefined && this.total > this.stopAfter) throw new Enough(this.total);
+    return bytes;
   }
+}
+
+/// Enough of a workspace was counted to know it exceeds its limit; more work is not needed for a warning.
+class Enough {
+  readonly bytes: number;
+  constructor(bytes: number) { this.bytes = bytes; }
 }
 
 /// The size of `path` and everything under it; links are not followed. With `found`, directories that can be made
 /// again are listed there (each counted whole, not looked into further).
-async function measure(path: string, seen: Seen, found: [string, number][] | null): Promise<number> {
+async function measure(path: string, seen: Seen, found: [string, number][] | null, signal?: AbortSignal, strict = false): Promise<number> {
+  signal?.throwIfAborted();
   let meta;
   try {
     meta = await lstat(path, { bigint: true });
-  } catch {
+  } catch (error) {
+    if (strict && (error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     return 0;
   }
   let bytes = seen.bytes(meta);
@@ -119,21 +142,22 @@ async function measure(path: string, seen: Seen, found: [string, number][] | nul
   let entries;
   try {
     entries = await readdir(path, { withFileTypes: true });
-  } catch {
+  } catch (error) {
+    if (strict && (error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     return bytes;
   }
   for (const entry of entries) {
     const child = join(path, entry.name);
     // Never discover cleanup candidates in repository metadata or historical attachments.
     if (found !== null && (entry.name === ".git" || entry.name === "uploads")) {
-      bytes += await measure(child, seen, null);
+      bytes += await measure(child, seen, null, signal, strict);
       continue;
     }
     if (found !== null && entry.isDirectory() && rebuildable(child)) {
-      const size = await measure(child, seen, null);
+      const size = await measure(child, seen, null, signal, strict);
       found.push([child, size]);
       bytes += size;
-    } else bytes += await measure(child, seen, found);
+    } else bytes += await measure(child, seen, found, signal, strict);
   }
   return bytes;
 }
@@ -145,5 +169,15 @@ export async function measureRoom(dir: string): Promise<Room> {
   return { bytes, rebuild };
 }
 
-/// The size of a path, each file once (for the tests: footprint.rs `measure` without `found`).
-export const measured = (path: string) => measure(path, new Seen(), null);
+/// The size of a path, each file once.
+export const measured = (path: string, signal?: AbortSignal) => measure(path, new Seen(), null, signal);
+
+/// Count the whole path when it fits; once it exceeds `limit`, return a lower bound without traversing the rest.
+export async function measuredUpTo(path: string, limit: number, signal?: AbortSignal): Promise<{ bytes: number; complete: boolean }> {
+  try {
+    return { bytes: await measure(path, new Seen(limit), null, signal, true), complete: true };
+  } catch (error) {
+    if (error instanceof Enough) return { bytes: error.bytes, complete: false };
+    throw error;
+  }
+}

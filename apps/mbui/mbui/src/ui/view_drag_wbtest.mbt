@@ -10,9 +10,9 @@ test "window tree: a finger held on a node over an old view: down, moved off it,
   set_view_app(fn(root) {
     old(root, fn(c) {
       let id = c.id("under")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         old_taps.val = old_taps.val + 1
-      }
+      })
       c.box(w=Fill(1.0), h=Fill(1.0), id~, fn() {  }) |> ignore
     })
     .over(Is(true))
@@ -117,9 +117,9 @@ fn press_with(between : (Tester, @signals.Signal[Bool]) -> Unit) -> (Int, Int) {
   set_view_app(fn(root) {
     old(root, fn(c) {
       let id = c.id("under")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         old_seen.val = old_seen.val + 1
-      }
+      })
       c.box(w=Fill(1.0), h=Fill(1.0), id~, fn() {  }) |> ignore
     })
     .over(Is(true))

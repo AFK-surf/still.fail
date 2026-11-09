@@ -1,7 +1,8 @@
-// 17-drive-read (e2e/traces/drive-read.trace: Studio against the local still.fail): a text of the lent folder read
+// 17-drive-read (e2e/traces/drive-read.trace: Mac against the local still.fail): a text of the lent folder read
 // (drive.read): its chapters found, the bars a tap away, the contents going to a chapter; where it was left told to
 // the core once the reader held still (drive.place, past the first two chapters: Flow::end has it asked as the run
 // asked it), and its row says how far.
+// before it: 15-drive-lend
 
 ///|
 test "17-drive-read" {

@@ -1,5 +1,5 @@
 // A row's digest, as a station compares what the core holds of a list with the list as it is (POST /changed/<list>,
-// station/src/read/digest.ts, the same, tested on the same values): the row's JSON with its keys sorted (the device
+// station/src/read/digest.ts uses this one): the row's JSON with its keys sorted (the device
 // keeps some of a row's fields apart and puts them back last), hashed (cyrb53, 53 bits), in base 36.
 
 /// The digests of rows that cannot change (frozen, as the device's records hold them): made once.

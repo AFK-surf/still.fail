@@ -249,7 +249,7 @@ pub fn Words::slice(self : Words, a : Int, b : Int) -> String {
 }
 
 ///|
-/// The offset in the words of a point in the window (Pick.kt offsetAt): in the paragraph whose lines hold its height
+/// The offset in the words of a point in the window: in the paragraph whose lines hold its height
 /// (the nearest across, beside a table's cell); else the start of the next one down; past them all, their end.
 pub fn Words::offset_at(self : Words, x : Double, y : Double) -> Int {
   let mut hit : WordsPiece? = None
@@ -379,7 +379,7 @@ fn own_word_at(text : String, i : Int) -> (Int, Int) {
 }
 
 ///|
-/// The press under way is the app's from here (a hold that picks words, Pick.kt): no tap of what it went down on once
+/// The press under way is the app's from here (a hold that picks words): no tap of what it went down on once
 /// lifted, nothing under it scrolled or dragged by it while it lasts, no edge swipe; the pointer is still told
 /// (Ctx::pointer), so the app follows the finger. Nothing when no finger is down.
 pub fn Ctx::take_press(self : Ctx) -> Unit {

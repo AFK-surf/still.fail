@@ -4,12 +4,12 @@
 // wrong policy can be told apart. People edit it on the pages, agents with the archive_policy tool; the station keeps
 // who changed it last (store `archive_policy`). Until anyone does, the default below.
 import type { ChoiceQuestion, ChoiceResult } from "./decision.ts";
+import type { InWorkspace } from "../store/rows.ts";
 
 export type ArchiveOption = { id: string; name: string; rubric: string; archive: boolean };
 export type ArchivePolicy = { policy: string; options: ArchiveOption[] };
 /// Who changed it: a person on the pages, or an agent (its session) with the tool.
 export type PolicyAuthor = { kind: "person"; email: string; name?: string | null } | { kind: "agent"; session: string };
-export type PolicyChange = { at: number; by: PolicyAuthor; summary: string };
 
 export const MAX_OPTIONS = 20;
 const MAX_POLICY = 4000;
@@ -108,10 +108,14 @@ export function changeSummary(before: ArchivePolicy, after: ArchivePolicy): stri
 
 type Kept = { archivePolicy(ws?: string | null): { policy: unknown; change: any } | null; setArchivePolicy(policy: unknown, author: unknown, summary: string, ws?: string | null): void };
 
-/// The policy in force in a workspace (docs/multi-workspace.md: one each; null, or absent, the station's home one): the
+/// The policy in force in a workspace (one each; null, or absent, the station's home one): the
 /// last one saved there, else the default.
 export function currentPolicy(store: Kept, ws: string | null = null): ArchivePolicy {
-  const saved = store.archivePolicy(ws);
+  return policyFrom(store.archivePolicy(ws));
+}
+
+/// Resolve a policy already read with its change information.
+export function policyFrom(saved: { policy: unknown } | null): ArchivePolicy {
   if (saved) {
     try {
       return checkedPolicy(saved.policy);
@@ -135,16 +139,16 @@ export function savePolicy(store: Kept, input: unknown, by: PolicyAuthor, ws: st
 const VIEW_DAYS = 7;
 const VIEW_CHATS = 20;
 
-type Viewed = Kept & { latestDecisionsSince(since: number): any[]; now(): number; getSession(key: string): { runtime: string } | null };
+type Viewed = Kept & { latestDecisionsSince(since: number, viewer?: InWorkspace): any[]; now(): number; getSession(key: string): { runtime: string } | null };
 
-/// A workspace's archive policy as the pages show it (accounts' `policyView`, for one workspace: docs/multi-workspace.md):
+/// A workspace's archive policy as the pages show it (accounts' `policyView`, for one workspace):
 /// its words, its options each with the chats of that workspace (`mine`) the checks of the last days put there (by
 /// their latest check), who changed it last, and how many checks failed.
-export function policyView(store: Viewed, ws: string | null, mine: (session: string) => boolean, title: (session: string) => string): any {
-  const policy = currentPolicy(store, ws);
+export function policyView(store: Viewed, ws: string | null, mine: (session: string) => boolean, title: (session: string) => string, viewer: InWorkspace): any {
   const saved = store.archivePolicy(ws);
+  const policy = policyFrom(saved);
   const latest = new Map<string, any>();
-  for (const row of store.latestDecisionsSince(store.now() - VIEW_DAYS * 86_400_000)) if (typeof row.session === "string" && mine(row.session)) latest.set(row.session, row);
+  for (const row of store.latestDecisionsSince(store.now() - VIEW_DAYS * 86_400_000, viewer)) if (typeof row.session === "string" && mine(row.session)) latest.set(row.session, row);
   const byOption = new Map<string, any[]>();
   let failed = 0;
   for (const [session, row] of [...latest.entries()].reverse()) {
@@ -162,7 +166,7 @@ export function policyView(store: Viewed, ws: string | null, mine: (session: str
     text: policy.policy,
     options: policy.options.map((o) => {
       const chats = byOption.get(o.id) ?? [];
-      // Named only as shown: each name is a lookup of the chat's (a week's checks came to 210 chats on ccvm).
+      // Named only as shown: each name is a lookup of the chat's (a week's checks came to many chats on a station).
       return { ...o, count: chats.length, chats: chats.slice(0, VIEW_CHATS).map(({ session, ...c }) => ({ session, title: title(session), ...c })) };
     }),
     days: VIEW_DAYS,

@@ -1,8 +1,8 @@
-// What a frame does again, by what it read (docs/incremental.md). A frame's work, from taking what came from outside
+// What a frame does again, by what it read. A frame's work, from taking what came from outside
 // to the end of its paint, runs under one watch (mbui/signals' Watch): all it reads of signals is followed, and that is
 // all it is built from: the core's data and the app's state, the frames' clock (frame_clock: Ctx::now), the host's
-// settings it is drawn by (frame_env), what came from outside that is no signal yet (outside_said: what
-// docs/determinism.md records, a message, a host's event, a step of the runtime's, a frame asked for between frames)
+// settings it is drawn by (host_said.mbt: one signal each, read where used), what came from outside that is no signal yet (outside_said: what
+// records, a message, a host's event, a step of the runtime's, a frame asked for between frames)
 // and the hand as what reads it reads it (hand.mbt: what the pointer is over, what is pressed, clicked, focused, the
 // hand's events; a pointer moved over what lights nothing changes none of it). So the next frame is built anew where
 // any of it changed (the watch is stale), where a moment it read the clock as came (a wake: Ctx::wake_in, Ctx::every,
@@ -20,8 +20,8 @@
 // shows changes but its looks by the clock (cycle_look.mbt: a spinner turning, the spokes stepping, a breath): the
 // frame is the last one's instances as they were painted, each look applied at its time, nothing built, laid out or
 // painted (2026-10-27: ~16 frames a second while chats are at work, each building, laying out and painting the window
-// for 0.03% of it). Where the Tester runs (looks_check), each frame painted alone or of its looks alone is drawn whole
-// after it as well and the two must be the same: every test holds it.
+// for 0.03% of it). A Tester draws each frame painted alone or of its looks alone whole after it as well, and the two
+// must be the same: every test holds it (tester_looks.mbt).
 
 ///|
 /// Where what the frames' watch was first told of since the frame before was set (Signal::set's place; "" none): said
@@ -47,11 +47,6 @@ let frame_clock : @signals.Signal[Double] = @signals.signal(0.0)
 /// again as it comes.
 // kept across runs: only counts on
 let outside_said : @signals.Signal[Int] = @signals.signal(0)
-
-///|
-/// What of the host the frame is drawn by and reads as it is built (looks_env), as each frame begins.
-// kept across runs: set as each frame begins
-let frame_env : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
 /// The watch the frames' work runs under (made with the run: frame_watch_of).
@@ -181,6 +176,24 @@ let frame_built : Ref[Bool] = Ref(false)
 let frame_running : Ref[Bool] = Ref(false)
 
 ///|
+/// The moment of the frame being drawn (on_frame's, frame_offscreen's `t`, from its start to its end, before even what
+/// came from outside is handed on), else -1: the runtime's clock in a frame (fx_runtime).
+// kept across runs: set and let go within a frame
+let frame_moment : Ref[Double] = Ref(-1.0)
+
+///|
+/// The frames drawn so far, on the display or offscreen (on_frame's, frame_offscreen's): which host's event a fiber
+/// forked in one came in (fx_runtime).
+// kept across runs: only ever counts up
+let frame_serial : Ref[Int] = Ref(0)
+
+///|
+/// Whether an offscreen frame is being drawn (frame_offscreen): it asks the host for nothing, no frame and no wake.
+fn offscreen_frame() -> Bool {
+  frame_moment.val >= 0.0 && !frame_running.val
+}
+
+///|
 /// The run's watch: as what its last read read changes, a frame is owed (in a frame, by its end; between frames, the
 /// host asked now).
 fn frame_watch_of() -> @signals.Watch {
@@ -234,34 +247,101 @@ fn paint_watch_of() -> @signals.Watch {
 /// The clock read followed where something reads (Ctx::now: a frame's build or paint, a computed), `loc` the reader.
 fn clock_read(loc : SourceLoc) -> Unit {
   if @signals.active_sub() is Some(_) {
-    clock_read_by(loc.to_string())
+    clock_read_by(loc.to_string(), None)
     frame_clock.get() |> ignore
   }
 }
 
 ///|
-/// The clock read followed by what shows a motion going (Ctx::shows_motion).
-fn clock_read_here() -> Unit {
+/// The clock read followed by what shows a motion going (Ctx::shows_motion: `who`'s, else the host's clock or its
+/// state): the record names the motion (Mover::told_as) where it was told who it is.
+fn clock_read_here(who? : Mover) -> Unit {
   if @signals.active_sub() is Some(_) {
-    clock_read_by("a motion, the host's clock or its state (Ctx::shows_motion, @ui.now, @hostapi.polled)")
+    clock_read_by("a motion, the host's clock or its state (Ctx::shows_motion, @hostapi.polled)", who)
     frame_clock.get() |> ignore
   }
 }
 
 ///|
-/// Where the clock was read followed (`at`), kept as the first such read of the frame's build or of its paint.
-fn clock_read_by(at : String) -> Unit {
-  let first = if paint_phase.val == 1 {
-    paint_clock_at
+/// Where the last frame built, laid out or painted first read the clock followed, which motion read it (`who`: the
+/// mover, kept beside `*_clock_at` as it is set and read only while that says a place; named as the record is written:
+/// clock_said).
+// kept across runs: written with clock_read_at, layout_clock_at and paint_clock_at
+let clock_read_who : Ref[Mover?] = Ref(None)
+
+///|
+// kept across runs: as clock_read_who
+let layout_clock_who : Ref[Mover?] = Ref(None)
+
+///|
+// kept across runs: as clock_read_who
+let paint_clock_who : Ref[Mover?] = Ref(None)
+
+///|
+/// Where a part or a list's row kept as its nodes (kept_part.mbt) first read the clock followed as the last frame
+/// built it, and which motion ("" none): its watch told by the frames' clock as the next begins, why it is built again.
+// kept across runs: put back as each frame begins (frame_drawn)
+let part_clock_at : Ref[String] = Ref("")
+
+///|
+/// How many times the clock was read followed, counted on (row_drawing.mbt: a row whose paint read it is not kept as
+/// drawn).
+// kept across runs: only counts on
+let clock_reads : Ref[Int] = Ref(0)
+
+///|
+// kept across runs: as part_clock_at
+let part_clock_who : Ref[Mover?] = Ref(None)
+
+///|
+/// Where the clock was read followed (`at`; by `who`'s motion, where it is known), kept as the first such read of the
+/// frame's build, of its layout or of its paint (and of the parts it built). Only a place and a mover kept: the words
+/// are worked out as the frame's why is (clock_said).
+fn clock_read_by(at : String, who : Mover?) -> Unit {
+  clock_reads.val += 1
+  if paint_phase.val == 1 {
+    if paint_clock_at.val == "" {
+      paint_clock_at.val = at
+      paint_clock_who.val = who
+    }
   } else if laying.val {
-    layout_clock_at
+    if layout_clock_at.val == "" {
+      layout_clock_at.val = at
+      layout_clock_who.val = who
+    }
   } else {
-    clock_read_at
-  }
-  if first.val == "" {
-    first.val = at
+    if clock_read_at.val == "" {
+      clock_read_at.val = at
+      clock_read_who.val = who
+    }
+    if part_building() && part_clock_at.val == "" {
+      part_clock_at.val = at
+      part_clock_who.val = who
+    }
   }
 }
+
+///|
+/// Where the clock was read (`at`) by `who`, in words: the motion it is, as it was told (`a motion of Anim "key", told
+/// at <the app's place>`: Mover::told_as), else the place itself.
+fn clock_said(at : String, who : Mover?) -> String {
+  match who {
+    Some(m) => {
+      let named = m.named()
+      if named == "" {
+        at
+      } else {
+        "a motion of " + named
+      }
+    }
+    None => at
+  }
+}
+
+///|
+/// The motion the last frame's why names (clock_said: "" none), counted by the record (app.mbt's probe_motions).
+// kept across runs: written by each frame
+let built_motion : Ref[String] = Ref("")
 
 ///|
 /// What the host keeps and changes with no event of its own, read (@hostapi.polled: a browser come back to a login),
@@ -274,7 +354,7 @@ fn init {
 /// The frames' clock (ms), followed only before `end` (Ctx::now): what moves till then and is still from then on (a
 /// spring's way, a fade), built again each frame till it is.
 #callsite(autofill(loc))
-pub fn Ctx::now_before(self : Ctx, end : Double, loc~ : SourceLoc) -> Double {
+fn Ctx::now_before(self : Ctx, end : Double, loc~ : SourceLoc) -> Double {
   if self.clock < end {
     clock_read(loc)
   }
@@ -282,9 +362,21 @@ pub fn Ctx::now_before(self : Ctx, end : Double, loc~ : SourceLoc) -> Double {
 }
 
 ///|
+/// The frames' clock (ms), followed as Ctx::now is, read for `who`'s motion (an Anim stepped to the frame): the
+/// performance record names that motion (Mover::told_as) as what read it, not the place it was read at.
+#callsite(autofill(loc))
+pub fn Ctx::now_of(self : Ctx, who : Mover, loc~ : SourceLoc) -> Double {
+  if @signals.active_sub() is Some(_) {
+    clock_read_by(loc.to_string(), Some(who))
+    frame_clock.get() |> ignore
+  }
+  self.clock
+}
+
+///|
 /// What came from outside and is no signal: what each frame's build reads (outside_said) built again.
 fn outside_counted() -> Unit {
-  outside_said.set(@signals.untracked(fn() { outside_said.get() }) + 1)
+  outside_said.set(outside_said.untracked() + 1)
 }
 
 ///|
@@ -298,11 +390,10 @@ fn outside_left() -> Unit {
 }
 
 ///|
-/// What the frame reads of what came from outside and of the host's settings, as it has taken them (frame_body):
-/// followed. (Of the hand, what reads it reads it: hand.mbt.)
+/// What the frame reads of what came from outside, as it has taken it (frame_body): followed. (Of the hand, what reads
+/// it reads it: hand.mbt; of the host's settings, what reads one reads it: host_said.mbt.)
 fn frame_inputs_read() -> Unit {
   outside_said.get() |> ignore
-  frame_env.get() |> ignore
 }
 ///|
 /// The last frame as its paint ended (looks_keep): its instances, with the tags of its looks by the clock before they
@@ -310,10 +401,10 @@ fn frame_inputs_read() -> Unit {
 /// come of its own: looks_left); the soonest moment anything but a look or a paint asked to be drawn at (-1: none),
 /// from its build on.
 priv struct LooksBase {
-  /// its instances, kept only where it has looks (a frame of the looks alone draws them again); what they were said
-  /// as one number (insts_said), for the next paint to know whether it drew the same
+  /// its instances, kept only where it has looks (a frame of the looks alone draws them again)
   mut inst : FixedArray[Double]
-  mut said : Int64
+  /// where its headers were among them (ride_spans), put back with them
+  mut spans : Array[Int]
   mut n : Int
   mut looks : Bool
   mut ok : Bool
@@ -335,7 +426,7 @@ priv struct LooksBase {
 // kept across runs: put back with the globals (looks_reset), else made again by each frame painted
 let looks_base : LooksBase = {
   inst: FixedArray::make(0, 0.0),
-  said: 0L,
+  spans: [],
   n: 0,
   looks: false,
   ok: false,
@@ -347,6 +438,12 @@ let looks_base : LooksBase = {
   built: false,
   settled: false,
 }
+
+///|
+/// A list's anchor moved in this frame, or something of the window's tree scrolled (view_paint). Its new drawing must not be treated as the one whose fingerprint was kept;
+/// whether it happens to be identical need not be worked out while it is moving.
+// kept across runs: cleared as each frame begins
+let scroll_paint_uncompared : Ref[Bool] = Ref(false)
 
 ///|
 /// What the last build laid out, as one number (tree_sig), whether there was one before it and whether it laid out the
@@ -382,12 +479,6 @@ priv struct LooksOwn {
 let looks_own : LooksOwn = { wake: -1.0, cycling: false }
 
 ///|
-/// Whether each frame painted alone or of the looks alone is drawn whole after it as well and the two compared (a
-/// Tester's: every test holds it); a host draws it once.
-// kept across runs: set by each Tester as it is made (Tester::new), a bench's turned off
-let looks_check : Ref[Bool] = Ref(false)
-
-///|
 /// Whether the last frame was of its looks alone: what the frame did (FramePerf's `looks`).
 // kept across runs: written by each frame
 let looks_drawn : Ref[Bool] = Ref(false)
@@ -408,12 +499,11 @@ let looks_frames : Ref[Int] = Ref(0)
 let paints_alone : Ref[Int] = Ref(0)
 
 ///|
-/// Put back as a run begins (reset_globals): the run's watches let go, the first frame built whole.
-fn looks_reset() -> Unit {
-  nodes_forget()
-  layout_said.val = ""
-  frame_told_at.val = ""
-  layout_clock_at.val = ""
+let laid_otherwise = "the one before it laid out otherwise"
+
+///|
+/// Release the run's frame readers while the resources they read still belong to that run.
+fn frame_watches_let_go() -> Unit {
   for w in [frame_watch, layout_watch, paint_watch] {
     match w.val {
       Some(w) => w.stop()
@@ -421,6 +511,17 @@ fn looks_reset() -> Unit {
     }
     w.val = None
   }
+}
+
+///|
+/// Put back as a run begins (reset_globals): the run's watches let go, the first frame built whole.
+fn looks_reset() -> Unit {
+  nodes_forget()
+  list_hand_forget()
+  layout_said.val = ""
+  frame_told_at.val = ""
+  layout_clock_at.val = ""
+  frame_watches_let_go()
   looks_base.n = 0
   looks_base.looks = false
   looks_base.ok = false
@@ -480,14 +581,52 @@ fn looks_apply(c : Ctx) -> Unit {
   looks_own.cycling = false
   in_looks.val = true
   c.cycle_looks()
+  // (what columns scroll by their offsets alone moved by their headers to where they have them now: list_looks)
+  list_looks(c)
+  // (the window's tree's endless decorations on the resident clock (View::cycle_resident): its next step woken for,
+  // said later, as a look's here is: nothing built for it; a step nobody can see waits)
+  match view_app.val {
+    Some(tree) if tree.resident_read() && app_visible() => c.wake_at_time(tree.resident_next(), later=true)
+    _ => ()
+  }
   in_looks.val = false
 }
 
 ///|
-/// What of the host the frame is drawn by and its build reads (the window, its scale, the system's settings as
-/// envrec.mbt records them, the faces' atlas, whether something reads the widgets out, the layout's epoch), as one line.
-fn looks_env(c : Ctx, w : Double, h : Double, scale : Double) -> String {
-  "\{w} \{h} \{scale} \{whole_px_layout()} \{font_scale()} \{h_atlas_generation()} \{h_a11y_on()} \{reduced_motion()} \{h_reduce_transparency()} \{system_dark()} \{window_inset()} \{h_h264_here()} \{h_stream_feeds()} \{h_stream_layers()} \{copy_shown()} \{layout_reuse.val} \{c.epoch} \{view_island_said()}"
+/// Each header of what a column scrolls by its offset alone among the frame's instances (view_ride.mbt's ListHead)
+/// written as its column has it at the frame's moment (@view.Tree::scroll_off_of: how far it is scrolled then), the one
+/// writer of where they are, a frame painted or of its looks alone: written in place again where something drew the
+/// frame out since (a Tester's host, Ctx::flat_from), said among its headers again. While a column glides on by itself
+/// (a fling, a wheel's notches easing in, what shows past an end going back: its end said), a frame each frame till that
+/// end, and one woken for at it.
+fn list_looks(c : Ctx) -> Unit {
+  if list_heads.is_empty() {
+    return
+  }
+  guard view_app.val is Some(tree) else { return }
+  let a = c.inst
+  for h in list_heads {
+    guard h.at < c.ninst && tree.scroll_off_of(h.id, c.clock) is Some((ox, oy)) else { continue }
+    let b = h.at * inst_size
+    h.head.blit_to(a, len=inst_size, dst_offset=b)
+    a[b] = h.bx + h.s * ox
+    a[b + 1] = h.by + h.s * oy
+    if !ride_spans.contains(h.at) {
+      let mut j = ride_spans.length()
+      while j > 0 && ride_spans[j - 1] > h.at {
+        j = j - 1
+      }
+      ride_spans.insert(j, h.at)
+    }
+    match tree.glide_end_of(tree.scroll_off_by(h.id)) {
+      Some(end) if c.clock < end => {
+        c.cycling = true
+        looks_own.cycling = true
+        c.wake_at_time(end)
+      }
+      _ => ()
+    }
+  }
 }
 
 ///|
@@ -556,6 +695,9 @@ fn tree_sig(c : Ctx) -> Int64 {
     h = hash_mix(h, (if e.look_by is Some(_) { 1 } else { 0 }).to_int64())
     h = hash_mix(h, (if e.bg_by is Some(_) { 1 } else { 0 }).to_int64())
     h = hash_mix(h, (if e.glyphs_by is Some(_) { 1 } else { 0 }).to_int64())
+    h = hash_mix(h, (if e.ink_by is Some(_) { 1 } else { 0 }).to_int64())
+    h = hash_mix(h, (if e.notch_by is Some(_) { 1 } else { 0 }).to_int64())
+    h = hash_mix(h, (if e.cut_by is Some(_) { 1 } else { 0 }).to_int64())
     h = hash_mix(h, (if e.cycle is Some(_) { 1 } else { 0 }).to_int64())
     h = hash_mix(h, (if e.keep is Some(_) { 1 } else { 0 }).to_int64())
     h = sig_num(h, e.bottom)
@@ -573,73 +715,42 @@ fn tree_sig(c : Ctx) -> Int64 {
 }
 
 ///|
-/// `x` folded into `h` as tree_sig folds a length: to 1/64 of a point.
+/// `x` folded into `h` as tree_sig folds a length: to the bit. To 1/64 of a point, a layout still moving by less than
+/// that a frame was taken as settled, the frames after it painted from it, and what was laid out where it had come to
+/// at the next built whole: at 120 frames a second a way's last tenths of a point frozen where at 60 they were not
+/// (kept_panes_wbtest, MBUI_TEST_FPS=120, 2026-11-09). A build of the same lays out the same to the bit.
 fn sig_num(h : Int64, x : Double) -> Int64 {
-  hash_mix(h, (x * 64.0).round().to_int64())
+  hash_mix(h, x.reinterpret_as_int64())
 }
 
 ///|
 /// The frame's paint is over, its looks by the clock not applied yet (frame_paint): what it drew kept (with their tags,
 /// where it has looks), for a frame of the looks alone; whether it drew what the paint before it drew.
 fn looks_keep(c : Ctx) -> Unit {
-  if looks_check.val {
-    looks_nodes.clear()
-    for i in 0..<c.count {
-      let nd = c.nodes[i]
-      looks_nodes.push((nd.x, nd.y, nd.fw, nd.fh, nd.text, nd.id, nd.tx, nd.ty, nd.opacity))
-    }
-  }
   // (what it drew said as one number, read once: not kept whole and compared with the paint before, two more passes
   // over every instance; kept whole only where a frame of the looks alone draws it again)
   let len = c.ninst * inst_size
-  let said = insts_said(c.inst, c.ninst)
-  looks_base.settled = looks_base.built && c.ninst == looks_base.n && said == looks_base.said
-  looks_base.built = true
+  if scroll_paint_uncompared.val {
+    // The old fingerprint says nothing about this drawing. Be conservative even when the movement happens not to
+    // change a visible pixel: a later still paint establishes a new fingerprint before using the looks-only path.
+    looks_base.settled = false
+    looks_base.built = false
+  } else {
+    // (what a paint leaves for the next to read is told to the paint's watch as it changes (paint_watch_of): a paint
+    // with nothing stale after it drew what the next would, never painted again to find out by comparing the two)
+    looks_base.settled = true
+    looks_base.built = true
+  }
   looks_base.n = c.ninst
-  looks_base.said = said
   looks_base.looks = !cycle_frame.is_empty()
   if looks_base.looks {
+    // (its headers kept as they are, where they are among them: what the looks are applied to passes over their rooms,
+    // inst_after; a list's moved again as it is drawn again, list_looks)
     if looks_base.inst.length() < len {
       looks_base.inst = FixedArray::make(len, 0.0)
     }
     c.inst.blit_to(looks_base.inst, len~)
-  }
-}
-
-///|
-/// The first `n` instances of `a` as one number (64 bits of FNV-1a over their numbers' bits): the same for instances
-/// drawn the same (the tags of the looks by the clock, slot 20 below 0, all one: a tag each paint gives anew,
-/// cycle_look.mbt; every NaN one).
-fn insts_said(a : FixedArray[Double], n : Int) -> Int64 {
-  // (four lanes, each folding every fourth number: one lane's multiply need not wait for the last, the lanes folded
-  // into one at the end)
-  let mut h0 = -3750763034362895579L
-  let mut h1 = h0
-  let mut h2 = h0
-  let mut h3 = h0
-  let end = n * inst_size
-  let mut k = 0
-  while k < end {
-    let j = k % inst_size
-    h0 = (h0 ^ inst_bits(a[k], j)) * 1099511628211L
-    h1 = (h1 ^ inst_bits(a[k + 1], j + 1)) * 1099511628211L
-    h2 = (h2 ^ inst_bits(a[k + 2], j + 2)) * 1099511628211L
-    h3 = (h3 ^ inst_bits(a[k + 3], j + 3)) * 1099511628211L
-    k = k + 4
-  }
-  (((h0 * 31L) ^ h1) * 31L ^ h2) * 31L ^ h3
-}
-
-///|
-/// An instance's number `x` in its slot `j` as insts_said folds it: its bits; a tag of a look by the clock (slot 20
-/// below 0) all one; every NaN one.
-fn inst_bits(x : Double, j : Int) -> Int64 {
-  if x != x {
-    -2L
-  } else if j == 20 && x < 0.0 {
-    -1L
-  } else {
-    x.reinterpret_as_int64()
+    looks_base.spans = ride_spans.copy()
   }
 }
 
@@ -676,7 +787,7 @@ fn looks_left(c : Ctx, held : Bool) -> Unit {
     bench.mode == 0 &&
     // (a host that tells no events of its own (a picture decoded, a view ready) is read each build: every frame
     // built whole there)
-    (fake.val is Some(_) || outside_told.val)
+    outside_told.val
   looks_base.left = left
   if looks_drawn.val || painted_alone.val {
     looks_base.ok = looks_base.ok && left
@@ -688,6 +799,12 @@ fn looks_left(c : Ctx, held : Bool) -> Unit {
     looks_base.built_at = c.clock
   }
 }
+
+///|
+/// Whether the frame is of its looks alone with nothing but lists moved by their headers written anew among the last
+/// frame's instances (looks_frame): what the host draws again of it is found from those headers (h_present).
+// kept across runs: false as each frame begins, and once it is presented
+let looks_heads_only : Ref[Bool] = Ref(false)
 
 ///|
 /// Whether the frame left its paint something to come (what its paint read changed as it was painted): the next frame
@@ -714,7 +831,14 @@ fn looks_frame(c : Ctx, t : Double) -> Double {
   if looks_base.looks {
     looks_base.inst.blit_to(c.inst, len=looks_base.n * inst_size)
     c.ninst = looks_base.n
+    ride_spans.clear()
+    ride_spans.append(looks_base.spans)
     looks_apply(c)
+  } else if !list_heads.is_empty() {
+    // (what columns scroll by their offsets alone moved by their headers, the rest as it was painted: list_looks; what
+    // the host draws again of it found from those headers alone, h_present)
+    looks_apply(c)
+    looks_heads_only.val = true
   }
   c.t_build = 0.0
   c.t_layout = 0.0
@@ -723,10 +847,7 @@ fn looks_frame(c : Ctx, t : Double) -> Double {
   painted_alone.val = false
   looks_frames.val = looks_frames.val + 1
   // (a frame as any: told at its end, as frame_paint tells the others)
-  match frame_hook.val {
-    Some(f) if !looks_rebuilt.val => f()
-    _ => ()
-  }
+  frame_hook_told(c)
   t0
 }
 
@@ -758,10 +879,9 @@ fn paint_frame(c : Ctx, t : Double) -> Double {
 ///|
 /// The frame at `t`: built whole under the run's watch where what the last read changed, a moment it waits for came
 /// or it left something to come (why: built_why); else painted alone where what its paint read changed, a moment its
-/// paint waits for came or the paint before drew otherwise (painted_why); else of its looks alone. Where looks_check
-/// says, one painted alone or of the looks alone is built whole after it as well and the two compared, the test failing
-/// where they differ. When it began.
+/// paint waits for came or the paint before drew otherwise (painted_why); else of its looks alone. When it began.
 fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
+  looks_heads_only.val = false
   // (where the hand's inputs since the frame before went, among the old views: view_host.mbt)
   let went_to = view_input_taken()
   let watch = frame_watch_of()
@@ -777,6 +897,8 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (what the host says of the streams and the native views, read of it each frame: what changed come from outside)
   streams_arrive()
   views_arrive()
+  // (what the system said of its notifications, read of it so: what reads it built again as it came, notify.mbt)
+  notices_arrive()
   // (what came as the frame began told the window's tree: brought before what it does again is decided, where the old
   // views are placed part of that, and what a still pointer is over found so before the hand is said: view_host.mbt)
   view_arrived()
@@ -785,24 +907,41 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (what reads the clock and the host's settings read so: what read them is stale where they changed; what a part or
   // a list's row kept read of the frame and of a moment, told: kept_part.mbt's KeptClock)
   frame_clock.set(t)
-  frame_env.set(looks_env(c, w, h, scale))
+  frame_settings_arrive(w, h, scale)
   clock_frame_start(t)
   // (the hand's discrete events since the frame before: what reads them takes them as it is built, and a frame that
   // takes one is built anew, its rows too: what took one changes as it is built what built before it read)
   // (the pointer's presses among them: hand_pressed)
   let events = @signals.untracked(fn() { hand.events.get() + hand.presses.get() })
-  let evented = events != events_seen.val
+  let typed = hand.typed.untracked()
+  let evented = events != events_seen.val || typed != typed_seen.val
+  // (what was typed into a field of an old view, and nothing else of the hand's: a part kept through it, built anew
+  // for anything else that came, Ctx::kept_part's `typed_stays`)
+  let typed_alone = events == events_seen.val && typed != typed_seen.val
   events_seen.val = events
+  typed_seen.val = typed
   // (and what came from outside that is no signal: a part kept whatever else the frame built anew is built anew for it)
   let outside = outside_events.val != outside_seen.val
   outside_seen.val = outside_events.val
+  // (the motions that read the clock as the last frame was built, laid out or painted: named as said here)
+  built_motion.val = ""
+  let said_clock = fn(at : String, who : Mover?) {
+    let words = clock_said(at, who)
+    if words != at {
+      built_motion.val = words
+    }
+    words
+  }
+  let (part_at, part_who) = (part_clock_at.val, part_clock_who.val)
+  part_clock_at.val = ""
+  part_clock_who.val = None
   let why = if said != "" {
     said
   } else if bench_whole.val && bench_measuring.val {
     "a bench building each frame whole"
   } else if watch.is_stale() {
     if clock_read_at.val != "" {
-      "the clock read at \{clock_read_at.val}"
+      "the clock read at \{said_clock(clock_read_at.val, clock_read_who.val)}"
     } else {
       "what it read changed" + (if frame_told_at.val != "" { ", set at \{frame_told_at.val}" } else { "" })
     }
@@ -817,26 +956,53 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   }
   // (else laid out again, built as it was built, its lists' rows kept where nothing they show changed: what its layout
   // read changed, what a row read, or the one before it laid out otherwise, what built may read)
-  let laid_why = if why != "" {
+  let mut laid_why = if why != "" {
     ""
   } else if layout_said.val != "" {
     layout_said.val
   } else if layout_watch_of().is_stale() {
     if layout_clock_at.val != "" {
-      "the clock read as it was laid out at \{layout_clock_at.val}"
+      "the clock read as it was laid out at \{said_clock(layout_clock_at.val, layout_clock_who.val)}"
     } else {
       "what its layout read changed"
     }
   } else if nodes_run.told {
+    let part = c.told_said()
     "what a part or a list's row read changed" +
+    (if part != "" { ", \{part}" } else { "" }) +
     (match nodes_run.told_at {
       Some(at) => ", set at \{at}"
       None => ""
-    })
+    }) +
+    (if part_at != "" { ", the clock read in it at \{said_clock(part_at, part_who)}" } else { "" })
   } else if !paint_base.laid_same {
-    "the one before it laid out otherwise"
+    laid_otherwise
   } else {
     ""
+  }
+  // (a list the hand moved, its rows staying: moved as they are, nothing built or laid out for it, what follows where
+  // it stands told again; what was built reads where it stands only as list_hand_move asks it. The build before having
+  // laid out otherwise is no reason to build: what it read back of that layout is asked there too)
+  let mut list_scrolled = false
+  // (an old view's list the hand moved: what is drawn in it moved with nothing it read told, no old view kept as drawn
+  // in this frame, view_ride.mbt's island_still)
+  old_lists_moved.val = !list_hand_dirty.is_empty()
+  if old_lists_moved.val {
+    islands_unkept()
+  }
+  if why == "" && (laid_why == "" || laid_why == laid_otherwise) && !list_hand_dirty.is_empty() {
+    let stopped = c.list_hand_move(t)
+    if stopped == "" {
+      list_scrolled = true
+      laid_why = ""
+      // (what follows where a list stands told, as a build's are once it is laid out, before it is painted: what they
+      // change of what is built shows from the next frame)
+      for f in list_fast_tells {
+        f()
+      }
+    } else {
+      laid_why = "a list moved (" + stopped + ")"
+    }
   }
   built_why.val = if why != "" { why } else { laid_why }
   frame_told_at.val = ""
@@ -850,18 +1016,35 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     layout_coming.val = true
     nodes_run.told = false
     nodes_run.fresh = why != "" || evented
-    nodes_run.evented = evented || outside || test_step_came.val
+    nodes_run.evented = evented || outside
     // (the hand's alone, gone to one old view: that one's part alone built for it, view_host.mbt)
-    nodes_run.evented_only = if outside || test_step_came.val { -1 } else { went_to }
-    test_step_came.val = false
+    nodes_run.evented_only = if outside { -1 } else { went_to }
+    // (and the frame after it, built for what that changed late in it (app.mbt's `inputs_taken`), nothing else come
+    // meanwhile: the same)
+    let typed_on = !evented && went_to < 0 && typed_frame_last.val >= 0
+    nodes_run.typed_alone = !outside && ((typed_alone && went_to >= 0) || typed_on)
+    if typed_on && !outside {
+      nodes_run.evented_only = typed_frame_last.val
+    }
+    typed_frame_last.val = if nodes_run.typed_alone && !typed_on { nodes_run.evented_only } else { -1 }
     nodes_run.whole = bench_whole.val && bench_measuring.val
-    return watch.read(fn() { frame_body(c, w, h, scale, t) })
+    let t0 = watch.read(fn() { frame_body_drawn(c, t) })
+    frame_looked(c, w, h, scale, t, 0, false)
+    return t0
   }
-  let paint_why = if paint_told != "" {
+  typed_frame_last.val = -1
+  // (what the window's tree was told as the frame went, brought before it is decided whether to paint: what that
+  // changed of it painted, what changed nothing of it not: view_brought)
+  view_arrived()
+  let paint_why = if list_scrolled {
+    "a list scrolled without changing its rows"
+  } else if paint_told != "" {
     paint_told
   } else if paint.is_stale() {
     if paint_clock_at.val != "" {
-      "the clock read as it was painted at \{paint_clock_at.val}"
+      "the clock read as it was painted at \{said_clock(paint_clock_at.val, paint_clock_who.val)}"
+    } else if view_due_at.val != "" {
+      "the window's tree had something to do, set at \{view_due_at.val}"
     } else {
       "what its paint read changed"
     }
@@ -874,34 +1057,24 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   }
   painted_why.val = paint_why
   let t0 = if paint_why != "" { paint_frame(c, t) } else { looks_frame(c, t) }
-  if !looks_check.val {
-    return t0
-  }
-  let n = c.ninst
-  let alone = FixedArray::make(n * inst_size + 1, 0.0)
-  c.inst.blit_to(alone, len=n * inst_size)
-  let wake = looks_own.wake
-  let cycling = looks_own.cycling
-  let then = looks_nodes.copy()
-  let painted = painted_alone.val
-  // (built whole as a frame begins: what the paint alone read, read anew by its paint; no row kept)
-  paint_phase.val = 0
-  nodes_run.fresh = true
-  nodes_run.whole = true
-  looks_rebuilt.val = true
-  watch.read(fn() { frame_body(c, w, h, scale, t) }) |> ignore
-  looks_rebuilt.val = false
-  looks_drawn.val = false
-  painted_alone.val = false
-  looks_compare(c, alone, n, wake, cycling, t, then, painted~)
+  frame_looked(c, w, h, scale, t, if paint_why != "" { 1 } else { 2 }, list_scrolled)
   t0
 }
 
 ///|
-/// Whether the frame is being built whole again to be compared with it as it was painted alone or of its looks alone
-/// (looks_check): a check's, no frame of the app's (frame_hook is not told of it).
-// kept across runs: set and let go within a frame
-let looks_rebuilt : Ref[Bool] = Ref(false)
+/// What looks at each frame as it is drawn, where something does (a Tester's: tester_looks.mbt): the frame `c` at `t`
+/// in a window `w` × `h` at `scale`, built whole (`kind` 0), painted alone (1) or of its looks alone (2), a list moved
+/// in it with nothing built (`scrolled`).
+// kept across runs: set by each Tester as it is made, let go as its run ends
+let frame_look : Ref[((Ctx, Double, Double, Double, Double, Int, Bool) -> Unit)?] = Ref(None)
+
+///|
+fn frame_looked(c : Ctx, w : Double, h : Double, scale : Double, t : Double, kind : Int, scrolled : Bool) -> Unit {
+  match frame_look.val {
+    Some(f) => f(c, w, h, scale, t, kind, scrolled)
+    None => ()
+  }
+}
 
 ///|
 /// How many of the hand's discrete events the frame before had seen (hand.mbt's `events`).
@@ -909,194 +1082,30 @@ let looks_rebuilt : Ref[Bool] = Ref(false)
 let events_seen : Ref[Int] = Ref(0)
 
 ///|
+/// The old view's part what was typed alone went to in the frame before (nodes_run's `typed_alone`), -1: none, or that
+/// frame was the one after it.
+// kept across runs: said as each frame is built
+let typed_frame_last : Ref[Int] = Ref(-1)
+
+///|
+/// How many times the frame before had seen something typed into a field of an old view (hand.mbt's `typed`).
+// kept across runs: only counts on with them
+let typed_seen : Ref[Int] = Ref(0)
+
+///|
 /// How many events from outside the frame before had seen (kept_part.mbt's `outside_events`).
 // kept across runs: only counts on with them
 let outside_seen : Ref[Int] = Ref(0)
 
 ///|
-/// The frame painted alone or of the looks alone (`painted`; `alone`, `n` instances; its looks asking to be woken at
-/// `wake`, or drawn each frame: `cycling`) against the same frame built whole (`c`'s): the same instances, its looks
-/// asking the same, else the test fails, saying where they part: the first instance that differs (what it is and
-/// where), and how many each drew.
-fn looks_compare(
-  c : Ctx,
-  alone : FixedArray[Double],
-  n : Int,
-  wake : Double,
-  cycling : Bool,
-  t : Double,
-  then : Array[(Double, Double, Double, Double, String, Int, Double, Double, Double)],
-  painted~ : Bool,
-) -> Unit {
-  let at = t.to_int()
-  let kind = if painted { "painted alone" } else { "of its looks alone" }
-  let m = c.ninst
-  let mut first = -1
-  let mut slot = -1
-  for q in 0..<(if n < m { n } else { m }) {
-    let b = q * inst_size
-    for j in 0..<inst_size {
-      let x = alone[b + j]
-      let y = c.inst[b + j]
-      if first < 0 && !drawn_same(x, y) {
-        first = q
-        slot = j
-      }
-    }
-  }
-  if first < 0 && n != m {
-    first = if n < m { n } else { m }
-  }
-  if first >= 0 {
-    let inst = fn(a : FixedArray[Double], q : Int, k : Int) {
-      if q >= k {
-        "none"
-      } else {
-        let b = q * inst_size
-        "kind \{a[b + 5]} at \{a[b]},\{a[b + 1]} \{a[b + 2]}×\{a[b + 3]}" +
-        (if slot >= 0 { " (slot \{slot}: \{a[b + slot]})" } else { "" })
-      }
-    }
-    // (what is drawn there, as built whole: the words of the nodes over the place)
-    let (px, py) = if first < m {
-      (c.inst[first * inst_size], c.inst[first * inst_size + 1])
-    } else {
-      (alone[first * inst_size], alone[first * inst_size + 1])
-    }
-    let there = []
-    for i in 0..<c.count {
-      let nd = c.nodes[i]
-      if nd.text != "" && px >= nd.x - 1.0 && px <= nd.x + nd.fw + 1.0 && py >= nd.y - 1.0 && py <= nd.y + nd.fh + 1.0 {
-        there.push(nd.text)
-      }
-    }
-    looks_fail(
-      "the frame at \{at} ms \{kind} (\{n} instances) parts from it built whole (\{m}) at instance \{first}: \{inst(alone, first, n)}, built whole \{inst(c.inst, first, m)}; words there: \{there.join(" | ")}; \{looks_node_moved(c, then)}",
-    )
-  }
-  if cycling != looks_own.cycling || wake != looks_own.wake {
-    let next = fn(cy : Bool, w : Double) { if cy { "each frame" } else { "at \{w}" } }
-    looks_fail(
-      "the frame at \{at} ms \{kind} has its looks ask for the next \{next(cycling, wake)}, built whole \{next(looks_own.cycling, looks_own.wake)}",
-    )
-  }
-}
-
-///|
-/// Where the nodes of the frame a frame of its looks alone is drawn from were laid out (x, y, w, h), their words and
-/// ids, kept where they are compared (looks_check): where it parts from the frame built whole, the first node laid out
-/// elsewhere is said.
-// kept across runs: written by each frame built whole while looks_check is on
-let looks_nodes : Array[(Double, Double, Double, Double, String, Int, Double, Double, Double)] = []
-
-///|
-/// The first node laid out elsewhere in `c` than in the frame the looks alone were drawn from (looks_nodes), said.
-fn looks_node_moved(
-  c : Ctx,
-  then : Array[(Double, Double, Double, Double, String, Int, Double, Double, Double)],
-) -> String {
-  if then.length() != c.count {
-    return "\{then.length()} nodes then, \{c.count} now"
-  }
-  for i in 0..<c.count {
-    let nd = c.nodes[i]
-    let (x, y, w, h, text, id, tx, ty, op) = then[i]
-    if nd.x != x ||
-      nd.y != y ||
-      nd.fw != w ||
-      nd.fh != h ||
-      nd.text != text ||
-      nd.id != id ||
-      nd.tx != tx ||
-      nd.ty != ty ||
-      nd.opacity != op {
-      // (what it holds: the words under it)
-      let words = []
-      let mut j = nd.first
-      while j >= 0 && words.length() < 4 {
-        if c.nodes[j].text != "" {
-          words.push(c.nodes[j].text)
-        }
-        j = c.nodes[j].next
-      }
-      let mut up = nd.parent
-      let mut above = ""
-      while up >= 0 && above == "" {
-        let mut k = c.nodes[up].first
-        while k >= 0 && above == "" {
-          if c.nodes[k].text != "" {
-            above = c.nodes[k].text
-          }
-          k = c.nodes[k].next
-        }
-        up = c.nodes[up].parent
-      }
-      return "node \{i} (id \{id}, \{text}) at \{x},\{y} \{w}×\{h} moved \{tx},\{ty} alpha \{op} then, \{nd.x},\{nd.y} \{nd.fw}×\{nd.fh} moved \{nd.tx},\{nd.ty} alpha \{nd.opacity} now; words in it: \{words.join(" | ")}; near: \{above}"
-    }
-  }
-  "every node where it was"
-}
-
-///|
-/// Where the Tester whose frames are compared was made (Tester::new's `loc`).
-// kept across runs: set by each Tester as it is made
-let looks_made_at : Ref[String] = Ref("")
-
-///|
-fn looks_fail(s : String) -> Unit {
-  let said = "a frame not built whole (frame_watch.mbt), the Tester made at \{looks_made_at.val}: " +
-    s +
-    " (built whole last at \{looks_base.built_at.to_int()} ms\{if wall_read.val { "; the time of day read as it was built" } else { "" }}; what is said to move: \{g().moving_now().join("; ")})"
-  println(said)
-  abort(said)
-}
-
-///|
-/// Whether each frame of the looks alone is drawn whole after it as well and the two compared (on in every Tester:
-/// frame_watch.mbt's head): off for a run measured as a host runs it (mbui/src/film's bench).
-pub fn Tester::check_looks(self : Tester, on : Bool) -> Unit {
-  ignore(self)
-  looks_check.val = on
-}
-
-///|
-/// Why the last frame was built whole ("" where it was of its looks alone): it left more to come of its own, what it
-/// read changed (the clock, where it read it so), a moment it waits for came.
-pub fn Tester::built_why(self : Tester) -> String {
-  ignore(self)
-  built_why.val
-}
-
-///|
-/// Why the last frame was painted alone, from the last build's tree ("" where it was built whole or of its looks
-/// alone): what its paint read changed (the clock, where it read it so), a moment its paint waits for came, the paint
-/// before it drew otherwise.
-pub fn Tester::painted_why(self : Tester) -> String {
-  ignore(self)
-  painted_why.val
-}
-
-///|
 /// A step of a test's (Tester::frame, Tester::run_for), or a change of how frames are drawn (a Tester's or a run's
 /// measure: all that shows only while lit shown, what draws each instance kept): what it changed of what is no signal
-/// shows at the next frame, which is built whole; no frame is asked for by it, what changed it draws its own.
+/// shows at the next frame, which is built whole; no frame is asked for by it, what changed it draws its own. What it
+/// changed of what is no signal (a made-up core's state, a page opened by hand) is taken as an event from outside is
+/// (outside_events): parts kept whatever else the frame built anew built anew for it too (NodesRun's `evented`).
 fn test_stepped() -> Unit {
   frame_watch_of().touch()
-  test_step_came.val = true
-}
-
-///|
-/// A step of the test's came since the frame before (test_stepped): what the test changed of what is no signal (a
-/// made-up core's state, a page opened by hand) is taken as an event from outside is, parts kept whatever else the frame
-/// built anew built anew for it too (NodesRun's `evented`).
-// kept across runs: set by each step of a test's, taken as the frame decides what it does
-let test_step_came : Ref[Bool] = Ref(false)
-
-///|
-/// Whether two numbers of an instance draw the same: equal, both none (NaN), or apart by no more than the rounding of
-/// adding a move to what was placed as laid out (Ctx::moved_place) leaves, a billionth of them: nothing a pixel shows.
-fn drawn_same(x : Double, y : Double) -> Bool {
-  x == y || (x.is_nan() && y.is_nan()) || (x - y).abs() <= 1.0e-9 * dmax(1.0, dmax(x.abs(), y.abs()))
+  outside_events.val = outside_events.val + 1
 }
 
 ///|

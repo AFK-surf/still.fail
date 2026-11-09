@@ -10,6 +10,11 @@ export type Cost = { input: number; output: number; cacheRead?: number; cacheWri
 /// What the catalog says of a model; a field it does not know is left out.
 export type Facts = {
   name?: string;
+  /// Who made it (the lab models.dev names: meta, tencent…), its name where the cloud has one, and its series as its
+  /// name spells it (Muse, MiMo).
+  maker?: string;
+  makerName?: string;
+  family?: string;
   /// What it reads: text, image, pdf, audio, video.
   input?: string[];
   reasoning?: boolean;
@@ -32,6 +37,7 @@ function factsOf(raw: unknown): Facts | null {
   if (!isObject(raw)) return null;
   const f: Facts = {};
   if (typeof raw.name === "string") f.name = raw.name;
+  for (const k of ["maker", "makerName", "family"] as const) if (typeof raw[k] === "string" && raw[k] !== "") f[k] = raw[k];
   const input = strings(raw.input);
   if (input) f.input = input;
   if (typeof raw.reasoning === "boolean") f.reasoning = raw.reasoning;
@@ -65,6 +71,9 @@ export function learn(models: unknown): number {
   told = next;
   return next.size;
 }
+
+/// The keys of the models the catalog names.
+export const named = (): string[] => [...told.keys()];
 
 /// What the catalog says of a model, however a profile spells it (anthropic/claude-opus-5-5[1m] is claude-opus-5-5);
 /// null for one it does not name.

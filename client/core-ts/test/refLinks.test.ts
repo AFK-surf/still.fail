@@ -1,7 +1,7 @@
 // still.fail's links as what is written names them (src/refLinks.ts), as every client reads them.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { adbOfLink, chatOfLink, copiedRef, isChatLink, REF_LINK, REF_MARK, screenOfLink, shareLink, splitBy, stationOfLink } from "../src/refLinks.ts";
+import { adbOfLink, chatOfLink, copiedRef, draftWords, isChatLink, linkTo, personWords, REF_LINK, REF_MARK, screenOfLink, shareLink, splitBy, stationOfLink } from "../src/refLinks.ts";
 
 const runs = (text: string, pattern: RegExp) => splitBy(text, pattern).map((p) => (typeof p === "string" ? p : [...p]));
 
@@ -47,8 +47,12 @@ test("a_link_copied_says_its_title_on_one_line_as_a_reference_is_sent", () => {
 });
 
 test("the_chat_station_screen_or_shared_debugging_a_link_names", () => {
-  assert.deepEqual(chatOfLink("https://app.still.fail/o/ws/st/ds%3Ak?history=k2&entry=5"), { station: "ws/st", id: "ds:k", history: "?history=k2&entry=5" });
-  assert.deepEqual(chatOfLink("https://app.still.fail/w/ws/s/st/chats/7/"), { station: "ws/st", id: "7", history: "" });
+  assert.deepEqual(chatOfLink("https://app.still.fail/o/ws/st/ds%3Ak?history=k2&entry=5"), { station: "ws/st", id: "ds:k", history: "?history=k2&entry=5", message: "" });
+  assert.deepEqual(chatOfLink("https://app.still.fail/w/ws/s/st/chats/7/"), { station: "ws/st", id: "7", history: "", message: "" });
+  // One of its messages, as a notification and 复制消息链接 link it: still the chat, so a chip with its title.
+  assert.deepEqual(chatOfLink("https://app.still.fail/o/ws/st/ds%3Ak?message=2"), { station: "ws/st", id: "ds:k", history: "", message: "?message=2" });
+  assert.deepEqual(chatOfLink("https://app.still.fail/w/ws/s/st/chats/7/?message=11"), { station: "ws/st", id: "7", history: "", message: "?message=11" });
+  assert.equal(chatOfLink("https://app.still.fail/o/ws/st/k?message=0"), null);
   assert.equal(chatOfLink("https://x.com/chats/7"), null);
   assert.equal(chatOfLink("/w/ws/s/st/chats/%E0%A4%A"), null);
   assert.equal(stationOfLink("https://app.still.fail/o/ws/st/k"), "ws/st");
@@ -60,4 +64,33 @@ test("the_chat_station_screen_or_shared_debugging_a_link_names", () => {
   assert.equal(adbOfLink("/w/ws/s/st/adb"), "ws/st");
   assert.equal(adbOfLink("https://app.still.fail/w/w%20s/s/st/adb/"), "w s/st");
   assert.equal(adbOfLink("/w/ws/s/st/adb/x"), null);
+});
+
+test("a person's words in runs: a chat referenced, a web address written bare, a chat's page written bare", () => {
+  const page = "https://app.still.fail/w/ws1/s/st1/chats/s-c2";
+  assert.deepEqual(personWords(`看 [首页](${page}) 和 https://example.com/a。还有 ${page}`), [
+    { text: "看 " },
+    { text: "首页", link: page, ref: true, to: { chat: true } },
+    { text: " 和 " },
+    { text: "https://example.com/a", link: "https://example.com/a" },
+    { text: "。还有 " },
+    { text: page, link: page, ref: true, to: { chat: true } },
+  ]);
+  assert.deepEqual(personWords("没有链接"), [{ text: "没有链接" }]);
+  // What is being written: a composer's mark a reference to its chat (its link the core's till sent), the rest as above.
+  assert.deepEqual(draftWords("看 @[首页] 和 https://example.com/a"), [
+    { text: "看 " },
+    { text: "首页", ref: true },
+    { text: " 和 " },
+    { text: "https://example.com/a", link: "https://example.com/a" },
+  ]);
+  // What a link is to, as every client draws it: a screen's, a station's 共享调试, a chat's web service's.
+  assert.deepEqual(linkTo("https://app.still.fail/w/ws1/s/st1/screen/browser%3Atab1"), { card: "screen", station: "ws1/st1", screen: "browser:tab1" });
+  assert.deepEqual(linkTo("/w/ws1/s/st1/adb"), { card: "adb", station: "ws1/st1" });
+  assert.deepEqual(linkTo("https://app.still.fail/o/ws1/st1/c-1?service=job_1"), { chat: true, card: "service", station: "ws1/st1", job: "job_1" });
+  assert.equal(linkTo("https://example.com/a"), null);
+  // a pull request's or an issue's: its card the rich one
+  assert.deepEqual(linkTo("https://github.com/a/b/pull/12?x=1"), { peek: "pull" });
+  assert.deepEqual(linkTo("https://github.com/a/b/issues/3#c"), { peek: "issue" });
+  assert.equal(linkTo("https://github.com/a/b/pulls"), null);
 });

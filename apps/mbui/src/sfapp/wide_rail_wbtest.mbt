@@ -1,4 +1,4 @@
-// The wide frame's rail and its sidebar as the web's (Rail.tsx, brand.tsx, shell.css.ts dock): folded, the rail a bar
+// The wide frame's rail and its sidebar as the web's (brand.tsx, shell.css.ts dock): folded, the rail a bar
 // of its own and the list shown a while as the pointer comes onto it; each sidebar's width and folding kept on the
 // device; the lit place pressed again folds or opens; ⌃1 … ⌃9 the workspaces; a row's menu relays it.
 
@@ -50,11 +50,12 @@ test "wide: ⌘\\ folds the sidebar to the rail's bar of its own; the pointer on
 }
 
 ///|
-/// The ground (30, Rail.css.ts item's) of the rail's place at `rect` (its 38 to press): its box as laid out.
+/// The ground (30) of the rail's place at `rect` (its 38 to press): its box as laid out (a node of the window's tree:
+/// among the tree's, Tester::boxes_held).
 fn rail_ground_at(t : @ui.Tester, rect : (Double, Double, Double, Double)) -> @ui.Laid {
   let (x, y, w, h) = rect
   t
-  .boxes()
+  .boxes_held()
   .iter()
   .find_first(fn(b) {
     b.kind != "text" && b.w == 30.0 && b.h == 30.0 && b.x >= x && b.y >= y && b.x + b.w <= x + w && b.y + b.h <= y + h
@@ -78,15 +79,23 @@ test "wide on a Mac: the closed bar, shown a while, one corner all round, the wi
       t.run_for(@ui.move_most_ms)
       assert_true(t.find("新建对话") is Some(_), msg="shown a while")
     }
-    let bar = t
-      .boxes()
-      .iter()
-      .find_first(fn(b) { b.x == @sfdesk.closed_bar_in && b.radius > 0.0 && b.h > 400.0 && b.bg != 0L })
+    // (the block's ground a node of the window's tree: as the tree draws it)
+    guard @ui.view_tree()
       .unwrap()
-    assert_eq(bar.radii, (follow, follow, follow, follow))
-    // the settings' ground at the bar's foot, 6 from its left and its foot, concentric with the bar's corner there
-    // (6.4), all round alike; a place's in the middle the same, one layer, one corner
-    let inner = @ui.concentric(follow, 6.0)
+      .drawn()
+      .iter()
+      .find_first(fn(d) { d.x == @sfdesk.closed_bar_in && d.h > 400.0 && d.ground != 0L }) is Some(bar) else {
+      fail("no closed bar's ground drawn at \{@sfdesk.closed_bar_in}")
+    }
+    let radii = match bar.corners {
+      Some(k) => k
+      None => (bar.radius, bar.radius, bar.radius, bar.radius)
+    }
+    assert_eq(radii, (follow, follow, follow, follow))
+    // the settings' ground at the bar's foot, 6 from its left and its foot: the bar's corner there (10) less 6, 4, is
+    // squarer than the ranges let a corner be (6): it stands alone, a small block's 10, all round alike; a place's in
+    // the middle the same, one layer, one corner
+    let inner = if @ui.concentric(follow, 6.0) >= @sf.corner_fit.least { @ui.concentric(follow, 6.0) } else { @sf.small_corner }
     let g = rail_ground_at(t, gear)
     assert_eq(g.radii, (inner, inner, inner, inner))
     let files = rail_ground_at(t, t.query(Button, label="文件").unwrap().rect)
@@ -99,12 +108,18 @@ test "wide on a Mac: the closed bar, shown a while, one corner all round, the wi
       let (fx, fy, fw, fh) = t.query(Button, label=named).unwrap().rect
       t.move(fx + fw / 2.0, fy + fh / 2.0)
       t.run_for(@ui.move_most_ms)
-      let filter = t
-        .boxes()
-        .iter()
-        .find_first(fn(b) { b.kind != "text" && b.w == fw && b.h == fh && b.x == fx && b.y == fy && b.bg != 0L })
+      // (the band's filter a node of the window's tree: its ground as the tree draws it)
+      let filter = @ui.view_tree()
         .unwrap()
-      assert_eq(filter.radii, (inner, inner, inner, inner))
+        .drawn()
+        .iter()
+        .find_first(fn(d) { d.w == fw && d.h == fh && d.x == fx && d.y == fy && d.ground != 0L })
+        .unwrap()
+      let radii = match filter.corners {
+        Some(k) => k
+        None => (filter.radius, filter.radius, filter.radius, filter.radius)
+      }
+      assert_eq(radii, (inner, inner, inner, inner))
       assert_eq((bar.x + bar.w - (filter.x + filter.w), filter.y - bar.y), (6.0, 6.0))
       assert_eq(t.corner_faults(), [])
     }
@@ -257,6 +272,7 @@ test "wide: a row's menu has 接力到频道… for a chat with an agent" {
   let (x, y) = t.find("整理发布清单").unwrap()
   t.right_click(x, y)
   t.frame()
+  open_share(t)
   assert_true(t.find("接力到频道…") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
 
@@ -282,11 +298,11 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
   let archive : Json = { "days": [{ "label": "今天", "items": [row("a1", "整理上个月的发票"), row("a2", "试一下新的图标尺寸")] }] }
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "archive" {
         { value: Some(archive), error: None, version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -306,6 +322,16 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
     Chat(r) => assert_eq(r.session, "s-a1")
     _ => fail("the newest not open")
   }
+  // The menu and keys step through the archive's own rows, and stop at either end.
+  @settings.ask_action("chat.next")
+  t.frame()
+  assert_eq(open_title(), "试一下新的图标尺寸")
+  t.key(@ui.key_code_down, mods=@ui.mod_alt)
+  assert_eq(open_title(), "试一下新的图标尺寸")
+  t.key(@ui.key_code_up, mods=@ui.mod_alt)
+  assert_eq(open_title(), "整理上个月的发票")
+  t.key(@ui.key_code_up, mods=@ui.mod_alt)
+  assert_eq(open_title(), "整理上个月的发票")
   // pointed at, 恢复
   let (x, y) = t.find("试一下新的图标尺寸").unwrap()
   t.move(x, y)
@@ -318,8 +344,9 @@ test "wide: 已归档 one of the sidebar's lists, slid to: its rows under its fi
       m.name == "chat.archive" && text(Some(m.params), "session") == "s-a2" && field(Some(m.params), "archived") == Some(Json::boolean(false))
     }),
   )
-  // right clicked (held, by a finger: its keys never drawn for one), its menu: 恢复到列表 and 删除
-  let (x, y) = t.find("整理上个月的发票").unwrap()
+  // right clicked (held, by a finger: its keys never drawn for one), its menu: 恢复到列表 and 删除 (its row in the list,
+  // not the chat open beside it, titled the same in its bar)
+  let (x, y) = t.locate("整理上个月的发票").filter(fn(p) { p.0 < 300.0 })[0]
   t.right_click(x, y)
   t.frame()
   assert_true(t.find("删除") is Some(_))
@@ -363,28 +390,30 @@ fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
   new_run()
   let base = fixture("home")
   let kept : Map[String, Json] = {}
+  // (told as `kept` changes, where the prefs set changes it)
+  let kept_told = @signals.signal(0)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match changed.get(name) {
         Some(v) => { value: Some(v), error: None, version: 1 }
         None if name == "prefs" =>
-          match (base.topic)(name, params).value {
-            Some(Object(m)) => {
+          match base.topic(name, params).get().snapshot() {
+            { value: Some(Object(m)), version, .. } => {
               let p = m.copy()
               p["trouble"] = Json::object(kept)
-              { value: Some(Json::object(p)), error: None, version: 2 + kept.length() }
+              { value: Some(Json::object(p)), error: None, version: version + kept_told.get() }
             }
-            v => { value: v, error: None, version: 1 }
+            t => t
           }
-        None => (base.topic)(name, params)
+        None => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
       if name == "prefs.set" {
         match field(Some(params), "trouble") {
-          Some(Object(t)) =>
+          Some(Object(t)) => {
             for k, v in t {
               if v == Json::null() {
                 kept.remove(k)
@@ -392,6 +421,8 @@ fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
                 kept[k] = v
               }
             }
+            kept_told.set(kept_told.get() + 1)
+          }
           _ => ()
         }
       }
@@ -404,10 +435,10 @@ fn wide_with(calls : Array[Made], changed : Map[String, Json]) -> @ui.Tester {
 ///|
 /// The home fixture's chats of ws1 with what is wrong with its stations.
 fn chats_in_trouble() -> Json {
-  match (fixture("home").topic)("chats", { "scope": Json::string("ws1"), "mine": Json::boolean(false) }).value {
+  match fixture("home").topic("chats", { "scope": Json::string("ws1"), "mine": Json::boolean(false) }).get().value {
     Some(Object(m)) => {
       let v = m.copy()
-      v["trouble"] = { "text": "MBA 连不上了", "state": "error" }
+      v["trouble"] = { "text": "Maple 连不上了", "state": "error" }
       Json::object(v)
     }
     _ => Json::null()
@@ -419,14 +450,14 @@ test "wide: with the bell in the rail, the stations' trouble is in 待处理's p
   let calls : Array[Made] = []
   let t = wide_with(calls, { "chats": chats_in_trouble() })
   t.frame()
-  assert_true(t.find("MBA 连不上了") is None, msg="not in the lists' foot")
+  assert_true(t.find("Maple 连不上了") is None, msg="not in the lists' foot")
   let (bx, by, bw, bh) = t.query(Button, label="待处理").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   t.frame()
-  let (x, y) = t.find("MBA 连不上了").unwrap()
+  let (x, y) = t.find("Maple 连不上了").unwrap()
   // 10 past the bell
   assert_true(x >= bx + bw + 10.0, msg=x.to_string())
-  assert_eq(trouble_said(calls, "ws1\nseen"), Some(Json::string("MBA 连不上了")))
+  assert_eq(trouble_said(calls, "ws1\nseen"), Some(Json::string("Maple 连不上了")))
   // nothing to let it go with: looked at, it goes by itself
   t.move(x, y)
   t.frame()
@@ -435,7 +466,7 @@ test "wide: with the bell in the rail, the stations' trouble is in 待处理's p
   t.frame()
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   t.frame()
-  assert_true(t.find("MBA 连不上了") is None, msg="looked at")
+  assert_true(t.find("Maple 连不上了") is None, msg="looked at")
   assert_true(t.find("暂无待处理") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
 
@@ -493,7 +524,7 @@ test "wide: 待处理's panel lists a chat that waits on the viewer; 忽略 on i
   let (bx, by, bw, bh) = t.query(Button, label="待处理").unwrap().rect
   t.tap(bx + bw / 2.0, by + bh / 2.0)
   t.frame()
-  // one gone wrong is not let go from here (Attention.tsx: 忽略 for what waits on the viewer)
+  // one gone wrong is not let go from here
   let (ax, ay) = t.find("磁盘满了").unwrap()
   t.move(ax, ay)
   t.frame()
@@ -581,7 +612,7 @@ test "wide: shown a while, the page moves aside as far as what it shows is from 
   t.move(1000.0, 400.0)
   t.run_for(@ui.move_most_ms)
   // folded: what the page shows across (its bar left out), and where its field is
-  let (left, right) = t.ctx().shown_across(t.ctx().id("main-page"), but="page-bar").unwrap()
+  let (left, right) = t.ctx().shown_across(@sfdesk.pane_page_id(), but="page-bar").unwrap()
   let (x0, _, _, _) = t.rect_of("发消息").unwrap()
   // the pointer on the bar: shown a while, the page moved aside as far as that needs, no further than the room on its
   // right or the sidebar's width
@@ -686,6 +717,172 @@ test "wide, the window's buttons in the app's top row: the sidebar shown a while
 }
 
 ///|
+test "wide: a build becoming ready between frames offers to restart without another interaction" {
+  let t = wide_tester([], mode="chat")
+  t.check_looks(false)
+  t.set_frame_period(t.period)
+  t.run_for(@ui.move_most_ms)
+  let sent = Ref(false)
+  t.between_frames(fn() {
+    if !sent.val {
+      sent.val = true
+      @sffixture.fixture_update("0.1.9999")
+      @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+    }
+  })
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="重启更新") is Some(_), msg="the ready update in the sidebar")
+}
+
+///|
+test "wide: a ready update remains available when the files sidebar is shown" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="重启更新") is Some(_))
+  t.click(Button, label="文件")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="重启更新") is Some(_), msg="the ready update in the files sidebar")
+}
+
+///|
+test "wide: the files sidebar's update stays in place as it starts to float" {
+  let t = wide_tester([], mode="chat", window_corner=16.0, window_inset=true)
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+  t.click(Button, label="文件")
+  t.run_for(@ui.move_most_ms)
+  let update_at = fn() {
+    let (x, y, _, _) = t.query(Button, label="重启更新").unwrap().rect
+    (x, y)
+  }
+  let open = update_at()
+  let (x, y, w, h) = t.query(Button, label="文件").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_true(@sfdesk.wide.folded.get() && @sfdesk.wide.peeking.get())
+  let start = update_at()
+  assert_true((start.0 - open.0).abs() < 0.5 && (start.1 - open.1).abs() < 0.5, msg="open \{open}, floating starts \{start}")
+}
+
+///|
+test "wide: the update is also offered in the stations, profiles and settings sidebars" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+  let pages : Array[Page] = [Place("stations"), Place("profiles"), Settings]
+  for page in pages {
+    app.nav.replace(page)
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.query(Button, label="重启更新") is Some(_), msg="the ready update at \{@sfbase.page_kind(page)}")
+  }
+}
+
+///|
+test "wide: the settings list stays in place as a download starts" {
+  let t = screen_in("settings-about", ("wide", 1280.0, 800.0, 0, ""), "zh")
+  @sfbase.update_reset()
+  t.run_for(@ui.move_most_ms)
+  let side_names = fn() { t.words().filter(fn(w) { w.0 == "林" && w.1 < 300.0 }) }
+  let before = side_names()
+  assert_eq(before.length(), 1)
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40, away=false)
+  t.run_for(@ui.move_most_ms)
+  let after = side_names()
+  assert_eq(after.length(), 1)
+  assert_eq((after[0].1, after[0].2), (before[0].1, before[0].2))
+}
+
+///|
+test "an update in each sidebar keeps its corner and press room on medium and large screens" {
+  for win in [
+    ("touch", 600.0, 900.0, 2, "medium"),
+    ("desk", 600.0, 760.0, 0, ""),
+    ("desk-win", 600.0, 760.0, 3, ""),
+    ("tablet", 840.0, 900.0, 2, "expanded"),
+    ("wide", 1280.0, 800.0, 0, ""),
+  ] {
+    for mode in ["settings-about", "files", "place-stations", "place-profiles"] {
+      let t = screen_in(mode, win, "zh")
+      if mode != "settings-about" {
+        @sffixture.fixture_update("0.1.9999")
+        @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40, away=false)
+        t.run_for(@ui.move_most_ms)
+      }
+      let corners = t.corner_faults()
+      assert_true(corners.is_empty(), msg="\{win.0} \{mode}: \{corners}")
+      let rooms = t.room_faults().filter(fn(f) { f.contains("正在下载") })
+      assert_true(rooms.is_empty(), msg="\{win.0} \{mode}: \{rooms}")
+    }
+  }
+}
+
+///|
+test "wide: a downloading update shows its progress where restart will be offered" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40, away=false)
+  t.run_for(@ui.move_most_ms)
+  let downloading = t.query(Button, label="正在下载 0.1.9999")
+  assert_true(downloading is Some(_), msg="the update's download in the sidebar")
+  let before = downloading.unwrap().rect
+  let (x, y, w, h) = before
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(@sf.tip_delay_ms * 2.0)
+  assert_true(t.find("正在下载 0.1.9999 · 40% · 22.4 MB") is Some(_), msg="the download's progress in its tip")
+  t.click(Button, label="正在下载 0.1.9999")
+  t.run_for(@kit.dialog_ms)
+  assert_true(t.find("正在下载 0.1.9999 · 40% · 22.4 MB") is Some(_), msg="the download's details")
+  // The release notes also contain 关闭; choose the button's exact words, not that substring in the notes.
+  let close = t.words().filter(fn(w) { w.0 == "关闭" })
+  assert_eq(close.length(), 1)
+  let (_, cx, cy, cw, ch, _) = close[0]
+  t.tap(cx + cw / 2.0, cy + ch / 2.0)
+  assert_false(@sfbase.update_dialog_open())
+  t.run_for(@ui.move_most_ms)
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.query(Button, label="重启更新").unwrap().rect, before)
+}
+
+///|
+test "wide: a download of unknown length is still shown" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "downloading", away=false)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="正在下载 0.1.9999") is Some(_))
+}
+
+///|
+test "wide: a downloading update's ring sits in the middle of its key, as the filter's mark does" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40, away=false)
+  t.run_for(@ui.move_most_ms)
+  let (x, y, w, h) = t.query(Button, label="正在下载 0.1.9999").unwrap().rect
+  // the ring's pieces drawn within the key: as far from its middle on every side
+  let ring = t.drawn_lines().filter(fn(l) { l.0 >= x && l.0 <= x + w && l.1 >= y && l.1 <= y + h })
+  assert_true(ring.length() > 0, msg="the ring drawn in the key")
+  let mut left = x + w
+  let mut top = y + h
+  let mut right = x
+  let mut bottom = y
+  for l in ring {
+    left = dmin(left, dmin(l.0, l.2))
+    right = dmax(right, dmax(l.0, l.2))
+    top = dmin(top, dmin(l.1, l.3))
+    bottom = dmax(bottom, dmax(l.1, l.3))
+  }
+  let (mx, my) = ((left + right) / 2.0, (top + bottom) / 2.0)
+  assert_true(
+    (mx - (x + w / 2.0)).abs() < 0.5 && (my - (y + h / 2.0)).abs() < 0.5,
+    msg="the ring's middle \{(mx, my)}, the key's \{(x + w / 2.0, y + h / 2.0)}",
+  )
+}
+
+///|
 test "wide: a newer build of the desktop app ready: 重启更新 the update key in the sidebar's first row before the filter, as large as it; folded, past the rail, the page bar's start clear of it" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
@@ -710,6 +907,41 @@ test "wide: a newer build of the desktop app ready: 重启更新 the update key 
   t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.peeking.get())
   assert_eq(@sfdesk.wide.bar_pl, @sfdesk.bar_in)
+}
+
+///|
+test "wide: 重启更新 a mark alone, its tip as the pointer rests on it says what it does in every state it shows in: to which build; while still.fail cloud is asked first, that (the key staying); while it goes in, that" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  @sffixture.fixture_update("0.1.9999")
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+  t.frame()
+  t.run_for(@ui.move_most_ms)
+  let said = fn(s : String) { t.words().filter(fn(w) { w.0.contains(s) && w.5 > 0.5 }) }
+  assert_eq(said("重启以更新到 0.1.9999").length(), 0)
+  let (x, y, w, h) = t.query(Button, label="重启更新").unwrap().rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(@sf.tip_delay_ms * 2.0)
+  let tip = said("重启以更新到 0.1.9999")
+  assert_eq(tip.length(), 1, msg="its tip: \{t.words().map(fn(w) { w.0 }).join("|")}")
+  // under the key, in the window
+  assert_true(tip[0].2 >= y + h, msg="\{tip[0]} under \{y + h}")
+  assert_true(tip[0].1 >= 0.0, msg="\{tip[0]}")
+  // pressed, still.fail cloud asked first: the key stays, under way, said so
+  @sfbase.update.checking.set(true)
+  t.frame()
+  t.run_for(@sf.tip_delay_ms * 2.0)
+  let checking = t.query(Button, label="正在检查最新版本")
+  assert_true(checking is Some(_), msg="the key while it asks")
+  assert_true(checking.unwrap().disabled)
+  assert_eq(said("正在检查最新版本").length(), 1, msg="\{t.words().map(fn(w) { w.0 }).join("|")}")
+  @sfbase.update.checking.set(false)
+  // going in
+  t.tells_update("{\"phase\":\"installing\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-beta-0.1.9999.apk\"}")
+  t.frame()
+  t.run_for(@sf.tip_delay_ms * 2.0)
+  assert_true(t.query(Button, label="正在重启").unwrap().disabled)
+  assert_eq(said("正在安装 0.1.9999").length(), 1, msg="\{t.words().map(fn(w) { w.0 }).join("|")}")
 }
 
 ///|
@@ -807,11 +1039,11 @@ test "wide: Station's page picked in one workspace: in another, that one's first
   // (the second workspace's own station: the fixture's list is the first's)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       match (name, params.get("scope")) {
         ("stations", Some(String("ws2"))) =>
-          match ((base.topic)(name, { "scope": Json::string("ws1") }).value) {
+          match (base.topic(name, { "scope": Json::string("ws1") }).get().value) {
             Some(Array(list)) =>
               match list[0] {
                 Object(m) => {
@@ -819,7 +1051,7 @@ test "wide: Station's page picked in one workspace: in another, that one's first
                   s["station"] = Json::string("ws2/st9")
                   s["id"] = Json::string("st9")
                   s["name"] = Json::string("家里的 mini")
-                  topic_as_read(name, params, { ..t, value: Some(Json::array([Json::object(s)])) })
+                  { ..t, value: Some(Json::array([Json::object(s)])) }
                 }
                 _ => t
               }
@@ -836,7 +1068,7 @@ test "wide: Station's page picked in one workspace: in another, that one's first
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0)
   @sfbase.go_place("stations") |> ignore
   t.run_for(@ui.move_most_ms)
-  t.tap_text("MBA")
+  t.tap_text("Maple")
   t.run_for(@ui.move_most_ms)
   @sfpages.switch_workspace(src, "ws2")
   t.run_for(@ui.move_most_ms)
@@ -847,6 +1079,26 @@ test "wide: Station's page picked in one workspace: in another, that one's first
   // back in the first: the one picked there still
   @sfpages.switch_workspace(src, "ws1")
   t.run_for(@ui.move_most_ms)
-  let picked = t.words().filter(fn(w) { w.0 == "MBA" }).length()
+  let picked = t.words().filter(fn(w) { w.0 == "Maple" }).length()
   assert_true(picked >= 2, msg=t.words().map(fn(w) { w.0 }).join("|"))
+}
+
+///|
+test "wide: the update's three stages in the sidebar, the same key in the same place: 有新版本 (pressed, downloaded now), 正在下载, 重启更新" {
+  let t = wide_tester([], mode="chat")
+  @sffixture.fixture_updates()
+  @sffixture.fixture_update("0.1.9999")
+  t.run_for(@ui.move_most_ms)
+  let offered = t.query(Button, label="有新版本 0.1.9999")
+  assert_true(offered is Some(_), msg="the offered update in the sidebar")
+  let at = offered.unwrap().rect
+  t.click(Button, label="有新版本 0.1.9999")
+  assert_eq(t.update_asked().filter(fn(a) { a.has_suffix(" true") }).length(), 1)
+  @sffixture.fixture_update_goes("0.1.9999", "downloading", percent=40)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.query(Button, label="正在下载 0.1.9999").unwrap().rect, at)
+  @sffixture.fixture_update_goes("0.1.9999", "ready", away=false)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.query(Button, label="重启更新").unwrap().rect, at)
+  update_reset()
 }

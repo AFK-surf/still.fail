@@ -1,4 +1,4 @@
-// What the last update brought at Home's top (home_news.mbt; PageParts.kt ChangelogNews), over the fixture's Home with
+// What the last update brought at Home's top, over the fixture's Home with
 // the changelog's `news` said.
 
 ///|
@@ -8,7 +8,7 @@ fn news_home(calls : Array[String]) -> @ui.Tester {
   let base = fixture("home")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "changelog" {
         {
           value: Some({
@@ -26,7 +26,7 @@ fn news_home(calls : Array[String]) -> @ui.Tester {
           version: 1,
         }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {

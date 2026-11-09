@@ -11,16 +11,34 @@ holdLanguage();
 type J = any;
 
 const row = (day: string, person: string, thread: number, profile: string, model: string, calls: number, cost: number | null): J => ({
-  day, session: "ember:c-1", thread, person, profile, runtime: "claude", model, calls, input: 10 * calls, cacheRead: 90 * calls, cacheWrite: 0, output: calls, cost,
+  day, session: "chat:c-1", thread, person, profile, runtime: "claude", model, calls, input: 10 * calls, cacheRead: 90 * calls, cacheWrite: 0, output: calls, cost,
 });
 const station = (rows: J[]): J => ({
   since: 0, reading: false, rows,
-  threads: { "7": { title: "修登录", surface: "ember", home: "ember:c-1", archived: false }, "8": { title: "#ops", surface: "slack:T1", home: "ember:c-2", archived: true } },
+  threads: { "7": { title: "修登录", surface: "ember", home: "chat:c-1", archived: false }, "8": { title: "#ops", surface: "slack:T1", home: "chat:c-2", archived: true } },
   people: { "a@x": { id: "a@x", name: "a@x", email: "a@x", via: "cloud" }, "slack:ds:U1": { id: "slack:ds:U1", name: "阿一", email: "a@x", via: "slack" }, "b@x": { id: "b@x", name: "b@x", email: "b@x", via: "cloud" } },
   profiles: { cc: { name: "公司账号", runtime: "claude" } },
 });
 const NOW = 1_790_913_600_000;
 const ok = (v: J) => ({ ok: v });
+
+test("recent totals wait for every station even when one has already answered", () => {
+  const ready: Source = { address: "ws/a", name: "alpha", online: true,
+    value: ok(station([row("2026-10-02", "a@x", 7, "cc", "claude-opus-5-5", 1, 3)])) };
+  const pending: Source = { address: "ws/b", name: "beta", online: true,
+    value: ok({ ...station([]), detailsPreparing: true }) };
+  for (const sources of [[ready, pending], [pending, ready]]) {
+    const view = usageView(sources, 7, NOW, 480, {}, []);
+    assert.equal(view.detailsPreparing, true);
+    assert.equal(view.wait.reading, true);
+    assert.equal(view.empty, true, "incomplete totals cannot be shared as a whole");
+  }
+  const complete = usageView([ready, { ...pending, value: ok(station([])) }], 7, NOW, 480, {}, []);
+  assert.notEqual(complete.detailsPreparing, true);
+  assert.equal(complete.wait.reading, false);
+  assert.equal(complete.empty, false);
+  assert.equal(complete.tiles[0].value, "$3.00");
+});
 
 test("days_split_by_who_and_lists_ranked_by_cost", () => {
   assert.equal(localDay(NOW, 480), "2026-10-02");
@@ -49,7 +67,11 @@ test("days_split_by_who_and_lists_ranked_by_cost", () => {
   assert.deepEqual([people[0].title, people[0].shareText, people[0].person.shown.picture], ["阿一", "100%", "https://p/a"]);
   const chats = list(1);
   assert.deepEqual([chats[0].title, chats[0].chat], ["修登录", { station: "ws/st", thread: 7 }]);
-  assert.deepEqual([chats[1].sub, chats[1].chat], ["Slack · 已归档", { station: "ws/st", session: "ember:c-2" }]);
+  // each chat said with who it was for and its model, the most of each, then where it is
+  assert.deepEqual([chats[0].sub, chats[1].sub, chats[1].chat], ["阿一 · Opus 5.5", "阿一 · Opus 5.5 · Slack · 已归档", { station: "ws/st", session: "chat:c-2" }]);
+  // one person, one model: neither said of a chat, nor any list of one told apart
+  const one = usageView([{ address: "ws/st", name: "studio", online: true, value: ok(station([row("2026-10-02", "a@x", 7, "cc", "claude-opus-5-5", 10, 3.0)])) }], 7, NOW, 480, { id: "a@x", email: "a@x" }, []);
+  assert.deepEqual([one.lists[1].items[0].sub, one.lists.map((l: J) => l.parts.length)], [null, [0, 0, 0, 0]]);
   const profiles = list(2);
   assert.deepEqual([profiles[0].title, profiles[1].title], ["公司账号", "gone（已删除）"]);
   const models = list(3);
@@ -130,6 +152,24 @@ test("unknown_prices_are_not_shown_as_zero_and_tokens_stay_counted", () => {
   assert.ok("ok" in conform("UsageView", v));
 });
 
+test("days before one station began keeping detail are unavailable rather than zero or partial", () => {
+  const old = row("2026-09-30", "a@x", 7, "cc", "claude-opus-5-5", 2, 10);
+  const recent = row("2026-10-01", "a@x", 7, "cc", "claude-opus-5-5", 1, 2);
+  const today = row("2026-10-02", "a@x", 7, "cc", "claude-opus-5-5", 1, 3);
+  const sources: Source[] = [
+    { address: "ws/a", name: "a", online: true, value: ok({ ...station([today]), detailSince: NOW - 86_400_000 }) },
+    { address: "ws/b", name: "b", online: true, value: ok(station([old, recent])) },
+  ];
+  const v = usageView(sources, 7, NOW, 480, {}, []);
+  assert.deepEqual([v.daily[4].costText, v.daily[4].callsText, v.daily[4].cost], ["—", "—", 0]);
+  assert.deepEqual([v.daily[5].costText, v.daily[6].costText], ["$2.00", "$3.00"]);
+  assert.deepEqual([v.tiles[0].value, v.tiles[1].value], ["$5.00", "2 次"]);
+  assert.ok(v.notes.some((note: string) => note.includes("10 月 1 日")));
+  const earlier = usageView(sources, 7, NOW, 480, {}, [], { day: "2026-09-30" });
+  assert.ok(earlier.tiles.every((tile: J) => tile.value === "—"));
+  assert.equal(earlier.empty, false, "unavailable is not described as a period with no usage");
+});
+
 test("unknown_people_keep_their_usage_and_the_view_decodes", () => {
   for (const reference of [null, "missing@x"]) {
     const unknown = row("2026-10-02", "", 7, "cc", "gpt-6", 2, 3.0);
@@ -180,4 +220,76 @@ test("the_bars_scale_is_a_round_top_cut_in_two_or_three_steps_each_said_short", 
   // each step's line at its value: the last the top
   const s = scale(5351);
   assert.deepEqual(s.ticks.map((t) => t.value), [2000, 4000, 6000]);
+});
+
+test("each_total_said_against_the_days_before_as_many", () => {
+  const rows = [
+    row("2026-10-02", "a@x", 7, "cc", "claude-opus-5-5", 12, 6.0),
+    row("2026-09-30", "a@x", 7, "cc", "claude-opus-5-5", 10, 5.0),
+    row("2026-09-25", "a@x", 7, "cc", "claude-opus-5-5", 10, 4.0),
+    // (before the days before: in neither)
+    row("2026-09-10", "a@x", 7, "cc", "claude-opus-5-5", 500, 500.0),
+  ];
+  const read = (from: number, since = 0) => [{ address: "ws/st", name: "studio", online: true, value: ok({ ...station(rows), from, since }) }];
+  const v = usageView(read(NOW - 60 * 86_400_000), 7, NOW, 480, { id: "a@x", email: "a@x" }, []);
+  assert.deepEqual(v.tiles.map((x: J) => [x.change, x.trend]), [["↑175%", "up"], ["↑120%", "up"], ["↑120%", "up"], ["↑120%", "up"]]);
+  assert.deepEqual([v.versus, v.period], ["比前 7 天", "近 7 天"]);
+  // read only from within the days before (an older core's 30 days for 30), or recorded only since then: none said
+  assert.equal(usageView(read(NOW - 10 * 86_400_000), 7, NOW, 480, { id: "a@x", email: "a@x" }, []).tiles[0].change, null);
+  assert.equal(usageView(read(NOW - 60 * 86_400_000, NOW - 10 * 86_400_000), 7, NOW, 480, { id: "a@x", email: "a@x" }, []).tiles[0].change, null);
+  // nothing spent before: none
+  const fresh = [{ address: "ws/st", name: "studio", online: true, value: ok({ ...station(rows.slice(0, 2)), from: NOW - 60 * 86_400_000 }) }];
+  assert.equal(usageView(fresh, 7, NOW, 480, { id: "a@x", email: "a@x" }, []).tiles[0].change, null);
+  assert.ok("ok" in conform("UsageView", v));
+});
+
+test("the_days_split_by_the_list_picked_and_one_seen_alone", () => {
+  const rows = [
+    row("2026-10-02", "a@x", 7, "cc", "claude-opus-5-5", 10, 3.0),
+    row("2026-10-02", "a@x", 8, "cc", "claude-sonnet-5", 4, 1.0),
+    row("2026-10-01", "b@x", 7, "cc", "claude-sonnet-5", 2, 2.0),
+  ];
+  const sources: Source[] = [{ address: "ws/st", name: "studio", online: true, value: ok(station(rows)) }];
+  const me = { id: "a@x", email: "a@x" };
+  // several people: split by them; asked, by the models
+  assert.equal(usageView(sources, 7, NOW, 480, me, []).split, "people");
+  const byModel = usageView(sources, 7, NOW, 480, me, [], { split: "models" });
+  assert.deepEqual([byModel.split, byModel.series.map((s: J) => s.name), byModel.daily[6].parts], ["models", ["Opus 5.5", "Sonnet 5"], [3, 1]]);
+  // one person alone: only their calls, the days split by their models (one person: the models' by default)
+  const alone = usageView(sources, 7, NOW, 480, me, [], { only: { list: "people", key: "b@x" } });
+  assert.deepEqual([alone.only, alone.split, alone.tiles[1].value, alone.lists[0].items.length], [{ list: "people", key: "b@x", title: "b@x" }, "models", "2 次", 1]);
+  // a model alone, and a list that cannot be (a chat opens instead)
+  assert.equal(usageView(sources, 7, NOW, 480, me, [], { only: { list: "models", key: "claude-sonnet-5" } }).tiles[1].value, "6 次");
+  assert.equal(usageView(sources, 7, NOW, 480, me, [], { only: { list: "chats", key: "ws/st/7" } }).only, null);
+  assert.ok("ok" in conform("UsageView", alone));
+});
+
+test("a_day_picked_the_lists_parts_and_each_allowance_beside_what_it_spent", () => {
+  const rows = [
+    row("2026-10-02", "a@x", 7, "cc", "claude-opus-5-5", 10, 3.0),
+    row("2026-10-01", "b@x", 7, "cc", "claude-sonnet-5", 2, 2.0),
+    row("2026-10-01", "b@x", 8, "kimi", "kimi-k3", 1, 0.5),
+    row("2026-09-30", "c@x", 8, "kimi", "gpt-6", 1, 0.25),
+    row("2026-09-29", "d@x", 8, "kimi", "gpt-6", 1, 0.125),
+  ];
+  const sources: Source[] = [{ address: "ws/st", name: "studio", online: true, value: ok(station(rows)) }];
+  const me = { id: "a@x", email: "a@x" };
+  // a day picked: the days' bars all of them, the rest of that day alone, against nothing
+  const day = usageView(sources, 7, NOW, 480, me, [], { day: "2026-10-01" });
+  assert.deepEqual([day.day, day.period, day.tiles[0].value, day.tiles[0].change, day.daily[6].cost], ["2026-10-01", "10/1", "$2.50", null, 3]);
+  assert.equal(usageView(sources, 7, NOW, 480, me, [], { day: "2025-01-01" }).day, null);
+  // a list's first three and the rest
+  const v = usageView(sources, 7, NOW, 480, me, []);
+  assert.deepEqual(v.lists[0].parts.map((p: J) => [p.key, p.title, p.costText]), [["a@x", "你", "$3.00"], ["b@x", "b@x", "$2.50"], ["c@x", "未知用户", "$0.25"], ["d@x", "未知用户", "$0.13"]]);
+  const five = usageView([{ address: "ws/st", name: "studio", online: true, value: ok(station([...rows, row("2026-09-29", "e@x", 8, "kimi", "gpt-6", 1, 0.125)])) }], 7, NOW, 480, me, []);
+  assert.deepEqual(five.lists[0].parts.map((p: J) => [p.key, p.title, p.costText]), [["a@x", "你", "$3.00"], ["b@x", "b@x", "$2.50"], ["c@x", "未知用户", "$0.25"], ["", "其他", "$0.25"]]);
+  // a subscription with an allowance, what its copies spent beside it; one without, none
+  const quota = { state: "ok", windows: [{ label: "5h", usedPercent: 40, mark: "5H", left: 60, level: "ok", checkedAt: 0 }], checkedAt: 0 };
+  const accounts = [
+    { key: "a@claude", title: "a@claude", profile: { quota }, members: [{ station: "ws/st", profileId: "cc" }] },
+    { key: "kimi", title: "Kimi", profile: { quota: { state: "unsupported", windows: [], checkedAt: 0 } }, members: [{ station: "ws/st", profileId: "kimi" }] },
+  ];
+  const with_ = usageView(sources, 7, NOW, 480, me, [], {}, accounts);
+  assert.deepEqual(with_.accounts.map((a: J) => [a.key, a.costText, a.quota.windows[0].left]), [["a@claude", "$5.00", 60]]);
+  assert.ok("ok" in conform("UsageView", with_));
 });

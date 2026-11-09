@@ -1,4 +1,4 @@
-// The apps' accessibility trees on the desktop (docs/remote-screens.md, "Agents on a screen"): agent-desktop
+// The apps' accessibility trees on the desktop ("Agents on a screen"): agent-desktop
 // (vercel-labs/agent-desktop, Apache-2.0) reads an app's window as a tree of elements, each acted on by its ref through
 // the accessibility API, without the pointer or the keyboard focus (its "headless" delivery). It runs where the
 // desktop's apps are and with what they were granted: on macOS in still.fail Helper (its `ui` op, which macOS's

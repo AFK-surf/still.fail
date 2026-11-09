@@ -1,0 +1,11 @@
+# A preset deleted from its dialog (sf presenters.mbt scrim_owner, pushed_look): 删除 asks 删除预设？ over it, and its
+# 删除 says it: the confirm and the dialog both go. MBUI_FIXTURE=newchat-preset-edit; a phone's window
+# (MBUI_FILM_PLATFORM=2) or, with MBUI_WIN=1280x800 MBUI_FILM_PLATFORM=0, a wide one.
+timeout 20000
+until 名字
+wait 800
+tap 删除
+wait 1000
+tap 删除
+wait 1500
+exit

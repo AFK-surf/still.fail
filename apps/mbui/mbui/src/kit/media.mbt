@@ -10,18 +10,19 @@
 ///|
 /// What is played: its name, its media type, whether it is known to be a song, and how its bytes are read
 /// (`read(offset, length, answer)`: `answer(bytes, total, more)` as they come, what it gives back stopping it, as
-/// `@ui.NativeView::video` reads).
+/// `@ui.NativeView::video` reads), and how a host may read them itself (its `direct`; "": none).
 pub(all) struct MediaTrack {
   name : String
   mime : String
   audio : Bool
   read : (Double, Int, (Bytes, Double, Bool) -> Unit) -> () -> Unit
+  direct : String
 }
 
 ///|
 /// How a player stands, as its view says (or pinned, for a fixture's shot).
 pub(all) struct MediaStatus {
-  /// -1 failed, 0 opening, 1 ready
+  /// -1 failed, -2 unsupported format, -3 damaged file, -4 unsupported or damaged, 0 opening, 1 ready
   state : Int
   duration : Double
   position : Double
@@ -41,7 +42,7 @@ pub fn media_status(n : @ui.NativeView?) -> MediaStatus {
     Some(n) => {
       let (w, h) = n.natural()
       {
-        state: n.state(),
+        state: if n.state() == 2 { 0 } else { n.state() },
         duration: n.duration(),
         position: n.position(),
         buffered: n.buffered(),
@@ -119,6 +120,8 @@ pub struct Media {
   priv wait_ms : Double
   priv mut track : MediaTrack?
   priv mut view : @ui.NativeView?
+  /// Whether the current first-frame wait has expired.
+  priv mut decode_failed : Bool
   priv mut start_at : Double
   priv mut started : Bool
   /// the place it opens at, owed to the player once the frame's builds are over (Media::frame)
@@ -128,15 +131,14 @@ pub struct Media {
   priv mut subtitle : Bool
   priv mut cues : Array[@codec.Cue]
   priv mut fill : Bool
-  priv mut sideways : Bool
+  // (turned sideways or not, as it is told: what reads it follows it, a frame round the player laid out by it)
+  priv sideways : @signals.Signal[Bool]
   priv mut awake : Bool
   /// a mouse's pointer over where its controls or its bar are (Media::near): they show while it is
   priv mut near : Bool
   priv mut poke : Int
   priv mut rest_key : String
   priv mut note : MediaNote?
-  /// a tap waiting to be a single one (for double_tap_ms)
-  priv mut tap_waiting : Bool
   /// where the timeline is dragged to (ms); -1: it is not
   priv mut scrub : Double
   /// where the player was last sent while it is dragged (ms; -1: not yet), whether it played when the finger came
@@ -155,7 +157,7 @@ pub struct Media {
 }
 
 ///|
-/// How long a player's controls stay left alone while it plays (Player.kt's 2.5 s), a note a double tap said is said
+/// How long a player's controls stay left alone while it plays, a note a double tap said is said
 /// (0.8 s), its controls take to come as they are woken (0.12 s) and to fade as they rest (0.32 s, both on the
 /// ease-out: still.fail's, viewer/media.css.ts): Media::new's, unless said otherwise.
 pub let media_rest_ms : Double = 2500.0
@@ -168,6 +170,48 @@ pub let media_wake_ms : Double = 120.0
 
 ///|
 pub let media_sleep_ms : Double = 320.0
+
+///|
+/// How long to give a system decoder after it has received the whole file but shown no first frame.
+pub let media_decode_wait_ms : Double = 20000.0
+
+///|
+/// Whether a player has waited for its first frame long enough after all bytes were delivered. The host reports when
+/// that happened; the app's clock schedules the decision, including when no frames were drawn in between.
+pub fn media_decode_stalled(c : @ui.Ctx, view : @ui.NativeView?) -> Bool {
+  match view {
+    Some(n) if n.state() == 2 && n.decode_since() >= 0.0 => {
+      let left = n.decode_since() + media_decode_wait_ms - c.moment()
+      if left <= 0.0 {
+        true
+      } else {
+        c.wake_in(left)
+        false
+      }
+    }
+    _ => false
+  }
+}
+
+///|
+/// How long a frame asked of a player is waited for, its read and its seek together.
+pub let media_grab_wait_ms : Double = 10000.0
+
+///|
+/// Whether the frame asked of `n` has been waited for long enough. A system player may never end a seek, with nothing
+/// said; only the app's clock can tell a grab like that from one still on its way.
+pub fn media_grab_stalled(c : @ui.Ctx, n : @ui.NativeView) -> Bool {
+  if n.grab_since() < 0.0 {
+    return false
+  }
+  let left = n.grab_since() + media_grab_wait_ms - c.moment()
+  if left <= 0.0 {
+    true
+  } else {
+    c.wake_in(left)
+    false
+  }
+}
 
 ///|
 /// A player with nothing in it yet. Its ways, as Player.kt's: the speeds a tap steps through, what a double tap on a
@@ -197,6 +241,7 @@ pub fn Media::new(
     wait_ms,
     track: None,
     view: None,
+    decode_failed: false,
     start_at: 0.0,
     started: false,
     seek_owed: false,
@@ -205,13 +250,12 @@ pub fn Media::new(
     subtitle: false,
     cues: [],
     fill: false,
-    sideways: false,
+    sideways: @signals.signal(false, same=fn(a, b) { a == b }),
     awake: true,
     near: false,
     poke: 0,
     rest_key: "",
     note: None,
-    tap_waiting: false,
     scrub: -1.0,
     scrub_sent: -1.0,
     scrub_played: false,
@@ -229,7 +273,8 @@ pub fn Media::new(
 /// `track` played from `start` ms in (0: its start), at the speed chosen; what played before stops.
 pub fn Media::open(self : Media, track : MediaTrack, start? : Double = 0.0) -> Unit {
   self.close_view()
-  let n = @ui.NativeView::video(track.mime, track.read)
+  self.decode_failed = false
+  let n = @ui.NativeView::video(track.mime, track.read, direct=track.direct)
   if self.speed != 1.0 {
     n.rate(self.speed)
   }
@@ -297,7 +342,14 @@ pub fn Media::pin(self : Media, s : MediaStatus) -> Unit {
 pub fn Media::status(self : Media) -> MediaStatus {
   match self.pinned {
     Some(s) => s
-    None => media_status(self.view)
+    None => {
+      let s = media_status(self.view)
+      if self.decode_failed && self.view is Some(n) && n.state() == 2 {
+        { ..s, state: -4 }
+      } else {
+        s
+      }
+    }
   }
 }
 
@@ -340,14 +392,14 @@ pub fn Media::started(self : Media) -> Bool {
 ///|
 /// Whether it is sideways (back turns it upright first).
 pub fn Media::is_sideways(self : Media) -> Bool {
-  self.sideways
+  self.sideways.get()
 }
 
 ///|
 /// Upright again (back while sideways).
 pub fn Media::upright(self : Media) -> Unit {
-  if self.sideways {
-    self.sideways = false
+  if self.sideways.untracked() {
+    self.sideways.set(false)
     @hostapi.set_sideways(false)
   }
 }
@@ -382,7 +434,7 @@ pub fn Media::scrubbing(self : Media) -> Double? {
 
 ///|
 fn Media::phase(self : Media, s : MediaStatus) -> MediaPhase {
-  if s.state == -1 {
+  if s.state < 0 {
     Failed
   } else if !self.started {
     Opening
@@ -566,8 +618,9 @@ pub fn Media::toggle_fill(self : Media) -> Unit {
 ///|
 /// Turned sideways, or upright again.
 pub fn Media::toggle_sideways(self : Media) -> Unit {
-  self.sideways = !self.sideways
-  @hostapi.set_sideways(self.sideways)
+  let on = !self.sideways.untracked()
+  self.sideways.set(on)
+  @hostapi.set_sideways(on)
 }
 
 ///|
@@ -576,6 +629,9 @@ pub fn Media::toggle_sideways(self : Media) -> Unit {
 /// a tap left single after `double_tap_ms` bringing them or taking them away, a note said `note_ms`.
 pub fn Media::frame(self : Media, c : @ui.Ctx) -> MediaFrame {
   let p = self
+  if p.pinned is None && !p.decode_failed && media_decode_stalled(c, p.view) {
+    p.decode_failed = true
+  }
   let s = p.status()
   let name = match p.track {
     Some(t) => t.name
@@ -628,15 +684,6 @@ pub fn Media::frame(self : Media, c : @ui.Ctx) -> MediaFrame {
   // what it waits on said only once it has waited wait_ms, with how fast its bytes come meanwhile
   let waited = after(c, p.key + "/wait", phase is (Opening | Buffering), p.wait_ms)
   let rate = p.rate_now(c, phase is (Opening | Buffering))
-  // a tap left single: the controls shown or hidden
-  if p.tap_waiting && after(c, p.key + "/tap", true, p.double_tap_ms) {
-    p.tap_waiting = false
-    if p.awake && phase == Playing {
-      p.awake = false
-    } else {
-      p.wake()
-    }
-  }
   let target = if p.awake || p.near || phase != Playing || audio { 1.0 } else { 0.0 }
   let shown = @motion.animate(c, p.key + "/shown", target, spec=@motion.tween(
       if target > 0.0 {
@@ -691,29 +738,37 @@ fn Media::rate_now(self : Media, c : @ui.Ctx, waiting : Bool) -> Double {
 pub fn Media::stage(self : Media, c : @ui.Ctx, id : Int, w : Double) -> Unit {
   // (a ground, not a control: Ctx::cursor)
   c.cursor(id, Arrow)
-  if !c.clicked(id) {
-    return
-  }
-  let (x, _, _) = c.pointer()
-  if !self.tap_waiting {
-    self.tap_waiting = true
-    restart(c, self.key + "/tap", self.double_tap_ms)
-    return
-  }
-  self.tap_waiting = false
-  let third = w / 3.0
-  if x < third {
-    self.seek_by(-self.nudge_ms)
-    self.note = Some(Back(self.nudge_ms))
-  } else if x > third * 2.0 {
-    self.seek_by(self.nudge_ms)
-    self.note = Some(Ahead(self.nudge_ms))
-  } else {
-    let was = self.status().playing
-    self.play_pause()
-    self.note = Some(if was { Paused } else { Played })
-  }
-  restart(c, self.key + "/note", self.note_ms)
+  // (the moment a tap on it is left single: declared by the first, under this player's key)
+  let single = self.key + "/tap-single"
+  c.on_press(id, fn() {
+    // a second within double_tap_ms of the first: the first's moment called off, a double one where it is let go
+    if c.call_off(single) {
+      let (x, _, _) = c.pointer()
+      let third = w / 3.0
+      if x < third {
+        self.seek_by(-self.nudge_ms)
+        self.note = Some(Back(self.nudge_ms))
+      } else if x > third * 2.0 {
+        self.seek_by(self.nudge_ms)
+        self.note = Some(Ahead(self.nudge_ms))
+      } else {
+        let was = self.status().playing
+        self.play_pause()
+        self.note = Some(if was { Paused } else { Played })
+      }
+      restart(c, self.key + "/note", self.note_ms)
+    } else {
+      // the first: left single once double_tap_ms has gone from it with no second (its moment the tap's: Ctx::moment),
+      // the controls shown or hidden
+      c.at_moment(single, c.moment() + self.double_tap_ms, fn() {
+        if self.awake && self.phase(self.status()) == Playing {
+          self.awake = false
+        } else {
+          self.wake()
+        }
+      })
+    }
+  })
 }
 
 ///|
@@ -762,14 +817,20 @@ pub fn Media::timeline(
       _ => ()
     }
     self.scrub_done()
-  } else if on && c.clicked(id) {
-    match under() {
-      Some(ms) => {
-        self.seek_near(ms)
-        self.wake()
+  }
+  // tapped (let go with no frame having seen it held, so not dragged): there at once, as it is let go
+  if on {
+    c.on_press(id, fn() {
+      if self.scrub < 0.0 {
+        match under() {
+          Some(ms) => {
+            self.seek_near(ms)
+            self.wake()
+          }
+          None => ()
+        }
       }
-      None => ()
-    }
+    })
   }
 }
 
@@ -835,7 +896,7 @@ pub fn Media::picture_rect(self : Media, s : MediaStatus, bw : Double, bh : Doub
   if s.width > 0.0 && s.height > 0.0 {
     let kx = bw / s.width
     let ky = bh / s.height
-    let k = if self.fill && self.sideways {
+    let k = if self.fill && self.sideways.get() {
       if kx > ky {
         kx
       } else {

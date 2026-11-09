@@ -1,9 +1,10 @@
-// What a person hears about while a client runs (notices.rs; the `notices` topic, docs/notifications.md): a chat of
+// What a person hears about while a client runs (the `notices` topic): a chat of
 // theirs whose agent is blocked on them, went wrong, or finished with something new to read, or where someone else
 // said something, or where a card newly waits for them. Noticed from the chat rows the core holds (what the sync keeps
 // current), by how each row changed in a write (db/account.ts says each row before and after): looked at as they change
 // (rule 2), never polled, and never all of them. A station's first rows are where it starts from. Each workspace hears
 // of its own.
+import { Marks } from "./reactive.ts";
 import * as decisions from "./decisions.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
@@ -12,6 +13,7 @@ import { encode } from "./ops.ts";
 import * as present from "./present.ts";
 import { arr as arrU, get as getU } from "./util.ts";
 import type { Workspace, Workspaces } from "./workspace.ts";
+import { isStationAuthor } from "./titles.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -44,6 +46,8 @@ export type NoticesEnv = {
 
 export class Notices {
   readonly #env: NoticesEnv;
+  /// What reads the notices (`value`) is made again as new ones are noticed.
+  readonly #seen = new Marks();
 
   constructor(env: NoticesEnv) {
     this.#env = env;
@@ -55,6 +59,7 @@ export class Notices {
 
   /// A workspace's notices; with none given, every workspace's, the latest KEEP.
   value(workspace: string | null): J {
+    this.#seen.read();
     if (workspace !== null) {
       const w = this.#env.workspaces.get(workspace);
       return { items: w ? structuredClone(this.#heard(w).items) : [] };
@@ -106,8 +111,9 @@ export class Notices {
       if (first) continue;
       const found = noticed(row, old, me, slackUsers, members);
       if (found !== null && found[0] === "block") next.told = needSeq(row);
-      if (found !== null) added.push(this.#add(its, station, row, found[0], found[1], found[0] === "wait" ? next.decision : next.seq));
+      if (found !== null && get(row, "muted") !== true) added.push(this.#add(its, station, row, found[0], found[1], found[0] === "wait" ? next.decision : next.seq));
     }
+    if (added.length > 0) this.#seen.touch();
     return added;
   }
 
@@ -177,7 +183,7 @@ function noticed(row: J, thenSeen: Seen | undefined, me: J, slackUsers: string[]
   if (text === "" && hasLast) text = t("core-misc.notice.file");
   const byName = typeof get(by, "name") === "string" ? by.name : "";
   // Blocked on what it asks that waits for them and was not told yet: not on an ask told before (woken by a job between,
-  // it ends blocked on it again), nor on one answered since (nothing waits for them, as 奏 shows nothing).
+  // it ends blocked on it again), nor on one answered since (nothing waits for them).
   if (now.state === "block" && card === null && now.told !== null && now.told !== then.told) {
     let need: string | null = null;
     for (const a of arr(get(row, "agents"))) {
@@ -192,7 +198,11 @@ function noticed(row: J, thenSeen: Seen | undefined, me: J, slackUsers: string[]
   }
   const fresh = now.seq > then.seq;
   const kind = get(by, "kind");
-  if (fresh && (kind === "ember" || kind === "stillfail") && text.startsWith("⚠️")) return ["failed", body("failed", "", text.slice("⚠️".length).trim())];
+  // A failure's first paragraph: what it means (what failed said, under it, is for the chat).
+  if (fresh && isStationAuthor(kind) && text.startsWith("⚠️")) {
+    const first = format.cleanText(format.plainText(String(last.text).split("\n\n")[0]!));
+    return ["failed", body("failed", "", first.slice("⚠️".length).trim())];
+  }
   const unread = get(row, "unread") === true;
   if (!unread || !(fresh || then.pending) || mine || now.state === "run" || !hasLast) return null;
   const k = kind === "agent" ? "done" : kind === "person" ? "message" : null;

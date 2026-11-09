@@ -4,6 +4,7 @@
 // has is the key.
 import zhStation from "../../../client/i18n/catalog/zh/station.json" with { type: "json" };
 import enStation from "../../../client/i18n/catalog/en/station.json" with { type: "json" };
+import { branded, productOf, STILLFAIL, type Product } from "../../../client/i18n/brand.ts";
 
 export type Lang = "zh" | "en";
 type Words = Record<string, string | { one?: string; other: string }>;
@@ -22,13 +23,18 @@ let station: Lang = "zh";
 export const setStationLang = (language: string | null | undefined) => (station = langOf(language));
 export const stationLang = () => station;
 
+let product: Product = STILLFAIL;
+/// The cloud the station is enrolled in (cloud.json `origin`): its product's name in what the station says
+/// (client/i18n/brand.ts; monoid's station says monoid).
+export const setStationCloud = (origin: string | null | undefined) => (product = origin ? productOf(origin) : STILLFAIL);
+
 export function tr(lang: Lang, key: string, args: Record<string, unknown> = {}): string {
   const found = (lang === "en" ? EN : ZH)[key] ?? ZH[key];
   let text: string;
   if (typeof found === "string") text = found;
   else if (found) text = ("n" in args && String(args.n).trim() === "1" ? found.one : found.other) ?? found.other ?? key;
   else text = key;
-  return fill(text, args);
+  return fill(branded(text, product), args);
 }
 
 /// `{name}` filled; one not given, and a `{` that opens no name, left as they are.
@@ -36,3 +42,7 @@ function fill(text: string, args: Record<string, unknown>): string {
   if (Object.keys(args).length === 0 || !text.includes("{")) return text;
   return text.replace(/\{([A-Za-z0-9_]*)\}/g, (all, name) => (name in args ? String(args[name]) : all));
 }
+
+/// A failure whose message is for people, in their language (made with `tr`): said to them as it is. What any other
+/// error says (a process, the network, the OS) is for the logs and reports, and people are told what it means instead.
+export class Said extends Error {}

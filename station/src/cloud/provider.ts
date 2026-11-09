@@ -1,5 +1,5 @@
 // Which control plane a station is enrolled in, and how each one is spoken to: still.fail cloud (the default, as it
-// always was) or Comma (docs/cloud.md, "Control planes"). Only names, paths and signing tags differ; the scheme is one:
+// always was) or Comma ("Control planes"). Only names, paths and signing tags differ; the scheme is one:
 // Ed25519 over "<tag>:<origin>:<station>:<ts>[:<sha256 of the body>]" with the station's key, in x-<prefix>-* headers.
 // cloud.json says which (`provider`, absent: still.fail).
 
@@ -19,16 +19,15 @@ export type ProviderSpec = {
   readonly enrollPath: string;
   /// The enrollment proof's prefixes, tried in order: the next only when the control plane refuses the signature.
   readonly enrollPrefixes: readonly string[];
-  /// POST, signed as enrollment: joins one more workspace, staying in those it is in (docs/multi-workspace.md).
+  /// POST, signed as enrollment: joins one more workspace, staying in those it is in.
   readonly joinPath: string;
   /// The presence WebSocket.
   readonly connectPath: string;
   /// The connect proof's prefixes: each signs under its own tag in its own x-<prefix>-* headers.
   readonly connectPrefixes: readonly string[];
-  /// Notices posted signed, under this tag; also in the former headers when `notifyFormer`.
+  /// Notices posted signed, under this tag.
   readonly notifyPath: string;
   readonly notifyTag: string;
-  readonly notifyFormer: boolean;
   /// Traces (OTLP JSON, `path`) and the station's log (OTLP JSON, `logs`), signed under each prefix's tag; none: the
   /// provider takes none.
   readonly telemetry: { readonly path: string; readonly logs: string | null; readonly prefixes: readonly string[] } | null;
@@ -50,16 +49,15 @@ export const STILLFAIL: ProviderSpec = {
   provider: "stillfail",
   name: "still.fail cloud",
   enrollPath: "/v1/stations/enroll",
-  enrollPrefixes: ["stillfail", "ember"],
+  enrollPrefixes: ["stillfail"],
   joinPath: "/v1/stations/join",
   connectPath: "/v1/stations/connect",
-  connectPrefixes: ["stillfail", "ember"],
+  connectPrefixes: ["stillfail"],
   notifyPath: "/v1/stations/notify",
-  notifyTag: "ember-station-notify-v1",
-  notifyFormer: true,
-  telemetry: { path: "/v1/telemetry/traces", logs: "/v1/telemetry/logs", prefixes: ["stillfail", "ember"] },
+  notifyTag: "stillfail-station-notify-v1",
+  telemetry: { path: "/v1/telemetry/traces", logs: "/v1/telemetry/logs", prefixes: ["stillfail"] },
   releaseBase: (origin) => origin,
-  credential: { issuers: ["stillfail-cloud", "ember-cloud"], types: ["stillfail-member+jwt", "ember-member+jwt"] },
+  credential: { issuers: ["stillfail-cloud"], types: ["stillfail-member+jwt"] },
   feedback: true,
   pages: true,
   tools: false,
@@ -76,7 +74,6 @@ export const COMMA: ProviderSpec = {
   connectPrefixes: ["comma"],
   notifyPath: "/v1/comma/stations/notify",
   notifyTag: "comma-station-notify-v1",
-  notifyFormer: false,
   // Comma takes no station traces yet (its tag, comma-station-telemetry-v1, is reserved).
   telemetry: null,
   releaseBase: (origin) => `${origin}/stations`,

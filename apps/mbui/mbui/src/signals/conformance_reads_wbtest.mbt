@@ -1,5 +1,5 @@
-// The conformance suite (conformance_graph_wbtest.mbt): Untracked / Unsampled Reads (untracked.ts) and Stale
-// Evaluation Order (staleEvaluation.ts).
+// The conformance suite (conformance_graph_wbtest.mbt): Untracked / Unsampled Reads and Stale
+// Evaluation Order.
 
 ///|
 test "untracked #75 untracked read in effect does not create dependency" {

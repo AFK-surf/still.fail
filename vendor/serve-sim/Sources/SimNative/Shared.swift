@@ -1,4 +1,4 @@
-// ember: what FrameCapture.swift takes from upstream's files left out here (CaptureEngine.swift's PixelConsumerCount,
+// stillfail: what FrameCapture.swift takes from upstream's files left out here (CaptureEngine.swift's PixelConsumerCount,
 // EncoderDiagnostics.swift's isoTimestamp and jsonString), as they are there; PixelConsumerCount public.
 import Foundation
 

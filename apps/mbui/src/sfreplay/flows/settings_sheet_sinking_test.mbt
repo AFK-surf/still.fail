@@ -10,7 +10,7 @@ test "53-settings-sheet-sinking" {
     f.run_for(@ui.move_most_ms)
     f.tap("=Station")
     f.run_for(@ui.move_most_ms)
-    f.tap("=studio")
+    f.tap("=willow")
     f.run_for(@ui.move_most_ms)
     // (the page under it at its 软件与设备: a sinking sheet is only drawn, a tap where its 保存 is drawn goes to what is
     // under it, here its versions' words, which take none; the overview has its rows to go to there)
@@ -22,14 +22,17 @@ test "53-settings-sheet-sinking" {
     f.clear()
     f.type_text("e2e-not-082939")
     // the scrim tapped: the sheet sinks, only drawn; 保存 tapped where it is drawn on its way down takes nothing
-    let (sx, sy) = f.t.reachable("=保存")[0]
+    // (near its end, past where the page's rows under it keep what they are pressed at (their card's words' inset), so
+    // the taps meet none of them whatever height the rows are drawn)
+    let save = f.t.get(@ui.Role::Button, label="保存").rect
+    let (sx, sy) = (save.0 + save.2 - 6.0, save.1 + save.3 / 2.0)
     f.tap_at(195.0, 60.0)
     for dy in [0.0, 30.0, 60.0, 90.0] {
       f.tap_at(sx, sy + dy)
     }
     f.run_to(@kit.sheet_rest("sf-present"))
     f.gone("station 名称")
-    f.see("=studio")
+    f.see("=willow")
     f.end()
   })
 }

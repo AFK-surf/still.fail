@@ -1,7 +1,7 @@
 // GET /events following a job's log by its real watch (fs.watch): the OS tells of the growth, when it does, so it runs
 // beside the checks (`pnpm test:side`). test/events.test.ts covers the rest, on a TestClock. Its time a TestClock here
 // too, moved only by the watch's own 200 ms wait: the 5 s look never comes, so a log told again was told by the watch,
-// however long the OS took to say so (a wall-clock bound of 4 s failed on mini1 under load, main b1ee5247, 40817480230).
+// however long the OS took to say so (a wall-clock bound of 4 s failed under load, main b1ee5247, 40817480230).
 import assert from "node:assert/strict";
 import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,6 +19,7 @@ test("a job's log is told as it grows, by its watch (before the 5 s look)", asyn
   const events = new Events({
     clock: time.clock,
     readers: { read: async () => "[]" } as any,
+    said: () => [],
     subscribe: () => () => {},
     host: async () => ({}),
     jobLog: (id) => (id === "j" ? join(dir, "j.log") : null),

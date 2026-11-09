@@ -1,4 +1,4 @@
-// A phone's adb lent to a real station end to end (docs/adb-share.md): a dev cloud (cloud/test/dev.ts), a real station
+// A phone's adb lent to a real station end to end: a dev cloud (cloud/test/dev.ts), a real station
 // with the fake adb (station/test/fake/adb.mjs) on its PATH, and this core's mesh and Adb over real iroh, its adbd an
 // echo server. The phone offers, the station `adb connect`s through a tunnel, then pairs a few times a while: each
 // pairing is a tunnel of its own, opened as the mesh's ways come and go.
@@ -24,6 +24,7 @@ import { Store } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
 import { Tracer } from "../src/trace.ts";
 import { Wakes } from "../src/wake.ts";
+import { personalStub, takeAll } from "../test/adb-personal-stub.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -160,7 +161,8 @@ async function phone(alice: Account, ws: string, stationId: string) {
   // THEIRS: a relay of the workspace's own (the same relay under another URL will do): two ways to choose between, so
   // the mesh steers, and takes the LAN way as a phone on its station's LAN does.
   const theirs = process.env.THEIRS ? [process.env.THEIRS] : [];
-  const adb = new Adb({ host, runner, store, mesh: () => Effect.succeed(mesh), credentials, relays: () => theirs, lends: () => true });
+  const adb = new Adb({ ...personalStub(), host, runner, store, mesh: () => Effect.succeed(mesh), credentials, relays: () => theirs, lends: () => true });
+  takeAll(adb);
   const station = `${ws}/${stationId}`;
   const connectPort = await adbd();
   const pairPort = await adbd();

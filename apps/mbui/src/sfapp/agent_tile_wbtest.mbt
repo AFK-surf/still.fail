@@ -6,7 +6,7 @@
 test "the joined maker's hover ground is uncovered and square at the seam" {
   new_run()
   let src = fixture("chat-info")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=900.0, platform=0)
   t.run_for(@ui.move_most_ms)
   t.frame()
@@ -29,7 +29,7 @@ test "the joined maker's hover ground is uncovered and square at the seam" {
 fn tile_on_tablet() -> (@ui.Tester, @ui.SemNode) raise {
   new_run()
   let src = fixture("chat-info")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=900.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.frame()
@@ -47,7 +47,7 @@ test "a tablet's agent tile: pressed whole, a tap opens its history beside the c
   t.tap(x + w / 2.0, y + h / 2.0)
   t.frame()
   t.frame()
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   assert_true(side_now(r).1 == "s-c1", msg="its history in front beside the chat")
 }
 
@@ -62,6 +62,6 @@ test "a tablet's agent tile: held, its card and its station's as one, under it" 
   t.run_for(@sfpages.hover_open_ms)
   // the station's card under the agent's: where to go on from it
   assert_true(t.find("机器详情") is Some(_), msg="the station's card")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   assert_true(side_now(r).0.length() == 0, msg="a hold is no tap: no history opened")
 }

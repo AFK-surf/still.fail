@@ -16,7 +16,7 @@ fn finder_tester(w : Double, platform : Int, regular : Bool, words : String) -> 
   t.draw()
   if platform == 2 {
     // a finger's: the field at the list's top, in every tier
-    t.scroll_to(0)
+    list_up_to_top(t)
     t.draw()
     tap_search_field(t)
     t.run_for(@ui.move_most_ms)
@@ -84,7 +84,7 @@ test "the search's way in by the hand: a finger's field at the lists' top in eve
       assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
     }
     t.draw()
-    t.scroll_to(0)
+    list_up_to_top(t)
     t.draw()
     let at = "\{w} platform \{platform}"
     if platform == 2 {
@@ -102,23 +102,42 @@ test "the search's way in by the hand: a finger's field at the lists' top in eve
 }
 
 ///|
-/// The search's field as drawn: the list's (its words, `editor` false) or come up from it (the page's, its placeholder
-/// the same words): how big its words are and how high what holds them is.
+/// The search's field as drawn now (`editor`: the page's, its placeholder the same words, as the one seen while it is
+/// open; else the list's): how big its words are and how high its capsule is.
 fn search_field_drawn(t : @ui.Tester, editor : Bool) -> (Double, Double)? {
-  let bs = t.boxes()
-  for b in bs {
-    let it = if editor {
-      b.kind == "editor" && b.text == "搜索全部内容"
-    } else {
-      b.kind == "text" && (b.text == "搜索全部内容" || b.text == "搜索")
-    }
-    if it {
-      // (the editor in a box of its own, beside the mark; the list's words beside it)
-      let row = if editor { bs[bs[b.parent].parent] } else { bs[b.parent] }
-      return Some((b.font_size, row.h))
+  // (the page's field an editor, its placeholder the words: as the frame lays it out, in its capsule)
+  if editor {
+    let bs = t.boxes()
+    for b in bs {
+      if b.kind == "editor" && (b.text == "搜索全部内容" || b.text == "搜索") && b.parent >= 0 {
+        let mut p = b.parent
+        while p >= 0 && bs[p].h < b.h + 1.0 {
+          p = bs[p].parent
+        }
+        if p >= 0 {
+          return Some((b.font_size, bs[p].h))
+        }
+      }
     }
   }
-  None
+  // (the field drawn now, the last of them: the search's page over the list where it is open; its words' size and its
+  // capsule's height, the first drawn round them with a ground)
+  // (a field of the tree's found by its hint, its words' size its editor's: Tester::drawn_words_found)
+  let drawn = t.drawn_words_found()
+  let mut found : (Double, Double)? = None
+  for d in drawn {
+    let (n, holder, _, words, size) = d
+    if n.alpha > 0.0 && (words == "搜索全部内容" || words == "搜索") {
+      let mut h = holder
+      while h >= 0 && drawn[h].0.ground == 0L {
+        h = drawn[h].1
+      }
+      if h >= 0 {
+        found = Some((size, drawn[h].0.h))
+      }
+    }
+  }
+  found
 }
 
 ///|
@@ -132,13 +151,13 @@ test "a finger's search field comes up from the list and goes back as itself: it
       assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
     }
     t.draw()
-    t.scroll_to(0)
+    list_up_to_top(t)
     t.draw()
     let at = w.to_string()
     guard search_field_drawn(t, false) is Some(list) else { fail("\{at}: no field in the list") }
     tap_search_field(t)
     t.run_for(@ui.move_most_ms)
-    assert_eq(search_field_drawn(t, true), Some(list), msg="\{at}: come up")
+    assert_eq(search_field_drawn(t, true), Some(list), msg="\{at}: come up: \{search_field_drawn(t, true)} for \{list}")
     // 取消: on its way back, then the list's again, as it was
     guard t.find_last("取消") is Some((x, y)) else { fail("\{at}: no 取消") }
     t.tap(x, y)
@@ -186,8 +205,9 @@ test "small with a mouse, ⌘K: the search's page in the lists' box, the keys in
   assert_true(@sfpages.search_opened())
   assert_false(@sfdesk.switcher_open())
   // the lists gone from under it, as under a finger's (not seen through its rows)
-  let row = t.words().iter().find_first(fn(x) { x.0 == "整理发布清单" }).unwrap()
-  assert_true(row.5 < 0.01, msg=row.5.to_string())
+  // (the list's row there unseen; the same chat among what the search offers, seen)
+  let rows = t.words().filter(fn(x) { x.0 == "整理发布清单" }).map(fn(x) { x.5 })
+  assert_true(rows.iter().any(fn(a) { a < 0.01 }), msg=rows.to_string())
   // what can be done here among what it finds: 设置 with its keys, Enter runs it
   t.type_text("设置")
   t.frame()
@@ -284,6 +304,106 @@ test "⌘K laid out Medium and Large: its panel, room round it on every side" {
     let c = t.ctx()
     let (x, y, pw, _) = c.rect_of(c.id("switcher")).unwrap()
     assert_true(x >= 16.0 && x + pw <= w - 16.0 && y > 0.0, msg="\{w}: \{x} \{pw}")
+  }
+}
+
+///|
+test "⌘K's scrolling results reach its curved foot and fade towards it" {
+  for width in [600.0, 1280.0] {
+    let height = 180.0
+    let calls : Array[Made] = []
+    // A short window cuts the first, initially selected result partway through, without moving the pointer.
+    let t = wide_tester(calls, w=width, h=height, platform=0)
+    t.draw()
+    t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+    t.run_for(@ui.move_most_ms)
+    let c = t.ctx()
+    let (px, py, pw, ph) = c.rect_of(c.id("switcher")).unwrap()
+    let lists = t.boxes().filter(fn(b) { b.kind == "list" && b.w > pw * 0.8 && b.x >= px && b.x + b.w <= px + pw && b.y >= py && b.y < py + ph })
+    assert_eq(lists.length(), 1, msg="\{width}: lists")
+    let list = lists[0]
+    let foot = list.y + list.h
+    let rows = t.drawn_instances().filter(fn(a) {
+      a[5] == 0.0 && (a[0] - list.x).abs() < 0.5 && (a[2] - list.w).abs() < 0.5 && a[1] < foot && a[1] + a[3] > foot
+    })
+    assert_eq(rows.length(), 1, msg="\{width}x\{height}: a selected row crosses the foot")
+    let row = rows[0]
+    // The viewport reaches the panel's edge; the panel itself cuts its contents to its outline.
+    assert_true((foot - (py + ph)).abs() < 0.5, msg="\{width}: list ends at \{foot}, panel at \{py + ph}")
+    assert_true(corner_cover(row, list.x + list.w / 2.0, foot - 2.0, 2.0) > 0.9, msg="\{width}: middle")
+    let panels = t.boxes().filter(fn(b) { (b.x - px).abs() < 0.5 && (b.y - py).abs() < 0.5 && (b.w - pw).abs() < 0.5 && b.border_w > 0.0 })
+    assert_eq(panels.length(), 1, msg="\{width}: panel")
+    let inset = list.x - px
+    // (cut at the panel's own edge: its line takes no room and is drawn over what it holds)
+    let r = panels[0].radius
+    // Its colour fades per pixel to the foot; the panel and its border stay whole.
+    assert_true((row[54] - foot).abs() < 0.5 && (row[55] - inset).abs() < 0.5, msg="\{width}: fade \{row[54]}, \{row[55]}")
+    let cover = fn(d : Double) { dmax(0.0, dmin(1.0, 0.5 - d * 2.0)) }
+    for x0 in [list.x, list.x + list.w - 22.0] {
+      for i in 0..<44 {
+        for j in 0..<44 {
+          let x = x0 + (i.to_double() + 0.5) / 2.0
+          let y = foot - 22.0 + (j.to_double() + 0.5) / 2.0
+          let own = cover(@ui.sd_box(x - (row[0] + row[2] / 2.0), y - (row[1] + row[3] / 2.0), row[2] / 2.0, row[3] / 2.0, row[4]))
+          let inside = cover(@ui.sd_clip(x, y, px, py, px + pw, py + ph, (r, r, r, r), (1.0, 1.0, 1.0, 1.0)))
+          let have = corner_cover(row, x, y, 2.0)
+          assert_true((have - own * inside).abs() < 0.06, msg="\{width}x\{height}: (\{x}, \{y}) covers \{have}, expected \{own * inside}")
+        }
+      }
+    }
+  }
+}
+
+///|
+test "⌘K: the pointer going down its rows leaves only the one under it shown chosen, none behind it" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, w=1280.0, h=900.0, platform=0)
+  t.draw()
+  t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+  t.run_for(@ui.move_most_ms)
+  let c = t.ctx()
+  let (px, py, pw, ph) = c.rect_of(c.id("switcher")).unwrap()
+  let lists = t.boxes().filter(fn(b) { b.kind == "list" && b.w > pw * 0.8 && b.x >= px && b.x + b.w <= px + pw && b.y >= py && b.y < py + ph })
+  assert_eq(lists.length(), 1, msg="lists")
+  let list = lists[0]
+  // the grounds drawn as wide as the list: the rows shown chosen, each at its top
+  let chosen = fn() {
+    t.drawn_instances().filter(fn(a) { a[5] == 0.0 && (a[0] - list.x).abs() < 0.5 && (a[2] - list.w).abs() < 0.5 }).map(fn(a) { a[1] })
+  }
+  let first = chosen()
+  assert_eq(first.length(), 1, msg="as it opens")
+  for k in 0..<4 {
+    let y = first[0] + @sf.theme().chat_list.found.row_h * (k.to_double() + 0.5)
+    t.move(list.x + list.w / 2.0, y)
+    t.run_for(@ui.move_most_ms)
+    let rows = chosen()
+    assert_eq(rows.length(), 1, msg="the pointer on row \{k}: \{rows}")
+    assert_true(rows[0] <= y && y < rows[0] + @sf.theme().chat_list.found.row_h, msg="the pointer at \{y}: \{rows}")
+  }
+}
+
+///|
+test "⌘K at its end leaves its last result as far from the foot as from the sides" {
+  for width in [600.0, 1280.0] {
+    let calls : Array[Made] = []
+    let t = wide_tester(calls, w=width, h=800.0, platform=0)
+    t.draw()
+    t.key(@ui.key_of_char('k'), mods=@ui.mod_cmd)
+    t.run_for(@ui.move_most_ms)
+    let c = t.ctx()
+    let (px, py, pw, ph) = c.rect_of(c.id("switcher")).unwrap()
+    let lists = t.boxes().filter(fn(b) { b.kind == "list" && b.w > pw * 0.8 && b.x >= px && b.x + b.w <= px + pw && b.y >= py && b.y < py + ph })
+    assert_eq(lists.length(), 1, msg="\{width}: list")
+    let list = lists[0]
+    t.wheel(list.x + list.w / 2.0, list.y + list.h / 2.0, 3000.0)
+    t.run_for(@ui.move_most_ms)
+    let children = t.boxes().filter(fn(b) { b.parent == list.index })
+    assert_true(children.length() >= 2, msg="\{width}: last row and its foot")
+    let last = children[children.length() - 2]
+    let blank = children[children.length() - 1]
+    let inset = list.x - px
+    assert_true(((last.y + last.h) - (py + ph - inset)).abs() < 0.5, msg="\{width}: last result ends at \{last.y + last.h}, panel at \{py + ph}")
+    assert_true((blank.h - inset).abs() < 0.5, msg="\{width}: foot room \{blank.h}, side room \{inset}")
   }
 }
 

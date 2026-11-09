@@ -7,7 +7,7 @@ test "09-paste-long" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("paste-long"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
-    f.see("=studio")
+    f.see("=willow")
     f.tap("发消息")
     f.paste_n(6000, "长段落粘贴测试。")
     // a text file of them in the draft, how long it is said; none of them in the field

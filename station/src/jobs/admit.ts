@@ -1,13 +1,14 @@
-// The station's queue for other stations' tasks (station_task, jobs/remote.ts; docs/station-scheduling.md): a task
-// that arrives while the machine is busy waits here, so agents that each looked at the load and saw room do not all
-// start at once. Nothing is estimated beforehand (a build takes more or less by its caches): what is measured decides.
+// The station's queue for other stations' tasks (station_task, jobs/remote.ts): a task
+// that arrives while the machine's memory is under pressure, or the screen it needs is taken, waits here. Nothing is
+// estimated beforehand (a build takes more or less by its caches): what is measured decides.
 //
-// - With no task of the queue running, the first that waits starts, however busy the machine is: one always goes on.
-// - Another starts only once the CPUs, looked at since the last one started (while that one still runs: one that
-//   ended has nothing more to show), were busy less than BUSY_MAX: tasks come in one by one while there is room.
-//   (A flat 30 s after each start held a task of an idle machine back minutes when several sessions each had one
-//   waiting, 2026-10-24: two a minute, the CPUs at 5%.)
-// - None starts while the system says its memory is under pressure (high or critical).
+// - How busy the CPUs are holds no task back: busy CPUs make the tasks slower, not the machine unable to run them.
+//   (They did, and wasted the machine: their busy share is 100% as soon as each core has something, however little
+//   waits; the load average lags a minute, high while the cores sit idle after tasks end; a ramp after each start held
+//   tasks of an idle machine back. 2026-10-24, 2026-11-09.)
+// - None starts while the system says its memory is under pressure (high or critical), but a small task while it is only
+//   high: there is always a way to look at a machine short of running out (a small diagnostic waited with the rest
+//   over 40 minutes, nothing else able to reach it, #4355).
 // - A task that uses the screen (windows, a simulator, screenshots) throughout starts only while no other task has the
 //   screen, and none of the commands that asked for it before it came waits for it.
 // - Which one: of the sessions that have tasks waiting, the one whose task last started longest ago (one never started
@@ -26,29 +27,26 @@
 // working it through still.fail), it is theirs: nothing more is given it, so no window comes up under their hand; what
 // holds it goes on.
 //
-// A task started with others running is told how many CPUs are free (STILLFAIL_CPUS, and the build tools' own
-// variables when its environment has none of them), so a build does not take every core for itself.
+// One explicitly small offscreen task may run beside busy builds. Its own slot is bounded to one task, it is told to
+// use one CPU, and it waits only when memory is critical. This is for brief work such as drawing with a prebuilt renderer.
+// Other tasks started with others running are told how many CPUs are free (STILLFAIL_CPUS and build tools' variables).
 import type { Ticks } from "../read/host.ts";
 
 /// What the system says of its memory: under pressure (high), or about to run out (critical); null where it cannot be
 /// read.
 export type Pressure = "normal" | "high" | "critical";
 
-/// The CPUs busy less than this over BUSY_SPAN_MS: there is room for another task.
-export const BUSY_MAX = 0.8;
-/// Over how long the CPUs are looked at, and how often.
+/// Over how long the CPUs are looked at (for how many a task started beside others is told are free), and how often
+/// the queue looks at the machine while a task waits.
 export const BUSY_SPAN_MS = 20_000;
 export const LOOK_MS = 5000;
-/// How long, at least, the CPUs are looked at after a task starts before another may (two looks: its load shows).
-export const RAMP_MS = 2 * LOOK_MS;
 
-export type Waiting = { id: string; session: string; screen: boolean; queuedAt: number };
-export type Started = { id: string; screen: boolean };
+export type Waiting = { id: string; session: string; screen: boolean; queuedAt: number; small?: boolean };
+export type Started = { id: string; screen: boolean; small?: boolean };
 
-/// Why a task waits, for its agent (station_task's answer): the screen another task's, or a person's.
-export type Why = "memory" | "busy" | "screen" | "person";
-/// A CPU wait is either for a sample or for CPUs the sample found busy.
-export type BusyCause = "sampling" | "cpu";
+/// Why a task waits, for its agent (station_task's answer): the memory under pressure, the small tasks' slot taken, the
+/// screen another task's, or a person's.
+export type Why = "memory" | "small" | "screen" | "person";
 
 /// The machine's input idle less than this: a person is at it (or works it through still.fail).
 export const PERSON_IDLE_MS = 60_000;
@@ -84,7 +82,7 @@ export class Busy {
   }
 }
 
-export type Room = { busy: number | null; pressure: Pressure | null; person?: boolean };
+export type Room = { pressure: Pressure | null; person?: boolean };
 
 /// A command's claim on the screen (`stillfail-job screen`): its job, the process that asked (the command's shell),
 /// when it first asked (the store's clock, as a task's queuedAt), whether it has the screen now, and since when (the
@@ -123,26 +121,26 @@ export function pick(
   waiting: readonly Waiting[],
   running: readonly Started[],
   room: Room,
-  now: number,
-  lastStart: number | null,
   lastOf: (session: string) => number | null,
   claims: Claims = { held: false, asked: null },
-): { start: Waiting } | { wait: Why; cause?: BusyCause } | null {
+): { start: Waiting } | { wait: Why } | null {
   if (waiting.length === 0) return null;
-  if (room.pressure === "high" || room.pressure === "critical") return { wait: "memory" };
+  if (room.pressure === "critical") return { wait: "memory" };
+  const roomy = room.pressure !== "high";
+  if (!roomy && !waiting.some((w) => w.small === true)) return { wait: "memory" };
   // (the screen another task's, a person's, or asked for by a command before this task came)
   const screenBusy = running.some((r) => r.screen) || claims.held;
   const person = room.person === true;
-  const able = waiting.filter((w) => !(w.screen && (screenBusy || person || (claims.asked !== null && claims.asked <= w.queuedAt))));
+  const able = waiting.filter((w) => (roomy || w.small === true) && !(w.screen && (screenBusy || person || (claims.asked !== null && claims.asked <= w.queuedAt))));
+  if (!roomy && able.length === 0) return { wait: "memory" };
   if (able.length === 0) return { wait: !screenBusy && person ? "person" : "screen" };
-  if (running.length > 0) {
-    if (lastStart !== null && now - lastStart < RAMP_MS) return { wait: "busy", cause: "sampling" };
-    if (room.busy === null) return { wait: "busy", cause: "sampling" };
-    if (room.busy >= BUSY_MAX) return { wait: "busy", cause: "cpu" };
-  }
+  // (one small task at a time beside the rest)
+  const smallBusy = running.some((r) => r.small === true);
+  const ready = able.filter((w) => w.small !== true || !smallBusy);
+  if (ready.length === 0) return { wait: "small" };
   // The session whose task last started longest ago (never: first), its oldest task.
   const last = (w: Waiting) => lastOf(w.session) ?? -Infinity;
-  const chosen = [...able].sort((a, b) => last(a) - last(b) || a.queuedAt - b.queuedAt)[0]!;
+  const chosen = [...ready].sort((a, b) => last(a) - last(b) || a.queuedAt - b.queuedAt)[0]!;
   return { start: chosen };
 }
 

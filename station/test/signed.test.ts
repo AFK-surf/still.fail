@@ -1,4 +1,4 @@
-// Signed releases (docs/release-signing.md): what verifies and what does not, the release signed by
+// Signed releases (scripts/release-sign.ts): what verifies and what does not, the release signed by
 // scripts/release-sign.ts as CI signs it, and `stillfail-station update` saying what to run.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -36,6 +36,10 @@ describe("signed releases", () => {
     // Signed words of another release, or none, under the feed's version.
     unverified(() => verifyFeed({ ...feedOf(1310), version: "0.1.1320" }, trusted), /not the signed one/);
     unverified(() => verifyFeed({ version: "0.1.1310", ...signed({ ...words(1310), version: "0.1.1" }) }, trusted), /not the signed one/);
+    // 0.<m>.<n>: any m (the stable releases before it, only said), n its build.
+    assert.equal(verifyFeed({ version: "0.34.1310", ...signed({ ...words(1310), version: "0.34.1310" }) }, trusted).build, 1310);
+    unverified(() => verifyFeed({ version: "0.34.1311", ...signed({ ...words(1310), version: "0.34.1311" }) }, trusted), /not the signed one/);
+    unverified(() => verifyFeed({ version: "1.34.1310", ...signed({ ...words(1310), version: "1.34.1310" }) }, trusted), /not the signed one/);
     unverified(() => verifyFeed({ version: "0.1.1310", ...signed({ kind: "stillfail-desktop-win", version: "0.1.1310", build: 1310 }) }, trusted), /not a station release/);
     unverified(() => verifyFeed(feedOf(1310, { sha256: "nope" }), trusted), /not well formed/);
     unverified(() => expected(r, "plan9-mips"), /no build for plan9-mips/);

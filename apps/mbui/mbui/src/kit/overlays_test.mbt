@@ -410,6 +410,52 @@ test "tooltip: one shown soon after another closed skips the wait" {
 }
 
 ///|
+test "tooltip: a newly hovered trigger replaces a focused trigger's tip" {
+  let t = @ui.Tester::new(fn(c) {
+    c.row(gap=40.0, pad=80.0, fn() {
+      let a = button(c, "A", key="a")
+      tooltip(c, "ta", a.id, "First tip") |> ignore
+      let b = button(c, "B", key="b")
+      tooltip(c, "tb", b.id, "Second tip") |> ignore
+    }) |> ignore
+  })
+  let visible = fn() { t.semantics().filter(fn(s) { s.role == Tooltip && !s.hidden }).map(fn(s) { s.label }) }
+  t.tab()
+  assert_eq(visible(), ["First tip"])
+  let (x, y, w, h) = t.get(@ui.Role::Button, label="B").rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  t.run_for(tooltip_delay_ms)
+  assert_eq(visible(), ["Second tip"])
+  t.run_for(@kit.pop_out_ms)
+  assert_eq(visible(), ["Second tip"])
+}
+
+///|
+test "tooltip: a shown tip made again can take the slot back" {
+  let first = Ref(true)
+  let second = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    c.row(gap=40.0, pad=80.0, fn() {
+      let a = button(c, "A", key="a")
+      if first.val { tooltip(c, "ta", a.id, "First tip", shown=true) |> ignore }
+      let b = button(c, "B", key="b")
+      if second.val { tooltip(c, "tb", b.id, "Second tip", shown=true) |> ignore }
+    }) |> ignore
+  })
+  let visible = fn() { t.semantics().filter(fn(s) { s.role == Tooltip && !s.hidden }).map(fn(s) { s.label }) }
+  t.draw()
+  assert_eq(visible(), ["First tip"])
+  second.val = true
+  t.draw()
+  assert_eq(visible(), ["Second tip"])
+  first.val = false
+  t.draw()
+  first.val = true
+  t.draw()
+  assert_eq(visible(), ["First tip"])
+}
+
+///|
 test "hover card: opened once the pointer rests on its trigger, kept while over it or the card, closed after" {
   let open = Ref(false)
   let t = @ui.Tester::new(fn(c) {
@@ -802,4 +848,46 @@ test "popover: a wheel turned over it scrolls nothing under it; beside it, what 
   t.run_for(pop_ms)
   let (_, y1, _, _) = t.rect_of("line 0").unwrap_or((0.0, -1000.0, 0.0, 0.0))
   assert_true(y1 < y0)
+}
+
+///|
+test "toasts: one comes in faded and risen as each frame is painted, nothing built for its way in" {
+  let t = @ui.Tester::new(fn(c) { toaster(c, "toasts", [toast("a", "Saved")]) |> ignore })
+  t.draw()
+  // (where its words are drawn, and how far they show)
+  let words = fn() {
+    let g = t.drawn_glyphs()
+    if g.is_empty() {
+      None
+    } else {
+      Some((g[0].1, g[0].2 & 0xFFL))
+    }
+  }
+  let end = t.time() + presence_in_ms
+  let built : Array[String] = []
+  let seen : Array[(Double, Int64)] = []
+  // (its first frame built it; the frame after it is built once more for laying out otherwise, none after it)
+  let mut first = true
+  while t.time() < end {
+    // (the next frame its motion asks for)
+    let w = t.wanted_after()
+    if w == @double.infinity {
+      break
+    }
+    t.frame_at(if w <= t.time() { t.next_frame_time() } else { t.display_frame(w) })
+    let why = t.built_why()
+    if why != "" && !(first && why == "the one before it laid out otherwise") {
+      built.push("\{t.time()}: \{why}")
+    }
+    first = false
+    match words() {
+      Some(w) => if !seen.contains(w) { seen.push(w) }
+      None => ()
+    }
+  }
+  // (it rose and faded in: drawn somewhere else, fainter, most frames, to where it rests, whole)
+  assert_true(seen.length() > 3, msg="\{seen}")
+  let (y, a) = seen[seen.length() - 1]
+  assert_true(seen.iter().all(fn(s) { s.0 >= y && s.1 <= a }), msg="\{seen}")
+  assert_eq(built, [], msg="\{built.length()} frames built: \{built}")
 }

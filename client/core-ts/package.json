@@ -2,13 +2,16 @@
   "name": "@stillfail/core-ts",
   "private": true,
   "type": "module",
-  "description": "The still.fail client core in TypeScript (docs/core-ts.md): the same protocol, data and words as client/core-ts",
+  "imports": {
+    "#mermaid-lib": { "hermes": "./src/mermaid-lib-hermes.ts", "default": "./src/mermaid-lib.ts" }
+  },
+  "description": "The still.fail client core in TypeScript: the same protocol, data and words as client/core-ts",
   "scripts": {
     "check": "tsgo --noEmit",
     "shapes": "node scripts/shapes.ts",
     "build": "esbuild src/index.ts src/hosts/node.ts --outbase=src --bundle --platform=node --format=esm --target=node24 --outdir=dist --external:*.node",
     "test": "node ../../scripts/native.ts run mesh -- node --test --test-force-exit test/*.test.ts",
-    "side": "node ../../scripts/native.ts run mesh iroh-relay -- node --test --test-force-exit side/*.test.ts",
+    "side": "node ../../scripts/native.ts run mesh iroh-relay -- node --test --test-concurrency=1 --test-force-exit side/*.test.ts",
     "hermes": "node scripts/hermes-bundle.ts"
   },
   "dependencies": {
@@ -18,10 +21,13 @@
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
     "@scure/bip39": "2.4.0",
+    "alien-signals": "3.2.1",
     "effect": "4.1.0",
     "fzstd": "0.1.1",
     "markdown-it": "14.1.0",
     "markdown-it-cjk-friendly": "2.0.3",
+    "linkedom": "0.18.14",
+    "mermaid": "11.17.2",
     "ws": "8.22.0"
   },
   "devDependencies": {
@@ -31,7 +37,8 @@
     "@types/node": "24.10.1",
     "@types/ws": "8.18.2",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "fontkit": "2.0.4"
   },
   "packageManager": "pnpm@10.33.0"
 }

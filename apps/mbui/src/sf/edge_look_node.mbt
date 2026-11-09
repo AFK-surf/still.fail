@@ -7,36 +7,94 @@
 /// One of what a look moves (a bar's height, how much it shows, its ink, the line's): its way, the end of the way it
 /// goes now (a moment of the node's timeline: what reads it told as it is there), let go as another is said and as the
 /// node is.
-priv struct EdgeWay {
+struct EdgeWay {
   way : @motion.Way
   ended : @signals.Signal[Int]
   mut due : () -> Unit
 }
 
 ///|
-fn EdgeWay::new(v : Double) -> EdgeWay {
+pub fn EdgeWay::new(v : Double) -> EdgeWay {
   { way: @motion.Way::new(v), ended: @signals.signal(0), due: fn() {  } }
 }
 
 ///|
 /// Off to `to` over `ms` (eased out, or as `ease` says) from `n`'s cause's moment, from where it is then; its end a
 /// moment of `n`'s.
-fn EdgeWay::go(self : EdgeWay, n : @view.View, to : Double, ms : Double, ease? : @ui.Ease = Out) -> Unit {
+pub fn EdgeWay::go(self : EdgeWay, n : @view.View, to : Double, ms : Double, ease? : @ui.Ease = Out) -> Unit {
   if self.way.target() == to {
     return
   }
   (self.due)()
   self.way.go(to, @motion.tween(ms, ease~), at=n.cause_at())
   self.due = if self.way.ends_at() >= 0.0 {
-    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
     fn() {  }
   }
 }
 
 ///|
+/// Off to `to` as `spec` says (a Move by how far it goes) from `n`'s cause's moment, from where it is then (as fast as
+/// it goes then); its end a moment of `n`'s.
+/// `velocity`: as fast as that instead (per second: a hand letting it go).
+pub fn EdgeWay::go_by(
+  self : EdgeWay,
+  n : @view.View,
+  to : Double,
+  spec : @motion.Spec,
+  velocity? : Double,
+) -> Unit {
+  if self.way.target() == to {
+    return
+  }
+  (self.due)()
+  self.way.go(to, spec, at=n.cause_at(), velocity?)
+  self.due = if self.way.ends_at() >= 0.0 {
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
+  } else {
+    fn() {  }
+  }
+}
+
+///|
+/// Off from `from` (put there at that moment, still) to `to` as `spec` says, from `n`'s cause's moment; its end a moment
+/// of `n`'s: gone again from the start of its way (a cover's, sent to another item).
+pub fn EdgeWay::go_from(self : EdgeWay, n : @view.View, from : Double, to : Double, spec : @motion.Spec) -> Unit {
+  (self.due)()
+  self.way.put(from)
+  self.way.go(to, spec, at=n.cause_at())
+  self.due = if self.way.ends_at() >= 0.0 {
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
+  } else {
+    fn() {  }
+  }
+}
+
+///|
+/// There at once, still (where a hand holds it).
+pub fn EdgeWay::put(self : EdgeWay, v : Double) -> Unit {
+  (self.due)()
+  self.due = fn() {  }
+  self.way.put(v)
+}
+
+///|
+/// The moment its way ends (a moment of its node's timeline: what is done once it is there is declared at it).
+pub fn EdgeWay::end(self : EdgeWay) -> Double {
+  self.way.end()
+}
+
+///|
+/// Where it goes (where it is, at rest), followed as another way is said.
+pub fn EdgeWay::target(self : EdgeWay) -> Double {
+  self.way.said()
+  self.way.target()
+}
+
+///|
 /// Where it is as `n` is drawn: at the moment it is drawn at while it goes, where it went once it is there.
-fn EdgeWay::shown(self : EdgeWay, n : @view.View) -> Double {
+pub fn EdgeWay::shown(self : EdgeWay, n : @view.View) -> Double {
   self.way.said()
   self.ended.get() |> ignore
   if self.way.goes_at(n.logic_at()) {
@@ -52,14 +110,16 @@ fn EdgeWay::shown(self : EdgeWay, n : @view.View) -> Double {
 /// edge grey while `active()` (pressed, dragged), else the strong line's grey; its line while on it (unless `line()` says
 /// no, as that changes: a sidebar folded) or active. Its bar's height and showing move over edge_bar_ms, its grey over edge_ink_ms, its line over
 /// edge_line_ms, each eased out, from the moment its state changed. Taking nothing. The node.
+#callsite(autofill(loc))
 pub fn edge_look_node(
   parent : @view.View,
   over : () -> Bool,
   on : () -> Bool,
   active : () -> Bool,
   line? : () -> Bool = fn() { true },
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     let theme = fn() { @ui.tree_theme() }
     let state = fn() { edge_state(over(), on(), active(), line()) }
     let now = @signals.untracked(state)

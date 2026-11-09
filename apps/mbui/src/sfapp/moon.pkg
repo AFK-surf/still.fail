@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/core/cmp",
+  "moonbitlang/core/double",
   "mbui/pixels",
   "mbui/codec",
   "moonbitlang/core/buffer",
@@ -22,4 +24,4 @@ import {
   "stillfail/sffixture",
 }
 
-import { "stillfail/sfkept", "stillfail/sfscreens" } for "wbtest"
+import { "stillfail/sfkept", "stillfail/sfscreens", "stillfail/core" } for "wbtest"

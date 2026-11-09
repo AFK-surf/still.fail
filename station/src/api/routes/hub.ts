@@ -1,18 +1,19 @@
-// What the pages ask of the hub, the jobs and the files (admin/mod.rs `route`, admin/files.rs): new chats and sessions,
+// What the pages ask of the hub, the jobs and the files (admin/mod.rs `route`): new chats and sessions,
 // uploads, messages, adding a session to a chat, archiving, deleting, stopping, evicting, warming, a session's settings,
 // clearing a chat's ended jobs, stopping a job. What is only written to the store is routes/marks.ts's; the reads are
 // routes/chats.ts's and routes/sessions.ts's (GET /sessions/:key/files among them).
+import { presetCopyInput } from "../../sessions/presets.ts";
 import { createHash, randomBytes, type Hash } from "node:crypto";
 import { appendFileSync, constants as fsConstants, copyFileSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { clean, fileName as nameOf, inside } from "../../ops/paths.ts";
-import { type Answer, type Request, error, json, param, percentDecode } from "../request.ts";
+import { type Answer, type Request, error, json, param, segment, ok, Refused, input } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { tr } from "../../ops/i18n.ts";
 import { log } from "../../ops/log.ts";
 import { find as findMachineSession, roots as machineRoots } from "../../read/machine.ts";
 import { STILLFAIL_SURFACE } from "../../store/rows.ts";
-import type { Attachment, Quote } from "../../store/rows.ts";
+import type { Attachment, Quote, SessionRow } from "../../store/rows.ts";
 import type { Store } from "../../store/store.ts";
 import type { AgentsParts } from "../../sessions/agents.ts";
 import type { SessionChange } from "../../sessions/accounts.ts";
@@ -37,16 +38,9 @@ import { shownFacts } from "../../sessions/image-size.ts";
 import { wall } from "../../ops/fibers.ts";
 import { sessionSeen } from "../seen.ts";
 import { runtimeKind } from "../../agents/runtime.ts";
+import { contextAsked } from "../../sessions/context-cap.ts";
+import { regenerateTitle, TitleError } from "../../sessions/regenerate-title.ts";
 
-const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
-const ok = (value: unknown, status = 200) => json(status, JSON.stringify(value));
-class Refused extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
 /// A hub error the Rust maps to a status (`map_err(|e| http_error(status, e.to_string()))`).
 async function as<T>(status: number, f: () => T | Promise<T>): Promise<T> {
   try {
@@ -68,18 +62,6 @@ const DISK_SPARE = 1024 * 1024 * 1024;
 const PART_PREFIX = ".part-";
 const STAGED_FOR_MS = 24 * 3600 * 1000;
 
-/// A request's JSON object (`read_json`): nothing is `{}`, as is anything not an object; more than a megabyte refused.
-function input(r: Request): Record<string, unknown> {
-  if (r.body.length > 1_000_000) throw new Refused(413, "request too large");
-  if (r.body.length === 0) return {};
-  let value: unknown;
-  try {
-    value = JSON.parse(r.body.toString("utf8"));
-  } catch {
-    throw new Refused(400, "invalid JSON");
-  }
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
 
 /// `Input::text`: JavaScript's String(x ?? "") as serde writes it.
 const text = (v: unknown): string => (v === undefined || v === null ? "" : typeof v === "string" ? v : JSON.stringify(v));
@@ -358,9 +340,26 @@ export const routes = (tools: Tools): Route[] => {
 
   /// admin/mod.rs Input::text: JavaScript's String(x ?? "").
   const said = (v: unknown) => (v === undefined || v === null ? "" : typeof v === "string" ? v : JSON.stringify(v));
-  /// A development station's (STILLFAIL_DEV=1, else EMBER_DEV=1): only there is /dev/inject a route.
-  const dev = (process.env.STILLFAIL_DEV || process.env.EMBER_DEV) === "1";
+  /// A development station's (STILLFAIL_DEV=1): only there is /dev/inject a route.
+  const dev = process.env.STILLFAIL_DEV === "1";
   return [
+    {
+      method: "POST",
+      pattern: /^\/*threads\/+([^/]+)\/+regenerate-title\/*$/,
+      handle: (r, [raw]) => write(async (s, a) => {
+        const t = thread(s, segment(raw!));
+        if (t.surface !== STILLFAIL_SURFACE) throw new Refused(400, tr(r.lang, "station.admin.renameOnlyStillfail"));
+        const members = s.threadSessions(t.id).map((m) => s.getSession(m.session))
+          .filter((row): row is SessionRow => row !== null && sessionSeen(s, r.viewer, row.key));
+        try {
+          await regenerateTitle(a.hub, t.id, members);
+        } catch (e) {
+          if (e instanceof TitleError) throw new Refused(e.problem === "changed" ? 409 : 400, tr(r.lang, `station.title.${e.problem}`));
+          throw e;
+        }
+        return threadView(r, t.id);
+      }),
+    },
     // Hands the station a chat message as if the connect had received it (development stations, for those who manage
     // them; anyone else finds no such route).
     ...(dev
@@ -404,10 +403,13 @@ export const routes = (tools: Tools): Route[] => {
                 model: given("model"),
                 effort: given("effort"),
                 fast: typeof i.fast === "boolean" ? i.fast : null,
+                context: contextAsked(i.context, r.lang),
                 title: typeof i.title === "string" ? chars(i.title, 120) : null,
                 createdBy: r.viewer.email,
                 clientKey: given("clientKey"),
                 ws: r.viewer.workspace || null,
+                preset: given("preset"),
+                presetCopy: i.presetCopy !== undefined && i.presetCopy !== null ? presetCopyInput(i.presetCopy) : null,
               },
               r.lang,
             ),
@@ -426,7 +428,7 @@ export const routes = (tools: Tools): Route[] => {
           const id = text(i.id);
           const roots = machineRoots();
           // Only Claude Code's and Codex's terminal sessions are read (read/machine.ts).
-          const found = kind === "dsh" || kind === "grok" || kind === "cursor" || kind === "devin" || kind === "hermes" ? null : findMachineSession(roots, kind, id);
+          const found = kind === "dsh" || kind === "grok" || kind === "cursor" || kind === "devin" || kind === "hermes" || kind === "agy" ? null : findMachineSession(roots, kind, id);
           if (found === null) throw new Refused(404, tr(r.lang, "station.admin.noLocalSession", { id }));
           const [key, chat] = await as(400, () => continueMachineSession(a.hub, roots, found, r.viewer.email, r.lang, r.viewer.home === false ? r.viewer.workspace : null));
           log.info("admin", "machine session continued from the admin page", { session: key, from: id, by: r.viewer.email });
@@ -514,7 +516,7 @@ export const routes = (tools: Tools): Route[] => {
     ),
     {
       method: "POST",
-      pattern: /^\/*sessions\/+([^/]+)\/+(stop|evict|warm|compact|clear|settings)(?:\/.*)?$/,
+      pattern: /^\/*sessions\/+([^/]+)\/+(stop|cancel-retry|evict|warm|compact|clear|settings)(?:\/.*)?$/,
       handle: (r, [k, action]) =>
         write(async (s, a) => {
           const key = segment(k!);
@@ -522,6 +524,13 @@ export const routes = (tools: Tools): Route[] => {
             case "stop":
               await a.hub.stop(key);
               return ok({ ok: true });
+            case "cancel-retry": {
+              session(s, key, r);
+              const { thread, seq } = input(r);
+              if (!Number.isSafeInteger(thread) || !Number.isSafeInteger(seq) || (thread as number) <= 0 || (seq as number) <= 0) throw new Refused(400, "invalid retry notice");
+              await a.hub.cancelRetry(key, thread as number, seq as number);
+              return ok({ ok: true });
+            }
             case "evict":
               await a.hub.evict(key);
               return ok({ ok: true });
@@ -544,6 +553,10 @@ export const routes = (tools: Tools): Route[] => {
               const i = input(r);
               const pick = (name: string): string | null | undefined => (!(name in i) ? undefined : i[name] === null ? null : text(i[name]));
               const change: SessionChange = {};
+              if ("runtime" in i) {
+                if (typeof i.runtime !== "string" || i.runtime === "") throw new Refused(400, "runtime must be a name");
+                change.runtime = i.runtime;
+              }
               const model = pick("model");
               const effort = pick("effort");
               if (model !== undefined) change.model = model;
@@ -561,6 +574,8 @@ export const routes = (tools: Tools): Route[] => {
                 if (i.fast !== null && typeof i.fast !== "boolean") throw new Refused(400, tr(r.lang, "station.admin.badFast"));
                 change.fast = i.fast;
               }
+              // The most context it runs with: null gives it the model's whole window.
+              if ("context" in i) change.context = await as(400, () => contextAsked(i.context, r.lang));
               await as(400, () => configure(a.hub, key, change, r.lang));
               // With the profile it runs on now (picked again: the one picked).
               return ok({ ok: true, profile: a.hub.store.getSession(key)?.profile ?? null });
@@ -593,12 +608,22 @@ export const routes = (tools: Tools): Route[] => {
           const quotes = quotesOf(i.quotes);
           if (said === "" && files.length === 0 && quotes.length === 0) throw new Refused(400, tr(r.lang, "station.admin.emptyMessage"));
           let answeredCard: number | null = null;
-          const pending = s.pendingCard(t.id);
+          // Only a quote naming a message can match a pending card. Use the original input here, as the legacy
+          // option check also considers quotes that quotesOf omits (including ones beyond its display limit).
+          const originalQuotes: unknown[] = Array.isArray(i.quotes) ? i.quotes : [];
+          const named = originalQuotes.some((q: any) => q !== null && typeof q === "object" && typeof q.ts === "string");
+          let pending = named ? s.pendingCardHeaderIfReady(t.id) : null;
+          while (pending === undefined) {
+            if (!a.hub.prepareCardPosts) throw new Refused(503, "card lookup is not ready");
+            await a.hub.prepareCardPosts([t.id]);
+            if (s.getThread(t.id) === null) throw new Refused(404, `unknown thread ${t.id}`);
+            pending = s.pendingCardHeaderIfReady(t.id);
+          }
           if (pending !== null) {
             const [asked, card] = pending;
             const options: unknown[] = Array.isArray(card?.options) ? card.options : [];
             const selected = options.some((o: any) => o !== null && typeof o === "object" && o.label === said && o.action === "close");
-            const quoted = Array.isArray(i.quotes) && i.quotes.some((q: any) => q !== null && typeof q === "object" && q.ts === asked.ts);
+            const quoted = originalQuotes.some((q: any) => q !== null && typeof q === "object" && q.ts === asked.ts);
             if (files.length === 0 && selected && quoted) throw new Refused(409, tr(r.lang, "station.admin.updateClientForOption"));
             if (quoted) answeredCard = asked.n;
           }
@@ -606,7 +631,7 @@ export const routes = (tools: Tools): Route[] => {
           const client = typeof i.client === "string" ? chars([...i.client.trim()].filter((c) => !/\p{Cc}/u.test(c)).join(""), 80) : "";
           const kept = await keep(files, thumbsDir(a.hub.config().dataDir));
           const n = say(a.hub, t.id, r.viewer.email, said, kept, quotes, client === "" ? null : client);
-          // Copied to the Slack and Feishu threads of the chat its sender picked (docs/relay.md "抄送"): after the answer,
+          // Copied to the Slack and Feishu threads of the chat its sender picked: after the answer,
           // not waited on.
           const ccTo = Array.isArray(i.cc) ? i.cc.filter((x: unknown): x is number => typeof x === "number") : [];
           if (ccTo.length > 0) void cc(a.hub, t.id, r.viewer.name.trim() || r.viewer.email, r.viewer.email, said, kept, ccTo);
@@ -630,7 +655,7 @@ export const routes = (tools: Tools): Route[] => {
         }),
     },
     // The people of where the chat would be relayed (`?connect=&channel=`, or `?link=` of a Slack message), for its note
-    // to mention (docs/relay.md「附言里 @ 人」).
+    // to mention (「附言里 @ 人」).
     {
       method: "GET",
       pattern: /^\/*threads\/+([^/]+)\/+relay\/+people\/*$/,
@@ -644,7 +669,7 @@ export const routes = (tools: Tools): Route[] => {
           return ok({ people: await as(400, () => relayPeople(a.hub, t, target)) });
         }),
     },
-    // Where the chat can be relayed (docs/relay.md): each connect's channels and groups its bot is in.
+    // Where the chat can be relayed: each connect's channels and groups its bot is in.
     {
       method: "GET",
       pattern: /^\/*threads\/+([^/]+)\/+relay(?:\/.*)?$/,

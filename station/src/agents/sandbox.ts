@@ -1,4 +1,4 @@
-// Execution in sandboxes (docs/sandbox-exec.md): with `sandbox` in config.json switched on, what the station starts for
+// Execution in sandboxes: with `sandbox` in config.json switched on, what the station starts for
 // a session (its runtime's process, its jobs) runs in that session's own sandbox, reached over SSH (an l4es front door:
 // `ssh NAME.WORKSPACE@host` makes the sandbox on first use and deletes it after it has been idle), through
 // ./sandbox-bridge.mjs. The station itself, its chats, its store and its door stay here. The sandboxes share no file
@@ -11,6 +11,8 @@ import { execFile } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { sandboxName } from "./sandbox-name.ts";
+export { keyPart, sandboxName } from "./sandbox-name.ts";
 
 export const BRIDGE = fileURLToPath(new URL("./sandbox-bridge.mjs", import.meta.url));
 
@@ -31,6 +33,9 @@ export type SandboxConfig = {
   /// A directory in the sandboxes, on storage they keep (an NFS mount), where the station's data directory there is:
   /// a session's files outlive its sandbox. None: each sandbox has them on its own disk, gone with it.
   persist?: string;
+  /// The node labels every sandbox it makes requires (l4es `create NAME LABEL ...`): e.g. the nodes `persist`'s NFS
+  /// server can be reached from. None: any node.
+  labels?: string[];
   /// How long a session's runtime process may be idle (no turn) before it is ended and its sandbox stopped (once no job
   /// of the session runs there): `stopIdle`.
   idleMinutes: number;
@@ -53,6 +58,7 @@ export function sandboxConfig(raw: any): SandboxConfig | null {
     ...(typeof s.identity === "string" ? { identity: s.identity } : {}),
     ...(typeof s.knownHosts === "string" ? { knownHosts: s.knownHosts } : {}),
     ...(typeof s.persist === "string" ? { persist: s.persist } : {}),
+    ...(Array.isArray(s.labels) && s.labels.length > 0 ? { labels: s.labels } : {}),
     idleMinutes: typeof s.idleMinutes === "number" ? s.idleMinutes : IDLE_MINUTES,
   };
 }
@@ -66,28 +72,15 @@ export function checkSandbox(raw: any): void {
   if (typeof s.ssh !== "string" || !/^[^\s@]*\{name\}[^\s@]*@[^\s@]+$/.test(s.ssh)) throw new Error("sandbox.ssh must be like {name}.WORKSPACE@HOST");
   for (const k of ["identity", "knownHosts", "persist"]) if (s[k] !== undefined && typeof s[k] !== "string") throw new Error(`sandbox.${k} must be a path`);
   if (typeof s.persist === "string" && !s.persist.startsWith("/")) throw new Error("sandbox.persist must be an absolute path in the sandboxes");
+  if (s.labels !== undefined && (!Array.isArray(s.labels) || !s.labels.every((l: unknown) => typeof l === "string" && labelName(l)))) throw new Error("sandbox.labels must be a list of node labels (lowercase letters, digits, -, _ and .)");
   if (s.idleMinutes !== undefined && (typeof s.idleMinutes !== "number" || !(s.idleMinutes > 0))) throw new Error("sandbox.idleMinutes must be a number of minutes above 0");
-}
-
-/// A sandbox's name for a station's key (a session's): what the front door takes (a lowercase letter, then lowercase
-/// letters, digits and `-`, 31 at most), the same for the same key, apart for keys that clean up the same.
-export function sandboxName(key: string): string {
-  const clean = key.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 16).replace(/-+$/, "");
-  const hash = createHash("sha256").update(key).digest("hex").slice(0, 10);
-  return clean === "" ? `s-${hash}` : `s-${clean}-${hash}`;
 }
 
 /// The key a runner's id was made from (agents/process.ts `runnerId`: `<kind>-<clean>[-<hash>]`): the session's for a
 /// session's process, the profile's for a process its sessions share (Codex's host).
 export function keyOfRunner(id: string): string {
-  return id.replace(/^[a-z]+-/, "");
-}
-
-/// A station's key (a session's) as a runner's id has it after its kind (agents/process.ts `runnerId`): safe as a file
-/// name, a hash keeping two keys that clean up the same apart. A session's sandbox is named from it.
-export function keyPart(key: string): string {
-  const clean = key.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 24);
-  return clean === key ? clean : `${clean}-${createHash("sha256").update(key).digest("hex").slice(0, 10)}`;
+  // A Codex app-server started while one of its key was being replaced has `.<n>` after it (codex.ts `runnerFor`).
+  return id.replace(/^[a-z]+-/, "").replace(/\.[0-9a-z]+$/, "");
 }
 
 /// ssh's command line to the sandbox `name`, up to (not including) the remote command.
@@ -189,15 +182,27 @@ export function stopSandbox(data: string, key: string, size?: string, timeoutMs 
 /// A size's name as the sandboxes' operator gives them (l4es `SBX_SANDBOX_SIZES`).
 export const sizeName = (size: string) => /^[a-z][a-z0-9-]{0,30}$/.test(size);
 
+/// A node label as l4es takes one.
+const labelName = (label: string) => /^[a-z0-9][a-z0-9_.-]{0,62}$/.test(label);
+
+/// The front door's command that makes sandbox `name` (or finds it there, made the same way) before it is connected
+/// to: with a size or the config's labels. None: the first connection makes it, of the default size on any node.
+function createFor(config: SandboxConfig, name: string, size?: string): string[] | undefined {
+  const labels = config.labels ?? [];
+  if (size === undefined && labels.length === 0) return undefined;
+  return [...sshArgs(config, "_"), "create", name, ...(size === undefined ? [] : ["--size", size]), ...labels];
+}
+
 /// How something is started in a sandbox: `node` runs the bridge; with a `size`, in a sandbox of the key's of that size,
 /// which the front door is asked to make first; `agent`: a runtime's process, which ends those started there before;
 /// `lostFile`: written when the connection to it is lost; `sync`: what is copied there and back (`syncFor`).
 export type Placing = { node?: string; size?: string; agent?: boolean; lostFile?: string; sync?: SyncEntry[] };
 
 /// The bridge's spec for sandbox `name`, without a program: what is copied, where the data directory is.
-function bridgeSpec(at: Placed, config: SandboxConfig, data: string, name: string, cwd: string | null, sync: SyncEntry[]) {
+function bridgeSpec(at: Placed, config: SandboxConfig, data: string, name: string, cwd: string | null, sync: SyncEntry[], size?: string) {
+  const create = createFor(config, name, size);
   return {
-    ssh: sshArgs(config, name), ports: at.ports(),
+    ssh: sshArgs(config, name), ports: at.ports(), ...(create ? { create } : {}),
     root: { path: data, ...(config.persist ? { persist: config.persist } : {}) },
     dirs: cwd === null ? [] : [cwd], sync,
   };
@@ -211,13 +216,12 @@ export function inSandbox(data: string, key: string, program: string, args: stri
   const config = at?.config() ?? null;
   if (at === undefined || config === null) return null;
   const name = size === undefined ? sandboxName(key) : sandboxName(`${key}|${size}`);
-  const create = size === undefined ? undefined : [...sshArgs(config, "_"), "create", name, "--size", size];
   const sync = how.sync ?? sessionSync(data, cwd);
   // What a session's workspace has from the station goes there with it (syncChanged has nothing to copy then).
   if (size === undefined) copied.set(`${data}|${key}`, signature(sessionSync(data, cwd)));
   const spec = {
-    ...bridgeSpec(at, config, data, name, cwd, sync), program, args, cwd,
-    ...(create ? { create } : {}), ...(how.agent ? { agent: true } : {}), ...(how.lostFile ? { lostFile: how.lostFile } : {}),
+    ...bridgeSpec(at, config, data, name, cwd, sync, size), program, args, cwd,
+    ...(how.agent ? { agent: true } : {}), ...(how.lostFile ? { lostFile: how.lostFile } : {}),
     // The station's GitHub login, lent to what runs there (sandbox-bridge.mjs `lendGh`).
     gh: true,
   };
@@ -290,7 +294,8 @@ export function fetchFiles(data: string, key: string, paths: string[]): Promise<
 /// refused).
 export function checkReach(config: SandboxConfig, data: string, timeoutMs = 120_000, node = process.execPath): Promise<{ ok: true } | { ok: false; why: string }> {
   const name = sandboxName("reach");
-  const spec = { ssh: sshArgs(config, name), ports: [], root: { path: data, ...(config.persist ? { persist: config.persist } : {}) }, dirs: [], sync: [] };
+  const create = createFor(config, name);
+  const spec = { ssh: sshArgs(config, name), ...(create ? { create } : {}), ports: [], root: { path: data, ...(config.persist ? { persist: config.persist } : {}) }, dirs: [], sync: [] };
   return new Promise((resolve) => {
     execFile(node, [BRIDGE, "host", JSON.stringify(spec)], { timeout: timeoutMs }, (error, _out, err) => {
       const said: { ok: true } | { ok: false; why: string } = !error ? { ok: true } : { ok: false, why: `the sandbox could not be had: ${(err || error.message).trim().split("\n").pop()}` };

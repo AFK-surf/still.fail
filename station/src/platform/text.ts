@@ -29,13 +29,16 @@ export function pressureOfAvailable(available: number | null, total: number | nu
   return share < 0.04 ? "critical" : share < 0.1 ? "high" : "normal";
 }
 
-/// macOS's kern.memorystatus_vm_pressure_level: 1 normal, 2 warn, 4 critical.
-export function pressureOfLevel(level: string): "normal" | "high" | "critical" | null {
+/// macOS's kern.memorystatus_vm_pressure_level: 1 normal, 2 warn, 4 critical. Warn is high only while the memory left
+/// says so too (available and total, as pressureOfAvailable; high where they cannot be read): macOS warns while its
+/// free pages are low, which it keeps them with file cache and the compressor, and a machine stayed in warn over 40
+/// minutes with a quarter of its memory available, every task held back (#4355).
+export function pressureOfLevel(level: string, available: number | null = null, total: number | null = null): "normal" | "high" | "critical" | null {
   switch (trim(level)) {
     case "1":
       return "normal";
     case "2":
-      return "high";
+      return pressureOfAvailable(available, total) ?? "high";
     case "4":
       return "critical";
     default:
@@ -104,4 +107,16 @@ export function parseLsof(text: string, port: number): string[] {
 export function idleOfIoreg(text: string): number | null {
   const m = /"HIDIdleTime"\s*=\s*([0-9]+)/.exec(text);
   return m === null ? null : Number(m[1]) / 1e6;
+}
+
+/// The mount points `mount` lists (macOS: `<what> on <where> (<type>, <flags>)`) besides the machine's own volumes: its
+/// root, the system's volumes under /System/Volumes, its devices.
+export function parseMounts(out: string): string[] {
+  const found: string[] = [];
+  for (const line of out.split("\n")) {
+    const at = / on (\/.*?) \([^()]*\)$/.exec(line)?.[1];
+    if (at === undefined || at === "/" || at === "/dev" || at.startsWith("/System/Volumes/")) continue;
+    found.push(at);
+  }
+  return found;
 }

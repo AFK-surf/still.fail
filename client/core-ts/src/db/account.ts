@@ -1,4 +1,4 @@
-// One signed-in account's database (docs/core-db.md): the tables of db/schema.ts, read by indexed queries, written by
+// One signed-in account's database: the tables of db/schema.ts, read by indexed queries, written by
 // one writer. Everything here is synchronous (the host's SQLite is), on the core's one thread.
 //
 // The writer: every change opens the burst's transaction (BEGIN IMMEDIATE) if none is open and runs in it, so what
@@ -12,6 +12,7 @@
 // chats, sessions, threads, jobs) is loaded by one indexed query the first time it is asked for and from then on kept
 // current by the writer, row by row, until no topic reads it. Nothing is loaded at start.
 import { lowerBound, upperBound } from "../ordered.ts";
+import { work } from "../work.ts";
 import { LogIndex, LogIndices } from "./log-index.ts";
 import { Deferred, Effect, type Fiber, Queue } from "effect";
 import type { Sql, SqlRow, SqlValue } from "../host.ts";
@@ -22,6 +23,10 @@ import { equal, isObject } from "../util.ts";
 import { ensureFilesKept, ensureKept, ensureLetters, ensureMdKept, ensureSaid, ensureSlackSaid, giveBackRoom, migrate, versionOf } from "./schema.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 import { timed } from "../spent.ts";
+import { OWN_SURFACES } from "../titles.ts";
+
+/// The station's own chats' surfaces, as SQL's list.
+const OWN_IN = OWN_SURFACES.map((s) => `'${s}'`).join(", ");
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -32,6 +37,7 @@ export type Derive = { tone(row: J): string | null; asks(row: J): boolean };
 
 /// A chat row before and after a burst (undefined: not there).
 export type RowChange = { id: string; before: J | undefined; after: J | undefined };
+type ReadChatChange = RowChange & { archived: boolean; between?: J[] };
 
 /// What a burst changed.
 export type Changes = {
@@ -39,6 +45,8 @@ export type Changes = {
   topics: Map<string, Topic>;
   /// Each station's sidebar rows (archived = 0) that changed.
   chats: Map<string, Map<string, RowChange>>;
+  /// Changed rows, including archived ones: indexed readers must refresh after a commit or a rollback.
+  readChats: Map<string, Map<string, ReadChatChange>>;
   /// The logs that changed: [table, station, thread or session].
   logs: Map<string, [string, string, string]>;
   /// The stations whose sidebar rows were read for the first time (where noticing starts from).
@@ -135,43 +143,89 @@ function longestRun(values: (number | null)[]): Set<number> {
 }
 
 /// A list loaded: its rows by id and where each sorts.
-class Collection {
+export class Collection {
   readonly items = new Map<string, J>();
   readonly sort = new Map<string, number[]>();
+  /// The rows in order, and their ids: made once, then each change put in its place on copies of them (one row of 1400
+  /// changed sorted all of them again, as each chat's new message did, 2026-11-08).
   #array: J[] | null = null;
+  #ids: string[] | null = null;
   readonly descending: boolean;
   constructor(descending: boolean) {
     this.descending = descending;
   }
 
+  #before(x: number[], a: string, y: number[], b: string): number {
+    const d = this.descending ? -1 : 1;
+    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return (x[i]! - y[i]!) * d;
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+
+  /// Where id with `sort` is, or goes, in the ids in order.
+  #at(ids: string[], id: string, sort: number[]): number {
+    let lo = 0;
+    let hi = ids.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.#before(this.sort.get(ids[mid]!)!, ids[mid]!, sort, id) < 0) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
+  #out(id: string): { ids: string[]; rows: J[] } | null {
+    if (!this.#ids || !this.#array) return null;
+    const ids = this.#ids.slice();
+    const rows = this.#array.slice();
+    const was = this.sort.get(id);
+    if (was !== undefined) {
+      const at = this.#at(ids, id, was);
+      if (ids[at] === id) {
+        ids.splice(at, 1);
+        rows.splice(at, 1);
+      } else return null;
+    }
+    return { ids, rows };
+  }
+
   set(id: string, row: J, sort: number[]): void {
+    const kept = this.#out(id);
     this.items.set(id, row);
     this.sort.set(id, sort);
-    this.#array = null;
+    if (kept === null) {
+      this.#array = null;
+      this.#ids = null;
+      return;
+    }
+    const at = this.#at(kept.ids, id, sort);
+    kept.ids.splice(at, 0, id);
+    kept.rows.splice(at, 0, row);
+    this.#ids = kept.ids;
+    this.#array = kept.rows;
   }
 
   delete(id: string): void {
-    if (this.items.delete(id)) {
-      this.sort.delete(id);
-      this.#array = null;
-    }
+    if (!this.items.has(id)) return;
+    const kept = this.#out(id);
+    this.items.delete(id);
+    this.sort.delete(id);
+    this.#ids = kept?.ids ?? null;
+    this.#array = kept?.rows ?? null;
   }
 
   /// The rows in order (the same array while nothing changed).
   array(): J[] {
     if (this.#array) return this.#array;
     const ids = [...this.items.keys()];
-    const d = this.descending ? -1 : 1;
-    ids.sort((a, b) => {
-      const x = this.sort.get(a)!;
-      const y = this.sort.get(b)!;
-      for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return (x[i] - y[i]) * d;
-      return a < b ? -1 : a > b ? 1 : 0;
-    });
+    ids.sort((a, b) => this.#before(this.sort.get(a)!, a, this.sort.get(b)!, b));
+    this.#ids = ids;
     this.#array = ids.map((id) => this.items.get(id));
     return this.#array;
   }
 }
+
+/// How many items of a log a read takes from SQLite one by one, beside those parsed already; more, it reads the range.
+const LOG_READ_ALONE = 16;
 
 /// Rows read by key, kept until written; the oldest go past `cap`.
 class Cache {
@@ -254,7 +308,7 @@ export class AccountDb {
   #inTx = false;
   /// What failed in this burst: it is rolled back.
   #failed: SqlError | null = null;
-  #changes: Changes = { topics: new Map(), chats: new Map(), logs: new Map(), firstChats: new Set() };
+  #changes: Changes = { topics: new Map(), chats: new Map(), readChats: new Map(), logs: new Map(), firstChats: new Set() };
   /// The statements of this burst that are what the device did itself, to be written again if the burst fails.
   #precious: [string, readonly SqlValue[]][] = [];
   /// What could not be written even so, written again with the next burst.
@@ -265,6 +319,9 @@ export class AccountDb {
   readonly #cache = new Cache(4096);
   readonly #logCache = new Cache(8192);
   readonly #logIndices = new LogIndices();
+  /// Each log's span (`logSpan`) as read, kept as items are put in it (putLog), let go as anything else changes it:
+  /// a long chat's count was read from SQLite again on every view of it (four times to open one, 2026-11-08).
+  readonly #logSpans = new Map<string, { min: number; max: number; count: number } | null>();
   readonly #lists = new Map<string, Collection>();
   #closed = false;
   /// Told after each burst is written, with what it changed.
@@ -352,7 +409,7 @@ export class AccountDb {
     if (!this.#inTx) return this.#settled();
     const changes = this.#changes;
     const precious = this.#precious;
-    this.#changes = { topics: new Map(), chats: new Map(), logs: new Map(), firstChats: new Set() };
+    this.#changes = { topics: new Map(), chats: new Map(), readChats: new Map(), logs: new Map(), firstChats: new Set() };
     this.#precious = [];
     this.#inTx = false;
     const failed = this.#failed;
@@ -376,11 +433,17 @@ export class AccountDb {
       } catch {
         // Rolled back already.
       }
+      // A row change tells noticing what was committed. The retry below only keeps this device's own tables, not
+      // the station's chat rows, so none of the rolled-back rows or first-list marker can be announced.
+      changes.chats.clear();
+      changes.firstChats.clear();
       // What was read is not what is kept any more.
       this.#cache.clear();
       this.#logCache.clear();
       this.#logIndices.clear();
+      this.#logSpans.clear();
       this.#lists.clear();
+      this.#slackNames.clear();
       const again = [...this.#unwritten, ...precious];
       this.#unwritten = [];
       if (again.length > 0) {
@@ -442,8 +505,23 @@ export class AccountDb {
     m.set(id, { id, before: was ? was.before : before, after });
   }
 
+  #tellChatRead(station: string, archived: number, id: string, before: J | undefined, after: J | undefined): void {
+    let rows = this.#changes.readChats.get(station);
+    if (!rows) {
+      rows = new Map();
+      this.#changes.readChats.set(station, rows);
+    }
+    const key = K(String(archived), id);
+    const was = rows.get(key);
+    if (was) {
+      if (was.after !== undefined) (was.between ??= []).push(was.after);
+      was.after = after;
+    } else rows.set(key, { id, archived: archived !== 0, before, after });
+  }
+
   #tellLog(table: string, station: string, id: string): void {
     this.#logIndices.delete(K(table, station, id));
+    this.#logSpans.delete(K(table, station, id));
     this.#changes.logs.set(K(table, station, id), [table, station, id]);
     if (table === "slack") this.#slackNames.delete(station);
   }
@@ -528,9 +606,9 @@ export class AccountDb {
     return this.#doc(K("wpref", workspace, key), "SELECT json FROM workspace_pref WHERE workspace = ? AND key = ?", [workspace, key]);
   }
 
-  putWorkspacePref(workspace: string, key: string, value: J | undefined): void {
-    if (value === undefined) this.#dropDoc(K("wpref", workspace, key), "DELETE FROM workspace_pref WHERE workspace = ? AND key = ?", [workspace, key], null);
-    else this.#putDoc(K("wpref", workspace, key), value, "SELECT json FROM workspace_pref WHERE workspace = ? AND key = ?", [workspace, key], "INSERT OR REPLACE INTO workspace_pref (workspace, key, json) VALUES (?, ?, ?)", (json) => [workspace, key, json], null);
+  putWorkspacePref(workspace: string, key: string, value: J | undefined, topic: Topic | null = null): void {
+    if (value === undefined) this.#dropDoc(K("wpref", workspace, key), "DELETE FROM workspace_pref WHERE workspace = ? AND key = ?", [workspace, key], topic);
+    else this.#putDoc(K("wpref", workspace, key), value, "SELECT json FROM workspace_pref WHERE workspace = ? AND key = ?", [workspace, key], "INSERT OR REPLACE INTO workspace_pref (workspace, key, json) VALUES (?, ?, ?)", (json) => [workspace, key, json], topic);
   }
 
   /// What this device did and its station has not confirmed (views/local.ts): every row of one of its tables.
@@ -708,6 +786,7 @@ export class AccountDb {
     const kept = frozen(JSON.parse(JSON.stringify(row)));
     this.#cache.set(K("chat", station, archived, id), kept);
     this.#loadedList(station, archived ? "archived" : "chats")?.set(id, kept, [ord]);
+    this.#tellChatRead(station, archived, id, before, kept);
     if (!archived) this.#tellChat(station, id, before, kept);
     this.#tell({ topic: archived ? "archivedRows" : "chatRows", station });
   }
@@ -748,6 +827,7 @@ export class AccountDb {
     this.#run("DELETE FROM chat WHERE station = ? AND archived = ? AND id = ?", [station, archived, id]);
     this.#cache.delete(K("chat", station, archived, id));
     this.#loadedList(station, archived ? "archived" : "chats")?.delete(id);
+    this.#tellChatRead(station, archived, id, before, undefined);
     if (!archived) this.#tellChat(station, id, before, undefined);
     this.#tell({ topic: archived ? "archivedRows" : "chatRows", station });
   }
@@ -796,6 +876,16 @@ export class AccountDb {
   chatOfThread(station: string, thread: number): J {
     const r = this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND thread = ? ORDER BY ord LIMIT 1", [station, thread])[0];
     return r ? this.#chatRow(station, 0, String(r[0]), r[1], r[2]) : undefined;
+  }
+
+  /// The sidebar rows a thread's or an agent's session's changes touch: the thread's chat's; the rows the session is
+  /// among the agents of (its own, and the chats it takes part in).
+  chatsOf(station: string, of: { thread: number } | { session: string }): J[] {
+    const rows = "thread" in of
+      ? this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND thread = ?", [station, of.thread])
+      : this.sql.all("SELECT id, json, unread FROM chat WHERE station = ? AND archived = 0 AND (session = ? OR instr(json, ?) > 0)", [station, of.session, JSON.stringify(of.session)]);
+    const out = rows.map((r) => this.#chatRow(station, 0, String(r[0]), r[1], r[2]));
+    return "thread" in of ? out : out.filter((row) => Array.isArray(get(row, "agents")) && (get(row, "agents") as J[]).some((a) => get(a, "key") === of.session));
   }
 
   /// The sidebar row of an agent's session.
@@ -874,7 +964,9 @@ export class AccountDb {
   setSessions(station: string, list: J[], confirmed: number | null): void {
     this.#write(() => {
       const was = new Map<string, SqlRow>();
-      for (const r of this.sql.all("SELECT key, ord, summary, listed, detail FROM session WHERE station = ?", [station])) was.set(String(r[0]), r);
+      // Only listed sessions need comparing with the list. Unlisted ones keep their details but cannot be removed from
+      // this list, and the details of listed ones are not needed to compare their summaries either.
+      for (const r of this.sql.all("SELECT key, ord, summary, listed FROM session WHERE station = ? AND listed = 1", [station])) was.set(String(r[0]), r);
       const items: [string, J][] = [];
       const seen = new Set<string>();
       for (const s of list) {
@@ -890,7 +982,7 @@ export class AccountDb {
         const json = JSON.stringify(s);
         if (r && r[3] === 1 && r[1] === places[i] && r[2] === json) return;
         changed = true;
-        this.#putSummary(station, key, s, json, 1, places[i], r !== undefined, r?.[4] !== null && r?.[4] !== undefined);
+        this.#putSummary(station, key, s, json, 1, places[i]);
       });
       for (const [key, r] of was) {
         if (seen.has(key) || r[3] !== 1) continue;
@@ -898,22 +990,30 @@ export class AccountDb {
         this.#run("UPDATE session SET listed = 0 WHERE station = ? AND key = ?", [station, key]);
         this.#loadedList(station, "sessions")?.delete(key);
         this.#tell({ topic: "sessions", station });
+        this.#tellSession(station, key);
       }
       this.#markListed(station, "sessions", confirmed, changed);
     });
   }
 
-  #putSummary(station: string, key: string, summary: J, json: string, listed: number, ord: number, exists: boolean, hasDetail: boolean): void {
+  #putSummary(station: string, key: string, summary: J, json: string, listed: number, ord: number): void {
     const cols = this.#sessionCols(summary);
-    if (exists) this.#run("UPDATE session SET summary = ?, listed = ?, ord = ?, last_active = ?, process = ?, connect = ?, archived_at = ?, turns = ? WHERE station = ? AND key = ?", [json, listed, ord, ...cols, station, key]);
-    else this.#run("INSERT INTO session (station, key, listed, ord, last_active, process, connect, archived_at, turns, summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [station, key, listed, ord, ...cols, json]);
+    // A newly listed session may already be held unlisted. Update the summary in place without replacing its detail.
+    this.#run(
+      `INSERT INTO session (station, key, listed, ord, last_active, process, connect, archived_at, turns, summary)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (station, key) DO UPDATE SET listed = excluded.listed, ord = excluded.ord,
+       last_active = excluded.last_active, process = excluded.process, connect = excluded.connect,
+       archived_at = excluded.archived_at, turns = excluded.turns, summary = excluded.summary`,
+      [station, key, listed, ord, ...cols, json],
+    );
     const kept = frozen(JSON.parse(json));
     this.#cache.set(K("sum", station, key), kept);
     const list = this.#loadedList(station, "sessions");
     if (listed) list?.set(key, kept, [ord]);
     else list?.delete(key);
     this.#tell({ topic: "sessions", station });
-    if (hasDetail) this.#tellSession(station, key);
+    this.#tellSession(station, key);
   }
 
   #tellSession(station: string, key: string): void {
@@ -936,7 +1036,7 @@ export class AccountDb {
       if (listed === 1 && r?.[2] !== 1) ord = ((this.sql.all("SELECT min(ord) FROM session WHERE station = ? AND listed = 1", [station])[0]?.[0] as number | null) ?? 1) - 1;
       const json = JSON.stringify(summary);
       const detail = r && r[3] !== null ? parse(r[3]) : undefined;
-      again = detail === undefined || !sameTurns(get(detail, "turns"), summary);
+      again = detail === undefined || (!counted(summary) && !sameTurns(get(detail, "turns"), summary));
       // One more turn, or the last one gone on, as the summary says it: put in place, not all its turns read again.
       const placed = again && detail !== undefined && placeTurn(detail, summary);
       if (placed) {
@@ -946,7 +1046,7 @@ export class AccountDb {
       }
       if (r && r[1] === json && r[2] === listed) return;
       // Its detail shows it as it is now too (`detail`).
-      this.#putSummary(station, key, summary, json, listed, ord, r !== undefined, detail !== undefined);
+      this.#putSummary(station, key, summary, json, listed, ord);
     });
     return again;
   }
@@ -1052,11 +1152,26 @@ export class AccountDb {
     });
   }
 
+  /// The listed session keys, in order, so a sweep can inspect their details in bounded groups.
+  sessionKeys(station: string): string[] {
+    return this.sql.all("SELECT key FROM session WHERE station = ? AND listed = 1 ORDER BY ord", [station]).map((r) => String(r[0]));
+  }
+
   /// A station's sessions with whether each one's detail is to be read again (none held, or its turns changed).
-  sessionsToRead(station: string): [string, boolean][] {
-    return this.sql.all("SELECT key, summary, detail FROM session WHERE station = ? AND listed = 1 ORDER BY ord", [station]).map((r) => {
-      const detail = r[2] === null ? undefined : parse(r[2]);
-      return [String(r[0]), detail === undefined || !sameTurns(get(detail, "turns"), parse(r[1]))];
+  /// Only the last turn matters; earlier turns and the rest of each detail stay in the database.
+  sessionsToRead(station: string, keys?: readonly string[]): [string, boolean][] {
+    if (keys?.length === 0) return [];
+    const only = keys === undefined ? "" : ` AND key IN (${keys.map(() => "?").join(", ")})`;
+    return this.sql.all(
+      `SELECT key, summary, detail IS NOT NULL,
+         CASE WHEN json_type(detail, '$.turns') = 'array' THEN json_array_length(detail, '$.turns') ELSE 0 END,
+         CASE WHEN json_type(detail, '$.turns') = 'array' AND json_array_length(detail, '$.turns') > 0
+              THEN json_quote(json_extract(detail, '$.turns[#-1]')) END
+       FROM session WHERE station = ? AND listed = 1${only} ORDER BY ord`,
+      [station, ...(keys ?? [])],
+    ).map((r) => {
+      const summary = parse(r[1]);
+      return [String(r[0]), r[2] !== 1 || (!counted(summary) && !sameTurnEnd(Number(r[3]), r[4] === null ? null : parse(r[4]), summary))];
     });
   }
 
@@ -1087,7 +1202,7 @@ export class AccountDb {
 
   /// The station's chat bound to an agent: the still.fail thread it started.
   threadOf(station: string, session: string): number | null {
-    const r = this.sql.all("SELECT id FROM thread WHERE station = ? AND listed = 1 AND first_member = ? AND surface IN ('ember', 'stillfail') ORDER BY sort_at DESC, created_at DESC, id DESC LIMIT 1", [station, session])[0];
+    const r = this.sql.all(`SELECT id FROM thread WHERE station = ? AND listed = 1 AND first_member = ? AND surface IN (${OWN_IN}) ORDER BY sort_at DESC, created_at DESC, id DESC LIMIT 1`, [station, session])[0];
     return r ? (r[0] as number) : null;
   }
 
@@ -1187,9 +1302,12 @@ export class AccountDb {
         const id = r[0] as number;
         if (seen.has(id)) continue;
         changed = true;
+        const before = this.thread(station, id);
         this.#run("UPDATE thread SET listed = 0 WHERE station = ? AND id = ?", [station, id]);
         this.#loadedList(station, "threads")?.delete(String(id));
         this.#tell({ topic: "threads", station });
+        this.#tell({ topic: "thread", station, thread: id });
+        for (const member of membersOf(before)) this.#tellSession(station, member);
       }
       this.#markListed(station, "threads", confirmed, changed);
     });
@@ -1206,11 +1324,6 @@ export class AccountDb {
       this.#deleteThread(station, id);
       this.#forgetEntries(station, id);
     });
-  }
-
-  /// A thread out of the lists (it is not there any more), its entries kept.
-  unlistThread(station: string, id: number): void {
-    this.#write(() => this.#deleteThread(station, id));
   }
 
   /// A thread goes at least to `n` (an event, a message sent).
@@ -1281,7 +1394,8 @@ export class AccountDb {
   setJobs(station: string, list: J[], confirmed: number | null): void {
     this.#write(() => {
       const was = new Map<string, SqlRow>();
-      for (const r of this.sql.all("SELECT id, ord, json, chat, open FROM job WHERE station = ?", [station])) was.set(String(r[0]), r);
+      // Only open jobs can be retained or need closing. An incoming closed job is written anew either way.
+      for (const r of this.sql.all("SELECT id, ord, json, chat, open FROM job WHERE station = ? AND open = 1", [station])) was.set(String(r[0]), r);
       const items: [string, J][] = [];
       const seen = new Set<string>();
       for (const j of list) {
@@ -1395,9 +1509,23 @@ export class AccountDb {
   /// The agents' transcripts held, least recently used first: by when their history was last opened here or their agent
   /// last active, whichever is later. (A chat's messages are never let go: they are the chat, and small.)
   transcriptsByUse(limit: number): { station: string; id: string }[] {
+    // Seek to each next session in the transcript primary key; DISTINCT would scan every item of every transcript.
     return this.sql
       .all(
-        `SELECT x.station, x.session FROM (SELECT DISTINCT station, session FROM transcript) x
+        `WITH RECURSIVE x(station, session) AS (
+           SELECT station, session FROM (SELECT station, session FROM transcript ORDER BY station, session LIMIT 1)
+           UNION ALL
+           SELECT t.station, t.session FROM x JOIN transcript t ON (t.station, t.session, t.i) = (
+             SELECT z.station, z.session, z.i FROM transcript z WHERE z.station = x.station AND z.session > x.session
+             ORDER BY z.station, z.session, z.i LIMIT 1
+           )
+           UNION ALL
+           SELECT t.station, t.session FROM x JOIN transcript t ON (t.station, t.session, t.i) = (
+             SELECT z.station, z.session, z.i FROM transcript z WHERE z.station > x.station
+             ORDER BY z.station, z.session, z.i LIMIT 1
+           ) WHERE NOT EXISTS (SELECT 1 FROM transcript z WHERE z.station = x.station AND z.session > x.session)
+         )
+         SELECT x.station, x.session FROM x
          LEFT JOIN log_use u ON u.kind = 'transcript' AND u.station = x.station AND u.id = x.session
          LEFT JOIN session s ON s.station = x.station AND s.key = x.session
          ORDER BY max(coalesce(u.opened, 0), coalesce(s.last_active, 0)), x.station, x.session LIMIT ?`,
@@ -1425,6 +1553,7 @@ export class AccountDb {
     if (hit) return hit.numbers;
     const [key, col] = logColumns(table);
     const numbers = this.sql.all(`SELECT ${col} FROM ${table} WHERE station = ? AND ${key} = ? ORDER BY ${col}`, [station, logId(table, id)]).map((r) => r[0] as number);
+    work.logNumbers += numbers.length;
     this.#logIndices.set(cacheKey, new LogIndex(numbers));
     return numbers;
   }
@@ -1433,22 +1562,40 @@ export class AccountDb {
   logRange(table: LogTable, station: string, id: string, from: number, to: number): Map<number, J> {
     const [key, col] = logColumns(table);
     const out = new Map<number, J>();
+    // Which numbers it holds there: from its index where one is kept, else asked of SQLite (the numbers alone, not their
+    // JSON), so a window read again is read from what is parsed (a chat's window read from SQLite on each of its new
+    // messages was much of what one cost, 2026-11-08) and a long log's every number is not read to open it.
     const index = this.#logIndices.get(K(table, station, id));
-    if (index) {
-      const numbers = index.numbers;
-      const first = lowerBound(numbers, from);
-      const end = upperBound(numbers, to);
+    const numbers = index ? index.numbers : this.sql.all(`SELECT ${col} FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} BETWEEN ? AND ? ORDER BY ${col}`, [station, logId(table, id), from, to]).map((r) => r[0] as number);
+    if (!index) work.logNumbers += numbers.length;
+    const first = index ? lowerBound(numbers, from) : 0;
+    const end = index ? upperBound(numbers, to) : numbers.length;
+    const missing: number[] = [];
+    for (let i = first; i < end; i++) {
+      const n = numbers[i]!;
+      const item = this.#logCache.get(K(table, station, id, n));
+      if (item === undefined) missing.push(n);
+      else out.set(n, item);
+    }
+    // A hot window is already parsed: do not copy its JSON strings out of SQLite on every view update; what is not (a
+    // new item, one let go from the cache) read alone.
+    if (missing.length === 0) return out;
+    if (missing.length <= LOG_READ_ALONE) {
+      const rows = this.sql.all(`SELECT ${col}, json FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} IN (${missing.map(() => "?").join(", ")})`, [station, logId(table, id), ...missing]);
+      work.logRows += rows.length;
+      const read = new Map(rows.map((r) => [r[0] as number, this.#logItem(table, station, id, r[0] as number, r[1])]));
+      // (in order of number, as the range reads: those read alone put in their places)
+      const ordered = new Map<number, J>();
       for (let i = first; i < end; i++) {
         const n = numbers[i]!;
-        const item = this.#logCache.get(K(table, station, id, n));
-        if (item === undefined) break;
-        out.set(n, item);
+        const item = out.get(n) ?? read.get(n);
+        if (item !== undefined) ordered.set(n, item);
       }
-      // A hot window is already parsed: do not copy its JSON strings out of SQLite on every view update.
-      if (out.size === Math.max(0, end - first)) return out;
-      out.clear();
+      return ordered;
     }
+    out.clear();
     const rows = this.sql.all(`SELECT ${col}, json FROM ${table} WHERE station = ? AND ${key} = ? AND ${col} BETWEEN ? AND ? ORDER BY ${col}`, [station, logId(table, id), from, to]);
+    work.logRows += rows.length;
     for (const r of rows) {
       const n = r[0] as number;
       out.set(n, this.#logItem(table, station, id, n, r[1]));
@@ -1467,11 +1614,17 @@ export class AccountDb {
 
   /// The highest and lowest numbers a log holds, and how many (null when it holds none).
   logSpan(table: LogTable, station: string, id: string): { min: number; max: number; count: number } | null {
-    const index = this.#logIndices.get(K(table, station, id));
+    const cacheKey = K(table, station, id);
+    const index = this.#logIndices.get(cacheKey);
     if (index) return index.span;
+    const kept = this.#logSpans.get(cacheKey);
+    if (kept !== undefined) return kept === null ? null : { ...kept };
     const [key, col] = logColumns(table);
     const r = this.sql.all(`SELECT min(${col}), max(${col}), count(*) FROM ${table} WHERE station = ? AND ${key} = ?`, [station, logId(table, id)])[0];
-    return r && r[2] !== 0 ? { min: r[0] as number, max: r[1] as number, count: r[2] as number } : null;
+    const span = r && r[2] !== 0 ? { min: r[0] as number, max: r[1] as number, count: r[2] as number } : null;
+    work.logSpans += span?.count ?? 0;
+    this.#logSpans.set(cacheKey, span);
+    return span === null ? null : { ...span };
   }
 
   /// How many of `from ..= to` a log holds.
@@ -1489,8 +1642,11 @@ export class AccountDb {
     this.#write(() => {
       const cacheKey = K(table, station, id);
       const index = this.#logIndices.get(cacheKey);
-      // A failed SQL write must never leave a cached index of a different transaction state.
+      const span = this.#logSpans.get(cacheKey);
+      // A failed SQL write must never leave a cached index (or span) of a different transaction state.
       this.#logIndices.delete(cacheKey);
+      this.#logSpans.delete(cacheKey);
+      const added: number[] = [];
       const [key, col] = logColumns(table);
       const k: SqlValue = logId(table, id);
       let changed = false;
@@ -1510,6 +1666,7 @@ export class AccountDb {
           if (was === json || (keep && was !== undefined)) continue;
           this.sql.run(`INSERT OR REPLACE INTO ${table} (station, ${key}, ${col}, json) VALUES (?, ?, ?, ?)`, [station, k, n, json]);
           this.#logCache.delete(K(table, station, id, n));
+          if (was === undefined) added.push(n);
           written.push([n, value]);
           changed = true;
         }
@@ -1528,6 +1685,12 @@ export class AccountDb {
       if (index) {
         index.put(written.map(([n]) => n), cutAfter);
         this.#logIndices.set(cacheKey, index);
+      }
+      // (only what was put in: a cut is read again)
+      if (span !== undefined && cutAfter === null) {
+        let next = span === null ? null : { ...span };
+        for (const n of new Set(added)) next = next === null ? { min: n, max: n, count: 1 } : { min: Math.min(next.min, n), max: Math.max(next.max, n), count: next.count + 1 };
+        this.#logSpans.set(cacheKey, next);
       }
     });
   }
@@ -1857,7 +2020,12 @@ export class AccountDb {
         this.sql.run(`DELETE FROM ${table} WHERE ${column} = ?`, [station]);
       }
       if (this.sql.all("SELECT 1 FROM sqlite_master WHERE name = 'log_use'").length > 0) this.sql.run("DELETE FROM log_use WHERE station = ?", [station]);
-      if (this.#hasSlackSaid()) this.sql.run("DELETE FROM slack_said WHERE station = ?", [station]);
+      if (this.#hasSlackSaid()) {
+        const sessions = this.sql.all("SELECT DISTINCT session FROM slack_said WHERE station = ?", [station]);
+        if (this.sql.run("DELETE FROM slack_said WHERE station = ?", [station]) > 0) {
+          for (const [session] of sessions) this.#tellLog("slack", station, String(session));
+        }
+      }
       this.#slackNames.delete(station);
       if (this.#filesKept) this.sql.run("DELETE FROM file_kept WHERE station = ?", [station]);
       if (this.#mdKept) {
@@ -1868,7 +2036,9 @@ export class AccountDb {
       this.#cache.clear();
       this.#logCache.clear();
       this.#logIndices.clear();
+      this.#logSpans.clear();
       for (const key of [...this.#lists.keys()]) if (key.endsWith(`\u0001${station}`)) this.#lists.delete(key);
+      this.#tell({ topic: "$station-reset", station });
       for (const topic of ["overview", "footprint", "stationUsage", "chatRows", "archivedRows", "sessions", "threads", "jobs"]) this.#tell({ topic, station });
     });
   }
@@ -1908,12 +2078,24 @@ export function placeTurn(detail: J, summary: unknown): boolean {
   return true;
 }
 
+/// Whether a session's summary says what is shown of its turns (how many, how long they ran: `turns`, `workMs`, none for
+/// one with turns from before that was kept, which shows how many alone), so
+/// that its detail, read once, needs no reading again as they start and end: a detail listed every turn for that, read
+/// again after each one, many of one session in 25 s on a station (2026-11-03). A station from before says none.
+export function counted(summary: unknown): boolean {
+  if (!isObject(summary) || !("workMs" in summary)) return false;
+  return (typeof summary.workMs === "number" || summary.workMs === null) && typeof summary.turns === "number";
+}
+
 /// Whether the turns a session detail lists still end as its summary says.
 export function sameTurns(turns: unknown, summary: unknown): boolean {
   const list = Array.isArray(turns) ? turns : [];
-  if (get(summary, "turns") !== list.length) return false;
+  return sameTurnEnd(list.length, list.length > 0 ? list[list.length - 1] : null, summary);
+}
+
+function sameTurnEnd(length: number, record: unknown, summary: unknown): boolean {
+  if (get(summary, "turns") !== length) return false;
   const lastTurn = get(summary, "lastTurn") ?? null;
-  const record = list.length > 0 ? list[list.length - 1] : null;
   if (record === null && lastTurn === null) return true;
   if (record === null || lastTurn === null) return false;
   return ["kind", "outcome", "declared", "detail", "startedAt", "endedAt"].every((k) => equal(get(record, k), get(lastTurn, k)));

@@ -1,0 +1,8 @@
+# 大屏, a mouse: a long chat's scroll bar brought out by a wheel, its thumb held and dragged (where the bar is in a
+# window of 1280×800, scripts/latency.sh's WIN, the chat 200 points up)
+timeout 20000
+until 发消息
+wheel -200
+latency drag @1275,668
+timeout 600000
+ends

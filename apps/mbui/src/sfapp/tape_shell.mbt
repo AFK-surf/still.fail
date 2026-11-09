@@ -1,5 +1,5 @@
 // Signed in with a workspace in view, on the tape (laid out Medium with a sidebar to show: sfdesk's tape_holds): the
-// shell as nodes of the window's tree (mbui's view package, docs/retained.md, the way there's 4), made once, its panels
+// shell as nodes of the window's tree (mbui's view package, the way there's 4), made once, its panels
 // the tape's nodes (sfdesk's tape_view.mbt), what they hold and what floats over them old views (islands):
 //
 //   - under all of it, what the frame does in every tier before its pages (signed_in_frame) and what the tape's frame
@@ -30,7 +30,7 @@ fn paned_shell(v : @view.View, src : Source) -> Unit {
   // (on the page's ground, as the old frame's row was: what nothing covers shows it)
   v.ground(By(fn() { @sf.theme().p.bg })) |> ignore
   @ui.old(v, fn(c) { paned_under(c, src) }).over(Is(true)) |> ignore
-  // a page opened in the pane shows once the core has given what it shows (page_local_ms at most: pane_page_built)
+  // a page opened in the pane shows once the core has given what it shows (page_local_ms at most: pane_page_wait, pane_pages)
   @sfdesk.pane_view(v, src, ready=fn(p) { pane_ready(src, p) }, most=page_local_ms)
   @ui.old(v, fn(c) { taped_over(c, src) }).over(Is(true)) |> @ui.old_takes_own |> ignore
   wide_viewer(v, src)
@@ -38,10 +38,14 @@ fn paned_shell(v : @view.View, src : Source) -> Unit {
 
 ///|
 /// An image opened over the wide frame, over all of it (as narrow_shell's over its pages and bar): nodes of the
-/// tree's of its own (sfbase's viewer_tree.mbt), its stage the whole window, followed; what is opened otherwise the
-/// old view's over the panels (sfdesk's overlays.mbt, file_viewer).
+/// tree's of its own (sfbase's viewer_tree.mbt), its stage the whole window but for the column of the system's bars
+/// down its trailing edge (an iPhone Duo's on its side: @sf.native_clear), followed; what is opened otherwise the old
+/// view's over the panels (sfdesk's overlays.mbt).
 fn wide_viewer(v : @view.View, src : Source) -> Unit {
-  @sfbase.viewer_node(v, src, fn() { v.window() })
+  @sfbase.viewer_node(v, src, fn() {
+    let (w, h) = v.window()
+    (dmax(0.0, w - @sf.native_clear()), h)
+  })
 }
 
 ///|
@@ -64,7 +68,7 @@ fn paned_under(c : @ui.Ctx, src : Source) -> Unit {
 }
 
 ///|
-/// Under the tape's panels (an island): what every frame of the app's state does (app_state_island's), what the
+/// Under the tape's panels (an island): the window's top dragging it where its buttons are, what the
 /// signed-in frame does before its pages (signed_in_frame), what the tape's frame does under them (sfdesk's tape_under).
 fn taped_under(c : @ui.Ctx, src : Source) -> Unit {
   if @ui.window_inset() {
@@ -86,7 +90,7 @@ fn taped_under(c : @ui.Ctx, src : Source) -> Unit {
 ///|
 /// Over the tape's panels (an island, taking presses where it draws them alone): a station's screen over the whole
 /// window, as Android's ScreenActivity is over the app; a drive's text read, a film played over it too, as the web's
-/// pages of a file opened (Drive.css.ts opened: fixed over everything); what opens over the panels (sfdesk's
+/// pages of a file opened; what opens over the panels (sfdesk's
 /// overlays.mbt); the player sideways turned upright and words picked let go by back first; a visualization over the
 /// whole screen; what is over the frame in every tier (signed_in_over).
 fn taped_over(c : @ui.Ctx, src : Source) -> Unit {

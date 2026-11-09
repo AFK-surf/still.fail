@@ -1,5 +1,5 @@
 #!/bin/sh
-# What a CI run used of the caches it restored, the rest deleted before they are saved again (.github/workflows/mbui.yml):
+# What a CI run used of the caches it restored, the rest deleted before they are saved again (.github/workflows/preview.yml):
 # of mbc's units (MBC_STORE: a unit's directory is newer than the run's start when the run made or took it) and of
 # ThinLTO's cache (MBC_LTO_CACHE: the linker opens an entry it reads with its access time set, and writes what it makes).
 # Without, both only grew: the macOS job's 1.7 GB, a minute to restore, one to save and one to hash for its key

@@ -33,6 +33,34 @@ test("the console answers only the admin, and only on its host; everyone else ge
   }
 });
 
+test("with Cloudflare Access in front of the console, whoever it lets through is its admin, and nobody else", async () => {
+  const h = await harness({ access: true });
+  try {
+    const bobTokens = await h.login("bob");
+    const aliceTokens = await h.login("alice");
+    const me = (tokens: typeof bobTokens, access?: string, host: "admin" | "main" = "admin") =>
+      (host === "admin" ? h.fetchAdmin : h.fetch)("/v1/admin/me", { headers: { authorization: `Bearer ${tokens.access_token}`, ...(access ? { "cf-access-jwt-assertion": access } : {}) } });
+    // bob is not ADMIN_EMAIL, and Access let him through: he is in, as himself.
+    const through = await me(bobTokens, await h.accessToken("bob@team.example"));
+    assert.equal(through.status, 200);
+    assert.deepEqual(await through.json(), { email: "bob@example.test" });
+    assert.equal((await h.fetchAdmin("/v1/admin/users", { headers: { authorization: `Bearer ${bobTokens.access_token}`, "cf-access-jwt-assertion": await h.accessToken("bob@team.example") } })).status, 200);
+    // Not through Access, ADMIN_EMAIL's account included; nor with a token of another application, team, or expired; nor
+    // signed in to nothing; nor on the main host.
+    for (const response of [
+      await me(aliceTokens),
+      await me(bobTokens, "not-a-token"),
+      await me(bobTokens, await h.accessToken("bob@team.example", { aud: "another-app" })),
+      await me(bobTokens, await h.accessToken("bob@team.example", { issuer: "https://other.cloudflareaccess.example" })),
+      await me(bobTokens, await h.accessToken("bob@team.example", { expired: true })),
+      await h.fetchAdmin("/v1/admin/me", { headers: { "cf-access-jwt-assertion": await h.accessToken("bob@team.example") } }),
+      await me(bobTokens, await h.accessToken("bob@team.example"), "main"),
+    ]) assert.equal(response.status, 404);
+  } finally {
+    await h.close();
+  }
+});
+
 test("the admin sees every user, workspace and code", async () => {
   const h = await harness();
   try {
@@ -52,7 +80,7 @@ test("the admin sees every user, workspace and code", async () => {
     // A station, enrolled and never connected.
     const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
     const station = hex((await crypto.subtle.exportKey("raw", pair.publicKey)) as ArrayBuffer);
-    const enrollment = await (await alice("POST", `/v1/workspaces/${home.id}/enrollments`, { name: "studio" })).json() as any;
+    const enrollment = await (await alice("POST", `/v1/workspaces/${home.id}/enrollments`, { name: "willow" })).json() as any;
     const signature = hex(await crypto.subtle.sign("Ed25519", pair.privateKey, new TextEncoder().encode(`stillfail-station-enroll-v1:${h.origin}:${enrollment.token}:${station}`)));
     assert.equal((await h.fetch("/v1/stations/enroll", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token: enrollment.token, station, signature, version: "0.3.1" }) })).status, 200);
 
@@ -82,7 +110,7 @@ test("the admin sees every user, workspace and code", async () => {
     const seen = workspaces.find((w: any) => w.id === home.id);
     assert.equal(seen.created_by.email, "alice@example.test");
     assert.deepEqual(seen.members.map((m: any) => [m.email, m.role]), [["alice@example.test", "owner"], ["bob@example.test", "member"]]);
-    assert.deepEqual(seen.stations.map((s: any) => [s.id, s.name, s.version]), [[station, "studio", "0.3.1"]]);
+    assert.deepEqual(seen.stations.map((s: any) => [s.id, s.name, s.version]), [[station, "willow", "0.3.1"]]);
     assert.deepEqual(seen.invitations.map((i: any) => [i.email, i.role, i.inviter]), [["erin@example.test", "admin", "Name of alice"]]);
 
     const { codes } = await (await aliceAdmin("GET", "/v1/admin/invite-codes")).json() as any;
@@ -234,7 +262,7 @@ test("an account creates up to five workspaces, and a workspace lets in up to fi
   }
 });
 
-test("the free plan limits workspaces and people, but not stations", async () => {
+test("free and standard workspaces both hold up to 64 stations", async () => {
   const h = await harness();
   try {
     const aliceTokens = await h.login("alice");
@@ -247,33 +275,54 @@ test("the free plan limits workspaces and people, but not stations", async () =>
     const added = await bob("POST", `/v1/workspaces/${w}/members`, { role: "member", emails: ["carol@example.test"] });
     assert.deepEqual([added.status, ((await added.json()) as any).error], [429, "too_many_members"]);
 
-    const enroll = async () => {
+    const enroll = async (join = false, issued?: string) => {
       const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
       const station = hex((await crypto.subtle.exportKey("raw", pair.publicKey)) as ArrayBuffer);
-      const made = await bob("POST", `/v1/workspaces/${w}/enrollments`, { name: "s" });
-      if (!made.ok) return [made.status, ((await made.json()) as any).error];
-      const { token } = await made.json() as any;
+      let token = issued;
+      if (!token) {
+        const made = await bob("POST", `/v1/workspaces/${w}/enrollments`, { name: "s" });
+        if (!made.ok) return [made.status, ((await made.json()) as any).error];
+        token = ((await made.json()) as any).token;
+      }
       const signature = hex(await crypto.subtle.sign("Ed25519", pair.privateKey, new TextEncoder().encode(`stillfail-station-enroll-v1:${h.origin}:${token}:${station}`)));
-      return (await h.fetch("/v1/stations/enroll", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, station, signature, version: "0.3.1" }) })).status;
+      const response = await h.fetch(join ? "/v1/stations/join" : "/v1/stations/enroll", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, station, signature, version: "0.3.1" }) });
+      return response.ok ? response.status : [response.status, ((await response.json()) as any).error];
     };
     assert.equal(await enroll(), 200);
     assert.equal(await enroll(), 200);
     assert.equal(await enroll(), 200);
     const plans = async () => ((await (await aliceAdmin("GET", "/v1/admin/workspaces")).json()) as any).workspaces.map((x: any) => [x.plan, x.seats, x.station_seats, x.stations_unlimited]);
-    assert.deepEqual(await plans(), [["free", 1, undefined, true]]);
+    assert.deepEqual(await plans(), [["free", 1, 64, undefined]]);
 
     await aliceAdmin("POST", `/v1/admin/users/${bobTokens.subject}/may-create`, { on: true });
     assert.deepEqual(await plans(), [["standard", 6, 64, undefined]]);
     assert.equal((await bob("POST", `/v1/workspaces/${w}/invitations`, { role: "member", email: "carol@example.test" })).status, 200);
     assert.equal(await enroll(), 200);
     await aliceAdmin("POST", `/v1/admin/users/${bobTokens.subject}/may-create`, { on: false });
-    // More than even the standard plan's 64 stations: there is no replacement numeric cap on free.
-    for (let n = 4; n < 65; n++) assert.equal(await enroll(), 200, `station ${n + 1}`);
-    assert.deepEqual(await plans(), [["free", 1, undefined, true]]);
+    const issued = async () => ((await (await bob("POST", `/v1/workspaces/${w}/enrollments`, { name: "late" })).json()) as any).token as string;
+    const lateEnroll = await issued(), lateJoin = await issued();
+    for (let n = 4; n < 64; n++) assert.equal(await enroll(), 200, `station ${n + 1}`);
+    assert.deepEqual(await enroll(), [429, "too_many_stations"], "free stops at 64");
+    assert.deepEqual(await enroll(false, lateEnroll), [429, "too_many_stations"], "a previously issued token does not bypass the cap");
+    assert.deepEqual(await plans(), [["free", 1, 64, undefined]]);
     await aliceAdmin("POST", `/v1/admin/users/${bobTokens.subject}/may-create`, { on: true });
-    assert.deepEqual(await enroll(), [429, "too_many_stations"], "the standard plan retains its cap");
+    assert.deepEqual(await enroll(), [429, "too_many_stations"], "standard stops at the same limit");
+    assert.deepEqual(await enroll(true, lateJoin), [429, "too_many_stations"], "joining also stops at the limit");
     await aliceAdmin("POST", `/v1/admin/users/${bobTokens.subject}/may-create`, { on: false });
-    assert.equal(await enroll(), 200);
+    assert.equal(((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations.length, 64, "existing stations stay when the plan changes");
+    const namespace: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
+    const directory = namespace.get(namespace.idFromName("primary")) as { previouslyEnrolledStation(workspace: string, station: string, by: string): Promise<void>; legacyStationLimit(workspace: string, limit: number): Promise<void> };
+    const earlier = "f".repeat(64);
+    await directory.previouslyEnrolledStation(w, earlier, bobTokens.subject);
+    const retained = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations;
+    assert.equal(retained.length, 65, "stations already above the cap remain");
+    assert.ok(retained.some((s: any) => s.id === earlier));
+    assert.deepEqual(await enroll(), [429, "too_many_stations"]);
+    assert.equal((await bob("DELETE", `/v1/workspaces/${w}/stations/${earlier}`)).status, 200);
+    assert.deepEqual(await (await aliceAdmin("POST", `/v1/admin/workspaces/${w}/limits`, { members: 1, stations: 256 })).json(), { members: 1, stations: 64 });
+    await directory.legacyStationLimit(w, 256);
+    assert.deepEqual(await plans(), [["enterprise", 1, 64, undefined]], "an older custom cap does not change the shared limit");
+    assert.deepEqual(await enroll(), [429, "too_many_stations"]);
   } finally {
     await h.close();
   }
@@ -457,13 +506,13 @@ test("the admin makes a workspace for a company: its owners by email, limits of 
     const made = await (await aliceAdmin("POST", "/v1/admin/workspaces", acme)).json() as any;
     assert.deepEqual([made.joined, made.added], [[], ["boss@example.test"]], "the owner has not signed in yet");
     let w = await listed(made.id);
-    assert.deepEqual([w.plan, w.seats, w.station_seats, w.members, w.added.map((a: any) => [a.email, a.role]), w.enrollable], ["enterprise", 3, 1, [], [["boss@example.test", "owner"]], true]);
+    assert.deepEqual([w.plan, w.seats, w.station_seats, w.members, w.added.map((a: any) => [a.email, a.role]), w.enrollable], ["enterprise", 3, 64, [], [["boss@example.test", "owner"]], true]);
     assert.equal(w.created_by.email, "alice@example.test");
     // The admin made it, but is not in it.
     assert.ok(!((await (await alice("GET", "/v1/me")).json()) as any).workspaces.some((x: any) => x.id === made.id));
     assert.equal((await alice("GET", `/v1/workspaces/${made.id}`)).status, 404);
 
-    // A station, put in by the admin; the second is one more than it holds, until the limit is raised.
+    // Stations put in by the admin follow the same fixed limit, regardless of an older requested cap.
     assert.equal((await aliceAdmin("POST", "/v1/admin/workspaces/nope/enrollments", { name: "Mac mini" })).status, 404);
     // Not one that is not a company's: its owners put their stations in.
     const own = await (await bob("POST", "/v1/workspaces", { name: "Bob's" })).json() as any;
@@ -477,10 +526,9 @@ test("the admin makes a workspace for a company: its owners by email, limits of 
     assert.equal((await enroll(first.token)).status, 200);
     w = await listed(made.id);
     assert.deepEqual(w.stations.map((s: any) => s.name), ["Mac mini"]);
-    assert.equal((await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/enrollments`, { name: "Second" })).status, 429);
     for (const wrong of [{ members: 3 }, { members: 3, stations: 0 }]) assert.equal((await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/limits`, wrong)).status, 400);
     assert.equal((await aliceAdmin("POST", "/v1/admin/workspaces/nope/limits", { members: 3, stations: 2 })).status, 404);
-    assert.deepEqual(await (await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/limits`, { members: 3, stations: 2 })).json(), { members: 3, stations: 2 });
+    assert.deepEqual(await (await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/limits`, { members: 3, stations: 2 })).json(), { members: 3, stations: 64 });
     const second = await (await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/enrollments`, { name: "Second" })).json() as any;
     assert.equal((await enroll(second.token)).status, 200);
 

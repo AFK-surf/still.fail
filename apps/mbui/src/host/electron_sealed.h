@@ -1,4 +1,4 @@
-// What still.fail's desktop app (Electron's, apps/desktop/src/secure.ts) kept sealed, opened for the app built in its
+// What still.fail's desktop app (Electron's) kept sealed, opened for the app built in its
 // place (scripts/mac-app.sh's stable and beta: its id, its data). apple_core.mm's secure.get takes a key from it the
 // first time the core asks for one the Keychain does not have, and seals it there again, as Android's CoreHost does
 // the Kotlin app's. A file of that app's userData/sealed: "SFS1", the `user` byte (1: Touch ID's, opened only when
@@ -10,7 +10,7 @@
 #import <Foundation/Foundation.h>
 #include <CommonCrypto/CommonCrypto.h>
 
-// A key as Electron's file is named (secure.ts fileName): letters, digits, `-` and `_` as they are, the rest %XX.
+// A key as Electron's file is named: letters, digits, `-` and `_` as they are, the rest %XX.
 static NSString *electron_sealed_name(NSString *key) {
   NSData *k = [key dataUsingEncoding:NSUTF8StringEncoding];
   const uint8_t *b = (const uint8_t *)k.bytes;

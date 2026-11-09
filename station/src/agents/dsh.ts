@@ -2,7 +2,7 @@
 // the station's own driver plugin in it (./dsh-bridge.mjs) in place of dsh's ACP server: dsh's ACP and SDK servers take
 // no input for a running turn, and its SDK cannot stop one. The plugin speaks a line of JSON per message (its header).
 //
-// Behaviour pinned against dsh 0.2 (docs/dsh.md):
+// Behaviour pinned against dsh 0.2:
 // - `open` makes the session (dsh names it) or resumes a persisted one; the station's tools are dsh's mcp-client in the
 //   patch, the session's token read from the environment;
 // - `prompt` queues a message for the next turn (one starts at once when none runs); `steer` puts one in the running
@@ -52,12 +52,21 @@ const TOKEN_HEADER = "__stillfail_mcp_authorization__";
 const piEffort = (effort: string | undefined) => (effort && ["minimal", "low", "medium", "high", "xhigh", "max"].includes(effort) ? effort : undefined);
 const deepseekEffort = (effort: string | undefined) => (effort === "low" ? "low" : effort === "medium" || effort === "high" ? "high" : effort === "max" ? "max" : undefined);
 
+/// Whether a route's address is OpenAI's own API.
+const openaiOwn = (baseURL: string) => {
+  try {
+    return new URL(baseURL).hostname === "api.openai.com";
+  } catch {
+    return false;
+  }
+};
+
 /// dsh's prompt variables are `{{name}}`, strictly: any `{{` in the instructions would stop it, so it is broken.
 const literal = (text: string) => text.replaceAll("{{", "{​{");
 
 /// What a session is started with: the patch over dsh's acp profile (YAML; JSON is YAML) and the route its agent asks
-/// for (none: dsh's default).
-export type DshSetup = { patch: Json[]; provider?: string; model?: string };
+/// for (none: dsh's default), with the effort in the route's terms (none: the route's default).
+export type DshSetup = { patch: Json[]; provider?: string; model?: string; effort?: string };
 
 /// The patch for a session: dsh's ACP server off and the station's driver in; the profile's provider as a route of
 /// its own and its model; the station's instructions after dsh's own; transcripts kept uncompressed (read/transcript.ts
@@ -69,12 +78,18 @@ export function dshSetup(route: DshRoute | null, model: string | undefined, effo
     { insert: [{ id: "stillfail-bridge", name: bridge }, { id: "stillfail-tools", name: "@deepseek-ai/dsh-mcp-client", config: tools }] },
   ];
   let chosen: { provider: string; model: string } | undefined;
+  let chosenEffort: string | undefined;
   if (route?.kind === "pi") {
     if (model === undefined) throw new Error("the profile names no model for DeepSeek Harness");
     const entry: Json = { id: model, ...(seesImages(model) ? { input: ["text", "image"] } : {}) };
     const provider: Json = { displayName: route.name, api: route.api, baseURL: route.baseURL, apiKeyEnv: DSH_KEY, models: [entry] };
     if (route.headers) provider.headers = expandRoute(route.headers, sessionRoute);
+    // pi-ai gives a reasoning model's instructions the "developer" role on an OpenAI protocol at an address it does not
+    // know, which only OpenAI's own API takes: a gateway refuses the whole request (FB-7: 400 Unexpected role
+    // "developer"). Everywhere else they go as "system", which OpenAI takes too.
+    if (route.api !== "anthropic-messages" && !openaiOwn(route.baseURL)) provider.compat = { supportsDeveloperRole: false };
     const reasoning = piEffort(effort);
+    chosenEffort = reasoning;
     if (reasoning) {
       provider.reasoning = reasoning;
       // pi-ai takes a model it has no catalog entry for (deepseek-flash on OpenCode Go) as one without reasoning and
@@ -87,6 +102,7 @@ export function dshSetup(route: DshRoute | null, model: string | undefined, effo
     const config: Json = { apiKeyEnv: "DEEPSEEK_API_KEY" };
     if (model !== undefined) config.models = [{ id: model }];
     const reasoning = deepseekEffort(effort);
+    chosenEffort = reasoning;
     if (reasoning) config.reasoningEffort = reasoning;
     patch.push({ id: "llm-deepseek", config });
     chosen = { provider: DEEPSEEK_ROUTE, model: model ?? DEEPSEEK_MODEL };
@@ -98,7 +114,7 @@ export function dshSetup(route: DshRoute | null, model: string | undefined, effo
   // No prompt variables: the ones of dsh's ACP server ({{model}}) have no value without it.
   patch.push({ id: "system-prompt", config: { personaPrefix: "", personaSuffix: literal(instructions) } });
   patch.push({ id: "session-persistence-jsonl", config: { root: join(home, SESSIONS), compression: "none" } });
-  return { patch, ...chosen };
+  return { patch, ...chosen, ...(chosen && chosenEffort ? { effort: chosenEffort } : {}) };
 }
 
 /// The patch as its file says it: YAML (JSON is YAML) with the tools' header read from the environment by dsh.
@@ -190,7 +206,7 @@ export class DshDriver extends OwnProcessDriver<DshSession> {
 
     const env: Record<string, string> = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "dsh"), options.route) };
     env.DSH_HOME = home;
-    // Its shared skills and AGENTS.md are the profile home's (agent-home.ts), not the person's ~/.agents.
+    // Not the person's ~/.agents: the session's workspace's skills are where it runs (agent-home.ts `sessionSkills`).
     env.DSH_AGENTS_HOME = join(home, "agents");
     // No sandbox and no approvals, as the other runtimes run here; nothing of a session goes to DeepSeek's telemetry.
     env.DSH_PERMISSION_MODE = "danger-full-access";
@@ -206,6 +222,7 @@ export class DshDriver extends OwnProcessDriver<DshSession> {
         cwd: options.cwd,
         ...(options.resume !== undefined ? { resume: options.resume } : {}),
         ...(setup.provider !== undefined ? { provider: setup.provider, model: setup.model } : {}),
+        ...(setup.effort !== undefined ? { effort: setup.effort } : {}),
       }, "dsh did not open the session (its driver plugin did not load?)");
       if (typeof opened?.session !== "string" || opened.session === "") throw new Error("dsh named no session");
       session.named(opened.session);

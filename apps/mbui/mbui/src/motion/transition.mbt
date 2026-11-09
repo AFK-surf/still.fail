@@ -7,17 +7,40 @@
 
 ///|
 /// One of Motion's transitions: its kind (for showing it), its delay (ms), and how its generator is made from the
-/// value's start, its target and its velocity (per second).
+/// value's start, its target and its velocity (per second); what it was said with (`said`: its numbers, and the
+/// functions it was given, its eases), where all of it was (None: made otherwise, known by itself alone).
 pub struct Transition {
   kind : String
   delay : Double
   make : (Double, Double, Double) -> Generator
+  said : (Array[Double], Array[(Double) -> Double])?
 }
 
 ///|
-/// The same transition (it is made by a function: the same one).
+/// The same transition: said by the same kind with the same numbers and the same functions (each the same one), the
+/// same delay; else (not all of it said) the same one.
 pub impl Eq for Transition with equal(self, other) {
-  physical_equal(self, other)
+  match (self.said, other.said) {
+    (Some((nums, fns)), Some((others, other_fns))) =>
+      self.kind == other.kind &&
+      self.delay == other.delay &&
+      nums == others &&
+      fns.length() == other_fns.length() &&
+      fns.iter().zip(other_fns.iter()).all(fn(p) { physical_equal(p.0, p.1) })
+    _ => physical_equal(self, other)
+  }
+}
+
+///|
+/// An optional number as said: whether it was, and what.
+fn said_num(nums : Array[Double], v : Double?) -> Unit {
+  match v {
+    Some(v) => {
+      nums.push(1.0)
+      nums.push(v)
+    }
+    None => nums.push(0.0)
+  }
 }
 
 ///|
@@ -28,7 +51,7 @@ pub impl Show for Transition with output(self, logger) {
 ///|
 /// The same, after `delay` ms.
 pub fn Transition::delayed(self : Transition, delay : Double) -> Transition {
-  { kind: self.kind, delay, make: self.make }
+  { kind: self.kind, delay, make: self.make, said: self.said }
 }
 
 ///|
@@ -60,9 +83,14 @@ pub fn spring_to(
   rest_delta? : Double,
   delay? : Double = 0.0,
 ) -> Spec {
+  let nums = []
+  for v in [stiffness, damping, mass, duration, bounce, visual_duration, rest_speed, rest_delta] {
+    said_num(nums, v)
+  }
   Motion({
     kind: "spring",
     delay,
+    said: Some((nums, [])),
     make: fn(from, to, v) {
       spring_generator(
         from,
@@ -88,6 +116,7 @@ pub fn tween_to(duration? : Double = 300.0, ease? : (Double) -> Double = ease_in
   Motion({
     kind: "tween",
     delay,
+    said: Some(([duration], [ease])),
     make: fn(from, to, _) { keyframes_generator([from, to], duration~, ease~) },
   })
 }
@@ -103,9 +132,39 @@ pub fn keyframes_to(
   eases? : Array[(Double) -> Double],
   delay? : Double = 0.0,
 ) -> Spec {
+  // (its own copies, what it goes through and what it is said by the same: the caller's arrays changed after are not it)
+  let values = values.copy()
+  let times = times.map(fn(ts) { ts.copy() })
+  let eases = eases.map(fn(es) { es.copy() })
+  let nums = [values.length().to_double()]
+  nums.append(values)
+  nums.push(duration)
+  match times {
+    Some(ts) => {
+      nums.push(ts.length().to_double())
+      nums.append(ts)
+    }
+    None => nums.push(-1.0)
+  }
+  let fns = []
+  match ease {
+    Some(e) => {
+      nums.push(1.0)
+      fns.push(e)
+    }
+    None => nums.push(0.0)
+  }
+  match eases {
+    Some(es) => {
+      nums.push(es.length().to_double())
+      fns.append(es)
+    }
+    None => nums.push(-1.0)
+  }
   Motion({
     kind: "keyframes",
     delay,
+    said: Some((nums, fns)),
     make: fn(from, _, _) {
       let all = [from]
       for v in values {
@@ -132,9 +191,22 @@ pub fn inertia_to(
   rest_speed? : Double,
   delay? : Double = 0.0,
 ) -> Spec {
+  let nums = [power, time_constant, bounce_damping, bounce_stiffness, rest_delta]
+  said_num(nums, min)
+  said_num(nums, max)
+  said_num(nums, rest_speed)
+  let fns = []
+  match modify_target {
+    Some(f) => {
+      nums.push(1.0)
+      fns.push(f)
+    }
+    None => nums.push(0.0)
+  }
   Motion({
     kind: "inertia",
     delay,
+    said: Some((nums, fns)),
     make: fn(from, _, v) {
       inertia_generator(
         from,

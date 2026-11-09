@@ -8,9 +8,9 @@ fn bar_rows(pressed : Array[Int], over_foot? : Double = 0.0, corner? : Double = 
     c.box(w=Fill(1.0), h=Fill(1.0), radius=corner, clip=corner > 0.0, fn() {
       c.list("list", 200, 40.0, fn(i) {
         let id = c.id("row")
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           pressed.push(i)
-        }
+        })
         c.box(w=Fill(1.0), h=Px(40.0), id~, fn() { c.text("Row \{i}", wrap=false) |> ignore }) |> ignore
       })
       |> ignore
@@ -264,8 +264,8 @@ fn twelve_lines() -> String {
 
 ///|
 /// How far the field's words are scrolled up in it.
-fn field_scrolled(t : @ui.Tester) -> Double {
-  let ((_, oy), (_, y, _, _)) = t.ctx().field_words("f").unwrap()
+fn field_scrolled(f : @ui.Field) -> Double {
+  let ((_, oy), (_, y, _, _)) = f.words_at().unwrap()
   y - oy
 }
 
@@ -274,10 +274,10 @@ test "scroll bar: a field of more lines than it shows scrolls by the wheel, its 
   let f = @ui.Field::new(text=twelve_lines())
   let t = @ui.Tester::new(field_rows(f), w=300.0, h=400.0)
   // its end shown, where the caret is
-  assert_eq(field_scrolled(t), 180.0)
+  assert_eq(field_scrolled(f), 180.0)
   t.move(100.0, 30.0)
   t.wheel(100.0, 30.0, -100.0)
-  assert_eq(field_scrolled(t), 80.0)
+  assert_eq(field_scrolled(f), 80.0)
   assert_eq(f.selection(), (twelve_lines().length(), twelve_lines().length()))
   t.run_for(@ui.scrollbar_fade_ms)
   let shown = thumbs(t)
@@ -285,21 +285,49 @@ test "scroll bar: a field of more lines than it shows scrolls by the wheel, its 
   assert_true(shown[0].0 == 300.0 - 2.0 - 3.0 && shown[0].1 + shown[0].3 <= 60.0, msg="\{shown}")
   // past its top the wheel goes no further
   t.wheel(100.0, 30.0, -500.0)
-  assert_eq(field_scrolled(t), 0.0)
+  assert_eq(field_scrolled(f), 0.0)
   // the words changed where the caret is: in view again
   t.tap(100.0, 30.0)
   f.set(twelve_lines() + "!")
   t.draw()
-  assert_eq(field_scrolled(t), 180.0)
+  assert_eq(field_scrolled(f), 180.0)
+}
+
+///|
+/// A field six lines high holding twelve (20 a line), 10 inside a box 200 by 140 whose corners are `r` round and cut
+/// what it holds, scrolled by the wheel: its bar's thumbs as drawn.
+fn inset_field_thumbs(r : Double) -> Array[(Double, Double, Double, Double, Int64)] {
+  let f = @ui.Field::new(text=twelve_lines())
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Px(200.0), h=Px(140.0), pad=10.0, radius=r, clip=true, bg=0xEEEEEEFFL, fn() {
+        c.editor("f", field=f, max_lines=6, plain=true, font_size=10.0, line=20.0) |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=400.0,
+  )
+  t.move(100.0, 40.0)
+  t.wheel(100.0, 40.0, -100.0)
+  t.run_for(@ui.scrollbar_fade_ms)
+  thumbs(t)
+}
+
+///|
+test "scroll bar: a field inset in a box cut round, its corners clear of the field's: its thumb where it is in a box cut square" {
+  let square = inset_field_thumbs(0.0)
+  assert_eq(square.length(), 1, msg="its thumb out: \{square}")
+  assert_eq(inset_field_thumbs(30.0), square, msg="cut round: the same thumb")
 }
 
 ///|
 test "scroll bar: a finger dragging a field of more lines than it shows scrolls it, the caret put nowhere" {
   let f = @ui.Field::new(text=twelve_lines())
   let t = @ui.Tester::new(field_rows(f), w=300.0, h=400.0, platform=2)
-  assert_eq(field_scrolled(t), 180.0)
+  assert_eq(field_scrolled(f), 180.0)
   t.drag(100.0, 5.0, 100.0, 55.0)
-  assert_true(field_scrolled(t) < 180.0 - 30.0, msg="\{field_scrolled(t)}")
+  assert_true(field_scrolled(f) < 180.0 - 30.0, msg="\{field_scrolled(f)}")
   assert_eq(f.selection(), (twelve_lines().length(), twelve_lines().length()))
   assert_eq(t.ctx().field_focused(), false)
   t.run_for(@ui.scrollbar_fade_ms)

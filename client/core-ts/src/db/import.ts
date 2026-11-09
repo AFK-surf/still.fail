@@ -1,4 +1,4 @@
-// What a device kept before the databases per account (docs/core-db.md, Import), brought into an account's database
+// What a device kept before the databases per account (Import), brought into an account's database
 // once, when it is first opened: the former records store (the KV `records` table of `core.db`, IndexedDB `records` on
 // the web; data.ts before) and what the Rust core kept of threads and transcripts in storage chunks (`kept`). Each
 // account takes what is its own and what is of the workspaces it reaches (the first account in sign-in order whose
@@ -18,7 +18,7 @@ type J = any;
 
 const SEP = "\u0001";
 const END = "\u{10ffff}";
-/// The Rust core's chunks of a log (kept.rs).
+/// The Rust core's chunks of a log.
 export const CHUNK = 256;
 const DEVICE_DONE = "device-imported";
 
@@ -189,7 +189,7 @@ function importDevice(host: Host, data: Data): Effect.Effect<void> {
 const getJson = (host: Host, key: string): Effect.Effect<J> =>
   Effect.map(Effect.orElseSucceed(host.storageGet(key), () => null), (b) => (b ? parseJson(b) : undefined));
 
-/// The Rust core's chunks of 256 (kept.rs): `thread/<station>/<thread>/<chunk>` (entries numbered from 1),
+/// The Rust core's chunks of 256: `thread/<station>/<thread>/<chunk>` (entries numbered from 1),
 /// `transcript/<station>/<session>/<chunk>` (items from 0), `<log>/meta` the run `{first, last}` held, `kept` the index.
 export function importKept(host: Host, db: AccountDb, ours: (station: string) => boolean): Effect.Effect<void> {
   return Effect.gen(function* () {

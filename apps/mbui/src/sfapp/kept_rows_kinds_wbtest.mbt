@@ -23,7 +23,7 @@ let kept_rows_still_ms : Double = 70.0
 fn kept_rows_open(mode : String, w : Double, h : Double) -> @ui.Tester {
   new_run()
   let src = fixture(mode)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let large = w >= 1000.0
   // (two ways of drawing compared: the corner rule is held where the chats' pictures are tested)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform=if large { 0 } else { 2 }, corners_held=false)
@@ -44,7 +44,7 @@ fn kept_rows_open(mode : String, w : Double, h : Double) -> @ui.Tester {
 /// drawn again where they can be (`again`) or built every frame; `a11y`: something reading the widgets out.
 fn kept_rows_kind(mode : String, again : Bool, w : Double, h : Double, a11y? : Bool = false) -> Array[Array[String]] {
   let t = kept_rows_open(mode, w, h)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(again)
   t.set_a11y(a11y)
   t.said() |> ignore
@@ -61,7 +61,7 @@ fn kept_rows_kind(mode : String, again : Bool, w : Double, h : Double, a11y? : B
 /// they can be (`again`) or built every frame.
 fn kept_rows_kind_scrolled(mode : String, again : Bool, w : Double, h : Double) -> Array[Array[String]] {
   let t = kept_rows_open(mode, w, h)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(again)
   t.said() |> ignore
   let out = []
@@ -180,7 +180,7 @@ test "every kind of message scrolled on 大屏: drawn again as building it draws
 /// up past it), the rows drawn again where they can be (`again`) or built every frame.
 fn kept_rows_sent(mode : String, again : Bool, w : Double, h : Double) -> (Array[Array[String]], Int) {
   let t = kept_rows_open(mode, w, h)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(again)
   t.tap_text("发消息")
   t.type_text("刚发的这一句")

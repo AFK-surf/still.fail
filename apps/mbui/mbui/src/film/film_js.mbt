@@ -29,6 +29,12 @@ fn draw_timed(
 }
 
 ///|
+/// (a frame's work counted only by a Wasm host: film_wasm.mbt's)
+fn mark(frame : Int, end : Bool) -> Unit {
+  ignore((frame, end))
+}
+
+///|
 fn now_ms() -> Double {
   0.0
 }
@@ -40,8 +46,9 @@ fn open(path : String, w : Int, h : Int, fps : Int) -> Bool {
 }
 
 ///|
-fn draw(inst : FixedArray[Double], count : Int, r : Double, g : Double, b : Double) -> Unit {
+fn draw(inst : FixedArray[Double], count : Int, r : Double, g : Double, b : Double) -> Bool {
   ignore((inst, count, r, g, b))
+  false
 }
 
 ///|
@@ -57,7 +64,19 @@ fn close(frames : Int) -> Bool {
 }
 
 ///|
+fn finish(publish : Bool) -> Bool {
+  ignore(publish)
+  false
+}
+
+///|
 fn snapshot(path : String) -> Bool {
+  ignore(path)
+  false
+}
+
+///|
+fn snapshot_transparent(path : String) -> Bool {
   ignore(path)
   false
 }

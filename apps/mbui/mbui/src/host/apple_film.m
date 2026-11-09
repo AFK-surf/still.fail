@@ -16,6 +16,7 @@
 void mb_render_init_offscreen(double w, double h, double scale);
 uint8_t *mb_render_read(const double *inst, int32_t count, double r, double g, double b, int *w, int *h);
 int mb_render_snapshot(const char *path);
+int mb_render_snapshot_transparent(const char *path);
 
 static NSString *ns(moonbit_string_t s) {
   return [NSString stringWithCharacters:(const unichar *)s length:(NSUInteger)Moonbit_array_length(s)];
@@ -31,6 +32,10 @@ static moonbit_string_t mb(NSString *s) {
 static AVAssetWriter *writer;
 static AVAssetWriterInput *input;
 static AVAssetWriterInputPixelBufferAdaptor *adaptor;
+// Write beside the destination and replace it only after the whole run succeeds. A failed take must not destroy the
+// previous good one or leave a partial video where the caller expects the finished film.
+static NSURL *film_destination;
+static NSURL *film_temporary;
 // the picture drawn last, what the next frames written are
 static CVPixelBufferRef shown;
 static int32_t film_w, film_h, film_fps;
@@ -38,16 +43,31 @@ static int32_t film_w, film_h, film_fps;
 // How long the writer may take to want the next frame, or to finish (s): what it has not done by then failed.
 static const double writer_most = 60;
 
-// A film begun at `path` (what was there gone), `w` × `h` pixels (to even numbers, as H.264's 4:2:0 has them),
-// `fps` frames a second: 1, or 0 with what went wrong said.
-int32_t mbf_open(moonbit_string_t path, int32_t w, int32_t h, int32_t fps) {
+// A writer that could not be opened must not leave its temporary file or state behind.
+static void mbf_discard_open(void) {
+  if (writer.status == AVAssetWriterStatusWriting) [writer cancelWriting];
+  if (film_temporary) [[NSFileManager defaultManager] removeItemAtURL:film_temporary error:nil];
+  writer = nil;
+  input = nil;
+  adaptor = nil;
+  film_temporary = nil;
+  film_destination = nil;
+}
+
+// A film begun for `path`, `w` × `h` pixels (to even numbers, as H.264's 4:2:0 has them),
+// `fps` frames a second: 1, or 0 with what went wrong said. (mbf_open_path: the same for a host that is not MoonBit's,
+// the Wasm film's, tools/wasm-film/native_host.m)
+int32_t mbf_open_path(NSString *path, int32_t w, int32_t h, int32_t fps) {
   @autoreleasepool {
-    NSURL *url = [NSURL fileURLWithPath:ns(path)];
-    [[NSFileManager defaultManager] removeItemAtURL:url error:nil];
+    NSURL *url = [NSURL fileURLWithPath:path];
+    film_destination = url;
+    NSString *temporary = [NSString stringWithFormat:@".%@.%@.tmp.mp4", url.lastPathComponent, NSUUID.UUID.UUIDString];
+    film_temporary = [[url URLByDeletingLastPathComponent] URLByAppendingPathComponent:temporary];
     NSError *err = nil;
-    writer = [[AVAssetWriter alloc] initWithURL:url fileType:AVFileTypeMPEG4 error:&err];
+    writer = [[AVAssetWriter alloc] initWithURL:film_temporary fileType:AVFileTypeMPEG4 error:&err];
     if (!writer) {
       fprintf(stderr, "film: %s\n", err.localizedDescription.UTF8String);
+      mbf_discard_open();
       return 0;
     }
     film_w = w & ~1;
@@ -82,15 +102,38 @@ int32_t mbf_open(moonbit_string_t path, int32_t w, int32_t h, int32_t fps) {
                                                                                sourcePixelBufferAttributes:px];
     if (![writer canAddInput:input]) {
       fprintf(stderr, "film: the writer takes no H.264 of %d x %d\n", film_w, film_h);
+      mbf_discard_open();
       return 0;
     }
     [writer addInput:input];
     if (![writer startWriting]) {
       fprintf(stderr, "film: %s\n", writer.error.localizedDescription.UTF8String);
+      mbf_discard_open();
       return 0;
     }
     [writer startSessionAtSourceTime:kCMTimeZero];
     return 1;
+  }
+}
+
+int32_t mbf_open(moonbit_string_t path, int32_t w, int32_t h, int32_t fps) {
+  @autoreleasepool { return mbf_open_path(ns(path), w, h, fps); }
+}
+
+// Publish a completed take by an atomic rename, or discard an unsuccessful one. The old destination is untouched on
+// failure. Both paths are in the same directory, so the rename does not cross filesystems.
+int32_t mbf_finish(int32_t publish) {
+  @autoreleasepool {
+    if (!film_temporary || !film_destination) return 0;
+    int ok = 1;
+    if (publish && rename(film_temporary.fileSystemRepresentation, film_destination.fileSystemRepresentation) != 0) {
+      perror("film: could not publish");
+      ok = 0;
+    }
+    if (!publish || !ok) [[NSFileManager defaultManager] removeItemAtURL:film_temporary error:nil];
+    film_temporary = nil;
+    film_destination = nil;
+    return ok;
   }
 }
 
@@ -201,12 +244,28 @@ int32_t mbf_write_text(moonbit_string_t path, moonbit_string_t text) {
   }
 }
 
+// Write beside the destination, then rename only a complete PNG into place. A failed render or write leaves the old
+// picture alone, including when this is used directly rather than through a shell wrapper.
+static int32_t snapshot_to(moonbit_string_t path, int transparent) {
+  NSURL *destination = [NSURL fileURLWithPath:ns(path)];
+  NSString *name = [NSString stringWithFormat:@".%@.%@.tmp.png", destination.lastPathComponent, NSUUID.UUID.UUIDString];
+  NSURL *temporary = [[destination URLByDeletingLastPathComponent] URLByAppendingPathComponent:name];
+  const char *temp_path = temporary.fileSystemRepresentation;
+  int ok = transparent ? mb_render_snapshot_transparent(temp_path) : mb_render_snapshot(temp_path);
+  if (ok && rename(temp_path, destination.fileSystemRepresentation) != 0) ok = 0;
+  if (!ok) [[NSFileManager defaultManager] removeItemAtURL:temporary error:nil];
+  return ok;
+}
+
 // The frame drawn last as it was drawn (the renderer's own pixels, not the film's encoding of them) written to `path`
 // as a PNG: 1, or 0.
 int32_t mbf_snapshot(moonbit_string_t path) {
-  @autoreleasepool {
-    return mb_render_snapshot(ns(path).fileSystemRepresentation);
-  }
+  @autoreleasepool { return snapshot_to(path, 0); }
+}
+
+// A picture for compositing: the last frame over a transparent ground.
+int32_t mbf_snapshot_transparent(moonbit_string_t path) {
+  @autoreleasepool { return snapshot_to(path, 1); }
 }
 
 // The machine's clock (ms, monotonic): what a bench over a Tester times the frame's work by (src/film's bench; the

@@ -9,6 +9,9 @@
 #include "../host/apple_auth.m"
 #include "../core/core_client.h"
 #include "../host/apple.h"
+#if TARGET_OS_IPHONE
+#include "apple_product.h"
+#endif
 
 // $MBUI_CORE_DATA, else ~/Library/Application Support/<bundle id, or mbui>/core: the app's own, never the installed
 // still.fail app's. Built as still.fail's desktop app itself (scripts/mac-app.sh's stable and beta: Electron's ids,
@@ -38,6 +41,9 @@ static const mbc_engine hermes_engine = {mb_core_start, mb_core_send, mb_core_st
 #endif
 
 __attribute__((constructor)) static void use_hermes_engine(void) {
+#if TARGET_OS_IPHONE
+  sf_product_environment(NSBundle.mainBundle.infoDictionary[@"MBUIEnvironment"]);
+#endif
   mbc_use(&hermes_engine);
   // a remote screen's frames and sound the shell reads itself go to the stream the app routed them to, past its queue
   // (mbui's apple_stream.m), acknowledged to the station through the shell

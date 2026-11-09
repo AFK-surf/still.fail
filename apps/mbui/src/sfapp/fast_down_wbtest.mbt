@@ -26,9 +26,14 @@ test "a video taken down fast (its finger's events 20 ms apart) and let go past 
     held: false,
   }
   let t = @ui.Tester::new(
-    fn(c) {
-      chat_file(c, src, a)
-      preview(c, src)
+    fn(c) { @ui.old_views_here(c) },
+    tree=fn(root) {
+      root.box(fn(v) {
+        v.grow(Is(1.0)) |> ignore
+        @ui.old(v, fn(c) { chat_file(c, src, a) }).over(Is(true)) |> ignore
+        @sfbase.viewer_node(v, src, fn() { v.window() })
+      })
+      |> ignore
     },
     w=390.0,
     h=844.0,
@@ -36,7 +41,7 @@ test "a video taken down fast (its finger's events 20 ms apart) and let go past 
   )
   t.draw()
   t.run_for(@ui.image_fade_ms)
-  t.tap_text("演示录屏.mp4")
+  tap_video(t, "演示录屏.mp4")
   t.run_for(@ui.move_most_ms)
   t.set_player(1, position=4000.0)
   t.draw()
@@ -56,7 +61,7 @@ test "the app's video (its window's tree, the old views in it) taken down fast: 
   new_run()
   let src = fixture("chat-preview-video")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   t.set_player(1, position=4000.0)

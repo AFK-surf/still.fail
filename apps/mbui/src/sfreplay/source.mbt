@@ -85,15 +85,40 @@ fn with_rail_view(v : Json?) -> Json? {
 }
 
 ///|
+/// Older runs used one full jobs subscription for both the bar and the sheet. New runs keep each separately.
+// kept across runs: Flow::start says which the next recording has before its first frame
+let legacy_chat_jobs : Ref[Bool] = Ref(false)
+
+///|
+/// Match the jobs read by the replay to what this recording's core could say.
+pub fn use_recorded_jobs(r : @core.Replay) -> Unit {
+  legacy_chat_jobs.val = !r.has_jobs_summary()
+}
+
+///|
+fn replay_topic_params(name : String, params : Map[String, Json]) -> Map[String, Json] {
+  let out = @sfbase.core_topic_params(name, params)
+  if name == "chatJobs" && legacy_chat_jobs.val {
+    out.remove("summary")
+  }
+  out
+}
+
+///|
 /// The app's source over @core, as src/stillfail's (without its logs and its read-only runs).
 pub fn source() -> @sfapp.Source {
   {
-    topic: fn(name, params) {
-      let s = @core.subscribe(name, params~).followed()
+    topic_read: fn(name, params) {
+      let s = @core.follow_topic(name, params=replay_topic_params(name, params))
       let value = if name == "prefs" { with_rail_view(s.value) } else { s.value }
       { value, error: s.error, version: s.version }
     },
-    waits: fn(name, params) { @core.subscribe(name, params~).followed().waiting },
+    topic_key: fn(name, params) { @sfbase.wire_topic_key(name, replay_topic_params(name, params)) },
+    topic_scope: None,
+    topic_alive: fn() { true },
+    topic_lease_own: None,
+    waits: fn(name, params) { @core.follow_topic(name, params=replay_topic_params(name, params)).waiting },
+    generation: fn(name, params) { @core.client.topic_generation(name, params=replay_topic_params(name, params)) },
     // The core's pure calls (`markdown`, `code.ink`, `reader.*`) answered as the real core answered them, kept
     // (src/sfkept): tapes older than a call have none of it, and it is a pure function of what is asked, not made up
     // here. Any other ask the tape does not have still diverges; ⌘K's `commands.find` is the tape's (it says it in the
@@ -149,9 +174,9 @@ pub fn source() -> @sfapp.Source {
     },
     cancel: fn(id) { @core.cancel(id) },
     sign_in: fn() { @sfcore.sign_in() },
-    signing_in: fn() { @sfcore.state.busy },
+    signing_in: fn() { @sfcore.sign_in_now().busy },
     sign_in_step: fn() {
-      let s = @sfcore.state
+      let s = @sfcore.sign_in_now()
       @sfbase.SignInStep::of(busy=s.busy, verifying=s.verifying, waiting=s.waiting, failed=s.failed)
     },
     picture: fn(url, stint) { picture(url, stint) },
@@ -183,7 +208,11 @@ pub fn source() -> @sfapp.Source {
     },
     images,
     now: fn() { @ui.wall_ms() },
-    leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },
+    leave: fn(name, params, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      @core.leave_topic(name, params=replay_topic_params(name, params)) },
+    release: fn(name, params) { @core.release_topic(name, params=replay_topic_params(name, params)) },
+    refresh: fn(name, params) { @core.refresh_topic(name, params=replay_topic_params(name, params)) },
     read_only: false,
   }
 }
@@ -212,4 +241,11 @@ pub fn app(c : @ui.Ctx) -> Unit {
   }
   @sfcore.frame(@core.subscribe("accounts"))
   @sfapp.view(c, the_source)
+}
+
+///|
+/// The app's window tree over the kept conversations (sfapp's app_tree over this package's source): what `app` is the
+/// old frame around, the one way the app is drawn.
+pub fn app_tree(root : @view.View) -> Unit {
+  @sfapp.app_tree(the_source)(root)
 }

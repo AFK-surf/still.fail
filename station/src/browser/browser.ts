@@ -1,4 +1,4 @@
-// The station's browser (docs/remote-screens.md): one real Chrome, kept for the agents, its tabs screens a person can
+// The station's browser: one real Chrome, kept for the agents, its tabs screens a person can
 // see and drive. Started when an agent asks for it (the `browser` tool), started again if it dies while in use, closed
 // after a long idle. It outlives a station process, as jobs do: the next one (a handover, a restart) finds it by its
 // DevToolsActivePort and takes it up, its tabs and logins as they were.
@@ -9,6 +9,7 @@ import type { Screens } from "../screens/source.ts";
 import type { Cdp } from "./cdp.ts";
 import { type ChromeHost, type Running, readState, writeState } from "./chrome.ts";
 import { Owners } from "./owners.ts";
+import { Authenticators } from "./passkeys.ts";
 import { BEHIND } from "./gate.ts";
 import { type TabInfo, Tabs } from "./tabs.ts";
 
@@ -49,9 +50,10 @@ export type BrowserOptions = {
   later?: (ms: number, f: () => void) => () => void;
   /// The session whose chat's context a browser context is (browsers.ts): a tab in it is that session's.
   contextOwner?: (browserContextId: string | undefined) => string | undefined;
+  usedTab?: (session: string, targetId: string) => void;
 };
 
-type Up = { running: Running; cdp: Cdp; tabs: Tabs; since: number };
+type Up = { running: Running; cdp: Cdp; tabs: Tabs; keys: Authenticators; since: number };
 
 export class StationBrowser {
   readonly #o: BrowserOptions;
@@ -134,6 +136,28 @@ export class StationBrowser {
     return up.cdp.send(method, params);
   }
 
+  /// A connection of its own to tab `targetId` (a sign-in's form filled by the station: signin-form.ts), the tab's
+  /// session on it; closing it lets go of the tab.
+  async attach(targetId: string): Promise<{ cdp: Cdp; session: string }> {
+    this.used();
+    const up = await this.#ensure();
+    if (!up.tabs.has(targetId)) throw new Error("This tab is closed.");
+    const cdp = await this.#o.chrome.connect(up.running.ws);
+    try {
+      const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
+      return { cdp, session: sessionId };
+    } catch (e) {
+      cdp.close();
+      throw e;
+    }
+  }
+
+  /// The chats' tabs' authenticators (passkeys.ts), the browser started if it is not running.
+  async passkeys(): Promise<Authenticators> {
+    this.used();
+    return (await this.#ensure()).keys;
+  }
+
   /// The browser context of target `targetId` (any target: a page, a frame, a worker), when it is known.
   contextOf(targetId: string): string | undefined {
     return this.#up?.tabs.contextOf(targetId);
@@ -195,6 +219,7 @@ export class StationBrowser {
     this.#up = null;
     if (up) {
       up.tabs.close();
+      up.keys.close();
       up.cdp.close();
     }
     this.#note();
@@ -237,23 +262,34 @@ export class StationBrowser {
   async #take(running: Running): Promise<Up> {
     const { chrome, screens } = this.#o;
     const cdp = await chrome.connect(running.ws);
+    // (each chat's tab its authenticator: passkeys.ts; the station's own context has none)
+    const owner = this.#o.contextOwner;
+    const keys = new Authenticators(cdp, (ctx) => owner?.(ctx) !== undefined);
     const tabs = new Tabs({
       cdp, screens, connect: () => chrome.connect(running.ws), now: () => this.#fibers.now(), activity: () => this.used(), later: this.#o.later,
-      owners: this.#owners, ...(this.#o.contextOwner ? { contextOwner: this.#o.contextOwner } : {}),
+      owners: this.#owners, ...(owner ? { contextOwner: owner } : {}),
+      ownPasskey: (targetId, rpId) => {
+        const ctx = tabs.contextOf(targetId);
+        return ctx !== undefined && keys.has(ctx, rpId);
+      },
+      usedTab: (session, targetId) => this.#o.usedTab?.(session, targetId),
     });
     try {
+      await keys.start();
       await tabs.start();
     } catch (e) {
+      keys.close();
       tabs.close();
       cdp.close();
       throw e;
     }
     if (this.#closed) {
+      keys.close();
       tabs.close();
       cdp.close();
       throw new Error("The station is stopping.");
     }
-    const up: Up = { running, cdp, tabs, since: this.#fibers.now() };
+    const up: Up = { running, cdp, tabs, keys, since: this.#fibers.now() };
     this.#up = up;
     this.#leaving = false;
     void cdp.closed.then(() => this.#lost(up));
@@ -266,6 +302,7 @@ export class StationBrowser {
     if (this.#up !== up) return;
     this.#up = null;
     up.tabs.close();
+    up.keys.close();
     this.#idle();
     if (this.#leaving || this.#closed) return;
     const inUse = this.#fibers.now() - this.#lastUse < this.#idleMs;
@@ -308,6 +345,7 @@ export class StationBrowser {
     this.#restart();
     log.info("browser", "closing Chrome", { why, pid: up.running.pid });
     up.tabs.close();
+    up.keys.close();
     await up.cdp.send("Browser.close").catch(() => {});
     up.cdp.close();
     if (this.#up === up) this.#up = null;

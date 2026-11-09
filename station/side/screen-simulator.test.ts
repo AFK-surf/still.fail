@@ -1,4 +1,4 @@
-// An iOS Simulator as a screen (docs/remote-screens.md "Simulators") on a real Mac with Xcode: a simulator of this
+// An iOS Simulator as a screen on a real Mac with Xcode: a simulator of this
 // test's own made and booted (deleted afterwards), found as the station finds it, viewed through still.fail Helper
 // (native/helper, prebuilt by scripts/native.ts; STILLFAIL_HELPER another) as the station starts it. A finger dragged
 // across its home screen: says how soon the first picture after it came, the frames a second while it moved, and how

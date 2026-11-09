@@ -1,5 +1,5 @@
 // What macOS lets still.fail Helper do, as the station's page and the agents see it and ask for it (src/helper/grants.ts,
-// src/api/routes/permissions.ts, src/tools/permissions.ts; docs/remote-screens.md "Grants"): the grants as the helper
+// src/api/routes/permissions.ts, src/tools/permissions.ts): the grants as the helper
 // says them, told again as they change; one asked for puts the helper's window up once (not again while it is up, nor
 // within AGAIN_MS when an agent or the drive asks; a person's own ask puts it up again); the answer says whether the screen can be driven (the
 // client then opens it) or the person has to go to the Mac. The helper is a fake in this process speaking main.swift's
@@ -109,7 +109,7 @@ function station(options: { folders?: boolean } = {}) {
   // Whether the station reaches its LAN (none by default: no LAN), and System Settings' panes opened on the Mac.
   const lan: { now: "granted" | "denied" | null } = { now: null };
   const opened: string[] = [];
-  const grants = new HelperGrants({ helper, folders: options.folders, now: () => clock.now, volumes, reach: async () => lan.now, open: (url) => void opened.push(url) });
+  const grants = new HelperGrants({ helper, folders: options.folders, now: () => clock.now, volumes, mounts: () => [], reach: async () => lan.now, open: (url) => void opened.push(url) });
   let changes = 0;
   grants.onChange(() => changes++);
   // Ends with its test: nothing left to keep the process.
@@ -181,8 +181,7 @@ test("a station without the folders' grants lists the screen's two only", { skip
   await s.end();
 });
 
-/// 2026-10-18, a MacBook on studio's Wi-Fi: the desktop app (and the station it runs) could reach nothing on its own
-/// subnet, macOS's Local Network not switched on for it. The station's own: listed last once it is on a LAN, with the
+/// macOS's Local Network must be enabled before the desktop app can reach its subnet. The station's own: listed last once it is on a LAN, with the
 /// app it is switched on for; asked for, System Settings' Local Network list comes up on the Mac, once in a while.
 test("the station's Local Network: listed once on a LAN, asked for it opens System Settings there", { skip: WINDOWS }, async () => {
   const s = station();

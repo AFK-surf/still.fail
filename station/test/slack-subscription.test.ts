@@ -10,18 +10,31 @@ import { SlackClient } from "../src/slack/web.ts";
 import { Store } from "../src/store/store.ts";
 import { FakeSlack, bot } from "./slack-fake.ts";
 
-test("an existing connected Slack app gets the stop event when a configuration token becomes available", async () => {
+test("a turn racing an app upgrade retries its status once the agent feature is enabled", async () => {
   const data = mkdtempSync(join(tmpdir(), "stop-sub-"));
   writeFileSync(join(data, "config.json"), JSON.stringify({ connects: [{ id: "cl", createdBy: { id: "owner@example.test", name: "Owner" }, slack: { appToken: "xapp-test", botToken: "xoxb-test" } }] }));
   const fake = await FakeSlack.start();
   bot(fake);
   fake.answer("bots.info", { ok: true, bot: { app_id: "A1" } });
   let manifest = slackManifest("old");
+  delete manifest.features.agent_view;
   manifest.settings.event_subscriptions.bot_events = ["app_mention", "custom_event"];
   let exports = 0;
-  fake.answer("apps.manifest.export", () => (++exports === 1 ? { ok: false, error: "temporarily_unavailable" } : { ok: true, manifest }));
+  let releaseSetup!: () => void;
+  const setupHeld = new Promise<void>((resolve) => (releaseSetup = resolve));
+  fake.answer("apps.manifest.export", async () => {
+    if (++exports === 1) return { ok: false, error: "temporarily_unavailable" };
+    await setupHeld;
+    return { ok: true, manifest };
+  });
   fake.answer("apps.manifest.update", (s) => {
     manifest = JSON.parse(s.params.manifest!);
+    return { ok: true };
+  });
+  let statusesSet = 0;
+  fake.answer("agents.sessions.setStatus", () => {
+    if (!manifest.features.agent_view) return { ok: false, error: "not_authorized" };
+    statusesSet++;
     return { ok: true };
   });
   const config = new ConfigFile(data);
@@ -40,13 +53,20 @@ test("an existing connected Slack app gets the stop event when a configuration t
     await fake.until("the first attempt", () => exports === 1);
     // No timer keeps asking Slack: the next real turn tries the failed setup again.
     slack.chat("cl")!.working!({ channel: "C1", threadTs: "1.1" }, "1.1", "working");
+    await fake.until("status and setup both started", () => exports === 2 && fake.calls("agents.sessions.setStatus").length === 1);
+    assert.equal(statusesSet, 0);
+    releaseSetup();
     await fake.until("the app's manifest updated", () => fake.calls("apps.manifest.update").length === 1);
     assert.deepEqual(manifest.settings.event_subscriptions.bot_events, ["app_mention", "custom_event", "agent_session_stopped"]);
+    assert.ok(manifest.features.agent_view);
+    await fake.until("an agent session starts", () => statusesSet === 1);
+    assert.deepEqual(fake.calls("agents.sessions.setStatus").map((c) => c.params.status), ["processing", "processing"]);
     assert.equal(manifest.display_information.name, "old");
     assert.equal(fake.calls("apps.manifest.update")[0]!.params.app_id, "A1");
     await slack.reconcile();
     assert.equal(fake.calls("apps.manifest.update").length, 1, "reconciling does not write it again");
   } finally {
+    releaseSetup();
     await slack.close();
     store.close();
     await fake.close();

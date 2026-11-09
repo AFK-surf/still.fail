@@ -9,8 +9,8 @@ let card_around_ms : Double = 20.0
 /// What the card's view is given: whether the trigger is drawn, how far down it stands, whether the card's inner
 /// popover is open, whether the trigger and its card are a part kept (an island: kept while nothing it read changed).
 struct CardView {
-  shown : Ref[Bool]
-  down : Ref[Double]
+  shown : @signals.Signal[Bool]
+  down : @signals.Signal[Double]
   inner : Ref[Bool]
   kept : Bool
   open : Ref[Bool]
@@ -20,12 +20,12 @@ struct CardView {
 /// A Tester of a trigger (@ada) `down` below the top, its card holding a line and a button (Notes) that opens a popover
 /// of its own (a button there, Inner notes).
 fn card_tester(kept? : Bool = false) -> (@ui.Tester, CardView) {
-  let v : CardView = { shown: Ref(true), down: Ref(0.0), inner: Ref(false), kept, open: Ref(false) }
+  let v : CardView = { shown: @signals.signal(true), down: @signals.signal(0.0), inner: Ref(false), kept, open: Ref(false) }
   let t = @ui.Tester::new(fn(c) {
     c.column(pad=40.0, fn() {
-      c.box(style=@ui.style(h=Fixed(v.down.val)), fn() {  }) |> ignore
+      c.box(style=@ui.style(h=Fixed(v.down.get())), fn() {  }) |> ignore
       let body = fn() {
-        if v.shown.val {
+        if v.shown.get() {
           let r = button(c, "@ada", key="ada", variant=Ghost)
           v.open.val = hover_card(c, "card", r.id, fn() {
             c.text("Ada's card") |> ignore
@@ -75,9 +75,9 @@ test "hover card: its trigger gone a frame and drawn again under the resting poi
   let (x, y) = middle_of(t, "@ada")
   t.move(x, y)
   t.run_for(hover_card_open_ms / 2.0)
-  v.shown.val = false
+  v.shown.set(false)
   t.draw()
-  v.shown.val = true
+  v.shown.set(true)
   t.frame()
   // (drawn again: under the pointer from this frame)
   let again = t.time()
@@ -124,7 +124,7 @@ test "hover card: its trigger moved under the still pointer waits from the frame
   t.move(x, y + 240.0)
   t.run_for(hover_card_open_ms * 2.0)
   assert_false(v.open.val, msg="nothing under the pointer")
-  v.down.val = 240.0
+  v.down.set(240.0)
   t.frame()
   // (drawn under it as this frame ended)
   let drawn = t.time()
@@ -134,7 +134,7 @@ test "hover card: its trigger moved under the still pointer waits from the frame
   assert_eq(seen.map(fn(s) { s.1 }), [false, true], msg="(ms after it was drawn under the pointer, open): \{seen}")
   // moved from under it again: closes from the frame that drew it away
   t.run_for(hover_card_open_ms)
-  v.down.val = 0.0
+  v.down.set(0.0)
   t.frame()
   let away = t.time()
   t.advance(hover_card_close_ms * 2.0 / 3.0)
@@ -254,7 +254,7 @@ test "hover card: kept open by the keyboard's focus in it; a screen reader's Foc
   assert_true(t.focused().map(fn(f) { f.label }) == Some("Tree button"), msg="out of the card: \{t.focused()}")
   t.advance(hover_card_close_ms * 2.0 / 3.0)
   t.frame()
-  let v : CardView = { shown: Ref(true), down: Ref(0.0), inner: Ref(false), kept: false, open }
+  let v : CardView = { shown: @signals.signal(true), down: @signals.signal(0.0), inner: Ref(false), kept: false, open }
   let seen = around(t, v, moved, hover_card_close_ms)
   assert_eq(seen.map(fn(s) { s.1 }), [true, false], msg="(ms after Focus, open): \{seen}")
 }

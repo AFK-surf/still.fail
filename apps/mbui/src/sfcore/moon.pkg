@@ -3,5 +3,6 @@ import {
   "mbui/effect",
   "mbui/hostapi",
   "mbui/ui",
+  "mbui/signals",
   "moonbitlang/core/json",
 }

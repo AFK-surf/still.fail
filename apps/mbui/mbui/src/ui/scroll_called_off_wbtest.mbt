@@ -1,6 +1,6 @@
 // A list pulled past its top and the press called off (the host's word, or a modal layer of the window's tree come
 // over the old view the list is in), or let go flicked back into what it pulled: what was pulled goes back from that
-// moment, not from the next frame (docs/retained.md: a press called off sets going what it sets going at its cause).
+// moment, not from the next frame (a press called off sets going what it sets going at its cause).
 // Two ways, the same moment: the next frame drawn at once, or late; where it is at a moment after both is the same, and
 // both are at rest at the end said for its way back. A fling still sets out at its first frame (Compose's playtime 0).
 

@@ -1,4 +1,4 @@
-// Slack on the station (server.rs's part of it, admin/slack.rs `remember_identities`): its connects as every
+// Slack on the station (server.rs's part of it): its connects as every
 // platform's are kept (connects/connects.ts: connected as config.json and the station's workspace say, the names Slack
 // gives people and channels in <data>/slack-names.json), and the app API with the configuration tokens in config.json.
 import type { Clock } from "effect";
@@ -8,7 +8,7 @@ import { type ConnectsOptions, makeConnects } from "../connects/connects.ts";
 import { NAMES_FILE } from "../connects/keys.ts";
 import type { NameBook } from "../connects/names.ts";
 import { log } from "../ops/log.ts";
-import { type ConfigToken, SlackApps, type SlackAppLinks, appIdOf, slackAppLinks, upsertToken, withStopEvent } from "./apps.ts";
+import { type ConfigToken, SlackApps, type SlackAppLinks, appIdOf, slackAppLinks, upgraded, upsertToken } from "./apps.ts";
 import { SlackSurface } from "./surface.ts";
 import { SlackClient } from "./web.ts";
 
@@ -27,7 +27,7 @@ export type SlackConnect = {
   botImage: string | null;
   /// Who added or was handed the connect: only their configuration token maintains its app.
   owner: string | null;
-  /// The still.fail workspace it was added in (docs/multi-workspace.md); null: the station's home one.
+  /// The still.fail workspace it was added in; null: the station's home one.
   workspace?: string | null;
 };
 
@@ -108,11 +108,14 @@ export type SlackParts = ReturnType<typeof makeConnections>;
 export function makeConnections(options: SlackOptions) {
   const { config } = options;
   const client = options.client ?? new SlackClient();
-  let onWorking = (_id: string) => {};
+  let onWorking = async (_id: string) => false;
   const create =
     options.create ??
     ((c: SlackConnect, book: NameBook, web: SlackClient) =>
-      new SlackSurface({ appToken: c.appToken, botToken: c.botToken, client: web, connect: c.id, book, pingMs: options.pingMs, staleMs: options.staleMs, clock: options.clock, onWorking: () => onWorking(c.id) }));
+      new SlackSurface({
+        appToken: c.appToken, botToken: c.botToken, client: web, connect: c.id, book, pingMs: options.pingMs, staleMs: options.staleMs, clock: options.clock,
+        onWorking: () => onWorking(c.id), models: () => options.models?.(c.id) ?? [],
+      }));
   const connects = makeConnects<SlackConnect>(options, {
     kind: "slack",
     names: NAMES_FILE.slack,
@@ -153,9 +156,8 @@ export function makeConnections(options: SlackOptions) {
   const attempted = new Map<string, string>();
   const completed = new Map<string, string>();
   const upgrading = new Map<string, Promise<void>>();
-  const retryAtEnd = new Set<string>();
   let closed = false;
-  const upgradeStops = () => {
+  const upgradeApps = () => {
     if (closed) return;
     if (!options.bound()) {
       attempted.clear();
@@ -186,31 +188,33 @@ export function makeConnections(options: SlackOptions) {
               connects.state(c.id)?.state !== "connected") return null;
           if (!manifest || typeof manifest !== "object") throw new Error("Slack returned no app manifest");
           applicable = true;
-          return withStopEvent(manifest);
+          return upgraded(manifest);
         });
         if (applicable) completed.set(c.id, versionOf(configTokens(config.raw())));
-      })().catch((error) => log.warn("slack", "could not enable the native stop button", { connect: c.id, error: (error as Error)?.message ?? String(error) }))
+      })().catch((error) => log.warn("slack", "could not bring the app up to date (native stop button, /sf)", { connect: c.id, error: (error as Error)?.message ?? String(error) }))
         .finally(() => {
           upgrading.delete(c.id);
-          if (retryAtEnd.delete(c.id) && completed.get(c.id) !== attempted.get(c.id)) attempted.delete(c.id);
-          upgradeStops();
+          upgradeApps();
         });
       upgrading.set(c.id, work);
     }
   };
-  onWorking = (id) => {
-    if (upgrading.has(id)) retryAtEnd.add(id);
-    else attempted.delete(id);
-    upgradeStops();
+  onWorking = async (id) => {
+    // A real turn is the opportunity to retry setup if it failed; there is no timer polling Slack.
+    await upgrading.get(id);
+    attempted.delete(id);
+    upgradeApps();
+    await upgrading.get(id);
+    return completed.has(id);
   };
-  const offChanges = connects.onChange(upgradeStops);
-  const offConfig = config.listen(upgradeStops);
+  const offChanges = connects.onChange(upgradeApps);
+  const offConfig = config.listen(upgradeApps);
 
   return {
     ...connects,
     reconcile: async () => {
       await connects.reconcile();
-      upgradeStops();
+      upgradeApps();
     },
     close: async () => {
       closed = true;
@@ -221,13 +225,13 @@ export function makeConnections(options: SlackOptions) {
     },
     apps,
     client,
-    /// What the overview says of Slack for a viewer (views.rs): the apps they made that wait for a connect, and the
+    /// What the overview says of Slack for a viewer: the apps they made that wait for a connect, and the
     /// Slack workspaces they can make apps in (never a token).
     overview: (viewer: string) => slackOverview(config.raw(), viewer),
   };
 }
 
-/// The overview's Slack parts for a viewer (admin/views.rs `overview`'s slackApps, `slack_teams`).
+/// The overview's Slack parts for a viewer (`slack_teams`).
 export function slackOverview(raw: Json, by: string): { slackApps: Json[]; slackTeams: Json[] } {
   const tokens = configTokens(raw);
   const slackApps = madeApps(raw)

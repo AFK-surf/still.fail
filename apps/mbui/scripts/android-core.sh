@@ -1,6 +1,6 @@
 # Sourced by scripts/android.sh for an app with the still.fail core in it (coredemo, stillfail; MBUI_ANDROID_HOOK):
 # the core on the app's engine (src/sfcore/android_engine.c, which includes android_core.c; its C API apps/mbui/engine's
-# engine.h). Into out/android/apk, which Gradle packs: the prebuilt engine and shell (EMBER: still.fail's checkout, as
+# engine.h). Into out/android/apk, which Gradle packs: the prebuilt engine and shell (SF_SRC: still.fail's checkout, as
 # scripts/core.sh has it; `node scripts/native.ts path engine|shell android-arm64` there, prebuilt or built by it),
 # libhermes.so from React Native's hermes-android (the Hermes the engine is built against: Gradle's cache, else Maven
 # Central), and the core as Hermes bytecode (scripts/core.sh hermes; ENTRY picks the core's entry, by default the one
@@ -8,11 +8,11 @@
 #   HBC_CACHE (a directory: CI's): core.hbc kept there by what it is made of (scripts/core.sh hermes).
 #   CORE_SCRIPT: a script in the core's place (listen-test).
 H="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EMBER=${EMBER:-$(cd "$TOOLS/.." 2>/dev/null && pwd)/ember-src}
+SF_SRC=${SF_SRC:-$(cd "$H/../../.." && pwd)}
 APP_KIND=core
-# mbui/core's queue, the keyboard's files (src/pinyin) and the app's engine (src/<app>/android_engine.c, which includes
+# mbui/core's queue and the app's engine (src/<app>/android_engine.c, which includes
 # src/sfcore/android_engine.c)
-APP_EXTRA="--extra=src/core/core_native.c --extra=src/pinyin/read_file.c --extra=src/$PKG/android_engine.c"
+APP_EXTRA="--extra=src/core/core_native.c --extra=src/$PKG/android_engine.c"
 APP_LINK="-L$jni -lstillfail_hermes"
 # (the engine's C API, engine.h)
 CFLAGS="$CFLAGS -I$H/../engine"
@@ -28,8 +28,8 @@ aar_lib() {
 # the .so files, which libmbui.so links against
 app_libs() {
   local engine shell
-  engine=$(cd "$EMBER" && node scripts/native.ts path engine android-arm64)
-  shell=$(cd "$EMBER" && node scripts/native.ts path shell android-arm64)
+  engine=$(cd "$SF_SRC" && node scripts/native.ts path engine android-arm64)
+  shell=$(cd "$SF_SRC" && node scripts/native.ts path shell android-arm64)
   cp -p $engine/libstillfail_hermes.so $engine/libjsi.so $engine/libc++_shared.so $shell/libstillfail_shell.so $jni/
   # Hermes as React Native 0.81.4 has it, and the fbjni it needs (libc++_shared.so is the engine's, the NDK's, which
   # fbjni's AAR carries an older copy of)
@@ -44,16 +44,13 @@ app_libs() {
 app_assets() {
   if [ -n "${CORE_SCRIPT:-}" ]; then
     # a script in the core's place (listen-test: core/listen-test.js)
-    EMBER=$EMBER "$H/core.sh" hermes-script "$CORE_SCRIPT" || { echo "android.sh: $CORE_SCRIPT did not compile" >&2; exit 1; }
+    SF_SRC=$SF_SRC "$H/core.sh" hermes-script "$CORE_SCRIPT" || { echo "android.sh: $CORE_SCRIPT did not compile" >&2; exit 1; }
   else
-    EMBER=$EMBER ENTRY=${ENTRY:-$PWD/core/media-hermes.ts} "$H/core.sh" hermes \
-      || { echo "android.sh: no core for the app (scripts/core.sh hermes failed)" >&2; exit 1; }  # with media, as on macOS
+    SF_SRC=$SF_SRC "$H/core.sh" hermes \
+      || { echo "android.sh: no core for the app (scripts/core.sh hermes failed)" >&2; exit 1; }
   fi
   cp -p out/core/core.hbc $apk/assets/
   echo "core.hbc $(size $apk/assets/core.hbc)"
-  # the keyboard's words (src/pinyin, mbui's Keyboard.java copies assets/keyboard to where the keyboard reads them)
-  mkdir -p $apk/assets/keyboard
-  cp -p src/pinyin/words.txt $apk/assets/keyboard/
 }
 
 app_cmd() {

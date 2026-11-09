@@ -1,6 +1,5 @@
 #!/bin/sh
 # still.fail's command line, from a clone or from an installed release (~/.stillfail/app, see cloud/src/install.ts).
-# `ember`, its name before the rename, is a link to it (bin/ember, ~/.local/bin/ember).
 #   stillfail start [--port N]                          runs the station (the release's service does this):
 #                                                       stillfail-station, whose loopback port (4760, or a free one when
 #                                                       that is taken; --port insists on one) sends links to the page it
@@ -14,29 +13,31 @@
 #   stillfail station enroll <cloud-origin> <token> [--provider comma] [--lock <hash>] [--join | --stay]
 #                                                       joins a workspace in still.fail cloud (or in Comma), leaving
 #                                                       those it is in; --join stays in them, --stay too when it is in
-#                                                       one (docs/multi-workspace.md); --lock pins that workspace lock
-#                                                       (docs/workspace-lock.md)
+#                                                       one; --lock pins that workspace lock
+#
 #   stillfail station id
 #   stillfail lock status|reset                         the workspace lock on this station: what is pinned, or taking
 #                                                       it away (when every device that could sign is lost)
 #   stillfail heap                                      a heap snapshot of the running station's main thread, written
 #                                                       to <data>/run (only the latest kept; it holds the station's
 #                                                       tokens): what its memory holds, for Chrome's DevTools
-# The data is in $STILLFAIL_DATA (else $EMBER_DATA), default ~/.stillfail; ~/.ember is the old default, which the
-# station moves there on its first start (the Rust station's former.rs).
+# The data is in $STILLFAIL_DATA, default ~/.stillfail.
 set -eu
 # Called through a link (~/.local/bin/stillfail): the app is where the link points.
 self=$(readlink -f "$0" 2>/dev/null || echo "$0")
 here=$(cd "$(dirname "$self")/.." && pwd)
-data=${STILLFAIL_DATA:-${EMBER_DATA:-$HOME/.stillfail}}
-[ "$data" = "$HOME/.ember" ] && data="$HOME/.stillfail"
-station=${STILLFAIL_STATION_BIN:-${EMBER_STATION_BIN:-$here/mesh/target/release/stillfail-station}}
+# Called as another product's command (`monoid`: the installer links it so, client/i18n/brand.ts), that product's data
+# directory (~/.monoid) beside still.fail's.
+own=$HOME/.stillfail
+case "$(basename "$0")" in stillfail|stillfail-*) ;; *) [ ! -d "$HOME/.$(basename "$0")/app" ] || own="$HOME/.$(basename "$0")" ;; esac
+data=${STILLFAIL_DATA:-$own}
+station=${STILLFAIL_STATION_BIN:-$here/mesh/target/release/stillfail-station}
 case "${1:-} ${2:-}" in
   "start "*) shift; exec "$station" run --app "$here" --data "$data" "$@" ;;
   "update "*)
     # The channel's latest release, verified by this release's Node (the station's `update`: its signature, newer than
     # this one) and installed by the installer this release carries, told what it must hash to
-    # (docs/release-signing.md). Not the cloud's installer: whoever serves it could put anything here.
+    # (scripts/release-sign.ts). Not the cloud's installer: whoever serves it could put anything here.
     node=${STILLFAIL_NODE:-$here/node/bin/node}
     [ -x "$node" ] && [ -f "$here/station/main.js" ] || { echo "stillfail update: $here is not an installed release (no node/bin/node or station/main.js)" >&2; exit 1; }
     case "${2:-}" in --beta|--stable|"") ;; *) echo "usage: stillfail update [--beta|--stable]" >&2; exit 2 ;; esac

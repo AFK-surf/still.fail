@@ -1,6 +1,6 @@
-// How a chat's agent runs, changed on a page of its own (History.kt RunSettingsScreen), the machine's own sessions to
-// go on with (NewChat.kt MachineSessionsOffer, openMachineSessions, lookAtMachineSession), and adding people to the
-// workspace (Settings.kt AddSheet) with the workspace's mark.
+// How a chat's agent runs, changed on a page of its own, the machine's own sessions to
+// go on with (openMachineSessions, lookAtMachineSession), and adding people to the
+// workspace with the workspace's mark.
 
 ///|
 /// How an agent runs (RunSettingsScreen): what it is now and what it becomes, the changes marked (and why its account
@@ -9,7 +9,7 @@
 /// (`pick.save`), or, another station's model, borrows it once asked again.
 fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -> Unit {
   let of = "session:" + key
-  let topic = (core.topic)("pick", { "station": str(station), "of": str(of) })
+  let topic = (core.topic)("pick", { "station": str(station), "of": str(of) }).get()
   let v = topic.value
   let pick = fn(more : Array[(String, Json)]) {
     let p = [("station", str(station)), ("of", str(of))]
@@ -73,10 +73,10 @@ fn run_view(
 ) -> Unit {
   let t = @sf.theme()
   let of = "session:" + key
-  let runtime = text(field(v, "value"), "runtime")
   let draft = field(v, "draft")
+  let runtime = text(draft, "runtime")
   if list == "model" {
-    // every model it can move to (SettingParts.kt ModelList)
+    // every model it can move to
     model_list(c, "run-session-models/" + key, items(v, "options"), runtime, text(v, "option"), fn(m) {
       pick([("model", str(m))])
       run_list.remove(of)
@@ -88,7 +88,7 @@ fn run_view(
     let repick = text(v, "repick")
     let repicking = fn() {
       let busy = is_doing(core, ["pick.repick"], [("station", station), ("of", of)])
-      if @sf.button(c, repick, key="run-session-repick", busy~) {
+      @sf.button(c, repick, key="run-session-repick", busy~, on_press=fn() {
         (core.call)("pick.repick", obj([("station", str(station)), ("of", str(of))]), fn(r) {
           match r {
             Ok(said) =>
@@ -99,7 +99,7 @@ fn run_view(
             Err(e) => (core.say)(fill("android-misc.act.failed", [("what", repick), ("error", error_text(e))]))
           }
         })
-      }
+      })
     }
     account_list(
       c,
@@ -128,9 +128,9 @@ fn run_view(
       for o in options {
         let on = o == chosen
         let id = c.id(k + "/" + o)
-        if hit(c, id) {
+        c.on_press(id, fn() {
           run(o)
-        }
+        })
         c.box(padx=chip_px, pady=chip_py, radius=chip_corner, bg=if on { t.p.text } else { t.p.chip }, id~, fn() {
           c.text(o, size=t.t.ui, weight=if on { 600 } else { 400 }, color=if on { t.p.bg } else { t.p.text }, wrap=false)
           |> ignore
@@ -141,15 +141,14 @@ fn run_view(
     |> ignore
   }
   // (a row of the library's list card, as every page's: the user, 2026-10-29, cards each page rounded its own way)
-  let setting_row = fn(k : String, title : String, note : String, trouble : String, lead : (() -> Unit)?) {
-    let mut tapped = false
-    @sf.group(c, fn() { tapped = @sf.link_row(c, k, title, note~, trouble~, lead?) })
-    tapped
+  let setting_row = fn(k : String, title : String, note : String, trouble : String, lead : (() -> Unit)?, on_press : () -> Unit) {
+    @sf.group(c, fn() { @sf.link_row(c, k, title, note~, trouble~, lead?, title_cut=true, on_press~) })
   }
   let fast = flag(v, "fastAvailable")
   // (in the page's room, 12 from its sides, as every page's blocks: it stood 18 in)
   c.box(style=run_body, fn() {
-    scroll_page(c, "run-session/" + key, [
+    // (what it shows the run as it would be: changed as a pick is, it goes to its new height)
+    scroll_page(c, "run-session/" + key, keys=["run"], versions=[json_sign(v)], [
       fn() {
         // what it was and what it becomes, a line each property, the changes marked
         c.box(w=Fill(1.0), pt=8.0, fn() {
@@ -160,6 +159,11 @@ fn run_view(
             }
             let was = strings(v, "was")
             let becomes = strings(v, "becomes")
+            if !flag(v, "runtimeFixed") && runtime != text(field(v, "value"), "runtime") {
+              labels.push(@sf.t("web-main.model.runtime"))
+              was.push(runtime_label(text(field(v, "value"), "runtime")))
+              becomes.push(runtime_label(runtime))
+            }
             // (the labels' column as wide as the widest of them, in this language: words of a length known, whole)
             let label_w = labels.fold(init=0.0, fn(m, l) {
               dmax(m, c.words_across(l, run_label).ceil())
@@ -190,10 +194,24 @@ fn run_view(
       },
       fn() {
         group(tr("android-chat.run.label.model"))
-        if setting_row("session-run-model", text(v, "modelText"), "", "", Some(fn() {
+        setting_row("session-run-model", text(v, "modelText"), "", "", Some(fn() {
             @sf.maker_mark(c, text(field(v, "maker"), "id"), runtime, 18.0) |> ignore
-          })) {
-          run_list[of] = "model"
+          }), fn() { run_list[of] = "model" })
+      },
+      fn() {
+        let runtimes = strings(v, "runtimes")
+        if !flag(v, "runtimeFixed") && runtimes.length() > 1 {
+          let label = @sf.t("web-main.model.runtime")
+          group(label)
+          setting_row("session-run-runtime", runtime_label(runtime), "", "", None, fn() {
+            @sf.pick(
+              label,
+              runtimes.map(fn(r) { @sf.choice(r, runtime_label(r), icon="runtime:" + r) }),
+              runtime,
+              fn(r) { pick([("runtime", str(r))]) },
+              from=Of(c.id("session-run-runtime")),
+            )
+          })
         }
       },
       fn() {
@@ -228,15 +246,14 @@ fn run_view(
       },
       fn() {
         group(tr("android-chat.run.label.account"))
-        if setting_row(
-            "session-run-account",
-            text(v, "accountText"),
-            text(v, "accountNote"),
-            if flag(v, "accountWarn") { tr("android-chat.run.account.warn") } else { "" },
-            None,
-          ) {
-          run_list[of] = "account"
-        }
+        setting_row(
+          "session-run-account",
+          text(v, "accountText"),
+          text(v, "accountNote"),
+          if flag(v, "accountWarn") { tr("android-chat.run.account.warn") } else { "" },
+          None,
+          fn() { run_list[of] = "account" },
+        )
         gap(c, 16.0)
       },
     ])
@@ -255,9 +272,9 @@ fn run_view(
       })
       |> ignore
       c.box(w=Fill(1.0), pl=foot_l, pr=foot_r, pt=12.0, pb=foot_b, fn() {
-        if wide_button(c, "session-borrow", text(b, "action"), allowed, busy=is_doing(core, ["pick.borrow"], [("station", station), ("of", of)]), enabled=allowed) {
+        wide_button(c, "session-borrow", text(b, "action"), allowed, busy=is_doing(core, ["pick.borrow"], [("station", station), ("of", of)]), enabled=allowed, on_press=fn() {
           confirm_borrow(core, station, of, b)
-        }
+        })
       })
       |> ignore
     }
@@ -266,7 +283,7 @@ fn run_view(
       let changed = flag(v, "changed")
       let go = changed && has(v, "option") && !busy
       c.box(w=Fill(1.0), pl=foot_l, pr=foot_r, pt=12.0, pb=foot_b, fn() {
-        if wide_button(c, "session-save", text(v, "saveText"), changed, busy~) {
+        wide_button(c, "session-save", text(v, "saveText"), changed, busy~, on_press=fn() {
           // back at once, not waiting on the station; failed, a toast says why
           (core.pop)()
           if go {
@@ -277,7 +294,7 @@ fn run_view(
               }
             })
           }
-        }
+        })
       })
       |> ignore
     }
@@ -300,25 +317,30 @@ fn run_sample() -> Json {
 }
 
 // ---------------------------------------------------------------------------
-// The machine's own sessions (web/src/MachineSessions.tsx)
+// The machine's own sessions
 
 ///|
-/// The sessions a station's machine kept (by station), as `machineSessions.list` answered; asked once a page.
-let machine_sessions : Map[String, Array[Json]] = Map([])
+/// The sessions a station's machine kept (by station), as `machineSessions.list` answered; asked once a page. What
+/// shows them follows the answer (it comes from outside, as the core answers).
+let machine_sessions : @sf.LiveMap[String, Array[Json]] = @sf.LiveMap::new()
 
 ///|
-/// The offer, where the station's machine kept sessions of its own Claude Code or Codex (MachineSessions.css.ts offer):
+/// The stations whose machine's sessions were asked (machine_sessions): asked once.
+let machine_sessions_asked : Map[String, Bool] = Map([])
+
+///|
+/// The offer, where the station's machine kept sessions of its own Claude Code or Codex:
 /// quiet as the words around it until pointed at, then its ground and its words the text's; its list and a look at one
 /// before going on with it are sheets. Drawn by a new chat's page (sfpages), which says where it hangs.
 pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name : String) -> Unit {
   let t = @sf.theme()
-  if !machine_sessions.contains(station) {
-    machine_sessions[station] = []
+  if !machine_sessions_asked.contains(station) {
+    machine_sessions_asked[station] = true
     // (asked once the frame's builds are over: the build that first comes to it alone)
     c.tell("machineSessions.list/" + station, fn() {
       (core.call)("machineSessions.list", obj([("station", str(station))]), fn(r) {
         match r {
-          Ok(v) => machine_sessions[station] = items(Some(v), "sessions")
+          Ok(v) => machine_sessions.set(station, items(Some(v), "sessions"))
           Err(_) => ()
         }
       })
@@ -329,9 +351,9 @@ pub fn machine_sessions_offer(c : @ui.Ctx, core : Core, station : String, name :
     return
   }
   let id = c.id("machine-offer/" + station)
-  if hit(c, id) {
+  c.on_press(id, fn() {
     open_machine_sessions(core, station, name)
-  }
+  })
   let lit = c.lit(id)
   let words = fill("android-chat.new.machine.offer", [
     ("station", if name == "" { tr("android-chat.new.machine.here") } else { name }),
@@ -439,7 +461,7 @@ pub fn open_machine_sessions(core : Core, station : String, name : String) -> Un
             f if f == machine_own => tr("android-chat.new.machine.own")
             f => f
           }
-          if @sf.chip(c, label, key=chip, icon="folder") {
+          @sf.chip(c, label, key=chip, icon="folder", on_press=fn() {
             let choices = [@sf.choice("", tr("android-chat.new.machine.allFolders"), value=(all.length() - own).to_string())]
             for f in folders {
               choices.push(@sf.choice(f.0, f.0, value=f.1.to_string()))
@@ -448,7 +470,7 @@ pub fn open_machine_sessions(core : Core, station : String, name : String) -> Un
               choices.push(@sf.choice(machine_own, tr("android-chat.new.machine.own"), value=own.to_string()))
             }
             @sf.pick(tr("android-chat.new.machine.folder"), choices, folder.get(), fn(k) { folder.set(k) }, from=Of(c.id(chip)))
-          }
+          })
         })
         |> ignore
         if runtimes.length() > 1 {
@@ -505,7 +527,7 @@ pub fn open_machine_sessions(core : Core, station : String, name : String) -> Un
           Session(s) => {
             let sv = Some(s)
             let key = "machine-session/" + text(sv, "id")
-            let pressed = @sf.choice_row(
+            @sf.choice_row(
               c,
               key,
               false,
@@ -520,14 +542,14 @@ pub fn open_machine_sessions(core : Core, station : String, name : String) -> Un
               trail=fn() {
                 c.text(text(sv, "when"), style=machine_when) |> ignore
               },
-            )
-            if pressed {
               // (the look in its place)
-              close()
-              look_at_machine_session(core, station, name, s)
-            }
-            // its first words whole while it is pointed at (MachineSessions.tsx's tip: its title cut short is often them)
-            @sf.tip(c, key + "/tip", c.id(key), text(sv, "first"))
+              on_press=fn() {
+                close()
+                look_at_machine_session(core, station, name, s)
+              },
+            )
+            // its first words whole while it is pointed at
+            @sf.tip(c, key + "/tip", c.id(key), text(sv, "first"), repeats=text(sv, "title") == "")
           }
         }
       })
@@ -667,12 +689,12 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
     }
     let busy = is_doing(core, ["machineSessions.continue"], [("station", station), ("id", text(sv, "id"))])
     c.box(style=@sf.panel_words_in(), dir=Row, w=Fill(1.0), pt=10.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
-      if @sf.button(c, tr("common.back"), key="machine-back") {
+      @sf.button(c, tr("common.back"), key="machine-back", on_press=fn() {
         // (the list in its place)
         close()
         open_machine_sessions(core, station, name)
-      }
-      if @sf.button(c, tr(if has(sv, "session") { "android-chat.new.machine.open" } else { "android-chat.new.machine.continue" }), key="machine-go", tone=Primary, busy=busy) {
+      })
+      @sf.button(c, tr(if has(sv, "session") { "android-chat.new.machine.open" } else { "android-chat.new.machine.continue" }), key="machine-go", tone=Primary, busy=busy, on_press=fn() {
         error.set("")
         (core.call)("machineSessions.continue", obj([("station", str(station)), ("runtime", str(text(sv, "runtime"))), ("id", str(text(sv, "id")))]), fn(r) {
           match r {
@@ -684,14 +706,14 @@ fn look_at_machine_session(core : Core, station : String, name : String, s : Jso
             Err(e) => error.set(error_text(e))
           }
         })
-      }
+      })
     })
     |> ignore
   })
 }
 
 // ---------------------------------------------------------------------------
-// Adding people (Settings.kt AddSheet) and the workspace's mark
+// Adding people and the workspace's mark
 
 ///|
 /// The emails in what was typed or pasted (parseEmails): each once, lowercased.
@@ -783,7 +805,7 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
         None =>
           blocks.push(fn() {
             c.box(dir=Row, fn() {
-              if @sf.button(c, tr("android-settings.add.fromSlack"), key="add-from-slack", busy=reading.get() > 0) {
+              @sf.button(c, tr("android-settings.add.fromSlack"), key="add-from-slack", busy=reading.get() > 0, on_press=fn() {
                 reading.set(online.length())
                 let seen : Map[String, Json] = Map([])
                 for s in online {
@@ -825,7 +847,7 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
                     }
                   })
                 }
-              }
+              })
             })
             |> ignore
           })
@@ -843,7 +865,7 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
                 line=18.0,
               )
               |> ignore
-              if tap_text(c, "add-all", tr("android-settings.all"), size=14.0) {
+              tap_text(c, "add-all", tr("android-settings.all"), size=14.0, on_press=fn() {
                 picked.clear()
                 for p in list {
                   let e = text(Some(p), "email")
@@ -851,10 +873,10 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
                     picked.push(e)
                   }
                 }
-              }
-              if tap_text(c, "add-none", tr("android-settings.none"), size=14.0) {
+              })
+              tap_text(c, "add-none", tr("android-settings.none"), size=14.0, on_press=fn() {
                 picked.clear()
-              }
+              })
             })
             |> ignore
           })
@@ -867,12 +889,12 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
                 "" => e
                 n => n
               }
-              if @sf.choice_row(c, "add-person/" + e, there || picked.contains(e), name, note=join([e, if there { tr("android-settings.add.in") } else if flag(pv, "guest") { tr("android-settings.add.guest") } else { "" }], " · "), disabled=!(!there), lead=fn() { avatar(c, core, e, name, 28.0, picture=text(pv, "image")) }) {
+              @sf.choice_row(c, "add-person/" + e, there || picked.contains(e), name, note=join([e, if there { tr("android-settings.add.in") } else if flag(pv, "guest") { tr("android-settings.add.guest") } else { "" }], " · "), disabled=!(!there), lead=fn() { avatar(c, core, e, name, 28.0, picture=text(pv, "image")) }, on_press=fn() {
                 match picked.search(e) {
                   Some(i) => picked.remove(i) |> ignore
                   None => picked.push(e)
                 }
-              }
+              })
             }
             if problems.length() > 0 {
               c.text(join(problems, tr("android-settings.add.problemSep")), size=t.t.meta, color=t.p.red, w=Fill(1.0), line=18.0) |> ignore
@@ -884,9 +906,9 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
     blocks.push(fn() {
       c.text(tr("android-settings.add.role"), size=t.t.meta, weight=600, color=t.p.text, w=Fill(1.0), line=18.0) |> ignore
       for r in roles {
-        if @sf.choice_row(c, "add-role/" + r, role.val == r, role_label(r), note=role_hint(r)) {
+        @sf.choice_row(c, "add-role/" + r, role.val == r, role_label(r), note=role_hint(r), on_press=fn() {
           role.val = r
-        }
+        })
       }
     })
     if error.get() != "" {
@@ -902,9 +924,9 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
     // its buttons at the panel's foot (the presenter's: as far from its foot as its corner says), from what is typed
     // and picked now
     if done.get() != "" {
-      if @sf.button(c, tr("common.done"), key="add-people-done", tone=Primary) {
+      @sf.button(c, tr("common.done"), key="add-people-done", tone=Primary, on_press=fn() {
         close()
-      }
+      })
       return
     }
     let busy = is_doing(core, ["workspace.addMembers"], [("account", here.sub), ("workspace", here.workspace)])
@@ -914,15 +936,16 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
         emails.push(e)
       }
     }
-    if @sf.button(c, tr("common.cancel"), key="add-cancel") {
+    @sf.button(c, tr("common.cancel"), key="add-cancel", on_press=fn() {
       c.blur()
       close()
+    })
+    let go = if emails.length() > 1 {
+      fill("android-settings.add.many", [("n", emails.length().to_string())])
+    } else {
+      tr("android-settings.add.one")
     }
-    if @sf.button(c, if emails.length() > 1 {
-          fill("android-settings.add.many", [("n", emails.length().to_string())])
-        } else {
-          tr("android-settings.add.one")
-        }, key="add-go", tone=Primary, busy=busy, disabled=emails.length() == 0) {
+    @sf.button(c, go, key="add-go", tone=Primary, busy=busy, disabled=emails.length() == 0, on_press=fn() {
       c.blur()
       error.set("")
       (core.call)(
@@ -955,17 +978,17 @@ pub fn open_add_people(core : Core, here : Here, view : Json?, from? : @sf.Ancho
           }
         },
       )
-    }
+    })
   })
 }
 
 ///|
-/// The run's chips in lines (History.kt EffortChips), and a chip.
+/// The run's chips in lines, and a chip.
 // kept across runs: a value (no field of it changes)
 let run_chips : @ui.Style = @ui.css("row w=Full gap=S2")
 
 ///|
-/// A chip of a choice (History.kt EffortChips): 16 either side of its words, 9 over and under, round by 18.
+/// A chip of a choice: 16 either side of its words, 9 over and under, round by 18.
 let chip_px : Double = 16.0
 
 ///|
@@ -975,7 +998,7 @@ let chip_py : Double = 9.0
 let chip_corner : Double = 18.0
 
 ///|
-/// Who runs the model picked (SettingParts.kt AccountList): what 自动分配 means, then 自动分配 (none picked: the
+/// Who runs the model picked: what 自动分配 means, then 自动分配 (none picked: the
 /// station's pick; `auto_trail` at its end) and each account it may be kept to, its provider's mark before it and its
 /// allowance after it, 18 from the sides. `pick` hears the account picked (None: 自动分配).
 fn account_list(
@@ -991,23 +1014,22 @@ fn account_list(
     fn() {
       c.box(style=account_list_room, fn() {
         c.box(style=account_note_room, fn() { c.text(tr("android-chat.run.account.note"), style=account_note_words) |> ignore }) |> ignore
-        if @sf.choice_row(c, key + "/auto", picked == "", tr("android-chat.run.account.auto"), trail?=auto_trail) {
+        @sf.choice_row(c, key + "/auto", picked == "", tr("android-chat.run.account.auto"), trail?=auto_trail, on_press=fn() {
           pick(None)
-        }
+        })
         for a in accounts {
           let av = Some(a)
           let id = text(av, "id")
           let own = text(av, "runtime")
-          if @sf.choice_row(
-              c,
-              key + "/" + id,
-              picked == id,
-              text(av, "name"),
-              lead=fn() { @sf.provider_logo(c, if own == "" { runtime } else { own }, text(av, "kind"), 18.0, text(av, "mark")) },
-              tag=fn() { @sf.quota_chips(c, field(av, "quota"), key=key + "/" + id) },
-            ) {
-            pick(Some(id))
-          }
+          @sf.choice_row(
+            c,
+            key + "/" + id,
+            picked == id,
+            text(av, "name"),
+            lead=fn() { @sf.provider_logo(c, if own == "" { runtime } else { own }, text(av, "kind"), 18.0, text(av, "mark")) },
+            tag=fn() { @sf.quota_chips(c, field(av, "quota"), key=key + "/" + id) },
+            on_press=fn() { pick(Some(id)) },
+          )
         }
       })
       |> ignore

@@ -62,7 +62,7 @@ test("work is a running turn, a wait on what a session started, or a running job
       anyRunning: () => sessions.some((s) => s.running),
       liveSessions: () => last.map((_, i) => ({ key: String(i) })),
       jobsRunning: () => jobs.filter((j) => j.state === "running").map((j) => ({ sessionKey: "0", startedAt: now, ...j })),
-      statsOf: (keys: Iterable<string>) => new Map([...keys].flatMap((k) => (last[Number(k)] ? [[k, { lastTurn: last[Number(k)] }] as const] : []))),
+      lastTurnsOf: (keys: Iterable<string>) => new Map([...keys].flatMap((k) => (last[Number(k)] ? [[k, last[Number(k)]] as const] : []))),
     }) as never;
   assert.equal(working(store([{ running: false }], []), now), false);
   assert.equal(working(store([{ running: true }], []), now), true);

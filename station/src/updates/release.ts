@@ -1,5 +1,5 @@
 // What updating the station runs, from the pages (updates.ts) and from `stillfail update` (command.ts) alike
-// (docs/release-signing.md): the channel's feed read and its release verified (signed.ts), refused when it would put an
+// (scripts/release-sign.ts): the channel's feed read and its release verified (signed.ts), refused when it would put an
 // older release back, and the installer this release carries (bin/install.<lang>.<sh|ps1>) told where the release is
 // and what it and its Node must hash to.
 import { existsSync } from "node:fs";
@@ -49,7 +49,7 @@ export async function planUpdate(o: { base: string; channel: Channel; app: strin
   const { release, why } = verifiedOrNull(await readFeed(o.channel, o.base), o.trusted);
   if (release === null) throw new Error(tr(o.lang, "station.updates.unverified", { why }));
   const version = stationVersion(o.app) ?? null;
-  const current = version === null ? null : Number(version.slice("0.1.".length));
+  const current = version === null ? null : Number(/^0\.\d+\.(\d+)$/.exec(version)?.[1] ?? NaN);
   if (!allowed(release, current, o.channel, o.installed)) throw new Error(tr(o.lang, "station.updates.older", { version: release.version, current: version }));
   let build;
   try {

@@ -1,10 +1,11 @@
-// Keyed collections (docs/core-ts.md, rule 7 and 按 key 的增量): where a topic's value holds lists of items with a
+// Keyed collections (rule 7 and 按 key 的增量): where a topic's value holds lists of items with a
 // stable id, and the delta that changes them item by item. A row that changed is one `patch` of that row, wherever it
 // is; a row that moved is a `move`; a new one a `put` before its neighbour; one gone a `drop`. The rest of the value
 // changes by the old ops (delta.ts). A list whose keys are not each once there (or not all there) goes the old way.
-import { type Op, type Segment, largerThan } from "./delta.ts";
+import { type Op, type Segment, diffAt, jsonLength, largerThan } from "./delta.ts";
 import type { Topic } from "./protocol.ts";
 import { compareKeys, equal, isObject } from "./util.ts";
+import { work } from "./work.ts";
 
 /// Where the keyed lists of a value are: `key` (the fields an item's key is made of) says the value at this place is
 /// one; `item` where the keyed lists of each item are; `fields` those of an object's fields.
@@ -75,6 +76,8 @@ export function diffKeyed(old: unknown, next: unknown, spec: Spec | null): AnyOp
 
 function at(path: Segment[], old: unknown, next: unknown, spec: Spec | null, ops: AnyOp[]): void {
   if (old === next) return;
+  // Nothing keyed below: delta.ts's own.
+  if (spec === null) return diffAt([...path], old, next, ops as Op[]);
   if (spec?.key && Array.isArray(old) && Array.isArray(next) && list(path, old, next, spec, ops)) return;
   if (isObject(old) && isObject(next)) {
     // Only the keys that may differ are put in order, as delta.ts diffAt.
@@ -106,24 +109,93 @@ function at(path: Segment[], old: unknown, next: unknown, spec: Spec | null, ops
   ops.push({ path: [...path], set: next });
 }
 
+/// `next`, with each part of it equal to the same part of `prev` (a field's value; the item with the same key of a keyed
+/// list, else the one at the same place) taken from `prev`, and `prev` itself where all of it is equal. The store keeps
+/// a topic's new value so (store.ts): what did not change is the object that went out before, so what follows (the
+/// diff, the weighing, the items' shaping) steps over it, and a source that made all of it again costs one comparison.
+export function share<T>(prev: unknown, next: T, spec: Spec | null): T {
+  return shareAt(prev, next, spec) as T;
+}
+function shareAt(prev: unknown, next: unknown, spec: Spec | null): unknown {
+  if (prev === next || typeof next !== "object" || next === null || typeof prev !== "object" || prev === null) return next;
+  work.compared++;
+  let out: unknown;
+  if (Array.isArray(next)) {
+    if (!Array.isArray(prev)) return next;
+    const fields = spec?.key;
+    let byKey: Map<string, unknown> | null = null;
+    if (fields) {
+      byKey = new Map();
+      for (const item of prev) byKey.set(textOf(item, fields), item);
+    }
+    let all = prev.length === next.length;
+    const items = next.map((item, i) => {
+      const kept = shareAt(byKey ? byKey.get(textOf(item, fields!)) : prev[i], item, spec?.item ?? null);
+      if (kept !== prev[i]) all = false;
+      return kept;
+    });
+    out = all ? prev : items;
+  } else {
+    if (!isObject(prev) || !isObject(next)) return next;
+    const keys = Object.keys(next);
+    let all = keys.length === Object.keys(prev).length;
+    const fields: Record<string, unknown> = {};
+    for (const key of keys) {
+      const kept = shareAt(prev[key], next[key], spec?.fields?.[key] ?? null);
+      if (kept !== prev[key] || !(key in prev)) all = false;
+      fields[key] = kept;
+    }
+    out = all ? prev : fields;
+  }
+  if (out === prev) work.remade++;
+  return out;
+}
+
+/// An item's key as text, kept with the item (an object kept from one value to the next is not written out again).
+const texts = new WeakMap<string[], WeakMap<object, string>>();
+export function textOf(item: unknown, fields: string[]): string {
+  if (item === null || typeof item !== "object") return text(keyOf(item, fields));
+  let byItem = texts.get(fields);
+  if (!byItem) texts.set(fields, (byItem = new WeakMap()));
+  let t = byItem.get(item);
+  if (t === undefined) {
+    work.keyed++;
+    byItem.set(item, (t = text(keyOf(item, fields))));
+  }
+  return t;
+}
+
 /// Keys of a list, each once; null when one is there twice.
 function keysOf(list: unknown[], fields: string[]): string[] | null {
-  const out = list.map((item) => text(keyOf(item, fields)));
+  const out = list.map((item) => textOf(item, fields));
   return new Set(out).size === out.length ? out : null;
 }
 
 /// A keyed list's ops: drops, then from the last item on, each new one put and each moved one moved before the one
 /// after it (those in the longest run kept in order stay), and each changed one patched. False: not keyed (a key twice).
+/// The same objects at its start and its end stay as they are: only what is between them is matched, so a message
+/// added to a chat costs that message.
 function list(path: Segment[], old: unknown[], next: unknown[], spec: Spec, ops: AnyOp[]): boolean {
   const fields = spec.key!;
-  const oldKeys = keysOf(old, fields);
-  const nextKeys = keysOf(next, fields);
-  if (!oldKeys || !nextKeys) return false;
-  const was = new Map(oldKeys.map((k, i) => [k, i]));
+  if (old.length === next.length && old.every((item, i) => item === next[i])) return true;
+  const allOld = keysOf(old, fields);
+  const allNext = keysOf(next, fields);
+  if (!allOld || !allNext) return false;
+  let start = 0;
+  while (start < old.length && start < next.length && old[start] === next[start]) start++;
+  let oldEnd = old.length;
+  let nextEnd = next.length;
+  while (oldEnd > start && nextEnd > start && old[oldEnd - 1] === next[nextEnd - 1]) {
+    oldEnd--;
+    nextEnd--;
+  }
+  const oldKeys = allOld.slice(start, oldEnd);
+  const nextKeys = allNext.slice(start, nextEnd);
+  const was = new Map(oldKeys.map((k, i) => [k, start + i]));
   const now = new Set(nextKeys);
   const out: AnyOp[] = [];
-  for (let i = 0; i < old.length; i++) {
-    if (!now.has(oldKeys[i]!)) out.push({ path: [...path], key: fields, drop: keyOf(old[i], fields) });
+  for (let i = start; i < oldEnd; i++) {
+    if (!now.has(allOld[i]!)) out.push({ path: [...path], key: fields, drop: keyOf(old[i], fields) });
   }
   // Where each kept one was among the kept (in the new order), and which of them stay.
   const positions = nextKeys.map((k) => was.get(k) ?? -1);
@@ -134,14 +206,15 @@ function list(path: Segment[], old: unknown[], next: unknown[], spec: Spec, ops:
     return true;
   }
   const stay = longestRun(positions);
-  for (let i = next.length - 1; i >= 0; i--) {
+  for (let j = positions.length - 1; j >= 0; j--) {
+    const i = start + j;
     const before = i + 1 < next.length ? keyOf(next[i + 1], fields) : null;
-    const from = positions[i]!;
+    const from = positions[j]!;
     if (from < 0) {
       out.push({ path: [...path], key: fields, put: next[i], before });
       continue;
     }
-    if (!stay.has(i)) out.push({ path: [...path], key: fields, move: keyOf(next[i], fields), before });
+    if (!stay.has(j)) out.push({ path: [...path], key: fields, move: keyOf(next[i], fields), before });
     const changes = diffKeyed(old[from], next[i], spec.item ?? null);
     if (changes.length === 0) continue;
     const key = keyOf(next[i], fields);
@@ -161,8 +234,14 @@ export function heavier(ops: AnyOp[], value: unknown): boolean {
   if (ops.length === 1 && "set" in ops[0]!) return ops[0]!.path.length === 0;
   // Ops that set a long list whole (one loaded after its first screen) are about as heavy as the value: not weighed.
   if (setsLongList(ops)) return false;
-  const size = JSON.stringify(ops).length;
-  return size > 4096 && size >= JSON.stringify(value).length;
+  const size = jsonLength(ops);
+  work.weighed += size;
+  // (the value counted only as far as the ops' size: a chat's 50 messages written out on each new one was what its
+  // change cost most of, 2026-11-08)
+  if (size <= 4096) return false;
+  const whole = jsonLength(value, size);
+  work.weighed += Math.min(whole, size + 1);
+  return whole <= size;
 }
 
 /// Whether ops set a list of more than LONG items whole, anywhere in them.

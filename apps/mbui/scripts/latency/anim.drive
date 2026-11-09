@@ -1,0 +1,6 @@
+# 大屏: no input, what moves by itself (a chat answering: its waiting look), its frames only
+timeout 20000
+until 发消息
+latency anim
+timeout 600000
+ends

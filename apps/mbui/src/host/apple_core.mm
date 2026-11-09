@@ -1,4 +1,4 @@
-// The still.fail client core in Hermes, for the macOS and iOS hosts (core_api.h; core/README.md): the same engine
+// The still.fail client core in Hermes, for the macOS and iOS hosts (core_api.h): the same engine
 // still.fail's Android app runs it in (React Native 0.81.4's Hermes, its JSI; apps/android/core/src/main/cpp/engine.cpp,
 // whose loop this is, without JNI), on the same Rust shell (client/shell), the same bytecode (core.hbc: scripts/core.sh
 // hermes). Built by scripts/core.sh engine into out/core/<target>/libmbui_core.a (Objective-C++, ARC), which the apps
@@ -9,7 +9,7 @@
 // CLOCK_MONOTONIC (which on Apple's systems goes on while the machine sleeps, as Android's CLOCK_BOOTTIME: a 10 s wait
 // begun before a sleep is over after it), and the microtasks drained after each.
 //
-// The script's `__native` is ember's HermesNative (hosts/hermes-globals.ts; bytes as ArrayBuffers both ways), its calls
+// The script's `__native` is still.fail's HermesNative (hosts/hermes-globals.ts; bytes as ArrayBuffers both ways), its calls
 // going to the shell (HTTP, still.fail cloud's socket, files and the accounts' SQLite, TCP, iroh), whose answers come
 // from its threads and are posted here as tasks. What only an app can do is not the shell's: `listen.*` (a login's
 // loopback listener) is answered here, on apple_listen.m; `secure.*` here too (the Keychain, or files for a build that
@@ -43,6 +43,7 @@
 #include "listen_api.h"
 #include "electron_sealed.h"
 #include "apple_collate.h"
+#include "../../engine/ready_queue.h"
 
 namespace jsi = facebook::jsi;
 
@@ -65,6 +66,17 @@ int32_t sf_utc_offset_min(double at_ms);
 extern "C" __attribute__((weak)) int mb_perf_on(void) { return 0; }
 // A line into the performance record (ios_app.m), where the host keeps one.
 extern "C" __attribute__((weak)) void mb_perf_note(const char *text) { (void)text; }
+// MBUI_PROBE_JS's seconds (probe_js, below), 0 none.
+static int probe_js_seconds(void) {
+  static const int s = getenv("MBUI_PROBE_JS") ? atoi(getenv("MBUI_PROBE_JS")) : 0;
+  return s;
+}
+// Whether the core's thread times its tasks by what they were: the record kept, or MBUI_PROBE (its `PROBE core js:`
+// line every 5 s, probe_taps: on a Mac, which keeps no record, the only way to see what the core is busy with).
+static bool core_timed(void) {
+  static const bool probe = getenv("MBUI_PROBE") != nullptr;
+  return probe || mb_perf_on() != 0;
+}
 
 #if TARGET_OS_IPHONE
 static const char *const kOS = "ios";
@@ -161,7 +173,7 @@ struct Gate {
 
 using Task = std::function<void(jsi::Runtime &)>;
 
-/// The one core. `tasks`, `timers`, `dues` and `stopping` under `mutex`; the rest is the core thread's, but for what
+/// The one core. `queue` and `stopping` under `mutex`; the rest is the core thread's, but for what
 /// mb_core_start sets before the thread starts and mb_core_stop reads after it ended.
 struct Core {
   pthread_t thread{};
@@ -170,9 +182,7 @@ struct Core {
   void *shell = nullptr;
   std::mutex mutex;
   std::condition_variable wake;
-  std::deque<Task> tasks;
-  std::unordered_map<uint64_t, double> timers;
-  std::multimap<double, uint64_t> dues;
+  ReadyQueue<Task> queue;
   bool stopping = false;
   bool dead = false;
   mb_core_message_fn on_message = nullptr;
@@ -201,7 +211,7 @@ void post(Task task) {
   {
     std::lock_guard<std::mutex> lock(C.mutex);
     if (C.stopping || !C.running) return;
-    C.tasks.push_back(std::move(task));
+    C.queue.post(std::move(task), timer_ms());
   }
   C.wake.notify_one();
 }
@@ -290,9 +300,10 @@ static void answer_later(double cid, NSData *json, NSString *error, NSData *byte
             !error && bytes != nil);
 }
 
-// ── secure.* (ember hosts/bridge.ts; Android's Keystore) ──
+// ── secure.* (still.fail hosts/bridge.ts; Android's Keystore) ──
 //   secure.get {key, user, reason} → {} + the bytes, or {none: true}; secure.set {key, user} + the bytes → {};
-//   secure.delete {key} → {}; secure.ask {reason} → {} once the person said yes.
+//   secure.delete {key} → {}; secure.ask {reason} → {} once the person said yes; secure.past {key} → {sizes} + the
+//   bytes, a `user: false` key's values kept before accounts named the home (past_accounts), newest first.
 // What the core keeps out of the files it syncs (the lock's signing seed, a vault's key): in the Keychain, as a
 // generic password per data directory and key, readable once the device is unlocked after a restart and never with a
 // Keychain dialog (none can be answered on a station's locked screen: it fails instead). MBUI_KEYS_IN_FILES=1 keeps
@@ -328,15 +339,92 @@ static BOOL keys_in_files(void) {
 // keychain from asking whether this build may read an item another build made: kept, as it was with JavaScriptCore)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-static NSMutableDictionary *keychain_query(NSString *key, BOOL user) {
+static NSMutableDictionary *keychain_item(NSString *account) {
   return [@{
     (id)kSecClass : (id)kSecClassGenericPassword,
     (id)kSecAttrService : @"fail.still.mbui.core",
-    (id)kSecAttrAccount : [NSString stringWithFormat:@"%@\n%@%@", secure_dir, key, user ? @"\nuser" : @""],
+    (id)kSecAttrAccount : account,
     (id)kSecUseAuthenticationUI : (id)kSecUseAuthenticationUIFail,
   } mutableCopy];
 }
 #pragma clang diagnostic pop
+
+// A path as it is in the Keychain's accounts: without the /private an iOS path may come with.
+static NSString *unprivate(NSString *path) {
+  return [path hasPrefix:@"/private/"] ? [path substringFromIndex:8] : path;
+}
+
+// The data directory as an account names it: from the home directory on ("~/Library/…"), as iOS moves an app's home
+// (…/Containers/Data/Application/<UUID>) when it updates the app; else its whole path.
+static NSString *secure_dir_named(void) {
+  NSString *home = unprivate(NSHomeDirectory());
+  NSString *dir = unprivate(secure_dir);
+  return [dir hasPrefix:[home stringByAppendingString:@"/"]] ? [@"~" stringByAppendingString:[dir substringFromIndex:home.length]] : dir;
+}
+
+static NSString *account_tail(NSString *key, BOOL user) {
+  return [NSString stringWithFormat:@"\n%@%@", key, user ? @"\nuser" : @""];
+}
+
+static NSMutableDictionary *keychain_query(NSString *key, BOOL user) {
+  return keychain_item([secure_dir_named() stringByAppendingString:account_tail(key, user)]);
+}
+
+// The accounts `key` was kept under before they named the data directory from the home on (its whole path), newest
+// first: this home's, and (iOS) an earlier install's, whose home iOS has moved since: a path that is this one's from
+// the home on, under another …/Containers/Data/Application/<UUID>.
+static NSArray<NSString *> *past_accounts(NSString *key, BOOL user) {
+  NSString *tail = account_tail(key, user);
+  NSString *dir = unprivate(secure_dir), *named = secure_dir_named();
+  NSMutableDictionary *q = keychain_item(@"");
+  [q removeObjectForKey:(id)kSecAttrAccount];
+  q[(id)kSecReturnAttributes] = @YES;
+  q[(id)kSecMatchLimit] = (id)kSecMatchLimitAll;
+  CFTypeRef out = NULL;
+  if (SecItemCopyMatching((__bridge CFDictionaryRef)q, &out) != errSecSuccess) return @[];
+  NSArray<NSDictionary *> *items = (__bridge_transfer NSArray *)out;
+  NSMutableArray<NSDictionary *> *past = [NSMutableArray array];
+  for (NSDictionary *item in items) {
+    NSString *a = item[(id)kSecAttrAccount];
+    if (![a isKindOfClass:[NSString class]] || ![a hasSuffix:tail]) continue;
+    NSString *was = [a substringToIndex:a.length - tail.length];
+    if ([was containsString:@"\n"] || [was isEqualToString:named]) continue;
+    BOOL moved = NO;
+    if ([named hasPrefix:@"~/"] && [was hasSuffix:[named substringFromIndex:1]]) {
+      NSString *home = [was substringToIndex:was.length - (named.length - 1)];
+      moved = [[home stringByDeletingLastPathComponent] hasSuffix:@"/Containers/Data/Application"];
+    }
+    if (moved || [was isEqualToString:dir]) [past addObject:item];
+  }
+  [past sortUsingComparator:^NSComparisonResult(NSDictionary *x, NSDictionary *y) {
+    NSDate *a = x[(id)kSecAttrModificationDate], *b = y[(id)kSecAttrModificationDate];
+    return a && b ? [b compare:a] : NSOrderedSame;
+  }];
+  NSMutableArray<NSString *> *accounts = [NSMutableArray array];
+  for (NSDictionary *item in past) [accounts addObject:item[(id)kSecAttrAccount]];
+  return accounts;
+}
+
+// The value under `account`, not asking anyone: nil when none is, or it can't be read.
+static NSData *account_value(NSString *account) {
+  NSMutableDictionary *q = keychain_item(account);
+  q[(id)kSecReturnData] = @YES;
+  q[(id)kSecMatchLimit] = (id)kSecMatchLimitOne;
+  CFTypeRef out = NULL;
+  return SecItemCopyMatching((__bridge CFDictionaryRef)q, &out) == errSecSuccess ? (__bridge_transfer NSData *)out : nil;
+}
+
+// What was kept under `key` before (past_accounts), newest first: what a `user: false` one may be, the core picking
+// (the lock's signing key: the one the lock names).
+static NSArray<NSData *> *kept_past(NSString *key, BOOL user) {
+  NSMutableArray<NSData *> *values = [NSMutableArray array];
+  if (keys_in_files()) return values;
+  for (NSString *a in past_accounts(key, user)) {
+    NSData *v = account_value(a);
+    if (v) [values addObject:v];
+  }
+  return values;
+}
 
 // A key still.fail's desktop app (Electron's) kept, where this app is built in its place and so keeps its data where
 // that one did (src/sfcore/apple_engine.m: <that app's userData>/core): its file in userData/sealed, opened with the
@@ -396,8 +484,9 @@ static NSData *kept_get(NSString *key, BOOL user, NSString **error) {
     *error = [NSString stringWithFormat:@"secure.get: Keychain %d", (int)st];
     return nil;
   }
-  // none here yet: still.fail's desktop app's, where this app is built in its place, sealed here again
-  NSData *old = electron_sealed(key, user);
+  // none here yet: the newest kept before accounts named the home (left as it is, for secure.past), kept here again;
+  // else still.fail's desktop app's, where this app is built in its place, sealed here again
+  NSData *old = kept_past(key, user).firstObject ?: electron_sealed(key, user);
   if (old) kept_set(key, user, old);
   return old;
 }
@@ -406,7 +495,11 @@ static NSData *kept_get(NSString *key, BOOL user, NSString **error) {
 static void kept_delete(NSString *key) {
   for (BOOL user : {NO, YES}) {
     if (keys_in_files()) [[NSFileManager defaultManager] removeItemAtPath:secure_path(key, user) error:nil];
-    else SecItemDelete((__bridge CFDictionaryRef)keychain_query(key, user));
+    else {
+      SecItemDelete((__bridge CFDictionaryRef)keychain_query(key, user));
+      // and those kept before, else a get would bring one back
+      for (NSString *a in past_accounts(key, user)) SecItemDelete((__bridge CFDictionaryRef)keychain_item(a));
+    }
   }
 }
 
@@ -490,6 +583,16 @@ static void secure_do(NSString *op, NSDictionary *a, NSData *bytes, NSData **jso
   } else if ([op isEqualToString:@"secure.set"]) {
     if (user && (*error = person_cannot())) return;
     if (!(*error = kept_set(key, user, bytes ?: [NSData data]))) *json_out = const_json("{}");
+  } else if ([op isEqualToString:@"secure.past"]) {
+    // what nobody is asked for only
+    NSMutableData *all = [NSMutableData data];
+    NSMutableArray<NSNumber *> *sizes = [NSMutableArray array];
+    for (NSData *v in kept_past(key, NO)) {
+      [sizes addObject:@(v.length)];
+      [all appendData:v];
+    }
+    *json_out = [NSJSONSerialization dataWithJSONObject:@{@"sizes" : sizes} options:0 error:nil];
+    *bytes_out = all;
   } else if ([op isEqualToString:@"secure.delete"]) {
     kept_delete(key);
     *json_out = const_json("{}");
@@ -545,13 +648,34 @@ extern "C" int mb_core_secure_test(void) {
     BOOL gone = !e && std_of(j) == "{\"none\":true}";
     fprintf(stderr, "SECURE_TEST secure.get after delete %s\n", e ? e.UTF8String : std_of(j).c_str());
     ok = ok && gone;
+    // kept by an install whose home iOS has moved since (an update): read, kept here again, and gone once deleted
+    if ([secure_dir_named() hasPrefix:@"~/"]) {
+      NSString *moved = [@"/var/mobile/Containers/Data/Application/5EC0E7E5-0000-4000-8000-000000000000" stringByAppendingString:
+                            [[secure_dir_named() substringFromIndex:1] stringByAppendingString:account_tail(@"secure-test", NO)]];
+      NSMutableDictionary *q = keychain_item(moved);
+      q[(id)kSecValueData] = value;
+      q[(id)kSecAttrAccessible] = (id)kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly;
+      SecItemDelete((__bridge CFDictionaryRef)keychain_item(moved));
+      OSStatus st = SecItemAdd((__bridge CFDictionaryRef)q, NULL);
+      secure_do(@"secure.past", k, nil, &j, &b, &e);
+      BOOL past = st == errSecSuccess && !e && [b isEqualToData:value];
+      fprintf(stderr, "SECURE_TEST secure.past after a move %s %lu bytes\n", e ? e.UTF8String : std_of(j).c_str(), (unsigned long)b.length);
+      secure_do(@"secure.get", k, nil, &j, &b, &e);
+      BOOL found = !e && [b isEqualToData:value];
+      fprintf(stderr, "SECURE_TEST secure.get after a move %s, %s\n", e ? e.UTF8String : std_of(j).c_str(), found ? "the same" : "NOT the same");
+      secure_do(@"secure.delete", k, nil, &j, &b, &e);
+      secure_do(@"secure.get", k, nil, &j, &b, &e);
+      BOOL left = !e && std_of(j) == "{\"none\":true}" && account_value(moved) == nil;
+      fprintf(stderr, "SECURE_TEST secure.get after a move and delete %s\n", e ? e.UTF8String : std_of(j).c_str());
+      ok = ok && past && found && left;
+    }
     fprintf(stderr, "SECURE_TEST %s in %.0f ms (%s)\n", ok ? "ok" : "FAILED", clock_ms(CLOCK_MONOTONIC) - t0,
             keys_in_files() ? "files, MBUI_KEYS_IN_FILES" : "the Keychain");
   });
   return 1;
 }
 
-// ── listen.* (ember client/core-ts hosts/bridge.ts; Android's Loopback.kt) ──
+// ── listen.* (still.fail client/core-ts hosts/bridge.ts) ──
 //   listen.open {port, host} → {id, port}, or the error (the port taken: "Address already in use")
 //   listen.next {id} → {request, method, path, headers} + the body, or {end: true} once the listener is closed
 //   listen.respond {id, request, status, headers: [[name, value]]} + the body → {}
@@ -669,7 +793,7 @@ static void core_listen_close_all(void) {
   core_listens = nil;
 }
 
-// ── kept.read (ember client/core-ts hosts/bridge.ts) ──
+// ── kept.read (still.fail client/core-ts hosts/bridge.ts) ──
 //   kept.read {at, start, end} → {} + the bytes, or {none: true}: a file the app saved where the person keeps files
 //   (its path, as the keep said it: apple_views.m keep_answer) read back, bytes start to end (the core's downloads:
 //   drive-kept.ts `saved`). One exported through iOS's Files sheet is named only, out of the app's reach: none.
@@ -733,9 +857,17 @@ static void install(jsi::Runtime &rt) {
       }
       return jsi::Value::undefined();
     }
-    if (mb_perf_on()) perf_ops[id] = op;
+    if (core_timed()) perf_ops[id] = op;
     sf_shell_call(C.shell, id, op.c_str(), reinterpret_cast<const uint8_t *>(json.data()), json.size(), p, len, has ? 1 : 0);
     return jsi::Value::undefined();
+  });
+  // A script more, given as bytes (bytecode, or source), run in this runtime as the core's own is: mermaid's, which the
+  // app carries and gives the core as a chart is first drawn (client/core-ts/src/mermaid.ts provideMermaid).
+  fn("evaluate", 2, [](jsi::Runtime &rt, const jsi::Value&, const jsi::Value *a, size_t n) -> jsi::Value {
+    jsi::ArrayBuffer b = a[0].asObject(rt).getArrayBuffer(rt);
+    std::string bytes(reinterpret_cast<const char *>(b.data(rt)), b.size(rt));
+    std::string name = n > 1 && a[1].isString() ? a[1].asString(rt).utf8(rt) : std::string("script");
+    return rt.evaluateJavaScript(std::make_shared<Bytes>(std::move(bytes)), name);
   });
   fn("callSync", 2, [](jsi::Runtime &rt, const jsi::Value &, const jsi::Value *a, size_t) -> jsi::Value {
     std::string op = a[0].asString(rt).utf8(rt);
@@ -786,15 +918,13 @@ static void install(jsi::Runtime &rt) {
   });
   fn("setTimer", 2, [](jsi::Runtime &, const jsi::Value &, const jsi::Value *a, size_t) -> jsi::Value {
     uint64_t id = uint64_t(a[0].asNumber());
-    double due = timer_ms() + std::max(0.0, a[1].asNumber());
     std::lock_guard<std::mutex> lock(C.mutex);
-    C.timers[id] = due;
-    C.dues.emplace(due, id);
+    C.queue.setTimer(id, timer_ms() + std::max(0.0, a[1].asNumber()));
     return jsi::Value::undefined();
   });
   fn("clearTimer", 1, [](jsi::Runtime &, const jsi::Value &, const jsi::Value *a, size_t) -> jsi::Value {
     std::lock_guard<std::mutex> lock(C.mutex);
-    C.timers.erase(uint64_t(a[0].asNumber()));
+    C.queue.clearTimer(uint64_t(a[0].asNumber()));
     return jsi::Value::undefined();
   });
   // the performance record (the core's record.ts): whether it is kept now, and a line into it
@@ -842,6 +972,8 @@ static void run(void) {
     if (!C.dead) {
       auto config = ::hermes::vm::RuntimeConfig::Builder().withMicrotaskQueue(true).withEnableBlockScoping(true).withIntl(true).build();
       rt = facebook::hermes::makeHermesRuntime(config);
+      // (MBUI_PROBE_JS: the core sampled, probe_js; a runtime is sampled only once registered, on its own thread)
+      if (probe_js_seconds() > 0) rt->registerForProfiling();
       double t1 = clock_ms(CLOCK_MONOTONIC), t2 = t1;
       try {
         install(*rt);
@@ -867,29 +999,9 @@ static void run(void) {
       std::unique_lock<std::mutex> lock(C.mutex);
       for (;;) {
         if (C.stopping) break;
-        if (!C.tasks.empty()) {
-          task = std::move(C.tasks.front());
-          C.tasks.pop_front();
-          break;
-        }
-        // The next timer still set (one cleared, or set again later, is passed over).
-        while (!C.dues.empty()) {
-          auto first = C.dues.begin();
-          auto it = C.timers.find(first->second);
-          if (it == C.timers.end() || it->second != first->first) {
-            C.dues.erase(first);
-            continue;
-          }
-          break;
-        }
-        if (!C.dues.empty()) {
-          double left = C.dues.begin()->first - timer_ms();
-          if (left <= 0) {
-            timer = C.dues.begin()->second;
-            C.timers.erase(timer);
-            C.dues.erase(C.dues.begin());
-            break;
-          }
+        double left;
+        if (C.queue.take(timer_ms(), task, timer, left)) break;
+        if (left >= 0) {
           C.wake.wait_for(lock, std::chrono::microseconds(int64_t(left * 1000)));
         } else {
           C.wake.wait(lock);
@@ -899,7 +1011,7 @@ static void run(void) {
     }
     if (C.dead || !rt) continue;
     // (the record kept: this task timed, by what it was)
-    bool perf = mb_perf_on() != 0;
+    bool perf = core_timed();
     double perf_t0 = perf ? clock_ms(CLOCK_MONOTONIC) : 0;
     perf_task = task ? "task" : "timer";
     @autoreleasepool {
@@ -917,6 +1029,7 @@ static void run(void) {
 
   @autoreleasepool {
     core_listen_close_all();
+    if (rt && probe_js_seconds() > 0) rt->unregisterForProfiling();
     rt.reset();
   }
 }
@@ -931,9 +1044,37 @@ static void stop_at_exit(void) {
 
 static void probe_taps(void);
 
+// MBUI_PROBE_JS=<seconds>: the core's JS sampled for that long, from MBUI_PROBE_JS_AFTER seconds (10) after it starts
+// (what it spends its time on, in the app as shipped: Android's CoreProfile, engine.cpp sf_engine_profile), written as
+// a Chrome trace to MBUI_PROBE_JS_OUT (default $TMPDIR/stillfail-core-<pid>.cpuprofile). Its frames say where in the
+// core's script each function is (core-hermes.js's line and column: that script, made again from the build's commit
+// with its source map, names them). 0: none.
+static void probe_js(void) {
+  static bool asked = false;
+  int seconds = probe_js_seconds();
+  if (asked || seconds <= 0) return;
+  asked = true;
+  const char *o = getenv("MBUI_PROBE_JS_OUT");
+  const char *after = getenv("MBUI_PROBE_JS_AFTER");
+  int64_t wait = after ? atoi(after) : 10;
+  std::string out = o ? o : std::string(NSTemporaryDirectory().UTF8String) + "stillfail-core-" + std::to_string(getpid()) + ".cpuprofile";
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, wait * NSEC_PER_SEC), dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+    auto *root = jsi::castInterface<facebook::hermes::IHermesRootAPI>(facebook::hermes::makeHermesRootAPI());
+    if (!root) return;
+    root->enableSamplingProfiler();
+    fprintf(stderr, "PROBE core js sampled for %d s\n", seconds);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)seconds * NSEC_PER_SEC), dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+      root->dumpSampledTraceToFile(out);
+      root->disableSamplingProfiler();
+      fprintf(stderr, "PROBE core js profile: %s\n", out.c_str());
+    });
+  });
+}
+
 void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_core_message_fn on_message, void *ctx) {
   if (C.running) return;
   probe_taps();
+  probe_js();
   static bool at_exit = false;
   if (!at_exit) at_exit = atexit(stop_at_exit) == 0;
   C.on_message = on_message;
@@ -946,9 +1087,7 @@ void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_
   C.gate = new Gate();
   {
     std::lock_guard<std::mutex> lock(C.mutex);
-    C.tasks.clear();
-    C.timers.clear();
-    C.dues.clear();
+    C.queue.clear();
     C.stopping = false;
     C.running = true;
   }
@@ -968,7 +1107,7 @@ void mb_core_send(const char *json, size_t len, const uint8_t *bytes, size_t ble
   std::string j(json, len);
   bool has = bytes != nullptr;
   std::string b = has ? std::string(reinterpret_cast<const char *>(bytes), blen) : std::string();
-  std::string what = mb_perf_on() ? perf_asked(j) : std::string();
+  std::string what = core_timed() ? perf_asked(j) : std::string();
   post([j = std::move(j), b = std::move(b), has, what = std::move(what)](jsi::Runtime &rt) {
     if (!what.empty()) perf_task = what;
     jsi::Object sf = stillfail(rt);
@@ -1009,8 +1148,8 @@ extern "C" int mb_core_tap_line(int who, char *out, size_t n) {
   NSMutableString *line = [NSMutableString string];
   for (NSString *k in taps)
     [line appendFormat:@"%@%@=%lld", line.length ? @" " : @"", k, count(calls, k) - count(was[who], k)];
-  // (the record's: the shell's other operations asked most since, the 6 most, as `ops: name=N …`)
-  if (who == 1) {
+  // (the shell's other operations asked most since, the 6 most, as `ops: name=N …`)
+  {
     NSMutableDictionary<NSString *, NSNumber *> *more = [NSMutableDictionary dictionary];
     for (NSString *k in calls) {
       long long d = count(calls, k) - count(was[who], k);
@@ -1049,7 +1188,9 @@ extern "C" int mb_core_perf_line(double span_ms, char *out, size_t n) {
   return at;
 }
 
-// MBUI_PROBE=1: what the shell did of remote screens every 5 s, on the log (`PROBE core: tap.views=…`: mb_core_tap_line).
+// MBUI_PROBE=1: what the shell did of remote screens every 5 s, on the log (`PROBE core: tap.views=…`: mb_core_tap_line),
+// and what the core's thread spent its time on (`PROBE core js: busy=…`: mb_core_perf_line), unless the record takes
+// that (the iOS host's, while it is kept: one taker, or each would see half).
 static void probe_taps(void) {
   static dispatch_source_t timer;
   if (timer || !getenv("MBUI_PROBE")) return;
@@ -1058,6 +1199,8 @@ static void probe_taps(void) {
   dispatch_source_set_event_handler(timer, ^{
     char line[512];
     if (mb_core_tap_line(0, line, sizeof line) > 0) fprintf(stderr, "PROBE core: %s\n", line);
+    char js[900];
+    if (!mb_perf_on() && mb_core_perf_line(5000, js, sizeof js) > 0) fprintf(stderr, "PROBE core js: %s\n", js);
   });
   dispatch_resume(timer);
 }
@@ -1079,6 +1222,6 @@ void mb_core_stop(void) {
   if (C.shell) sf_shell_stop(C.shell);
   C.shell = nullptr;
   std::lock_guard<std::mutex> lock(C.mutex);
-  C.tasks.clear();
+  C.queue.clear();
   C.running = false;
 }

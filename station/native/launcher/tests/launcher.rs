@@ -86,9 +86,7 @@ impl Station {
             .env("STILLFAIL_NODE", node())
             .env("STILLFAIL_LAUNCHER_TIMES", times)
             .env_remove("STILLFAIL_DATA")
-            .env_remove("EMBER_DATA")
             .env_remove("STILLFAIL_CONFIG")
-            .env_remove("EMBER_CONFIG")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(std::fs::OpenOptions::new().create(true).append(true).open(self.dir.join("launcher.log")).unwrap());
@@ -306,6 +304,19 @@ fn node_serves_the_launchers_ports_and_station_json_names_the_launcher() {
     station.signal(libc::SIGTERM);
     assert!(station.wait().success());
     assert!(station.said(node, "got stop") && station.said(node, "exit"));
+}
+
+#[test]
+fn node_runs_with_malloc_set_for_space_on_macos() {
+    let mut station = Station::new("malloc");
+    station.start("");
+    station.up();
+    let node = station.started()[0];
+    until("node to say its malloc", || station.log().into_iter().any(|(_, p, w)| p == node && w.starts_with("malloc ")).then_some(()));
+    let set = if cfg!(target_os = "macos") { "malloc 1" } else { "malloc as it is" };
+    assert!(station.said(node, set), "{:?}", station.log());
+    station.signal(libc::SIGTERM);
+    assert!(station.wait().success());
 }
 
 #[test]
@@ -608,9 +619,7 @@ fn with_parent_it_stops_once_the_parent_is_gone() {
             .env("STILLFAIL_NODE", node())
             .env("STILLFAIL_LAUNCHER_TIMES", "parent=200")
             .env_remove("STILLFAIL_DATA")
-            .env_remove("EMBER_DATA")
             .env_remove("STILLFAIL_CONFIG")
-            .env_remove("EMBER_CONFIG")
             .stdout(Stdio::piped()),
     );
     let mut line = String::new();

@@ -1,0 +1,9 @@
+import {
+  "mbui/skia",
+  "mbui/svg",
+  "mbui/font",
+  "mbui/shape",
+  "mbui/skiatest",
+  "mbui/pixels",
+  "moonbitlang/core/encoding/utf8",
+}

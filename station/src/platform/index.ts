@@ -17,6 +17,17 @@ export type How = { program: string; args: string[] };
 /// A process as the memory watch sees it (jobs/memory.ts).
 export type ProcessInfo = { pid: number; ppid: number; pgid: number; bytes: number; command: string };
 
+/// A process table as a tree: each process by its pid, and the pids of each one's children.
+export function treeOf(table: readonly ProcessInfo[]): { byPid: Map<number, ProcessInfo>; children: Map<number, number[]> } {
+  const children = new Map<number, number[]>();
+  const byPid = new Map<number, ProcessInfo>();
+  for (const p of table) {
+    byPid.set(p.pid, p);
+    if (p.pid !== p.ppid) children.set(p.ppid, [...(children.get(p.ppid) ?? []), p.pid]);
+  }
+  return { byPid, children };
+}
+
 /// How the host page says the machine (GET /host): memory, CPU, uptime, the OS.
 export type Host = {
   /// CPU time since boot, all CPUs together: (busy, total); none when it cannot be read.
@@ -54,6 +65,8 @@ export type Platform = {
   appendPath(env: Env, dir: string): void;
   /// A command on `env`'s PATH as a shell finds it (with PATHEXT's extensions on Windows).
   findCommand(name: string, env: Env): Found | null;
+  /// The user's interactive shell, when this machine has one to read a PATH from.
+  userShell(env: Env): string | null;
   /// How Node runs a command (a name on PATH, or a path) with `args`: on Windows a .cmd is run around cmd when it can
   /// be (npm's, Vite+'s), else through it, quoted.
   runnable(command: string, args: string[], env: NodeJS.ProcessEnv): { file: string; args: string[]; windowsVerbatimArguments?: true };
@@ -117,6 +130,11 @@ export type Platform = {
   /// /media/<user> and /mnt (each folder there, names in order); Windows' drives, `C:\` to `Z:\`, by their letter.
   /// Each as it is there, not yet looked into: a link to `/` (macOS's own disk) is the caller's to leave out.
   disks(home: string): Promise<{ name: string; path: string }[]>;
+  /// Where file systems other than the machine's own volumes are mounted (a network share, OrbStack's NFS in the home,
+  /// a disk), wherever that is: macOS asks the person before a process opens one, so the station never does itself
+  /// (drive/fs.ts protectedPlace). macOS's, as `mount` says them (read again in the background when asked a while
+  /// after the last read); none elsewhere.
+  mounts(): string[];
   /// Whether making a symbolic link was refused for want of the privilege (Windows without Developer Mode).
   linkRefused(error: unknown): boolean;
   /// Whether a directory's entries can be made durable by syncing it (not on Windows: NTFS journals them).
@@ -147,7 +165,7 @@ export type Platform = {
   devinInstall: How;
   /// The kind of the installer a release carries for this machine: bin/install.<lang>.<this> (scripts/installers.ts).
   installerExt: "sh" | "ps1";
-  /// Starts `script` (the installer the running release carries, docs/release-signing.md) apart from the station, run
+  /// Starts `script` (the installer the running release carries, scripts/release-sign.ts) apart from the station, run
   /// from a copy in `runDir`, its exit to run/update.exit and what it said to run/update.log. Whether it was started.
   startInstaller(script: string, runDir: string, env: Record<string, string>, app: string): Promise<boolean>;
   /// How a runtime found as a package manager's of this machine's kind is updated (Windows: winget's package, Vite+'s
@@ -217,10 +235,10 @@ export type Platform = {
   hasFolderPermissions: boolean;
   /// Spotlight's index of the machine's files, asked with `mdfind` (macOS's): the search finds files through it.
   hasSpotlight: boolean;
-  /// What shows the machine's display to a client and drives it (docs/remote-screens.md): still.fail Helper (macOS),
-  /// stillfail-screen (Windows), or nothing.
-  desktopScreen: "helper" | "screen" | null;
-  /// Unix domain sockets at a path: how the station and its modules talk (docs/station-modules.md).
+  /// What shows the machine's display to a client and drives it: still.fail Helper (macOS),
+  /// stillfail-screen (Windows), X11 (Linux), or nothing.
+  desktopScreen: "helper" | "screen" | "x11" | null;
+  /// Unix domain sockets at a path: how the station and its modules talk.
   hasUnixSockets: boolean;
 };
 

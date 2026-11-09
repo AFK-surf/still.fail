@@ -1,7 +1,7 @@
 // The record of what the connections do (record.ts): its lines' form, and nothing built while it is off.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { dialLine, record, recording, said, stationTag, type Recording } from "../src/record.ts";
+import { dialLine, record, recordDht, recording, said, stationTag, type Recording } from "../src/record.ts";
 
 test("a_dial_is_one_line_its_stages_from_its_start", () => {
   assert.equal(
@@ -38,4 +38,44 @@ test("off_nothing_is_built", () => {
   assert.deepEqual(lines, ["conn dial: x"]);
   // a host that keeps none
   assert.equal(recording({}), false);
+});
+
+test("the_dht_s_lines_recorded_each_with_how_long_before_kept_until_off_and_off_told_once", () => {
+  let on = true;
+  let now = 10_000;
+  const lines: string[] = [];
+  const host = { recorder: { on: () => on, line: (l: string) => lines.push(l) }, nowMs: () => now };
+  const keeps: boolean[] = [];
+  let next: { at: number; text: string }[] = [{ at: 9_988, text: "dht#3 read failed #1: NotConnected, next read in 50ms" }, { at: 9_990, text: "dht#3 lookup d70ccd13 asked" }];
+  const dht = {
+    dhtSaid: (keep: boolean) => {
+      keeps.push(keep);
+      const said = { lines: next, dropped: next.length > 0 ? 2 : 0 };
+      next = [];
+      return said;
+    },
+  };
+  recordDht(host, dht);
+  assert.deepEqual(lines, [
+    "dht: dht#3 read failed #1: NotConnected, next read in 50ms (12ms before)",
+    "dht: dht#3 lookup d70ccd13 asked (10ms before)",
+    "dht: 2 line(s) dropped for want of room",
+  ]);
+  // each station's tick: one take between them within `every`
+  now += 1_000;
+  recordDht(host, dht, 5_000);
+  recordDht(host, dht, 5_000);
+  assert.deepEqual(keeps, [true]);
+  // back after ten minutes away (nothing taken meanwhile): what the socket said as it came back, at once
+  now += 600_000;
+  next = [{ at: now - 3, text: "dht#3 read failed #1: NotConnected, next read in 50ms" }];
+  recordDht(host, dht);
+  assert.equal(lines.at(-2), "dht: dht#3 read failed #1: NotConnected, next read in 50ms (3ms before)");
+  // off: told once to keep none
+  on = false;
+  recordDht(host, dht);
+  recordDht(host, dht, 5_000);
+  assert.deepEqual(keeps, [true, true, false]);
+  // a host whose endpoints look nothing up on the DHT
+  recordDht(host, {});
 });

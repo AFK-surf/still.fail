@@ -34,22 +34,22 @@ pub fn fixture_face(e : (String, String, Bool, Array[Int], Double)) -> Json {
   // (a whole number of bytes, as the core says a file's size)
   let each = (bytes / weights.length().to_double()).floor()
   {
-    "id": id.to_json(),
-    "name": name.to_json(),
-    "mono": mono.to_json(),
-    "family": ("SF " + name).to_json(),
-    "preview": (base + "/preview.ttf").to_json(),
+    "id": ToJson::to_json(id),
+    "name": ToJson::to_json(name),
+    "mono": ToJson::to_json(mono),
+    "family": ToJson::to_json("SF " + name),
+    "preview": ToJson::to_json(base + "/preview.ttf"),
     "files": Json::array(
       weights.map(fn(w) {
         {
-          "weight": w.to_json(),
-          "url": (base + "/" + (if w == 0 { "var" } else { w.to_string() }) + ".ttf.gz").to_json(),
-          "bytes": each.to_json(),
-          "sha256": fixture_face_sha.to_json(),
+          "weight": ToJson::to_json(w),
+          "url": ToJson::to_json(base + "/" + (if w == 0 { "var" } else { w.to_string() }) + ".ttf.gz"),
+          "bytes": ToJson::to_json(each),
+          "sha256": ToJson::to_json(fixture_face_sha),
         }
       }),
     ),
-    "bytes": bytes.to_json(),
+    "bytes": ToJson::to_json(bytes),
   }
 }
 
@@ -69,7 +69,7 @@ pub fn fixture_faces(fonts : Map[String, String]) -> Json {
         {
           "id": "",
           "name": "",
-          "mono": (place == "code").to_json(),
+          "mono": ToJson::to_json(place == "code"),
           "family": "",
           "files": [],
           "bytes": 0,
@@ -90,7 +90,7 @@ pub fn fixture_faces(fonts : Map[String, String]) -> Json {
 pub fn fixture_fonts(fonts : Map[String, String]) -> Json {
   let m : Map[String, Json] = {}
   for k, v in fonts {
-    m[k] = v.to_json()
+    m[k] = ToJson::to_json(v)
   }
   Json::object(m)
 }
@@ -100,10 +100,17 @@ pub fn fixture_fonts(fonts : Map[String, String]) -> Json {
 pub fn fixture_fonts_topic(f : Fixture) -> Json {
   let fetching : Map[String, Json] = {}
   if f.mode == "settings-fonts-coming" {
-    fetching["noto-sans-sc"] = (0.42).to_json()
+    fetching["noto-sans-sc"] = ToJson::to_json(0.42)
   }
-  let kept : Array[Json] = f.fonts_fetched.keys().map(fn(id) { id.to_json() }).collect()
-  { "fetching": Json::object(fetching), "failed": {}, "kept": Json::array(kept) }
+  let kept : Array[Json] = f.fonts_fetched.keys().map(fn(id) { ToJson::to_json(id) }).collect()
+  // (share-card-senren-adv-coming: its picture and face partly here, its tiles' not begun)
+  let share : Map[String, Json] = {}
+  if f.mode == "share-card-senren-adv-coming" {
+    share["1/a1-murasame-adv.webp"] = { "got": 82000, "bytes": 196076 }
+    share["1/face-400.gz"] = { "got": 90000, "bytes": 203995 }
+    share["1/face-600.gz"] = { "got": 60000, "bytes": 203267 }
+  }
+  { "fetching": Json::object(fetching), "failed": {}, "kept": Json::array(kept), "share": Json::object(share) }
 }
 
 ///|
@@ -129,7 +136,7 @@ pub fn fixture_fonts_call(f : Fixture, name : String, params : Json, done : (Res
 
 ///|
 /// A face's file (gzipped once a face was fetched; not here before), or its preview.
-pub fn fixture_fonts_read(f : Fixture, name : String) -> Result[(Json, Bytes), Json]? {
+pub fn fixture_fonts_read(f : Fixture, name : String, params? : Json = Json::null()) -> Result[(Json, Bytes), Json]? {
   let file = @codec.from_base64_exact(fixture_face_gz).unwrap()
   match name {
     "fonts.file" =>
@@ -141,6 +148,41 @@ pub fn fixture_fonts_read(f : Fixture, name : String) -> Result[(Json, Bytes), J
         },
       )
     "fonts.preview" => Some(Ok(({}, file)))
+    // a file of the looks (@sfbase.looks_file) as the made-up site has it: a look's picture a plain one of its own
+    // colour, their face the one the app carries (the card's words in it as they were)
+    "fonts.share" => Some(Ok(({}, fixture_looks_file(text(Some(params), "file")))))
     _ => None
   }
+}
+
+///|
+/// A file of the share card's looks as the made-up site has it (fixture_fonts_read): their face's the one the app
+/// carries; a picture 4 by 4 of one colour, worked out from its name.
+fn fixture_looks_file(file : String) -> Bytes {
+  for f in @sfbase.share_face_carried() {
+    if file.has_suffix("/face-\{f.1}.gz") {
+      return f.0
+    }
+  }
+  let h = @ui.stable_hash(file).to_int()
+  let px = FixedArray::make(4 * 4 * 4, b'\xFF')
+  for i in 0..<16 {
+    px[i * 4] = (0x40 + (h & 0x3F)).to_byte()
+    px[i * 4 + 1] = (0x40 + ((h >> 6) & 0x3F)).to_byte()
+    px[i * 4 + 2] = (0x40 + ((h >> 12) & 0x3F)).to_byte()
+  }
+  @pixels.png(4, 4, px)
+}
+
+///|
+/// Where a test holds the share card's looks' files asked of the made-up core (`fonts.share`): each asked, by its name,
+/// and what is told its answer, which the test gives when it will (fixture_looks_file's file, or an error); None, each
+/// answered as it is asked.
+// kept across runs: set by a test for what it runs, put back by it
+pub let fixture_looks_held : Ref[Array[(String, (Result[(Json, Bytes), Json]) -> Unit)]?] = Ref(None)
+
+///|
+/// The file of the looks `file` as the made-up site has it (fixture_looks_file), as a held one is answered.
+pub fn fixture_looks_answer(file : String) -> Result[(Json, Bytes), Json] {
+  Ok(({}, fixture_looks_file(file)))
 }

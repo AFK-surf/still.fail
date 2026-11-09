@@ -60,8 +60,9 @@ fn linked_nodes() -> (Node, Node) {
 
 ///|
 test "corners linked: a panel's corners linked to a Mac window's follow it, a ground linked to the panel's follows that, the rule holds both" {
-  let follow = concentric(16.0, 6.0)
-  let t = Tester::new(linked_panel(6.0), w=400.0, h=200.0, window_corner=16.0)
+  // (a window 22 round: the panel's 16 there, the ground's 10 in that, round enough to follow)
+  let follow = concentric(22.0, 6.0)
+  let t = Tester::new(linked_panel(6.0), w=400.0, h=200.0, window_corner=22.0)
   t.draw()
   let (p, b) = linked_nodes()
   assert_eq(corners4(p), (34.0, follow, follow, 34.0))
@@ -83,7 +84,7 @@ test "corners linked: the window square, each stands alone, worked out again; a 
 
 ///|
 test "corners linked: one standing elsewhere than its link says is said" {
-  let t = Tester::new(linked_panel(8.0), w=400.0, h=200.0, window_corner=16.0, corners_held=false)
+  let t = Tester::new(linked_panel(8.0), w=400.0, h=200.0, window_corner=22.0, corners_held=false)
   t.draw()
   let faults = t.corner_faults()
   assert_true(faults.iter().any(fn(f) { f.contains("linked to follow") }), msg="\{faults}")
@@ -111,11 +112,11 @@ test "corners linked: a link's radius, whether it follows, where it stands" {
   assert_eq(deep.radius(at), 34.0)
   assert_false(deep.follows(at))
   assert_eq(deep.inset(at), None)
-  // a capsule 30 high in a 34 (a circle reads it as 32.52): 17.52 in, further than the ranges let; one 40 high, 12.52
+  // a capsule 30 high in a 34: 19 in, further than the ranges let; one 40 high, 14 (its half less the corner)
   let own : CornerOf = Own(34.0)
   assert_eq(own.capsule_at(30.0, at), None)
   match own.capsule_at(40.0, at) {
-    Some(d) => assert_true((d - (34.0 * smooth_round - 20.0)).abs() < 1.0e-9)
+    Some(d) => assert_true((d - (34.0 - 20.0)).abs() < 1.0e-9)
     None => fail("a capsule 40 high stands in a 34")
   }
 }
@@ -150,4 +151,95 @@ test "corners linked of the window's tree's nodes: worked out from the ranges of
   assert_eq(seen[0], ({ window: 8.0, fit: None, zoom: 1.0 }, [concentric(8.0, 6.0)]), msg="none: followed, as any is")
   assert_eq(seen[1], ({ window: 8.0, fit: Some(fit_ranges), zoom: 1.0 }, [16.0]), msg="told: too square to follow, alone, at once")
   assert_eq(seen[2], seen[0], msg="none again: as before, at once")
+}
+
+///|
+test "a node of the window's tree linked at each corner (tree_corners_linked): its corners worked out as the tree's linked corners are, again as the theme's ranges change, the same node; the corner rule told them linked, from the same corners" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0, window_corner=8.0)
+  let fit : @signals.Signal[CornerFit?] = @signals.signal(None, same=fn(a, b) { a == b })
+  let drawn : Ref[@view.NodeId?] = Ref(None)
+  let links : FixedArray[CornerOf] = FixedArray::from_array([
+    Follow(Window, 6.0, 16.0),
+    Own(28.0),
+    Own(28.0),
+    Follow(Window, 6.0, 16.0),
+  ])
+  set_view_app(fn(root) {
+    set_tree_theme(fn() { { ..Theme::light(), corner_fit: fit.get() } })
+    root.box(fn(b) {
+      b.width(Is(Some(120.0))).height(Is(Some(80.0))).ground(Is(0xFFFFFFFFL)) |> ignore
+      tree_corners_linked(b, fn() { Some(links) })
+      drawn.val = Some(b.id())
+    })
+    |> ignore
+  })
+  t.draw()
+  let id = drawn.val.unwrap()
+  let tree = view_tree().unwrap()
+  // (its corners as the tree has them at the tester's moment, brought there, no frame drawn)
+  let corners = fn() {
+    tree.bring_to(t.time())
+    tree.drawn().filter(fn(d) { d.id == id }).map(fn(d) { d.corners })
+  }
+  let worked = fn() {
+    let roots = tree_corner_roots_now()
+    Some((links[0].radius(roots), links[1].radius(roots), links[2].radius(roots), links[3].radius(roots)))
+  }
+  let seen = []
+  for f in [None, Some(fit_ranges), None] {
+    fit.set(f)
+    seen.push((corners(), worked()))
+  }
+  assert_eq(seen[0], ([worked_at(None, links)], worked_at(None, links)), msg="none: \{seen[0]}")
+  assert_eq(seen[1].0, [seen[1].1], msg="told: as the tree's linked corners, at once")
+  assert_true(seen[1].0 != seen[0].0, msg="the theme's ranges changing its corners: \{seen}")
+  assert_eq(seen[2], seen[0], msg="none again: as before, at once")
+  // (the corner rule takes the tree's node as linked, from the same corners)
+  t.draw()
+  let linked = g().with_tree_nodes(fn() {
+    let out = []
+    for i in 0..<g().count {
+      match g().nodes[i].links {
+        Some(ls) => out.push(ls)
+        None => ()
+      }
+    }
+    out
+  })
+  assert_eq(linked.length(), 1)
+  assert_true(physical_equal(linked[0], links) || linked[0] == links)
+}
+
+///|
+/// Corners `links` worked out from the window's 8, the theme's ranges `fit`, no zoom.
+fn worked_at(fit : CornerFit?, links : FixedArray[CornerOf]) -> (Double, Double, Double, Double)? {
+  let roots : CornerRoots = { window: 8.0, fit, zoom: 1.0 }
+  Some((links[0].radius(roots), links[1].radius(roots), links[2].radius(roots), links[3].radius(roots)))
+}
+
+///|
+test "the window's tree let go before its theme and its inset are forgotten: what of it read them not worked out again as a run ends (a tree whose theme said other corners than the window's own)" {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
+  let reads = Ref(0)
+  set_view_app(fn(root) {
+    set_tree_theme(fn() { { ..Theme::light(), radii: { ..Theme::light().radii, xl3: 26.0 } } })
+    root.show(
+      fn() {
+        reads.val += 1
+        tree_theme().corner(Xl3) > 25.0 && window_inset_now()
+      },
+      fn(_) {  },
+    )
+    root.show(
+      fn() {
+        reads.val += 1
+        tree_theme().corner(Xl3) > 25.0
+      },
+      fn(b) { b.width(Is(Some(32.0))).height(Is(Some(32.0))) |> ignore },
+    )
+  })
+  t.draw()
+  let before = reads.val
+  run_let_go()
+  assert_eq(reads.val, before, msg="read again as the run ended")
 }

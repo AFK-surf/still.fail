@@ -1,4 +1,4 @@
-// Firebase Cloud Messaging (docs/notifications.md), for the Android app: the HTTP v1 API, as the Firebase project's
+// Firebase Cloud Messaging, for the Android app: the HTTP v1 API, as the Firebase project's
 // service account (FCM_SERVICE_ACCOUNT, its JSON). The account signs an RS256 JWT, Google's token endpoint trades it
 // for an access token, kept in memory until a few minutes before it ends.
 import { importPKCS8, SignJWT } from "jose";

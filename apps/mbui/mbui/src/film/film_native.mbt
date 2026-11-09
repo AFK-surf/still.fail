@@ -29,6 +29,9 @@ extern "C" fn ffi_put(k : Int) -> Int = "mbf_put"
 extern "C" fn ffi_close(frames : Int) -> Int = "mbf_close"
 
 ///|
+extern "C" fn ffi_finish(publish : Int) -> Int = "mbf_finish"
+
+///|
 extern "C" fn ffi_spin(ms : Double) -> Unit = "mbf_spin"
 
 ///|
@@ -53,6 +56,10 @@ extern "C" fn ffi_exit(code : Int) -> Unit = "mbf_exit"
 ///|
 #borrow(path)
 extern "C" fn ffi_snapshot(path : String) -> Int = "mbf_snapshot"
+
+///|
+#borrow(path)
+extern "C" fn ffi_snapshot_transparent(path : String) -> Int = "mbf_snapshot_transparent"
 
 ///|
 #borrow(inst, out)
@@ -90,6 +97,12 @@ fn draw_timed(
 }
 
 ///|
+/// (a frame's work counted only by a Wasm host: film_wasm.mbt's)
+fn mark(frame : Int, end : Bool) -> Unit {
+  ignore((frame, end))
+}
+
+///|
 /// The machine's clock (ms): what a bench times the work by.
 fn now_ms() -> Double {
   ffi_now_ms()
@@ -114,8 +127,8 @@ fn open(path : String, w : Int, h : Int, fps : Int) -> Bool {
 
 ///|
 /// The instances drawn offscreen, read back as the film's picture from now on.
-fn draw(inst : FixedArray[Double], count : Int, r : Double, g : Double, b : Double) -> Unit {
-  ignore(ffi_draw(inst, count, r, g, b))
+fn draw(inst : FixedArray[Double], count : Int, r : Double, g : Double, b : Double) -> Bool {
+  ffi_draw(inst, count, r, g, b) != 0
 }
 
 ///|
@@ -131,9 +144,20 @@ fn close(frames : Int) -> Bool {
 }
 
 ///|
+/// Publish a completed film, or discard a failed one without replacing the previous file.
+fn finish(publish : Bool) -> Bool {
+  ffi_finish(if publish { 1 } else { 0 }) != 0
+}
+
+///|
 /// The frame drawn last, as the renderer drew it, written to `path` (a PNG).
 fn snapshot(path : String) -> Bool {
   ffi_snapshot(path) != 0
+}
+
+///|
+fn snapshot_transparent(path : String) -> Bool {
+  ffi_snapshot_transparent(path) != 0
 }
 
 ///|

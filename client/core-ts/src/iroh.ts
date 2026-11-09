@@ -1,4 +1,4 @@
-// The iroh surface a host gives the core (docs/core-ts.md, Hosts): an endpoint bound with a key, connections to
+// The iroh surface a host gives the core (Hosts): an endpoint bound with a key, connections to
 // stations, their streams, how each runs. Node has it from the native addon (station/native/mesh, hosts/node-iroh.ts);
 // the browser from iroh's wasm build (relay only); Android from its JNI shell. The mesh (mesh.ts) is the core's own
 // logic over it: links, credentials, renewals, races, measurements.
@@ -32,7 +32,7 @@ export interface IrohStream {
   stopped(): Effect.Effect<number | null, HostError>;
   /// Ends it at once, both ways.
   reset(code: number): void;
-  /// A remote screen's view (docs/remote-screens.md) read by the host from now on, beginning with `prefix` (what was
+  /// A remote screen's view read by the host from now on, beginning with `prefix` (what was
   /// read past its reply): its picture's and sound's frames said to the app itself as the progress of its call `call`
   /// (as screens.ts would say them), `read` answering only the rest (a config too, and the first video frame's head
   /// after each). False where the host does not (then nothing changed). Hosts whose shell says to the app (Apple's).
@@ -67,6 +67,11 @@ export interface IrohEndpoint {
   networkChange(): Effect.Effect<void>;
   /// Its home relays, and whether it is connected to each now.
   relayStatus(): { url: string; connected: boolean; access?: string }[];
+  /// What the DHT lookup's socket and lookups went through since the last take (each line with when, ms since the Unix
+  /// epoch), kept from now on while `keep` (until a take without), none kept without; how many were dropped for want of
+  /// room.
+  /// A host whose endpoints look nothing up on the DHT has none.
+  dhtSaid?(keep: boolean): { lines: { at: number; text: string }[]; dropped: number };
   /// Update forwarding entrances without closing any station connection.
   setRelayEntries?(entries: { entry: string; relay: string }[]): Effect.Effect<void, HostError>;
   close(): Effect.Effect<void>;

@@ -205,7 +205,7 @@ test "an edge's look as nodes let go as it moves: no frame asked after" {
   @ui.set_view_app(fn(root) {
     root.box(fn(n) {
       n.over(Is(true)).offset(Is((140.0, 20.0))).width(Is(Some(handle_w))).height(Is(Some(200.0))) |> ignore
-      n.show(fn() { there.get() }, fn(e) {
+      n.show(at_once=true, fn() { there.get() }, fn(e) {
         e.grow(Is(1.0)) |> ignore
         edge_look_node(e, fn() { true }, fn() { on.get() }, fn() { false }) |> ignore
       })

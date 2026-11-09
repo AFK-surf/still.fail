@@ -15,7 +15,7 @@ let viz_chat_picture : String = "compare.png"
 fn viz_chat() -> (@ui.Tester, (Double, Double)?, (Double, Double)?) {
   new_run()
   let src = fixture("chat-viz")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=viz_chat_h, platform=0)
   nav_rested(t)
   t.run_for(@ui.move_most_ms)

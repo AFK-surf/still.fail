@@ -21,11 +21,14 @@ pub fn toast(id : String, title : String, description? : String = "", action? : 
 }
 
 ///|
-/// What a toast's look is given: the toast, how far in it is (0 … 1), how far it is swiped (to the right), pointed at.
+/// What a toast's look is given: the toast, how far in it is (0 … 1, read where it is drawn: Anim::get in
+/// Ctx::look_by), how far it is swiped (to the right, as the finger has it), how far it slides to the right as it goes
+/// (all the way out; 0 while it is shown), pointed at.
 pub(all) struct ToastState {
   toast : Toast
-  t : Double
+  t : @motion.Anim
   dx : Double
+  away : Double
   hovered : Bool
 }
 
@@ -38,15 +41,12 @@ pub(all) struct Toasts {
 }
 
 ///|
-/// A viewport's toasts as drawn last frame, in order, and those of them put away (coming out); and as the frame before
-/// left them, with its number: each build of a frame starts from there (a frame may be built twice), only what was put
-/// away in it (a swipe, its time) kept put away.
+/// A viewport's toasts as drawn last, in order, and those of them put away (coming out), each as its cause came: no
+/// longer given, swiped, closed, acted on, its time out. A build again of the frame goes on from there: what put one
+/// away was so.
 priv struct Kept {
   mut drawn : Array[Toast]
   gone : Map[String, Bool]
-  mut frame : Int
-  mut drawn_before : Array[Toast]
-  gone_before : Map[String, Bool]
 }
 
 ///|
@@ -68,19 +68,10 @@ pub fn toaster(
   let kept = match kit.val.toasts.get(vid) {
     Some(k) => k
     None => {
-      let k = { drawn: [], gone: {}, frame: -1, drawn_before: [], gone_before: {} }
+      let k = { drawn: [], gone: {} }
       kit.val.toasts[vid] = k
       k
     }
-  }
-  if kept.frame != c.frame_number() {
-    kept.frame = c.frame_number()
-    kept.drawn_before = kept.drawn
-    kept.gone_before.clear()
-    kept.gone.each(fn(id, v) { kept.gone_before[id] = v })
-  } else {
-    kept.drawn = kept.drawn_before
-    kept.gone_before.each(fn(id, v) { kept.gone[id] = v })
   }
   // as drawn last frame (those no longer given put away), then the new ones
   let order : Array[Toast] = []
@@ -160,12 +151,7 @@ pub fn toaster(
           continue
         }
         drawn.push(to)
-        let st = {
-          toast: to,
-          t: p.t,
-          dx: if live { dx } else { (1.0 - p.t) * width * 0.5 },
-          hovered: c.lit(tid),
-        }
+        let st = { toast: to, t: p.t, dx, away: if live { 0.0 } else { width * 0.5 }, hovered: c.lit(tid) }
         let i = c.drag_area(if live { tid } else { 0 }, axis=Horizontal, fn() {
           look(
             c,
@@ -214,11 +200,10 @@ fn focus_in(c : @ui.Ctx, key : String, id : String) -> Bool {
 ///|
 /// A toast's default look (still.fail's): the primary ink, a corner of 20; its title over its description (fainter)
 /// over what `action` builds (its action), what `close` builds (its close button) in its top right corner; it fades
-/// and rises as it comes in, slides away as it goes out and is swiped.
+/// and rises as it comes in, slides away as it goes out (as it is drawn) and is swiped.
 pub fn toast_look(c : @ui.Ctx, s : ToastState, action : () -> Unit, close : () -> Unit) -> Unit {
   let t = c.theme()
-  let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
-  c.box(
+  let b = c.box(
     // a small panel's: 6 in, its words 10 further (16), its buttons at the 6 in its corners, concentric
     dir=Row,
     pad=6.0,
@@ -231,8 +216,6 @@ pub fn toast_look(c : @ui.Ctx, s : ToastState, action : () -> Unit, close : () -
     shadow_color=t.shadow,
     shadow_y=8.0,
     tx=s.dx,
-    ty=(1.0 - k) * 12.0,
-    opacity=k,
     fn() {
       // the first line of words on the close button's middle
       c.box(fn() {
@@ -251,7 +234,11 @@ pub fn toast_look(c : @ui.Ctx, s : ToastState, action : () -> Unit, close : () -
       close()
     },
   )
-  |> ignore
+  // (coming in, faded and risen; going, slid away: as it is drawn, nothing built for it)
+  c.look_by(b, fn() {
+    let k = dmax(0.0, dmin(1.0, s.t.get(c)))
+    @ui.look(alpha=k, dx=(1.0 - k) * s.away, dy=(1.0 - k) * 12.0)
+  })
 }
 
 ///|
@@ -287,7 +274,11 @@ pub fn toast_button(c : @ui.Ctx, key : String, text : String, label : String, ro
 /// is shown does not wait for it): what goes on to it by name, as a run's end goes on to every time told (a toast left
 /// on screen at the end not decided by where the end's last frame happens to fall).
 pub fn toast_due(key : String) -> Double {
-  kit.val.toast_dues.get(key).unwrap_or(-1.0)
+  // (a toaster_node's, where there is one by that key: toast_node_due)
+  match toast_node_due(key) {
+    Some(d) => d
+    None => kit.val.toast_dues.get(key).unwrap_or(-1.0)
+  }
 }
 
 ///|
@@ -296,5 +287,9 @@ pub fn toast_due(key : String) -> Double {
 /// goes (its time out, closed, swiped). Its time on screen is a timer, not a motion: toast_due, or `run_for` the
 /// toaster's duration.
 pub fn toast_rest(key : String) -> Double {
-  @ui.rest_of("\u{2}presence/" + key + "/")
+  // (a toaster_node's, where there is one by that key: toast_node_rest)
+  match toast_node_rest(key) {
+    Some(r) => r
+    None => @ui.rest_of("\u{2}presence/" + key + "/")
+  }
 }

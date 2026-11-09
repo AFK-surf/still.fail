@@ -1,8 +1,11 @@
 // The Rust core's store.rs tests, ported (same names, same checks): time on a TestClock.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { apply as applyOps, type Op } from "../src/delta.ts";
+import { applyKeyed, type AnyOp } from "../src/collections.ts";
 import { CoreError } from "../src/error.ts";
 import { holdLanguage } from "../src/i18n.ts";
+import { Output } from "../src/output.ts";
 import type { Topic } from "../src/protocol.ts";
 import { Runner } from "../src/runtime.ts";
 import { COALESCE_MS, EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
@@ -236,6 +239,117 @@ test("a_watch_keeps_a_topic_live_and_hears_its_changes", async () => {
   assert.equal(heard.length, 2);
 });
 
+test("a_topic_only_watched_inside_the_core_is_formatted_when_a_page_asks_for_it", async () => {
+  const { host, store, pass } = setup();
+  const stations: Topic = { topic: "stations", scope: "ws" };
+  const heard: unknown[] = [];
+  const shape = Output.prototype.shape;
+  let formatted = 0;
+  Output.prototype.shape = function (topic, ...args) {
+    if (topic.topic === "stations") formatted++;
+    return shape.call(this, topic, ...args);
+  };
+  const watch = store.watch(stations, () => heard.push(store.get(stations)));
+  try {
+    store.set(stations, { ok: [{ id: "a", name: "first" }] });
+    await pass(COALESCE_MS * 2);
+    assert.deepEqual(heard, [[{ id: "a", name: "first" }]]);
+    assert.equal(formatted, 0, "a value read only by another page needs no client output");
+    assert.deepEqual(host.takeEmitted(), []);
+
+    store.subscribe(1, 1, stations);
+    await pass(COALESCE_MS * 2);
+    assert.deepEqual(host.takeEmitted(), [[1, value(1, [{ id: "a", name: "first" }])]]);
+    assert.equal(formatted, 1);
+
+    store.unsubscribe(1, 1);
+    store.set(stations, { ok: [{ id: "a", name: "second" }] });
+    await pass(COALESCE_MS * 2);
+    assert.deepEqual(heard.at(-1), [{ id: "a", name: "second" }]);
+    assert.equal(formatted, 1, "a closed page is not formatted while its cache is kept");
+
+    store.subscribe(1, 2, stations);
+    const messages = host.takeEmitted();
+    await pass(COALESCE_MS * 2);
+    messages.push(...host.takeEmitted());
+    let shown: unknown;
+    for (const [, message] of messages) {
+      const m = message as { value?: unknown; delta?: Op[] };
+      if ("value" in m) shown = m.value;
+      else if (m.delta) shown = applyOps(shown, m.delta);
+    }
+    assert.deepEqual(shown, [{ id: "a", name: "second" }]);
+  } finally {
+    watch.drop();
+    Output.prototype.shape = shape;
+  }
+});
+
+test("a_closed_page_is_not_formatted_until_it_is_opened_again", async () => {
+  const { host, store, pass } = setup();
+  const page: Topic = { topic: "page" };
+  const shape = Output.prototype.shape;
+  let formatted = 0;
+  Output.prototype.shape = function (topic, ...args) {
+    if (topic.topic === "page") formatted++;
+    return shape.call(this, topic, ...args);
+  };
+  try {
+    store.subscribe(1, 1, page);
+    store.set(page, { ok: { name: "first" } });
+    await pass(COALESCE_MS * 2);
+    assert.deepEqual(host.takeEmitted(), [[1, value(1, { name: "first" })]]);
+    assert.equal(formatted, 1);
+
+    store.unsubscribe(1, 1);
+    store.set(page, { ok: { name: "second" } });
+    await pass(COALESCE_MS * 2);
+    assert.equal(formatted, 1, "nothing is formatting a page that nobody is viewing");
+    assert.deepEqual(host.takeEmitted(), []);
+
+    store.subscribe(1, 2, page);
+    let shown: unknown;
+    const messages = host.takeEmitted();
+    assert.equal(messages.length, 0, "a reopened page is not sent a stale value while its current one is prepared");
+    await pass(COALESCE_MS * 2);
+    messages.push(...host.takeEmitted());
+    for (const [, message] of messages) {
+      const m = message as { value?: unknown; delta?: Op[] };
+      if ("value" in m) shown = m.value;
+      else if (m.delta) shown = applyOps(shown, m.delta);
+    }
+    assert.deepEqual(shown, { name: "second" }, "reopening shows the latest value");
+  } finally {
+    Output.prototype.shape = shape;
+  }
+});
+
+test("a_reopened_held_page_catches_up_with_changes_while_closed", async () => {
+  const { host, store, pass } = setup();
+  let held: unknown = { name: "first" };
+  store.setHeld((topic) => topic.topic === "overview" ? held : undefined);
+  store.subscribe(1, 1, overview());
+  await pass(COALESCE_MS * 2);
+  assert.deepEqual(host.takeEmitted(), [[1, value(1, { name: "first" })]]);
+  store.unsubscribe(1, 1);
+
+  held = { name: "second" };
+  store.changed(overview());
+  await pass(COALESCE_MS * 2);
+  store.subscribe(1, 2, overview());
+  const messages = host.takeEmitted();
+  assert.equal(messages.length, 0, "a reopened held value is not sent an outdated snapshot");
+  await pass(COALESCE_MS * 2);
+  messages.push(...host.takeEmitted());
+  let shown: unknown;
+  for (const [, message] of messages) {
+    const m = message as { value?: unknown; delta?: Op[] };
+    if ("value" in m) shown = m.value;
+    else if (m.delta) shown = applyOps(shown, m.delta);
+  }
+  assert.deepEqual(shown, { name: "second" }, "a held value changed while the page was closed");
+});
+
 test("an_invalidated_topic_is_computed_once_as_it_goes_out", async () => {
   const { host, store, source, pass } = setup();
   const chats: Topic = { topic: "chats", scope: "ws", mine: false };
@@ -294,8 +408,8 @@ test("a_first_value_goes_out_without_waiting_the_window", async () => {
   store.set(session, { ok: "s" });
   await pass(COALESCE_MS / 5);
   assert.deepEqual(host.takeEmitted(), [
-    [1, value(1, "o")],
     [1, value(2, "s")],
+    [1, value(1, "o")],
   ]);
 });
 
@@ -315,6 +429,28 @@ test("a_keyed_subscriber_gets_keyed_ops_and_the_others_the_old_ones", async () =
   assert.deepEqual(keyed, { id: 10, delta: [{ path: [], key: ["id"], move: "t30", before: "t0" }] });
   assert.equal(c2, 2);
   assert.ok(Array.isArray(old.delta) || "value" in old);
+});
+
+test("a_subscriber_from_another_of_its_subscriptions_gets_its_first_value_as_what_changed_from_that_ones", async () => {
+  const { host, store, pass } = setup();
+  const rows = (limit: number): Topic => ({ topic: "chatRows", station: "ws/st", limit });
+  const list = Array.from({ length: 100 }, (_, i) => ({ id: `t${i}`, title: `chat ${i}` }));
+  store.subscribe(1, 10, rows(50), true);
+  store.set(rows(50), { ok: list.slice(0, 50) });
+  await pass(COALESCE_MS * 2);
+  const [[, first]] = host.takeEmitted() as [number, { value: unknown }][];
+  // (more of them asked: a new subscription from the first, which the client holds till it answers)
+  store.subscribe(1, 11, rows(100), true, 10);
+  store.set(rows(100), { ok: list });
+  await pass(COALESCE_MS * 2);
+  const [[c, more]] = host.takeEmitted() as [number, { id: number; delta: AnyOp[]; from: number }][];
+  assert.equal(c, 1);
+  assert.equal(more.id, 11);
+  assert.equal(more.from, 10);
+  assert.deepEqual(applyKeyed(first.value, more.delta), list);
+  // (one not keyed, or from one it does not have: whole)
+  store.subscribe(1, 12, rows(100), true, 99);
+  assert.deepEqual(host.takeEmitted(), [[1, value(12, list)]]);
 });
 
 test("what_the_store_keeps_is_frozen_all_through_in_tests", async () => {
@@ -385,11 +521,11 @@ test("rounds_that_held_the_core_are_told_at_most_once_a_minute_with_how_many_and
     },
   };
   const store = new Store(host, new Runner(host.time.clock), tracer as never);
-  // each topic made in 30 ms of the core's (its clock moved on as it is made)
+  // The first topic holds the core for 60 ms; the second runs in a separate turn.
   let extra = 0;
   const mono = host.monotonicMs.bind(host);
   host.monotonicMs = () => mono() + extra;
-  store.setSource({ start() {}, stop() {}, compute: () => ((extra += 30), { ok: extra }) });
+  store.setSource({ start() {}, stop() {}, compute: (topic) => ((extra += topic.topic === "a" ? 60 : 0), { ok: extra }) });
   const topics = [{ topic: "a" }, { topic: "b" }];
   topics.forEach((t, i) => store.subscribe(1, i + 1, t));
   for (const t of topics) store.invalidate(t);
@@ -406,4 +542,263 @@ test("rounds_that_held_the_core_are_told_at_most_once_a_minute_with_how_many_and
   assert.equal(told.length, 2);
   assert.equal(told[1]!["stillfail.rounds"], 21);
   assert.equal(told[1]!["stillfail.held_ms"], 60);
+});
+
+test("a_change_during_computation_is_eventually_shown", async () => {
+  const { host, store, pass } = setup();
+  const page: Topic = { topic: "page" };
+  let computations = 0;
+  store.setSource({
+    start() {},
+    stop() {},
+    compute(topic) {
+      if (topic.topic !== "page") return undefined;
+      computations++;
+      if (computations === 1) store.invalidate(page);
+      return { ok: computations };
+    },
+  });
+  store.subscribe(1, 1, page);
+  store.invalidate(page);
+  await pass(COALESCE_MS * 4);
+  const shown = host.takeEmitted().filter(([, message]) => message.id === 1);
+  assert.deepEqual(shown.at(-1), [1, value(1, 2)]);
+  assert.equal(store.get(page), 2);
+  assert.equal(computations, 2);
+});
+
+test("a_new_page_gets_its_first_value_before_unrelated_updates_waiting_to_go_out", async () => {
+  const { host, store, pass } = setup();
+  const chat: Topic = { topic: "chat", station: "ws/st", thread: 7 };
+  store.subscribe(1, 1, overview());
+  store.set(overview(), { ok: "before" });
+  await pass(COALESCE_MS * 2);
+  host.takeEmitted();
+  store.set(overview(), { ok: "changed" });
+  store.subscribe(1, 2, chat);
+  store.set(chat, { ok: "opened" });
+  await pass(COALESCE_MS * 2);
+  const sent = host.takeEmitted();
+  assert.deepEqual(sent[0], [1, value(2, "opened")], "the new page is not held behind a background update");
+  assert.deepEqual(sent[1], [1, value(1, "changed")], "the update still goes out");
+});
+
+test("a_new_page_reads_its_pending_dependency_before_giving_its_first_value", async () => {
+  const { host, store, pass } = setup();
+  const dependency: Topic = { topic: "dependency" };
+  const page: Topic = { topic: "page" };
+  let current = "before";
+  store.setSource({
+    start() {},
+    stop() {},
+    compute(topic) {
+      if (topic.topic === "dependency") return { ok: current };
+      if (topic.topic === "page") return { ok: store.get(dependency) };
+      return undefined;
+    },
+  });
+  store.subscribe(1, 1, dependency);
+  store.invalidate(dependency);
+  await pass(COALESCE_MS * 2);
+  host.takeEmitted();
+
+  // The dependency is due for recomputation but has not gone out when the page opens. Giving the page priority must
+  // not make its first value from the dependency's previous value.
+  current = "after";
+  store.invalidate(dependency);
+  store.subscribe(1, 2, page);
+  store.invalidate(page);
+  await pass(COALESCE_MS * 2);
+  const messages = host.takeEmitted();
+  assert.deepEqual(messages.find(([, message]) => message.id === 2), [1, value(2, "after")]);
+});
+
+test("a_new_page_reads_through_pending_dependencies_before_giving_its_first_value", async () => {
+  const { host, store, pass } = setup();
+  const base: Topic = { topic: "base" };
+  const middle: Topic = { topic: "middle" };
+  const page: Topic = { topic: "page" };
+  let current = "before";
+  store.setSource({
+    start() {},
+    stop() {},
+    compute(topic) {
+      if (topic.topic === "base") return { ok: current };
+      if (topic.topic === "middle") return { ok: store.get(base) };
+      if (topic.topic === "page") return { ok: store.get(middle) };
+      return undefined;
+    },
+  });
+  store.subscribe(1, 1, base);
+  store.subscribe(1, 2, middle);
+  const baseWatch = store.watch(base, () => store.invalidate(middle));
+  const middleWatch = store.watch(middle, () => store.invalidate(page));
+  store.invalidate(base);
+  store.invalidate(middle);
+  await pass(COALESCE_MS * 3);
+  host.takeEmitted();
+
+  current = "after";
+  store.invalidate(base);
+  store.subscribe(1, 3, page);
+  store.invalidate(page);
+  await pass(COALESCE_MS * 4);
+  const firstPage = host.takeEmitted().find(([, message]) => message.id === 3);
+  assert.deepEqual(firstPage, [1, value(3, "after")]);
+  baseWatch.drop();
+  middleWatch.drop();
+});
+
+test("a_dependency_read_for_a_new_page_still_reaches_its_other_watchers", async () => {
+  const { host, store, pass } = setup();
+  const dependency: Topic = { topic: "dependency" };
+  const page: Topic = { topic: "page" };
+  const heard: unknown[] = [];
+  let current = "before";
+  store.setSource({
+    start() {},
+    stop() {},
+    compute(topic) {
+      if (topic.topic === "dependency") return { ok: current };
+      if (topic.topic === "page") return { ok: store.get(dependency) };
+      return undefined;
+    },
+  });
+  store.subscribe(1, 1, dependency);
+  const watcher = store.watch(dependency, () => heard.push(store.get(dependency)));
+  store.invalidate(dependency);
+  await pass(COALESCE_MS * 2);
+  heard.length = 0;
+  host.takeEmitted();
+
+  current = "after";
+  store.invalidate(dependency);
+  store.subscribe(1, 2, page);
+  store.invalidate(page);
+  await pass(COALESCE_MS * 3);
+  const messages = host.takeEmitted();
+  assert.deepEqual(messages.find(([, message]) => message.id === 2), [1, value(2, "after")]);
+  assert.deepEqual(messages.find(([, message]) => message.id === 1), [1, value(1, "after")]);
+  assert.deepEqual(heard, ["after"]);
+  watcher.drop();
+});
+
+test("a_reopened_page_shows_its_cache_then_the_pending_dependency_update", async () => {
+  const { host, store, pass } = setup();
+  const dependency: Topic = { topic: "dependency" };
+  const page: Topic = { topic: "page" };
+  let current = "before";
+  store.setSource({
+    start(topic) {
+      if (topic.topic === "page") {
+        store.watch(dependency, () => store.invalidate(page));
+        store.invalidate(page);
+      }
+    },
+    stop() {},
+    compute(topic) {
+      if (topic.topic === "dependency") return { ok: current };
+      if (topic.topic === "page") return { ok: store.get(dependency) };
+      return undefined;
+    },
+  });
+  store.subscribe(1, 1, dependency);
+  store.invalidate(dependency);
+  await pass(COALESCE_MS * 2);
+  store.subscribe(1, 2, page);
+  await pass(COALESCE_MS * 2);
+  host.takeEmitted();
+  store.unsubscribe(1, 2);
+
+  current = "after";
+  store.invalidate(dependency);
+  store.subscribe(1, 3, page);
+  const reopened = host.takeEmitted().find(([, message]) => message.id === 3);
+  assert.deepEqual(reopened, [1, value(3, "before")], "the previously shown value is available at once");
+  await pass(COALESCE_MS * 3);
+  const changed = host.takeEmitted().find(([, message]) => message.id === 3);
+  assert.deepEqual(changed, [1, value(3, "after")], "the pending dependency reaches it too");
+});
+
+test("a_nested_computation_can_fail_and_recover_without_stopping_other_topics", async () => {
+  const { host, store, pass } = setup();
+  const base: Topic = { topic: "base" };
+  const middle: Topic = { topic: "middle" };
+  const page: Topic = { topic: "page" };
+  const other: Topic = { topic: "other" };
+  let broken = false;
+  store.setSource({
+    start() {}, stop() {},
+    compute(topic) {
+      if (topic.topic === "base") {
+        if (broken) throw Error("base failed");
+        return { ok: 1 };
+      }
+      if (topic.topic === "middle") return store.value(base);
+      if (topic.topic === "page") return store.value(middle);
+      return undefined;
+    },
+  });
+  const baseWatch = store.watch(base, () => store.invalidate(middle));
+  const middleWatch = store.watch(middle, () => store.invalidate(page));
+  store.subscribe(1, 1, page);
+  store.subscribe(1, 2, other);
+  store.invalidate(base);
+  store.invalidate(middle);
+  store.invalidate(page);
+  store.set(other, { ok: 0 });
+  await pass(COALESCE_MS * 4);
+  host.takeEmitted();
+  const error = console.error;
+  console.error = () => {};
+  try {
+    broken = true;
+    store.invalidate(base);
+    store.set(other, { ok: 1 });
+    await pass(COALESCE_MS * 4);
+    const failed = host.takeEmitted();
+    const message = failed.find(([, m]) => m.id === 1)?.[1];
+    assert.ok(message && "error" in message && message.error.code === "internal");
+    assert.deepEqual(failed.find(([, m]) => m.id === 2), [1, value(2, 1)]);
+    broken = false;
+    store.invalidate(base);
+    await pass(COALESCE_MS * 4);
+    assert.deepEqual(host.takeEmitted().find(([, m]) => m.id === 1), [1, value(1, 1)]);
+  } finally {
+    console.error = error;
+    baseWatch.drop();
+    middleWatch.drop();
+  }
+});
+
+test("new_pages_and_background_updates_both_get_a_turn", async () => {
+  const { store, pass } = setup();
+  const first: Topic = { topic: "first" };
+  const background: Topic = { topic: "background" };
+  const pages: Topic[] = [{ topic: "page1" }, { topic: "page2" }, { topic: "page3" }];
+  const order: string[] = [];
+  const open = (index: number) => {
+    store.subscribe(1, index + 3, pages[index]!);
+    store.invalidate(pages[index]!);
+  };
+  store.setSource({
+    start() {},
+    stop() {},
+    compute(topic) {
+      order.push(topic.topic);
+      if (topic.topic === "first") open(0);
+      const index = pages.findIndex((page) => page.topic === topic.topic);
+      if (index >= 0 && index < pages.length - 1) open(index + 1);
+      return { ok: topic.topic };
+    },
+  });
+  store.subscribe(1, 1, first);
+  store.subscribe(1, 2, background);
+  store.set(first, { ok: "old first" });
+  store.set(background, { ok: "old background" });
+  await pass(COALESCE_MS * 2);
+  store.invalidate(first);
+  store.invalidate(background);
+  await pass(COALESCE_MS * 4);
+  assert.deepEqual(order, ["first", "page1", "background", "page2", "page3"]);
 });

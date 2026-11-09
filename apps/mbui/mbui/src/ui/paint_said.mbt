@@ -1,8 +1,12 @@
-// What is drawn, as data (mbui/paint: shapes, glass, corners), taken in here by name: what the old views and the app
-// say of it as ever (@ui.Shape, @ui.Glass, @ui.CornerOf, @ui.concentric …), one type with what the window's tree says.
+// What is drawn, as data (mbui/paint: shapes, lines, glass, corners), taken in here by name: what the old views and the
+// app say of it as ever (@ui.Shape, @ui.Line, @ui.Glass, @ui.CornerOf, @ui.concentric …), one type with what the window's
+// tree says.
 
 pub using @paint {
   type Shape,
+  type Line,
+  line,
+  arc,
   shape_of,
   vector_shapes,
   dashed_outlines,
@@ -15,9 +19,7 @@ pub using @paint {
   smoothness,
   concentric,
   concentric_out,
-  smooth_round,
-  round_like,
-  round_like_out,
+  capsule_in,
   smooth_middle,
   corner_middle,
   sd_corner,

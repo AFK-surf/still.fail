@@ -15,13 +15,17 @@ pub struct ReactiveNode {
   priv mut subs_tail : Link?
   priv mut flags : Int
   priv kind : NodeKind
-  /// a signal's SignalState, a computed's ComputedState, an effect's fn (`no_own` for a scope's and a trigger's)
+  /// an effect's fn, a watch's own (NoOwn for a signal's, a computed's, a scope's and a trigger's: a signal's and a
+  /// computed's state is its Signal's and Computed's, and its update's)
   priv own : Own
-  /// a signal's or a computed's update of its own (updateSignal, updateComputed): one function a type of value, not a
-  /// closure a node
+  /// a signal's or a computed's update of its own (updateSignal, updateComputed), over its state
   priv update : ((ReactiveNode) -> Bool)?
   /// an effect's cleanup, as its fn returned it (EffectNode.cleanup)
   priv mut cleanup : (() -> Unit)?
+  /// not alien-signals': whether what it reads, or it, holds something outside while it is read (a resource told as
+  /// its last reader leaves: Signal::on_unwatched, computed_scoped), once it has; so what reads it does (holds_up). For
+  /// rest: what holds nothing keeps what it read at rest
+  priv mut holds : Bool
 }
 
 ///|
@@ -38,16 +42,14 @@ enum NodeKind {
 }
 
 ///|
-/// A node's own (its SignalState[T], ComputedState[T] or fn) with its type left out, the node being the same for every
-/// type of value: what knows the type (Signal[T], Computed[T], the update the node was made with) says it back
-/// (signals.mbt's `coerce`). Made only as `no_own`; a reference, as what it stands for is.
-priv struct Own {
-  own : Own?
+/// What a node holds besides the graph's fields that is not a value of a type of its own: an effect's fn, a watch's
+/// own (signals.mbt's WatchOwn). (A signal's and a computed's state, of their value's type, are held by their Signal and
+/// Computed and their update: as one reference of another type (`%identity`) the Wasm GC's types do not take it.)
+priv enum Own {
+  NoOwn
+  EffectOwn(() -> (() -> Unit)?)
+  WatchOwned(WatchOwn)
 }
-
-///|
-/// The own of a node that has none (a scope, a trigger's reader).
-let no_own : Own = { own: None }
 
 ///|
 /// An edge: `sub` read `dep` (Link), in `dep`'s subs and `sub`'s deps both; `version` the cycle it was read in.
@@ -65,11 +67,11 @@ struct Link {
 /// The frames checkDirty and propagate stack up as they go down (index.ts's Stack, a list of them): an array each,
 /// kept, where index.ts makes a frame an object, under reference counting a malloc and a free a level. A call works
 /// above where it found its array's end and leaves it there (what checkDirty updates may check again, inside).
-let check_frames : Array[Link] = []
+let check_frames : Array[Link?] = []
 
 ///|
 /// (propagate's frames that would hold no link, which it would only step over, left out)
-let propagate_frames : Array[Link] = []
+let propagate_frames : Array[Link?] = []
 
 ///|
 /// ReactiveFlags.
@@ -97,14 +99,18 @@ pub const PENDING : Int = 32
 fn ReactiveNode::new(
   flags : Int,
   kind : NodeKind,
-  own? : Own = no_own,
+  own? : Own = NoOwn,
   update? : (ReactiveNode) -> Bool,
 ) -> ReactiveNode {
-  { deps: None, deps_tail: None, subs: None, subs_tail: None, flags, kind, own, update, cleanup: None }
+  { deps: None, deps_tail: None, subs: None, subs_tail: None, flags, kind, own, update, cleanup: None, holds: false }
 }
 
 ///|
 fn link(dep : ReactiveNode, sub : ReactiveNode, version : Int) -> Unit {
+  // (not alien-signals': what reads what holds, holds)
+  if dep.holds && !sub.holds {
+    holds_up(sub)
+  }
   let prev_dep = sub.deps_tail
   if prev_dep is Some(p) && physical_equal(p.dep, dep) {
     return
@@ -136,6 +142,19 @@ fn link(dep : ReactiveNode, sub : ReactiveNode, version : Int) -> Unit {
   match prev_sub {
     Some(p) => p.next_sub = Some(new_link)
     None => dep.subs = Some(new_link)
+  }
+}
+
+///|
+/// Not alien-signals': `node` holds (ReactiveNode's `holds`), and so does what reads it, and what reads that.
+fn holds_up(node : ReactiveNode) -> Unit {
+  node.holds = true
+  let mut l = node.subs
+  while l is Some(link) {
+    if !link.sub.holds {
+      holds_up(link.sub)
+    }
+    l = link.next_sub
   }
 }
 
@@ -205,7 +224,7 @@ fn propagate(start : Link, inner_write : Bool) -> Unit {
           let next_sub = sub_subs.next_sub
           if next_sub is Some(_) {
             if next is Some(n) {
-              propagate_frames.push(n)
+              propagate_frames.push(Some(n))
             }
             next = next_sub
           }
@@ -223,7 +242,10 @@ fn propagate(start : Link, inner_write : Bool) -> Unit {
       None => ()
     }
     if propagate_frames.length() > base {
-      let l = propagate_frames.pop().unwrap()
+      let i = propagate_frames.length() - 1
+      let l = propagate_frames[i].unwrap()
+      propagate_frames[i] = None
+      propagate_frames.pop() |> ignore
       link = l
       next = l.next_sub
       continue
@@ -254,7 +276,7 @@ fn check_dirty(start : Link, start_sub : ReactiveNode) -> Bool {
         dirty = true
       }
     } else if (flags & (MUTABLE | PENDING)) == (MUTABLE | PENDING) {
-      check_frames.push(link)
+      check_frames.push(Some(link))
       link = dep.deps.unwrap()
       sub = dep
       check_depth += 1
@@ -272,10 +294,17 @@ fn check_dirty(start : Link, start_sub : ReactiveNode) -> Bool {
     let mut to_top = false
     while check_depth > 0 {
       check_depth -= 1
-      link = check_frames.pop().unwrap()
+      let i = check_frames.length() - 1
+      link = check_frames[i].unwrap()
+      check_frames[i] = None
+      check_frames.pop() |> ignore
       if dirty {
         let subs = sub.subs
-        if update(sub) {
+        // The update below may have disconnected this entire computed chain. Do not run a computed that no longer
+        // has a reader just because check_dirty still has one of its old links on the traversal stack.
+        if subs is None {
+          dirty = false
+        } else if update(sub) {
           if subs is Some(subs) && subs.next_sub is Some(_) {
             shallow_propagate(subs)
           }

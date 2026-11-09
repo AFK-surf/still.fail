@@ -1,31 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-
-export const pageBarTitle = style({
-  gridColumn: "2", display: "flex", alignItems: "center", gap: "8px", minWidth: "0", lineHeight: "22px",
-  "@media": {
-    "(max-width: 700px)": {
-      gridColumn: "2", justifyContent: "center",
-    },
-  },
-});
 export const msg = style({ display: "grid", gap: "6px", fontSize: vars.textBody, lineHeight: "1.65", minWidth: "0" });
-export const msgBubble = style({
-  maxWidth: "min(78%, 640px)", padding: "10px 16px", borderRadius: `calc(20px * ${vars.cornerScale})`,
-  background: vars.neutralBg, whiteSpace: "pre-wrap", overflowWrap: "anywhere", cornerShape: vars.cornerShape,
-});
-export const msgHead = style({ display: "flex", minHeight: "24px", alignItems: ["baseline", "center"], gap: "6px" });
-export const msgTime = style({ fontSize: vars.textCaption, color: vars.muted });
-/** "At work", as the agent badge says it: a still hollow ring. */
-export const activityPulse = style({
-  width: "8px", height: "8px", boxSizing: "border-box", borderRadius: "50%", border: `2px solid ${vars.accent}`,
-  flex: "none",
-});
 export const markdown = style({ fontFamily: vars.fontText, fontVariantNumeric: "normal", fontSize: vars.textBody, lineHeight: "1.65", overflowWrap: "anywhere", minWidth: "0" });
-globalStyle(`${pageBarTitle} h1`, {
-  margin: "0", fontSize: vars.textBody, fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis",
-  whiteSpace: "nowrap", maxWidth: "42vw",
-});
 globalStyle(`${markdown} > :first-child`, { marginTop: "0" });
 globalStyle(`${markdown} > :last-child`, { marginBottom: "0" });
 globalStyle(`${markdown} ul, ${markdown} ol, ${markdown} pre, ${markdown} table, ${markdown} blockquote`, { margin: "0 0 8px" });
@@ -44,13 +20,6 @@ globalStyle(`${markdown} th`, {
 });
 globalStyle(`${markdown} tr:last-child td`, { borderBottom: "0" });
 globalStyle(`${markdown} blockquote`, { paddingLeft: "10px", borderLeft: `2px solid ${vars.lineStrong}`, color: vars.muted });
-globalStyle(`${pageBarTitle} h1`, {
-  "@media": {
-    "(max-width: 700px)": {
-      maxWidth: "none",
-    },
-  },
-});
 globalStyle(`${markdown} pre code`, { fontFamily: vars.fontMono });
 /**
  * Waiting its turn, a message takes no room (not even the list's gap), and what it holds does not reach past it (the

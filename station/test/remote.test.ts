@@ -3,8 +3,8 @@
 // through a direct `call` that answers as the transport does.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, test } from "node:test";
@@ -12,7 +12,7 @@ import { type Clock, type Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { signalGroup } from "../src/ops/group.ts";
 import { Jobs, type Machine } from "../src/jobs/jobs.ts";
-import { GIVE_UP_MS, IDLE_MS, type PeerCall, Refused, Remote, answerPeer, filePath, readJson, writeJson } from "../src/jobs/remote.ts";
+import { GIVE_UP_MS, IDLE_MS, type PeerCall, Refused, Remote, answerPeer, filePath, hash, readJson, writeJson } from "../src/jobs/remote.ts";
 import { type Load, OLDER } from "../src/jobs/load.ts";
 import { type Json, Store } from "../src/store/store.ts";
 import { remoteTools } from "../src/tools/remote.ts";
@@ -74,13 +74,13 @@ async function rounds(_what: string, clock: ReturnType<typeof testClock>, by: Du
 
 type Station = { dir: string; store: Store; jobs: Jobs; remote: Remote; told: [string, string][] };
 
-function station(options: { clock?: Clock.Clock; jobsClock?: Clock.Clock; machine?: Machine; meshWaitMs?: number; dir?: string; store?: Store; jobs?: Jobs; notify?: (s: string, t: string) => void } = {}): Station {
+function station(options: { clock?: Clock.Clock; jobsClock?: Clock.Clock; machine?: Machine; meshWaitMs?: number; dir?: string; store?: Store; jobs?: Jobs; notify?: (s: string, t: string) => void; removeMirror?: (path: string) => Promise<void> } = {}): Station {
   const dir = options.dir ?? tempdir();
   const store = options.store ?? Store.open(":memory:");
   const told: [string, string][] = [];
   const jobs = options.jobs ?? new Jobs({ store, data: dir, notify: () => {}, link: () => null, clock: options.jobsClock, machine: options.machine });
   const remote = new Remote({
-    data: dir, store, jobs, clock: options.clock, meshWaitMs: options.meshWaitMs,
+    data: dir, store, jobs, clock: options.clock, meshWaitMs: options.meshWaitMs, removeMirror: options.removeMirror,
     notify: options.notify ?? ((session, text) => void told.push([session, text])),
   });
   cleanup.push(async () => {
@@ -105,6 +105,189 @@ const unb64 = (v: Json) => Buffer.from(v.data, "base64").toString();
 
 // Each test has stations of its own (directories, stores, clocks): they run at once.
 describe("remote", { concurrency: true }, () => {
+  test("the hourly cleanup remains due across station restarts", async () => {
+    const clock = testClock();
+    const store = Store.open(":memory:", null, clock);
+    const dir = tempdir();
+    const jobs = new Jobs({ store, data: dir, notify: () => {}, link: () => null });
+    // One station's saved last cleanup, shared by its successive Remote instances.
+    let last = 0;
+    const backTidy = { read: async () => last, write: async (at: number) => { last = at; } };
+    let runs = 0;
+    let remote: Remote | null = null;
+    const open = () => {
+      const options = { data: dir, store, jobs, clock, notify: () => {}, backTidy };
+      const next = new Remote(options);
+      (next as any).tidyBack = async () => { runs++; };
+      return next;
+    };
+    try {
+      for (let i = 0; i < 3; i++) {
+        remote = open();
+        await turn();
+        await Effect.runPromise(clock.adjust("20 minutes"));
+        await turn();
+        if (i < 2) {
+          assert.equal(runs, 0, "the hour has not passed");
+          await remote.close();
+          remote = null;
+        }
+      }
+      assert.equal(runs, 1, "updating the station every 20 minutes must not postpone the hourly cleanup");
+      await remote!.close();
+      remote = open();
+      await turn();
+      await Effect.runPromise(clock.adjust("20 minutes"));
+      await turn();
+      assert.equal(runs, 1, "a restart after cleanup does not scan again immediately");
+    } finally {
+      await remote?.close();
+      await jobs.shutdown();
+      store.close();
+    }
+  });
+
+  test("a first cleanup is remembered on disk", async () => {
+    const clock = testClock();
+    const store = Store.open(":memory:", null, clock);
+    const dir = tempdir();
+    const jobs = new Jobs({ store, data: dir, notify: () => {}, link: () => null });
+    const remote = new Remote({ data: dir, store, jobs, clock, notify: () => {} });
+    let runs = 0;
+    (remote as any).tidyBack = async () => { runs++; };
+    const record = join(dir, "remote", "back-tidied.json");
+    try {
+      await until("the first cleanup was recorded", () => {
+        try { return runs === 1 && JSON.parse(readFileSync(record, "utf8")) === 0; } catch { return false; }
+      });
+      assert.equal(runs, 1);
+    } finally {
+      await remote.close();
+      await jobs.shutdown();
+      store.close();
+    }
+  });
+
+  test("what tasks brought back goes once nothing in it changed for 6 hours, what is newer stays", async () => {
+    const r = station();
+    const home = join(r.dir, "home");
+    r.store.insertSession({ key: "s1", connect: "ds", runtime: "claude", profile: "cc", workspace: home, token: "t1", createdBy: "ann", createdAt: Date.now(), lastActiveAt: Date.now() });
+    const back = join(home, "station-back");
+    const put = (key: string, hoursAgo: number, inner?: number) => {
+      mkdirSync(join(back, key, "logs"), { recursive: true });
+      const file = join(back, key, "logs", "a.log");
+      writeFileSync(file, "x");
+      const at = (Date.now() - hoursAgo * 3600_000) / 1000;
+      for (const p of [file, join(back, key, "logs"), join(back, key)]) utimesSync(p, at, at);
+      if (inner !== undefined) {
+        const late = join(back, key, "late.txt");
+        writeFileSync(late, "y");
+        const t = (Date.now() - inner * 3600_000) / 1000;
+        utimesSync(late, t, t);
+        utimesSync(join(back, key), at, at);
+      }
+    };
+    put("old", 7);
+    put("new", 1);
+    put("old-with-a-new-file", 7, 1);
+    await (r.remote as any).tidyBack();
+    assert.deepEqual(["old", "new", "old-with-a-new-file"].map((k) => existsSync(join(back, k))), [false, true, true]);
+  });
+
+  test("a startup sweep lets other station work run while it reads many remote sessions and tasks", async () => {
+    const r = station();
+    const incoming = join(r.remote.root, "incoming");
+    const now = Date.now();
+    for (let i = 0; i < 20; i++) {
+      const session = `s${i}`;
+      const room = r.remote.room("ws", "peer-a", session);
+      mkdirSync(room, { recursive: true });
+      writeFileSync(join(room, "session.json"), JSON.stringify({ workspace: "ws", station: "peer-a", session, seen: now }));
+      for (let j = 0; j < 5; j++) {
+        const dir = join(incoming, hash(["ws", "peer-a", session, `k${j}`]));
+        mkdirSync(dir);
+        writeFileSync(join(dir, "task.json"), JSON.stringify({ workspace: "ws", station: "peer-a", session, key: `k${j}`, layout: "session", spec: { command: "true" } }));
+      }
+    }
+    let swept = false;
+    const sweeping = r.remote.sweep(now).then(() => void (swept = true));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(swept, false, "the event loop is free to open the agents' door while remote records are read");
+    await sweeping;
+  });
+
+  test("the task index follows additions and removals, including a record written after its directory", async () => {
+    const r = station();
+    const prepare = (peer: string, key: string) => r.remote.handle("ws", peer, {
+      method: "task.prepare", session: "s", key, spec: { command: "true" },
+    });
+    const list = async (peer: string) => (await r.remote.handle("ws", peer, { method: "task.list", session: "s" })).tasks.map((t: Json) => t.key).sort();
+    await prepare("peer-a", "first");
+    assert.deepEqual(await list("peer-a"), ["first"]);
+    await prepare("peer-a", "second");
+    await prepare("peer-b", "private");
+    assert.deepEqual(await list("peer-a"), ["first", "second"]);
+    assert.deepEqual(await list("peer-b"), ["private"]);
+
+    // An older station could have made the directory before this station took over, writing its record afterwards.
+    const late = join(r.remote.root, "incoming", hash(["ws", "peer-a", "s", "late"]));
+    mkdirSync(late);
+    assert.deepEqual(await list("peer-a"), ["first", "second"]);
+    writeFileSync(join(late, "task.json"), JSON.stringify({ workspace: "ws", station: "peer-a", session: "s", key: "late", spec: { command: "true" } }));
+    assert.deepEqual(await list("peer-a"), ["first", "late", "second"], "a formerly unreadable record is retried");
+    rmSync(late, { recursive: true });
+    assert.deepEqual(await list("peer-a"), ["first", "second"]);
+    await r.remote.handle("ws", "peer-a", { method: "session.close", session: "s" });
+    assert.deepEqual(await list("peer-a"), []);
+    assert.deepEqual(await list("peer-b"), ["private"], "closing one session leaves the other's records alone");
+  });
+
+  test("an idle session used again while its tasks are read is not removed", async () => {
+    const r = station();
+    const work = r.remote.work("ws", "peer-a", "s");
+    const room = r.remote.room("ws", "peer-a", "s");
+    const record = join(room, "session.json");
+    const now = Date.now();
+    writeJson(record, { ...readJson(record), seen: now - IDLE_MS - 1000 });
+    writeFileSync(join(work, "keep"), "the session's work");
+
+    const remote = r.remote as unknown as { tasksOf: (...args: [string, string, string]) => Promise<unknown[]> };
+    const tasksOf = remote.tasksOf.bind(r.remote);
+    let entered!: () => void;
+    let release!: () => void;
+    const reading = new Promise<void>((resolve) => (entered = resolve));
+    const held = new Promise<void>((resolve) => (release = resolve));
+    remote.tasksOf = async (...args) => {
+      entered();
+      await held;
+      return tasksOf(...args);
+    };
+    const sweeping = r.remote.sweep(now);
+    await reading;
+    r.remote.work("ws", "peer-a", "s");
+    release();
+    await sweeping;
+    assert.equal(readFileSync(join(work, "keep"), "utf8"), "the session's work");
+  });
+
+  test("a remote workspace's size is measured for its owning chat, never another station's chat", async () => {
+    const target = station();
+    const prep = (peer: string) => target.remote.handle("ws", peer, {
+      method: "task.prepare", session: "same-chat", key: "one", spec: { command: "true" },
+    });
+    await prep("peer-a");
+    const work = join(target.remote.room("ws", "peer-a", "same-chat"), "work");
+    writeFileSync(join(work, "output"), Buffer.alloc(1024 * 1024, 1));
+    let size = await target.remote.handle("ws", "peer-a", { method: "session.size", session: "same-chat" });
+    while (size.pending === true) {
+      await turn();
+      size = await target.remote.handle("ws", "peer-a", { method: "session.size", session: "same-chat" });
+    }
+    assert.ok(size.bytes >= 1024 * 1024, "the written output counts toward this workspace");
+    const other = await target.remote.handle("ws", "peer-b", { method: "session.size", session: "same-chat" });
+    assert.equal(other.present, false, "a different station cannot measure that workspace by naming the same chat");
+  });
+
   test("a request asked before the mesh is up waits for it; one it never comes up for is refused after the wait", async () => {
     // As a chat taken up as the station starts, on a subscription borrowed from another station.
     const s = station({ meshWaitMs: 2000 });
@@ -149,10 +332,10 @@ describe("remote", { concurrency: true }, () => {
     const got: [string, Json][] = [];
     r.remote.setInbox(async (peer, request) => {
       got.push([peer, request]);
-      return { thread: "EMBER/1.1" };
+      return { thread: "CHAT/1.1" };
     });
     const answer = await call(r, "peer-c", "session.message", { to: "k", text: "hi" });
-    assert.equal(answer.thread, "EMBER/1.1");
+    assert.equal(answer.thread, "CHAT/1.1");
     const [peer, request] = got.pop()!;
     assert.deepEqual([peer, request.to, request.text], ["peer-c", "k", "hi"]);
     for (const method of ["session.file", "session.put"]) {
@@ -211,21 +394,24 @@ describe("remote", { concurrency: true }, () => {
     const capacity = { cpus: 12, cpuBusy: { share: 0.55, seconds: 60 }, memory: { totalBytes: 64 * 1024 ** 3, availableBytes: 45 * 1024 ** 3 }, checkedAt: 123 };
     let reads = 0;
     r.remote.setLoad(async () => { reads++; return capacity; });
+    // (each uses the screen: the first has it, the others wait for it; busy CPUs alone hold none back)
     for (const key of ["first", "second", "third"]) {
-      await callAs(r, "s", key, "task.prepare", { spec: { command: FOREVER } });
+      await callAs(r, "s", key, "task.prepare", { spec: { command: FOREVER, screen: true } });
       const started = await callAs(r, "s", key, "task.start");
       if (key !== "first") {
         assert.equal(started.job.queued, true);
-        assert.equal(started.queue.cause, "sampling");
+        assert.equal(started.queue.why, "screen");
+        assert.equal(started.queue.cause, undefined);
         assert.deepEqual(started.queue.load, capacity);
       } else {
         assert.equal(reads, 0, "a task that starts at once does not wait on a host reading");
       }
     }
     const got = await callAs(r, "s", "second", "task.get");
-    assert.equal(got.queue.cause, "sampling");
+    assert.equal(got.queue.why, "screen");
     assert.deepEqual(got.queue.load, capacity);
-    assert.equal(got.queue.decision.cpuBusy, null, "the queue has not measured a whole window yet");
+    assert.deepEqual(Object.keys(got.queue.decision), ["memoryPressure"], "no CPU measurement in the queue's decision");
+    assert.doesNotMatch(got.queue.note, /CPU/);
     const laterCapacity = { ...capacity, cpuBusy: { share: 0.25, seconds: 60 }, checkedAt: 456 };
     r.remote.setLoad(async () => laterCapacity);
     assert.deepEqual((await callAs(r, "s", "second", "task.get")).queue.load, laterCapacity, "a later request gets a new reading");
@@ -244,9 +430,9 @@ describe("remote", { concurrency: true }, () => {
     const machine: Machine = { cpus: () => 12, ticks: () => [0, 0], pressure: async () => "normal" };
     const r = station({ clock, jobsClock, machine });
     r.remote.setLoad(() => new Promise(() => {}));
-    await callAs(r, "s", "first", "task.prepare", { spec: { command: FOREVER } });
+    await callAs(r, "s", "first", "task.prepare", { spec: { command: FOREVER, screen: true } });
     await callAs(r, "s", "first", "task.start");
-    await callAs(r, "s", "second", "task.prepare", { spec: { command: FOREVER } });
+    await callAs(r, "s", "second", "task.prepare", { spec: { command: FOREVER, screen: true } });
     const before = clock.asked();
     let answer: Json = null;
     void callAs(r, "s", "second", "task.start").then((got) => (answer = got));
@@ -267,9 +453,10 @@ describe("remote", { concurrency: true }, () => {
     let read = false;
     let release!: (load: Json) => void;
     r.remote.setLoad(() => { read = true; return new Promise((resolve) => { release = resolve; }); });
-    await callAs(r, "s", "first", "task.prepare", { spec: { command: FOREVER } });
+    // (the first has the screen a second; the second waits for it)
+    await callAs(r, "s", "first", "task.prepare", { spec: { command: "sleep 1", screen: true } });
     await callAs(r, "s", "first", "task.start");
-    await callAs(r, "s", "second", "task.prepare", { spec: { name: "second", command: FOREVER } });
+    await callAs(r, "s", "second", "task.prepare", { spec: { name: "second", command: FOREVER, screen: true } });
     const starting = callAs(r, "s", "second", "task.start");
     await until("the capacity is being read", () => read);
     await rounds("the second task starts", jobsClock, "5 seconds", () => r.store.listJobs(null).some((j) => j.name === "second" && j.queued !== true));
@@ -310,7 +497,7 @@ describe("remote", { concurrency: true }, () => {
 
   test("one chat's slow request holds up no other chat's, nor what only reads", async () => {
     // Every request of every chat was answered in one line: on a loaded station a task's state, asked by one chat,
-    // waited behind another chat's sync past its caller's 30 s (2026-10-21, Studio for ccvm).
+    // waited behind another chat's sync past its caller's 30 s (2026-10-21, Office for lab-node).
     const r = station();
     let release!: () => void;
     const released = new Promise<void>((resolve) => (release = resolve));
@@ -416,10 +603,10 @@ describe("remote", { concurrency: true }, () => {
   /// A source station "A" and a target "B" in one workspace; each one's calls reach the other as the transport would
   /// carry them (errors come back as Refused). `reach`: whether B's calls get through to A. `roster`: the stations the
   /// workspace has, as the cloud names them.
-  function pair(roster: Json[] = [{ id: "A" }, { id: "B" }]) {
+  function pair(roster: Json[] = [{ id: "A" }, { id: "B" }], target: Parameters<typeof station>[0] = {}) {
     const clock = testClock();
     const a = station({ clock });
-    const b = station({ clock });
+    const b = station({ ...target, clock });
     mkdirSync(join(a.dir, "mesh"), { recursive: true });
     writeFileSync(join(a.dir, "mesh", "cloud.json"), JSON.stringify({ workspace: "ws", station: "A" }));
     const home = join(a.dir, "work");
@@ -448,6 +635,206 @@ describe("remote", { concurrency: true }, () => {
     const use = async (name: string, args: Json) => JSON.parse(await tools.find((t) => t.name === name)!.run("s1", args));
     return { a, b, home, clock, use, asked, back };
   }
+
+  test("a failed re-prepare cannot start the command from the previous prepare", async () => {
+    const { b, use } = pair();
+    const task = { station: "B", key: "same" };
+    const original = { ...task, action: "prepare", command: "echo original > output" };
+    await use("station_task", original);
+    await assert.rejects(use("station_task", { ...original, command: "echo replacement > output" }), /different inputs/);
+    await assert.rejects(use("station_task", { ...task, action: "start" }), /prepare.*failed|prepare.*again/i);
+    assert.deepEqual((await use("station_task", { ...task, action: "get" })).job, null, "the old command was not started");
+
+    // An explicit, successful re-prepare makes the intended command usable again, including start retries.
+    await use("station_task", original);
+    const started = (await use("station_task", { ...task, action: "start" })).job;
+    await until("the intended command ends", () => b.store.getJob(started.id)!.state !== "running");
+    assert.equal(readFileSync(join(started.cwd, "output"), "utf8"), "original\n");
+    assert.equal((await use("station_task", { ...task, action: "start" })).job.id, started.id);
+  });
+
+  test("a locally rejected re-prepare also prevents the old command from starting", async () => {
+    const { use } = pair();
+    const task = { station: "B", key: "same-local" };
+    await use("station_task", { ...task, action: "prepare", command: "true" });
+    await assert.rejects(use("station_task", { ...task, action: "prepare", command: "true", dir: "relative" }), /absolute path/);
+    await assert.rejects(use("station_task", { ...task, action: "start" }), /prepare.*failed|prepare.*again/i);
+    assert.deepEqual((await use("station_task", { ...task, action: "get" })).job, null);
+  });
+
+  test("a failed prepare stays fenced after migration of an older record and a restart", async () => {
+    const { a, b, clock, use } = pair();
+    const task = { station: "B", key: "restart" };
+    await use("station_task", { ...task, action: "prepare", command: "true" });
+    await assert.rejects(use("station_task", { ...task, action: "prepare", command: "different" }), /different inputs/);
+    // A pre-migration record found after the failure must not replace the newer fence.
+    const name = `${hash(["ws", "s1", "B", "restart"])}.json`;
+    writeJson(join(a.dir, "remote", "prepared", name), { workspace: "ws", session: "s1", station: "B", key: "restart" });
+    await a.remote["movePrepared"]();
+    await a.remote.close();
+    const next = station({ dir: a.dir, store: a.store, jobs: a.jobs, clock });
+    next.remote.attach(async (target, workspace, request) => {
+      if (target === "" && request.method === "peers") return { workspace: "ws", stations: [{ id: "A" }, { id: "B" }], current: true };
+      const answer = await answerPeer(b.remote, workspace ?? "ws", "A", overWire(request));
+      if ("error" in answer) throw new Refused(answer.error);
+      return answer.result;
+    });
+    await assert.rejects(next.remote.tool("station_task", "s1", { ...task, action: "start" }), /prepare.*failed|prepare.*again/i);
+    assert.equal((await next.remote.tool("station_task", "s1", { ...task, action: "get" })).job, null);
+  });
+
+  test("a small offscreen task reaches the target's small slot", async () => {
+    const { b, use, asked } = pair();
+    await use("station_task", { station: "B", key: "build", action: "prepare", command: FOREVER });
+    const build = (await use("station_task", { station: "B", key: "build", action: "start" })).job;
+    await use("station_task", { station: "B", key: "picture", action: "prepare", command: FOREVER, small: true });
+    const picture = (await use("station_task", { station: "B", key: "picture", action: "start" })).job;
+    assert.equal(picture.small, true);
+    assert.notEqual(picture.queued, true);
+    assert.equal(b.store.getJob(picture.id)!.small, true);
+    assert.equal(b.store.getJob(build.id)!.state, "running");
+    assert.ok(asked.some((request) => request.method === "describe"), "checks the target supports small tasks");
+    await assert.rejects(use("station_task", { station: "B", key: "bad", action: "prepare", command: "true", small: true, screen: true }), /small task cannot use the screen/);
+    await assert.rejects(b.remote.handle("ws", "A", { method: "task.prepare", session: "s1", key: "bad", spec: { command: "true", small: "yes" } }), /small must be a boolean/);
+  });
+
+  test("a target from before small tasks is not silently used as a fast queue", async () => {
+    const { a, use } = pair();
+    a.remote.attach(async (_target, _workspace, request) => {
+      assert.equal(request.method, "describe");
+      return { protocol: 1, sync: 1 };
+    });
+    await assert.rejects(use("station_task", { station: "B", key: "picture", action: "prepare", command: "true", small: true }), /cannot run small tasks/);
+  });
+
+  test("a chat can ask the target station to remove its own unused mirror while a busy one stays", async () => {
+    const { a, b, home, use } = pair();
+    const idle = join(home, "idle");
+    const busy = join(home, "busy");
+    mkdirSync(idle);
+    mkdirSync(busy);
+    writeFileSync(join(idle, "source.txt"), "source\n");
+    writeFileSync(join(busy, "source.txt"), "keep\n");
+    const run = async (key: string, dir: string, command: string) => {
+      await use("station_task", { station: "B", key, action: "prepare", dir, command });
+      return use("station_task", { station: "B", key, action: "start" });
+    };
+    const first = await run("one", idle, "echo output > built.txt");
+    await until("the first task ends", () => b.store.getJob(first.job.id)!.state !== "running");
+    await until("its results are delivered", () => a.told.some(([, text]) => text.startsWith("Remote task one on ") && text.includes('"state":"exited"')));
+    const second = await run("two", busy, FOREVER);
+    const room = b.remote.room("ws", "A", "s1");
+    const idlePath = join(room, "work", "idle");
+    const busyPath = join(room, "work", "busy");
+    const nonMirror = join(room, "work", "manual");
+    mkdirSync(nonMirror);
+    writeFileSync(join(nonMirror, "keep"), "work\n");
+    const listed = await use("station_task", { station: "B", action: "mirrors" });
+    assert.deepEqual(listed.mirrors.map((m: Json) => [m.name, m.busy]).sort(), [["busy", true], ["idle", false]]);
+    await assert.rejects(use("station_task", { station: "B", action: "clean", mirror: "busy" }), /in use/);
+    assert.ok(existsSync(busyPath), "a running task's directory remains");
+    const sync = join(room, "sync", "idle");
+    mkdirSync(sync, { recursive: true });
+    await assert.rejects(use("station_task", { station: "B", action: "clean", mirror: "idle" }), /in use/);
+    const old = new Date(Date.now() - 2 * 3600 * 1000);
+    utimesSync(sync, old, old);
+    const syncing = await use("station_task", { station: "B", action: "mirrors" });
+    assert.equal(syncing.mirrors.find((m: Json) => m.name === "idle").busy, true, "even an old sync is not safe to interrupt");
+    await assert.rejects(use("station_task", { station: "B", action: "clean", mirror: "idle" }), /in use/);
+    rmSync(sync, { recursive: true });
+    assert.equal((await use("station_task", { station: "B", action: "clean", mirror: "manual" })).removed, false);
+    assert.equal((await use("station_task", { station: "B", action: "clean", mirror: "../manual" })).removed, false);
+    assert.ok(existsSync(join(nonMirror, "keep")), "other directories and paths outside the mirror list stay");
+    const other = await b.remote.handle("ws", "another-source", { method: "task.clean", session: "s1", mirror: "idle" });
+    assert.equal(other.removed, false, "another station cannot remove this chat's mirror");
+    assert.ok(existsSync(idlePath));
+    const removed = await use("station_task", { station: "B", action: "clean", mirror: "idle" });
+    assert.equal(removed.removed, true);
+    assert.ok(!existsSync(idlePath));
+    assert.ok(existsSync(join(idle, "source.txt")), "the source copy is untouched");
+    // The busy mirror has already been checked. Stop it before starting the replacement so the test does not wait
+    // for the host's real CPU load to fall below the queue's admission threshold.
+    await use("station_task", { station: "B", key: "two", action: "stop" });
+    const again = await run("three", idle, "test -f source.txt && test ! -e built.txt");
+    await until("the replacement task ends", () => b.store.getJob(again.job.id)!.state !== "running");
+    assert.equal(b.store.getJob(again.job.id)!.exitCode, 0, "a later task syncs that mirror again");
+  });
+
+  test("a slow mirror cleanup answers pending, resumes the same removal, and holds the session lane", async () => {
+    let release!: () => void;
+    let entered = 0;
+    const gate = new Promise<void>((resolve) => void (release = resolve));
+    const { a, b, home, use, clock } = pair(undefined, { removeMirror: async (path) => {
+      entered++;
+      await gate;
+      await rm(path, { recursive: true, force: true });
+    } });
+    const dir = join(home, "slow");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "source"), "data");
+    await use("station_task", { station: "B", key: "slow", action: "prepare", dir, command: "true" });
+    const started = await use("station_task", { station: "B", key: "slow", action: "start" });
+    await until("the task ends", () => b.store.getJob(started.job.id)!.state !== "running");
+    await until("its results are delivered", () => a.told.some(([, text]) => text.startsWith("Remote task slow on ") && text.includes('"state":"exited"')));
+    const sleeps = clock.asked();
+    const first = use("station_task", { station: "B", action: "clean", mirror: "slow" });
+    await until("removal starts", () => entered === 1);
+    await until("the answer timer is sleeping", () => clock.asked() > sleeps);
+    await Effect.runPromise(clock.adjust("2 seconds"));
+    assert.equal((await first).pending, true);
+    const again = use("station_task", { station: "B", action: "clean", mirror: "slow" });
+    let prepared = false;
+    const later = b.remote.handle("ws", "A", { method: "task.prepare", session: "s1", key: "later", spec: { command: "true", dir } }).then(() => void (prepared = true));
+    await turn();
+    assert.equal(prepared, false, "another request cannot race removal in this session");
+    assert.equal(entered, 1, "a repeated cleanup joins the existing removal");
+    release();
+    assert.equal((await again).removed, true);
+    await later;
+    assert.equal(prepared, true);
+  });
+
+  test("an interrupted cleanup leaves a prepared task needing a sync before it can start", async () => {
+    let fail = true;
+    const { a, b, home, use } = pair(undefined, { removeMirror: async (path) => {
+      if (fail) throw new Error("removal interrupted");
+      await rm(path, { recursive: true, force: true });
+    } });
+    const dir = join(home, "interrupted");
+    mkdirSync(dir);
+    writeFileSync(join(dir, "source"), "data");
+    await use("station_task", { station: "B", key: "one", action: "prepare", dir, command: "true" });
+    const started = await use("station_task", { station: "B", key: "one", action: "start" });
+    await until("the task ends", () => b.store.getJob(started.job.id)!.state !== "running");
+    await until("its results are delivered", () => a.told.some(([, text]) => text.startsWith("Remote task one on ") && text.includes('"state":"exited"')));
+    const record = join(b.remote.root, "incoming", hash(["ws", "A", "s1", "one"]), "task.json");
+    assert.equal(readJson(record).synced, true);
+    await assert.rejects(use("station_task", { station: "B", action: "clean", mirror: "interrupted" }), /could not be removed/);
+    assert.equal(readJson(record).synced, false, "a partially removed mirror is never considered synced");
+    const room = b.remote.room("ws", "A", "s1");
+    assert.ok(existsSync(join(room, "mirrors", "interrupted.json")), "the removal remains retryable");
+    fail = false;
+    assert.equal((await use("station_task", { station: "B", action: "clean", mirror: "interrupted" })).removed, true);
+  });
+
+  test("the source can read its remote workspace size and address that station by name", async () => {
+    const { a, b, use } = pair([{ id: "A", name: "Home" }, { id: "B", name: "Office" }]);
+    await use("station_task", { station: "B", key: "k", action: "prepare", command: "true" });
+    const work = join(b.remote.room("ws", "A", "s1"), "work");
+    writeFileSync(join(work, "data"), Buffer.alloc(1024 * 1024, 1));
+    assert.deepEqual(a.remote.workspaceTargets("s1"), { workspace: "ws", stations: ["B"] });
+    assert.equal(await a.remote.workspaceStation("s1", "Office"), "B");
+    assert.equal(await a.remote.workspaceStation("s1", "Home"), "");
+    let size = await a.remote.workspaceSize("s1", "B");
+    while (size === null) {
+      await turn();
+      size = await a.remote.workspaceSize("s1", "B");
+    }
+    assert.equal(size.path, work);
+    assert.ok(size.bytes >= 1024 * 1024);
+    assert.equal(a.remote.workspaceTargets("missing"), null);
+    await assert.rejects(a.remote.workspaceStation("s1", "another"), /no remote workspace/);
+  });
 
   test("a session runs a task on another station: inputs up, its notices and end told here, its artifact down", async () => {
     const { a, b, home, clock, use } = pair();
@@ -507,9 +894,9 @@ describe("remote", { concurrency: true }, () => {
 
   /// A station's load as one that measures it says it.
   const loadOf = (busy: number, turns: number): Load => ({
-    os: "macOS 15.6", arch: "arm64", cpus: 12, cpuModel: "Apple M2 Max", cpuBusy: { share: busy, seconds: 60 }, loadAvg: [1.5, 2, 2.5],
-    memory: { totalBytes: 64 * 1024 ** 3, availableBytes: 40 * 1024 ** 3 }, disk: { path: "/data", totalBytes: 1000 * 1024 ** 3, freeBytes: 200 * 1024 ** 3 },
-    gpus: [{ name: "Apple M2 Max", cores: 30 }], running: { remoteTasks: 1, jobs: 2, services: 0, turns }, relay: { home: "https://r.example", ping: { relay: "https://r.example", ms: 12 } },
+    os: "macOS 15.6", arch: "arm64", cpus: 10, cpuModel: "Apple M1 Pro", cpuBusy: { share: busy, seconds: 60 }, loadAvg: [1.5, 2, 2.5],
+    memory: { totalBytes: 32 * 1024 ** 3, availableBytes: 20 * 1024 ** 3 }, disk: { path: "/data", totalBytes: 1000 * 1024 ** 3, freeBytes: 200 * 1024 ** 3 },
+    gpus: [{ name: "Apple M1 Pro", cores: 16 }], running: { remoteTasks: 1, jobs: 2, services: 0, turns }, relay: { home: "https://r.example", ping: { relay: "https://r.example", ms: 12 } },
     checkedAt: 0,
   });
 
@@ -550,7 +937,7 @@ describe("remote", { concurrency: true }, () => {
     assert.equal(listed, null);
     await rounds("the list is out", clock, "500 millis", () => listed !== null);
     const busy = (share: string, turns: string) =>
-      `arm64 macOS 15.6, 12 cores (Apple M2 Max), GPU 30 cores; CPU ${share} busy over the last 60 s, load 1.5 / 2 / 2.5 (1 / 5 / 15 min); memory 40 GiB of 64 GiB free, disk 200 GiB of 1000 GiB free; running 1 remote task, 2 jobs, 0 services, ${turns}; relay ping 12 ms`;
+      `arm64 macOS 15.6, 10 cores (Apple M1 Pro), GPU 16 cores; CPU ${share} busy over the last 60 s, load 1.5 / 2 / 2.5 (1 / 5 / 15 min); memory 20 GiB of 32 GiB free, disk 200 GiB of 1000 GiB free; running 1 remote task, 2 jobs, 0 services, ${turns}; relay ping 12 ms`;
     assert.deepEqual(listed, {
       workspace: "ws",
       current: true,
@@ -603,13 +990,13 @@ describe("remote", { concurrency: true }, () => {
   });
 
   test("a station is named by its id or by the name station_list shows it by", async () => {
-    const { a, b, use } = pair([{ id: "A", name: "Studio" }, { id: "B", name: "Mini1" }, { id: "C", name: "MBA" }, { id: "D", name: "mba" }]);
-    assert.deepEqual(await use("station_task", { station: "mini1", key: "k", action: "prepare", command: "true" }), { key: "k", prepared: true });
-    const started = await use("station_task", { station: "Mini1", key: "k", action: "start" });
+    const { a, b, use } = pair([{ id: "A", name: "Office" }, { id: "B", name: "TestStation" }, { id: "C", name: "Laptop" }, { id: "D", name: "laptop" }]);
+    assert.deepEqual(await use("station_task", { station: "teststation", key: "k", action: "prepare", command: "true" }), { key: "k", prepared: true });
+    const started = await use("station_task", { station: "TestStation", key: "k", action: "start" });
     assert.equal(b.store.getJob(started.job.id)!.sessionKey, "remote:ws:A:s1");
     assert.ok(existsSync(a.remote.outgoing("ws", "s1", "B", "k")), "kept under its id, as one started by id is");
     assert.equal((await use("station_task", { station: "B", key: "k", action: "get" })).key, "k");
-    await assert.rejects(use("station_task", { station: "MBA", key: "k", action: "get" }), /2 stations are named MBA/);
+    await assert.rejects(use("station_task", { station: "Laptop", key: "k", action: "get" }), /2 stations are named Laptop/);
     await assert.rejects(use("station_task", { station: "Nowhere", key: "k", action: "get" }), /peer is not another station/);
   });
 
@@ -628,6 +1015,42 @@ describe("remote", { concurrency: true }, () => {
     assert.ok(a.told[0][1].includes('"state":"stopped"'), a.told[0][1]);
     assert.deepEqual(asked.slice(before).map((r) => r.method), ["task.gets"], "asked once, after it was told");
     assert.equal(readJson(a.remote.outgoing("ws", "s1", "B", "k")).delivered, true);
+  });
+
+  test("a task waiting for the screen is not reported ended before it actually runs", async () => {
+    {
+      const jobsClock = testClock();
+      let ticks = 0;
+      const machine: Machine = { cpus: () => 8, ticks: () => [0, ticks += 1000], pressure: async () => "normal" };
+      const { a, b, use, clock } = pair(undefined, { jobsClock, machine });
+      const first = { station: "B", key: "first" };
+      const second = { station: "B", key: "second" };
+      await use("station_task", { ...first, action: "prepare", screen: true, command: "while [ ! -e proceed ]; do sleep 0.05; done" });
+      const running = (await use("station_task", { ...first, action: "start" })).job;
+      await use("station_task", { ...second, action: "prepare", screen: true, command: "echo ran > second-ran" });
+      const waiting = await use("station_task", { ...second, action: "start" });
+      assert.equal(waiting.job.queued, true);
+      assert.equal(waiting.queue.why, "screen");
+      for (let i = 0; i < 12; i++) {
+        await Effect.runPromise(jobsClock.adjust("5 seconds"));
+        await Effect.runPromise(clock.adjust("5 seconds"));
+        await turn();
+        const got = await use("station_task", { ...second, action: "get" });
+        assert.equal(got.job.state, "running");
+        assert.equal(got.job.queued, true);
+        assert.equal(got.queue.why, "screen");
+        assert.equal(a.told.some(([, text]) => text.startsWith("Remote task second on ")), false);
+      }
+      assert.equal(existsSync(join(running.cwd, "second-ran")), false);
+      writeFileSync(join(running.cwd, "proceed"), "go");
+      await until("the first task ends", () => b.store.getJob(running.id)!.state === "exited");
+      await rounds("the second task runs", jobsClock, "5 seconds", () => b.store.getJob(waiting.job.id)!.state === "exited");
+      await rounds("the second task's completion is told", clock, "5 seconds", () => a.told.some(([, text]) => text.startsWith("Remote task second on ")));
+      const notices = a.told.filter(([, text]) => text.startsWith("Remote task second on "));
+      assert.equal(notices.length, 1);
+      assert.match(notices[0]![1], /"state":"exited".*"exitCode":0/);
+      assert.equal(readFileSync(join(running.cwd, "second-ran"), "utf8"), "ran\n");
+    }
   });
 
   test("a change the source was not reached for is told again until it is, and after the target restarts", async () => {
@@ -656,19 +1079,28 @@ describe("remote", { concurrency: true }, () => {
     assert.ok(a.told[1][1].includes("two"));
   });
 
-  test("the tasks followed on a station from before task.changed are asked about in one request", async () => {
+  test("a task on a station from before task.changed is not asked about on a timer: its session is told so, once", async () => {
     const clock = testClock();
     const s = station({ clock });
-    for (const key of ["k1", "k2", "k3"]) writeJson(s.remote.outgoing("ws", "s1", "old", key), { workspace: "ws", session: "s1", station: "old", key, delivered: false });
+    const paths = ["k1", "k2"].map((key) => {
+      const path = s.remote.outgoing("ws", "s1", "old", key);
+      writeJson(path, { workspace: "ws", session: "s1", station: "old", key, delivered: false });
+      return path;
+    });
     const asked: Json[] = [];
     s.remote.attach(async (_station, _workspace, request) => {
       asked.push(request);
       return { tasks: request.tasks.map((t: Json) => ({ ...t, result: { key: t.key, job: { state: "running" }, log: "", notices: [] } })) };
     });
-    const all = (r: Json) => r.method === "task.gets" && r.tasks.length === 3;
-    await rounds("rounds asking about all three", clock, "5 seconds", () => asked.filter(all).length >= 3);
-    assert.deepEqual(asked.find(all)!.tasks.map((t: Json) => t.key).sort(), ["k1", "k2", "k3"]);
-    assert.ok(asked.every(all), "none on its own");
+    await rounds("both told", clock, "1 second", () => s.told.length === 2);
+    assert.ok(s.told.every(([session, text]) => session === "s1" && text.includes("is not followed")));
+    for (const path of paths) assert.equal(readJson(path).delivered, true);
+    const before = asked.length;
+    for (let i = 0; i < 6; i++) {
+      await Effect.runPromise(clock.adjust("10 seconds"));
+      await sleep(1);
+    }
+    assert.equal(asked.length, before, "not asked again");
   });
 
   test("a station from before task.gets is asked about each task on its own", async () => {
@@ -693,7 +1125,7 @@ describe("remote", { concurrency: true }, () => {
 
   test("a task its station does not know, or never started, is told and no longer followed after a while", async () => {
     // Followed for good every 5 s: an agent whose prepare or start did not get through goes on with another key, and
-    // ccvm followed 90 such tasks on Studio (2026-10-21).
+    // lab-node followed 90 such tasks on Office (2026-10-21).
     const clock = testClock();
     const store = Store.open(":memory:", null, clock);
     cleanup.push(() => store.close());
@@ -708,7 +1140,7 @@ describe("remote", { concurrency: true }, () => {
       tasks: request.tasks.map((t: Json) =>
         t.key === "unknown" ? { ...t, error: "unknown task" }
         : t.key === "unstarted" ? { ...t, result: { key: t.key, job: null, log: null, notices: [] } }
-        : { ...t, result: { key: t.key, job: { state: "running" }, log: "", notices: [] } }),
+        : { ...t, result: { key: t.key, job: { state: "running" }, log: "", notices: [], push: true } }),
     }));
     await rounds("followed a while", clock, "1 minute", () => store.now() - readJson(unknown).since >= GIVE_UP_MS - 60_000);
     assert.equal(s.told.length, 0, "not before");

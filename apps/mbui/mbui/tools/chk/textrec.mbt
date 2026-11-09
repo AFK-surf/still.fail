@@ -1,6 +1,6 @@
 // A real host's run (MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1: TEXTREC, DRAWHASH, INPUT and ENV lines on its log) made a
 // test of whether a Tester over the host's kept text draws, frame for frame, what the host drew (the host's contract,
-// docs/determinism.md): the run kept as src/kitdemo/gallery/textrec_NAME.mbt, its test
+//): the run kept as src/kitdemo/gallery/textrec_NAME.mbt, its test
 // src/kitdemo/gallery/textrec_NAME_wbtest.mbt, and src/kitdemo/gallery/textrec_runs.mbt naming every kept run (what
 // MBUI_TEXTCHECK=NAME asks the host's text system again: the text's contract, src/kitdemo/gallery/textcheck.mbt).
 //

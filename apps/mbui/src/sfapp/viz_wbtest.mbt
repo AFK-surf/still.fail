@@ -1,5 +1,5 @@
 // Visualizations (viz.mbt) over the made-up chat (MBUI_FIXTURE=chat-viz: its last message places release.html and has
-// a mermaid chart), as Android's Viz.kt and VizFiles.kt have them.
+// a mermaid chart, the app's own picture), as Android's Viz.kt and VizFiles.kt have them.
 
 ///|
 /// A number as a line of the fake host's says it.
@@ -24,20 +24,28 @@ fn opened_views(t : @ui.Tester, kind : Int) -> Array[Int] {
 }
 
 ///|
-/// The page of the visualization the message places, and the mermaid chart's: by what each draws (the order they are
-/// opened in is the frame's builds', not the message's).
+/// The page of the visualization the message places, by what it draws, and no other.
 fn viz_views(t : @ui.Tester) -> (Int, Int) {
   ignore(t)
   let mut page = 0
-  let mut chart = 0
+  let mut other = 0
   for k, f in viz_frames {
     if k.has_suffix("/release.html") {
       page = f.view.id()
-    } else if k.contains("/mermaid/") {
-      chart = f.view.id()
+    } else {
+      other = f.view.id()
     }
   }
-  (page, chart)
+  (page, other)
+}
+
+///|
+/// A fragment's page in a message, for what all pages do.
+fn a_page(c : @ui.Ctx) -> Unit {
+  c.box(style=@sfbase.viz_mermaid_box, fn() {
+    @sfbase.viz_frame(c, "chat/ws1/st1:s-c1/message/page.html", "<p>图</p>", None, { keep: None, failed: None, follow_up: None })
+  })
+  |> ignore
 }
 
 ///|
@@ -65,16 +73,16 @@ test "two scoped copies of a visualization each own their native view" {
     c.with_theme(@sf.ui_theme(), fn() {
       for page in [1, 2] {
         c.scope(page, fn() {
-          viz_mermaid_block(c, "chat/ws1/st1:s-c1/message", "graph TD; A-->B", @sf.theme().p.subtle)
+          a_page(c)
         })
       }
     })
   }, w=390.0, h=700.0, platform=1)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   t.draw()
   let views = opened_views(t, 2)
-  assert_eq(views.length(), 2, msg="each page has its own Mermaid view")
+  assert_eq(views.length(), 2, msg="each page has its own view")
   assert_true(view_rect(t, views[0]).unwrap().1 != view_rect(t, views[1]).unwrap().1, msg="each view is placed at its own node")
 }
 
@@ -87,7 +95,7 @@ test "two copies of a visualization move with their rows while scrolling" {
       c.list("rows", 6, 160.0, fn(i) {
         c.column(h=Px(160.0), fn() {
           if i == 1 || i == 2 {
-            viz_mermaid_block(c, "chat/ws1/st1:s-c1/message", "graph TD; A-->B", @sf.theme().p.subtle)
+            a_page(c)
           } else {
             c.text("row \{i}") |> ignore
           }
@@ -95,7 +103,7 @@ test "two copies of a visualization move with their rows while scrolling" {
       }, h=Px(340.0)) |> ignore
     })
   }, w=390.0, h=340.0, platform=1)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   t.draw()
   let views = opened_views(t, 2)
@@ -117,11 +125,11 @@ test "a visualization view is reused after its page leaves and all its copies cl
     @sf.begin(c) |> ignore
     c.with_theme(@sf.ui_theme(), fn() {
       c.nav(nav, fn(_) {
-        viz_mermaid_block(c, "chat/ws1/st1:s-c1/message", "graph TD; A-->B", @sf.theme().p.subtle)
+        a_page(c)
       }) |> ignore
     })
   }, w=390.0, h=700.0, platform=1)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   t.draw()
   assert_eq(opened_views(t, 2).length(), 1)
@@ -155,12 +163,12 @@ test "a placed HTML file is drawn in its message, 120 high, covered until it has
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("touch \{page} vertical ") }))
   // what it says of its height: taken, however tall (a long post's last part not cut off), and the page shown (heard
   // as a frame is painted: the next one has it)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":231.4}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":231.4}")
   // (there on a move from the height it had, as what is over and under it goes with it: rows_steady.mbt)
   t.run_for(@ui.move_most_ms)
   let (_, _, _, h2) = view_rect(t, page).unwrap()
   assert_eq(h2, 232.0)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":5000}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":5000}")
   t.run_for(@ui.move_most_ms)
   assert_eq(view_rect(t, page).unwrap().3, 5000.0)
   // what is not a message of the bridge's is let go
@@ -175,17 +183,17 @@ test "a page that grows a little with each height it is given (100vh) is held wh
   let t = chat_tester("chat-viz")
   t.frame()
   let (page, _) = viz_views(t)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":300}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":300}")
   for i in 1..=100 {
-    t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":\{300 + i * 10}}")
+    t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":\{300 + i * 10}}")
   }
   t.run_for(@ui.move_most_ms)
   // 60 times running it followed, then held
   assert_eq(view_rect(t, page).unwrap().3, 900.0)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":2000}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":2000}")
   t.frame()
   assert_eq(view_rect(t, page).unwrap().3, 900.0)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":400}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":400}")
   t.run_for(@ui.move_most_ms)
   assert_eq(view_rect(t, page).unwrap().3, 400.0)
 }
@@ -195,12 +203,12 @@ test "what a visualization's widget keeps is kept, given back as it is shown aga
   let t = chat_tester("chat-viz")
   t.frame()
   let (page, _) = viz_views(t)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"state\",\"state\":{\"seen\":true}}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"state\",\"state\":{\"seen\":true}}")
   t.frame()
   let l = viz_loads.get(viz_id("ws1/st1", "s-c1", "work/s-c1/release.html")).unwrap()
   assert_eq(l.state.get(), Some({ "seen": true }))
   let big = "x".repeat(17000)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"state\",\"state\":\"" + big + "\"}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"state\",\"state\":\"" + big + "\"}")
   t.frame()
   assert_eq(l.state.get(), Some({ "seen": true }))
 }
@@ -210,7 +218,7 @@ test "words a visualization asks to send go into the composer, said so; the pers
   let t = chat_tester("chat-viz")
   t.frame()
   let (page, _) = viz_views(t)
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"followup\",\"prompt\":\"  把周五的发布挪到周四 \"}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"followup\",\"prompt\":\"  把周五的发布挪到周四 \"}")
   t.frame()
   // (left for the chat's composer, whichever frame's: taken as it is next drawn)
   t.frame()
@@ -231,20 +239,20 @@ test "under the page: the whole screen, its name and a close over it; back close
   t.frame()
   assert_true(t.find("release.html") is Some(_))
   let full = opened_views(t, 2)
-  assert_eq(full.length(), 3)
+  assert_eq(full.length(), 2)
   // a page of its own: it keeps its touches
-  assert_false(t.views().iter().any(fn(l) { l.has_prefix("touch \{full[2]} ") }))
+  assert_false(t.views().iter().any(fn(l) { l.has_prefix("touch \{full[1]} ") }))
   t.back()
   t.frame()
   assert_true(t.find("release.html") is None)
-  assert_true(t.views().contains("close \{full[2]}"))
+  assert_true(t.views().contains("close \{full[1]}"))
 }
 
 ///|
 test "the whole window with the window's buttons in the app's top row (a Mac's): the bar every file opened has, clear of them; its way back closes it" {
   new_run()
   let src = fixture("chat-viz")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.set_window_inset(true)
   t.run_for(@ui.move_most_ms)
@@ -292,53 +300,36 @@ test "beside: the visualization as a page of its own, served from here with what
   assert_true(v.iter().any(fn(s) { s.has_prefix("site head \{site} 1 200 ") && s.contains("text/html") }))
   assert_true(v.iter().any(fn(s) { s.has_prefix("site head \{site} 2 404 ") }))
   // what its widget keeps from there is kept too
-  t.view_says(site, "{\"emberViz\":true,\"type\":\"state\",\"state\":{\"n\":2}}")
+  t.view_says(site, "{\"vizMessage\":true,\"type\":\"state\",\"state\":{\"n\":2}}")
   t.frame()
   assert_eq(viz_loads.get(viz_id("ws1/st1", "s-c1", "work/s-c1/release.html")).unwrap().state.get(), Some({ "n": 2 }))
 }
 
 ///|
-test "a mermaid chart is drawn as a page of its own; one that will not draw is shown as code from then on" {
+test "a mermaid chart is the app's own picture, no page for it; over the whole screen, the viewer's picture" {
   let t = chat_tester("chat-viz")
   t.frame()
-  let (_, chart) = viz_views(t)
+  t.frames_owed()
+  // the page the message places, and nothing else drawn in a page
+  let (page, other) = viz_views(t)
+  assert_true(page != 0)
+  assert_eq(other, 0)
+  // a picture, not its code
   assert_true(t.find("graph LR; 构建-->签名-->发布") is None)
-  t.view_says(chart, "{\"emberViz\":true,\"type\":\"failed\",\"message\":\"mermaid 加载失败\"}")
-  t.frame()
-  t.frame()
-  assert_true(t.find("graph LR; 构建-->签名-->发布") is Some(_))
-  assert_true(view_rect(t, chart) is None)
-}
-
-///|
-test "under a mermaid chart: the whole screen, the chart as written to pinch, its touches its own; back closes it" {
-  let t = chat_tester("chat-viz")
-  t.frame()
-  let (_, chart) = viz_views(t)
-  // drawn (a line of it, so what is under it is above the composer)
-  t.view_says(chart, "{\"emberViz\":true,\"type\":\"height\",\"height\":40}")
-  t.frame()
-  t.frame()
-  let (x, y, w, h) = view_rect(t, chart).unwrap()
-  // one 22 box under it, at its right
-  t.tap(x + w - 11.0, y + h + 2.0 + 11.0)
-  t.frame()
-  assert_true(t.find("Mermaid") is Some(_))
-  let mut full = 0
-  for k, f in viz_frames {
-    if k.has_prefix("full/mermaid/") {
-      full = f.view.id()
-      // fitted to the screen, the page moving it under the fingers
-      assert_true(f.html.contains("const FULL = true"))
-      assert_true(f.html.contains("touch-action:none"))
+  // the way under it to the whole screen (the lower of the two: the page the message places is over it): the viewer,
+  // the chart's picture in it
+  let ways = t.semantics().filter(fn(s) { s.label == viz_tr("android-misc.viz.fullscreen") && !s.hidden })
+  assert_eq(ways.length(), 2)
+  let f = if ways[0].rect.1 > ways[1].rect.1 { ways[0] } else { ways[1] }
+  t.tap(f.rect.0 + f.rect.2 / 2.0, f.rect.1 + f.rect.3 / 2.0)
+  t.frames_owed()
+  match @sfbase.viewer.get() {
+    Some(v) => {
+      assert_eq(v.file.name, "Mermaid.svg")
+      assert_true(v.file.path.has_prefix("draft:mermaid/"))
     }
+    None => fail("no viewer")
   }
-  assert_true(full != 0)
-  assert_false(t.views().iter().any(fn(l) { l.has_prefix("touch \{full} ") }))
-  t.back()
-  t.frame()
-  assert_true(t.find("Mermaid") is None)
-  assert_true(t.views().contains("close \{full}"))
 }
 
 ///|
@@ -363,7 +354,7 @@ test "a visualization's document: a fragment in the stylesheet with its tokens a
 test "on the tape what shows of a visualization's page beside the sidebar in use takes the presses there, not the page" {
   new_run()
   let src = fixture("chat-viz")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   // an opened fold's inner screen upright, a finger: laid out Medium
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h=840.0, platform=2)
   say_room(t, "medium", "medium")
@@ -371,7 +362,7 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
   assert_true(@sfdesk.wide.tape)
   let (page, _) = viz_views(t)
   // as tall as it may be: the chat's page under all of what shows of it
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":5000}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":5000}")
   t.frame()
   t.frame()
   // the sidebar in use at first, a strip of the page showing beside it
@@ -396,7 +387,7 @@ test "on the tape what shows of a visualization's page beside the sidebar in use
 test "a page opened over the chat on a wide window shows over the chat's visualization still painted under it, not under it" {
   new_run()
   let src = fixture("chat-viz")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   t.frame()
@@ -444,13 +435,13 @@ fn view_covered(t : @ui.Tester, id : Int) -> Bool {
 test "a page that said its height stays covered till its host has drawn it (its first frame on the screen)" {
   new_run()
   let src = fixture("chat-viz")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2, finish=false)
   t.run_for(@ui.move_most_ms)
   let (page, _) = viz_views(t)
   assert_true(view_covered(t, page))
   // its height said (its page loaded): still covered, the host not done drawing it
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":231.4}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":231.4}")
   t.run_for(@ui.move_most_ms)
   assert_eq(view_rect(t, page).unwrap().3, 232.0)
   assert_true(view_covered(t, page))
@@ -511,7 +502,7 @@ test "inline HTML is set in the faces the app is set in, a face still.fail keeps
 test "an inline page not drawn yet holds its place with a placeholder, gone once it is drawn" {
   new_run()
   let src = fixture("chat-viz")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2, finish=false)
   t.run_for(@ui.move_most_ms)
   let (page, _) = viz_views(t)
@@ -524,7 +515,7 @@ test "an inline page not drawn yet holds its place with a placeholder, gone once
     })
   }
   assert_true(placeholder())
-  t.view_says(page, "{\"emberViz\":true,\"type\":\"height\",\"height\":231.4}")
+  t.view_says(page, "{\"vizMessage\":true,\"type\":\"height\",\"height\":231.4}")
   t.frame()
   t.frame()
   // its height said, its host not done drawing it: still held

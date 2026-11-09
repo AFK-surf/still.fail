@@ -4,11 +4,6 @@
 // gradients itself, this goes onto that.
 
 ///|
-/// The pictures made, by what they are made of (their key says it all: the same picture each time it is asked for).
-// kept across runs: a cache by content; what is in it never changes for a key
-let gradients_made : Map[String, Bool] = {}
-
-///|
 /// How many pixels across the picture is made (its height in the box's proportion): the colours change slowly, so few
 /// are needed, each stretched.
 let gradient_px : Int = 64
@@ -18,14 +13,21 @@ let gradient_px : Int = 64
 /// about `w` by `h` (its proportion sets the gradient's line, as CSS's does), with corners of `radius`; as wide as its
 /// parent and `h` high. Put behind what the box holds (first, in a box that lays what follows over it).
 pub fn gradient(c : @ui.Ctx, w : Double, h : Double, angle : Double, from : Int64, to : Int64, radius? : Double = 0.0) -> Unit {
+  c.image(gradient_key(w, h, angle, from, to), w=Fill(1.0), h=Px(h), fit=FitFill, radius~, bg=0L, fade=false) |> ignore
+}
+
+///|
+/// The picture of the gradient for a box `w` by `h` (as `gradient`'s), by the key the host keeps it at: made the first
+/// time it is asked for, its key saying it all (a tree's node shows it by View::image).
+pub fn gradient_key(w : Double, h : Double, angle : Double, from : Int64, to : Int64) -> String {
   let pw = gradient_px
   let ph = if w <= 0.0 { 2 } else { dmax_int(2, (h / w * pw.to_double()).round().to_int()) }
   let key = "mem:sf-gradient/\{from}/\{to}/\{angle}/\{pw}x\{ph}"
-  if !gradients_made.contains(key) {
-    gradients_made[key] = true
+  // (made once: its key says it all, the same picture each time it is asked for)
+  if !@ui.has_image(key) {
     @ui.add_image(key, @pixels.png(pw, ph, gradient_pixels(pw, ph, w, h, angle, from, to)))
   }
-  c.image(key, w=Fill(1.0), h=Px(h), fit=FitFill, radius~, bg=0L, fade=false) |> ignore
+  key
 }
 
 ///|

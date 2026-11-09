@@ -3,6 +3,7 @@
 // GLES3 renderer and forwards between Java and the MoonBit callbacks. All
 // MoonBit code runs on the GL thread. Built by scripts/android.sh.
 #include <sys/resource.h>
+#include <dlfcn.h>
 #include <jni.h>
 #include <GLES3/gl3.h>
 #include <android/log.h>
@@ -41,7 +42,7 @@ static jclass host_cls, text_cls, images_cls, login_cls, picks_cls, views_cls, p
 static jmethodID m_reduce_motion;
 static jmethodID m_text_menu;
 static jmethodID m_posted;
-static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
+static jmethodID m_request_frame, m_wake_after, m_frames_paced, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_glyph_put, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes, m_pk_info,
     m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key, m_v_open, m_v_place, m_v_close,
@@ -53,6 +54,8 @@ static jclass updates_cls, shares_cls, keeps_cls, holds_cls;
 static jclass gallery_cls, marks_cls;
 static void device_init(JNIEnv *env);  // android_device.h
 static jmethodID m_mk_start, m_mk_state, m_mk_png;
+static jclass autofills_cls;
+static jmethodID m_af_able, m_af_ask, m_af_take, m_af_end;
 static jmethodID m_face_add, m_face_add_bytes, m_face_clear, m_ahead, m_flush;
 static jmethodID m_cs_known, m_cs_decode;
 static jmethodID m_v_text, m_v_still, m_v_lost;
@@ -89,6 +92,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_request_frame = (*env)->GetStaticMethodID(env, host_cls, "requestFrame", "()V");
   m_posted = (*env)->GetStaticMethodID(env, host_cls, "posted", "()V");
   m_wake_after = (*env)->GetStaticMethodID(env, host_cls, "wakeAfter", "(D)V");
+  m_frames_paced = (*env)->GetStaticMethodID(env, host_cls, "framesPaced", "(D)Z");
   m_set_ime = (*env)->GetStaticMethodID(env, host_cls, "setIme", "(ZDDDDLjava/lang/String;II)V");
   m_clipboard = (*env)->GetStaticMethodID(env, host_cls, "clipboardSet", "(Ljava/lang/String;)V");
   m_text_menu = (*env)->GetStaticMethodID(env, host_cls, "textMenu", "(ZDDDDI)V");
@@ -149,6 +153,11 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_bl_open = (*env)->GetStaticMethodID(env, login_cls, "open", "(ILjava/lang/String;)I");
   m_bl_back = (*env)->GetStaticMethodID(env, login_cls, "back", "(I)Ljava/lang/String;");
   m_bl_end = (*env)->GetStaticMethodID(env, login_cls, "end", "(I)V");
+  autofills_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Autofills"));
+  m_af_able = (*env)->GetStaticMethodID(env, autofills_cls, "able", "()I");
+  m_af_ask = (*env)->GetStaticMethodID(env, autofills_cls, "ask", "(Ljava/lang/String;)I");
+  m_af_take = (*env)->GetStaticMethodID(env, autofills_cls, "take", "()Ljava/lang/String;");
+  m_af_end = (*env)->GetStaticMethodID(env, autofills_cls, "end", "()V");
   m_open_tab = (*env)->GetStaticMethodID(env, login_cls, "openTab", "(Ljava/lang/String;)Z");
   holds_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/LoginService"));
   m_hold_words = (*env)->GetStaticMethodID(env, holds_cls, "words",
@@ -300,14 +309,15 @@ static GLuint image_tex(int id) {
   return id > 0 && id < nimgs && imgs[id].state == 1 ? imgs[id].tex : 0;
 }
 
-// a new context has none of the old textures: forget them and decode again
+// a new context has none of the old textures: forget them and decode again; each told the app again as it is uploaded
+// anew (Native.imageDone), so what draws it is drawn again then, not left as the frames drawn without it had it
 static void images_lost(JNIEnv *env) {
   static int first = 1;
   if (first) {
     first = 0;
     return;
   }
-  for (int i = 0; i < nimgs; i++) imgs[i].tex = 0;
+  for (int i = 0; i < nimgs; i++) imgs[i].tex = 0, imgs[i].told = 0;
   white_tex = 0;
   (*env)->CallStaticVoidMethod(env, images_cls, m_img_reload);
   streams_lost(env);
@@ -347,11 +357,13 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_resize(JNIEnv *env, jclass c, jint w
 // Over another app (OverActivity: Native.overOther): what the app does not paint stays clear, the app under it shows.
 JNIEXPORT void JNICALL Java_dev_mbui_Native_overOther(JNIEnv *env, jclass c, jboolean on) { over_other = on ? 1 : 0; }
 
+#include "groups.h"
+
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   // the glyphs placed in the atlas as the frame was painted, uploaded before it is drawn (MBText.flush)
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, text_cls, m_flush);
-  gl_present(buf, count, r, g, b);
+  gl_present((double *)mb_groups_draw_out(buf, count), count, r, g, b);
 }
 
 // (MBView.onDrawFrame, GL thread: only a native view's picture changed since the last frame)
@@ -370,11 +382,28 @@ void mb_render_init_offscreen(double w, double h, double scale) {
 }
 
 void mb_render_draw_timed(const double *inst, int32_t count, double r, double g, double b, double *out) {
+  // the GPU's time where the driver measures it (GL_EXT_disjoint_timer_query's GL_TIME_ELAPSED_EXT)
+  static int timer = -1;
+  static GLuint q;
+  if (timer < 0) {
+    const char *ext = (const char *)glGetString(GL_EXTENSIONS);
+    timer = ext && strstr(ext, "GL_EXT_disjoint_timer_query") != NULL;
+    if (timer) glGenQueries(1, &q);
+  }
   double t0 = mb_host_now();
+  if (timer) glBeginQuery(0x88BF, q);
   mb_host_present((double *)inst, count, r, g, b);
+  if (timer) glEndQuery(0x88BF);
   glFinish();
   out[0] = mb_host_now() - t0;
   out[1] = -1;
+  if (timer) {
+    GLuint ns = 0;
+    glGetQueryObjectuiv(q, GL_QUERY_RESULT, &ns);
+    GLint disjoint = 0;
+    glGetIntegerv(0x8FBB, &disjoint);
+    if (!disjoint) out[1] = ns / 1e6;
+  }
 }
 
 // the images decoded meanwhile uploaded here (Images.pump), then a while for more
@@ -722,6 +751,16 @@ void mb_host_wake_after(double ms) {
   (*env)->CallStaticVoidMethod(env, host_cls, m_wake_after, ms);
 }
 
+// A frame for what moves on by the clock that needs only `hz` frames a second (@hostapi.frames_paced, said in the
+// frame): MBView's to wake for and to say of the display (Host.framesPaced); the next vsync's, as any frame asked for,
+// where it paces none (the display's rate no more than it), in a run to a declared moment (its frames are its clock's:
+// MBView's shotFrame) and where the frame asks for one besides.
+void mb_host_frames_paced(double hz) {
+  JNIEnv *env = env_();
+  if (own_clock || want_frame || !(*env)->CallStaticBooleanMethod(env, host_cls, m_frames_paced, hz))
+    mb_host_request_frame();
+}
+
 void mb_host_font_metrics(double size, int32_t weight, int32_t style, double *out) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, text_cls, m_metrics, size, weight, style, small_buf);
@@ -874,7 +913,35 @@ void mb_host_clipboard_secret_off(void) {
   (*env)->CallStaticVoidMethod(env, host_cls, m_clipboard_secret_off);
 }
 
+// The last lines the program said that a crash's report says again (wasm_shell.c report_depth): its PERF lines and its
+// HANG lines (src/ui/journal.mbt), each kept as it is said, the oldest let go
+#define MB_RECENT 12
+static char mb_recent[MB_RECENT][240];
+static int mb_recent_at, mb_recent_n;
+
+void mb_host_recent(void (*each)(const char *line)) {
+  for (int k = 0; k < mb_recent_n; k++) each(mb_recent[(mb_recent_at - mb_recent_n + k + MB_RECENT) % MB_RECENT]);
+}
+
+static void recent_keep(moonbit_string_t s) {
+  int32_t n = Moonbit_array_length(s);
+  if (n < 4) return;
+  int perf = 0;
+  for (int32_t k = 0; k + 3 < n && k < 16; k++)
+    if ((s[k] == 'P' && s[k + 1] == 'E' && s[k + 2] == 'R' && s[k + 3] == 'F') ||
+        (s[k] == 'H' && s[k + 1] == 'A' && s[k + 2] == 'N' && s[k + 3] == 'G'))
+      perf = 1;
+  if (!perf) return;
+  char *out = mb_recent[mb_recent_at];
+  int32_t m = n < (int32_t)sizeof mb_recent[0] - 1 ? n : (int32_t)sizeof mb_recent[0] - 1;
+  for (int32_t k = 0; k < m; k++) out[k] = s[k] < 128 ? (char)s[k] : '?';
+  out[m] = 0;
+  mb_recent_at = (mb_recent_at + 1) % MB_RECENT;
+  if (mb_recent_n < MB_RECENT) mb_recent_n++;
+}
+
 void mb_host_log(moonbit_string_t s) {
+  recent_keep(s);
   JNIEnv *env = env_();
   jstring j = jstr(env, s);
   (*env)->CallStaticVoidMethod(env, host_cls, m_log, j);
@@ -894,9 +961,9 @@ int32_t mb_host_reduce_motion(void) {
 // video's first frame shown, a sound that can play) or failed (state -1), or (a view, state 0: NView.askApp) waiting on
 // the app now, a player's read or a site's request: the host's work for it stops until the app answers. Told on the
 // GL thread, MoonBit's, between frames (each comes as a queued event, which GLSurfaceView runs before the next
-// onDrawFrame); ready or failed once per item. Also (Native.tell) what the pickers gave, the gallery read, marks
-// drawn, a video's frame grabbed, an update's progress: the kinds named as src/ui/hostcall.mbt's outside_* and
-// Native.java's OUTSIDE_*.
+// onDrawFrame); ready or failed once per item, a ready one told again as a new context has it uploaded anew. Also
+// (Native.tell) what the pickers gave, the gallery read, marks drawn, a video's frame grabbed, an update's progress: the
+// kinds named as src/ui/hostcall.mbt's outside_* and Native.java's OUTSIDE_*.
 enum { MB_OUTSIDE_IMAGE = 1, MB_OUTSIDE_VIEW = 2, MB_OUTSIDE_POSTED = 11, MB_OUTSIDE_STREAMED = 12 };
 static void (*outside_cb)(int32_t, int32_t, int32_t);
 int32_t mb_host_set_outside(void (*f)(int32_t, int32_t, int32_t)) {
@@ -964,6 +1031,54 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   return r;
 }
 
+// Input to the screen measured (Latency.java): the frame the next swap presents, and what the system says of it
+// (EGL_ANDROID_get_frame_timestamps: when the GPU finished it, when the compositor latched it, composited it, and when
+// the display showed it, CLOCK_MONOTONIC's ns as System.nanoTime's; -1 none, -2 not yet). EGL is GLSurfaceView's,
+// in the process already: its calls looked up there, nothing linked for them. A frame with no id says why: -2 no EGL,
+// -3 no such extension, -4 the surface keeps no timestamps, -5 the system gave no id.
+typedef unsigned long long lat_u64;
+static unsigned (*lat_next_id)(void *, void *, lat_u64 *);
+static unsigned (*lat_times)(void *, void *, lat_u64, int, const int *, long long *);
+static void *(*lat_display)(void);
+static void *(*lat_surface)(int);
+static unsigned (*lat_attrib)(void *, void *, int, int);
+static void *lat_kept_on;
+
+JNIEXPORT jlong JNICALL Java_dev_mbui_Native_latencyFrame(JNIEnv *env, jclass c) {
+  if (!lat_next_id) {
+    void *egl = dlopen("libEGL.so", RTLD_NOW);
+    if (!egl) return -2;
+    void *(*proc)(const char *) = (void *(*)(const char *))dlsym(egl, "eglGetProcAddress");
+    lat_display = (void *(*)(void))dlsym(egl, "eglGetCurrentDisplay");
+    lat_surface = (void *(*)(int))dlsym(egl, "eglGetCurrentSurface");
+    lat_attrib = (unsigned (*)(void *, void *, int, int))dlsym(egl, "eglSurfaceAttrib");
+    if (!proc || !lat_display || !lat_surface || !lat_attrib) return -2;
+    lat_times = (unsigned (*)(void *, void *, lat_u64, int, const int *, long long *))proc("eglGetFrameTimestampsANDROID");
+    lat_next_id = (unsigned (*)(void *, void *, lat_u64 *))proc("eglGetNextFrameIdANDROID");
+    if (!lat_times || !lat_next_id) {
+      lat_next_id = NULL;
+      return -3;
+    }
+  }
+  void *d = lat_display(), *s = lat_surface(0x3059 /* EGL_DRAW */);
+  // (EGL_TIMESTAMPS_ANDROID: kept for the surface's frames from now on)
+  if (s != lat_kept_on) {
+    if (!lat_attrib(d, s, 0x3430, 1)) return -4;
+    lat_kept_on = s;
+  }
+  lat_u64 id;
+  return lat_next_id(d, s, &id) ? (jlong)id : -5;
+}
+
+JNIEXPORT jint JNICALL Java_dev_mbui_Native_latencyTimes(JNIEnv *env, jclass c, jlong id, jlongArray out) {
+  // rendering complete, composition latch, first composition start, display present
+  static const int names[] = {0x3435, 0x3436, 0x3437, 0x343A};
+  long long v[4];
+  if (!lat_times || !lat_times(lat_display(), lat_surface(0x3059), (lat_u64)id, 4, names, v)) return 0;
+  (*env)->SetLongArrayRegion(env, out, 0, 4, (const jlong *)v);
+  return 1;
+}
+
 // MainActivity sets the intent's `env` extras as the process's environment before the app starts. A release build
 // takes no intent's on a phone (MainActivity.testHooks): the frame probe's switches (MBUI_PROBE, MBUI_PROBE_DAMAGE:
 // app.mbt's slow_probe, on the log) are read from a debug property besides, `debug.mbui.probe` and the like, which only
@@ -1018,6 +1133,7 @@ int32_t mb_host_perf_state(void) { return -1; }
 void mb_host_set_perf(int32_t on) { (void)on; }
 void mb_host_perf_line(moonbit_string_t line) { (void)line; }
 moonbit_string_t mb_host_perf_where(void) { return moonbit_make_string_raw(0); }
+int32_t mb_host_perf_open(int32_t go) { (void)go; return 0; }
 double mb_host_perf_size(void) { return 0; }
 moonbit_bytes_t mb_host_perf_read(void) { return moonbit_make_bytes(0, 0); }
 
@@ -1158,6 +1274,57 @@ moonbit_string_t mb_host_browser_login_back(int32_t id) {
 void mb_host_browser_login_end(int32_t id) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, login_cls, m_bl_end, id);
+}
+
+// The system's browser session (an app's engine's web_auth, the still.fail core's core_client.h): dev.mbui.WebAuth, a
+// Custom Tab the browser comes back from on the app's own scheme, its package's (mb_host_app_scheme), as an intent.
+// One at a time, as iOS's: `done` is told once, from the main thread (Native.webAuthBack).
+static void (*web_auth_done)(const char *url, const char *error, void *ctx);
+static void *web_auth_ctx;
+static jclass web_auth_cls;
+
+static jclass web_auth_class(JNIEnv *env) {
+  if (!web_auth_cls) web_auth_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/WebAuth"));
+  return web_auth_cls;
+}
+
+void mb_host_web_auth(const char *url, const char *scheme, void (*done)(const char *, const char *, void *), void *ctx) {
+  (void)scheme;  // the app's own (mb_host_app_scheme), as the core asked for its redirect
+  JNIEnv *env = env_();
+  jclass c = web_auth_class(env);
+  // one under way is given up for this one, as iOS starts a new session
+  if (web_auth_done) web_auth_done(NULL, "cancelled", web_auth_ctx);
+  web_auth_done = done;
+  web_auth_ctx = ctx;
+  jstring u = (*env)->NewStringUTF(env, url);
+  (*env)->CallStaticBooleanMethod(env, c, (*env)->GetStaticMethodID(env, c, "open", "(Ljava/lang/String;)Z"), u);
+  (*env)->DeleteLocalRef(env, u);
+}
+
+// The scheme the browser session comes back on: the app's package (UTF-8, kept); "" before the activity is there.
+const char *mb_host_app_scheme(void) {
+  static char kept[256];
+  if (kept[0]) return kept;
+  JNIEnv *env = env_();
+  jclass c = web_auth_class(env);
+  jstring s = (jstring)(*env)->CallStaticObjectMethod(env, c, (*env)->GetStaticMethodID(env, c, "scheme", "()Ljava/lang/String;"));
+  if (!s) return kept;
+  const char *u = (*env)->GetStringUTFChars(env, s, NULL);
+  snprintf(kept, sizeof kept, "%s", u);
+  (*env)->ReleaseStringUTFChars(env, s, u);
+  (*env)->DeleteLocalRef(env, s);
+  return kept;
+}
+
+JNIEXPORT void JNICALL Java_dev_mbui_Native_webAuthBack(JNIEnv *env, jclass c, jstring url, jstring error) {
+  void (*done)(const char *, const char *, void *) = web_auth_done;
+  web_auth_done = NULL;
+  if (!done) return;
+  jstring s = url ? url : error;
+  const char *text = s ? (*env)->GetStringUTFChars(env, s, NULL) : "the browser session ended";
+  if (url) done(text, NULL, web_auth_ctx);
+  else done(NULL, text, web_auth_ctx);
+  if (s) (*env)->ReleaseStringUTFChars(env, s, text);
 }
 
 // ---------------------------------------------------------------------------
@@ -1659,6 +1826,7 @@ int32_t mb_host_window_inset(void) { return 0; }
 // A window filling the screen (@hostapi.full_screen): not one of this host's.
 int32_t mb_host_full_screen(void) { return 0; }
 void mb_host_set_full_screen(int32_t on) { (void)on; }
+void mb_host_window_buttons_down(double by, double ms) { (void)by; (void)ms; }
 // How round the window's corners are (@hostapi.window_corner): the app fills the screen, whose own corners (40 and
 // more) are rounder than anything by them could follow within the corner rule's ranges: said as none.
 double mb_host_window_corner(void) { return 0; }
@@ -1674,6 +1842,7 @@ int32_t mb_host_window_snap_state(void) { return 0; }
 // A window of the app's own beside this one (@hostapi.window_opens, window_open): a desktop's; none here.
 int32_t mb_host_window_opens(void) { return 0; }
 int32_t mb_host_window_open(moonbit_string_t what) { (void)what; return 0; }
+int32_t mb_host_window_front(moonbit_string_t what) { (void)what; return 0; }
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
 void mb_host_set_badge(int32_t n) { (void)n; }
 // The menu bar (@hostapi.menu_setup): none here.
@@ -2088,6 +2257,34 @@ void mb_host_stream_direct(int32_t sid, double route, double after, int32_t what
     if (what & 2) r->audio = sid;
   }
   pthread_mutex_unlock(&routes_lock);
+}
+
+// The system's autofill (host_native.mbt `af_*`, hostapi/autofill.mbt): dev.mbui.Autofills puts a login form of the
+// site asked for before the autofill service, and keeps the login the person picks there until it is taken.
+int32_t mb_host_autofill_able(void) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, autofills_cls, m_af_able);
+}
+
+int32_t mb_host_autofill_ask(moonbit_string_t host) {
+  JNIEnv *env = env_();
+  jstring h = jstr(env, host);
+  jint ok = (*env)->CallStaticIntMethod(env, autofills_cls, m_af_ask, h);
+  (*env)->DeleteLocalRef(env, h);
+  return ok;
+}
+
+moonbit_string_t mb_host_autofill_take(void) {
+  JNIEnv *env = env_();
+  jstring s = (jstring)(*env)->CallStaticObjectMethod(env, autofills_cls, m_af_take);
+  moonbit_string_t out = s ? mstr(env, s) : moonbit_make_string_raw(0);
+  if (s) (*env)->DeleteLocalRef(env, s);
+  return out;
+}
+
+void mb_host_autofill_end(void) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, autofills_cls, m_af_end);
 }
 
 // This device's password manager (host_native.mbt `pw_*`): none here (apple_passwords.m, win_passwords.c).

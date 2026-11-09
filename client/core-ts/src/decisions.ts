@@ -1,9 +1,10 @@
-// Cards (decisions.rs): what an agent's post asks people to answer it with (options to pick from, or a field to write
-// in), for the viewer: a row's card and line (奏 · …), how each card in a chat's messages stands, the options in the
+// Cards: what an agent's post asks people to answer it with (options to pick from, or a field to write
+// in), for the viewer: a row's card and line (待处理 · …), how each card in a chat's messages stands, the options in the
 // order they are shown (the recommended one last). Dismissing one is kept by the station for the viewer.
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
 import * as present from "./present.ts";
+import { howText } from "./vault-words.ts";
 import { arr as arrU, get as getU, isObject, str, u64 } from "./util.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -49,12 +50,15 @@ export function ofMessage(m: J): J | null {
 export function cardShown(card: J): J {
   const v: J = { type: kind(card) };
   for (const field of ["assignee", "assigneeText"]) if (get(card, field) !== undefined) v[field] = card[field];
-  // An agent's request for a vault item: its id, for an app to approve it (docs/vault.md).
+  // An agent's request for a vault item: its id, for an app to approve it.
   const request = trimmed(get(get(card, "vault"), "request"));
   if (request !== null) v.vault = request;
   const ask = vaultAsk(get(card, "vault"));
   if (ask !== null) v.vaultAsk = ask;
-  // An agent's request for its person's phone (docs/adb-share.md): what it asks, and once decided, how.
+  // An agent's ask to sign in to a site ( 登录态): which, why, on which tab, how it goes.
+  const signin = signinAsk(get(card, "signin"));
+  if (signin !== null) v.signinAsk = signin;
+  // An agent's request for its person's phone: what it asks, and once decided, how.
   const phone = phoneAsk(get(card, "adb"));
   if (phone !== null) v.phoneAsk = phone;
   if (kind(card) === "options") v.options = optionsShown(get(card, "options"));
@@ -62,7 +66,7 @@ export function cardShown(card: J): J {
     const p = trimmed(get(card, "placeholder"));
     if (p !== null) v.placeholder = p;
   } else if (kind(card) === "login") {
-    // A login a person finishes from the card (docs/remote-login.md): its id, and its station when another's.
+    // A login a person finishes from the card: its id, and its station when another's.
     const login = trimmed(get(card, "login"));
     const station = trimmed(get(card, "station"));
     if (login !== null) v.login = login;
@@ -71,13 +75,32 @@ export function cardShown(card: J): J {
   return v;
 }
 
+/// A card's fields that stand for an ask living beyond its post (inMessages: one card on screen for each).
+const LIVE_ASK_FIELDS = ["login", "station", "vault", "vaultAsk", "signinAsk", "phoneAsk"];
+
+/// Which ask living beyond its post a shown card is (cardShown's), or null: the same one twice is one ask.
+function liveAsk(s: J): string | null {
+  if (s.login !== undefined) return `login ${s.station ?? ""} ${s.login}`;
+  if (s.vault !== undefined) return `vault ${s.vault}`;
+  if (s.signinAsk !== undefined) return `signin ${s.signinAsk.id}`;
+  if (s.phoneAsk !== undefined) return `phone ${s.phoneAsk.request}`;
+  return null;
+}
+
 /// A vault request as its card says it (station/src/vault/secrets.ts): which item, why, the command, how (or, one to
 /// keep a secret, what it is); and once decided, how. Null for a card from before it said so (its post's words say it).
 function vaultAsk(v: J): J | null {
   const name = trimmed(get(v, "name"));
   const mode = trimmed(get(v, "mode"));
   if (name === null || mode === null) return null;
-  const out: J = { name, reason: str(get(v, "reason")) ?? "", mode, hosts: arr(get(v, "hosts")).filter((h) => typeof h === "string") };
+  const hosts = arr(get(v, "hosts")).filter((h): h is string => typeof h === "string");
+  const out: J = { name, reason: str(get(v, "reason")) ?? "", mode, hosts };
+  const timeoutKind = get(get(v, "timeout"), "kind");
+  const timeoutSeconds = get(get(v, "timeout"), "seconds");
+  if ((timeoutKind === "idle" || timeoutKind === "fixed") && typeof timeoutSeconds === "number") {
+    out.timeoutKind = timeoutKind;
+    out.timeoutSeconds = timeoutSeconds;
+  }
   const command = trimmed(get(v, "command"));
   if (command !== null) out.command = command;
   // Another station its commands run on (or a secret to keep was read on), by name.
@@ -87,13 +110,37 @@ function vaultAsk(v: J): J | null {
   if (status !== null) out.status = status;
   const scope = trimmed(get(get(v, "outcome"), "scope"));
   if (scope !== null) out.scope = scope;
+  const approved = get(get(v, "outcome"), "timeout");
+  if ((get(approved, "kind") === "idle" || get(approved, "kind") === "fixed") && typeof get(approved, "seconds") === "number") {
+    out.approvedTimeoutKind = get(approved, "kind");
+    out.approvedTimeoutSeconds = get(approved, "seconds");
+  }
   // A request to keep a secret (secret_save): what kind, the account it is for, whether the person types it in.
   const kind = trimmed(get(get(v, "save"), "kind"));
   if (kind !== null) {
     const username = trimmed(get(get(v, "save"), "username"));
     const filename = trimmed(get(get(v, "save"), "filename"));
     out.save = { kind, ...(username !== null ? { username } : {}), ...(filename !== null ? { filename } : {}), ...(get(get(v, "save"), "typed") === true ? { typed: true } : {}) };
+  } else {
+    out.howText = howText(mode, hosts);
   }
+  return out;
+}
+
+/// A site's sign-in as its card says it (station/src/vault/signin.ts): its id, site, why, tab, and how it goes.
+function signinAsk(v: J): J | null {
+  const id = trimmed(get(v, "id"));
+  const site = trimmed(get(v, "site"));
+  const screen = trimmed(get(v, "screen"));
+  if (id === null || site === null || screen === null) return null;
+  const out: J = { id, site, reason: str(get(v, "reason")) ?? "", screen };
+  const outcome = get(v, "outcome");
+  for (const field of ["status", "why", "said", "save", "kept"]) {
+    const said = trimmed(get(outcome, field));
+    if (said !== null) out[field] = said;
+  }
+  const keep = get(outcome, "keep");
+  if (typeof keep === "boolean") out.keep = keep;
   return out;
 }
 
@@ -268,6 +315,14 @@ export function inMessages(messages: J[], pendingOf: [number, boolean] | null | 
     const s = cardShown(card);
     const options: J[] = s.options ?? [];
     const replaced = at + 1 < cards.length;
+    // Whatever a card asks that lives beyond it (a login, a vault request, a sign-in, a phone request) asked again in a
+    // later post is that post's card alone: the ask is one card on screen, its field (a login's code, a secret typed in)
+    // one editor, and this post says how it went as any replaced card does. Not one kind at a time: #3798 took a login
+    // alone and a vault request asked again (secret_reask) still drew two cards of one field (2026-11-04).
+    const ask = liveAsk(s);
+    if (ask !== null && cards.slice(at + 1).some(([, c]) => liveAsk(cardShown(c)) === ask)) {
+      for (const field of LIVE_ASK_FIELDS) delete s[field];
+    }
     const answer = messages.slice(i + 1).find((m) => get(m, "authorKind") === "person")
       ?? (replaced || sending.length === 0 ? undefined : { ...sending[0], authorKind: "person", mine: true });
     let isWaiting: boolean;

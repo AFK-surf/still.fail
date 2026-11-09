@@ -1,5 +1,5 @@
 // src/host/win_collate.h: the order people read names in, as the core asks it (text.collate), on Windows. Built and run
-// by `scripts/win.sh collate` (mbui.yml's windows job). Exit 0 when Chinese names come in pinyin's order in Chinese,
+// by `scripts/win.sh collate` (preview.yml's windows job). Exit 0 when Chinese names come in pinyin's order in Chinese,
 // case aside, numbers by their value, equal names one place, and an ask with a name that is no string is said to be
 // wrong.
 #include "win_collate.h"

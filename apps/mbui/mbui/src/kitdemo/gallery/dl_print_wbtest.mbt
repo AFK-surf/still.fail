@@ -21,7 +21,7 @@ fn first_frame_time(tape : String) -> Double {
 
 ///|
 /// The controls page's draw list printed when asked (MBUI_DL_PRINT=1: scripts/render_offscreen.sh, render_check.sh):
-/// of the run kept from mini1, or (MBUI_DL_TAPE, a run's log: its text, its input and its frames) of that run, its
+/// of the run kept on a Mac, or (MBUI_DL_TAPE, a run's log: its text, its input and its frames) of that run, its
 /// frames drawn again here, the last one's; and whether each frame here was the run's (DLFRAMES).
 test "the controls page's draw list printed when asked (MBUI_DL_PRINT=1: scripts/render_check.sh)" {
   if node_env("MBUI_DL_PRINT") == "1" {
@@ -84,6 +84,112 @@ test "a rounded clip's draw lists printed when asked (MBUI_DL_PRINT=clip-cut or 
   if which == "clip-cut" || which == "clip-box" {
     println("DLBEGIN")
     println(rounded_clip(which == "clip-cut").drawlist())
+    println("DLEND")
+  }
+}
+
+///|
+/// A lightly blurred picture with ink near each straight edge, and a strongly blurred solid picture over red.
+/// Both are clipped to rounded rectangles. Their rendered pixels are checked by scripts/chk contained.
+fn contained_shown() -> @ui.Tester {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), h=Fill(1.0), pad=20.0, gap=20.0, bg=0xFF0000FFL, align=AStart, fn() {
+        c.box(w=Px(160.0), h=Px(120.0), radius=26.0, clip=true, align=AStart, fn() {
+          c.box(w=Fill(1.0), h=Fill(1.0), bg=0xFFFFFFFFL, fn() { () }) |> ignore
+          c.layer(fn() {
+            c.lines(
+              [
+                @ui.line([(0.25, 35.0), (0.25, 85.0)], width=0.5, color=0x000000FFL),
+                @ui.line([(5.0, 35.0), (5.0, 85.0)], width=4.0, color=0x000000FFL),
+                @ui.line([(155.0, 35.0), (155.0, 85.0)], width=4.0, color=0x000000FFL),
+                @ui.line([(45.0, 5.0), (115.0, 5.0)], width=4.0, color=0x000000FFL),
+                @ui.line([(45.0, 115.0), (115.0, 115.0)], width=4.0, color=0x000000FFL),
+              ],
+              w=Px(160.0),
+              h=Px(120.0),
+            ) |> ignore
+          }) |> ignore
+          c.layer(fn() {
+            c.box(w=Fill(1.0), h=Fill(1.0), glass=@ui.Glass::frosted(blur=0.5, tint=0L, solid=0L, contained=true), fn() { () }) |> ignore
+          }) |> ignore
+        }) |> ignore
+        c.box(w=Px(160.0), h=Px(120.0), radius=26.0, clip=true, align=AStart, fn() {
+          c.box(w=Fill(1.0), h=Fill(1.0), bg=0x1559C4FFL, fn() { () }) |> ignore
+          c.layer(fn() {
+            c.box(w=Fill(1.0), h=Fill(1.0), glass=@ui.Glass::frosted(blur=14.0, tint=0L, solid=0L, contained=true), fn() { () }) |> ignore
+          }) |> ignore
+        }) |> ignore
+      }) |> ignore
+    },
+    w=200.0,
+    h=300.0,
+    scale=2.0,
+  )
+  t.draw()
+  t
+}
+
+///|
+test "contained glass's draw list printed when asked" {
+  if node_env("MBUI_DL_PRINT") == "contained" {
+    println("DLBEGIN")
+    println(contained_shown().drawlist())
+    println("DLEND")
+  }
+}
+
+///|
+/// A light picture over black, cut by a rounded frame: filling it, letterboxed, or inset between device pixels. The
+/// matching references show the same frames: a white fill, a precomposed 160 × 160 picture, or an inset white box.
+/// The picture and matte must share their cut to match them.
+fn matte_shown(reference : Bool, which : String) -> @ui.Tester {
+  let h = if which == "fill" { 40.0 } else { 80.0 }
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(pad=20.0, align=AStart, fn() {
+        c.box(w=Px(80.0), h=Px(h), radius=12.0, tx=0.125, clip=true,
+          bg=if reference && which == "inset" { 0x000000FFL } else { 0L }, fn() {
+          if reference && which == "inset" {
+            c.box(w=Px(59.5), h=Px(39.5), tx=10.0, ty=20.125, bg=0xFFFFFFFFL, fn() {  }) |> ignore
+          } else if reference && which == "fill" {
+            // The reference fills beyond the frame; the same clip alone covers its edge, even between pixels.
+            c.box(w=Px(82.0), h=Px(42.0), tx= -1.0, ty= -1.0, bg=0xFFFFFFFFL, fn() {  }) |> ignore
+          } else if reference {
+            // The black and white bands already in these pixels: one frame, one clip, the same geometry as the image
+            // under test. At scale 2 its 160 pixels land on the 80-point frame's pixels without resampling. Black
+            // behind the opaque picture makes its alpha exactly one even where texture filtering rounds it down.
+            c.image("mem:matte-bars", w=Px(80.0), h=Px(h), fit=FitFill, bg=0x000000FFL, fade=false, matte=true) |> ignore
+          } else if which == "inset" {
+            c.picture("mem:matte-white", x=10.0, y=20.125, w=59.5, h=39.5, bg=0x000000FFL, matte=true) |> ignore
+          } else {
+            c.image("mem:matte-white", w=Px(80.0), h=Px(h), fit=if which == "contain" { FitContain } else { FitCover },
+              bg=0x000000FFL, fade=false, matte=true) |> ignore
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=120.0,
+    h=120.0,
+    scale=2.0,
+  )
+  // The Tester's byte decoder makes a 4:3 picture; these matching solid-white pixels are what the renderer sees.
+  @ui.add_image("mem:matte-white", @codec.from_base64("iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAADklEQVR4nGP4jwQYcHIAu4cj3ZP55DwAAAAASUVORK5CYII="))
+  @ui.add_image("mem:matte-bars", @codec.from_base64("iVBORw0KGgoAAAANSUhEUgAAAKAAAACgCAIAAAAErfB6AAAA4UlEQVR42u3RQREAAAzCMPyb3kzw4hIJbQIAAAAAAAAAAEDNMc1ggzEYgzEYgzEYgw3GYAzGYAzGYAw2GIMxGIMxGIMxGIMNxmAMxmAMxmAMNhiDMRiDMRiDMdhgDMZgDMZgDMZgDDYYgzEYgzEYgzHYYAzGYAzGYAzGYIMlMBiDMRiDMRiDMdhgDMZgDMZgDMZggzEYgzEYgzEYgzHYYAzGYAzGYAzGYIMxGIMxGIMxGIMNxmAMxmAMxmAMxmCDMRiDMRiDMRiDDcZgDMZgDMZgDDaY7cEAAAAAAAAAAADUPDtlLCFksrJqAAAAAElFTkSuQmCC"))
+  t.draw()
+  t
+}
+
+///|
+test "a picture and its matte drawn through a rounded frame (scripts/render_dl.sh)" {
+  let which = node_env("MBUI_DL_PRINT")
+  if which.has_prefix("matte-") {
+    let shape = if which.has_prefix("matte-fill") { "fill" } else if which.has_prefix("matte-contain") { "contain" } else { "inset" }
+    let t = matte_shown(which.has_suffix("-reference"), shape)
+    println("DLBEGIN")
+    println(t.drawlist(bytes=true))
     println("DLEND")
   }
 }
@@ -225,7 +331,7 @@ test "lines are drawn where they are said to be" {
 }
 
 ///|
-/// A screen in which only a spinner moves (docs/partial-redraw.md), at `phase` of its turn: in a window 240 by 200 at
+/// A screen in which only a spinner moves, at `phase` of its turn: in a window 240 by 200 at
 /// scale 2, under a bar of frosted glass whose capture reaches it, a box turned with it, a card with a
 /// shadow, shapes, and far from it a dot whose colour changes with it. Its two moments drawn one after the other, the second only where it differs, are the second
 /// drawn whole, to the byte (mbui-render MBUI_DL_FROM: scripts/render_offscreen.sh, render_check.sh).
@@ -305,4 +411,68 @@ test "a spinner's two moments' draw lists printed when asked (MBUI_DL_PRINT=part
     println(partial_shown(if which == "partial-a" { 0.1 } else { 0.35 }).drawlist())
     println("DLEND")
   }
+}
+
+///|
+/// What the renderers draw in strips (src/host/bands.h), in a window 240 by 300 at scale 3: a card's shadow under its
+/// ground, a ground in nine pieces (its middle flat), a ring that is only a border, a ground in a rounded clip (whole),
+/// and a sheet of frosted glass whose shadow is only outside it. Drawn in strips and drawn whole (mbui-render with
+/// MBUI_STRIPS=0), the same picture to the byte (scripts/render_offscreen.sh, render_check.sh, render_linux.sh,
+/// render_windows.sh).
+fn strips_shown() -> @ui.Tester {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), h=Fill(1.0), bg=0xF2F2F2FFL, pad=16.0, gap=16.0, align=AStart, fn() {
+        c.box(dir=Row, gap=16.0, fn() {
+          c.box(w=Px(96.0), h=Px(72.0), radius=16.0, bg=0xFFFFFFFFL, shadow=12.0, fn() { () }) |> ignore
+          c.box(w=Px(96.0), h=Px(72.0), radius=20.0, border=1.5, border_color=0x1559C4FFL, fn() { () }) |> ignore
+        })
+        |> ignore
+        c.box(w=Fill(1.0), h=Px(64.0), radius=12.0, bg=0x1559C4CCL, fn() { () }) |> ignore
+        c.box(w=Fill(1.0), h=Px(48.0), radius=18.0, clip=true, fn() {
+          c.box(w=Fill(1.0), h=Fill(1.0), bg=0xFF3B30FFL, fn() { () }) |> ignore
+        })
+        |> ignore
+        c.layer(fn() {
+          c.box(w=Fill(1.0), h=Fill(1.0), pt=200.0, align=AStart, fn() {
+            c.box(
+              w=Fill(1.0),
+              h=Px(140.0),
+              radius=28.0,
+              shadow=19.2,
+              shadow_y=14.4,
+              shadow_color=0x00000044L,
+              glass=@ui.Glass::frosted(blur=12.0, tint=0xFFFFFF99L, solid=0xFFFFFFFFL),
+              fn() {  },
+            )
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=240.0,
+    h=300.0,
+    scale=3.0,
+  )
+  t.draw()
+  t
+}
+
+///|
+test "what the renderers draw in strips: its draw list printed when asked (MBUI_DL_PRINT=strips: scripts/render_dl.sh)" {
+  if node_env("MBUI_DL_PRINT") == "strips" {
+    println("DLBEGIN")
+    println(strips_shown().drawlist())
+    println("DLEND")
+  }
+}
+
+///|
+test "what the renderers draw in strips: a shadow under a ground, one only outside its glass, a ring, grounds" {
+  let t = strips_shown()
+  let shadows = t.drawn_shadows()
+  assert_eq(shadows.length(), 2)
 }

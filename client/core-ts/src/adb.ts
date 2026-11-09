@@ -1,8 +1,9 @@
-// This phone's adb, lent to a station's agents (adb.rs; docs/adb-share.md): the `adbShare` topic and the `adb.*`
+// This phone's adb, lent to a station's agents (adb.rs): the `adbShare` topic and the `adb.*`
 // calls. While it is offered (until stopped or its hour is up) a stream on the station's link says so, opened again on
 // each link that takes the place of one, and every stream the station opens on that link is a tunnel to the phone's
 // own adbd. The offers kept in memory only: a core started anew offers again as its app asks (the grants it lends
 // for kept on the device: GRANTS_KEY). Only a host with TCP reaches adbd.
+import { Marks } from "./reactive.ts";
 import { Deferred, Effect, Fiber, Scope } from "effect";
 import type { AdbCall, Offer } from "./adb-parse.ts";
 import { CoreError } from "./error.ts";
@@ -11,7 +12,9 @@ import { current, t } from "./i18n.ts";
 import type { IrohStream } from "./iroh.ts";
 import type { CredentialSource, Link, Mesh } from "./mesh.ts";
 import type { Runner } from "./runtime.ts";
+import { PersonalLock, grantHolds } from "./personal-lock.ts";
 import { StationAddr } from "./station/addr.ts";
+import { Retold } from "./station/retold.ts";
 import { LANG_HEADER } from "./station/requests.ts";
 import type { RequestHead } from "./station/wire.ts";
 import type { Store } from "./store.ts";
@@ -20,7 +23,17 @@ import { fromUtf8, parseJson, utf8 } from "./util.ts";
 // deno-lint-ignore no-explicit-any
 type J = any;
 
+/// The identity used both to show a chat once and to take back everything behind its row.
+function grantChat(g: J): string {
+  return typeof g.chat === "string" && g.chat !== "" ? g.chat : typeof g.session === "string" && g.session !== "" ? g.session : g.id;
+}
+
 const RETRY_MS = 1_000;
+/// How much of a file the station sends is asked at once (as a chat's file's download asks: views/downloads.ts).
+const FETCH_PART = 4 * 1024 * 1024;
+/// The grants taken back here (id → when they would have ended): a station that goes on saying one lends nothing.
+export const REVOKED_KEY = "adb-revoked";
+
 /// Where this person's chats' grants of their phone are kept on the device, as the stations last said them: a core
 /// started anew (the app's process gone and back, the phone started again) lends it to them at once, not only once
 /// each station is reached again.
@@ -32,6 +45,15 @@ export const ON_KEY = "adb-on";
 const RETRY_MAX_MS = 30_000;
 
 type Ended = { changed: true } | { expired: true } | { refused: string } | { lost: string | null; pause: boolean };
+
+/// What reads the lending (the `adbShare` and `adbCard` topics) is made again as it changes (reactive.ts), by the
+/// store its topics are in.
+const seens = new WeakMap<Store, Marks>();
+function seenOf(store: Store): Marks {
+  let seen = seens.get(store);
+  if (!seen) seens.set(store, (seen = new Marks()));
+  return seen;
+}
 
 export type AdbEnv = {
   host: Host;
@@ -45,6 +67,16 @@ export type AdbEnv = {
   /// Whether this device has an adb to lend: a phone's own adbd, which only an Android device runs (as it said it is:
   /// `client.device`), reached over TCP; a Mac's or a PC's core reaches TCP too, and has none.
   lends: () => boolean;
+  /// A part of a file sent in a chat of `station` (its session `key`, `name` in its uploads), as a chat's file is
+  /// downloaded (station/requests.ts `filePart`): what `#fetch` brings a file the station sends this phone with.
+  part?: (station: StationAddr, key: string, name: string, offset: number, length: number) => Effect.Effect<{ total: number; bytes: Uint8Array }, CoreError>;
+  /// The person's own lock (personal-lock.ts): whose a workspace's grants are, who this device speaks for, and how it
+  /// joins (views/pair.ts).
+  personal: PersonalLock;
+  subOf: (workspace: string) => string | null;
+  /// The accounts signed in here: each has a lock of its own.
+  subs: () => { sub: string; email: string }[];
+  pair: { begin(subs: string[]): Effect.Effect<unknown, CoreError>; code(typed: string): Effect.Effect<unknown, CoreError>; cancel(): void; state(sub: string): J };
 };
 
 function head(): RequestHead {
@@ -66,7 +98,7 @@ function readLine(stream: IrohStream, carry: { bytes: Uint8Array }): Effect.Effe
         carry.bytes = carry.bytes.slice(at + 1);
         return line;
       }
-      const chunk = yield* Effect.mapError(stream.read(), (e) => new CoreError("mesh", e.message));
+      const chunk = yield* Effect.mapError(stream.read(), (e) => CoreError.plainly("mesh", e, t("core-logic.mesh.cut")));
       if (chunk === null) return null;
       const next = new Uint8Array(carry.bytes.length + chunk.length);
       next.set(carry.bytes, 0);
@@ -79,6 +111,8 @@ function readLine(stream: IrohStream, carry: { bytes: Uint8Array }): Effect.Effe
 /// This phone lent to one station: its offer, the stream saying it, the tunnels the station opens.
 class Lend {
   readonly #env: AdbEnv;
+  /// A grant-backed lending's fallback deadline is not a grant's expiry and is not shown.
+  readonly #grantBased: boolean;
   #offer: Offer | null = null;
   #until = 0;
   #run = 0;
@@ -95,8 +129,9 @@ class Lend {
   readonly #accepting = new Set<Link>();
   #changed: Deferred.Deferred<void> = Deferred.makeUnsafe<void>();
 
-  constructor(env: AdbEnv) {
+  constructor(env: AdbEnv, grantBased = false) {
     this.#env = env;
+    this.#grantBased = grantBased;
   }
 
   run(call: AdbCall): Effect.Effect<unknown, CoreError> {
@@ -135,16 +170,18 @@ class Lend {
       serial: this.#offer !== null ? said("serial") : null,
       adb: phase === "offered" ? said("adb") : null,
       message: this.#problem ?? (phase === "offered" ? said("message") : null),
-      until: this.#offer !== null ? Math.trunc(this.#until) : null,
+      until: this.#offer !== null && !this.#grantBased ? Math.trunc(this.#until) : null,
       tunnels: this.#tunnels,
       connectPort: this.#offer?.connect ?? null,
       pairPort: this.#offer?.pair ?? null,
       refusedPort: this.#offer !== null && this.#refused === this.#offer.connect ? this.#refused : null,
+      // The chats whose own screens are up on the phone (the station's displays.ts), for the notification.
+      screens: this.#offer !== null && Array.isArray(this.#station?.screens) ? (this.#station.screens as unknown[]).filter((t): t is string => typeof t === "string") : [],
     };
   }
 
   /// A link to a station's 共享调试 as a message shows it (the `adbCard` topic): what it is, and in a line how this
-  /// phone's adb stands with that station (its minutes left, sent again each minute as every shown time is).
+  /// phone's adb stands with that station (a legacy timed offer's minutes left, if any).
   card(station: string): J {
     const title = t("core-views.adb.card.title");
     const sharing = this.#offer !== null && this.#offer.station === station;
@@ -156,7 +193,7 @@ class Lend {
     const line = view.phase !== "offered"
       ? (view.message ?? t("core-views.adb.card.connecting"))
       : view.adb === "connected"
-        ? t("core-views.adb.card.connected", { n: minutes })
+        ? (this.#grantBased ? t("core-views.adb.card.shared") : t("core-views.adb.card.connected", { n: minutes }))
         : view.adb === "unpaired"
           ? t("core-views.adb.card.unpaired")
           : view.adb === "off"
@@ -169,12 +206,11 @@ class Lend {
 
   /// What the cards say, again: the device said what it is (`client.device`), and with it whether it lends.
   deviceTold(): void {
-    this.#env.store.invalidateAll((topic) => topic.topic === "adbCard");
+    seenOf(this.#env.store).touch();
   }
 
   #shown(): void {
-    this.#env.store.invalidate({ topic: "adbShare" });
-    this.#env.store.invalidateAll((topic) => topic.topic === "adbCard");
+    seenOf(this.#env.store).touch();
   }
 
   #tellChanged(): void {
@@ -360,9 +396,11 @@ class Lend {
       const carry = { bytes: new Uint8Array() };
       const line = yield* Effect.orElseSucceed(readLine(stream, carry), () => null);
       if (line === null) return;
-      const kind = (parseJson(utf8(line)) as J)?.tunnel;
+      const asked = parseJson(utf8(line)) as J;
+      const kind = asked?.tunnel;
       const offer = this.#offer;
       if (offer === null) return yield* refuse("已停止共享");
+      if (asked?.fetch !== undefined) return yield* this.#fetch(stream, offer.station, asked.fetch);
       const port = kind === "connect" ? offer.connect : kind === "pair" ? offer.pair : null;
       if (port === null) return yield* refuse(kind === "connect" ? "手机未开启无线调试" : kind === "pair" ? "手机未打开配对窗口" : "无法识别的通道");
       // This device's own adb session where its host has one (the shell's adb.rs): the station's adb carried on the one
@@ -415,6 +453,46 @@ class Lend {
     });
   }
 
+  /// A file the station sends this phone (its agent's `phone_send`): `{fetch: {key, name, size}}`, fetched a part at a
+  /// time as a chat's file is downloaded and written where adb's shell reads it, going on from what an earlier fetch of
+  /// it left. Answered `{at}` after each part, then `{path}`, or `{error, at}`.
+  #fetch(stream: IrohStream, station: string, fetch: J): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const say = (said: J) => Effect.ignore(stream.write(utf8(`${JSON.stringify(said)}\n`)), { log: "Unhandled", message: "fetch said" });
+      const end = Effect.ignore(stream.finish(), { log: "Unhandled", message: "fetch finished" });
+      const stage = this.#env.host.stage?.bind(this.#env.host);
+      const part = this.#env.part;
+      const { key, name, size } = fetch ?? {};
+      if (stage === undefined || part === undefined) return yield* Effect.andThen(say({ error: "unsupported" }), end);
+      if (typeof key !== "string" || typeof name !== "string" || !/^[^/\\]+$/.test(name) || name === "." || name === ".." || !Number.isSafeInteger(size) || size < 0)
+        return yield* Effect.andThen(say({ error: "invalid fetch" }), end);
+      const addr = StationAddr.parse(station);
+      const failed = (at: number) => (e: { message: string }) => Effect.andThen(say({ error: e.message, at }), end);
+      const had = yield* Effect.result(stage(name, -1, new Uint8Array()));
+      if (had._tag === "Failure") return yield* failed(0)(had.failure);
+      // (one longer than the file is another's: begun anew)
+      let at = had.success.size <= size ? had.success.size : 0;
+      let path = had.success.path;
+      if (at === 0) {
+        const begun = yield* Effect.result(stage(name, 0, new Uint8Array()));
+        if (begun._tag === "Failure") return yield* failed(0)(begun.failure);
+      }
+      while (at < size) {
+        const got = yield* Effect.result(part(addr, key, name, at, FETCH_PART));
+        if (got._tag === "Failure") return yield* failed(at)(got.failure);
+        const { total, bytes } = got.success;
+        if (total !== size || bytes.length === 0) return yield* failed(at)({ message: `the station has ${total} bytes of it, not ${size}` });
+        const wrote = yield* Effect.result(stage(name, at, bytes));
+        if (wrote._tag === "Failure") return yield* failed(at)(wrote.failure);
+        at += bytes.length;
+        path = wrote.success.path;
+        yield* say({ at });
+      }
+      yield* say({ path });
+      yield* end;
+    });
+  }
+
   /// An ask about the offer (`pair`, `grant`) on the station's link now.
   #ask(ask: J): Effect.Effect<unknown, CoreError> {
     const offer = this.#offer;
@@ -429,7 +507,7 @@ class Lend {
       const reply = yield* link.adb(head(), { ...ask, phone: mesh.deviceId() });
       const parts: Uint8Array[] = [];
       for (;;) {
-        const chunk = yield* Effect.mapError(reply.body.take, (e) => new CoreError("mesh", e.message));
+        const chunk = yield* Effect.mapError(reply.body.take, (e) => CoreError.plainly("mesh", e, t("core-logic.mesh.cut")));
         if (chunk === null) break;
         parts.push(chunk);
       }
@@ -441,16 +519,19 @@ class Lend {
   }
 }
 
-/// This phone's adb (docs/adb-share.md): while its switch is on (`adb.on`), lent to each station a chat's grant of it is live on (`wanted`), with the ports
+/// This phone's adb: while its switch is on (`adb.on`), lent to each station a chat's grant of it is live on (`wanted`), with the ports
 /// its app found (`adb.ports`); and, from an app before grants, to the one station its switch lent it to (`adb.share`).
 /// The grants, every station's, as each says them; decided and taken back here (`adb.decide`, `adb.revoke`).
 export class Adb {
+  /// How a grant is checked (a test of the lending itself takes every grant as the station says it).
+  check: typeof grantHolds = grantHolds;
   readonly #env: AdbEnv;
   readonly #legacy: Lend;
   readonly #lends = new Map<string, Lend>();
   #ports: Omit<Offer, "station" | "minutes"> | null = null;
   /// This person's chats' grants of their phone (and requests waiting), by station address and id.
   readonly #grants = new Map<string, Map<string, J>>();
+  readonly #retold = new Retold();
   /// Their 默认最长授权 as last set here or said by a station.
   #lasts: "hour" | "chat" = "chat";
   /// Whether the grants kept on the device were read (`adbShare` `known`): before, none known is not none granted.
@@ -458,10 +539,20 @@ export class Adb {
   /// This phone's 共享调试 switch (ON_KEY): it lends only while on.
   #on = false;
   #switched = false;
+  readonly #revoked = new Map<string, number>();
+  /// The stations from before signatures.
+  readonly #old = new Set<string>();
+  /// What wakes #sync as the next grant ends by what was signed for it (a station that does not say so lends no longer).
+  #stopWake: (() => void) | null = null;
 
   constructor(env: AdbEnv) {
     this.#env = env;
     this.#legacy = new Lend(env);
+    env.runner.fork(Effect.ignore(Effect.map(env.host.storageGet(REVOKED_KEY), (bytes) => {
+      const kept = bytes === null ? null : (parseJson(bytes) as J);
+      if (kept !== null && typeof kept === "object") for (const [id, until] of Object.entries(kept)) if (typeof until === "number") this.#revoked.set(id, until);
+      this.#sync();
+    }), { log: "Unhandled", message: "debugging grants taken back read" }));
     env.runner.fork(
       Effect.ensuring(
         Effect.map(Effect.all([Effect.orElseSucceed(env.host.storageGet(GRANTS_KEY), () => null), Effect.orElseSucceed(env.host.storageGet(ON_KEY), () => null)]), ([bytes, on]) => {
@@ -491,7 +582,7 @@ export class Adb {
   /// The grants as they stand kept on the device (the live ones and the requests waiting: those ended let go).
   #keep(): void {
     const out: Record<string, J[]> = {};
-    for (const g of this.grants()) (out[g.station as string] ??= []).push(Object.fromEntries(Object.entries(g).filter(([k]) => k !== "station")));
+    for (const g of this.#allGrants()) (out[g.station as string] ??= []).push(Object.fromEntries(Object.entries(g).filter(([k]) => k !== "station")));
     this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(GRANTS_KEY, utf8(JSON.stringify(out))), { log: "Unhandled", message: "debugging grants kept" }));
   }
 
@@ -532,19 +623,55 @@ export class Adb {
         return lend === undefined ? Effect.fail(CoreError.invalid(t("core-misc.adb.not_sharing"))) : lend.run(call);
       }
       case "decide":
-        return Effect.map(this.#legacy.askAt(call.station, { op: "decide", request: call.request, scope: call.scope }), (r) => {
+        return Effect.gen({ self: this }, function* () {
+          // Allowed on this device's own key, the person asked; refused needs none.
+          const signed = call.scope === null ? undefined : yield* this.#signed(call.station, call.request, call.scope);
+          const r = yield* this.#legacy.askAt(call.station, { op: "decide", request: call.request, scope: call.scope, ...(signed ? { signed } : {}) });
           this.heard(call.station, (r as J)?.request);
           return null;
         });
-      case "revoke":
-        return Effect.map(this.#legacy.askAt(call.station, { op: "revoke", request: call.request }), (r) => {
+      case "personalOpen":
+        return this.#of(call.sub, (sub) => this.#env.personal.open(sub, t("core-misc.personal.reason.open")));
+      case "personalJoin":
+        return this.#of(call.sub, (sub) => Effect.gen({ self: this }, function* () {
+          yield* Effect.forEach(this.#env.subs(), (a) => Effect.ignore(this.#env.personal.refresh(a.sub), { log: "Unhandled", message: "personal lock read" }), { discard: true });
+          yield* this.#env.personal.refresh(sub);
+          yield* this.#env.personal.makeKey();
+          // Every account here the other device can let it in to, on the one code.
+          const others = this.#env.personal.outside(this.#env.subs().map((a) => a.sub));
+          return yield* this.#env.pair.begin(others.includes(sub) ? others : [sub, ...others]);
+        }));
+      case "personalCode":
+        return Effect.as(this.#env.pair.code(call.code), null);
+      case "personalCancel":
+        return Effect.sync(() => (this.#env.pair.cancel(), null));
+      case "personalRemove":
+        return this.#of(call.sub, (sub) => this.#env.personal.removeDevice(sub, call.key, t("core-misc.personal.reason.remove")));
+      case "personalForget":
+        return this.#of(call.sub, (sub) => this.#env.personal.forget(sub, t("core-misc.personal.reason.forget")));
+      case "personalRestart":
+        return this.#of(call.sub, (sub) => this.#env.personal.restart(sub, t("core-misc.personal.reason.restart")));
+      case "personalConfirm":
+        return this.#confirm();
+      case "revoke": {
+        // One list row represents the whole chat, including multiple agents' grants in that chat.
+        const selected = this.#grants.get(call.station)?.get(call.request);
+        const matching = selected === undefined ? [] : this.#allGrants()
+          .filter((g) => g.station === call.station && grantChat(g) === grantChat(selected))
+          .map((g) => g.id as string);
+        const ids = matching.length > 0 ? matching : [call.request];
+        // Off this phone at once, whatever the station answers or goes on saying.
+        for (const id of ids) this.#revoked.set(id, this.#grants.get(call.station)?.get(id)?.exp ?? Math.floor(this.#env.host.nowMs() / 1000) + 30 * 86400);
+        this.#keepRevoked();
+        this.#sync();
+        return Effect.as(Effect.forEach(ids, (request) => Effect.map(this.#legacy.askAt(call.station, { op: "revoke", request }), (r) => {
           this.heard(call.station, (r as J)?.request);
-          return null;
-        });
+        }), { discard: true }), null);
+      }
       case "lasts": {
         // at once here, then told to every station this person's grants are read from (the latest `at` wins there)
         this.#lasts = call.lasts;
-        this.#env.store.invalidate({ topic: "adbShare" });
+        seenOf(this.#env.store).touch();
         const at = Math.floor(this.#env.host.nowMs());
         return Effect.as(
           Effect.forEach([...this.#grants.keys()], (station) => Effect.ignore(this.#legacy.askAt(station, { op: "lasts", lasts: call.lasts, at }), { log: "Unhandled", message: "debugging lasts told" }), { concurrency: "unbounded", discard: true }),
@@ -554,7 +681,95 @@ export class Adb {
     }
   }
 
-  /// This phone paired with its own adbd (docs/adb-share.md, 2026-10-31): once, whichever station's page or card asked,
+  personal(): PersonalLock {
+    return this.#env.personal;
+  }
+
+  /// `run` as this account, one signed in here.
+  #of<A>(sub: string, run: (sub: string) => Effect.Effect<A, CoreError>): Effect.Effect<A, CoreError> {
+    return this.#env.subs().some((a) => a.sub === sub) ? run(sub) : Effect.fail(CoreError.invalid(t("core-misc.personal.noAccount")));
+  }
+
+  /// Whose a station's grants are: its workspace's account; not known yet (a phone just started), the only one here.
+  #subAt(station: string): string | null {
+    let workspace: string;
+    try {
+      workspace = StationAddr.parse(station).workspace;
+    } catch {
+      return null;
+    }
+    return this.#env.subOf(workspace) ?? this.#env.subs()[0]?.sub ?? null;
+  }
+
+  /// The grants from before they were signed: each account's signed at one go, the person asked once for each, and told
+  /// to their stations.
+  #confirm(): Effect.Effect<null, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const waiting = this.#allGrants().filter((g) => this.#toConfirm(g));
+      const bySub = new Map<string, J[]>();
+      for (const g of waiting) {
+        const sub = this.#subAt(g.station);
+        if (sub !== null) bySub.set(sub, [...(bySub.get(sub) ?? []), g]);
+      }
+      for (const [sub, grants] of bySub) {
+        const bodies = grants.map((g) => ({ station: g.station as string, request: g.id as string, session: g.session as string, chat: g.chat as string, scope: g.scope as "hour" | "chat", exp: g.exp as number }));
+        const signed = yield* this.#env.personal.signGrants(sub, bodies, t("core-misc.personal.reason.confirm"));
+        for (const [i, g] of grants.entries()) {
+          const r = yield* this.#legacy.askAt(g.station, { op: "sign", request: g.id, signed: signed[i] });
+          this.heard(g.station, (r as J)?.request);
+        }
+      }
+      return null;
+    });
+  }
+
+  /// A grant live but unsigned, on a station that can carry a signature, and an account whose lock this device is on.
+  #toConfirm(g: J): boolean {
+    if (g.status !== "granted" || g.signed != null || this.#revoked.has(g.id) || this.#old.has(g.station)) return false;
+    const sub = this.#subAt(g.station);
+    return sub !== null && this.#env.personal.standing(sub) === "member";
+  }
+
+  /// What this device signs to allow a chat a phone.
+  #signed(station: string, request: string, scope: "hour" | "chat"): Effect.Effect<J, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const sub = this.#subAt(station);
+      if (sub === null) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noAccount")));
+      if (this.#old.has(station)) return yield* Effect.fail(new CoreError("personal_old_station", t("core-misc.personal.oldStation")));
+      if (this.#grants.get(station)?.get(request) === undefined) yield* this.readGrants(station);
+      const g = this.#grants.get(station)?.get(request);
+      if (g === undefined) return yield* Effect.fail(CoreError.invalid(t("core-misc.personal.noRequest")));
+      const exp = Math.floor(this.#env.host.nowMs() / 1000) + (scope === "hour" ? 3600 : 30 * 86400);
+      return yield* this.#env.personal.signGrant(sub, { station, request, session: g.session, chat: g.chat, scope, exp }, t("core-misc.personal.reason.grant"));
+    });
+  }
+
+  /// Until when grant `g` holds on this phone (null: it lends nothing on it): signed by a device on the lock pinned here.
+  #holds(g: J): number | null {
+    if (g.status !== "granted" || this.#revoked.has(g.id)) return null;
+    const sub = this.#subAt(g.station);
+    const chain = sub === null ? null : this.#env.personal.chain(sub);
+    return sub === null || chain === null ? null : this.check(g, g.station, sub, chain.devices, Math.floor(this.#env.host.nowMs() / 1000));
+  }
+
+  /// The lock pinned here read, and what it lets this phone lend for, as soon as it is known whose it is: a phone started
+  /// anew lends before any station is reached.
+  accountsKnown(): void {
+    for (const { sub } of this.#env.subs()) this.#readPersonal(sub);
+  }
+
+  /// (`at`: as that station is reached, read of it alone)
+  #readPersonal(sub: string, at?: string): void {
+    this.#env.runner.fork(Effect.ensuring(Effect.ignore(this.#env.personal.refresh(sub, at), { log: "Unhandled", message: "personal lock read" }), Effect.sync(() => this.#sync())));
+  }
+
+  #keepRevoked(): void {
+    const now = this.#env.host.nowMs() / 1000;
+    for (const [id, until] of this.#revoked) if (until <= now) this.#revoked.delete(id);
+    this.#env.runner.fork(Effect.ignore(this.#env.host.storageSet(REVOKED_KEY, utf8(JSON.stringify(Object.fromEntries(this.#revoked)))), { log: "Unhandled", message: "debugging grants taken back kept" }));
+  }
+
+  /// This phone paired with its own adbd (2026-10-31): once, whichever station's page or card asked,
   /// and every station it lends to offered again, so that each connects at once.
   #pairHere(own: NonNullable<AdbEnv["host"]["adb"]>, typed: string): Effect.Effect<unknown, CoreError> {
     const code = [...typed].filter((c) => c >= "0" && c <= "9").join("");
@@ -575,28 +790,43 @@ export class Adb {
   /// A station said how a grant or request of this person's stands (its `adb-grant` event, or a decision's answer).
   heard(station: string, d: J): void {
     if (typeof d?.id !== "string") return;
-    const at = this.#grants.get(station) ?? new Map<string, J>();
-    if (d.status === "pending" || d.status === "granted") at.set(d.id, d);
-    else at.delete(d.id);
-    this.#grants.set(station, at);
+    this.#retold.told(station, "adb-grant", d);
+    this.#putGrant(station, d);
     this.#keep();
     this.#sync();
   }
 
+  #putGrant(station: string, d: J): void {
+    const at = this.#grants.get(station) ?? new Map<string, J>();
+    if (d.status === "pending" || d.status === "granted") at.set(d.id, d);
+    else at.delete(d.id);
+    this.#grants.set(station, at);
+  }
+
   /// A station's grants read whole, as it is reached (one from before grants answers with none).
   readGrants(station: string): Effect.Effect<void, CoreError> {
-    return Effect.map(Effect.orElseSucceed(this.#legacy.askAt(station, { op: "grants" }), () => null), (r) => {
-      const list = Array.isArray((r as J)?.grants) ? ((r as J).grants as J[]) : null;
-      if (list === null) return;
-      if ((r as J)?.lasts === "hour" || (r as J)?.lasts === "chat") this.#lasts = (r as J).lasts;
-      this.#grants.set(station, new Map(list.filter((g) => typeof g?.id === "string").map((g) => [g.id as string, g])));
-      this.#keep();
-      this.#sync();
+    return Effect.suspend(() => {
+      const sub = this.#subAt(station);
+      if (sub !== null) this.#readPersonal(sub, station);
+      const read = this.#retold.asked();
+      return Effect.map(Effect.orElseSucceed(this.#legacy.askAt(station, { op: "grants" }), () => null), (r) => {
+        const list = Array.isArray((r as J)?.grants) ? ((r as J).grants as J[]) : null;
+        if (list === null) return;
+        if ((r as J)?.lasts === "hour" || (r as J)?.lasts === "chat") this.#lasts = (r as J).lasts;
+        // (one from before signatures drops them: said on its cards, nothing allowed there would lend)
+        if ((r as J)?.signs === true) this.#old.delete(station);
+        else this.#old.add(station);
+        this.#grants.set(station, new Map(list.filter((g) => typeof g?.id === "string").map((g) => [g.id as string, g])));
+        // A change heard while the read was out is newer than the snapshot it brought.
+        for (const { data } of this.#retold.since(read, station)) this.#putGrant(station, data as J);
+        this.#keep();
+        this.#sync();
+      }).pipe(Effect.ensuring(Effect.sync(() => this.#retold.over(read))));
     });
   }
 
   /// The grants live now and the requests waiting, every station's: `{station, id, chat, reason, status, scope, exp}`.
-  grants(): J[] {
+  #allGrants(): J[] {
     const now = this.#env.host.nowMs() / 1000;
     const out: J[] = [];
     for (const [station, at] of this.#grants)
@@ -604,9 +834,32 @@ export class Adb {
     return out.sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
   }
 
+  /// One row per chat, most recently used first. All underlying grants stay kept and are taken back together.
+  grants(): J[] {
+    const out = new Map<string, J>();
+    for (const whole of this.#allGrants()) {
+      const { signed: _signed, ...shown } = whole;
+      const sub = this.#subAt(whole.station);
+      const standing = sub === null ? "member" : this.#env.personal.standing(sub);
+      const g = {
+        ...shown,
+        ...(sub !== null ? { sub } : {}),
+        ...(whole.status === "granted" ? { held: this.#holds(whole) !== null, unsigned: whole.signed == null } : {}),
+        ...(whole.status === "pending" && standing !== "member" ? { join: true } : {}),
+        ...(this.#old.has(whole.station) ? { oldStation: true } : {}),
+      };
+      const key = JSON.stringify([g.station, grantChat(g)]);
+      const before = out.get(key);
+      const used = typeof g.lastUsedAt === "number" ? g.lastUsedAt : 0;
+      const wasUsed = typeof before?.lastUsedAt === "number" ? before.lastUsedAt : 0;
+      if (before === undefined || (before.status !== "granted" && g.status === "granted") || (before.status === g.status && (used > wasUsed || (used === wasUsed && (g.at ?? 0) > (before.at ?? 0))))) out.set(key, g);
+    }
+    return [...out.values()].sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0) || (b.at ?? 0) - (a.at ?? 0));
+  }
+
   /// The stations a grant lends this phone to now.
   wanted(): string[] {
-    return [...new Set(this.grants().filter((g) => g.status === "granted").map((g) => g.station as string))];
+    return [...new Set(this.#allGrants().filter((g) => this.#holds(g) !== null).map((g) => g.station as string))];
   }
 
   /// Each wanted station lent to (with the ports the app found), each no longer wanted let go.
@@ -620,13 +873,25 @@ export class Adb {
     for (const station of wanted) {
       let lend = this.#lends.get(station);
       if (lend === undefined) {
-        lend = new Lend(this.#env);
+        lend = new Lend(this.#env, true);
         this.#lends.set(station, lend);
       }
       // (lent for as long as a grant is: the grants end it, not its own clock)
       this.#env.runner.fork(Effect.ignore(lend.run({ kind: "share", offer: { ...this.#ports!, station, minutes: 30 * 24 * 60 } }), { log: "Unhandled", message: "debugging lend shared" }));
     }
-    this.#env.store.invalidate({ topic: "adbShare" });
+    seenOf(this.#env.store).touch();
+    this.#wakeAtEnd();
+  }
+
+  /// #sync once more as the first grant it lends on ends, by what was signed: no station need say so.
+  #wakeAtEnd(): void {
+    this.#stopWake?.();
+    this.#stopWake = null;
+    const ends = this.#allGrants().map((g) => this.#holds(g)).filter((e): e is number => e !== null);
+    if (ends.length === 0) return;
+    const wait = Math.max(0, Math.min(...ends) * 1000 + 1 - this.#env.host.nowMs());
+    const f = this.#env.runner.fork(Effect.andThen(Effect.sleep(Math.min(wait, 2 ** 31 - 1)), Effect.sync(() => this.#sync())));
+    this.#stopWake = () => void Effect.runFork(Fiber.interrupt(f));
   }
 
   /// The lending a person has something to do for, of those grants made: one whose station's adb waits to be paired
@@ -644,16 +909,27 @@ export class Adb {
   /// The `adbShare` topic: the lending as the app's switch made it, or the one a grant made a person has something to do
   /// for (#focus), and every grant and lending.
   value(): J {
+    seenOf(this.#env.store).read();
     const first = this.#legacy.value().sharing ? this.#legacy : (this.#focus() ?? this.#legacy);
     const lends = [...this.#lends.entries()].map(([station, l]) => {
       const v = l.value();
       return { station, phase: v.phase, adb: v.adb, serial: v.serial, message: v.message, tunnels: v.tunnels };
     });
-    return { ...first.value(), on: this.#on, grants: this.grants(), wanted: this.wanted(), known: this.#known, lends, lasts: this.#lasts };
+    // Every station's chats with screens up, not only the first lending's.
+    const screens = [...new Set([this.#legacy, ...this.#lends.values()].flatMap((l) => l.value().screens as string[]))];
+    const personal = this.#env.subs().map(({ sub, email }) => ({ ...this.#env.personal.view(sub), email, pair: this.#env.pair.state(sub) }));
+    const toConfirm = this.#allGrants().filter((g) => this.#toConfirm(g)).length;
+    return { ...first.value(), on: this.#on, grants: this.grants(), wanted: this.wanted(), known: this.#known, lends, lasts: this.#lasts, screens, personal, toConfirm };
   }
 
   card(station: string): J {
+    seenOf(this.#env.store).read();
     return (this.#lends.get(station) ?? this.#legacy).card(station);
+  }
+
+  /// What the lending shows changed elsewhere (a pairing, a personal lock): what shows it is made again.
+  touched(): void {
+    seenOf(this.#env.store).touch();
   }
 
   deviceTold(): void {

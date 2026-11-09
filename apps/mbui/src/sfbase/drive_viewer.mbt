@@ -1,4 +1,4 @@
-// A file of a station's drive as a viewer opens it (@sf.ViewerFile; the web's web/src/drive/viewerFile.ts): read
+// A file of a station's drive as a viewer opens it (@sf.ViewerFile): read
 // through the core a part at a time (`drive.read`, 4 MB a part, bytes beside the answer), kept on the device as its
 // folder lists it (drive_keep: read whole as `file`, played as `played`); where it was left on this device the core's
 // (the drivePlace topic, `drive.place`); saved as the drive's 下载 saves it. A text of it read in the library's reader,
@@ -14,6 +14,21 @@ pub fn drive_viewer_file(c : @ui.Ctx, src : Source, at : DriveAt) -> @sf.ViewerF
   let entry = dv_entries(src, at.station, root, dir).unwrap_or([]).iter().find_first(fn(e) { e.name == name && !e.dir })
   let (by_kind, by_name, _) = preview_kind(name)
   let listed = entry.map(fn(e) { (e.mtime, e.size) })
+  // what it is played by: kept as played, as the folder lists it (Player.kt: DriveCache.played by its mtime and
+  // size; one not in it played without being kept), its parts' offset and length each read's own
+  let played = fn() {
+    let p = drive_params(at.station, root, at.path)
+    match listed {
+      Some((mtime, size)) => {
+        drive_keep(p, "played", mtime, size)
+        // (opened here, where it is: brought after everything else once let go)
+        p["from"] = { "root": Json::string(root), "path": Json::string(at.path) }
+      }
+      None => ()
+    }
+    p
+  }
+  let size = listed.map(fn(l) { l.1 }).unwrap_or(0.0)
   {
     name,
     size: match entry {
@@ -53,26 +68,17 @@ pub fn drive_viewer_file(c : @ui.Ctx, src : Source, at : DriveAt) -> @sf.ViewerF
       })
     },
     stream: Some(fn(offset, length, answer) {
-      let p = drive_params(at.station, root, at.path)
+      let p = played()
       p["offset"] = Json::number(offset)
       p["length"] = Json::number(length.to_double())
-      // kept as played, as the folder lists it (Player.kt: DriveCache.played by its mtime and size); one not in it
-      // played without being kept
-      match listed {
-        Some((mtime, size)) => {
-          drive_keep(p, "played", mtime, size)
-          // (opened here, where it is: brought after everything else once let go)
-          p["from"] = { "root": Json::string(root), "path": Json::string(at.path) }
-        }
-        None => ()
-      }
-      stream_part(src, "drive.read", p, listed.map(fn(l) { l.1 }).unwrap_or(0.0), answer, ended=fn(r) {
+      stream_part(src, "drive.read", p, size, answer, ended=fn(r) {
         match r {
           Ok(_) => ()
           Err(e) => @ui.log("player: \{name} @\{offset.to_int()} failed: \{e.stringify()}")
         }
       })
     }),
+    direct: direct_part("drive.read", played(), size),
     beside: Some(fn(e, done) {
       drive_read_all(src, at.station, root, dv_join(dir, e.name), subtitle_limit, "played", listed=Some((e.mtime, e.size)), fn(r) {
         done(
@@ -85,7 +91,7 @@ pub fn drive_viewer_file(c : @ui.Ctx, src : Source, at : DriveAt) -> @sf.ViewerF
     }),
     place: fn() {
       // where it was left, held on this device (the core's: no wait for a station)
-      let place = (src.topic)("drivePlace", drive_params(at.station, root, at.path))
+      let place = src.topic("drivePlace", drive_params(at.station, root, at.path)).get().snapshot()
       match place.value {
         Some(v) => {
           let left = number(Some(v), "at")

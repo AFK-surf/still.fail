@@ -5,6 +5,10 @@ import { LIMITS } from "../src/limits.ts";
 import { relayConns, relayLoad, type Load } from "../src/relay-metrics.ts";
 import { relayLoadView, type Sample } from "../src/relay-load-view.ts";
 
+// A cron at a minute that is only the every-minute one's (not the hourly models' at :07, not a probe's): the real
+// clock's minute made the hourly catalog's fetch of models.dev run in the test at :07 (2026-11-08, run 42469996303).
+const EVERY_MINUTE_ONLY = new Date(Date.UTC(2026, 0, 1, 0, 1));
+
 const METRICS = [
   "# HELP relayserver_bytes_sent_total x",
   "relayserver_bytes_sent_total 1000",
@@ -140,10 +144,9 @@ test("what a relay did between two of its samples goes to Axiom as a log line", 
   }
 });
 
-// The last stretch to each client, which the relay's counters do not see (relay-load.sh `node_conn`): 2026-10-30 a phone
-// on 衡阳移动 got 8-19 KB/s through Beijing while the relay counted nothing wrong. Each connection that sent in the
-// minute goes to Axiom as a `relay conn` line beside the minute's, whatever the minute says; lines that do not read are
-// left out.
+// The last stretch to each client, which the relay's counters do not see (relay-load.sh `node_conn`): the connection
+// counters show its round trips and retransmissions. Each connection that sent in the minute goes to Axiom as a `relay
+// conn` line beside the minute's, whatever the minute says; lines that do not read are left out.
 test("each client connection a relay's kernel saw goes to Axiom beside its minute", async () => {
   const conn = "node_conn 58.216.63.0 39879 25.878 25.228 3646482 126655 2816728 1322 1";
   assert.deepEqual(relayConns(`${METRICS}\n${conn}\nnode_conn 1.2.3.0 x\nnode_conn <b> 1 1 1 1 1 1 1 0\nnode_conn 2409:8a1e:6c20:: 5555 40 30 900 0 8000 10 0\n`), [
@@ -174,8 +177,8 @@ test("the cron reads still.fail's own relay's counters, and says in Axiom how ne
   const got: any[] = [];
   const h = await harness({ axiom: async (request) => (got.push(JSON.parse(await request.text())), new Response("{}")) });
   try {
-    const api = (await h.mf.getWorker("api")) as unknown as { scheduled(options: { cron: string }): Promise<{ outcome: string }> };
-    assert.equal((await api.scheduled({ cron: "* * * * *" })).outcome, "ok");
+    const api = (await h.mf.getWorker("api")) as unknown as { scheduled(options: { cron: string; scheduledTime: Date }): Promise<{ outcome: string }> };
+    assert.equal((await api.scheduled({ cron: "* * * * *", scheduledTime: EVERY_MINUTE_ONLY })).outcome, "ok");
     const admin = h.as(await h.login("alice"), "admin");
     const answer = await (await admin("GET", "/v1/admin/relays")).json() as { relays: { at: number | null; open: number | null }[] };
     assert.equal(answer.relays[0]!.at, h.now());

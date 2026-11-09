@@ -13,16 +13,3 @@ pub fn mark_login(address : String, login : String) -> Unit {
   // its card is in the page's 设置
   station_parts[address] = "settings"
 }
-
-///|
-/// The station's page (list `key`) brought to its login a link pointed to, at block `at` (its cards under way), once
-/// the page's list is there.
-fn bring_marked_login(c : @ui.Ctx, address : String, key : String, at : Int) -> Unit {
-  match login_marked.val {
-    Some((a, m, false)) if a == address && c.list_info_as(key, fn(i) { i is Some(_) }) is Some(_) => {
-      c.list_scroll_to(key, at)
-      login_marked.val = Some((a, m, true))
-    }
-    _ => ()
-  }
-}

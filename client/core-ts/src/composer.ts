@@ -597,7 +597,8 @@ export class Composers {
       }
       while (saved === undefined) {
         if (!blob) return yield* Effect.fail(new CoreError("upload", t("core-misc.composer.upload_missing", { name: f.name })));
-        const bytes = new Uint8Array(yield* Effect.tryPromise({ try: () => blob.slice(have, have + PART).arrayBuffer(), catch: asCoreError }));
+        // Its source not read (gone with the page or app that held it, or unreadable): said as that, what the reader said kept.
+        const bytes = new Uint8Array(yield* Effect.tryPromise({ try: () => blob.slice(have, have + PART).arrayBuffer(), catch: (e) => CoreError.plainly("upload", e, t("core-misc.composer.upload_missing", { name: f.name })) }));
         const from = have;
         const told = yield* inner.stations.requests.uploadPart(addr, { id, name: f.name, size: f.size, offset: have }, bytes, null, (n) => went(from + n));
         if (told.file !== undefined) saved = told.file;

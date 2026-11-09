@@ -97,7 +97,7 @@ final class BrowserLogin {
     }
 
     /**
-     * A page in a Custom Tab over the app (@hostapi.open_tab: a login's page, as still.fail's LoginCards.kt openLoginPage),
+     * A page in a Custom Tab over the app (@hostapi.open_tab: a login's page),
      * or in the system's browser where none takes a tab; false when nothing takes it at all.
      */
     static boolean openTab(String url) {

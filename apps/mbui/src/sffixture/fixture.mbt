@@ -4,7 +4,10 @@
 // `mode`: "home" (signed in, the chats), "signin" (signed out), "loading" (the list being read), "empty" (a
 // workspace with nothing in it yet); "chat" (the first row's chat open: chat_fixture.mbt), "chat-loading" (it being
 // read), "chat-long" (thousands of messages in it); "long" (the chats and many weeks more of them: for flinging,
-// scripts/android.sh fling-test); "home-pins" (the chats as a station that knows pins says them: one pinned, one kept).
+// scripts/android.sh fling-test); "home-pins" (the chats as a station that knows pins says them: one pinned, one kept);
+// "home-share" (one of them shared and pictured from its row's menu, and in Slack); "long-paged" (a long account's
+// chats, two hundred days of them, given a page at a time as the core gives them: firstRows, its `limit` and `more`;
+// scripts/instrbench.sh's `paged`).
 
 ///|
 pub(all) struct Fixture {
@@ -16,7 +19,15 @@ pub(all) struct Fixture {
   mut window_zoom : String
   /// motion chosen (the prefs' `motion`: reduce, full; "" the system's)
   mut motion : String
+  /// haptics chosen (the prefs' `haptics`: off; "" on)
+  mut haptics : String
+  /// automatic updates chosen (the prefs' `appUpdate`: off; "" on)
+  mut app_update : String
+  /// how the composer sends (prefs `sendKey`): `mod`, or "" Enter
+  mut send_key : String
   archived : Map[String, Bool]
+  hidden : Map[String, Bool]
+  muted : Map[String, Bool]
   filters : Map[String, String]
   /// the faces chosen (the prefs' `fonts`), and those whose files the core has (fonts_fixture.mbt)
   fonts : Map[String, String]
@@ -37,8 +48,8 @@ pub(all) struct Fixture {
   /// each sidebar's width and folding as kept on this device (the prefs' `sidebars`, by `<workspace>\n<group>`), as
   /// the core's prefs.ts keeps a map: by key, null letting one go
   sidebars : Map[String, Json]
-  /// the look the card to share is drawn in (the prefs' `shareLook`; "" none kept): share-card-poster, -receipt and
-  /// -terminal open it in theirs
+  /// the look the card to share is drawn in (the prefs' `shareLook`; "" none kept): share-card-<key> (but -dark) opens
+  /// it in that look
   mut share_look : String
 }
 
@@ -49,11 +60,12 @@ pub fn fixture_chat_tabs(mode : String) -> Map[String, Json] {
   let kept = fn(tab : String) -> Json { { "tabs": [Json::string(tab)], "active": Json::string(tab) } }
   match mode {
     "newchat-files" => { "new:ws1": kept("files") }
+    "chat-screen-tab" => { "ws1/st1:s-c1": kept("screen:[\"ws-1/st-1\",\"browser:tab-1\"]") }
     "chat-letters-side" => { "ws1/st1:s-c1": kept("letters") }
     "chat-things-side" => { "ws1/st1:s-c1": kept("things") }
     "chat-jobs-side" => { "ws1/st1:s-c1": kept("jobs") }
     "chat-service-side" => { "ws1/st1:s-c1": kept("service:j-web") }
-    "chat-history-side" | "chat-model-pop" => { "ws1/st1:s-c1": kept("s-c1") }
+    "chat-history-side" | "chat-model-pop" | "chat-model-accounts" => { "ws1/st1:s-c1": kept("s-c1") }
     "chat-tabs-side" => { "ws1/st1:s-c1": { "tabs": ["s-c1", "jobs"], "active": "jobs" } }
     _ => {}
   }
@@ -64,6 +76,7 @@ pub fn fixture_chat_tabs(mode : String) -> Map[String, Json] {
 /// panel's two tabs pointed at), as the core shows what is kept (chat-tabs.ts tabsOf).
 pub fn fixture_tabs_shown(mode : String) -> Map[String, Json] {
   match mode {
+    "chat-screen-tab" => { "ws1/st1:s-c1": { "open": ["screen:[\"ws-1/st-1\",\"browser:tab-1\"]"], "shown": "screen:[\"ws-1/st-1\",\"browser:tab-1\"]" } }
     "chat-tabs-side" => { "ws1/st1:s-c1": { "open": ["s-c1", "jobs"], "shown": "jobs" } }
     _ => {}
   }
@@ -202,7 +215,7 @@ pub fn row(
     "mine": true,
     "lastActiveAt": 0,
     "station": Json::string(station),
-    "stationName": Json::string(if station == "ws1/st1" { "Studio" } else { "MBA" }),
+    "stationName": Json::string(if station == "ws1/st1" { "Willow" } else { "Maple" }),
     "stationIcon": Json::string(
       if station == "ws1/st1" {
         "glyph:desktop"
@@ -214,6 +227,38 @@ pub fn row(
   }
   for k, v in more {
     r[k] = v
+  }
+  // The core lets any made chat on an online station be swiped to archive, regardless of its state.
+  if !more.contains("offline") && more.get("pending") != Some(Json::boolean(true)) {
+    r["swipeArchive"] = Json::boolean(true)
+    // its swipe asks first (the core's swipeAsk): started by someone else, that it goes off everyone's list; keeping
+    // watch, in its watch's words; at work, that it is
+    let state = match more.get("watch") {
+      Some(Object(w)) =>
+        match w.get("ask") {
+          Some(String(ask)) => ask
+          _ => ""
+        }
+      _ =>
+        if more.get("state") == Some(Json::string("run")) {
+          "此对话正在进行中。归档后，agent 完成当前回复即停止，等待中的任务也会停止。"
+        } else {
+          ""
+        }
+    }
+    let others = match more.get("creator") {
+      Some(Object(c)) if c.get("id") != Some(Json::string("lin@example.com")) => {
+        let name = match c.get("name") {
+          Some(String(n)) => n
+          _ => ""
+        }
+        "这是\{name}发起的对话。归档后，workspace 里所有人的列表都不再显示它，agent 也不再接收新消息。"
+      }
+      _ => ""
+    }
+    if others + state != "" {
+      r["swipeAsk"] = Json::string(others + state)
+    }
   }
   Json::object(r)
 }
@@ -233,7 +278,7 @@ pub fn last(text : String) -> Json {
 }
 
 ///|
-/// The web's demo's chats (ember web/src/demo/fixtures.ts startingChats), its one station's, as its core lists them:
+/// The web's demo's chats, its one station's, as its core lists them:
 /// MBUI_FIXTURE=webdemo, the wide frame beside the web's story app-chat with the same chats (their people's pictures
 /// letters here).
 pub fn webdemo_days() -> Array[Json] {
@@ -286,6 +331,22 @@ pub fn webdemo_days() -> Array[Json] {
 }
 
 ///|
+/// 夜里的构建又失败了 as its row says what its menu offers besides the list's own (home-share): shared with the viewer's
+/// other workspaces, a picture of it, it in Slack.
+fn fix_row_share(r : Json) -> Json {
+  match r {
+    Object(m) if text(Some(r), "id") == "c3" => {
+      let o = m.copy()
+      o["mayShare"] = Json::boolean(true)
+      o["mayPublish"] = Json::boolean(true)
+      o["slackUrl"] = Json::string("https://example.slack.com/archives/C1/p1")
+      Json::object(o)
+    }
+    other => other
+  }
+}
+
+///|
 /// A row as a station that knows pins says it (home-pins): 给设置页加一个深色模式开关 pinned, 盯着 CI，绿了告诉我 kept
 /// (保留), the rest neither.
 fn fix_pins(r : Json) -> Json {
@@ -298,6 +359,63 @@ fn fix_pins(r : Json) -> Json {
         o["kept"] = Json::boolean(true)
       }
       Json::object(o)
+    }
+    other => other
+  }
+}
+
+///|
+/// A row's or a chat's `opener`, as the core says one an agent opened (chat-opener, its sheet open: chat-opener-info): the chat of 和 Ana 一起看新版的引导页.
+fn with_opener(v : Json?) -> Json? {
+  match v {
+    Some(Object(m)) => {
+      let m = m.copy()
+      m["opener"] = {
+        "station": "ws1/st1",
+        "session": "s-c6",
+        "title": "和 Ana 一起看新版的引导页",
+        "text": "由「和 Ana 一起看新版的引导页」创建",
+      }
+      Some(Json::object(m))
+    }
+    other => other
+  }
+}
+
+///|
+/// A row made by the first row's chat's agent (chat-opened): its `opener` that chat.
+fn opened_by_first(r : Json) -> Json {
+  match r {
+    Object(m) => {
+      let m = m.copy()
+      m["opener"] = { "station": "ws1/st1", "session": "s-c1", "title": "整理发布清单", "text": "由「整理发布清单」创建" }
+      Json::object(m)
+    }
+    other => other
+  }
+}
+
+///|
+/// The first row's chat with the chats its agent made (chat-opened), as the core lists them: one waiting for the
+/// viewer, one done, one in the archive.
+fn with_opened(v : Json?) -> Json? {
+  match v {
+    Some(Object(m)) => {
+      let m = m.copy()
+      m["opened"] = [
+        {
+          "station": "ws1/st2",
+          "session": "s-c3",
+          "title": "夜里的构建又失败了",
+          "mark": "block",
+          "stateLead": "need",
+          "stateText": "要你帮忙：测试机的磁盘满了，要不要清理旧的缓存？",
+        },
+        { "station": "ws1/st1", "session": "s-c4", "title": "给设置页加一个深色模式开关", "stateLead": "done", "stateText": "做完了：开关和三处颜色都改好了" },
+        { "station": "ws1/st1", "session": "s-c12", "title": "旧版引导页的截图", "archived": true, "note": "已归档" },
+      ]
+      m["openedText"] = "创建了 3 个对话"
+      Some(Json::object(m))
     }
     other => other
   }
@@ -319,11 +437,11 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
     row("c2", "首页的列表改成按天分组", "ws1/st1", "8 分钟前", {
       "unread": true,
       "tone": "wait",
-      "decision": { "seq": 3, "options": [], "text": "奏 · 分组的标题用相对日期还是具体日期？" },
+      "decision": { "seq": 3, "options": [], "text": "待处理 · 分组的标题用相对日期还是具体日期？" },
       // (its line, and what leads it, as the core says them: client/core-ts present.ts rowStateLine)
-      "stateText": "奏 · 分组的标题用相对日期还是具体日期？",
+      "stateText": "待处理 · 分组的标题用相对日期还是具体日期？",
       "stateLead": "decision",
-      "stateLeadText": "奏",
+      "stateLeadText": "待处理",
       "stateRest": " · 分组的标题用相对日期还是具体日期？",
       "people": [me, ana],
       "creator": { "id": "lin@example.com", "name": "林", "via": "cloud" },
@@ -350,11 +468,39 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
       "stateLead": "watch",
       "stateRest": "监控中：每 5 分钟看一次主干的构建",
       "stateAbout": 12,
-      "watch": { "text": "监控中：主干构建", "ask": "它会在归档里继续盯着。" },
+      "watch": { "text": "监控中：主干构建", "ask": "「主干构建」仍在监控。归档会停止监控。" },
     }),
   ]
   // home-pins: rows from a station that knows pins, for their menus' 固定 and 保留
-  let today = if f.mode == "home-pins" { today.map(fix_pins) } else { today }
+  let today = if f.mode == "home-pins" || f.mode == "chat-actions" { today.map(fix_pins) } else { today }
+  let today = if f.mode == "home-share" { today.map(fix_row_share) } else { today }
+  // chat-opener: the first row's chat and 夜里的构建 opened by 和 Ana 一起看新版的引导页's agent (chat_create)
+  let today = if f.mode.has_prefix("chat-opener") {
+    today.mapi(fn(i, r) { if i == 0 || i == 2 { with_opener(Some(r)).unwrap_or(r) } else { r } })
+  } else if f.mode.has_prefix("chat-opened") {
+    // chat-opened: 夜里的构建 and 深色模式开关 made by the first row's chat's agent
+    today.mapi(fn(i, r) { if i == 2 || i == 3 { opened_by_first(r) } else { r } })
+  } else {
+    today
+  }
+  // A station that supports personal hiding (used to exercise its menu and list).
+  let today = if f.mode == "home-hide" {
+    today.map(fn(r) {
+      match r {
+        Object(m) => {
+          let v = m.copy()
+          let first = text(Some(r), "id") == "c1"
+          v["hidden"] = Json::boolean(first && f.hidden.get("c1").unwrap_or(false))
+          v["muted"] = Json::boolean(first && f.muted.get("c1").unwrap_or(false))
+          if first { v["thread"] = Json::number(17.0) }
+          Json::object(v)
+        }
+        _ => r
+      }
+    })
+  } else {
+    today
+  }
   let yesterday = [
     row("c6", "和 Ana 一起看新版的引导页", "ws1/st1", "昨天 21:14", {
       "last": last("Ana：第二屏的插画可以再小一点"),
@@ -369,7 +515,6 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
     row("c8", "把旧的截图都换成新的", "ws1/st1", "昨天 10:30", {
       "settled": true,
       "archivable": true,
-      "swipeArchive": true,
       "stateText": "做完了",
       "stateLead": "done",
       "stateRest": "",
@@ -377,8 +522,8 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
   ]
   let earlier = [
     row("c9", "迁移数据库的演练", "ws1/st2", "星期三", {
-      "offline": "MBA 离线",
-      "last": last("演练到第二步时 MBA 断开了"),
+      "offline": "Maple 离线",
+      "last": last("演练到第二步时 Maple 断开了"),
       "agents": [agent("anthropic", "claude"), agent("openai", "codex"), agent("deepseek", "dsh"), agent("qwen", "dsh"), agent("kimi", "dsh")],
     }),
     row("c10", "周报的模板", "ws1/st1", "星期三", {
@@ -437,7 +582,7 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
     { "daysAgo": 1, "at": 0, "label": "昨天", "items": keep(yesterday) },
     { "daysAgo": 4, "at": 0, "label": "星期三", "items": keep(earlier) },
   ]
-  if f.mode == "long" {
+  if f.mode == "long" || f.mode == "long-paged" {
     // weeks more, six chats a day, every word made up
     let topics = ["例会的记录", "接口的命名", "图标的尺寸", "崩溃的日志", "发布的说明", "测试的清单"]
     // (each with what leads it, as the core would say: none for words of their own)
@@ -449,7 +594,7 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
       ("要你帮忙看一眼", "", ""),
       ("已经交给评审", "", ""),
     ]
-    for d in 0..<40 {
+    for d in 0..<(if f.mode == "long-paged" { 200 } else { 40 }) {
       let items = Array::makei(6, fn(k) {
         let n = d * 6 + k + 11
         let (said, lead, rest) = states[(d + k) % 6]
@@ -467,26 +612,56 @@ pub fn fixture_days(f : Fixture) -> Array[Json] {
 }
 
 ///|
+/// The first `limit` rows of `days`, in their days, and how many more there are (the core's views.ts firstRows).
+fn first_rows(days : Array[Json], limit : Int) -> (Array[Json], Int) {
+  let mut left = limit
+  let mut more = 0
+  let out : Array[Json] = []
+  for d in days {
+    let its = items(Some(d), "items")
+    if left <= 0 {
+      more += its.length()
+      continue
+    }
+    if its.length() <= left {
+      out.push(d)
+    } else {
+      match d {
+        Object(m) => {
+          let v = m.copy()
+          v["items"] = Json::array(its[:left].to_array())
+          out.push(Json::object(v))
+        }
+        _ => out.push(d)
+      }
+      more += its.length() - left
+    }
+    left -= if its.length() < left { its.length() } else { left }
+  }
+  (out, more)
+}
+
+///|
 pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
   let scope = match params.get("scope") {
     Some(String(s)) => s
     _ => ""
   }
-  // each with how many of its agents are at work, as the core says it (views.ts: looks.doing): Studio's one at work,
-  // MBA down; the card to share's (share-card, and share-card-… over the rest of the app) more of them, on more stations
+  // each with how many of its agents are at work, as the core says it (views.ts: looks.doing): Willow's one at work,
+  // Maple down; the card to share's (share-card, and share-card-… over the rest of the app) more of them, on more stations
   let stations : Json = if f.mode == "webdemo" {
-    [{ "id": "ws1/st1", "name": "Studio" }]
+    [{ "id": "ws1/st1", "name": "Willow" }]
   } else if f.mode.has_prefix("share-card") {
     [
-      { "id": "ws1/st1", "station": "ws1/st1", "name": "Studio", "state": "online", "running": 5, "doing": "5 个正在运行" },
-      { "id": "ws1/st3", "station": "ws1/st3", "name": "ccvm", "state": "online", "running": 3, "doing": "3 个正在运行" },
-      { "id": "ws1/st4", "station": "ws1/st4", "name": "Mini1", "state": "online", "running": 1, "doing": "1 个正在运行" },
-      { "id": "ws1/st2", "station": "ws1/st2", "name": "MBA", "state": "error", "running": 0, "doing": "连不上" },
+      { "id": "ws1/st1", "station": "ws1/st1", "name": "Willow", "state": "online", "running": 5, "doing": "5 个正在运行" },
+      { "id": "ws1/st3", "station": "ws1/st3", "name": "Birch", "state": "online", "running": 3, "doing": "3 个正在运行" },
+      { "id": "ws1/st4", "station": "ws1/st4", "name": "Cedar", "state": "online", "running": 1, "doing": "1 个正在运行" },
+      { "id": "ws1/st2", "station": "ws1/st2", "name": "Maple", "state": "error", "running": 0, "doing": "连不上" },
     ]
   } else {
     [
-      { "id": "ws1/st1", "station": "ws1/st1", "name": "Studio", "state": "online", "running": 1, "doing": "1 个正在运行" },
-      { "id": "ws1/st2", "station": "ws1/st2", "name": "MBA", "state": "offline", "running": 0, "doing": "离线" },
+      { "id": "ws1/st1", "station": "ws1/st1", "name": "Willow", "state": "online", "running": 1, "doing": "1 个正在运行" },
+      { "id": "ws1/st2", "station": "ws1/st2", "name": "Maple", "state": "offline", "running": 0, "doing": "离线" },
     ]
   }
   let rich = f.mode.has_prefix("share-card")
@@ -497,7 +672,19 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
   let mine = params.get("mine") is Some(True)
   let watching = params.get("watching") is Some(True)
   let days = if scope == "ws1" && f.mode != "empty" && !watching {
-    let all = fixture_days(f)
+    // (a long account's made once, as a core keeps its chats: what each page asks costs it no more)
+    let all = if f.mode == "long-paged" {
+      match paged_days.val {
+        Some(d) => d
+        None => {
+          let d = fixture_days(f)
+          paged_days.val = Some(d)
+          d
+        }
+      }
+    } else {
+      fixture_days(f)
+    }
     if mine {
       // the viewer's: those they are in
       all.map(fn(d) {
@@ -523,15 +710,38 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
   } else {
     []
   }
+  let hidden = params.get("hidden") is Some(True)
+  let days = if f.mode == "home-hide" {
+    days.filter_map(fn(d) {
+      match d {
+        Object(m) => {
+          let v = m.copy()
+          let found = items(Some(d), "items").filter(fn(r) { flag(Some(r), "hidden") == hidden })
+          v["items"] = Json::array(found)
+          if found.is_empty() { None } else { Some(Json::object(v)) }
+        }
+        _ => None
+      }
+    })
+  } else if hidden {
+    []
+  } else {
+    days
+  }
   let empty = days.iter().all(fn(d) { items(Some(d), "items").length() == 0 })
-  Some({
+  // (its first `limit` rows and how many more it has, as the core's firstRows gives them)
+  let (days, more) = match params.get("limit") {
+    Some(Number(n, ..)) if f.mode == "long-paged" => first_rows(days, n.to_int())
+    _ => (days, 0)
+  }
+  let chats : Json = {
     "me": { "email": "lin@example.com" },
     "stations": if scope == "ws1" { stations } else { [] },
     "loading": false,
     "days": Json::array(days),
     "leading": "agents",
     "note": { "reading": false, "failing": [], "empty": Json::boolean(empty) },
-    // the stations at a glance (Station's place in the bar): Studio online, MBA not (the web's demo: its one, online)
+    // the stations at a glance (Station's place in the bar): Willow online, Maple not (the web's demo: its one, online)
     "glyph": if scope == "ws1" && f.mode != "webdemo" {
       {
         "online": if rich { 3 } else { 1 },
@@ -547,8 +757,59 @@ pub fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
     } else {
       { "online": 1, "dim": 0, "failing": 0, "working": 0, "connecting": 0, "label": "1 台在线" }
     },
-  })
+  }
+  match chats {
+    Object(m) if more > 0 => m["more"] = Json::number(more.to_double())
+    _ => ()
+  }
+  if f.mode == "long-paged" {
+    // (as the core's message comes to the app, more of a list asked from what it has: the rows it had kept as they
+    // were, those new read from their text)
+    match chats {
+      Object(m) =>
+        m["days"] = Json::array(
+          items(Some(chats), "days").map(fn(d) {
+            match d {
+              Object(dm) => {
+                let v = dm.copy()
+                v["items"] = Json::array(items(Some(d), "items").map(paged_row))
+                Json::object(v)
+              }
+              _ => d
+            }
+          }),
+        )
+      _ => ()
+    }
+    Some(chats)
+  } else {
+    Some(chats)
+  }
 }
+
+///|
+// kept across runs: let go of as a fixture is made (fixture)
+/// A long-paged account's rows as the app has had them, by their keys.
+let paged_rows : Map[String, Json] = {}
+
+///|
+/// Row `r` as the app has it: as it had it, else read from its text.
+fn paged_row(r : Json) -> Json {
+  let key = text(Some(r), "station") + "\u{1}" + text(Some(r), "id")
+  match paged_rows.get(key) {
+    Some(had) => had
+    None => {
+      let read = @json.parse(r.stringify()) catch { _ => r }
+      paged_rows[key] = read
+      read
+    }
+  }
+}
+
+///|
+// kept across runs: let go of as a fixture is made (fixture)
+/// A long-paged account's days, made once.
+let paged_days : Ref[Array[Json]?] = Ref(None)
 
 ///|
 ///|
@@ -560,28 +821,45 @@ pub fn Fixture::changed(self : Fixture) -> Unit {
 }
 
 ///|
+/// How many changes the made-up core made: its own (Fixture::changed) and its station's later ones, done as they came
+/// (fix_done): what is worked out of its data is worked out again as this moves on.
+pub fn Fixture::changes(self : Fixture) -> Int {
+  self.version + fix_done.val
+}
+
+///|
 pub fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topic {
   // (read in a computed, followed as the made-up core changes: Fixture::changed)
   @settings.fixture_followed()
-  fix_tick(f)
+  fix_tick()
   // (the same answer while the made-up core is as it was, as the core's own: a subscription's value kept, not worked
   // out again each time it is read)
-  let version = f.version + @settings.fixture_version() + fix_browse.changes
+  let version = f.changes() + @settings.fixture_version() + fix_browse.changes + fix_presets_said.val
+  // (a draft's own changes, its words as they are typed: its topic's alone, fix_compose_call)
+  let own = if name == "composer" {
+    @settings.fixture_draft_followed()
+    match fix_writes.get(text(Some(Json::object(params)), "key")) {
+      Some(w) => w.version
+      None => 0
+    }
+  } else {
+    0
+  }
   let key = name + "\u{1}" + f.mode + "\u{1}" + Json::object(params).stringify()
   match fixture_answers.get(key) {
-    Some(t) if t.version == version => return t
+    Some((at, at_own, t)) if at == version && at_own == own => return t
     _ => ()
   }
   let t = fixture_answer(f, name, params, version)
-  fixture_answers[key] = t
+  fixture_answers[key] = (version, own, t)
   t
 }
 
 ///|
-/// The made-up core's answers given, by topic and what was asked, each as of the version it was given at
-/// (fixture_topic).
+/// The made-up core's answers given, by topic and what was asked, each as of the version it was given at, and its
+/// draft's for a draft's topic (fixture_topic).
 // kept across runs: let go as a fixture is made (fixture)
-let fixture_answers : Map[String, Topic] = {}
+let fixture_answers : Map[String, (Int, Int, Topic)] = {}
 
 ///|
 /// Topic `name` asked with `params`, worked out of the made-up core as it is (`version`).
@@ -595,6 +873,10 @@ fn fixture_answer(f : Fixture, name : String, params : Map[String, Json], versio
     "stations" if params.get("drive") is Some(True) =>
       fix_browse_with_drive(f, fixture_stations_way(value), text(Some(Json::object(params)), "here"))
     "stations" => fixture_stations_way(value)
+    "chat" if f.mode.has_prefix("chat-opened") && params.get("session") is Some(String("s-c1")) =>
+      fixture_with_tabs(f, params, with_opened(value))
+    "chat" if f.mode.has_prefix("chat-opener") && params.get("session") is Some(String("s-c1")) =>
+      fixture_with_tabs(f, params, with_opener(value))
     "chat" => fixture_with_tabs(f, params, value)
     "stationNet" => {
       let address = text(Some(Json::object(params)), "station")
@@ -644,6 +926,16 @@ pub fn fixture_file_peek(path : String) -> Json {
 }
 
 ///|
+/// What the made-up station says of one message of a chat a link names (GET /threads/:id/entries).
+pub fn fixture_message_peek() -> Json {
+  {
+    "author": "林小满",
+    "text": "列表按天分组做好了，今天和昨天之外的日子都写日期。",
+    "time": { "at": { "at": 0, "ago": "5 分钟前", "full": "10/26 11:00", "until": "", "past": true } },
+  }
+}
+
+///|
 /// What the made-up station says of a web link (station/src/links/preview.ts): the rich chat's benchmark page as a
 /// page, a pull request on GitHub as GitHub says it, anything else nothing to show of it.
 pub fn fixture_link_preview(url : String) -> Json {
@@ -685,16 +977,28 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
     "downloads" => Some(fixture_downloads_topic())
     // the phone's 共享调试 as a request's card for it goes by: its switch on (chat-phone-off: off)
     "adbShare" if f.mode.has_prefix("chat-phone") =>
-      Some({ "sharing": false, "phase": "off", "tunnels": 0, "on": f.mode != "chat-phone-off" })
+      Some({
+        "sharing": false,
+        "phase": "off",
+        "tunnels": 0,
+        "on": f.mode != "chat-phone-off",
+        "personal": [{ "sub": "s", "email": "lin@example.com", "standing": if f.mode == "chat-phone-outside" { "outside" } else { "member" }, "devices": [] }],
+        "grants": if f.mode == "chat-phone-outside" { [{ "id": "p-1", "status": "pending", "sub": "s", "join": true }] } else { [] },
+      })
     // what a web link in a message is, as the link's station says it (the core's `linkPreview`: peeks.mbt)
     "linkPreview" => Some(fixture_link_preview(text(Some(Json::object(params)), "url")))
     // what a file a message names is, as the station reads it under its agent's working directory (peeks.mbt)
     "filePeek" => Some(fixture_file_peek(text(Some(Json::object(params)), "path")))
+    // one message of a chat a link names, as its station reads it (peeks.mbt)
+    "messagePeek" => Some(fixture_message_peek())
     // what is written, as the core's composers keep it (compose_fixture.mbt): its files up at once
     "composer" => Some(fix_compose_view(f, text(Some(Json::object(params)), "key")))
-    // signed in with no workspace yet (landing.mbt): landing, landing-invited (an invitation waiting), blocked (the
-    // account not let into this app)
-    "workspaces" if f.mode == "landing" || f.mode == "landing-invited" || f.mode == "blocked" => {
+    // signed in with no workspace yet: landing, landing-invited (an invitation waiting), blocked (the
+    // account not let into this app), landing-code (still.fail cloud asking for an invite code to make one)
+    "workspaces" if f.mode == "landing" ||
+      f.mode == "landing-invited" ||
+      f.mode == "blocked" ||
+      f.mode == "landing-code" => {
       let o : Map[String, Json] = {
         "account": account,
         "workspaces": [],
@@ -739,11 +1043,14 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         "appearance": Json::string(f.appearance),
         "windowZoom": Json::string(f.window_zoom),
         "motion": Json::string(f.motion),
+        "haptics": Json::string(f.haptics),
+        "appUpdate": Json::string(f.app_update),
         "shareLook": if f.share_look == "" { Json::null() } else { Json::string(f.share_look) },
         "fonts": fixture_fonts(f.fonts),
         "faces": fixture_faces(f.fonts),
         "keys": fixture_keys(f.keys),
-        "keymap": fixture_keymap(f.keys),
+        "sendKey": if f.send_key == "" { Json::null() } else { Json::string(f.send_key) },
+        "keymap": fixture_keymap(f.keys, send_key=f.send_key),
         // the rail as the core says it (rail.ts railView), none kept: its default
         "railView": match fixture_kept("railView", {}, None) {
           Some(Ok((v, _))) => v
@@ -761,7 +1068,7 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
     "job" | "previewLoad" => fixture_service_topic(f, name, params)
     "shareIn" => fixture_share_topic(params)
     "imageNear" => fixture_image_near(params)
-    // (待处理 open, MBA offline: decide_fixture.mbt)
+    // (待处理 open, Maple offline: decide_fixture.mbt)
     "chats" if f.mode == "home-attention" => fixture_chats(f, params).map(fn(v) { fix_with_trouble(v, params) })
     "chats" if f.mode == "home-syncing" => fixture_chats(f, params).map(fix_with_syncing)
     "chats" => fixture_chats(f, params)
@@ -781,10 +1088,18 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         },
         "others": if f.workspace == "ws1" { "done" } else { "alert" },
         // what the badge counts, as the core says it (the prefs' badgeKinds, or their defaults)
-        "badgeKinds": { "on": true, "wait": true, "failed": true, "done": false, "message": false, "services": true },
+        "badgeKinds": { "on": true, "wait": true, "failed": true, "done": true, "message": true, "services": true },
+      })
+    // (the workspaces read slowly, the device's data not opened: with MBUI_HOLD=workspaces, the splash saying so)
+    "status" if f.mode == "reading-slow" =>
+      Some({
+        "state": "trouble",
+        "text": "本机数据无法打开，只能从网络读取 · 共 4 项 · 172 KB/s",
+        "items": [],
+        "lines": ["本机数据无法打开，只能从网络读取"],
       })
     "status" => Some({ "items": [] })
-    // what the last update brought (home_news.mbt): said on MBUI_FIXTURE=home-news only
+    // what the last update brought: said on MBUI_FIXTURE=home-news only
     "changelog" if f.mode == "home-news" =>
       Some({
         "build": 1310,
@@ -802,10 +1117,18 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
       Some({ "title": "共享调试", "line": "仅安卓 app 支持共享调试", "sharing": false, "lendable": false })
     "screenCard" | "adbCard" => fixture_link_card(name, params)
     // (a chat's agent's run settings, a settings page: the settings' own)
-    "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" || f.mode == "settings-run-accounts" =>
+    "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" || f.mode == "settings-run-accounts" || f.mode == "settings-run-runtime" =>
       @settings.fixture_topic(f.mode, name, params)
     "pick" if params.get("of") is Some(String(o)) && o.has_prefix("session:") => Some(fix_session_pick())
+    "presets" =>
+      if new_fix.presets_late && !text(Some(Json::object(params)), "station").has_suffix("st2") {
+        None
+      } else {
+        Some(fix_presets_of(text(Some(Json::object(params)), "station")))
+      }
     "newChat" | "pick" => fixture_new_topic(f, name)
+    // none left up long, as the core answers it (the first page waits for it); decide_fixture.mbt's modes say theirs
+    "longJobs" if !decide_mode(f.mode) => Some({ "groups": [], "lit": false, "ids": [] })
     _ =>
       match decide_fixture_topic(f, name, params) {
         Some(v) => v
@@ -860,8 +1183,8 @@ pub fn fixture_stations_way(v : Json?) -> Json? {
 
 ///|
 /// `base` answering `ms` late, as a phone's core across its thread does: each call's answer and each topic's first value
-/// (src/sffilm's MBUI_CORE_MS: what shows meanwhile filmed too). What is due comes as the fixture is next read
-/// (fix_later).
+/// (src/sffilm's MBUI_CORE_MS: what shows meanwhile filmed too). What is due comes at its moment, told then as the
+/// made-up core's change (fix_later), what reads it reading it anew.
 pub fn round_trip(base : Source, ms : Double) -> Source {
   round_trip_by(base, fn() { ms })
 }
@@ -874,11 +1197,13 @@ pub fn round_trip_by(base : Source, ms : () -> Double) -> Source {
   {
     ..base,
     call: fn(name, params, done) { (base.call)(name, params, fn(r) { fix_later(ms(), fn() { done(r) }) }) },
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      @settings.fixture_followed()
+      let t = base.topic(name, params).get().snapshot()
       let k = name + Json::object(params).stringify()
-      // (its first value come late, as the clock goes: followed as it is read, @sfbase.topic_as_read)
-      @sfbase.topic_as_read(name, params, match read.get(k) {
+      // (its first value come late: set at its moment and told then (fix_later), what reads it following the made-up
+      // core's changes as it reads it (fixture_followed); nothing set as it is read)
+      match read.get(k) {
         Some(true) => t
         Some(false) => { value: None, error: None, version: -1 }
         None => {
@@ -886,7 +1211,7 @@ pub fn round_trip_by(base : Source, ms : () -> Double) -> Source {
           fix_later(ms(), fn() { read[k] = true })
           { value: None, error: None, version: -1 }
         }
-      })
+      }
     },
   }
 }
@@ -897,11 +1222,27 @@ pub fn round_trip_by(base : Source, ms : () -> Double) -> Source {
 pub fn held_topics(base : Source, held : Array[String]) -> Source {
   {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if held.contains(name) {
-        @sfbase.topic_as_read(name, params, { value: None, error: None, version: -1 })
+        { value: None, error: None, version: -1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
+      }
+    },
+  }
+}
+
+///|
+/// `base` with the topics named in `failed` failing to be read, the core saying why as `why` (src/sffilm's MBUI_FAILED):
+/// what shows when reading them fails, filmed.
+pub fn failed_topics(base : Source, failed : Array[String], why : String) -> Source {
+  {
+    ..base,
+    topic_read: fn(name, params) {
+      if failed.contains(name) {
+        { value: None, error: Some({ "message": Json::string(why) }), version: 1 }
+      } else {
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -911,6 +1252,8 @@ pub fn held_topics(base : Source, held : Array[String]) -> Source {
 /// A source of made-up chats (see the top of this file for `mode`).
 pub fn fixture(mode : String) -> Source {
   fixture_answers.clear()
+  paged_days.val = None
+  paged_rows.clear()
   fixture_preview(mode)
   let f : Fixture = {
     mode: if mode == "" { "home" } else { mode },
@@ -922,7 +1265,12 @@ pub fn fixture(mode : String) -> Source {
     },
     motion: "",
     window_zoom: "",
+    haptics: "",
+    app_update: "",
+    send_key: "",
     archived: {},
+    hidden: {},
+    muted: {},
     filters: {},
     fonts: if mode == "settings-fonts-coming" { { "ui": "noto-sans-sc" } } else { {} },
     fonts_fetched: {},
@@ -933,11 +1281,16 @@ pub fn fixture(mode : String) -> Source {
     chat_tabs: fixture_chat_tabs(mode),
     tabs_shown: fixture_tabs_shown(mode),
     sidebars: {},
-    share_look: match mode {
-      "share-card-poster" => "poster"
-      "share-card-receipt" => "receipt"
-      "share-card-terminal" => "terminal"
-      _ => ""
+    share_look: if mode.has_prefix("share-card-") && mode != "share-card-dark" {
+      // (share-card-<key>-coming, -failed: its files of the looks on their way, not had)
+      let look = mode.unsafe_substring(start="share-card-".length(), end=mode.length())
+      if look.has_suffix("-coming") || look.has_suffix("-failed") {
+        look.unsafe_substring(start=0, end=look.length() - "-coming".length())
+      } else {
+        look
+      }
+    } else {
+      ""
     },
   }
   if f.mode == "drive-motion" {
@@ -964,7 +1317,7 @@ pub fn fixture(mode : String) -> Source {
   }
   if f.mode == "home-motion" {
     // the list changing on its own, a step every 1.6 s from MBUI_MOTION_AT ms (2000) after it starts: rows moving,
-    // coming, going (ListMotion.kt), for the recordings of the Home rows' motion
+    // coming, going, for the recordings of the Home rows' motion
     let at = {
       let w = @ui.env("MBUI_MOTION_AT")
       let mut v = 0
@@ -1012,8 +1365,21 @@ pub fn fixture(mode : String) -> Source {
       }
       None => ()
     }
+    // a file of the share card's looks held where a test holds them (fixture_looks_held)
+    if name == "fonts.share" && fixture_looks_held.val is Some(held) {
+      held.push((text(Some(params), "file"), done))
+      return
+    }
+    // (share-card-<key>-coming: never answered; -failed: not had)
+    if name == "fonts.share" && f.mode.has_prefix("share-card-") && f.mode.has_suffix("-coming") {
+      return
+    }
+    if name == "fonts.share" && f.mode.has_prefix("share-card-") && f.mode.has_suffix("-failed") {
+      done(Err({ "code": "fonts", "message": "下载返回 404" }))
+      return
+    }
     // the faces' files (fonts_fixture.mbt)
-    match fixture_fonts_read(f, name) {
+    match fixture_fonts_read(f, name, params~) {
       Some(r) => {
         done(r)
         return
@@ -1039,11 +1405,18 @@ pub fn fixture(mode : String) -> Source {
     }
   }
   {
-    topic: fn(name, params) { fixture_topic(f, name, params) },
+    topic_read: fn(name, params) { fixture_topic(f, name, params) },
+    topic_key: @sfbase.exact_topic_key,
+    topic_scope: None,
+    topic_alive: fn() { true },
+    topic_lease_own: None,
     call: fn(name, params, done) {
-      // (answered at once, as a core's answer comes from outside: what it changes of what is no signal taken so)
+      // (answered at once, as a core's answer comes from outside: what it changes of what is no signal taken so; but one
+      // whose answer changes only signals, as the core's is taken as it comes, sfbase's calls_said)
       let done = fn(r) {
-        @ui.came_from_outside()
+        if !@sfbase.call_said(name) {
+          @ui.came_from_outside()
+        }
         done(r)
       }
       match fixture_kept(name, params, None) {
@@ -1052,6 +1425,11 @@ pub fn fixture(mode : String) -> Source {
           return
         }
         None => ()
+      }
+      // a workspace asked to be made, still.fail cloud wanting an invite code first (landing-code)
+      if name == "workspace.create" && f.mode == "landing-code" && text(Some(params), "invite_code") == "" {
+        done(Err({ "code": "invite_code_required", "message": "invite code required" }))
+        return
       }
       // asked back (a toast's 撤销, the archive's 还原): in the lists again, as well as out of the archive
       if name == "chat.archive" && field(Some(params), "archived") is Some(False) {
@@ -1073,6 +1451,31 @@ pub fn fixture(mode : String) -> Source {
         }
         None => ()
       }
+      // a ```mermaid block's chart, as the core makes it (its code a box's words: what the core's mermaid.ts makes of it
+      // is the core's to test) and mermaid as the app gives it the core
+      if name == "mermaid.load" {
+        done(Ok(Json::object({})))
+        return
+      }
+      if name == "mermaid.chart" {
+        let code = text(Some(params), "code").replace_all(old="&", new="&amp;").replace_all(old="<", new="&lt;")
+        done(
+          Ok({
+            "svg": Json::string("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 320 160\"><rect width=\"320\" height=\"160\" fill=\"#ffffff\"/>" +
+            "<text x=\"16\" y=\"80\">" + code + "</text></svg>"),
+            "width": ToJson::to_json(320.0),
+            "height": ToJson::to_json(160.0),
+          }),
+        )
+        return
+      }
+      if name == "file.peek" {
+        match fixture_file_peek(text(Some(params), "path")) {
+          Object(_) as found => done(Ok(found))
+          _ => done(Err({ "code": "not_found", "message": "找不到文件" }))
+        }
+        return
+      }
       // the faces' files (fonts_fixture.mbt)
       if fixture_fonts_call(f, name, params, done) {
         return
@@ -1086,10 +1489,31 @@ pub fn fixture(mode : String) -> Source {
         None => ()
       }
       match name {
+        "session.cancelRetry" => {
+          if f.mode == "chat-overload-after" {
+            f.step += 1
+            f.changed()
+          }
+          done(Ok(Json::object({})))
+        }
         "chat.archive" => {
           let session = text(Some(params), "session")
           f.archived[session.view(start_offset=2).to_owned()] = true
           f.changed()
+          done(Ok(Json::object({})))
+        }
+        "chat.hide" => {
+          if f.mode == "home-hide" && field(Some(params), "thread") is Some(Number(17.0, ..)) {
+            f.hidden["c1"] = flag(Some(params), "hidden")
+            f.changed()
+          }
+          done(Ok(Json::object({})))
+        }
+        "chat.mute" => {
+          if f.mode == "home-hide" && field(Some(params), "thread") is Some(Number(17.0, ..)) {
+            f.muted["c1"] = flag(Some(params), "muted")
+            f.changed()
+          }
           done(Ok(Json::object({})))
         }
         // a visualization's widget kept nothing yet; what it keeps is taken (viz.mbt)
@@ -1102,6 +1526,34 @@ pub fn fixture(mode : String) -> Source {
         }
         // a screen's preview's frame taken (chat-screens): the fixture sends no other
         "screen.ack" => done(Ok(Json::object({})))
+        // what a simulator's 日志 and 重启 App read (screen-simulator)
+        "screen.logs" => {
+          let line = fn(at : String, level : String, words : String) -> Json {
+            { "at": "2026-11-02 " + at + ".000000+0800", "level": Json::string(level), "app": "Demo", "text": Json::string(words) }
+          }
+          let after = if params is Object(o) && o.get("after") is Some(Number(n, ..)) { n } else { 0.0 }
+          done(Ok(if after > 0.0 {
+            { "next": 3.0, "lines": [] }
+          } else {
+            {
+              "next": 3.0,
+              "lines": [
+                line("13:23:09", "Default", "Loaded 12 workouts"),
+                line("13:23:10", "Debug", "HealthKit authorized: true"),
+                line("13:23:11", "Error", "Sync failed: The network connection was lost."),
+              ],
+            }
+          }))
+        }
+        "screen.apps" =>
+          done(Ok({
+            "apps": [
+              { "id": "fail.still.demo", "name": "Demo", "running": true },
+              { "id": "fail.still.other", "name": "Other", "running": false },
+            ],
+          }))
+        "screen.relaunch" => done(Ok(Json::object({})))
+        "screen.settings" | "screen.setSetting" => done(Ok({ "appearance": "light", "textSize": "large" }))
         "chat.tabs.open" | "chat.tabs.close" | "chat.tabs.front" | "chat.tabs.clear" =>
           done(fixture_tabs_call(f, name, params))
         "decision.show" => done(Ok(Json::null()))
@@ -1131,6 +1583,21 @@ pub fn fixture(mode : String) -> Source {
           match field(Some(params), "motion") {
             Some(String(m)) => f.motion = m
             Some(Null) => f.motion = ""
+            _ => ()
+          }
+          match field(Some(params), "haptics") {
+            Some(String(h)) => f.haptics = h
+            Some(Null) => f.haptics = ""
+            _ => ()
+          }
+          match field(Some(params), "appUpdate") {
+            Some(String(u)) => f.app_update = u
+            Some(Null) => f.app_update = ""
+            _ => ()
+          }
+          match field(Some(params), "sendKey") {
+            Some(String(k)) => f.send_key = k
+            Some(Null) => f.send_key = ""
             _ => ()
           }
           match field(Some(params), "listFilter") {
@@ -1206,7 +1673,7 @@ pub fn fixture(mode : String) -> Source {
       fixture_fetch(name, params, done)
     },
     stream: fn(name, params, _bytes, on_value, done) {
-      // a player's part read (preview.mbt stream_part): as read_bytes answers it, its bytes in one piece
+      // a player's part read: as read_bytes answers it, its bytes in one piece
       if name == "station.file.part" || name == "drive.read" {
         read_bytes(name, params, fn(r) {
           match r {
@@ -1231,6 +1698,7 @@ pub fn fixture(mode : String) -> Source {
     },
     cancel: fn(_) {  },
     waits: fn(_, _) { false },
+    generation: fn(_, _) { (0, true) },
     call_bytes: fn(name, params, bytes, done) {
       match fixture_kept(name, params, Some(bytes)) {
         Some(r) => {
@@ -1259,7 +1727,11 @@ pub fn fixture(mode : String) -> Source {
     draft_picture: fn(_, _) { "!" },
     images: @sfbase.ChatImages::new(),
     now: fn() { 0.0 },
-    leave: fn(_, _) {  },
+    leave: fn(_, _, __reason) {
+      if __reason is @sfbase.TopicLeave::Owned(__stop) { __stop(); return }
+      },
+    release: fn(_, _) {  },
+    refresh: fn(_, _) {  },
     read_only: false,
   }
 }
@@ -1336,7 +1808,7 @@ pub fn fixture_kept(name : String, params : Json, bytes : Bytes?) -> Result[(Jso
 
 ///|
 /// The card shared of the agents at work (the core's `fleet` view, views/fleet.ts), as the made-up workspace has it:
-/// its one Claude subscription's tokens, Studio's one chat at work; the card to share's (share-card, share-card-…) three
+/// its one Claude subscription's tokens, Willow's one chat at work; the card to share's (share-card, share-card-…) three
 /// kinds of subscription (six Claude accounts' 2.5 亿 tokens, two ChatGPT's, two OpenCode Go's: 3.1 亿 in all, as the
 /// week's input tokens say), nine chats at work on three stations, and their week.
 pub fn fixture_fleet(f : Fixture) -> Json {
@@ -1360,6 +1832,7 @@ pub fn fixture_fleet(f : Fixture) -> Json {
       "chats": 1,
       "chatsText": "1 个对话正在运行",
       "where": "今天用了 1 台设备",
+      "devices": 1,
     }
   }
   // each day's chats archived (57 in all, 12 today), as a share of the most on a day
@@ -1412,6 +1885,8 @@ pub fn fixture_fleet(f : Fixture) -> Json {
     "chats": 9,
     "chatsText": "9 个对话正在运行",
     "where": "今天用了 3 台设备",
+    "devices": 3,
+    "tasks": 312,
     "tasksText": "近 7 天 agent 跨设备执行了 312 个任务",
     "tasksPer": "平均每个对话 5.2 个",
     "today": {

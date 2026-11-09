@@ -1,4 +1,4 @@
-// A station's files as they are browsed on this device (docs/drive.md "Clients"): the core's part of drive-browse.ts's
+// A station's files as they are browsed on this device: the core's part of drive-browse.ts's
 // `Browsing` — the prefs it keeps and reads, the folders held, the workspace's stations with a drive — and the topics and
 // calls it answers. A client draws what it is told and does what a call answers (another folder shown, an entry
 // opened…).
@@ -17,7 +17,7 @@ import type { Inner } from "../core.ts";
 import { handlers } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
 import type { Owner } from "../core/routing.ts";
-import { kindOf } from "../drive.ts";
+import { driveCount, kindOf } from "../drive.ts";
 import { Browsing, type Named } from "../drive-browse.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
@@ -39,6 +39,7 @@ function browsingOf(inner: Inner): Browsing {
   if (b) return b;
   b = new Browsing({
     prefs: () => inner.data.shared({ topic: "prefs" }),
+    countText: driveCount,
     collate: (names) => inner.host.collate?.(names) ?? null,
     setPrefs: (patch) => prefs.set(inner.data, patch, false, inner.host.nowMs()),
     // A folder's entries as its station said them (held), each with what opens it.
@@ -92,9 +93,4 @@ function run(inner: Inner, c: Of): Effect.Effect<unknown, CoreError> {
 export function install(inner: Inner): void {
   handlers.browse = (core, call) => run(core, call as Of);
   inner.router.owners.push(owner(inner));
-  // A folder read again changes what the places that show it show; the prefs, the order and the tabs.
-  inner.data.onChange((topic) => {
-    if (topic.topic === "drive") inner.store.invalidateAll((x) => x.topic === "driveBrowse" && x.station === topic.station && x.root === topic.root);
-    else if (topic.topic === "prefs" || topic.topic === "*") inner.store.invalidateAll((x) => x.topic === "driveBrowse" || x.topic === "filesTabs");
-  });
 }

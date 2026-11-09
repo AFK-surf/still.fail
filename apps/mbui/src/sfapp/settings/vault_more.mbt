@@ -122,6 +122,17 @@ pub fn vault_act(
 pub let recovery_words : Map[String, Array[String]] = Map([])
 
 ///|
+/// recovery_words changed (given, written down): what shows them reads `recovery_words_turned`, so that a page kept
+/// across frames is built again as they come or go (they are no signal of their own: 已抄写 left them up until
+/// something else built the page, a minute on, as the end-to-end flow on Android found).
+pub let recovery_words_turned : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+pub fn recovery_words_changed() -> Unit {
+  recovery_words_turned.set(recovery_words_turned.untracked() + 1)
+}
+
+///|
 /// What `vault.open` gave of the item on its page (by item), while the page is up; whether it is being opened.
 priv struct Opened {
   plain : @sf.LiveMap[String, Json]
@@ -217,7 +228,7 @@ pub(all) struct VaultEditing {
 pub let vault_serial : Ref[Int] = Ref(0)
 
 ///|
-/// What `vault.putItem` is given for an item (Vault.tsx putOf): the vault, the item's id where it is one already, what
+/// What `vault.putItem` is given for an item: the vault, the item's id where it is one already, what
 /// it holds (`words`: its fields' words by name, as typed), and, where agents may ask for it, how (`mode`, its hosts,
 /// its variable) and its longest grant (`lasts`: "default" its vault's).
 pub fn vault_put_params(
@@ -291,7 +302,7 @@ pub fn vault_hosts(words : Map[String, String]) -> Array[String] {
 }
 
 ///|
-/// Whether an item's words can be saved (Vault.tsx formProblem): its name, what its kind needs, and the hosts where a
+/// Whether an item's words can be saved: its name, what its kind needs, and the hosts where a
 /// proxy gives it; the problem's name, or "" none.
 pub fn vault_problem(k : String, words : Map[String, String], agent : Bool, mode : String) -> String {
   let got = fn(f : String) { words.get(f).unwrap_or("").trim(chars=" \n").to_owned() }

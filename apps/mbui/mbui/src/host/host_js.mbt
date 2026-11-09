@@ -24,6 +24,9 @@ extern "js" fn js_request_frame() -> Unit =
 extern "js" fn js_wake_after(ms : Double) -> Unit =
   #|(ms) => globalThis.__mbhost && globalThis.__mbhost.wakeAfter(ms)
 
+extern "js" fn js_frames_paced(hz : Double) -> Unit =
+  #|(hz) => globalThis.__mbhost && globalThis.__mbhost.framesPaced && globalThis.__mbhost.framesPaced(hz)
+
 extern "js" fn js_font_metrics(
   size : Double,
   weight : Int,
@@ -148,6 +151,10 @@ fn set_window_key(_f : FuncRef[(Int, Int) -> Int]) -> Unit {
 }
 
 ///|
+extern "js" fn wheel_kept(kept : Bool) -> Unit =
+  #|(k) => { if (globalThis.__mbhost) globalThis.__mbhost.wheelKept = k }
+
+///|
 fn run(
   title : String,
   frame : FuncRef[(Double, Double, Double, Double) -> Unit],
@@ -213,6 +220,13 @@ fn platform() -> Int {
 ///|
 fn request_frame() -> Unit {
   js_request_frame()
+}
+
+///|
+/// The frame asked for what moves on by the clock needs only `hz` frames a second (@hostapi.frames_paced): a browser's
+/// host that says nothing of it draws the next animation frame.
+fn frames_paced(hz : Double) -> Unit {
+  js_frames_paced(hz)
 }
 
 ///|
@@ -315,6 +329,22 @@ fn present(
   b : Double,
 ) -> Unit {
   js_present(buf, count, r, g, b)
+}
+
+///|
+/// (web/host.js keeps no groups: a frame's instances are all written)
+fn groups_here() -> Bool {
+  false
+}
+
+///|
+fn group_set(_id : Int, _inst : FixedArray[Double], _moves : FixedArray[Double], _n : Int) -> Unit {
+  ()
+}
+
+///|
+fn group_drop(_id : Int) -> Unit {
+  ()
 }
 
 ///|
@@ -464,6 +494,12 @@ fn perf_where() -> String {
 }
 
 ///|
+fn perf_open(go : Bool) -> Bool {
+  ignore(go)
+  false
+}
+
+///|
 fn perf_size() -> Double {
   0.0
 }
@@ -550,9 +586,14 @@ fn share(text : String, name : String, mime : String, data : Bytes) -> Bool {
 }
 
 ///|
+/// What the page was given to share (its /share, web/src/mbui/share.ts `__mbshare`), taken once: "" for none.
 fn shared_in() -> String {
-  ""
+  js_shared_in()
 }
+
+///|
+extern "js" fn js_shared_in() -> String =
+  #|() => { const s = globalThis.__mbshare; return (s && s.take && s.take()) || "" }
 
 ///|
 fn shared_in_file(i : Int) -> Bytes {
@@ -599,12 +640,15 @@ extern "js" fn js_post(channel : String, json : String) -> Unit =
   #|(c, j) => { const H = globalThis.__mbhost; if (H && H.post) H.post(c, j) }
 
 ///|
-/// A scripted run's input given to the host (see host_native.mbt): the browser has none of these paths.
+/// A scripted run's input given to the host (see host_native.mbt): the browser has only the GL context's (10, 11).
 fn drive(kind : Int, text : String) -> Bool {
-  ignore(kind)
   ignore(text)
-  false
+  js_drive(kind)
 }
+
+///|
+extern "js" fn js_drive(kind : Int) -> Bool =
+  #|(k) => globalThis.__mbhost.drive(k)
 
 ///|
 extern "js" fn js_image_load(src : String, max_px : Int) -> Int =
@@ -722,6 +766,28 @@ fn pw_out(_id : Int) -> String {
 
 ///|
 fn pw_end(_id : Int) -> Unit {
+
+}
+
+// The system's autofill (autofill.mbt): a page's is the browser's own.
+
+///|
+fn af_able() -> Int {
+  0
+}
+
+///|
+fn af_ask(_host : String) -> Int {
+  0
+}
+
+///|
+fn af_take() -> String {
+  ""
+}
+
+///|
+fn af_end() -> Unit {
 
 }
 
@@ -1020,8 +1086,8 @@ fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double, more : Bo
 }
 
 ///|
-/// What a view has to say (see host_native.mbt): the browser opens no site (a page cannot answer another's requests
-/// without a service worker of its own), so only what a page's frame posts its host (`{"said":…}`).
+/// What a view has to say (see host_native.mbt): a site's requests where the page has a frame for them (web/host.js),
+/// what a page's frame posts its host (`{"said":…}`).
 fn view_site_next(id : Int) -> String {
   js_view_site_next(id)
 }
@@ -1041,44 +1107,57 @@ extern "js" fn js_view_tell(id : Int, what : Int, text : String) -> Unit =
   #|(i, w, t) => { const H = globalThis.__mbhost; if (H && H.viewTell) H.viewTell(i, w, t) }
 
 ///|
+extern "js" fn js_view_site_body(id : Int, req : Int) -> Bytes =
+  #|(i, r) => globalThis.__mbhost.viewSiteBody(i, r)
+
+///|
 fn view_site_body(id : Int, req : Int) -> Bytes {
-  ignore(id)
-  ignore(req)
-  Bytes::new(0)
+  js_view_site_body(id, req)
 }
+
+///|
+extern "js" fn js_view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit =
+  #|(i, r, s, h) => globalThis.__mbhost.viewSiteHead(i, r, s, h)
 
 ///|
 fn view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit {
-  ignore(id)
-  ignore(req)
-  ignore(status)
-  ignore(headers)
+  js_view_site_head(id, req, status, headers)
 }
+
+///|
+extern "js" fn js_view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit =
+  #|(i, r, d) => globalThis.__mbhost.viewSiteChunk(i, r, d)
 
 ///|
 fn view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit {
-  ignore(id)
-  ignore(req)
-  ignore(data)
+  js_view_site_chunk(id, req, data)
 }
+
+///|
+extern "js" fn js_view_site_end(id : Int, req : Int, error : String) -> Unit =
+  #|(i, r, e) => globalThis.__mbhost.viewSiteEnd(i, r, e)
 
 ///|
 fn view_site_end(id : Int, req : Int, error : String) -> Unit {
-  ignore(id)
-  ignore(req)
-  ignore(error)
+  js_view_site_end(id, req, error)
 }
+
+///|
+extern "js" fn js_view_site_state(id : Int) -> String =
+  #|(i) => globalThis.__mbhost.viewSiteState(i)
 
 ///|
 fn view_site_state(id : Int) -> String {
-  ignore(id)
-  ""
+  js_view_site_state(id)
 }
 
 ///|
+extern "js" fn js_view_site_load(id : Int, path : String) -> Unit =
+  #|(i, p) => globalThis.__mbhost.viewSiteLoad(i, p)
+
+///|
 fn view_site_load(id : Int, path : String) -> Unit {
-  ignore(id)
-  ignore(path)
+  js_view_site_load(id, path)
 }
 
 ///|
@@ -1179,6 +1258,13 @@ fn set_full_screen(on : Bool) -> Unit {
 }
 
 ///|
+/// A browser's page: no window's buttons in it.
+fn window_buttons_down(by : Double, ms : Double) -> Unit {
+  ignore(by)
+  ignore(ms)
+}
+
+///|
 /// A browser's page: its corners square (@hostapi.window_corner).
 fn window_corner() -> Double {
   0.0
@@ -1226,6 +1312,12 @@ fn window_opens() -> Bool {
 
 ///|
 fn window_open(what : String) -> Bool {
+  ignore(what)
+  false
+}
+
+///|
+fn window_front(what : String) -> Bool {
   ignore(what)
   false
 }
@@ -1292,10 +1384,15 @@ fn open_url(url : String) -> Bool {
 }
 
 ///|
-/// The app over another app done (see host_native.mbt): a page never is.
+/// The app over another app done (see host_native.mbt): a page is over another only as the browser extension's
+/// window it shares from (web/src/mbui/share.ts), which goes once its sheet is let go of.
 fn over_done(open_app~ : Bool) -> Unit {
-  ignore(open_app)
+  js_over_done(open_app)
 }
+
+///|
+extern "js" fn js_over_done(open_app : Bool) -> Unit =
+  #|(o) => { const s = globalThis.__mbshare; if (s && s.done) s.done(o) }
 
 ///|
 /// A page in a browser's tab (see host_native.mbt): a tab of its own, as open_url.

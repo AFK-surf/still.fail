@@ -8,8 +8,8 @@ const at = (path: string, query: string | null = null, p: Place | null = place) 
 
 test("old links to the page go to the same page in the cloud", () => {
   const [w, s] = ["https://app.still.fail/w/W1", "https://app.still.fail/w/W1/s/abc"];
-  assert.equal(at("/admin/chats/ember%3Ac-1", "history=k&entry=3"), `${s}/chats/ember%3Ac-1?history=k&entry=3`);
-  assert.equal(at("/admin/chats/ember%3Ac-1"), `${s}/chats/ember%3Ac-1`);
+  assert.equal(at("/admin/chats/chat%3Ac-1", "history=k&entry=3"), `${s}/chats/chat%3Ac-1?history=k&entry=3`);
+  assert.equal(at("/admin/chats/chat%3Ac-1"), `${s}/chats/chat%3Ac-1`);
   assert.equal(at("/admin/services/j1"), `${s}/services/j1`);
   assert.equal(at("/admin/connects/c1"), `${s}/connects/c1`);
   assert.equal(at("/admin/bots/c1"), `${s}/connects/c1`);

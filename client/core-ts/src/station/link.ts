@@ -1,10 +1,11 @@
 // A station's link: its `/admin/api/events` stream, held open for as long as the station is reached, and opened again
-// with backoff when it drops (docs/core-ts.md, rule 6). Every station of every workspace an account reaches has one.
+// with backoff when it drops (rule 6). Every station of every workspace an account reaches has one.
 //
 // This is the way to a station only: when its stream is opened, tried again, or taken over by another that follows
 // something else. What comes on it and what is read as it opens is the sync's (sync.ts), told here as `Told`: a stream
 // opens either afresh (nothing says what the device missed: the station is read again) or going on from where the
 // device was in the station's log of events (cursor.ts: what changed meanwhile is told first).
+import type { Marks } from "./rows-made.ts";
 import { record, said, stationTag } from "../record.ts";
 import { Deferred, Effect, type Fiber } from "effect";
 import type { Inner } from "../core.ts";
@@ -47,9 +48,8 @@ export const logKey = (job: string, lines: number) => `${LOG_KEY}${job}\n${lines
 export const LOGS_KEPT = 40;
 /// The agents' memory on the station as it answered GET /memory last (the `memory` topic), in the link's memory.
 export const MEMORY = "agentMemory";
-/// The programs granted the station's data as it answered GET /outflow/grants last (the `outflowGrants` topic,
-/// docs/data-outflow.md), in the link's memory; `{unsupported: true}` from a station from before.
-export const OUTFLOW = "outflowGrants";
+/// The workspace's presets on the station as it answered GET /presets last (the `presets` topic), in the link's memory.
+export const PRESETS = "presets";
 /// What a web link in a message is, as the station answered GET /link-preview for it last (the `linkPreview` topic), in
 /// the link's memory: the latest few kept (each may carry its page's icon and picture inline).
 export const LINK_PREVIEW_KEY = "linkPreview\n";
@@ -60,6 +60,11 @@ export const LINK_PREVIEWS_KEPT = 30;
 export const FILE_PEEK_KEY = "filePeek\n";
 export const filePeekKey = (key: string, path: string, line: number | null) => `${FILE_PEEK_KEY}${key}\n${path}\n${line ?? ""}`;
 export const FILE_PEEKS_KEPT = 30;
+/// One message of a chat, as the station answered GET /threads/:id/entries for it last (the `messagePeek` topic), in the
+/// link's memory: the latest few kept.
+export const MESSAGE_PEEK_KEY = "messagePeek\n";
+export const messagePeekKey = (thread: number, seq: number) => `${MESSAGE_PEEK_KEY}${thread}\n${seq}`;
+export const MESSAGE_PEEKS_KEPT = 30;
 /// A station's streams carry a keepalive every 25 s; one silent this long is on a link that is gone.
 export const STREAM_IDLE_MS = 40_000;
 /// A stream silent past one keepalive (and a little) may be on a link that is gone.
@@ -77,7 +82,8 @@ export const BRIEF_MAX_MS = 8_000;
 /// The steps in flight and the phase of a session at work, as its stream says them.
 /// `tasks` and `plan`: what it has going in the background (each with since when, on this device's clock) and its
 /// checklist, as its station last said them (none from a station from before it says them).
-export type LiveView = { steps: unknown[]; phase: unknown | null; rate: number | null; usage: unknown; loaded: boolean; tasks?: unknown[]; plan?: unknown[] };
+/// `failed`: why its transcript's last read failed (it is read again while shown), till one answers.
+export type LiveView = { steps: unknown[]; phase: unknown | null; rate: number | null; usage: unknown; loaded: boolean; failed?: string; tasks?: unknown[]; plan?: unknown[] };
 
 /// Why a station taken for down is not reached, as far as the device can tell: `network`, still.fail cloud is not
 /// reached either (the device's own network, most likely); `station`, the cloud says it is not online; `unreached`, the
@@ -150,8 +156,28 @@ export class Link {
   readonly memory: Memory;
   /// Whether the usage held is as the station has it: read since it last said its usage changed.
   usageCurrent = false;
+  /// Since the usage held was read: when the earliest call the station recorded since was made, as it said (what is
+  /// read again of it, from that day on); null where it said a change without when (all of it), none where it said none.
+  usageFrom: number | null | undefined = undefined;
+  /// Whether the station leaves its sidebar rows' changes to the device (`rows=1`, rows-after.ts: it said so as its
+  /// stream opened): what only it can say of them is read, the rows that change alone (`rowsWanted`).
+  makesRows = false;
+  /// What the station keeps beside the summaries that the sidebar is made of here (rows-made.ts): null while it is not
+  /// read, or the station answers its sidebar made (one from before).
+  marks: Marks | null = null;
+  /// Whether its sidebar is made of the chat list the station makes once for everyone (`shared`, chat-row.ts), as its
+  /// stream said; and that list as read and told since, by row id (null till read).
+  shared = false;
+  sharedRows: Map<string, Record<string, any>> | null = null;
+  /// The marks to read again: those of some chats, or all of them (`whole`).
+  readonly marksWanted = { sessions: new Set<string>(), threads: new Set<number>(), whole: false };
+  readonly rowsWanted = { sessions: new Set<string>(), threads: new Set<number>() };
   /// Whether the archived chats held are as the station has them: read since anything could have changed them.
   archivedCurrent = false;
+  /// The archive's pages are being read: what it holds is not all of it yet.
+  archiveReading = false;
+  /// Why its read stopped short, until it is read again.
+  archiveFailed: string | null = null;
   /// When the station said it has no POST /changed/<list> (one from before): its lists are read whole a while.
   changesRefused: number | null = null;
   /// When the station said it has no POST /batch (one from before): its history is read a request a read a while.
@@ -159,10 +185,14 @@ export class Link {
   /// What is left of the sweep of its history under way (#history), and what the sweep asked (each read once).
   history: HistoryRead[] = [];
   readonly historyAsked = new Set<string>();
+  /// Which preparation of a history sweep is newest (an older one may still be yielding).
+  historySweep = 0;
   /// Catching up on what changed while the device was away (sync.ts `#catching`): from its stream's opening after it
   /// was, until the threads it found behind have their latest on the device. Before it has looked (`tallied`), what is
   /// behind is not known; null once caught up, or while it is not reached.
   catching: { tallied: boolean; behind: Set<number> } | null = null;
+  /// Its last host reading is not one this core can read (a station newer than the app).
+  hostUnreadable = false;
 
   constructor(address: string, addr: StationAddr, scoped: Scoped, memory: Memory = new Memory()) {
     this.address = address;
@@ -347,7 +377,7 @@ export class Links {
       now: () => core.host.nowMs(),
       later: (ms, run) => void core.runner.fork(Effect.andThen(laterSleep(ms), Effect.sync(run)), scoped),
     };
-    const link = new Link(address, addr, scoped, new Memory(keeper, [[LOG_KEY, LOGS_KEPT], [LINK_PREVIEW_KEY, LINK_PREVIEWS_KEPT], [FILE_PEEK_KEY, FILE_PEEKS_KEPT]]));
+    const link = new Link(address, addr, scoped, new Memory(keeper, [[LOG_KEY, LOGS_KEPT], [LINK_PREVIEW_KEY, LINK_PREVIEWS_KEPT], [FILE_PEEK_KEY, FILE_PEEKS_KEPT], [MESSAGE_PEEK_KEY, MESSAGE_PEEKS_KEPT]]));
     this.#links.set(address, link);
     // The last event it told a core before this one, written down with what it told: the first stream asks what came
     // after it, and nothing is read again when the station still has that (the app started again within the hour). Not
@@ -478,8 +508,9 @@ export class Links {
   /// The stream's path for `wants`, each session asked for from the transcript items held; `since`: the last event the
   /// stream it takes over from gave (what was told after it comes first, else `missed`).
   #path(address: string, wants: EventsFor, since: string | null = null): string {
-    // The sessions at work followed by the station itself, those named ignored where it does (FOLLOWS).
-    const query: string[] = ["running=1"];
+    // The sessions at work followed by the station itself, those named ignored where it does (FOLLOWS); a thread's
+    // summary made here from what is said in it (thread-after.ts), not told; and the sidebar's rows (rows-after.ts).
+    const query: string[] = ["running=1", "views=1", "rows=1", "shared=1"];
     if (wants.host) query.push("host=1");
     for (const key of wants.live) {
       const held = this.#core.data.logSpan("transcript", address, key);
@@ -489,7 +520,7 @@ export class Links {
     // Their transcript entries in brief: what a history shows before a step is opened (`detail` reads it whole then).
     if (wants.live.length > 0) query.push("brief=1");
     for (const [job, lines] of wants.logs) query.push(`job=${encode(job)}&lines=${lines}`);
-    // The logins' terminals shown (docs/remote-login.md).
+    // The logins' terminals shown.
     for (const id of wants.logins ?? []) query.push(`login=${encode(id)}`);
     if (since !== null) query.push(`since=${encode(since)}`);
     return `/events?${query.join("&")}`;
@@ -546,7 +577,20 @@ export class Links {
               }),
               () => Effect.succeed({ dropped: true } as const),
             );
-            const opened = yield* Effect.raceFirst(Effect.result(self.#requests.stream(link.addr, path, span.context)), dropped);
+            // Not answered at all within as long as a stream may stay silent: the way it went is taken for gone (a
+            // station killed and started anew, its connection left open here: every open waited on it for good).
+            const slow = Effect.sleep(STREAM_IDLE_MS).pipe(Effect.as({ slow: true } as const)); // timer: a timeout
+            const opened = yield* Effect.raceAllFirst([Effect.result(self.#requests.stream(link.addr, path, span.context)), dropped, slow]);
+            if ("slow" in opened) {
+              self.#requests.wire.reset?.(link.addr);
+              span.fail();
+              span.end();
+              misses++;
+              const state = reached && misses < MISSES ? "reconnecting" : "offline";
+              const message = t("station.core.streamIdle");
+              self.setLink(address, state === "offline" ? { state, message, cause: self.#cause(address) } : { state, message });
+              return { failed: `open failed: ${t("station.core.streamIdle")}` } as const;
+            }
             if ("dropped" in opened) {
               self.#requests.wire.reset?.(link.addr);
               span.fail();
@@ -637,6 +681,8 @@ export class Links {
                 break;
               }
               if ("idle" in next) {
+                // Silent past its keepalive: the way to it is taken for gone too, not asked again on the same.
+                self.#requests.wire.reset?.(link.addr);
                 why = t("station.core.streamIdle");
                 break;
               }

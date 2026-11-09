@@ -1,0 +1,52 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { overview } from "../src/api/overview.ts";
+import { Store } from "../src/store/store.ts";
+
+test("the overview counts only sessions visible in the viewer's workspace", async () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    const names = ["", "a", "å", "中"];
+    db.exec("BEGIN");
+    for (let n = 0; n < 4003; n++) {
+      const key = `session-${n}`;
+      store.insertSession({ key, connect: names[n % names.length]!, runtime: "claude", profile: "cc",
+        workspace: "/work", token: `token-${n}`, createdAt: n, lastActiveAt: n,
+        ws: n < 2 ? "mine" : n === 2 ? null : "elsewhere" });
+    }
+    db.prepare("UPDATE sessions SET archived_at = 1 WHERE key = 'session-1'").run();
+    db.exec("COMMIT");
+    const hub: any = { processes: () => [], config: () => ({ dataDir: "/" }) };
+    const cloud: any = { state: null };
+    const config = () => ({ connects: names.map((id) => ({ id, workspace: "mine" })) });
+    const viewer = { sub: "s", email: "person@example.test", name: "P", role: "member", workspace: "mine", device: "d", home: false };
+    const get = async (who: typeof viewer) => await overview({ store, hub, cloud, config }, who, "en") as any;
+    const joined = await get(viewer);
+    assert.equal(joined.counts.sessions, 2);
+    assert.deepEqual(joined.connects.map((c: any) => c.sessions), [1, 1, 0, 0]);
+    const home = await get({ ...viewer, home: true });
+    assert.equal(home.counts.sessions, 3);
+    assert.deepEqual(home.connects.map((c: any) => c.sessions), [1, 1, 1, 0]);
+    const empty = await get({ ...viewer, workspace: "absent" });
+    assert.equal(empty.counts.sessions, 0);
+
+    db.exec("UPDATE sessions SET ws='elsewhere' WHERE key='session-0'; UPDATE sessions SET connect='中' WHERE key='session-1'");
+    const moved = await get(viewer);
+    assert.equal(moved.counts.sessions, 1);
+    assert.deepEqual(moved.connects.map((c: any) => c.sessions), [0, 0, 0, 1]);
+    db.exec("DELETE FROM sessions WHERE key='session-1'; UPDATE sessions SET ws='mine' WHERE key='session-2'");
+    const changed = await get(viewer);
+    assert.equal(changed.counts.sessions, 1);
+    assert.deepEqual(changed.connects.map((c: any) => c.sessions), [0, 0, 1, 0]);
+  } finally { store.close(); }
+});
+
+test("a new station has no session counts in either kind of workspace", () => {
+  const store = Store.open(":memory:");
+  try {
+    assert.deepEqual(store.sessionCounts({ workspace: "mine", home: false }), []);
+    assert.deepEqual(store.sessionCounts({ workspace: "mine", home: true }), []);
+    assert.deepEqual(store.sessionCounts(), []);
+  } finally { store.close(); }
+});

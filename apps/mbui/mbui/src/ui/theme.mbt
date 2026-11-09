@@ -1,12 +1,12 @@
 // What the views built under it look like unless they say (SwiftUI's environment, Compose's CompositionLocal, egui's
 // Style): the theme's colours, corners and sizes, and which way words and rows run. The app sets it once (it stays
 // from frame to frame) or for a part of what it builds (Ctx::with_theme, Ctx::with_direction); the widgets read their
-// defaults from it, and what a call says itself still wins. docs/components.md says how the components use it.
+// defaults from it, and what a call says itself still wins. mbui's kit/styles.mbt says how the components use it.
 
 ///|
 /// The theme: colours RRGGBBAA, corners and sizes in logical pixels. Made from one of its kinds (Theme::light, …) and
 /// changed where the app differs (`{ ..Theme::light(), accent: 0x… }`). By default still.fail's (its web and apps'
-/// tokens: the wide screen's white canvas and ember orange, the phone's warm paper); iOS's colours, what mbui had
+/// tokens: the wide screen's white canvas and still.fail orange, the phone's warm paper); iOS's colours, what mbui had
 /// hard-coded, are Theme::ios_light and Theme::ios_dark.
 pub(all) struct Theme {
   /// dark (what draws over it picks its own shades by it)
@@ -228,7 +228,7 @@ pub fn RadiusScale::tailwind() -> RadiusScale {
 }
 
 ///|
-/// still.fail's light theme, the wide screen's (web/ui styles/tokens.css.ts): the white canvas, ink, ember orange.
+/// still.fail's light theme, the wide screen's (web/ui styles/tokens.css.ts): the white canvas, ink, still.fail orange.
 pub fn Theme::light() -> Theme {
   {
     dark: false,
@@ -255,8 +255,8 @@ pub fn Theme::light() -> Theme {
     thumb: 0xFFFFFFFFL,
     radius: 12.0,
     radius_lg: 20.0,
-    // (a field 36 high, 24 in, in its corners: 24 + 18 as a circle reads it, smooth.mbt round_like_out)
-    radius_dialog: round_like_out(42.0),
+    // (a field 36 high, 24 in, in its corners: 24 + 18: capsule_in)
+    radius_dialog: 42.0,
     font: 13.0,
     font_sm: 12.0,
     font_title: 16.0,

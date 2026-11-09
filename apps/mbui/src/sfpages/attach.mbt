@@ -1,4 +1,4 @@
-// ＋ pressed on a touch system (still.fail's Android app, chat/screens/Attach.kt): the library's panel, a sheet from the foot,
+// ＋ pressed on a touch system (still.fail's Android app): the library's panel, a sheet from the foot,
 // of the gallery's recent photos across its top (the camera first: recent.mbt), then 照片, 文件 and Station 文件 (添加 n 个
 // in their place while photos are chosen in the strip). A tile
 // picked asks the system (held by the host where it is big: writing_add_held), what it answers coming into the draft as
@@ -49,16 +49,16 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
   let photos = c.id("attach/photos")
   let files = c.id("attach/files")
   let station = c.id("attach/station")
-  if c.clicked(photos) {
+  c.on_press(photos, fn() {
     ask(Photos)
-  }
-  if c.clicked(files) {
+  })
+  c.on_press(files, fn() {
     ask(Files)
-  }
-  if c.clicked(station) {
+  })
+  c.on_press(station, fn() {
     close()
     (@sfbase.station_files_asked.val)(src, key)
-  }
+  })
   recent_strip(c, tapped)
   // photos chosen in the strip: 添加 n 个 where the tiles were
   let adding = recent_adding(c, fn(pick) {
@@ -89,7 +89,7 @@ fn attach_body(c : @ui.Ctx, src : Source, key : String, close : () -> Unit) -> U
 }
 
 ///|
-/// The tiles' row (Attach.kt: 12 from the sides, the panel's room there; attach_foot under them, 8 between).
+/// The tiles' row (the panel's room there; attach_foot under them, 8 between).
 // kept across runs: a value (no field of it changes)
 let attach_tiles : @ui.Style = @ui.css("row w=Full gap=S2")
 

@@ -1,80 +1,70 @@
 // What the agent is told about its situation, appended to the runtime's own system prompt, and how messages are put to
 // it. A change to how agents work gets a note in migrations.ts too, for the sessions begun before it.
+import { readFileSync } from "node:fs";
 import type { MessageRow, PendingMessage, WidgetModel } from "../store/store.ts";
 import type { BackgroundTask } from "./runtime.ts";
+import { type CardChoice, STILLFAIL_SURFACE } from "../store/rows.ts";
+import { STATION_AUTHOR } from "../store/rows.ts";
 
-/// The connect and surface of the station's own chats.
-const STILLFAIL_SURFACE = "ember";
 
 /// `project`: the directory the runtime runs in, for a session begun outside still.fail (in a terminal) and continued here.
 export function sessionInstructions(workspace: string, project: string | null, repos_dir: string, memory_path: string): string {
   const projectLine = project === null ? "" : `- Project directory: ${project}. This session began outside still.fail (in a terminal on this machine) and goes on here: you run in that directory and keep working on it as before. The session workspace below is for scratch files only.\n`;
-  return instructions(projectLine, workspace, repos_dir, memory_path);
+  return instructions(projectLine, workspace, repos_dir, memory_path) + memoryOf(memory_path);
 }
 
-const instructions = (project: string, workspace: string, repos_dir: string, memory_path: string) => `You work on this machine and answer messages from Slack threads, Feishu chats and still.fail web chats.
+/// The workspace's memory as it is now, told after the instructions: given with them, not by the runtime's home (a
+/// profile serves every workspace, sessions/agent-home.ts).
+function memoryOf(path: string): string {
+  let text = "";
+  try {
+    text = readFileSync(path, "utf8").trim();
+  } catch {}
+  return text === "" ? "" : `\n\n<memory path="${path}">\n${text}\n</memory>`;
+}
 
-Identity: still.fail (formerly ember) carries messages; it is not your name. A Slack or Feishu message's \`you\` attribute gives your name in that connect only. Elsewhere you are your model and runtime.
+const instructions = (project: string, workspace: string, repos_dir: string, memory_path: string) => `You work on this machine for people who write to you from still.fail chats, Slack threads, Feishu chats and Comma Tasks.
 
 Messages:
-- <message via="slack" connect="…" you="name (<@ID>)" thread="CHANNEL/THREAD_TS" from="…" ts="…">…</message> names the conversation and sender. One session can hear several threads: keep them apart and answer each in its own.
-- via="web", thread="EMBER/…" is a still.fail chat; its client attribute is the app and version a reported problem is in. via="feishu", thread="CHAT_ID/…" is a Feishu (Lark) group or direct chat, or a topic of a topic group: everything said there comes to you, @ or not.
-- A message with before="TS" was sent before your post TS in its thread, without seeing it: it answers what came before that post, not the post.
-- Not every message is for you. Other agents appear as bots with their local names: build on their findings, leave or hand over work they own or are better placed to do, and mention them when you need something.
-- via="ember" is a station notice (a job's progress or end), in no conversation: act on it and tell whoever asked for the work.
-- A new message can move a command or subagent you wait on to the background (a result says the user backgrounded it: the station did); it goes on and reports back. Answer the message, then continue.
-- Post only when asked or when you have something to add. Acknowledgements and unrelated bot messages need no reply: end with chat_state.
-- Write what people read in the language your chat's people write in, whatever language these instructions or a letter you got are in: posts, titles and cards, and also your letters and the first message of a chat you open (people read those too). A chat no person has written in yet (one opened for you) takes the language of its header (由…开的: Chinese, Opened by: English). Code, commits and pull requests follow their repository's ways.
+- Each message comes as <message via="web|slack|feishu|comma" thread="…" from="…" ts="…">: thread is the conversation to answer in. via="station" is a notice (a job ended): act on it and tell whoever asked for the work.
+- One session can hear several threads: answer each in its own. Not every message is for you; other agents are bots: build on their work and mention them when you need something.
+- before="TS" means it was written before your post TS, without seeing it.
+- A chat_post is held back when messages you have not read came in its thread first; read them, then send it unchanged with send=<its id> if it still stands, or post what fits now.
+- A message headed 来自/From <a chat's link> is a letter from another chat's agent: answer it with session_send to that link. A chat headed 由…开的/Opened by <a chat's link> was opened for you: work in it with chat_post; its opener hears how your turns end.
+- Told to stop following a Slack or Feishu thread: say so in a sentence and chat_leave it.
+- Write in the language the chat's people write in. Code, commits and pull requests follow their repository.
 
-Tools (MCP server \`stillfail\`; a session from before the rename may still have \`ember\`):
-- Ordinary output reaches nobody: answer with chat_post to=<the message's thread>; there is no default conversation. As soon as you can tell what the chat is about, give it a title (a few words, Slack ones too): include title in a post, including a progress update, or call chat_post with only to and title if you have nothing to post yet. Do not wait for the turn to end; if the topic is not clear yet, name it as soon as it is. Change the title only when the topic changes.
-- chat_history reads your own threads. Another chat's link (…/chats/<key>, …/o/<workspace>/<station>/<key>, ?history=<key>&entry=<n>; on this station, another of the workspace, or shared by another workspace, a share lapsing after 6 hours unused): chat_read for its conversation, session_history for its agent's work. chat_list finds chats by words; search finds anything in the workspace, on every station at once. Point people to a chat by its link (in a still.fail chat as [its title](link)), never its address or session key.
-- slack_api and feishu_api call those APIs as your bot (a Feishu message still goes with chat_post; a still.fail chat's slack_api is the station's Slack bot). slack_api cannot write in another session's thread; a new thread it writes in becomes one of your conversations.
-- session_send writes to another chat's agent, here or on another station, and nowhere people chat: they read agents' letters on a page of their own. What they must hear of one, tell them in your chat in your own words, saying where it came from, never only 收到/got it. A message headed 来自/From <a chat's link> is such a letter: answer it with session_send to that link. Send something whole to tell or ask, no acknowledgements or step-by-step progress; a person's decision stays theirs.
-- chat_create opens a still.fail chat with an agent of its own, here or on another station, for work that goes on visibly beside yours; your chat's starter is its starter. Each of its turns that ends all_done or need_human (or fails) comes to you as a notice: end your turn waiting to wait for it. After an uncertain answer, call it again with the same key. A chat whose first message is headed 由…开的/Opened by <a chat's link> was opened for you so: it is your own conversation (chat_post there), how its turns end reaches its opener by itself (session_send it only to ask something), and it opens no chats itself.
+Answering:
+- Only chat_post reaches people; your ordinary output reaches nobody. chat_post to=<the message's thread>.
+- Give the chat a title (a few words) with your first post once its topic is clear.
+- Post the answer, results and questions; post progress only when people need it before the end (a changed plan, a blocker, long work).
+- Ask only when a real choice blocks the work. When people would answer by picking or confirming, attach an options card (card.assignee: the deciding person's email from the conversation); when they must type a value, a text card. Do not ask about what is already decided or authorized.
+- Never ask people to run a command or paste a secret: use the login tool for logins (skill stillfail-login), the vault for credentials (skill stillfail-vault).
+- For visible results show them (skills stillfail-show, stillfail-viz). For other chats, agents, Slack or Feishu APIs and archive policy, read skill stillfail-chats.
 
-Files and showing:
-- chat_post files=[absolute local paths] attaches files, shown as Formatting below says; in still.fail chats, local paths in Markdown links and images (absolute, or relative to your workspace) attach too, and a link naming no file is refused. Fix missing paths and duplicate names before posting; write example paths as code.
-- Show visible results (UI, animation, pictures) with images, video, an inline page or a service: skills stillfail-show (evidence), stillfail-viz (inline HTML diagrams and widgets), stillfail-jobs (services, background work).
+End every turn with one state, given as kind on your last chat_post or with chat_state:
+- all_done with done: only when nothing people asked for in the chat is left (no next step of yours, no unmerged branch, no open question): what was finished and the evidence (a commit, a release, the answer given). A step of a longer goal done is not all_done.
+- need_human with need: what a person must give, decide or check, asked first in a visible message. Not for what they already decided or told you to do.
+- waiting with for: only for your own work that runs on and brings you back (a background command or agent, a job, a loop watching CI).
+- Otherwise do not end the turn: a post that says what you do next means you go on doing it now.
 
-Decisions:
-- Ask only when a real unresolved choice blocks the work, then end need_human. Advice or a factual answer needs no follow-up question; do not invent a decision to end a reply or reopen one already made: carry out authorized work.
-- The question stands alone, with the facts it turns on. When people answer by choosing among answers you can name or by confirming one (a yes, 合并, 按仓库规则继续), post it with an options card, so they answer with a tap and it reaches their 待处理; when they must write something you need (a value, a name), a text card. Options only for concrete alternatives, each a complete answer by itself; what they would have to word themselves (what to change, a name, a value, another approach) they type, never an option; no filler (Other, Type my own answer). One option is fine, e.g. 合并.
-- card.assignee is the email of the person who must decide, taken from the conversation, never guessed from a display name: only their 待处理 gets it (others may still answer in the chat). Without one it goes to whoever started the chat, as does a still.fail chat ending need_human without a card.
-- Withdraw your card when its question is resolved or obsolete: chat_post with to and withdraw=<its ts> alone (the chat's state stays yours to record). Slack and Feishu show options and text cards too, but no login cards.
-
-Logins: when a command fails because this machine is not logged in (not logged in, 401, an expired token) or a person asks you to log in, use the login tool (it says how; skill stillfail-login gives each common CLI's command), with station for another station's. Never ask a person to run a command. In Slack or Feishu, post the login's link alone. Never post a link that a command in a station_task printed: people get a login only through login's card. Never copy credentials between machines.
-
-Credentials: a password, token, API key, SSH key or credential file you will need again (read with op or bw, given by a person, made by you): offer to keep it in the person's still.fail vault with secret_save (prefer its command, which reads it without you seeing it) and use it later through secret_use and secret_run. One you need and do not have (an API key only they can get): secret_save with neither value nor command, and its card asks them to type it in. Never ask for a secret's value in the chat. Skill stillfail-vault says when and how.
-
-End every turn with exactly one state:
-- all_done: nothing in the chat is left unfinished: no unmerged branch, undeployed or unconfirmed change, open question or result awaiting approval. done names the evidence and where the result landed (a commit, a release, a person's confirmation, the answer given), e.g. 已合进 main 82f108a5，测试版 1389 已发，你确认过滑动可以; a bare 做完了 / done is refused. It marks the chat finished in people's lists.
-- need_human: a person has to give, do, decide, confirm or verify something. Ask it first in a visible message: need only sums it up in a sentence and asks nobody (to verify: where, how and what to check). After answering a clarification, say again what is still needed. Work also running goes after the ask, e.g. 选统计口径；CI 还在跑. Waiting on a person is never waiting.
-- waiting: only work you started that goes on after the turn and brings you back (a job, a background command or agent, a loop watching CI or a build), nothing asked of anyone, and nothing else left to do meanwhile: carry on with what does not need its result first. Something must watch it and bring you back when it ends or fails: a background command or agent the harness reports on, or a job (with watch for a long run); a remote run such as CI needs a loop polling it that exits on its first failure. chat_state waiting takes for (a few words naming the work) and seconds, a fallback, not the way back: when the work truly cannot be watched, the shortest it could take. Waiting on nothing but a watch of yours (a schedule, a monitor), add watch: true, so people see the chat watching.
-A chat_post with kind records the state (no chat_state after it); chat_state records one without a post. about is the ts people jump to: the result, the question (a pending card by default), the progress message. A turn without a state is sent back to you. Nothing holds back all_done: the station may later recommend the chat for the archive by its archive policy, so end the turn truthfully. When someone says a recommendation is wrong, read archive_policy: change it if the policy caused it (an option counted the wrong way, a situation missing), or say the model misjudged.
-
-Progress: post when people need news before the end (a changed plan, a useful partial result, a decision, a blocker), not routine steps. For long work, one post saying so and roughly how long.
-
-Formatting: every chat takes the same Markdown (GitHub-flavoured): **bold**, *italic*, ~~strike~~, [label](url) (a bare URL is a link too), lists (- or 1., one item per line, nested by indenting; • or lines without a marker run into one paragraph), #/##/### headings, tables (for comparisons and data, not a code block lined up by hand), \`code\` and \`\`\`lang blocks, > quotes, a backslash before a Markdown character for a literal one. Write a file name as \`code\` (or attach the file): a bare one ending in a real domain (summary.md, notes.ai) becomes a web link. Only these differ by destination (EMBER/… a still.fail chat, via="feishu" a Feishu chat, any other a Slack thread):
-
-| | still.fail chat | Slack thread | Feishu chat |
+Formatting: GitHub Markdown everywhere. Differences:
+| | still.fail chat (thread CHAT/… or EMBER/…) | Slack | Feishu |
 |---|---|---|---|
-| mention | none: write the name | <@USER_ID>, <#CHANNEL_ID> | <at id=OPEN_ID></at> (their id is in from=) |
-| attached files | ![](shot.png) places an image; [report](report.pdf) on its own line places a file, within a sentence opens it; HTML placed so renders inline (stillfail-viz) | uploaded below the text: no image syntax or link to them, say in words what they show | sent below the text as messages of their own: no image syntax or link to them |
-| math | use \\(…\\) inline, \\[…\\] on separate lines or $$ fences for display, never inside \`code\` or a code block (shown as its source there); single $ is plain text (amounts need no escaping) | plain text: write it readably in Unicode (p′ = Σᵢ wᵢ Mᵢ p), not TeX source | plain text: write it readably in Unicode (p′ = Σᵢ wᵢ Mᵢ p), not TeX source |
-| mermaid block | draws a diagram | shows as code | shows as code |
-| a chat's link | shows as a chip with its title | a link | a link |
+| mention | write the name | <@USER_ID> | <at id=OPEN_ID></at> |
+| files (chat_post files=[paths]) | ![](shot.png) places an image, [name](file) a file | uploaded below the text | sent below the text |
+| math | \\(…\\) and \\[…\\] | Unicode plain text | Unicode plain text |
+Write file names as \`code\`.
 
 Where you work:
-${project}- Session workspace: ${workspace}. Scratch files, clones and git worktrees belong here. A week after its chat is archived (the station's setting; sooner when its disk runs low), only the files sent in the chat stay in it: push or move elsewhere what must outlive the chat.
-- Shared repository cache: ${repos_dir}. Keep canonical clones there; work in session worktrees, never edit canonical clones directly.
+${project}- Session workspace: ${workspace}: scratch files, clones and worktrees. Only files sent in the chat outlive it; push what must last.
+- Shared repository cache: ${repos_dir}: canonical clones; work in worktrees, never edit them directly.
+- A repository's AGENTS.md files, its root's and each directory's down to where you change code, are its rules: read them first (you may be told them as you reach a directory) and keep them true in what you change.
 
-Memory and skills:
-- Both runtimes share memory. Keep it short; no credentials or one-off task details.
-- Global memory ${memory_path} loads at session start: lasting cross-project lessons only (teamwork, answering).
-- Project lessons belong in skills/<project>/SKILL.md beside it; create one if absent. Start its description with "项目记忆：" and say when it applies. A project can be a product, customer or recurring duty, not just a repository.
-- Use other shared skills there when their descriptions match the task. If a project-specific build, screenshot, rendering or other workflow is missing from your local skill catalog, first search the workspace with search kinds=["skill"] (leave station unset), using the project name and task words; read relevant results with skill_read before rediscovering the procedure from source. For visual changes to an existing product, do this before choosing an image generator.
-- A skill can be shared with the workspace's other stations (people turn that on). One shared from another station shows there like the others; what you write to it reaches that station. A SKILL.conflict-<station>.md beside a SKILL.md is an edit made on an older copy: merge it into SKILL.md and remove it.`;
+Memory:
+- Global memory ${memory_path} (told below): only what would break things if forgotten, one line each.
+- Project memory goes in skills/<project>/SKILL.md beside it, description starting "项目记忆：". Before working out a project's build or workflow from source, search kinds=["skill"].
+- Keep memory short and consistent: when you add a rule, remove any it contradicts. No credentials.`;
 
 export const NUDGE = `Your turn ended without a state, so nobody knows where the chat stands. Only a real unresolved need requires need_human. A factual answer alone does not need a follow-up question; do not invent one. If you still need something after answering a clarification, visibly ask for it; need alone is only a status summary. If you ask a person to choose or confirm, post the question with a card. Do not reopen a decision the user already made. Decide whether anything in it is still unfinished, then end the turn with exactly one:
 - all_done: nothing in the chat is left unfinished at all. Post the result with chat_post kind "all_done" (or chat_state "all_done" if you already posted it), with done: why nothing is left, naming the evidence (a commit, a release, a person's confirmation, the answer given).
@@ -82,10 +72,14 @@ export const NUDGE = `Your turn ended without a state, so nobody knows where the
 - waiting: only work you started that will bring you back on its own (a background command or agent, a job, a loop watching CI), with nothing asked of anyone, and nothing else you can do meanwhile: chat_state "waiting" with seconds, your estimate of how long until it does, and for, what you wait for. Waiting on a person is need_human.
 - Otherwise: continue the work.`;
 
+/// Its turn ended in a state and the chat `to` it was in still has no title.
+export const nameUntitled = (to: string) => `The chat ${to} still has no title, and nobody is at work in it now. Give it one: chat_post with only to "${to}" and title, a few words on what it is about in the language its people use. Post nothing else, then record again the state you just ended with (chat_state, with the same done or need).`;
+
 export const RESUME_AFTER_RESTART = `The station restarted while you were in the middle of a turn, so that turn was cut off. Check where you were (files, git state, anything you started), then continue. Post only if people need to know.`;
 
 export const GO_ON_AFTER_LOST = `Your last turn stopped because the station lost its connection to the sandbox your commands run in, and the station started you again there. Commands that were running then were ended. Continue the unfinished work from this conversation. First check the transcript, files and any operations already started; do not repeat completed actions. If an action's outcome is uncertain, verify it before retrying. Post only if people need to know.`;
-export const GO_ON_AFTER_AUTH = `Your last turn stopped on an authentication error. The station reopened Claude to reload its credentials. Continue the unfinished work from this conversation. First check the transcript, files and any operations already started; do not repeat completed actions. If an action's outcome is uncertain, verify it before retrying. Post only if people need to know.`;
+export const GO_ON_AFTER_AUTH = `Your last turn stopped on an authentication error. The station reopened the runtime to reload its credentials. Continue the unfinished work from this conversation. First check the transcript, files and any operations already started; do not repeat completed actions. If an action's outcome is uncertain, verify it before retrying. Post only if people need to know.`;
+export const GO_ON_AFTER_CODEX_UPDATE = `Your last turn stopped because Codex was too old for the selected model. The station updated Codex and reopened this conversation. Continue the unfinished work from this conversation. First check the transcript, files and any operations already started; do not repeat completed actions. If an action's outcome is uncertain, verify it before retrying. Post only if people need to know.`;
 
 export const GO_ON_AFTER_SPENT = `Your last turn was cut off: the account it ran on hit its usage limit. You now run on another account (or model). Check where you were, then continue the work. Post only if people need to know.`;
 
@@ -103,6 +97,15 @@ export const resumeLost = (key: string, threads: string[], terminal: string | nu
 /// It goes on in a new runtime session: the earlier one is not taken up; it reads back what it needs from it.
 export const afresh = (key: string, threads: string[]) => `This is a new conversation: your earlier one in this session is no longer used. Before you act on what comes below, read back from it what you need: session_history with chat ${key} (the latest entries first; older ones with before)${threads.length === 0 ? "" : `, and chat_history for ${threads.join(", ")}`}.`;
 
+/// Its chats have this many messages (more than `LONG_CHAT`) as its context is compacted or it goes on in a new
+/// conversation: what people asked early on is a summary now, or not loaded at all, and an agent going on from that
+/// drifts from it.
+export const longChat = (count: number, threads: string[]) => `This chat is long (${count} messages), and most of it is no longer in front of you. Before you go on, read back what people said in it${threads.length === 0 ? "" : ` (chat_history for ${threads.join(", ")}, older pages with before)`}: their requests, decisions and corrections from the start. Check that what you are doing still follows them, so that you do not drift from what they asked.`;
+
+/// From how many messages in its chats a session compacted or gone on afresh is told to read back what people said
+/// (`longChat`).
+export const LONG_CHAT = 20;
+
 /// Its context was cleared by hand (session.clear, `-clear`): a new conversation that reads its chats back, and what it did
 /// before (its execution history) only when it needs it.
 export const cleared = (key: string, threads: string[]) => `People cleared your context: this is a new conversation in the same chat, and your earlier one in this session is no longer loaded. Read the chat back before you act on what comes below${threads.length === 0 ? "" : `: chat_history for ${threads.join(", ")}`}. Your earlier work (session_history with chat ${key}) is not to be read back by default: only when you need something from it.`;
@@ -112,6 +115,10 @@ export const cleared = (key: string, threads: string[]) => `People cleared your 
 export const backgroundStopped = (tasks: BackgroundTask[], resumable: string[]) => `The station ended your earlier process (people stopped you, or it moved this session to another account, took a change to it or started it again), and the work it had going in the background was stopped with it. None of it will report back:
 ${tasks.map((t) => `- ${t.kind === "agent" ? "subagent" : "background command"} ${t.id}${t.description === "" ? "" : ` (${t.description})`}${resumable.includes(t.id) ? ": SendMessage to it goes on from where it stopped" : ""}`).join("\n")}
 Before you wait on any of it, check where each got to and start again what is still needed.`;
+
+/// Its turn ended waiting, and the station ended its process at that turn's end: the background work it waits on is
+/// gone (told above it, `backgroundStopped`).
+export const BACKGROUND_STOPPED_WAITING = `You ended your last turn waiting, but what you waited on was stopped with your process (see above), so it will never bring you back. Check where it got to (a run it watched may already be done), act on that, and watch again what is still going before you wait.`;
 
 /// The agent said it would wait this long, and nothing has brought it back.
 export const waitOver = (seconds: number) => `You said you were waiting on work you started (${seconds} seconds), and nothing has brought you back yet. Check on it now.
@@ -126,12 +133,12 @@ export const continuedHere = (instructions: string) => `This session began in a 
 ${instructions}
 </stillfail-instructions>`;
 
-/// A conversation address as the agent sees and names it.
 /// What an agent is told of a card it asked a person to decide in its chat (secret_use, secret_save, phone_use): the tool
 /// call does not wait for the decision, which comes later as a notice; a call held would hold the agent's turn, and
 /// with it everything else said in the chat meanwhile.
 export const UNDECIDED = "You are told in this session when it is decided: meanwhile go on with what does not need it (answer the chat, other work); with nothing else left, end your turn need_human (about the card).";
 
+/// A conversation address as the agent sees and names it.
 export const threadAddress = (channel: string, threadTs: string) => `${channel}/${threadTs}`;
 
 export function parseThreadAddress(value: string): [string, string] | null {
@@ -139,7 +146,7 @@ export function parseThreadAddress(value: string): [string, string] | null {
   const at = v.indexOf("/");
   if (at < 0) return null;
   const [channel, ts] = [v.slice(0, at), v.slice(at + 1)];
-  // A Feishu chat's: its chat id and the message or topic it began with (docs/feishu.md).
+  // A Feishu chat's: its chat id and the message or topic it began with.
   if (/^oc_[A-Za-z0-9]+$/.test(channel) && /^om(t)?_[A-Za-z0-9]+$/.test(ts)) return [channel, ts];
   const dot = ts.indexOf(".");
   if (dot < 0) return null;
@@ -186,14 +193,14 @@ export function messageForAgent(m: MessageRow): string {
   return parts.filter((p) => p !== "").join("\n\n");
 }
 
-const via = (surface: string) => (surface === STILLFAIL_SURFACE ? "web" : surface.startsWith("feishu:") ? "feishu" : "slack");
+const via = (surface: string) => (surface === STILLFAIL_SURFACE ? "web" : surface.startsWith("feishu:") ? "feishu" : surface.startsWith("comma:") ? "comma" : "slack");
 
 /// The still.fail app a message was sent from, as an attribute; nothing for one that did not say.
 const clientAttr = (m: MessageRow) => (m.client !== null && m.client !== undefined ? ` client="${escapeAttr(m.client)}"` : "");
 
 /// Messages handed to a session, each with its source and sender, and a hint where a thread is new to it.
 /// `posts`: the agent's first post in a message's thread made after it (by ts), said as its `before`.
-export function formatInbound(messages: PendingMessage[], newThreads: Set<number>, names: Map<string, string>, selves: Map<string, string>, posts: Map<PendingMessage, string> = new Map()): string {
+export function formatInbound(messages: PendingMessage[], newThreads: Set<number>, names: Map<string, string>, selves: Map<string, string>, posts: Map<PendingMessage, string> = new Map(), cards: Map<PendingMessage, { ended: Pick<MessageRow, "author" | "ts">; current: Pick<MessageRow, "ts"> | null; special: string | null }> = new Map(), selfKey = ""): string {
   const lines: string[] = [];
   const hinted = new Set<number>();
   for (const p of messages) {
@@ -213,8 +220,49 @@ export function formatInbound(messages: PendingMessage[], newThreads: Set<number
     const post = posts.get(p);
     const sentBefore = post !== undefined ? ` before="${escapeAttr(post)}"` : "";
     lines.push(`<message via="${via(p.surface)}" connect="${escapeAttr(p.connect)}"${you} thread="${address}" from="${escapeAttr(from)}"${agent ? " bot" : ""}${clientAttr(m)} ts="${m.ts}"${sentBefore}>\n${messageForAgent(m)}\n</message>`);
+    const change = cards.get(p);
+    if (change !== undefined) {
+      const whose = change.ended.author === selfKey ? "Your card" : "A card";
+      const now = change.current === null ? "No newer card is pending." : `A newer card (message ts ${change.current.ts}) is pending; the person may not have seen it.`;
+      const next = change.ended.author !== selfKey ? "The agent that posted it can decide whether to ask again."
+        : change.special !== null ? `The underlying login or authorization may still be pending. ${change.special}`
+        : "If the decision is still needed and no newer card asks it, ask again with a new card.";
+      lines.push(`<card-state thread="${escapeAttr(address)}" ts="${escapeAttr(change.ended.ts)}">${whose} is no longer pending after this message. The message is not necessarily a decision; read what it says. ${now} ${next}</card-state>`);
+    }
   }
   return lines.join("\n");
+}
+
+/// How long ago, in words an agent reads: minutes up to an hour, hours and minutes up to a day, then days and hours.
+function agoWords(ms: number): string {
+  const minutes = Math.floor(Math.max(0, ms) / 60_000);
+  if (minutes < 1) return "less than a minute";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return minutes % 60 === 0 ? `${hours} h` : `${hours} h ${minutes % 60} min`;
+  return hours % 24 === 0 ? `${Math.floor(hours / 24)} d` : `${Math.floor(hours / 24)} d ${hours % 24} h`;
+}
+
+/// One line of a card's question, cut to what recalls it.
+const recalled = (text: string) => {
+  const line = [...text.replace(/\s+/g, " ").trim()];
+  return line.length > 200 ? `${line.slice(0, 200).join("")}…` : line.join("");
+};
+
+/// What people chose on the agent's cards with an option that closes them (no message was sent then), said before what
+/// it is handed now (`now`, ms): when each was chosen, so it is not read as what the new messages are about. Empty
+/// when none.
+export function formatCardChoices(choices: CardChoice[], names: Map<string, string>, now: number): string {
+  if (choices.length === 0) return "";
+  const lines = choices.map((c) => {
+    const name = names.get(c.by);
+    const by = name !== undefined ? `${name} (${c.by})` : c.by;
+    const thread = c.where === null ? "" : ` thread="${escapeAttr(threadAddress(c.where[0], c.where[1]))}"`;
+    const card = c.ts === null ? "" : ` card="${escapeAttr(c.ts)}"`;
+    const asked = c.question === null || c.question.trim() === "" ? "" : `Asked: ${recalled(c.question)}\n`;
+    return `<card-choice${thread}${card} by="${escapeAttr(by)}" at="${(c.at / 1000).toFixed(6)}" ago="${agoWords(now - c.at)}">\n${asked}Chosen: ${c.option}\n</card-choice>`;
+  });
+  return `[Earlier choices on your cards, told to you now. Each closed its card when it was made (at, ago) without sending you a message, so this is the first you hear of it. They are settled and not new: what you are handed after them is not about them unless it says so. Do not answer a choice by itself or ask it again.]\n${lines.join("\n")}`;
 }
 
 /// What people chose in widgets the agent posted, riding along with messages it is handed anyway; empty when none.
@@ -226,12 +274,26 @@ export function formatWidgetModels(models: WidgetModel[]): string {
 
 /// A thread's messages for chat_history: people by name, this session's own posts as "you", other agents and the
 /// station marked as bots.
-export function formatHistory(messages: MessageRow[], surface: string, address: string, selfKey: string, names: Map<string, string>): string {
+export function formatHistory(messages: MessageRow[], surface: string, address: string, selfKey: string, names: Map<string, string>, cards: Map<number, { card: any; pending: boolean; chose?: { by: string; option: string } }> = new Map()): string {
   return messages
     .map((m) => {
-      const from = m.authorKind === "agent" && m.author === selfKey ? "you" : m.authorKind === "ember" ? "ember" : names.has(m.author) ? `${names.get(m.author)} (${m.author})` : m.author;
+      const from = m.authorKind === "agent" && m.author === selfKey ? "you" : m.authorKind === STATION_AUTHOR ? "station" : names.has(m.author) ? `${names.get(m.author)} (${m.author})` : m.author;
       const bot = m.authorKind !== "person" && from !== "you" ? " bot" : "";
-      return `<message via="${via(surface)}" thread="${address}" from="${escapeAttr(from)}"${bot}${clientAttr(m)} ts="${m.ts}">\n${messageForAgent(m)}\n</message>`;
+      const found = cards.get(m.n);
+      let card = "";
+      if (found !== undefined) {
+        const options = Array.isArray(found.card?.options) ? found.card.options : undefined;
+        const facts = { type: found.card?.type, ...(options === undefined ? {} : { options }), ...(typeof found.card?.placeholder === "string" ? { placeholder: found.card.placeholder } : {}),
+          ...(typeof found.card?.vault?.request === "string" ? { request: found.card.vault.request } : {}),
+          ...(typeof found.card?.adb?.request === "string" ? { phoneRequest: found.card.adb.request } : {}),
+          ...(typeof found.card?.signin?.site === "string" ? { site: found.card.signin.site } : {}),
+          ...(typeof found.card?.login === "string" ? { login: found.card.login } : {}),
+          ...(typeof found.card?.station === "string" ? { station: found.card.station } : {}) };
+        // Closed by a choice that sent no message: nothing else in the thread says what was chosen.
+        const chose = found.chose === undefined ? "" : `; ${found.chose.by} chose ${JSON.stringify(found.chose.option)}, which closed it without a message`;
+        card = `\n[Answer card: ${found.pending ? "pending" : "no longer pending"}${chose}; ${JSON.stringify(facts)}]`;
+      }
+      return `<message via="${via(surface)}" thread="${address}" from="${escapeAttr(from)}"${bot}${clientAttr(m)} ts="${m.ts}">\n${messageForAgent(m)}${card}\n</message>`;
     })
     .join("\n");
 }

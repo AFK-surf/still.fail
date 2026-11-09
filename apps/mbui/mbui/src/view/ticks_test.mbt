@@ -102,7 +102,7 @@ test "a frame to be shown at 100 drawn at 90: a step due at 100 not taken before
     let on = @signals.signal(true, same=fn(a, b) { a == b })
     let log : Array[Double] = []
     let t = @view.Tree::new(
-      fn(root) { root.show(fn() { on.get() }, fn(a) { a.steps(10, 1, fn(_, m) { log.push(m) }) |> ignore }) },
+      fn(root) { root.show(at_once=true, fn() { on.get() }, fn(a) { a.steps(10, 1, fn(_, m) { log.push(m) }) |> ignore }) },
       time=fn() { now.val },
     )
     t.frame(390.0, 844.0, now=0.0) |> ignore
@@ -130,7 +130,7 @@ test "a look by the time made by an event at 10: it goes on with the clock, and 
   let card : Ref[@view.View?] = Ref(None)
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { on.get() }, fn(v) {
+      root.show(at_once=true, fn() { on.get() }, fn(v) {
         card.val = Some(v)
         v.height(Is(Some(10.0))).alpha(By(fn() { v.drawn_at() / 100.0 })) |> ignore
       })

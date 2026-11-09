@@ -1,4 +1,5 @@
-// Pictures checked: a renderer's lines (chk lines PNG), its shapes (chk shapes PNG), Android's round page (chk views-round LOG PNG)
+// Pictures checked: a renderer's lines (chk lines PNG), its shapes (chk shapes PNG), Android's round page (chk views-round LOG PNG),
+// a picture drawn again in a new context (chk images LOG)
 
 ///|
 fn picture(path : String) -> @png.Picture? {
@@ -31,6 +32,48 @@ fn num_text(x : Double) -> String {
 }
 
 ///|
+/// The picture under contained glass keeps detail at its straight edges and does not take in the red outside its
+/// rounded corners. The scene is contained_shown in src/kitdemo/gallery/dl_print_wbtest.mbt, drawn at scale 2.
+fn contained(args : Array[String]) -> Int {
+  if args.length() != 1 {
+    @sys.eprintln("chk contained PNG")
+    return 2
+  }
+  let pic = match picture(args[0]) {
+    Some(p) => p
+    None => return 1
+  }
+  if pic.w != 400 || pic.h != 600 {
+    say("contained check: \{args[0]}: \{pic.w}x\{pic.h}, not 400x600")
+    return 1
+  }
+  let bad = []
+  // A one-device-pixel mark at the straight edge must contribute even when it is near a rounded corner.
+  let edge = pic.rgb(40, 160)
+  if edge.0 > 130 || edge.1 > 130 || edge.2 > 130 {
+    bad.push("the first pixel of the straight edge was replaced: \{rgb_text(edge)}")
+  }
+  for p in [(25, 80), (175, 80), (100, 25), (100, 135)] {
+    let c = pic.rgb(p.0 * 2, p.1 * 2)
+    if !near_max(c, (0, 0, 0), 40) {
+      bad.push("ink at \{p} lost: \{rgb_text(c)}")
+    }
+  }
+  for p in [(30, 170), (170, 170), (170, 270), (30, 270)] {
+    let c = pic.rgb(p.0 * 2, p.1 * 2)
+    if !near_max(c, (0x15, 0x59, 0xC4), 20) {
+      bad.push("outside colour reaches the rounded corner at \{p}: \{rgb_text(c)}")
+    }
+  }
+  if bad.length() > 0 {
+    say("contained check: \{args[0]}:\n  " + bad.join("\n  "))
+    return 1
+  }
+  say("contained check: detail at straight edges and colour inside rounded corners preserved")
+  0
+}
+
+///|
 /// Whether a renderer draws lines (scene.mbt's kind 10) as they are: the picture of
 /// src/kitdemo/gallery/dl_print_wbtest.mbt's lines_shown (160 by 160 at scale 2, on white) drawn by it. Its horizontal
 /// line is the same as the rounded rect of the same shape drawn 40 under it (each pixel's channels within 3) but where
@@ -58,12 +101,12 @@ fn lines(args : Array[String]) -> Int {
   }
   let bad = []
   // the line against the rounded rect 40 under it, row by row over the band they are in; but where the rect, a
-  // capsule, eases into its long edges (from 0.3 to 2 of its radius in from either tip, mbui's capsule_ease) and the
+  // capsule, eases into its long edges (from 0.325 to 1.4 of its radius in from either tip, mbui's capsule_ease) and the
   // line's round cap does not
   let mut worst = 0
   let eases = fn(x : Int) {
     let from_tip = @cmp.minimum(x - 16 * s, 104 * s - x).to_double()
-    from_tip > 0.3 * 4.0 * s.to_double() && from_tip < 2.0 * 4.0 * s.to_double()
+    from_tip > 0.3 * 4.0 * s.to_double() && from_tip < 1.4 * 4.0 * s.to_double()
   }
   for y in (12 * s)..<(28 * s) {
     for x in 0..<(160 * s) {
@@ -368,4 +411,54 @@ fn shapes(args : Array[String]) -> Int {
   } else {
     1
   }
+}
+
+///|
+/// (The images' contract, kitdemo's MBUI_IMAGECHECK) the window pictured once the red picture, told ready again in the
+/// canvas's new context, was drawn again: as many red pixels in it as the picture has (its side in points at the
+/// window's scale, squared), all but its edges' row of each side
+fn images(args : Array[String]) -> Int {
+  if args.length() != 1 {
+    @sys.eprintln("chk images LOG")
+    return 2
+  }
+  let mut drawn : Array[String]? = None
+  for line in text_lines(@sys.read_text(args[0]).unwrap_or("")) {
+    match line.find("IMAGECHECK drawn ") {
+      Some(i) => {
+        let ws = split_ws(line.view(start_offset=i + 17).to_string())
+        if ws.length() >= 3 {
+          drawn = Some(ws)
+        }
+      }
+      None => ()
+    }
+  }
+  let ws = match drawn {
+    Some(ws) => ws
+    None => {
+      say("images contract: the run did not say where it pictured the window (IMAGECHECK drawn)")
+      return 1
+    }
+  }
+  let pic = match picture(ws[0]) {
+    Some(p) => p
+    None => return 1
+  }
+  let side = (double_of_signed(ws[1]) * double_of_signed(ws[2])).round().to_int()
+  let mut red = 0
+  for y in 0..<pic.h {
+    for x in 0..<pic.w {
+      if near_max(pic.rgb(x, y), (255, 0, 0), 8) {
+        red += 1
+      }
+    }
+  }
+  let want = (side - 2) * (side - 2)
+  if red < want {
+    say("images contract: the picture not drawn again in the new context (\{red} red pixels, \{want} at least)")
+    return 1
+  }
+  say("images contract: the picture drawn again in the new context (\{red} red pixels)")
+  0
 }

@@ -83,7 +83,7 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
   const up = Effect.runSync(SubscriptionRef.make(true));
   const plane = makeControlPlane({ state, changes: Stream.never, key, up });
   const presence = Effect.runFork(plane.presence);
-  await until(() => state.peersCurrent && (state.state!.gateway_keys ?? []).includes(gateway.id()));
+  await until(() => state.reached && (state.state!.gateway_keys ?? []).includes(gateway.id()));
 
   // The station's own parts: its store, a hub with scripted runtimes, the admin API, the device tools.
   const config = new ConfigFile(data);
@@ -145,7 +145,8 @@ test("a station in Comma: enrolled, online, a member admitted, a viewer read-onl
   assert.equal((await ask(viewer, "GET", "/admin/api/tools/access"))[0], 200);
   assert.deepEqual(await ask(viewer, "POST", "/admin/api/sessions", { runtime: "claude" }), [403, { error: "read-only members cannot change this station" }]);
   assert.deepEqual(await ask(viewer, "PUT", "/admin/api/tools/access", { access: "full" }), [403, { error: "read-only members cannot change this station" }]);
-  // The drive (docs/drive.md): a viewer lists and reads what is shared, and changes nothing of it; a member does.
+  for (const path of ["views/end", "views/v1/end", "views/v1/watch"]) assert.deepEqual(await ask(viewer, "POST", `/admin/api/screens/desktop/${path}`, {}), [403, { error: "read-only members cannot change this station" }]);
+  // The drive: a viewer lists and reads what is shared, and changes nothing of it; a member does.
   const shared = realpathSync(mkdtempSync(join(tmpdir(), "comma-drive-")));
   t.after(() => rmSync(shared, { recursive: true, force: true }));
   writeFileSync(join(shared, "a.txt"), "hi");

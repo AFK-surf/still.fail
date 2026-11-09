@@ -1,6 +1,6 @@
 // The tabs of the station's browser, as its DevTools tell of them (Target.setDiscoverTargets on the station's own
 // connection): listed to the agents, and each a screen source (`browser:<targetId>`) in the station's Screens while it
-// is there, saying the session that opened it (owners.ts) and closed from a person's app (docs/remote-screens.md).
+// is there, saying the session that opened it (owners.ts) and closed from a person's app.
 import type { ClipType, ScreenSource, ScreenView, Screens, ViewOptions } from "../screens/source.ts";
 import { wall } from "../ops/fibers.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
@@ -28,6 +28,9 @@ export type TabsParts = {
   owners?: Owners;
   /// The session whose chat's context a browser context is (browsers.ts).
   contextOwner?: (browserContextId: string | undefined) => string | undefined;
+  usedTab?: (session: string, targetId: string) => void;
+  /// Whether tab `targetId`'s context has a passkey of relying party `rpId` its authenticator signs (passkeys.ts).
+  ownPasskey?: (targetId: string, rpId: string) => boolean;
 };
 
 /// Chrome tells of a tab's new address, not of its title, which the page sets after (Chrome 155): the titles are read
@@ -193,7 +196,9 @@ export class Tabs {
       const { sessionId } = await cdp.send("Target.attachToTarget", { targetId: tab.info.targetId, flatten: true });
       const view: TabView = new TabView({
         cdp, session: sessionId, targetId: tab.info.targetId, now: () => this.#p.now(),
+        ...(this.#p.ownPasskey ? { ownPasskey: (rpId: string) => this.#p.ownPasskey!(tab.info.targetId, rpId) } : {}),
         sized: (size) => tab.sized(size),
+        used: () => { const owner = this.ownerOf(tab.info.targetId); if (owner) this.#p.usedTab?.(owner, tab.info.targetId); },
         ended: () => {
           this.#views.delete(view);
           this.#p.activity();

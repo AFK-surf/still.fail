@@ -1,10 +1,10 @@
-// The web app's Worker (ember-web, wrangler.web.jsonc): its static files, and on its old host (ember.3720.org, from
+// The web app's Worker (stillfail-web, wrangler.web.jsonc): its static files, and on its old host (ember.3720.org, from
 // before the rename) the pages moved to the new one — the same path and query on PUBLIC_ORIGIN, so links already sent
 // (Slack's, invitations, bookmarks) open the app where it now lives. Only the pages: the API's and the relay's paths
 // on the old host are routes of their own (wrangler.jsonc), which stations and apps from before the rename keep
 // calling, and never reach this Worker. 302, not 301, which browsers would remember for good.
-// The same code and the same files are the test channel's Worker too (ember-web-beta, wrangler.web-beta.jsonc, on
-// BETA_ORIGIN): a build tried there is promoted to ember-web byte for byte (deploy.py promote-web). On that host every
+// The same code and the same files are the test channel's Worker too (stillfail-web-beta, wrangler.web-beta.jsonc, on
+// BETA_ORIGIN): a build tried there is promoted to stillfail-web byte for byte (deploy.py promote-web). On that host every
 // answer says not to index it, /robots.txt disallows everything, and each page gets
 // <meta name="stillfail-beta" content="<PUBLIC_ORIGIN>">, by which the page knows it is the test channel and where the
 // stable one is (web/src/cloud/beta.tsx); what the files call the product before any script runs (the title, the
@@ -44,7 +44,7 @@ export function betaNamed(text: string): string {
 }
 
 /**
- * The app's pages (index.html, at whichever of its routes) are not kept: not by the browser's cache, and not in its
+ * The app's pages (index.html, at whichever of its routes, and web.html) are not kept: not by the browser's cache, and not in its
  * back/forward cache, where a page keeps its core worker too, frozen holding the lock the core runs under
  * (web/src/core/worker.ts) while the next page waits on it (an iOS home-screen app coming back from Google's sign-in
  * stuck at 正在登录…, 2026-10-09). WebKit never keeps a page sent as no-store there.
@@ -56,10 +56,65 @@ function unkept(file: Response): Response {
   return answer;
 }
 
+/**
+ * The web's pages of their own, apart from the app (index.html: mbui's, web/vite.config.ts), which web.html answers
+ * (web/src/main.tsx): signing in (/login, and /auth/callback it comes back to), Slack sending back an app a station
+ * made, and a station's web service on a page of its own. Every other page is the app's.
+ */
+const WEB_PAGES = /^\/(login|auth\/callback|slack\/installed|w\/[^/]+\/s\/[^/]+\/services\/[^/]+)\/?$/;
+
+/** The file that answers `request`: web.html (at /web, as Cloudflare serves a page's .html) for one of WEB_PAGES. */
+function fileOf(request: Request): Request {
+  const url = new URL(request.url);
+  if (!WEB_PAGES.test(url.pathname)) return request;
+  return new Request(new URL(`/web${url.search}`, url), request);
+}
+
 /** The web app's answer to `request`, its files got by `files`: as above, on the test channel's host or the others. */
-export async function serveWeb(request: Request, env: Omit<WebEnv, "ASSETS">, files: (request: Request) => Promise<Response> | Response): Promise<Response> {
+export async function serveWeb(request: Request, env: Omit<WebEnv, "ASSETS">, assets: (request: Request) => Promise<Response> | Response): Promise<Response> {
   const redirect = moved(request, env);
   if (redirect) return redirect;
+  const answer = built(request, hardened(await page(request, env, assets)));
+  return (await packed(request, answer, assets)) ?? answer;
+}
+
+/**
+ * The app's files named by the build that made them (`?b=`: web/src/mbui/core.ts BUILT_AT): another build's are
+ * another name, so the browser keeps them a year and never asks after them again.
+ */
+function built(request: Request, answer: Response): Response {
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith("/mbui/") || !url.searchParams.has("b") || !answer.ok) return answer;
+  if ((answer.headers.get("content-type") ?? "").startsWith("text/html")) return answer;
+  answer.headers.set("cache-control", "public, max-age=31536000, immutable");
+  return answer;
+}
+
+/** The app's scripts that the build brotlis at the highest level beside them (apps/mbui/scripts/web-app.sh). */
+const PACKED = /^\/mbui\/(app|host)\.js$/;
+
+/**
+ * `answer` (one of PACKED) as its build brotlied it, `<file>.br`, sent as it is to a browser that takes brotli:
+ * Cloudflare's own brotli of it on the fly is a lower level's (app.js: 2.26 MB sent, 1.66 at the highest, 2026-11-09).
+ * Null for any other answer, a browser that takes no brotli, or a build without one: the file as it is.
+ */
+async function packed(request: Request, answer: Response, assets: (request: Request) => Promise<Response> | Response): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (!PACKED.test(url.pathname) || answer.status !== 200) return null;
+  if (!/\bbr\b/.test(request.headers.get("accept-encoding") ?? "")) return null;
+  const file = await assets(new Request(new URL(`${url.pathname}.br`, url), { method: request.method }));
+  if (file.status !== 200 || (file.headers.get("content-type") ?? "").startsWith("text/html")) return null;
+  const headers = new Headers(answer.headers);
+  headers.set("content-encoding", "br");
+  headers.append("vary", "accept-encoding");
+  headers.delete("content-length");
+  void answer.body?.cancel();
+  return new Response(file.body, { status: 200, headers, encodeBody: "manual" });
+}
+
+/** The page or file `request` asks for: the app's own, or on the test channel's host, the test channel's. */
+async function page(request: Request, env: Omit<WebEnv, "ASSETS">, assets: (request: Request) => Promise<Response> | Response): Promise<Response> {
+  const files = (r: Request) => assets(fileOf(r));
   if (new URL(request.url).origin !== betaOrigin(env)) return unkept(await files(request));
   if (new URL(request.url).pathname === "/robots.txt") {
     return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain; charset=utf-8", "x-robots-tag": NOINDEX } });
@@ -87,6 +142,24 @@ export async function serveWeb(request: Request, env: Omit<WebEnv, "ASSETS">, fi
       if (betaNamed(content) !== content) tag.setAttribute("content", betaNamed(content));
     } })
     .transform(answer);
+}
+
+/**
+ * What every answer of the app's host says besides its file: it may not be framed (a click in the app reaches a
+ * station), it sends no referrer (an address here names a chat or a station), and it is what it says it is. The CSP
+ * names no script source: the page's first scripts are inline (index.html), and the agent-written HTML a chat draws in
+ * frames of its own runs inline scripts from public CDNs — a script-src that lets those in lets an
+ * injected one in just as well. What it does say holds however a script comes to be there: no plugins, no <base>, and
+ * forms only to this host or Google's sign-in.
+ */
+const APP_CSP = ["object-src 'none'", "base-uri 'none'", "form-action 'self' https://accounts.google.com", "frame-ancestors 'none'"].join("; ");
+
+function hardened(answer: Response): Response {
+  const headers = new Headers(answer.headers);
+  headers.set("content-security-policy", APP_CSP);
+  headers.set("referrer-policy", "no-referrer");
+  headers.set("x-content-type-options", "nosniff");
+  return new Response(answer.body, { status: answer.status, statusText: answer.statusText, headers });
 }
 
 export default {

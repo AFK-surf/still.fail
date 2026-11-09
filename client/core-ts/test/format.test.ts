@@ -30,6 +30,9 @@ test("words_as_the_clients_had_them", () => {
   assert.equal(f.relativeTime(now - 10_000, now, 480), "刚刚");
   assert.equal(f.relativeTime(now - 3 * MINUTE, now, 480), "3 分钟前");
   assert.equal(f.relativeTime(now - 30 * 60 * MINUTE, now, 480), "昨天 02:00");
+  // 40 hours back is two calendar days back, not yesterday.
+  assert.equal(f.relativeTime(now - 40 * 60 * MINUTE, now, 480), "9月25日 16:00");
+  assert.equal(f.relativeTime(now - 9 * 60 * MINUTE, now, 480), "9 小时前");
   assert.equal(f.dayLabel(now, now, 480), "今天");
   assert.equal(f.dayLabel(now - DAY, now, 480), "昨天");
   assert.equal(f.dayLabel(now - 20 * DAY, now, 480), "9月7日");
@@ -39,11 +42,16 @@ test("words_as_the_clients_had_them", () => {
   assert.deepEqual(f.makerOf("deepseek-flash"), ["deepseek", "DeepSeek"]);
   assert.deepEqual(f.makerOf("o3"), ["openai", "OpenAI"]);
   assert.equal(f.makerOf("something"), null);
+  assert.deepEqual(f.labMaker("zhipuai", "Zhipu AI"), ["zhipu", "智谱"]);
+  assert.deepEqual(f.labMaker("tencent", null), ["tencent", "腾讯"]);
+  assert.deepEqual(f.labMaker("sakana", "Sakana AI"), ["sakana", "Sakana AI"]);
+  assert.deepEqual(f.labMaker("bytedance-seed", null), ["bytedance-seed", "Bytedance Seed"]);
   assert.equal(f.agentLabel("gpt-6-astra", "medium"), "GPT-6 Astra · medium");
   assert.equal(f.agentLabel("my-model", null), "my-model");
   assert.equal(f.cleanText("<@U1> hi   there"), "hi there");
   const plain = (s: string) => f.cleanText(f.plainText(s));
   assert.equal(plain("改成 `tsgo` 了，**快**很多 ~~慢~~ *真的*"), "改成 tsgo 了，快很多 慢 真的");
+  assert.equal(plain("12~20 个，100~300 元"), "12~20 个，100~300 元");
   assert.equal(plain("看 [PR #12](https://github.com/a/b/pull/12) 和 https://x.dev/a?b=1"), "看 PR #12 和 [链接]");
   assert.equal(plain("<https://x.dev|文档> <https://y.dev> <#C1|ops> &lt;b&gt; &amp;"), "文档 [链接] #ops <b> &");
   assert.equal(plain("![](shot.png) [](/tmp/a.pdf) [报告](report.pdf)"), "[图片] [文件] 报告");
@@ -64,6 +72,7 @@ test("words_in_english", () => {
   assert.equal(f.relativeTimeIn("en", now - MINUTE, now, 480), "1 min ago");
   assert.equal(f.relativeTimeIn("en", now - 3 * 60 * MINUTE, now, 480), "3 hr ago");
   assert.equal(f.relativeTimeIn("en", now - 30 * 60 * MINUTE, now, 480), "yesterday 02:00");
+  assert.equal(f.relativeTimeIn("en", now - 40 * 60 * MINUTE, now, 480), "Sep 25, 16:00");
   assert.equal(f.relativeTimeIn("en", now - 20 * DAY, now, 480), "Sep 7, 08:00");
   assert.equal(f.dayLabelIn("en", now - 3 * DAY, now, 480), "Thursday");
   assert.equal(f.dayLabelIn("en", now - 20 * DAY, now, 480), "Sep 7");
@@ -140,7 +149,7 @@ test("reported_levels_aliases_empty_and_legacy", () => {
 
 test("deepseek_harness_is_named_thinks_at_its_own_levels_and_runs_on_any_endpoint", () => {
   assert.deepEqual(["claude", "codex", "dsh"].map(f.runtimeLabel), ["Claude Code", "Codex", "DeepSeek Harness"]);
-  assert.deepEqual(f.RUNTIMES, ["claude", "codex", "dsh", "grok", "cursor", "devin", "hermes"]);
+  assert.deepEqual(f.RUNTIMES, ["claude", "codex", "dsh", "grok", "cursor", "devin", "hermes", "agy"]);
   assert.deepEqual(fallback("dsh"), ["low", "medium", "high", "max"]);
   assert.deepEqual(available("dsh", "deepseek-v4", { codex: { "deepseek-v4": ["low"] } }), fallback("dsh"));
   const runs = (id: string, endpoint: string | null = null, protocol: string | null = null) => {
@@ -172,7 +181,7 @@ test("grok_build_is_named_thinks_up_to_max_and_runs_on_xais_own_api_alone", () =
 
 test("cursor_is_named_last_sets_no_effort_and_runs_on_no_providers_key", () => {
   assert.equal(f.runtimeLabel("cursor"), "Cursor");
-  assert.deepEqual(f.RUNTIMES, ["claude", "codex", "dsh", "grok", "cursor", "devin", "hermes"]);
+  assert.deepEqual(f.RUNTIMES, ["claude", "codex", "dsh", "grok", "cursor", "devin", "hermes", "agy"]);
   assert.deepEqual([f.efforts("cursor"), fallback("cursor")], [[], []]);
   assert.deepEqual(available("cursor", "composer-2", { codex: { "composer-2": ["low"] } }), []);
   assert.deepEqual(f.makerOf("composer-2"), ["cursor", "Cursor"]);
@@ -207,4 +216,6 @@ test("fills_and_counts", () => {
  test("hermes uses its configured reasoning and has its own runtime label", () => {
   assert.equal(f.runtimeLabel("hermes"), "Hermes Agent");
   assert.deepEqual(fallback("hermes"), []);
+  assert.equal(f.runtimeLabel("agy"), "Antigravity CLI");
+  assert.deepEqual(fallback("agy"), []);
 });

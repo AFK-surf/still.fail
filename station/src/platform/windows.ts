@@ -8,7 +8,7 @@ import { delimiter, dirname, join, win32 } from "node:path";
 import { createConnection } from "node:net";
 import { stat } from "node:fs/promises";
 import { promisify } from "node:util";
-import { holder, pidAlive, runnerBinary } from "./processes.ts";
+import { holder, osCpuTicks, pidAlive, runnerBinary } from "./processes.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
 import { pressureOfAvailable, trim } from "./text.ts";
 
@@ -260,16 +260,7 @@ const sameFile = (a: string, b: string) => {
 
 /// What Node's os says (the same counters Task Manager reads): Windows has neither /proc nor sysctl.
 const host: Host = {
-  cpuTicks() {
-    const all = cpuList();
-    if (all.length === 0) return null;
-    let [busy, total] = [0, 0];
-    for (const { times: t } of all) {
-      busy += t.user + t.sys + t.nice;
-      total += t.user + t.sys + t.idle + t.nice;
-    }
-    return [busy, total];
-  },
+  cpuTicks: osCpuTicks,
   memory: () => ({ totalBytes: totalmem(), usedBytes: Math.max(totalmem() - freemem(), 0), swapUsedBytes: null }),
   cpuModel: () => trim(cpuList()[0]?.model ?? ""),
   uptimeSec: () => Math.round(osUptime()),
@@ -281,12 +272,12 @@ const host: Host = {
 /// A PowerShell string of `s`.
 const q = (s: string) => `'${s.replaceAll("'", "''")}'`;
 
-/// run/update.ps1 (startInstaller): the STILLFAIL_ (and EMBER_DATA) variables of `env`, then run/install.ps1 (the
+/// run/update.ps1 (startInstaller): the STILLFAIL_ variables of `env`, then run/install.ps1 (the
 /// installer the release carries, copied there) run, what it says (both streams, UTF-8) in run/update.log and its exit
 /// in run/update.exit, then `task` removed. With a BOM, as PowerShell 5.1 reads a file of non-ASCII words.
 export function windowsUpdateScript(runDir: string, env: Record<string, string>, task: string): string {
   return String.fromCharCode(0xfeff) + `${[
-    ...Object.entries(env).filter(([k]) => k.startsWith("STILLFAIL_") || k === "EMBER_DATA").map(([k, v]) => `$env:${k} = ${q(v)}`),
+    ...Object.entries(env).filter(([k]) => k.startsWith("STILLFAIL_")).map(([k, v]) => `$env:${k} = ${q(v)}`),
     "[Console]::OutputEncoding = [Text.Encoding]::UTF8",
     `$run = ${q(runDir)}`,
     "$log = Join-Path $run 'update.log'",
@@ -381,6 +372,7 @@ export const windows: Platform = {
     env[key] = path === "" ? dir : `${path}${delimiter}${dir}`;
   },
   findCommand,
+  userShell: () => null,
   /// A bare name is found with PATHEXT (libuv adds .exe and .com only), and a .cmd or .bat (npm's shims) runs through
   /// cmd, which Node refuses to do by itself: each argument quoted, and one cmd would read into (a quote, a %) refused.
   runnable(command, args, env) {
@@ -453,6 +445,7 @@ export const windows: Platform = {
   },
 
   disks: () => drives((path) => stat(path).then((s) => s.isDirectory(), () => false)),
+  mounts: () => [],
   linkRefused: (error) => (error as NodeJS.ErrnoException).code === "EPERM",
   syncsDirectories: false,
   /// A symbolic link needs a privilege most users lack (Developer Mode gives it): a hard link then, the same file as
@@ -488,7 +481,7 @@ export const windows: Platform = {
       const name = execFileSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", `(Get-Process -Id ${pid} -ErrorAction Stop).ProcessName`], {
         encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], windowsHide: true,
       }).trim();
-      return /^(stillfail|ember)-station(-w)?$/i.test(name);
+      return /^stillfail-station(-w)?$/i.test(name);
     } catch {
       return false;
     }

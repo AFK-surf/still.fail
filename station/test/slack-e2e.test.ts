@@ -16,6 +16,7 @@ import { hubConfig } from "../src/sessions/config.ts";
 import { Hub } from "../src/sessions/hub.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
 import { makeConnections } from "../src/slack/index.ts";
+import { slackManifest } from "../src/slack/apps.ts";
 import { SlackClient } from "../src/slack/web.ts";
 import { chatTools } from "../src/tools/chat.ts";
 import { openAgentsDoor } from "../src/tools/http.ts";
@@ -41,11 +42,19 @@ test("Slack Socket Mode starts a Claude turn, receives its post, and stops a lat
     JSON.stringify({
       profiles: [{ id: "cc", runtime: "claude", home: "homes/cc" }],
       maxNudges: 1,
-      connects: [{ id: "ds", mode: "multi-session", bind: { runtime: "claude" }, slack: { appToken: "xapp-1-e2e", botToken: "xoxb-e2e" } }],
+      connects: [{ id: "ds", mode: "multi-session", bind: { runtime: "claude" }, createdBy: { id: "owner@example.test" }, slack: { appToken: "xapp-1-e2e", botToken: "xoxb-e2e", appId: "A1" } }],
+      slackConfigTokens: [{ by: "owner@example.test", teamId: "T1", accessToken: "test", refreshToken: "refresh", expiresAt: Date.now() + 3_600_000 }],
     }),
   );
   const slackStandIn = await FakeSlack.start();
   bot(slackStandIn);
+  // Like an existing ordinary bot, Slack rejects the session API until its agent feature is enabled, even when it
+  // already subscribes to the stop event.
+  let manifest = slackManifest("e2e");
+  delete manifest.features.agent_view;
+  slackStandIn.answer("apps.manifest.export", () => ({ ok: true, manifest }));
+  slackStandIn.answer("apps.manifest.update", (s) => { manifest = JSON.parse(s.params.manifest!); return { ok: true }; });
+  slackStandIn.answer("agents.sessions.setStatus", () => manifest.features.agent_view ? { ok: true } : { ok: false, error: "not_authorized" });
   const config = new ConfigFile(data);
   const store = Store.open(join(data, "stillfail.db"), join(data, "archive"));
   const driver = new ClaudeDriver({ data });
@@ -99,18 +108,20 @@ test("Slack Socket Mode starts a Claude turn, receives its post, and stops a lat
     assert.equal(slackStandIn.calls("chat.postMessage").length, 1);
     // While it worked, the thread said so, and the line was cleared at the end: at once, or (the line changed just
     // before) once its couple of seconds are up: what was due by then has gone.
-    const cleared = () => slackStandIn.calls("assistant.threads.setStatus").some((c) => c.params.status === "");
+    const cleared = () => slackStandIn.calls("agents.sessions.setStatus").some((c) => c.params.status === "active");
     await settle();
     await Effect.runPromise(clock.adjust("2 seconds"));
     await slackStandIn.until("the status cleared", cleared);
-    assert.equal(slackStandIn.calls("assistant.threads.setStatus")[0]!.params.thread_ts, "1700000000.000100");
+    assert.equal(slackStandIn.calls("agents.sessions.setStatus")[0]!.params.thread_ts, "1700000000.000100");
+    assert.ok(manifest.features.agent_view);
+    assert.equal(slackStandIn.calls("assistant.threads.setStatus").length, 0, "the session API was used once setup finished");
 
     // A later Slack turn waits inside the fake Claude process. A native stop event traverses the socket and the real
     // driver, and only the result of Claude's interrupt clears the status and confirms the stop.
     slackStandIn.event("env-2", { type: "message", channel: "C1", user: "U42", thread_ts: "1700000000.000100", ts: "1700000001.000100", text: "<@UBOT> test-hold:1" });
     await slackStandIn.until("the next turn", () => store.listTurns(key).length === 2 && store.lastTurn(key)?.endedAt === null);
     await Effect.runPromise(clock.adjust("2 seconds"));
-    await slackStandIn.until("working again", () => slackStandIn.calls("assistant.threads.setStatus").filter((c) => c.params.status !== "").length >= 2);
+    await slackStandIn.until("working again", () => slackStandIn.calls("agents.sessions.setStatus").filter((c) => c.params.status === "processing").length >= 2);
     slackStandIn.event("env-stop", { type: "agent_session_stopped", channel: "C1", thread_ts: "1700000000.000100", event_ts: (Date.now() / 1000).toFixed(6), user: "U42" });
     await slackStandIn.until("stop acknowledged", () => slackStandIn.acks.some((a) => a.envelope_id === "env-stop"));
     await slackStandIn.until("stopped", () => store.lastTurn(key)?.outcome === "aborted");
@@ -118,7 +129,7 @@ test("Slack Socket Mode starts a Claude turn, receives its post, and stops a lat
     await hub.actor(store.getSession(key)!).flushed();
     await settle();
     await Effect.runPromise(clock.adjust("2 seconds"));
-    await slackStandIn.until("stop cleared the status", () => slackStandIn.calls("assistant.threads.setStatus").filter((c) => c.params.status === "").length >= 2);
+    await slackStandIn.until("stop cleared the status", () => slackStandIn.calls("agents.sessions.setStatus").filter((c) => c.params.status === "active").length >= 2);
     assert.equal(store.listTurns(key).length, 2, "a stop does not restart the agent");
   } finally {
     await slack.close();

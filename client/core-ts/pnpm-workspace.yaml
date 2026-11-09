@@ -7,3 +7,5 @@ allowBuilds:
 # (no-default-font). The core lays formulas out with the TeX font it gives (src/math.ts).
 overrides:
   "@mathjax/mathjax-newcm-font": "link:./no-default-font"
+# linkedom's CSS parser (its style elements' `sheet`, which the core's mermaid document never reads): none (no-cssom).
+  "@acemir/cssom": "link:./no-cssom"

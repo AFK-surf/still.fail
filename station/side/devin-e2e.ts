@@ -1,4 +1,4 @@
-// Devin as a runtime end to end (docs/devin.md), on a dev cloud (cloud/test/dev.ts), a real station and the owner's
+// Devin as a runtime end to end, on a dev cloud (cloud/test/dev.ts), a real station and the owner's
 // real core, against the real Devin CLI: a chat on a Devin profile answers through the station's tools (its instructions
 // and the stillfail MCP server reached), a message sent while a command runs goes into the turn (the command not run
 // again), each turn's usage is kept, and the station started again takes the session up (the agent remembers).

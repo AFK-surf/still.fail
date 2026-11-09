@@ -5,13 +5,17 @@
 //   MBUI_DL_FROM=<before.dl> MBUI_DL=<list.dl> MBUI_DL_PNG=<out.png> mbui-render
 //   MBUI_DL_BENCH=<n> MBUI_DL_FROM=<before.dl> MBUI_DL=<list.dl> MBUI_DL_PNG=<out.png> mbui-render
 //
-// With MBUI_DL_FROM, partial redraw (docs/partial-redraw.md): the list before drawn whole, then this one only where it
+// Each list is drawn as a host draws a frame: what of it cannot be seen left out (@damage's Damage::occlude); with
+// MBUI_DL_ALL=1, every instance of it.
+//
+// With MBUI_DL_FROM, partial redraw: the list before drawn whole, then this one only where it
 // differs from it (@damage, @hostapi.render_dirty), as a window's frames are drawn, then this one again (nothing of it
-// differing); the picture is what the target holds then (<out.png>), and this list drawn whole again into it
-// (<out>.whole.png): the two the same to the byte.
+// differing); the picture is what the target holds then (<out.png>), and this list drawn whole again into it, every
+// instance of it, none left out (<out>.whole.png): the two the same to the byte.
 //
 // With MBUI_DL_BENCH too, the two lists drawn one after the other n times each, whole and then only where they differ,
-// and the GPU's time of a frame said (the median: where the host measures it, Metal's), nothing written.
+// and the GPU's time of a frame said (the median: where the host measures it, Metal's, and GLES's on Android where the
+// driver has GL_EXT_disjoint_timer_query), nothing written; and again with every instance drawn, none left out.
 //
 // Each glyph is made again by what the list says it is (its words shaped in its font, the cluster it is), each image
 // decoded again from its source (or, handed over as bytes, from <list.dl>.img<N> beside it), and their instances given
@@ -160,7 +164,8 @@ fn main {
   match from {
     None => {
       let (inst, n, made) = instances(dl, path, atlas, colour_atlas)
-      draw(inst, n, r, gg, b)
+      let (si, sn) = seen(inst, n, dl)
+      draw(si, sn, r, gg, b)
       if !snapshot(out) {
         say("mbui-render: \{out}: not written")
         return
@@ -177,14 +182,16 @@ fn main {
       let damage = @damage.Damage::new()
       let (ar, ag, ab) = a.clear
       tell_parts(damage.next(ia, na, a.w, a.h, a.scale, ar, ag, ab))
-      draw(ia, na, ar, ag, ab)
+      let (si, sn) = seen(ia, na, a)
+      draw(si, sn, ar, ag, ab)
       let parts = damage.next(inst, n, dl.w, dl.h, dl.scale, r, gg, b)
       say("mbui-render: \{path}: drawn again where it differs from \{from_path}: \{parts}")
       let bench = arg("MBUI_DL_BENCH")
       if bench != "" {
         let times = num(bench).to_int()
-        let time = fn(partial : Bool) -> Double {
+        let time = fn(partial : Bool, all : Bool) -> Double {
           let d = @damage.Damage::new()
+          let hid = @damage.Damage::new()
           let gpus = []
           for k in 0..<(2 * times) {
             let (fi, fn_) = if k % 2 == 0 { (ia, na) } else { (inst, n) }
@@ -194,7 +201,8 @@ fn main {
             } else {
               @hostapi.render_dirty(0.0, 0.0, -1.0, -1.0)
             }
-            let ms = draw_gpu(fi, fn_, r, gg, b)
+            let (si, sn) = if all { (fi, fn_) } else { hid.occlude(fi, fn_, dl.w, dl.h) }
+            let ms = draw_gpu(si, sn, r, gg, b)
             if k >= 4 {
               gpus.push(ms)
             }
@@ -202,22 +210,29 @@ fn main {
           gpus.sort()
           gpus[gpus.length() / 2]
         }
-        let whole_ms = time(false)
-        let part_ms = time(true)
-        say("BENCH \{path}: GPU a frame, median: whole \{whole_ms} ms, in parts \{part_ms} ms")
+        let whole_ms = time(false, false)
+        let part_ms = time(true, false)
+        let whole_all = time(false, true)
+        let part_all = time(true, true)
+        say(
+          "BENCH \{path}: GPU a frame, median: whole \{whole_ms} ms, in parts \{part_ms} ms; every instance drawn (none left out unseen): whole \{whole_all} ms, in parts \{part_all} ms",
+        )
         return
       }
       tell_parts(parts)
-      draw(inst, n, r, gg, b)
+      let (si, sn) = seen(inst, n, dl)
+      draw(si, sn, r, gg, b)
       // and again, nothing of it differing: what a frame that draws nothing new shows (its target's, as it was)
       tell_parts(damage.next(inst, n, dl.w, dl.h, dl.scale, r, gg, b))
-      draw(inst, n, r, gg, b)
+      let (si, sn) = seen(inst, n, dl)
+      draw(si, sn, r, gg, b)
       let whole = (if out.has_suffix(".png") { out.view(end_offset=out.length() - 4).to_owned() } else { out }) +
         ".whole.png"
       if !snapshot_drawn(out) {
         say("mbui-render: \{out}: not written")
         return
       }
+      // (every instance of it, none left out as unseen: Damage::occlude)
       @hostapi.render_dirty(0.0, 0.0, -1.0, -1.0)
       draw(inst, n, r, gg, b)
       if !snapshot_drawn(whole) {
@@ -375,4 +390,21 @@ fn instances(dl : Dl, path : String, atlas : @hostapi.Atlas, colour_atlas : @hos
     n,
     "\{n} instances, \{dl.glyphs.length()} glyphs (\{unknown} not known here, \{resized} another size here), \{dl.images.length()} images",
   )
+}
+
+///|
+/// What leaves out of a list what cannot be seen, as a host's frame does (@damage's Damage::occlude, src/ui/hostcall.mbt
+/// h_present).
+let unseen : @damage.Damage = @damage.Damage::new()
+
+///|
+/// The instances of `dl` (`inst`, `n` of them) a host draws: what of them cannot be seen left out (none with
+/// MBUI_DL_ALL=1), how many said.
+fn seen(inst : FixedArray[Double], n : Int, dl : Dl) -> (FixedArray[Double], Int) {
+  if arg("MBUI_DL_ALL") == "1" {
+    return (inst, n)
+  }
+  let (si, sn) = unseen.occlude(inst, n, dl.w, dl.h)
+  say("mbui-render: \{n - sn} of \{n} instances left out, unseen")
+  (si, sn)
 }

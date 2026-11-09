@@ -1,11 +1,14 @@
-// A card that asks (docs/ui-panels.md, 要人拍板的卡片): its title the question, the one line the answer turns on, its
+// A card that asks (sf/align.mbt, 要人拍板的卡片): its title the question, the one line the answer turns on, its
 // buttons in its foot corners; one alone in the middle of what it is over (a player's), all of it in its middle and its
 // buttons across its foot. An agent's ask in a chat (settings' vault_ask, phone_ask; sfbase's adb_link_card) and
 // what a player asks over its picture (player.mbt: 无法播放, 播放结束) alike; on the night (on_night: a player's, a
 // stage's) in the night's words and buttons.
+//
+// Answered stays where it is: the list changes height only for what is new (the user, 2026-10-29: 「有个勾不就行了吗
+// ？为啥非要冒一行字？」).
 
 ///|
-/// What is asked, over the answer: its lines 2 apart (VaultAsk.css.ts what).
+/// What is asked, over the answer: its lines 2 apart.
 // kept across runs: a value (no field of it changes)
 pub let ask_what : @ui.Style = @ui.css("w=Full gap=S0_5")
 
@@ -59,21 +62,51 @@ pub fn ask_words(c : @ui.Ctx, title : String, note : String, centred? : Bool = f
 }
 
 ///|
+/// An answered card's result, with a small disclosure to show that its original contents can be read again. Its
+/// caller opens the history from the returned id; `line` is the words' first-line height, so the mark stays centred on
+/// that line even if the words wrap or the font is scaled. The press room grows without moving its neighbours.
+pub fn ask_history_trigger(c : @ui.Ctx, key : String, words : Array[@ui.Run], style : @ui.TextStyle, line : Double) -> Int {
+  let id = c.id("ask-history/" + key)
+  // (its mark's ink eased as it is painted)
+  let lit = @motion.told(c, "ask-history-lit/" + key, if c.lit(id) || c.has_focus(id) { 1.0 } else { 0.0 }, spec=@motion.tween(dur_ms, ease=Out))
+  let b = c.box(style=ask_history_line, id~, fn() {
+    c.rich(words, style~) |> ignore
+    c.box(style=ask_history_mark.then(@ui.style(h=Fixed(line))), fn() {
+      let (text, muted) = (theme().p.text, theme().p.muted)
+      let mark = icon(c, "chevron-right", size=12.0, color=mix(text, lit.target(), muted))
+      c.ink_by(mark, fn() { mix(text, lit.get(c), muted) })
+    })
+    |> ignore
+  })
+  c.semantics(b, Button, id~, label=words.map(fn(w) { w.text }).join("") + " · " + t("web-main.history.details"))
+  c.focusable(id, node=b)
+  id
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let ask_history_line : @ui.Style = @ui.css("row gap=S1 align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let ask_history_mark : @ui.Style = @ui.css("justify=JCenter")
+
+///|
 // kept across runs: a value (no field of it changes)
 let ask_in_middle : @ui.TextStyle = @ui.text_style(center=true)
 
 ///|
-/// Its answer's buttons, as vault_foot lays them last on its card: a line of them, on to a second what has not the room
-/// on the first, out in the card's foot corners.
+/// Its answer's buttons, out in the card's foot corners. What does not fit goes onto a line above, leaving the first
+/// action in the card's bottom left.
 pub fn ask_buttons(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=ask_foot.then(foot_reach(button_height())), flow=true, line_gap=ask_foot_lines(), body) |> ignore
+  c.box(style=ask_foot.then(foot_reach(button_height())), flow_reverse=true, line_gap=ask_foot_lines(), fn() { card_foot_words(body) }) |> ignore
 }
 
 ///|
 /// The buttons of a card alone in the middle of what it is over: across its foot, each its share (foot_fills), the
 /// first and the last concentric with its foot corners (foot_reach); nothing to one side.
 pub fn ask_buttons_across(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  c.box(style=ask_across.then(foot_reach(button_height())), fn() {
+  c.box(style=ask_across.then(foot_reach(button_height())), flow=true, line_gap=ask_foot_lines(), fn() {
     let was = foot_fills.val
     foot_fills.val = true
     body()

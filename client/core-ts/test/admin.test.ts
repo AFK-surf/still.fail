@@ -2,7 +2,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
-import { feedback, list, overview, user, workspace } from "../src/views/admin.ts";
+import { admin, feedback, list, overview, user, workspace } from "../src/views/admin.ts";
+import { CoreError } from "../src/error.ts";
 import { relays } from "../src/views/admin-relays.ts";
 
 holdLanguage();
@@ -32,7 +33,7 @@ const reports = (): J => ({
   feedback: [
     {
       id: "F2", number: 2, channel: "beta", station: { id: "s1", name: "studio" }, workspace: { id: "w1", name: "产品" }, account: null,
-      title: "发送后消息消失", body: "## 步骤\n1. 发一条", area: "web", reporter: "Ann (Slack)", context: { version: "0.1.1212", session: "ember:c-1", extra: { a: 1 } },
+      title: "发送后消息消失", body: "## 步骤\n1. 发一条", area: "web", reporter: "Ann (Slack)", context: { version: "0.1.1212", session: "chat:c-1", extra: { a: 1 } },
       logs: "line 1\nline 2", status: "new", created_at: NOW - 60, updated_at: NOW - 60,
     },
     {
@@ -157,7 +158,7 @@ test("a_bug_reports_page_has_all_of_it_in_text_too", () => {
   assert.ok(context.some(([k, v]: J) => k === "version" && v === "0.1.1212") && context.some(([k, v]: J) => k === "extra" && v === '{"a":1}'), JSON.stringify(context));
   const text: string = page.text;
   assert.ok(text.startsWith("FB-2 发送后消息消失\n"), text);
-  for (const part of ["渠道: 测试版 (beta)", "Station: studio (s1)", "Workspace: 产品 (w1)", "反馈人: Ann (Slack)", "## 步骤", "session: ember:c-1", "```\nline 1\nline 2\n```"]) assert.ok(text.includes(part), `${part} in ${text}`);
+  for (const part of ["渠道: 测试版 (beta)", "Station: studio (s1)", "Workspace: 产品 (w1)", "反馈人: Ann (Slack)", "## 步骤", "session: chat:c-1", "```\nline 1\nline 2\n```"]) assert.ok(text.includes(part), `${part} in ${text}`);
   page = feedback("F1", reports());
   assert.deepEqual([page.logs, page.context.length, page.account.title], [null, 0, "ann@x.io"]);
   assert.ok(!page.text.includes("## 日志"));
@@ -204,4 +205,14 @@ test("the_relays_page_says_each_relays_load_now_and_over_the_range", () => {
   assert.equal(w.range, "week");
   assert.equal(w.relays[0].charts[0].series[0].values.length, 168);
   assert.ok(w.relays[0].ticks.every((tick: J) => /^\d+\/\d+$/.test(tick.label)));
+});
+
+test("a_bug_making_a_view_is_thrown_for_the_store_to_report_and_a_core_error_is_the_views", () => {
+  const view = (list: string, id?: string) => ({ topic: "adminItem", account: "a", list, ...(id ? { id } : {}) });
+  // The page's own error (no such user) is the view's value.
+  const missing = admin(view("users", "nobody"), (_, l) => ({ ok: l === "users" ? users() : workspaces() }), NOW * 1000, 0);
+  assert.ok(missing && "err" in missing && missing.err instanceof CoreError && missing.err.code === "http_404");
+  // A bug is not passed off as a CoreError (the web host sends one by its toJSON: a TypeError has none, and took the
+  // whole core down as "t.error.toJSON is not a function"): it is thrown, for the store to fail this topic with.
+  assert.throws(() => admin(view("feedback", "F1"), () => ({ ok: { get feedback(): J { throw new TypeError("a bug"); } } }), NOW * 1000, 0), TypeError);
 });

@@ -5,8 +5,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect, Fiber } from "effect";
 import type { Inner } from "../src/core.ts";
+import { Core } from "../src/core.ts";
 import { DriveKept, chatKeptId, keptId, outboxKeptId, sentKeptId } from "../src/drive-kept.ts";
 import { keptFirst } from "../src/station/calls.ts";
+import { HostWire } from "../src/station/wire.ts";
 import { FakeHost } from "../src/testing.ts";
 import { answers, call } from "./helpers.ts";
 import { Raw, started, stationReplies, status } from "./station-fixture.ts";
@@ -373,11 +375,71 @@ test("a chat's file opened is kept with its chat: read again from the device, li
   t.core.close();
 });
 
+test("a chat picture opened again after the core restarts is read from the device", async () => {
+  const t = await started();
+  const picture = bytesOf(40, 7);
+  const params = { station: ST, key: "k1", name: "picture.png", keep: true, size: picture.length };
+  stationReplies(t.host, (req) => {
+    if (!new URL(req.url).pathname.endsWith("/sessions/k1/parts")) return undefined;
+    return new Raw({ status: 200, headers: [["content-type", "image/png"], ["stillfail-total", String(picture.length)]], body: picture });
+  });
+  const asked = () => t.host.requests.filter((r) => r.url.includes("/sessions/k1/parts")).length;
+  const ui = t.core.connect();
+  call(t.core, ui, 1, "station.file", params);
+  await t.host.settle();
+  const first = answers(t.host.takeEmitted(), 1) as { bytes: Uint8Array };
+  assert.deepEqual(first.bytes, picture);
+  assert.equal(asked(), 1);
+  t.core.close();
+  // The station has gone away; the copy remains in the host's storage across a new core.
+  stationReplies(t.host, (req) => new URL(req.url).pathname.endsWith("/sessions/k1/parts") ? status(503, { error: "offline" }) : undefined);
+  const again = await Core.create(t.host, { clock: t.host.time.clock, sample: 0, wire: () => new HostWire(t.host) });
+  try {
+    call(again, again.connect(), 2, "station.file", params);
+    await t.host.settle();
+    const reopened = answers(t.host.takeEmitted(), 2) as { bytes: Uint8Array };
+    assert.deepEqual(reopened.bytes, picture);
+    assert.equal(asked(), 1, "the reopened picture did not ask the station again");
+  } finally {
+    again.close();
+  }
+});
+
+test("a chat's video streamed to a page that takes its bytes away (the web's worker moves them to the page): played, and kept all the same", async () => {
+  const t = await started();
+  const film = bytesOf(64, 30);
+  stationReplies(t.host, (req) => {
+    const u = new URL(req.url);
+    if (!u.pathname.endsWith("/sessions/k1/parts")) return undefined;
+    const offset = Number(u.searchParams.get("offset"));
+    return new Raw({ status: 200, headers: [["content-type", "video/mp4"], ["stillfail-total", "64"]], body: film.slice(offset, offset + Number(u.searchParams.get("length"))) });
+  });
+  const asked = () => t.host.requests.filter((r) => r.url.includes("/sessions/k1/")).length;
+  // (what the page is given is the page's: its buffer moved there, nothing of it left here)
+  const emit = t.host.emit.bind(t.host);
+  t.host.emit = (client, message) => {
+    emit(client, message);
+    if ("bytes" in message && message.bytes !== undefined) structuredClone(message.bytes.buffer, { transfer: [message.bytes.buffer as ArrayBuffer] });
+  };
+  const ui = t.core.connect();
+  call(t.core, ui, 1, "station.file.part", { station: ST, key: "k1", name: "film.mp4", offset: 0, length: 32, stream: true, keep: true, size: 64 });
+  await t.host.settle();
+  const said = t.host.takeEmitted().map(([, m]) => m as { id?: number; bytes?: Uint8Array; ok?: unknown; error?: unknown }).filter((m) => m.id === 1);
+  assert.deepEqual(said.flatMap((m) => (m.bytes ? [...m.bytes] : [])), [...film.subarray(0, 32)], "played");
+  assert.equal(said.find((m) => m.error !== undefined)?.error, undefined, "no error");
+  assert.ok(said.some((m) => m.ok !== undefined), "answered");
+  // read again: from the device
+  call(t.core, ui, 2, "station.file.part", { station: ST, key: "k1", name: "film.mp4", offset: 8, length: 16, keep: true, size: 64 });
+  await t.host.settle();
+  assert.equal(asked(), 1, "kept as it was played");
+  t.core.close();
+});
+
 test("the page of what the device keeps calls each chat as the chats' list does, the one keeping most first", async () => {
   const t = await started();
   const data = t.core.inner.data;
   // named by its agent; of still.fail's own, never named; a Slack thread, by its first line
-  data.putThread(ST, { id: 1, surface: "ember", title: null, autoTitle: "ccvm 扩容", sessions: [{ session: "k1" }] });
+  data.putThread(ST, { id: 1, surface: "ember", title: null, autoTitle: "处理构建问题", sessions: [{ session: "k1" }] });
   data.putThread(ST, { id: 2, surface: "ember", title: null, sessions: [{ session: "k2" }] });
   data.putThread(ST, { id: 3, surface: "slack:T1", channel: "C1", title: null, firstText: "<@U1> 看下构建", sessions: [{ session: "k3" }] });
   data.putItems("entry", ST, "1", [[1, { text: "a" }]]);
@@ -387,6 +449,6 @@ test("the page of what the device keeps calls each chat as the chats' list does,
   call(t.core, ui, 1, "cache.usage", {});
   await t.host.settle();
   const usage = answers(t.host.takeEmitted(), 1)?.ok as { chats: { thread: number; title: string | null }[] };
-  assert.deepEqual(usage.chats.filter((c) => c.thread <= 3).map((c) => [c.thread, c.title]), [[2, "新对话"], [3, "看下构建"], [1, "ccvm 扩容"]]);
+  assert.deepEqual(usage.chats.filter((c) => c.thread <= 3).map((c) => [c.thread, c.title]), [[2, "新对话"], [3, "看下构建"], [1, "处理构建问题"]]);
   t.core.close();
 });

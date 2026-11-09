@@ -3,6 +3,32 @@
 // and follows nothing.
 
 ///|
+test "a parent withdrawn between frames stops its children before advancing the drawing clock tells them" {
+  let now = Ref(0.0)
+  let data : @signals.Signal[String?] = @signals.signal(Some("station"))
+  let missing = Ref(0)
+  let t = @view.Tree::new(fn(root) {
+    root.box(fn(clock) {
+      clock.words(By(fn() { clock.drawn_at().to_string() })) |> ignore
+    }) |> ignore
+    root.show(at_once=true, fn() { data.get() is Some(_) }, fn(part) {
+      part.show(at_once=true, fn() {
+        match data.get() {
+          Some(name) => name != ""
+          None => { missing.val += 1; false }
+        }
+      }, fn(label) { label.words(Is("station")) |> ignore })
+    })
+  }, time=fn() { now.val })
+  t.frame(390.0, 844.0, now=0.0) |> ignore
+  now.val = 10.0
+  data.set(None)
+  t.frame(390.0, 844.0, now=now.val) |> ignore
+  assert_eq(missing.val, 0, msg="the child's data belongs to the part that has just been withdrawn")
+  assert_true(t.drawn().iter().all(fn(d) { d.words != "station" }))
+}
+
+///|
 test "a binding queued, then the property bound again: the one before runs no more, reads nothing again" {
   let a = @signals.signal(1L, same=fn(x, y) { x == y })
   let b = @signals.signal(2L, same=fn(x, y) { x == y })
@@ -32,7 +58,7 @@ test "a shown part let go with its own binding queued: that binding runs no more
   let words = @signals.signal("甲", same=fn(a, b) { a == b })
   let runs = Ref(0)
   let t = @view.Tree::new(fn(root) {
-    root.show(fn() { on.get() }, fn(v) {
+    root.show(at_once=true, fn() { on.get() }, fn(v) {
       v.words(By(fn() {
         runs.val = runs.val + 1
         words.get()
@@ -82,7 +108,7 @@ test "made in untracked inside a node's making: still the node's, let go with it
   let runs = Ref(0)
   let cleanups = Ref(0)
   let t = @view.Tree::new(fn(root) {
-    root.show(fn() { on.get() }, fn(_) {
+    root.show(at_once=true, fn() { on.get() }, fn(_) {
       @signals.untracked(fn() {
         @signals.effect_cleanup(fn() {
           outside.get() |> ignore
@@ -134,4 +160,109 @@ test "a handle on a node let go: what comes and goes made on it reads nothing, f
   assert_eq(reads.val, 0)
   assert_false(shown.watched())
   assert_eq(t.alive(), alive)
+}
+
+///|
+test "leaving followed: a reaction on it, of what leaves and of one it holds, told as it starts leaving and as it comes back, not as the frames come; reading no clock" {
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let own : Array[Bool] = []
+  let held : Array[Bool] = []
+  let t = @view.Tree::new(fn(root) {
+    root.show(fn() { on.get() }, fn(v) {
+      v.reacts(fn() { v.leaving() }, fn(l) { own.push(l) })
+      v.box(fn(k) { k.reacts(fn() { k.leaving() }, fn(l) { held.push(l) }) }) |> ignore
+    }, leave=100.0)
+  })
+  t.frame(390.0, 844.0, now=0.0) |> ignore
+  on.set(false)
+  t.frame(390.0, 844.0, now=10.0) |> ignore
+  t.frame(390.0, 844.0, now=20.0) |> ignore
+  let clock = t.clock_read()
+  t.frame(390.0, 844.0, now=30.0) |> ignore
+  on.set(true)
+  t.frame(390.0, 844.0, now=40.0) |> ignore
+  assert_eq((own, held, clock), ([false, true, false], [false, true, false], false))
+}
+
+///|
+test "the tree let go of from inside a walk of its scene: the walk ends there, and one after it walks nothing" {
+  let t = @view.Tree::new(fn(root) {
+    for w in ["甲", "乙", "丙"] {
+      root.box(fn(b) { b.words(Is(w)) |> ignore }) |> ignore
+    }
+  })
+  t.frame(390.0, 844.0) |> ignore
+  let mut before = 0
+  t.each_drawn(fn(_, _, _, _) { before += 1 })
+  assert_true(before >= 3, msg="the scene's three words walked: \{before}")
+  let mut seen = 0
+  t.each_drawn(fn(_, _, _, _) {
+    seen += 1
+    if seen == 1 {
+      t.dispose()
+    }
+  })
+  assert_eq(seen, 1, msg="nothing walked of it once it is let go of")
+  let mut after = 0
+  t.each_drawn(fn(_, _, _, _) { after += 1 })
+  assert_eq(after, 0)
+  assert_eq(t.drawn().length(), 0)
+}
+
+///|
+test "a walk of the scene inside another's: each where the walk alone puts it, the outer's places its own after it" {
+  let t = @view.Tree::new(fn(root) {
+    for w in ["甲", "乙", "丙"] {
+      root.box(fn(b) { b.padding(Is((4.0, 4.0, 4.0, 4.0))).box(fn(c) { c.words(Is(w)) |> ignore }) |> ignore })
+      |> ignore
+    }
+  })
+  t.frame(390.0, 844.0) |> ignore
+  let alone : Array[(Double, Double)] = []
+  t.each_drawn(fn(_, x, y, _) { alone.push((x, y)) })
+  let outer : Array[(Double, Double)] = []
+  let inner : Array[Array[(Double, Double)]] = []
+  t.each_drawn(fn(_, x, y, _) {
+    let these = []
+    t.each_drawn(fn(_, ix, iy, _) { these.push((ix, iy)) })
+    inner.push(these)
+    outer.push((x, y))
+  })
+  assert_true(alone.length() >= 3, msg="the three words walked: \{alone.length()}")
+  assert_eq(outer, alone)
+  assert_eq(inner.length(), alone.length())
+  assert_true(inner.iter().all(fn(i) { i == alone }))
+}
+
+///|
+test "the scene's order made again from inside a walk of it (more of it built, laid out): the walk goes no further than the order is long, a walk after it walks all of it" {
+  let more = @signals.signal(false, same=fn(a, b) { a == b })
+  let t = @view.Tree::new(fn(root) {
+    root.box(fn(b) { b.words(Is("甲")) |> ignore }) |> ignore
+    root.show(fn() { more.get() }, fn(s) {
+      for w in ["乙", "丙", "丁"] {
+        s.box(fn(b) { b.words(Is(w)) |> ignore }) |> ignore
+      }
+    })
+  })
+  t.frame(390.0, 844.0) |> ignore
+  let mut before = 0
+  t.each_drawn(fn(_, _, _, _) { before += 1 })
+  let mut seen = 0
+  t.each_drawn(fn(_, _, _, _) {
+    seen += 1
+    if seen == 1 {
+      more.set(true)
+      t.frame(390.0, 844.0) |> ignore
+    }
+  })
+  let words : Array[String] = []
+  t.each_drawn(fn(c, _, _, _) { words.push(c.words) })
+  let after = words.length()
+  assert_true(seen <= after, msg="walked \{seen}, the order now \{after}")
+  // (the three it built drawn, each its words)
+  assert_true(after >= before + 3, msg="walked \{before} before it, \{after} after")
+  for w in ["甲", "乙", "丙", "丁"] {
+    assert_true(words.contains(w), msg="\{w} walked: \{words}")
+  }
 }

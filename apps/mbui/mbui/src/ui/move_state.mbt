@@ -3,7 +3,7 @@
 // web lists them) and sets out once (Ctx::move_state). From then the view builds the new state as usual, and each box
 // so named is shown from what it showed as the move set out to what it is built as now, all of them on one clock and
 // curve. What the view builds stays the truth: a move holds nothing once it ends. Said again over one going on, it
-// goes on from wherever that had got to. Motion as data (docs/determinism.md): what is shown at a moment is a
+// goes on from wherever that had got to. Motion as data: what is shown at a moment is a
 // function of that moment, however many frames came between.
 //
 // Its first frame builds the new state, which may take longer than the display's frame (a page built for the first
@@ -268,7 +268,9 @@ pub fn Ctx::move_state(
     waits_late: true,
     late_at,
   }
-  self.moving_as(who, run as &Moving, "a move of \{names.keys().collect()} set out at \{loc}")
+  let what = "a move of \{names.keys().collect()} set out at \{loc}"
+  who.what = what
+  self.moving_as(who, run as &Moving, what)
   self.move_runs.push(run)
 }
 
@@ -308,6 +310,21 @@ pub fn Ctx::moved(self : Ctx, name : String, target : Double) -> Double {
     }
   }
   v
+}
+
+///|
+/// When a move listing value `name` (Ctx::move_state) is there, as it has worked out how long it goes (Ctx::moved
+/// asked first this frame); none while none goes on. What goes on with it is there then too, whichever frame sees it.
+pub fn Ctx::moved_ends(self : Ctx, name : String) -> Double? {
+  let mut k = self.move_runs.length() - 1
+  while k >= 0 {
+    let run = self.move_runs[k]
+    if run.vars.contains(name) {
+      return Some(run.ends())
+    }
+    k = k - 1
+  }
+  None
 }
 
 ///|

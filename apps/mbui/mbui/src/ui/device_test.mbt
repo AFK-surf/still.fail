@@ -334,3 +334,28 @@ test "what the app writes, keeps awake and fires is the test's to read" {
   })
   assert_true(u.find("say it") is Some(_))
 }
+
+///|
+test "what is copied is felt, once a copy; with haptics off nothing is" {
+  let copy = Ref::new(0)
+  let t = @ui.Tester::new(fn(c) {
+    if copy.val > 0 {
+      copy.val -= 1
+      c.copy_text("words")
+    }
+    c.text("x", wrap=false) |> ignore
+  })
+  copy.val = 1
+  t.draw()
+  assert_eq(t.clipboard(), "words")
+  assert_eq(t.haptics(), [KeyboardTap])
+  @ui.set_haptics(false)
+  copy.val = 1
+  t.draw()
+  @ui.haptic(LongPress)
+  assert_eq(t.haptics(), [KeyboardTap])
+  // (on again, as a new test's Tester has them)
+  @ui.set_haptics(true)
+  @ui.haptic(LongPress)
+  assert_eq(t.haptics(), [KeyboardTap, LongPress])
+}

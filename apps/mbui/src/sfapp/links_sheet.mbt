@@ -1,4 +1,4 @@
-// An invitation's link (/invite#<token>) opened in the app (ember apps/android settings/screens/Workspaces.kt
+// An invitation's link (/invite#<token>) opened in the app (still.fail apps/android settings/screens/Workspaces.kt
 // openInvite, InviteLinkSheet, invitationToken): what it leads to, read as the account it would be accepted by
 // (`invitation.preview`), shown in a sheet of half the screen before it is accepted (`invitation.accept`), that
 // account chosen when more than one is signed in. Signed out, the sheet says to sign in first. Without a link (pasted
@@ -47,7 +47,7 @@ fn invite_reset() -> Unit {
 }
 
 ///|
-/// An invitation's link opened in the app (Workspaces.kt openInvite): what it leads to, before it is accepted.
+/// An invitation's link opened in the app: what it leads to, before it is accepted.
 fn open_invite(token : String) -> Unit {
   invite_reset()
   invite.token.set(Some(token))
@@ -57,7 +57,7 @@ fn open_invite(token : String) -> Unit {
 
 ///|
 /// The token of an invitation's link (`<cloud>/invite#<token>`), or what was pasted when it is a token by itself
-/// (Workspaces.kt invitationToken).
+/// .
 fn invitation_token(words : String) -> String? {
   let t = words.trim(chars=" \n\t").to_string()
   if t == "" {
@@ -91,7 +91,7 @@ let invite_body : @ui.Style = @ui.css("w=Full h=Full px=S5 gap=S2_5 clip")
 let invite_buttons : @ui.Style = @ui.css("row w=Full pt=S1_5 pb=S6 gap=S2 justify=JEnd")
 
 ///|
-/// The field a link is pasted in (Controls.kt Field): the surface, a line round it, 12 round, 12 and 10 in.
+/// The field a link is pasted in: the surface, a line round it, 12 round, 12 and 10 in.
 // kept across runs: a value (no field of it changes)
 let invite_field : @ui.Style = @ui.css("w=Full px=S3 py=S2_5 radius=Xl bg=Card border=B1 border_color=Line")
 
@@ -109,17 +109,17 @@ let invite_label : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, co
 let invite_error : @ui.TextStyle = @ui.text_style(size=Meta, color=Danger)
 
 ///|
-/// The invitation's sheet with no link yet: one to paste (Workspaces.kt openInviteLink): the landing's 用邀请链接加入.
+/// The invitation's sheet with no link yet: one to paste: the landing's 用邀请链接加入.
 fn open_invite_link() -> Unit {
   invite_reset()
   raise_sheet(InviteLink)
 }
 
 ///|
-/// The sheet (Workspaces.kt InviteLinkSheet), over the pages or the sign-in page.
+/// The sheet, over the pages or the sign-in page.
 fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
-  let accounts = (src.topic)("accounts", {})
+  let accounts = src.topic("accounts", {}).get().snapshot()
   let list = match accounts.value {
     Some(Array(a)) => a
     _ => []
@@ -168,18 +168,19 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
     c.box(style=invite_body, fn() {
       lead(fill("android-misc.signIn.invited", [("app", "still.fail")]))
       buttons(fn() {
-        if @sf.button(c, tr("common.cancel"), key="invite/cancel") {
+        @sf.button(c, tr("common.cancel"), key="invite/cancel", on_press=fn() {
           lower_sheet()
-        }
-        if @sf.button(
-            c,
-            tr("android-misc.signIn.google"),
-            key="invite/sign-in",
-            tone=Primary,
-            busy=(src.signing_in)(),
-          ) {
-          (src.sign_in)()
-        }
+        }) |> ignore
+        @sf.button(
+          c,
+          tr("android-misc.signIn.google"),
+          key="invite/sign-in",
+          tone=Primary,
+          busy=(src.signing_in)(),
+          on_press=fn() {
+            (src.sign_in)()
+          },
+        ) |> ignore
       })
     })
     |> ignore
@@ -219,32 +220,35 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
         )
         |> ignore
         buttons(fn() {
-          if @sf.button(c, tr("common.cancel"), key="invite/cancel") {
+          @sf.button(c, tr("common.cancel"), key="invite/cancel", on_press=fn() {
             invite.field.take() |> ignore
             lower_sheet()
-          }
+          }) |> ignore
           let token = invitation_token(words)
-          if @sf.button(
-              c,
-              tr("android-misc.invite.view"),
-              key="invite/view",
-              tone=Primary,
-              disabled=token is None,
-            ) {
-            invite.field.take() |> ignore
-            invite.token.set(token)
-          }
+          @sf.button(
+            c,
+            tr("android-misc.invite.view"),
+            key="invite/view",
+            tone=Primary,
+            disabled=token is None,
+            on_press=fn() {
+              invite.field.take() |> ignore
+              invite.token.set(token)
+            },
+          ) |> ignore
         })
       }
       (Some(_), Some(Err(why))) => {
         lead(why)
         buttons(fn() {
-          if invite.given.get() is None && @sf.button(c, tr("android-misc.invite.otherLink"), key="invite/other") {
-            invite.token.set(None)
+          if invite.given.get() is None {
+            @sf.button(c, tr("android-misc.invite.otherLink"), key="invite/other", on_press=fn() {
+              invite.token.set(None)
+            }) |> ignore
           }
-          if @sf.button(c, tr("common.close"), key="invite/close", tone=Primary) {
+          @sf.button(c, tr("common.close"), key="invite/close", tone=Primary, on_press=fn() {
             lower_sheet()
-          }
+          }) |> ignore
         })
       }
       (Some(_), None) => @sf.wait_line(c, tr("common.reading"), key="invite")
@@ -269,9 +273,9 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
           c.box(style=@sf.full_width, fn() {
             for a in list {
               let s = text(Some(a), "sub")
-              if @sf.choice_row(c, "invite/as/" + s, s == sub, text(Some(a), "email")) {
+              @sf.choice_row(c, "invite/as/" + s, s == sub, text(Some(a), "email"), on_press=fn() {
                 invite.chosen.set(s)
-              }
+              }) |> ignore
             }
           })
           |> ignore
@@ -284,19 +288,20 @@ fn invite_sheet(c : @ui.Ctx, src : Source) -> Unit {
           None => ""
         }
         buttons(fn() {
-          if @sf.button(c, tr("common.cancel"), key="invite/cancel") {
+          @sf.button(c, tr("common.cancel"), key="invite/cancel", on_press=fn() {
             lower_sheet()
-          }
-          if @sf.button(
-              c,
-              fill("android-misc.invite.joinAs", [("email", as_email)]),
-              key="invite/join",
-              tone=Primary,
-              busy=invite.accepting.get(),
-              disabled=sub == "",
-            ) {
-            accept_invite(src, tok, sub, text(Some(p), "name"))
-          }
+          }) |> ignore
+          @sf.button(
+            c,
+            fill("android-misc.invite.joinAs", [("email", as_email)]),
+            key="invite/join",
+            tone=Primary,
+            busy=invite.accepting.get(),
+            disabled=sub == "",
+            on_press=fn() {
+              accept_invite(src, tok, sub, text(Some(p), "name"))
+            },
+          ) |> ignore
         })
       }
     }

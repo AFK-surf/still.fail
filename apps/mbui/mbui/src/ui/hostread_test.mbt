@@ -3,7 +3,7 @@ test "host reads: under a Tester the defaults are its own, not the machine's" {
   let seen : Array[String] = []
   let t = @ui.Tester::new(fn(c) {
     seen.push(
-      "\{@ui.platform()} \{@ui.system_dark()} \{@ui.window_inset()} [\{@ui.env("HOME")}] \{@ui.app_version()} \{@ui.now() == c.now()}",
+      "\{@ui.platform()} \{@ui.system_dark()} \{@ui.window_inset()} [\{@ui.env("HOME")}] \{@ui.app_version()} \{@hostapi.now() == c.moment()}",
     )
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
@@ -58,9 +58,9 @@ test "host reads: the clock is the Tester's" {
   let t = @ui.Tester::new(fn(c) {
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
-  let t0 = @ui.now()
+  let t0 = @hostapi.now()
   assert_eq(t0, t.time())
   t.frame()
   assert_true(t.time() > t0)
-  assert_eq(@ui.now(), t.time())
+  assert_eq(@hostapi.now(), t.time())
 }

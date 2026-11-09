@@ -1,4 +1,4 @@
-// Messages between a UI and the core (protocol.rs; docs/client-core.md, Protocol). The JSON is the Rust core's.
+// Messages between a UI and the core (protocol.rs, Protocol). The JSON is the Rust core's.
 import type { CoreError } from "./error.ts";
 import type { AnyOp } from "./collections.ts";
 import { isObject, toJson } from "./util.ts";
@@ -12,7 +12,9 @@ export type RequestId = number;
 /// them in the message, the native hosts hand them over as they are (never as base64 in the JSON).
 export type ClientMessage =
   | { kind: "call"; id: RequestId; call: string; params: unknown; bytes?: Uint8Array }
-  | { kind: "subscribe"; id: RequestId; subscribe: Topic; keyed?: boolean }
+  /// `from`: another of its subscriptions to the same topic with other params (a list's first rows, more of them asked
+  /// now), still held: this one's first value goes as a keyed delta to what that one has (store.ts `#firstFrom`).
+  | { kind: "subscribe"; id: RequestId; subscribe: Topic; keyed?: boolean; from?: RequestId }
   | { kind: "unsubscribe"; id: RequestId; unsubscribe: boolean }
   | { kind: "cancel"; id: RequestId; cancel: boolean };
 
@@ -24,6 +26,8 @@ export type CoreMessage =
   /// native hosts hand them over as they are (never as base64 in the JSON).
   | { id: RequestId; value: unknown; bytes?: Uint8Array }
   | { id: RequestId; delta: AnyOp[] }
+  /// A subscription's first value as what changed from what its `from` has now (a subscribe's `from`).
+  | { id: RequestId; delta: AnyOp[]; from: RequestId }
   /// A topic with no value yet whose value waits on a station (or the cloud), not on the core reading what the device
   /// holds (store.ts `waits`): what shows it can show what is to come now, not what it holds a moment later.
   | { id: RequestId; waiting: true };
@@ -42,7 +46,7 @@ export class Beside {
 /// options left out). `station` is `"<workspace>/<station>"`.
 export type Topic = { topic: string; [param: string]: unknown };
 
-type Param = "string" | "u64" | "u32" | "u16" | "bool";
+type Param = "string" | "u64" | "u32" | "u16" | "bool" | "object";
 /// How each param is kept: `req` must be given; `def` is filled in when absent (and always sent); `opt` is null when
 /// absent and sent so; `skip` is left out when absent (`skip_serializing_if`); `skipFalse`, a bool left out when false.
 type Spec = Record<string, [Param, "req" | "def" | "opt" | "skip" | "skipFalse"]>;
@@ -62,7 +66,7 @@ export const TOPICS: Record<string, Spec> = {
   host: { station: S },
   footprint: { station: S },
   memory: { station: S },
-  outflowGrants: { station: S },
+  presets: { station: S },
   net: { station: S },
   way: { station: S },
   threads: { station: S },
@@ -81,11 +85,11 @@ export const TOPICS: Record<string, Spec> = {
   adminItem: { account: S, list: S, id: S },
   adminOverview: { account: S },
   adminRelays: { account: S, range: ["string", "skip"] },
-  chats: { scope: S, mine: ["bool", "def"], watching: ["bool", "skipFalse"] },
-  stations: { scope: S, drive: ["bool", "skipFalse"], here: ["string", "skip"] },
+  chats: { scope: S, mine: ["bool", "def"], watching: ["bool", "skipFalse"], hidden: ["bool", "skipFalse"], limit: ["u32", "skip"] },
+  stations: { scope: S, drive: ["bool", "skipFalse"], here: ["string", "skip"], brief: ["bool", "skipFalse"] },
   profiles: { scope: S },
   connects: { scope: S, mine: ["bool", "def"] },
-  chat: { station: S, thread: ["u64", "opt"], session: ["string", "opt"] },
+  chat: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], compact: ["bool", "skipFalse"] },
   history: { station: S, key: S },
   agentCard: { station: S, key: S },
   stationNet: { station: S },
@@ -97,21 +101,22 @@ export const TOPICS: Record<string, Spec> = {
   notify: { workspace: ["string", "skip"] },
   chatSearch: { scope: S, query: ["string", "def"], station: ["string", "skip"], exclude: ["string", "skip"], limit: ["u32", "skip"], messages: ["u32", "skip"], elsewhere: ["bool", "skipFalse"] },
   archivedRows: { station: S },
-  archive: { scope: S },
+  archive: { scope: S, q: ["string", "skip"], limit: ["u32", "skip"] },
   search: { scope: S, query: ["string", "def"], kind: ["string", "skip"], limit: ["u32", "skip"] },
-  stationSearch: { station: S, q: S, kind: ["string", "skip"], limit: ["u32", "skip"] },
+  stationSearch: { station: S, q: S, kind: ["string", "skip"], limit: ["u32", "skip"], archived: ["bool", "skipFalse"] },
   linkPreview: { station: S, url: S },
   filePeek: { station: S, key: S, path: S, line: ["u32", "skip"] },
+  messagePeek: { station: S, thread: ["u64", "req"], seq: ["u64", "req"] },
   newChat: { scope: S },
   shareIn: { scope: S, source: S, query: ["string", "def"] },
   pick: { station: S, of: S },
-  chatJobs: { station: S, thread: ["u64", "opt"], session: ["string", "opt"] },
+  chatJobs: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], compact: ["bool", "skipFalse"], summary: ["bool", "skipFalse"] },
   chatLetters: { station: S, thread: ["u64", "req"] },
   chatThings: { station: S, thread: ["u64", "req"], q: ["string", "skip"] },
-  imageNear: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], path: S },
+  imageNear: { station: S, thread: ["u64", "opt"], session: ["string", "opt"], path: S, at: ["string", "skip"] },
   longJobs: { scope: S },
   stationUsage: { station: S },
-  usage: { scope: S, days: ["u32", "skip"] },
+  usage: { scope: S, days: ["u32", "skip"], split: ["string", "skip"], only: ["object", "skip"], day: ["string", "skip"] },
   fleet: { scope: S },
   railCard: { scope: S, place: S },
   settings: { scope: S },
@@ -132,6 +137,7 @@ export const TOPICS: Record<string, Spec> = {
   agentEnvForm: { station: S, form: S },
   profileFlow: { station: S, form: S },
   changelog: {},
+  releases: {},
   fonts: {},
   workspaceMarks: { workspace: ["string", "skip"] },
   workspaceWays: { workspace: S },
@@ -159,23 +165,18 @@ function fits(value: unknown, kind: Param): boolean {
       return typeof value === "string";
     case "bool":
       return typeof value === "boolean";
+    case "object":
+      return isObject(value);
     default:
       return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= LIMITS[kind]!;
   }
 }
 
 /// A topic as the UI said it, or null when it is none (the subscribe is then no message the core knows).
-/// `moduleTopic`: whether a name the core does not know is an app's module's topic (module.ts, `<module>.…`): its
-/// params are the module's to check, taken as they come where each is a string, number, boolean or null.
-export function parseTopic(raw: unknown, moduleTopic?: (name: string) => boolean): Topic | null {
+export function parseTopic(raw: unknown): Topic | null {
   if (!isObject(raw) || typeof raw.topic !== "string") return null;
   const spec = TOPICS[raw.topic];
-  if (!spec) {
-    if (!moduleTopic?.(raw.topic)) return null;
-    const params = Object.entries(raw).filter(([k]) => k !== "topic");
-    if (params.some(([, v]) => v !== null && !["string", "number", "boolean"].includes(typeof v))) return null;
-    return { topic: raw.topic, ...Object.fromEntries(params) };
-  }
+  if (!spec) return null;
   const out: Topic = { topic: raw.topic };
   for (const [name, [kind, how]] of Object.entries(spec)) {
     const value = raw[name];
@@ -203,7 +204,7 @@ export function sameTopic(a: Topic, b: Topic): boolean {
   return topicKey(a) === topicKey(b);
 }
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "outflowGrants", "linkPreview", "filePeek"]);
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "stationResources", "session", "live", "thread", "letters", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch", "memory", "presets", "linkPreview", "filePeek", "messagePeek"]);
 const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "chatLetters", "chatThings", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "fleet", "railCard", "settings", "resources", "adminList", "adminItem", "adminOverview", "adminRelays", "workspaceWays"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.
@@ -216,9 +217,8 @@ export function isView(topic: Topic): boolean {
 }
 
 /// A message from a UI, or why it is none (serde's words, as the native host answers them: `bad_message`). `bytes`:
-/// those a native host handed over beside it; a page's come in it. `moduleTopic`: which topics an app's modules have
-/// (parseTopic).
-export function parseClientMessage(raw: unknown, bytes?: Uint8Array, moduleTopic?: (name: string) => boolean): ClientMessage | { invalid: string } {
+/// those a native host handed over beside it; a page's come in it.
+export function parseClientMessage(raw: unknown, bytes?: Uint8Array): ClientMessage | { invalid: string } {
   const bad = { invalid: "data did not match any variant of untagged enum ClientMessage" };
   if (!isObject(raw)) return bad;
   const id = raw.id;
@@ -229,9 +229,15 @@ export function parseClientMessage(raw: unknown, bytes?: Uint8Array, moduleTopic
     return beside === undefined ? { kind: "call", id, call: raw.call, params } : { kind: "call", id, call: raw.call, params, bytes: beside };
   }
   if ("subscribe" in raw) {
-    const topic = parseTopic(raw.subscribe, moduleTopic);
+    const topic = parseTopic(raw.subscribe);
     // `keyed`: the UI applies keyed ops (collections.ts); the Rust core ignores it.
-    if (topic) return raw.keyed === true ? { kind: "subscribe", id, subscribe: topic, keyed: true } : { kind: "subscribe", id, subscribe: topic };
+    if (topic) {
+      if (raw.keyed !== true) return { kind: "subscribe", id, subscribe: topic };
+      const from = raw.from;
+      return typeof from === "number" && Number.isInteger(from) && from >= 0 && from !== id
+        ? { kind: "subscribe", id, subscribe: topic, keyed: true, from }
+        : { kind: "subscribe", id, subscribe: topic, keyed: true };
+    }
   }
   if (typeof raw.unsubscribe === "boolean") return { kind: "unsubscribe", id, unsubscribe: raw.unsubscribe };
   if (typeof raw.cancel === "boolean") return { kind: "cancel", id, cancel: raw.cancel };

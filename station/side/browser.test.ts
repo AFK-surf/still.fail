@@ -15,6 +15,7 @@ import { StationBrowser } from "../src/browser/browser.ts";
 import { type Cdp, connectCdp } from "../src/browser/cdp.ts";
 import { chromeHost } from "../src/browser/chrome.ts";
 import { BEHIND } from "../src/browser/proxy.ts";
+import { type FormField, TabForm, drive } from "../src/browser/signin-form.ts";
 import { COPY_BINDING, LOGIN_BINDING, PASSKEY_BINDING, jpegSize } from "../src/browser/view.ts";
 import type { Clip, LoginField, PasskeyAsk } from "../src/screens/source.ts";
 import { makeScreens } from "../src/screens/source.ts";
@@ -251,6 +252,79 @@ test("a tab's login form, for a person driving it: the field in focus said with 
   }
 });
 
+test("a site's sign-in filled by the station from what a person's app gave: an account, then a password, then a code it asks for, each typed as keys and sent; refused, stuck behind a captcha or on another site, a person is needed", { skip: binary === undefined && "no Chrome here" }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "side-browser-signin-"));
+  const screens = makeScreens();
+  const browser = new StationBrowser({ dir, chrome: chromeHost({ dir, headless: true }), screens });
+  // A site's sign-in in three steps, as large sites make them: the account (sent by its button only, by script), the
+  // password (Enter sends its form), a code split one digit to a box (the page moving the focus on as each is typed).
+  const pages: Record<string, string> = {
+    "/": `<title>a</title><input id=u autocomplete=username><button id=next type=button>Next</button>
+<script>window.typed = ""; u.addEventListener("keydown", (e) => (typed += e.key)); u.addEventListener("input", () => (typed = typed || "input"));
+next.onclick = () => (location.href = "/password?u=" + encodeURIComponent(u.value));</script>`,
+    "/password": `<title>p</title><form action=/check><input type=password name=p id=p></form>`,
+    "/code": `<title>c</title><form action=/home>${[0, 1, 2, 3, 4, 5].map((i) => `<input name=d${i} maxlength=1 inputmode=numeric autocomplete=${i === 0 ? "one-time-code" : "off"}>`).join("")}<button>Verify</button></form>
+<script>const boxes = [...document.querySelectorAll("input")]; boxes.forEach((b, i) => b.addEventListener("input", () => { if (b.value && boxes[i + 1]) boxes[i + 1].focus(); }));</script>`,
+    "/home": `<title>home</title><p>signed in</p>`,
+    "/captcha": `<title>x</title><form><input type=password id=p></form><iframe src="/recaptcha/api2/anchor" style="width:300px;height:80px"></iframe>`,
+  };
+  let account = "";
+  const server = createServer((req, res) => {
+    const u = new URL(req.url ?? "/", "http://x");
+    if (u.pathname === "/password") account = u.searchParams.get("u") ?? "";
+    if (u.pathname === "/check") return res.writeHead(302, { location: u.searchParams.get("p") === "correct horse" && account === "a@x.com" ? "/code" : "/password" }).end();
+    if (u.pathname === "/home" && [0, 1, 2, 3, 4, 5].map((i) => u.searchParams.get(`d${i}`)).join("") !== "123456") return res.writeHead(302, { location: "/code" }).end();
+    res.writeHead(200, { "content-type": "text/html" }).end(pages[u.pathname] ?? "<title>none</title>");
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+  let agent: Cdp | null = null;
+  try {
+    const s = await browser.endpoint();
+    agent = await connectCdp(s.ws!);
+    const open = async (path: string) => {
+      const { targetId } = await agent!.send("Target.createTarget", { url: `${base}${path}` });
+      await until(() => browser.hasTab(targetId), "the tab is there");
+      const { cdp, session } = await browser.attach(targetId);
+      await until(async () => (await cdp.send("Runtime.evaluate", { expression: "document.readyState", returnByValue: true }, session)).result?.value === "complete", "the page loads");
+      return { targetId, form: new TabForm(cdp, session, targetId), cdp, session };
+    };
+
+    const { form, cdp, session } = await open("/");
+    assert.deepEqual(await form.look(), { username: true, password: false, code: false, blocked: false });
+    const used = new Set<FormField>();
+    // Another site's: nothing typed.
+    assert.deepEqual(await drive(form, "example.com", { username: "a@x.com", password: "correct horse" }, used, wait), { state: "person", why: "elsewhere" });
+    assert.equal(used.size, 0);
+    const first = await drive(form, "127.0.0.1", { username: "a@x.com", password: "correct horse" }, used, wait);
+    assert.deepEqual(first, { state: "code" }, "account, then password, then the code it was not given");
+    assert.equal(new URL(await form.url()).pathname, "/code");
+    assert.equal(account, "a@x.com");
+    assert.deepEqual([...used].sort(), ["password", "username"]);
+    const done = await drive(form, "127.0.0.1", { username: "a@x.com", password: "correct horse", code: "123456" }, used, wait);
+    assert.deepEqual(done, { state: "left" });
+    assert.equal(new URL(await form.url()).pathname, "/home");
+    assert.equal((await cdp.send("Runtime.evaluate", { expression: "document.title", returnByValue: true }, session)).result?.value, "home");
+    form.close();
+
+    // A wrong password: the page asks again for what was typed.
+    const wrong = await open("/password");
+    assert.deepEqual(await drive(wrong.form, "127.0.0.1", { password: "nope" }, new Set(), wait), { state: "person", why: "refused" });
+    wrong.form.close();
+    // A captcha on the page: a person's.
+    const captcha = await open("/captcha");
+    assert.deepEqual(await drive(captcha.form, "127.0.0.1", { password: "x" }, new Set(), wait), { state: "person", why: "blocked" });
+    captcha.form.close();
+  } finally {
+    agent?.close();
+    await browser.stop().catch(() => {});
+    await browser.close();
+    server.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("a tab's passkey sign-in, for a person driving it: asked with the tab's origin, answered from their app as the browser would, refused for another site, given up with the page's signal", { skip: binary === undefined && "no Chrome here" }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "side-browser-passkey-"));
   const screens = makeScreens();
@@ -417,6 +491,98 @@ const hasPlaywright = (() => {
     return false;
   }
 })();
+
+test("a passkey added in a chat's browser is kept with its sign-in, signs in another chat granted it (its tabs, a view's hook letting the browser sign), and goes out with the grant", { skip: binary === undefined ? "no Chrome here" : !hasPlaywright && "no Playwright here (install the repository's root)" }, async () => {
+  const { chromium } = (await import(PLAYWRIGHT)) as any;
+  const { Browsers } = await import("../src/browser/browsers.ts");
+  const { browserDoor, sessionPath } = await import("../src/browser/proxy.ts");
+  const { openAgentsDoor } = await import("../src/tools/http.ts");
+  const { McpEndpoint } = await import("../src/tools/mcp.ts");
+  const { stateOf } = await import("../src/browser/signins.ts");
+  const dir = mkdtempSync(join(tmpdir(), "side-passkeys-"));
+  const screens = makeScreens();
+  const browsers = new Browsers({ dir, chrome: chromeHost({ dir }), screens });
+  const takenOut: string[] = [];
+  browsers.onTakenOut((_s, _r, kept) => takenOut.push(kept));
+  // A site that makes a passkey and signs in with one, as sites ask: what came back (or why not) said.
+  const page = `<title>passkeys</title><script>
+const b64 = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/, "");
+window.make = () => navigator.credentials.create({ signal: AbortSignal.timeout(5000), publicKey: { rp: { id: "localhost", name: "site" }, user: { id: new Uint8Array([1, 2, 3]), name: "alice", displayName: "Alice" },
+  challenge: new Uint8Array([1, 2, 3, 4]), pubKeyCredParams: [{ type: "public-key", alg: -7 }], authenticatorSelection: { residentKey: "required", userVerification: "required" } } })
+  .then((c) => b64(c.rawId), (e) => e.name);
+window.sign = () => navigator.credentials.get({ signal: AbortSignal.timeout(5000), publicKey: { challenge: new Uint8Array([5, 6, 7]), rpId: "localhost", userVerification: "required" } })
+  .then((c) => b64(c.rawId), (e) => e.name);
+</script>`;
+  const server = createServer((_, res) => res.writeHead(200, { "content-type": "text/html" }).end(page));
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  // (a relying party is a domain, not an address: the site as localhost, which is a secure context too)
+  const site = `http://localhost:${(server.address() as AddressInfo).port}/`;
+  const door = await openAgentsDoor({ port: 0 }, new McpEndpoint(() => undefined, []), () => ({ status: 404, body: {} }), () => null, () => [browserDoor(browsers)]);
+  const connect = (session: string) => chromium.connectOverCDP(`ws://127.0.0.1:${door.port}${sessionPath(session)}`);
+  try {
+    const one = await connect("chat-1");
+    const two = await connect("chat-2");
+    // Made in chat-1's tab with no prompt (its authenticator), and kept with the sign-in, its private key with it.
+    const p1 = await one.contexts()[0]!.newPage();
+    await p1.goto(site);
+    const made = await until(async () => {
+      const r = await p1.evaluate("make()");
+      return r === "NotAllowedError" ? null : r;
+    }, "a passkey made in chat-1's tab");
+    assert.match(made, /^[A-Za-z0-9_-]{16,}$/);
+    assert.equal(await p1.evaluate("sign()"), made, "it signs there");
+    const kept = stateOf(await browsers.cookies("chat-1", ["localhost"], false));
+    assert.equal(kept.passkeys.length, 1);
+    assert.equal(kept.passkeys[0]!.rpId, "localhost");
+    assert.ok(kept.passkeys[0]!.privateKey.length > 40, "its private key kept");
+    assert.equal((await browsers.cookies("chat-1", ["example.org"], false)), "[]", "none of another site's: the cookies alone, as before");
+    // chat-2 has none of its own; granted the sign-in, its tab signs with it, and a tab opened after too.
+    const p2 = await two.contexts()[0]!.newPage();
+    await p2.goto(site);
+    // (its tab's authenticator given as its page comes: until then, nothing answers)
+    assert.equal(await until(async () => {
+      const r = await p2.evaluate("sign()");
+      return r === "TimeoutError" ? null : r;
+    }, "chat-2's tab has its authenticator"), "NotAllowedError");
+    await browsers.signIn("chat-2", { request: "r_1", sites: ["localhost"], cookies: JSON.stringify(kept), until: Math.floor(Date.now() / 1000) + 8 });
+    assert.equal(await p2.evaluate("sign()"), made);
+    const p3 = await two.contexts()[0]!.newPage();
+    await p3.goto(site);
+    assert.equal(await until(async () => {
+      const r = await p3.evaluate("sign()");
+      return r === "NotAllowedError" ? null : r;
+    }, "a tab opened after has it"), made);
+    // A person driving the tab: the view's hook leaves a sign-in the context can sign to the browser, no device asked.
+    const [tab] = browsers.tabs("chat-2").filter((t) => t.url === site);
+    const view = await screens.get(`browser:${tab!.id}`)!.open({ maxWidth: 800, maxHeight: 600, codecs: ["jpeg"] });
+    await view.next();
+    const heard: (PasskeyAsk | null)[] = [];
+    const unwatch = view.watchPasskey!((a) => heard.push(a));
+    const page2 = two.contexts()[0]!.pages().find((p: { url(): string }) => p.url() === site)!;
+    await until(async () => (await page2.evaluate(`typeof window.${PASSKEY_BINDING}`)) === "function", "the hook is there");
+    assert.equal(await page2.evaluate("sign()"), made);
+    assert.deepEqual(heard.filter((a) => a !== null), [], "not asked of the person's device");
+    unwatch();
+    view.close();
+    // The grant ends: taken out (no tab of chat-2 signs), and given back as it was then, its count gone up.
+    const afterwards = await until(async () => {
+      const r = await p2.evaluate("sign()");
+      return r === made ? null : r;
+    }, "taken out as its grant ends", 20_000);
+    assert.equal(afterwards, "NotAllowedError");
+    const back = stateOf(await until(() => takenOut.at(-1), "given back"));
+    assert.equal(back.passkeys.length, 1);
+    assert.ok(back.passkeys[0]!.signCount > kept.passkeys[0]!.signCount, "its count as it was then");
+    await one.close();
+    await two.close();
+  } finally {
+    await door.close(0);
+    server.close();
+    await browsers.station.stop();
+    await browsers.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test("each chat's own context in the one real Chrome, through its gate: Playwright works in it, sees nothing of another chat's, and a sign-in goes in and out", { skip: binary === undefined ? "no Chrome here" : !hasPlaywright && "no Playwright here (install the repository's root)" }, async () => {
   const { chromium } = (await import(PLAYWRIGHT)) as any;

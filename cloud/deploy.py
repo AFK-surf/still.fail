@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deploys still.fail cloud, seven Workers (wrangler.jsonc says what each is; they keep their names from before the
+"""Deploys still.fail cloud, eight Workers (wrangler.jsonc says what each is; they keep their names from before the
 rename to still.fail, as do their Durable Objects, bucket and secrets: renaming would make new, empty ones):
   api       stillfail-cloud     the API (wrangler.jsonc)
   relay     stillfail-relay     the relay and its container (wrangler.relay.jsonc)
@@ -7,7 +7,7 @@ rename to still.fail, as do their Durable Objects, bucket and secrets: renaming 
   web-beta  stillfail-web-beta  the same build on app.youdid.wtf, the test channel (wrangler.web-beta.jsonc)
   admin     stillfail-admin     the admin's console, static (wrangler.admin.jsonc)
   preview   stillfail-preview   the preview host, static (wrangler.preview.jsonc)
-  share     stillfail-share     the share host, static (wrangler.share.jsonc): published chats, on share.still.fail
+  status    still-fail-status   still.fail/status, static (wrangler.status.jsonc)
 Each is deployed on its own: deploying the API drops no relay connection and serves no page. (And the official
 site, `site`, still-fail-site; and the test channel's, `site-beta`, youdid-wtf-site on youdid.wtf, only when named.)
 The test channel lives on its own domain, youdid.wtf: until that zone is active on Cloudflare (or with STILLFAIL_BETA=off)
@@ -19,15 +19,14 @@ The web app goes to the test channel first: a deploy without parts deploys web-b
 deployed in <deploy>/builds/<commit>/cloud-web (the newest ten). Once tried there, that very build (not a new one) goes
 to app.still.fail with promote-web. `web` named deploys a new build to app.still.fail straight away.
 
-    python3 deploy.py                   # all but web and site-beta: relay, api, then web-beta, admin, preview, share, site
+    python3 deploy.py                   # all but web and site-beta: relay, api, then web-beta, admin, preview, status, site
     python3 deploy.py api web-beta      # only these (the static ones are built first)
     python3 deploy.py web               # a new build to app.still.fail, without the test channel
     python3 deploy.py promote-web <dir> # a build already made (a directory, or a commit kept in <deploy>/builds) to app.still.fail
     python3 deploy.py --check           # only report what is missing
 
-Inputs (none of them in the repository), in the deploy directory: $STILLFAIL_DEPLOY_DIR (or $EMBER_DEPLOY_DIR),
-else ~/stillfail-deploy, else ~/ember-deploy while only that one exists (from before the rename; move it when you
-like, nothing else changes):
+Inputs (none of them in the repository), in the deploy directory: $STILLFAIL_DEPLOY_DIR,
+else ~/stillfail-deploy:
   --google  Google "Web application" OAuth client JSON (default <deploy>/google-oauth.json;
             its redirect URIs must include <origin>/v1/auth/google/callback for every origin still in use:
             https://app.still.fail and https://ember.3720.org)
@@ -35,11 +34,14 @@ like, nothing else changes):
             the Ed25519 key that signs station grants. Keep it; losing it logs everyone out and makes
             stations distrust new grants until they re-enroll.
   posthog   <deploy>/posthog.json, {host, key}: PostHog's project key, built into the web app
-            (docs/telemetry.md). Without it the web app is built without analytics.
-  axiom     <deploy>/axiom.json, {"dataset", "token"}: where traces go (docs/telemetry.md).
+. Without it the web app is built without analytics.
+  axiom     <deploy>/axiom.json, {"dataset", "token"}: where traces go.
             Without it the cloud takes no traces.
   review    <deploy>/review-accounts.json, [{"email", "password", "name"}]: the accounts that sign in with a
             password (cloud/src/password.ts), App Store review's. Without it nobody signs in that way.
+  feedback  <deploy>/feedback-token: the token that reads the console's bug reports and nothing else
+            (POST /v1/admin/feedback/list, the team's feedback monitor's). Without it nobody reads them so.
+  admin     STILLFAIL_ADMIN_EMAIL, or <deploy>/admin-email: the operator console's Google account.
 Cloudflare: an interactive `wrangler login` (or CLOUDFLARE_API_TOKEN). Docker (OrbStack) builds the relay image.
 """
 import argparse
@@ -64,28 +66,41 @@ REPO = ROOT.parent
 
 
 def env_var(name: str):
-    """STILLFAIL_<name>, or EMBER_<name> from before the rename."""
-    return os.environ.get(f"STILLFAIL_{name}") or os.environ.get(f"EMBER_{name}")
+    """STILLFAIL_<name>."""
+    return os.environ.get(f"STILLFAIL_{name}")
 
 
 def deploy_dir() -> Path:
     if env_var("DEPLOY_DIR"):
         return Path(env_var("DEPLOY_DIR")).expanduser()
-    new, old = Path.home() / "stillfail-deploy", Path.home() / "ember-deploy"
-    # The keys in it are what every session and station trusts: never start a fresh one next to the old.
-    return old if old.exists() and not new.exists() else new
+    # Another cloud's keys are never still.fail's (CLOUDS below).
+    if env_var("CLOUD"):
+        return Path.home() / f"{env_var('CLOUD')}-deploy"
+    return Path.home() / "stillfail-deploy"
 
 
 DEPLOY = deploy_dir()
 KEYS = DEPLOY / "keys.json"
 POSTHOG = DEPLOY / "posthog.json"
 AXIOM = DEPLOY / "axiom.json"
-# Push notifications (docs/notifications.md): the VAPID key ({public, private, subject}), Firebase's service account
+# Push notifications: the VAPID key ({public, private, subject}), Firebase's service account
 # and the APNs key ({keyId, teamId, key, topic?}).
 VAPID = DEPLOY / "vapid.json"
 FCM = DEPLOY / "fcm-service-account.json"
 APNS = DEPLOY / "apns.json"
 REVIEW = DEPLOY / "review-accounts.json"
+FEEDBACK = DEPLOY / "feedback-token"
+
+
+def admin_email(dry_run: bool) -> str:
+    """Read the operator's account outside the shared repository; fail closed for a real API deploy."""
+    if dry_run:
+        return "admin@example.test"
+    path = DEPLOY / "admin-email"
+    email = (env_var("ADMIN_EMAIL") or (path.read_text() if path.exists() else "")).strip()
+    if email:
+        return email
+    sys.exit("no administrator configured: set STILLFAIL_ADMIN_EMAIL or put it in <deploy>/admin-email")
 
 
 def write_private(path: Path, value) -> None:
@@ -97,7 +112,7 @@ def write_private(path: Path, value) -> None:
     os.replace(tmp, path)
 
 
-PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "web-beta": "wrangler.web-beta.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc", "share": "wrangler.share.jsonc", "site": "wrangler.site.jsonc", "site-beta": "wrangler.site-beta.jsonc"}
+PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "web-beta": "wrangler.web-beta.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc", "status": "wrangler.status.jsonc", "site": "wrangler.site.jsonc", "site-beta": "wrangler.site-beta.jsonc"}
 # What a deploy without parts deploys: the web app only to the test channel (promote-web takes it on); not youdid.wtf's site.
 DEFAULT_PARTS = [p for p in PARTS if p not in ("web", "site-beta")]
 # The test channel's parts, on its own domain (youdid.wtf): deployed only once that zone is on Cloudflare (beta_zone()).
@@ -107,11 +122,91 @@ BUILDS = DEPLOY / "builds"
 KEEP_BUILDS = 10
 
 
+# Another cloud made of the same code (STILLFAIL_CLOUD=<name>), in a Cloudflare account of its own: monoid's, the
+# company's (monoid.build, its test channel on monoid.zone, as still.fail's is on youdid.wtf), beside still.fail's.
+# Its accounts are its own: nobody signed up on one is known to the other. Each of still.fail's hosts is that cloud's
+# host in the same place (app.still.fail: app.monoid.build); what still.fail keeps from before its rename (3720.org) it
+# never had, and those routes and aliases go. The Workers, their Durable Objects and the bucket keep their names (another
+# account's). The deploy directory is that cloud's (its keys.json: losing it logs out everyone of that cloud).
+CLOUDS = {
+    "monoid": {
+        "zones": {"still.fail": "monoid.build", "youdid.wtf": "monoid.zone"},
+        # its name where still.fail's stands alone in the static sites' pages (client/i18n/brand.ts says it for the rest)
+        "name": "monoid",
+        "dropped": ["3720.org"],
+        # The API's own: Cloudflare Access in front of the console (src/admin.ts), its application "monoid admin" on
+        # admin.monoid.build letting in the AFK-surf GitHub organization's members.
+        # Its bucket holds its own apps' builds alone: the station's releases, the same code's, read from still.fail's
+        # (src/install.ts sharedRelease).
+        "api_vars": {
+            "ACCESS_TEAM_DOMAIN": "https://afksurf.cloudflareaccess.com",
+            "ACCESS_AUD": "53ffdc9eaf8c6827ad4081e898f4019d440e0de828643b995759a222c35f86e5",
+            "RELEASES_UPSTREAM": "https://app.still.fail/releases",
+        },
+    },
+}
+CLOUD = env_var("CLOUD") or ""
+if CLOUD and CLOUD not in CLOUDS:
+    sys.exit(f"no such cloud: {CLOUD} (of {', '.join(CLOUDS)})")
+
+
+def rehost(text: str, cloud: str = CLOUD) -> str:
+    """`text` with still.fail's hosts (and addresses: noreply@still.fail) the cloud's, each in its place."""
+    for zone, theirs in CLOUDS[cloud]["zones"].items() if cloud else []:
+        text = re.sub(rf"(?<![\w.-])((?:[\w-]+\.)*){re.escape(zone)}(?![\w-]|\.\w)", rf"\g<1>{theirs}", text)
+    return text
+
+
+# still.fail's name standing alone, not a host's part or an address (client/i18n/brand.ts NAME)
+STILLFAIL_NAME = re.compile(r"(?<![\w./@-])still\.fail(?![\w-]|\.\w)")
+
+
+def rebrand_static(cloud: str = CLOUD) -> None:
+    """The static sites' pages and manifests built in dist/ as `cloud` has them: its hosts, and its name for still.fail's
+    (the title, the description, the link previews'). Their scripts are left as they are: the app says its cloud's name
+    itself (its core's, client/i18n/brand.ts)."""
+    if not cloud:
+        return
+    for site in ("cloud-web", "cloud-admin", "cloud-preview"):
+        for path in (REPO / "dist" / site).rglob("*"):
+            if path.suffix in (".html", ".webmanifest") and path.is_file():
+                text = path.read_text()
+                # (the name first: rehost would take a bare still.fail for the domain it also is)
+                path.write_text(rehost(STILLFAIL_NAME.sub(CLOUDS[cloud]["name"], text), cloud))
+
+
+def dropped(text: str, cloud: str = CLOUD) -> bool:
+    """Whether `text` names a host of a zone the cloud does not have."""
+    return cloud != "" and any(re.search(rf"(?<![\w-]){re.escape(zone)}(?![\w-]|\.\w)", text) for zone in CLOUDS[cloud]["dropped"])
+
+
+def for_cloud(config: dict, cloud: str = CLOUD) -> dict:
+    """A part's config as `cloud` has it: still.fail's own as it is."""
+    if not cloud:
+        return config
+    config = json.loads(rehost(json.dumps(config), cloud))
+    if "routes" in config:
+        config["routes"] = [r for r in config["routes"] if not dropped(json.dumps(r), cloud)]
+    # (the vars that list hosts, comma-separated: PUBLIC_ORIGIN_ALIASES, ADMIN_ORIGIN_ALIASES, of the old ones alone)
+    kept = {}
+    for key, value in config.get("vars", {}).items():
+        if isinstance(value, str) and dropped(value, cloud):
+            value = ",".join(v for v in value.split(",") if not dropped(v, cloud))
+            if not value:
+                continue
+        kept[key] = value
+    if "vars" in config:
+        config["vars"] = kept
+    if "ADMIN_ORIGIN" in kept:
+        config["vars"] |= CLOUDS[cloud].get("api_vars", {})
+    return config
+
+
 def read_template(name: str = "wrangler.jsonc") -> dict:
     text = (ROOT / name).read_text()
     text = re.sub(r"^\s*//.*$", "", text, flags=re.M)
     text = re.sub(r",(\s*[}\]])", r"\1", text)
-    return json.loads(text)
+    return for_cloud(json.loads(text))
 
 
 # Cloudflare's own failures, not the request's: asked again (what is asked of it here is the same done twice). A
@@ -200,6 +295,10 @@ def review() -> dict:
     return {"REVIEW_ACCOUNTS": json.dumps(accounts)}
 
 
+def feedback() -> dict:
+    return {"FEEDBACK_TOKEN": FEEDBACK.read_text().strip()} if FEEDBACK.exists() else {}
+
+
 @contextmanager
 def docker_env():
     """A throwaway Docker config: an SSH session cannot unlock the macOS keychain Docker's default helper uses."""
@@ -237,7 +336,7 @@ def beta_ready(account: str) -> bool:
         else:
             headers["authorization"] = f"Bearer {auth['token']}"
         url = f"https://api.cloudflare.com/client/v4/zones?name={zone}&account.id={account}"
-        # (a connection broken off asked again: Mini1's to the API ended mid-handshake, SSL's UNEXPECTED_EOF, and
+        # (a connection broken off asked again: the CI Mac's to the API ended mid-handshake, SSL's UNEXPECTED_EOF, and
         # stopped main's deploy, 441b768f, 2026-10-30)
         for tries in range(3):
             try:
@@ -345,6 +444,7 @@ def main() -> None:
     if unknown:
         sys.exit(f"no such part: {', '.join(sorted(unknown))}")
     parts = [p for p in PARTS if p in args.parts] or list(DEFAULT_PARTS)
+    admin_account = admin_email(args.dry_run) if "api" in parts and not args.check else None
 
     template = read_template()
     origin = template["vars"]["PUBLIC_ORIGIN"]
@@ -379,34 +479,44 @@ def main() -> None:
         if not args.parts and "web-beta" in skipped:
             parts.insert(parts.index("admin"), "web")
             print("note: deploying web (app.still.fail) instead of web-beta", flush=True)
-    if not args.skip_build and {"web", "web-beta", "admin", "preview", "share"} & set(parts):
-        # web/vite.config.ts reads the key from the file STILLFAIL_POSTHOG (EMBER_POSTHOG before the rename) names.
+    if not args.skip_build and {"web", "web-beta", "admin", "preview"} & set(parts):
+        # web/vite.config.ts reads the key from the file STILLFAIL_POSTHOG names.
         if not POSTHOG.exists():
             print(f"note: no {POSTHOG}; building the web app without analytics")
-        env = {**os.environ, "STILLFAIL_POSTHOG": str(POSTHOG), "EMBER_POSTHOG": str(POSTHOG)} if POSTHOG.exists() else None
-        # still.fail's app for the browser (/mbui.html: apps/mbui/scripts/web-app.sh into web/public/mbui): as it is when
-        # it is there (CI's static job has it from mbui-web), else built where MoonBit is (the bundle job's), else none
+        env = {**os.environ, "STILLFAIL_POSTHOG": str(POSTHOG)} if POSTHOG.exists() else dict(os.environ)
+        if CLOUD:
+            # What the builds read of still.fail's hosts themselves: the preview host the web app opens services on
+            # (web/vite.config.ts).
+            env |= {"STILLFAIL_PREVIEW_ORIGIN": rehost("https://preview.still.fail")}
+        # still.fail's app for the browser (apps/mbui/scripts/web-app.sh into web/public/mbui), the page of every one of
+        # the web app's pages (web/vite.config.ts): as it is when it is there (CI's static job has it from mbui-web), else
+        # built where MoonBit is (the bundle job's). Without it the web app would be a page with nothing to draw.
         if (REPO / "web" / "public" / "mbui" / "app.js").exists():
             print("note: the app's page as web/public/mbui has it", flush=True)
         elif shutil.which("moon"):
             subprocess.run(["bash", "apps/mbui/scripts/web-app.sh"], cwd=REPO, check=True)
+        elif {"web", "web-beta"} & set(parts):
+            sys.exit("no moon and no web/public/mbui/app.js: the web app's pages are the app's, built by "
+                     "apps/mbui/scripts/web-app.sh where MoonBit is")
         else:
-            print("note: no moon; building the web app without the app's page (/mbui.html)", flush=True)
+            print("note: no moon; building without the app (no web app deployed)", flush=True)
         subprocess.run(["pnpm", "run", "build:cloud"], cwd=REPO, env=env, check=True)
-    if not args.skip_build and "site" in parts:
-        subprocess.run(["pnpm", "run", "build:site"], cwd=REPO, check=True)
-    if not args.skip_build and "site-beta" in parts:
-        subprocess.run(["pnpm", "run", "build:site-beta"], cwd=REPO, check=True)
+        rebrand_static()
+    # The official sites (website/build.mjs SITES): this cloud's (still.fail, monoid.build) into dist/site, its test
+    # channel's (youdid.wtf, monoid.zone) into dist/site-beta.
+    for part, site in (("site", rehost("still.fail")), ("site-beta", beta_zone())):
+        if not args.skip_build and part in parts:
+            subprocess.run(["node", "website/build.mjs", "--site", site, "--out", f"dist/{part}"], cwd=REPO, check=True)
     # Read only for the parts that take them: keys() makes keys.json where there is none, which a deploy of the static
     # sites alone (CI's web-beta, on a machine without the deploy directory's keys) must not do.
     secrets_of = {
-        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push(), **review()},
+        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push(), **review(), **feedback()},
         "relay": lambda: {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
     }
     def deploy(part: str, env) -> None:
         config = {**read_template(PARTS[part]), "account_id": account}
         if part == "api":
-            config["vars"] = {**config["vars"], "GOOGLE_CLIENT_ID": web.get("client_id", "dry-run")}
+            config["vars"] = {**config["vars"], "GOOGLE_CLIENT_ID": web.get("client_id", "dry-run"), "ADMIN_EMAIL": admin_account}
             if not beta:
                 config = without_beta(config)
         local = ROOT / PARTS[part].replace(".jsonc", ".local.json")
@@ -452,12 +562,12 @@ def main() -> None:
         "web-beta": [f"{template['vars'].get('BETA_ORIGIN', 'https://app.youdid.wtf')}/"],
         "admin": [f"{admin}/", f"{old_admin}/"],
         "preview": ["https://preview.still.fail/_stillfail/frame", "https://preview.ember.3720.org/_ember/frame"],
-        "share": ["https://share.still.fail/", "https://share.still.fail/frame"],
+        "status": ["https://still.fail/status"],
         "site": ["https://still.fail/"],
         "site-beta": [f"https://{beta_zone()}/"],
     }
     for part in [] if args.dry_run else parts:
-        for url in dict.fromkeys(checks[part]):
+        for url in dict.fromkeys(rehost(u) for u in checks[part] if not dropped(u)):
             request = urllib.request.Request(url, headers={"user-agent": "stillfail-deploy"})
             try:
                 with urllib.request.urlopen(request, timeout=30) as response:

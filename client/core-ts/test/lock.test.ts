@@ -102,8 +102,9 @@ test("a host that seals keeps the signing key sealed, read without asking; one i
   const stuck = new SealingHost();
   stuck.store("lock-signer", before.stored("lock-signer")!);
   stuck.failSet = true;
-  await assert.rejects(Effect.runPromise(Signer.load(stuck)), /keystore said no/);
-  await assert.rejects(Effect.runPromise(Signer.make(stuck)), /keystore said no/);
+  const keystore = (e: unknown) => /keystore said no/.test(String((e as Error).cause ?? (e as Error).message));
+  await assert.rejects(Effect.runPromise(Signer.load(stuck)), keystore);
+  await assert.rejects(Effect.runPromise(Signer.make(stuck)), keystore);
   assert.ok(stuck.stored("lock-signer"), "the file is kept");
   stuck.failSet = false;
   assert.equal((await Effect.runPromise(Signer.load(stuck)))?.id, old.id, "and moves in once sealing works");

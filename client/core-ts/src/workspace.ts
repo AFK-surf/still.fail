@@ -1,8 +1,9 @@
-// Workspaces: the units the core keeps apart (workspace.rs). What the core has of one workspace is its own: the account
+// Workspaces: the units the core keeps apart. What the core has of one workspace is its own: the account
 // that reaches it, its stations (station.ts), what is waited on for them (status.ts), what its person hears of it
 // (notices.ts) and what the core keeps in sync of it (sync.ts). What is the device's stays shared; what is an account's
 // is kept by account.
 import type { Host } from "./host.ts";
+import { batch, signal, tracking, untracked, type Source } from "./reactive.ts";
 import type { Runner } from "./runtime.ts";
 import { Status, type NameOf, type Waited } from "./status.ts";
 
@@ -15,7 +16,9 @@ export function ofAddress(address: string): string {
 export class Workspace {
   readonly id: string;
   /// The signed-in account that reaches it, as the latest `/v1/me` answers say; null while not known.
-  owner: string | null = null;
+  readonly #owner: Source<string | null>;
+  get owner(): string | null { return this.#owner.get(); }
+  set owner(owner: string | null) { this.#owner.set(owner); }
   /// Its stations while any of their topics is live, by address (station.ts).
   readonly stations = new Map<string, unknown>();
   /// What is waited on for its stations.
@@ -23,9 +26,10 @@ export class Workspace {
   /// Per-module state the later parts keep here (preview loads, what was heard, what is synced).
   readonly own = new Map<string, unknown>();
 
-  constructor(id: string, status: Status) {
+  constructor(id: string, status: Status, owner: Source<string | null>) {
     this.id = id;
     this.status = status;
+    this.#owner = owner;
   }
 
   /// A module's own part of this workspace, made the first time.
@@ -45,7 +49,9 @@ export class Workspaces {
   readonly #runner: Runner;
   readonly #waited: Waited | null;
   readonly #all = new Map<string, Workspace>();
-  #statusChanged: ((id: string) => void) | null = null;
+  readonly #owners = new Map<string, Source<string | null>>();
+  readonly #allChanged = signal(0);
+  #allRevision = 0;
   #names: NameOf | null = null;
 
   /// `waited`: the device's count every workspace's requests are counted in.
@@ -55,16 +61,13 @@ export class Workspaces {
     this.#waited = waited;
   }
 
-  /// What a workspace's status changing calls, and the names its status says.
-  wireStatus(changed: (id: string) => void, names: NameOf): void {
-    this.#statusChanged = changed;
+  /// The names a workspace's status says.
+  wireStatus(names: NameOf): void {
     this.#names = names;
     for (const w of this.all()) this.#wire(w);
   }
 
   #wire(w: Workspace): void {
-    const changed = this.#statusChanged;
-    if (changed) w.status.onChange(() => changed(w.id));
     if (this.#names) w.status.setNames(this.#names);
   }
 
@@ -72,13 +75,25 @@ export class Workspaces {
     return this.#all.get(id);
   }
 
+  #ownerOf(id: string): Source<string | null> {
+    let owner = this.#owners.get(id);
+    if (!owner) {
+      owner = signal<string | null>(null, () => {
+        if (!this.#all.has(id)) this.#owners.delete(id);
+      });
+      this.#owners.set(id, owner);
+    }
+    return owner;
+  }
+
   /// The workspace `id`, made the first time.
   of(id: string): Workspace {
     let w = this.#all.get(id);
     if (w) return w;
-    w = new Workspace(id, new Status(this.#host, this.#runner, this.#waited));
+    w = new Workspace(id, new Status(this.#host, this.#runner, this.#waited), this.#ownerOf(id));
     this.#wire(w);
     this.#all.set(id, w);
+    this.#allChanged.set(++this.#allRevision);
     return w;
   }
 
@@ -88,17 +103,22 @@ export class Workspaces {
 
   /// In id order (a BTreeMap in the Rust core).
   all(): Workspace[] {
+    this.#allChanged.get();
     return [...this.#all.keys()].sort().map((k) => this.#all.get(k)!);
   }
 
   /// Which account reaches each workspace: those it names get theirs, every other one none.
   setOwners(owners: Map<string, string>): void {
-    for (const [id, sub] of owners) this.of(id).owner = sub;
-    for (const w of this.all()) if (!owners.has(w.id)) w.owner = null;
+    batch(() => untracked(() => {
+      for (const [id, sub] of owners) this.of(id).owner = sub;
+      for (const w of this.all()) if (!owners.has(w.id)) w.owner = null;
+    }));
   }
 
   owner(id: string): string | null {
-    return this.get(id)?.owner ?? null;
+    const workspace = this.get(id);
+    if (workspace) return workspace.owner;
+    return tracking() ? this.#ownerOf(id).get() : null;
   }
 
   /// The workspaces an account reaches: [id, owner].

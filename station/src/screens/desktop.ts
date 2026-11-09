@@ -1,8 +1,8 @@
-// This machine's display as a screen source (`desktop`, docs/remote-screens.md): on macOS, still.fail Helper
+// This machine's display as a screen source (`desktop`): on macOS, still.fail Helper
 // (helper/app.ts) captures the main display with ScreenCaptureKit, encodes H.264 with VideoToolbox (or a JPEG a
 // picture, for a view that takes no H.264) and posts input with CGEvent, a view a connection to it. Windows' is
-// win-desktop.ts (its views are this file's HelperView too); elsewhere the desktop says it is not supported, and opens
-// nothing.
+// win-desktop.ts (its views are this file's HelperView too); Linux's X11 source is x11-desktop.ts. Elsewhere the
+// desktop says it is not supported, and opens nothing.
 //
 // macOS grants Screen Recording and Accessibility to the helper app. Opening the desktop while one is missing puts the
 // helper's window up on this Mac (once an attempt, the system's own prompt not asked: it would fight the window): a
@@ -22,7 +22,7 @@ import { ScreenRefused } from "./hub.ts";
 import { MacInput } from "./mac-input.ts";
 import { helperUi } from "./ui.ts";
 export type { HelperStatus } from "../helper/grants.ts";
-import { type AudioFrame, type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenVideo, type ScreenSource, type ScreenView, type ViewOptions, clipFits, regionOf } from "./source.ts";
+import { type AudioFrame, type Clip, type ClipType, type Codec, type Frame, type FrameConfig, type Region, type ScreenAccess, type ScreenCursor, type ScreenInput, type ScreenVideo, type ScreenSource, type ScreenView, type ViewOptions, clipFits, codecFor, regionOf } from "./source.ts";
 
 export type DesktopOptions = {
   /// Whether this machine's display can be seen at all (platform.desktopScreen: the helper).
@@ -123,7 +123,7 @@ export class Desktop implements ScreenSource {
     if (helper === null) throw new ScreenRefused(501, "station.screen.noHelper", {}, this.access());
     // H.265 where it is taken (the hardware's, smallest; the helper makes H.264 where this Mac encodes no H.265), H.264,
     // else a JPEG a picture (an agent's view, a client without either).
-    const codec: Codec | undefined = (["h265", "h264", "jpeg"] as const).find((c) => options.codecs.includes(c));
+    const codec = codecFor(options, ["h265", "h264", "jpeg"]);
     if (codec === undefined) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264, JPEG" });
     await this.refresh(true);
     const synthetic = this.#o.synthetic !== undefined;
@@ -256,6 +256,9 @@ export class HelperView implements ScreenView {
   /// Who hears the pointer, and the last it said (told at once to one who starts to hear it).
   #cursor: ((cursor: ScreenCursor) => void) | null = null;
   #lastCursor: ScreenCursor | null = null;
+  /// Who hears how a simulator's picture is turned, and the last it said (message 10).
+  #turn: ((turn: number) => void) | null = null;
+  #lastTurn: number | null = null;
 
   /// What it was asked for, then what it encodes (its `info`).
   #codec: Codec;
@@ -368,6 +371,16 @@ export class HelperView implements ScreenView {
         this.#cursor?.(this.#lastCursor);
         return;
       }
+      case 10: {
+        let said: any = null;
+        try {
+          said = JSON.parse(payload.toString());
+        } catch {}
+        if (![0, 1, 2, 3].includes(said?.turn)) return;
+        this.#lastTurn = said.turn;
+        this.#turn?.(said.turn);
+        return;
+      }
       case 5: {
         const body = payload.subarray(1);
         const clip: Clip | null = payload[0] === 1 ? { type: "text", text: body.toString("utf8") } : payload[0] === 2 ? { type: "png", data: new Uint8Array(body) } : null;
@@ -454,6 +467,14 @@ export class HelperView implements ScreenView {
     if (this.#lastCursor) heard(this.#lastCursor);
     return () => {
       if (this.#cursor === heard) this.#cursor = null;
+    };
+  }
+
+  watchTurn(heard: (turn: number) => void): () => void {
+    this.#turn = heard;
+    if (this.#lastTurn !== null) heard(this.#lastTurn);
+    return () => {
+      if (this.#turn === heard) this.#turn = null;
     };
   }
 

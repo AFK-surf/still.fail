@@ -1,5 +1,5 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
-# The renderer's pixels on Windows (docs/determinism.md, "Pixel references belong to one kind of machine"): a Tester's
+# The renderer's pixels on Windows ("Pixel references belong to one kind of machine"): a Tester's
 # draw list drawn offscreen by the Direct3D 11 renderer on WARP on GitHub's windows-2025 runner, twice in each of two
 # jobs at once, against its reference (goldens/render/windows-controls.png) to the byte, on the runner image the
 # reference was made on (goldens/render/windows.txt). The picture drawn is the artifact: what a PR that changes it
@@ -21,6 +21,7 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
       - "apps/mbui/mbui/src/ui/smooth.mbt"
       - "apps/mbui/mbui/src/host/corner*"
+      - "apps/mbui/mbui/src/host/contained.h"
       - "apps/mbui/mbui/goldens/render/windows*"
       - "apps/mbui/mbui/goldens/render/controls.dl"
       - "apps/mbui/mbui/scripts/render_dl.sh"

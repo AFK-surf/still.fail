@@ -1,7 +1,7 @@
 #!/bin/bash
 # Screenshots of the demo on every platform, compared with goldens/.
 #   scripts/shots.sh [mac web ios android | windows | kit]   UPDATE=1 accepts them as goldens
-# `kit` is the components' gallery (APP=kitdemo, docs/components.md) on macOS, a page a shot (KIT_PAGES, all by
+# `kit` is the components' gallery (APP=kitdemo, mbui's kit/styles.mbt) on macOS, a page a shot (KIT_PAGES, all by
 # default), the light theme beside the dark one: goldens/mac-kit-<page>.png.
 # Writes out/shots/<name>.png and, where a golden exists, out/shots/<name>-review.png (golden | new | differences).
 # (still.fail's screens in mbui, and their goldens, are in still.fail's repository: apps/mbui/scripts/shots.sh.)

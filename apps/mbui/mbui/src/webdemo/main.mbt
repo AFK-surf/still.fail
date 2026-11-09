@@ -100,7 +100,7 @@ fn once(cell : Ref[@ui.NativeView?], make : () -> @ui.NativeView) -> @ui.NativeV
 ///|
 fn state_word(v : @ui.NativeView) -> String {
   match v.state() {
-    -1 => "无法显示"
+    n if n < 0 => "无法显示"
     1 => "已加载"
     _ => "加载中"
   }
@@ -120,7 +120,7 @@ fn pane(c : @ui.Ctx, title : String, v : @ui.NativeView, body : () -> Unit) -> U
       bg=0xF2F2F7FFL,
       clip=true,
       fn() {
-        if v.state() == -1 {
+        if v.state() < 0 {
           c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
             c.text("无法显示", size=18.0, weight=600, color=0x8E8E93FFL, wrap=false) |> ignore
           })

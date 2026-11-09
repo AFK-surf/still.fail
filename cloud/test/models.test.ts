@@ -8,27 +8,48 @@ import { catalog } from "../src/models.ts";
 /// models.dev as it answers, cut to two makers: a model's canonical entry (models.json) and the providers' (api.json),
 /// one of them reselling the other's model at a price of its own.
 const CANONICAL = {
-  "anthropic/claude-opus-5-5": { name: "Claude Opus 5.5", reasoning: true, modalities: { input: ["text", "image", "pdf"], output: ["text"] }, limit: { context: 1_000_000, output: 128_000 } },
+  "anthropic/claude-opus-5-5": { name: "Claude Opus 5.5", family: "claude-opus", reasoning: true, modalities: { input: ["text", "image", "pdf"], output: ["text"] }, limit: { context: 1_000_000, output: 128_000 } },
   "deepseek/deepseek-v4-pro": { name: "DeepSeek V4 Pro", reasoning: true, modalities: { input: ["text"], output: ["text"] }, limit: { context: 1_000_000, output: 384_000 } },
   "nowhere/odd": { name: "Odd", modalities: { input: "text" }, limit: { context: -1 } },
 };
 const PROVIDERS = {
-  anthropic: { models: { "claude-opus-5-5": { reasoning_options: [{ type: "effort", values: ["low", "medium", "high", "xhigh", "max"] }], cost: { input: 4, output: 20, cache_read: 0.2, cache_write: 5 } } } },
+  anthropic: { name: "Anthropic", models: { "claude-opus-5-5": { reasoning_options: [{ type: "effort", values: ["low", "medium", "high", "xhigh", "max"] }], cost: { input: 4, output: 20, cache_read: 0.2, cache_write: 5 } } } },
   openrouter: { models: { "deepseek/deepseek-v4-pro": { cost: { input: 9, output: 9 } } } },
 };
 
 test("each model is keyed without its maker, with its maker's own prices and effort levels", () => {
   assert.deepEqual(catalog(CANONICAL, PROVIDERS), {
     "claude-opus-5-5": {
-      name: "Claude Opus 5.5", input: ["text", "image", "pdf"], reasoning: true, context: 1_000_000, output: 128_000,
+      name: "Claude Opus 5.5", maker: "anthropic", makerName: "Anthropic", family: "Claude Opus", input: ["text", "image", "pdf"], reasoning: true, context: 1_000_000, output: 128_000,
       efforts: ["low", "medium", "high", "xhigh", "max"], cost: { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
     },
     // A reseller's price is what it charges, not the model's: none.
-    "deepseek-v4-pro": { name: "DeepSeek V4 Pro", input: ["text"], reasoning: true, context: 1_000_000, output: 384_000 },
+    "deepseek-v4-pro": { name: "DeepSeek V4 Pro", maker: "deepseek", input: ["text"], reasoning: true, context: 1_000_000, output: 384_000 },
     // What is of no shape known is left out.
-    odd: { name: "Odd" },
+    odd: { name: "Odd", maker: "nowhere" },
   });
   assert.deepEqual(catalog(null, null), {});
+});
+
+test("a model's maker is its lab, named as its own API is; its series as its name spells it", () => {
+  const canonical = {
+    "meta/muse-spark-1.3": { name: "Muse Spark 1.3", family: "muse" },
+    "stepfun/step-5-preview": { name: "Step 5 Preview" },
+    "xiaomi/mimo-v2.6-pro": { name: "MiMo-V2.6-Pro", family: "mimo" },
+    "tencent/hy3": { name: "Hy3", family: "Hy" },
+    "openai/gpt-6.1-sol": { name: "GPT-6.1 Sol", family: "gpt-sol" },
+  };
+  const providers = { meta: { name: "Meta", models: {} }, stepfun: { name: "StepFun (China)", models: {} }, xiaomi: { name: "Xiaomi", models: {} } };
+  const said = Object.fromEntries(Object.entries(catalog(canonical, providers)).map(([k, f]) => [k, [f.maker, f.makerName ?? null, f.family ?? null]]));
+  assert.deepEqual(said, {
+    "muse-spark-1.3": ["meta", "Meta", "Muse"],
+    "step-5-preview": ["stepfun", "StepFun", null],
+    "mimo-v2.6-pro": ["xiaomi", "Xiaomi", "MiMo"],
+    // A lab selling no API of its own has no name there.
+    hy3: ["tencent", null, "Hy"],
+    // A series its name does not spell: none.
+    "gpt-6.1-sol": ["openai", null, null],
+  });
 });
 
 test("a model its maker sells under another name, or by its dated version, has that entry's prices", () => {

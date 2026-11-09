@@ -1,4 +1,4 @@
-// A sidebar's top row (ember web/src/Sidebar.css.ts brand), the frame's; its rows are the library's (src/sf
+// A sidebar's top row (still.fail web/src/Sidebar.css.ts brand), the frame's; its rows are the library's (src/sf
 // side_rows.mbt).
 
 ///|
@@ -14,9 +14,52 @@ pub fn side_top(c : @ui.Ctx) -> Unit {
 }
 
 ///|
+/// The band's first row (side_top's) as a node in `parent`: `brand()` tall (where the block's move has got: the frame's
+/// --brand), the window's buttons' row where they are in the app's top row, which drags the window while the sidebar is
+/// open.
+fn side_top_node(parent : @view.View, brand : () -> Double) -> Unit {
+  parent.box(fn(top) {
+    top.height(By(fn() { Some(brand()) })).moves_window(By(fn() { @ui.window_inset_now() && !side_folded() })) |> ignore
+  })
+  |> ignore
+}
+
+///|
 /// The band's first row's height (side_top).
 pub fn side_top_h() -> Double {
   wide.brand_h
+}
+
+///|
+/// The room the chats' lists leave for the sidebar's top row: as side_top_h says, but on the block's way between open and
+/// folded the taller end's all the way, so that their rows are not laid out again each frame (fold_bars).
+fn list_top_h() -> Double {
+  wide.list_top
+}
+
+///|
+/// What the lists' room over them is worked out from, as the frame last said it (its top row's height, the room left for
+/// it, the band's held, whether on the tape, the band's where it is now: list_room_told): read by the lists' nodes,
+/// laid out again as it changes, not as they happen to be built again.
+let lists_room : @signals.Signal[(Double, Double, Double, Bool, Double)] = @signals.signal((0.0, 0.0, 0.0, false, 0.0), same=fn(a, b) {
+  a == b
+})
+
+///|
+/// The lists' room told as the frame has just worked it out (lists_room).
+fn list_room_told() -> Unit {
+  lists_room.set((wide.brand_h, wide.list_top, wide.list_band, wide.tape, wide.band))
+}
+
+///|
+/// The room the chats' lists leave for the band over them: as tall as band_h, but on the block's way the open band's all
+/// the way (list_top_h), the band itself moving as it goes over them.
+fn list_band_h(src : Source, w : Workspace) -> Double {
+  let band = wide.band
+  wide.band = wide.list_band
+  let h = band_h(src, w) - side_top_h() + list_top_h()
+  wide.band = band
+  h
 }
 
 ///|

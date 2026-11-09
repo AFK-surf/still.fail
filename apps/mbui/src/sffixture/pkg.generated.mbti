@@ -31,6 +31,8 @@ pub fn decided_json(String) -> Json
 
 pub let done_state : (String, String, String)
 
+pub fn failed_topics(@sfbase.Source, Array[String], String) -> @sfbase.Source
+
 pub fn file(String, Int32, Int32, Int32) -> Json
 
 pub let file_links_answer : String
@@ -69,6 +71,10 @@ pub fn fix_browse_topic(Fixture, String, Map[String, Json]) -> Json?
 
 pub fn fix_browse_with_drive(Fixture, Json?, String) -> Json?
 
+pub fn fix_candidates() -> Json
+
+pub let fix_card_replies : Array[Json]
+
 pub fn fix_chat(String) -> FixChat
 
 pub fn fix_chat_jobs() -> Json
@@ -76,6 +82,8 @@ pub fn fix_chat_jobs() -> Json
 pub let fix_chats : Map[String, FixChat]
 
 pub let fix_clock : @ref.Ref[(() -> Double)?]
+
+pub fn fix_clock_set(@ref.Ref[Double], Double) -> Unit
 
 pub fn fix_compose_call(Fixture, String, Json) -> Result[Json, Json]?
 
@@ -89,6 +97,7 @@ pub fn fix_crowded_frequent() -> Json
 
 pub fn fix_crowded_model(String, String, String, String, Array[String]) -> Json
 
+pub let fix_core_for : @ref.Ref[Double]
 pub let fix_crowded_models : Array[String]
 
 pub let fix_ctx : @ref.Ref[@ui.Ctx?]
@@ -103,6 +112,8 @@ pub fn fix_detailed_chat(Json) -> Json
 
 pub let fix_docs : String
 
+pub let fix_done : @ref.Ref[Int32]
+
 pub fn fix_download_id(FixDownload) -> String
 
 pub fn fix_download_shown(FixDownload) -> Json
@@ -116,8 +127,6 @@ pub fn fix_draft_ref(String, String, Bool, Double, String, Bool) -> Unit
 pub let fix_drafts : Map[String, Json]
 
 pub fn fix_drive_downloads(String, String) -> Unit
-
-pub let fix_due : Array[() -> Unit]
 
 pub fn fix_entry(String, Bool, Int32, String) -> Json
 
@@ -149,6 +158,8 @@ pub let fix_home : String
 
 pub fn fix_job(String) -> Json
 
+pub let fix_job_more : Ref[Int]
+
 pub let fix_keeping : Array[FixKeeping]
 
 pub fn fix_keeping_id(FixKeeping) -> String
@@ -179,10 +190,13 @@ pub fn fix_no_agent(Json) -> Json
 
 pub let fix_novel : @ref.Ref[String?]
 
+pub fn fix_now(() -> Unit) -> Unit
+
 pub let fix_outside : Array[(String, String, Bool)]
 
 pub fn fix_own(Array[Json]) -> Array[Json]
 
+pub let fix_pace : @ref.Ref[(Double, Double, Double)]
 pub let fix_phone : @ref.Ref[String]
 
 pub let fix_phone_link : @ref.Ref[String]
@@ -191,7 +205,19 @@ pub fn fix_pick() -> Json
 
 pub let fix_places : Map[String, Json]
 
+pub fn fix_preset(String, String, Array[String], String) -> Json
+
+pub fn fix_presets_of(String) -> Json
+
+pub let fix_presets_said : @ref.Ref[Int32]
+
+pub fn fix_presets_say() -> Unit
+
 pub fn fix_preview() -> Json
+
+pub fn fix_preview_viz() -> Json
+
+pub let fix_providers : Array[(String, String, String, String)]
 
 pub let fix_put_up : Map[String, String]
 
@@ -202,6 +228,8 @@ pub fn fix_relay_places() -> Json
 pub let fix_replied : Map[Int32, String]
 
 pub fn fix_runtime_of(String) -> String
+
+pub let fix_sent_for : @ref.Ref[Double]
 
 pub let fix_serial : @ref.Ref[Int32]
 
@@ -225,8 +253,6 @@ pub let fix_tall_models : Array[String]
 
 pub let fix_threads : Map[Int32, String]
 
-pub fn fix_tick(Fixture) -> Unit
-
 pub let fix_timers : Array[(Double, () -> Unit)]
 
 pub fn fix_transfer(Json) -> Unit
@@ -248,6 +274,8 @@ pub fn fix_with_trouble(Json, Map[String, Json]) -> Json
 pub let fix_working_important : @ref.Ref[Bool]
 
 pub let fix_working_now : @ref.Ref[(String, String)]
+
+pub let fix_working_status : @ref.Ref[String]
 
 pub fn fix_write(Fixture, String) -> FixWrite
 
@@ -339,6 +367,8 @@ pub fn fixture_markdown() -> String
 
 pub let fixture_md : String
 
+pub fn fixture_message_peek() -> Json
+
 pub fn fixture_named(String, Json?, (Result[(Json, Bytes), Json]) -> Unit) -> Unit
 
 pub fn fixture_new_call(Fixture, String, Json) -> Result[Json, Json]?
@@ -353,7 +383,7 @@ pub let fixture_pictures : Map[String, (String, Bytes)]
 
 pub fn fixture_play_read(Json, (Result[(Json, Bytes), Json]) -> Unit) -> Bool
 
-pub fn fixture_png(Int32, Int32) -> Bytes
+pub fn fixture_png(Int32, Int32, mirrored? : Bool) -> Bytes
 
 pub fn fixture_preview(String) -> Unit
 
@@ -439,6 +469,10 @@ pub fn long_chat(Int32) -> Json
 
 pub fn long_job() -> Json
 
+pub fn long_screen(String, String, String, String, String, String, String, String) -> Json
+
+pub fn long_screens_view() -> Json
+
 pub let long_reply : String
 
 pub fn made_chat(String) -> Json
@@ -464,6 +498,8 @@ pub fn person(String, String, Bool) -> Json
 pub fn phone_post() -> Json
 
 pub fn play_fixture(String) -> (@sfbase.DriveAt, @kit.MediaStatus?)?
+
+pub let preview_broken : @ref.Ref[String?]
 
 pub let preview_coming : @ref.Ref[(String, Json?)?]
 
@@ -499,6 +535,8 @@ pub fn seeded_outbox(String) -> Array[Json]
 
 pub fn seeded_pictures(String, Array[Json]) -> Unit
 
+pub fn signin_post(String) -> Json
+
 pub fn small_chat(String, String) -> Json
 
 pub let stations_slow_ms : Double
@@ -509,7 +547,7 @@ pub let table_images_md : Json
 
 pub fn text_of(Json, String) -> String
 
-pub fn vault_post(Bool, file? : Bool) -> Json
+pub fn vault_post(Bool, file? : Bool, use_secret? : Bool, timed? : Bool) -> Json
 
 pub let viz_answer : String
 
@@ -536,6 +574,8 @@ pub fn with_message(Json, String) -> Json
 pub fn with_need(Json) -> Json
 
 pub fn with_none_shown(Json) -> Json
+
+pub fn with_reply_after(Json) -> Json
 
 pub fn with_sent(Json, String) -> Json
 
@@ -570,6 +610,8 @@ pub(all) struct FixChat {
   outbox : Array[Json]
   mut working : Double
   line : @ref.Ref[Int32]
+  mut turns : Int32
+  mut about : Int32
 }
 
 pub(all) struct FixDownload {
@@ -614,6 +656,7 @@ pub(all) struct Fixture {
   mut appearance : String
   mut window_zoom : String
   mut motion : String
+  mut haptics : String
   archived : Map[String, Bool]
   filters : Map[String, String]
   fonts : Map[String, String]
@@ -628,6 +671,7 @@ pub(all) struct Fixture {
   mut share_look : String
 }
 pub fn Fixture::changed(Self) -> Unit
+pub fn Fixture::changes(Self) -> Int32
 
 pub(all) struct NewFix {
   mut station : String
@@ -638,10 +682,17 @@ pub(all) struct NewFix {
   mut d_runtime : String
   mut d_effort : String
   mut d_profile : String
+  mut context : String
   mut made : Int32
   mut reading : Int32
   mut crowded : Bool
   mut tall : Bool
+  mut preset : String
+  presets : Array[Json]
+  mut presets_late : Bool
+  liked : Array[String]
+  mut providers : Bool
+  mut borrow : Bool
 }
 
 // Type aliases

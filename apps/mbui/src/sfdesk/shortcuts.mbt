@@ -1,17 +1,20 @@
-// ⌘/ (ember web/src/Shortcuts.tsx ShortcutsDialog, Shortcuts.css.ts): every shortcut, by where it works, the way to
+// ⌘/: every shortcut, by where it works, the way to
 // change them (快捷键, sfpages shortcuts.mbt) at its foot.
 
 ///|
-/// ⌘/ (Shortcuts.tsx ShortcutsDialog): every shortcut, by where it works (the core's keymap, then those of one place,
+/// ⌘/: every shortcut, by where it works (the core's keymap, then those of one place,
 /// not changed here), quiet words beside each; the way to change them at its foot (the desktop app's).
 pub fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
-  let change = Ref(false)
+  let prefs = src.topic("prefs", {}).get().value
+  // (whether it is open: the shell's, kept across builds; its close button and 更改 let it go as they are pressed)
+  let shown = wide.keys_open
   let footer : (() -> Unit)? = if @settings.keys_changeable(prefs) {
     Some(fn() {
-      if @sf.button(c, @sf.t("web-main.shortcuts.change"), key="keys-dialog/change", tone=Ghost) {
-        change.val = true
-      }
+      // (the shortcuts' own page in its place)
+      @sf.button(c, @sf.t("web-main.shortcuts.change"), key="keys-dialog/change", tone=Ghost, on_press=fn() {
+        shown.set(false)
+        open_settings_at(@settings.Route::Shortcuts)
+      }) |> ignore
     })
   } else {
     None
@@ -19,9 +22,10 @@ pub fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
   let d = @sf.dialog(
     c,
     "keys-dialog",
-    wide.keys_open.get(),
+    shown.get(),
     @sf.t("web-main.shortcuts.title"),
     close_label=@sf.t("common.close"),
+    on_close=fn() { shown.set(false) },
     footer?,
     fn() {
       c.box(style=keys_sheet, fn() {
@@ -29,7 +33,7 @@ pub fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
           c.box(style=keys_group, fn() {
             c.box(style=keys_group_head, fn() { c.text(g.0, style=keys_group_title) |> ignore }) |> ignore
             for k in g.1 {
-              c.box(style=keys_line, fn() {
+              c.box(style=keys_line, flow=true, line_gap=@ui.Space::px(S1), fn() {
                 c.text(k.0, style=keys_line_words) |> ignore
                 c.text(k.1, style=keys_line_keys) |> ignore
               })
@@ -42,24 +46,22 @@ pub fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
       |> ignore
     },
   )
-  wide.keys_open.set(d && !change.val)
-  if change.val {
-    open_settings_at(@settings.Route::Shortcuts)
-  }
+  shown.set(d)
 }
 
 ///|
 /// What ⌘/ lists, each place's shortcuts with their keys in words: worked out as it is drawn, not while it is closed.
 fn key_lines(prefs : Json?) -> Array[(String, Array[(String, String)])] {
   let (first_ws, last_ws) = @settings.workspace_keys(prefs)
+  let (send, newline) = @settings.send_lines(prefs)
   let groups = @settings.key_groups(prefs)
   groups.push((@sf.t("web-main.shortcuts.group.workspace"), [(@sf.t("web-main.shortcuts.switchWorkspace"), first_ws + " … " + last_ws)]))
   groups.push(
     (
       @sf.t("web-main.shortcuts.group.composer"),
       [
-        (@sf.t("web-main.shortcuts.send"), "↩"),
-        (@sf.t("web-main.shortcuts.newline"), "⇧↩"),
+        (@sf.t("web-main.shortcuts.send"), send),
+        (@sf.t("web-main.shortcuts.newline"), newline),
         (@sf.t("web-main.shortcuts.prevNextChat"), "↑ / ↓"),
       ],
     ),
@@ -79,7 +81,7 @@ fn key_lines(prefs : Json?) -> Array[(String, Array[(String, String)])] {
 }
 
 ///|
-/// (Shortcuts.css.ts sheet: the groups 18 apart; group: its lines 2 apart, its title 4 over them)
+/// (group: its lines 2 apart, its title 4 over them)
 // kept across runs: a value (no field of it changes)
 let keys_sheet : @ui.Style = @ui.css("w=Full gap=S4_5")
 
@@ -103,9 +105,9 @@ let keys_line : @ui.Style = @ui.css("row w=Full py=S1 gap=S4 align=AEnd justify=
 
 ///|
 // kept across runs: a value (no field of it changes)
-let keys_line_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, wrap=false)
+let keys_line_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg)
 
 ///|
 /// (keys: muted, their digits as wide as each other)
 // kept across runs: a value (no field of it changes)
-let keys_line_keys : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+let keys_line_keys : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted)

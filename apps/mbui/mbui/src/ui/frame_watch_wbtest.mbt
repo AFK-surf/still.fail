@@ -220,6 +220,63 @@ test "the clock read as the view is built: each frame built whole, said where it
 }
 
 ///|
+/// What moves for ever while a test reads it (frame_watch_wbtest's motions named): never at rest.
+priv struct Endless {}
+
+///|
+impl Moving for Endless with rest_at(self, now, frame) {
+  ignore((self, now, frame))
+  @double.infinity
+}
+
+///|
+/// Where it is called (a test's place, as the app's would be told).
+#callsite(autofill(loc))
+fn place_here(loc~ : SourceLoc) -> SourceLoc {
+  loc
+}
+
+///|
+test "a frame built again for a motion going names the motion and the place that told it, in the view or in a part kept" {
+  let who = Mover::new()
+  let in_part = Ref(false)
+  let t = Tester::new(fn(c) {
+    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+      if in_part.val {
+        c.kept_part(c.id("part"), "", fn() {
+          c.shows_motion(who, true)
+          c.box(w=Px(20.0), h=Px(8.0), fn() {  }) |> ignore
+        })
+      } else {
+        c.shows_motion(who, true)
+      }
+    })
+    |> ignore
+  })
+  // (said to go, as an Anim says it: Ctx::moving with where to, then who it is for the record)
+  t.ctx().moving(who, Endless::{  }, what="Anim \"slide\" to 1")
+  let at = place_here()
+  who.told_as("Anim \"slide\"", at)
+  t.clock_frame()
+  t.clock_frame()
+  let why = t.built_why()
+  assert_eq(why, "the clock read at a motion of Anim \"slide\", told at \{at}")
+  assert_eq(built_motion.val, "a motion of Anim \"slide\", told at \{at}")
+  assert_true(at.to_string().contains("frame_watch_wbtest.mbt"), msg=at.to_string())
+  // (in a part kept: the part built again, said so, and what in it read the clock)
+  in_part.val = true
+  t.frame()
+  t.clock_frame()
+  t.clock_frame()
+  let why = t.built_why()
+  assert_true(
+    why.has_prefix("what a part or a list's row read changed") &&
+    why.has_suffix(", the clock read in it at a motion of Anim \"slide\", told at \{at}"),
+    msg=why,
+  )
+}
+
+///|
 /// How long the mark's move takes (moved_tester).
 let moved_ms : Double = 400.0
 
@@ -323,4 +380,46 @@ test "a page pushed: the frames of its slide are painted alone, the one at its e
   assert_true(builds.val > built)
   assert_eq(nav.depth(), 2)
   t.assert_idle()
+}
+
+///|
+test "a frame built again for what a part or a list's row read names it and where what it read was set, in a batch too" {
+  let shown = @signals.signal(0)
+  let t = Tester::new(fn(c) {
+    c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+      c.kept_part(c.id("part"), "", fn() {
+        c.text("part \{shown.get()}", size=12.0) |> ignore
+      })
+      c.box(w=Fill(1.0), h=Px(200.0), fn() {
+        c.list("chats", 20, 40.0, fn(i) {
+          c.box(h=Px(40.0), fn() {
+            c.text("row \{i} \{if i == 2 { shown.get() * 2 } else { 0 }}", size=10.0) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.set_rows_on_pixels(true)
+  t.draw()
+  t.frame()
+  // (set in a batch, as a core's delta is: told as it ends, no set under way then)
+  @signals.start_batch()
+  let at = place_here(); shown.set(1)
+  @signals.end_batch()
+  t.clock_frame()
+  let why = t.built_why()
+  assert_true(why.has_prefix("what a part or a list's row read changed, "), msg=why)
+  // (which: the part, or the list's row, whichever was told last; where Ctx::kept_part or Ctx::list was said)
+  assert_true(
+    why.contains(", the part kept at src/ui/frame_watch_wbtest.mbt:") ||
+    why.contains(", a row of list \"chats\" made at src/ui/frame_watch_wbtest.mbt:"),
+    msg=why,
+  )
+  // (set on `at`'s line)
+  let parts = at.to_string().split(":").take(2).map(fn(v) { v.to_string() }).collect()
+  assert_true(why.contains(", set at \{parts[0]}:\{parts[1]}:"), msg=why)
 }

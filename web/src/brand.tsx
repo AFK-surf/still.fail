@@ -1,15 +1,6 @@
-import { useSyncExternalStore } from "react";
 import { useDark } from "./theme.ts";
-import { shortcutOf, useKeymap, useShortcut } from "./keymap.ts";
 import * as css from "./brand.css.ts";
-import * as shellCss from "./styles/shell.css.ts";
-import * as sidebarCss from "./styles/sidebar.css.ts";
-import * as railCss from "./Rail.css.ts";
-import * as listCss from "./Sidebar.css.ts";
-import * as bubblesCss from "./SystemBubbles.css.ts";
-import { moveState } from "@stillfail/ui/motion.ts";
 import { NAME } from "./channel.ts";
-import { t } from "./i18n.ts";
 // still.fail's brand, from web/public (design/brand/README.md): the mark (the face: the black one on light, the white
 // one on dark), the wordmark and the illustrations. Mark and wordmark have -dark twins, picked by the page's 外观 like the
 // rest of the app; the illustrations switch themselves.
@@ -39,114 +30,6 @@ export function Wordmark({ size = 22, className }: { size?: number; className?: 
   return <Themed name={WORDMARK.name} width={Math.round(WORDMARK.width * k)} height={Math.round(WORDMARK.height * k)} alt={NAME} className={className} />;
 }
 
-/**
- * The sidebar's top: the name (on a phone, where the sidebar is a page; and with no rail). Beside the rail (Rail.tsx)
- * the rail opens and closes the sidebar.
- */
-export function SidebarBrand({ rail }: { rail?: boolean }) {
-  return (
-    <>
-      {!rail && <Wordmark className={css.brandWordmark} />}
-      <span className={css.brandPhone}><Wordmark size={24} className={css.brandBlock} /></span>
-    </>
-  );
-}
-
-/** The wordmark alone, for a page with no sidebar (a workspace's onboarding). */
-export function PageBrand() {
-  return <Wordmark className={css.brandWordmark} />;
-}
-
-const SIDEBAR = "stillfail.sidebar";
-
-/** Whether the sidebar is closed: on the page's root (so the layout follows), and kept on this device. */
-function closeSidebar(closed: boolean) {
-  if (closed) document.documentElement.dataset.sidebar = "closed";
-  else delete document.documentElement.dataset.sidebar;
-  try { localStorage.setItem(SIDEBAR, closed ? "closed" : "open"); } catch { /* private mode: for this page only */ }
-}
-
-/** The sidebar's latest opening or closing: only its end lets the sidebar overflow again. */
-let moving = 0;
-
-/**
- * The sidebar opened, closed or made wider or narrower by `change`, the page following as it moves (and the sidebar with
- * it, the page bars' room for it). Only so: resizing the sidebar follows the pointer at once.
- */
-export function moveSidebar(change: () => void): void {
-  const moves = (selector: string, props: string[]) => [...document.querySelectorAll<HTMLElement>(selector)].map((el) => [el, props] as [HTMLElement, string[]]);
-  // Cut to its column while it moves, opening too (open, it is not: its resize handle stands over its edge). Else what
-  // is drawn over the list (its frosted top and foot) shows at its whole width over the page from the first frame.
-  const turn = ++moving;
-  document.documentElement.dataset.sidebarMoving = "";
-  void moveState([
-    ...moves(`.${shellCss.shell}`, ["grid-template-columns"]),
-    // The page as wide as it was, moved aside for the folded sidebar shown a while (shell.css.ts main, Rail.tsx peekShift).
-    ...moves(`.${shellCss.shell} > .${shellCss.main}`, ["left"]),
-    ...moves(`.${railCss.edge}`, ["left"]),
-    // The rail as narrow as the closed bar and its places as far from its edges, with its margins (no transitions of
-    // their own: on other clocks and eases they shook the places).
-    ...moves(`.${railCss.rail}`, ["width", "padding-top", "padding-bottom"]),
-    ...moves(`.${railCss.top}`, ["height", "margin-bottom"]),
-    // The block's margins (closed, it stands off the window's edges; shown a while, it reaches over the page) at the same
-    // pace as its column, not a transition of their own that would run ahead of it.
-    // Its corner, ground, shadow and line as well: every part of it on one clock and ease (Motion), no CSS transitions.
-    ...moves(`.${shellCss.dock}`, ["margin-top", "margin-right", "margin-bottom", "margin-left", "border-radius", "background-color", "box-shadow", "--dock-line"]),
-    // The sidebar in it (open, reaching 8 into the rail; its width the group's) and its frosted bands' ground.
-    ...moves(`.${shellCss.dock} > .${listCss.sidebar}`, ["margin-inline-start", "width"]),
-    ...moves(`.${listCss.navTop}, .${listCss.navFoot}`, ["background-color"]),
-    // Its top row, none in the closed bar (under the window's buttons).
-    ...moves(`.${listCss.brand}`, ["height"]),
-    // The lists' marks on the rail, and the app's bubbles beside it.
-    ...moves(`.${railCss.listMark}`, ["opacity", "transform"]),
-    ...moves(`.${bubblesCss.stack}`, ["left", "bottom"]),
-    ...moves(`.${sidebarCss.pageBar}`, ["padding-left", "margin-left", "margin-right"]),
-  ], change).then(() => { if (turn === moving) delete document.documentElement.dataset.sidebarMoving; });
-}
-
-/**
- * Opening and closing the sidebar (its shortcut too, unless `keys` is false: one place on the page holds it), the page
- * following as it moves; `moved` is told where it goes as it starts.
- */
-/** Whether the sidebar is closed, as the page's root says: the same to everything reading it. */
-export function useSidebarClosed(): boolean {
-  return useSyncExternalStore((changed) => {
-    const watch = new MutationObserver(changed);
-    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-sidebar"] });
-    return () => watch.disconnect();
-  }, () => document.documentElement.dataset.sidebar === "closed", () => false);
-}
-
-/** Told when the person opens or closes the sidebar (its edge, its shortcut), not when a place shows or hides it. */
-let chosen: ((closed: boolean) => void) | null = null;
-export function onSidebarChosen(told: ((closed: boolean) => void) | null): void {
-  chosen = told;
-}
-
-/** The sidebar shown or not as a place has it (Rail.tsx), moving as when toggled (with `also` in the same move: its new
- * width); not the person's choice. */
-export function showSidebar(open: boolean, also?: () => void): void {
-  if ((document.documentElement.dataset.sidebar === "closed") !== open) { also?.(); return; }
-  moveSidebar(() => { also?.(); closeSidebar(!open); });
-}
-
-export function useSidebarToggle(moved?: (closed: boolean) => void, { keys: owns = true }: { keys?: boolean } = {}): { closed: boolean; toggle: () => void; label: string } {
-  const closed = useSidebarClosed();
-  const toggle = () => {
-    const next = !closed;
-    // A page with no sidebar of its own (Rail.tsx): nothing to open.
-    if (!next && "sidebarNone" in document.documentElement.dataset) return;
-    chosen?.(next);
-    moveSidebar(() => closeSidebar(next));
-    moved?.(next);
-  };
-  // One place on the page holds the shortcut (the rail).
-  useShortcut("sidebar.toggle", owns ? toggle : null);
-  useKeymap();
-  const keys = shortcutOf("sidebar.toggle");
-  return { closed, toggle, label: `${closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}${keys ? `  ${keys}` : ""}` };
-}
-
 type Illus = "new-chat" | "no-station" | "station-offline" | "sign-in" | "no-profile" | "no-connect";
 const ILLUS_SIZE: Record<Illus, [number, number]> = {
   "new-chat": [320, 160], "no-station": [320, 160], "station-offline": [320, 160], "sign-in": [360, 200],
@@ -157,7 +40,7 @@ const ILLUS_SIZE: Record<Illus, [number, number]> = {
  * The scenes, fetched and decoded as the app starts and kept: the first page to show one (a new chat) draws it in its
  * first frame, instead of an empty box that fills a moment later.
  */
-export const illustrationUrl = (name: Illus) => `${BASE}illus-${name}.svg`;
+const illustrationUrl = (name: Illus) => `${BASE}illus-${name}.svg`;
 const decoded = (Object.keys(ILLUS_SIZE) as Illus[]).map((name) => {
   const img = new Image();
   img.src = illustrationUrl(name);

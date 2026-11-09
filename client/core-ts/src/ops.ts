@@ -1,4 +1,4 @@
-// What the UIs can have done on a station or on still.fail cloud, each by its name (ops.rs). A UI never makes a request
+// What the UIs can have done on a station or on still.fail cloud, each by its name. A UI never makes a request
 // itself: it names what it wants done and with what, and the core knows the request that does it and what it changes
 // (the effects declared beside each operation).
 import { CoreError } from "./error.ts";
@@ -22,12 +22,12 @@ export type Effect =
   | { kind: "job" }
   /// The agents' memory (the `memory` topic): read again.
   | { kind: "memory" }
-  /// The programs granted the station's data (the `outflowGrants` topic, docs/data-outflow.md): read again.
-  | { kind: "outflowGrants" }
+  /// The workspace's presets on the station (the `presets` topic): read again.
+  | { kind: "presets" }
   | { kind: "identity" }
   /// Folders of the station's drive under `root` (paths relative to it): read again where held or shown.
   | { kind: "drive"; root: string; paths: string[] }
-  /// A station's logins (docs/remote-login.md): the login answered with is put in place at once.
+  /// A station's logins: the login answered with is put in place at once.
   | { kind: "machineLogins" }
   /// A sign-in for a new profile (the overview's `logins`) started, given its code or dropped: as the station answered,
   /// in place at once until the overview says as much. `id`: the login's (null: the answer names it, as it starts);
@@ -45,7 +45,7 @@ export type Request = {
   effect: Effect;
 };
 
-/// Percent-encodes a path segment like encodeURIComponent (station.rs `encode`).
+/// Percent-encodes a path segment like encodeURIComponent.
 export function encode(text: string): string {
   let out = "";
   for (const b of utf8(text)) {
@@ -56,18 +56,17 @@ export function encode(text: string): string {
   return out;
 }
 
-const CLOUD_SERVICES = ["workspace", "invitation", "loginSession", "admin"];
+const CLOUD_SERVICES = ["workspace", "invitation", "loginSession", "account", "admin"];
 
 /// What each operation takes (`field:type`, `field?:type` when it may be left out; types: string, number, boolean,
 /// strings, json), station operations first: the contract the UIs' bindings are made from (scripts/operations.ts:
 /// web/src/core/operations.ts, the Android app's data/Operations.kt). It names exactly what `request` reads of the
-/// params (test/ops.test.ts checks it), besides `station` and `account`.
+/// params, besides `station` and `account`.
 export const PARAMS: Record<string, string> = {
   "session.stop": "key:string",
+  "session.cancelRetry": "key:string thread:number seq:number",
   "tools.access": "",
   "tools.setAccess": "access:string",
-  "station.modules": "",
-  "station.module.set": "id:string enabled:boolean",
   "agentEnv.set": "env?:json text?:string",
   "search.setPersonal": "personal:boolean",
   "network.setCongestion": "congestion:string",
@@ -80,10 +79,13 @@ export const PARAMS: Record<string, string> = {
   "session.compact": "key:string",
   "session.clear": "key:string readBack?:boolean",
   "session.delete": "key:string",
-  "session.settings": "key:string profile?:string model?:string effort?:string fast?:boolean repick?:boolean afresh?:boolean",
+  "session.settings": "key:string runtime?:string profile?:string model?:string effort?:string fast?:boolean context?:number repick?:boolean afresh?:boolean",
   "chat.archive": "archived?:boolean session:string thread?:number",
   "chat.keep": "kept?:boolean thread:number",
+  "chat.hide": "hidden:boolean thread:number",
+  "chat.mute": "muted:boolean thread:number",
   "chat.rename": "session?:string title?:string thread?:number",
+  "chat.regenerateTitle": "thread:number",
   "chat.pin": "pinned?:boolean session:string",
   "chat.relayPlaces": "thread:number",
   "chat.relay": "thread:number connect?:string channel?:string link?:string note?:string",
@@ -91,7 +93,10 @@ export const PARAMS: Record<string, string> = {
   "decision.dismiss": "thread:number seq:number",
   "decision.close": "thread:number seq:number option:string",
   "chat.report": "thread:number seq:number",
-  "session.new": "runtime?:string profile?:string model?:string effort?:string fast?:boolean",
+  "session.new": "runtime?:string profile?:string model?:string effort?:string fast?:boolean context?:number preset?:string",
+  "preset.add": "name:string dirs:json instructions?:string",
+  "preset.put": "id:string name:string dirs:json instructions?:string",
+  "preset.delete": "id:string",
   "chats.archived": "",
   "chat.forSession": "session?:string",
   "widget.state": "key:string path:string",
@@ -111,13 +116,15 @@ export const PARAMS: Record<string, string> = {
   "connect.put": "id:string input?:json",
   "connect.delete": "id:string",
   "connect.reconnect": "id:string",
+  "connect.move": "id:string to:string",
   "connect.bindSession": "connect:string session?:string title?:string",
   "connect.putSlackApp": "connect:string input?:json from?:json",
-  "feishu.register": "domain?:string name?:string",
+  "feishu.register": "domain?:string name?:string bind?:json mode?:string requireMention?:boolean threads?:boolean",
   "feishu.cancelRegistration": "id:string",
   "feishu.verify": "appId:string appSecret:string domain?:string",
   "feishu.createConnect": "feishu:json bind?:json mode?:string requireMention?:boolean owner?:json",
   "feishu.putSecret": "id:string appSecret:string",
+  "comma.createConnect": "line:string bind?:json",
   "slack.verify": "connect?:string install?:string appToken?:string botToken?:string",
   "slack.makeApp": "team?:string settings?:json icon?:string",
   "slack.dropApp": "appId:string",
@@ -150,16 +157,35 @@ export const PARAMS: Record<string, string> = {
   "job.log": "id:string lines:number",
   "job.stop": "id:string",
   "screen.close": "screen:string",
-  "job.clearEnded": "session:string",
+  "screen.endView": "screen:string view:string",
+  "screen.watchOnly": "screen:string view:string",
+  "screen.endViews": "screen:string",
+  "screen.logs": "screen:string after:number",
+  "screen.apps": "screen:string",
+  "screen.relaunch": "screen:string app:string",
+  "screen.settings": "screen:string",
+  "screen.setSetting": "screen:string name:string value:string",
+  "screen.screenshot": "screen:string",
+  "screen.chrome": "screen:string panel:number turn:number",
+  "screen.install": "screen:string path:string",
+  "screen.biometrics": "screen:string what:string",
+  "screen.uninstall": "screen:string app:string",
+  "screen.recordStart": "screen:string panel?:string",
+  "screen.recordStop": "screen:string",
+  "screen.openUrl": "screen:string url:string",
+  "screen.location": "screen:string at?:string",
+  "screen.statusBar": "screen:string tidy:boolean",
+  "screen.push": "screen:string app:string text:string",
+  "signin.fill": "id:string login:json keep?:boolean",
+  "signin.self": "id:string done?:boolean",
+  "signin.deny": "id:string",
   "memory.get": "",
-  "outflow.revoke": "id:string",
-  "outflow.answer": "id:string allow:boolean scopes?:strings workspace?:boolean",
   "process.end": "pid:number session:string",
   "footprint.scan": "",
   "footprint.rebuild": "keys?:strings",
   "footprint.delete": "keys?:strings",
   "footprint.evict": "keys?:strings",
-  "software.update": "id?:string",
+  "software.update": "id?:string repair?:boolean",
   "software.updateAll": "",
   "software.check": "",
   "software.channel": "channel?:string",
@@ -193,6 +219,8 @@ export const PARAMS: Record<string, string> = {
   "invitation.accept": "id?:string token?:string",
   "invitation.decline": "id:string",
   "loginSession.revoke": "id:string",
+  "account.setPicture": "picture:string",
+  "account.removePicture": "",
   "admin.me": "",
   "admin.createCode": "note?:string days?:number beta?:boolean",
   "admin.revokeCode": "code:string",
@@ -296,17 +324,11 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("GET", () => "/tools/access", null, NONE);
     case "tools.setAccess":
       return op("PUT", () => "/tools/access", p.pick(["access"]), OVERVIEW);
-    // The modules beside the station (docs/station-modules.md): each still.fail makes and each it runs, how it is now;
-    // one turned on (installed as a package and run) or off by the workspace's owners and admins.
-    case "station.modules":
-      return op("GET", () => "/modules", null, NONE);
-    case "station.module.set":
-      return op("PUT", () => `/modules/${encode(p.str("id"))}`, { enabled: p.bool("enabled") }, OVERVIEW);
-    // The variables everything the station starts for its agents runs with (docs/agent-env.md), set by the workspace's
+    // The variables everything the station starts for its agents runs with, set by the workspace's
     // owners and admins: `text`, all of them as `NAME=value` lines; or `env`, a patch (a string sets one, null removes it).
     case "agentEnv.set":
       return op("PUT", () => "/agent-env", p.pick(["env", "text"]), OVERVIEW);
-    // Whether the station's search finds its machine's person's own mail, messages and the like too (docs/search.md);
+    // Whether the station's search finds its machine's person's own mail, messages and the like too;
     // set by the workspace's owners and admins.
     case "search.setPersonal":
       return op("PUT", () => "/search/settings", p.pick(["personal"]), OVERVIEW);
@@ -329,6 +351,8 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("PUT", () => "/elevation", p.pick(["on"]), OVERVIEW);
     case "session.stop":
       return op("POST", () => `/sessions/${p.at("key")}/stop`, null, process("key"));
+    case "session.cancelRetry":
+      return op("POST", () => `/sessions/${p.at("key")}/cancel-retry`, p.pick(["thread", "seq"]), process("key"));
     case "session.warm":
       // As a person types in its chat (once a minute), nobody waiting on it: its station tells its session's new state.
       // It read the detail each time, a third of a phone's reads of details.
@@ -344,7 +368,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "session.delete":
       return op("DELETE", () => `/sessions/${p.at("key")}`, null, session("key"));
     case "session.settings":
-      return op("POST", () => `/sessions/${p.at("key")}/settings`, p.pick(["profile", "model", "effort", "fast", "repick", "afresh"]), session("key"));
+      return op("POST", () => `/sessions/${p.at("key")}/settings`, p.pick(["runtime", "profile", "model", "effort", "fast", "context", "repick", "afresh"]), session("key"));
     case "chat.archive": {
       const method = p.bool("archived") ? "POST" : "DELETE";
       const fallback = op(method, () => `/sessions/${p.at("session")}/archive`, null, session("session"));
@@ -360,14 +384,26 @@ function stationOp(name: string, params: unknown): Request | null {
       // Kept (the default), or let go (`kept: false`): offered for archiving again.
       return op(p.has("kept") && p.value("kept") === false ? "DELETE" : "PUT", () => `/threads/${thread}/keep`, null, { kind: "thread", archived: false });
     }
+    case "chat.hide": {
+      const thread = p.u64("thread");
+      return op("PUT", () => `/threads/${thread}/hidden`, p.pick(["hidden"]), { kind: "thread", archived: false });
+    }
+    case "chat.mute": {
+      const thread = p.u64("thread");
+      return op("PUT", () => `/threads/${thread}/muted`, p.pick(["muted"]), { kind: "thread", archived: false });
+    }
     case "chat.rename": {
       const thread = optU64("thread");
       if (thread !== null) return op("PUT", () => `/threads/${thread}/title`, p.pick(["title"]), { kind: "thread", archived: false });
       return op("POST", () => `/sessions/${p.at("session")}/title`, p.pick(["title"]), session("session"));
     }
+    case "chat.regenerateTitle": {
+      const thread = p.u64("thread");
+      return op("POST", () => `/threads/${thread}/regenerate-title`, null, { kind: "thread", archived: false });
+    }
     case "chat.pin":
       return op(p.bool("pinned") ? "PUT" : "DELETE", () => `/sessions/${p.at("session")}/pin`, null, session("session"));
-    // Where a chat can be relayed (docs/relay.md): each connect's channels and groups its bot is in, read as asked.
+    // Where a chat can be relayed: each connect's channels and groups its bot is in, read as asked.
     case "chat.relayPlaces": {
       const thread = p.u64("thread");
       return op("GET", () => `/threads/${thread}/relay`, null, NONE);
@@ -401,7 +437,14 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/threads/${thread}/report`, { n: p.u64("seq") }, NONE);
     }
     case "session.new":
-      return op("POST", () => "/sessions", p.pick(["runtime", "profile", "model", "effort", "fast"]), { kind: "session", key: null });
+      return op("POST", () => "/sessions", p.pick(["runtime", "profile", "model", "effort", "fast", "context", "preset"]), { kind: "session", key: null });
+    // The workspace's presets on the station: what a chat starts knowing, chosen as it is opened.
+    case "preset.add":
+      return op("POST", () => "/presets", { name: p.str("name"), dirs: p.value("dirs"), instructions: p.word("instructions") ?? "" }, { kind: "presets" });
+    case "preset.put":
+      return op("PUT", () => `/presets/${p.at("id")}`, { name: p.str("name"), dirs: p.value("dirs"), instructions: p.word("instructions") ?? "" }, { kind: "presets" });
+    case "preset.delete":
+      return op("DELETE", () => `/presets/${p.at("id")}`, null, { kind: "presets" });
     case "chats.archived":
       return op("GET", () => "/chats?archived=1", null, NONE);
     case "chat.forSession":
@@ -444,6 +487,9 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("DELETE", () => `/connects/${p.at("id")}`, null, connect("id"));
     case "connect.reconnect":
       return op("POST", () => `/connects/${p.at("id")}/reconnect`, null, connect("id"));
+    // To another station of its workspace (station/src/connects/workspace.ts), which runs it from then on.
+    case "connect.move":
+      return op("POST", () => `/connects/${p.at("id")}/move`, { station: p.str("to") }, connect("id"));
     case "connect.bindSession":
       return op("POST", () => `/connects/${p.at("connect")}/session`, p.pick(["session", "title"]), connect("connect"));
     // `from`: the app's settings the form started from; only what differs from them is written (and a new icon).
@@ -456,16 +502,19 @@ function stationOp(name: string, params: unknown): Request | null {
           : input;
       return op("PUT", () => `/connects/${p.at("connect")}/slack-app`, changed, connect("connect"));
     }
-    // Feishu (and Lark) bots (docs/feishu.md): made by scanning (the station follows it, the overview's
+    // Feishu (and Lark) bots: made by scanning (the station follows it, the overview's
     // `feishuRegistrations` says how it goes), an app of one's own checked, a connect added with either.
     case "feishu.register":
-      return op("POST", () => "/feishu/registrations", p.pick(["domain", "name"]), OVERVIEW);
+      return op("POST", () => "/feishu/registrations", p.pick(["domain", "name", "bind", "mode", "requireMention", "threads"]), OVERVIEW);
     case "feishu.cancelRegistration":
       return op("DELETE", () => `/feishu/registrations/${p.at("id")}`, null, OVERVIEW);
     case "feishu.verify":
       return op("POST", () => "/feishu/verify", p.pick(["appId", "appSecret", "domain"]), NONE);
     case "feishu.createConnect":
       return op("POST", () => "/feishu/connects", p.pick(["feishu", "bind", "mode", "requireMention", "owner"]), { kind: "connect", id: null });
+    // A Comma connect: made of the line Comma's still.fail plugin shows.
+    case "comma.createConnect":
+      return op("POST", () => "/comma/connects", p.pick(["line", "bind"]), { kind: "connect", id: null });
     // A Feishu connect's App Secret replaced (verified there first).
     case "feishu.putSecret":
       return op("PUT", () => `/feishu/connects/${p.at("id")}/secret`, p.pick(["appSecret"]), connect("id"));
@@ -523,7 +572,7 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/logins/${p.at("id")}/code`, p.pick(["code"]), { kind: "login", id: p.str("id"), from: "needs_code" });
     case "login.drop":
       return op("DELETE", () => `/logins/${p.at("id")}`, null, { kind: "login", id: p.str("id"), from: null });
-    // A sign-in's page opened in the station's own browser (docs/remote-login.md, 在 station 的浏览器中登录), for the
+    // A sign-in's page opened in the station's own browser (在 station 的浏览器中登录), for the
     // person to finish there: `{screen}`, the screen of its tab, to open. Its job says the tab from then on (`screen`).
     case "profile.loginBrowser":
       return op("POST", () => `/profiles/${p.at("id")}/login-browser`, null, NONE);
@@ -535,21 +584,78 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("GET", () => `/jobs/${p.at("id")}/log?lines=${p.u64("lines")}`, null, NONE);
     case "job.stop":
       return op("POST", () => `/jobs/${p.at("id")}/stop`, null, { kind: "job" });
-    // A screen closed for good (a tab of the station's browser, docs/remote-screens.md): it leaves the station's list as
+    // A screen closed for good (a tab of the station's browser): it leaves the station's list as
     // the station tells it (`screens` on its stream).
     case "screen.close":
       return op("POST", () => `/screens/${p.at("screen")}/close`, null, NONE);
-    case "job.clearEnded":
-      return op("DELETE", () => `/sessions/${p.at("session")}/jobs`, null, session("session"));
+    // A person's view of a screen, wherever it is, ended or made to only look ( "Who is on a
+    // screen"); it changes on the station's list as the station tells it.
+    case "screen.endView":
+      return op("POST", () => `/screens/${p.at("screen")}/views/${p.at("view")}/end`, null, NONE);
+    case "screen.watchOnly":
+      return op("POST", () => `/screens/${p.at("screen")}/views/${p.at("view")}/watch`, null, NONE);
+    case "screen.endViews":
+      return op("POST", () => `/screens/${p.at("screen")}/views/end`, null, NONE);
+    // An app debugged on a simulator: its log's lines after `after` (`{next, lines}`),
+    // the apps installed there (`{apps}`), one of them started again.
+    case "screen.logs":
+      return op("GET", () => `/screens/${p.at("screen")}/logs?after=${p.u64("after")}`, null, NONE);
+    case "screen.apps":
+      return op("GET", () => `/screens/${p.at("screen")}/apps`, null, NONE);
+    case "screen.relaunch":
+      return op("POST", () => `/screens/${p.at("screen")}/relaunch`, p.pick(["app"]), NONE);
+    // What can be set of it (`{appearance, textSize}`), one of them set (the same back), and its picture in its own pixels
+    // (`{png}`, base64).
+    case "screen.settings":
+      return op("GET", () => `/screens/${p.at("screen")}/settings`, null, NONE);
+    case "screen.setSetting":
+      return op("POST", () => `/screens/${p.at("screen")}/settings`, p.pick(["name", "value"]), NONE);
+    case "screen.chrome":
+      return op("GET", () => `/screens/${p.at("screen")}/chrome/${p.u64("panel")}/${p.u64("turn")}`, null, NONE);
+    case "screen.screenshot":
+      return op("POST", () => `/screens/${p.at("screen")}/screenshot`, null, NONE);
+    // What Device Hub does of a device besides its keys: a link opened in it, where it is (`at`; none: nowhere), its status
+    // bar tidy, a notification to one of its apps.
+    // Its screen recorded (`panel`: `inner` or `cover`, where it has two); ended, its movie where the drive reads it (`{root, path}`).
+    case "screen.biometrics":
+      return op("POST", () => `/screens/${p.at("screen")}/biometrics`, p.pick(["what"]), NONE);
+    case "screen.uninstall":
+      return op("POST", () => `/screens/${p.at("screen")}/uninstall`, p.pick(["app"]), NONE);
+    case "screen.recordStart":
+      return op("POST", () => `/screens/${p.at("screen")}/record`, p.pick(["panel"]), NONE);
+    case "screen.recordStop":
+      return op("POST", () => `/screens/${p.at("screen")}/record/stop`, null, NONE);
+    case "screen.install":
+      return op("POST", () => `/screens/${p.at("screen")}/install`, p.pick(["path"]), NONE);
+    case "screen.openUrl":
+      return op("POST", () => `/screens/${p.at("screen")}/open-url`, p.pick(["url"]), NONE);
+    case "screen.location":
+      return op("POST", () => `/screens/${p.at("screen")}/location`, p.pick(["at"]), NONE);
+    case "screen.statusBar":
+      return op("POST", () => `/screens/${p.at("screen")}/status-bar`, p.pick(["tidy"]), NONE);
+    case "screen.push":
+      return op("POST", () => `/screens/${p.at("screen")}/push`, p.pick(["app", "text"]), NONE);
+    // A sign-in its card asks of the person (station/src/vault/signin.ts 登录态): what their password
+    // manager gave (`login`: username, password, code; an object, so `doing` keeps no copy of it), typed into the chat's
+    // tab by the station; they sign in themselves on its screen (`signin.self`, `done` once they did); or they will not.
+    // The card says how it goes, restated by the station.
+    case "signin.fill": {
+      const login = p.value("login");
+      const given: Record<string, string> = {};
+      if (login !== null && typeof login === "object" && !Array.isArray(login)) {
+        for (const k of ["username", "password", "code"]) {
+          const v = (login as Record<string, unknown>)[k];
+          if (typeof v === "string" && v !== "") given[k] = v;
+        }
+      }
+      return op("POST", () => `/browser/sign-ins/${p.at("id")}/fill`, { ...given, ...(p.has("keep") ? { keep: p.bool("keep") } : {}) }, NONE);
+    }
+    case "signin.self":
+      return op("POST", () => `/browser/sign-ins/${p.at("id")}/self`, { done: p.bool("done") }, NONE);
+    case "signin.deny":
+      return op("POST", () => `/browser/sign-ins/${p.at("id")}/deny`, null, NONE);
     case "memory.get":
       return op("GET", () => "/memory", null, NONE);
-    // A program's grant of the station's data revoked (docs/data-outflow.md): its next read is refused.
-    case "outflow.revoke":
-      return op("DELETE", () => `/outflow/grants/${p.at("id")}`, null, { kind: "outflowGrants" });
-    // An admin's answer to a program's request for the station's data: allowed with the kinds and reach they left, or
-    // refused (docs/data-outflow.md). Its program takes the token the next time it asks.
-    case "outflow.answer":
-      return op("POST", () => `/outflow/requests/${p.at("id")}`, p.pick(["allow", "scopes", "workspace"]), { kind: "outflowGrants" });
     // A chat's process ended from its station's 进程 (resources/watch.ts `end`): the page reads it again in a moment.
     case "process.end":
       return op("POST", () => `/resources/processes/${p.u64("pid")}/end`, p.pick(["session"]), NONE);
@@ -562,7 +668,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "footprint.evict":
       return op("POST", () => "/footprint/evict", p.pick(["keys"]), FOOTPRINT);
     case "software.update":
-      return op("POST", () => "/updates", p.pick(["id"]), OVERVIEW);
+      return op("POST", () => "/updates", p.pick(["id", "repair"]), OVERVIEW);
     case "software.updateAll":
       return op("POST", () => "/updates/all", null, OVERVIEW);
     case "software.check":
@@ -571,12 +677,12 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => "/updates/channel", p.pick(["channel"]), OVERVIEW);
     case "software.auto":
       return op("POST", () => "/updates/auto", { on: p.bool("on") }, OVERVIEW);
-    // The station's drive (docs/drive.md): the folders it lends its members, named by the workspace's owners and admins
+    // The station's drive: the folders it lends its members, named by the workspace's owners and admins
     // (their folders to pick from: `drive.folders`), and changes of what is in them. A station in several workspaces keeps a
-    // list for each: the asker's (docs/multi-workspace.md).
+    // list for each: the asker's.
     case "drive.setRoots":
       return op("PUT", () => "/drive/roots", p.pick(["roots"]), OVERVIEW);
-    // still.fail Helper's window for a grant up on a Mac station (docs/remote-screens.md "Grants"): `{window, screen}`.
+    // still.fail Helper's window for a grant up on a Mac station: `{window, screen}`.
     case "permissions.request":
       return op("POST", () => "/permissions/request", { grant: p.str("grant") }, OVERVIEW);
     case "drive.folders":
@@ -594,7 +700,7 @@ function stationOp(name: string, params: unknown): Request | null {
     // (the phone's Station 文件 switched to a file; the web's composer stages its own: composer.ts).
     case "drive.stage":
       return op("POST", () => "/drive/stage", p.pick(["root", "path", "zip"]), NONE);
-    // A login to one of the station's command-line tools cancelled (docs/remote-login.md): agents start them and drive
+    // A login to one of the station's command-line tools cancelled: agents start them and drive
     // their commands; how each stands comes on the station's stream (`machineLogins`).
     case "machineLogin.cancel":
       return op("DELETE", () => `/machine-logins/${p.at("id")}`, null, { kind: "machineLogins" });
@@ -654,6 +760,12 @@ function cloudOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/v1/invitations/${p.at("id")}/decline`, null);
     case "loginSession.revoke":
       return op("DELETE", () => `/v1/auth/sessions/${p.at("id")}`, null);
+    // The picture the account puts up for itself (a data URL, which still.fail cloud keeps), shown in the place of its
+    // sign-in's; or taken away, its sign-in's shown again.
+    case "account.setPicture":
+      return op("PUT", () => "/v1/me/picture", p.pick(["picture"]));
+    case "account.removePicture":
+      return op("DELETE", () => "/v1/me/picture", null);
     case "admin.me":
       return op("GET", () => "/v1/admin/me", null);
     case "admin.createCode":

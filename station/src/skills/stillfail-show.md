@@ -38,7 +38,7 @@ Images plus a service often work together: quick visual review and a working ver
 ## Services and inline HTML
 
 - Use stillfail-jobs to start, verify, share and keep a service available for review.
-- Use stillfail-viz for inline charts, diagrams and option widgets (`ember.sendFollowUpMessage` can put a choice
+- Use stillfail-viz for inline charts, diagrams and option widgets (`openai.sendFollowUpMessage` can put a choice
   in the user's composer). Inline HTML runs in still.fail's sandbox/style; it is not evidence of your actual UI.
   Screenshot or serve that UI instead.
 - Full-screen pages (promo, player, slideshow) work better as an unplaced attachment or service. Include a

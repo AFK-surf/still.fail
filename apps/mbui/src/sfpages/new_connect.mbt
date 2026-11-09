@@ -1,4 +1,4 @@
-// A new connect on the desktop, in a dialog (ember web/src/pages/Connect.tsx NewConnectDialog, CoreNewConnectDialog,
+// A new connect on the desktop, in a dialog (still.fail web/src/pages/Connect.tsx NewConnectDialog, CoreNewConnectDialog,
 // SlackTeamIcon, TokenOwner, MadeAppSteps; FeishuConnect.tsx useFeishuStep; Connect.css.ts, FeishuConnect.css.ts): the
 // core's wizard (`connectFlow {station, form}`: its step, title, count, what can be done, what is wrong) drawn a step
 // at a time — the platform; Slack's (the workspace to make its app in, a configuration token to add, the app's look
@@ -16,12 +16,18 @@ priv struct NcFlow {
   resume : String
   app_id : @ui.Field
   app_secret : @ui.Field
+  /// the line Comma's still.fail plugin shows, as typed
+  comma_line : @ui.Field
+  mut comma_line_sent : String
   mut app_id_sent : String
-  mut app_secret_sent : String
   mut look : SaDraft?
   mut look_sent : String
   mut icon_sent : String
   mut gone : Bool
+  /// the steps the dialog shows, as the wizard has gone through them (the dialog's steps follow the core's: nc_follow)
+  pages : Array[String]
+  /// what each step said as it was last on top (its title, count and what it is about): nc_words_at
+  words : Map[Int, (String, String, String)]
 }
 
 ///|
@@ -52,34 +58,27 @@ pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : Stri
     resume,
     app_id: @ui.Field::new(),
     app_secret: @ui.Field::new(),
+    comma_line: @ui.Field::new(),
+    comma_line_sent: "",
     app_id_sent: "",
-    app_secret_sent: "",
     look: None,
     look_sent: "",
     icon_sent: "",
     gone: false,
+    pages: [],
+    words: {},
   }
   let opened = Ref(false)
-  let view = fn() { (core.topic)("connectFlow", { "station": str(station), "form": str(f.form) }).value }
+  let view = fn() { (core.topic)("connectFlow", { "station": str(station), "form": str(f.form) }).get().value }
+  // (back on any step the wizard's: told to the core, which goes back or says it is closed; the dialog's steps follow)
+  let shut = fn() { @sf.close_presented() }
+  let back = fn() { nc_go(core, f, "back", fn() { nc_close(core, f, shut) }) }
   open_dialog(
     @sf.t("web-pages.connects.add"),
     wide=true,
-    live=fn() {
-      let v = view()
-      match v {
-        Some(_) =>
-          (
-            text(v, "title"),
-            text_number(v, "number").to_string() + " / " + text_number(v, "total").to_string(),
-            if text(v, "step") == "team" && !flag(v, "gettingToken") {
-              @sf.t("web-pages.connect.teamLead")
-            } else {
-              ""
-            },
-          )
-        None => (@sf.t("web-pages.connects.add"), "", "")
-      }
-    },
+    steps=true,
+    back~,
+    live=fn() { nc_words_at(f, view, 0) },
     fn(c, shut) {
       if !opened.val {
         opened.val = true
@@ -102,11 +101,97 @@ pub fn new_connect_dialog(src : Source, core : Core, here : Here, station : Stri
           )
         })
       }
-      nc_body(c, src, core, here, f, view(), fn() { nc_close(core, f, shut) })
+      nc_step(c, src, core, here, f, view, 0, f.pages.get(0).unwrap_or(""), shut, back)
     },
-    fn(c, shut) { nc_foot(c, core, here, f, view(), fn() { nc_close(core, f, shut) }) },
+    fn(c, shut) { nc_foot(c, core, here, f, view(), fn() { nc_close(core, f, shut) }, step=f.pages.get(0).unwrap_or("")) },
     on_gone=fn() { nc_drop(core, f) },
   )
+}
+
+///|
+/// The wizard's title, which of its steps it is on and what that is about, as the core says now (CoreNewConnectDialog's
+/// head), or the dialog's before it has said.
+fn nc_words(v : Json?) -> (String, String, String) {
+  match v {
+    Some(_) =>
+      (
+        text(v, "title"),
+        text_number(v, "number").to_string() + " / " + text_number(v, "total").to_string(),
+        if text(v, "step") == "team" && !flag(v, "gettingToken") {
+          @sf.t("web-pages.connect.teamLead")
+        } else {
+          ""
+        },
+      )
+    None => (@sf.t("web-pages.connects.add"), "", "")
+  }
+}
+
+///|
+/// The words of the dialog's step `at`: the core's as it says them now while the wizard is on that step, those it had
+/// then once it has gone on or back (the core says the wizard's step now, not the one the dialog's step was for).
+fn nc_words_at(f : NcFlow, view : () -> Json?, at : Int) -> (String, String, String) {
+  let v = view()
+  // (the core on this step still: gone on, the words are the next step's before the dialog has it on top)
+  if f.pages.is_empty() || f.pages.get(at) == Some(text(v, "step")) {
+    let w = nc_words(v)
+    f.words[at] = w
+    w
+  } else {
+    f.words.get(at).unwrap_or(nc_words(view()))
+  }
+}
+
+///|
+/// The dialog's step `at` (0 its first): what it holds for the wizard's step `own` it was for ("" the wizard's now,
+/// before it has said its first); on the step on top, the dialog's steps brought to the wizard's (nc_follow) first.
+/// Gone back from, as it slides away, it still holds its own.
+fn nc_step(
+  c : @ui.Ctx,
+  src : Source,
+  core : Core,
+  here : Here,
+  f : NcFlow,
+  view : () -> Json?,
+  at : Int,
+  own : String,
+  shut : () -> Unit,
+  back : () -> Unit,
+) -> Unit {
+  let v = view()
+  if at == f.pages.length() - 1 || f.pages.is_empty() {
+    nc_follow(src, core, here, f, view, v, back)
+  }
+  let own = if own == "" { f.pages.get(0).unwrap_or(text(v, "step")) } else { own }
+  nc_body(c, src, core, here, f, v, fn() { nc_close(core, f, shut) }, step=own)
+}
+
+///|
+/// The dialog's steps brought to the wizard's as the core has it now: its first as it is first said; gone on to
+/// another, that one slides in (its words as the core says them while it shows, back on it the wizard's); gone back to
+/// the one under the top, the top slides away.
+fn nc_follow(src : Source, core : Core, here : Here, f : NcFlow, view : () -> Json?, v : Json?, back : () -> Unit) -> Unit {
+  guard v is Some(Object(_)) else { return }
+  let step = text(v, "step")
+  let n = f.pages.length()
+  if n == 0 {
+    f.pages.push(step)
+  } else if f.pages[n - 1] == step {
+    ()
+  } else if n >= 2 && f.pages[n - 2] == step {
+    f.pages.pop() |> ignore
+    @sf.panel_back() |> ignore
+  } else {
+    f.pages.push(step)
+    let at = n
+    @sf.panel_go(
+      text(v, "title"),
+      fn(c, shut) { nc_step(c, src, core, here, f, view, at, step, shut, back) },
+      foot=fn(c, shut) { nc_foot(c, core, here, f, view(), fn() { nc_close(core, f, shut) }, step~) },
+      back~,
+      live=fn() { nc_words_at(f, view, at) },
+    )
+  }
 }
 
 ///|
@@ -195,9 +280,19 @@ fn nc_tokens(c : @ui.Ctx, core : Core, f : NcFlow, install : String) -> SlackTok
 
 ///|
 /// The step shown (CoreNewConnectDialog's body; useFeishuStep's).
-fn nc_body(c : @ui.Ctx, src : Source, core : Core, here : Here, f : NcFlow, v : Json?, close : () -> Unit) -> Unit {
+fn nc_body(
+  c : @ui.Ctx,
+  src : Source,
+  core : Core,
+  here : Here,
+  f : NcFlow,
+  v : Json?,
+  close : () -> Unit,
+  step? : String = "",
+) -> Unit {
   guard v is Some(Object(_)) else { @settings.wait_line(c, @sf.t("common.reading")) }
-  let step = text(v, "step")
+  // (the dialog's step's own: one sliding away as another comes still shows what it was)
+  let step = if step == "" { text(v, "step") } else { step }
   let fe = field(v, "feishu")
   let error = nc_error(core, f)
   // added on its own (a bot made by scanning): its page, once the frame is built
@@ -208,28 +303,31 @@ fn nc_body(c : @ui.Ctx, src : Source, core : Core, here : Here, f : NcFlow, v : 
     match step {
       "platform" => {
         let offered = strings(v, "platforms").contains("feishu")
+        let comma = strings(v, "platforms").contains("comma")
         let platform = opt_text(v, "platform").unwrap_or("slack")
+        let platforms = [
+          ("slack", "Slack", @sf.t("web-pages.connect.feishu.slackNote")),
+          (
+            "feishu",
+            @sf.t("web-pages.connect.feishu.name"),
+            @sf.t(if offered { "web-pages.connect.feishu.feishuNote" } else { "web-pages.connect.feishu.update" }),
+          ),
+        ]
+        // (offered only by a station with the Comma connect)
+        if comma {
+          platforms.push(("comma", "Comma", @sf.t("web-pages.connect.comma.note")))
+        }
         let picked = @sf.choices(
           c,
           "nc-platform/" + f.form,
           platform,
-          [
-            ("slack", "Slack", @sf.t("web-pages.connect.feishu.slackNote")),
-            (
-              "feishu",
-              @sf.t("web-pages.connect.feishu.name"),
-              @sf.t(if offered { "web-pages.connect.feishu.feishuNote" } else { "web-pages.connect.feishu.update" }),
-            ),
-          ],
+          platforms,
           label=@sf.t("web-pages.connect.feishu.platform"),
           disabled=if offered { [] } else { ["feishu"] },
           icon=fn(p) {
             c.box(style=nc_platform_mark, fn() {
-              if p == "feishu" {
-                @sf.feishu_mark(c, nc_platform_size) |> ignore
-              } else {
-                @sf.slack_mark(c, nc_platform_size) |> ignore
-              }
+              // (Comma's mark is one colour: in the page's ink)
+              @sf.drawable(c, @sf.origin_mark_name(p), nc_platform_size, tint?=if p == "comma" { Some(@sf.theme().p.text) } else { None }) |> ignore
             })
             |> ignore
           },
@@ -238,12 +336,13 @@ fn nc_body(c : @ui.Ctx, src : Source, core : Core, here : Here, f : NcFlow, v : 
           nc_edit(core, f, obj([("platform", str(picked))]))
         }
       }
-      "feishuBind" | "bind" => {
+      "commaLine" | "done" if text(v, "platform") == "comma" => nc_comma_line(c, core, f, field(v, "comma"), error)
+      "feishuBind" | "commaBind" | "bind" => {
         nc_models(c, src, core, f, v)
         @sf.field(c, @sf.t("web-pages.connect.mode"), fn() {
-          let (m, r) = mode_choices(c, "nc-mode/" + f.form, field(v, "modeWords"), text(v, "mode"), flag(v, "requireMention"))
-          if m != text(v, "mode") || r != flag(v, "requireMention") {
-            nc_edit(core, f, obj([("mode", str(m)), ("requireMention", Json::boolean(r))]))
+          let (m, r, by_thread) = mode_choices(c, "nc-mode/" + f.form, field(v, "modeWords"), text(v, "mode"), flag(v, "requireMention"), flag(v, "threads"))
+          if m != text(v, "mode") || r != flag(v, "requireMention") || by_thread != flag(v, "threads") {
+            nc_edit(core, f, obj([("mode", str(m)), ("requireMention", Json::boolean(r)), ("threads", Json::boolean(by_thread))]))
           }
         })
         if step == "bind" && error != "" {
@@ -339,9 +438,9 @@ fn nc_models(c : @ui.Ctx, src : Source, core : Core, f : NcFlow, v : Json?) -> U
   let runtimes = strings(field(pick, "valueOption"), "runtimes")
   @sf.field(c, @sf.t("web-pages.profiles.models"), hint=if runtimes.length() > 1 { @sf.t("web-pages.connect.bothRuntimes") } else { "" }, fn() {
     if items(pick, "options").length() == 0 {
-      if cd_link(c, "nc-no-models/" + f.form, @sf.t("web-pages.connect.noModels")) {
+      cd_link(c, "nc-no-models/" + f.form, @sf.t("web-pages.connect.noModels"), on_press=fn() {
         (core.push)(Profiles(f.station))
-      }
+      })
     } else {
       model_triple(c, src, f.station, "connect-new:" + f.form)
     }
@@ -365,9 +464,9 @@ fn nc_team(c : @ui.Ctx, core : Core, f : NcFlow, v : Json?, close : () -> Unit) 
       if teams.length() == 0 {
         c.box(style=nc_manual_line, fn() {
           c.text(@sf.t("web-pages.connect.noToken"), style=nc_meta) |> ignore
-          if cd_text_button(c, "nc-manual/" + f.form, @sf.t("web-pages.connect.manualApp")) {
+          cd_text_button(c, "nc-manual/" + f.form, @sf.t("web-pages.connect.manualApp"), on_press=fn() {
             nc_go(core, f, "manual", close)
-          }
+          })
         })
         |> ignore
       }
@@ -398,13 +497,13 @@ fn nc_team(c : @ui.Ctx, core : Core, f : NcFlow, v : Json?, close : () -> Unit) 
   if picked != chosen {
     nc_edit(core, f, obj([("team", str(picked))]))
   }
-  c.box(style=nc_team_more, fn() {
-    if @sf.button(c, @sf.t("web-pages.connect.addTeamToken"), key="nc-add-token/" + f.form, tone=Ghost, icon="plus") {
+  c.box(style=nc_team_more, flow=true, line_gap=@ui.Space::px(S1), fn() {
+    @sf.button(c, @sf.t("web-pages.connect.addTeamToken"), key="nc-add-token/" + f.form, tone=Ghost, icon="plus", reach=@sf.button_start_reach(), on_press=fn() {
       nc_edit(core, f, obj([("adding", Json::boolean(true))]))
-    }
-    if cd_text_button(c, "nc-manual-short/" + f.form, @sf.t("web-pages.connect.manualShort")) {
+    }) |> ignore
+    cd_text_button(c, "nc-manual-short/" + f.form, @sf.t("web-pages.connect.manualShort"), on_press=fn() {
       nc_go(core, f, "manual", close)
-    }
+    })
   })
   |> ignore
 }
@@ -461,26 +560,26 @@ fn nc_made_steps(c : @ui.Ctx, core : Core, f : NcFlow, made : Json?) -> Unit {
             )
           } else {
             c.text(@sf.t("web-pages.connect.made.oauth"), style=@sf.step_words) |> ignore
-            if @sf.button(c, @sf.t("web-pages.connect.made.install"), key="nc-install/" + f.form, tone=Primary, icon="external") {
+            @sf.button(c, @sf.t("web-pages.connect.made.install"), key="nc-install/" + f.form, tone=Primary, icon="external", on_press=fn() {
               (core.open_link)(url)
-            }
+            }) |> ignore
           }
         None => {
           c.text(@sf.t("web-pages.connect.made.manual"), style=@sf.step_words) |> ignore
-          if @sf.button(c, @sf.t("web-pages.connect.made.install"), key="nc-install/" + f.form, tone=Primary, icon="external") {
+          @sf.button(c, @sf.t("web-pages.connect.made.install"), key="nc-install/" + f.form, tone=Primary, icon="external", on_press=fn() {
             (core.open_link)(text(links, "install"))
-          }
-          if @sf.button(c, @sf.t("web-pages.connect.made.openOauth"), key="nc-oauth/" + f.form) {
+          }) |> ignore
+          @sf.button(c, @sf.t("web-pages.connect.made.openOauth"), key="nc-oauth/" + f.form, on_press=fn() {
             (core.open_link)(text(links, "oauth"))
-          }
+          }) |> ignore
         }
       }
     },
     fn() {
       c.text(@sf.t("web-pages.connect.made.appToken"), style=@sf.step_words) |> ignore
-      if @sf.button(c, @sf.t("web-pages.connect.made.openSocket"), key="nc-socket/" + f.form, icon="external") {
+      @sf.button(c, @sf.t("web-pages.connect.made.openSocket"), key="nc-socket/" + f.form, icon="external", on_press=fn() {
         (core.open_link)(text(links, "appToken"))
-      }
+      }) |> ignore
     },
     fn() {
       c.text(@sf.t(if oauth is Some(_) { "web-pages.connect.made.fillOne" } else { "web-pages.connect.made.fillBoth" }), style=@sf.step_words)
@@ -490,7 +589,7 @@ fn nc_made_steps(c : @ui.Ctx, core : Core, f : NcFlow, made : Json?) -> Unit {
 }
 
 ///|
-/// A Feishu bot being made by scanning (useFeishuStep's scan step: FeishuConnect.css.ts scan): its QR code 196 (or, before
+/// A Feishu bot being made by scanning: its QR code 196 (or, before
 /// it, a ring or Feishu's mark in its place), beside it (narrow: under it) where it stands (a ring while the connect is
 /// added, red where it failed), what went wrong, and while it waits how to scan it and the way to open it on this
 /// device.
@@ -527,9 +626,9 @@ fn nc_scan(c : @ui.Ctx, core : Core, fe : Json?) -> Unit {
     }
     if waiting {
       c.text(@sf.t("web-pages.connect.feishu.scanHint"), style=desk_muted) |> ignore
-      if @sf.button(c, @sf.t("web-pages.connect.feishu.openInFeishu"), key="nc-feishu-open", icon="external") {
+      @sf.button(c, @sf.t("web-pages.connect.feishu.openInFeishu"), key="nc-feishu-open", icon="external", on_press=fn() {
         (core.open_link)(text(r, "url"))
-      }
+      }) |> ignore
     }
   })
 }
@@ -541,9 +640,9 @@ fn nc_feishu_app(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, error : Strin
   let lark = flag(fe, "lark")
   c.box(style=nc_hint_line, flow=true, fn() {
     c.text(@sf.t("web-pages.connect.feishu.appHint"), style=desk_muted) |> ignore
-    if cd_link(c, "nc-console/" + f.form, @sf.t("web-pages.connect.feishu.openConsole")) {
+    cd_link(c, "nc-console/" + f.form, @sf.t("web-pages.connect.feishu.openConsole"), on_press=fn() {
       (core.open_link)(if lark { "https://open.larksuite.com/app" } else { "https://open.feishu.cn/app" })
-    }
+    })
   })
   |> ignore
   // (the fields echo what is typed; the core has it a moment later)
@@ -552,24 +651,23 @@ fn nc_feishu_app(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, error : Strin
     f.app_id_sent = text(fe, "appId")
   }
   @sf.field(c, "App ID", fn() {
-    let typed = @sf.input(c, "nc-app-id/" + f.form, placeholder="cli_…", field=f.app_id).text
-    if typed != f.app_id_sent {
+    @sf.input(c, "nc-app-id/" + f.form, placeholder="cli_…", field=f.app_id, on_change=fn(typed) {
       f.app_id_sent = typed
-      c.tell("nc-app-id/" + f.form, fn() { nc_edit(core, f, obj([("feishu", obj([("appId", str(typed))]))])) })
-    }
+      nc_edit(core, f, obj([("feishu", obj([("appId", str(typed))]))]))
+    })
+    |> ignore
   })
   let errors = strings(fe, "errors")
   @sf.field(c, "App Secret", error=errors.iter().fold(init="", fn(a, e) { if a == "" { e } else { a + "；" + e } }), fn() {
-    let typed = @sf.input(c, "nc-app-secret/" + f.form, secret=true, field=f.app_secret).text
-    if typed != f.app_secret_sent {
-      f.app_secret_sent = typed
-      c.tell("nc-app-secret/" + f.form, fn() { nc_edit(core, f, obj([("feishu", obj([("appSecret", str(typed))]))])) })
-    }
+    @sf.input(c, "nc-app-secret/" + f.form, secret=true, field=f.app_secret, on_change=fn(typed) {
+      nc_edit(core, f, obj([("feishu", obj([("appSecret", str(typed))]))]))
+    })
+    |> ignore
   })
-  let now = @sf.switch_row(c, "nc-lark/" + f.form, @sf.t("web-pages.connect.feishu.lark"), lark, note=@sf.t("web-pages.connect.feishu.larkNote"))
-  if now != lark {
+  @sf.switch_row(c, "nc-lark/" + f.form, @sf.t("web-pages.connect.feishu.lark"), lark, note=@sf.t("web-pages.connect.feishu.larkNote"), on_change=fn(now) {
     nc_edit(core, f, obj([("feishu", obj([("lark", Json::boolean(now))]))]))
-  }
+  })
+  |> ignore
   let identity = field(fe, "identity")
   if flag(fe, "verified") && identity is Some(Object(_)) {
     let tenant = text(field(identity, "tenant"), "name")
@@ -592,41 +690,86 @@ fn nc_feishu_app(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, error : Strin
 }
 
 ///|
-/// The dialog's buttons for the step shown (CoreNewConnectDialog's footer; useFeishuStep's): back (or 取消) and the
-/// way on, each as the core says the step stands.
-fn nc_foot(c : @ui.Ctx, core : Core, here : Here, f : NcFlow, v : Json?, close : () -> Unit) -> Unit {
+/// The Comma path's last step: where the line comes from (Comma's still.fail plugin), the line pasted, why adding it
+/// failed.
+fn nc_comma_line(c : @ui.Ctx, core : Core, f : NcFlow, cm : Json?, error : String) -> Unit {
+  // (the field echoes what is typed; the core has it a moment later)
+  if f.comma_line_sent == "" && f.comma_line.text() == "" && text(cm, "line") != "" {
+    f.comma_line.set(text(cm, "line"))
+    f.comma_line_sent = text(cm, "line")
+  }
+  let said = match opt_text(cm, "error") {
+    Some(e) => e
+    None => error
+  }
+  @sf.field(c, @sf.t("web-pages.connect.comma.line"), hint=@sf.t("web-pages.connect.comma.lineHint"), error=said, fn() {
+    @sf.input(c, "nc-comma-line/" + f.form, placeholder="comma https://… …", field=f.comma_line, on_change=fn(typed) {
+      f.comma_line_sent = typed
+      nc_edit(core, f, obj([("comma", obj([("line", str(typed))]))]))
+    })
+    |> ignore
+  })
+}
+
+///|
+/// The dialog's buttons for its step `step` (CoreNewConnectDialog's footer; useFeishuStep's): 取消 where the wizard's
+/// back closes it (back a step is the step's head's, the dialog's steps following the wizard's), and the way on, each
+/// as the core says the step stands.
+fn nc_foot(
+  c : @ui.Ctx,
+  core : Core,
+  here : Here,
+  f : NcFlow,
+  v : Json?,
+  close : () -> Unit,
+  step? : String = "",
+) -> Unit {
   ignore(here)
   guard v is Some(Object(_)) else {
-    if @sf.button(c, @sf.t("common.cancel"), key="nc-cancel/" + f.form, tone=Ghost) {
+    @sf.button(c, @sf.t("common.cancel"), key="nc-cancel/" + f.form + "/" + step, tone=Ghost, on_press=fn() {
       close()
-    }
+    }) |> ignore
   }
-  let step = text(v, "step")
+  let step = if step == "" { text(v, "step") } else { step }
   let fe = field(v, "feishu")
   let busy = nc_busy(core, f)
-  let back = fn(label : String) {
-    if @sf.button(c, label, key="nc-back/" + f.form, tone=Ghost) {
-      nc_go(core, f, "back", close)
+  let cancel = fn() {
+    if text(v, "back") == "close" {
+      @sf.button(c, @sf.t("common.cancel"), key="nc-cancel/" + f.form + "/" + step, tone=Ghost, on_press=fn() {
+        close()
+      }) |> ignore
     }
   }
   let next = fn(label : String, disabled : Bool, busy : Bool, run : () -> Unit) {
-    if @sf.button(c, label, key="nc-next/" + f.form, tone=Primary, disabled~, busy~) {
+    @sf.button(c, label, key="nc-next/" + f.form + "/" + step, tone=Primary, disabled~, busy~, on_press=fn() {
       run()
-    }
+    }) |> ignore
   }
-  let feishu_back = fn() { back(@sf.t(if text(v, "back") == "close" { "common.cancel" } else { "web-pages.connect.previous" })) }
   match step {
     "platform" => {
-      feishu_back()
+      cancel()
       let feishu = opt_text(v, "platform") == Some("feishu") && strings(v, "platforms").contains("feishu")
-      next(@sf.t("web-pages.connect.next"), false, false, fn() { nc_go(core, f, if feishu { "feishuBind" } else { "team" }, close) })
+      let comma = opt_text(v, "platform") == Some("comma") && strings(v, "platforms").contains("comma")
+      next(@sf.t("web-pages.connect.next"), false, false, fn() {
+        nc_go(core, f, if feishu { "feishuBind" } else if comma { "commaBind" } else { "team" }, close)
+      })
+    }
+    "commaBind" => {
+      cancel()
+      next(@sf.t("web-pages.connect.next"), !flag(v, "canCreate"), false, fn() { nc_go(core, f, "commaLine", close) })
+    }
+    "commaLine" | "done" if text(v, "platform") == "comma" => {
+      cancel()
+      next(@sf.t("web-pages.connect.addConnect"), !flag(field(v, "comma"), "ready"), busy, fn() {
+        nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, false) })
+      })
     }
     "feishuBind" => {
-      feishu_back()
+      cancel()
       next(@sf.t("web-pages.connect.next"), !flag(v, "canCreate"), false, fn() { nc_go(core, f, "feishuWay", close) })
     }
     "feishuWay" => {
-      feishu_back()
+      cancel()
       next(@sf.t("web-pages.connect.next"), false, busy, fn() {
         if text(fe, "way") == "app" {
           nc_go(core, f, "feishuApp", close)
@@ -635,10 +778,10 @@ fn nc_foot(c : @ui.Ctx, core : Core, here : Here, f : NcFlow, v : Json?, close :
         }
       })
     }
-    "feishuScan" => nc_scan_foot(c, core, f, fe, feishu_back, busy, close)
-    "done" if field(fe, "registration") is Some(Object(_)) => nc_scan_foot(c, core, f, fe, feishu_back, busy, close)
+    "feishuScan" => nc_scan_foot(c, core, f, fe, cancel, busy, close)
+    "done" if field(fe, "registration") is Some(Object(_)) => nc_scan_foot(c, core, f, fe, cancel, busy, close)
     "feishuApp" | "done" => {
-      feishu_back()
+      cancel()
       if flag(fe, "verified") {
         next(@sf.t("web-pages.connect.addConnect"), false, busy || flag(fe, "creating"), fn() {
           nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, true) })
@@ -651,40 +794,26 @@ fn nc_foot(c : @ui.Ctx, core : Core, here : Here, f : NcFlow, v : Json?, close :
       let adding = flag(v, "adding")
       let teams = items(v, "teams")
       if adding && teams.length() > 0 {
-        if @sf.button(c, @sf.t("common.back"), key="nc-back/" + f.form, tone=Ghost) {
+        @sf.button(c, @sf.t("common.back"), key="nc-back/" + f.form + "/" + step, tone=Ghost, on_press=fn() {
           nc_edit(core, f, obj([("adding", Json::boolean(false))]))
-        }
-      } else if text(v, "back") == "platform" {
-        back(@sf.t("web-pages.connect.previous"))
-      } else if @sf.button(c, @sf.t("common.cancel"), key="nc-cancel/" + f.form, tone=Ghost) {
-        close()
+        }) |> ignore
+      } else {
+        cancel()
       }
       if !flag(v, "gettingToken") {
         next(@sf.t("web-pages.connect.next"), !(field(v, "chosen") is Some(Object(_))), false, fn() { nc_go(core, f, "app", close) })
       }
     }
     "app" => {
-      if @sf.button(c, @sf.t("web-pages.connect.previous"), key="nc-back/" + f.form, tone=Ghost) {
-        nc_go(core, f, "team", close)
-      }
       next(@sf.t("web-pages.connect.createApp"), !flag(v, "canMake"), busy, fn() { nc_act(core, f, "make") })
     }
     "install" | "manual" => {
-      if step == "manual" {
-        if @sf.button(c, @sf.t("web-pages.connect.previous"), key="nc-back/" + f.form, tone=Ghost) {
-          nc_go(core, f, "team", close)
-        }
-      } else if @sf.button(c, @sf.t("common.cancel"), key="nc-cancel/" + f.form, tone=Ghost) {
-        close()
-      }
+      cancel()
       let install = text(field(v, "made"), "state")
       let tk = nc_tokens(c, core, f, if step == "install" { install } else { "" })
       next(@sf.t("web-pages.connect.next"), !tokens_ready(core, tk), busy || tokens_busy(core, tk), fn() { nc_act(core, f, "verify") })
     }
     _ => {
-      if @sf.button(c, @sf.t("web-pages.connect.previous"), key="nc-back/" + f.form, tone=Ghost) {
-        nc_go(core, f, if opt_text(v, "madeId") is Some(_) { "install" } else { "manual" }, close)
-      }
       next(@sf.t("web-pages.connect.addConnect"), items(field(v, "pick"), "options").length() == 0, busy, fn() {
         nc_act(core, f, "create", done=fn(a) { nc_added(core, f, text(Some(a), "id"), close, false) })
       })
@@ -693,19 +822,19 @@ fn nc_foot(c : @ui.Ctx, core : Core, here : Here, f : NcFlow, v : Json?, close :
 }
 
 ///|
-/// The scan step's buttons: back, and a new QR code where it ended without an app, or trying again where adding the
+/// The scan step's buttons: 取消 where it closes the wizard, and a new QR code where it ended without an app, or trying again where adding the
 /// connect failed.
-fn nc_scan_foot(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, back : () -> Unit, busy : Bool, close : () -> Unit) -> Unit {
+fn nc_scan_foot(c : @ui.Ctx, core : Core, f : NcFlow, fe : Json?, cancel : () -> Unit, busy : Bool, close : () -> Unit) -> Unit {
   ignore(close)
-  back()
+  cancel()
   if flag(fe, "failed") {
-    if @sf.button(c, @sf.t("web-pages.connect.feishu.newQr"), key="nc-qr/" + f.form, tone=Primary, icon="refresh", busy~) {
+    @sf.button(c, @sf.t("web-pages.connect.feishu.newQr"), key="nc-qr/" + f.form + "/scan", tone=Primary, icon="refresh", busy~, on_press=fn() {
       nc_act(core, f, "register")
-    }
+    }) |> ignore
   } else if opt_text(fe, "error") is Some(_) {
-    if @sf.button(c, @sf.t("web-pages.connect.feishu.retry"), key="nc-retry/" + f.form, tone=Primary, busy=busy || flag(fe, "creating")) {
+    @sf.button(c, @sf.t("web-pages.connect.feishu.retry"), key="nc-retry/" + f.form + "/scan", tone=Primary, busy=busy || flag(fe, "creating"), on_press=fn() {
       nc_act(core, f, "create")
-    }
+    }) |> ignore
   }
 }
 

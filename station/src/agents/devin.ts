@@ -1,7 +1,7 @@
 // Devin driver: one `devin acp` per session (Cognition's Devin CLI, its local agent), spoken to in ACP (acp.ts) with one
 // ACP session in it.
 //
-// Behaviour pinned against the Devin CLI 3000.11 (docs/devin.md), beside what ACP says:
+// Behaviour pinned against the Devin CLI 3000.11, beside what ACP says:
 // - `authenticate` with the profile's key (`_meta.api_key`, read from the credentials its sign-in left in the profile's
 //   home), not the CLI's own sign-in on this machine;
 // - `session/load` takes up a session it keeps (its store: DEVIN_SESSIONS_DIR);
@@ -15,12 +15,11 @@
 //   (its AGENTS.md and .devin/ read as a project's);
 // - Devin keeps its sessions in a database of its own: the driver keeps the transcript itself (acp.ts KeptTranscript),
 //   which the history and the usage read.
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { linkSync } from "../ops/links.ts";
-import { log } from "../ops/log.ts";
 import { peerHttpBase } from "../tools/http.ts";
+import { rulesFolder as folderOf } from "./rules-folder.ts";
 import { AcpDriver, AcpSession, KeptTranscript, acpOutcome, type AcpStart } from "./acp.ts";
 import type { Events } from "./own-process.ts";
 import { expandRoute, profileEnv, profileModel } from "./profiles.ts";
@@ -67,26 +66,11 @@ export const devinRules = (instructions: string) =>
   `${instructions}${instructions === "" ? "" : "\n\n"}The station's tools (chat_post, chat_state and the others named in these instructions) are the stillfail MCP server's: call one by its name (mcp__stillfail__chat_post and so on) without listing the server's tools first.`;
 
 /// The station's instructions as the rules of a folder of the session's own, beside its working directory, with the
-/// shared memory (AGENTS.md) and skills (.devin/skills) linked in: Devin reads a workspace directory it is given as a
+/// skills of its workspace (`skills`) linked in as .devin/skills: Devin reads a workspace directory it is given as a
 /// project's, without them being written into the person's project.
-export function rulesFolder(home: string, key: string, instructions: string): string {
-  const dir = join(devinHome(home), "station", createHash("sha256").update(key).digest("hex").slice(0, 16));
-  mkdirSync(join(dir, ".devin", "rules"), { recursive: true });
-  writeFileSync(join(dir, ".devin", "rules", "stillfail.md"), `---\ndescription: still.fail station\ntrigger: always_on\n---\n${devinRules(instructions)}\n`);
-  const linked = (target: string, path: string) => {
-    if (!existsSync(target)) return;
-    rmSync(path, { recursive: true, force: true });
-    try {
-      // Where links are refused (Windows without Developer Mode), the skills' a junction and the memory a copy.
-      linkSync(target, path, { junction: true, copy: true });
-    } catch (e) {
-      log.warn("agents::devin", "the shared memory or skills not linked for Devin", { path, error: (e as Error).message });
-    }
-  };
-  // The profile home's AGENTS.md and skills/ are the station's shared memory and skills (agent-home.ts).
-  linked(join(home, "AGENTS.md"), join(dir, "AGENTS.md"));
-  linked(join(home, "skills"), join(dir, ".devin", "skills"));
-  return dir;
+export function rulesFolder(home: string, key: string, instructions: string, skills?: string): string {
+  const rule = `---\ndescription: still.fail station\ntrigger: always_on\n---\n${devinRules(instructions)}\n`;
+  return folderOf(devinHome(home), key, ".devin", { file: "stillfail.md", text: rule }, "Devin", skills);
 }
 
 /// The thinking levels Devin's models are offered at (the last part of a variant's name: swe-2-high).
@@ -183,7 +167,7 @@ export class DevinDriver extends AcpDriver<DevinSession> {
     if (options.resume !== undefined && !existsSync(join(sessions, `${options.resume}.jsonl`))) throw new Error(`no Devin session ${options.resume}`);
     const config = join(devinHome(home), "config.json");
     writeFileSync(config, `${JSON.stringify(CONFIG, null, 2)}\n`);
-    const rules = rulesFolder(home, options.key, options.instructions);
+    const rules = rulesFolder(home, options.key, options.instructions, options.skills);
     const model = options.model ?? profileModel(options.profile);
     return { command: this.command, args: devinArgs(config, model, options.effort), env: devinEnv(options), opening: { additionalDirectories: [rules] } };
   }

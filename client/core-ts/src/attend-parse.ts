@@ -1,4 +1,4 @@
-// The attention calls by name (attend.rs `parse`): `client.focus`, `notify.set`, `notify.permission`, `notice.claim`,
+// The attention calls by name: `client.focus`, `notify.set`, `notify.permission`, `notice.claim`,
 // `notice.pushed`, `notice.bring`.
 import { read } from "./core/params.ts";
 import { CoreError } from "./error.ts";

@@ -32,6 +32,8 @@ fn runs_pair(pieces : Array[(String, Int, Int64)], w : Double, theme : Theme) ->
           weight: 400,
           line: 22.0,
           wrap: true,
+          tracking: @view.letters_own,
+          balance: false,
         })
         |> ignore
       })
@@ -91,7 +93,7 @@ fn shaped_words(
   t.tabular_wider(0.5)
   t.ui_face_wider(0.1)
   let node : Ref[@view.View?] = Ref(None)
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false }
   set_view_app(fn(root) {
     set_tree_theme(fn() { { ..Theme::light(), tabular: tabular.get() } })
     // (the app's words' face given before any words are made, `face`)
@@ -250,7 +252,7 @@ test "a node's words made once, drawn frame after frame while an old view draws 
     })
     |> ignore
     root.box(fn(n) {
-      n.words(Is("AB"), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: false }) |> ignore
+      n.words(Is("AB"), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
     })
     |> ignore
   })
@@ -304,16 +306,18 @@ test "a node's words hidden (what holds them faded out) hold no room in the atla
   let first_shown = @signals.signal(true, same=fn(a, b) { a == b })
   let second_there = @signals.signal(false, same=fn(a, b) { a == b })
   let (one, two) = (letters(0x4E00, 40), letters(0x5000, 40))
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
   set_view_app(fn(root) {
     root.lines_up(Is(Some(Start))) |> ignore
     root.box(fn(h) {
       h.alpha(By(fn() { if first_shown.get() { 1.0 } else { 0.0 } })) |> ignore
-      h.box(fn(n) { n.offset(Is((0.0, 100.0))).words(Is(one), ink=0x333333FFL, look~) |> ignore }) |> ignore
+      // (as wide as its letters, said so: one line past the window's width, not held to it, every glyph drawn)
+      h.box(fn(n) { n.offset(Is((0.0, 100.0))).width(Is(Some(600.0))).words(Is(one), ink=0x333333FFL, look~) |> ignore })
+      |> ignore
     })
     |> ignore
     root.show(fn() { second_there.get() }, fn(b) {
-      b.offset(Is((0.0, 200.0))).words(Is(two), ink=0x333333FFL, look~) |> ignore
+      b.offset(Is((0.0, 200.0))).width(Is(Some(600.0))).words(Is(two), ink=0x333333FFL, look~) |> ignore
     })
   })
   t.draw()
@@ -359,7 +363,7 @@ test "a node's words made as the atlas has no room for them this frame (an old v
     })
     |> ignore
     root.show(fn() { there.get() }, fn(n) {
-      n.offset(Is((0.0, 100.0))).words(Is(word), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: false }) |> ignore
+      n.offset(Is((0.0, 100.0))).words(Is(word), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }) |> ignore
     })
   })
   t.draw()
@@ -479,9 +483,9 @@ fn window_row(node : Bool) -> (Array[Int], Array[Bool], Int) raise {
         let top = c.id("top")
         let key = c.id("key")
         c.window_drag(top)
-        if c.clicked(key) {
+        c.on_press(key, fn() {
           pressed.val += 1
-        }
+        })
         c.box(id=top, w=Fill(1.0), h=Px(44.0), fn() { c.box(id=key, w=Px(40.0), h=Px(44.0), fn() {  }) |> ignore })
         |> ignore
       }
@@ -527,7 +531,7 @@ test "a node's words in a line shorter than their font, measured again as lines 
   t.check_looks(false)
   set_web_lines(false)
   // (a font taller than its line: 20 in lines of 14)
-  let look : @view.WordsLook = { size: 20.0, weight: 400, line: 14.0, wrap: false }
+  let look : @view.WordsLook = { size: 20.0, weight: 400, line: 14.0, wrap: false, tracking: @view.letters_own, balance: false }
   let node : Ref[@view.View?] = Ref(None)
   set_view_app(fn(root) {
     root.lines_up(Is(Some(Start))) |> ignore
@@ -556,7 +560,7 @@ test "a node kept no narrower than what it holds (View::keeps_held), sharing its
   t.ui_face_wider(0.1)
   let words = @signals.signal("界面草图", same=fn(a, b) { a == b })
   let parts : Ref[(@view.View?, @view.View?, @view.View?)] = Ref((None, None, None))
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
   set_view_app(fn(root) {
     root.box(fn(row) {
       row.row(Is(true)).width(Is(Some(300.0))) |> ignore
@@ -593,6 +597,77 @@ test "a node kept no narrower than what it holds (View::keeps_held), sharing its
   words.set("界面草图")
   alike("short again")
   assert_eq(b.laid_size().0, 150.0, msg="short again: its share")
+}
+
+///|
+test "a row that leaves out what has not the room (View::fits) counts what is kept no narrower than it holds (View::keeps_held) whole: what may leave leaves for it, as the room comes back it is back" {
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  t.check_looks(false)
+  let w = @signals.signal(300.0, same=fn(a, b) { a == b })
+  let parts : Ref[(@view.View?, @view.View?)] = Ref((None, None))
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
+  set_view_app(fn(root) {
+    root.box(fn(row) {
+      row.row(Is(true)).fits(Is(true)).gap(Is(8.0)).width(By(fn() { Some(w.get()) })) |> ignore
+      let title = row.box(fn(k) {
+        k.min_width(Is(Some(0.0))).keeps_held(Is(true)).words(Is("界面草图界面草图"), ink=0x333333FFL, look~) |> ignore
+      })
+      let goes = row.box(fn(g) { g.width(Is(Some(60.0))).height(Is(Some(20.0))).drops(Is(1)) |> ignore })
+      parts.val = (Some(title), Some(goes))
+    })
+    |> ignore
+  })
+  t.draw()
+  let (title, goes) = (parts.val.0.unwrap(), parts.val.1.unwrap())
+  let whole = title.laid_size().0
+  assert_true(whole > 100.0 && !goes.left_out(), msg="room for both: \{whole}, \{goes.left_out()}")
+  // (as wide as the words and what may leave, less a point: no room for both)
+  w.set(whole + 8.0 + 60.0 - 1.0)
+  t.frame()
+  assert_true(goes.left_out(), msg="no room for both: what may leave left out")
+  assert_eq(title.laid_size().0, whole, msg="no room for both: the words whole")
+  w.set(whole + 8.0 + 60.0)
+  t.frame()
+  assert_true(!goes.left_out(), msg="the room back: what left is back")
+}
+
+///|
+test "kept whole in a row that leaves out what has not the room (View::fit_whole): what may leave leaves for it first, then it is cut short to the room; the room back, whole and what left back" {
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  t.check_looks(false)
+  let w = @signals.signal(300.0, same=fn(a, b) { a == b })
+  let parts : Ref[(@view.View?, @view.View?)] = Ref((None, None))
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
+  set_view_app(fn(root) {
+    root.box(fn(row) {
+      row.row(Is(true)).fits(Is(true)).gap(Is(8.0)).width(By(fn() { Some(w.get()) })) |> ignore
+      let title = row.box(fn(k) {
+        k.min_width(Is(Some(0.0))).fit_whole(Is(true)).cuts(Is(true)).words(Is("界面草图界面草图"), ink=0x333333FFL, look~)
+        |> ignore
+      })
+      let goes = row.box(fn(g) { g.width(Is(Some(60.0))).height(Is(Some(20.0))).drops(Is(1)) |> ignore })
+      parts.val = (Some(title), Some(goes))
+    })
+    |> ignore
+  })
+  t.draw()
+  let (title, goes) = (parts.val.0.unwrap(), parts.val.1.unwrap())
+  let whole = title.laid_size().0
+  assert_true(whole > 100.0 && !goes.left_out(), msg="room for both: \{whole}, \{goes.left_out()}")
+  // (a point short of both: what may leave goes, the words whole)
+  w.set(whole + 8.0 + 60.0 - 1.0)
+  t.frame()
+  assert_true(goes.left_out(), msg="a point short of both: what may leave left out")
+  assert_eq(title.laid_size().0, whole, msg="a point short of both: the words whole")
+  // (short of the words alone: they are cut to the room)
+  w.set(whole - 30.0)
+  t.frame()
+  assert_true(goes.left_out(), msg="short of the words: what may leave still out")
+  assert_eq(title.laid_size().0, whole - 30.0, msg="short of the words: cut to the room")
+  w.set(whole + 8.0 + 60.0)
+  t.frame()
+  assert_true(!goes.left_out(), msg="the room back: what left is back")
+  assert_eq(title.laid_size().0, whole, msg="the room back: the words whole")
 }
 
 ///|
@@ -670,7 +745,7 @@ test "words and words in pieces in a node that clips, 100 down the window: drawn
   let (plain, runs) = (0x112233FFL, 0x445566FFL)
   let down = @signals.signal(100.0, same=fn(a, b) { a == b })
   let clips = @signals.signal(true, same=fn(a, b) { a == b })
-  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false }
+  let look : @view.WordsLook = { size: 15.0, weight: 400, line: 22.0, wrap: false, tracking: @view.letters_own, balance: false }
   set_view_app(fn(root) {
     root.lines_up(Is(Some(Start))) |> ignore
     root.box(fn(p) {
@@ -772,5 +847,127 @@ test "a node that clips drawn half as big (View::scale): what it holds cut where
     let d = view_app.val.unwrap().drawn_of(parent.val.unwrap().id()).unwrap()
     let cut = clips_of(inner, 0.0).map(fn(r) { [r[0], r[1], r[2], r[3], r[4]] })
     assert_eq(cut, [[d.x, d.y, d.x + d.w, d.y + d.h, 10.0 * k]], msg="\{k} as big: cut where it is drawn, as big, as round")
+  }
+}
+
+///|
+/// `runs` drawn by an old view (Ctx::rich, as it sets them where it says nothing) at (0, 0) and by a node 200 down
+/// (View::words_runs, runs_plain), each `w` wide at most: every instance each draws, the node's moved up by 200, rounded
+/// to a hundredth (a glyph's place in its atlas left out), in one order.
+fn runs_whole_pair(runs : Array[Run], w : Double) -> (Array[String], Array[String]) {
+  let (_, drawn) = runs_whole_tester(runs, w, @signals.signal(@view.runs_plain.code_ground))
+  drawn()
+}
+
+///|
+/// runs_whole_pair's two, code's ground (`ground`: 0 none) as it says, told both as it changes: the tester and what
+/// each draws as of its last frame.
+fn runs_whole_tester(
+  runs : Array[Run],
+  w : Double,
+  ground : @signals.Signal[Int64],
+) -> (Tester, () -> (Array[String], Array[String])) {
+  let t = Tester::new(fn(_c) {  }, w=400.0, h=400.0)
+  t.check_looks(false)
+  set_view_app(fn(root) {
+    root.box(fn(h) {
+      h.width(Is(Some(w))).height(Is(Some(200.0))) |> ignore
+      old(h, fn(c) {
+        c.box(w=Px(w), fn() { c.rich(runs, size=15.0, line=22.0, color=0x333333FFL, code_bg=ground.get()) |> ignore })
+        |> ignore
+      }).grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+    root.box(fn(b) {
+      b.width(Is(Some(w))).lines_up(Is(Some(Start))) |> ignore
+      b.box(fn(n) {
+        n
+        .words_runs(Is(runs), ink=0x333333FFL, look={ size: 15.0, weight: 400, line: 22.0, wrap: true, tracking: @view.letters_own, balance: false })
+        .runs_look(By(fn() { { ..@view.runs_plain, code_ground: ground.get() } }))
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  (t, fn() {
+    let all = t.drawn_instances()
+    // (what is drawn, where and in what: its place, size, corner, kind and ink, a glyph's cell; not where a glyph or a
+    // shape's outline is kept (a glyph's place in its atlas, a shape's in the frame's outlines), nor what cuts it: the
+    // old view's cut to its box over the node's)
+    let shown = fn(a : Array[Double], dy : Double) {
+      a
+      .mapi(fn(j, x) {
+        if (a[5] == 1.0 || a[5] == 11.0) && (j == 12 || j == 13) {
+          "-"
+        } else {
+          let x = if j == 1 { x - dy } else { x }
+          ((x * 100.0).round() / 100.0).to_string()
+        }
+      })
+      .iter()
+      .take(16)
+      .collect()
+      .join(",")
+    }
+    // (a shape's outline as instances of its own, kind 12, where the old view keeps it: what it is drawn as is its shape's)
+    let drawn = all.filter(fn(a) { a[5] != 12.0 })
+    let old_drawn = drawn.filter(fn(a) { a[1] < 200.0 }).map(fn(a) { shown(a, 0.0) })
+    let new_drawn = drawn.filter(fn(a) { a[1] >= 200.0 }).map(fn(a) { shown(a, 200.0) })
+    old_drawn.sort()
+    new_drawn.sort()
+    (old_drawn, new_drawn)
+  })
+}
+
+///|
+test "words in pieces on a node each set as it says (bold, slanted, code on its ground, a link in its ink, struck through, underlined, a label's ground), wrapped: every instance drawn as an old view's paragraph of the same pieces" {
+  let runs = [
+    plain("先 "),
+    bold("粗体"),
+    plain(" 和 "),
+    italic("slanted"),
+    plain(" "),
+    code("code()"),
+    plain(" 去 "),
+    link("still.fail", "https://still.fail"),
+    plain(" "),
+    strike("划掉的"),
+    plain(" "),
+    span("下划线", underline=true),
+    plain(" "),
+    span("标签", bg=0x30A46C33L, ground=Some(({ room: 0.4, height: 1.3, corner: 0.3, after: 0.3 } : Ground))),
+    plain(" 一段很长的话，长到要换行，让代码 "),
+    code("跨行的一段代码也被撕开"),
+    plain(" 才结束。"),
+  ]
+  for w in [400.0, 160.0] {
+    let (old, new) = runs_whole_pair(runs, w)
+    assert_true(old.length() > 20, msg="the old one drawn: \{old.length()}")
+    if new != old {
+      let only_old = old.filter(fn(x) { !new.contains(x) })
+      let only_new = new.filter(fn(x) { !old.contains(x) })
+      fail("at \{w}: \{new.length()} drawn, the old \{old.length()}\nthe old's alone:\n\{only_old.join("\n")}\nthe node's alone:\n\{only_new.join("\n")}")
+    }
+  }
+}
+
+///|
+test "words in pieces on a node, code's ground coming, changing colour and going as it says: each drawn as an old view's paragraph saying the same, the same node" {
+  let runs = [plain("先 "), code("a_long_name()"), plain(" 然后一段话，长到在代码前后换行 "), code("x"), plain(" 完。")]
+  let ground = @signals.signal(0L)
+  let (t, drawn) = runs_whole_tester(runs, 200.0, ground)
+  for g in [0L, 0x7676801FL, 0x30A46C33L, 0L] {
+    ground.set(g)
+    t.draw()
+    let (old, new) = drawn()
+    assert_true(old.length() > 10, msg="the old one drawn: \{old.length()}")
+    if new != old {
+      let only_old = old.filter(fn(x) { !new.contains(x) })
+      let only_new = new.filter(fn(x) { !old.contains(x) })
+      fail("at \{g}: the old's alone:\n\{only_old.join("\n")}\nthe node's alone:\n\{only_new.join("\n")}")
+    }
   }
 }

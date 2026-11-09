@@ -15,6 +15,7 @@ import { fromBase64, get, hex, isObject, parseJson, toJsonBytes } from "../util.
 import type { StationAddr } from "./addr.ts";
 import { concat, readAll, replyHeader, type RequestHead, type ScreenAsk, type StationWire, type WireReply, type WireSocket } from "./wire.ts";
 import { timed } from "../spent.ts";
+import { BUILD_HEADER, ownBuild, stationTooOld } from "./oldest.ts";
 
 export const IDEMPOTENCY_KEY = "idempotency-key";
 /// A request that only reads though it is no GET (POST /changed/<list>, what is held in its body): asked again on
@@ -48,7 +49,9 @@ const within = <A, E, R>(work: Effect.Effect<A, E, R>, ms: number) => ms > 0
 export function httpError(status: number, data: unknown): CoreError {
   const e = get(data, "error");
   const code = get(data, "code");
-  return new CoreError(typeof code === "string" && /^[a-z][a-z0-9_]*$/.test(code) ? code : `http_${status}`, typeof e === "string" ? e : t("station.core.requestFailed", { status }), status);
+  // A refusal said by the key of its words (`station.files.notFound`…: station/src/read/sessions.ts) in this device's.
+  const said = typeof e === "string" ? (/^station\.[a-zA-Z]+\.[a-zA-Z.]+$/.test(e) ? t(e) : e) : t("station.core.requestFailed", { status });
+  return new CoreError(typeof code === "string" && /^[a-z][a-z0-9_]*$/.test(code) ? code : `http_${status}`, said, status);
 }
 
 export const failed = failedIn;
@@ -63,6 +66,9 @@ export function answered(span: Span, reply: WireReply): void {
 const empty = new Uint8Array();
 /// How often a part on its way says how much of it has come (a part is 4 MB).
 const PART_STEP = 64 * 1024;
+/// A player's bytes go on in smaller pieces: at 32 KB/s, holding 64 KB made it wait two seconds for each piece,
+/// including the first one. Keep some batching across the app's boundary without making a slow link wait that long.
+const STREAM_STEP = 4 * 1024;
 
 /// A reply's body as the station wrote it: decompressed as it comes when it came compressed, each piece as soon as it
 /// is whole (an event stream's, event by event); by the host where it has a way of its own (a native app's shell:
@@ -95,7 +101,7 @@ function plainHere(reply: WireReply, partial: boolean): Pull<Uint8Array> {
       } catch (error) {
         // Live streams can end between flushed blocks; a finite JSON reply must end its frame.
         if (ended && partial) continue;
-        return yield* Effect.fail(new HostError(t("core-logic.mesh.read_failed", { error: (error as Error).message })));
+        return yield* Effect.fail(Object.assign(HostError.said(t("core-logic.mesh.read_failed")), { cause: (error as Error).message }));
       }
     }
   });
@@ -113,7 +119,7 @@ function plainBy(z: Unzstd, reply: WireReply, partial: boolean): Pull<Uint8Array
       if (chunk === null) {
         ended = true;
         // Live streams can end between flushed blocks; a finite JSON reply must end its frame.
-        if (!whole && !partial) return yield* Effect.fail(new HostError(t("core-logic.mesh.cut")));
+        if (!whole && !partial) return yield* Effect.fail(HostError.said(t("core-logic.mesh.cut")));
         return null;
       }
       if (chunk.length === 0) continue;
@@ -165,6 +171,7 @@ export class Requests {
     span.set("stillfail.station", station.station);
     if (bodySize > 0) span.set("http.request.body.size", bodySize);
     const h: [string, string][] = [...headers, ["traceparent", span.context.traceparent()], [LANG_HEADER, current()]];
+    if (ownBuild() !== "") h.push([BUILD_HEADER, ownBuild()]);
     if (!path.startsWith("/preview/")) h.push(["stillfail-runtimes", RUNTIMES.join(",")]);
     if (!path.startsWith("/preview/") && !headers.some(([k]) => k.toLowerCase() === "accept-encoding")) h.push(["accept-encoding", ZSTD]);
     // A write carries a key of its own: a station that keeps writes to once does it once however often it arrives.
@@ -180,19 +187,35 @@ export class Requests {
   /// One whole request: its status, its reply's head, its body. `quiet`: in the background, not said to be waited on.
   /// `heard`: how much of the body has come, now and then as it comes (every PART_STEP); `wrote`: how much of what is
   /// sent has gone, as it goes (a wire that sends it whole says nothing); `sink`: a 2xx answer's body handed over as it
-  /// comes, in pieces of PART_STEP (the last smaller), not kept (the body given is empty); `onHead`: the reply's status
+  /// comes, in pieces of at least STREAM_STEP (the last smaller), not kept (the body given is empty); `onHead`: the reply's status
   /// and head as they come, before its body. `json`: validate finite compression/JSON and bound each idle wait.
-  exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null, heard?: (loaded: number) => void, wrote?: (sent: number) => void, sink?: (piece: Uint8Array) => void, onHead?: (status: number, headers: [string, string][]) => void, json = false): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array; json?: unknown }, CoreError> {
+  /// `flushCut`: hand the last short batch to the sink on failure or cancellation, for a download keeping its bytes.
+  exchange(station: StationAddr, method: string, path: string, headers: [string, string][], body: Uint8Array, quiet: boolean, ctx: SpanContext | null, heard?: (loaded: number) => void, wrote?: (sent: number) => void, sink?: (piece: Uint8Array) => void, onHead?: (status: number, headers: [string, string][]) => void, json = false, flushCut = false): Effect.Effect<{ status: number; headers: [string, string][]; body: Uint8Array; json?: unknown }, CoreError> {
     const idleMs = json ? JSON_IDLE_MS : 0;
     return Effect.scoped(
       Effect.gen({ self: this }, function* () {
         const status = this.#status(station);
         const waiting = quiet ? null : status.begin({ station: station.toString() }, stationWhat(method, path), false);
         const [span, head] = this.#head(station, method, path, headers, body.length, ctx);
+        // When its body was all gone and its answer's head came, in ms from the start: a slow request says which
+        // part was slow (a 470 KB picture's station had it in 0.7 s, its answer came 9 s later, 2026-11-09).
+        const host = this.#core.host;
+        const began = host.monotonicMs();
+        let all = false;
+        const gone = wrote && ((n: number) => {
+          if (!all && n >= body.length) {
+            all = true;
+            span.set("stillfail.wrote_ms", Math.round(host.monotonicMs() - began));
+          }
+          wrote(n);
+        });
         const result = yield* Effect.result(
           Effect.gen({ self: this }, function* () {
-            const reply = yield* within(this.wire.request(station, head, body, wrote), idleMs);
+            const reply = yield* within(this.wire.request(station, head, body, gone), idleMs);
+            span.set("stillfail.head_ms", Math.round(host.monotonicMs() - began));
             answered(span, reply);
+            const tooOld = stationTooOld(reply.headers);
+            if (tooOld !== null) return yield* Effect.fail(tooOld);
             onHead?.(reply.status, reply.headers);
             // What came over the link is counted (and said in the span); what it says, decompressed.
             let came = 0;
@@ -213,10 +236,9 @@ export class Requests {
               if (heard && loaded - told >= PART_STEP) heard((told = loaded));
               if (give) {
                 held.push(chunk);
-                if ((heldBytes += chunk.length) >= PART_STEP) hand();
+                if ((heldBytes += chunk.length) >= STREAM_STEP) hand();
               }
-            }, give === undefined);
-            hand();
+            }, give === undefined).pipe(Effect.onExit((exit) => Effect.sync(() => { if (exit._tag === "Success" || flushCut) hand(); })));
             span.set("http.response.body.size", came);
             if (came !== loaded) span.set("stillfail.body.decompressed", loaded);
             const parsed = json ? timed("reply.parse", () => parseJson(bytes)) : undefined;
@@ -276,6 +298,8 @@ export class Requests {
       const reply = opened.success;
       answered(span, reply);
       span.end();
+      const tooOld = stationTooOld(reply.headers);
+      if (tooOld !== null) return yield* Effect.fail(tooOld);
       if (reply.status < 200 || reply.status >= 300) {
         const bytes = yield* Effect.orElseSucceed(readAll(yield* plain(this.#core.host, reply)), () => empty);
         const data = parseJson(bytes);
@@ -284,7 +308,9 @@ export class Requests {
       // What comes on it is no longer waited on, only counted (as it came over the link: `came`), and decompressed.
       const came = { bytes: 0 };
       const body = { take: Effect.tap(reply.body.take, (chunk) => Effect.sync(() => chunk && (status.received(null, chunk.length), (came.bytes += chunk.length)))) };
-      return { ...reply, body: yield* plain(this.#core.host, { ...reply, body }), came };
+      // An older station may answer a stream request with finite JSON; it still has to end its compression frame.
+      const finiteJson = (replyHeader(reply, "content-type") ?? "").startsWith("application/json");
+      return { ...reply, body: yield* plain(this.#core.host, { ...reply, body }, !finiteJson), came };
     });
   }
 
@@ -407,15 +433,15 @@ export class Requests {
   /// a time (onto the disk) rather than whole. `unsupported` from a station from before parts (it has no such route).
   /// `heard`: the part's bytes so far, as they come; `sink`: its bytes handed over as they come, not kept (`bytes` empty);
   /// `said`: what the station says it is, as its answer begins (before its bytes). `quiet`: in the background, not said
-  /// to be waited on.
-  filePart(station: StationAddr, key: string, name: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void, said?: (head: { type: string; total: number }) => void, quiet = false): Effect.Effect<{ type: string; total: number; bytes: Uint8Array }, CoreError> {
+  /// to be waited on; `flushCut`: hand a final short batch to the sink even when it is cut short.
+  filePart(station: StationAddr, key: string, name: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void, said?: (head: { type: string; total: number }) => void, quiet = false, flushCut = false): Effect.Effect<{ type: string; total: number; bytes: Uint8Array }, CoreError> {
     const path = `/sessions/${encode(key)}/parts?name=${encode(name)}&offset=${offset}&length=${length}`;
     const onHead = said && ((status: number, headers: [string, string][]) => {
       if (status !== 200) return;
       const total = Number(headerOf(headers, "stillfail-total"));
       if (Number.isSafeInteger(total)) said({ type: headerOf(headers, "content-type") ?? "", total });
     });
-    return Effect.flatMap(this.exchange(station, "GET", path, [], empty, quiet, ctx, heard, undefined, sink, onHead), (r) => {
+    return Effect.flatMap(this.exchange(station, "GET", path, [], empty, quiet, ctx, heard, undefined, sink, onHead, false, flushCut), (r) => {
       if (r.status === 404 && isNoRoute(r.body)) return Effect.fail(new CoreError("unsupported", t("station.core.fileOldStation"), 404));
       if (r.status !== 200) {
         const data = parseJson(r.body);
@@ -456,7 +482,7 @@ export class Requests {
 
   /// GET /drive/read?root=&path=&offset=&length=: a part of a file of the station's drive, its whole size and time.
   /// `heard`, `sink`, `said`, `quiet`: as filePart's.
-  driveRead(station: StationAddr, root: string, path: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void, said?: (head: { type: string; total: number; mtime: number | null }) => void, quiet = false): Effect.Effect<{ type: string; total: number; mtime: number | null; bytes: Uint8Array }, CoreError> {
+  driveRead(station: StationAddr, root: string, path: string, offset: number, length: number, ctx: SpanContext | null, heard?: (loaded: number) => void, sink?: (piece: Uint8Array) => void, said?: (head: { type: string; total: number; mtime: number | null }) => void, quiet = false, flushCut = false): Effect.Effect<{ type: string; total: number; mtime: number | null; bytes: Uint8Array }, CoreError> {
     const asked = `/drive/read?root=${encode(root)}&path=${encode(path)}&offset=${offset}&length=${length}`;
     const onHead = said && ((status: number, headers: [string, string][]) => {
       if (status !== 200) return;
@@ -464,7 +490,7 @@ export class Requests {
       const mtime = Number(headerOf(headers, "stillfail-mtime"));
       if (Number.isSafeInteger(total)) said({ type: headerOf(headers, "content-type") ?? "", total, mtime: Number.isSafeInteger(mtime) ? mtime : null });
     });
-    return Effect.flatMap(this.exchange(station, "GET", asked, [], empty, quiet, ctx, heard, undefined, sink, onHead), (r) => {
+    return Effect.flatMap(this.exchange(station, "GET", asked, [], empty, quiet, ctx, heard, undefined, sink, onHead, false, flushCut), (r) => {
       if (r.status === 404 && isNoRoute(r.body)) return Effect.fail(new CoreError("unsupported", t("station.core.driveOldStation"), 404));
       if (r.status !== 200) {
         const data = parseJson(r.body);
@@ -580,7 +606,7 @@ export class Requests {
     });
   }
 
-  /// A view of the station's screen `id` (docs/remote-screens.md): open once the station answers 200, its frames
+  /// A view of the station's screen `id`: open once the station answers 200, its frames
   /// both ways then (screen-frames.ts). A station that refuses says why (`httpError`: 404 no such screen, or no such
   /// route on a station from before screens). A station from before screens that takes the stream for a request
   /// waits for a body never finished: the open is given up after SOCKET_OPEN_MS.

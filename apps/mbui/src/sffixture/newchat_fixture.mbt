@@ -17,6 +17,8 @@ pub(all) struct NewFix {
   mut d_runtime : String
   mut d_effort : String
   mut d_profile : String
+  /// The most context it runs with, in tokens ("" its model's whole window)
+  mut context : String
   mut made : Int
   /// MBUI_FIXTURE=stations-slow: its stations not asked for yet (0), being read (1), read (2)
   mut reading : Int
@@ -25,6 +27,17 @@ pub(all) struct NewFix {
   /// MBUI_FIXTURE=newchat-tall-model: as crowded, how hard it thinks and how fast as Codex offers them (2026-10-30: the
   /// column beside the models taller than they are at most)
   mut tall : Bool
+  /// The preset a new chat is opened with ("" for none), and the station's presets (fix_presets)
+  mut preset : String
+  presets : Array[Json]
+  /// The first station's presets not said yet (their topic as a station still to answer has it)
+  mut presets_late : Bool
+  /// The models starred in the model control (`pick.like`), the first starred first
+  liked : Array[String]
+  /// MBUI_FIXTURE=newchat-providers…: as crowded, with keys of many providers besides (fix_providers)
+  mut providers : Bool
+  /// MBUI_FIXTURE=settings-connect-borrow: the model drafted another station's, borrowed first (the pick's `borrow`)
+  mut borrow : Bool
 }
 
 ///|
@@ -37,25 +50,149 @@ pub let new_fix : NewFix = {
   d_runtime: "claude",
   d_effort: "high",
   d_profile: "",
+  context: "",
   made: 0,
   reading: 0,
   crowded: false,
   tall: false,
+  preset: "",
+  presets_late: false,
+  presets: [fix_preset_design(), fix_preset("p-tc", "web-app + backend", ["web-app", "backend"], "")],
+  liked: [],
+  providers: false,
+  borrow: false,
+}
+
+///|
+/// A preset of the made-up station's: its directories clones in its repository cache (fix_candidates).
+pub fn fix_preset(id : String, name : String, dirs : Array[String], instructions : String) -> Json {
+  {
+    "id": Json::string(id),
+    "name": Json::string(name),
+    "dirs": Json::array(dirs.map(fn(d) { { "path": Json::string(if d == "still.fail" { "/Users/me/projects/still.fail" } else { "/Users/me/code/" + d }), "repo": Json::string(fix_repo(d)) } })),
+    "instructions": Json::string(instructions),
+    "createdBy": "me@example.com",
+    "createdAt": 1793500000000.0,
+    "updatedAt": 1793500000000.0,
+  }
+}
+
+///|
+fn fix_repo(name : String) -> String {
+  match name {
+    "still.fail" => "github.com/AFK-surf/still.fail"
+    "mbui" => "github.com/AFK-surf/mbui"
+    _ => "github.com/acme/" + name
+  }
+}
+
+///|
+/// How many times the first station's presets were said late (fix_presets_say): a version of the made-up core's.
+// kept across runs: put back by fixture_reset
+pub let fix_presets_said : Ref[Int] = Ref(0)
+
+///|
+/// The first station's presets said, late (newchat's `presets_late` let go), as a station answers once it can.
+pub fn fix_presets_say() -> Unit {
+  new_fix.presets_late = false
+  fix_presets_said.val += 1
+  @settings.fixture_changed()
+}
+
+///|
+/// still.fail 开发: still.fail on the first station, its design folder on Maple.
+fn fix_preset_design() -> Json {
+  match fix_preset("p-sf", "still.fail 开发", ["still.fail"], "先检查页面布局。") {
+    Object(m) => {
+      let p = m.copy()
+      let dirs = match p.get("dirs") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      dirs.push({ "path": "/Users/me/Design/still.fail 设计稿", "repo": Json::null(), "station": "ws1/st2", "stationName": "Maple" })
+      p["dirs"] = Json::array(dirs)
+      Json::object(p)
+    }
+    other => other
+  }
+}
+
+///|
+/// A made-up station's presets and the folders it offers (the `presets` topic): Maple's a design folder and a clone of
+/// still.fail of its own (offered under Maple too), the first station's the rest.
+pub fn fix_presets_of(station : String) -> Json {
+  if station.has_suffix("st2") {
+    {
+      "presets": [],
+      "candidates": [
+        {
+          "path": "/Users/me/Design/still.fail 设计稿",
+          "name": "still.fail 设计稿",
+          "repo": Json::null(),
+          "chats": 0.0,
+          "lastAt": 1793500000000.0,
+          "where": "~/Design/still.fail 设计稿",
+        },
+        {
+          "path": "/Users/me/code/still.fail",
+          "name": "still.fail",
+          "repo": "github.com/AFK-surf/still.fail",
+          "chats": 2.0,
+          "lastAt": 1793500000000.0,
+          "where": "~/code/still.fail",
+        },
+      ],
+    }
+  } else {
+    { "presets": Json::array(new_fix.presets), "candidates": fix_candidates() }
+  }
+}
+
+///|
+/// The directories the made-up station offers for a new preset: its clones, those its chats worked in most first.
+pub fn fix_candidates() -> Json {
+  Json::array(
+    [
+      ("still.fail", "~/projects/still.fail", "github.com/AFK-surf/still.fail", 12, false),
+      ("web-app", "~/code/web-app", "github.com/acme/web-app", 9, false),
+      ("backend", "github.com/acme/backend", "github.com/acme/backend", 3, true),
+      ("notes", "~/code/notes", "github.com/acme/notes", 0, false),
+    ].map(fn(x) {
+      let (name, at, repo, chats, cached) = x
+      let path = if cached { "/Users/me/.stillfail/repos/" + name } else { "/Users/me" + at.unsafe_substring(start=1, end=at.length()) }
+      let o : Map[String, Json] = {
+        "path": Json::string(path),
+        "name": Json::string(name),
+        "repo": if repo == "" { Json::null() } else { Json::string(repo) },
+        "chats": Json::number(chats.to_double()),
+        "lastAt": 1793500000000.0,
+        "where": Json::string(at),
+      }
+      if cached {
+        o["cached"] = Json::boolean(true)
+      }
+      // (still.fail's own touch icon, as the station finds it in web/public)
+      if name == "still.fail" {
+        o["icon"] = Json::string(fix_sf_icon)
+      }
+      Json::object(o)
+    }),
+  )
 }
 
 ///|
 /// A station a new chat can start on, as the core's `newChat` lists it (StationView): what it is, its agents at work
 /// (`overview`) and what is left of its machine (`host`); how this device reaches it is the `stationNet` view's (the
-/// made-up stations' `net`: Studio's, none of MBA's).
+/// made-up stations' `net`: Willow's, none of Maple's).
 pub fn fix_station(id : String) -> Json {
   match id {
     "st2" =>
       {
         "station": "ws1/st2",
         "id": "st2",
-        "name": "MBA",
+        "name": "Maple",
         "icon": "glyph:laptop",
-        "summary": "空闲 · Apple M4 · 16 GB · macOS 27.0.1",
+        "summary": "空闲 · Apple M4 · 16 GB · macOS 26",
         "online": true,
         "host": {
           "meters": [
@@ -72,14 +209,14 @@ pub fn fix_station(id : String) -> Json {
       {
         "station": "ws1/st1",
         "id": "st1",
-        "name": "Studio",
+        "name": "Willow",
         "icon": "glyph:desktop",
-        "summary": "2 个 agent 正在运行 · Apple M2 Max · 64 GB · macOS 27.0.1",
+        "summary": "2 个 agent 正在运行 · Apple M1 Pro · 32 GB · macOS 26",
         "online": true,
         "host": {
           "meters": [
             fix_meter("CPU", 72, "ok", "72", "%"),
-            fix_meter("内存", 18, "amber", "11.5", "GB"),
+            fix_meter("内存", 18, "amber", "5.8", "GB"),
             fix_meter("磁盘", 41, "ok", "380", "GB"),
           ],
         },
@@ -124,12 +261,45 @@ pub fn fix_crowded_model(model : String, name : String, family : String, maker :
     "model": Json::string(model),
     "name": Json::string(name),
     "family": Json::string(family),
-    "maker": { "id": Json::string(maker), "name": Json::string(maker) },
+    "maker": { "id": Json::string(maker), "name": Json::string(fix_maker_name(maker)) },
     "runtimes": Json::array(runtimes.map(Json::string(_))),
     "ids": [Json::string(model)],
     "efforts": {},
     "accounts": {},
     "availability": "here",
+  }
+}
+
+///|
+/// The models of newchat-providers besides newchat-crowded's (2026-11-02 用户「我 20 个 provider 你怎么排」, 「分组应该是
+/// 模型厂商」): each its id, name, and maker (its id, as format.ts names it, and its name), many makers among them.
+// kept across runs: a table, never written
+pub let fix_providers : Array[(String, String, String, String)] = [
+  ("gemini-3-pro", "Gemini 3 Pro", "gemini", "Google"),
+  ("devstral-3", "Devstral 3", "mistral", "Mistral"),
+  ("qwen3-8-coder", "Qwen3.8 Coder", "qwen", "Qwen"),
+  ("glm-5-3", "GLM-5.3", "zhipu", "Z.ai"),
+  ("minimax-m3", "MiniMax M3", "minimax", "MiniMax"),
+  ("mimo-3", "MiMo 3", "xiaomi", "Xiaomi"),
+  ("nemotron-4", "Nemotron 4", "nvidia", "NVIDIA"),
+  ("gpt-oss-2", "gpt-oss 2", "openai", "OpenAI"),
+]
+
+///|
+/// The makers' names, by id.
+fn fix_maker_name(id : String) -> String {
+  match id {
+    "anthropic" => "Anthropic"
+    "openai" => "OpenAI"
+    "deepseek" => "DeepSeek"
+    "xai" => "xAI"
+    "kimi" => "Moonshot AI"
+    "devin" => "Cognition"
+    other =>
+      match fix_providers.iter().find_first(fn(p) { p.2 == other }) {
+        Some(p) => p.3
+        None => other
+      }
   }
 }
 
@@ -143,12 +313,16 @@ pub fn fix_model(model : String) -> Json {
     "swe-2" => fix_crowded_model(model, "SWE-2", "SWE", "devin", ["devin"])
     "gpt-6-1-sol" => fix_crowded_model(model, "GPT-6.1 Sol", "Sol", "openai", ["codex"])
     "gpt-6-1-terra" => fix_crowded_model(model, "GPT-6.1 Terra", "GPT", "openai", ["codex"])
+    m if fix_providers.iter().any(fn(p) { p.0 == m }) => {
+      let p = fix_providers.iter().find_first(fn(p) { p.0 == m }).unwrap()
+      fix_crowded_model(m, p.1, p.1, p.2, ["claude"])
+    }
     "claude-sonnet-5" =>
       {
         "model": "claude-sonnet-5",
         "name": "Sonnet 5",
         "family": "Sonnet",
-        "maker": { "id": "anthropic", "name": "anthropic" },
+        "maker": { "id": "anthropic", "name": "Anthropic" },
         "runtimes": ["claude"],
         "ids": ["claude-sonnet-5"],
         "efforts": {},
@@ -160,7 +334,7 @@ pub fn fix_model(model : String) -> Json {
         "model": "gpt-6",
         "name": "GPT-6",
         "family": "GPT",
-        "maker": { "id": "openai", "name": "openai" },
+        "maker": { "id": "openai", "name": "OpenAI" },
         "runtimes": ["codex"],
         "ids": ["gpt-6"],
         "efforts": {},
@@ -172,7 +346,7 @@ pub fn fix_model(model : String) -> Json {
         "model": "claude-opus-5-5",
         "name": "Opus 5.5",
         "family": "Opus",
-        "maker": { "id": "anthropic", "name": "anthropic" },
+        "maker": { "id": "anthropic", "name": "Anthropic" },
         "runtimes": ["claude"],
         "ids": ["claude-opus-5-5"],
         "efforts": {},
@@ -187,6 +361,31 @@ pub fn fix_runtime_of(model : String) -> String {
   match items(Some(fix_model(model)), "runtimes").get(0) {
     Some(String(r)) => r
     _ => "claude"
+  }
+}
+
+///|
+/// The models the model control offers, in the core's order.
+fn fix_shown_models() -> Array[Json] {
+  let n = new_fix
+  if n.tall {
+    fix_crowded_models.map(fix_model) + fix_tall_models.map(fix_model)
+  } else if n.providers {
+    fix_crowded_models.map(fix_model) + fix_providers.map(fn(p) { fix_model(p.0) })
+  } else if n.crowded {
+    fix_crowded_models.map(fix_model)
+  } else {
+    [fix_model("claude-opus-5-5"), fix_model("claude-sonnet-5"), fix_model("gpt-6")]
+  }
+}
+
+///|
+/// The models new chats here started on most, most first.
+fn fix_near() -> Array[String] {
+  if new_fix.crowded {
+    ["gpt-6-astra", "deepseek-v4-1-flash", "swe-2"]
+  } else {
+    ["claude-opus-5-5", "gpt-6"]
   }
 }
 
@@ -208,14 +407,36 @@ pub fn fix_pick() -> Json {
     Json::object(o)
   }
   {
-    "options": if n.tall {
-      Json::array(fix_crowded_models.map(fix_model) + fix_tall_models.map(fix_model))
-    } else if n.crowded {
-      Json::array(fix_crowded_models.map(fix_model))
-    } else {
-      [fix_model("claude-opus-5-5"), fix_model("claude-sonnet-5"), fix_model("gpt-6")]
+    "options": fix_pick_options(fix_shown_models()),
+    // (those used most, the starred left out)
+    "near": Json::array(fix_near().filter(fn(m) { !n.liked.contains(m) }).map(Json::string(_))),
+    // (every one starred, however often used)
+    "liked": Json::array(n.liked.map(Json::string(_))),
+    // (the makers of its models, in their order, as the core says them)
+    "makers": {
+      let makers : Array[(String, String, Int)] = []
+      for o in fix_shown_models() {
+        let id = text(field(Some(o), "maker"), "id")
+        match makers.search_by(fn(m) { m.0 == id }) {
+          Some(i) => makers[i] = (id, makers[i].1, makers[i].2 + 1)
+          None => makers.push((id, text(field(Some(o), "maker"), "name"), 1))
+        }
+      }
+      Json::array(makers.map(fn(m) { { "id": Json::string(m.0), "title": Json::string(m.1), "count": Json::number(m.2.to_double()) } }))
     },
     "runtimeFixed": false,
+    // (the model drafted another station's: borrowed first, asked, from the panel's foot)
+    "borrow": if n.borrow {
+      {
+        "title": "借用 Maple 的 Fable 5.1？",
+        "lines": ["Fable 5.1 由 Maple 上的 Claude 订阅运行。", "借用后，这个连接的会话也用它的额度。"],
+        "action": "借用",
+        "allowed": true,
+        "note": "Fable 5.1 在 Maple 上，借用后这里也能用。",
+      }
+    } else {
+      Json::null()
+    },
     "value": picked(n.model, n.runtime, n.effort, ""),
     "valueOption": fix_model(n.model),
     "draft": picked(n.d_model, n.d_runtime, n.d_effort, n.d_profile),
@@ -234,6 +455,16 @@ pub fn fix_pick() -> Json {
       ["low", "medium", "high"]
     },
     "fastAvailable": n.tall,
+    // (how much context Claude Code can be kept to under the model's 1M)
+    "contexts": if n.d_runtime == "claude" {
+      [("", "完整 · 1M"), ("500000", "500K"), ("300000", "300K"), ("200000", "200K")].map(fn(c) {
+        Json::object({ "id": Json::string(c.0), "text": Json::string(c.1) })
+      })
+      |> Json::array
+    } else {
+      []
+    },
+    "contextNow": Json::string(n.context),
     "accounts": [
       {
         "id": "p1",
@@ -262,6 +493,68 @@ pub fn fix_pick() -> Json {
     "accountWarn": false,
     "saveText": "",
   }
+}
+
+///|
+/// The models as the model control has them: each as it last ran here (`usual`, `usualText`; the one drafted as it is
+/// drafted) and how often new chats started on it (`uses`): the new chat's frequent ones, the rest never used.
+fn fix_pick_options(all : Array[Json]) -> Json {
+  let n = new_fix
+  let effort_word = fn(e : String) {
+    match e {
+      "low" => "低"
+      "medium" => "中"
+      "high" => "高"
+      "max" => "最高"
+      _ => ""
+    }
+  }
+  // (model: runtime, effort, uses)
+  let used : Map[String, (String, String, Int)] = if n.crowded {
+    { "gpt-6-astra": ("codex", "medium", 6), "deepseek-v4-1-flash": ("dsh", "high", 4), "swe-2": ("devin", "high", 2) }
+  } else {
+    { "claude-opus-5-5": ("claude", "high", 9), "gpt-6": ("codex", "medium", 5) }
+  }
+  Json::array(
+    all.map(fn(o) {
+      match o {
+        Object(m) => {
+          let m = m.copy()
+          let model = text(Some(o), "model")
+          m["liked"] = Json::boolean(n.liked.contains(model))
+          let many = items(Some(o), "runtimes").length() > 1
+          let ran = if model == n.d_model {
+            Some((n.d_runtime, n.d_effort, used.get(model).map(fn(u) { u.2 }).unwrap_or(0)))
+          } else {
+            used.get(model)
+          }
+          match ran {
+            Some((runtime, effort, uses)) => {
+              m["usual"] = {
+                "runtime": Json::string(runtime),
+                "effort": if effort == "" { Json::null() } else { Json::string(effort) },
+                "fast": Json::null(),
+              }
+              let parts = []
+              if many {
+                parts.push(@settings.runtime_label(runtime))
+              }
+              if effort_word(effort) != "" {
+                parts.push(effort_word(effort))
+              }
+              if parts.length() > 0 {
+                m["usualText"] = Json::string(parts.join(" · "))
+              }
+              m["uses"] = Json::number(uses.to_double())
+            }
+            None => m["uses"] = Json::number(0.0)
+          }
+          Json::object(m)
+        }
+        other => other
+      }
+    }),
+  )
 }
 
 ///|
@@ -312,14 +605,15 @@ fn fix_new_chat_of(f : Fixture) -> Json {
       "frequent": [],
     }
   }
-  // its station with no profile open here: what to add first (newchat-noprofile)
-  if f.mode == "newchat-noprofile" {
+  // Its station has no profile, or its only available profiles are disabled.
+  if f.mode == "newchat-noprofile" || f.mode == "newchat-disabled" {
     return {
       "kept": Json::string(n.station),
       "stations": [fix_station("st1"), fix_station("st2")],
       "any": true,
       "station": fix_station(n.station),
-      "blocked": "profile",
+      "blocked": Json::string(if f.mode == "newchat-disabled" { "disabled" } else { "profile" }),
+      "problem": Json::string(if f.mode == "newchat-disabled" { "Willow 的可用 Profile 均已停用，请在 Profile 页面重新启用。" } else { "" }),
       "model": Json::null(),
       "runtime": "",
       "effort": "",
@@ -345,7 +639,7 @@ fn fix_new_chat_of(f : Fixture) -> Json {
       "accounts": [],
       "pickAccount": false,
       "waiting": true,
-      "problem": "正在读取 Studio 的 Profile",
+      "problem": "正在读取 Willow 的 Profile",
       "pick": Json::null(),
       "frequent": [],
     }
@@ -382,6 +676,35 @@ fn fix_new_chat_of(f : Fixture) -> Json {
     "pick": fix_pick(),
     "frequent": if n.crowded { fix_crowded_frequent() } else { fix_frequent() },
     "label": Json::string(effort_word),
+    "preset": Json::string(n.preset),
+    "presets": Json::array(
+      n.presets.map(fn(p) {
+        {
+          "id": field(Some(p), "id").unwrap_or(Json::string("")),
+          "name": field(Some(p), "name").unwrap_or(Json::string("")),
+          "dirs": Json::number(
+            match field(Some(p), "dirs") {
+              Some(Array(a)) => a.length().to_double()
+              _ => 0.0
+            },
+          ),
+          "station": Json::string(text(Some(fix_station(n.station)), "station")),
+          "stationName": Json::string(text(Some(fix_station(n.station)), "name")),
+        }
+      }),
+    ),
+    "presetMarks": if n.preset == "" {
+      Json::array([])
+    } else {
+      [{ "name": "still.fail", "repo": "github.com/AFK-surf/still.fail", "icon": Json::string(fix_sf_icon) }, { "name": "still.fail 设计稿", "repo": "" }]
+    },
+    "presetStation": Json::string(if n.preset == "" { "" } else { text(Some(fix_station(n.station)), "station") }),
+    "presetName": Json::string(
+      match n.presets.iter().find_first(fn(p) { field(Some(p), "id") == Some(Json::string(n.preset)) }) {
+        Some(p) => field(Some(p), "name").unwrap_or(Json::string("")).as_string().unwrap_or("")
+        None => ""
+      },
+    ),
   }
 }
 
@@ -494,6 +817,32 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
         n.effort = s
         n.d_effort = s
       })
+      take("preset", fn(s) { n.preset = s })
+      f.changed()
+      Some(Ok(Json::object({})))
+    }
+    "preset.add" | "preset.put" => {
+      let id = match field(p, "id") {
+        Some(String(s)) => s
+        _ => "p-\{n.presets.length()}"
+      }
+      let dirs = match field(p, "dirs") {
+        Some(Array(a)) => a.map(fn(d) { d.as_string().unwrap_or("") })
+        _ => []
+      }
+      let made = fix_preset(id, field(p, "name").unwrap_or(Json::string("")).as_string().unwrap_or(""), dirs.map(fn(d) {
+        match d.rev_find("/") {
+          Some(i) => d.unsafe_substring(start=i + 1, end=d.length())
+          None => d
+        }
+      }), "")
+      n.presets.retain(fn(x) { field(Some(x), "id") != Some(Json::string(id)) })
+      n.presets.push(made)
+      f.changed()
+      Some(Ok(made))
+    }
+    "preset.delete" => {
+      take("id", fn(s) { n.presets.retain(fn(x) { field(Some(x), "id") != Some(Json::string(s)) }) })
       f.changed()
       Some(Ok(Json::object({})))
     }
@@ -514,7 +863,26 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       f.changed()
       Some(Ok(Json::object({})))
     }
+    "pick.like" => {
+      take("model", fn(s) {
+        n.liked.retain(fn(m) { m != s })
+        if flag(p, "liked") {
+          n.liked.push(s)
+        }
+      })
+      f.changed()
+      Some(Ok(Json::object({})))
+    }
     "pick.save" => {
+      // (with picks of its own, a model's as it last ran or a change in the panel: those picked first)
+      take("model", fn(s) {
+        n.d_model = s
+        n.d_runtime = fix_runtime_of(s)
+      })
+      take("runtime", fn(s) { n.d_runtime = s })
+      take("effort", fn(s) { n.d_effort = s })
+      take("profile", fn(s) { n.d_profile = s })
+      take("context", fn(s) { n.context = s })
       n.model = n.d_model
       n.runtime = n.d_runtime
       n.effort = n.d_effort
@@ -541,7 +909,7 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
 
 ///|
 /// The files' page's tabs of files-split, as the core keeps them: two, the one shown split, 文档 in front and the home
-/// beside it; 照片 of MBA the other.
+/// beside it; 照片 of Maple the other.
 pub fn fix_split_tabs() -> Json {
   {
     "tabs": [
@@ -558,3 +926,7 @@ pub fn fix_split_tabs() -> Json {
     "current": "t0",
   }
 }
+
+///|
+/// still.fail's web/public/apple-touch-icon.png, as a data URL.
+let fix_sf_icon : String = "data:image/png;base64,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"

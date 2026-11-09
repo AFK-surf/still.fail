@@ -11,8 +11,9 @@ import { log } from "../ops/log.ts";
 import { nowSecs } from "../ops/files.ts";
 import { version } from "../ops/version.ts";
 import { type Cloud as CloudState, isRevocation, joinedOf, joinedPendingPath, pendingLockPath } from "./state.ts";
-import { type Entry, asEntry, entryHash } from "./lock.ts";
+import { type Entry, asEntry, entryHash, fold } from "./lock.ts";
 import type { StationKey } from "./key.ts";
+import type { CloudSaid } from "./plane.ts";
 import { type ProviderSpec, signedHeaders } from "./provider.ts";
 import { wall } from "../ops/fibers.ts";
 
@@ -20,19 +21,12 @@ import { wall } from "../ops/fibers.ts";
 const PING_MS = 30_000;
 /// How the cloud closes the socket of a station removed from its workspace.
 const CLOSE_REMOVED = 4004;
-const REMOVED_RETRY_MS = 600_000;
 const CONNECT_TIMEOUT_MS = 20_000;
-/// How long the roster the cloud said last stays current once its socket ended. A socket the cloud closes is back
-/// within seconds (ccvm's about every 20 minutes, 2026-10-29), and every request between the workspace's stations in
-/// those seconds was refused as `roster is not current`: a share not told, a task not started. Past this, or when the
-/// station is removed, calls fail closed until a fresh roster comes.
+/// How long the roster the cloud said last counts as reached once its socket ended. A socket the cloud closes is back
+/// within seconds (one station's about every 20 minutes, 2026-10-29): those seconds are not shown as cut off. The roster itself
+/// is taken on past this (cloud/state.ts `peersCurrent`), until the station is removed.
 export const ROSTER_GRACE_MS = 60_000;
 
-/// REMOVED_RETRY, or STILLFAIL_REMOVED_RETRY_SECS (tests against a dev cloud).
-function removedRetry(): number {
-  const secs = Number(process.env.STILLFAIL_REMOVED_RETRY_SECS?.trim());
-  return Number.isFinite(secs) && secs > 0 ? secs * 1000 : REMOVED_RETRY_MS;
-}
 
 /// Whether the station is online at still.fail cloud, and since when or why not: <data>/run/presence.json, for
 /// `stillfail status`.
@@ -48,10 +42,12 @@ export type PresenceParts = {
   key: StationKey;
   up: SubscriptionRef.SubscriptionRef<boolean>;
   spec: () => ProviderSpec;
+  /// What the cloud tells the station of besides its state (plane.ts `told`).
+  said?: (event: CloudSaid) => void;
 };
 
 /// Keeps the socket for good (until interrupted): open while the station is up.
-export const presence = ({ cloud, key, up, spec }: PresenceParts) => Effect.gen(function* () {
+export const presence = ({ cloud, key, up, spec, said }: PresenceParts) => Effect.gen(function* () {
   const until = (wanted: boolean) => SubscriptionRef.changes(up).pipe(Stream.filter((now) => now === wanted), Stream.runHead);
   let backoff = 1000;
   for (;;) {
@@ -62,18 +58,18 @@ export const presence = ({ cloud, key, up, spec }: PresenceParts) => Effect.gen(
     const s = cloud.state;
     s.reload();
     if (s.removed()) {
-      const retry = removedRetry();
-      const every = retry === REMOVED_RETRY_MS ? "every 10 minutes" : `every ${retry / 1000} s`;
-      writePresence(s.data, false, `removed from its workspace; the cloud is asked again ${every}`);
-      // Enrolled again meanwhile (the file changes): ask at once.
-      yield* Effect.raceFirst(Effect.sleep(retry), cloud.changes.pipe(Stream.filter(() => !s.removed()), Stream.runHead));
+      // The cloud forgot the station as it removed it: only enrolling it again (by the station, which changes
+      // cloud.json) brings it back, and nothing else is asked until then.
+      writePresence(s.data, false, "removed from its workspace; enroll it again to bring it back");
+      yield* cloud.changes.pipe(Stream.filter(() => !s.removed()), Stream.runHead);
+      continue;
     }
     const started = yield* Clock.currentTimeMillis;
     const plane = spec();
     // The socket, until it ends or the station stops answering (then it is closed: offline at the cloud).
-    const ended = yield* Effect.result(Effect.raceFirst(connect(s, key, plane), Effect.as(until(false), `station not answering; went offline at ${plane.name}`)));
+    const ended = yield* Effect.result(Effect.raceFirst(connect(s, key, plane, said), Effect.as(until(false), `station not answering; went offline at ${plane.name}`)));
     lapse(s);
-    const why = ended._tag === "Success" ? ended.success : ended.failure.message;
+    const why = ended._tag === "Success" ? ended.success : failureText(ended.failure);
     writePresence(s.data, false, why);
     if (ended._tag === "Success") log.info("presence", why);
     else log.warn("presence", `no presence socket to ${plane.name}`, { error: why });
@@ -84,22 +80,48 @@ export const presence = ({ cloud, key, up, spec }: PresenceParts) => Effect.gen(
   }
 });
 
-/// The roster said last, no longer current once ROSTER_GRACE_MS passed with no fresh one (at once when the station
-/// was removed).
+/// What a failed socket says: every address's own error when they all failed (Node's AggregateError, whose message is
+/// empty: the log said only `error=`).
+export function failureText(error: Error): string {
+  const each = error instanceof AggregateError ? error.errors.map((e) => (e instanceof Error ? e.message : String(e))).filter((m) => m.length > 0) : [];
+  return each.length > 0 ? each.join("; ") : error.message || error.name;
+}
+
+/// The roster said last, no longer reached once ROSTER_GRACE_MS passed with no fresh one; not taken at all at once when
+/// the station was removed.
 export function lapse(s: CloudState, after: (ms: number, f: () => void) => unknown = wall.after) {
   if (s.removed()) {
-    s.peersCurrent = false;
+    s.lapsed();
     return;
   }
   const said = s.rostersSaid;
   after(ROSTER_GRACE_MS, () => {
-    if (s.rostersSaid === said) s.peersCurrent = false;
+    if (s.rostersSaid === said) s.lapsed();
   });
+}
+
+/// Whether `text` is something the cloud tells of besides the station's state (a release out, the models' catalog
+/// changed), told to `said`.
+function cloudSaid(text: string, said?: (event: CloudSaid) => void): boolean {
+  if (!text.startsWith('{"type":')) return false;
+  let event: unknown;
+  try {
+    event = JSON.parse(text);
+  } catch {
+    return false;
+  }
+  const type = (event as { type?: unknown } | null)?.type;
+  if (type === "release") said?.({ type });
+  else if (type === "models") {
+    const etag = (event as { etag?: unknown }).etag;
+    said?.(typeof etag === "string" ? { type, etag } : { type });
+  } else return false;
+  return true;
 }
 
 /// One socket, signed at connect like enrollment: succeeds with why it ended when the cloud closes it, fails when it
 /// can't be had or breaks; closed when interrupted.
-const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
+const connect = (s: CloudState, key: StationKey, plane: ProviderSpec, said?: (event: CloudSaid) => void) =>
   Effect.callback<string, Error>((resume) => {
     const state = s.state!;
     const ts = nowSecs();
@@ -108,29 +130,7 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
     const socket = new WebSocket(`${state.origin.replace("http", "ws")}${plane.connectPath}`, { headers, handshakeTimeout: CONNECT_TIMEOUT_MS });
     let ping: (() => void) | undefined;
     let answered = true;
-    // Entries this station took from devices and other stations, given to the plane too (it keeps the lock for whoever
-    // asks it next): the home workspace's, and each joined one's (`workspace` says which).
-    const told = new Map<string, number>();
-    const tell = () => {
-      for (const m of s.memberships()) {
-        const ws = m.home ? null : m.workspace;
-        const seq = s.locked(ws)?.state?.seq;
-        const plane = ws === null ? s.planeLockSeq : (s.planeLockSeqs.get(ws) ?? null);
-        const was = told.get(m.workspace) ?? (s.locked(ws)?.state?.seq ?? -1);
-        if (!told.has(m.workspace)) told.set(m.workspace, was);
-        if (seq === undefined || seq <= was || socket.readyState !== WebSocket.OPEN || plane === null) continue;
-        const entries = s.lockAfter(Math.max(plane, -1), ws);
-        if (entries.length > 0) socket.send(JSON.stringify({ type: "lock.put", entries, ...(ws === null ? {} : { workspace: ws }) }));
-        told.set(m.workspace, seq);
-      }
-      askPending();
-    };
-    // The lock joining a workspace named, asked for (pendingAsks) as the station hears it joined and at each ping.
-    const asked = new Set<string>();
-    const askPending = () => {
-      if (socket.readyState !== WebSocket.OPEN) return;
-      for (const ws of pendingAsks(s, asked)) socket.send(JSON.stringify({ type: "lock.get", after: -1, workspace: ws }));
-    };
+    const { tell, askPending } = planeTeller(s, (frame) => socket.send(JSON.stringify(frame)), () => socket.readyState === WebSocket.OPEN);
     tell();
     const unlisten = s.listen(tell);
     let failed: Error | null = null;
@@ -165,6 +165,7 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
       if (binary) return;
       const text = data.toString();
       if (text === "pong") answered = true;
+      else if (cloudSaid(text, said)) return;
       else if (!tool(s, plane, socket, text)) applyState(s, text, (frame) => socket.readyState === WebSocket.OPEN && socket.send(JSON.stringify(frame)));
     });
     socket.on("close", (code, reason) => {
@@ -181,6 +182,34 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
       socket.close();
     });
   });
+
+/// What a station tells the plane of its locks on one socket (`send`, while `open`): the entries it took from devices
+/// and other stations since the socket opened (the plane keeps the lock for whoever asks it next): the home
+/// workspace's, and each joined one's (`workspace` says which); and the locks joining named, asked for (pendingAsks).
+/// `tell` as cloud.json changes, `askPending` as the station hears it joined and at each ping.
+export function planeTeller(s: CloudState, send: (frame: unknown) => void, open: () => boolean) {
+  const told = new Map<string, number>();
+  const asked = new Set<string>();
+  const askPending = () => {
+    if (!open()) return;
+    for (const ws of pendingAsks(s, asked)) send({ type: "lock.get", after: -1, workspace: ws });
+  };
+  const tell = () => {
+    for (const m of s.memberships()) {
+      const ws = m.home ? null : m.workspace;
+      const seq = s.locked(ws)?.state?.seq;
+      const plane = ws === null ? s.planeLockSeq : (s.planeLockSeqs.get(ws) ?? null);
+      const was = told.get(m.workspace) ?? (s.locked(ws)?.state?.seq ?? -1);
+      if (!told.has(m.workspace)) told.set(m.workspace, was);
+      if (seq === undefined || seq <= was || !open() || plane === null) continue;
+      const entries = s.lockAfter(Math.max(plane, -1), ws);
+      if (entries.length > 0) send({ type: "lock.put", entries, ...(ws === null ? {} : { workspace: ws }) });
+      told.set(m.workspace, seq);
+    }
+    askPending();
+  };
+  return { tell, askPending };
+}
 
 /// A device tool request pushed on the socket (`{type: "tool", id, request}`, contract §8 presence transport): run
 /// by the mesh's tools and answered `{type: "tool_result", id, response}`. Only a provider with device tools pushes
@@ -248,6 +277,7 @@ export function applyState(s: CloudState, text: string, send: (frame: unknown) =
     s.setPlaneLists(Array.isArray(body.peers) ? body.peers : [], Array.isArray(body.gateway_keys) ? body.gateway_keys.filter((k: unknown): k is string => typeof k === "string") : undefined);
     // Current before it is told, so whoever hears of the new roster reads it as current.
     s.peersCurrent = Array.isArray(body.peers);
+    s.reached = s.peersCurrent;
     s.rostersSaid = (s.rostersSaid ?? 0) + 1;
     s.update((st) => {
       for (const k of ["workspace", "workspace_name", "name", "origin", "relay_url"] as const) {
@@ -319,10 +349,16 @@ function syncLock(s: CloudState, head: any, send: (frame: unknown) => unknown, w
   const mine = s.locked(ws)?.state?.seq;
   if (mine === undefined) {
     const pending = ws === null ? pendingLock(s.data) : s.pendingLock(ws);
-    if (theirs >= 0 && pending !== null) send({ type: "lock.get", after: -1, ...which });
+    // (a joined workspace that turned its lock on after this station joined it, this station not in it then: its lock,
+    // pinned once it names this station, takeFromPlane)
+    if (theirs >= 0 && (pending !== null || (ws !== null && s.leftOut(ws) === "unpinned"))) send({ type: "lock.get", after: -1, ...which });
     return;
   }
-  if (theirs > mine) send({ type: "lock.get", after: mine, ...which });
+  // The plane's lock another than the one pinned here: turned off and on again while this station was not there to hear
+  // it. Asked for the rest of its own (the plane keeps a chain turned off): its `disable` lets it go.
+  const genesis = s.locked(ws)?.state?.genesis;
+  if (head !== null && typeof head === "object" && typeof head.genesis === "string" && genesis !== undefined && head.genesis !== genesis) send({ type: "lock.get", after: mine, genesis, ...which });
+  else if (theirs > mine) send({ type: "lock.get", after: mine, ...which });
   else if (theirs < mine) send({ type: "lock.put", entries: s.lockAfter(theirs, ws), ...which });
 }
 
@@ -334,6 +370,21 @@ function takeFromPlane(s: CloudState, raw: unknown[], ws: string | null = null) 
   try {
     if (s.locked(ws) === null) {
       const pending = ws === null ? pendingLock(s.data) : s.pendingLock(ws);
+      // A joined workspace that turned its lock on after this station joined it: it takes none of its members (leftOut
+      // `unpinned`) until it pins a lock, which no device of it can bring (it refuses them all). Its lock as the plane
+      // has it, once that names this station (its owner put it in, `lock.joinStation`): pinned, as it was the plane's
+      // word it took for that workspace before (2026-11-04: a workspace's members turned away for two hours, then the
+      // station removed from it and added again).
+      if (pending === null && ws !== null && s.leftOut(ws) === "unpinned") {
+        let named = false;
+        try {
+          named = fold(entries as Entry[], null).stations.has(s.state?.station ?? "");
+        } catch {
+          named = false;
+        }
+        if (named) s.takeLock(entries as Entry[], ws);
+        return;
+      }
       if (pending === null) return;
       if (!entries.some((e) => entryHash(e!) === pending)) return log.warn("lock", "the control plane's lock is not the one this station was enrolled with", ws === null ? {} : { workspace: ws });
       s.takeLock(entries as Entry[], ws);

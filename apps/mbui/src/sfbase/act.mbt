@@ -22,20 +22,40 @@ pub fn acting_reset() -> Unit {
 }
 
 ///|
+/// `text` put on the system's clipboard, felt as a copy is (a key's light tap), and `said` in the toast where it is
+/// given: for an event's handler (a menu's item chosen, a press's confirm), outside a build, as Ctx::copy_text has it
+/// there.
+pub fn copy_out(text : String, said? : String) -> Unit {
+  @hostapi.clipboard_set(text)
+  @ui.haptic(KeyboardTap)
+  match said {
+    Some(words) => toast_later(words)
+    None => ()
+  }
+}
+
+///|
 /// Says `words` in the toast from the next frame on (from a call's answer, between frames), with a button of
 /// `action`'s words on it doing `run` ("" none).
 pub fn toast_later(words : String, action? : String = "", run? : () -> Unit = fn() {  }) -> Unit {
-  app.toast.set(words)
-  app.toast_n.set(app.toast_n.get() + 1)
-  app.toast_action = action
-  app.toast_run = run
+  // (its words, which saying it is, its button and what that does said as one: what reads them never sees one without
+  // the others)
+  let n = @signals.untracked(fn() { app.toast.get().n }) + 1
+  app.toast.set({ words, n, action, run })
+}
+
+///|
+/// The words the toast says now ("" none).
+pub fn toast_words() -> String {
+  app.toast.get().words
 }
 
 ///|
 /// Has the core do something (AppState.act): `key` under way until it answers (its button's spinner), `done` said
 /// when it did (with a button of `done_action`'s words doing `done_run`, "" none), why not said when it could not
 /// (`failed` told then); `at_once`: `done` said as it is asked, where the core has it done on the device at once (its
-/// rows: an archive), the station's answer said only when it is a no. Nothing with MBUI_READONLY=1.
+/// rows: an archive), the station's answer said only when it is a no. What `done` says is felt as something done, a
+/// no as something refused. Nothing with MBUI_READONLY=1.
 pub fn act(
   src : Source,
   what : String,
@@ -60,6 +80,7 @@ pub fn act(
   }
   if at_once && done != "" {
     toast_later(done, action=done_action, run=done_run)
+    @ui.haptic(Confirm)
   }
   (src.call)(call, params, fn(res) {
     if key != "" {
@@ -74,11 +95,13 @@ pub fn act(
       Ok(v) => {
         if done != "" && !at_once {
           toast_later(done, action=done_action, run=done_run)
+          @ui.haptic(Confirm)
         }
         ok(v)
       }
       Err(e) => {
         let code = text(Some(e), "code")
+        @ui.haptic(Reject)
         toast_later(
           @sf.t(if code == "unconfirmed" { "android-misc.act.unconfirmed" } else { "android-misc.act.failed" }, args=[
             ("what", what),
@@ -128,7 +151,7 @@ pub fn failed_lately(c : @ui.Ctx, key : String) -> Bool {
 /// Whether one of `calls` about what `on` names is under way, as the core's `doing` says (doing.ts useDoing: its
 /// params as words).
 pub fn core_doing(src : Source, calls : Array[String], on : Array[(String, String)]) -> Bool {
-  items((src.topic)("doing", {}).value, "doing").iter().any(fn(d) {
+  items(src.topic("doing", {}).get().value, "doing").iter().any(fn(d) {
     text(Some(d), "stage") != "failed" && doing_of(d, calls, on)
   })
 }
@@ -138,7 +161,7 @@ pub fn core_doing(src : Source, calls : Array[String], on : Array[(String, Strin
 /// useDoingFailed), if it did.
 pub fn core_failed(src : Source, calls : Array[String], on : Array[(String, String)]) -> String? {
   let mut why : String? = None
-  for d in items((src.topic)("doing", {}).value, "doing") {
+  for d in items(src.topic("doing", {}).get().value, "doing") {
     if text(Some(d), "stage") == "failed" && doing_of(d, calls, on) {
       why = Some(
         match text(Some(d), "error") {

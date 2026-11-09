@@ -125,9 +125,11 @@ fn Ctx::cycle_looks(self : Ctx) -> Unit {
   let a = self.inst
   // what each tag's instances cover, together (x0 y0 x1 y1)
   let boxes : Map[Int, (Double, Double, Double, Double)] = {}
-  for q in 0..<self.ninst {
+  let mut q = 0
+  while q < self.ninst {
     let b = q * inst_size
     let tag = cycle_tag_of(a, b)
+    q = inst_after(a, q)
     if tag == 0 {
       continue
     }
@@ -152,7 +154,8 @@ fn Ctx::cycle_looks(self : Ctx) -> Unit {
         if next < 0.0 {
           self.cycling = true
           looks_own.cycling = true
-        } else if next < @double.infinity {
+        } else if next < @double.infinity && app_visible() {
+          // (a step nobody can see waits: the window shown again asks a frame, which draws the step it is at)
           self.wake_at_time(next, later=true)
         }
       }
@@ -160,9 +163,11 @@ fn Ctx::cycle_looks(self : Ctx) -> Unit {
       None => ()
     }
   }
-  for q in 0..<self.ninst {
+  let mut q = 0
+  while q < self.ninst {
     let b = q * inst_size
     let tag = cycle_tag_of(a, b)
+    q = inst_after(a, q)
     if tag == 0 {
       continue
     }

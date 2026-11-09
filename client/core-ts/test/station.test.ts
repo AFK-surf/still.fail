@@ -1,4 +1,4 @@
-// The station sync and topics (docs/core-ts.md, rules 2, 3, 6): a station is linked as its workspace is reached,
+// The station sync and topics (rules 2, 3, 6): a station is linked as its workspace is reached,
 // read when its stream opens, kept current by its events; topics only read what is held.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -11,7 +11,8 @@ import { HostWire } from "../src/station/wire.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { answers as answered, apply, call, readsOf, signIn, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
-import { type Answers, base, entries, entry, overview, session, started, stationHost, stationLater, threadView } from "./station-fixture.ts";
+import { type Answers, base, entries, entry, overview, session, started, stationHost, stationLater, status, threadView } from "./station-fixture.ts";
+import { retryAfter } from "../src/station/sync.ts";
 
 const gets = (host: FakeHost, path: string) => host.requests.flatMap(readsOf).filter((url) => url.endsWith(path)).length;
 
@@ -20,7 +21,7 @@ test("a_reached_station_is_linked_read_as_its_stream_opens_and_its_topics_read_o
   assert.equal(streams.length, 1, "its events stream is open");
   const read = host.requests.find(r => r.url.endsWith("/admin/api/overview"));
   assert.equal(read?.headers.find(([key]) => key === "stillfail-runtimes")?.[1], RUNTIMES.join(","));
-  assert.equal(streams[0].path, "/events?running=1");
+  assert.equal(streams[0].path, "/events?running=1&views=1&rows=1&shared=1");
   for (const path of ["/admin/api/overview", "/admin/api/sessions", "/admin/api/threads", "/admin/api/chats"]) assert.equal(gets(host, path), 1, path);
   // Its chats' entries are brought onto the device, nobody looking.
   assert.equal(gets(host, "/admin/api/threads/7/entries?limit=50"), 1);
@@ -71,8 +72,9 @@ test("events_keep_the_records_current", async () => {
   assert.deepEqual(v(values, 2).entries.map((e: { n: number }) => e.n), [1, 2, 3, 4]);
   assert.equal(v(values, 2).caught, 3, "said as it came: it comes in with a motion");
   assert.deepEqual(v(values, 3).map((r: { id: string }) => r.id), ["7", "8"]);
-  // A burst of thread events reads the thread's summary once.
-  assert.equal(gets(host, "/admin/api/threads/7"), 1);
+  // Its summary made from what was said (station/thread-after.ts), not read.
+  assert.equal(gets(host, "/admin/api/threads/7"), 0);
+  assert.equal((core.inner.data.of("ws/st")!.thread("ws/st", 7) as { last: number }).last, 4);
   core.close();
 });
 
@@ -151,6 +153,40 @@ test("a_chat_with_something_unread_opens_at_it_and_pages_back", async () => {
   core.close();
 });
 
+test("the_page_before_a_chat_is_read_once_at_a_time_and_a_failure_says_why_and_waits", async () => {
+  // A read of the page before that failed was asked for again at once by the app, as fast as it failed, its top
+  // turning for ever; the core says how it stands instead and asks again only a while after.
+  const answers = base();
+  answers["GET /threads"] = [threadView(7, 120)];
+  answers["GET /threads/7/entries?limit=50"] = { last: 120, entries: entries(71, 120) };
+  const older = "GET /threads/7/entries?before=71&limit=50";
+  answers[older] = status(502, { error: "busy" });
+  const { host, core } = await started(answers);
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "thread", station: "ws/st", thread: 7 });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).first, 71);
+  const asked = () => host.requests.filter((r) => r.url.includes("entries?before=71&")).length;
+  await assert.rejects(run(core.inner.stationTopics.older("ws/st", 7)));
+  await host.time.pass(100);
+  apply(host, values);
+  assert.deepEqual([v(values, 1).older, v(values, 1).olderFailed, v(values, 1).first], ["failed", "busy", 71]);
+  // Asked again before the while is up: nothing is read.
+  assert.equal(await run(core.inner.stationTopics.older("ws/st", 7)), true);
+  assert.equal(asked(), 1);
+  await host.time.pass(retryAfter(0) + 50, 50);
+  apply(host, values);
+  assert.equal(v(values, 1).older, undefined);
+  answers[older] = { last: 120, entries: entries(21, 70) };
+  assert.equal(await run(core.inner.stationTopics.older("ws/st", 7)), true);
+  await host.time.pass(100);
+  apply(host, values);
+  assert.deepEqual([v(values, 1).older, v(values, 1).first, asked()], [undefined, 21, 2]);
+  core.close();
+});
+
 test("a_chat_window_holds_WINDOW_of_what_it_shows_so_a_chat_mostly_of_letters_keeps_both_its_ends", async () => {
   // Agents writing each other (letters, not shown in the chat): 300 entries, 3 of them shown. Its window holds WINDOW
   // of what it shows: paging back keeps its end, paging on its start (by entries, each dropped what the other brought,
@@ -202,7 +238,7 @@ test("a_write_answers_once_what_it_touched_is_read_again", async () => {
   assert.deepEqual(answer?.[1], { id: 9, ok: { ok: true } });
   // Its own detail; the lists that show it its station tells as they change.
   assert.equal(gets(host, "/admin/api/sessions"), before);
-  assert.equal(gets(host, "/admin/api/sessions/k1"), 2);
+  assert.equal(gets(host, "/admin/api/sessions/k1?turns=0&jobs=now"), 2);
   // Warmed as someone types: nothing read, its station tells its new state.
   const reads = host.requests.length;
   call(core, ui, 10, "session.warm", { station: "ws/st", key: "k1" });

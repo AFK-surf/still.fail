@@ -1,4 +1,4 @@
-// The desktop as a screen end to end on a Mac (docs/remote-screens.md): a dev cloud (cloud/test/dev.ts), a station
+// The desktop as a screen end to end on a Mac: a dev cloud (cloud/test/dev.ts), a station
 // of this checkout started as launchd starts one (a job in the GUI session running the launcher itself), still.fail
 // Helper started by it, and a member's device on iroh asking for the desktop. A missing grant puts the helper's window
 // up on this Mac; this waits (WAIT seconds, default 1800) for a person to grant it there, then measures a still and a
@@ -11,7 +11,7 @@
 // LAUNCHER: the launcher to run (default the prebuilt one); STILLFAIL_HELPER: the helper app to give the station (a
 // signed one keeps its grant across builds: verify.md); REBUILT: another build of it, signed the same way, put in its
 // place after the measurement, to see the grant kept (the station copies it in and starts it anew); WORK: where all
-// of it goes (default /tmp/screen-e2e). TRANSFER=1: the clipboard and files too (docs/remote-screens.md, "Clipboard
+// of it goes (default /tmp/screen-e2e). TRANSFER=1: the clipboard and files too ("Clipboard
 // and files"): a note opened in TextEdit, text pasted into it from the device and saved (⌘S), read back from disk;
 // copied there (⌘A ⌘C) and a picture put on the Mac's clipboard, both heard by the device; a file put where the
 // screen's `drop` says, there on disk, its path pasted into the note. KEEP=1: the cloud and the station kept up after,
@@ -33,7 +33,7 @@ const RELAY = process.env.RELAY ?? "http://127.0.0.1:3340";
 const WORK = process.env.WORK ?? "/tmp/screen-e2e";
 const WAIT = Number(process.env.WAIT ?? 1800);
 const SECONDS = Number(process.env.SCREEN_SECONDS ?? 5);
-const LABEL = "dev.ember.screen-e2e";
+const LABEL = "dev.stillfail.screen-e2e";
 const native = (what: string) => execFileSync(process.execPath, [join(ROOT, "scripts/native.ts"), "file", what], { encoding: "utf8" }).trim();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const say = (s: string) => console.log(`\n== ${s}`);

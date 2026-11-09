@@ -1,12 +1,9 @@
 import {
   "mbui/ui",
-  "mbui/effect",
   "mbui/signals",
   "moonbitlang/core/math",
   "mbui/dmath",
   "moonbitlang/core/double",
+  "mbui/view",
 }
 
-import {
-  "mbui/view",
-} for "test"

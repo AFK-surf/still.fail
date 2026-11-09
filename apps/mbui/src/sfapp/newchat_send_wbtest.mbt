@@ -32,11 +32,11 @@ fn assert_at(was : (Double, Double), now : (Double, Double), loc~ : SourceLoc) -
 
 ///|
 /// Home over the made-up chats with the core's answers to `newChat.create` and `chat.send` kept (`held`, by name: what
-/// gives each), and the chat made unread while `unread` says: as a phone's core gives them, a round trip later. In a
-/// phone's window, or `w` by `h` on `platform`.
+/// gives each), and the chat made unread while `unread` says (told as the test sets it): as a phone's core gives them,
+/// a round trip later. In a phone's window, or `w` by `h` on `platform`.
 fn held_core(
   held : Map[String, () -> Unit],
-  unread : Ref[Bool],
+  unread : @signals.Signal[Bool],
   w? : Double = 390.0,
   h? : Double = 844.0,
   platform? : Int = 2,
@@ -52,18 +52,17 @@ fn held_core(
         _ => (base.call)(name, params, done)
       }
     },
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       let made = match params.get("session") {
         Some(String(s)) => s.has_prefix("new:")
         _ => false
       }
-      // (made up as it is read: followed by its version, as the core's by what it says)
-      topic_as_read(name, params, if name == "chat" && made && unread.val {
+      if name == "chat" && made && unread.get() {
         { value: None, error: None, version: 0 }
       } else {
         t
-      })
+      }
     },
   }
   @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
@@ -146,7 +145,7 @@ test "wide: a new chat's first words sent: its field's hint not drawn over them 
 ///|
 test "a new chat's first words go into their bubble from the frame they are sent, the core's answers and its view of the chat however late" {
   let held : Map[String, () -> Unit] = {}
-  let unread = Ref(true)
+  let unread = @signals.signal(true)
   let t = held_core(held, unread)
   let words = "把发布说明写一下"
   let typed = new_chat_sent(t, words)
@@ -174,7 +173,7 @@ test "a new chat's first words go into their bubble from the frame they are sent
     t.draw()
     assert_at(landed, seen_once(t, words))
   }
-  unread.val = false
+  unread.set(false)
   t.draw()
   t.frame()
   let after = seen_once(t, words)
@@ -193,7 +192,7 @@ fn keyboard_up(t : @ui.Tester, h : Double) -> Unit {
 test "a new chat's first words sent with the keyboard up: no words over others on any frame, the core however late" {
   // (words over words on any frame where something moves fail the test: words_over.mbt)
   let held : Map[String, () -> Unit] = {}
-  let unread = Ref(true)
+  let unread = @signals.signal(true)
   let t = held_core(held, unread)
   let (_, y) = bar_places_at()
   t.tap(195.0, y - 28.0 - 4.0)
@@ -216,7 +215,7 @@ test "a new chat's first words sent with the keyboard up: no words over others o
     }
     t.draw()
   }
-  unread.val = false
+  unread.set(false)
   t.run_for(new_leave_ms)
   assert_at(landed, seen_once(t, words))
 }
@@ -230,9 +229,12 @@ test "a new chat's restored picture travels from its composer into its first mes
       @ui.add_image("mem:test/new-restored", png_head())
       "mem:test/new-restored"
     },
-    topic: fn(name, params) {
-      let now = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let now = base.topic(name, params).get().snapshot()
       if name != "composer" { return now }
+      // The fixture's draft comes with an in-memory picture, as one picked here. After a restart the app keeps none:
+      // its source is the kept draft's, from the first read of it on.
+      @sfbase.writing_pictures.remove("seed-0")
       let m = match now.value { Some(Object(v)) => v.copy(); _ => return now }
       m["files"] = Json::array(items(now.value, "files").map(fn(file) {
         guard file is Object(o) else { return file }
@@ -253,15 +255,11 @@ test "a new chat's restored picture travels from its composer into its first mes
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.drive("timeout 20000\nuntil 想让 agent 做什么？\n") |> ignore
-  // The fixture normally starts with an in-memory picture. Its source after a restart is the kept draft instead.
-  @sfbase.writing_pictures.remove("seed-0")
-  @sfbase.sent_pictures.clear()
-  t.frame()
   t.run_for(@ui.image_fade_ms)
   assert_true(t.locate("img:mem:test/new-restored").length() > 0)
   tap_send(t)
   let flying = send_flight.get().unwrap().files
-  assert_true(flying.iter().any(fn(f) { f.key == "upload:seed-0" && f.picture == "mem:test/new-restored" }))
+  assert_true(flying.iter().any(fn(f) { f.key == "upload:seed-0" && f.picture == Some("mem:test/new-restored") }))
   let row = sending_of(send_flight.get().unwrap().turns)[0].row
   assert_eq(sent_picture("ws1/st1", row.attachments[0]), Some("mem:test/new-restored"))
 }
@@ -280,9 +278,37 @@ test "a new chat's first words and picture sent with the keyboard up: no words o
 }
 
 ///|
+test "a new chat's first words sent on a short page: nothing of its scene the foot hid is seen as the foot fades" {
+  // (the scene longer than the page: its combinations under the band, frosted, and under the composer, hidden)
+  let src = fixture_app("newchat-crowded")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=470.0, platform=2)
+  t.drive("timeout 20000\nuntil 想让 agent 做什么？\n") |> ignore
+  t.tap_text("做任何事")
+  t.type_text("把发布说明写一下")
+  t.run_for(@ui.move_most_ms)
+  // the foot's top: what is seen under it is the choices' and the composer's alone
+  let top = 470.0 - @motion.measured(t.ctx(), "new/foot").unwrap()
+  let under = fn() { t.glyphs_seen().filter(fn(g) { g.3 > top + 1.0 }).length() }
+  let before = under()
+  tap_send(t)
+  t.draw()
+  assert_true(app.nav.top() is Chat(_))
+  // as it is sent, halfway through the choices' fading (the band's), as they have gone, as the scene is half gone
+  for i, ms in [0.0, new_fade_ms / 2.0, new_fade_ms / 2.0, new_leave_ms / 2.0 - new_fade_ms] {
+    if i > 0 {
+      t.run_for(ms)
+    }
+    let now = under()
+    if now > before {
+      fail("\{now - before} glyphs more seen under the foot's top at \{t.time()} than before the words were sent")
+    }
+  }
+}
+
+///|
 test "a new chat's first words sent: its scene fades where it is from then, as they go, not once the chat is made" {
   let held : Map[String, () -> Unit] = {}
-  let t = held_core(held, Ref(true))
+  let t = held_core(held, @signals.signal(true))
   let title = "想让 agent 做什么？"
   new_chat_sent(t, "把发布说明写一下") |> ignore
   let at = seen_once(t, title)
@@ -318,7 +344,7 @@ test "a new chat's first words sent: its scene fades where it is from then, as t
 ///|
 test "a new chat's first words hold its composer as tall as it was while they are in it, its chat's, till they set out" {
   let held : Map[String, () -> Unit] = {}
-  let unread = Ref(true)
+  let unread = @signals.signal(true)
   let t = held_core(held, unread)
   let (_, y) = bar_places_at()
   t.tap(195.0, y - 28.0 - 4.0)
@@ -355,7 +381,7 @@ test "a new chat's first words with the core at once: never gone, into their bub
 ///|
 test "a new chat's first words not sent (the chat not made): the page the new chat again, they back in its field" {
   let held : Map[String, () -> Unit] = {}
-  let unread = Ref(true)
+  let unread = @signals.signal(true)
   new_run()
   let base = fixture("home")
   let src : Source = {
@@ -364,7 +390,7 @@ test "a new chat's first words not sent (the chat not made): the page the new ch
       match name {
         "newChat.create" =>
           held[name] = fn() {
-            done(Err({ "code": Json::string("unavailable"), "message": Json::string("Studio 离线") }))
+            done(Err({ "code": Json::string("unavailable"), "message": Json::string("Willow 离线") }))
           }
         _ => (base.call)(name, params, done)
       }
@@ -396,7 +422,7 @@ test "a new chat's first words not sent (the chat not made): the page the new ch
 ///|
 /// Home over the made-up chats with the new chat's stations not read while `reading` says (the core's `newChat` with
 /// no `stations`: only the station it last started on, `kept`), the new chats asked for counted in `made`.
-fn reading_core(reading : Ref[Bool], made : Ref[Int]) -> @ui.Tester {
+fn reading_core(reading : @signals.Signal[Bool], made : Ref[Int]) -> @ui.Tester {
   new_run()
   let base = fixture("home")
   let src : Source = {
@@ -407,8 +433,8 @@ fn reading_core(reading : Ref[Bool], made : Ref[Int]) -> @ui.Tester {
       }
       (base.call)(name, params, done)
     },
-    topic: fn(name, params) {
-      if name == "newChat" && reading.val {
+    topic_read: fn(name, params) {
+      if name == "newChat" && reading.get() {
         {
           value: Some({
             "kept": "st1",
@@ -423,7 +449,7 @@ fn reading_core(reading : Ref[Bool], made : Ref[Int]) -> @ui.Tester {
           version: 0,
         }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -432,7 +458,7 @@ fn reading_core(reading : Ref[Bool], made : Ref[Int]) -> @ui.Tester {
 
 ///|
 test "a new chat while its stations are read: its page and composer as they will be, only the station's parts waiting" {
-  let reading = Ref(true)
+  let reading = @signals.signal(true)
   let made = Ref(0)
   let t = reading_core(reading, made)
   let (_, y) = bar_places_at()
@@ -452,9 +478,9 @@ test "a new chat while its stations are read: its page and composer as they will
   let (_, field, _, _) = t.ime()
   assert_eq(field, "先写一半")
   // read: the page on the station it started on, the same words in the same field, and they go
-  reading.val = false
+  reading.set(false)
   t.draw()
-  assert_true(t.find("它会在 Studio 上") is Some(_))
+  assert_true(t.find("它会在 Willow 上") is Some(_))
   let (_, kept, _, _) = t.ime()
   assert_eq(kept, "先写一半")
   tap_send(t)

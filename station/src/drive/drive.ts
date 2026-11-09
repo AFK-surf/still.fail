@@ -21,7 +21,7 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { platform } from "../platform/index.ts";
 import { wall } from "../ops/fibers.ts";
-import { unreadableDir } from "../ops/files.ts";
+import { unreadableDir, unreadableDirAsync } from "../ops/files.ts";
 import { TooBig, zipFolder } from "./zip.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { type Fs, type Grant, type Protected, direct, protectedTop, realOf } from "./fs.ts";
@@ -85,7 +85,7 @@ const key = (path: string) => platform.paths.key(path);
 const within = (path: string, dir: string) => platform.paths.within(key(path), key(dir));
 
 /// The roots config.json names (`drive.roots`): absolute paths, as written. Those of a workspace the station joined are
-/// `drive.workspaces[<id>]` (docs/multi-workspace.md); none named, its home workspace's.
+/// `drive.workspaces[<id>]`; none named, its home workspace's.
 export function rootsOf(raw: any, workspace: string | null = null): string[] {
   const roots = workspace === null ? raw?.drive?.roots : raw?.drive?.workspaces?.[workspace];
   return Array.isArray(roots) ? roots.filter((r: unknown): r is string => typeof r === "string" && platform.paths.rooted(r)).map((r) => platform.paths.clean(r)) : [];
@@ -121,7 +121,7 @@ function granted(files: Protected, top: string): boolean {
   return known?.state === "granted";
 }
 
-/// Where a file a person drops into one of the station's screens is put (docs/remote-screens.md `drop`): the machine's
+/// Where a file a person drops into one of the station's screens is put: the machine's
 /// Downloads, where files from elsewhere land (a browser's, AirDrop's) and where its file dialogs look first; the home
 /// where it has none. Only the folder's own entry is looked at, never what is in it: on macOS listing a protected
 /// folder can put a privacy prompt up and hold the caller until it is answered (a whole station, for a sync call). A
@@ -145,7 +145,7 @@ export function typeOf(name: string): string {
 
 const TYPES: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", heic: "image/heic", bmp: "image/bmp",
-  mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm", mkv: "video/x-matroska", avi: "video/x-msvideo", ts: "video/mp2t",
+  mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm", ogv: "video/ogg", "3gp": "video/3gpp", "3g2": "video/3gpp2", mkv: "video/x-matroska", avi: "video/x-msvideo", ts: "video/mp2t",
   mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", flac: "audio/flac", wav: "audio/wav", ogg: "audio/ogg", opus: "audio/opus",
   pdf: "application/pdf", zip: "application/zip",
   txt: "text/plain; charset=utf-8", md: "text/markdown; charset=utf-8", markdown: "text/markdown; charset=utf-8", log: "text/plain; charset=utf-8",
@@ -234,7 +234,7 @@ export type DriveDeps = {
   home?: string;
 };
 
-/// The station's drive, one for the admin API's routes and the modules' local API (modules/local.ts): config.json's
+/// The station's drive, one for the admin API's routes: config.json's
 /// roots, the station's own never reached (its data directory, config, and `more`: what its parts add, ops/own.ts), the
 /// folders macOS protects through still.fail Helper (`files`, where there is one).
 export const stationDrive = (config: ConfigFile, more: () => string[], files: Protected | null) =>
@@ -273,10 +273,10 @@ export class Drive {
     return fs.helper && this.#locked(path) !== null ? fs.real(path) : real(path);
   }
 
-  /// Whether the station may not list `dir`, even through still.fail Helper.
-  #unreadable(dir: string): boolean {
+  /// Whether the station may not list `dir`, even through still.fail Helper: looked at off the main thread.
+  async #unreadable(dir: string): Promise<boolean> {
     const top = this.#locked(dir);
-    return top === null ? unreadableDir(dir) : !this.#granted(top);
+    return top === null ? unreadableDirAsync(dir) : !this.#granted(top);
   }
 
   /// How paths in these scopes (the root each is told to stay in) are reached: through still.fail Helper when any is in
@@ -394,7 +394,7 @@ export class Drive {
     });
   }
 
-  /// A file for what opens it by its path itself (the image codecs, a video's poster; modules/media.ts): where it is as
+  /// A file for what opens it by its path itself (the image codecs, a video's poster): where it is as
   /// the file system has it (`found`, what it is known by), its name, size and time. `copy` is there when it is reached
   /// through still.fail Helper, which the station does not open itself: the file copied to `to` (a new file of the
   /// station's own) to be read there instead.
@@ -618,7 +618,7 @@ export class Drive {
       for (const d of listed.d) {
         if (d.name.startsWith(".")) continue;
         const asked = join(at, d.name);
-        if (d.stat?.dir && !(await this.isProtected(asked, d.real, protect))) entries.push({ name: d.name, path: asked, unreadable: this.#unreadable(asked) });
+        if (d.stat?.dir && !(await this.isProtected(asked, d.real, protect))) entries.push({ name: d.name, path: asked, unreadable: await this.#unreadable(asked) });
       }
       entries.sort((a, b) => collator.compare(a.name, b.name));
       const parent = dirname(at);
@@ -630,15 +630,15 @@ export class Drive {
 
   /// Where a folder to lend usually is: the home's own folders that are there, then the disks mounted.
   private async places(home: string, lang: Lang, protect: string[]): Promise<Folder[]> {
-    const found: Folder[] = [{ name: tr(lang, "station.drive.place.home"), path: home, unreadable: this.#unreadable(home) }];
+    const found: Folder[] = [{ name: tr(lang, "station.drive.place.home"), path: home, unreadable: await this.#unreadable(home) }];
     for (const name of PLACES) {
       const path = join(home, name);
-      if (await isDir(path)) found.push({ name: tr(lang, `station.drive.place.${name}`), path, unreadable: this.#unreadable(path) });
+      if (await isDir(path)) found.push({ name: tr(lang, `station.drive.place.${name}`), path, unreadable: await this.#unreadable(path) });
     }
     // Disks: those the machine has (macOS's own, in /Volumes a link to /, left out).
     for (const { name, path } of await platform.disks(home)) {
       if (!(await isDir(path)) || (await real(path)) === "/" || (await this.isProtected(path, await real(path), protect))) continue;
-      found.push({ name, path, unreadable: this.#unreadable(path), disk: true });
+      found.push({ name, path, unreadable: await this.#unreadable(path), disk: true });
     }
     return found;
   }

@@ -1,4 +1,4 @@
-// Going somewhere on the files' page (ember web/src/pages/FilesGo.tsx, FilesGo.css.ts): another station from a
+// Going somewhere on the files' page: another station from a
 // folder's trail (the station's button at its start: the same folder there when it has one, else its home; ⌥ in a new
 // tab), and a folder by its path (⌘⇧G, as Finder's 前往文件夹): `mba:~/Projects` names the station before the colon, `~`
 // its home, a path without a slash in front is under the folder shown; Tab completes a folder's name, as a terminal
@@ -29,6 +29,9 @@ priv struct Go {
   switching : @signals.Signal[Int]
   /// its dialog as presented (@sf.last_presented; 0 none)
   mut shown : Int
+  /// how many times ↓ ↑ moved what is chosen (its action's), and as of which the chosen row was last brought into view
+  keyed : @signals.Signal[Int]
+  mut keyed_shown : Int
 }
 
 ///|
@@ -44,6 +47,8 @@ let go : Go = {
   asked: @signals.signal("", same=fn(a, b) { a == b }),
   switching: @signals.signal(0, same=fn(a, b) { a == b }),
   shown: 0,
+  keyed: @signals.signal(0, same=fn(a, b) { a == b }),
+  keyed_shown: 0,
 }
 
 ///|
@@ -58,6 +63,8 @@ fn go_reset() -> Unit {
   go.asked.set("")
   go.switching.set(0)
   go.shown = 0
+  go.keyed.set(0)
+  go.keyed_shown = 0
 }
 
 ///|
@@ -246,26 +253,35 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
       _ => ()
     }
   }
-  // ↓ ↑ move what is chosen, Tab completes it (read in the dialog: its keys while it is open)
-  let mut keyed = false
-  if c.key_pressed(@ui.key_code_down, in_field=true) && go.at.get() < rows.length() - 1 {
-    go.at.set(go.at.get() + 1)
-    keyed = true
-  }
-  if c.key_pressed(@ui.key_code_up, in_field=true) && go.at.get() > 0 {
-    go.at.set(go.at.get() - 1)
-    keyed = true
-  }
-  if c.key_pressed(@ui.key_tab, in_field=true) {
-    match rows.get(go.at.get()) {
-      Some((_, complete, _)) => {
-        go.field.set(complete)
-        go.typed.set(complete)
-        go.at.set(0)
-      }
-      None => ()
+  // ↓ ↑ move what is chosen, Tab completes it: the dialog's field's keys, each as it comes, before the field sees it
+  // (Ctx::on_key); what is chosen moved by them brought into view as it is built after
+  c.on_key(c.id("files-goto/field"), fn(code, mods) {
+    if mods != 0 {
+      return false
     }
-  }
+    if code == @ui.key_code_down || code == @ui.key_code_up {
+      let at = go.at.get() + (if code == @ui.key_code_down { 1 } else { -1 })
+      if at >= 0 && at < rows.length() {
+        go.at.set(at)
+        go.keyed.set(go.keyed.get() + 1)
+      }
+      true
+    } else if code == @ui.key_tab {
+      match rows.get(go.at.get()) {
+        Some((_, complete, _)) => {
+          go.field.set(complete)
+          go.typed.set(complete)
+          go.at.set(0)
+        }
+        None => ()
+      }
+      true
+    } else {
+      false
+    }
+  })
+  let keyed = go.keyed.get() != go.keyed_shown
+  go.keyed_shown = go.keyed.get()
   c.box(style=go_field_box, fn() {
     let res = c.editor(
       "files-goto/field",
@@ -279,6 +295,13 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
       caret_color=t.p.accent,
       enter_sends=true,
       field=go.field,
+      // Enter: gone to, as it is pressed (where it was found already, at once; else once the core finds it)
+      on_submit=fn(words) {
+        match go.resolved.get() {
+          Some((was, r)) if was == words => enter(r)
+          _ => go_resolve(src, ws, words, here, enter)
+        }
+      },
     )
     // (a dialog's only field: it has the keys while it is open, a composer's given up as it opens)
     if !res.focused {
@@ -287,14 +310,6 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
     if res.text != go.typed.get() {
       go.typed.set(res.text)
       go.at.set(0)
-    }
-    match res.submitted {
-      Some(words) =>
-        match go.resolved.get() {
-          Some((was, r)) if was == words => enter(r)
-          _ => c.tell("files-goto/enter", fn() { go_resolve(src, ws, words, here, enter) })
-        }
-      None => ()
     }
   })
   |> ignore
@@ -307,9 +322,9 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
       for i, r in rows {
         let (label, _, target) = r
         let id = c.id("files-goto/row/" + label)
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           open(target)
-        }
+        })
         if c.lit(id) {
           go.at.set(i)
         }
@@ -376,7 +391,7 @@ fn station_switch(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit
       _ => ()
     }
   }
-  if c.clicked(chip) {
+  c.on_press(chip, fn() {
     front_it()
     // the stations with a drive (this machine, the one shown, one away said beside each), the one shown chosen: the
     // library's pick under it
@@ -398,7 +413,7 @@ fn station_switch(c : @ui.Ctx, src : Source, f : FolderOf, front_it : () -> Unit
     })
     @sf.pick(@sf.t("web-pages.files.switchNote"), choices, at.station, picked, from=Of(chip))
     go.switching.set(@sf.last_presented())
-  }
+  })
   let b = c.box(style=switch_button, id=chip, fn() {
     @sf.station_icon(c, f.st.emoji, f.st.icon, switch_icon, t.p.muted, here=f.st.station == here)
     c.text(f.st.name, style=switch_words) |> ignore

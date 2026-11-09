@@ -1,4 +1,4 @@
-// The mesh's spans (station telemetry.rs's tests).
+// The mesh's spans.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Traces, parseParent, route } from "../src/mesh/traces.ts";

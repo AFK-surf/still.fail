@@ -1,4 +1,4 @@
-// A connect's Slack app (chat/slack_apps.rs and chat/slack_apps/tests.rs, ported): manifests and their permission
+// A connect's Slack app (ported): manifests and their permission
 // groups, the create-app link, and Slack's app API with a person's configuration tokens against a stand-in for Slack.
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -14,6 +14,7 @@ import {
   slackManifest,
   upsertToken,
   withSocketMode,
+  upgraded,
   withStopEvent,
 } from "../src/slack/apps.ts";
 import { SlackApiError, SlackClient } from "../src/slack/web.ts";
@@ -29,6 +30,7 @@ test("a new app has every permission group on", () => {
   assert.equal(Object.keys(settings.groups).length, SLACK_GROUPS.length);
   assert.ok(Object.values(settings.groups).every((on) => on));
   assert.ok(manifest.settings.event_subscriptions.bot_events.includes("agent_session_stopped"));
+  assert.ok(manifest.features.agent_view.agent_description);
   const old = structuredClone(manifest);
   old.settings.event_subscriptions.bot_events = old.settings.event_subscriptions.bot_events.filter((e: string) => e !== "agent_session_stopped");
   assert.ok(applySettings(old, {}).settings.event_subscriptions.bot_events.includes("agent_session_stopped"), "an existing app gets it when saved");
@@ -55,16 +57,53 @@ test("the base group cannot be turned off", () => {
   assert.equal(settingsOf(applySettings(slackManifest("ember"), { groups: { base: false } })).groups.base, true);
 });
 
-test("the stop subscription changes only the connected app's event list", () => {
+test("an existing plain bot gets the agent feature and stop subscription without losing its settings", () => {
   const old = slackManifest("ember");
+  delete old.features.agent_view;
   old.settings.event_subscriptions.bot_events = ["app_mention", "an_unknown_event"];
   const next = withStopEvent(old);
   assert.ok(next);
   assert.deepEqual(next.settings.event_subscriptions.bot_events, ["app_mention", "an_unknown_event", "agent_session_stopped"]);
   assert.deepEqual(next.oauth_config, old.oauth_config);
+  assert.deepEqual(next.features.agent_view, { agent_description: old.display_information.description });
+  assert.equal(old.features.agent_view, undefined);
   assert.deepEqual(old.settings.event_subscriptions.bot_events, ["app_mention", "an_unknown_event"]);
   assert.equal(withStopEvent(next), null);
   assert.equal(withStopEvent(withSocketMode(old, false)), null);
+});
+
+test("an already subscribed plain bot still gets an agent view; an existing assistant view is kept", () => {
+  const old = slackManifest("ember");
+  delete old.features.agent_view;
+  const next = withStopEvent(old);
+  assert.ok(next?.features.agent_view);
+  assert.deepEqual(next.settings.event_subscriptions, old.settings.event_subscriptions);
+  old.features.assistant_view = { assistant_description: "Existing assistant" };
+  assert.equal(withStopEvent(old), null);
+  old.settings.event_subscriptions.bot_events = ["app_mention"];
+  const assistant = withStopEvent(old);
+  assert.deepEqual(assistant.features.assistant_view, old.features.assistant_view);
+  assert.equal(assistant.features.agent_view, undefined);
+});
+
+test("/sf is in the manifest while the bot may take slash commands; other commands are kept", () => {
+  const sf = (m: any) => (m.features.slash_commands ?? []).filter((c: any) => c.command === "/sf").length;
+  const made = slackManifest("ember");
+  assert.equal(sf(made), 1);
+  // An app from before /sf gets it as it is brought up to date, beside a command of its own; once there, nothing to do.
+  const old = structuredClone(made);
+  old.features.slash_commands = [{ command: "/mine", description: "mine" }];
+  const next = upgraded(old);
+  assert.deepEqual(next.features.slash_commands.map((c: any) => c.command), ["/mine", "/sf"]);
+  assert.equal(upgraded(next), null);
+  // An app whose bot lacks the `commands` scope (made before it joined the base group): no command until a save puts
+  // the scope back (Slack refuses a command without it).
+  const bare = structuredClone(made);
+  bare.oauth_config.scopes.bot = bare.oauth_config.scopes.bot.filter((s: string) => s !== "commands");
+  delete bare.features.slash_commands;
+  assert.equal(upgraded(bare), null);
+  assert.equal(sf(applySettings(bare, { groups: { more: false } })), 1);
+  assert.equal(sf(withSocketMode(made, false)), 0, "nothing comes without Socket Mode");
 });
 
 test("automatic and manual edits of the same app keep both changes", async () => {

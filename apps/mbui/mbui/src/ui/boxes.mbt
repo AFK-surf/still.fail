@@ -149,3 +149,11 @@ pub fn Tester::boxes(self : Tester) -> Array[Laid] {
   }
   out
 }
+
+///|
+/// The boxes of the frame just drawn (Tester::boxes) with the window's tree's nodes among them, each old view's held
+/// by the tree's node it is drawn in, as the corner rule takes them (Ctx::with_tree_nodes): a panel the tree draws
+/// round what an old view in it draws.
+pub fn Tester::boxes_held(self : Tester) -> Array[Laid] {
+  g().with_tree_nodes(fn() { self.boxes() })
+}

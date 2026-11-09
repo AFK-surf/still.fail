@@ -1,7 +1,8 @@
-// A station's screen over the fixture (APP=sffix MBUI_FIXTURE=screen-…; ember apps/android ScreenViewerTest's shots,
+// A station's screen over the fixture (APP=sffix MBUI_FIXTURE=screen-…; still.fail apps/android ScreenViewerTest's shots,
 // the same states said the same way): the screen's view opened over the chats, its states and frames (a JPEG of a
 // browser's tab: screen_fixture_frame.mbt) as the core would say them, each mode one of the Android test's pictures.
 //
+//   chat-screen-tab                     live, the only tab of a chat's side panel
 //   screen-audio                        live with system audio available (no sound emitted by the fixture)
 //   screen-connecting                   nothing said yet
 //   screen-live, -live-dark             live, driven, 李雷 also on it (the landscape one: the same, its window sideways)
@@ -21,12 +22,29 @@
 //   screen-files-going, -done (-dark)   two files sent to its machine: going (the first under a free name), then there
 //   screen-center, -stats (-dark)       driving a Windows desktop that changes its scale: 控制中心 open; the view's
 //                                       figures open
+//   screen-simulator, -center, -logs,   driving an iOS Simulator: its page, what debugs an app beside the picture; 控制中心
+//     -apps, -device (-dark)            open; its 日志 open; its 重启 App open; 设备 showing
 //   screen-login-fill, -pick (-dark)    driving a tab whose focus is in github.com's password field: 用 1Password
 //                                       填入 offered; pressed, its two logins there to pick from
 
 ///|
 /// The fixture's screen mode ("" none), its dark taken off.
 let screen_fix_mode : Ref[String] = Ref("")
+
+///|
+/// What the fixture's core says of its screen's view to, as it streams it (screen_fixture_stream): none before.
+let screen_fix_heard : Ref[((Json, Bytes?) -> Unit)?] = Ref(None)
+
+///|
+/// The fixture's live screen said again with `others` also on it (its state alone changed, as the core says a change of
+/// it): nothing where nothing streams.
+pub fn screen_fix_others(others : Array[String]) -> Unit {
+  match screen_fix_heard.val {
+    Some(said) =>
+      said({ "state": screen_fix_state("live", true, true, others, "", None, None, None, None, None, None) }, None)
+    None => ()
+  }
+}
 
 ///|
 /// The fixture's screen, as Android's test has it.
@@ -36,6 +54,11 @@ let screen_fix_at : ScreenAt = { station: "ws-1/st-1", screen: "browser:tab-1", 
 ///|
 /// MBUI_FIXTURE=screen-…: the screen's viewer over the chats.
 pub fn open_screen_fixture(mode : String) -> Unit {
+  // (a chat's side panel showing it, as fixture_tabs_shown keeps it)
+  if mode == "chat-screen-tab" {
+    screen_fix_mode.val = "screen-live"
+    return
+  }
   if !mode.has_prefix("screen-") {
     return
   }
@@ -56,13 +79,20 @@ pub fn open_screen_fixture(mode : String) -> Unit {
         u.held.mods = mod_meta
       }
     }
-    "screen-full" => u.full = true
+    "screen-full" => u.full.set(true)
     "screen-full-tools" => {
-      u.full = true
+      u.full.set(true)
       u.tools_open = true
     }
     "screen-center" => u.asked_panel = "center"
     "screen-stats" => u.asked_panel = "net"
+    "screen-simulator-center" => u.asked_panel = "center"
+    "screen-simulator-logs" => u.asked_panel = "logs"
+    "screen-simulator-apps" => u.asked_panel = "apps"
+    "screen-simulator-device" => {
+      u.logs.tab.set(1)
+      u.asked_panel = "logs"
+    }
     _ => ()
   }
 }
@@ -76,6 +106,7 @@ pub fn screen_fixture_stream(
   done : (Result[Json, Json]) -> Unit,
 ) -> Int {
   ignore(params)
+  screen_fix_heard.val = Some(on_value)
   let m = screen_fix_mode.val
   let agent = "Agent「修登录」"
   let drop : Json = { "folder": "/Users/alice/Downloads", "reveal": true }
@@ -223,6 +254,30 @@ pub fn screen_fixture_stream(
       st["video"] = { "capture": "Windows.Graphics.Capture", "encoder": "NVENC", "hardware": true }
       on_value({ "state": Json::object(st) }, None)
     }
+    "screen-simulator" | "screen-simulator-center" | "screen-simulator-logs" | "screen-simulator-apps" | "screen-simulator-device" => {
+      live(true, true, [], None, None, None, None, None, None)
+      let st = match screen_fix_state("live", true, true, [], "", None, None, None, None, None, None) {
+        Object(m) => m.copy()
+        _ => {}
+      }
+      st["title"] = Json::string("iPhone Duo · iOS 27.1")
+      st["kind"] = Json::string("simulator")
+      st["debug"] = Json::boolean(true)
+      st["poses"] = Json::boolean(true)
+      st["panels"] = Json::array([
+        {
+          "width": Json::number(466.0),
+          "height": Json::number(678.0),
+          "corners": Json::array([Json::number(0.022), Json::number(0.1622), Json::number(0.1622), Json::number(0.022)]),
+        },
+        {
+          "width": Json::number(1252.0),
+          "height": Json::number(1780.0),
+          "corners": Json::array([Json::number(0.1024), Json::number(0.1024), Json::number(0.1024), Json::number(0.1024)]),
+        },
+      ])
+      on_value({ "state": Json::object(st) }, None)
+    }
     "screen-login-fill" | "screen-login-pick" => {
       live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
       let st = match screen_fix_state("live", true, true, [], "", None, None, None, None, Some(["text", "png"]), Some(drop)) {
@@ -320,24 +375,28 @@ fn screen_fix_drops(done : Bool) -> Unit {
     serial: 1,
     folder: "/Users/alice/Downloads",
     reveal: true,
+    install: false,
     bytes: report,
     name: @signals.signal("季度报告 (1).pdf"),
     tried: @sf.LiveArray::from(["季度报告.pdf"]),
     sent: @signals.signal(if done { report.length() } else { 256 * 1024 }),
     state: if done { @signals.signal("done") } else { @signals.signal("going") },
     error: "",
+    installed: "",
     id: @signals.signal(""),
   })
   s.drops.push({
     serial: 2,
     folder: "/Users/alice/Downloads",
     reveal: true,
+    install: false,
     bytes: notes,
     name: @signals.signal("notes.txt"),
     tried: @sf.LiveArray::from([]),
     sent: if done { @signals.signal(notes.length()) } else { @signals.signal(0) },
     state: if done { @signals.signal("done") } else { @signals.signal("waiting") },
     error: "",
+    installed: "",
     id: @signals.signal(""),
   })
   s.drops_serial = 2
@@ -359,11 +418,11 @@ fn screen_fix_one_password() -> Unit {
     if args.length() >= 2 && args[0] == "item" && args[1] == "list" {
       (
         0,
-        "[{\"id\":\"gh1\",\"title\":\"GitHub\",\"additional_information\":\"zzj\",\"urls\":[{\"href\":\"https://github.com/login\"}]},{\"id\":\"gh2\",\"title\":\"GitHub 工作\",\"additional_information\":\"zzj-work\",\"urls\":[{\"href\":\"github.com\"}]},{\"id\":\"gl\",\"title\":\"GitLab\",\"urls\":[{\"href\":\"https://gitlab.com\"}]}]",
+        "[{\"id\":\"gh1\",\"title\":\"GitHub\",\"additional_information\":\"demo-user\",\"urls\":[{\"href\":\"https://github.com/login\"}]},{\"id\":\"gh2\",\"title\":\"GitHub 工作\",\"additional_information\":\"demo-work\",\"urls\":[{\"href\":\"github.com\"}]},{\"id\":\"gl\",\"title\":\"GitLab\",\"urls\":[{\"href\":\"https://gitlab.com\"}]}]",
         "",
       )
     } else if args.length() >= 3 && args[0] == "item" && args[1] == "get" {
-      let who = if args[2] == "gh1" { "zzj" } else { "zzj-work" }
+      let who = if args[2] == "gh1" { "demo-user" } else { "demo-work" }
       (0, "[{\"id\":\"username\",\"label\":\"username\",\"value\":\"\{who}\"},{\"id\":\"password\",\"label\":\"password\",\"purpose\":\"PASSWORD\",\"value\":\"pw-\{who}\"}]", "")
     } else {
       (1, "", "unknown command")

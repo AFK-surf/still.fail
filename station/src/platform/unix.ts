@@ -1,15 +1,15 @@
 // macOS and Linux (and another Unix as Linux): process groups and signals, /bin/sh, `/` paths, links. What the two
 // differ in (how the machine reads: sysctl and vm_stat, or /proc; the keychain and QuickLook) is said here too.
 import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
-import { cpus as cpuList, release, type as osType } from "node:os";
+import { chmodSync, existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { release, type as osType, userInfo } from "node:os";
 import { basename, delimiter, join } from "node:path";
-import { readdir } from "node:fs/promises";
+import { copyFile, readdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
-import { holder } from "./processes.ts";
-import { fieldOrNull, firstWord, idleOfIoreg, output, parseF64, parseLsof, parsePs, parseTopMem, parseU64, pressureOfAvailable, pressureOfLevel, procStatTicks, trim } from "./text.ts";
+import { holder, osCpuTicks } from "./processes.ts";
+import { fieldOrNull, firstWord, idleOfIoreg, output, parseF64, parseLsof, parseMounts, parsePs, parseTopMem, parseU64, pressureOfAvailable, pressureOfLevel, procStatTicks, trim } from "./text.ts";
 
 const MACOS = process.platform === "darwin";
 /// Names in the order people read them (numbers by value, case aside), as the drive sorts them.
@@ -75,16 +75,7 @@ const host: Host = {
   /// On macOS the CPUs' user, system, idle and nice time (os.cpus, from the same counters as Mach's
   /// HOST_CPU_LOAD_INFO, in ms rather than ticks: the share is the same); elsewhere /proc/stat.
   cpuTicks() {
-    if (MACOS) {
-      const all = cpuList();
-      if (all.length === 0) return null;
-      let [busy, total] = [0, 0];
-      for (const { times: t } of all) {
-        busy += t.user + t.sys + t.nice;
-        total += t.user + t.sys + t.idle + t.nice;
-      }
-      return [busy, total];
-    }
+    if (MACOS) return osCpuTicks();
     try {
       return procStatTicks(readFileSync("/proc/stat", "utf8"));
     } catch {
@@ -269,6 +260,28 @@ function procListening(pids: number[], port: number): string[] | null {
 /// std::env::consts::OS for the Unixes Node names otherwise.
 const OS: Record<string, string> = { darwin: "macos", linux: "linux", freebsd: "freebsd", openbsd: "openbsd" };
 
+/// macOS's mounts as last read (platform `mounts`), and when; read again in the background once this old.
+let mounted: { at: number; points: string[] } | null = null;
+let mounting = false;
+const MOUNTS_FRESH_MS = 2_000;
+function mounts(): string[] {
+  if (!MACOS) return [];
+  if (mounted === null) {
+    let out = "";
+    try {
+      out = execFileSync("/sbin/mount", { encoding: "utf8" });
+    } catch {}
+    mounted = { at: wall.now(), points: parseMounts(out) };
+  } else if (!mounting && wall.now() - mounted.at > MOUNTS_FRESH_MS) {
+    mounting = true;
+    execFile("/sbin/mount", { encoding: "utf8" }, (error, out) => {
+      mounting = false;
+      mounted = { at: wall.now(), points: error ? mounted!.points : parseMounts(out) };
+    });
+  }
+  return mounted.points;
+}
+
 export const unix: Platform = {
   os: OS[process.platform] ?? process.platform,
   buildOs: process.platform === "darwin" || process.platform === "linux" ? process.platform : null,
@@ -294,6 +307,16 @@ export const unix: Platform = {
       if (executable(onPath)) return { onPath, real: real(onPath) ?? onPath };
     }
     return null;
+  },
+  userShell(env) {
+    if (env.SHELL) return env.SHELL;
+    try {
+      const user = userInfo();
+      // A caller with another HOME (a test or another account) did not supply this user's shell.
+      return !env.HOME || env.HOME === user.homedir ? user.shell : null;
+    } catch {
+      return null;
+    }
   },
   runnable: (command, args) => ({ file: command, args }),
   posixShell: () => "/bin/sh",
@@ -419,6 +442,7 @@ export const unix: Platform = {
     }
     return found;
   },
+  mounts,
   linkRefused: () => false,
   syncsDirectories: true,
   shareFile(target, link) {
@@ -440,7 +464,7 @@ export const unix: Platform = {
   isLauncher(pid) {
     try {
       const command = execFileSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-      return command.includes("stillfail-station") || command.includes("ember-station");
+      return command.includes("stillfail-station");
     } catch {
       return false;
     }
@@ -458,13 +482,13 @@ export const unix: Platform = {
   /// In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a handover
   /// (this process is let go) and a restart (the service's processes are stopped).
   installerExt: "sh",
-  startInstaller(script, runDir, env) {
-    // A copy: the installer replaces the release it is in.
+  async startInstaller(script, runDir, env) {
+    // A copy: the installer replaces the release it is in. Off the station's thread so file I/O does not hold it up.
     const copy = join(runDir, "install.sh");
     try {
-      copyFileSync(script, copy);
+      await copyFile(script, copy);
     } catch {
-      return Promise.resolve(false);
+      return false;
     }
     const shell = `( sh "$1"; echo $? > "$2/update.exit" ) > "$2/update.log" 2>&1 < /dev/null &`;
     return new Promise<boolean>((resolve) => {
@@ -543,7 +567,12 @@ export const unix: Platform = {
   },
   async memoryPressure() {
     try {
-      if (MACOS) return pressureOfLevel((await run("sysctl", ["-n", "kern.memorystatus_vm_pressure_level"])).stdout);
+      if (MACOS) {
+        const level = (await run("sysctl", ["-n", "kern.memorystatus_vm_pressure_level"])).stdout;
+        if (trim(level) !== "2") return pressureOfLevel(level);
+        const mem = host.memory();
+        return mem.known === false ? pressureOfLevel(level) : pressureOfLevel(level, mem.totalBytes - mem.usedBytes, mem.totalBytes);
+      }
       const info = readFileSync("/proc/meminfo", "utf8");
       return pressureOfAvailable(fieldOrNull(info, "MemAvailable"), fieldOrNull(info, "MemTotal"));
     } catch {
@@ -632,5 +661,5 @@ export const unix: Platform = {
   hasFolderPermissions: MACOS,
   hasSpotlight: MACOS,
   hasUnixSockets: true,
-  desktopScreen: MACOS ? "helper" : null,
+  desktopScreen: MACOS ? "helper" : process.platform === "linux" ? "x11" : null,
 };

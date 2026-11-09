@@ -12,19 +12,19 @@ runs:
     - uses: actions/cache/restore@v4
       id: newest
       with:
-        # (in the runner's own tool cache: two runners on one machine (Mini1's) shared ~/.moon-ci, and one's restore wrote
+        # (in the runner's own tool cache: two runners on one machine (macos-ci's) shared ~/.moon-ci, and one's restore wrote
         # over the MoonBit the other's tests were running with: moon test said nothing, run 39532570138. A self-hosted
         # runner's put in and taken out at moon-ci-put, in its workspace, then moved there: an entry is found only by the
-        # path it was saved at, as written, and each of Mini1's runners has a tool cache of its own, so only the one the
+        # path it was saved at, as written, and each of macos-ci's runners has a tool cache of its own, so only the one the
         # moonbit workflow put it in from ever found it, the others failing at each new release once theirs was gone:
-        # main's web deploy on mini1-2, twice, 2026-10-31, 41173735373)
+        # main's web deploy on macos-ci-2, twice, 2026-10-31, 41173735373)
         path: ${{ runner.environment == 'self-hosted' && 'moon-ci-put' || format('{0}/moon-ci', runner.tool_cache) }}
         # (no key is this one: the newest of this prefix, the latest release the moonbit workflow put in)
         key: moonbit-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-none
         restore-keys: moonbit-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-
         lookup-only: true
     # A self-hosted runner's tool cache stays from one job to the next: the release restored there before (its key in
-    # moon-ci.key beside it) is not downloaded again. Mini1's mbui jobs each took the same ~104 MB from the Actions
+    # moon-ci.key beside it) is not downloaded again. macos-ci's mbui jobs each took the same ~104 MB from the Actions
     # cache through the proxy its DNS sends GitHub to, ~13 GB a day (2026-10-23). GitHub's runners start with none.
     - id: kept
       shell: bash
@@ -80,6 +80,8 @@ runs:
       run: |
         [ -d apps/mbui/mbui/tools ] || exit 0
         for t in mbc chk detlint apk; do echo "$t=$(sh apps/mbui/mbui/scripts/$t key)" >> "$GITHUB_OUTPUT"; done
+        # (the app's: scripts/testexe, a test program's runs for scripts/test.sh)
+        [ ! -f apps/mbui/scripts/testexe ] || echo "testexe=$(bash apps/mbui/scripts/testexe key)" >> "$GITHUB_OUTPUT"
     - if: steps.tools.outputs.mbc != ''
       uses: actions/cache@v4
       with:
@@ -87,6 +89,13 @@ runs:
           apps/mbui/mbui/tools/_build/native/release/build/mbc/mbc.exe
           apps/mbui/mbui/tools/_build/native/release/build/mbc/mbc.exe.src
         key: mbui-tool-mbc-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.mbc }}
+    - if: steps.tools.outputs.testexe != ''
+      uses: actions/cache@v4
+      with:
+        path: |
+          apps/mbui/tools/_build/native/release/build/sftools/testexe/testexe.exe
+          apps/mbui/tools/_build/native/release/build/sftools/testexe/testexe.exe.src
+        key: mbui-tool-testexe-${{ runner.os }}-${{ runner.arch }}-${{ steps.tools.outputs.testexe }}
     - if: steps.tools.outputs.chk != ''
       uses: actions/cache@v4
       with:

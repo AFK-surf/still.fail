@@ -67,8 +67,8 @@ const MODELS = ["swe-2", "claude-opus-5-5", "kimi-k2-6", "glm-5-2"];
 const EFFORTS = { "swe-2": ["medium", "high", "max"], "claude-opus-5-5": ["low", "medium"], "glm-5-2": ["max"] };
 
 let n = 0;
-/// A Devin account signed in (its key in the profile's devin/data, as `devin auth login` leaves it), with the station's
-/// shared memory and skills in the home.
+/// A Devin account signed in (its key in the profile's devin/data, as `devin auth login` leaves it), with a workspace's
+/// skills.
 function options(extra: Partial<OpenOptions> = {}, signedIn = true): OpenOptions & { dump: string } {
   const i = ++n;
   const home = join(data, `h${i}`);
@@ -77,8 +77,9 @@ function options(extra: Partial<OpenOptions> = {}, signedIn = true): OpenOptions
     mkdirSync(join(devinData(home), "devin"), { recursive: true });
     writeFileSync(join(devinData(home), "devin", "credentials.toml"), `windsurf_api_key = "devin-k${i}"\napi_server_url = "https://server.codeium.com"\n`);
   }
-  writeFileSync(join(home, "AGENTS.md"), "# still.fail memory\n");
-  mkdirSync(join(home, "skills", "s1"), { recursive: true });
+  // A workspace's skills (not the profile home's: agent-home.ts).
+  const skills = join(data, `skills${i}`);
+  mkdirSync(join(skills, "s1"), { recursive: true });
   const dump = join(data, `dump${i}`);
   return {
     key: `slack:T1:C${i}:1700000000.000${i}`,
@@ -87,6 +88,7 @@ function options(extra: Partial<OpenOptions> = {}, signedIn = true): OpenOptions
     model: "swe-2",
     effort: "high",
     instructions: "be brief",
+    skills,
     mcpToken: "tok",
     mcpUrl: "http://127.0.0.1:4750/mcp",
     route: `route${i}`,
@@ -163,8 +165,8 @@ describe("the Devin driver", { concurrency: true }, () => {
     const [rules] = sent[2].params.additionalDirectories;
     assert.deepEqual(sent[2].params.additionalDirectories, [rules]);
     assert.match(readFileSync(join(rules, ".devin", "rules", "stillfail.md"), "utf8"), /^---\ndescription: still\.fail station\ntrigger: always_on\n---\nbe brief\n\n.*mcp__stillfail__chat_post.*\n$/s);
-    assert.equal(readFileSync(join(rules, "AGENTS.md"), "utf8"), "# still.fail memory\n", "the shared memory linked in");
-    assert.ok(existsSync(join(rules, ".devin", "skills", "s1")), "the shared skills linked in");
+    assert.ok(!existsSync(join(rules, "AGENTS.md")), "no memory but the one with the instructions");
+    assert.ok(existsSync(join(rules, ".devin", "skills", "s1")), "the workspace's skills linked in");
     assert.deepEqual(sent[3].params, { sessionId: session.id(), configId: "mode", value: "bypass" });
     assert.deepEqual(sent[4].params, { sessionId: session.id(), prompt: [{ type: "text", text: "work" }] });
     assert.ok(said(o.dump).some((m) => m.id === sent[3].id && m.result !== undefined), "bypass taken");

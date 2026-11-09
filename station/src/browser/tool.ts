@@ -11,7 +11,7 @@ import type { Tool } from "../tools/mcp.ts";
 export const BROWSER = {
   name: "browser",
   description:
-    "This chat's own browser: a real Google Chrome with a profile of this chat's, so sign-ins made in it stay for this chat (no other chat sees them; they go when the chat is archived). action endpoint (default) starts it if needed and gives its DevTools endpoint and how to connect (chrome-devtools-mcp --wsEndpoint, Playwright connectOverCDP); tabs lists its tabs; status says whether it runs; stop closes it (its sign-ins stay). Use it for web work that needs a login or should look like a person's browser; when a page needs a person (sign-in, captcha, 2FA), give them the tab with the `screen` tool.",
+    "This chat's own browser: a real Google Chrome with a profile of this chat's, so sign-ins made in it stay for this chat (no other chat sees them; they go when the chat is archived). action endpoint (default) starts it if needed and gives its DevTools endpoint and how to connect (chrome-devtools-mcp --wsEndpoint, Playwright connectOverCDP); tabs lists its tabs; status says whether it runs; stop closes it (its sign-ins stay). Use it for web work that needs a login or should look like a person's browser. To be signed in to a site, open its sign-in page here and call `sign_in` (it asks for the vault's sign-in, or has the person sign in from a card); when a page needs a person for anything else (a captcha, a consent), give them the tab with the `screen` tool.",
   inputSchema: {
     type: "object",
     properties: {
@@ -41,7 +41,8 @@ export function howTo(s: BrowserStatus, ws: string | null): string {
     "",
     "It is this chat's alone: its sign-ins are the ones made in it (none of another chat's). Close the tabs you are done with.",
     "Never launch another Chrome for work that needs a login: this one keeps them.",
-    "When a page needs a person (sign-in, captcha, 2FA, a consent), give them that tab with the `screen` tool (a link to see and drive it from their app), ask in the chat (need_human), and end your turn; carry on when they say it is done.",
+    "To be signed in to a site, open its sign-in page here and call `sign_in {site, reason}`: it asks for the sign-in the vault keeps, or has the person sign in from a card with their own password manager. Never ask for a password in the chat.",
+    "When a page needs a person for anything else (a captcha, a consent), give them that tab with the `screen` tool (a link to see and drive it from their app), ask in the chat (need_human), and end your turn; carry on when they say it is done.",
     ws !== null
       ? "If the connection drops (the browser was restarted or closed after a long idle, the station restarted), connect again to the same address: it starts the browser if needed."
       : "If the connection drops (the browser was restarted or closed after a long idle), call browser again: the address usually stays the same.",

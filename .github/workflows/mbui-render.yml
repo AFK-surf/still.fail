@@ -1,7 +1,7 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
-# The renderer's pixels (docs/determinism.md, "Pixel references belong to one machine"): a Tester's draw list drawn
-# offscreen on Mini1 (mbui's runner there, label mbui-render), against its reference (goldens/render/mini1-*.png) to
-# the byte, on the macOS and GPU the references were made on (goldens/render/mini1.txt). The pictures drawn are the
+# The renderer's pixels ("Pixel references belong to one machine"): a Tester's draw list drawn
+# offscreen on macos-ci (mbui's runner there, label mbui-render), against its reference (goldens/render/macos-ci-*.png) to
+# the byte, on the macOS and GPU the references were made on (goldens/render/macos-ci.txt). The pictures drawn are the
 # artifact: what a PR that changes them commits, saying which and why.
 name: mbui-render
 on:
@@ -18,6 +18,7 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
       - "apps/mbui/mbui/src/ui/smooth.mbt"
       - "apps/mbui/mbui/src/host/corner*"
+      - "apps/mbui/mbui/src/host/contained.h"
       - "apps/mbui/mbui/goldens/render/**"
       - "apps/mbui/mbui/scripts/render_offscreen.sh"
       - ".github/workflows/mbui-render.yml"
@@ -35,6 +36,7 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/dl_print_wbtest.mbt"
       - "apps/mbui/mbui/src/ui/smooth.mbt"
       - "apps/mbui/mbui/src/host/corner*"
+      - "apps/mbui/mbui/src/host/contained.h"
       - "apps/mbui/mbui/goldens/render/**"
   workflow_dispatch:
 
@@ -65,7 +67,7 @@ jobs:
       - name: The macOS and the GPU the references were made on
         run: |
           for k in system gpu; do
-            want=$(sed -n "s/^$k //p" goldens/render/mini1.txt)
+            want=$(sed -n "s/^$k //p" goldens/render/macos-ci.txt)
             have=$(sed -n "s/^$k //p" out/render/machine.txt)
             if [ "$want" != "$have" ]; then
               echo "$k is $have here, the references were made on $want: make them all again in one PR (this run's artifact), saying so"
@@ -74,9 +76,9 @@ jobs:
           done
       - name: Against the references, to the byte
         run: |
-          if cmp -s out/render/controls.png goldens/render/mini1-controls.png; then
+          if cmp -s out/render/controls.png goldens/render/macos-ci-controls.png; then
             echo "the same to the byte"
           else
-            echo "goldens/render/mini1-controls.png: not what Mini1 draws now (this run's artifact has it)"
+            echo "goldens/render/macos-ci-controls.png: not what macos-ci draws now (this run's artifact has it)"
             exit 1
           fi

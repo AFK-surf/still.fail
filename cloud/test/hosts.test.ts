@@ -12,6 +12,10 @@ test("each host serves its own static site, the API and the relay on their paths
     assert.deepEqual(await text(await h.fetch("/")), [200, "<title>still.fail</title>"]);
     assert.deepEqual(await text(await h.fetch("/w/some-workspace/chats")), [200, "<title>still.fail</title>"]);
     assert.deepEqual(await text(await h.fetch("/assets/app.js")), [200, "// the web app"]);
+    // The app's page answers every page but the few the web's own pages have (src/web.ts WEB_PAGES).
+    for (const page of ["/login", "/login?return_to=%2F", "/auth/callback?code=x&state=y", "/slack/installed?code=x", "/w/ws1/s/st1/services/job1"]) assert.deepEqual(await text(await h.fetch(page)), [200, "<title>still.fail · web</title>"], page);
+    // What another app shares in is the app's too (web/src/mbui/share.ts).
+    for (const page of ["/mbui", "/share?text=hi", "/o/ws1/st1/s1", "/w/ws1/s/st1/chats/c1", "/invite", "/auth/callbacks", "/w/ws1/s/st1/services"]) assert.deepEqual(await text(await h.fetch(page)), [200, "<title>still.fail</title>"], page);
     // The app's pages are kept by nothing, its files as their host says (src/web.ts unkept).
     for (const page of ["/", "/w/some-workspace/chats", "/auth/callback?code=x&state=y"]) assert.equal((await h.fetch(page)).headers.get("cache-control"), "no-store", page);
     assert.notEqual((await h.fetch("/assets/app.js")).headers.get("cache-control"), "no-store");
@@ -35,6 +39,60 @@ test("each host serves its own static site, the API and the relay on their paths
     assert.match((await h.fetch("/install.sh")).headers.get("content-type") ?? "", /shellscript/);
     // The static sites take no writes.
     assert.equal((await h.fetch("/", { method: "POST" })).status, 405);
+  } finally {
+    await h.close();
+  }
+});
+
+// src/web.ts `hardened`: the app's answers carry the headers that keep a page from being framed, keep its addresses
+// out of other sites' logs, and stop a browser reading a file as something else.
+test("the app's host answers with what a page there may do; the test channel's too", async () => {
+  const h = await harness();
+  try {
+    const fetch = async (path: string, beta = false) => (beta ? h.fetchBeta(path) : h.fetch(path));
+    for (const [path, beta] of [["/", false], ["/assets/app.js", false], ["/auth/callback?code=x&state=y", false], ["/", true], ["/assets/app.js", true]] as const) {
+      const answer = await fetch(path, beta);
+      const at = `${path}${beta ? " (test channel)" : ""}`;
+      assert.equal(answer.headers.get("referrer-policy"), "no-referrer", at);
+      assert.equal(answer.headers.get("x-content-type-options"), "nosniff", at);
+      const csp = answer.headers.get("content-security-policy") ?? "";
+      for (const said of ["object-src 'none'", "base-uri 'none'", "form-action 'self' https://accounts.google.com", "frame-ancestors 'none'"]) assert.ok(csp.split("; ").includes(said), `${at}: ${said}`);
+    }
+    // A page asked for on an old host is a redirect first: it says where it went, not what a page may do.
+    const old = await h.fetchOld("main", "/w/ws1/chats", { redirect: "manual" });
+    assert.equal(old.status, 302);
+    assert.equal(old.headers.get("location"), `${h.origin}/w/ws1/chats`);
+  } finally {
+    await h.close();
+  }
+});
+
+// src/web.ts `packed` and `built`: the app's script goes as its build brotlied it to a browser that takes brotli, the
+// file as it is to one that does not or where the build made none; a file named by its build is kept for good.
+test("the app's scripts go as their build brotlied them, and what a build names is kept for good", async () => {
+  const h = await harness();
+  try {
+    for (const beta of [false, true]) {
+      const fetch = (path: string, init?: RequestInit) => (beta ? h.fetchBeta(path, init) : h.fetch(path, init));
+      const at = beta ? " (test channel)" : "";
+      const br = await fetch("/mbui/app.js?b=123", { headers: { "accept-encoding": "gzip, br" } });
+      assert.equal(br.status, 200, at);
+      assert.match(br.headers.get("vary") ?? "", /accept-encoding/i, at);
+      // (brotlied once, by the build and not again by the Worker: the client undoes it once and has the file; what the
+      // answer says of its encoding Miniflare keeps to itself, test/web.test.ts reads it)
+      assert.equal(await br.text(), "// the app, as mbui-web built it", at);
+      assert.equal(br.headers.get("cache-control"), "public, max-age=31536000, immutable", at);
+      assert.equal(br.headers.get("x-content-type-options"), "nosniff", at);
+      const plain = await fetch("/mbui/app.js?b=123", { headers: { "accept-encoding": "gzip" } });
+      assert.notEqual(plain.headers.get("content-encoding"), "br", at);
+      assert.equal(await plain.text(), "// the app, as mbui-web built it", at);
+      const host = await fetch("/mbui/host.js?b=123", { headers: { "accept-encoding": "br" } });
+      assert.notEqual(host.headers.get("content-encoding"), "br", `host.js has no .br${at}`);
+      assert.equal(await host.text(), "// mbui's web host", at);
+      // without its build's name it is asked after as before; the page itself is kept by nothing
+      assert.notEqual((await fetch("/mbui/app.js")).headers.get("cache-control"), "public, max-age=31536000, immutable", at);
+      assert.equal((await fetch("/mbui/missing.js?b=123")).headers.get("cache-control"), "no-store", `a missing file is the page${at}`);
+    }
   } finally {
     await h.close();
   }

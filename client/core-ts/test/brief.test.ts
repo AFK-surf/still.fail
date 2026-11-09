@@ -15,6 +15,16 @@ test("work_counts_turns_and_the_time_finished_ones_took", () => {
   assert.equal(workText([turn(0, 50), turn(60 * MIN, 22)]), "2 轮 · 共工作 1 小时 12 分");
 });
 
+test("work_as_its_summary_counts_it_where_its_station_says_so", () => {
+  // Its detail lists its latest turn alone; its summary says how many and how long all of them ran.
+  assert.equal(workText([turn(0, 5)], { turns: 2, workMs: 72 * MIN }), "2 轮 · 共工作 1 小时 12 分");
+  assert.equal(workText([], { turns: 0, workMs: 0 }), null);
+  // One with turns from before its station kept the work: how many alone.
+  assert.equal(workText([], { turns: 3, workMs: null }), "3 轮");
+  // A station from before says no work: what its detail lists, all its turns, added up.
+  assert.equal(workText([turn(0, 5)], { turns: 2 }), "1 轮 · 共工作 5 分钟");
+});
+
 test("jobs_at_work_by_what_they_are", () => {
   const job = (name: string, patch: object = {}) => ({ name, state: "running", port: null, ...patch });
   assert.equal(jobsText([]), null);
@@ -41,6 +51,15 @@ test("the_card_says_what_it_did_cost_and_used", () => {
   assert.equal(c.jobs, "服务在线：web");
   // A quota running out is its account's windows' to say.
   assert.deepEqual(c.attention, [{ text: "磁盘剩 8 GB", level: "amber" }, { text: "「lin」需要重新登录", level: "red" }]);
+  // Kept to less context than its model's window: that is the window it fills.
+  const kept = card({ ...agent, session: { context: 500_000 } }, { usage: { ...live.usage, contextTokens: 450_000, contextWindow: 1_000_000 } });
+  assert.deepEqual(kept.context, { percent: 90, text: "450K / 500K", level: "amber" });
+  // Lowered under what it holds: the most it ran with till now, and said what comes, until it is compacted.
+  const lowered = card({ ...agent, attention: [], session: { context: 300_000, contextBefore: 500_000 } }, { usage: { ...live.usage, contextTokens: 450_000, contextWindow: 1_000_000 } });
+  assert.deepEqual(lowered.context, { percent: 90, text: "450K / 500K", level: "amber" });
+  assert.deepEqual(lowered.attention, [{ text: "本轮结束后压缩到 300K", level: "amber" }]);
+  const whole = card({ ...agent, attention: [], session: { context: 300_000, contextBefore: 0 } }, { usage: { ...live.usage, contextTokens: 627_800, contextWindow: 1_000_000 } });
+  assert.equal(whole.context.text, "627.8K / 1M");
   // Before its first turn and its usage is read: nothing.
   const none = card({ turns: [], attention: [], jobs: [] }, null);
   assert.deepEqual([none.work, none.cost, none.cache, none.context, none.jobs, none.latest, none.attention], [null, undefined, undefined, undefined, null, [], []]);
@@ -149,7 +168,7 @@ test("the_latest_three_things_it_did_oldest_first", () => {
     call("Grep", { pattern: "width" }, { subagent: true }),
     { kind: "tool_result", text: "ok" },
     { kind: "assistant", text: "测试过了。\n\n接着发消息" },
-    call("mcp__stillfail__chat_post", { to: "EMBER/1", text: "改好了\n详情见 PR" }),
+    call("mcp__stillfail__chat_post", { to: "CHAT/1", text: "改好了\n详情见 PR" }),
     call("mcp__stillfail__chat_state", { kind: "all_done", done: "合了" }),
   ];
   const lines = (live: unknown) => recentOf(live).map((r) => `${r.key} ${r.text}`);

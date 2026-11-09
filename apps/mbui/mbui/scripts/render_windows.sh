@@ -38,9 +38,18 @@ case "${1:-run}" in
     "$D/chk" lines $O/lines.png
     MBUI_DL="$(cygpath -w "$PWD/$O/shapes.dl")" MBUI_DL_PNG="$(cygpath -w "$PWD/$O/shapes.png")" ./$EXE
     "$D/chk" shapes $O/shapes.png
+    MBUI_DL="$(cygpath -w "$PWD/$O/contained.dl")" MBUI_DL_PNG="$(cygpath -w "$PWD/$O/contained.png")" ./$EXE
+    "$D/chk" contained $O/contained.png
     MBUI_DL_FROM="$(cygpath -w "$PWD/$O/partial-a.dl")" MBUI_DL="$(cygpath -w "$PWD/$O/partial-b.dl")" \
       MBUI_DL_PNG="$(cygpath -w "$PWD/$O/partial.png")" ./$EXE
     render_partial windows
+    MBUI_DL="$(cygpath -w "$PWD/$O/strips.dl")" MBUI_DL_PNG="$(cygpath -w "$PWD/$O/strips.png")" ./$EXE
+    MBUI_STRIPS=0 MBUI_DL="$(cygpath -w "$PWD/$O/strips.dl")" MBUI_DL_PNG="$(cygpath -w "$PWD/$O/strips.whole.png")" ./$EXE
+    render_strips windows
+    for k in matte-fill matte-fill-reference matte-contain matte-contain-reference matte-inset matte-inset-reference; do
+      MBUI_DL="$(cygpath -w "$PWD/$O/$k.dl")" MBUI_DL_PNG="$(cygpath -w "$PWD/$O/$k.png")" ./$EXE
+    done
+    render_matte windows
     md5sum $O/controls-1.png $O/controls-2.png
     if ! cmp -s $O/controls-1.png $O/controls-2.png; then
       echo "render_windows: the two runs' pictures differ"

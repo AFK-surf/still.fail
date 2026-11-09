@@ -5,20 +5,25 @@ import {
   "mbui/host",
   "mbui/hostapi",
   "mbui/ui",
+  "mbui/view",
+  "mbui/svg",
+  "mbui/font",
   "stillfail/sfcore",
   "stillfail/sfbase",
   "stillfail/sfapp",
   "stillfail/sfpages",
   "stillfail/sf",
-  "stillfail/keyboard",
+  "mbui/wasmrt",
 }
 
 options(
   "is-main": true,
-  targets: { "link_native.mbt": [ "native" ], "link_js.mbt": [ "js" ] },
+  targets: { "link_native.mbt": [ "native" ], "link_js.mbt": [ "js" ], "link_wasm.mbt": [ "wasm" ], "wasm_shell.mbt": [ "wasm" ], "reports_js_wbtest.mbt": [ "js" ] },
   "native-stub": [ "core_engine.m" ],
   link: {
     "js": { "format": "iife" },
+    // (run by mbui's native shell, scripts/wasm-app.sh: what it calls of the program, wasm_shell.mbt)
+    "wasm": { "exports": ["mbw_string", "mbw_bytes"], "export-memory-name": "memory" },
     "native": {
       "stub-cc-flags": "-fobjc-arc -O2",
       "cc-link-flags": "-framework Cocoa -framework Metal -framework QuartzCore -framework CoreText -framework CoreGraphics -framework ImageIO -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit -framework AuthenticationServices -framework SystemConfiguration -framework Security -framework LocalAuthentication -framework CoreFoundation -framework Foundation -liconv out/core/aarch64-apple-darwin/libmbui_core.a out/core/aarch64-apple-darwin/libstillfail_shell.a -Fout/core/hermes/Library/Frameworks/macosx -framework hermes -lc++ -Wl,-rpath,@executable_path/../../../../../../out/core/hermes/Library/Frameworks/macosx -Wl,-rpath,@executable_path/../Frameworks -Wl,-dead_strip",

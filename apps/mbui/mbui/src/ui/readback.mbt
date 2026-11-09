@@ -91,11 +91,48 @@ fn Ctx::left_out_after_layout(self : Ctx) -> Unit {
 }
 
 ///|
+/// Whether some words in box `id` showed cut short as the last frame laid them out: ended in an ellipsis where they had
+/// not the room, said one of their shorter ways, lines left off after their last. For what is said over the box (a
+/// tip saying its words whole, wanted only where they do not show whole), not for what is built by it: not read back.
+pub fn Ctx::shows_cut(self : Ctx, id : Int) -> Bool {
+  self.cut_ids.contains(id)
+}
+
+///|
+/// Once laid out: the boxes words show cut short in (Ctx::shows_cut), the words' own and every box holding them.
+fn Ctx::cut_after_layout(self : Ctx) -> Unit {
+  self.cut_ids.clear()
+  for i in 0..<self.count {
+    let n = self.nodes[i]
+    let cut = if n.kind == kind_text {
+      match (n.tl, n.full) {
+        (Some(shown), Some(whole)) => n.full_cut || !physical_equal(shown, whole)
+        _ => false
+      }
+    } else {
+      n.kind == kind_rich && n.rcut is Some(_)
+    }
+    // (up from the words; a box already said has every box over it said too)
+    let mut p = if cut { i } else { -1 }
+    while p >= 0 {
+      let a = self.nodes[p]
+      if a.id != 0 {
+        if self.cut_ids.contains(a.id) {
+          break
+        }
+        self.cut_ids[a.id] = true
+      }
+      p = a.parent
+    }
+  }
+}
+
+///|
 /// What box `id` shows across, as the last frame laid it out (x of the left of what is leftmost, of the right of what
 /// is rightmost): its innermost parts that show something (words, a field, a picture, a drawing; not an empty box,
 /// whose ground may reach past what is drawn), those of them inside the box, none in a box moved by the name `but`
 /// (Ctx::box `moves`: a page's bar, across it whole). None where it showed nothing, or was not laid out last frame.
-/// The web's measure of a page's content (Rail.tsx peekShift). Not read back: for what is said once from it as a state
+/// The web's measure of a page's content. Not read back: for what is said once from it as a state
 /// changes, not for what is built by it every frame (that reads Ctx::laid_rect). Asked every frame it may be wanted: a
 /// frame that does not ask it lets it go.
 pub fn Ctx::shown_across(self : Ctx, id : Int, but? : String = "") -> (Double, Double)? {
@@ -208,6 +245,19 @@ fn Ctx::reads_after_layout(self : Ctx) -> Unit {
     }
   }
   let moved : Array[String] = []
+  // where what is picked ends as its words are laid out now (Ctx::selection_end), against what the build read; looked
+  // for only where the build read it (finding the window's tree's words lays the tree out as of now: tree_sels)
+  match sel_read.val {
+    Some((v, loc)) => {
+      sel_moved.val = self.selection_moved_now()
+      let now = selection_end_drawn().map(fn(e) { (e.1 + sel_moved.val.0, e.2 + sel_moved.val.1, e.3) })
+      if now != v {
+        moved.push("selection_end, read at \{loc}")
+      }
+      sel_read.val = None
+    }
+    None => ()
+  }
   self.laid_reads.each(fn(id, r) {
     if self.laid_rects.get(id) != r.0 {
       moved.push("laid_rect of box \{id}, read at \{r.1}")
@@ -247,6 +297,9 @@ fn Ctx::reads_after_layout(self : Ctx) -> Unit {
       moved.push("words_shape_of \"\{key}\" (laid out or gone)")
     }
   })
+  // Preserve the converged build's list reads for a possible scroll-only frame. The ordinary readback arrays are
+  // cleared below for the next build, including when the last build read nothing of any list.
+  self.list_fast_reads()
   self.laid_reads.clear()
   self.size_reads.clear()
   self.place_reads.clear()

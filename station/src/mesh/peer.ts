@@ -1,4 +1,4 @@
-// The workspace's stations calling each other (the Rust station's peer.rs): their own ALPN, and the peer's iroh key for
+// The workspace's stations calling each other: their own ALPN, and the peer's iroh key for
 // who it is, not a member's credential. Who belongs is only what still.fail cloud's presence socket said last
 // (`peers`, current while the socket holds): until a fresh roster comes, calls fail closed. One request a stream. On
 // `stillfail/station/2`: a JSON head line `{workspace, request, bytes?}` and, with `bytes: true`, the request's bytes
@@ -9,7 +9,7 @@
 import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import type { Cloud } from "../cloud/state.ts";
-import { BYTES, type Bytes, NoBytes, type PeerBus, type PeerCall, Refused, bytesOf } from "./bus.ts";
+import { BYTES, CHECK_BYTES, type Bytes, NoBytes, type PeerBus, type PeerCall, Refused, bytesOf } from "./bus.ts";
 import type { Addr, Connection, Endpoint, Stream } from "./native.ts";
 import { answerLock } from "./lock-sync.ts";
 import { Reader } from "./serve.ts";
@@ -33,8 +33,19 @@ const SLOW_MS = 10_000;
 export function member(cloud: Cloud, peer: string, workspace: string | null): string {
   if (!cloud.peersCurrent) throw new Error("workspace peer roster is not current; waiting for the control plane");
   const s = cloud.state;
-  const all = cloud.memberships();
-  const of = workspace === null ? (all.find((m) => m.peers.some((p) => p?.id === peer)) ?? all[0]) : cloud.membership(workspace);
+  let of;
+  if (workspace === null) {
+    // Home is first in the roster. A home peer needs no lock or roster checks in unrelated joined workspaces.
+    const home = cloud.home();
+    const first = home === null ? null : cloud.membership(home);
+    if (first !== null && first.peers.some((p) => p?.id === peer)) of = first;
+    else {
+      const all = cloud.memberships();
+      of = all.find((m) => m.peers.some((p) => p?.id === peer)) ?? all[0];
+    }
+  } else {
+    of = cloud.membership(workspace);
+  }
   if (s === null || of === undefined || of === null) throw new Error("station is outside this workspace");
   if (!of.peers.some((p) => p?.id === peer) || peer === s.station) throw new Error("peer is not another station in this workspace");
   return of.workspace;
@@ -101,7 +112,10 @@ class Incoming implements AsyncIterableIterator<Buffer> {
 /// fail on the way (a file that changed while it was read, the other end gone).
 async function sendBytes(stream: Stream, bytes: Bytes): Promise<void> {
   try {
-    for await (const piece of bytes) await within(IDLE_MS, stream.write(piece), "the other station took nothing for 30 s");
+    for await (const piece of bytes) {
+      bytes[CHECK_BYTES]?.();
+      await within(IDLE_MS, stream.write(piece), "the other station took nothing for 30 s");
+    }
     await stream.finish();
   } catch (error) {
     await stream.reset(FAILED).catch(() => {});
@@ -136,8 +150,8 @@ export function peerCall(
   const connections = new Map<string, Connection>();
   // Each request dialed its own while none was open, and one that timed out dropped its connection for the next to
   // dial another, the old one left open with its requests still run: a station following dozens of tasks on a loaded
-  // one dialed dozens at once, again after each timeout, and the loaded one answered all of them (2026-10-21, ccvm to
-  // Studio).
+  // one dialed dozens at once, again after each timeout, and the loaded one answered all of them (2026-10-21, one station to
+  // another).
   const dialing = new Map<string, Promise<Connection>>();
   const connected = (target: string): Promise<Connection> => {
     const open = connections.get(target);
@@ -272,7 +286,7 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
   // Each request answered on its own, as it comes: answered one after another, a slow one (a sync while the station
   // was loaded) held up every other one of the caller's, whose chats all share the connection; each timed out at 30 s,
   // the caller dialed again and its next requests queued behind the same, while those left on the old connection were
-  // still run (2026-10-20, ccvm to Studio for hours after Studio's load came down). Idle only with none being answered.
+  // still run (2026-10-20, between stations for hours after the load came down). Idle only with none being answered.
   // The stream being waited for stays the one waited for past each minute: one asked for again would be lost to it.
   let answering = 0;
   let next: Promise<Stream | null> | null = null;
@@ -332,12 +346,16 @@ export async function servePeer(conn: Connection, cloud: Cloud, remote: Pick<Pee
       outgoing = null;
     }
     // A request this slow has callers giving up at 30 s: said, so who held the station up is found (2026-10-20: nothing
-    // in Studio's log said which of ccvm's requests took it twenty minutes).
+    // in the other station's log said which request took it twenty minutes).
     const ms = Math.round(performance.now() - begun);
     if (ms >= SLOW_MS) {
       const r = asked as { method?: unknown; session?: unknown; key?: unknown } | null;
       log.warn("mesh", "peer request answered slowly", { peer: peer.slice(0, 12), method: String(r?.method ?? ""), session: String(r?.session ?? ""), key: String(r?.key ?? ""), ms });
     }
+    // A guarded answer may have become unauthorized since its handler returned. Do not send its head (including the
+    // body size) either; after the head, sendBytes checks again immediately before each body write.
+    try { outgoing?.[CHECK_BYTES]?.(); }
+    catch (error) { answer = { error: (error as Error).message }; outgoing = null; }
     try {
       await stream.write(Buffer.from(JSON.stringify(answer) + (bytes ? "\n" : "")));
       if (outgoing !== null) await sendBytes(stream, outgoing);

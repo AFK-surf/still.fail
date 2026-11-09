@@ -1,4 +1,4 @@
-// Connections that only trade packets that carry nothing. 2026-10-19 a phone on ccvm's LAN and the station sent each
+// Connections that only trade packets that carry nothing. 2026-10-19 a phone on the station's LAN and the station sent each
 // other some 48,000 packets a second for ten minutes and more, no request among them: the phone's of the smallest size
 // QUIC has (a PING or an ACK request), the station's ACKs. Neither is held back by congestion control or pacing (noq),
 // so once going it went at what the LAN takes, four of the station's threads half busy with it, until the phone's

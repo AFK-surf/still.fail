@@ -1,4 +1,4 @@
-// Feishu's OpenAPI over HTTP (docs/feishu.md): one client per app, with its tenant_access_token got from the app's id
+// Feishu's OpenAPI over HTTP: one client per app, with its tenant_access_token got from the app's id
 // and secret and taken again before it runs out. Feishu (open.feishu.cn) or Lark (open.larksuite.com), or a stand-in
 // for tests ($STILLFAIL_FEISHU_API, one address for both).
 import { wall } from "../ops/fibers.ts";

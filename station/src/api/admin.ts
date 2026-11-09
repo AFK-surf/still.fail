@@ -2,10 +2,12 @@
 // it, gathered from src/api/routes (one module a part of the API). Reads go to the readers (off the main thread); what
 // is not here answers 404 as an unknown route does.
 import { runtimeCompatible } from "./runtime-compat.ts";
+import { BUILD_HEADER, stationBuild } from "./oldest.ts";
 import { join } from "node:path";
 import type { ConfigFile } from "../ops/config.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { type ScreenHub, ScreenRefused } from "../screens/hub.ts";
+import type { SimDebug } from "../screens/sim-debug.ts";
 import type { Readers } from "../read/pool.ts";
 import { HttpError } from "../read/views.ts";
 import { type Answer, type Request, error, json, queryPairs } from "./request.ts";
@@ -24,12 +26,12 @@ import { routes as agentEnv } from "./routes/agent-env.ts";
 import { routes as networkSettings } from "./routes/network.ts";
 import { restarter } from "../ops/restart.ts";
 import { routes as contextSettings } from "./routes/context.ts";
+import { routes as presetRoutes } from "./routes/presets.ts";
 import { routes as diagnosticsSettings } from "./routes/diagnostics.ts";
 import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
 import { connectRoutes } from "./routes/connects.ts";
 import { type Drive, stationDrive } from "../drive/drive.ts";
-import { type ModuleSet, moduleOf } from "../modules/modules.ts";
 import type { StationParts } from "../parts.ts";
 import { HelperFiles } from "../helper/files.ts";
 import type { HelperApp } from "../helper/app.ts";
@@ -50,7 +52,7 @@ import { tr } from "../ops/i18n.ts";
 
 /// What a read-only member (a viewer, contract §4) may still ask besides reads: marks of their own (read, kept,
 /// dismissed), which change nothing anyone else sees.
-const OWN_MARKS = /^\/*threads\/+[^/]+\/+(read|dismissed|closed-card)(?:\/.*)?$/;
+const OWN_MARKS = /^\/*threads\/+[^/]+\/+(read|hidden|muted|dismissed|closed-card)(?:\/.*)?$/;
 /// Reads that send what the client holds (routes/changed.ts), and several reads in one (`batch`).
 const READS = /^\/*(changed\/+(chats|threads|sessions)|batch)$/;
 /// What a batch may read (POST /batch): the history a client brings onto its device in the background, each a read
@@ -78,6 +80,8 @@ export type Tools = {
   sessionExists(key: string): boolean;
   /// The station's store, for what is written (on this thread); none while the station starts.
   store?: Store;
+  /// The station's data directory (stillfail.db, sessions/, thumbs/).
+  data?: string;
   /// The hub, the jobs and the rest of the agents' side, for what needs a session run, stopped or changed; none where
   /// there are no agents (tests of reads).
   agents?: AgentsParts;
@@ -100,14 +104,12 @@ export type AdminDeps = {
   grants?: HelperGrants | null;
   /// The station's drive (services.ts StationDrive); one is made for the routes when none is given.
   drive?: Drive;
-  /// The modules beside the station (modules/modules.ts): `/m/<id>/…` passed on to them; none, no such route.
-  modules?: ModuleSet;
   /// The station's parts in its own process (parts.ts): their routes after the platform's, and what of theirs a
   /// read-only member may write.
   parts?: StationParts;
 };
 
-/// The header a write's key comes in, and how long an answer is kept (once.rs).
+/// The header a write's key comes in, and how long an answer is kept.
 const ONCE_KEY = "idempotency-key";
 const ONCE_KEEP_MS = 10 * 60_000;
 type Kept = { status: number; headers: Record<string, string>; body: Buffer };
@@ -137,7 +139,8 @@ export class Admin {
     const tools: Tools = {
       read: async (r, op, args) => {
         try {
-          return json(200, await this.readers.read(op, args, r.lang));
+          const signal = r.method === "GET" || (r.method === "POST" && READS.test(r.path)) ? r.signal : undefined;
+          return json(200, await this.readers.read(op, args, r.lang, { background: r.background === true, signal }));
         } catch (e) {
           return error(e instanceof HttpError ? e.status : 500, (e as Error).message);
         }
@@ -146,6 +149,7 @@ export class Admin {
       events: deps.events,
       sessionExists: (key) => deps.store?.getSession(key) != null,
       store: deps.store,
+      data: data ?? readers.data,
       get agents() {
         return agentsNow();
       },
@@ -159,7 +163,7 @@ export class Admin {
       ...(config && data !== undefined
         ? drive({
             config,
-            // The station's, shared with the modules' local API (services.ts StationDrive); made here when not given (tests).
+            // The station's (services.ts StationDrive); made here when not given (tests).
             drive:
               deps.drive ??
               stationDrive(
@@ -177,14 +181,57 @@ export class Admin {
             stage: (name) => uploadPath(join(data, "uploads"), name),
           })
         : []),
-      // What macOS lets still.fail Helper do here, a grant asked for from a member's app (docs/remote-screens.md "Grants").
+      // What macOS lets still.fail Helper do here, a grant asked for from a member's app.
       ...(deps.grants ? permissions({ grants: deps.grants }) : []),
-      // The screens members see and drive (docs/remote-screens.md); a view of one is a stream of its own (mesh/screens.ts).
+      // The screens members see and drive; a view of one is a stream of its own (mesh/screens.ts).
       ...(deps.screens
         ? [
             { method: "GET", pattern: /^\/screens$/, handle: async (r: Request) => (await deps.screens!.refresh(), json(200, JSON.stringify(deps.screens!.listed(r.lang)))) },
             // A person closes one (a tab of the browser): it leaves the list as it goes (`screens` on the event stream).
             { method: "POST", pattern: /^\/screens\/([^/]+)\/close$/, handle: async (r: Request, [raw]: string[]) => closeScreen(deps.screens!, r, raw!) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/views\/end$/, handle: async (r: Request, [raw]: string[]) => screenViews(r, raw!, (id) => ({ ended: deps.screens!.endViews(id, byOf(r)) })) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/views\/([^/]+)\/end$/, handle: async (r: Request, [raw, view]: string[]) => screenViews(r, raw!, (id) => (deps.screens!.endView(id, decodeURIComponent(view!), byOf(r)), {})) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/views\/([^/]+)\/watch$/, handle: async (r: Request, [raw, view]: string[]) => screenViews(r, raw!, (id) => (deps.screens!.watchOnly(id, decodeURIComponent(view!)), {})) },
+            // A person debugging an app on a simulator: its apps' logs (a poll, `after` from the last answer's `next`) and restart.
+            { method: "GET", pattern: /^\/screens\/([^/]+)\/logs$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => d.logs(Math.max(0, Number(r.query.find(([k]) => k === "after")?.[1]) || 0))) },
+            { method: "GET", pattern: /^\/screens\/([^/]+)\/apps$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => ({ apps: await d.apps() })) },
+            { method: "GET", pattern: /^\/screens\/([^/]+)\/settings$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => d.settings()) },
+            {
+              method: "POST",
+              pattern: /^\/screens\/([^/]+)\/settings$/,
+              handle: async (r: Request, [raw]: string[]) =>
+                screenDebug(deps.screens!, r, raw!, async (d) => {
+                  const { name, value } = JSON.parse(r.body.toString("utf8") || "{}") as { name?: unknown; value?: unknown };
+                  if (typeof name !== "string" || typeof value !== "string" || !(await d.setSetting(name, value))) throw new ScreenRefused(400, "station.screen.noSetting");
+                  return d.settings();
+                }),
+            },
+            { method: "GET", pattern: /^\/screens\/([^/]+)\/chrome\/(\d)\/(\d)$/, handle: async (r: Request, [raw, panel, turn]: string[]) => screenChrome(deps.screens!, r, raw!, Number(panel), Number(turn)) },
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/screenshot$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => ({ png: (await d.screenshot()).toString("base64") })) },
+            ...simActions(deps.screens),
+            // Its movie, the drive's way for the viewer to download (none: nothing was going on).
+            { method: "POST", pattern: /^\/screens\/([^/]+)\/record\/stop$/, handle: async (r: Request, [raw]: string[]) => screenDebug(deps.screens!, r, raw!, async (d) => (await d.recordStop()) ?? {}) },
+            {
+              method: "POST",
+              pattern: /^\/screens\/([^/]+)\/install$/,
+              handle: async (r: Request, [raw]: string[]) =>
+                screenDebug(deps.screens!, r, raw!, async (d) => {
+                  const path = (JSON.parse(r.body.toString("utf8") || "{}") as { path?: unknown }).path;
+                  const app = typeof path === "string" ? await d.install(path) : null;
+                  if (app === null) throw new ScreenRefused(400, "station.screen.notAnApp");
+                  return { app };
+                }),
+            },
+            {
+              method: "POST",
+              pattern: /^\/screens\/([^/]+)\/relaunch$/,
+              handle: async (r: Request, [raw]: string[]) =>
+                screenDebug(deps.screens!, r, raw!, async (d) => {
+                  const app = (JSON.parse(r.body.toString("utf8") || "{}") as { app?: unknown }).app;
+                  if (typeof app !== "string" || !(await d.relaunch(app))) throw new ScreenRefused(404, "station.screen.noApp");
+                  return {};
+                }),
+            },
           ]
         : []),
       // The agents' side's own (sessions/agents.ts says them as a part in the station; given whole, a test's).
@@ -195,16 +242,17 @@ export class Admin {
   async handle(r: Request): Promise<Answer> {
     // Who asks is remembered by name, as the cloud's names (`deps.names`): what chats show of people who wrote.
     if (r.viewer.name !== "") this.readers.names.set(r.viewer.email, r.viewer.name);
-    // A write with a key is done once, however often it is asked (once.rs); the key is the viewer's own.
+    // A write with a key is done once, however often it is asked; the key is the viewer's own.
     const key = Object.entries(r.headers).find(([k]) => k.toLowerCase() === ONCE_KEY)?.[1];
     const keyed = key !== undefined && key !== "" && key.length <= 200 && r.method !== "GET" && r.method !== "HEAD";
     const answer = keyed ? await this.once(`${r.viewer.email}\0${r.path}\0${key}`, () => this.answer(r)) : await this.answer(r);
-    // Every answer says this station keeps writes to once.
+    // Every answer says this station keeps writes to once, and its build (api/oldest.ts).
     answer.headers["stillfail-idempotent"] = "1";
+    answer.headers[BUILD_HEADER] = stationBuild();
     return runtimeCompatible(r, answer);
   }
 
-  /// `write`'s answer, or the answer the first write under `key` had (once.rs): while the first is under way the
+  /// `write`'s answer, or the answer the first write under `key` had: while the first is under way the
   /// others wait for it; a 5xx is not kept (the write may not have happened: asked again, it is tried again).
   private async once(key: string, write: () => Promise<Answer>): Promise<Answer> {
     const now = (this.deps.clock ?? liveClock).currentTimeMillisUnsafe();
@@ -245,7 +293,7 @@ export class Admin {
   private async answer(r: Request): Promise<Answer> {
     // A viewer reads: no message sent, nothing changed (previews included); a module says what of its own a viewer
     // changes too (their reading progress, say: its manifest's `viewerWrites`).
-    if (readOnly(r.viewer) && !readOnlyMay(r) && this.deps.modules?.viewerMay(r) !== true && this.deps.parts?.mayView(r) !== true) return error(403, "read-only members cannot change this station");
+    if (readOnly(r.viewer) && !readOnlyMay(r) && this.deps.parts?.mayView(r) !== true) return error(403, "read-only members cannot change this station");
     if (r.method === "POST" && /^\/*batch$/.test(r.path)) return this.batch(r);
     // A session, chat or job of another workspace than the viewer's is none for them (api/seen.ts).
     const hidden = this.deps.store ? elsewhere(this.deps.store, r.path, r.viewer) : null;
@@ -260,9 +308,6 @@ export class Admin {
       for (const [name, value] of answer.headers) joined[name] = name in joined ? `${joined[name]}, ${value}` : value;
       return { status: answer.status, headers: joined, body: answer.body };
     }
-    // A module's (modules/forward.ts): any method, its answer as it comes.
-    const module = moduleOf(r.path);
-    if (module !== null && this.deps.modules) return this.deps.modules.forward(r, module);
     for (const route of [...this.routes, ...(this.deps.parts?.allRoutes(this.tools) ?? [])]) {
       const found = r.method === route.method ? route.pattern.exec(r.path) : null;
       if (found) return route.handle(r, found.slice(1));
@@ -288,10 +333,11 @@ export class Admin {
     let next = 0;
     const work = async () => {
       for (let i = next++; i < paths.length; i = next++) {
+        if (r.signal?.aborted) return;
         const at = paths[i]!.indexOf("?");
         const path = at < 0 ? paths[i]! : paths[i]!.slice(0, at);
         const a = BATCHED.some((p) => p.test(path))
-          ? await this.answer({ ...r, method: "GET", path, query: at < 0 ? [] : queryPairs(paths[i]!.slice(at + 1)), search: at < 0 ? "" : paths[i]!.slice(at), body: Buffer.alloc(0) })
+          ? await this.answer({ ...r, background: true, method: "GET", path, query: at < 0 ? [] : queryPairs(paths[i]!.slice(at + 1)), search: at < 0 ? "" : paths[i]!.slice(at), body: Buffer.alloc(0) })
           : error(400, `not read in a batch: ${path}`);
         const text = Buffer.isBuffer(a.body) ? a.body.toString("utf8") : "";
         const isJson = Buffer.isBuffer(a.body) && (a.headers["content-type"] ?? "").startsWith("application/json") && text !== "";
@@ -299,6 +345,8 @@ export class Admin {
       }
     };
     await Promise.all(Array.from({ length: Math.min(BATCH_AT_ONCE, paths.length) }, work));
+    // A cancelled batch has no answer to keep under an idempotency key; a retry must read its pages again.
+    if (r.signal?.aborted) return error(503, "read cancelled");
     return json(200, `{"answers":[${answers.join(",")}]}`);
   }
 }
@@ -316,11 +364,13 @@ export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?
           overview: (viewer, lang) => agents.overview(viewer, lang),
           place: () => agents.place(),
           entry: (kind) => agents.connectKinds?.get(kind)?.entry,
+          heldBy: agents.heldBy,
           reconnect: async (kind, id) => void (await agents.connectKinds?.get(kind)?.reconnect(id)),
         })
       : []),
     ...(agents.updates ? updates({ updates: agents.updates }) : []),
     ...(agents.config ? agentEnv({ config: agents.config, changed: () => deps.events?.overviewChanged(), restart: () => agents.hub.everyChanged() }) : []),
+    ...(agents.hub ? presetRoutes({ presets: agents.hub.presets, reposDir: () => agents.hub.reposDir(), index: agents.hub.repoIndex, changed: () => deps.events?.presetsChanged() }) : []),
     ...(agents.config ? contextSettings({ config: agents.config, changed: () => deps.events?.overviewChanged() }) : []),
     ...(agents.config ? diagnosticsSettings({ config: agents.config, changed: () => deps.events?.overviewChanged() }) : []),
     ...(agents.xshare ? xshare({ xshare: agents.xshare, store: deps.store }) : []),
@@ -334,6 +384,89 @@ export function agentsRoutes(agents: AgentsParts, deps: { store?: Store; events?
       : []),
     ...(agents.overview ? [{ method: "GET", pattern: /^\/overview$/, handle: async (r: Request) => json(200, JSON.stringify(await agents.overview(r.viewer, r.lang))) }] : []),
   ];
+}
+
+/// A simulator's logs, apps and restart: only for those who may drive it (what apps log may be private; a read-only
+/// member only sees the screen). 404 no such screen, 405 nothing to debug on it, 502 simctl failed.
+/// What a person does of a device as Device Hub would, each with what it is told.
+function simActions(screens: ScreenHub) {
+  const route = (path: string, act: (d: SimDebug, said: Record<string, unknown>) => Promise<void>) => ({
+    method: "POST",
+    pattern: new RegExp(`^/screens/([^/]+)/${path}$`),
+    handle: async (r: Request, [raw]: string[]) =>
+      screenDebug(screens, r, raw!, async (d) => {
+        await act(d, JSON.parse(r.body.toString("utf8") || "{}"));
+        return {};
+      }),
+  });
+  return [
+    route("open-url", async (d, { url }) => {
+      if (typeof url !== "string" || !(await d.openUrl(url))) throw new ScreenRefused(400, "station.screen.badUrl");
+    }),
+    route("location", async (d, { at }) => {
+      if ((at !== undefined && typeof at !== "string") || !(await d.location((at as string | undefined) ?? null))) throw new ScreenRefused(400, "station.screen.badPlace");
+    }),
+    route("status-bar", async (d, { tidy }) => d.statusBar(tidy === true)),
+    route("biometrics", async (d, { what }) => {
+      if (typeof what !== "string" || !(await d.biometrics(what))) throw new ScreenRefused(400, "station.screen.noSetting");
+    }),
+    route("uninstall", async (d, { app }) => {
+      if (typeof app !== "string" || !(await d.uninstall(app))) throw new ScreenRefused(404, "station.screen.noApp");
+    }),
+    route("record", async (d, { panel }) => d.recordStart(panel === "inner" || panel === "cover" ? panel : null)),
+    route("push", async (d, { app, text }) => {
+      if (typeof app !== "string" || typeof text !== "string" || !(await d.push(app, text))) throw new ScreenRefused(404, "station.screen.noApp");
+    }),
+  ];
+}
+
+async function screenDebug(screens: ScreenHub, r: Request, raw: string, answer: (debug: SimDebug) => Promise<unknown>): Promise<Answer> {
+  if (readOnly(r.viewer)) return error(403, "a read-only member does not read an app's logs");
+  let id: string;
+  try {
+    id = decodeURIComponent(raw);
+  } catch {
+    return error(404, tr(r.lang, "station.screen.notFound"));
+  }
+  try {
+    return json(200, JSON.stringify(await answer(screens.debugOf(id))));
+  } catch (e) {
+    if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
+    // (simctl's own last line: what is before it is the command it ran and how it came to that)
+    const said = (e as Error).message.split("\n").map((l) => l.trim()).filter(Boolean).at(-1) ?? "";
+    return error(502, tr(r.lang, "station.screen.debugFailed", { said }));
+  }
+}
+
+/// GET /screens/<id>/chrome/<panel>/<turn>: a simulator's case, its pictures made of what Xcode has on this Mac.
+async function screenChrome(screens: ScreenHub, r: Request, raw: string, panel: number, turn: number): Promise<Answer> {
+  let id: string;
+  try {
+    id = decodeURIComponent(raw);
+  } catch {
+    return error(404, tr(r.lang, "station.screen.notFound"));
+  }
+  try {
+    return json(200, JSON.stringify(await screens.chromeOf(id, panel, turn)));
+  } catch (e) {
+    if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
+    return error(502, tr(r.lang, "station.screen.debugFailed", { said: (e as Error).message.split("\n").at(-1) ?? "" }));
+  }
+}
+
+/// Who a view's person is told ended it.
+const byOf = (r: Request) => r.viewer.name || r.viewer.email;
+
+/// POST /screens/<id>/views/…: a view ended or made to only look, by a member who may drive the screen (a read-only one
+/// is refused with every other write, Admin's own check). 404 no such screen or view (it ended meanwhile), 405 an agent's.
+async function screenViews(r: Request, raw: string, act: (id: string) => unknown): Promise<Answer> {
+  try {
+    return json(200, JSON.stringify(act(decodeURIComponent(raw))));
+  } catch (e) {
+    if (e instanceof ScreenRefused) return error(e.status, tr(r.lang, e.key, e.args));
+    if (e instanceof URIError) return error(404, tr(r.lang, "station.screen.notFound"));
+    throw e;
+  }
 }
 
 /// POST /screens/<id>/close: 404 no such screen, 405 one not closed from here (the desktop), 502 the browser refused.

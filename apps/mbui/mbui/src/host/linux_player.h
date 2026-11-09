@@ -81,7 +81,7 @@ typedef struct Player {
   uint8_t *px;
   int w, h, fresh, drawn;
   // the main thread's
-  int state;  // -1 failed, 0 opening, 1 ready
+  int state;  // -1 failed, -2 unsupported, -3 unparseable, 0 opening, 1 ready
   int playing, ended, scrubbing;
   gint64 last_t;  // its position as it was last looked at (buffering: info)
   int waiting;    // buffering, as it was last looked at
@@ -218,7 +218,7 @@ static int on_preroll(void *sink, gpointer data) {
 static void player_tell(Player *p, int state) {
   p->state = state;
   g_queue_push_tail(&told, GINT_TO_POINTER(p->vid));
-  g_queue_push_tail(&told, GINT_TO_POINTER(state));
+  g_queue_push_tail(&told, GINT_TO_POINTER(state < 0 ? -1 : state));
   vlog("view %d: told %d", p->vid, state);
   mb_host_request_frame();
 }
@@ -242,9 +242,14 @@ static void on_error(void *bus, void *msg, gpointer data) {
   char *dbg = NULL;
   gs.gst_message_parse_error(msg, &e, &dbg);
   vlog("view %d: cannot be played: %s (%s)", p->vid, e ? e->message : "?", dbg ? dbg : "");
+  // gsterror.h: missing a plugin or codec is a format the host cannot play; a demux failure may be a damaged file.
+  int state = -1;
+  if (e && ((e->domain == gs.gst_core_error_quark() && e->code == 12) ||
+            (e->domain == gs.gst_stream_error_quark() && e->code == 6))) state = -2;
+  else if (e && e->domain == gs.gst_stream_error_quark() && e->code == 9) state = -3;
   g_clear_error(&e);
   g_free(dbg);
-  if (p->state >= 0) player_tell(p, -1);
+  if (p->state >= 0) player_tell(p, state);
 }
 
 static void on_ready(void *bus, void *msg, gpointer data) {

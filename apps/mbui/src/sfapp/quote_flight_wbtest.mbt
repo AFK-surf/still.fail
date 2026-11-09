@@ -59,6 +59,19 @@ fn hint_seen(t : @ui.Tester, hint? : String = "发消息") -> Bool {
 }
 
 ///|
+/// The empty quote comment's hint is drawn in the field's colour, where the field is drawn.
+fn quote_hint_seen(t : @ui.Tester) -> Bool {
+  match t.words().iter().find_first(fn(w) { w.0 == "添加说明（可选）" && w.5 > 0.05 }) {
+    Some((_, x, y, w, h, _)) =>
+      t.drawn_glyphs().iter().any(fn(g) {
+        g.0 >= x - 1.0 && g.0 <= x + w + 1.0 && g.1 >= y - 1.0 && g.1 <= y + h + 1.0 &&
+          g.2 >> 8 == @sf.theme().p.subtle >> 8 && (g.2 & 0xFFL) != 0L
+      })
+    None => false
+  }
+}
+
+///|
 /// How much of a quote's ✕ is seen now (its round, 20 across, in the ink): 0 none.
 fn x_seen(t : @ui.Tester) -> Double {
   let ink = @sf.theme().p.text
@@ -104,7 +117,7 @@ fn send_ground(t : @ui.Tester) -> Int64 raise {
   }
   // (its round: the largest round about its middle, what it is pressed in reaching past it; drawn on its way as the
   // composer changes shape, its place in the capsule's end and in the opened box's corner 1.13 apart: smooth.mbt
-  // round_like)
+  // capsule_in)
   let (mx, my) = (x + w / 2.0, y + h / 2.0)
   let mut round : (Double, Double, Double, Double, Int64)? = None
   for r in t.drawn_rects() {
@@ -142,6 +155,70 @@ fn quoting(calls : Array[Made]) -> @ui.Tester {
 }
 
 ///|
+/// A quote with its empty comment line and a picture, sent from the composer on either size of screen.
+fn quote_media_departure(name : String, width : Double, height : Double, platform : Int) -> Unit raise {
+  new_run()
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=height, platform~)
+  let file : Json = {
+    "name": Json::string(name), "path": Json::string("/w/uploads/" + name), "size": 120,
+    "width": 1600, "height": 900, "owner": "s-c1",
+  }
+  @sfbase.writing_quote(src, @sfbase.writing(src, "ws1/st1:s-c1"), {
+    "author": "Ana", "text": quote_passage, "ts": "ts8",
+  }, file~)
+  t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
+  let before = quote_ground(t)
+  assert_true(quote_hint_seen(t), msg="the comment hint was not drawn before sending")
+  // A tap can owe several frames. Check each of them, including the frame before the destination row takes over.
+  let frames : Array[Bool] = []
+  t.between_frames(fn() { frames.push(quote_hint_seen(t)) })
+  tap_send(t)
+  t.between_frames(fn() {  })
+  assert_true(frames.length() > 0 && frames.iter().all(fn(seen) { seen }), msg="the comment hint blinked: \{frames}")
+  let first = quote_ground(t)
+  assert_true((first.3 - before.3).abs() < 0.5, msg="the card shrank on sending: \{before} to \{first}")
+  assert_true(quote_hint_seen(t), msg="the comment hint vanished on sending")
+  t.frame()
+  let second = quote_ground(t)
+  assert_true((second.3 - first.3).abs() < 2.0, msg="the card jumped on its next frame: \{first} to \{second}")
+  assert_true(quote_hint_seen(t), msg="the comment hint vanished on the next frame")
+}
+
+///|
+test "a quoted picture's card and empty comment do not blink as it is sent" {
+  quote_media_departure("departure.png", 390.0, 844.0, 2)
+}
+
+///|
+test "a quoted video cover's card and empty comment do not blink as it is sent" {
+  quote_media_departure("departure.mp4", 1280.0, 800.0, 0)
+}
+
+///|
+test "a long quoted picture's words do not rewrap as the card sets out" {
+  new_run()
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  let passage = quote_passage + "，然后把表格中的每一项逐一检查，确保发送前后文字不会在这里突然换行"
+  let file : Json = {
+    "name": "long-quote.png", "path": "/w/uploads/long-quote.png", "size": 120,
+    "width": 1600, "height": 900, "owner": "s-c1",
+  }
+  @sfbase.writing_quote(src, @sfbase.writing(src, "ws1/st1:s-c1"), {
+    "author": "Ana", "text": Json::string(passage), "ts": "ts8",
+  }, file~)
+  t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
+  let before = t.lines_of(passage)
+  assert_true(before.length() > 0, msg="the quote's words were not laid out")
+  tap_send(t)
+  let first = t.lines_of(passage)
+  assert_eq(first, before, msg="the quote's words rewrapped on sending")
+}
+
+///|
 test "a quote sent alone is in the list at once, its card flying there from the composer's: seen every frame, from where its words were" {
   let calls : Array[Made] = []
   let t = quoting(calls)
@@ -173,9 +250,10 @@ test "a quote sent alone is in the list at once, its card flying there from the 
     }
   }
   assert_false(hinted)
-  // and back once it is out of it
+  // and not back once it is out of it: the words' field has the cursor its comment line had (composer_hint)
   t.run_for(@sf.hint_back_ms)
-  assert_true(hint_seen(t))
+  assert_eq(focused_field(t), "发消息")
+  assert_false(hint_seen(t))
   assert_true(send_flight.get() is None)
   // landed in its message, over the composer, as wide as it needs
   let (_, y) = quote_once(t)
@@ -188,6 +266,35 @@ test "a quote sent alone is in the list at once, its card flying there from the 
       fail("its width went from \{widths[k - 1]} to \{widths[k]} at once: \{widths}")
     }
   }
+}
+
+///|
+/// Which field has the keyboard's focus now: its hint ("" none).
+fn focused_field(t : @ui.Tester) -> String {
+  match t.focused() {
+    Some(s) if s.role is TextField => s.label
+    _ => ""
+  }
+}
+
+///|
+test "sent with the focus in its comment line, a quote leaves the focus in the words' field" {
+  let calls : Array[Made] = []
+  let t = quoting(calls)
+  assert_eq(focused_field(t), "添加说明（可选）")
+  tap_send(t)
+  t.run_for(flight_ms + 50.0)
+  assert_eq(focused_field(t), "发消息")
+}
+
+///|
+test "taken out with the focus in its comment line, a quote leaves the focus in the words' field" {
+  let calls : Array[Made] = []
+  let t = quoting(calls)
+  assert_eq(focused_field(t), "添加说明（可选）")
+  t.click(Button, label=@sf.t("web-main.quote.remove"))
+  t.run_for(@sf.leave_ms + 50.0)
+  assert_eq(focused_field(t), "发消息")
 }
 
 ///|

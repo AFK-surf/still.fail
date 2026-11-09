@@ -45,3 +45,23 @@ test "keys read once and read no more are let go, those read still kept" {
 fn read_unfollowed(k : Keyed[Int], i : Int) -> Unit {
   untracked(fn() { k.has(i) }) |> ignore
 }
+
+///|
+test "the keys it holds said again tell nothing; as many said with one twice, the one left out leaves" {
+  let k : Keyed[Int] = keyed()
+  let w1 = watch(fn() {  })
+  let w2 = watch(fn() {  })
+  k.set([1, 2])
+  assert_eq(w1.read(fn() { k.has(1) }), true)
+  assert_eq(w2.read(fn() { k.has(2) }), true)
+  // (the same, in another order: none told)
+  k.set([2, 1])
+  assert_true(!w1.is_stale())
+  assert_true(!w2.is_stale())
+  // (as many, 1 twice: 2 leaves, 1 stays)
+  k.set([1, 1])
+  assert_true(!w1.is_stale())
+  assert_true(w2.is_stale())
+  assert_eq(w2.read(fn() { k.has(2) }), false)
+  assert_eq(k.count(), 1)
+}

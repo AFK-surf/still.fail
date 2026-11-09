@@ -5,12 +5,10 @@
 let hashed : Map[String, Bool] = {}
 
 ///|
-/// Every Tester starts as the app does (mbui's on_reset): the pictures made here gone with its images, none open.
+/// Every Tester starts as the app does (mbui's on_reset): the pictures made here gone with its images.
 fn init {
   @ui.on_reset(fn() {
     hashed.clear()
-    state.open = None
-    state.bars = true
   })
 }
 

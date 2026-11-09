@@ -98,6 +98,13 @@ pub fn window_inset_now() -> Bool {
 }
 
 ///|
+/// window_points_to_content for a node of the window's tree: at the zoom the frame is drawn at, followed
+/// (tree_window_zoom).
+pub fn window_points_to_content_now(points : Double) -> Double {
+  points / tree_window_zoom.get()
+}
+
+///|
 /// window_keys_left for a node of the window's tree (window_inset_now), followed.
 pub fn window_keys_left_now() -> Bool {
   window_inset_now() && platform() != 3 && platform() != 5
@@ -107,4 +114,31 @@ pub fn window_keys_left_now() -> Bool {
 /// window_keys_own for a node of the window's tree (window_inset_now), followed.
 pub fn window_keys_own_now() -> Bool {
   window_inset_now() && (platform() == 3 || platform() == 5)
+}
+
+///|
+/// The corners of nodes of the window's tree that are linked each (tree_corners_linked), by the node: what the corner
+/// rule takes of them as of an old view's box said so (Ctx::with_tree_nodes).
+// kept across runs: each let go with its node
+let tree_links : ByNode[() -> FixedArray[CornerOf]?] = ByNode::new()
+
+///|
+/// Node `v` of the window's tree round at each corner as `links` says (Radius::LinkedEach's: a panel's in the window's
+/// corners following them, the others the design's), read as it changes: drawn so (View::corners), and the corner rule
+/// taking its corners as linked, as an old view's box said so.
+pub fn tree_corners_linked(v : @view.View, links : () -> FixedArray[CornerOf]?) -> Unit {
+  let id = v.id()
+  tree_links[id] = links
+  v.owns(fn() { tree_links.remove(id) }) |> ignore
+  v.corners(By(fn() {
+    match links() {
+      Some(k) => {
+        // (as the tree's linked corners are worked out: its window's corner, its theme's, its zoom, followed)
+        let roots = tree_corner_roots_now()
+        Some((k[0].radius(roots), k[1].radius(roots), k[2].radius(roots), k[3].radius(roots)))
+      }
+      None => None
+    }
+  }))
+  |> ignore
 }

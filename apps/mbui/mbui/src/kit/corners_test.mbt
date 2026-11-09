@@ -94,10 +94,10 @@ test "corners: a fault names what breaks the rule by its words and place" {
 
 ///|
 test "corners: a circle or a capsule in a corner: as far from both edges, the container's corner following it" {
-  // a circle of 11, 15 from both edges, in a corner that reads to it as 26 (15 + 11: @ui.round_like): no fault
+  // a circle of 11, 15 from both edges, in a corner of 26 (15 + 11): no fault
   let t = @ui.Tester::new(fn(c) {
     c.column(pad=20.0, fn() {
-      c.box(w=Px(200.0), h=Px(80.0), pad=15.0, bg=0xEEEEEEFFL, radius=@ui.round_like_out(26.0), fn() {
+      c.box(w=Px(200.0), h=Px(80.0), pad=15.0, bg=0xEEEEEEFFL, radius=26.0, fn() {
         c.box(w=Px(22.0), h=Px(22.0), bg=0x3366FFFFL, radius=11.0, fn() {  }) |> ignore
       })
       |> ignore
@@ -109,7 +109,7 @@ test "corners: a circle or a capsule in a corner: as far from both edges, the co
   // a capsule 24 high, 12 from both edges, in a corner that reads to it as 24: no fault
   let t = @ui.Tester::new(fn(c) {
     c.column(pad=20.0, fn() {
-      c.box(w=Px(200.0), h=Px(80.0), pad=12.0, bg=0xEEEEEEFFL, radius=@ui.round_like_out(24.0), fn() {
+      c.box(w=Px(200.0), h=Px(80.0), pad=12.0, bg=0xEEEEEEFFL, radius=24.0, fn() {
         c.box(w=Px(60.0), h=Px(24.0), bg=0x3366FFFFL, radius=12.0, fn() {  }) |> ignore
       })
       |> ignore
@@ -118,7 +118,7 @@ test "corners: a circle or a capsule in a corner: as far from both edges, the co
   })
   t.draw()
   assert_eq(t.corner_faults(), [])
-  // the same circle in a corner of 24: the container's fault, it wants one that reads to it as 26 (27.18)
+  // the same circle in a corner of 24: the container's fault, it wants one of 26 (15 + 11)
   let t = @ui.Tester::new(fn(c) {
     c.column(pad=20.0, fn() {
       c.box(w=Px(200.0), h=Px(80.0), pad=15.0, bg=0xEEEEEEFFL, radius=24.0, fn() {
@@ -131,7 +131,7 @@ test "corners: a circle or a capsule in a corner: as far from both edges, the co
   t.draw()
   let faults = t.corner_faults()
   assert_eq(faults.length(), 1)
-  assert_true(faults[0].contains("wants corner 27.18"))
+  assert_true(faults[0].contains("wants corner 26"), msg=faults[0])
   // a circle nearer one edge than the other: its own fault
   let t = @ui.Tester::new(fn(c) {
     c.column(pad=20.0, fn() {
@@ -183,13 +183,13 @@ test "corners: a mark hung past the corner of a card in a container's corner is 
 
 ///|
 test "corners: a box in a container's corner is measured without the corner a mark is hung on" {
-  // a quote waiting in a composer (26 round, 10 in): its corner its container's inner, the room for its remove
-  // button's reach (5) after it, so 10 from the composer's left and top and 15 from its right; the button over its top
+  // a quote waiting in a composer (26 round, 8 in): its corner its container's inner (18), the room for its remove
+  // button's reach (5) after it, so 8 from the composer's left and top and 13 from its right; the button over its top
   // right corner, lifted past its top: that corner the button's, the quote measured by its top left: no fault
   let quote = fn(mark : Bool) {
     @ui.Tester::new(fn(c) {
       c.column(pad=20.0, fn() {
-        c.box(w=Px(300.0), h=Px(120.0), pad=10.0, bg=0xEEEEEEFFL, radius=26.0, fn() {
+        c.box(w=Px(300.0), h=Px(120.0), pad=8.0, bg=0xEEEEEEFFL, radius=26.0, fn() {
           c.box(dir=Row, w=Fill(1.0), fn() {
             c.box(style=@ui.style(w=Grow(1.0), h=Fixed(60.0), bg=Exact(0xFFFFFFFFL), radius=InnerOr(Exact(18.0))), fn() {  })
             |> ignore
@@ -211,7 +211,7 @@ test "corners: a box in a container's corner is measured without the corner a ma
   let t = quote(true)
   t.draw()
   assert_eq(t.corner_faults(), [])
-  // no mark on it: 10, 10 and 15 from the edges, a fault
+  // no mark on it: 8, 8 and 13 from the edges, a fault
   let t = quote(false)
   t.draw()
   assert_true(t.corner_faults().length() > 0)
@@ -252,13 +252,13 @@ test "corners: a round thing centred in its container is not set in a corner" {
 
 ///|
 test "corners: a container whose ground is a layer of its size: what is in its corner as far from both edges" {
-  // a composer: its glass a layer under it, the attachment's tile 10 from the left and 14 from the top: a fault
+  // a composer: its glass a layer under it, the attachment's tile 8 from the left and 14 from the top: a fault
   let composer = fn(c : @ui.Ctx, top : Double) {
     c.column(pad=20.0, fn() {
       c.box(w=Px(370.0), h=Px(160.0), fn() {
         c.layer(fn() { c.box(w=Fill(1.0), h=Fill(1.0), bg=0xEEEEEEFFL, radius=26.0, fn() {  }) |> ignore })
         |> ignore
-        c.box(pl=10.0, pt=top, fn() {
+        c.box(pl=8.0, pt=top, fn() {
           c.box(w=Px(56.0), h=Px(56.0), bg=0x3366FFFFL, radius=18.0, fn() {  }) |> ignore
         })
         |> ignore
@@ -271,9 +271,9 @@ test "corners: a container whose ground is a layer of its size: what is in its c
   t.draw()
   let faults = t.corner_faults()
   assert_eq(faults.length(), 1)
-  assert_true(faults[0].contains("10 and 14 from its edges"))
-  // 10 from both, its corner concentric with 26's (26 less 10 over 1.25: 18, still.fail's attachment): no fault
-  let t = @ui.Tester::new(fn(c) { composer(c, 10.0) })
+  assert_true(faults[0].contains("8 and 14 from its edges"), msg=faults[0])
+  // 8 from both, its corner concentric with 26's (26 less 8: 18, still.fail's attachment): no fault
+  let t = @ui.Tester::new(fn(c) { composer(c, 8.0) })
   t.draw()
   assert_eq(t.corner_faults(), [])
 }

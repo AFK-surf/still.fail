@@ -29,6 +29,8 @@ extern "C" fn ffi_platform() -> Int = "mb_host_platform"
 
 extern "C" fn ffi_request_frame() -> Unit = "mb_host_request_frame"
 
+extern "C" fn ffi_frames_paced(hz : Double) -> Unit = "mb_host_frames_paced"
+
 extern "C" fn ffi_wake_after(ms : Double) -> Unit = "mb_host_wake_after"
 
 #borrow(out)
@@ -91,6 +93,16 @@ extern "C" fn ffi_present(
   g : Double,
   b : Double,
 ) -> Unit = "mb_host_present"
+
+///|
+extern "C" fn ffi_groups_here() -> Int = "mb_host_groups_here"
+
+///|
+#borrow(inst, moves)
+extern "C" fn ffi_group_set(id : Int, inst : FixedArray[Double], moves : FixedArray[Double], n : Int) -> Unit = "mb_host_group_set"
+
+///|
+extern "C" fn ffi_group_drop(id : Int) -> Unit = "mb_host_group_drop"
 
 ///|
 extern "C" fn ffi_text_menu(shown : Int, x : Double, y : Double, w : Double, h : Double, can : Int) -> Unit = "mb_host_text_menu"
@@ -161,6 +173,9 @@ extern "C" fn ffi_set_perf(on : Int) -> Unit = "mb_host_set_perf"
 extern "C" fn ffi_perf_line(line : String) -> Unit = "mb_host_perf_line"
 
 extern "C" fn ffi_perf_where() -> String = "mb_host_perf_where"
+
+///|
+extern "C" fn ffi_perf_open(go : Int) -> Int = "mb_host_perf_open"
 
 extern "C" fn ffi_perf_size() -> Double = "mb_host_perf_size"
 
@@ -273,6 +288,9 @@ extern "C" fn ffi_full_screen() -> Int = "mb_host_full_screen"
 extern "C" fn ffi_set_full_screen(on : Int) -> Unit = "mb_host_set_full_screen"
 
 ///|
+extern "C" fn ffi_window_buttons_down(by : Double, ms : Double) -> Unit = "mb_host_window_buttons_down"
+
+///|
 extern "C" fn ffi_window_corner() -> Double = "mb_host_window_corner"
 
 ///|
@@ -301,6 +319,10 @@ extern "C" fn ffi_window_opens() -> Int = "mb_host_window_opens"
 extern "C" fn ffi_window_open(what : String) -> Int = "mb_host_window_open"
 
 ///|
+#borrow(what)
+extern "C" fn ffi_window_front(what : String) -> Int = "mb_host_window_front"
+
+///|
 extern "C" fn ffi_set_cursor(kind : Int) -> Unit = "mb_host_set_cursor"
 
 ///|
@@ -317,6 +339,12 @@ extern "C" fn ffi_menu_setup(json : String) -> Unit = "mb_host_menu_setup"
 /// it, Ctx::window_drag). Nothing where there is no window to size (iOS, Android, a browser's page).
 fn window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset? : Bool = false) -> Unit {
   ffi_window_setup(min_w, min_h, w, h, if inset { 1 } else { 0 })
+}
+
+///|
+/// (a window's wheel is the app's alone: no page under it zooms by one it kept nothing of)
+fn wheel_kept(_kept : Bool) -> Unit {
+  ()
 }
 
 ///|
@@ -346,6 +374,12 @@ fn full_screen() -> Bool {
 /// The window made to fill the screen, or back (macOS's full screen).
 fn set_full_screen(on : Bool) -> Unit {
   ffi_set_full_screen(if on { 1 } else { 0 })
+}
+
+///|
+/// The window's buttons moved `by` lower in the app's top row over `ms` (macOS's).
+fn window_buttons_down(by : Double, ms : Double) -> Unit {
+  ffi_window_buttons_down(by, ms)
 }
 
 ///|
@@ -401,6 +435,12 @@ fn window_opens() -> Bool {
 /// Another run of the program, its window beside this one (@hostapi.window_open).
 fn window_open(what : String) -> Bool {
   ffi_window_open(what) != 0
+}
+
+///|
+/// The window opened for `what` to the front, while it is open (@hostapi.window_front).
+fn window_front(what : String) -> Bool {
+  ffi_window_front(what) != 0
 }
 
 ///|
@@ -513,6 +553,12 @@ fn request_frame() -> Unit {
 }
 
 ///|
+/// The frame asked for what moves on by the clock needs only `hz` frames a second (@hostapi.frames_paced).
+fn frames_paced(hz : Double) -> Unit {
+  ffi_frames_paced(hz)
+}
+
+///|
 fn wake_after(ms : Double) -> Unit {
   ffi_wake_after(ms)
 }
@@ -620,6 +666,21 @@ fn present(
   b : Double,
 ) -> Unit {
   ffi_present(buf, count, r, g, b)
+}
+
+///|
+fn groups_here() -> Bool {
+  ffi_groups_here() != 0
+}
+
+///|
+fn group_set(id : Int, inst : FixedArray[Double], moves : FixedArray[Double], n : Int) -> Unit {
+  ffi_group_set(id, inst, moves, n)
+}
+
+///|
+fn group_drop(id : Int) -> Unit {
+  ffi_group_drop(id)
 }
 
 ///|
@@ -787,6 +848,11 @@ fn perf_line(line : String) -> Unit {
 ///|
 fn perf_where() -> String {
   ffi_perf_where()
+}
+
+///|
+fn perf_open(go : Bool) -> Bool {
+  ffi_perf_open(if go { 1 } else { 0 }) != 0
 }
 
 ///|
@@ -1069,6 +1135,21 @@ extern "C" fn pw_out(id : Int) -> String = "mb_host_passwords_out"
 
 ///|
 extern "C" fn pw_end(id : Int) -> Unit = "mb_host_passwords_end"
+
+// The system's autofill (autofill.mbt): android_host.c on dev.mbui.Autofills; none elsewhere, where `af_able` is 0.
+
+///|
+extern "C" fn af_able() -> Int = "mb_host_autofill_able"
+
+///|
+#borrow(host)
+extern "C" fn af_ask(host : String) -> Int = "mb_host_autofill_ask"
+
+///|
+extern "C" fn af_take() -> String = "mb_host_autofill_take"
+
+///|
+extern "C" fn af_end() -> Unit = "mb_host_autofill_end"
 
 // This device's passkeys (passkeys.mbt): the platform's authenticator asked to sign (win_passkeys.c on Windows; none
 // elsewhere, where `wa_able` is 0).
@@ -1401,7 +1482,8 @@ fn view_control(id : Int, op : Int, value : Double) -> Unit {
 }
 
 ///|
-/// How the view stands: -1 failed (a file the player cannot play, a page that cannot load), 0 opening, 1 ready.
+/// How the view stands: -1 failed, -2 a player's format unsupported, -3 its file not parseable, -4 unsupported or
+/// damaged, 0 opening, 1 ready.
 /// `out` (10): its length in ms (-1 not known), where it is (ms), playing (1; and while it seeks within what it has, if
 /// it is to play), the picture's own width and height (pixels), the bytes it has been given, whether a frame has been
 /// drawn (a page: loaded), buffering (1: to play and waiting on bytes still to come through the app, not a seek

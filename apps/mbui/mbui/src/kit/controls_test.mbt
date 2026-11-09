@@ -31,6 +31,8 @@ test "checkbox: a click checks it; Space with the focus unchecks it; neither (mi
   t.key(@ui.key_space)
   assert_eq(v.val, @ui.Check::Off)
   v.val = @ui.Check::Mixed
+  // (what the test holds set from outside, as an app's logic would: no signal, said so)
+  t.stepped()
   t.frame()
   t.click(@ui.Role::Checkbox, label="Terms")
   assert_eq(v.val, @ui.Check::On)
@@ -341,21 +343,64 @@ test "progress: its value as a percentage and its range; not known, neither, and
 }
 
 ///|
-test "progress: told a value anew, it goes there over progress_ms from where it showed (there at once the first time); its value said at once" {
+/// The fill of the bar a Tester draws, 200 wide (its pieces 3 high narrower than its track), each as drawn: its width
+/// and its corners' radii.
+fn fill_drawn(t : @ui.Tester) -> Array[(Double, Array[Double])] {
+  t.drawn_instances().filter(fn(i) { i[5] == 0.0 && i[3] == 3.0 && i[2] < 199.5 && i[2] > 0.0 }).map(fn(i) {
+    (i[2], [i[36], i[37], i[38], i[39]])
+  })
+}
+
+///|
+test "progress: told a value anew, laid out there at once (its value said at once), its fill reshaped there over progress_ms from the width it was drawn, its ends round all the way; nothing built for it" {
   let v : Ref[Double?] = Ref(Some(30.0))
   let shown : Ref[Double?] = Ref(None)
-  let t = @ui.Tester::new(fn(c) {
-    progress(c, "upload", v.val, max=60.0, label="Upload", look=fn(_, s) { shown.val = s.t })
-  })
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Px(200.0), fn() {
+        progress(c, "upload", v.val, max=60.0, label="Upload", look=fn(c, s) {
+          shown.val = s.t
+          progress_look(c, s)
+        })
+      })
+      |> ignore
+    },
+    w=400.0,
+    h=100.0,
+  )
+  t.check_looks(false)
+  t.draw()
+  // (there at once the first time)
   assert_eq(shown.val, Some(0.5))
+  assert_eq(fill_drawn(t), [(100.0, [1.5, 1.5, 1.5, 1.5])])
   v.val = Some(60.0)
   t.draw()
   assert_eq(t.get(@ui.Role::ProgressBar, label="Upload").value, "100%")
-  t.run_for(progress_ms / 2.0)
-  let half = shown.val.unwrap()
-  assert_true(half > 0.5 && half < 1.0, msg="\{half}")
-  t.run_for(progress_ms)
-  assert_eq(shown.val, Some(1.0))
+  assert_eq(shown.val, Some(1.0), msg="laid out as told at once")
+  // (drawn from where it was as it sets off, then wider frame by frame to all of it, a capsule all the way)
+  let widths : Array[Double] = []
+  let built : Array[String] = []
+  let until = t.time() + progress_ms
+  while t.time() < until {
+    let w = t.wanted_after()
+    if w == @double.infinity {
+      break
+    }
+    t.frame_at(if w <= t.time() { t.next_frame_time() } else { t.display_frame(w) })
+    if t.built_why().has_prefix("the clock read at") {
+      built.push("\{t.time()}: \{t.built_why()}")
+    }
+    for f in fill_drawn(t) {
+      assert_eq(f.1, [1.5, 1.5, 1.5, 1.5], msg="its ends round at \{f.0} wide")
+      if widths.length() > 0 {
+        assert_true(f.0 >= widths[widths.length() - 1], msg="\{widths} \{f.0}")
+      }
+      widths.push(f.0)
+    }
+  }
+  assert_true(widths.filter(fn(w) { w > 100.0 && w < 200.0 }).length() > 3, msg="\{widths}")
+  assert_eq(built, [], msg="built for the clock: \{built}")
+  t.assert_idle()
 }
 
 ///|
@@ -568,7 +613,7 @@ test "switch: its knob slides to the side it was turned to by a rest of its own 
 ///|
 test "progress: from not known to known, the band running along it is drawn into the part come over progress_known_ms, not changed in a frame" {
   let v : Ref[Double?] = Ref(None)
-  let seen : Ref[ProgressState] = Ref({ t: None, known: 0.0 })
+  let seen : Ref[ProgressState] = Ref({ t: None, known: 0.0, key: "" })
   let t = @ui.Tester::new(fn(c) { progress(c, "upload", v.val, max=100.0, look=fn(_, s) { seen.val = s }) })
   assert_eq(seen.val.known, 0.0)
   v.val = Some(40.0)
@@ -579,4 +624,52 @@ test "progress: from not known to known, the band running along it is drawn into
   t.run_for(progress_known_ms)
   assert_eq(seen.val.known, 1.0)
   assert_eq(seen.val.t, Some(0.4))
+}
+
+///|
+test "switch: its knob slides and its track's colour goes with it as each frame is painted: nothing built for its slide" {
+  let on = Ref(false)
+  let t = @ui.Tester::new(fn(c) { on.val = switch(c, "wifi", on.val, label="Wi-Fi").value })
+  t.draw()
+  // (its knob: the 18 by 18 drawn; its track: the 36 by 22)
+  let knob_x = fn() { t.drawn_rects().filter(fn(r) { r.2 == 18.0 && r.3 == 18.0 }).map(fn(r) { r.0 }) }
+  let track = fn() { t.drawn_rects().filter(fn(r) { r.2 == 36.0 && r.3 == 22.0 }).map(fn(r) { r.4 }) }
+  let (x0, ground0) = (knob_x(), track())
+  assert_eq((x0.length(), ground0.length()), (1, 1))
+  t.act(@ui.Role::Switch, @ui.Action::Activate, label="Wi-Fi")
+  assert_true(on.val)
+  let rest = switch_rest("wifi")
+  let built : Array[String] = []
+  let places : Array[Double] = []
+  let grounds : Array[Int64] = []
+  // (the frame that turned it laid it out again: the frame after it is built once more for that, as the frame after
+  // any build that laid out otherwise is; none after it)
+  let mut first = true
+  while t.time() < rest {
+    // (the next frame its motion asks for)
+    let w = t.wanted_after()
+    if w == @double.infinity {
+      break
+    }
+    t.frame_at(if w <= t.time() { t.next_frame_time() } else { t.display_frame(w) })
+    let why = t.built_why()
+    if why != "" && !(first && why == "the one before it laid out otherwise") {
+      built.push("\{t.time()}: \{why}")
+    }
+    first = false
+    let x = knob_x()
+    if x.length() == 1 && !places.contains(x[0]) {
+      places.push(x[0])
+    }
+    let g = track()
+    if g.length() == 1 && !grounds.contains(g[0]) {
+      grounds.push(g[0])
+    }
+  }
+  // (it slides, from the off side to the on side, its track's colour with it)
+  assert_true(places.length() > 3, msg="\{places}")
+  assert_eq(knob_x(), [x0[0] + 36.0 - 2.0 * 2.0 - 18.0])
+  assert_true(grounds.length() > 3, msg="\{grounds}")
+  assert_eq(built, [], msg="\{built.length()} frames built: \{built}")
+  t.assert_idle()
 }

@@ -1,4 +1,4 @@
-// The conformance suite (conformance_graph_wbtest.mbt): Batching / Transaction (batching.ts). #69 and #121 are not
+// The conformance suite (conformance_graph_wbtest.mbt): Batching / Transaction. #69 and #121 are not
 // here: they throw out of a batch and an effect, and nothing here throws.
 
 ///|

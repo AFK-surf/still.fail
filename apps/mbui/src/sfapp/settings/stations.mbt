@@ -1,10 +1,10 @@
-// The workspace's stations (settings/Stations.kt): a card each with its mark and what it is doing, what of its load
+// The workspace's stations: a card each with its mark and what it is doing, what of its load
 // runs low and its network; one station's page is the machine (its load large, its network, its details), with how
 // many connects and profiles run on it and its memory. Its owners and admins rename it (`workspace.renameStation`),
-// pick its mark or take it out from its "…" (Settings.kt openStationMenu).
+// pick its mark or take it out from its "…".
 
 ///|
-/// Where a station this workspace joined is at home (Stations.kt joinedMark), as grey words before what is said of it.
+/// Where a station this workspace joined is at home, as grey words before what is said of it.
 fn joined_mark(s : Json?) -> String {
   if !flag(s, "joined") {
     return ""
@@ -76,7 +76,7 @@ fn stations_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       None => ["waiting"]
     }
     keys.push("foot")
-    scroll_page(c, "stations", blocks, keys~)
+    scroll_page(c, "stations", blocks, keys~, continuity=fn(k) { k.has_prefix("st/") })
   })
 }
 
@@ -89,7 +89,8 @@ fn card_head(c : @ui.Ctx, mark : () -> Unit, name : String, said : String?, end 
     // In a box as large whatever it is: an emoji is drawn wider than an icon, and the names line up.
     c.box(w=Px(card_mark), h=Px(card_mark), align=ACenter, justify=JCenter, mark) |> ignore
     c.box(w=Fill(1.0), fn() {
-      c.text(name, size=t.t.title, weight=700, color=t.p.text, wrap=false, line=22.0) |> ignore
+      // A card is a summary; its page can show the station's name in full.
+      c.text(name, size=t.t.title, weight=700, color=t.p.text, wrap=false, line=22.0, allow_ellipsis=true) |> ignore
       match said {
         Some(line) => c.text(line, size=t.t.meta, color=t.p.muted, wrap=false, w=Fill(1.0), line=18.0) |> ignore
         None => ()
@@ -111,46 +112,46 @@ fn station_card(c : @ui.Ctx, core : Core, st : Json) -> Unit {
   let t = @sf.theme()
   let s = Some(st)
   let address = text(s, "station")
-  if card(c, key="station/" + address, fn() {
-      let emoji = text(s, "emoji")
-      let icon = text(s, "icon")
-      card_head(
-        c,
-        fn() {
-          if @sf.has_station_mark(emoji, icon) {
-            @sf.station_mark(c, emoji, icon, card_mark, t.p.text)
-          } else {
-            @sf.icon(c, "server", size=card_mark, color=t.p.text) |> ignore
-          }
-        },
-        text(s, "name"),
-        Some(join([joined_mark(s), text(s, "summary")], " · ")),
-        fn() {
-          if flag(s, "reconnecting") {
-            reconnecting(c)
-          }
-          chevron(c)
-        },
-      )
-      station_body(c, core, s)
-    }) {
+  card(c, key="station/" + address, fn() {
+    let emoji = text(s, "emoji")
+    let icon = text(s, "icon")
+    card_head(
+      c,
+      fn() {
+        if @sf.has_station_mark(emoji, icon) {
+          @sf.station_mark(c, emoji, icon, card_mark, t.p.text)
+        } else {
+          @sf.icon(c, "server", size=card_mark, color=t.p.text) |> ignore
+        }
+      },
+      text(s, "name"),
+      Some(join([joined_mark(s), text(s, "summary")], " · ")),
+      fn() {
+        if flag(s, "reconnecting") {
+          reconnecting(c)
+        }
+        chevron(c)
+      },
+    )
+    station_body(c, core, s)
+  }, on_press=fn() {
     (core.push)(Station(address))
-  }
+  })
 }
 
 ///|
 /// How this device reaches station `s` now, its figures (Stations.kt rememberStationNet: the `stationNet` view, sampled
 /// while shown; none before a connection of its own is open).
 fn station_net(core : Core, s : Json?) -> Json? {
-  // (the view's null: no connection of this device's own open yet, as none; Stations.kt's StationNet?)
-  match (core.topic)("stationNet", { "station": str(text(s, "station")) }).value {
+  // (the view's null: no connection of this device's own open yet, as none)
+  match (core.topic)("stationNet", { "station": str(text(s, "station")) }).get().value {
     Some(Object(_)) as v => v
     _ => None
   }
 }
 
 ///|
-/// Up but not reached just now (Stations.kt Reconnecting): what shows of it is from before.
+/// Up but not reached just now: what shows of it is from before.
 fn reconnecting(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   c.box(dir=Row, gap=5.0, align=ACenter, fn() {
@@ -180,14 +181,11 @@ fn station_body(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
       // the boxes of what runs low; not read yet, grey bars over their room
       c.box(style=@sf.full_width, fn() {
         c.box(style=seen(peek_meters, host is Some(_), faded), fn() {
-          for m in items(host, "meters") {
-            if text(Some(m), "level") != "ok" {
-              @sf.meter_chip(c, Some(m), key="station-body/" + text(s, "station"))
-            }
-          }
+          let low = items(host, "meters").filter(fn(m) { text(Some(m), "level") != "ok" })
+          @sf.meter_line(c, low, key="station-body/" + text(s, "station"))
         })
         |> ignore
-        if online && host is None {
+        if online && host is None && !unreadable(s) {
           c.layer(fn() { sample_meters(c, "station-body/" + text(s, "station")) }) |> ignore
         }
       })
@@ -284,24 +282,19 @@ fn clamp(n : Int) -> Int {
 }
 
 ///|
-/// A machine's CPU, memory and disk (components.tsx MeterChips), each a chip (MeterChip) with what it is in its tip;
+/// A machine's CPU, memory and disk, each a chip (MeterChip) with what it is in its tip;
 /// `alerts`: only those running low. 8 apart.
 pub fn meter_chips(c : @ui.Ctx, key : String, meters : Array[Json], alerts? : Bool = false) -> Unit {
   c.box(style=peek_meters, fn() {
-    for m in meters {
-      let mv = Some(m)
-      if alerts && text(mv, "level") == "ok" {
-        continue
-      }
-      // (what it is in the chip's own tip)
-      @sf.meter_chip(c, mv, key=key + "/meter")
-    }
+    // (what it is in the chip's own tip)
+    let shown = if alerts { meters.filter(fn(m) { text(Some(m), "level") != "ok" }) } else { meters }
+    @sf.meter_line(c, shown, key=key + "/meter")
   })
   |> ignore
 }
 
 ///|
-/// This device's connection to a station (Stations.kt NetLine): how it goes (and packets lost) over its round trip on
+/// This device's connection to a station: how it goes (and packets lost) over its round trip on
 /// the left; on the right ↑ over ↓, the speed each way and what went that way.
 fn net_line(c : @ui.Ctx, net : Json?) -> Unit {
   let t = @sf.theme()
@@ -389,109 +382,6 @@ fn dial_figure(c : @ui.Ctx, big : String, unit : String, color : Int64) -> Unit 
   )
   |> ignore
 }
-
-///|
-/// A machine's CPU, memory and disk on its page (Parts.kt MeterDials): each what is left large over ten cells (lit as
-/// far as is used), what it is and what it is out of; three sharing the width.
-fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
-  let t = @sf.theme()
-  c.box(dir=Row, w=Fill(1.0), gap=16.0, fn() {
-    for m in meters {
-      let v = Some(m)
-      let level = text(v, "level")
-      let tone = @sf.level_color(level)
-      let low = level == "amber" || level == "red"
-      let lit = ((100 - clamp(count(v, "left"))).to_double() / 10.0 + 0.5).floor().to_int()
-      c.box(w=Fill(1.0), gap=2.0, fn() {
-        dial_figure(c, text(v, "big"), text(v, "unit"), if low { tone } else { t.p.text })
-        c.box(dir=Row, pt=4.0, pb=6.0, gap=2.0, fn() {
-          for i in 0..<10 {
-            c.box(w=Px(7.0), h=Px(14.0), radius=2.0, bg=if i < lit { tone } else { t.p.line }, fn() {  }) |> ignore
-          }
-        })
-        |> ignore
-        c.text(text(v, "title"), size=t.t.meta, weight=500, color=t.p.text, wrap=false, line=18.0) |> ignore
-        c.text(
-          match text(v, "total") {
-            "" => " "
-            x => x
-          },
-          size=t.t.caption,
-          color=t.p.muted,
-          wrap=false,
-          line=17.0,
-        )
-        |> ignore
-      })
-      |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
-/// What is left of it large, 4 down.
-// kept across runs: a value (no field of it changes)
-let figures_dials : @ui.Style = @ui.css("w=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let figures_dials_in : @ui.Style = @ui.css("w=Full pt=S1")
-
-///|
-/// The dials' places before it is read, 16 apart (Bar 90 by 76, 6 round).
-// kept across runs: a value (no field of it changes)
-let figures_dials_unread : @ui.Style = @ui.css("row w=Full h=Full gap=S4")
-
-///|
-let unread_dial_w : Double = 90.0
-
-///|
-let unread_dial_h : Double = 76.0
-
-///|
-let unread_dial_r : Double = 6.0
-
-///|
-/// Its network 14 under the dials.
-// kept across runs: a value (no field of it changes)
-let figures_net : @ui.Style = @ui.css("w=Full pt=S3_5")
-
-///|
-/// Its rows, 8 apart (HostDetails).
-// kept across runs: a value (no field of it changes)
-let figures_rows : @ui.Style = @ui.css("w=Full gap=S2")
-
-///|
-/// What lies evenly down a room (its spacers share what is left).
-// kept across runs: a value (no field of it changes)
-let figures_spread : @ui.Style = @ui.css("w=Full h=Full")
-
-///|
-let unread_detail_w : Double = 180.0
-
-///|
-/// Its agents' processes, 14 under its network.
-// kept across runs: a value (no field of it changes)
-let figures_running : @ui.Style = @ui.css("w=Full pt=S3_5")
-
-///|
-/// A line's room, as tall as a line in Chinese (18), what it says centred across it (Line).
-// kept across runs: a value (no field of it changes)
-let figures_line : @ui.Style = @ui.css("w=Full h=S4_5 justify=JCenter")
-
-///|
-let unread_running_w : Double = 120.0
-
-///|
-/// A part's line where it has nothing to show (offline): 13 on 20, muted (Stations.kt StationDevice's, StationMachine's).
-// kept across runs: a value (no field of it changes)
-let part_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, leading=L5, w=Full)
-
-///|
-/// The parts' choice under the bar (StationScreen's Seg): 12 in from the page's sides as its cards, 10 over the first.
-// kept across runs: a value (no field of it changes)
-let parts_room : @ui.Style = @ui.css("w=Full px=S3 pb=S2_5")
 
 ///|
 /// The page's part shown, by station, by its name (StationPage.tsx Part: overview 概览, processes 进程, settings 设置,

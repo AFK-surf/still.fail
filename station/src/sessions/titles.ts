@@ -1,4 +1,4 @@
-// A chat named by its agent (the Rust station's hub/titles.rs, chat_post's title): the first name at once, a new one only when
+// A chat named by its agent (chat_post's title): the first name at once, a new one only when
 // the talk has moved on (people said enough since, and it was not changed too often), never over a name people gave
 // it, and not while someone has the chat open: then it waits until they leave. Redesigned on one point: a name that
 // waits looks again when the chat would no longer count as open (its last read plus OPEN_MS), not every minute.
@@ -38,6 +38,22 @@ export function nameChat(hub: Hub, thread: ThreadRow, given: string): string {
   return ` Titled the chat "${title}".`;
 }
 
+/// The chat session `key` last heard from, as its address, when it still has no name and nobody is at work in it:
+/// neither people nor an agent named it (nor waits to), a person has said something there, and none of its other
+/// agents is running, waiting or about to be handed a message.
+export function untitledChat(hub: Hub, key: string): string | null {
+  const thread = hub.store.latestThread(key)?.thread;
+  if (!thread || thread.hiddenAt !== null) return null;
+  if ((thread.title !== null && thread.title.trim() !== "") || thread.autoTitle !== null || hub.titles.has(thread.id)) return null;
+  if (hub.store.firstText(thread.id) === null) return null;
+  const atWork = hub.store.threadSessions(thread.id).some(({ session }) => {
+    if (session === key) return false;
+    const last = hub.store.lastTurn(session);
+    return hub.processState(session) === "running" || hub.store.hasPending(session) || (last !== null && (last.endedAt === null || last.declared === "waiting"));
+  });
+  return atWork ? null : `${thread.channel}/${thread.threadTs}`;
+}
+
 /// Whether `title` may name the chat now (false: it already does), or why not.
 function mayName(hub: Hub, thread: number, title: string): boolean | string {
   const row = hub.store.getThread(thread);
@@ -48,14 +64,14 @@ function mayName(hub: Hub, thread: number, title: string): boolean | string {
   if (given.title === title) return false;
   if (given.changes >= CHANGES) return "it has been changed as often as it may be";
   // A watch started since: the name may say so at once (job_start's watch), not only once the talk moved on.
-  if (hub.store.peopleSaidAfter(thread, given.n) < SAID_BEFORE_CHANGE && !watchingIn(hub, thread)) {
+  if (hub.store.peopleSaidAfter(thread, given.n, SAID_BEFORE_CHANGE) < SAID_BEFORE_CHANGE && !watchingIn(hub, thread)) {
     return "people have said too little since it was given; change it only when it no longer says what the chat is about";
   }
   return true;
 }
 
 /// Whether one of the chat's agents keeps watch (a watch job of its runs).
-const watchingIn = (hub: Hub, thread: number) => hub.store.threadSessions(thread).some((m) => hub.store.listJobs(m.session).some((j) => j.watch && j.state === "running"));
+const watchingIn = (hub: Hub, thread: number) => hub.store.hasActiveWatch(thread);
 
 const isOpen = (hub: Hub, thread: number) => {
   const at = hub.store.lastReadAt(thread);

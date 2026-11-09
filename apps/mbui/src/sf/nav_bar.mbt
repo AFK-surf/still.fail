@@ -4,7 +4,7 @@
 // each in its middle; a title's second line hangs below it, the bar taller by it. (NavBar sets the title's line 30, 1
 // higher, to stand on the back word's baseline, with 2 under it: on the Mac's text its letters then stood 1 over the
 // back word's. Here the title's line is the 32 and nothing under it: the line under the title and the bar's height
-// are NavBar's.) The title is in the middle of the bar inside its padding (10 at the start, 16 at the end) and keeps 84 clear
+// are NavBar's.) The title is in the middle of the bar inside its padding (16 at either end) and keeps 84 clear
 // at either side.
 
 ///|
@@ -14,14 +14,14 @@
 let nav_back_box : @ui.Style = @ui.css("row pr=S1_5 pt=S1 pb=S1 radius=Lg align=ACenter")
 
 ///|
-/// Back's word in a link's ink, its chevron the accent (Parts.kt:491 C.link, 490 C.accent).
+/// Back's word in a link's ink, its chevron the accent (490 C.accent).
 // kept across runs: a value (no field of it changes)
 let nav_back_words : @ui.TextStyle = @ui.text_style(size=Title, leading=Font, color=Link, wrap=false)
 
 ///|
-/// The bar: 10 in at its start, 16 at its end, 6 over and 10 under (NavBar).
+/// The bar: 16 in at each end, 6 over and 10 under.
 // kept across runs: a value (no field of it changes)
-let nav_bar_box : @ui.Style = @ui.css("w=Full pl=S2_5 pr=S4 pt=S1_5 pb=S2_5")
+let nav_bar_box : @ui.Style = @ui.css("w=Full px=S4 pt=S1_5 pb=S2_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -55,11 +55,11 @@ let nav_trailing : @ui.Style = @ui.css("row h=S8 align=ACenter")
 
 ///|
 /// Back: a chevron and where to in a link's ink, the accent's that reads on the page (Parts.kt NavBack; the accent
-/// itself, a fill's, was 2.8 to 1 there: docs/ui-panels.md 对比度). Its word no wider than `max_w`
+/// itself, a fill's, was 2.8 to 1 there: mbui ui/contrast.mbt). Its word no wider than `max_w`
 /// (when that is said): there whole or not at all (Ctx::box drop), the chevron alone where it has not the room, as
 /// iOS's back button gives way; never cut short past knowing (the user, 2026-10-25). It is still what the button is
-/// called. True on the frame after it was tapped.
-pub fn nav_back(c : @ui.Ctx, key : String, label : String, max_w? : Double = 0.0) -> Bool {
+/// called. `on_press` as it is pressed.
+pub fn nav_back(c : @ui.Ctx, key : String, label : String, max_w? : Double = 0.0, on_press? : () -> Unit) -> Unit {
   let t = theme()
   let id = c.id(key)
   c.box(style=nav_back_box, id~, label=label, fn() {
@@ -76,13 +76,16 @@ pub fn nav_back(c : @ui.Ctx, key : String, label : String, max_w? : Double = 0.0
     @motion.ripple(c, id, 8.0)
   })
   |> ignore
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
 /// The bar (NavBar): back (`back_key` its id, `back` its word, `back_max` how wide the word may be), `title` in the
 /// middle and `sub` under it, `trailing` at the end; on `bg` when it is said, from `top` above it down (the status
-/// bar's height, the view under it: NavBar's windowInsetsPadding(statusBars)). True on the frame after back was tapped.
+/// bar's height, the view under it: NavBar's windowInsetsPadding(statusBars)). `on_press` when back is tapped.
 pub fn nav_bar(
   c : @ui.Ctx,
   back_key : String,
@@ -93,8 +96,9 @@ pub fn nav_bar(
   back_max? : Double = 0.0,
   bg? : Int64 = 0L,
   top? : Double = 0.0,
-) -> Bool {
-  nav_bar_in(c, back_key, back, title, sub?, trailing?, back_max~, bg~, top~)
+  on_press? : () -> Unit,
+) -> Unit {
+  nav_bar_in(c, back_key, back, title, sub?, trailing?, back_max~, bg~, top~, on_press?)
 }
 
 ///|
@@ -108,8 +112,8 @@ fn nav_bar_in(
   back_max~ : Double,
   bg~ : Int64,
   top~ : Double,
-) -> Bool {
-  let mut went = false
+  on_press? : () -> Unit,
+) -> Unit {
   // det-ok(box-loose): the page's own ground (still.fail's palette, not one of mbui's theme roles yet), as the page has it
   c.box(style=nav_bar_box, bg~, fn() {
     // under the status bar
@@ -130,7 +134,7 @@ fn nav_bar_in(
       // back and what is at the end, on the 32 line at its top
       c.layer(fn() {
         c.box(style=nav_ends, fn() {
-          went = nav_back(c, back_key, back, max_w=back_max)
+          nav_back(c, back_key, back, max_w=back_max, on_press?)
           c.spacer()
           match trailing {
             Some(f) => c.box(style=nav_trailing, fn() { f() }) |> ignore
@@ -144,5 +148,79 @@ fn nav_bar_in(
     |> ignore
   })
   |> ignore
-  went
 }
+
+///|
+/// The bar (nav_bar's) as nodes in `parent`: back to where `back` says (nav_back_node), `on_back` as it is pressed;
+/// `title` in the middle, 84 clear of either side, cut short where it has less; what `trailing` makes at its end, on
+/// back's 32 line; on the page's ground, from `top` above it down (the status bar's height as it is).
+#callsite(autofill(loc))
+pub fn nav_bar_node(
+  parent : @view.View,
+  back : () -> String,
+  title : () -> String,
+  on_back : () -> Unit,
+  top? : () -> Double = fn() { 0.0 },
+  trailing? : (@view.View) -> Unit,
+  loc~ : SourceLoc,
+) -> Unit {
+  parent.box(made_for=loc, fn(b) {
+    b
+    .padding(Is((nav_bar_x, nav_bar_top, nav_bar_x, nav_bar_foot)))
+    .ground(By(fn() { theme().p.bg }))
+    |> ignore
+    // under the status bar
+    b.box(fn(s) { s.height(By(fn() { Some(top()) })) |> ignore }) |> ignore
+    b.box(fn(i) {
+      i.lines_up(Is(Some(Middle))) |> ignore
+      // the title, in the flow: as tall as its line makes the bar
+      i.box(fn(col) {
+        col.padding(Is((nav_title_x, 0.0, nav_title_x, 0.0))).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+        col.box(fn(l) {
+          l.height(Is(Some(nav_line_h))).lies_along(Is(Middle)).clips(Is(true)).min_width(Is(Some(0.0))) |> ignore
+          l.box(fn(w) {
+            styled_words(w, title, fn() { nav_title_words }).cuts(Is(true)).min_width(Is(Some(0.0))) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      // back and what is at the end, on the 32 line at its top
+      i.box(fn(e) {
+        e.over(Is(true)).row(Is(true)).height(Is(Some(nav_line_h))).lines_up(Is(Some(Middle))) |> ignore
+        nav_back_node(e, back, on_back)
+        e.box(fn(gap) { gap.grow(Is(1.0)) |> ignore }) |> ignore
+        match trailing {
+          Some(f) =>
+            e.box(fn(t) {
+              t.row(Is(true)).height(Is(Some(nav_line_h))).lines_up(Is(Some(Middle))) |> ignore
+              f(t)
+            })
+            |> ignore
+          None => ()
+        }
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// nav_bar_box's room (16 at either end, 6 over, 10 under), the title's clear of either side (nav_title_clear) and
+/// the line back, the title and what is at the end share (nav_line's 32).
+let nav_bar_x : Double = 16.0
+
+///|
+let nav_bar_top : Double = 6.0
+
+///|
+let nav_bar_foot : Double = 10.0
+
+///|
+let nav_title_x : Double = 84.0
+
+///|
+let nav_line_h : Double = 32.0

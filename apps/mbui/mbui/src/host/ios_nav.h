@@ -280,10 +280,17 @@ API_AVAILABLE(ios(18.0))
 @property(nonatomic, copy) NSString *spec;
 @property(nonatomic, copy) NSString *tabsKey;
 @property(nonatomic, copy) NSString *action;
+// (iOS 27: the accent the action's glass is washed with, and the wash, inside the system's own glass, nav_wash)
+@property(nonatomic, strong) UIColor *actionInk;
+@property(nonatomic, strong) UIView *actionWash;
 @property(nonatomic, strong) NSMutableDictionary<NSString *, UIButton *> *floatingButtons;
 @property(nonatomic, strong) NSMutableDictionary<NSString *, NSString *> *floatingKeys;
 @property(nonatomic) BOOL shown;
 @property(nonatomic, strong) NSMutableDictionary<NSString *, UINavigationController *> *navs;
+// each id's one tab over its controller, kept as tabs come and go: a tab made again over a controller the one before
+// still had stopped the app (UIKit's assertion in -[UITab viewController], an iPhone Duo back from hours away,
+// 2026-10-30..11-01), even with the tabs before let go of first
+@property(nonatomic, strong) NSMutableDictionary<NSString *, UITab *> *tabsById;
 // (a tab chosen by the app, not the person: not said back)
 @property(nonatomic) BOOL choosing;
 // what is pressed, not gone to (the action most wanted, what opens over the page: `act/`): the navigation bar's items,
@@ -315,16 +322,20 @@ static void nav_put(UIViewController *slot) {
   [the_view requestFrame];
 }
 
-// The action's icon: the app's icon in white on a disc of its accent, kept as drawn (the system's tab tints it not).
-static UIImage *nav_disc(NSString *icon, UIColor *ground, CGFloat size) {
-  UIImage *glyph = nav_icon(icon, size * 0.55);
-  UIGraphicsImageRenderer *r = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(size, size)];
-  UIImage *img = [r imageWithActions:^(UIGraphicsImageRendererContext *ctx) {
-    [ground setFill];
-    [[UIBezierPath bezierPathWithOvalInRect:CGRectMake(0, 0, size, size)] fill];
-    [[glyph imageWithTintColor:UIColor.whiteColor] drawInRect:CGRectMake(size * 0.225, size * 0.225, size * 0.55, size * 0.55)];
-  }];
-  return [img imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
+// The system's own glass a tab is drawn on: the item's platter (`_UITabBarItemPlatterView`, in an iPhone Duo's column
+// and in the bar across the foot alike) whose place is the tab's, both in `v`'s room.
+static UIView *nav_platter(UIView *in, UIView *v, CGRect r) {
+  if ([NSStringFromClass(in.class) hasSuffix:@"TabBarItemPlatterView"]) {
+    CGRect f = [in convertRect:in.bounds toView:v];
+    if (fabs(CGRectGetMidX(f) - CGRectGetMidX(r)) < 2 && fabs(CGRectGetMidY(f) - CGRectGetMidY(r)) < 2 &&
+        fabs(f.size.width - r.size.width) < 2)
+      return in;
+  }
+  for (UIView *c in in.subviews) {
+    UIView *p = nav_platter(c, v, r);
+    if (p) return p;
+  }
+  return nil;
 }
 
 static UIColor *nav_rgba(id v) {
@@ -391,6 +402,7 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   [super viewDidLoad];
   self.delegate = self;
   self.navs = [NSMutableDictionary dictionary];
+  self.tabsById = [NSMutableDictionary dictionary];
   [self applyNone];
 }
 // Where the system put the action's tab (iOS 27's prominent one: an iPhone Duo's round one at its column's foot) in
@@ -398,6 +410,7 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
 // composer at the foot of the card beside it).
 - (void)viewDidLayoutSubviews {
   [super viewDidLayoutSubviews];
+  [self washAction];
   UIView *v = the_view;
   CGRect r = CGRectZero;
   if (v && self.action.length && !self.tabBarHidden)
@@ -410,6 +423,36 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   if (CGRectEqualToRect(r, said)) return;
   said = r;
   say_system(@{@"nav_action" : @{@"x" : @(r.origin.x), @"y" : @(r.origin.y), @"w" : @(r.size.width), @"h" : @(r.size.height)}});
+}
+// iOS 27's prominent tab, the action's, on its glass washed with the accent (the user, 2026-11-07: 橙色背景太难看了，还是
+// 得用玻璃): the system has no API for its glass's colour, so the wash is a view of ours inside the system's own glass,
+// under its glyph; it moves, presses and turns with it as a part of it. (Laid over it from the tab's frame, it was
+// left off it as the column moved: 2026-10-28, 橙色圆形跑到了按钮右边.) Found again as the system makes its glass anew
+// (the column, the bar across the foot, a pose).
+- (void)washAction {
+  if (!self.actionInk || !self.action.length || self.tabBarHidden) {
+    [self.actionWash removeFromSuperview];
+    return;
+  }
+  UITab *x = self.tabsById[self.action];
+  CGRect r = x ? [x frameInView:self.view] : CGRectNull;
+  UIView *p = CGRectIsNull(r) || CGRectIsEmpty(r) ? nil : nav_platter(self.view, self.view, r);
+  if (!p) return;
+  if (!self.actionWash) {
+    self.actionWash = [UIView new];
+    self.actionWash.userInteractionEnabled = NO;
+    self.actionWash.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    // (round as the glass is: a continuous curve as wide as half its side is no circle, it bulges at four points)
+    self.actionWash.layer.cornerCurve = kCACornerCurveCircular;
+  }
+  UIView *w = self.actionWash;
+  // (the glass seen through it, the page's words bent under it: not a disc of paint)
+  w.backgroundColor = [self.actionInk colorWithAlphaComponent:0.6];
+  w.layer.cornerRadius = MIN(p.bounds.size.width, p.bounds.size.height) / 2;
+  if (w.superview == p) return;
+  [w removeFromSuperview];
+  w.frame = p.bounds;
+  [p insertSubview:w atIndex:0];
 }
 // What is pressed, not gone to, as the navigation bar's own items on every tab's page (the system lays them out:
 // down the side with the tabs where its vertical bar is, across the top upright), its title none: the action most
@@ -478,6 +521,8 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
                             if (still()) drawn.image = nav_any(spec, 24);
                           })
                                         : nav_letter(d[@"title"], 24);
+        // (a chat's "…" the system's own glyph, as the "…" it folds into: the user, 2026-11-04)
+        if ([ident hasSuffix:@"chat/more"]) icon = [UIImage systemImageNamed:@"ellipsis"] ?: icon;
         BOOL prominent = [d[@"prominent"] boolValue];
         // (said with where the item is in the app's view, for what opens from it: a popover at it)
         __block __weak UIBarButtonItem *weak = nil;
@@ -534,11 +579,17 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
           if ([ident hasPrefix:@"act/"] || [ident hasPrefix:@"lead/"]) b.sharesBackground = NO;
 #ifdef __IPHONE_27_0
           // (short of room in the column, what goes first: never 待处理's bell, the user 2026-10-27, more wanted than the
-          // workspace's and than any page's action; a page's first)
+          // workspace's and than any page's action; a page's first, and of a page's one that is itself a menu (a
+          // chat's "…") before the rest: folded, it is a submenu of the system's "…", nothing lost, where its button
+          // left beside the system's would be two "…" in the column: the user 2026-11-03)
           if (@available(iOS 27.0, *)) {
             // (the bell above all: on the outer screen's short column there is room for one of the app's own)
-            if ([ident hasSuffix:@"/attention"]) b.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
-            else if (![ident hasPrefix:@"act/"] && ![ident hasPrefix:@"lead/"]) b.visibilityPriority = UIBarButtonItemVisibilityPriorityLow;
+            if ([ident hasSuffix:@"/attention"] || [ident hasSuffix:@"side/close"]) b.visibilityPriority = UIBarButtonItemVisibilityPriorityHigh;
+            else if (![ident hasPrefix:@"act/"] && ![ident hasPrefix:@"lead/"])
+              b.visibilityPriority = rows.count ? UIBarButtonItemVisibilityPriorityLow - 1 : UIBarButtonItemVisibilityPriorityLow;
+            // (on a glass of its own: on one with the others, short of room, the system folded those and left this "…"
+            // beside its own: the user 2026-11-04)
+            if (rows.count) b.sharesBackground = NO;
           }
 #endif
           b.badge = [d[@"dot"] boolValue] ? [UIBarButtonItemBadge indicatorBadge] : nil;
@@ -594,6 +645,19 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
     self.navs[ident] = nav;
   }
   return nav;
+}
+// The tab of `ident` (made once, over its controller), its words and picture as given.
+- (UITab *)tabFor:(NSString *)ident title:(NSString *)title image:(UIImage *)image {
+  UITab *tab = self.tabsById[ident];
+  if (!tab) {
+    UINavigationController *nav = [self navFor:ident];
+    tab = [[UITab alloc] initWithTitle:title image:image identifier:ident viewControllerProvider:^(UITab *t) { return nav; }];
+    self.tabsById[ident] = tab;
+    return tab;
+  }
+  if (![tab.title isEqualToString:title]) tab.title = title;
+  tab.image = image;
+  return tab;
 }
 // The app reserves only the geometry. UIKit owns the glass, press feedback, title, image and popup menu.
 - (void)floatingItems:(NSArray<NSDictionary *> *)items ink:(UIColor *)ink {
@@ -695,7 +759,7 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   if (self.tabsKey.length || !self.tabs.count) {
     self.tabsKey = @"";
     self.choosing = YES;
-    self.tabs = @[ [[UITab alloc] initWithTitle:@"" image:nil identifier:@"" viewControllerProvider:^(UITab *t) { return nav; }] ];
+    self.tabs = @[ [self tabFor:@"" title:@"" image:nil] ];
     self.choosing = NO;
   }
   self.tabBarHidden = YES;
@@ -749,18 +813,30 @@ static void nav_title(UINavigationItem *item, NSString *title, UIColor *ink) {
   if (![key isEqualToString:self.tabsKey]) {
     self.tabsKey = key;
     NSMutableArray<UITab *> *made = [NSMutableArray array];
+    // (an id twice one tab: one controller is never two tabs')
+    NSMutableSet<NSString *> *seen = [NSMutableSet set];
     for (NSDictionary *t in places) {
-      UINavigationController *nav = [self navFor:t[@"id"]];
-      [made addObject:[[UITab alloc] initWithTitle:t[@"title"] image:nav_any(t[@"icon"], 26) identifier:t[@"id"]
-                                viewControllerProvider:^(UITab *x) { return nav; }]];
+      if ([seen containsObject:t[@"id"]]) continue;
+      [seen addObject:t[@"id"]];
+      UITab *tab = [self tabFor:t[@"id"] title:t[@"title"] image:nav_any(t[@"icon"], 26)];
+      // (the action's tab before, a place now: pinned no more)
+      tab.preferredPlacement = UITabPlacementDefault;
+      [made addObject:tab];
     }
     // (the action a tab of its own the system sets apart at the bar's end, as Xiaohongshu's 发布 is, on the system's
-    // glass, with an accent glyph: never chosen, shouldSelectTab says it)
+    // glass, with an accent glyph (iOS 27: white on its glass washed with the accent, washAction): never chosen,
+    // shouldSelectTab says it)
     self.action = act[@"id"];
-    if (act) {
-      UINavigationController *own = [self navFor:act[@"id"]];
-      UITab *x = [[UITab alloc] initWithTitle:act[@"title"] image:[nav_icon(act[@"icon"], 26) imageWithTintColor:accent renderingMode:UIImageRenderingModeAlwaysOriginal] identifier:act[@"id"]
-                       viewControllerProvider:^(UITab *t) { return own; }];
+    self.actionInk = nil;
+    if (act && ![seen containsObject:act[@"id"]]) {
+      UIImage *image = [nav_icon(act[@"icon"], 26) imageWithTintColor:accent renderingMode:UIImageRenderingModeAlwaysOriginal];
+#ifdef __IPHONE_27_0
+      if (@available(iOS 27.0, *)) {
+        image = [nav_icon(act[@"icon"], 26) imageWithTintColor:UIColor.whiteColor renderingMode:UIImageRenderingModeAlwaysOriginal];
+        self.actionInk = accent;
+      }
+#endif
+      UITab *x = [self tabFor:act[@"id"] title:act[@"title"] image:image];
       x.preferredPlacement = UITabPlacementPinned;
       [made addObject:x];
     }
