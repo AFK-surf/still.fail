@@ -290,7 +290,7 @@ fn journal_work(what : Done, start : Double, end : Double) -> Unit {
   }
   journal_counts[4] += end - start
   // (what it went on, the longest first)
-  // (a part 1 ms in all at least: each of them however short, summed by where it was made)
+  // (a part 1 ms in all at least: its pieces summed by where it was made, each as short as work_part tells)
   let notes = if journal_notes.is_empty() {
     []
   } else {

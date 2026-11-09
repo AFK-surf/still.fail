@@ -206,7 +206,7 @@ test "a hang as JSON: its rule, times from its start, each contributor's kind an
 }
 
 ///|
-test "many short parts of a kind, each under 1 ms, summed: what a burst of messages went on is kept" {
+test "many short parts of a kind, each under 1 ms (0.1 at least), summed: what a burst of messages went on is kept" {
   let (_, clock) = journal_start()
   defer set_work_clock(None)
   let told : Array[Hang] = []
