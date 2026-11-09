@@ -670,6 +670,15 @@ pub fn Tester::judges_motion(self : Tester) -> Bool {
 }
 
 ///|
+/// Whether this test program runs at a rate (MBUI_TEST_FPS, scripts/fps_check.sh): frames drawn on run_for's way. A
+/// test that walks its frames itself (`frame()`, the display's at any rate) to judge how what moves goes from frame to
+/// frame (send_steady_wbtest.mbt) is the default run's alone: at a rate it draws the very same frames and would only
+/// repeat itself (the user, 2026-11-09: 逐帧平滑度测试只在默认帧率跑).
+pub fn test_at_a_rate() -> Bool {
+  test_frames_between() > 0.0
+}
+
+///|
 /// When a Tester's first frame is drawn, after its `time`: the app's first frame, as a 60 Hz display's first would be,
 /// whatever the display's period (Tester::set_frame_period): what happens at the app's start happens at the same
 /// moment at any frame rate.
