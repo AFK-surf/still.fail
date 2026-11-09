@@ -136,7 +136,13 @@ test "scrolls_window reused: those put by follow nothing, those that show what t
   // (a wheel's turn of 40: the first, 40 tall, no more shows, put by)
   c.tree.wheel_at(150.0, 50.0, 0.0, 40.0, 0, 10.0) |> ignore
   c.tree.frame(390.0, 844.0) |> ignore
-  let showing = c.blocks.filter(fn(b) { b.0.parent() is Some(_) }).length()
+  // (those in sight: those put by are left where they were, out of it)
+  let showing = c.blocks
+    .filter(fn(b) {
+      let (_, y, _, h) = b.0.rect()
+      y + h > 0.0 && y < 100.0
+    })
+    .length()
   let before = c.reads.val
   c.outside.set(1)
   c.tree.frame(390.0, 844.0) |> ignore

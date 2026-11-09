@@ -5877,6 +5877,21 @@ fn View::park(self : View, v : View) -> () -> Unit {
 }
 
 ///|
+/// What this and what it holds bind at rest (@signals.rest), left where it is: following nothing, nothing of it worked
+/// out again, what is held while it is read held for none of it; what this gives wakes it, each binding worked out
+/// anew. For what is out of sight and kept to be another's (a list's block put by: View::scrolls_window's `reused`).
+fn View::rests(self : View) -> () -> Unit {
+  guard self.alive() else { return fn() {  } }
+  let wakes : Array[() -> Unit] = []
+  self.tree.rest_in(self.at, wakes)
+  fn() {
+    for w in wakes {
+      w()
+    }
+  }
+}
+
+///|
 /// What node `at` and what it holds bind, at rest (View::park), each's waking added to `wakes`.
 fn Tree::rest_in(self : Tree, at : Int, wakes : Array[() -> Unit]) -> Unit {
   let n = self.nodes[at]
