@@ -61,7 +61,7 @@ import { Loads } from "./preview-load.ts";
 import { Asks } from "./asks.ts";
 import { Adb } from "./adb.ts";
 import { PersonalLock } from "./personal-lock.ts";
-import { bindPerson, keepToPerson, lockSeen, tellStations } from "./views/lock.ts";
+import { bindPerson, keepToPerson, lockSeen, refusedAgain, tellStations } from "./views/lock.ts";
 import { personalBegin, personalCancel, personalPairState, personalProve } from "./views/pair.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
@@ -303,6 +303,7 @@ export class Core {
               lockSeen(inner).touch(`lock ${ws}`);
               inner.runner.fork(bindPerson(inner, ws));
               inner.runner.fork(keepToPerson(inner, ws));
+              refusedAgain(inner, ws);
             }
           },
           told: (sub, chain) => tellStations(inner, sub, chain),
