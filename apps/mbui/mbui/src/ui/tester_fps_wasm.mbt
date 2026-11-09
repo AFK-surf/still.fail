@@ -8,6 +8,6 @@ fn test_frames_between() -> Double {
 
 ///|
 /// (none either: test_motion_judged, tester_fps.mbt)
-fn test_motion_judged() -> MotionJudged {
+fn test_motion_judged(_loc : String) -> MotionJudged {
   Results
 }

@@ -70,8 +70,10 @@ yet and you can add one, add it.
   (`frame()`, the same frames at any rate) returns at once at a rate (`@ui.test_at_a_rate()`, send_steady_wbtest.mbt).
   That line: `MBUI_TEST_MOTION` (`count`, `judge`; `src/ui/tester_fps.mbt`) judges them at 60 and 120 on every frame on
   the way as well, where a step half way through a motion shows (「动画执行到一半突变也算突变」); CI's 60 and 120 runs
-  count them now (the job's summary, the `motion-*` artifacts: `scripts/motion_said.sh`), mended down to none before
-  they judge. No exemption mends one: the `*_known` bars only fall.
+  count them (the job's summary, the `motion-*` artifacts: `scripts/motion_said.sh`) only in the files each test
+  package still lists as it starts (`@ui.motion_counted`, `src/ui/tester.mbt`) and judge every other file, so one
+  mended to none stays so and a new one starts judged. No exemption mends one: the `*_known` bars only fall, and a
+  file leaves `motion_counted` once it shows none; one is never added to it.
 - Motion is data: said once with where from, where to, curve and start; its
   value at any time computed from that. Nothing in an animation, a timer or a fiber may step frame by frame
   (`@effect.next_frame` loops), or start at "the next frame" instead of the moment of what caused it. A motion is set
