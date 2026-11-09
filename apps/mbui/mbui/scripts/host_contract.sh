@@ -57,6 +57,9 @@
 #        the app (kitdemo's MBUI_FONTSCALECHECK, src/kitdemo/gallery/fontscalecheck.mbt): 1.5
 #   scripts/host_contract.sh mac a11y           the app's widgets as VoiceOver walks the view's elements (in the app:
 #        MBUI_A11Y_SELFCHECK), words put in a field and a button pressed through them
+#   scripts/host_contract.sh ios a11y           the same on the simulator: the view's accessibility elements walked in the
+#        app, the button activated through its own element
+#   scripts/host_contract.sh linux a11y         the canvas's GtkAccessibles walked in the app as AT-SPI walks them
 #   scripts/host_contract.sh windows a11y       the app's widgets read out by UI Automation's client (kitdemo's
 #        MBUI_A11YCHECK, src/kitdemo/gallery/a11ycheck.mbt; test/host/a11ycheck.ps1): a button and a checkbox found by
 #        their names, as their control types and the checkbox's state, words put in a field, the button invoked and the
@@ -209,7 +212,7 @@ run() {
       [[ $pid =~ ^[0-9]+$ ]] || { echo "host_contract: the app did not start"; tail -20 "$2"; return 1; }
       # the app's own named end, or its process gone without it (a crash); then its exit (the drive's and the check's
       # own, @hostapi.exit), so that its log is all written (scripts/chk logwait: kqueue's events, no time)
-      scripts/chk logwait --log "$2" --line "DRIVE (PASS|END|FAIL)|TEXTCHECK (done|no kept)|MARKS (done|none|failed)|VIEWCHECK done|SITECHECK done" --pid $pid \
+      scripts/chk logwait --log "$2" --line "DRIVE (PASS|END|FAIL)|TEXTCHECK (done|no kept)|MARKS (done|none|failed)|VIEWCHECK done|SITECHECK done|A11YCHECK activated" --pid $pid \
         || { echo "host_contract: the app ($pid) ended, or hung, saying nothing of its end"; tail -20 "$2"; return 1; }
       scripts/chk logwait --pid $pid ;;
   esac
@@ -746,7 +749,29 @@ INSTALL
       echo "a11y contract (mac): a field, a button and a checkbox told VoiceOver, words written in the field and the button pressed through them"
       exit 0
     fi
-    [ "$H" = windows ] || { echo "a11y contract: Windows' and the Mac's (Android's is TalkBack's on its emulator)"; exit 1; }
+    if [ "$H" = ios ]; then
+      # (iOS: the view's accessibility elements walked in the app itself as VoiceOver walks them, MBUI_A11Y_SELFCHECK, as on
+      # the Mac; the simulator runs no VoiceOver of its own a run could drive)
+      run "MBUI_A11YCHECK=1 MBUI_A11Y_SELFCHECK=1" $O/a11y.log || true
+      grep -a "^A11Y\|A11YCHECK" $O/a11y.log
+      grep -aq "A11Y node Button A11YCHECK press" $O/a11y.log && grep -aq "A11Y node Checkbox A11YCHECK check" $O/a11y.log &&
+        grep -aq "A11Y button traits [0-9]* activated 1" $O/a11y.log && grep -aq "A11YCHECK activated" $O/a11y.log ||
+        { echo "a11y contract (ios): not told VoiceOver and pressed as told"; tail -20 $O/a11y.log; exit 1; }
+      echo "a11y contract (ios): a button and a checkbox told VoiceOver, the button pressed through it"
+      exit 0
+    fi
+    if [ "$H" = linux ]; then
+      # (Linux: the canvas's accessibles walked in the app itself as AT-SPI walks them, MBUI_A11Y_SELFCHECK; GTK 4.14 gives
+      # an accessible that is no widget no action, so the button is asked of the app as a reader's would be)
+      run "MBUI_A11YCHECK=1 MBUI_A11Y_SELFCHECK=1" $O/a11y.log || true
+      grep -a "^A11Y\|A11YCHECK" $O/a11y.log
+      grep -aq "A11Y node Button A11YCHECK press$" $O/a11y.log && grep -aq "A11Y node Checkbox A11YCHECK check$" $O/a11y.log &&
+        grep -aq "A11Y walked" $O/a11y.log && grep -aq "A11YCHECK activated" $O/a11y.log ||
+        { echo "a11y contract (linux): not told GTK's accessibility, or not walked as told"; tail -20 $O/a11y.log; exit 1; }
+      echo "a11y contract (linux): a button and a checkbox told GTK's accessibility, walked as AT-SPI walks them, with their bounds"
+      exit 0
+    fi
+    [ "$H" = windows ] || { echo "a11y contract: Windows', the Mac's, iOS's and Linux's (Android's is TalkBack's on its emulator)"; exit 1; }
     # the app's widgets as UI Automation's client finds them (test/host/a11ycheck.ps1), the button pressed through it
     A=$PWD/$O/a11y
     rm -rf "$A" && mkdir -p "$A"
