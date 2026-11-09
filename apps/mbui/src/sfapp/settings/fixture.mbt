@@ -77,6 +77,12 @@ priv struct SettingsFixture {
   mut willow_incompatible : Bool
   /// the subscriptions' allowances a month's window too, three in all (settings-profiles-monthly: OpenCode Go's)
   mut monthly : Bool
+  /// the Claude subscription's allowance its models' own weeks too, under the account's: how many of Fable's, Opus's
+  /// (nearly spent) and Sonnet's (settings-profiles-fable, settings-profile-fable: one; …-own3: all three, five windows)
+  mut own : Int
+  /// that subscription with no 5 小时 window (…-week-fable: the account's week and Fable's alone, as an account says
+  /// them whose short window has not begun)
+  mut no_hours : Bool
   /// The same subscription independently signed in and borrowed on several stations.
   mut profile_hosts : Bool
   /// Only one station is signed in; another borrows it.
@@ -133,6 +139,8 @@ let fx : SettingsFixture = {
   willow_away: false,
   willow_incompatible: false,
   monthly: false,
+  own: 0,
+  no_hours: false,
   profile_hosts: false,
   profile_one_owner: false,
   profile_away: false,
@@ -246,6 +254,8 @@ fn fixture_reset() -> Unit {
   fx.willow_away = false
   fx.willow_incompatible = false
   fx.monthly = false
+  fx.own = 0
+  fx.no_hours = false
   fx.profile_hosts = false
   fx.profile_one_owner = false
   fx.profile_away = false
@@ -447,6 +457,13 @@ pub fn fixture_page(mode : String) -> String {
     // Profile's ＋ with more than one station online: which to add it on (pressed by the film's step)
     "settings-profiles-pick" => fx.mba_online = true
     "settings-profiles-monthly" => fx.monthly = true
+    "settings-profiles-fable" | "settings-profile-fable" => fx.own = 1
+    // (settings-station-own3: the station's page, for its accounts' panel pictured with them)
+    "settings-profiles-own3" | "settings-profile-own3" | "settings-station-own3" => fx.own = 3
+    "settings-profiles-week-fable" | "settings-profile-week-fable" => {
+      fx.own = 1
+      fx.no_hours = true
+    }
     "settings-stations-existing" => up("add-existing", "", 0)
     "settings-stations-command" => up("add-command", "", 0)
     "settings-first-station" => fx.none = true
@@ -573,17 +590,17 @@ pub fn fixture_page(mode : String) -> String {
     "settings-notify-off" | "settings-lock-prompt" | "settings-lock-prompt-personal" | "settings-vault-prompt" => "home"
     // (the notifications' page; the system having refused them: its banner's way to allow them)
     "settings-notify" | "settings-notify-denied" => "notifications"
-    "settings-station" | "settings-station-many-profiles" => "station:ws1/st1"
+    "settings-station" | "settings-station-many-profiles" | "settings-station-own3" => "station:ws1/st1"
     "settings-station-offline" => "station:ws1/st2"
     "settings-memory" => "memory:ws1/st1"
     "settings-memory-doc" => "memory-doc:ws1/st1#发布流程"
-    "settings-profile" | "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-hosts-cutoff" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" =>
+    "settings-profile" | "settings-profile-hosts" | "settings-profile-hosts-one" | "settings-profile-hosts-away" | "settings-profile-hosts-pending" | "settings-profile-hosts-cutoff" | "settings-profile-quota-failed" | "settings-profile-blocked" | "settings-profile-signin" | "settings-profile-fable" | "settings-profile-own3" | "settings-profile-week-fable" =>
       "profile:ws1/st1#cc"
     "settings-profile-key" => "profile:ws1/st1#k2"
     "settings-profile-quota" | "settings-profile-quota-login" | "settings-profile-quota-expiry" => "profile:ws1/st1#cx"
     "settings-me-reading" => "me"
     "settings-usage-details-pending" => "usage"
-    "settings-profiles-pick" | "settings-profiles-monthly" => "profiles"
+    "settings-profiles-pick" | "settings-profiles-monthly" | "settings-profiles-fable" | "settings-profiles-own3" | "settings-profiles-week-fable" => "profiles"
     "settings-connect" | "settings-connect-borrow" => "connect:ws1/st1#k1"
     _ =>
       if m.has_prefix("settings-") {
@@ -662,15 +679,23 @@ fn fx_profile(id : String, name : String, kind : String, tone : String, check : 
       (
         "windows",
         Json::array(
-        [
-          obj([("label", str("5 小时")), ("usedPercent", Json::number(38.0)), ("mark", str("5H")), ("left", Json::number(62.0)), ("level", str("ok")), ("refills", str("2 小时后恢复"))]),
-          obj([("label", str("本周")), ("usedPercent", Json::number(81.0)), ("mark", str("W")), ("left", Json::number(19.0)), ("level", str("amber")), ("refills", str("星期一恢复"))]),
-        ].iter().concat(
+        (if fx.no_hours {
+          []
+        } else {
+          [obj([("label", str("5 小时")), ("usedPercent", Json::number(38.0)), ("mark", str("5H")), ("left", Json::number(62.0)), ("level", str("ok")), ("refills", str(if fx.own > 0 { "3 小时 5 分钟后刷新" } else { "2 小时后恢复" }))])]
+        }).iter().concat(
+          // (with its models' own: named and refilling in the words the core says, their real length)
+          [obj([("label", str(if fx.own > 0 { "每周" } else { "本周" })), ("usedPercent", Json::number(81.0)), ("mark", str("W")), ("left", Json::number(19.0)), ("level", str("amber")), ("refills", str(if fx.own > 0 { "2 天 4 小时后刷新" } else { "星期一恢复" }))])].iter(),
+        ).concat(
           (if fx.monthly {
             [obj([("label", str("每月")), ("usedPercent", Json::number(3.0)), ("mark", str("M")), ("left", Json::number(97.0)), ("level", str("ok")), ("refills", str("11 月 1 日恢复"))])]
           } else {
             []
           }).iter(),
+        ).concat(
+          [("Fable", 46, "ok"), ("Opus", 8, "red"), ("Sonnet", 100, "ok")].iter().take(fx.own).map(fn(m) {
+            obj([("label", str("每周 · " + m.0)), ("usedPercent", Json::number((100 - m.1).to_double())), ("scope", str(m.0)), ("mark", str(m.0)), ("left", Json::number(m.1.to_double())), ("level", str(m.2)), ("refills", str("2 天 4 小时后刷新"))])
+          }),
         ).collect()),
       ),
       ("checkedAt", Json::number(0.0)),

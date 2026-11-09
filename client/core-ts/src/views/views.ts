@@ -50,7 +50,7 @@ import { stationProfileSummary, workspaceProfiles } from "./profiles.ts";
 import { settingsView } from "./settings.ts";
 import { waysView, type WaysView } from "./ways.ts";
 import { admin, sources as adminSources } from "./admin.ts";
-import { attention, choices, find, models, runnableOn, runtimes, servingIn } from "./models.ts";
+import { attention, choices, find, models, quotaFor, runnableOn, runtimes, servingIn } from "./models.ts";
 import * as brief from "./brief.ts";
 import * as xshare from "./xshare.ts";
 import * as memberships from "./memberships.ts";
@@ -2650,7 +2650,7 @@ export class Views implements Owner {
     const runnable = runnableOn(overview, session, now);
     let account: J = runnable.find((p) => p.current === true) ?? null;
     if (account === null && isObject(profile)) {
-      account = { id: profile.id ?? null, name: profile.name ?? null, current: true, kind: get(profile.access, "kind") ?? null, runtime: profile.runtime ?? null, quota: profile.quota ?? null };
+      account = { id: profile.id ?? null, name: profile.name ?? null, current: true, kind: get(profile.access, "kind") ?? null, runtime: profile.runtime ?? null, quota: quotaFor(profile.quota ?? null, str(get(session, "model")) ?? str(profile.model) ?? null) };
       if (typeof profile.providerMark === "string") account.mark = profile.providerMark;
     }
     // Its latest turn as its summary has it (its detail may list only the latest turns, read before this one began);

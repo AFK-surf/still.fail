@@ -12,7 +12,7 @@ import { topicKey, type Topic } from "../src/protocol.ts";
 import { Runner } from "../src/runtime.ts";
 import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
-import { attention, choices, runnableOn } from "../src/views/models.ts";
+import { attention, choices, models, runnableOn } from "../src/views/models.ts";
 import { Views, answeredAt, betaOffered, blockedUnder, chatDerive, down, noticeOf, shownMessage, stationOn } from "../src/views/views.ts";
 import { localDay } from "../src/views/usage.ts";
 import { installView, profile as presentProfile } from "../src/present.ts";
@@ -765,6 +765,21 @@ test("what_is_worth_a_look_about_a_session_is_its_account_its_quota_running_out_
     { kind: "quota", text: "每周剩余 8%", more: "即将刷新", quota: { left: 8, mark: "W", level: "red", until: 2 } },
     { kind: "disk", text: "磁盘剩 5 GB" },
   ]);
+});
+
+test("a_models_own_window_is_said_of_that_model_alone", () => {
+  // Fable's week used up under an account whose own windows have room (#4365): the account's other models run on.
+  const fable = { label: "每周 · Fable", usedPercent: 100, resetsAt: 9000, scope: "Fable" };
+  const week = { label: "每周", usedPercent: 30, resetsAt: 9000 };
+  const ov = { profiles: [{ id: "a", name: "A", runtimes: ["claude"], model: "claude-opus-5-5", models: ["claude-fable-5-1", "claude-opus-5-5"], check: { state: "ok" }, quota: { state: "ok", windows: [week], scoped: [fable] } }] };
+  const on = (model: string | null) => runnableOn(ov, { runtime: "claude", profile: "a", model }, 0)[0];
+  assert.deepEqual([on("claude-fable-5-1").quota.windows, on("claude-fable-5-1").spent.until, on("claude-fable-5-1").quotaLine], [[week, fable], 9000, { text: "每周 · Fable剩余 0%", level: "red" }]);
+  assert.deepEqual([on("claude-opus-5-5").quota, on("claude-opus-5-5").spent, on("claude-opus-5-5").quotaLine], [{ state: "ok", windows: [week] }, null, { text: "每周 70%" }]);
+  assert.deepEqual(on(null).quota.windows, [week], "its account's own model, Opus");
+  const spent = Object.fromEntries(models(ov, 0).map((m: J) => [m.model, m.spent?.until ?? null]));
+  assert.deepEqual(spent, { "claude-fable-5-1": 9000, "claude-opus-5-5": null });
+  assert.deepEqual(attention(ov, { profile: "a", model: "claude-opus-5-5" }, 0), []);
+  assert.deepEqual(attention(ov, { profile: "a", model: "claude-fable-5-1" }, 0), [{ kind: "quota", text: "每周 · Fable剩余 0%", more: "即将刷新", quota: { left: 0, mark: "Fable", level: "red", until: 9000 } }]);
 });
 
 test("an_agent_can_be_moved_to_the_profiles_of_its_runtime", () => {

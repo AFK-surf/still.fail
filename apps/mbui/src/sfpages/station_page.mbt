@@ -645,7 +645,7 @@ fn station_profile_row(c : @ui.Ctx, core : Core, address : String, p : Json?, st
       |> ignore
     },
     below?=if text(field(p, "quota"), "state") == "ok" {
-      Some(fn() { @sf.quota_chips(c, field(p, "quota"), small=true, key="station-profile/" + address + "/" + text(p, "id")) })
+      Some(fn() { @sf.quota_chips(c, field(p, "quota"), small=true, lines=true, key="station-profile/" + address + "/" + text(p, "id")) })
     } else {
       None
     },

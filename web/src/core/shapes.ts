@@ -743,11 +743,13 @@ export interface QuotaCredits {
 /** How full something is. */
 export type Level = "ok" | "amber" | "red";
 
-/** A quota window, as drawn: its mark (5H, W), what is left, how full (ok | amber | red), when it refills in words. */
+/** A quota window, as drawn: its mark (5H, W; its model where it is one model's: Fable), what is left, how full (ok | amber | red), when it refills in words. */
 export interface QuotaWindow {
 	label: string;
 	usedPercent: number;
 	resetsAt?: number;
+	/** The one model it is the allowance of (its series: Fable); none: the account's. */
+	scope?: string;
 	mark: string;
 	left: number;
 	level: Level;
