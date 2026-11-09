@@ -2684,16 +2684,27 @@ test("the_viewers_messages_sent_one_after_another_go_close_together_their_time_u
   assert.deepEqual(v.messages.map((m: J) => m.followed ?? false), [true, true, false, false, false, true, false]);
   // Each close under the one before it that has its time under it.
   assert.deepEqual(v.messages.map((m: J) => m.joined ?? false), [false, true, true, false, false, false, true]);
+  // What they send now would follow the last, theirs, for 5 minutes from its time.
+  assert.equal(v.joinsUntil, at[6] + 5 * minute);
   // One on its way follows the last one too; failed, it does not.
   const id = t.views.outboxAdd("ws/a", 7, { text: "还有", attachments: [], quotes: [] });
   await t.read(u, 1);
   v = u.value;
   assert.deepEqual(v.messages.map((m: J) => m.followed ?? false), [true, true, false, false, false, true, true]);
   assert.deepEqual([v.outbox[0].joined, v.outbox[0].followed], [true, undefined]);
+  assert.equal(v.joinsUntil, v.outbox[0].createdAt + 5 * minute);
   t.views.local.outboxState("ws/a", 7, id, "无法连接 station");
   await t.read(u, 1);
   assert.deepEqual(u.value.messages.map((m: J) => m.followed ?? false), [true, true, false, false, false, true, false]);
   assert.equal(u.value.outbox[0].joined, undefined);
+  // (nor would the next follow one that did not go, or someone else's)
+  assert.equal(u.value.joinsUntil, undefined);
+  t.views.local.outboxRemove("ws/a", 7, id);
+  await t.read(u, 1);
+  assert.equal(u.value.joinsUntil, at[6] + 5 * minute);
+  t.set(pageOf("ws/a", 7), { first: 1, last: 8, entries: [said(1, at[0]), said(2, at[1]), said(3, at[2]), said(4, at[3]), said(5, at[4], "a@x.com"), said(6, at[5]), said(7, at[6]), said(8, at[6] + minute, "a@x.com")], thread: null });
+  await t.read(u, 1);
+  assert.equal(u.value.joinsUntil, undefined);
 });
 
 test("a_chats_page_is_told_which_files_its_agents_words_place_and_an_open_image_the_ones_beside_it", async () => {

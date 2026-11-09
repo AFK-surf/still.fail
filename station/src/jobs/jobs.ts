@@ -26,8 +26,8 @@ import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "../ops/group.ts";
 import {
-  Busy, type BusyCause, type Claim, HELD_LONG_MS, LOOK_MS, PERSON_IDLE_MS, type Pressure, type Started, type Waiting, type Why, claimsOf, cpusFor,
-  overstaying, pick, place, served,
+  Busy, type Claim, HELD_LONG_MS, LOOK_MS, PERSON_IDLE_MS, type Pressure, type Started, type Waiting, type Why, claimsOf, cpusFor, overstaying,
+  pick, place, served,
 } from "./admit.ts";
 import type { Ticks } from "../read/host.ts";
 
@@ -286,13 +286,11 @@ export class Jobs {
   /// What waits for an exit file to appear, by job id; the watch on jobs/exit that tells them.
   private exitHeard = new Map<string, () => void>();
   private exitWatch: FSWatcher | null = null;
-  /// The queue (jobs/admit.ts): what it measures, the CPUs as it saw them, what the system last said of its memory, when
-  /// its last task started and when each session's did, and why the first waiting waits.
+  /// The queue (jobs/admit.ts): what it measures, the CPUs as it saw them (for the CPUs a task is told are free), what
+  /// the system last said of its memory, when each session's task last started, and why the first waiting waits.
   private machine: Machine;
   private busy = new Busy();
   private pressure: Pressure | null = null;
-  private lastStart: number | null = null;
-  private lastStarted: string | null = null;
   private lastOf = new Map<string, number>();
   private why: Why | null = null;
   /// The queue looks at the machine (every LOOK_MS) while a task waits, on the jobs' clock.
@@ -467,24 +465,19 @@ export class Jobs {
   /// What the queue would start now, and why the first waiting waits else (kept for `queueOf`).
   private chosen(pressure: Pressure | null): ReturnType<typeof pick> {
     const { waiting, running } = this.line();
-    // (the last started, while it runs: how busy since it started; one that ended holds nothing back)
-    const ramp = running.some((r) => r.id === this.lastStarted) ? this.lastStart : null;
-    const chosen = pick(waiting, running, { busy: this.busy.share(ramp), pressure, person: this.person }, this.queueNow(), ramp, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
+    const chosen = pick(waiting, running, { pressure, person: this.person }, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
     this.why = chosen !== null && "wait" in chosen ? chosen.wait : null;
     return chosen;
   }
 
-  /// A task of the queue starts: noted as the last, and what it is told of the CPUs free.
+  /// A task of the queue starts: noted as its session's last, and what it is told of the CPUs free (where the queue
+  /// looked at them over the last seconds, a task having waited: else nothing, rather than one CPU for want of a look).
   private admitted(job: JobRow): Record<string, string> {
     const alone = this.line().running.length === 0;
-    const now = this.queueNow();
-    if (!job.small) {
-      this.lastStart = now;
-      this.lastStarted = job.id;
-    }
-    this.lastOf.set(job.sessionKey, now);
+    this.lastOf.set(job.sessionKey, this.queueNow());
     if (job.small) return { STILLFAIL_CPUS: "1", MAKEFLAGS: "-j1", CARGO_BUILD_JOBS: "1", CMAKE_BUILD_PARALLEL_LEVEL: "1" };
-    return cpusFor(startEnv(), this.machine.cpus(), this.busy.share(), alone);
+    const busy = this.busy.share();
+    return busy === null ? {} : cpusFor(startEnv(), this.machine.cpus(), busy, alone);
   }
 
   /// While a task waits: every LOOK_MS the CPUs noted, the memory asked for, the next started if there is room.
@@ -516,7 +509,13 @@ export class Jobs {
     ).catch(() => undefined);
   }
 
-  /// Starts what the queue picks now. A small task has its own slot and does not have to wait for a build's ramp.
+  /// What the station's memory watch (jobs/memory.ts) read of the memory on its own look: what the queue goes by as a
+  /// task asks to start, the queue looking at it itself only while one waits.
+  memorySeen(pressure: Pressure | null): void {
+    this.pressure = pressure;
+  }
+
+  /// Starts what the queue picks now. A small task has its own slot beside the rest.
   /// Then the screen given out to the commands that ask for it, if no task has it now.
   private startNext(): void {
     if (this.closing) return;
@@ -579,9 +578,10 @@ export class Jobs {
     if (this.line().waiting.length > 0) this.watchQueue();
   }
 
-  /// A waiting task's place in line (1: the next), what blocks it, and the queue's measurements; null for one not
-  /// waiting. If it could start but another is ahead, `why` is null. Waiting for the screen, who has it (screenHolder).
-  queueOf(id: string): { place: number; why: Why | null; cause?: BusyCause; holder?: string; decision: { cpuBusy: ReturnType<Busy["sample"]>; memoryPressure: Pressure | null } } | null {
+  /// A waiting task's place in line (1: the next), what blocks it, and what the queue measured (the memory's pressure);
+  /// null for one not waiting. If it could start but another is ahead, `why` is null. Waiting for the screen, who has
+  /// it (screenHolder).
+  queueOf(id: string): { place: number; why: Why | null; holder?: string; decision: { memoryPressure: Pressure | null } } | null {
     const job = this.store.getJob(id);
     if (!job || job.state !== "running" || job.queued !== true) return null;
     const { waiting, running } = this.line();
@@ -589,13 +589,10 @@ export class Jobs {
     if (task === undefined) return null;
     const p = place(waiting.filter((w) => !!w.small === !!task.small), id, (s) => this.lastOf.get(s) ?? null);
     if (p === null) return null;
-    const ramp = running.some((r) => r.id === this.lastStarted) ? this.lastStart : null;
-    const cpuBusy = this.busy.sample(ramp);
-    const selected = pick([task], running, { busy: cpuBusy?.share ?? null, pressure: this.pressure, person: this.person }, this.queueNow(), ramp, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
+    const selected = pick([task], running, { pressure: this.pressure, person: this.person }, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
     const why = selected !== null && "wait" in selected ? selected.wait : null;
-    const cause = selected !== null && "wait" in selected ? selected.cause : undefined;
     const holder = why === "screen" ? this.screenHolder(id) : null;
-    return { place: p, why, ...(cause !== undefined ? { cause } : {}), ...(holder !== null ? { holder } : {}), decision: { cpuBusy, memoryPressure: this.pressure } };
+    return { place: p, why, ...(holder !== null ? { holder } : {}), decision: { memoryPressure: this.pressure } };
   }
 
   /// Who has the screen, for one waiting for it (not `except`, a job of its own): the task's name, the chat it is

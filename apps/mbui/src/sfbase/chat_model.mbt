@@ -633,6 +633,9 @@ pub(all) struct ChatView {
   unread_line : Double?
   unread_above : Bool
   outbox : Array[Outgoing]
+  /// till when (the core's time, its source's `now`) what the viewer sends here goes close under its last row, theirs,
+  /// that row's time under the new one (the core's `joinsUntil`); None: it would stand apart
+  joins_until : Double?
   offline : Bool
   /// its station down, the line over the composer (why, and that what is sent goes once it is reached)
   offline_note : String?
@@ -765,6 +768,7 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
         final: flag(s, "final"),
       }
     }),
+    joins_until: opt_number(s, "joinsUntil"),
     offline: flag(s, "offline"),
     offline_note: opt_text(s, "offlineNote"),
     updating: flag(s, "updating"),

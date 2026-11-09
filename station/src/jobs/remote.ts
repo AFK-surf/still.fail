@@ -30,7 +30,6 @@ import { wall } from "../ops/fibers.ts";
 import type { Cloud } from "../cloud/state.ts";
 import { type Json, type Store } from "../store/store.ts";
 import { type Jobs, jobJson, tail } from "./jobs.ts";
-import { BUSY_MAX } from "./admit.ts";
 import { detailed, summary } from "./load.ts";
 import { type Inbox, MESH_WAIT_MS, NoBytes, type PeerCall, PeerBus, Refused, bytesOf, withBytes } from "../mesh/bus.ts";
 import { fileBytes, readBytes, stopBytes, writeBytes } from "../mesh/files.ts";
@@ -713,9 +712,7 @@ export class Remote {
       q.why === "memory" ? "the machine's memory is under pressure"
       : q.why === "screen" ? q.holder !== undefined ? `the screen is held by ${q.holder}` : "the screen is held or an earlier request is waiting for it"
       : q.why === "person" ? "a person is using this machine's screen (its input not idle): no task is given it meanwhile"
-      : q.cause === "small" ? "another small task is using the station's small-work slot"
-      : q.cause === "sampling" ? "the queue is sampling CPU use before another task starts"
-      : q.cause === "cpu" ? `the queue measured the CPUs at least ${BUSY_MAX * 100}% busy`
+      : q.why === "small" ? "another small task is using the station's small-work slot"
       : "it is waiting for its turn";
     return { queue: { ...q, load, note: `Waiting in this station's queue (${q.place === 1 ? "next" : `number ${q.place}`}): ${why}. It starts by itself when there is room; you are told when it ends, as for any task.` } };
   }

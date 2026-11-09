@@ -3452,6 +3452,7 @@ export const SHAPES: Record<string, Shape> = {
     ["unreadLine", opt("i64"), { client: opt("I54"), doc: "The message the unread line goes over: the first the viewer had not read when the chat was opened (not\ntheirs); none while older pages are loaded to find it, or with nothing unread. Absent from a core before it." }],
     ["unreadAbove", opt("bool"), { doc: "The unread line lies above the messages loaded: older pages are being loaded to find it." }],
     ["outbox", vec("Outgoing")],
+    ["joinsUntil", opt("i64"), { client: opt("I54"), doc: "Until when (ms since 1970) what the viewer sends here follows the last message or outgoing one, theirs (that one\n`followed`, the new one `joined`): the page draws both so the frame it is sent. Absent when it would stand apart." }],
     ["link", "Link"],
     ["offline", "bool"],
     ["offlineNote", opt("String"), { said: true, doc: "Its station taken for down, the line over the composer: why, and that what is sent goes once it is\nreached (the composer stays open). Absent otherwise, and from a core before it." }],

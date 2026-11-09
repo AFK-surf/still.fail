@@ -13,15 +13,33 @@ priv struct SentMoves {
 }
 
 ///|
-fn send_at_pace(deliver : Double, answer : Double, end : Double, sent? : Double = -1.0) -> SentMoves raise {
+/// `core`: how long the core has them before its view has their row (fix_core_for). `after`: words sent that long
+/// before them, nothing between the two (the agent's answer further off than is watched): 0 or more.
+fn send_at_pace(
+  deliver : Double,
+  answer : Double,
+  end : Double,
+  sent? : Double = -1.0,
+  core? : Double = 0.0,
+  after? : Double = -1.0,
+) -> SentMoves raise {
   new_run()
   fix_pace.val = (deliver, answer, end)
   fix_sent_for.val = sent
+  fix_core_for.val = core
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
+  if after >= 0.0 {
+    t.type_text("再看一下")
+    tap_send(t)
+    let till = t.time() + after
+    while t.time() < till {
+      t.frame()
+    }
+  }
   t.type_text("看一下列表")
   // (the field's top: what is drawn below it is the composer's, not the list's)
   let field = match t.find("看一下列表") {
@@ -39,8 +57,11 @@ fn send_at_pace(deliver : Double, answer : Double, end : Double, sent? : Double 
   let before : Map[String, Double] = {}
   let said = t.words_said()
   let counts = once(said)
+  // (not what is said under the viewer's own last message, its time or that it is on its way: under the new one once
+  // that follows it, the core's `followed`)
+  let under = if after >= 0.0 { ["刚刚", @sf.t("web-main.chat.sending")] } else { [] }
   for w in said {
-    if w.2 + w.4 < field && w.2 > 0.0 && counts.get(w.0) == Some(1) {
+    if w.2 + w.4 < field && w.2 > 0.0 && counts.get(w.0) == Some(1) && !under.contains(w.0) {
       before[w.0] = w.2
     }
   }
@@ -49,7 +70,13 @@ fn send_at_pace(deliver : Double, answer : Double, end : Double, sent? : Double 
   let way : Map[String, Double] = {}
   let turns : Map[String, Int] = {}
   let down : Map[String, Double] = {}
-  let end_at = t.time() + deliver + (if sent > 0.0 { sent } else { 0.0 }) + answer + (if end > 0.0 { end } else { 0.0 }) + 3000.0
+  // (sent after others, their answer is not waited for: till the core, then the station, has them, and they are in)
+  let end_at = t.time() +
+    core +
+    deliver +
+    (if sent > 0.0 { sent } else { 0.0 }) +
+    (if after >= 0.0 { 0.0 } else { answer + (if end > 0.0 { end } else { 0.0 }) }) +
+    3000.0
   while t.time() < end_at {
     t.frame()
     let seen : Map[String, Double] = {}
@@ -160,6 +187,77 @@ test "words sent, the station slow to take them or the chat to reach them: the l
   }
   for b in bad {
     println("SENDSLOW " + b)
+  }
+  assert_eq(bad.length(), 0)
+}
+
+///|
+test "words sent soon after words sent, the core's row of them late or not: the list goes up only, never down and back" {
+  // (judged frame to frame on frame()'s, the display's own: the default run's alone, @ui.test_at_a_rate)
+  if @ui.test_at_a_rate() {
+    return
+  }
+  // (the viewer's own one after another go close together, the time under the last alone: the core says so of its row,
+  // which comes a round trip after they are sent, long after on a busy device; laid out as standing apart till then,
+  // the list went up 80 and came back 35 (the row 400 ms late), or 67 in one frame and back 22 (the station taking
+  // them at once): 2026-11-10 the user, 「现在偶现发消息动效都会抖」)
+  let bad : Array[String] = []
+  for after in [1000.0, 3000.0] {
+    for deliver in [0.0, 100.0, 700.0] {
+      for core in [0.0, 100.0, 400.0, 800.0] {
+        // (the station's message there in the call that sends them, before a frame has what was sent from here: the
+        // made-up core's alone, a device's comes between frames at the soonest)
+        if deliver == 0.0 && core == 0.0 {
+          continue
+        }
+        let at = "after \{after} deliver \{deliver} core \{core}"
+        let s = send_at_pace(deliver, 30000.0, fix_turn_end_ms, core~, after~) catch {
+          e => {
+            let said = e.to_string()
+            let cut = if said.length() > 900 { said.view(end_offset=900).to_string() } else { said }
+            bad.push(at + ": " + cut.replace_all(old="\n", new=" "))
+            continue
+          }
+        }
+        if s.turns > 0 || s.down >= 1.0 {
+          bad.push(at + ": \{s.turns} turns, down \{s.down} (\{s.worst})")
+        }
+      }
+    }
+  }
+  for b in bad {
+    println("SENDAFTER " + b)
+  }
+  assert_eq(bad.length(), 0)
+}
+
+///|
+test "words sent, the core's row of them late: the list goes up only, never down and back" {
+  // (judged frame to frame on frame()'s, the display's own: the default run's alone, @ui.test_at_a_rate)
+  if @ui.test_at_a_rate() {
+    return
+  }
+  let bad : Array[String] = []
+  for core in [100.0, 400.0, 800.0] {
+    for deliver in [0.0, 300.0, 700.0] {
+      for answer in [0.0, 400.0, 1400.0] {
+        let at = "core \{core} deliver \{deliver} answer \{answer}"
+        let s = send_at_pace(deliver, answer, fix_turn_end_ms, core~) catch {
+          e => {
+            let said = e.to_string()
+            let cut = if said.length() > 900 { said.view(end_offset=900).to_string() } else { said }
+            bad.push(at + ": " + cut.replace_all(old="\n", new=" "))
+            continue
+          }
+        }
+        if s.turns > 0 || s.down >= 1.0 {
+          bad.push(at + ": \{s.turns} turns, down \{s.down} (\{s.worst})")
+        }
+      }
+    }
+  }
+  for b in bad {
+    println("SENDLATE " + b)
   }
   assert_eq(bad.length(), 0)
 }

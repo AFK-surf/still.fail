@@ -132,6 +132,7 @@ export const NOTES: [number, string][] = [
   [125, "chat_post no longer posts over messages you have not read: when some came in its thread first, it holds the post back and answers its id, and they come to you next. If it still stands, send it unchanged with chat_post {to, send: <id>} plus the state the turn ends with, without writing it again; otherwise post what fits now."],
   [126, "all_done only when nothing people asked for in the chat is left, not when a step of a longer goal is done; a post that says what you do next means you go on doing it in this turn; need_human is not for what people already decided."],
   [127, "A choice on a card's action=close option still sends no message and does not wake you, but you are now told it: a <card-choice> block before what you are next handed (a message, a notice), with when it was chosen (at, ago). It is an earlier, settled choice, not what the new messages are about; chat_history shows it on the card as well."],
+  [128, "A station's queue no longer holds station_task tasks back for busy CPUs: a task waits only for memory pressure, the screen, or the small-task slot (queue.why memory, screen, person or small; no cause, and decision has only memoryPressure)."],
 ];
 
 /// The last note that replaces every one before it (the instructions rewritten whole): a session behind it hears only

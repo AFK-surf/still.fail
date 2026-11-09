@@ -526,6 +526,10 @@ fn Ctx::waited_by(self : Ctx) -> String {
   if self.wake_waited >= 0.0 && self.waited_at() == self.wake_waited {
     by_of(self.wake_by)
   } else {
-    " (the window's tree's)"
+    // (which of the tree's timers: where it was said, so that each that comes once is told from one saying itself again)
+    match view_app.val {
+      Some(tree) if tree.wake_waited_by() != "" => " (the window's tree's, said at \{tree.wake_waited_by()})"
+      _ => " (the window's tree's)"
+    }
   }
 }

@@ -394,21 +394,24 @@ describe("remote", { concurrency: true }, () => {
     const capacity = { cpus: 12, cpuBusy: { share: 0.55, seconds: 60 }, memory: { totalBytes: 64 * 1024 ** 3, availableBytes: 45 * 1024 ** 3 }, checkedAt: 123 };
     let reads = 0;
     r.remote.setLoad(async () => { reads++; return capacity; });
+    // (each uses the screen: the first has it, the others wait for it; busy CPUs alone hold none back)
     for (const key of ["first", "second", "third"]) {
-      await callAs(r, "s", key, "task.prepare", { spec: { command: FOREVER } });
+      await callAs(r, "s", key, "task.prepare", { spec: { command: FOREVER, screen: true } });
       const started = await callAs(r, "s", key, "task.start");
       if (key !== "first") {
         assert.equal(started.job.queued, true);
-        assert.equal(started.queue.cause, "sampling");
+        assert.equal(started.queue.why, "screen");
+        assert.equal(started.queue.cause, undefined);
         assert.deepEqual(started.queue.load, capacity);
       } else {
         assert.equal(reads, 0, "a task that starts at once does not wait on a host reading");
       }
     }
     const got = await callAs(r, "s", "second", "task.get");
-    assert.equal(got.queue.cause, "sampling");
+    assert.equal(got.queue.why, "screen");
     assert.deepEqual(got.queue.load, capacity);
-    assert.equal(got.queue.decision.cpuBusy, null, "the queue has not measured a whole window yet");
+    assert.deepEqual(Object.keys(got.queue.decision), ["memoryPressure"], "no CPU measurement in the queue's decision");
+    assert.doesNotMatch(got.queue.note, /CPU/);
     const laterCapacity = { ...capacity, cpuBusy: { share: 0.25, seconds: 60 }, checkedAt: 456 };
     r.remote.setLoad(async () => laterCapacity);
     assert.deepEqual((await callAs(r, "s", "second", "task.get")).queue.load, laterCapacity, "a later request gets a new reading");
@@ -427,9 +430,9 @@ describe("remote", { concurrency: true }, () => {
     const machine: Machine = { cpus: () => 12, ticks: () => [0, 0], pressure: async () => "normal" };
     const r = station({ clock, jobsClock, machine });
     r.remote.setLoad(() => new Promise(() => {}));
-    await callAs(r, "s", "first", "task.prepare", { spec: { command: FOREVER } });
+    await callAs(r, "s", "first", "task.prepare", { spec: { command: FOREVER, screen: true } });
     await callAs(r, "s", "first", "task.start");
-    await callAs(r, "s", "second", "task.prepare", { spec: { command: FOREVER } });
+    await callAs(r, "s", "second", "task.prepare", { spec: { command: FOREVER, screen: true } });
     const before = clock.asked();
     let answer: Json = null;
     void callAs(r, "s", "second", "task.start").then((got) => (answer = got));
@@ -450,9 +453,10 @@ describe("remote", { concurrency: true }, () => {
     let read = false;
     let release!: (load: Json) => void;
     r.remote.setLoad(() => { read = true; return new Promise((resolve) => { release = resolve; }); });
-    await callAs(r, "s", "first", "task.prepare", { spec: { command: FOREVER } });
+    // (the first has the screen a second; the second waits for it)
+    await callAs(r, "s", "first", "task.prepare", { spec: { command: "sleep 1", screen: true } });
     await callAs(r, "s", "first", "task.start");
-    await callAs(r, "s", "second", "task.prepare", { spec: { name: "second", command: FOREVER } });
+    await callAs(r, "s", "second", "task.prepare", { spec: { name: "second", command: FOREVER, screen: true } });
     const starting = callAs(r, "s", "second", "task.start");
     await until("the capacity is being read", () => read);
     await rounds("the second task starts", jobsClock, "5 seconds", () => r.store.listJobs(null).some((j) => j.name === "second" && j.queued !== true));

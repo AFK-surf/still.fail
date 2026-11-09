@@ -324,7 +324,12 @@ export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: 
   };
   return new MemoryWatch({
     clock: o.clock,
-    pressure: () => platform.memoryPressure(),
+    // (the queue told each reading: it decides by it as a task asks to start)
+    pressure: async () => {
+      const pressure = await platform.memoryPressure();
+      o.jobs.memorySeen(pressure);
+      return pressure;
+    },
     table: (exact) => platform.processTable(exact),
     totalBytes: () => totalmem(),
     cwds: (pids) => platform.cwds(pids),

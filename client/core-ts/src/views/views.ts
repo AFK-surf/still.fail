@@ -2923,6 +2923,14 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
   // one else's, nothing sent to Slack). Those still on their way count; one not sent stands apart.
   const outbox = view.newer === true ? [] : arr(view.outbox);
   const all: J[] = [...messages, ...outbox];
+  // What is sent from here would follow the last of them (the viewer's own, nothing sent to Slack after it) until
+  // FOLLOWED_MS past its time: the page lays its words out so the frame they are sent, before their row is here (that
+  // row come late, the list went up further than it ends and back, 2026-11-10).
+  const last = all[all.length - 1];
+  if (view.newer !== true && last !== undefined && last.elsewhere === undefined && (all.length > messages.length ? last.state !== "failed" : last.mine === true)) {
+    const at = u64(last.createdAt);
+    if (at !== null) view.joinsUntil = at + FOLLOWED_MS;
+  }
   const followed = new Set<number>();
   let shownAt: number | null = null;
   for (let i = all.length - 1; i >= 0; i--) {

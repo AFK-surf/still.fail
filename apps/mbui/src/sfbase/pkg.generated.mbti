@@ -1447,7 +1447,7 @@ pub fn sent_key(String, String) -> String
 
 pub fn sent_let_go(Reading, SendFlight?) -> Bool
 
-pub fn sent_local(@ui.Ctx, String, ChatView?, String, Array[@json.Json], going? : Array[@json.Json], quotes? : Array[@json.Json], runs? : @json.Json?) -> String
+pub fn sent_local(@ui.Ctx, String, ChatView?, String, Array[@json.Json], going? : Array[@json.Json], quotes? : Array[@json.Json], runs? : @json.Json?, now~ : Double) -> String
 
 pub fn sent_local_gone(String, String) -> Unit
 
@@ -2161,6 +2161,7 @@ pub(all) struct ChatView {
   unread_line : Double?
   unread_above : Bool
   outbox : Array[Outgoing]
+  joins_until : Double?
   offline : Bool
   offline_note : String?
   updating : Bool
