@@ -219,6 +219,7 @@
   "core-misc.lock.reason.disable": "关闭安全模式",
   "core-misc.lock.unconfirmed": "此设备尚未获准访问「{name}」：请在你在「{name}」中的受信任设备上，或请其管理员，打开「设置 › 安全」验证安全码 {code}",
   "core-misc.lock.unconfirmedNoCode": "此设备尚未获准访问「{name}」：请在你在「{name}」中的受信任设备上，或请其管理员，打开「设置 › 安全」批准",
+  "core-misc.lock.offOwnLock": "此设备不在你的个人锁里，「{name}」只放行你个人锁里的设备：在这台设备上打开「设置 › 安全 › 个人锁」加入，用你个人锁里的另一台设备核对安全码",
   "core-misc.lock.behind": "station 尚未收到此设备的批准，即将重试",
   "core-misc.lock.notSigner": "此设备不是受信任设备，无法更改安全模式：请先在「设置 › 安全」中将此设备设为受信任设备",
   "core-misc.lock.notOwn": "此设备是别人以你的名义加进安全模式的，签不了任何东西：请在「设置 › 安全」中移除它，再用你自己的设备重新批准",
