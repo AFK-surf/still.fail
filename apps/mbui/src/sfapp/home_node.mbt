@@ -23,10 +23,10 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
     before: fn(_, _) {
       let parts : Array[@sfpages.NodePart] = []
       if @sfpages.update_card_shown() {
-        parts.push({ key: "update-card", make: fn(p) { @ui.old(p, fn(c) { @sfpages.update_card(c, src) }, natural=true, unlaid=fn() { p.window().1 }) |> @ui.old_takes_own |> ignore } })
+        parts.push({ key: "update-card", make: fn(p) { @sfpages.update_card_node(p, src) } })
       }
       if @sfpages.news_of(src) is Some(_) {
-        parts.push({ key: "changelog-news", make: fn(p) { @ui.old(p, fn(c) { @sfpages.changelog_news(c, src) }, natural=true, unlaid=fn() { p.window().1 }) |> @ui.old_takes_own |> ignore } })
+        parts.push({ key: "changelog-news", make: fn(p) { @sfpages.changelog_news_node(p, src, tips) } })
       }
       parts
     },
