@@ -121,6 +121,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   only when it changed; the app compiled here for the device and put in its files), an iOS simulator's app (which reads
   the app where it lies on the Mac), a Windows program (Git Bash with MSVC). `e2e/run.sh android|ios` run it outside
   CI. `scripts/android.sh`, `ios.sh`, `win.sh` build the native apps, CI's and the releases'.
+- On a person's phone (lent to a chat by `phone_use`), a build of work in progress goes in as the dev build,
+  `fail.still.android.dev` (`scripts/android.sh`'s `VARIANT` left as it is), installed over the one there, whichever
+  chat put it: never a package of a chat's own, never in place of their stable or beta (the user, 2026-11-09). Its
+  test hooks (`env`, a drive script, a fixture) open with `adb shell setprop debug.mbui.hooks 1`.
 
 ## What is checked, and where
 
