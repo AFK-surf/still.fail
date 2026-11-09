@@ -71,3 +71,14 @@ fn[V] ByNode::keys(self : ByNode[V]) -> Array[@view.NodeId] {
   }
   out
 }
+
+///|
+/// What is kept of each exchanged with what `other` keeps (what draws a tree of its own keeps apart from the window's
+/// tree's, its nodes' indexes their own: shot.mbt's tree_shot_paint).
+fn[V] ByNode::swap(self : ByNode[V], other : ByNode[V]) -> Unit {
+  let (slots, count) = (self.slots, self.count)
+  self.slots = other.slots
+  self.count = other.count
+  other.slots = slots
+  other.count = count
+}

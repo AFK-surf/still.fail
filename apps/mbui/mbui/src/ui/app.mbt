@@ -790,7 +790,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   // (under a change of theme spreading from where it was asked, while it does: reveal.mbt)
   c.with_parent(root, fn() {
     c.revealed(w, h, fn() { (g_view.val)(c) })
-    // (and the pictures asked apart from any build: shot.mbt take_picture)
+    // (and the pictures made as nodes apart, laid out at this frame: shot.mbt take_picture)
     c.pictures_built()
   })
   // what lies over the page over everything else (overlay.mbt)
