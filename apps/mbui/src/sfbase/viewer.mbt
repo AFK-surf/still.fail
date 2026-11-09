@@ -2090,7 +2090,7 @@ pub fn Viewer::flight_target(self : Viewer, c : @ui.Ctx, src : Source) -> (Doubl
   // a video: where its picture will be, by its size as sent, else its still's (FilePreview.kt: known from the still
   // before the player is ready); none known, it fades in
   if self.shown_kind() == Some(KVideo) {
-    return self.video_target(src, c.width, c.height)
+    return self.video_target(src, c.width, c.height, c.moment())
   }
   if self.shown_kind() != Some(KImage) {
     return None
@@ -2100,7 +2100,7 @@ pub fn Viewer::flight_target(self : Viewer, c : @ui.Ctx, src : Source) -> (Doubl
     return None
   }
   let (nw, nh) = self.natural_size(src)
-  match self.zoom.rect() {
+  match self.zoom.rect(c) {
     Some(r) => Some(r)
     None => fitted_rect(nw, nh, c.width, c.height)
   }
@@ -2409,11 +2409,12 @@ pub fn fitted_rect(
   bh : Double,
   bar? : Double = 0.0,
 ) -> (Double, Double, Double, Double)? {
+  // (a zoom of its own, told once and nothing moving on it: the same at any moment)
   let z = @kit.Zoom::new()
-  z.boxed(bw, bh)
-  z.under_bars(bar, 0.0)
-  z.natural(nw, nh)
-  z.rect()
+  z.boxed(bw, bh, at=0.0)
+  z.under_bars(bar, 0.0, at=0.0)
+  z.natural(nw, nh, at=0.0)
+  z.rect_at(0.0)
 }
 
 ///|
@@ -2598,14 +2599,15 @@ pub fn Viewer::still(self : Viewer, src : Source) -> String {
 ///|
 /// Where a film's picture is fitted in the viewer (vzoom), clear of the player's bar and controls (@sf.player_room).
 fn Viewer::video_rect(self : Viewer, c : @ui.Ctx) -> (Double, Double, Double, Double)? {
-  self.video_rect_in(c.width)
+  let top = @sf.player_room(c.width).0
+  self.vzoom.rect(c).map(fn(r) { (r.0, r.1 + top, r.2, r.3) })
 }
 
 ///|
-/// The same, its player laid out `width` wide.
-fn Viewer::video_rect_in(self : Viewer, width : Double) -> (Double, Double, Double, Double)? {
+/// The same at the moment `at`, its player laid out `width` wide.
+fn Viewer::video_rect_in(self : Viewer, width : Double, at : Double) -> (Double, Double, Double, Double)? {
   let top = @sf.player_room(width).0
-  self.vzoom.rect().map(fn(r) { (r.0, r.1 + top, r.2, r.3) })
+  self.vzoom.rect_at(at).map(fn(r) { (r.0, r.1 + top, r.2, r.3) })
 }
 
 ///|
@@ -2636,18 +2638,24 @@ fn Viewer::video_natural(self : Viewer, src : Source) -> (Double, Double) {
 ///|
 /// Where a film's picture is, its player laid out `width` by `height`: where the player fitted it (Viewer::video_rect_in);
 /// before it has (its first frame: the flight in setting out as it opens), where it will, by the same size
-/// (Viewer::video_natural), in the room the player leaves it. None, its size not known.
-fn Viewer::video_target(self : Viewer, src : Source, width : Double, height : Double) -> (Double, Double, Double, Double)? {
-  match self.video_rect_in(width) {
+/// (Viewer::video_natural), in the room the player leaves it, at the moment `at`. None, its size not known.
+fn Viewer::video_target(
+  self : Viewer,
+  src : Source,
+  width : Double,
+  height : Double,
+  at : Double,
+) -> (Double, Double, Double, Double)? {
+  match self.video_rect_in(width, at) {
     Some(r) => Some(r)
     None => {
       let (nw, nh) = self.video_natural(src)
       let (top, foot) = @sf.player_room(width)
       // (fitted as the player fits it: its zoom's way, edge to edge, made bigger where it is smaller)
       let z = video_zoom()
-      z.boxed(width, height - top - foot)
-      z.natural(nw, nh)
-      z.rect().map(fn(r) { (r.0, r.1 + top, r.2, r.3) })
+      z.boxed(width, height - top - foot, at~)
+      z.natural(nw, nh, at~)
+      z.rect_at(at).map(fn(r) { (r.0, r.1 + top, r.2, r.3) })
     }
   }
 }
@@ -2703,13 +2711,13 @@ pub fn Viewer::player_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : In
   let z = v.vzoom
   // (clear of the bar and the controls as the player fits it: player_room)
   let (top, foot) = @sf.player_room(c.width)
-  z.boxed(c.width, c.height - top - foot)
+  z.boxed(c.width, c.height - top - foot, at=c.moment())
   // (as big as its player says, else as sent, else as its still: Viewer::video_natural, what its flight goes to too)
   let (nw, nh) = v.video_natural(src)
   if nw > 0.0 && nh > 0.0 {
-    z.natural(nw, nh)
+    z.natural(nw, nh, at=c.moment())
   }
-  z.step()
+  z.step(c)
   // flying (from the thumbnail's box to the picture's place, or back from where the player last drew it: the window's
   // tree's, viewer_tree.mbt's viewer_player, its bars coming with it there): the player not up yet, drawing no ground
   // of its own, its Esc not read: the viewer's, as it is over an image in flight

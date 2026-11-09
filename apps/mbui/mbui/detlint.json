@@ -225,8 +225,7 @@
       "src/motion/layer.mbt": 2
     },
     "ui-current": {
-      "src/kit/toast_node.mbt": 1,
-      "src/kit/zoom.mbt": 4
+      "src/kit/toast_node.mbt": 1
     },
     "build-clock": {
       "src/kit/progress.mbt": 1,

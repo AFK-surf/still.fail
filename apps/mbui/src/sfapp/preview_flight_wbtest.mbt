@@ -151,7 +151,7 @@ test "a picture sent from here flies out as its message shows it: the picture pi
   assert_eq(pv_hidden.get(), id)
   // halfway: the same picture (the message's hidden under it), on its way to its place on the stage
   t.run_for(@ui.move_most_ms / 2.0)
-  let to = v.zoom.rect().unwrap()
+  let to = v.zoom.rect(t.ctx()).unwrap()
   assert_true(t.locate("img:sent-key").length() > 0)
   let on_way = t
     .drawn_images()
@@ -261,7 +261,7 @@ test "a picture's whole come once it is in takes its stand-in's place once decod
   let v = viewer.get().unwrap()
   t.run_for(@ui.move_most_ms)
   assert_true(!v.flies)
-  let to = v.zoom.rect().unwrap()
+  let to = v.zoom.rect(t.ctx()).unwrap()
   assert_true(drawn_at(t, to))
   // its whole comes: in the frame it is here and not yet decoded, what stood in for it is still drawn there
   match held.val {
@@ -384,7 +384,7 @@ test "a picture under the composer goes out from under it at its own size first,
   assert_true(!composer_over_picture(t))
   // then grown to its place on the stage
   t.run_for(start + open_ms - t.time())
-  let to = v.zoom.rect().unwrap()
+  let to = v.zoom.rect(t.ctx()).unwrap()
   assert_true(drawn_at(t, to))
   // back: shrunk, then in under the composer to its thumbnail, one move of its own on the same curve
   t.back()
@@ -553,7 +553,7 @@ test "a picture under the chat's bar goes out from under it at its own size firs
   assert_true(v.flying(t.ctx()) > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
   assert_true(!head_over_picture(t))
   t.run_for(start + open_ms - t.time())
-  let to = v.zoom.rect().unwrap()
+  let to = v.zoom.rect(t.ctx()).unwrap()
   assert_true(drawn_at(t, to))
   // back: shrunk, then in under the bar, its corners round halfway in
   t.back()

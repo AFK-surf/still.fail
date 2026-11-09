@@ -647,8 +647,9 @@ fn grab(v : PlayerView, p : @kit.Media, fr : Frames) -> Unit {
 
 ///|
 /// Where the picture shows in the stage `w` × `h`: zoomed as the view's zoom has it (fitted until zoomed in), or
-/// filling the screen turned sideways (cropped); its size not known yet, a point in the middle.
+/// filling the screen turned sideways (cropped); its size not known yet, a point in the middle. As the old view `c` has it.
 fn picture_place(
+  c : @ui.Ctx,
   v : PlayerView,
   p : @kit.Media,
   s : @kit.MediaStatus,
@@ -659,21 +660,21 @@ fn picture_place(
   foot? : Double = 0.0,
 ) -> (Double, Double, Double, Double) {
   let z = v.zoom
-  z.boxed(w, h - top - foot)
+  z.boxed(w, h - top - foot, at=c.moment())
   if s.width > 0.0 && s.height > 0.0 {
-    z.natural(s.width, s.height)
+    z.natural(s.width, s.height, at=c.moment())
   } else {
     // (its size not said yet: its still's, which is of it)
     match @ui.image_natural(still) {
-      Some((sw, sh)) if still != "" && sw > 0.0 && sh > 0.0 => z.natural(sw, sh)
+      Some((sw, sh)) if still != "" && sw > 0.0 && sh > 0.0 => z.natural(sw, sh, at=c.moment())
       _ => ()
     }
   }
-  z.step()
+  z.step(c)
   if p.fills() && p.is_sideways() {
     return p.picture_rect(s, w, h)
   }
-  match z.rect() {
+  match z.rect(c) {
     Some((x, y, pw, ph)) => (x, y + top, pw, ph)
     None => p.picture_rect(s, w, h)
   }
@@ -949,7 +950,7 @@ pub fn player_view(
   if v.file != file.key {
     v.file = file.key
     native_full.set(false)
-    v.zoom.fit_now()
+    v.zoom.fit_now(at=c.moment())
     v.grabbing = false
     v.ended_off = ""
     v.taken_down = false
@@ -1103,10 +1104,10 @@ fn desk_player(
       None => ()
     }
     if picture && z.nw > 0.0 {
-      on("zoom_in", fn() { z.zoom_to(z.scale * player_zoom_step, z.bw / 2.0, z.bh / 2.0, true) })
-      on("zoom_out", fn() { z.zoom_to(z.scale / player_zoom_step, z.bw / 2.0, z.bh / 2.0, true) })
-      on("zoom_reset", fn() { z.reset() })
-      on("zoom_whole", fn() { z.zoom_to(player_whole, z.bw / 2.0, z.bh / 2.0, true) })
+      on("zoom_in", fn() { z.zoom_to(z.scale * player_zoom_step, z.bw / 2.0, z.bh / 2.0, true, at=c.moment()) })
+      on("zoom_out", fn() { z.zoom_to(z.scale / player_zoom_step, z.bw / 2.0, z.bh / 2.0, true, at=c.moment()) })
+      on("zoom_reset", fn() { z.reset(at=c.moment()) })
+      on("zoom_whole", fn() { z.zoom_to(player_whole, z.bw / 2.0, z.bh / 2.0, true, at=c.moment()) })
     }
     on("escape", fn() {
       if v.rates {
@@ -1132,12 +1133,12 @@ fn desk_player(
     if picture && z.nw > 0.0 && (wx != 0.0 || wy != 0.0) {
       if (mods & (@ui.wheel_mod_ctrl | @ui.wheel_mod_cmd)) != 0 {
         let fine = (mods & @ui.wheel_mod_ctrl) != 0 && wy.abs() < player_pinch_step
-        z.zoom_to(z.scale * @dmath.exp(-wy * (if fine { player_pinch_rate } else { player_wheel_rate })), px, py - room_top, false)
-      } else if z.zoomed() {
+        z.zoom_to(z.scale * @dmath.exp(-wy * (if fine { player_pinch_rate } else { player_wheel_rate })), px, py - room_top, false, at=c.moment())
+      } else if z.zoomed(c) {
         if (mods & @ui.wheel_mod_shift) != 0 && wx == 0.0 {
-          z.pan(-wy, 0.0)
+          z.pan(-wy, 0.0, at=c.moment())
         } else {
-          z.pan(-wx, -wy)
+          z.pan(-wx, -wy, at=c.moment())
         }
       }
     }
@@ -1146,7 +1147,7 @@ fn desk_player(
         let w = dmax(desk_none, c.width - panel)
         match p.native() {
           Some(n) if n.here() && !flying => {
-            let (x, y, pw, ph) = picture_place(v, p, s, w, c.height, still, top=room_top, foot=room_foot)
+            let (x, y, pw, ph) = picture_place(c, v, p, s, w, c.height, still, top=room_top, foot=room_foot)
             v.placed = Some((x, y, pw, ph))
             c.native(n, content=Some((x, y, pw, ph))) |> ignore
             player_still(c, n, still, x, y, pw, ph)
@@ -1628,7 +1629,7 @@ fn phone_player(
     c.box(style=player_fill, id=stage, fn() {
       match p.native() {
         Some(n) if n.here() && !flying => {
-          let (x, y, w, h) = picture_place(v, p, s, c.width, c.height, still)
+          let (x, y, w, h) = picture_place(c, v, p, s, c.width, c.height, still)
           v.placed = Some((x, y + v.drag_dy, w, h))
           c.native(n, content=Some((x, y + v.drag_dy, w, h))) |> ignore
           player_still(c, n, still, x, y + v.drag_dy, w, h)
@@ -1734,7 +1735,7 @@ fn phone_gestures(
   // a finger come down on it flinging stops it there (caught: no tap)
   c.follow_press(stage, fn(step) {
     if step is Down(_, _, _) {
-      v.caught = z.stop_fling()
+      v.caught = z.stop_fling(at=c.moment())
     }
   })
   let (px, py, down) = c.pointer()
@@ -1747,7 +1748,7 @@ fn phone_gestures(
       let d = ((px - x2) * (px - x2) + (py - y2) * (py - y2)).sqrt()
       let (was_d, was_x, was_y) = v.pinch
       if was_d > 0.0 && d > 0.0 {
-        z.transform(cx, cy, d / was_d, cx - was_x, cy - was_y)
+        z.transform(cx, cy, d / was_d, cx - was_x, cy - was_y, at=c.moment())
       }
       v.pinch = (d, cx, cy)
       v.pinched = true
@@ -1762,7 +1763,7 @@ fn phone_gestures(
     let dx = px - press.x
     let dy = py - press.y
     if v.drag == NoDrag && press.moved && !v.pinched {
-      v.drag = if z.zoomed() {
+      v.drag = if z.zoomed(c) {
         MoveZoom
       } else if dx.abs() > dy.abs() && s.duration > 0.0 {
         AlongTime
@@ -1786,7 +1787,7 @@ fn phone_gestures(
       MoveZoom => {
         let (lx, ly) = v.last
         if press.moved && !v.pinched {
-          z.pan(px - lx, py - ly)
+          z.pan(px - lx, py - ly, at=c.moment())
         }
       }
       NoDrag => ()
@@ -1812,7 +1813,7 @@ fn phone_gestures(
       MoveZoom =>
         if !v.pinched {
           let (fx, fy) = c.pointer_velocity()
-          z.fling(fx, fy)
+          z.fling(fx, fy, at=c.moment())
         }
       _ => ()
     }

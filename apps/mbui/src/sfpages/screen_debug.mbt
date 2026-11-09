@@ -321,7 +321,7 @@ fn debug_poses(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, icons? : Bool = false)
 /// the picture is of. The picture is square on its layer under the canvas; the body's edge is painted over what lies
 /// outside the screen's corners. Not while zoomed in: what shows is then a part of the screen.
 fn device_round(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, shown : SRect) -> Unit {
-  if !s.simulator() || u.zoom.zoomed() || shown.w <= 0.0 {
+  if !s.simulator() || u.zoom.zoomed(c) || shown.w <= 0.0 {
     return
   }
   let (tl, tr, br, bl) = panel_corners(field(s.state, "panels"), shown.w, shown.h)

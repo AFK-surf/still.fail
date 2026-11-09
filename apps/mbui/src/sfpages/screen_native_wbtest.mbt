@@ -86,7 +86,7 @@ test "a late system column refits the whole picture and its control panel opens 
   @sf.native_over_clear()
   r.t.run_for(late_column_ms)
   let u = r.ui()
-  let shown = u.shown()
+  let shown = u.shown(r.t.ctx())
   assert_true(shown.x >= -0.1 && shown.y >= -0.1)
   assert_true(shown.x + shown.w <= u.box_w.get() + 0.1)
   assert_true(shown.y + shown.h <= u.box_h.get() + 0.1)

@@ -642,10 +642,10 @@ fn service_stage(
             dmax(240.0, ((sh - 32.0) / fitted).floor())
           }
         }
-        p.view.boxed(sw, sh)
-        p.view.natural(w, h)
+        p.view.boxed(sw, sh, at=c.moment())
+        p.view.natural(w, h, at=c.moment())
         // (its scale as it shows, a glide's or a fling's way too: what its place says, Zoom::rect)
-        match p.view.rect() {
+        match p.view.rect(c) {
           // (fitted: on whole points)
           Some((x, y, rw, _)) if p.view.fitted => Some(({ x: x.round(), y: y.round(), scale: rw / w, w, h } : Placed))
           Some((x, y, rw, _)) => Some(({ x, y, scale: rw / w, w, h } : Placed))
@@ -742,7 +742,7 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
       None => 0.0
     }
     if !on_page && travelled < stage_tap_slop {
-      p.view.fit_now()
+      p.view.fit_now(at=c.moment())
     }
   })
   let (px, py, _) = c.pointer()
@@ -762,10 +762,10 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
           on_page,
         })
         if at.length() == 1 && (at[0].0 != dx || at[0].1 != dy) {
-          stage_moved(p, at)
+          stage_moved(c, p, at)
         }
       }
-      Some(_) => stage_moved(p, at)
+      Some(_) => stage_moved(c, p, at)
     }
   } else {
     p.hold = None
@@ -776,7 +776,7 @@ fn stage_gestures(c : @ui.Ctx, p : ServicePage, stage : Int, sx : Double, sy : D
 /// The fingers now at `at` (from the stage's top left): one moves the page as far as it went, two zoom it by how far
 /// apart they went about the point between them, moving it as that point did; a finger come or gone,
 /// from there on.
-fn stage_moved(p : ServicePage, at : Array[(Double, Double)]) -> Unit {
+fn stage_moved(c : @ui.Ctx, p : ServicePage, at : Array[(Double, Double)]) -> Unit {
   let h = match p.hold {
     Some(h) => h
     None => return
@@ -789,7 +789,7 @@ fn stage_moved(p : ServicePage, at : Array[(Double, Double)]) -> Unit {
     let (x0, y0) = h.was[0]
     let (x1, y1) = at[0]
     h.travelled = h.travelled + ((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0)).sqrt()
-    p.view.pan(x1 - x0, y1 - y0)
+    p.view.pan(x1 - x0, y1 - y0, at=c.moment())
   } else {
     let mid = fn(ps : Array[(Double, Double)]) { ((ps[0].0 + ps[1].0) / 2.0, (ps[0].1 + ps[1].1) / 2.0) }
     let apart = fn(ps : Array[(Double, Double)]) {
@@ -799,7 +799,7 @@ fn stage_moved(p : ServicePage, at : Array[(Double, Double)]) -> Unit {
     }
     let (m0x, m0y) = mid(h.was)
     let (m1x, m1y) = mid(at)
-    p.view.transform(m0x, m0y, apart(at) / apart(h.was), m1x - m0x, m1y - m0y)
+    p.view.transform(m0x, m0y, apart(at) / apart(h.was), m1x - m0x, m1y - m0y, at=c.moment())
   }
   h.was = at
 }
@@ -881,7 +881,7 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
           Some(x) => {
             // a size chosen is fitted anew; the page no longer moved by a finger
             x.moving = false
-            x.view.fit_now()
+            x.view.fit_now(at=c.moment())
             x.viewport = v
             keep_size(key, v)
           }
@@ -937,7 +937,7 @@ fn page_sizes(c : @ui.Ctx, key : String, close : () -> Unit) -> Unit {
             }
             if !x.view.fitted {
               @sf.button(c, svc("android-chat.preview.fitView"), key="service/fit-view", w=Fill(1.0), on_press=fn() {
-                x.view.fit_now()
+                x.view.fit_now(at=c.moment())
                 x.moving = false
                 close()
               }) |> ignore
@@ -1058,7 +1058,7 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
         }
         if !same {
           p.moving = false
-          p.view.fit_now()
+          p.view.fit_now(at=c.moment())
           p.viewport = Some(v)
           keep_size(key, Some(v))
         }
@@ -1119,7 +1119,7 @@ fn custom_size(c : @ui.Ctx, p : ServicePage, key : String) -> Unit {
         match p.viewport {
           Some({ width, height: Some(h) }) => {
             let v : Viewport = { width: h, height: Some(width) }
-            p.view.fit_now()
+            p.view.fit_now(at=c.moment())
             p.viewport = Some(v)
             keep_size(key, Some(v))
           }

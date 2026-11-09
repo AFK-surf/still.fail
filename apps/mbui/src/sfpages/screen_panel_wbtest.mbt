@@ -473,11 +473,11 @@ test "a device's picture fitted still once its poses take room from the stage: i
   // tall enough that the stage's height is what it is fitted to
   r.say({ "config": { "codec": "jpeg", "width": 1000.0, "height": 2040.0 } })
   r.t.draw()
-  assert_true(!r.ui().zoom.zoomed())
+  assert_true(!r.ui().zoom.zoomed(r.t.ctx()))
   r.state("live", more={ "kind": Json::string("simulator"), "poses": Json::boolean(true) })
   r.t.draw()
   r.t.draw()
-  assert_true(!r.ui().zoom.zoomed())
+  assert_true(!r.ui().zoom.zoomed(r.t.ctx()))
   screen_done(r.t)
 }
 
@@ -628,7 +628,7 @@ test "a device wider than tall: what it has itself in a row under it, App first;
   assert_eq(text(Some(ins[ins.length() - 1]), "name"), "volume_up")
   // under the device, not over it
   let (_, by, _, _) = r.labelled(tr("web-pages.screen.device.home")).map(fn(p) { (p.0, p.1, 0.0, 0.0) }).unwrap()
-  let shown = r.ui().shown()
+  let shown = r.ui().shown(r.t.ctx())
   assert_true(by > shown.y + shown.h)
   // App first, its log asked for only once it is looked at
   assert_true(r.told("screen.logs").is_empty())
@@ -638,7 +638,7 @@ test "a device wider than tall: what it has itself in a row under it, App first;
   r.t.draw()
   r.t.draw()
   assert_true(r.t.rect_of(tr("web-pages.screen.debug.relaunch")) is None)
-  assert_true(r.ui().shown().w >= wide)
+  assert_true(r.ui().shown(r.t.ctx()).w >= wide)
   r.t.resize(390.0, 844.0)
   r.ui().logs.tab.set(0)
   r.t.run_for(@sf.toast_ms)
@@ -672,7 +672,7 @@ test "a device taller than wide: as large as the window's height leaves it, what
   r.t.draw()
   r.t.draw()
   r.t.draw()
-  let shown = r.ui().shown()
+  let shown = r.ui().shown(r.t.ctx())
   let (rx, _) = r.labelled(tr("web-pages.screen.device.home")).unwrap()
   assert_true(shown.h > 600.0)
   // right by the device's body, a button's width away
