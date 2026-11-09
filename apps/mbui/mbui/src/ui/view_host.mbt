@@ -839,10 +839,37 @@ fn old_laid_arrive() -> Unit {
 /// Where the old views are laid out, as one line: whether the one is the whole window, and each one's place in its
 /// parent and size.
 fn view_island_said() -> String {
+  // (the line last said where nothing it says changed since: said again each frame, made again only as that changes)
+  let (whole, laid, said) = view_island_seen.val
+  if whole == old_whole.val && laid.length() == old_placed.length() {
+    let mut same = true
+    for i, p in old_placed {
+      let (id, x, y, w, h) = laid[i]
+      if id != p.0 || x != p.6 || y != p.7 || w != p.3 || h != p.4 {
+        same = false
+        break
+      }
+    }
+    if same {
+      return said
+    }
+  }
   // (and whether the one is the frame whole, the rest of the tree showing nothing: built so or in a box of its own)
-  "\{old_whole.val} " +
-  old_placed.map(fn(p) { "\{p.0.at}.\{p.0.gen}:\{p.6},\{p.7},\{p.3},\{p.4}" }).join(" ")
+  let said = "\{old_whole.val} " +
+    old_placed.map(fn(p) { "\{p.0.at}.\{p.0.gen}:\{p.6},\{p.7},\{p.3},\{p.4}" }).join(" ")
+  view_island_seen.val = (old_whole.val, old_placed.map(fn(p) { (p.0, p.6, p.7, p.3, p.4) }), said)
+  said
 }
+
+///|
+/// What view_island_said last said, and what it said it of: whether the one is the whole window, each one's node, place
+/// in its parent and size.
+// kept across runs: what it holds is what it was said of, checked each time
+let view_island_seen : Ref[(Bool, Array[(@view.NodeId, Double, Double, Double, Double)], String)] = Ref((
+  false,
+  [],
+  "false ",
+))
 
 ///|
 /// The old frame's build where the window is a tree: the one old view's own where it is the whole window; else each
