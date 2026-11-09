@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [097da8829](https://github.com/AFK-surf/still.fail/commit/097da88292160fb6ac0810b7bcda8ee79b0bb4be) mbui: a page's list made by an anchor, what shows  | 1.73 | 2.31 | 9.6 | 28.11 | 33.44 | 25.1 | 45.88 | 93 | 129.95 |
 | [f1d7ef363](https://github.com/AFK-surf/still.fail/commit/f1d7ef363367cb368666c8b785e2e123f8b1a7b0) mbui: two presses in a row are the window's tree's | 1.73 | 2.3 | 9.58 | 28.1 | 33.42 | 25.1 | 45.86 | 93.32 | 171.76 |
 | [0490574ec](https://github.com/AFK-surf/still.fail/commit/0490574ece26e7de539d2ea290ab95aa6ccb042c) app: what is worked out of a topic kept by the sou | 1.73 | 2.3 | 9.58 | 28.09 | 33.42 | 25.1 | 45.86 | 92.78 | 139.51 |
 | [048c87d3f](https://github.com/AFK-surf/still.fail/commit/048c87d3f25c4fcfe3db3c3b78e335b2b19dd61a) A station gone silent is not waited for again unti | 1.73 | 2.3 | 9.58 | 28.09 | 33.39 | 25.09 | 45.86 | 93.73 | 179.8 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [8ba01a5d7](https://github.com/AFK-surf/still.fail/commit/8ba01a5d7dbafb82b2376fb6feb58f8931ea4c00) ci: the Mac release's bytecode installs its packag | 1.71 | 2.28 | 9.52 | 28.01 | 33.18 | 25.02 | 45.7 | 93.06 | 156.81 |
 | [426cefb1f](https://github.com/AFK-surf/still.fail/commit/426cefb1f07546d0bc73df0918238fc4d5c23b8e) mbui: what a change costs as big as the change, no | 1.71 | 2.28 | 9.52 | 28.01 | 33.18 | 25.02 | 45.7 | 93.06 | 156.81 |
 | [10ac53813](https://github.com/AFK-surf/still.fail/commit/10ac538137a990210997c29f6f4acb37414d596e) Enable Android pushes for monoid (#5002) | 1.71 | 2.28 | 9.51 | 28.01 | 33.17 | 25.02 | 45.7 | 93.06 | 156.81 |
-| [5b0de1fd8](https://github.com/AFK-surf/still.fail/commit/5b0de1fd86222b34f16e25c584c515eb6fca5899) mbui: a row held for its menu lifted whole and cle | 1.71 | 2.28 | 9.51 | 28.01 | 33.17 | 25.02 | 45.7 | 93.06 | 156.81 |
