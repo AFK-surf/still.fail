@@ -10,11 +10,12 @@
 #   sh scripts/check.sh full <range>  full, on what the range changed
 #   sh scripts/check.sh all           full, as if every file changed
 #
-# STILLFAIL_CHECK_PART="<part> …" (ts, station, core) runs only those parts of it: ts the icons, the clients'
-# types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core: client/core-ts);
-# station the station (station/, its typecheck and tests) and its native parts' own tests
-# (station/native); core client/'s Rust (the core's native shells: iroh for the web and the apps' IO).
-# Unset: all of them.
+# STILLFAIL_CHECK_PART="<part> …" (ts, station, station-tests, core) runs only those parts of it: ts the icons, the
+# clients' types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core:
+# client/core-ts); station the station (station/: its typecheck, its programs in MoonBit) and its native parts' own
+# tests (station/native); station-tests the station's tests (station/test), all of them or, with
+# STILLFAIL_STATION_SHARD="<i>/<n>", the i-th slice of n; core client/'s Rust (the core's native shells: iroh for the
+# web and the apps' IO). Unset: all of them.
 #
 # The steps run side by side, each as soon as what it needs is there (a directory's node_modules: `prep`); each one's
 # output is kept to itself, and they are reported in the order they are listed here, as each is done, with the seconds
@@ -391,9 +392,14 @@ if [ $full = 1 ]; then
   # (client/i18n) broke them on main unseen (2026-10-17, a28f78496).
   if part ts && touches "$ts_core|^client/i18n/|^web/src/core/|^web/public/avatars/|^station/native/mesh/|^vendor/|^rules/js/|^station/src/cloud/lock\.ts$|^station/test/lock-(chains|oracle)\.ts$|^scripts/native\.ts$"; then prep core deps client/core-ts; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor rules/js station/src/cloud/lock.ts station/test/lock-chains.ts station/test/lock-oracle.ts scripts/native.ts" after core sh -c 'cd client/core-ts && pnpm test'; fi
   if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n station/src/cloud/lock.ts client/core-ts/src/lock-form.ts rules/js" after cloud sh -c 'cd cloud && pnpm test'; fi
-  # The station, with its native parts prebuilt (mesh addon, runner, the Rust station's archive for the compatibility
-  # tests): its tests run whenever it, one of them or the words it says changed.
-  if part station && touches '^station/|^vendor/|^client/i18n/|^client/shell/|^apps/mbui/mbui/src/effect/|^rules/js/|^scripts/native\.ts$'; then
+  # The station: it and its tests run whenever it, one of its native parts or the words it says changed (station_paths:
+  # scripts/plan.sh reads it from this line for CI's check-station).
+  station_paths='^station/|^vendor/|^client/i18n/|^client/shell/|^apps/mbui/mbui/src/effect/|^rules/js/|^scripts/native\.ts$'
+  # Its tests' native parts, prebuilt (mesh addon, runner, the reader in MoonBit; on a Mac the Rust station's archive
+  # command too, for the compatibility tests, which skip themselves without it: it is prebuilt for darwin alone).
+  station_natives="mesh runner reader"
+  [ "$(uname -s)" = Darwin ] && station_natives="mesh runner archive-rs reader"
+  if part station && touches "$station_paths"; then
     prep station deps station
     # Its programs in MoonBit (station/mb): what of them runs without a host (src/wire).
     remembered "tests: station's MoonBit" "station/mb apps/mbui/mbui/src/effect apps/mbui/mbui/moon.mod" sh -c 'cd station/mb && moon test --target native src/wire && moon test --target native src/jsjson && moon test --target native src/nodepath && moon test --target native src/jscase'
@@ -402,9 +408,24 @@ if [ $full = 1 ]; then
     # driver (agents/cursor-bridge.mjs) and the sandbox bridge (agents/sandbox-bridge.mjs) run in processes of their own,
     # not the station's.
     step "station: time through its clock" sh -c '! git grep -nE "Date\.now\(|new Date\(\)|setTimeout\(|setInterval\(" -- station/src ":!station/src/ops/fibers.ts" ":!station/src/agents/cursor-bridge.mjs" ":!station/src/agents/sandbox-bridge.mjs"'
-    # (STILLFAIL_NODE_TEST_JOBS, on a machine CI's runners share: station/package.json's `test`, that many files at a
-    # time, .github/actions/setup-mac)
-    remembered "tests: station" "station client/i18n client/shell vendor rules/js apps/mbui/mbui/src/effect scripts/native.ts" after station sh -c 'cd station && if [ -n "${STILLFAIL_NODE_TEST_JOBS:-}" ]; then node ../scripts/native.ts run mesh runner archive-rs reader -- node --import ./test/setup-env.mjs --test --test-concurrency="$STILLFAIL_NODE_TEST_JOBS" --test-timeout=600000 test/*.test.ts; else pnpm test; fi'
+    # Where the station's tests are another run's (CI: check-station's, on Linux), the ones only a Mac can run are
+    # this one's: those of the Rust station's archive command (test/cold-compat.test.ts, 8 tests; every other test
+    # ran on Linux as on a Mac, 2026-11-10).
+    if ! part station-tests && [ "$(uname -s)" = Darwin ]; then
+      remembered "tests: station, a Mac's alone" "station scripts/native.ts" after station sh -c 'cd station && node ../scripts/native.ts run mesh runner archive-rs reader -- node --import ./test/setup-env.mjs --test --test-timeout=600000 test/cold-compat.test.ts'
+    fi
+  fi
+  # The station's tests (station/test): every file, or one slice of them (STILLFAIL_STATION_SHARD="<i>/<n>": the files
+  # in order, every n-th from the i-th). CI runs them in slices on Linux runners of their own (pipeline.yml,
+  # check-station), not on macos-ci: four runners share that Mac, the tests took 2.3 to 4.1 minutes there by what else
+  # ran, and three checks at once went past the job's five (6 of some 18 in half a day, 2026-11-09; the files doubled
+  # in the five days before). A machine to itself, a slice takes the same every run.
+  if part station-tests && touches "$station_paths"; then
+    prep station deps station
+    slice=${STILLFAIL_STATION_SHARD:-}
+    # (STILLFAIL_NODE_TEST_JOBS: that many files at a time rather than Node's own count)
+    # shellcheck disable=SC2016 # the command's own variables, expanded by its shell
+    remembered "tests: station${slice:+ $slice}" "station client/i18n client/shell vendor rules/js apps/mbui/mbui/src/effect scripts/native.ts" after station env STATION_SLICE="$slice" STATION_NATIVES="$station_natives" sh -c 'cd station && files=$(ls test/*.test.ts | awk -v s="${STATION_SLICE:-0/1}" '"'"'BEGIN { split(s, a, "/") } NR % a[2] == a[1]'"'"') && [ -n "$files" ] && node ../scripts/native.ts run $STATION_NATIVES -- node --import ./test/setup-env.mjs --test ${STILLFAIL_NODE_TEST_JOBS:+--test-concurrency="$STILLFAIL_NODE_TEST_JOBS"} --test-timeout=600000 $files'
   fi
   # The usage stream exercises the real station reader and the client together. Keep it out of either side's own
   # typecheck and prepare both sides before checking and running it, including on a fresh checkout.
