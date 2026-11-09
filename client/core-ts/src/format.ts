@@ -281,7 +281,7 @@ export function plainText(text: string): string {
       .replace(/<!(here|channel|everyone)(\|[^>]*)?>/g, "@$1")
       .replace(/https?:\/\/[^\s<>()]+/g, () => words("link"))
       .replace(/(\*\*|__|~~)(?=\S)([^\n]*?\S)\1/g, "$2")
-      .replace(/(^|[^\w*~])([*_~])(?=[^\s*_~])([^\n]*?[^\s*_~])\2(?![\w*~])/gm, "$1$3")
+      .replace(/(^|[^\w*])([*_])(?=[^\s*_])([^\n]*?[^\s*_])\2(?![\w*])/gm, "$1$3")
       .replace(/\\([\\`*_{}[\]()#+\-.!|~>])/g, "$1")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")

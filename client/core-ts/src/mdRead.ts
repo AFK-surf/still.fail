@@ -1,8 +1,9 @@
 // Markdown read into the nodes markdown.ts makes its tree of (mdast's, as far as it reads them), by markdown-it.
 // micromark read it before: as GitHub's flavour, the same, but in Hermes (the phones' engine, which has no JIT) at
 // a substantial share of opening a chat; markdown-it is faster in that engine (bench/md-parse.ts). What it reads as
-// micromark's GFM did: tables, strikethrough with one tilde or
-// two, task lists; raw HTML left out; links as written (not encoded, none refused: a client keeps what it may open);
+// micromark's GFM did, save one thing: tables, strikethrough with two tildes (GFM's one tilde is words here: a
+// range written "12~20" next to "100~300" struck everything between them), task lists; raw HTML left out; links as
+// written (not encoded, none refused: a client keeps what it may open);
 // formulas in `$$` fences and `\[ \]` blocks, `\( \)` in a line (a `$` in prose is a dollar).
 //
 // The nodes say where in the text they stand where markdown.ts reads its runs from (`position`): a block by its lines,
@@ -36,18 +37,16 @@ reader.block.ruler.at("table", mathTable, { alt: ["paragraph", "reference"] });
 
 const isSpace = (c: number) => c === 0x20 || c === 0x09;
 
-// ── strikethrough as GFM has it: a run of one tilde or two, closed by a run of as many ──
+// ── strikethrough: a run of two tildes, closed by a run of two (one or three or more: words) ──
 
-const ONE = 0x7e;
-const TWO = 0x7e7e;
+const TILDE = 0x7e;
 
 function tilde(state: J, silent: boolean): boolean {
-  if (silent || state.src.charCodeAt(state.pos) !== ONE) return false;
+  if (silent || state.src.charCodeAt(state.pos) !== TILDE) return false;
   const scanned = state.scanDelims(state.pos, true);
   const token = state.push("text", "", 0);
   token.content = "~".repeat(scanned.length);
-  // (three or more: words)
-  if (scanned.length <= 2) state.delimiters.push({ marker: scanned.length === 1 ? ONE : TWO, length: 0, token: state.tokens.length - 1, end: -1, open: scanned.can_open, close: scanned.can_close });
+  if (scanned.length === 2) state.delimiters.push({ marker: TILDE, length: 0, token: state.tokens.length - 1, end: -1, open: scanned.can_open, close: scanned.can_close });
   state.pos += scanned.length;
   return true;
 }
@@ -55,7 +54,7 @@ function tilde(state: J, silent: boolean): boolean {
 function tildePairs(state: J): boolean {
   const pairs = (delimiters: J[]) => {
     for (const open of delimiters) {
-      if ((open.marker !== ONE && open.marker !== TWO) || open.end === -1) continue;
+      if (open.marker !== TILDE || open.end === -1) continue;
       const close = delimiters[open.end];
       for (const [d, type, nesting] of [[open, "s_open", 1], [close, "s_close", -1]] as const) {
         const token = state.tokens[d.token];
