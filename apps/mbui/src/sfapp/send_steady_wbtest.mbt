@@ -100,6 +100,10 @@ fn send_at_pace(deliver : Double, answer : Double, end : Double, sent? : Double 
 
 ///|
 test "words sent at any pace of the station: the list goes up only, never down and back" {
+  // (judged frame to frame on frame()'s, the display's own: the default run's alone, @ui.test_at_a_rate)
+  if @ui.test_at_a_rate() {
+    return
+  }
   // (paces each of which took it down and back before: the turn told over before its answer came (end < 0), the answer
   // come too soon to come out of an avatar (answer 100, 400; end after it), in rows_steady and on the screen)
   let bad : Array[String] = []
@@ -129,6 +133,10 @@ test "words sent at any pace of the station: the list goes up only, never down a
 
 ///|
 test "words sent, the station slow to take them or the chat to reach them: the list goes up only, never down and back" {
+  // (judged frame to frame on frame()'s, the display's own: the default run's alone, @ui.test_at_a_rate)
+  if @ui.test_at_a_rate() {
+    return
+  }
   // (正在发送 shows once they have been on their way a while (sending_shows_ms); taken, the outbox row is `sent`, its
   // time under it, till the chat's entries reach its message: 2026-11-09 the user, 「发消息会跳动」「跟发送中的状态有关」)
   let bad : Array[String] = []

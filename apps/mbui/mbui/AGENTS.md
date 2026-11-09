@@ -57,7 +57,8 @@ yet and you can add one, add it.
   mbui-ci's `native at …` and mbui-check's `… at … fps`, a runner a rate), and must come out the same. Only
   `run_for`'s way gets them: what a test walks itself (inputs, `frame()`) is on the display's frames as ever. Those runs
   hold results only; how a motion goes frame to frame (`sizes_steady`, `rows_steady`, `words_over`) is judged on the
-  default run's frames (the user, 2026-11-09: 平滑度另开一条线).
+  default run's frames (the user, 2026-11-09: 平滑度另开一条线), and a test that walks its frames itself to judge that
+  (`frame()`, the same frames at any rate) returns at once at a rate (`@ui.test_at_a_rate()`, send_steady_wbtest.mbt).
 - Motion is data: said once with where from, where to, curve and start; its
   value at any time computed from that. Nothing in an animation, a timer or a fiber may step frame by frame
   (`@effect.next_frame` loops), or start at "the next frame" instead of the moment of what caused it. A motion is set
