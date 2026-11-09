@@ -10,14 +10,21 @@
 #   scripts/instrbench.sh compare A B     two runs' OUTs side by side, A before and B after (each from its checkout),
 #                                         both compiled by the same MoonBit (MBUI_TOOLS): another one's code is
 #                                         another's (moon of 2026-10-16 and of 11-04: Home's frame 2.9% apart)
+#   scripts/instrbench.sh allocs [update] OUT
+#                                         each scene's allocations in OUT's run (the allocator's outermost calls, all
+#                                         its measured frames') held to its bar in bench/allocs.txt, which only falls,
+#                                         as detlint's counts (mbui's wasmgas allocs); update: the bars written as OUT's
 #   TOP=20: how many functions are said. MBUI_PROFILE_EACH=1: each function's counts in each frame too (F lines)
 set -eu
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
 # scene      script                           fixture    window
-table="home scroll-home long 390x844
-medium scroll-medium chat-long 690x840"
+# (idle: a long chat open, untouched; home, medium: scrolled; stream: an agent's messages coming in, untouched)
+table="idle idle-small chat-long 390x844
+home scroll-home long 390x844
+medium scroll-medium chat-long 690x840
+stream stream chat-stream 390x844"
 gas() { "$MBUI_DIR/scripts/wasmgas" "$@"; }
 if [ "${1:-run}" = compare ]; then
   [ $# = 3 ] || { echo 'instrbench.sh compare BEFORE_OUT AFTER_OUT' >&2; exit 2; }
@@ -31,6 +38,19 @@ if [ "${1:-run}" = compare ]; then
     echo
   done <<< "$table"
   exit 0
+fi
+if [ "${1:-run}" = allocs ]; then
+  shift
+  up=""
+  [ "${1:-}" = update ] && { up=update; shift; }
+  [ $# = 1 ] || { echo 'instrbench.sh allocs [update] OUT' >&2; exit 2; }
+  runs=()
+  while read -r scene _; do
+    [ -f "$1/$scene.profile" ] && runs+=("$scene" "$1/$scene.profile")
+  done <<< "$table"
+  [ ${#runs[@]} -gt 0 ] || { echo "instrbench: no scene's profile in $1" >&2; exit 1; }
+  gas allocs "$A/bench/allocs.txt" $up "${runs[@]}"
+  exit
 fi
 [ "${1:-run}" = run ] && shift || true
 O=$(mkdir -p "${1:-out/instr/run}" && cd "${1:-out/instr/run}" && pwd)

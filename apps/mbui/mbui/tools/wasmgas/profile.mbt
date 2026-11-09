@@ -18,6 +18,9 @@
 // its call: one each), what it runs inside left out of the above: `__gas` and the kinds as they were before it, the
 // functions it calls counted in the second table; what it ran in the exported i64 global `__a`, the calls the rest of
 // the program made of them in `__ac`.
+// The allocations: each outermost call of MoonBit's allocator (a call of one of `runtime_kind`'s K_ALLOC functions not
+// inside another, wherever it is called from) one in the exported i64 global `__m`, the bytes it asks for (its first
+// parameter) in `__mb`; those of the functions counted apart, as their instructions, not.
 // The start function (the packages' initializers, run once as the module is made) is left as it is, uncounted.
 // Nothing else of the module changes. What it cannot read it refuses (a GC type, exceptions, threads): a new
 // compiler feature never counted wrong in silence. (A memory, not globals, for the functions: a host makes each
@@ -334,6 +337,8 @@ priv struct Shape {
   mut has_memory_section : Bool
   func_types : Array[Int]
   type_params : Array[Int]
+  // each type's first parameter's value type (-1: none)
+  type_first : Array[Int]
   mut start : Int
   runtime : Map[Int, Int]
   // the functions counted apart (profile's `apart`), by their index
@@ -350,6 +355,7 @@ fn shape(data : Bytes, apart : (String) -> Bool) -> Shape {
     has_memory_section: false,
     func_types: [],
     type_params: [],
+    type_first: [],
     start: -1,
     runtime: {},
     apart: {},
@@ -368,6 +374,7 @@ fn shape(data : Bytes, apart : (String) -> Bool) -> Shape {
             fail("a type this reads not (\{form}): a GC program's? this counts classic Wasm")
           }
           let np = r.uint()
+          s.type_first.push(if np > 0 { r.data[r.p].to_int() } else { -1 })
           for _ in 0..<np {
             value_type(r)
           }
@@ -520,6 +527,11 @@ fn counter(v : @buffer.Buffer, g : Int, n : Int64) -> Unit {
 }
 
 ///|
+/// How many globals profile adds besides the kinds': __gas, the table in use's address, __a, __ac, __m, __mb, how deep
+/// in the allocator
+const OURS : Int = 7
+
+///|
 /// `data` made to count what it runs (the head of this file)
 fn profile(data : Bytes, apart : (String) -> Bool) -> Bytes {
   check_magic(data)
@@ -529,8 +541,8 @@ fn profile(data : Bytes, apart : (String) -> Bool) -> Bytes {
   let funcs = imported + nd
   let wrap = fn(f : Int) { if f >= imported && f < funcs { funcs + (f - imported) } else { f } }
   let g = s.imported_globals + s.defined_globals
-  // ours: __gas at g, each kind's at g + 1 + k, then the table in use's address, __a and __ac; our memory after the
-  // others, its two tables in its halves
+  // ours: __gas at g, each kind's at g + 1 + k, then the table in use's address, __a and __ac, __m and __mb, how deep
+  // in the allocator (an i32); our memory after the others, its two tables in its halves
   let gas = g
   let nk = kinds.length()
   let mi = s.memories
@@ -545,6 +557,9 @@ fn profile(data : Bytes, apart : (String) -> Bool) -> Bytes {
   put(globals_entry, [0x7f, 0x01, 0x41, 0x00, 0x0b])
   put(globals_entry, [0x7e, 0x01, 0x42, 0x00, 0x0b])
   put(globals_entry, [0x7e, 0x01, 0x42, 0x00, 0x0b])
+  put(globals_entry, [0x7e, 0x01, 0x42, 0x00, 0x0b])
+  put(globals_entry, [0x7e, 0x01, 0x42, 0x00, 0x0b])
+  put(globals_entry, [0x7f, 0x01, 0x41, 0x00, 0x0b])
   let out = @buffer.new()
   out.write_bytesview(data[0:8])
   let mut had_globals = false
@@ -598,7 +613,7 @@ fn profile(data : Bytes, apart : (String) -> Bool) -> Bytes {
         had_globals = true
         let n = r.uint()
         let b = @buffer.new()
-        leb_u(b, (n + 4 + nk).to_int64())
+        leb_u(b, (n + OURS + nk).to_int64())
         b.write_bytesview(data[r.p:next])
         b.write_bytes(globals_entry.to_bytes())
         section(out, 6, b)
@@ -606,15 +621,23 @@ fn profile(data : Bytes, apart : (String) -> Bool) -> Bytes {
       7 => {
         if !had_globals {
           let b = @buffer.new()
-          leb_u(b, (4 + nk).to_int64())
+          leb_u(b, (OURS + nk).to_int64())
           b.write_bytes(globals_entry.to_bytes())
           section(out, 6, b)
           had_globals = true
         }
         had_exports = true
+        let ours = [("__gas", 3, gas), ("__pm", 2, mi)]
+        for k in 0..<nk {
+          ours.push(("__k\{k}", 3, gas + 1 + k))
+        }
+        ours.push(("__a", 3, gas + nk + 2))
+        ours.push(("__ac", 3, gas + nk + 3))
+        ours.push(("__m", 3, gas + nk + 4))
+        ours.push(("__mb", 3, gas + nk + 5))
         let n = r.uint()
         let b = @buffer.new()
-        leb_u(b, (n + 4 + nk).to_int64())
+        leb_u(b, (n + ours.length()).to_int64())
         for _ in 0..<n {
           let l = r.uint()
           leb_u(b, l.to_int64())
@@ -625,12 +648,6 @@ fn profile(data : Bytes, apart : (String) -> Bool) -> Bytes {
           let idx = r.uint()
           leb_u(b, (if kind == 0 { wrap(idx) } else { idx }).to_int64())
         }
-        let ours = [("__gas", 3, gas), ("__pm", 2, mi)]
-        for k in 0..<nk {
-          ours.push(("__k\{k}", 3, gas + 1 + k))
-        }
-        ours.push(("__a", 3, gas + nk + 2))
-        ours.push(("__ac", 3, gas + nk + 3))
         for o in ours {
           let (name, kind, idx) = o
           leb_u(b, name.length().to_int64())
@@ -823,12 +840,32 @@ fn wrapper(s : Shape, k : Int, gas : Int, pb : Int) -> @buffer.Buffer {
   st(nb, mi, began)
   nb.write_byte(b'\x0b')
   bump(nb, pb, mi, d, 1L)
+  let alloc = s.runtime.get(s.imported_funcs + k) == Some(K_ALLOC)
+  let md = gas + kinds.length() + 6
+  if alloc {
+    // the outermost: __m += 1, __mb += its first parameter (the bytes asked for, an i32); then one deeper
+    put(nb, [0x23])
+    leb_u(nb, md.to_int64())
+    put(nb, [0x45, 0x04, 0x40])
+    counter(nb, md - 2, 1L)
+    if s.type_first[s.func_types[k]] == 0x7f {
+      nb.write_byte(b'\x23')
+      leb_u(nb, (md - 1).to_int64())
+      put(nb, [0x20, 0x00, 0xad, 0x7c, 0x24])
+      leb_u(nb, (md - 1).to_int64())
+    }
+    nb.write_byte(b'\x0b')
+    depth_by(nb, md, 0x6a)
+  }
   for a in 0..<params {
     nb.write_byte(b'\x20')
     leb_u(nb, a.to_int64())
   }
   nb.write_byte(b'\x10')
   leb_u(nb, (s.imported_funcs + k).to_int64())
+  if alloc {
+    depth_by(nb, md, 0x6b)
+  }
   // depth -= 1; if depth == 0 { incl += gas - began }
   bump(nb, pb, mi, d, -1L)
   ld(nb, pb, mi, d)
@@ -846,6 +883,15 @@ fn wrapper(s : Shape, k : Int, gas : Int, pb : Int) -> @buffer.Buffer {
 }
 
 ///|
+/// The i32 global `g` one more (`op` i32.add) or one less (i32.sub)
+fn depth_by(nb : @buffer.Buffer, g : Int, op : Int) -> Unit {
+  nb.write_byte(b'\x23')
+  leb_u(nb, g.to_int64())
+  put(nb, [0x41, 0x01, op, 0x24])
+  leb_u(nb, g.to_int64())
+}
+
+///|
 /// The wrapper of a function counted apart (profile's `apart`: a test's stand-in for the host, what a device's host
 /// does in its own code): each of its calls one call of the host's, its own, all inside it and its calls one each in
 /// the table in use; what it runs inside counted in `__a` (its calls in `__ac`) and the other table, the counts as
@@ -854,12 +900,13 @@ fn apart_wrapper(s : Shape, k : Int, gas : Int, nk : Int, pb : Int, apart_at : I
   let mi = s.memories
   let base = 40 * k
   let params = s.type_params[s.func_types[k]]
-  // its locals after its parameters: the table in use's address, then __gas and each kind's as they were
+  // its locals after its parameters: the table in use's address, then __gas and each kind's as they were, __m and
+  // __mb
   let at = params
   let was = params + 1
   let nb = @buffer.new()
   put(nb, [0x02, 0x01, 0x7f])
-  leb_u(nb, (1 + nk).to_int64())
+  leb_u(nb, (3 + nk).to_int64())
   nb.write_byte(b'\x7e')
   bump(nb, pb, mi, base, 1L)
   bump(nb, pb, mi, base + 8, 1L)
@@ -873,6 +920,10 @@ fn apart_wrapper(s : Shape, k : Int, gas : Int, nk : Int, pb : Int, apart_at : I
   for i in 0..=nk {
     get(0x23, gas + i)
     get(0x21, was + i)
+  }
+  for i in 0..<2 {
+    get(0x23, gas + nk + 4 + i)
+    get(0x21, was + nk + 1 + i)
   }
   nb.write_byte(b'\x41')
   leb_s(nb, apart_at.to_int64())
@@ -899,6 +950,11 @@ fn apart_wrapper(s : Shape, k : Int, gas : Int, nk : Int, pb : Int, apart_at : I
       put(nb, [0x42, 0x01, 0x7c])
     }
     get(0x24, gas + i)
+  }
+  // (what it allocated is not the program's either)
+  for i in 0..<2 {
+    get(0x20, was + nk + 1 + i)
+    get(0x24, gas + nk + 4 + i)
   }
   get(0x20, at)
   get(0x24, pb)

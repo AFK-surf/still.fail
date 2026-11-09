@@ -1006,6 +1006,26 @@ pub fn fix_deliver(session : String, id : String) -> Unit {
 }
 
 ///|
+/// The `i`-th of chat-stream's messages: its agent's, in the first row's chat (fixture.mbt), a line or a few.
+pub fn fix_stream_post(i : Int) -> Unit {
+  fix_serial.val += 1
+  let lines = ["读完了列表的布局。", "高度按行算，分组头单独一行。", "滚动时只重排看得见的行。", "下一步：把分组头的高度缓存起来。"]
+  let words = StringBuilder::new()
+  for k in 0..=(i % lines.length()) {
+    if k > 0 {
+      words.write_string("\n\n")
+    }
+    words.write_string(lines[k])
+  }
+  fix_chat("s-c1").sent.push(
+    msg(100 + fix_serial.val, "agent", by_agent("anthropic", "claude", "s-c1"), words.to_string(), "刚刚", {
+      "ts": Json::string("stream\{fix_serial.val}"),
+      "said": true,
+    }),
+  )
+}
+
+///|
 /// The fixture's writes in a chat (`chat.send`, `chat.retry`, `chat.discard`, `draft.get`, `draft.put`,
 /// `station.upload.part`, `session.warm`), and what the page tells (`client.focus`, `chat.place`): None for any other.
 pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, Json]? {

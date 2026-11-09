@@ -155,6 +155,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   every run (its `compare` sets two checkouts' runs side by side). It says numbers, each kind's and weighted, never a
   verdict: what they say of the change is weighed and told as it is (the user, 2026-11-09). A device's or the native
   build's time (`scripts/appbench.sh`) is what a frame takes there.
+- Its allocations (the allocator's outermost calls, each frame's, and the bytes) are counted the same way, the same
+  every run; each scene's, all its frames', has a bar in `bench/allocs.txt` that only falls, as detlint's counts:
+  `scripts/instrbench.sh allocs OUT` says a scene over it or under it, `allocs update OUT` writes what OUT counted.
 - A push starts CI. Push when the work is meant to merge (the change done, its files' tests and the bench passed),
   not after each small change: Studio's runs take the worktree by `station_task`'s `dir`, no push needed.
 - A PR that has not met what it must to merge is not waited on: no watching its CI, go on with the next step.

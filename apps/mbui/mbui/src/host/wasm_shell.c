@@ -491,11 +491,13 @@ static wasm_trap_t *film_say(void *env, wasmtime_caller_t *caller, const wasmtim
 //   FRAME FRAME SUM               the instructions run in a frame
 //   K FRAME C0 C1 …               each kind's in it (wasmgas's `__k<i>`), their sum SUM
 //   A FRAME N CALLS               what the functions counted apart ran in it, in how many calls
+//   M FRAME N BYTES               the allocations in it (wasmgas's `__m`, `__mb`): how many, the bytes they asked for
 //   FRAMES N                      as the program ends: how many frames were measured; then over them all,
 //   TOTAL K OWN CALLS INCL        each function's, and
 //   KINDS C0 C1 …                 each kind's
 //   APART N CALLS                 what the functions counted apart ran (wasmgas's `__a`, in `__ac` calls: the test's
 //                                 stand-in for the host, kept out of the counts above but for one host call each)
+//   ALLOCS N BYTES                the allocations
 //
 // The clock (film.now) says 0 always: what is counted is never by the time the machine took.
 typedef struct {
@@ -505,7 +507,7 @@ typedef struct {
 static FILE *profiled_out;
 static profiled_fn *profiled_before;
 static uint64_t *profiled_own, *profiled_calls, *profiled_incl, *profiled_kinds_before, *profiled_kinds_total;
-static uint64_t profiled_apart_before[2], profiled_apart_total[2];
+static uint64_t profiled_apart_before[4], profiled_apart_total[4];
 static size_t profiled_n, profiled_nk;
 static int profiled_open, profiled_frame, profiled_frames, profiled_each;
 
@@ -524,10 +526,11 @@ static void profiled_kinds(wasmtime_caller_t *caller, uint64_t *out) {
   }
 }
 
-// What the functions counted apart ran and their calls (`__a`, `__ac`), 0 where the program counts none apart
+// What the functions counted apart ran and their calls (`__a`, `__ac`), the allocations and their bytes (`__m`, `__mb`):
+// 0 where the program counts none
 static void profiled_apart(wasmtime_caller_t *caller, uint64_t *out) {
-  const char *names[2] = {"__a", "__ac"};
-  for (int i = 0; i < 2; i++) {
+  const char *names[4] = {"__a", "__ac", "__m", "__mb"};
+  for (int i = 0; i < 4; i++) {
     wasmtime_extern_t item;
     out[i] = 0;
     if (!wasmtime_caller_export_get(caller, names[i], strlen(names[i]), &item) || item.kind != WASMTIME_EXTERN_GLOBAL)
@@ -550,6 +553,8 @@ static void profiled_end(void) {
   fprintf(profiled_out, "\n");
   fprintf(profiled_out, "APART %llu %llu\n", (unsigned long long)profiled_apart_total[0],
           (unsigned long long)profiled_apart_total[1]);
+  fprintf(profiled_out, "ALLOCS %llu %llu\n", (unsigned long long)profiled_apart_total[2],
+          (unsigned long long)profiled_apart_total[3]);
   fclose(profiled_out);
   profiled_out = NULL;
 }
@@ -633,13 +638,14 @@ static wasm_trap_t *film_mark(void *env, wasmtime_caller_t *caller, const wasmti
     fprintf(profiled_out, " %llu", (unsigned long long)d);
   }
   fprintf(profiled_out, "\n");
-  uint64_t apart[2];
+  uint64_t apart[4];
   profiled_apart(caller, apart);
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < 4; i++) {
     apart[i] -= profiled_apart_before[i];
     profiled_apart_total[i] += apart[i];
   }
   fprintf(profiled_out, "A %d %llu %llu\n", frame, (unsigned long long)apart[0], (unsigned long long)apart[1]);
+  fprintf(profiled_out, "M %d %llu %llu\n", frame, (unsigned long long)apart[2], (unsigned long long)apart[3]);
   // (each instruction is of one kind: the kinds' sum is the functions', or the counting is wrong)
   if (profiled_nk && ksum != sum) {
     say("wasm shell: frame %d: the kinds' sum %llu is not the functions' %llu\n", frame, (unsigned long long)ksum,

@@ -1,0 +1,7 @@
+# Each scripts/instrbench.sh scene's allocations, all its measured frames' (the allocator's outermost calls, counted by
+# mbui's wasmgas in the classic Wasm build: the same every run, whatever the machine). A bar only falls, as detlint's:
+# scripts/instrbench.sh allocs OUT says a scene over or under its bar; `allocs update OUT` writes what OUT counted.
+home 277261
+idle 8030
+medium 875811
+stream 1539669

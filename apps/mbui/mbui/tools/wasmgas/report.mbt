@@ -24,6 +24,9 @@ priv struct Run {
   // what the functions counted apart (the test's host) ran over all frames, and their calls
   mut apart : Int64
   mut apart_calls : Int64
+  // each frame's allocations and the bytes they asked for (M lines; none in a profile from before they were counted)
+  allocs : Array[Int64]
+  alloc_bytes : Array[Int64]
 }
 
 ///|
@@ -96,6 +99,8 @@ fn read_run(program : String, profile : String) -> Run {
     imported: imported_functions(data),
     apart: 0L,
     apart_calls: 0L,
+    allocs: [],
+    alloc_bytes: [],
   }
   for line in text.split("\n") {
     let p = line.split(" ").map(fn(v) { v.to_owned() }).to_array()
@@ -106,6 +111,10 @@ fn read_run(program : String, profile : String) -> Run {
         run.own[k] = number(own)
         run.calls[k] = number(calls)
         run.incl[k] = number(incl)
+      }
+      ["M", _, n, bytes] => {
+        run.allocs.push(number(n))
+        run.alloc_bytes.push(number(bytes))
       }
       ["APART", n, calls] => {
         run.apart = number(n)
@@ -175,6 +184,37 @@ fn Run::sorted(self : Run) -> Array[Int64] {
 fn Run::at(self : Run, q : Double) -> Double {
   let s = self.sorted()
   s[(s.length().to_double() * q).to_int().min(s.length() - 1)].to_double()
+}
+
+///|
+fn sum(vs : Array[Int64]) -> Int64 {
+  let mut t = 0L
+  for v in vs {
+    t += v
+  }
+  t
+}
+
+///|
+/// The value at `q` of `vs` sorted (0: the least, 1: the most)
+fn quantile(vs : Array[Int64], q : Double) -> Int64 {
+  let s = vs.copy()
+  s.sort()
+  s[(s.length().to_double() * q).to_int().min(s.length() - 1)]
+}
+
+///|
+/// The allocations said: a frame's on average, p50, p90, the most; the frames with none; the bytes
+fn alloc_lines(run : Run) -> Array[String] {
+  if run.allocs.is_empty() {
+    return ["allocations: not counted (a profile from before wasmgas counted them)"]
+  }
+  let a = run.allocs
+  let none = a.filter(fn(v) { v == 0L }).length()
+  [
+    "allocations: \{sum(a)} in all; a frame: mean \{tenths(run.per_frame(sum(a)))}, p50 \{quantile(a, 0.5)}, p90 \{quantile(a, 0.9)}, max \{quantile(a, 1.0)}; \{none} of \{a.length()} frames none",
+    "  their bytes: \{sum(run.alloc_bytes)} in all; a frame: mean \{tenths(run.per_frame(sum(run.alloc_bytes)))}, max \{quantile(run.alloc_bytes, 1.0)}",
+  ]
 }
 
 ///|
@@ -314,6 +354,10 @@ fn report(run : Run, top : Int) -> Unit {
     "apart, not counted above (the test's stand-in for the host, a device's host's own code): \{k(run.per_frame(run.apart))} a frame, in \{tenths(run.per_frame(run.apart_calls))} calls (each one host call above)",
   )
   @sys.println_out("")
+  for l in alloc_lines(run) {
+    @sys.println_out(l)
+  }
+  @sys.println_out("")
   @sys.println_out("by their own instructions, a frame on average:")
   top_functions(run, top, false)
   @sys.println_out("")
@@ -362,6 +406,31 @@ fn compare(a : Run, b : Run, top : Int) -> Unit {
   @sys.println_out(
     "(apart: not in the counts above, what the test's stand-in for the host ran, a device's host's own code; its calls \{tenths(a.per_frame(a.apart_calls))} before, \{tenths(b.per_frame(b.apart_calls))} after, each one host call above)",
   )
+  @sys.println_out("")
+  if a.allocs.is_empty() || b.allocs.is_empty() {
+    @sys.println_out("allocations: not counted in one of them (a profile from before wasmgas counted them)")
+  } else {
+    row([("allocs", 9), ("before", 10), ("after", 10), ("change", 10), ("", 7)])
+    let n = fn(v : Int64) { v.to_string() }
+    let line = fn(name : String, x : Int64, y : Int64) {
+      let d = y - x
+      row([
+        (name, 9),
+        (n(x), 10),
+        (n(y), 10),
+        (if d > 0L { "+" + n(d) } else { n(d) }, 10),
+        (pct(x.to_double(), y.to_double()), 7),
+      ])
+    }
+    line("in all", sum(a.allocs), sum(b.allocs))
+    line("max", quantile(a.allocs, 1.0), quantile(b.allocs, 1.0))
+    line("p50", quantile(a.allocs, 0.5), quantile(b.allocs, 0.5))
+    line("bytes", sum(a.alloc_bytes), sum(b.alloc_bytes))
+    let none = fn(r : Run) { r.allocs.filter(fn(v) { v == 0L }).length() }
+    @sys.println_out(
+      "(frames with none: \{none(a)} of \{a.allocs.length()} before, \{none(b)} of \{b.allocs.length()} after)",
+    )
+  }
   // each function's own a frame, by its name (the two programs number them apart)
   let own_a = by_name(a)
   let own_b = by_name(b)
@@ -395,4 +464,86 @@ fn by_name(run : Run) -> Map[String, Double] {
     m[n] = m.get(n).unwrap_or(0.0) + run.per_frame(own)
   }
   m
+}
+
+///|
+/// Each scene's allocations held to a bar that only falls (the user, 2026-11-09: as detlint's counts): `kept` the bars,
+/// a line each, `scene allocations` (all its measured frames'), `#` a comment; `runs` each scene's profile. A scene
+/// over its bar or under it fails, under it with what to lower it to; one with no bar fails too. With `update`,
+/// the bars written as the runs counted them, nothing failed. The count is the same every run, whatever the machine
+/// (profile.mbt: the allocator's outermost calls), so a bar crossed is the code's.
+fn allocs(kept : String, update : Bool, runs : Array[(String, String)]) -> Bool {
+  let text = @sys.read_text(kept).unwrap_or("")
+  let bars : Map[String, Int64] = {}
+  let head : Array[String] = []
+  for line in text.split("\n") {
+    let l = line.trim(chars=" \t\r").to_string()
+    if l.has_prefix("#") || l == "" {
+      if bars.is_empty() && l != "" {
+        head.push(l)
+      }
+      continue
+    }
+    match l.split(" ").filter(fn(p) { p != "" }).map(fn(p) { p.to_string() }).to_array() {
+      [scene, n] => bars[scene] = number(n)
+      _ => fail("\{kept}: not `scene allocations`: \{l}")
+    }
+  }
+  let now : Array[(String, Int64)] = []
+  for r in runs {
+    let (scene, profile) = r
+    let t = @sys.read_text(profile).unwrap_or("")
+    let mut n : Int64? = None
+    for line in t.split("\n") {
+      match line.split(" ").map(fn(p) { p.to_string() }).to_array() {
+        ["ALLOCS", c, _] => n = Some(number(c))
+        _ => ()
+      }
+    }
+    match n {
+      Some(c) => now.push((scene, c))
+      None => fail("\{profile}: no allocations counted (the run did not end, or a shell from before they were)")
+    }
+  }
+  if update {
+    for s in now {
+      bars[s.0] = s.1
+    }
+    let sb = StringBuilder::new()
+    for h in head {
+      sb.write_string(h + "\n")
+    }
+    let names = bars.keys().to_array()
+    names.sort()
+    for s in names {
+      sb.write_string("\{s} \{bars[s]}\n")
+    }
+    if !@sys.write_text(kept, sb.to_string()) {
+      fail("\{kept}: cannot be written")
+    }
+    @sys.println_out("allocs: \{kept} written")
+    return true
+  }
+  let mut ok = true
+  for s in now {
+    let (scene, n) = s
+    match bars.get(scene) {
+      None => {
+        ok = false
+        @sys.println_out("\{scene}: \{n} allocations, no bar: add it (allocs … update)")
+      }
+      Some(b) if n > b => {
+        ok = false
+        @sys.println_out(
+          "\{scene}: \{n} allocations, over the bar \{b} by \{n - b}: what allocates more is in the change (instrbench.sh's report says where)",
+        )
+      }
+      Some(b) if n < b => {
+        ok = false
+        @sys.println_out("\{scene}: \{n} allocations, under the bar \{b}: lower it to what is now (allocs … update), so it stays there")
+      }
+      Some(_) => @sys.println_out("\{scene}: \{n} allocations, the bar")
+    }
+  }
+  ok
 }

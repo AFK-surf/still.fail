@@ -1,0 +1,8 @@
+# 小屏, a finger: the first row's chat open, its agent posting on its own a message every 250 ms (sffixture's
+# chat-stream); nothing touched for 4 s.
+timeout 20000
+until 发消息
+wait 500
+log measure
+wait 4000
+exit

@@ -3,9 +3,10 @@
 //
 // `mode`: "home" (signed in, the chats), "signin" (signed out), "loading" (the list being read), "empty" (a
 // workspace with nothing in it yet); "chat" (the first row's chat open: chat_fixture.mbt), "chat-loading" (it being
-// read), "chat-long" (thousands of messages in it); "long" (the chats and many weeks more of them: for flinging,
-// scripts/android.sh fling-test); "home-pins" (the chats as a station that knows pins says them: one pinned, one kept);
-// "home-share" (one of them shared and pictured from its row's menu, and in Slack).
+// read), "chat-long" (thousands of messages in it), "chat-stream" (its agent posting a message every 250 ms); "long"
+// (the chats and many weeks more of them: for flinging, scripts/android.sh fling-test); "home-pins" (the chats as a
+// station that knows pins says them: one pinned, one kept); "home-share" (one of them shared and pictured from its
+// row's menu, and in Slack).
 
 ///|
 pub(all) struct Fixture {
@@ -1191,6 +1192,13 @@ pub fn fixture(mode : String) -> Source {
       }
       @settings.fixture_changed()
     })
+  }
+  if f.mode == "chat-stream" {
+    // the first row's chat with its agent posting on its own, a message every 250 ms from 1 s on, 24 of them
+    // (scripts/instrbench.sh's stream scene: what a message coming in costs a frame)
+    for i in 0..<24 {
+      fix_later(1000.0 + 250.0 * i.to_double(), fn() { fix_stream_post(i) })
+    }
   }
   if f.mode == "settings-workspace-motion" || f.mode == "settings-stations-motion" || f.mode == "settings-connects-motion" || f.mode == "settings-vault-motion" {
     // the workspace changing on its own: a person and a station come at 2 s, one of each goes at 3.6 s

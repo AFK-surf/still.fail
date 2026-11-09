@@ -14,6 +14,9 @@
 //   wasmgas compare PROGRAM_A PROFILE_A PROGRAM_B PROFILE_B [TOP]
 //                                         two runs side by side, A before and B after: each kind's change and weighted,
 //                                         the TOP functions whose own count changed the most (by their names)
+//   wasmgas allocs KEPT [update] SCENE PROFILE …
+//                                         each scene's allocations held to its bar in KEPT, which only falls (report.mbt's
+//                                         allocs says how); update: KEPT written as these runs counted
 //
 // still.fail's scripts/instrbench.sh builds its scenes' program, profiles it, runs it and reports.
 
@@ -47,9 +50,25 @@ fn main {
     ["report", program, prof, .. rest] => report(read_run(program, prof), top_of(rest))
     ["compare", pa, fa, pb, fb, .. rest] =>
       compare(read_run(pa, fa), read_run(pb, fb), top_of(rest))
+    ["allocs", kept, .. rest] => {
+      let (update, rest) = match rest {
+        ["update", .. r] => (true, r)
+        r => (false, r)
+      }
+      if rest.length() % 2 != 0 {
+        fail("allocs KEPT [update] SCENE PROFILE …")
+      }
+      let runs = []
+      for i = 0; i < rest.length(); i = i + 2 {
+        runs.push((rest[i], rest[i + 1]))
+      }
+      if !allocs(kept, update, runs) {
+        @sys.exit(1)
+      }
+    }
     _ =>
       fail(
-        "profile IN.wasm OUT.wasm [APART] | report PROGRAM PROFILE [TOP] | compare PROGRAM_A PROFILE_A PROGRAM_B PROFILE_B [TOP]",
+        "profile IN.wasm OUT.wasm [APART] | report PROGRAM PROFILE [TOP] | compare PROGRAM_A PROFILE_A PROGRAM_B PROFILE_B [TOP] | allocs KEPT [update] SCENE PROFILE …",
       )
   }
   @sys.exit(0)

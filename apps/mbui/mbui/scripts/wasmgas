@@ -1,7 +1,7 @@
 #!/bin/sh
 # What a classic Wasm program runs, counted (tools/wasmgas, in MoonBit: its main.mbt says how): wasmgas profile IN OUT,
-# report PROGRAM PROFILE [TOP], compare PROGRAM_A PROFILE_A PROGRAM_B PROFILE_B [TOP]. Built here only when there is
-# none built from these very sources (by content).
+# report PROGRAM PROFILE [TOP], compare PROGRAM_A PROFILE_A PROGRAM_B PROFILE_B [TOP], allocs KEPT [update] SCENE
+# PROFILE …. Built here only when there is none built from these very sources (by content).
 D=$(cd "$(dirname "$0")" && pwd)
 T=$D/../tools
 TOOLS_SCRIPTS=$D; . "$D/tooltarget.sh"
