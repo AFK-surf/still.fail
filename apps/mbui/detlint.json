@@ -510,7 +510,6 @@
     },
     "old-panel": {
       "src/sfapp/context.mbt": 1,
-      "src/sfapp/settings/lock_prompts.mbt": 1,
       "src/sfapp/settings/run_more.mbt": 3,
       "src/sfapp/settings/station_add.mbt": 1,
       "src/sfapp/settings/station_mark.mbt": 1,
