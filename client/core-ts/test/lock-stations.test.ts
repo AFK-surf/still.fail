@@ -57,11 +57,13 @@ async function setUp(silent = false) {
     cloud.asked.push(`${req.method} ${req.url.replace(/^.*\/v1\/workspaces\/ws/, "")}`);
     return cloud.down ? new Status(503, { error: "down" }) : r.cloud.reply(req);
   });
+  // The silent one, until it wakes (answering as the other does; asked the while it slept, it never answers).
+  const asleep = { now: true, asked: 0 };
   const original = inner.stations.requests.call.bind(inner.stations.requests);
   inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
     const [ws, id] = addr.toString().split("/");
     if (ws === "ws" && id === A && path.startsWith("/lock")) return st.answer(method, path, body);
-    if (ws === "ws" && id === S) return Effect.never;
+    if (ws === "ws" && id === S) return (asleep.asked++, asleep.now ? Effect.never : st.answer(method, path, body));
     return (original as (...a: unknown[]) => unknown)(addr, method, path, body, ...rest);
   }) as typeof inner.stations.requests.call;
   const run = async <X>(e: Effect.Effect<X, any>) => {
@@ -74,7 +76,7 @@ async function setUp(silent = false) {
     if (failed !== undefined) throw failed;
     return out as X;
   };
-  return { r, inner, st, cloud, run, signer: () => me! };
+  return { r, inner, st, cloud, run, asleep, signer: () => me! };
 }
 
 test("the lock is read of its stations, the devices that came with it; the cloud is not asked", async () => {
@@ -142,7 +144,7 @@ test("a station refusing this device tells its lock's last entries: one taken ou
 });
 
 test("a station gone silent is not waited on: the locks are read of the one that answered and brought there", async () => {
-  const { inner, st, cloud, run, signer, r } = await setUp(true);
+  const { inner, st, cloud, run, signer, r, asleep } = await setUp(true);
   st.chain.push(signer().sign(next("ws", st.head(), 1001, "member", { sub: "s3", email: "c@x.com", role: "member" })));
   cloud.asked.length = 0;
   // Read of the one that answers, the other waited for OTHERS_MS more, not until its link gives up.
@@ -151,16 +153,16 @@ test("a station gone silent is not waited on: the locks are read of the one that
   assert.ok(r.host.nowMs() - t0 <= OTHERS_MS + 100, `read in ${r.host.nowMs() - t0} ms`);
   assert.equal(held(inner, "ws")?.head?.seq, 1);
   assert.equal(cloud.asked.length, 0, cloud.asked.join());
-  // An entry: the lock read first (as above), then done once the one took it.
+  // An entry: the lock read first, the silent one not waited for again (it was, once), then done once the one took it.
   const t1 = r.host.nowMs();
   await run(new Lock(inner, "ws", "s1", null).append("member", { sub: "s4", email: "d@x.com", role: "member" }));
-  assert.ok(r.host.nowMs() - t1 <= OTHERS_MS + 100, `taken in ${r.host.nowMs() - t1} ms`);
+  assert.ok(r.host.nowMs() - t1 <= 100, `taken in ${r.host.nowMs() - t1} ms`);
   assert.equal(st.chain.length, 3);
   // The person's own lock: read of the one that answered, brought, done once it took it.
   const own = personalStations(inner);
   const t2 = r.host.nowMs();
   assert.deepEqual(await run(own.read("s1")), []);
-  assert.ok(r.host.nowMs() - t2 <= OTHERS_MS + 100, `own lock read in ${r.host.nowMs() - t2} ms`);
+  assert.ok(r.host.nowMs() - t2 <= 100, `own lock read in ${r.host.nowMs() - t2} ms`);
   const t3 = r.host.nowMs();
   assert.equal(await run(own.bring("s1", [])), 1);
   assert.ok(r.host.nowMs() - t3 <= 100, `own lock taken in ${r.host.nowMs() - t3} ms`);
@@ -171,4 +173,13 @@ test("a station gone silent is not waited on: the locks are read of the one that
   await run(own.read("s1"));
   await run(read(inner, "ws"));
   assert.ok(r.host.nowMs() - t4 <= 2 * OTHERS_MS + 200, `refused in ${r.host.nowMs() - t4} ms`);
+  st.say.refuse = false;
+  // Awake again: once it answered something, it is waited for as before, and what it alone has is read of it.
+  asleep.now = false;
+  await run(read(inner, "ws"));
+  await r.host.time.pass(10);
+  asleep.now = true;
+  const t5 = r.host.nowMs();
+  await run(read(inner, "ws"));
+  assert.ok(r.host.nowMs() - t5 >= OTHERS_MS, `waited for again: ${r.host.nowMs() - t5} ms`);
 });
