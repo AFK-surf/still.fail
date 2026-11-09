@@ -2155,6 +2155,8 @@ pub(all) struct ChatView {
   newer : Bool
   first_entry : Double?
   last_entry : Double?
+  older : String
+  older_failed : String
   letters : Int32
   at : Double?
   at_offset : Double?
@@ -2352,7 +2354,7 @@ pub fn Emits::read(Self) -> Unit
 
 pub(all) enum Entry {
   Top
-  Older
+  Older(String)
   Empty
   Line
   Said(Message)
@@ -2974,6 +2976,8 @@ pub(all) struct Reading {
   mut rows_laid : String
   mut head : String
   mut head_at : Int32
+  mut first_was : Double
+  mut newer_was : Bool
   mut placed : Bool
   mut put : Bool
   mut lined : Bool

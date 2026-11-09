@@ -864,6 +864,7 @@ let en : Map[String, String] = {
   "web-main.chat.notSent": "Not sent",
   "web-main.chat.offline": "Can't reach the station. Messages are delivered once it's back.",
   "web-main.chat.offline.named": "Can't reach “{name}”. Messages are delivered once it's back.",
+  "web-main.chat.olderFailed": "Couldn't load earlier messages: {why}. Trying again shortly",
   "web-main.chat.openOpener": "Open “{title}”",
   "web-main.chat.pin": "Pin",
   "web-main.chat.pinFailed": "Couldn't pin: {error}",

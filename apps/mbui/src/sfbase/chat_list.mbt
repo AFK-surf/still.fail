@@ -8,7 +8,8 @@
 /// composer's).
 pub(all) enum Entry {
   Top
-  Older
+  /// the page before coming, or why it could not be read ("" coming)
+  Older(String)
   Empty
   Line
   Said(Message)
@@ -25,7 +26,7 @@ pub(all) enum Entry {
 pub fn Entry::id(self : Entry) -> String {
   match self {
     Top => "top"
-    Older => "older"
+    Older(_) => "older"
     Empty => "empty"
     Line => "line"
     Said(m) => "m:" + m.ts
@@ -52,6 +53,9 @@ pub(all) struct Reading {
   /// the first message's entry and where it was in the list, the last frame
   mut head : String
   mut head_at : Int
+  /// the window's first entry and whether it was short of the chat's end, as its rows were last given (paged_in)
+  mut first_was : Double
+  mut newer_was : Bool
   /// put in place once (the unread line, where it was opened, or the end)
   mut placed : Bool
   mut put : Bool
@@ -235,6 +239,8 @@ pub fn reading_of(key : String) -> Reading {
         rows_laid: "",
         head: "",
         head_at: -1,
+        first_was: -1.0,
+        newer_was: false,
         placed: false,
         put: false,
         lined: false,
@@ -399,7 +405,7 @@ fn answered_at(v : ChatView, all : Array[Entry]) -> Array[Agent] {
 fn chat_entries(v : ChatView) -> (Array[Entry], Int) {
   let out : Array[Entry] = [Top]
   if v.more {
-    out.push(Older)
+    out.push(Older(if v.older == "failed" { v.older_failed } else { "" }))
   }
   // (nothing in it: not a window showing none of it, what it shows before being brought, `more`)
   if v.messages.length() == 0 && v.outbox.length() == 0 && v.elsewhere.length() == 0 && !v.more {
@@ -1325,6 +1331,9 @@ pub fn row_keys(
   // row for its turn: what it made then, its rows not gone over again. Other view fields may change without changing
   // those inputs (the chat's title, for example). Whether the list follows its end is not asked: it only lets in rows
   // not known yet, and with the same entries every row was made known then.
+  // (a page read in, before the window or reaching the chat's end: what it brings was said long ago, there at once,
+  // the rows it joins as they are now; only what is said while the list is at the chat's end comes and changes)
+  let watched = !v.newer && !paged_in(rd, v)
   let sending = sending_of(rk)
   match rd.rows_made {
     Some(m) if rd.drawn &&
@@ -1337,7 +1346,7 @@ pub fn row_keys(
       m.rise_ms == rise_ms &&
       m.known == rd.known.length() &&
       sending.is_empty() &&
-      turns.waiting.is_empty() => return shown_rows(c, rd, m.list, m.keys, !v.newer, flight, laid~, laid_at~, foot_way~)
+      turns.waiting.is_empty() => return shown_rows(c, rd, m.list, m.keys, watched, flight, laid~, laid_at~, foot_way~)
     _ => ()
   }
   let made_whole = sending.is_empty() && turns.waiting.is_empty()
@@ -1576,7 +1585,25 @@ pub fn row_keys(
   // (what changes comes, goes and changes on the list's way whether the list follows its end or is read up it: the
   // row read from stays where it shows, what is over and under it moving away from it, mbui's ui/list_size.mbt; nothing
   // at once in view, 2026-10-31 the user: 「有一些是凭空出现的，有一些是凭空消失的」)
-  shown_rows(c, rd, list, keys, !v.newer, flight, laid~, laid_at~, foot_way~)
+  shown_rows(c, rd, list, keys, watched, flight, laid~, laid_at~, foot_way~)
+}
+
+///|
+/// Whether chat `v`'s window took in a page since its rows were last given: the page before it (its first entry
+/// earlier), or the page that reaches the chat's end (short of it till now).
+fn paged_in(rd : Reading, v : ChatView) -> Bool {
+  let first = match v.first_entry {
+    Some(f) => f
+    None =>
+      match v.messages.get(0) {
+        Some(m) => m.seq
+        None => -1.0
+      }
+  }
+  let paged = (first >= 0.0 && rd.first_was >= 0.0 && first < rd.first_was) || (rd.newer_was && !v.newer)
+  rd.first_was = first
+  rd.newer_was = v.newer
+  paged
 }
 
 ///|
@@ -2238,7 +2265,8 @@ pub fn list_after(
     let info = c.list_info_as(key, fn(i) { list_made(i, n, ask_rows) })
     // near the top: the page before comes in, once per page
     match (info, v.thread) {
-      (Some(i), Some(thread)) if v.more && rd.placed && i.first >= 0 && i.first <= 3 => {
+      // (not while the core reads it, nor while it waits after a read that failed: it says when to ask again)
+      (Some(i), Some(thread)) if v.more && v.older == "" && rd.placed && i.first >= 0 && i.first <= 3 => {
         // by entries, not messages: a page of what the chat does not show (letters, edits) moves it too
         let first = match v.first_entry {
           Some(f) => f
@@ -2373,6 +2401,7 @@ fn shown_sign(e : Entry) -> String {
     Out(o) => "o\{o.text.length()}|\{o.attachments.length()}|\{o.state}|\{o.joined}|\{o.followed}"
     State(a, b, c) => "s" + a + b + c
     Working(_) => "w"
+    Older(why) => "older" + why
     other => other.id()
   }
 }

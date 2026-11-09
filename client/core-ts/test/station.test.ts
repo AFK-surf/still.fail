@@ -11,7 +11,8 @@ import { HostWire } from "../src/station/wire.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { answers as answered, apply, call, readsOf, signIn, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
-import { type Answers, base, entries, entry, overview, session, started, stationHost, stationLater, threadView } from "./station-fixture.ts";
+import { type Answers, base, entries, entry, overview, session, started, stationHost, stationLater, status, threadView } from "./station-fixture.ts";
+import { retryAfter } from "../src/station/sync.ts";
 
 const gets = (host: FakeHost, path: string) => host.requests.flatMap(readsOf).filter((url) => url.endsWith(path)).length;
 
@@ -149,6 +150,40 @@ test("a_chat_with_something_unread_opens_at_it_and_pages_back", async () => {
   apply(host, values);
   assert.equal(v(values, 1).first, 1);
   assert.equal(v(values, 1).last, 120, "the whole thread fits the window: nothing goes at the other end");
+  core.close();
+});
+
+test("the_page_before_a_chat_is_read_once_at_a_time_and_a_failure_says_why_and_waits", async () => {
+  // A read of the page before that failed was asked for again at once by the app, as fast as it failed, its top
+  // turning for ever; the core says how it stands instead and asks again only a while after.
+  const answers = base();
+  answers["GET /threads"] = [threadView(7, 120)];
+  answers["GET /threads/7/entries?limit=50"] = { last: 120, entries: entries(71, 120) };
+  const older = "GET /threads/7/entries?before=71&limit=50";
+  answers[older] = status(502, { error: "busy" });
+  const { host, core } = await started(answers);
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "thread", station: "ws/st", thread: 7 });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).first, 71);
+  const asked = () => host.requests.filter((r) => r.url.includes("entries?before=71&")).length;
+  await assert.rejects(run(core.inner.stationTopics.older("ws/st", 7)));
+  await host.time.pass(100);
+  apply(host, values);
+  assert.deepEqual([v(values, 1).older, v(values, 1).olderFailed, v(values, 1).first], ["failed", "busy", 71]);
+  // Asked again before the while is up: nothing is read.
+  assert.equal(await run(core.inner.stationTopics.older("ws/st", 7)), true);
+  assert.equal(asked(), 1);
+  await host.time.pass(retryAfter(0) + 50, 50);
+  apply(host, values);
+  assert.equal(v(values, 1).older, undefined);
+  answers[older] = { last: 120, entries: entries(21, 70) };
+  assert.equal(await run(core.inner.stationTopics.older("ws/st", 7)), true);
+  await host.time.pass(100);
+  apply(host, values);
+  assert.deepEqual([v(values, 1).older, v(values, 1).first, asked()], [undefined, 21, 2]);
   core.close();
 });
 

@@ -22,6 +22,15 @@ fn pages_coming(c : @ui.Ctx, older : Bool) -> Unit {
 }
 
 ///|
+/// The page before that could not be read, in its place: why, the core asking for it again a while after.
+fn older_failed(c : @ui.Ctx, why : String) -> Unit {
+  c.box(style=older_row, fn() {
+    c.text(@sf.t("web-main.chat.olderFailed", args=[("why", why)]), style=older_failed_words) |> ignore
+  })
+  |> ignore
+}
+
+///|
 /// A chat with nothing in it yet (chatEmpty).
 fn chat_empty(c : @ui.Ctx) -> Unit {
   c.box(style=empty_row, fn() { c.text(@sf.t("web-main.chat.empty"), style=chat_empty_words) |> ignore }) |> ignore
@@ -864,6 +873,10 @@ let newer_row : @ui.Style = @ui.css("w=Full pt=S2 pb=S1 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let empty_row : @ui.Style = @ui.css("w=Full py=S8 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let older_failed_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=true)
 
 ///|
 // kept across runs: a value (no field of it changes)

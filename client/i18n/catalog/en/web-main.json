@@ -65,6 +65,7 @@
   "web-main.chat.archivedPlaceholder": "Restore to send",
   "web-main.chat.deleteFailed": "Couldn't delete: {error}",
   "web-main.chat.empty": "Send a message here; agents in this chat reply here",
+  "web-main.chat.olderFailed": "Couldn't load earlier messages: {why}. Trying again shortly",
   "web-main.chat.fromSlack": "From ",
   "web-main.chat.unkeep": "Stop keeping",
   "web-main.chat.unkeep.done": "No longer kept: suggested for archiving again once done",
