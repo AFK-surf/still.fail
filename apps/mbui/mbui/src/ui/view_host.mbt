@@ -1517,6 +1517,15 @@ fn Ctx::view_drawn(
   turn : Double,
   ground_drawn : @view.GroundShape,
 ) -> Int {
+  // (nothing of its own drawn (view_draws: no ground, edge, words, picture, field...): no block made or composed, what
+  // was kept of what it drew before let go (its block, its picture's shapes, their bands, as view_made lets them go),
+  // what it holds drawn as ever)
+  if !view_draws(c) {
+    view_blocks.remove(c.id)
+    view_pictures.remove(c.id)
+    view_shape_bands.remove(c.id)
+    return -1
+  }
   // (its edge after what it holds and what it draws of its own over its ground (its picture, its words, its shapes, its
   // field, an old view it hosts): border_over's, a clear one too: its ground inside it, its band left clear, as an old
   // view's box with a border of no colour; with nothing over its ground, drawn with it)
