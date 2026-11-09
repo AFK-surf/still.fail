@@ -27,7 +27,7 @@
 // (someone confirmed something): what waits for it then is tried at once.
 import { Deferred, Effect, type Result, Schedule } from "effect";
 import type { Inner } from "../core.ts";
-import { handlers, hooks } from "../core/execute.ts";
+import { type Roster, handlers, hooks } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
 import type { Owner } from "../core/routing.ts";
 import { CoreError } from "../error.ts";
@@ -328,7 +328,7 @@ const daysLeft = (secs: number) => Math.max(0, Math.ceil(secs / 86400));
 
 export function install(inner: Inner): void {
   hooks.enrolled = enrolled;
-  hooks.removing = removing;
+  hooks.roster = roster;
   hooks.lockRefused = refused;
   hooks.lockWaiting = waiting;
   inner.cloudSync.carry = (ws) => carried(inner, ws);
@@ -1344,20 +1344,23 @@ export function enrolled(inner: Inner, sub: string, ws: string, made: unknown): 
   });
 }
 
-/// A member or a station taken out of a locked workspace by this account: out of its lock first, by this device, where it
-/// signs there for an owner or an admin (`member.remove` takes their devices with them). The cloud alone keeping them
-/// out is not the lock's: it could hold back the end of a member's credential, or let a station back in, and the stations
-/// would take them as the lock still says. Where this device signs nothing there (a web page, one not let in), the cloud's
-/// word is all there is, as before; once the lock says it, a failure here is the call's, and the cloud is not asked.
-export function removing(inner: Inner, sub: string, ws: string, what: { member: string } | { station: string }): Effect.Effect<unknown, CoreError> {
+/// A member or a station taken out of a locked workspace by this account, or a member given another role: so in its
+/// lock first, by this device, where it signs there for an owner or an admin (`member.remove` takes their devices with
+/// them; `member` with the role, which the lock's rules decide who may give). The cloud's word alone is not the lock's:
+/// it could hold back the end of a member's credential or let a station back in, and the stations would take them as
+/// the lock still says; an admin made a member there would still sign as an admin. Where this device signs nothing there
+/// (a web page, one not let in), or the lock does not name them, the cloud's word is all there is, as before; once the
+/// lock is to say it, a failure here is the call's, and the cloud is not asked.
+export function roster(inner: Inner, sub: string, ws: string, what: Roster): Effect.Effect<unknown, CoreError> {
   return Effect.gen(function* () {
     if (inner.provider.kind !== "stillfail" || inner.workspaces.owner(ws) !== sub) return null;
-    yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "lock read before a removal" });
+    yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "lock read before a roster change" });
     const h = held(inner, ws);
     const key = signerOf(inner);
     if (!h?.head || key === null || !inner.host.appKeys) return null;
     const f = fold(h.entries);
-    if (f.disabled || ("member" in what ? !f.members.has(what.member) : !f.stations.has(what.station))) return null;
+    const member = "member" in what ? f.members.get(what.member) : undefined;
+    if (f.disabled || ("member" in what ? member === undefined || ("role" in what && member.role === what.role) : !f.stations.has(what.station))) return null;
     let by: ReturnType<typeof signerIn> = null;
     try {
       by = signerIn(checkLock(h.entries, now(inner)), key, now(inner));
@@ -1366,7 +1369,9 @@ export function removing(inner: Inner, sub: string, ws: string, what: { member: 
     }
     if (by === null || by.sub !== sub || !by.own || (by.role !== "owner" && by.role !== "admin")) return null;
     const lock = new Lock(inner, ws, sub, null);
-    return yield* ("member" in what ? lock.append("member.remove", { sub: what.member }) : lock.append("station.remove", { key: what.station }));
+    if ("station" in what) return yield* lock.append("station.remove", { key: what.station });
+    if ("role" in what) return yield* lock.append("member", { sub: what.member, email: member!.email, role: what.role });
+    return yield* lock.append("member.remove", { sub: what.member });
   });
 }
 
