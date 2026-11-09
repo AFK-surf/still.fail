@@ -66,7 +66,10 @@ jobs:
           - { part: app, group: pkgs, store: app-pkgs, fps: "24 7" }
           - { part: replay, group: "", store: replay, fps: "120" }
           - { part: replay, group: "", store: replay, fps: "60" }
-          - { part: replay, group: "", store: replay, fps: "24 7" }
+          # (24 and 7 a runner each for the flows: one after the other on one, their build 106 s and runs 80 + 71 s, 283 s
+          # of its five minutes on main f1d7ef36, 42643415378, 2026-11-10)
+          - { part: replay, group: "", store: replay, fps: "24" }
+          - { part: replay, group: "", store: replay, fps: "7" }
     env:
       PART: ${{ matrix.part }}
       GROUP: ${{ matrix.group }}
