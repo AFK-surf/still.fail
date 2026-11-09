@@ -127,16 +127,18 @@ fn Ctx::sizes_steady_said(self : Ctx, i : Int) -> String {
 
 ///|
 /// Where node `i` of the frame (with the window's tree's among it) was made, said after a fault (", made at …"): its
-/// own place where it is the tree's, else that of the tree's node it is drawn in, or the old view's; "" none kept.
+/// own place where it is the tree's, else that of the tree's node it is drawn in (the app's, past the framework's own
+/// boxes), or the old view's; "" none kept.
 fn Ctx::sizes_steady_made(self : Ctx, i : Int) -> String {
   let mut b = i
   while b >= 0 && b < self.count {
     match tree_frame_ids.get(b) {
-      Some(id) => {
+      // (not the framework's own boxes (an old view's host, a scroller's): the app's that holds them)
+      Some(id) if !source_said(id).has_prefix("made at mbui/src/view/") => {
         let s = source_said(id)
         return if s == "" { "" } else { " (" + s + ")" }
       }
-      None => b = self.nodes[b].parent
+      _ => b = self.nodes[b].parent
     }
   }
   let s = self.old_source_said(i)
@@ -225,8 +227,9 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
     // (what holds each before it: a node of the window's tree put among the frame's may come after what it holds)
     let order : Array[Int] = []
     let ordered = Array::make(k, false)
+    let up : Array[Int] = []
     for i in 0..<k {
-      let up : Array[Int] = []
+      up.clear()
       let mut q = i
       while q >= 0 && q < k && !ordered[q] {
         ordered[q] = true

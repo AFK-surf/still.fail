@@ -482,7 +482,8 @@ test "viewer on the tree, marking: a box's corner handle taken: the box stretche
   told_by(t, t.time(), [(0, 0, x + 20.0, y + 20.0, 10.0), (2, 0, x + 20.0, y + 20.0, 20.0)], At([]))
   display_frame(t)
   assert_eq(marking.note, -1)
-  // (its note's card under the picture now: the picture moved up clear of it)
+  // (its note's card under the picture now, its room opened on its way: the picture moved up clear of it)
+  t.run_for(@ui.move_most_ms)
   let (x, y, _, _) = z.rect().unwrap()
   // picked by its left edge (a tap: nothing to undo), then its foot right handle (drawn half a reach out of the
   // corner) taken 40, 30 further
@@ -2694,6 +2695,8 @@ test "viewer on the tree, a wide window, marking: a note asked for comes in the 
   click(pv("android-chat.annotate.done"))
   t.draw()
   assert_true(marking.note < 0, msg="done: let go")
+  // (the notes' cards' room opened on its way in its place)
+  t.run_for(@ui.move_most_ms)
   assert_false(@ui.view_tree().unwrap().clock_read(), msg="let go: nothing of it reads the clock")
 }
 
@@ -2786,7 +2789,8 @@ test "viewer on the tree, a wide window, marking: a note done (its card drawn), 
   let (t, _, click, id) = wide_box_noted("")
   click(pv("android-chat.annotate.done"))
   t.draw()
-  t.draw()
+  // (its card's room opened on its way)
+  t.run_for(@ui.move_most_ms)
   assert_true(marking.note < 0, msg="done: closed, its card drawn")
   let (cx, cy) = t.find(pv("android-chat.annotate.quoteOnly")).unwrap()
   t.touch(0, cx, cy)
@@ -3097,6 +3101,8 @@ fn pinned() -> (@ui.Tester, Int) raise {
   t.tap(tick[0].0, tick[0].1)
   t.draw()
   assert_eq(marking.note, -1, msg="its note done")
+  // (its card's room opened on its way under the picture, the picture fitted over it)
+  t.run_for(@ui.move_most_ms)
   (t, marking.shapes[0].id)
 }
 
@@ -3305,6 +3311,8 @@ fn shaped() -> @ui.Tester raise {
   t.tap(tick[0].0, tick[0].1)
   t.draw()
   assert_eq(marking.note, -1, msg="the arrow's note done")
+  // (the cards' room back on its way)
+  t.run_for(@ui.move_most_ms)
   marking.tool = Pen
   t.drag(x + 60.0 * k, y + 320.0 * k, x + 200.0 * k, y + 360.0 * k)
   marking.shapes.push({ id: marking.next_id, kind: "words", color: marking.color, w: 18.0 / k, pts: [380.0, 60.0], text: "对齐" })
