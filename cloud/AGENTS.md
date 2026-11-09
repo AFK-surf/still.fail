@@ -8,9 +8,14 @@
   (`src/index.ts`), the relay (`src/relay-worker.ts`: deploying it drops every relay connection, so it is deployed
   only when it changed), the static web, admin, preview, status and site. Their names, Durable Objects, bucket and
   secrets keep their names from before the rename: a renamed one would be new and empty.
-- `src/directory.ts` (one SQLite Durable Object) is who belongs where, every change one transaction, and holds the
-  sockets that make it live: a device's `/v1/events` and a station's presence socket, pushed what changed. Whether a
-  station is up is not the cloud's to say: devices find out over the mesh. `src/account.ts` is one account's sessions.
+- `src/directory.ts` (one SQLite Durable Object, `primary`) is who belongs where, every change one transaction: the
+  rows stay together, as splitting them would make most changes span objects. What grows with devices, stations or
+  requests is kept off it: a device's `/v1/events` socket is on its account's object (`src/account.ts`, also its
+  sessions and whether it is let into the test channel), a station's presence socket on the station's own
+  (`src/station.ts`, also whether it is enrolled). After each change the Directory tells those objects from an outbox
+  (in order, again until it gets there); whatever keeps someone's access is awaited before the answer.
+  `DIRECTORY_SOCKETS=primary` puts the sockets back on the Directory, the way back while nothing else depends on the
+  objects. Whether a station is up is not the cloud's to say: devices find out over the mesh.
 - A member's credential is a JWT the cloud signs (Ed25519, 30 days, bound to the device's key); stations check it
   offline with the key the presence socket's `state` frame gives, so a signed-in device works with the cloud down.
   A workspace in safe mode (the lock, `src/lock.ts` over `station/src/cloud/lock.ts` and `rules/`) is decided by
@@ -20,5 +25,6 @@
 - The control plane's contract is shared with Comma (AFK-surf/Cue): `station/src/cloud/provider.ts` holds what differs.
   A change to a station-facing route keeps both working.
 - Tests run in Miniflare with everything outside mocked: `pnpm run types && pnpm run check && pnpm test`, one file
-  `pnpm exec tsx --test test/<file>.test.ts`. `test/dev.ts` runs every Worker locally (`docs/development.md`).
+  `pnpm exec tsx --test test/<file>.test.ts`. What the Directory tells after a change answers is waited for with
+  `h.settled()` (test/harness.ts), never a while. `test/dev.ts` runs every Worker locally (`docs/development.md`).
   Deploying is main's pipeline's, never by hand from a branch.
