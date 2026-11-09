@@ -178,12 +178,21 @@ function leftOutFor(cloud: Cloud, hello: any, device: string, accepted?: Accepte
 /// What a hello this station refused (`e`, why) is answered: a lock's refusal with the code the device asks to be
 /// approved by and how far the lock goes here; a workspace left out for a lock, why (`lock_station`); else the reason.
 /// `sub`: whose credential checked out, refused for the lock: told the chains of their own lock this station keeps, so a
-/// device of theirs not on it yet (a new one) finds the devices that may let it in with no cloud (a few, as fit in a line).
+/// device of theirs not on it yet (a new one) finds the devices that may let it in with no cloud (a few, as fit in a line);
+/// and the last entries of the workspace's lock (`entries`), so one taken out of it hears so, with no cloud to read it of.
 export function refusalOf(cloud: Cloud, hello: any, device: string, e: unknown, accepted?: Accepted, sub: string | null = null): Record<string, unknown> {
   if (e instanceof LockRefusal) {
     const chains = sub === null ? [] : personChainsOf(cloud).of(sub).map(([genesis, entries]) => ({ genesis, entries }));
     const person = chains.length > 0 && JSON.stringify(chains).length <= REFUSAL_PERSON_BYTES ? { person: chains } : {};
-    return { error: e.message, code: e.code, lock: lockHead(cloud, joinedOf(cloud, claimed(hello))), ...person };
+    const ws = joinedOf(cloud, claimed(hello));
+    const tail: Entry[] = [];
+    let bytes = 0;
+    for (const entry of sub === null ? [] : cloud.lockAfter(-1, ws).reverse()) {
+      bytes += JSON.stringify(entry).length;
+      if (bytes > REFUSAL_ENTRIES_BYTES) break;
+      tail.unshift(entry);
+    }
+    return { error: e.message, code: e.code, lock: lockHead(cloud, ws), ...person, ...(tail.length > 0 ? { entries: tail } : {}) };
   }
   const left = leftOutFor(cloud, hello, device, accepted);
   if (left !== null) return { error: LEFT_OUT[left], code: "lock_station", why: left };
@@ -192,6 +201,8 @@ export function refusalOf(cloud: Cloud, hello: any, device: string, e: unknown, 
 
 /// How much of a person's own lock a refusal tells at most (a core reads a line of 64 KiB at most).
 const REFUSAL_PERSON_BYTES = 32 * 1024;
+/// How much of the workspace's lock (its last entries) a refusal tells at most.
+const REFUSAL_ENTRIES_BYTES = 16 * 1024;
 
 /// The workspace a hello's credential names, as it says (checked by verifyMember: only to say which lock refused it).
 function claimed(hello: any): string {

@@ -196,12 +196,16 @@ test("the devices that came are listed for the workspace's owners and admins, a 
 });
 
 test("a device refused for the lock is told its person's own lock, for a new one to find who may let it in with no cloud", () => {
-  const cloud = fakeCloud(mkdtempSync(join(tmpdir(), "refusal-person-")), { locked: () => null, home: () => null });
+  const kept = [{ v: 1, ws: "w1", seq: 0, kind: "genesis" }, { v: 1, ws: "w1", seq: 1, kind: "device.remove" }];
+  const cloud = fakeCloud(mkdtempSync(join(tmpdir(), "refusal-person-")), { locked: () => null, home: () => null, lockAfter: () => [...kept] });
   const carol = personal("carol");
   lockPartRoute(cloud, "person", "POST", body({ chain: carol.chain }), viewer("carol"));
   const said = refusalOf(cloud, {}, "ee".repeat(32), new LockRefusal("this device is not on the lock its person bound in this workspace"), undefined, "carol");
   assert.deepEqual((said.person as any[]).map((c) => [c.genesis, c.entries.length]), [[carol.genesis, 1]]);
+  // And the workspace lock's last entries, for one taken out of it to hear so.
+  assert.deepEqual((said.entries as any[]).map((e) => e.seq), [0, 1]);
   // Whose credential did not check out, or another's: nothing of it.
   assert.equal(refusalOf(cloud, {}, "ee".repeat(32), new LockRefusal("x"), undefined, null).person, undefined);
+  assert.equal(refusalOf(cloud, {}, "ee".repeat(32), new LockRefusal("x"), undefined, null).entries, undefined);
   assert.equal(refusalOf(cloud, {}, "ee".repeat(32), new LockRefusal("x"), undefined, "bob").person, undefined);
 });

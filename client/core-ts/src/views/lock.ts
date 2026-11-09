@@ -490,10 +490,11 @@ export function refusedAgain(inner: Inner, ws: string): void {
 
 /// A station refused this device for the lock: noted, not asked again until the lock moves on. What the refusal says
 /// then: which workspace, and where to approve it.
-function refused(inner: Inner, ws: string, station: string, theirs: unknown, person?: unknown): CoreError | null {
+function refused(inner: Inner, ws: string, station: string, theirs: unknown, told?: { person?: unknown; entries?: unknown }): CoreError | null {
   if (inner.provider.kind !== "stillfail") return null;
   const p = part(inner, ws);
-  heardRefused(inner, ws, person);
+  heardRefused(inner, ws, told?.person);
+  heardTail(inner, ws, told?.entries);
   const h = held(inner, ws);
   const base = p.base ?? bases.get(inner) ?? null;
   const f = fold(h?.entries ?? []);
@@ -737,6 +738,25 @@ function heardRefused(inner: Inner, ws: string, person: unknown): void {
   if (!m) refusedChains.set(inner, (m = new Map()));
   m.set(sub, chains);
   inner.runner.fork(Effect.ignore(inner.adb.personal().heardFrom(sub, chains), { log: "Unhandled", message: "personal lock heard of a refusal" }));
+}
+
+/// The last entries of the lock a station refusing this device told: held, as they go on from the lock held here (the
+/// station took each), so a device taken out hears so with no cloud to read it of.
+function heardTail(inner: Inner, ws: string, raw: unknown): void {
+  const sub = inner.workspaces.owner(ws);
+  const was = held(inner, ws);
+  const tail = arr(raw) as Entry[];
+  if (sub === null || !was?.head || tail.length === 0) return;
+  const first = tail[0]!.seq;
+  if (!Number.isSafeInteger(first) || first < 0 || first > was.head.seq + 1) return;
+  for (let i = 0; i < tail.length; i++) {
+    const prev = i === 0 ? (first === 0 ? undefined : was.entries[first - 1]) : tail[i - 1];
+    if (tail[i]!.seq !== first + i || (prev !== undefined && tail[i]!.prev !== entryHash(prev))) return;
+  }
+  const entries = [...was.entries.slice(0, first), ...tail];
+  if (entries.length <= was.entries.length || entryHash(entries[0]!) !== was.head.genesis) return;
+  const last = entries[entries.length - 1]!;
+  inner.runner.fork(hold(inner, ws, sub, was, { seq: last.seq, hash: entryHash(last), genesis: was.head.genesis }, entries, was.seen ?? null));
 }
 
 /// The stations of `sub`'s workspaces here, each once (one in two of them is asked in the first).

@@ -8,6 +8,7 @@ import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, Signer, entryHash, next } from "../src/lock.ts";
 import { Lock, fold, held, read } from "../src/views/lock.ts";
 import { ME, genesis, grant, rig } from "./lock-rig.ts";
+import { hooks } from "../src/core/execute.ts";
 import { Status, stationReplies } from "./station-fixture.ts";
 
 const A = "aa".repeat(32);
@@ -107,5 +108,22 @@ test("a station that tells its lock moved is read again", async () => {
   st.chain.push(signer().sign(next("ws", st.head(), 1001, "member", { sub: "s3", email: "c@x.com", role: "member" })));
   inner.stations.onEvent(`ws/${A}`, "lock", JSON.stringify({ workspace: "ws", head: st.head() }));
   for (let i = 0; i < 50 && held(inner, "ws")?.head?.seq !== 1; i++) await r.host.time.pass(10);
+  assert.equal(held(inner, "ws")?.head?.seq, 1);
+});
+
+test("a station refusing this device tells its lock's last entries: one taken out hears so, with no cloud", async () => {
+  const { inner, st, cloud, run, signer, r } = await setUp();
+  await run(read(inner, "ws"));
+  cloud.down = true;
+  // This device taken out (the lock's devices without it), told only by the refusal.
+  st.chain.push(signer().sign(next("ws", st.head(), 1001, "device.remove", { id: ME })));
+  hooks.lockRefused!(inner, "ws", A, st.head(), { entries: st.chain.slice(1) });
+  for (let i = 0; i < 50 && held(inner, "ws")?.head?.seq !== 1; i++) await r.host.time.pass(10);
+  assert.equal(held(inner, "ws")?.head?.seq, 1);
+  assert.equal(fold(held(inner, "ws")!.entries).devices.has(ME), false);
+  // Entries that do not go on from the lock held are not taken.
+  const other = signer().sign(next("ws", { seq: 1, hash: "ff".repeat(32), genesis: st.head().genesis }, 1002, "member", { sub: "s9", email: "x@x.com", role: "member" }));
+  hooks.lockRefused!(inner, "ws", A, st.head(), { entries: [other] });
+  await r.host.time.pass(100);
   assert.equal(held(inner, "ws")?.head?.seq, 1);
 });
