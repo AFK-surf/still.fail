@@ -1262,6 +1262,9 @@ class Vaults {
           yield* Effect.ignore(self.#putItem(item, nv), { log: "Unhandled", message: "vault item keyed anew" });
         }
         changed(inner, self.ws);
+        // A device that came back meanwhile (put in the lock again as it was keyed anew) was looked at against the
+        // version before, its key given for the epoch going: given the new one now (after this, as it waits its turn).
+        inner.runner.fork(Effect.ignore(self.giveKept(), { log: "Unhandled", message: "vault keys given" }));
       }),
     );
   }
