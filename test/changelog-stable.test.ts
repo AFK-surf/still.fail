@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { readRelease, stable, type Entry } from "../scripts/changelog.ts";
+import { lastBase, readRelease, stable, type Entry } from "../scripts/changelog.ts";
 
 const note = (version: number, lines = "- 新功能：一件事\n- 修复：另一件") => `---\nversion: ${version}\ndate: 2026-10-02\nparts: [web, android]\n---\n${lines}\n`;
 
@@ -25,4 +25,15 @@ test("the stable channel's entries, newest first, each with the fixes of the tes
   const beta = (version: number, fixes: number[]): Entry => ({ version, commit: "c", at: 0, text: ["x"], fixes, parts: ["web"] });
   const entries = stable(root, [beta(1410, [9]), beta(1350, [7, 8]), beta(1300, [5]), beta(1200, [3])]);
   assert.deepEqual(entries.map((e) => [e.version, e.fixes]), [[1400, [7, 8]], [1300, [3, 5]]]);
+});
+
+test("the next notes are drafted from the newest release's base: a release branch's main commit, else its version", () => {
+  const root = mkdtempSync(join(tmpdir(), "stable-"));
+  mkdirSync(join(root, "docs/releases"), { recursive: true });
+  assert.equal(lastBase(root), 0);
+  writeFileSync(join(root, "docs/releases/0.1.1300.md"), note(1300));
+  assert.equal(lastBase(root), 1300);
+  writeFileSync(join(root, "docs/releases/0.1.1404.md"), note(1404).replace("parts:", "base: 1400\nbranch: release/2026-10-02\nparts:"));
+  assert.equal(lastBase(root), 1400);
+  assert.deepEqual(stable(root).map((e) => e.version), [1404, 1300]);
 });

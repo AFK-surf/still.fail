@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       revision:
-        description: 'Optional full main SHA; empty selects the latest reviewed release notes'
+        description: 'Optional full SHA (a main commit, or a release branch''s newest its notes name); empty selects the latest reviewed release notes'
         required: false
         type: string
 concurrency:
@@ -21,12 +21,13 @@ jobs:
     outputs:
       sha: ${{ steps.plan.outputs.sha }}
       version: ${{ steps.plan.outputs.version }}
+      web: ${{ steps.plan.outputs.web }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, fetch-tags: true, filter: "blob:none" }
       - uses: ./.github/actions/setup
       - id: plan
-        name: Pin a reviewed release with a successful beta pipeline
+        name: Pin a reviewed release with a successful pipeline
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_REVISION: ${{ inputs.revision }}
@@ -236,8 +237,25 @@ jobs:
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/release-put.sh "$RUNNER_TEMP/monoid"
 
+  # The app's page for a web built here (plan's web=build: a release branch's commit, never on beta, or a main commit
+  # whose run changed no web and so kept no artifact), as the pipeline's mbui-web job builds it.
+  mbui-web:
+    needs: plan
+    if: needs.plan.outputs.web == 'build'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: '${{ needs.plan.outputs.sha }}' }
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/mbui-moonbit
+      - run: bash apps/mbui/scripts/web-app.sh
+      - uses: actions/upload-artifact@v4
+        with: { name: "mbui-web-stable-${{ needs.plan.outputs.sha }}", path: web/public/mbui, retention-days: 1 }
+
   web:
-    needs: [plan, android, desktop, desktop-win]
+    needs: [plan, android, desktop, desktop-win, mbui-web]
+    if: ${{ !cancelled() && needs.android.result == 'success' && needs.desktop.result == 'success' && needs.desktop-win.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.mbui-web.result) }}
     runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 5
@@ -246,7 +264,22 @@ jobs:
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0, filter: "blob:none" }
       - uses: ./.github/actions/setup
       - run: cd cloud && pnpm install --frozen-lockfile --prefer-offline
+      # web=build: built from the release's revision as the pipeline's static job builds main's (deploy.py, with the
+      # same PostHog key), then deployed to app.still.fail as an artifact would be.
+      - if: needs.plan.outputs.web == 'build'
+        uses: actions/download-artifact@v4
+        with: { name: "mbui-web-stable-${{ needs.plan.outputs.sha }}", path: web/public/mbui }
+      - name: Build the release's web app and deploy it
+        if: needs.plan.outputs.web == 'build'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+        run: |
+          sh .github/deploy.sh --dry-run web-beta
+          test "$(node -p 'require("./dist/cloud-web/build.json").revision')" = "${{ needs.plan.outputs.sha }}"
+          cd cloud && python3 deploy.py promote-web ../dist/cloud-web
       - name: Promote the same revision's original beta web artifact
+        if: needs.plan.outputs.web == 'artifact'
         env:
           GH_TOKEN: ${{ github.token }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -255,6 +288,7 @@ jobs:
       # monoid's web app (deploy.py CLOUDS), its own build of the same revision (pipeline.yml monoid-static). A revision
       # from before monoid has none: not a reason to hold still.fail's release back.
       - name: Promote the same revision's monoid web artifact
+        if: needs.plan.outputs.web == 'artifact'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
