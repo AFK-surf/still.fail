@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [90e201981](https://github.com/AFK-surf/still.fail/commit/90e20198115d774d5dc5412459e8e09b85a386f1) app: what shares a chat in one 分享… of its menu (#5 | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
 | [bbd8dfb56](https://github.com/AFK-surf/still.fail/commit/bbd8dfb56ccf3cec8327cb3f0f12542896a1f896) mbui: a film's flight under the chat's bar on 小屏,  | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
 | [f4874d328](https://github.com/AFK-surf/still.fail/commit/f4874d32855e3ca64bc80e4dfbc61f3a6409f83f) mbui: an agent's line gives its place to its answe | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
 | [70d70273b](https://github.com/AFK-surf/still.fail/commit/70d70273b99aa83c5d937c10b1b416ad3fb495da) app: 快捷键 lets a person choose how the composer sen | 1.72 | 2.29 | 9.53 | 28.02 | 33.2 | 25.03 | 45.72 | 93.06 | 156.81 |
