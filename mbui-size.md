@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [4609f133e](https://github.com/AFK-surf/still.fail/commit/4609f133ef61e66ed6679607e52b60bf1f3d7208) mbui: send pressed before the composer is built ag | 1.72 | 2.29 | 9.55 | 28.06 | 33.27 | 25.06 | 45.77 | 93.41 | 162.57 |
 | [d2e401bf4](https://github.com/AFK-surf/still.fail/commit/d2e401bf4c1346d44c0064e9b2a08d1077ffea46) mbui: the chat's untested ways tested, and its lis | 1.72 | 2.29 | 9.55 | 28.06 | 33.27 | 25.06 | 45.77 | 93.46 | 173.41 |
 | [c0c46191c](https://github.com/AFK-surf/still.fail/commit/c0c46191cd5346687858f65c836751d438e42609) mbui: a row back the other way soon after it stood | 1.72 | 2.29 | 9.55 | 28.06 | 33.27 | 25.06 | 45.77 | 93.32 | 160.2 |
 | [829615271](https://github.com/AFK-surf/still.fail/commit/82961527108a4d028fc8d8c709d659302878482b) mbui: a chat's row looks its chat up once as its k | 1.72 | 2.29 | 9.54 | 28.06 | 33.26 | 25.06 | 45.77 | 93.8 | 168.9 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [8209a1e38](https://github.com/AFK-surf/still.fail/commit/8209a1e38fb7433856b9eb1e2915e2e68c173d02) mbui: a pipeline of the shader for each kind it dr | 1.66 | 2.21 | 9.06 | 27.8 | 32.1 | 24.83 | 44.69 | 92.39 | 141.77 |
 | [ed1f4e05e](https://github.com/AFK-surf/still.fail/commit/ed1f4e05e9d0704d6c8cb28bac976511dd740420) mbui-size: run main's scripts, not the measured co | 1.66 | 2.21 | 9.06 | 27.8 | 32.1 | 24.83 | 44.69 | 92.39 | 155.57 |
 | [5d64047eb](https://github.com/AFK-surf/still.fail/commit/5d64047eb8e43ae037ffcaa423666021cef21621) mbui: the keyboard as actions and a keymap; the ap | 1.65 | 2.2 | 9.06 | 27.78 | 32.06 | 24.82 | 44.67 | 92.21 | 156.75 |
-| [f06992941](https://github.com/AFK-surf/still.fail/commit/f069929412f848a4e5096bea6278b9a98bde360e) mbui: a style's properties set together in one bin | 1.65 | 2.2 | 9.04 |  |  | 24.8 | 44.64 | 92.6 |  |
