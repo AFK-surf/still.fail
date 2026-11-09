@@ -47,8 +47,9 @@
 #   scripts/e2e-local.sh android-stage FILE…  files to attach put where the app's provider serves them (a share's intent)
 #   scripts/e2e-local.sh android-gallery FILE…  files put in the emulator's gallery, the app let read it
 #   scripts/e2e-local.sh release-seed     a newer build of the app (the APK as built) in the local cloud's releases
-#   scripts/e2e-local.sh second-station FILE   a second station enrolled with the command the app made (its log, FILE)
-#   scripts/e2e-local.sh second-down      that station stopped, its directory gone
+#   scripts/e2e-local.sh second-station FILE [third]   a second station enrolled with the command the app made (its log,
+#                                   FILE); `third`: another beside it
+#   scripts/e2e-local.sh second-down [third]   that station stopped, its directory gone
 #   scripts/e2e-local.sh connects [WORDS]   the test station's connects as its config has them (CONNECT id enabled=
 #                                       mode=), once a line has WORDS
 #   scripts/e2e-local.sh profiles [WORDS]   its profiles as its config has them (PROFILE id name), once a line has WORDS
@@ -305,11 +306,11 @@ stop() {
 down() {
   # (the station's directory another run's: only what this run started, by its own pids)
   if held_by_other; then
-    stop second; stop station; stop cloud; stop relay
+    stop second; stop third; stop station; stop cloud; stop relay
     say "down ($STATION left to the run of $(readlink "$HELD"))"
     return 0
   fi
-  second_down >/dev/null 2>&1 || true
+  for n in second third; do second_down $n >/dev/null 2>&1 || true; done
   stop station
   # whatever of the test station is left (its node, runner): only processes on its own data directory
   pkill -f "$STATION/data" 2>/dev/null || true
@@ -595,38 +596,43 @@ second_station() {
   local lock=$(echo "$cmd" | sed -n 's/.*--lock \([0-9a-f]*\).*/\1/p')
   local token=$(echo "$cmd" | sed 's/ --lock [0-9a-f]*//' | awk '{print $NF}')
   [ -n "$token" ] || die "no command made in $1"
-  local B=$STATION-b
-  second_down >/dev/null 2>&1
+  # (`third`: another beside it, of the same kind: its files under that name, its directory $STATION-third)
+  local n=${2:-second}
+  local B=$(more_dir $n)
+  second_down $n >/dev/null 2>&1
   mkdir -p $B/data $B/home $B/app/node/bin
   ln -s $E/station/dist $B/app/station
   ln -s "$(command -v node)" $B/app/node/bin/node
   echo '{"autoUpdate":false}' > $B/data/config.json
   (. $RUN/station-env.sh && export HOME=$B/home STILLFAIL_DATA=$B/data && \
-    node $E/station/dist/main.js enroll $ORIGIN $token ${lock:+--lock $lock} --data $B/data >$RUN/second-enroll.log 2>&1) \
-    || { cat $RUN/second-enroll.log; die "enrolling the second station failed"; }
+    node $E/station/dist/main.js enroll $ORIGIN $token ${lock:+--lock $lock} --data $B/data >$RUN/$n-enroll.log 2>&1) \
+    || { cat $RUN/$n-enroll.log; die "enrolling the $n station failed"; }
   # (started as start_station starts the first: up once its launcher says a Node has taken over)
   local launcher=$(native launcher)
-  rm -f "$RUN/second.ready"
-  mkfifo "$RUN/second.ready"
-  exec 9<> "$RUN/second.ready"
-  (. $RUN/station-env.sh && export HOME=$B/home STILLFAIL_DATA=$B/data && detach node "$D/waitfor.mjs" --tee "$RUN/second.log" \
-    --line 'Node [0-9]+ has taken over' --mark "$RUN/second.ready" -- \
-    "$launcher" run --app $B/app --data $B/data 9>&- >/dev/null 2>&1 & echo $! > $RUN/second.pid)
+  rm -f "$RUN/$n.ready"
+  mkfifo "$RUN/$n.ready"
+  exec 9<> "$RUN/$n.ready"
+  (. $RUN/station-env.sh && export HOME=$B/home STILLFAIL_DATA=$B/data && detach node "$D/waitfor.mjs" --tee "$RUN/$n.log" \
+    --line 'Node [0-9]+ has taken over' --mark "$RUN/$n.ready" -- \
+    "$launcher" run --app $B/app --data $B/data 9>&- >/dev/null 2>&1 & echo $! > $RUN/$n.pid)
   if ! IFS= read -r -t 60 ready <&9; then
     exec 9>&-
-    rm -f "$RUN/second.ready"
-    tail -20 "$RUN/second.log"
-    die "the second station did not start"
+    rm -f "$RUN/$n.ready"
+    tail -20 "$RUN/$n.log"
+    die "the $n station did not start"
   fi
   exec 9>&-
-  rm -f "$RUN/second.ready"
-  say "second station up ($(cat $RUN/second.pid)), enrolled: $(tr '\n' ' ' < $RUN/second-enroll.log)"
+  rm -f "$RUN/$n.ready"
+  say "$n station up ($(cat $RUN/$n.pid)), enrolled: $(tr '\n' ' ' < $RUN/$n-enroll.log)"
 }
+# the directory of a station beside the test station's: the second's $STATION-b, another's $STATION-<name>
+more_dir() { [ "$1" = second ] && echo $STATION-b || echo $STATION-$1; }
 second_down() {
-  stop second
-  pkill -9 -f "$STATION-b/data" 2>/dev/null || true
-  rm -rf "$STATION-b"
-  say "second station down"
+  local n=${1:-second}
+  stop $n
+  pkill -9 -f "$(more_dir $n)/data" 2>/dev/null || true
+  rm -rf "$(more_dir $n)"
+  say "$n station down"
 }
 
 # the test station's connects as its config.json has them: CONNECT <id> enabled=<on> mode=<mode>, a line each
@@ -753,7 +759,7 @@ case "${1:-all}" in
   android-gallery) shift; android_gallery "$@" ;;
   release-seed) release_seed ;;
   second-station) shift; second_station "$@" ;;
-  second-down) second_down ;;
+  second-down) shift; second_down "$@" ;;
   mac) shift; "$ROOT/e2e/run.sh" mac "$@" ;;
   android) shift; "$ROOT/e2e/run.sh" android "$@" ;;
   ios) shift; "$ROOT/e2e/run.sh" ios "$@" ;;

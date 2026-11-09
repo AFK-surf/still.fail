@@ -16,7 +16,7 @@
 // Each check says PASS or FAIL; it goes on after a failure where it can, and exits 1 if any failed. E2E_SF_SRC,
 // E2E_ORIGIN, E2E_PEER_DATA as peer.ts; E2E_WORK, E2E_STATION as e2e-local.sh's.
 import { type ChildProcess, execFileSync, fork } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -26,6 +26,30 @@ const dir = process.env.E2E_PEER_DATA!;
 const { apply } = await import(pathToFileURL(join(src, "client/core-ts/src/delta.ts")).href);
 
 type J = any;
+
+/// What `p` gives, or nothing once `ms` have gone by (a deadline: a core or a process that would not end).
+const within = <T>(p: Promise<T>, ms: number): Promise<T | undefined> => Promise.race([p, new Promise<undefined>((r) => setTimeout(r, ms))]);
+
+/// What `ok` gives, looked at again as each of `dirs` changes (the file system's events, as scripts/waitfor.mjs waits:
+/// a station's database and the lock chains it keeps), or an error saying `what` by `ms`.
+function whenChanged<T>(dirs: string[], ok: () => T | undefined | null | false, ms: number, what: () => string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const watchers = dirs.map((d) => watch(d, { recursive: true }, () => look()));
+    const end = () => {
+      done = true;
+      clearTimeout(deadline);
+      for (const w of watchers) w.close();
+    };
+    const deadline = setTimeout(() => (end(), reject(new Error(what()))), ms);
+    const look = () => {
+      if (done) return;
+      const got = ok();
+      if (got) (end(), resolve(got));
+    };
+    look();
+  });
+}
 
 // A device: this file run as `device NAME`, its core's messages passed to and from the parent as they are.
 if (process.argv[2] === "device") {
@@ -47,7 +71,7 @@ if (process.argv[2] === "device") {
   const core = start(join(data, "core"), origin, (_c: number, json: string) => process.send!(json), undefined, { sealer });
   const client = core.connect();
   process.on("message", (m: J) => {
-    if (m === "close") void Promise.race([core.close(), new Promise((r) => setTimeout(r, 4000))]).then(() => process.exit(0));
+    if (m === "close") void within(core.close(), 4000).then(() => process.exit(0));
     else core.receive(client, m);
   });
   await new Promise(() => {});
@@ -152,17 +176,11 @@ class Device {
   }
   async signIn(): Promise<{ workspace: string; station: string }> {
     await this.call("client.device", { client: "still.fail e2e", app: "desktop", model: this.name });
-    // (the dev cloud's sign-in, over the account's requests a minute (all these devices are one account's): again,
-    // as a person would)
-    let account: J;
-    for (let tries = 0; ; tries++) {
-      const r = await fetch(`${origin}/__dev/account?user=${this.user}`);
-      const text = await r.text();
-      if (r.ok) { account = JSON.parse(text); break; }
-      if (!/429/.test(text) || tries >= 12) throw new Error(`dev sign-in: ${text}`);
-      log(`  ${this.name} sign-in: ${text.slice(0, 80)}; again in 5 s`);
-      await new Promise((ok) => setTimeout(ok, 5000));
-    }
+    // (the dev cloud's sign-in: one over the account's requests a minute is a finding, not tried again)
+    const r = await fetch(`${origin}/__dev/account?user=${this.user}`);
+    const text = await r.text();
+    if (!r.ok) throw new Error(`dev sign-in: ${r.status} ${text.slice(0, 200)}`);
+    const account = JSON.parse(text);
     await this.call("migrate", { accounts: [account] });
     const accounts = await this.until({ topic: "accounts" }, (v) => (Array.isArray(v) && v.length > 0 ? v : undefined));
     this.sub = accounts[0].sub;
@@ -196,10 +214,10 @@ class Device {
   close(): Promise<void> {
     if (this.child.exitCode !== null || this.child.signalCode !== null) return Promise.resolve();
     const child = this.child;
-    return new Promise((resolve) => {
-      child.once("exit", () => resolve());
-      child.send("close");
-      setTimeout(() => child.kill("SIGKILL"), 5000);
+    const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+    child.send("close");
+    return within(exited, 5000).then(() => {
+      if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
     });
   }
 }
@@ -226,6 +244,8 @@ let dBase = "";
 const stationSays = (what: string): string => execFileSync("scripts/e2e-local.sh", [what], { encoding: "utf8", env: { ...process.env, HOME: process.env.E2E_HOME ?? process.env.HOME } });
 const stationDo = (what: string, ...more: string[]) => log(`  station: ${execFileSync("scripts/e2e-local.sh", [what, ...more], { encoding: "utf8", env: { ...process.env, HOME: process.env.E2E_HOME ?? process.env.HOME } }).trim().split("\n").pop()}`);
 let sub = "";
+/// The test station's data: its database, the lock chains it keeps (scripts/e2e-local.sh lock-state reads them).
+const stationData = `${process.env.E2E_STATION}/data`;
 try {
   const { workspace, station } = await a.signIn();
   log(`A signed in as ${sub}: workspace ${workspace}, station ${station}`);
@@ -325,11 +345,7 @@ try {
   await must("C joins alice's own lock face to face with A, and alice is bound to it then", async () => {
     if (stationSays("lock-state").includes("PERSONS 1")) throw new Error("bound before C joined");
     cKey = await join(c);
-    const until = Date.now() + 60_000;
-    while (!stationSays("lock-state").includes("PERSONS 1")) {
-      if (Date.now() > until) throw new Error("not bound in 60 s");
-      await new Promise((r) => setTimeout(r, 500));
-    }
+    await whenChanged([stationData], () => stationSays("lock-state").includes("PERSONS 1"), 60_000, () => "not bound in 60 s");
   });
   await must("A removes C from alice's own lock (bound once C was on it)", async () => {
     await a.call("adb.personalRemove", { sub, key: cKey });
@@ -602,11 +618,7 @@ try {
     }
   };
   const atLength = async (data: string, n: number, ms = 60_000) => {
-    const until = Date.now() + ms;
-    while (chainsAt(data) < n) {
-      if (Date.now() > until) throw new Error(`${data}: alice's own lock ${chainsAt(data)} long, not ${n}`);
-      await new Promise((r) => setTimeout(r, 250));
-    }
+    await whenChanged([data], () => chainsAt(data) >= n, ms, () => `${data}: alice's own lock ${chainsAt(data)} long, not ${n}`);
   };
   const first = `${process.env.E2E_STATION}/data`;
   const second = `${process.env.E2E_STATION}-b/data`;
@@ -731,12 +743,8 @@ try {
     await h.personal((p) => p.standing === "member");
   });
   await check("bob bound to his own lock in the workspace's lock (the station's: two persons); H still let in", async () => {
-    const until = Date.now() + 60_000;
     let said = "";
-    while (!/^PERSONS 2$/m.test((said = stationSays("lock-state")))) {
-      if (Date.now() > until) throw new Error(`the station's lock: ${said.trim().split("\n").slice(-4).join("; ")}`);
-      await new Promise((r) => setTimeout(r, 500));
-    }
+    await whenChanged([stationData], () => /^PERSONS 2$/m.test((said = stationSays("lock-state"))), 60_000, () => `the station's lock: ${said.trim().split("\n").slice(-4).join("; ")}`);
     await h.stationState(workspace, (s) => s.state === "online", 60_000);
     await bobOpens(h);
   });
@@ -791,5 +799,5 @@ try {
   fail("the run", e);
 }
 log(failed === 0 ? "ALL PASSED" : `${failed} FAILED`);
-await Promise.race([Promise.all([a, b, c, d, e, f, g, h, i].map((x) => x.close())), new Promise((r) => setTimeout(r, 5000))]);
+await within(Promise.all([a, b, c, d, e, f, g, h, i].map((x) => x.close())), 5000);
 process.exit(failed === 0 ? 0 : 1);
