@@ -1199,7 +1199,16 @@ fn Ctx::part_nodes(
   nodes_run.building = Some(rn)
   let was = nodes_run.part_fresh
   nodes_run.part_fresh = fresh
-  rn.watch.read(build)
+  // (how long it took, by where it was made, for a hang it is in: @hostapi.work_part)
+  @hostapi.work_part(
+    fn() {
+      match made_at {
+        Some(at) => "part \{at}"
+        None => "part " + named
+      }
+    },
+    fn() { rn.watch.read(build) },
+  )
   nodes_run.part_fresh = was
   nodes_run.building = outer
   rn.key = key
