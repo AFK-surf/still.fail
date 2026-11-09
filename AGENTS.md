@@ -37,6 +37,9 @@ chats, each conversation an agent session on a **station** (a machine of theirs)
   `scripts/plan.sh`: what each path deploys), so main is always releasable.
 - `sh scripts/check.sh full origin/main..HEAD` checks what the range changed (the git hooks run its quick part);
   `STILLFAIL_CHECK_PART` narrows it. Run the part you changed before a PR; the whole of it is CI's.
+- A fix that cannot wait a day for the next stable release (a crash, data lost, people locked out, a release that does
+  not update) says `Stable: yes` in its commit message: the stable release is the day before's main, and only such
+  fixes are cherry-picked onto it (`.github/stable-plan.py`; the user, 2026-11-09).
 - Older stations and newer cores coexist: what is kept for older versions goes 7 days after its replacement ships, and
   that change raises the floor (`OLDEST_CORE` in `station/src/api/oldest.ts`, `OLDEST_STATION` in
   `client/core-ts/src/station/oldest.ts`). Databases migrate forward only. Existing commands and shared links keep
