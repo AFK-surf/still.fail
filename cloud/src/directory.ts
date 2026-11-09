@@ -71,10 +71,10 @@ const SHOWN_PICTURE = "COALESCE(own_picture, picture)";
 type Attachment = { station: string; at: number; dropped?: boolean } | { sub: string };
 
 /**
- * Where devices' events sockets and stations' presence sockets open, and who says whether a station is enrolled or an
- * account let into the test channel: their own objects (account.ts, station.ts), or, with DIRECTORY_SOCKETS "primary"
- * (wrangler.jsonc vars), this one, as before them: the way back while nothing else depends on those objects. Told
- * either way. A test sets `where` to move them.
+ * Where devices' events sockets and stations' presence sockets open, and who says whether a station is enrolled: their
+ * own objects (account.ts, station.ts), or, with DIRECTORY_SOCKETS "primary" (env.ts), this one, as before them: the
+ * way back while nothing else depends on those objects. Told either way (an account's object keeps whether it is let
+ * into the test channel in both). A test sets `where` to move them.
  */
 export const sockets = { where: (env: Env): "objects" | "primary" => (env.DIRECTORY_SOCKETS === "primary" ? "primary" : "objects") };
 
@@ -194,9 +194,9 @@ export class Directory extends DurableObject<Env> {
   }
 
   /**
-   * Sockets held here while devices' and stations' open on their own objects (those of before this object let them go,
-   * and any an old Worker's request still opened here as it was replaced): closed as a restarting service's (1012), so
-   * each reconnects onto its own object, reading everything again as it does after any reconnect.
+   * Sockets held here while devices' and stations' open on their own objects (those from before the deploy that moved
+   * them, or from before the way back was left): closed as a restarting service's (1012), so each reconnects onto its
+   * own object, reading everything again as it does after any reconnect.
    */
   protected handOff(): void {
     for (const ws of this.ctx.getWebSockets()) {
