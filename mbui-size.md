@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [3800c90ad](https://github.com/AFK-surf/still.fail/commit/3800c90ad7d720ab03e1fe41e069648af348a571) station: the queue no longer holds tasks back for  | 1.74 | 2.32 | 9.64 | 28.17 | 33.63 | 25.16 | 46.1 | 93.19 | 181.3 |
 | [aed2ce44e](https://github.com/AFK-surf/still.fail/commit/aed2ce44eeecab50b9506dc391349e29d8d7bb81) mbui: 页面列表行里的内容也让出空间（展开、收起），列表自己的行照样立刻出现 (#5112) | 1.74 | 2.32 | 9.64 | 28.17 | 33.63 | 25.15 | 46.1 | 93.72 | 182.52 |
 | [2a31b314f](https://github.com/AFK-surf/still.fail/commit/2a31b314fb3486b36e023a5d682710dcbc9ed548) mbui: hang reports keep the heaviest past the cap, | 1.74 | 2.32 | 9.63 | 28.17 | 33.62 | 25.15 | 46.08 | 92.77 | 131.2 |
 | [d23367cfa](https://github.com/AFK-surf/still.fail/commit/d23367cfae07dd21c5805c27728d02873132630f) core: the account's list changed reads /v1/me and  | 1.74 | 2.32 | 9.63 | 28.16 | 33.61 | 25.15 | 46.08 | 93.05 | 179.11 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [6d5e5a4af](https://github.com/AFK-surf/still.fail/commit/6d5e5a4af588f37a999f3895144eec1f994604d8) mbui: send_steady runs at the default rate alone,  | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.19 | 138.67 |
 | [1f9a46795](https://github.com/AFK-surf/still.fail/commit/1f9a467957240cc436f9b420ec84ce873a967b91) Vault keyed anew: a device back meanwhile given th | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.01 | 129.53 |
 | [dda4bb55e](https://github.com/AFK-surf/still.fail/commit/dda4bb55e1f81beae1692721244c9f0094ae5ea7) mbui: a bench keeps not the lines of words drawn,  | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.49 | 168.57 |
-| [c751a3031](https://github.com/AFK-surf/still.fail/commit/c751a3031afcb76ec2d38c195e4dd77dad01db56) mbui: ⌘F in a chat tested: its bar, looked for aft | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.55 | 146.44 |
