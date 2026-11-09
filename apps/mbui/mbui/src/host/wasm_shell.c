@@ -7,6 +7,9 @@
 //
 //     SHELL PROGRAM.wasm [ARGS…]      (MBUI_WASM_APP: PROGRAM.wasm, where no argument says; PROGRAM.cwasm: compiled
 //                                     ahead for this machine by wasmtime's command line, a device's)
+//
+// MBUI_PROFILE_FILE=<file>: a program profiled by mbui's wasmgas (scripts/wasmgas profile) run as a bench (mbui/film's
+// bench, a still.fail scene's src/sfbench), what it runs in each measured frame counted into the file (profiled, below).
 #if defined(__linux__) && !defined(_GNU_SOURCE)
 #define _GNU_SOURCE  // (pthread_getattr_np)
 #endif
@@ -477,6 +480,218 @@ static wasm_trap_t *film_say(void *env, wasmtime_caller_t *caller, const wasmtim
   return NULL;
 }
 
+// A profiled run (MBUI_PROFILE_FILE): a program wasmgas instrumented (mbui's tools/wasmgas, its main.mbt says how it
+// counts) run as mbui/film's bench, its film's needs answered here (a file read and written, the clock) and its
+// drawing nothing (what is counted is the program's own work). film.mark, as a measured frame begins and ends: what
+// each function ran in it (its own instructions, all its calls ran, its calls) and each kind of instruction, written
+// to the file a frame at a time:
+//
+//   COUNTERS N                    the functions counted (wasmgas's `__pm`, 40 bytes each)
+//   F FRAME K OWN CALLS INCL      a function's (K: its place among those defined) in a frame (MBUI_PROFILE_EACH=1)
+//   FRAME FRAME SUM               the instructions run in a frame
+//   K FRAME C0 C1 …               each kind's in it (wasmgas's `__k<i>`), their sum SUM
+//   FRAMES N                      as the program ends: how many frames were measured; then over them all,
+//   TOTAL K OWN CALLS INCL        each function's, and
+//   KINDS C0 C1 …                 each kind's
+//
+// The clock (film.now) says 0 always: what is counted is never by the time the machine took.
+typedef struct {
+  uint64_t own, incl, calls, start, depth;
+} profiled_fn;
+
+static FILE *profiled_out;
+static profiled_fn *profiled_before;
+static uint64_t *profiled_own, *profiled_calls, *profiled_incl, *profiled_kinds_before, *profiled_kinds_total;
+static size_t profiled_n, profiled_nk;
+static int profiled_open, profiled_frame, profiled_frames, profiled_each;
+
+static void profiled_kinds(wasmtime_caller_t *caller, uint64_t *out) {
+  for (size_t k = 0; k < profiled_nk; k++) {
+    char name[16];
+    snprintf(name, sizeof name, "__k%zu", k);
+    wasmtime_extern_t item;
+    if (!wasmtime_caller_export_get(caller, name, strlen(name), &item) || item.kind != WASMTIME_EXTERN_GLOBAL) {
+      say("wasm shell: the profiled program has no %s\n", name);
+      exit(1);
+    }
+    wasmtime_val_t v;
+    wasmtime_global_get(wasmtime_caller_context(caller), &item.of.global, &v);
+    out[k] = (uint64_t)v.of.i64;
+  }
+}
+
+static void profiled_end(void) {
+  if (!profiled_out) return;
+  fprintf(profiled_out, "FRAMES %d\n", profiled_frames);
+  for (size_t i = 0; i < profiled_n; i++)
+    if (profiled_own[i] || profiled_calls[i])
+      fprintf(profiled_out, "TOTAL %zu %llu %llu %llu\n", i, (unsigned long long)profiled_own[i],
+              (unsigned long long)profiled_calls[i], (unsigned long long)profiled_incl[i]);
+  fprintf(profiled_out, "KINDS");
+  for (size_t k = 0; k < profiled_nk; k++) fprintf(profiled_out, " %llu", (unsigned long long)profiled_kinds_total[k]);
+  fprintf(profiled_out, "\n");
+  fclose(profiled_out);
+  profiled_out = NULL;
+}
+
+static wasm_trap_t *film_mark(void *env, wasmtime_caller_t *caller, const wasmtime_val_t *a, size_t na,
+                              wasmtime_val_t *r, size_t nr) {
+  (void)env; (void)na; (void)r; (void)nr;
+  int frame = a[0].of.i32, end = a[1].of.i32;
+  wasmtime_extern_t item;
+  if (!wasmtime_caller_export_get(caller, "__pm", 4, &item) || item.kind != WASMTIME_EXTERN_MEMORY) {
+    say("wasm shell: the program is not profiled (no __pm: scripts/wasmgas profile)\n");
+    exit(1);
+  }
+  wasmtime_context_t *context = wasmtime_caller_context(caller);
+  size_t bytes = wasmtime_memory_data_size(context, &item.of.memory);
+  profiled_fn *now = (profiled_fn *)wasmtime_memory_data(context, &item.of.memory);
+  if (!profiled_before) {
+    const char *path = getenv("MBUI_PROFILE_FILE");
+    profiled_out = fopen(path, "w");
+    if (!profiled_out) {
+      say("wasm shell: %s cannot be written\n", path);
+      exit(1);
+    }
+    profiled_n = bytes / sizeof(profiled_fn);
+    // (the kinds: as many `__k<i>` as the program exports)
+    for (;; profiled_nk++) {
+      char name[16];
+      snprintf(name, sizeof name, "__k%zu", profiled_nk);
+      wasmtime_extern_t k;
+      if (!wasmtime_caller_export_get(caller, name, strlen(name), &k)) break;
+    }
+    profiled_before = malloc(profiled_n * sizeof(profiled_fn));
+    profiled_own = calloc(profiled_n, sizeof(uint64_t));
+    profiled_calls = calloc(profiled_n, sizeof(uint64_t));
+    profiled_incl = calloc(profiled_n, sizeof(uint64_t));
+    profiled_kinds_before = calloc(profiled_nk + 1, sizeof(uint64_t));
+    profiled_kinds_total = calloc(profiled_nk + 1, sizeof(uint64_t));
+    profiled_each = getenv("MBUI_PROFILE_EACH") && *getenv("MBUI_PROFILE_EACH") == '1';
+    fprintf(profiled_out, "COUNTERS %zu\n", profiled_n);
+    atexit(profiled_end);
+  }
+  if (bytes / sizeof(profiled_fn) != profiled_n || end != profiled_open || (end && frame != profiled_frame)) {
+    say("wasm shell: a frame's marks out of order (frame %d, %s)\n", frame, end ? "end" : "begin");
+    exit(1);
+  }
+  if (!end) {
+    memcpy(profiled_before, now, profiled_n * sizeof(profiled_fn));
+    profiled_kinds(caller, profiled_kinds_before);
+    profiled_open = 1;
+    profiled_frame = frame;
+    return NULL;
+  }
+  profiled_open = 0;
+  profiled_frames++;
+  uint64_t sum = 0;
+  for (size_t i = 0; i < profiled_n; i++) {
+    uint64_t own = now[i].own - profiled_before[i].own, calls = now[i].calls - profiled_before[i].calls;
+    uint64_t incl = now[i].incl - profiled_before[i].incl;
+    profiled_own[i] += own;
+    profiled_calls[i] += calls;
+    profiled_incl[i] += incl;
+    sum += own;
+    if (profiled_each && (own || calls))
+      fprintf(profiled_out, "F %d %zu %llu %llu %llu\n", frame, i, (unsigned long long)own, (unsigned long long)calls,
+              (unsigned long long)incl);
+  }
+  fprintf(profiled_out, "FRAME %d %llu\n", frame, (unsigned long long)sum);
+  uint64_t kinds[64], ksum = 0;
+  if (profiled_nk > 64) {
+    say("wasm shell: more kinds than 64\n");
+    exit(1);
+  }
+  profiled_kinds(caller, kinds);
+  fprintf(profiled_out, "K %d", frame);
+  for (size_t k = 0; k < profiled_nk; k++) {
+    uint64_t d = kinds[k] - profiled_kinds_before[k];
+    profiled_kinds_total[k] += d;
+    ksum += d;
+    fprintf(profiled_out, " %llu", (unsigned long long)d);
+  }
+  fprintf(profiled_out, "\n");
+  // (each instruction is of one kind: the kinds' sum is the functions', or the counting is wrong)
+  if (profiled_nk && ksum != sum) {
+    say("wasm shell: frame %d: the kinds' sum %llu is not the functions' %llu\n", frame, (unsigned long long)ksum,
+        (unsigned long long)sum);
+    exit(1);
+  }
+  return NULL;
+}
+
+static wasm_trap_t *film_read(void *env, wasmtime_caller_t *caller, const wasmtime_val_t *a, size_t na,
+                              wasmtime_val_t *r, size_t nr) {
+  (void)env; (void)caller; (void)a; (void)na; (void)r; (void)nr;
+  char *path = film_text();
+  FILE *f = fopen(path, "rb");
+  free(path);
+  free(film_got);
+  film_got = NULL;
+  film_got_n = 0;
+  if (!f) return NULL;
+  fseek(f, 0, SEEK_END);
+  long n = ftell(f);
+  fseek(f, 0, SEEK_SET);
+  unsigned char *v = malloc((size_t)n + 1);
+  size_t got = fread(v, 1, (size_t)n, f);
+  fclose(f);
+  // (UTF-8 to UTF-16, as the program takes it a unit at a time: a character past the first plane as U+FFFD)
+  film_got = malloc((got + 1) * 2);
+  for (size_t i = 0; i < got;) {
+    unsigned char c = v[i];
+    uint32_t u;
+    if (c < 0x80) { u = c; i += 1; }
+    else if (c < 0xe0 && i + 1 < got) { u = (uint32_t)(c & 31) << 6 | (v[i + 1] & 63); i += 2; }
+    else if (c < 0xf0 && i + 2 < got) { u = (uint32_t)(c & 15) << 12 | (uint32_t)(v[i + 1] & 63) << 6 | (v[i + 2] & 63); i += 3; }
+    else { u = 0xfffd; i += c >= 0xf0 && i + 3 < got ? 4 : 1; }
+    film_got[film_got_n++] = (uint16_t)u;
+  }
+  free(v);
+  return NULL;
+}
+
+static char *film_held;
+static wasm_trap_t *film_hold(void *env, wasmtime_caller_t *caller, const wasmtime_val_t *a, size_t na,
+                              wasmtime_val_t *r, size_t nr) {
+  (void)env; (void)caller; (void)a; (void)na; (void)r; (void)nr;
+  free(film_held);
+  film_held = film_text();
+  return NULL;
+}
+
+static wasm_trap_t *film_write(void *env, wasmtime_caller_t *caller, const wasmtime_val_t *a, size_t na,
+                               wasmtime_val_t *r, size_t nr) {
+  (void)env; (void)caller; (void)a; (void)na; (void)nr;
+  char *value = film_text();
+  FILE *f = film_held ? fopen(film_held, "wb") : NULL;
+  size_t n = strlen(value), written = f ? fwrite(value, 1, n, f) : 0;
+  if (f) fclose(f);
+  free(value);
+  r[0].kind = WASMTIME_I32;
+  r[0].of.i32 = f && written == n;
+  return NULL;
+}
+
+static wasm_trap_t *film_now(void *env, wasmtime_caller_t *caller, const wasmtime_val_t *a, size_t na,
+                             wasmtime_val_t *r, size_t nr) {
+  (void)env; (void)caller; (void)a; (void)na; (void)nr;
+  r[0].kind = WASMTIME_F64;
+  r[0].of.f64 = 0.0;
+  return NULL;
+}
+
+// (the film's drawing, its window and its writing: nothing, answered done)
+static wasm_trap_t *film_nothing(void *env, wasmtime_caller_t *caller, const wasmtime_val_t *a, size_t na,
+                                 wasmtime_val_t *r, size_t nr) {
+  (void)env; (void)caller; (void)a; (void)na;
+  if (nr > 0) {
+    r[0].kind = WASMTIME_I32;
+    r[0].of.i32 = 1;
+  }
+  return NULL;
+}
+
 // An import the shell has not: the program runs until it is called, then ends saying which.
 static wasm_trap_t *missing(void *env, wasmtime_caller_t *caller, const wasmtime_val_t *a, size_t na,
                             wasmtime_val_t *r, size_t nr) {
@@ -676,6 +891,23 @@ int main(int argc, char **argv) {
   define(linker, "film", "gotUnit", film_got_unit, NULL, functype(1, i32, 1, i32));
   define(linker, "film", "say", film_say, NULL, functype(0, NULL, 0, NULL));
   define(linker, "film", "exit", proc_exit, NULL, functype(1, i32, 0, NULL));
+  if (getenv("MBUI_PROFILE_FILE") && *getenv("MBUI_PROFILE_FILE")) {
+    wasm_valkind_t f64[3] = {WASM_F64, WASM_F64, WASM_F64}, ifff[4] = {WASM_I32, WASM_F64, WASM_F64, WASM_F64};
+    define(linker, "film", "mark", film_mark, NULL, functype(2, i32, 0, NULL));
+    define(linker, "film", "read", film_read, NULL, functype(0, NULL, 0, NULL));
+    define(linker, "film", "hold", film_hold, NULL, functype(0, NULL, 0, NULL));
+    define(linker, "film", "write", film_write, NULL, functype(0, NULL, 1, i32));
+    define(linker, "film", "now", film_now, NULL, functype(0, NULL, 1, f64));
+    define(linker, "film", "init", film_nothing, NULL, functype(3, f64, 0, NULL));
+    define(linker, "film", "view", film_nothing, NULL, functype(3, f64, 0, NULL));
+    define(linker, "film", "open", film_nothing, NULL, functype(3, i32, 1, i32));
+    define(linker, "film", "draw", film_nothing, NULL, functype(4, ifff, 1, i32));
+    define(linker, "film", "put", film_nothing, NULL, functype(1, i32, 1, i32));
+    define(linker, "film", "close", film_nothing, NULL, functype(1, i32, 1, i32));
+    define(linker, "film", "finish", film_nothing, NULL, functype(1, i32, 1, i32));
+    define(linker, "film", "snapshot", film_nothing, NULL, functype(1, i32, 1, i32));
+    define(linker, "film", "spin", film_nothing, NULL, functype(1, f64, 0, NULL));
+  }
   // what else the program imports, a function that ends it saying which as it is called
   wasm_importtype_vec_t imports;
   wasmtime_module_imports(module, &imports);

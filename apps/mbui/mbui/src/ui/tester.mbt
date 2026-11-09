@@ -841,6 +841,8 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   }
   self.fake_pages_run()
   on_frame(self.w, self.h, self.fake.scale, if shown > at { shown } else { at })
+  // (a bench's measured frame ends here: what follows is the Tester's own checks of it, which a device runs not)
+  bench_frame_ends()
   self.frames = self.frames + 1
   // (each box's presses said to be another's that one's to take, where the box is: presses.mbt)
   g().check_press_owners()

@@ -79,7 +79,10 @@ pub fn bench(
   // (a frame counted under each that asked for it, said without when or where: why_labels)
   let whys : Map[String, Int] = {}
   let mut why = ""
-  let logs = t.bench(script, fps~, each=fn(t, frame) {
+  // (a list's rows set on the device's pixels, as every platform's host has them (Native's rows_on_pixels): the path a
+  // device runs measured, not the fake host's default)
+  t.set_rows_on_pixels(true)
+  let logs = t.bench(script, fps~, around=mark, each=fn(t, frame) {
     ticks = ticks + 1
     // (what asked for this frame, said on its line: FRAMES)
     let asked = why

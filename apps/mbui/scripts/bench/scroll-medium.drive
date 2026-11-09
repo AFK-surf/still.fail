@@ -1,0 +1,17 @@
+# 中屏 (an opened fold upright), a finger: the conversation brought over the chats by its tape at the window's end (as
+# src/sfapp/kept_rows_kinds_wbtest.mbt's kept_rows_open does), then four one-second drags through it and let it coast.
+# (Measured from about the same display frame as the other drives: the tape tapped as the app shows.) Its last words are seen before, and gone after: the drags hit the conversation and scrolled it.
+system {"size_class":{"width":"medium","height":"medium"}}
+timeout 20000
+until 发消息
+tapxy -28 420
+wait 500
+until 第 2998 步跑完了
+log measure
+drag -150 300 0 430 1000
+drag -150 300 0 430 1000
+drag -150 300 0 430 1000
+drag -150 300 0 430 1000
+wait 317
+gone 第 2998 步跑完了
+exit
