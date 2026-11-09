@@ -224,8 +224,37 @@ fn Ctx::emit_bands(
 ///|
 /// One shape's fill (`fill`) or stroke (`hw` half its width) as bands: its pieces, then a band at a time those that
 /// reach it, as shares of the band. Worked out in its own coordinates: the same numbers wherever it is drawn (moved,
-/// kept_nodes.mbt), and once for a shape drawn again (Ctx::paint_shapes).
+/// kept_nodes.mbt), and once for the same outlines wherever they are drawn again (a row's icon in the row that takes its
+/// place, an old view's shape each frame: shape_bands_known).
 fn shape_band_of(
+  outlines : Array[(Array[Double], Bool)],
+  fill : Bool,
+  hw : Double,
+  even_odd : Bool,
+) -> Array[ShapeBand] {
+  let key = (outlines, fill, hw, even_odd)
+  match shape_bands_known.get(key) {
+    Some(b) => return b
+    None => ()
+  }
+  let out = shape_band_made(outlines, fill, hw, even_odd)
+  // (a few hundred kept, all let go at once past them: what is drawn now is soon among them again)
+  if shape_bands_known.length() >= 256 {
+    shape_bands_known.clear()
+  }
+  // (by a copy of its outlines: one of theirs changed after is not the outlines these were made of)
+  shape_bands_known.set((outlines.map(fn(o) { (o.0.copy(), o.1) }), fill, hw, even_odd), out)
+  out
+}
+
+///|
+/// The bands outlines come to (shape_band_of), by their outlines alone: the same numbers for the same outlines,
+/// whichever node or view draws them, read only once made.
+// kept across runs: what the same outlines come to, the same in any run
+let shape_bands_known : Map[(Array[(Array[Double], Bool)], Bool, Double, Bool), Array[ShapeBand]] = Map([])
+
+///|
+fn shape_band_made(
   outlines : Array[(Array[Double], Bool)],
   fill : Bool,
   hw : Double,
