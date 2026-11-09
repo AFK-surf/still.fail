@@ -786,7 +786,7 @@ pub fn sending_of(String) -> Array[@sfbase.LocalSent]
 
 pub fn sent_key(String, String) -> String
 
-pub fn sent_local(@ui.Ctx, String, @sfbase.ChatView?, String, Array[@json.Json], going? : Array[@json.Json], quotes? : Array[@json.Json], runs? : @json.Json?) -> String
+pub fn sent_local(@ui.Ctx, String, @sfbase.ChatView?, String, Array[@json.Json], going? : Array[@json.Json], quotes? : Array[@json.Json], runs? : @json.Json?, now~ : Double) -> String
 
 pub fn sent_local_gone(String, String) -> Unit
 

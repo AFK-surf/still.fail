@@ -857,6 +857,12 @@ pub let fix_pace : Ref[(Double, Double, Double)] = Ref((fix_deliver_ms, fix_answ
 pub let fix_sent_for : Ref[Double] = Ref(-1.0)
 
 ///|
+/// How long the fixture's core has words sent before its view has their row (the app's way to its core and back: a
+/// frame or two on a quiet device, many on a busy one); 0, the frame after.
+// kept across runs: put back as a fixture is made (made.mbt)
+pub let fix_core_for : Ref[Double] = Ref(0.0)
+
+///|
 /// The status its agent at work on what was sent has: "queued" as the station has its words and it has not taken them
 /// yet (or a summary read before it took them said so).
 // kept across runs: put back as a fixture is made (made.mbt)
@@ -871,6 +877,47 @@ pub fn fix_later(ms : Double, f : () -> Unit) -> Unit {
     (None, Some(_)) => @ui.runtime().after(ms.ceil().to_int(), fn() { fix_now(f) })
     (None, None) => fix_unsaid.push((ms, f))
   }
+}
+
+///|
+/// What was sent since (`sent`, the messages; `outbox`, those on their way) as the core says the viewer's own sent one
+/// after another, nothing between them (views.ts drawn): each but the last `followed` (its time under a later one),
+/// each but the first `joined` (close under the one before). One that did not go stands apart. And whether what is
+/// sent next would follow the last of them (the view's `joinsUntil`).
+fn fix_followed(sent : Array[Json], outbox : Array[Json]) -> (Array[Json], Array[Json], Bool) {
+  let all = sent + outbox
+  let mine = fn(i : Int) {
+    if i < sent.length() {
+      field(Some(all[i]), "mine") is Some(True)
+    } else {
+      text(Some(all[i]), "state") != "failed"
+    }
+  }
+  let said : Array[Json] = []
+  let going : Array[Json] = []
+  for i, x in all {
+    let followed = i + 1 < all.length() && mine(i) && mine(i + 1)
+    let joined = i > 0 && mine(i - 1) && mine(i)
+    let x = match x {
+      Object(m) if followed || joined => {
+        let m = m.copy()
+        if followed {
+          m["followed"] = Json::boolean(true)
+        }
+        if joined {
+          m["joined"] = Json::boolean(true)
+        }
+        Json::object(m)
+      }
+      _ => x
+    }
+    if i < sent.length() {
+      said.push(x)
+    } else {
+      going.push(x)
+    }
+  }
+  (said, going, all.length() > 0 && mine(all.length() - 1))
 }
 
 ///|
@@ -890,11 +937,16 @@ pub fn with_sent(base : Json, session : String) -> Json {
         Some(Array(a)) => a.copy()
         _ => []
       }
-      for x in fc.sent {
+      let (sent, outbox, joins) = fix_followed(fc.sent, fc.outbox)
+      for x in sent {
         all.push(x)
       }
       o["messages"] = Json::array(all)
-      o["outbox"] = Json::array(fc.outbox.copy())
+      o["outbox"] = Json::array(outbox)
+      if joins {
+        // (5 minutes from its time: the fixture's now, 0)
+        o["joinsUntil"] = Json::number(300000.0)
+      }
       if fc.working >= 0.0 || fc.turns > 0 {
         let thread = field(field(Some(base), "thread"), "id")
         o["agents"] = Json::array(
@@ -1101,13 +1153,20 @@ pub fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Js
     "chat.send" => {
       fix_serial.val += 1
       let id = "out\{fix_serial.val}"
-      fix_chat(session).outbox.push(outgoing_json(id, params, "sending", ""))
-      // (chat-ask-end's card answered by it at once, as the core says it: decisions.ts inMessages)
-      if f.mode == "chat-ask-end" && session == "s-c1" && !fix_decided.contains(62) {
-        fix_decided[62] = { "resolved": true, "answeredBy": "你", "text": "你 回复了" }
+      let taken = fn() {
+        fix_chat(session).outbox.push(outgoing_json(id, params, "sending", ""))
+        // (chat-ask-end's card answered by it at once, as the core says it: decisions.ts inMessages)
+        if f.mode == "chat-ask-end" && session == "s-c1" && !fix_decided.contains(62) {
+          fix_decided[62] = { "resolved": true, "answeredBy": "你", "text": "你 回复了" }
+        }
+        fix_later(fix_pace.val.0, fn() { fix_deliver(session, id) })
       }
-      f.changed()
-      fix_later(fix_pace.val.0, fn() { fix_deliver(session, id) })
+      if fix_core_for.val > 0.0 {
+        fix_later(fix_core_for.val, taken)
+      } else {
+        taken()
+        f.changed()
+      }
       Some(Ok(Json::object({})))
     }
     "chat.retry" => {
