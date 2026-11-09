@@ -177,9 +177,29 @@ priv struct Desk {
 }
 
 ///|
+/// Which paragraph words picked with the pointer are of: an old view's (its rich text's id, Ctx::rich's `base`) or a
+/// window's tree's (its words in pieces: which tree it is of, by its number (view_tree_made), the row of a list made by
+/// its key it is in and where it is in that row (View::row_place): the same paragraph while its row's key is there,
+/// scrolled away and back, whatever node shows it then; another once another row is where it was); none.
+priv enum SelKey {
+  NoSel
+  Para(Int)
+  Words(Int, @view.NodeId, Array[Int])
+} derive(Eq, Hash)
+
+///|
+/// Which layer words picked with the pointer are in, the only one a selection picks in (as a browser's started in a
+/// dialog stays in it): an old view's (overlay.mbt: its id; 0 the page), or one of the window's tree's (where in its
+/// stack of layers: Tree::stack_of, -1 in none).
+priv enum SelLayer {
+  OldLayer(Int)
+  TreeLayer(Int)
+} derive(Eq)
+
+///|
 priv struct SelTarget {
-  base : Int
-  layer : Int
+  base : SelKey
+  layer : SelLayer
   /// the old view it was built in (Node's `island`): whether a press may pick it now, view_host.mbt's old_owner_open
   island : @view.NodeId?
   at : Array[Int]
@@ -191,13 +211,36 @@ priv struct SelTarget {
   y0 : Double
   x1 : Double
   y1 : Double
+  /// how big it is drawn (a node of the window's tree in what is drawn bigger or smaller: its words laid out in its
+  /// own terms, `lay`'s, from (ox, oy) in the window); an old view's paragraph 1
+  sc : Double
+  /// each line in the middle of so wide where it is drawn so (View::words_centered: rich_line_x's), -1 none
+  center : Double
+  /// the node of the window's tree that shows it now (none: an old view's)
+  node : @view.NodeId?
+}
+
+///|
+/// Where in its words a point (x, y) in the window is, as paragraph `t` is drawn (its scale, its lines in their
+/// middles where they stand so).
+fn SelTarget::offset_at(self : SelTarget, x : Double, y : Double) -> Int {
+  let lx = (x - self.ox) / self.sc
+  let ly = (y - self.oy) / self.sc
+  self.lay.offset_at(lx - rich_shift_at(self.lay, ly, self.center), ly)
+}
+
+///|
+/// What of paragraph `t` is picked, a rectangle a line, in its own terms as it is drawn (its lines in their middles
+/// where they stand so).
+fn SelTarget::picked_rects(self : SelTarget) -> Array[(Double, Double, Double, Double)] {
+  selected_rects(self.base, self.lay).map(fn(r) { (r.0 + rich_shift_at(self.lay, r.1 + r.3 / 2.0, self.center), r.1, r.2, r.3) })
 }
 
 ///|
 /// A place in the words picked with the pointer: its paragraph (its id), the offset in its text, and where the
 /// paragraph stands in the page (Ctx::page_order) as last laid out.
 priv struct SelSpot {
-  base : Int
+  base : SelKey
   off : Int
   at : Array[Int]
 }
@@ -222,20 +265,44 @@ priv struct SelSpan {
 priv struct Picked {
   mut from : SelSpot
   mut to : SelSpot
-  mut spans : Map[Int, SelSpan]
+  mut spans : Map[SelKey, SelSpan]
   mut dragging : Bool
   mut list : Int
-  mut layer : Int
+  mut layer : SelLayer
   mut made : Int
+  /// picked by a finger (finger_select.mbt): held on a word, its ends' handles, the system's text menu over it; the
+  /// old view it was picked in (an old view's words: Node's `island`), the only one whose words it picks
+  mut finger : Bool
+  mut island : @view.NodeId?
+  /// the word a finger's hold picked (its start and its end), widened from by words while the finger slides on
+  mut word : (SelSpot, SelSpot)?
+  /// which handle a finger has (1 the start's, 2 the end's, 0 none) and the end's place off the finger
+  mut handle : Int
+  mut grab_x : Double
+  mut grab_y : Double
 }
 
 ///|
 // kept across runs: let go as a run begins (select_none), which one it was only counting on
-let picked : Picked = { from: no_spot, to: no_spot, spans: {}, dragging: false, list: 0, layer: 0, made: 0 }
+let picked : Picked = {
+  from: no_spot,
+  to: no_spot,
+  spans: {},
+  dragging: false,
+  list: 0,
+  layer: OldLayer(0),
+  made: 0,
+  finger: false,
+  island: None,
+  word: None,
+  handle: 0,
+  grab_x: 0.0,
+  grab_y: 0.0,
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
-let no_spot : SelSpot = { base: 0, off: 0, at: [] }
+let no_spot : SelSpot = { base: NoSel, off: 0, at: [] }
 
 ///|
 let desk : Desk = {
@@ -271,6 +338,7 @@ fn desk_reset() -> Unit {
   desk.next_sels.clear()
   desk.sels = []
   select_none()
+  finger_reset()
 }
 
 ///|
@@ -306,6 +374,9 @@ fn Ctx::desk_frame_end(self : Ctx) -> Unit {
     None => true
   }
   desk.sels = desk.next_sels.copy()
+  // (drawn where they are: none moved since)
+  sel_moved.val = (0.0, 0.0)
+  finger_frame_end()
   if !self.down && self.px >= 0.0 {
     if pointing() is Finger {
       // a finger lifted is nowhere: what it last touched is not hovered, and the pointer is not over it (this frame,
@@ -371,7 +442,8 @@ fn Ctx::show_cursor(self : Ctx) -> Unit {
 ///|
 /// A node's marks (Node's `marks`): it takes presses (Ctx::takes_presses, and what reads its click), a press on it drags
 /// the window (Ctx::window_drag), keeps what is picked (Ctx::keeps_selection), is what lies under it's when held
-/// (Ctx::holds_through), asks for a menu (Ctx::menu_asked); above them, the pointer's shape over it and one
+/// (Ctx::holds_through), asks for a menu (Ctx::menu_asked), or covers words picked with the pointer
+/// (Ctx::blocks_selection); above them, the pointer's shape over it and one
 /// (Ctx::cursor), 0 where none is said.
 let mark_takes : Int = 1
 
@@ -388,10 +460,13 @@ let mark_holds : Int = 8
 let mark_asks : Int = 16
 
 ///|
-let mark_cursor_at : Int = 5
+let mark_blocks_selection : Int = 32
 
 ///|
-/// What is said of the target `id` as it is built, marked on its node (docs/retained.md, the way there's 1: what a frame
+let mark_cursor_at : Int = 6
+
+///|
+/// What is said of the target `id` as it is built, marked on its node (the way there's 1: what a frame
 /// says is what its nodes hold, kept with them). Said of an id whose node is not made yet, it is marked on it as it is
 /// (Ctx::id_built). The shape said last is the one.
 fn Ctx::mark_id(self : Ctx, id : Int, m : Int, cursor? : Int = -1) -> Unit {
@@ -478,7 +553,7 @@ pub fn Ctx::cursor(self : Ctx, id : Int, cursor : Cursor) -> Unit {
 
 ///|
 /// `id` takes presses, said as it is built: the pointer's hand over it (Ctx::show_cursor). What reads its click
-/// (Ctx::clicked, a part's Response) says so by that; what takes its press without its click (a slider set where it
+/// (Ctx::on_press, a part's Response) says so by that; what takes its press without its click (a slider set where it
 /// is pressed, Ctx::pressed alone) says it here.
 pub fn Ctx::takes_presses(self : Ctx, id : Int) -> Unit {
   self.mark_id(id, mark_takes)
@@ -560,7 +635,7 @@ pub fn Ctx::mouse_drags_lists(self : Ctx, on : Bool) -> Unit {
 /// Whether key `code` came since the last frame with exactly `mods` held (with `in_field`, also one a focused field
 /// took: an Enter it sent, an arrow it moved by).
 pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Bool = false) -> Bool {
-  hand_events_read()
+  hand_keys_read()
   // (under an open menu or dialog, none: they are its)
   if !self.keys_here() {
     return false
@@ -578,7 +653,7 @@ pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Boo
 /// read) has none to look for when none came, as on every frame of a phone without a keyboard.
 pub fn Ctx::keys_came(self : Ctx) -> Bool {
   ignore(self)
-  hand_events_read()
+  hand_keys_read()
   !desk.keys.is_empty()
 }
 
@@ -586,7 +661,7 @@ pub fn Ctx::keys_came(self : Ctx) -> Bool {
 /// Key `code` with exactly `mods` held, if it came since the last frame and nothing took it yet: taken now (what reads
 /// keys after this does not see it). For a widget's own keys while it has the focus (a slider's arrows).
 pub fn Ctx::take_key(self : Ctx, code : Int, mods? : Int = 0) -> Bool {
-  hand_events_read()
+  hand_keys_read()
   if !self.keys_here() {
     return false
   }
@@ -612,7 +687,7 @@ pub fn Ctx::shortcut(self : Ctx, ch : Char, shift? : Bool = false) -> Bool {
 /// The keys since the last frame (code, modifiers, whether a field took it); none under an open menu or dialog (they
 /// are its).
 pub fn Ctx::keys(self : Ctx) -> Array[(Int, Int, Bool)] {
-  hand_events_read()
+  hand_keys_read()
   if !self.keys_here() {
     return []
   }
@@ -630,6 +705,18 @@ pub fn Ctx::unfocus(self : Ctx) -> Unit {
 pub fn Ctx::field_focused(self : Ctx) -> Bool {
   hand.focus_id.get() |> ignore
   self.focus != 0 && self.editors.contains(self.focus)
+}
+
+///|
+/// Whether a field has the keyboard's focus that what is being built now would take it from: not one in a modal layer
+/// of the tree's that keeps this old view from input (a question over a chat its composer is first drawn under): what
+/// it asks then is kept for that layer to give back as it goes (view_focus_kept_for), taken from no one.
+pub fn Ctx::field_focused_here(self : Ctx) -> Bool {
+  self.field_focused() &&
+  (match (view_app.val, self.island_said()) {
+    (Some(t), Some(island)) => @signals.untracked(fn() { t.allows_as_its_own(island) })
+    _ => true
+  })
 }
 
 ///|
@@ -692,9 +779,10 @@ pub fn Ctx::sized(self : Ctx, w : Double, h : Double, body : () -> Unit) -> Unit
 }
 
 ///|
-/// The rich text `body` builds (and its lists' rows) is picked with the pointer: pressed and dragged over, its words
-/// are selected (in `color`), ⌘C (Ctrl+C) copies them; a press elsewhere lets them go. A desktop's page, where the
-/// mouse drags no list (Ctx::mouse_drags_lists false).
+/// The rich text `body` builds (and its lists' rows) is picked with the pointer: pressed and dragged over with a mouse
+/// (a desktop's page, where the mouse drags no list: Ctx::mouse_drags_lists false), held still on with a finger (the
+/// word there, then its handles and the system's text menu: finger_select.mbt), its words are selected (in `color`),
+/// ⌘C (Ctrl+C) or the menu copies them; a press elsewhere (a finger's tap) lets them go.
 pub fn Ctx::selectable(self : Ctx, body : () -> Unit, color? : Int64 = 0x3B82F64DL) -> Unit {
   ignore(self)
   let saved = desk.selecting
@@ -726,8 +814,12 @@ fn select_none() -> Unit {
   picked.to = no_spot
   picked.spans.clear()
   picked.dragging = false
-  picked.layer = 0
+  picked.layer = OldLayer(0)
+  picked.finger = false
+  picked.island = None
+  finger_let_go()
   select_edge_stop()
+  picked_told()
 }
 
 ///|
@@ -855,8 +947,8 @@ fn Ctx::sel_walk(
         match n.rich_layout(dmax(n.fw - n.pad_l - n.pad_r, 0.0)) {
           Some(lay) =>
             out.push({
-              base: r.base,
-              layer,
+              base: Para(r.base),
+              layer: OldLayer(layer),
               island: n.island,
               at: at.copy(),
               lay,
@@ -867,6 +959,9 @@ fn Ctx::sel_walk(
               y0: dmax(n.y, y0),
               x1: dmin(n.x + n.fw, x1),
               y1: dmin(n.y + n.fh, y1),
+              sc: 1.0,
+              center: -1.0,
+              node: None,
             })
           None => ()
         }
@@ -925,8 +1020,8 @@ fn field_picks(c : Ctx) -> Bool {
 ///|
 /// A paragraph that can be picked, as painted (rich.mbt paint_rich).
 fn selectable_painted(
-  base : Int,
-  layer : Int,
+  base : SelKey,
+  layer : SelLayer,
   island : @view.NodeId?,
   at : Array[Int],
   lay : RichLayout,
@@ -938,12 +1033,12 @@ fn selectable_painted(
   x1 : Double,
   y1 : Double,
 ) -> Unit {
-  desk.next_sels.push({ base, layer, island, at, lay, text, ox, oy, x0, y0, x1, y1 })
+  desk.next_sels.push({ base, layer, island, at, lay, text, ox, oy, x0, y0, x1, y1, sc: 1.0, center: -1.0, node: None })
 }
 
 ///|
 /// What of paragraph `base` is picked: a rectangle a line, in its text's terms.
-fn selected_rects(base : Int, lay : RichLayout) -> Array[(Double, Double, Double, Double)] {
+fn selected_rects(base : SelKey, lay : RichLayout) -> Array[(Double, Double, Double, Double)] {
   match picked.spans.get(base) {
     Some(s) if s.a < s.b => lay.rects(s.a, s.b)
     _ => []
@@ -987,7 +1082,7 @@ fn sel_spot_at(laid : Array[SelTarget], x : Double, y : Double) -> (SelTarget, I
   }
   match (hit, under, lowest) {
     (Some(t), _, _) => {
-      let off = t.lay.offset_at(x - t.ox, y - t.oy)
+      let off = t.offset_at(x, y)
       Some((t, imax(0, imin(off, t.text.length()))))
     }
     (None, Some(t), _) => Some((t, 0))
@@ -1002,9 +1097,15 @@ fn sel_spot_at(laid : Array[SelTarget], x : Double, y : Double) -> (SelTarget, I
 /// those not laid out now (scrolled out of view) kept as they were while they lie between, let go once they do not
 /// (the one the press went down in kept, empty).
 fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
-  // the paragraphs laid out: their words and where they stand in the page, now
-  let laid = self.sel_laid().filter(fn(t) { t.layer == picked.layer })
-  let drawn : Map[Int, SelSpan] = {}
+  // (a finger's handle: the end where it was off the finger, not under it)
+  let x = x + picked.grab_x
+  let y = y + picked.grab_y
+  // the paragraphs laid out: their words and where they stand in the page, now (a finger's: of the old view it picked
+  // in, as a dialog's selection stays in it)
+  let laid = (self.sel_laid() + tree_sels()).filter(fn(t) {
+    t.layer == picked.layer && (!picked.finger || t.island == picked.island)
+  })
+  let drawn : Map[SelKey, SelSpan] = {}
   for t in laid {
     if !drawn.contains(t.base) {
       drawn[t.base] = { a: 0, b: 0, text: t.text, at: t.at }
@@ -1018,7 +1119,27 @@ fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
   }
   picked.from = now(picked.from)
   picked.to = match sel_spot_at(laid, x, y) {
-    Some((t, off)) => now({ base: t.base, off, at: [] })
+    Some((t, off)) =>
+      match picked.word {
+        // a finger sliding on from the word its hold picked: by words, that word kept whole (Pick::slide's)
+        Some((ws, we)) => {
+          let (s, e) = word_at(t.text, off)
+          let start = now({ base: t.base, off: s, at: [] })
+          if spot_cmp(start, now(ws)) < 0 {
+            picked.from = now(we)
+            start
+          } else {
+            picked.from = now(ws)
+            let end = now({ base: t.base, off: e, at: [] })
+            if spot_cmp(end, now(we)) > 0 {
+              end
+            } else {
+              now(we)
+            }
+          }
+        }
+        None => now({ base: t.base, off, at: [] })
+      }
     None => now(picked.to)
   }
   let (lo, hi) = if spot_cmp(picked.from, picked.to) <= 0 {
@@ -1026,10 +1147,10 @@ fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
   } else {
     (picked.to, picked.from)
   }
-  let known : Map[Int, SelSpan] = {}
+  let known : Map[SelKey, SelSpan] = {}
   picked.spans.each(fn(k, s) { if !drawn.contains(k) { known[k] = s } })
   drawn.each(fn(k, d) { known[k] = d })
-  let spans : Map[Int, SelSpan] = {}
+  let spans : Map[SelKey, SelSpan] = {}
   known.each(fn(k, s) {
     let n = s.text.length()
     let a = if k == lo.base {
@@ -1053,6 +1174,7 @@ fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
     }
   })
   picked.spans = spans
+  picked_told()
 }
 
 ///|
@@ -1061,7 +1183,8 @@ fn Ctx::select_to(self : Ctx, x : Double, y : Double) -> Unit {
 fn Ctx::select_after_layout(self : Ctx) -> Unit {
   // (read so: hand.mbt)
   hand.down.get() |> ignore
-  if picked.dragging && self.down {
+  // (the window's tree's: as each frame lays it out, view_frame)
+  if picked.dragging && self.down && !tree_picking() {
     hand.pointer.get() |> ignore
     self.select_to(self.px, self.py)
   }
@@ -1085,6 +1208,7 @@ let select_edge_least : Double = 10.0
 /// pointer, faster the further past it is, words coming as it does (select_after_layout), until the pointer comes
 /// back in or lets go. Its edges as the last frame drew it (its scroll bar's: none where it does not scroll).
 fn Ctx::select_edge(self : Ctx) -> Unit {
+  // (the window's tree's column: as each frame lays the tree out, view_frame's tree_edge_to)
   let id = picked.list
   if id == 0 {
     return
@@ -1111,6 +1235,7 @@ fn Ctx::select_edge(self : Ctx) -> Unit {
 ///|
 /// The list words were picked in scrolls no more toward the pointer (it let go, or they did).
 fn select_edge_stop() -> Unit {
+  tree_edge_stop()
   if picked.list != 0 {
     g().edge_scroll(picked.list, 0.0)
     picked.list = 0
@@ -1121,14 +1246,31 @@ fn select_edge_stop() -> Unit {
 /// The paragraph that can be picked under (x, y), the topmost, in the layer a press there goes to (Ctx::layer_at):
 /// none of the page's under a popover's panel or a dialog's ground.
 fn Ctx::sel_at(self : Ctx, x : Double, y : Double) -> SelTarget? {
-  if desk.mouse_drags || x < 0.0 {
+  if x < 0.0 || self.selection_blocked(x, y) {
+    return None
+  }
+  // (the window's tree's words picked, where they are said to be (words_picked): what is over them there is the tree's
+  // to say, the press come here only where nothing of it took it)
+  match tree_sel_at(x, y) {
+    Some(t) => return Some(t)
+    None => ()
+  }
+  if desk.mouse_drags {
     return None
   }
   let layer = self.layer_at(x, y)
+  // (what floats over what scrolls there, a page's bar, its buttons: its own words alone, never those scrolled under it)
+  let over = self.float_at(layer, x, y)
   let mut k = desk.sels.length() - 1
   while k >= 0 {
     let t = desk.sels[k]
-    if t.layer == layer && x >= t.x0 && x < t.x1 && y >= t.y0 && y < t.y1 && old_owner_open(t.island) {
+    if t.layer == OldLayer(layer) &&
+      x >= t.x0 &&
+      x < t.x1 &&
+      y >= t.y0 &&
+      y < t.y1 &&
+      old_owner_open(t.island) &&
+      (over is None || over.map(fn(o) { has_prefix(t.at, o) }) == Some(true)) {
       return Some(t)
     }
     k = k - 1
@@ -1137,15 +1279,58 @@ fn Ctx::sel_at(self : Ctx, x : Double, y : Double) -> SelTarget? {
 }
 
 ///|
+/// Where in the page the topmost box floating over what scrolls (Ctx::floats_over) in layer `layer` holding (x, y)
+/// stands (Ctx::page_order), as last laid out; none there.
+fn Ctx::float_at(self : Ctx, layer : Int, x : Double, y : Double) -> Array[Int]? {
+  let mut k = self.floating.length() - 1
+  while k >= 0 {
+    let i = self.floating[k]
+    if i < self.count {
+      let n = self.nodes[i]
+      if x >= n.x && x < n.x + n.fw && y >= n.y && y < n.y + n.fh && self.layer_of(i) == layer {
+        return Some(self.page_order(i))
+      }
+    }
+    k = k - 1
+  }
+  None
+}
+
+///|
+/// Whether place `at` lies within place `p` (Ctx::page_order): `p`, or below it.
+fn has_prefix(at : Array[Int], p : Array[Int]) -> Bool {
+  if at.length() < p.length() {
+    return false
+  }
+  for i, v in p {
+    if at[i] != v {
+      return false
+    }
+  }
+  true
+}
+
+///|
 /// A primary press at (x, y), the `clicks`th in a row (Ctx's `clicks`): on words that are picked with the pointer,
 /// picking starts there (a double click's second picks the word under it, a triple's the paragraph, as a browser's
 /// do); elsewhere what was picked is let go.
 fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
+  // (a finger's press picks nothing as it goes down: a hold does, finger_select.mbt; what a finger picked stays through
+  // it, let go by a tap elsewhere as it lifts)
+  if pointing() is Finger && picked.finger {
+    return
+  }
   select_none()
+  if pointing() is Finger {
+    return
+  }
   match self.sel_at(x, y) {
     Some(target) => {
       let text = target.text
-      let off = imax(0, imin(target.lay.offset_at(x - target.ox, y - target.oy), text.length()))
+      let off = imax(
+        0,
+        imin(target.offset_at(x, y), text.length()),
+      )
       let (s, e) = if clicks <= 1 {
         (off, off)
       } else if clicks == 2 {
@@ -1163,6 +1348,11 @@ fn Ctx::select_press(self : Ctx, x : Double, y : Double, clicks : Int) -> Unit {
       picked.layer = target.layer
       // (the list it lies in: sideways boxes in it scroll it no way the pointer goes up or down)
       picked.list = if picked.dragging { outer_scroll(self, x, y) } else { 0 }
+      // (a paragraph of the window's tree's: the column it is in, the same way)
+      if picked.dragging {
+        tree_edge_from(target)
+      }
+      picked_told()
     }
     None => ()
   }
@@ -1183,6 +1373,35 @@ pub fn Ctx::selection_made(self : Ctx) -> Int {
 /// drawn.
 pub fn Ctx::keeps_selection(self : Ctx, id : Int) -> Unit {
   self.mark_id(id, mark_keeps)
+}
+
+///|
+/// A surface and what it holds cover words under them: a press on it lets go of a selection, but cannot begin one in
+/// words behind it. The surface's own fields keep their usual selection and scroll behavior.
+pub fn Ctx::blocks_selection(self : Ctx, id : Int) -> Unit {
+  self.mark_id(id, mark_blocks_selection)
+}
+
+///|
+/// Whether the target a press reaches, or one of its holders, covers words behind it.
+fn Ctx::selection_blocked(self : Ctx, x : Double, y : Double) -> Bool {
+  let top = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y, pressed=true)
+  let k = press_reach(self.hit_ids, self.hit_rects, self.hit_clips, top, x, y)
+  if k < 0 {
+    return false
+  }
+  if k < self.hit_marks.length() && (self.hit_marks[k] & mark_blocks_selection) != 0 {
+    return true
+  }
+  for j in 0..<k {
+    if j < self.hit_ends.length() &&
+      self.hit_ends[j] > k &&
+      j < self.hit_marks.length() &&
+      (self.hit_marks[j] & mark_blocks_selection) != 0 {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -1212,12 +1431,12 @@ pub fn Ctx::selection_box(self : Ctx) -> (Double, Double, Double, Double)? {
   let mut x1 = -1.0e9
   let mut y1 = -1.0e9
   // (of the paragraphs drawn, where they are drawn: those scrolled out of view are nowhere)
-  for t in desk.sels {
-    for r in selected_rects(t.base, t.lay) {
-      x0 = dmin(x0, t.ox + r.0)
-      y0 = dmin(y0, t.oy + r.1)
-      x1 = dmax(x1, t.ox + r.0 + r.2)
-      y1 = dmax(y1, t.oy + r.1 + r.3)
+  for t in sels_shown() {
+    for r in t.picked_rects() {
+      x0 = dmin(x0, t.ox + r.0 * t.sc)
+      y0 = dmin(y0, t.oy + r.1 * t.sc)
+      x1 = dmax(x1, t.ox + (r.0 + r.2) * t.sc)
+      y1 = dmax(y1, t.oy + (r.1 + r.3) * t.sc)
     }
   }
   if x1 < x0 {
@@ -1231,21 +1450,52 @@ pub fn Ctx::selection_box(self : Ctx) -> (Double, Double, Double, Double)? {
 /// Where the pointer let what is picked go, in the window: the end of it the pointer took (Picked's `to`: dragged
 /// down, the last of its lines' right end; dragged up, the first's left end), x and its line's top and height; None
 /// as selection_box. What it holds is what was dragged over, so this is where the pointer let go, not past the words.
-pub fn Ctx::selection_end(self : Ctx) -> (Double, Double, Double)? {
+/// As the words it ends in are laid out this frame: where they moved since they were drawn (a row above them grown as
+/// its height is learned) it moves with them, read back (readback.mbt): read before they were laid out, the frame is
+/// built again from where they are.
+#callsite(autofill(loc))
+pub fn Ctx::selection_end(self : Ctx, loc~ : SourceLoc) -> (Double, Double, Double)? {
   ignore(self)
+  let v = selection_end_drawn().map(fn(e) {
+    let (dx, dy) = sel_moved.val
+    (e.1 + dx, e.2 + dy, e.3)
+  })
+  if building.val {
+    if sel_read.val is None {
+      sel_read.val = Some((v, loc))
+    }
+    row_read_laid(Sel(v, loc))
+  }
+  v
+}
+
+///|
+/// How far the words what is picked ends in have moved since they were drawn, as this frame lays them out
+/// (Ctx::selection_moved_now): what Ctx::selection_end adds to where they were drawn. None moved as a frame draws them.
+// kept across runs: worked out as a frame is laid out, read as the next pass builds
+let sel_moved : Ref[(Double, Double)] = Ref((0.0, 0.0))
+
+///|
+/// Where what is picked ends as the build read it (Ctx::selection_end), the first read of a frame's pass: read back.
+// kept across runs: said as a pass builds, looked at as it is laid out
+let sel_read : Ref[((Double, Double, Double)?, SourceLoc)?] = Ref(None)
+
+///|
+/// The end of what is picked where its words were last drawn: the paragraph it ends in, x, y, the line's height.
+fn selection_end_drawn() -> (SelTarget, Double, Double, Double)? {
   if picked.dragging {
     return None
   }
   let down = spot_cmp(picked.from, picked.to) <= 0
-  let mut end : (Array[Int], Double, Double, Double)? = None
+  let mut end : (SelTarget, Array[Int], Double, Double, Double)? = None
   // (of the paragraphs drawn, where they are drawn: those scrolled out of view are nowhere)
-  for t in desk.sels {
-    for r in selected_rects(t.base, t.lay) {
-      let (x, y) = (t.ox + r.0, t.oy + r.1)
-      let here = (t.at, if down { x + r.2 } else { x }, y, r.3)
+  for t in sels_shown() {
+    for r in t.picked_rects() {
+      let (x, y) = (t.ox + r.0 * t.sc, t.oy + r.1 * t.sc)
+      let here = (t, t.at, if down { x + r.2 * t.sc } else { x }, y, r.3 * t.sc)
       end = match end {
         None => Some(here)
-        Some((at, _, ey, _) as e) => {
+        Some((_, at, _, ey, _) as e) => {
           let k = order_cmp(t.at, at)
           let k = if k == 0 { y.compare(ey) } else { k }
           if (down && k > 0) || (!down && k < 0) {
@@ -1257,7 +1507,26 @@ pub fn Ctx::selection_end(self : Ctx) -> (Double, Double, Double)? {
       }
     }
   }
-  end.map(fn(e) { (e.1, e.2, e.3) })
+  end.map(fn(e) { (e.0, e.2, e.3, e.4) })
+}
+
+///|
+/// How far the paragraph what is picked ends in (an old view's, found by its words' key) is laid out this frame from
+/// where it was drawn (Ctx::sel_walk's ox, oy); none where it is not found.
+fn Ctx::selection_moved_now(self : Ctx) -> (Double, Double) {
+  guard selection_end_drawn() is Some((t, _, _, _)) else { return (0.0, 0.0) }
+  guard t.base is Para(base) else { return (0.0, 0.0) }
+  for j in 0..<self.count {
+    let n = self.nodes[j]
+    let said = match (n.rcut, n.rich) {
+      (Some(r), _) | (None, Some(r)) => r.select && r.base == base
+      _ => false
+    }
+    if n.kind == kind_rich && said {
+      return (n.x + n.pad_l - t.ox, n.y + n.pad_t - t.oy)
+    }
+  }
+  (0.0, 0.0)
 }
 
 ///|

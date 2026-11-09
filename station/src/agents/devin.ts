@@ -1,7 +1,7 @@
 // Devin driver: one `devin acp` per session (Cognition's Devin CLI, its local agent), spoken to in ACP (acp.ts) with one
 // ACP session in it.
 //
-// Behaviour pinned against the Devin CLI 3000.11 (docs/devin.md), beside what ACP says:
+// Behaviour pinned against the Devin CLI 3000.11, beside what ACP says:
 // - `authenticate` with the profile's key (`_meta.api_key`, read from the credentials its sign-in left in the profile's
 //   home), not the CLI's own sign-in on this machine;
 // - `session/load` takes up a session it keeps (its store: DEVIN_SESSIONS_DIR);
@@ -15,12 +15,11 @@
 //   (its AGENTS.md and .devin/ read as a project's);
 // - Devin keeps its sessions in a database of its own: the driver keeps the transcript itself (acp.ts KeptTranscript),
 //   which the history and the usage read.
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { linkSync } from "../ops/links.ts";
-import { log } from "../ops/log.ts";
 import { peerHttpBase } from "../tools/http.ts";
+import { rulesFolder as folderOf } from "./rules-folder.ts";
 import { AcpDriver, AcpSession, KeptTranscript, acpOutcome, type AcpStart } from "./acp.ts";
 import type { Events } from "./own-process.ts";
 import { expandRoute, profileEnv, profileModel } from "./profiles.ts";
@@ -70,24 +69,8 @@ export const devinRules = (instructions: string) =>
 /// skills of its workspace (`skills`) linked in as .devin/skills: Devin reads a workspace directory it is given as a
 /// project's, without them being written into the person's project.
 export function rulesFolder(home: string, key: string, instructions: string, skills?: string): string {
-  const dir = join(devinHome(home), "station", createHash("sha256").update(key).digest("hex").slice(0, 16));
-  mkdirSync(join(dir, ".devin", "rules"), { recursive: true });
-  writeFileSync(join(dir, ".devin", "rules", "stillfail.md"), `---\ndescription: still.fail station\ntrigger: always_on\n---\n${devinRules(instructions)}\n`);
-  const linked = (target: string, path: string) => {
-    if (!existsSync(target)) return;
-    rmSync(path, { recursive: true, force: true });
-    try {
-      // Where links are refused (Windows without Developer Mode), a junction.
-      linkSync(target, path, { junction: true, copy: true });
-    } catch (e) {
-      log.warn("agents::devin", "the workspace's skills not linked for Devin", { path, error: (e as Error).message });
-    }
-  };
-  // The skills of the session's workspace (agent-home.ts); its memory is told with the instructions. (An AGENTS.md
-  // linked here before was the profile home's, the home workspace's memory whatever the session's workspace: gone.)
-  rmSync(join(dir, "AGENTS.md"), { force: true });
-  if (skills !== undefined) linked(skills, join(dir, ".devin", "skills"));
-  return dir;
+  const rule = `---\ndescription: still.fail station\ntrigger: always_on\n---\n${devinRules(instructions)}\n`;
+  return folderOf(devinHome(home), key, ".devin", { file: "stillfail.md", text: rule }, "Devin", skills);
 }
 
 /// The thinking levels Devin's models are offered at (the last part of a variant's name: swe-2-high).

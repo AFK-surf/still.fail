@@ -20,7 +20,7 @@ available to workspace members through its returned link.
 - To wait on CI or another remote run, start a job (or background command) that polls it and exits on the first
   failure: its completion wakes you. Do not end `waiting` on a guessed duration with nothing watching.
 - Inside long jobs, `stillfail-job notify "<words>"` reports meaningful milestones or trouble, not every line.
-  `ember-job` is an alias. Notices arrive via="ember"; relay only what matters and act on failures.
+  Notices arrive via="station"; relay only what matters and act on failures.
 - Completion includes the exit code and log tail. `job_log` reads more (up to 1000 lines); `job_list` shows your
   jobs; `job_stop` stops one. A completed step needs no separate user post unless it is useful news.
 
@@ -101,6 +101,9 @@ output inside it rather than elsewhere on that machine (or over ssh): it is remo
 this chat is archived or deleted, or after 14 days unused, which is what keeps the target's disk free. Pin inputs and
 versions: clone or fetch the intended revision there, or upload a bundle.
 
+If prepare fails or is interrupted, start refuses that key until a prepare succeeds. Retry the intended prepare; use a
+new key for different work. A failed re-prepare never makes the previous command the intended one.
+
 A station is often someone's own computer, in use. A command that needs an administrator's password or a permission
 the system asks for (`sudo`, `sfltool dumpbtm`, a first `osascript` controlling another app, a protected folder) puts
 the system's dialog on that machine's screen, naming only the command, so nobody there can tell who asks; the task
@@ -112,7 +115,8 @@ To build or test a local working directory there (a checkout with uncommitted ch
 absolute path here) instead of uploading: each start syncs it into a mirror on the target (named in prepare's answer,
 inside the session directory) and runs the command there. Only files Git tracks or would add (all but the usual build
 and dependency directories outside Git) go, and only what changed; the target's build output and dependencies stay
-warm. `back: [paths]` downloads outputs into `station-back/<key>/` here when the task ends. Synced files the command
+warm. `back: [paths]` downloads outputs into `station-back/<key>/` here when the task ends; it is removed once nothing in
+it changed for 6 hours, so move what you keep into your workspace. Synced files the command
 changed come back as `station-back/<key>/changes.patch`: review it and `git apply` it in the directory if wanted. One task
 at a time per mirror.
 
@@ -120,6 +124,12 @@ at a time per mirror.
 station restarts; no local polling job is needed. End `waiting`, naming the task. Download artifacts with
 `station_file` and post them to the requesting chat. Downloads create new files, never overwrite; inputs may be
 uploaded again before start.
+
+When a task changes files in a mirror, the next sync preserves those changes if the source is unchanged, and refuses
+conflicting changes on both sides. Its result must finish coming back before another task uses the mirror. If a notice
+says some results could not be saved, preserve those with `station_file` first, then use `station_task` action `release`
+with that task's key; this permits later tasks to change the remote files. A target without this protection must be
+updated before a task can sync a directory there.
 
 After a timeout, inspect or retry the same key: work may already have run. Lost remote processes are not restarted
 automatically; `failed` without an exit code means the outcome may be uncertain. Inspect before using a new key.
@@ -131,7 +141,7 @@ Services listening on another station's localhost are reachable from here with n
 
 - **A program calling an HTTP API with a base URL** (an LLM server, a REST API, a script): use the path form,
   `$STILLFAIL_PEER_HTTP/<station>/<port>/<path>` = `http://localhost:<port>/<path>` there (streams, large bodies and
-  WebSockets pass as they come), e.g. `OLLAMA_HOST=$STILLFAIL_PEER_HTTP/studio/11434`. Without the variable, it is
+  WebSockets pass as they come), e.g. `OLLAMA_HOST=$STILLFAIL_PEER_HTTP/willow/11434`. Without the variable, it is
   your stillfail MCP URL with `/mcp` replaced by `/peer`. Programs only (Host 127.0.0.1, no browser `Origin`). 502
   "needs an update": that station is from before this; 504: it is offline.
 - **Anything else: a browser, web pages, dev servers (HMR), databases, any TCP protocol**: forward the port with

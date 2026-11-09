@@ -20,8 +20,8 @@ fn reveal_pair(on : @signals.Signal[Bool], node : Bool) -> @ui.Tester {
         c.box(w=Px(300.0), fn() {
           let target = if on.get() { 1.0 } else { 0.0 }
           let open = @motion.anim(c, "t/said", target, global=true)
-          open.follow(target, @motion.move().per_unit(@motion.reveal_height("t/said")))
-          let share = open.get()
+          open.follow(c, target, @motion.move().per_unit(@motion.reveal_height(c, "t/said")))
+          let share = open.get(c)
           if share > 0.0 {
             @motion.reveal(c, "t/said", share, middle=true, fn() { c.text(reveal_words, style~) |> ignore })
           }
@@ -41,7 +41,7 @@ fn reveal_pair(on : @signals.Signal[Bool], node : Bool) -> @ui.Tester {
           // (as the old one's words are set: the meta's size and its own line)
           let (size, line) = @ui.tree_theme().text_size(Meta)
           h
-          .words(Is(reveal_words), look={ size, weight: 400, line, wrap: true })
+          .words(Is(reveal_words), look={ size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false })
           .ink(By(fn() { @ui.tree_theme().color(Muted) }))
           .words_centered(Is(true))
           |> ignore
@@ -104,7 +104,7 @@ fn node_room(
         @motion.reveal_node(b, fn() { on.get() }, fn(h) {
           let (size, line) = @ui.tree_theme().text_size(Meta)
           h.box(fn(w) {
-            w.words(By(fn() { words.get() }), look={ size, weight: 400, line, wrap: true }).words_centered(Is(true)) |> ignore
+            w.words(By(fn() { words.get() }), look={ size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false }).words_centered(Is(true)) |> ignore
           })
           |> ignore
           h.box(fn(k) {

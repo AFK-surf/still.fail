@@ -45,7 +45,7 @@ test "run_to_rest: only what was said" {
   f.gone("=从栏上归档 085454")
   f.t.draw()
   // the toast going, to its end
-  f.run_to(f.t.rest_of("toast"))
+  f.run_to_rest("toast")
   assert_true(f.rest_passed("toast"))
   assert_false(f.rest_passed("dv-sheet"))
   ignore(f.end())

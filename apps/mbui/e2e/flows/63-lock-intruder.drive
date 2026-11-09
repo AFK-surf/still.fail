@@ -1,0 +1,11 @@
+# A cloud not to be trusted signs a device in as alice on its own (it can mint her a credential) and says something in
+# the test chat with it: the station, going by the lock and not the cloud, refuses it; nothing of it comes to the chat.
+#only android
+timeout 120000
+until 端到端测试
+log do: intruder-refused send 冒名消息 {T}
+done 1-intruder-refused
+tap 端到端测试
+until 端到端测试的对话
+gone 冒名消息
+shot 1-chat

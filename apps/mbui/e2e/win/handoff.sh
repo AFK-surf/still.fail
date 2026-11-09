@@ -1,6 +1,6 @@
 #!/bin/bash
 # The desktop app's own updater (Electron's: electron-updater's NsisUpdater, apps/desktop main.ts) moving it over to
-# mbui's Windows app, end to end on Windows (mbui.yml's windows job, for a change to how that goes), as
+# mbui's Windows app, end to end on Windows (preview.yml's windows job, for a change to how that goes), as
 # scripts/release.sh has it happen to the installed apps and apps/mbui/scripts/handoff.sh rehearses it on a Mac: the
 # desktop app as released (HANDOFF_FROM: its installer; by default the one its feed names now, the beta's), installed
 # as a person installs it (/S: per user, %LOCALAPPDATA%\Programs); mbui's app built as that app (scripts/win.sh

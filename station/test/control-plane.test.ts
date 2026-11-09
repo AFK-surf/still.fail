@@ -10,7 +10,7 @@ import { Effect, Fiber, Stream, SubscriptionRef } from "effect";
 import { enroll } from "../src/cli.ts";
 import { loadKey } from "../src/cloud/key.ts";
 import { makeControlPlane } from "../src/cloud/plane.ts";
-import { ROSTER_GRACE_MS, applyState, lapse } from "../src/cloud/presence.ts";
+import { ROSTER_GRACE_MS, applyState, failureText, lapse } from "../src/cloud/presence.ts";
 import { COMMA, STILLFAIL, providerOf } from "../src/cloud/provider.ts";
 import { Cloud } from "../src/cloud/state.ts";
 import { verifyMember } from "../src/mesh/credential.ts";
@@ -48,28 +48,37 @@ async function enrolled(t: { after(f: () => unknown): void }, provider: "stillfa
   return { fake, origin, data, state, key, plane };
 }
 
-test("the roster stays current a while after its socket ends, until a fresh one or the station is removed", () => {
-  const s = new Cloud(mkdtempSync(join(tmpdir(), "roster-")));
+test("the roster is reached a while after its socket ends, and taken on past that until the station is removed", () => {
+  const data = mkdtempSync(join(tmpdir(), "roster-"));
+  const s = new Cloud(data);
   const timers: { ms: number; f: () => void }[] = [];
   const after = (ms: number, f: () => void) => timers.push({ ms, f });
   applyState(s, JSON.stringify({ type: "state", peers: [] }));
   assert.equal(s.peersCurrent, true);
-  // The socket ends: still current, until the grace is over with no roster since.
+  assert.equal(s.reached, true);
+  let told = 0;
+  const unlisten = s.listen(() => told++);
+  // The socket ends: reached until the grace is over with no roster since; the roster is still taken after it.
   lapse(s, after);
-  assert.equal(s.peersCurrent, true);
+  assert.equal(s.reached, true);
   assert.equal(timers[0]!.ms, ROSTER_GRACE_MS);
   timers.shift()!.f();
-  assert.equal(s.peersCurrent, false);
-  // Back within it: the fresh roster keeps it current past the old socket's grace.
+  assert.equal(s.reached, false);
+  assert.equal(s.peersCurrent, true);
+  // Told as a fresh roster is: the overview says the station is cut off.
+  assert.equal(told, 1);
+  unlisten();
+  // Back within it: the fresh roster keeps it reached past the old socket's grace.
   applyState(s, JSON.stringify({ type: "state", peers: [] }));
   lapse(s, after);
   applyState(s, JSON.stringify({ type: "state", peers: [] }));
   timers.shift()!.f();
-  assert.equal(s.peersCurrent, true);
-  // Removed: at once.
+  assert.equal(s.reached, true);
+  // Removed: not taken at all, at once.
   s.state = { removed_at: 1 } as any;
   lapse(s, after);
   assert.equal(s.peersCurrent, false);
+  assert.equal(s.reached, false);
   assert.equal(timers.length, 0);
   s.close();
 });
@@ -83,21 +92,25 @@ test("still.fail cloud: enrollment, presence, notices, traces and releases as th
   assert.deepEqual(Object.keys(file), ["origin", "station", "workspace", "workspace_name", "name", "relay_url", "relay_urls", "grant_keys", "peers", "revocations"]);
   assert.equal(state.provider(), "stillfail");
 
-  await until(() => state.peersCurrent);
+  await until(() => state.reached);
+  // Started again before the cloud is heard: the roster it said last is taken, not shown as reached.
+  const again = new Cloud(data);
+  assert.deepEqual([again.peersCurrent, again.reached], [true, false]);
+  again.close();
   const connected = fake.asked.find((a) => a.path === "/v1/stations/connect")!;
-  // Signed under both names, each its own proof.
-  assert.deepEqual(connected.verified, ["stillfail", "ember"]);
-  assert.equal(connected.headers["x-stillfail-version"], connected.headers["x-ember-version"]);
+  // Signed under its name alone.
+  assert.deepEqual(connected.verified, ["stillfail"]);
+  assert.equal(connected.headers["x-ember-version"], undefined);
   assert.equal(state.state!.gateway_keys, undefined);
 
   await Effect.runPromise(plane.notify([{ email: "a@x", title: "t", body: "b" } as any]));
   const notified = fake.asked.find((a) => a.path === "/v1/stations/notify")!;
-  assert.deepEqual(notified.verified, ["ember-station-notify-v1", "ember:ember-station-notify-v1"]);
+  assert.deepEqual(notified.verified, ["stillfail-station-notify-v1"]);
   assert.deepEqual(JSON.parse(notified.body.toString()), { notices: [{ email: "a@x", title: "t", body: "b" }] });
 
   await Effect.runPromise(plane.traces([{ name: "span" }]));
   const traced = fake.asked.find((a) => a.path === "/v1/telemetry/traces")!;
-  assert.deepEqual(traced.verified, ["stillfail-station-telemetry-v1", "ember:ember-station-telemetry-v1"]);
+  assert.deepEqual(traced.verified, ["stillfail-station-telemetry-v1"]);
   assert.equal(JSON.parse(traced.body.toString()).resourceSpans[0].resource.attributes[1].value.stringValue, key.id);
 
   assert.equal(plane.releaseBase(), origin);
@@ -113,7 +126,7 @@ test("Comma: enrollment, presence with gateways, notices, no traces, releases un
   assert.deepEqual(file.gateway_keys, [gateway]);
   assert.equal(state.provider(), "comma");
 
-  await until(() => state.peersCurrent);
+  await until(() => state.reached);
   const connected = fake.asked.find((a) => a.path === "/v1/comma/stations/connect")!;
   assert.deepEqual(connected.verified, ["comma"]);
   assert.equal(connected.headers["x-ember-signature"], undefined, "Comma is sent the still.fail headers only");
@@ -166,6 +179,7 @@ test("each provider's credentials are taken only where it is the control plane",
 
 test("a viewer reads and keeps their own marks, and changes nothing else", () => {
   assert.ok(readOnlyMay({ method: "GET", path: "/chats" }));
+  for (const path of ["/screens/desktop/views/end", "/screens/desktop/views/v1/end", "/screens/desktop/views/v1/watch"]) assert.equal(readOnlyMay({ method: "POST", path }), false, path);
   assert.ok(readOnlyMay({ method: "GET", path: "/events" }));
   assert.ok(readOnlyMay({ method: "PUT", path: "/threads/3/read" }));
   // A list read with what the client holds.
@@ -177,4 +191,15 @@ test("a viewer reads and keeps their own marks, and changes nothing else", () =>
   assert.ok(!readOnlyMay({ method: "PUT", path: "/threads/3/title" }));
   assert.ok(!readOnlyMay({ method: "PUT", path: "/tools/access" }));
   assert.ok(!readOnlyMay({ method: "DELETE", path: "/sessions/k" }));
+});
+
+test("a presence socket no address of the cloud took says each address's error, not an empty one", () => {
+  // As Node fails a connect when every address it tried failed (autoSelectFamily): an AggregateError with no message.
+  const all = Object.assign(new AggregateError([
+    Object.assign(new Error("connect ETIMEDOUT 104.21.0.1:443"), { code: "ETIMEDOUT" }),
+    Object.assign(new Error("connect EHOSTUNREACH 2606:4700::1:443"), { code: "EHOSTUNREACH" }),
+  ]), { code: "ETIMEDOUT" });
+  assert.equal(all.message, "");
+  assert.equal(failureText(all), "connect ETIMEDOUT 104.21.0.1:443; connect EHOSTUNREACH 2606:4700::1:443");
+  assert.equal(failureText(new Error("still.fail cloud answered 502")), "still.fail cloud answered 502");
 });

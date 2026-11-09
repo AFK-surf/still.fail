@@ -1,4 +1,4 @@
-// Picking a passage of a message where it is, in its chat, as both frames do it. With a finger (ember apps/android
+// Picking a passage of a message where it is, in its chat, as both frames do it. With a finger (still.fail apps/android
 // chat/screens/MessagePick.kt, ui/Pick.kt; web mobile/pick.tsx): held still on its words it picks the word under it
 // and, sliding on, widens it by words (the list holds still meanwhile); lifted, the passage has handles at its ends to
 // move, and a bar over it to quote it into the chat's draft, copy it, or take all of the message; a tap anywhere else
@@ -16,6 +16,8 @@
 pub(all) struct ChatPick {
   /// the message picked from ("" none)
   mut ts : String
+  /// the message to quote, when its picking identity is not its station timestamp ("" means not there yet)
+  mut source_ts : String?
   mut author : String
   mut role : String
   mut share : (() -> Unit)?
@@ -25,7 +27,13 @@ pub(all) struct ChatPick {
 }
 
 ///|
-pub let pk : ChatPick = { ts: "", author: "", role: "", share: None, link: "", sel: @kit.Pick::new(), taken_at: -1 }
+pub let pk : ChatPick = { ts: "", source_ts: None, author: "", role: "", share: None, link: "", sel: @kit.Pick::new(), taken_at: -1 }
+
+///|
+/// The moment the passage picked was picked anew (-1 none): its bar comes in from then (pick_bar), shown again after a
+/// handle moved or the list let go of as it is by then, not coming in again.
+// kept across runs: put back as a test starts (pick_reset)
+let picked_at : Ref[Double] = Ref(-1.0)
 
 ///|
 /// What is picked as told (picked): one passage at a time, by an identity of its own (`serial`: a number each passage
@@ -74,20 +82,38 @@ fn pick_told_gone() -> Unit {
 }
 
 ///|
-/// A message right clicked: the frame, where, its share, link and complete text, for the window's menu. None once taken.
-pub let share_offered : Ref[(Int, Double, Double, () -> Unit, String, String)?] = Ref(None)
+/// A message right clicked: where (the right click's place, which says the right click it is: sfdesk's
+/// context_opened_at), its share, link and complete text, and its row's key, for the window's menu. None once its menu
+/// closes, or another right click elsewhere opens it. What shows the menu (built apart from the message: another old
+/// view's) follows it: told as another is offered, not as the same one is offered again (its turn's action aside).
+// kept across runs: none as a run begins (pick_reset)
+pub let share_offered : @signals.Signal[(Double, Double, () -> Unit, String, String, String)?] = @signals.signal(
+  None,
+  same=fn(a, b) {
+    match (a, b) {
+      (Some(a), Some(b)) => a.0 == b.0 && a.1 == b.1 && a.3 == b.3 && a.4 == b.4 && a.5 == b.5
+      (None, None) => true
+      _ => false
+    }
+  },
+)
 
 ///|
-/// Told as a message offers its turn (share_offered): what shows the menu, built apart from the message (another old
-/// view's), follows it.
-// kept across runs: a count told, nothing reads what it is (only that it changed)
-pub let share_offered_told : @signals.Signal[Int] = @signals.signal(0)
+/// The message whose right click's menu is open (its row's key, as share_offered says it; "" none), told by what shows
+/// that menu: its row lit meanwhile (message_menu_on).
+// kept across runs: none as a run begins (pick_reset)
+pub let message_menu : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
-/// The turn of a message right clicked offered (share_offered), told.
-fn share_offer(at : Int, x : Double, y : Double, go : () -> Unit, link : String, words : String) -> Unit {
-  share_offered.val = Some((at, x, y, go, link, words))
-  share_offered_told.set(@signals.untracked(fn() { share_offered_told.get() }) + 1)
+/// Whether message `key`'s menu is open: its right click's, or its ⋯'s (share_turn_tool).
+pub fn message_menu_on(key : String) -> Bool {
+  message_menu.get() == key || @sf.menu_shown(key + "/message-menu")
+}
+
+///|
+/// The turn of a message right clicked offered (share_offered).
+fn share_offer(x : Double, y : Double, go : () -> Unit, link : String, words : String, key : String) -> Unit {
+  share_offered.set(Some((x, y, go, link, words, key)))
 }
 
 ///|
@@ -97,7 +123,7 @@ fn share_offer(at : Int, x : Double, y : Double, go : () -> Unit, link : String,
 /// bar over its selection instead (pick_layer), not from every message's head.
 pub fn share_turn_tool(c : @ui.Ctx, key : String, row : Int, link : String, words : String, go : () -> Unit) -> Unit {
   match c.menu_asked(row) {
-    Some((x, y)) => share_offer(c.frame_number(), x, y, go, link, words)
+    Some((x, y)) => share_offer(x, y, go, link, words, key)
     None => ()
   }
   let menu = key + "/message-menu"
@@ -117,9 +143,7 @@ fn message_items(link : String, words : String, go : () -> Unit) -> Array[@sf.Me
     items.push(
       Some(
         @sf.menu_item_of(@sf.t("web-main.chat.copyMessage"), icon="copy", fn() {
-          let c = @ui.current()
-          c.copy_text(words)
-          say(c, @sf.t("common.copied"))
+          copy_out(words, said=@sf.t("common.copied"))
         }),
       ),
     )
@@ -128,16 +152,14 @@ fn message_items(link : String, words : String, go : () -> Unit) -> Array[@sf.Me
     items.push(
       Some(
         @sf.menu_item_of(@sf.t("web-main.chat.copyMessageLink"), icon="link", fn() {
-          let c = @ui.current()
-          c.copy_text(link)
-          say(c, @sf.t("common.link.copied"))
+          copy_out(link, said=@sf.t("common.link.copied"))
         }),
       ),
     )
   }
   items.push(
     Some(
-      @sf.menu_item_of(@sf.t("web-main.chat.shareTurn"), icon="photo", fn() {
+      @sf.menu_item_of(@sf.t("web-main.chat.selectMessages"), icon="check-circle", fn() {
         pick_clear()
         go()
       }),
@@ -170,13 +192,16 @@ pub fn pick_told_given() -> Unit {
 /// As at the start (tests): nothing picked, no press remembered.
 pub fn pick_reset() -> Unit {
   pick_clear()
+  pk.source_ts = None
   pk.author = ""
   pk.role = ""
   pk.share = None
   pk.link = ""
-  share_offered.val = None
+  share_offered.set(None)
+  message_menu.set("")
   pk.taken_at = -1
   pk.sel.reset()
+  picked_at.val = -1.0
   picked.set(picked_none)
   pick_mouse_made.val = -1
   // (the press last felt, by its frame: a Tester's frames count from 0 again, and a press another test's pick was felt
@@ -192,7 +217,7 @@ pub fn mouse_picks() -> Bool {
 }
 
 ///|
-/// A message's words to be picked from (MessagePick.kt messagePick), round what draws them (`body`): its ts, who said
+/// A message's words to be picked from, round what draws them (`body`): its ts, who said
 /// it and as what, its words; `fill`, as wide as its column (else as its words: the viewer's bubble). With a mouse
 /// (`mouse`), what of it the page's selection holds is told the pill, and a right click on it offers its turn shared
 /// (`share`, where it is given: share_offered); held with a finger, its bar shares its turn and copies `link` too
@@ -213,14 +238,20 @@ pub fn pickable(
   share? : (() -> Unit)? = None,
   link? : String = "",
   lit? : (Int, Int, Int64)? = None,
+  source_ts? : String? = None,
 ) -> Unit {
   let key = "pick/" + ts
   let id = c.id(key)
   // Its ground takes presses for picking; a finger's tap does not leave the field being written in.
   c.cursor(id, Arrow)
   let press = c.press()
-  if mouse && c.clicked(id) && !press.long {
-    c.blur()
+  if mouse {
+    // (a click, not a hold: the field written in let go)
+    c.on_press(id, fn() {
+      if !press.long {
+        c.blur()
+      }
+    })
   } else {
     c.takes_presses(id)
   }
@@ -235,6 +266,12 @@ pub fn pickable(
   // its words kept as laid out while a press is in it or a passage of it is picked (what the hold and the handles
   // ask), or what is marked in it asks
   if pk.ts == ts {
+    // The same outgoing row can acquire a station message while its words are picked.
+    if pk.source_ts != source_ts || pk.link != link {
+      pk.source_ts = source_ts
+      pk.share = share
+      pk.link = link
+    }
     c.words(box, key, a=pk.sel.a, b=pk.sel.b, color=@sf.alpha(@sf.theme().p.accent, picked_alpha))
   } else if lit is Some((a, b, color)) {
     // (round at the passage's two ends, square where it runs on to the next line)
@@ -254,6 +291,7 @@ pub fn pickable(
             let anew = pk.ts != ts || c.selection_made() != pick_mouse_made.val
             pick_mouse_made.val = c.selection_made()
             pk.ts = ts
+            pk.source_ts = source_ts
             pk.author = author
             pk.role = role
             pk.share = share
@@ -268,11 +306,12 @@ pub fn pickable(
       None => ()
     }
     // right clicked: its turn offered the window's right click menu (sfdesk's context_menu.mbt); not where something
-    // in it has a menu of its own (a file's: the innermost asker's, Ctx::menu_asked)
+    // in it has a menu of its own (a file's: the innermost asker's, Ctx::menu_asked); its row's key the message's
+    // (others_message's "m:" and its ts)
     match share {
       Some(go) =>
         match c.menu_asked(id) {
-          Some((x, y)) => share_offer(c.frame_number(), x, y, go, link, words)
+          Some((x, y)) => share_offer(x, y, go, link, words, "m:" + ts)
           None => ()
         }
       None => ()
@@ -288,12 +327,16 @@ pub fn pickable(
     words.trim(chars=" \n\t") != ""
   if pk.sel.hold(c, key, id, may~) {
     pk.ts = ts
+    picked_at.val = c.moment()
+    pk.source_ts = source_ts
     pk.author = author
     pk.role = role
     pk.share = share
     pk.link = link
-    // (picked anew, its metadata said first: told once)
+    // (picked anew, its metadata said first: told once); what a finger held elsewhere picked let go (@ui's: one thing
+    // picked at a time)
     pick_told_new(ts, pk.sel.a, pk.sel.b)
+    c.selection_clear()
     // the press is the pick's: the list holds still, lifting it taps nothing
     c.take_press()
     let at = press.frame
@@ -319,7 +362,7 @@ pub let picked_alpha : Double = 0.26
 let pick_felt : Ref[Int] = Ref(-1)
 
 ///|
-/// Over list `list` (MessagePick.kt PickLayer): the picked passage's handles and its bar (over it; under it when the
+/// Over list `list`: the picked passage's handles and its bar (over it; under it when the
 /// bar over the list is too near: `top`, where the list's bar ends; `foot`, what is kept clear at its foot), the bar
 /// gone while the list moves or the passage is being changed; with a mouse (`mouse`), the pill. A tap anywhere else
 /// lets go of it, as back does. Quoted: `quote` told whose words, the words, their message and its role. After what
@@ -338,6 +381,11 @@ pub fn pick_layer(
     return
   }
   if pk.ts == "" {
+    return
+  }
+  // (words held elsewhere since, picked as @ui picks them: this let go, one thing picked at a time)
+  if c.selection_by_finger() {
+    pick_clear()
     return
   }
   let words = match c.words_of(pk.sel.key) {
@@ -363,36 +411,35 @@ pub fn pick_layer(
   let link = c.id("pick/link")
   let ends = [c.id("pick/start"), c.id("pick/end")]
   // the bar's buttons
-  if c.clicked(quote_id) {
+  c.on_press(quote_id, fn() {
     let text = words.slice(pk.sel.a, pk.sel.b).trim(chars=" \n\t").to_string()
     if text != "" {
-      quote(pk.author, text, pk.ts, pk.role)
+      quote(pk.author, text, pk.source_ts.unwrap_or(pk.ts), pk.role)
     }
     pick_clear()
-    return
-  }
-  if c.clicked(copy) {
+  })
+  c.on_press(copy, fn() {
     c.copy_text(words.slice(pk.sel.a, pk.sel.b))
     say(c, @sf.t("android-chat.annotate.copied"))
     pick_clear()
-    return
-  }
-  if c.clicked(all) {
+  })
+  c.on_press(all, fn() {
     pk.sel.all(words)
-  }
+  })
   match pk.share {
-    Some(go) if c.clicked(share) => {
-      pick_clear()
-      go()
-      return
-    }
-    _ => ()
+    Some(go) =>
+      c.on_press(share, fn() {
+        pick_clear()
+        go()
+      })
+    None => ()
   }
-  if pk.link != "" && c.clicked(link) {
-    c.copy_text(pk.link)
-    say(c, @sf.t("common.link.copied"))
-    pick_clear()
-    return
+  if pk.link != "" {
+    c.on_press(link, fn() {
+      c.copy_text(pk.link)
+      say(c, @sf.t("common.link.copied"))
+      pick_clear()
+    })
   }
   let first = lines[0]
   let last = lines[lines.length() - 1]
@@ -488,7 +535,7 @@ pub fn pick_layer(
               c.box(style=pick_bar_rule, fn() {  }) |> ignore
             }
             if pk.share is Some(_) {
-              mark(share, @sf.t("web-main.chat.shareTurn"), "photo")
+              mark(share, @sf.t("web-main.chat.selectMessages"), "check-circle")
             }
             if pk.link != "" {
               mark(link, @sf.t("common.link.copy"), "link")
@@ -497,7 +544,7 @@ pub fn pick_layer(
         )
         // coming as a small panel does (@kit.pop_in), each passage picked anew; a handle moved, or the list let go of,
         // it is where it is
-        match @motion.presence(c, "pick/bar/\{pk.ts}/\{pk.taken_at}", true, enter=@kit.pop_in, initial=true) {
+        match @motion.presence(c, "pick/bar/\{pk.ts}/\{pk.taken_at}", true, enter=@kit.pop_in, initial=true, start_at?=if picked_at.val >= 0.0 { Some(picked_at.val) } else { None }) {
           Some(l) => c.look(b, l)
           None => ()
         }
@@ -510,7 +557,7 @@ pub fn pick_layer(
 }
 
 ///|
-/// What the mouse picked in a message (Chat.tsx useSelectionQuote, Chat.css.ts quotePop): once it is let go, a small
+/// What the mouse picked in a message (Chat.tsx useSelectionQuote): once it is let go, a small
 /// dark pill 8 over where the pointer let it go (Ctx::selection_end: the end it dragged, on its line), 引用 with its
 /// mark, quoting it (whose words they are, as the message says: pickable). ⌘C copies it (Ctx::selectable); a press
 /// elsewhere lets it go.
@@ -526,16 +573,15 @@ fn pick_pop(c : @ui.Ctx, quote : (String, String, String, String) -> Unit) -> Un
     }
   }
   let pop = c.id("pick/pop")
-  if c.clicked(pop) {
+  c.on_press(pop, fn() {
     let text = c.selected_text().trim(chars=" \n\t").to_string()
     if text != "" {
-      quote(pk.author, text, pk.ts, pk.role)
+      quote(pk.author, text, pk.source_ts.unwrap_or(pk.ts), pk.role)
     }
     c.selection_clear()
     pk.ts = ""
     pick_told_gone()
-    return
-  }
+  })
   // (pressed, what is picked stays picked: it is what is quoted)
   c.keeps_selection(pop)
   // (where the layer it is in starts in the window, as this frame lays it out: what is picked is said in the window's)
@@ -587,7 +633,7 @@ let pick_line : @ui.Style = @ui.css("w=S0_5 bg=Accent")
 let pick_knob : @ui.Style = @ui.css("w=S3 h=S3 radius=Full bg=Accent")
 
 ///|
-/// The bar (MessagePick.kt PickBar): in the middle of its row, 40 high, 4 in, round, raised on its line and shadow;
+/// The bar: in the middle of its row, 40 high, 4 in, round, raised on its line and shadow;
 /// its buttons 32 high, 12 in, their mark 5 before their words (14, the ink).
 // kept across runs: a value (no field of it changes)
 let pick_bar_row : @ui.Style = @ui.css("row w=Full justify=JCenter")
@@ -666,7 +712,7 @@ let pick_pop_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-/// Pointed at: a step towards the page, as every solid ground (docs/ui-panels.md 悬停).
+/// Pointed at: a step towards the page, as every solid ground (mbui ui/hand_moves.mbt).
 // kept across runs: a value (no field of it changes)
 let pick_pop_hot : @ui.Style = pick_pop_box.then(@ui.css("bg=Over(Primary, A(Bg, O15))"))
 

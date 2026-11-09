@@ -58,7 +58,7 @@ fn landing_error_node(body : @view.View, words : () -> String) -> Unit {
 /// The landing's words, `size` as the window's theme has it and on its own line, `weight`, wrapping.
 fn landing_words(size : @ui.TextSize, weight : Int) -> @view.WordsLook {
   let (px, line) = @ui.tree_theme().text_size(size)
-  { size: px, weight, line, wrap: true }
+  { size: px, weight, line, wrap: true, tracking: @view.letters_own, balance: false }
 }
 
 ///|
@@ -164,14 +164,14 @@ fn landing_column(b : @view.View) -> Unit {
 }
 
 ///|
-/// An invitation in `row` (landing_page_of's card): on the surface, 20 in, its name and who sent it to whom as what, its
+/// An invitation in `row` (landing_page_of's card): on the surface, a card's words in (card_pad), its name and who sent it to whom as what, its
 /// 加入 across its foot (in its foot corners, concentric with its corner: @sf.card_foot_in), 12 apart; joined as it is
 /// pressed, one at a time.
 fn invitation_node(row : @view.View, src : Source, p : () -> (Json?, Json)) -> Unit {
   let th = fn() { @ui.tree_theme() }
   let button_h = @sf.button_height()
   let foot_in = @sf.card_foot_in(button_h)
-  let card_in = @ui.Space::px(S5)
+  let card_in = @sf.card_pad
   row
   .width_share(Is(1.0))
   .padding(Is((0.0, card_in, 0.0, foot_in)))
@@ -221,7 +221,7 @@ fn invitation_node(row : @view.View, src : Source, p : () -> (Json?, Json)) -> U
       b,
       fn() { @sf.t("android-misc.invite.join") },
       fn() {
-        if @signals.untracked(fn() { landing.accepting.get() }) == "" {
+        if landing.accepting.untracked() == "" {
           let (account, _) = @signals.untracked(p)
           accept_invitation(src, account, @signals.untracked(id))
         }

@@ -1,4 +1,4 @@
-// What a viewer (reader.mbt, player.mbt) opens: a file as the page has it (web/ui viewer/file.ts). One of a station's
+// What a viewer (reader.mbt, player.mbt) opens: a file as the page has it. One of a station's
 // drive (the app's: read a part at a time, played as it comes, where it was left kept), or one here already (`bytes`:
 // a chat's file its preview has read, blob_file).
 
@@ -10,7 +10,7 @@ pub(all) struct Got {
 }
 
 ///|
-/// Where it was left on this device (file.ts usePlace): not known yet, never opened, or at `at` (a text's offset, a
+/// Where it was left on this device: not known yet, never opened, or at `at` (a text's offset, a
 /// film's time in ms) of `of` (0: not said).
 pub(all) enum PlaceNow {
   NotKnown
@@ -76,7 +76,7 @@ pub(all) struct FileFacts {
 pub let no_facts : FileFacts = { width: 0.0, height: 0.0, duration: 0.0, frames: 0 }
 
 ///|
-/// A file here already (a chat's, read by its preview): nothing kept of where it was left (file.ts blobFile).
+/// A file here already (a chat's, read by its preview): nothing kept of where it was left.
 pub fn blob_file(
   bytes : Bytes,
   name : String,

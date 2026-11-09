@@ -69,9 +69,9 @@ test "panel centred a share of the window tall, 大屏 keyboard and mouse: a col
     let h = if kind.has_suffix("500") { 500.0 } else { 800.0 }
     let t = menu_tester(1280.0, h, 0)
     let foot = fn(c : @ui.Ctx, close : () -> Unit) {
-      if @sf.button(c, "好的", key="ok34", tone=Primary) {
+      @sf.button(c, "好的", key="ok34", tone=Primary, on_press=fn() {
         close()
-      }
+      }) |> ignore
     }
     let rows = @signals.signal(if kind.has_prefix("many") || kind.has_prefix("says") || kind.has_prefix("deep") { 60 } else { 3 })
     match kind {
@@ -97,16 +97,16 @@ test "panel centred a share of the window tall, 大屏 keyboard and mouse: a col
   // (as main has it: drawn by the old frame, the same test, before this)
   assert_eq((out, drawn), (
     [
-      "column 800: dialog (380, 173.7, 520, 452.5) row0 [(424, 248.7, 432, 22)] last between Some(第13行) ok Some((826.5, 576.7, 58, 34)) | wheel: row0 [(424, 128.7, 432, 22)] | end: [true]",
-      "column 500: dialog (380, 98.7, 520, 302.5) row0 [(424, 173.7, 432, 22)] last between Some(第7行) ok Some((826.5, 351.7, 58, 34)) | wheel: row0 [(424, 53.7, 432, 22)] | end: [true]",
-      "few 800: dialog (380, 292.7, 520, 214.5) row0 [(414, 367.7, 452, 22)] last between Some(第2行) ok Some((826.5, 457.7, 58, 34)) | wheel: row0 [(414, 367.7, 452, 22)] | end: [true]",
-      "many 800: dialog (380, 53.7, 520, 692.5) row0 [(414, 128.7, 452, 22)] last between Some(第24行) ok Some((826.5, 696.7, 58, 34)) | wheel: row0 [] | end: [true]",
-      "many 500: dialog (380, 24, 520, 452) row0 [(414, 99, 452, 22)] last between Some(第13行) ok Some((826.5, 426.5, 58, 34)) | wheel: row0 [] | end: [true]",
-      "deep 500: dialog (380, 24, 520, 452) row0 [(414, 99, 452, 22)] last between Some(第13行) ok Some((826.5, 426.5, 58, 34)) | wheel: row0 [] | end: [true]",
-      "says 800: dialog (380, 40.7, 520, 718.5) row0 [(414, 141.7, 452, 22)] last between Some(第24行) ok Some((826.5, 709.7, 58, 34)) | wheel: row0 [] | end: [true]",
-      "grown 800: dialog (380, 292.7, 520, 214.5) row0 [(414, 367.7, 452, 22)] last between Some(第2行) ok Some((826.5, 457.7, 58, 34)) | wheel: row0 [(414, 367.7, 452, 22)] | end: [true]",
-      "grown 800 to 60: dialog (380, 53.7, 520, 692.5) row0 [(414, 128.7, 452, 22)] last between Some(第24行) ok Some((826.5, 696.7, 58, 34)) | wheel: row0 [] | end: [true]",
-      "grown 800 to 5: dialog (380, 53.7, 520, 692.5) row0 [(414, 128.7, 452, 22)] last between Some(第4行) ok Some((826.5, 696.7, 58, 34)) | wheel: row0 [(414, 128.7, 452, 22)] | end: [true]",
+      "column 800: dialog (380, 168.5, 520, 463) row0 [(414, 243.5, 452, 22)] last between Some(第13行) ok Some((818, 571.5, 58, 36)) | wheel: row0 [(414, 123.5, 452, 22)] | end: [true]",
+      "column 500: dialog (380, 93.5, 520, 313) row0 [(414, 168.5, 452, 22)] last between Some(第7行) ok Some((818, 346.5, 58, 36)) | wheel: row0 [(414, 48.5, 452, 22)] | end: [true]",
+      "few 800: dialog (380, 287.5, 520, 225) row0 [(406, 362.5, 468, 22)] last between Some(第2行) ok Some((818, 452.5, 58, 36)) | wheel: row0 [(406, 362.5, 468, 22)] | end: [true]",
+      "many 800: dialog (380, 48.5, 520, 703) row0 [(406, 123.5, 468, 22)] last between Some(第24行) ok Some((818, 691.5, 58, 36)) | wheel: row0 [] | end: [true]",
+      "many 500: dialog (380, 24, 520, 452) row0 [(406, 99, 468, 22)] last between Some(第13行) ok Some((818, 416, 58, 36)) | wheel: row0 [] | end: [true]",
+      "deep 500: dialog (380, 24, 520, 452) row0 [(406, 99, 468, 22)] last between Some(第13行) ok Some((818, 416, 58, 36)) | wheel: row0 [] | end: [true]",
+      "says 800: dialog (380, 35.5, 520, 729) row0 [(406, 136.5, 468, 22)] last between Some(第24行) ok Some((818, 704.5, 58, 36)) | wheel: row0 [] | end: [true]",
+      "grown 800: dialog (380, 287.5, 520, 225) row0 [(406, 362.5, 468, 22)] last between Some(第2行) ok Some((818, 452.5, 58, 36)) | wheel: row0 [(406, 362.5, 468, 22)] | end: [true]",
+      "grown 800 to 60: dialog (380, 48.5, 520, 703) row0 [(406, 123.5, 468, 22)] last between Some(第24行) ok Some((818, 691.5, 58, 36)) | wheel: row0 [] | end: [true]",
+      "grown 800 to 5: dialog (380, 48.5, 520, 703) row0 [(406, 123.5, 468, 22)] last between Some(第4行) ok Some((818, 691.5, 58, 36)) | wheel: row0 [(406, 123.5, 468, 22)] | end: [true]",
     ],
     [true, true, true, true, true, true, true, true],
   ))

@@ -1,4 +1,4 @@
-// The remote screen's stage (ember apps/android app/remote/ScreenViewer.kt Stage, Over, Ended, Drops, Pointer and the
+// The remote screen's stage (still.fail apps/android app/remote/ScreenViewer.kt Stage, Over, Ended, Drops, Pointer and the
 // gestures): the frame fitted and zoomed, its pointer; how the view is, and the files sent, over it; what a finger does
 // on it.
 
@@ -26,7 +26,12 @@ let screen_over_blur : Double = 28.0 * 0.57735 + 0.5
 /// The stage's view of a frame: where it is fitted, and drawn (zoomed).
 fn ScreenUi::fit(self : ScreenUi) -> SRect {
   match self.fit_for {
-    Some((w, h)) => fit_in(self.box_w, self.box_h, w.to_double(), h.to_double())
+    Some((w, h)) =>
+      cased_in(
+        fit_in(self.box_w.get(), self.box_h.get(), w.to_double() * (1.0 + 2.0 * self.case_x), h.to_double() * (1.0 + 2.0 * self.case_y)),
+        self.case_x,
+        self.case_y,
+      )
     None => srect_zero
   }
 }
@@ -128,45 +133,57 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
     None => if over { Some((16, 10)) } else { None }
   }
   if over && !u.over_seen {
-    u.zoom.fit_now()
+    u.zoom.fit_now(at=c.moment())
   }
   u.over_seen = over
   // another size of frame: fitted again
   if size != u.fit_for {
-    u.zoom.fit_now()
+    u.zoom.fit_now(at=c.moment())
   }
   let stage = c.id("screen-stage/" + key)
   match c.laid_size(stage) {
-    Some((bw, bh)) if bw != u.box_w || bh != u.box_h => {
-      if u.box_w > 0.0 && u.box_h > 0.0 && size == u.fit_for && size is Some(_) {
+    Some((bw, bh)) if bw != u.box_w.get() || bh != u.box_h.get() => {
+      if u.box_w.get() > 0.0 && u.box_h.get() > 0.0 && size == u.fit_for && size is Some(_) {
         // Turned, or a fitted view given a new width by the system column: fit again.
         // Height alone (the keyboard) keeps the picture and pointer as before.
-        if (u.box_w > u.box_h) != (bw > bh) || (bw != u.box_w && u.zoom.fitted) {
-          u.zoom.fit_now()
+        // (a device's page gives the stage's height to what comes as its state does, its poses: its picture fitted to what
+        // is left, or it would be taken for zoomed in, its body gone)
+        if (u.box_w.get() > u.box_h.get()) != (bw > bh) || (u.zoom.fitted && (bw != u.box_w.get() || s.simulator())) {
+          u.zoom.fit_now(at=c.moment())
         } else {
-          u.zoom.resize_keeping(bw, bh, pointer_now(s, u), screen_keep_margin)
+          u.zoom.resize_keeping(bw, bh, pointer_now(s, u), screen_keep_margin, when=c.moment())
         }
       }
-      u.box_w = bw
-      u.box_h = bh
+      u.box_w.set(bw)
+      u.box_h.set(bh)
     }
     _ => ()
   }
   u.fit_for = size
+  // a device's case round its picture, as much as it has at its widest on each side (what the zoom fits is the picture and that)
+  let cased = device_case(c, s, size)
+  let (case_x, case_y) = match cased {
+    Some(k) => k.around()
+    None => (0.0, 0.0)
+  }
+  u.case_x = case_x
+  u.case_y = case_y
   // the zoom's frame and stage as they are now (fitted, fitted to them)
   match size {
-    Some((w, h)) => u.zoom.natural(w.to_double(), h.to_double())
-    None => u.zoom.natural(0.0, 0.0)
+    Some((w, h)) => u.zoom.natural(w.to_double() * (1.0 + 2.0 * case_x), h.to_double() * (1.0 + 2.0 * case_y), at=c.moment())
+    None => u.zoom.natural(0.0, 0.0, at=c.moment())
   }
-  u.zoom.boxed(u.box_w, u.box_h)
+  // (a device's page keeps some of it for what the device has itself: debug_room)
+  let (room_w, room_h) = debug_room(u, size, cased)
+  u.zoom.boxed(dmax(0.0, u.box_w.get() - room_w), dmax(0.0, u.box_h.get() - room_h), at=c.moment())
   // where a double tap's glide has got to
-  u.zoom.step()
+  u.zoom.step(c)
   let fit = u.fit()
   // zoomed in, the part of the screen in sight told the core, in this device's pixels (the whole once it is not)
   let scale = c.scale
   c.after_build("screen-look/" + key, fn() {
-    let part = u.in_sight()
-    let shown = u.shown()
+    let part = u.in_sight(c)
+    let shown = u.shown(c)
     let (w, h) = match part {
       Some(p) => (p.w * shown.w * scale, p.h * shown.h * scale)
       None => (0.0, 0.0)
@@ -190,9 +207,10 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
   if u.mouse.over {
     c.cursor(stage, cursor_of_shape(text(field(s.state, "cursor"), "shape")))
   }
-  c.box(style=stage_box, id=stage, fn() {
+  let in_body = s.simulator() && !u.zoom.zoomed(c)
+  c.box(style=if in_body { stage_box_body } else if u.in_tab { stage_box_in_panel } else { stage_box }, id=stage, fn() {
     if size is Some(_) && fit.w > 0.0 {
-      let shown = u.shown()
+      let shown = u.shown(c)
       // on its way back, as it was, faded; over (ended, gone…), blurred under the dark it has gone to
       let still = phase != "live" && s.shown_any
       c.layer(fn() {
@@ -231,6 +249,11 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
         |> ignore
       })
       |> ignore
+      match cased {
+        Some(k) => if !u.zoom.zoomed(c) { device_cased(c, s, u, k, shown) }
+        None => device_round(c, s, u, shown)
+      }
+      debug_by_device(c, s, u, shown, size, cased)
       if over {
         // the screen gone dark in its place (its last frame showing through, blurred), what happened said there
         c.layer(fn() {
@@ -286,7 +309,10 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
     c.layer(fn() {
       c.box(style=stage_foot, fn() {
         c.box(style=stage_foot_column, fn() {
-          drops(c, s)
+          // (beside the device they are at the foot of what is done with it: nothing over the app being debugged)
+          if !(u.logs.beside && u.logs.shown) {
+            drops(c, s)
+          }
           login_fill(c, s)
           passkey_sign(c, s)
           match s.undriven() {
@@ -310,7 +336,7 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
 
 ///|
 /// How the view is on its way, or back on its way (over, `ended` says it in the screen's place): in the pill every
-/// wait is said in (Waiting.kt WaitPill), floating over the frame (kept as it was) or the empty stage; said once it
+/// wait is said in, floating over the frame (kept as it was) or the empty stage; said once it
 /// has been waited on a moment (LATER_MS).
 fn screen_waiting(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
   let words = match phase {
@@ -348,19 +374,23 @@ fn screen_ended(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
     // denied for a grant the station lacks (macOS's): its station's page where it is asked for (设置's 权限), a tap
     // away rather than looked for
     let access = field(s.state, "access")
-    let granting = phase == "denied" &&
+    let os = screen_os(s.src, s.station).to_lower()
+    let granting = !os.has_prefix("linux") && phase == "denied" &&
       (field(access, "capture") == Some(Json::boolean(false)) || field(access, "control") == Some(Json::boolean(false)))
+    let linux_setup = os.has_prefix("linux") && text(access, "help") == "linux-desktop"
     // a light capsule on the dark either way: the solid one in the dark theme, the soft one in the light
     if phase == "ended" || phase == "denied" || phase == "failed" {
       c.box(style=ended_keys, flow=true, line_gap=@ui.Space::S2.px(), fn() {
-        if again_key(c, "screen-again/" + s.view, @sf.t("web-pages.screen.again")) {
-          c.tell("screen-again/" + s.view, fn() { s.open(s.src) })
+        again_key(c, "screen-again/" + s.view, @sf.t("web-pages.screen.again"), on_press=fn() { s.open(s.src) })
+        if granting {
+          again_key(c, "screen-grants/" + s.view, @sf.t("web-pages.screen.toGrants"), on_press=fn() {
+            @settings.station_parts[s.station] = "settings"
+            open_page(Setting(@settings.Route::Station(s.station)))
+          })
         }
-        if granting && again_key(c, "screen-grants/" + s.view, @sf.t("web-pages.screen.toGrants")) {
-          let station = s.station
-          c.tell("screen-grants/" + s.view, fn() {
-            @settings.station_parts[station] = "settings"
-            open_page(Setting(@settings.Route::Station(station)))
+        if linux_setup {
+          again_key(c, "screen-linux-setup/" + s.view, @sf.t("web-pages.screen.linuxSetup"), on_press=fn() {
+            @ui.open_url("https://github.com/AFK-surf/still.fail/blob/main/docs/linux-desktop-setup.md") |> ignore
           })
         }
       })
@@ -371,15 +401,18 @@ fn screen_ended(c : @ui.Ctx, s : ScreenSess, phase : String) -> Unit {
 }
 
 ///|
-/// A capsule under what happened (重新打开, 前往权限设置), light on the screen's dark: whether it was pressed.
-fn again_key(c : @ui.Ctx, key : String, words : String) -> Bool {
+/// A capsule under what happened (重新打开, 前往权限设置), light on the screen's dark; `on_press` as it is pressed.
+fn again_key(c : @ui.Ctx, key : String, words : String, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let dark = c.theme().dark
   let i = c.box(style=if dark { again_solid } else { again_soft }, id~, fn() {
     c.text(words, style=if dark { again_solid_words } else { again_soft_words }) |> ignore
   })
   c.semantics(i, Button, id~, label=words, actions=[Activate])
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
@@ -412,34 +445,37 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
     // failed under them, as wide as its words (lines of their own)
     @sf.row_lines(c, fn() {
       c.box(style=drop_words, fn() { c.text(d.name.get(), style=drop_name) |> ignore }) |> ignore
-      if d.state.get() == "failed" && screen_row_key(c, "retry", "retry", @sf.t("android-misc.drive.retry")) {
-        s.retry(d)
+      if d.state.get() == "failed" {
+        screen_row_key(c, "retry", "retry", @sf.t("android-misc.drive.retry"), on_press=fn() {
+          s.retry(d)
+        })
       }
       let close = if d.state.get() == "done" || d.state.get() == "failed" {
         @sf.t("common.close")
       } else {
         @sf.t("common.cancel")
       }
-      if screen_row_key(c, "dismiss", "close", close) {
+      screen_row_key(c, "dismiss", "close", close, on_press=fn() {
         s.dismiss(d)
-      }
+      })
     }, fn() {
       match d.state.get() {
+        "done" if d.install =>
+          c.text(@sf.t("web-pages.screen.debug.installed", args=[("name", d.installed)]), style=drop_path_words) |> ignore
+        "installing" => c.text(@sf.t("web-pages.screen.debug.installGoing"), style=drop_going_words) |> ignore
         "done" => {
           c.text(d.path(), style=drop_path_words) |> ignore
           // what is done with it there goes through the view: while driving it
           if s.driving() {
             c.box(style=drop_buttons, fn() {
-              if s.pastes() && soft_button(c, "paste-path", @sf.t("android-misc.screen.pastePath")) {
-                let path = d.path()
-                c.tell("screen-paste-path/\{d.serial}", fn() {
-                  s.paste(s.src, path, screen_act(c, @sf.t("android-misc.screen.pasteWhat")))
+              if s.pastes() {
+                soft_button(c, "paste-path", @sf.t("android-misc.screen.pastePath"), on_press=fn() {
+                  s.paste(s.src, d.path(), screen_act(c, @sf.t("android-misc.screen.pasteWhat")))
                 })
               }
-              if d.reveal && soft_button(c, "reveal", @sf.t("android-misc.screen.reveal")) {
-                let path = d.path()
-                c.tell("screen-reveal/\{d.serial}", fn() {
-                  s.reveal(s.src, path, screen_act(c, @sf.t("android-misc.screen.revealWhat")))
+              if d.reveal {
+                soft_button(c, "reveal", @sf.t("android-misc.screen.reveal"), on_press=fn() {
+                  s.reveal(s.src, d.path(), screen_act(c, @sf.t("android-misc.screen.revealWhat")))
                 })
               }
             })
@@ -483,22 +519,28 @@ fn drop_row(c : @ui.Ctx, s : ScreenSess, d : ScreenDropItem) -> Unit {
 
 ///|
 /// A small round key at a row's end (34, its icon 16 muted: DriveScreen's).
-fn screen_row_key(c : @ui.Ctx, key : String, icon : String, label : String) -> Bool {
+fn screen_row_key(c : @ui.Ctx, key : String, icon : String, label : String, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let i = c.box(style=row_key_round, id~, fn() {
     @sf.icon(c, icon, size=drop_key_icon, color=c.color(Muted)) |> ignore
   })
   c.semantics(i, Button, id~, label~, actions=[Activate])
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
-/// A button that is not the main one (Controls.kt Button, primary false: the chip's ground, its words in the ink).
-fn soft_button(c : @ui.Ctx, key : String, label : String) -> Bool {
+/// A button that is not the main one (primary false: the chip's ground, its words in the ink).
+fn soft_button(c : @ui.Ctx, key : String, label : String, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let i = c.box(style=soft_button_box, id~, keep=true, fn() { c.text(label, style=soft_button_words) |> ignore })
   c.semantics(i, Button, id~, label~, actions=[Activate])
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 // ── the gestures ─────────────────────────────────────────────────────────
@@ -589,8 +631,12 @@ priv struct Gesture {
   mut tap_open : Bool
   mut tx : Double
   mut ty : Double
-  /// the frame whose pointer was last taken
-  mut frame : Int
+  /// directly, a drag: where its last move went on the picture
+  mut moved_to : (Double, Double)?
+  /// what the hand did that is to go to the screen and be felt, not yet told: kept here as it is done, so a frame
+  /// built again (which sees none of what the first build took) adds nothing and loses nothing of it
+  sent : Array[Json]
+  buzz : Array[@ui.Haptic]
 }
 
 ///|
@@ -613,12 +659,14 @@ fn gesture_new() -> Gesture {
     tap_open: false,
     tx: 0.0,
     ty: 0.0,
-    frame: -1,
+    moved_to: None,
+    sent: [],
+    buzz: [],
   }
 }
 
 ///|
-/// The stage's gestures (ScreenViewer.kt gestures). Driving it as a trackpad: one finger moves the pointer, a tap
+/// The stage's gestures. Driving it as a trackpad: one finger moves the pointer, a tap
 /// clicks where it points, tapped again and moved (or held still) it drags, two fingers tapped click the right button,
 /// two moving together scroll. Driving it directly: a tap is a click where it is (down and up, the primary button), a
 /// press held a right click, a drag a drag (down, moves, up), two fingers moving together a wheel. Either way two
@@ -633,27 +681,22 @@ fn screen_gestures(
   catcher : String,
 ) -> Unit {
   let g = u.gesture
-  let frame = c.frame_number()
-  if g.frame == frame {
-    return
-  }
-  g.frame = frame
   // a mouse is itself: the screen's pointer where it is
   if @sf.pointer_rests() {
-    screen_mouse(c, s, u, stage, catcher, frame)
+    screen_mouse(c, s, u, stage, catcher)
     return
   }
   u.mouse.over = false
-  let sent : Array[Json] = []
-  let buzz : Array[@ui.Haptic] = []
+  let sent = g.sent
+  let buzz = g.buzz
   let (ox, oy) = match c.rect_of(stage) {
     Some((x, y, _, _)) => (x, y)
     None => (u.stage_x, u.stage_y)
   }
   u.stage_x = ox
   u.stage_y = oy
-  let bw = u.box_w
-  let bh = u.box_h
+  let bw = u.box_w.get()
+  let bh = u.box_h.get()
   let frame_px = s.frame_size()
   // the double tap's wait closes after its time (what is shown does not wait for it)
   if g.tap_open && @kit.after(c, "screen-tap/\{g.taps}", true, screen_double_tap_ms, later=true) {
@@ -681,6 +724,7 @@ fn screen_gestures(
         g.two = None
         g.two_moved = false
         g.two_held = false
+        g.moved_to = None
         let near = ((g.sx - g.tx) * (g.sx - g.tx) + (g.sy - g.ty) * (g.sy - g.ty)).sqrt() <
           screen_slop * 4.0
         g.again = g.pad && g.tap_open && near
@@ -701,7 +745,7 @@ fn screen_gestures(
             g.mode = 2
           } else {
             if g.drives {
-              match screen_frame_at(g.sx, g.sy, u.shown(), false) {
+              match screen_frame_at(g.sx, g.sy, u.shown(c), false) {
                 Some(at) => {
                   sent.push(pointer_input("down", at, btn_secondary))
                   sent.push(pointer_input("up", at, btn_secondary))
@@ -720,7 +764,7 @@ fn screen_gestures(
               sent.push(pointer_input("up", u.pad.at(), btn_primary))
             }
             if !g.pad && g.mode == 1 {
-              match screen_frame_at(g.lx, g.ly, u.shown(), true) {
+              match screen_frame_at(g.lx, g.ly, u.shown(c), true) {
                 Some(at) => sent.push(pointer_input("up", at, btn_primary))
                 None => ()
               }
@@ -741,18 +785,21 @@ fn screen_gestures(
                       g.mode = 1
                     }
                   } else if g.drives {
-                    match screen_frame_at(g.sx, g.sy, u.shown(), false) {
+                    match screen_frame_at(g.sx, g.sy, u.shown(c), false) {
                       Some(at) => {
                         sent.push(pointer_input("down", at, btn_primary))
                         g.mode = 1
-                        match screen_frame_at(x, y, u.shown(), true) {
-                          Some(at2) => sent.push(pointer_input("move", at2, btn_primary))
+                        match screen_frame_at(x, y, u.shown(c), true) {
+                          Some(at2) => {
+                            g.moved_to = Some(at2)
+                            sent.push(pointer_input("move", at2, btn_primary))
+                          }
                           None => ()
                         }
                       }
                       None => g.mode = 4
                     }
-                  } else if u.zoom.zoomed() {
+                  } else if u.zoom.zoomed(c) {
                     g.mode = 2
                   } else {
                     g.mode = 4
@@ -762,7 +809,7 @@ fn screen_gestures(
               1 | 2 if g.pad => {
                 let dx = x - g.lx
                 let dy = y - g.ly
-                let shown = u.shown()
+                let shown = u.shown(c)
                 if shown.w > 0.0 && (dx != 0.0 || dy != 0.0) {
                   let dt = dmax(1.0, c.frame_dt())
                   let gain = pad_gain((dx * dx + dy * dy).sqrt() / dt)
@@ -778,17 +825,21 @@ fn screen_gestures(
                       },
                     ),
                   )
-                  if u.zoom.zoomed() {
-                    u.zoom.keep(u.pad.at(), screen_keep_margin)
+                  if u.zoom.zoomed(c) {
+                    u.zoom.keep(u.pad.at(), screen_keep_margin, when=c.moment())
                   }
                 }
               }
+              // (where it is on the picture, once each: held still, no move again)
               1 =>
-                match screen_frame_at(x, y, u.shown(), true) {
-                  Some(at) => sent.push(pointer_input("move", at, btn_primary))
-                  None => ()
+                match screen_frame_at(x, y, u.shown(c), true) {
+                  Some(at) if g.moved_to != Some(at) => {
+                    g.moved_to = Some(at)
+                    sent.push(pointer_input("move", at, btn_primary))
+                  }
+                  _ => ()
                 }
-              2 => if fit.w > 0.0 { u.zoom.pan(x - g.lx, y - g.ly) }
+              2 => if fit.w > 0.0 { u.zoom.pan(x - g.lx, y - g.ly, at=c.moment()) }
               3 =>
                 match (g.two, second) {
                   (Some(t), Some((bx, by))) => {
@@ -799,20 +850,20 @@ fn screen_gestures(
                     if t.kind == 1 {
                       let k = if t.spread_was > 0.0 { sp / t.spread_was } else { 1.0 }
                       if fit.w > 0.0 {
-                        u.zoom.transform(cx, cy, k, cx - t.fx, cy - t.fy)
+                        u.zoom.transform(cx, cy, k, cx - t.fx, cy - t.fy, at=c.moment())
                       }
                     } else if t.kind == 2 {
                       if g.pad {
-                        scroll_by(sent, cx - t.fx, cy - t.fy, u.pad.at(), u.shown(), frame_px)
+                        scroll_by(sent, cx - t.fx, cy - t.fy, u.pad.at(), u.shown(c), frame_px)
                       } else if g.drives {
-                        match screen_frame_at(cx, cy, u.shown(), true) {
+                        match screen_frame_at(cx, cy, u.shown(c), true) {
                           Some(at) =>
-                            scroll_by(sent, cx - t.fx, cy - t.fy, at, u.shown(), frame_px)
+                            scroll_by(sent, cx - t.fx, cy - t.fy, at, u.shown(c), frame_px)
                           None => ()
                         }
-                      } else if u.zoom.zoomed() {
+                      } else if u.zoom.zoomed(c) {
                         if fit.w > 0.0 {
-                          u.zoom.pan(cx - t.fx, cy - t.fy)
+                          u.zoom.pan(cx - t.fx, cy - t.fy, at=c.moment())
                         }
                       }
                     }
@@ -840,7 +891,7 @@ fn screen_gestures(
                 g.tx = g.sx
                 g.ty = g.sy
               } else if g.drives {
-                match screen_frame_at(g.sx, g.sy, u.shown(), false) {
+                match screen_frame_at(g.sx, g.sy, u.shown(c), false) {
                   Some(at) => {
                     sent.push(pointer_input("down", at, btn_primary))
                     sent.push(pointer_input("up", at, btn_primary))
@@ -853,7 +904,7 @@ fn screen_gestures(
                 let near = ((g.sx - g.tx) * (g.sx - g.tx) + (g.sy - g.ty) * (g.sy - g.ty)).sqrt() <
                   screen_slop * 4.0
                 if g.tap_open && near {
-                  u.zoom.double_tap(g.sx, g.sy)
+                  u.zoom.double_tap(g.sx, g.sy, at=c.moment())
                   g.tap_open = false
                 } else {
                   g.taps += 1
@@ -863,7 +914,7 @@ fn screen_gestures(
                 }
               }
             1 if !g.pad =>
-              match screen_frame_at(g.lx, g.ly, u.shown(), true) {
+              match screen_frame_at(g.lx, g.ly, u.shown(c), true) {
                 Some(at) => sent.push(pointer_input("up", at, btn_primary))
                 None => ()
               }
@@ -884,11 +935,15 @@ fn screen_gestures(
     None => ()
   }
   if sent.length() > 0 || buzz.length() > 0 {
-    c.tell("screen-pointer/" + s.view + "/\{frame}", fn() {
-      for j in sent {
+    c.tell("screen-pointer/" + s.view, fn() {
+      let js = sent.copy()
+      let hs = buzz.copy()
+      sent.clear()
+      buzz.clear()
+      for j in js {
         s.input(s.src, j)
       }
-      for h in buzz {
+      for h in hs {
         @ui.haptic(h)
       }
     })
@@ -907,7 +962,7 @@ fn scroll_by(
   frame : (Int, Int)?,
 ) -> Unit {
   guard frame is Some((fw, _)) else { return }
-  if shown.w <= 0.0 {
+  if shown.w <= 0.0 || (dx == 0.0 && dy == 0.0) {
     return
   }
   let k = fw.to_double() / shown.w
@@ -926,22 +981,30 @@ priv struct MouseDrive {
   mut mods : Int
   mut at : (Double, Double)?
   mut over : Bool
+  /// where it last pressed on the stage, in the window's points: where typing is likeliest to go
+  mut pressed : (Double, Double)?
+  /// what it did that is to go to the screen, not yet told (as Gesture's)
+  sent : Array[Json]
 }
+
+///|
+/// How tall the caret this device's input method is told of on a screen, in points.
+let screen_ime_h : Double = 20.0
 
 ///|
 fn mouse_drive_new() -> MouseDrive {
-  { down: false, sent_down: false, mods: 0, at: None, over: false }
+  { down: false, sent_down: false, mods: 0, at: None, over: false, pressed: None, sent: [] }
 }
 
 ///|
-/// What a mouse did on the stage since the last frame, as the screen takes it (web/src/screen/input.ts, a mouse): its
+/// What a mouse did on the stage since the last frame, as the screen takes it (a mouse): its
 /// moves over the picture (the frame's last), its primary button down where it is, moved held (past the picture's
 /// edge, at its edge) and up, its secondary button a right click, its wheel (in pixels, not a pinch); with ⇧ ⌃ ⌥ ⌘
 /// held as a button goes down, their keys round it. A press on the stage, a picture's letterbox too, gives it the
 /// keyboard. Only while driving it: only looking, nothing goes.
-fn screen_mouse(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, catcher : String, frame : Int) -> Unit {
+fn screen_mouse(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, catcher : String) -> Unit {
   let m = u.mouse
-  let sent : Array[Json] = []
+  let sent = m.sent
   let send = fn(j : Json) { sent.push(j) }
   let (ox, oy) = match c.rect_of(stage) {
     Some((x, y, _, _)) => (x, y)
@@ -949,7 +1012,7 @@ fn screen_mouse(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, catcher 
   }
   u.stage_x = ox
   u.stage_y = oy
-  let shown = u.shown()
+  let shown = u.shown(c)
   let driving = s.driving()
   let on_frame = fn(x : Double, y : Double, clamp : Bool) { screen_frame_at(x - ox, y - oy, shown, clamp) }
   let move_to = fn(at : (Double, Double), buttons : Int) {
@@ -970,6 +1033,7 @@ fn screen_mouse(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, catcher 
         m.sent_down = false
         if driving {
           keys = true
+          m.pressed = Some((d.x0, d.y0))
           match on_frame(d.x0, d.y0, false) {
             Some(at) => {
               m.mods = mods_of_held(@ui.mods_held())
@@ -1041,9 +1105,14 @@ fn screen_mouse(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, stage : Int, catcher 
   if keys {
     c.catch_keys(catcher, true)
   }
+  // this device's input method by what is being typed on: where the mouse last pressed, the screen's own caret not being known here
+  let (ix, iy) = m.pressed.unwrap_or((ox + shown.x, oy + shown.y + shown.h))
+  c.key_catcher_place(catcher, ix, iy, screen_ime_h)
   if sent.length() > 0 {
-    c.tell("screen-mouse/" + s.view + "/\{frame}", fn() {
-      for j in sent {
+    c.tell("screen-mouse/" + s.view, fn() {
+      let js = sent.copy()
+      sent.clear()
+      for j in js {
         s.input(s.src, j)
       }
     })

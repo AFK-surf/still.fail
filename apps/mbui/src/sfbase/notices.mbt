@@ -1,19 +1,19 @@
-// Notifications, as still.fail's Android app has them (ember apps/android app/Notices.kt, Push.kt, App.kt,
-// MainActivity.kt; docs/notifications.md → Clients): one channel (消息), one notification per chat (its tag), a tap
+// Notifications, as still.fail's Android app has them (still.fail apps/android app/Notices.kt, Push.kt, App.kt,
+// MainActivity.kt): one channel (消息), one notification per chat (its tag), a tap
 // opening the chat at the message it is about with Back going to its chat list.
 //
 // - While the app goes on (shown, or put away where its host still runs it: a desktop's app in the notification area
 //   or minimized, @ui.app_awake, as still.fail's desktop app showed its notices with no window open): the notices the
 //   core's `notify {workspace}` says to show now (not while off, not for the chat looked at, none of a workspace turned
 //   off, another workspace's named in its title: client/core-ts attend.ts decides), each shown once it is taken (`notice.claim`). Behind for good (a phone's
-//   app behind another, its frames stopped), the topic is left (the core then holds none back for a page: Notices.kt's
+//  app behind another, its frames stopped), the topic is left (the core then holds none back for a page: Notices.kt's
 //   flow ends with the activity's onStop).
 // - What the system lets the app show, told to the core as the app starts and each time it is shown again
 //   (`notify.permission`); the system asked once, the first time signed in with notifications on (`notify.set
 //   {asked}`), and again as they are turned on in settings (refused there, a toast says where to allow them).
-// - A chat on top: its notification taken off (App.kt). A notification tapped: its link read by the core
+// - A chat on top: its notification taken off. A notification tapped: its link read by the core
 //   (`link.parse`), its workspace switched to, the chat pushed over Home at the message (chat.mbt `go_to`).
-// - Pushes (Push.kt): this device's registration held as the core's `notify` says (`push.register` with the host's
+// - Pushes: this device's registration held as the core's `notify` says (`push.register` with the host's
 //   token, `push.unregister` while off), a token come later registered then. A push delivered is the app's push
 //   service's (android/…/Push.java, as PushService: it asks the core whether to show it, `notice.pushed`, then brings
 //   what it is about, `notice.bring`), since the app's frames stop while it is behind.
@@ -119,7 +119,7 @@ pub fn push_sync(src : Source, wanted : Bool?) -> Unit {
   let push = match wanted {
     Some(b) => Some(b)
     None =>
-      match field((src.topic)("notify", Map::new()).value, "push") {
+      match field(src.topic("notify", Map::new()).get().value, "push") {
         Some(True) => Some(true)
         Some(False) => Some(false)
         _ => None
@@ -170,7 +170,7 @@ pub fn notices_frame(src : Source, w : Workspace) -> Unit {
   notice_state.src = Some(src)
   let h = notice_host.val
   let shown = @ui.app_visible()
-  let notify = (src.topic)("notify", Map::new()).value
+  let notify = src.topic("notify", Map::new()).get().value
   match notify {
     Some(_) => {
       // what the system allows, as the app starts and each time it is shown again (MainActivity onStart)
@@ -215,7 +215,7 @@ pub fn notices_frame(src : Source, w : Workspace) -> Unit {
     }
     None => ()
   }
-  // the notices to show while the app goes on (Notices.kt showNotices)
+  // the notices to show while the app goes on
   if @ui.app_awake() {
     follow_notices(src, w.id)
   } else {
@@ -262,7 +262,7 @@ fn follow_notices(src : Source, workspace : String) -> Unit {
     leave_notices(src)
     notice_state.following = workspace
   }
-  let v = (src.topic)("notify", notify_params(workspace)).value
+  let v = src.topic("notify", notify_params(workspace)).get().value
   for n in items(v, "show") {
     let id = text(Some(n), "id")
     if id == "" || notice_state.taken.contains(id) {
@@ -281,7 +281,7 @@ fn follow_notices(src : Source, workspace : String) -> Unit {
 ///|
 fn leave_notices(src : Source) -> Unit {
   if notice_state.following != "" {
-    (src.leave)("notify", notify_params(notice_state.following))
+    (src.leave)("notify", notify_params(notice_state.following), TopicLeave::Legacy)
     notice_state.following = ""
   }
 }

@@ -1,22 +1,17 @@
-// A chat made public (docs/public-share.md): the snapshots its station keeps of it, as its "…" lists them
-// (`ChatView.publish`, each with its link put together here), and the calls that make and revoke one:
-// `chat.publishPreview` (what a snapshot would hold now, nothing kept), `chat.publish` (kept, with its link) and
-// `chat.unpublish`. Only people publish; the station keeps the snapshot and its key. Done, the thread as held says so
-// at once (as xshare.ts's). A revoke shows at once: what is being revoked is kept in the chat's workspace
-// (workspace.ts `part`) and left out of the list until its station answers (rule 4).
+// A chat drawn as one long picture (its "…"'s 分享图片): `ChatView.publish` says whether the viewer may, and
+// `chat.publishPreview` what a picture of it holds now, made here of what the device holds (its station is not asked, so
+// a busy one keeps nobody waiting).
 import { Effect } from "effect";
 import type { Inner } from "../core.ts";
 import { handlers } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
-import { CoreError } from "../error.ts";
 import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import { markdown } from "../markdown.ts";
-import { encode } from "../ops.ts";
 import { placeFiles } from "../placed.ts";
 import * as present from "../present.ts";
-import { StationAddr, stationId } from "../station/addr.ts";
-import { arr as arrU, base64url, get as getU, isObject } from "../util.ts";
+import { redact } from "../redact.ts";
+import { arr as arrU, get as getU, isObject } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -26,82 +21,11 @@ const get = (v: unknown, k: string): J => getU(v, k);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
-/// Where a snapshot's link opens: still.fail's viewer, which reads it from the station itself, never through the cloud.
-export const SHARE_ORIGIN = "https://share.still.fail";
-
-const PART = "publish";
-
-/// The snapshots of a workspace's chats being revoked here, not answered yet (`station\tid`).
-function revokingOf(inner: Inner, station: string): Set<string> {
-  return inner.workspaces.ofStation(station).part(PART, () => new Set<string>());
-}
-
-const revokingKey = (station: string, id: string) => `${station}\t${id}`;
-
-/// Whether a snapshot is being revoked here.
-export function revoking(inner: Inner, station: string, id: string): boolean {
-  return inner.workspaces.get(ofAddress(station))?.own.has(PART) === true && revokingOf(inner, station).has(revokingKey(station, id));
-}
-
-/// A station's iroh key as a link has it: its 32 bytes in base64url (43 characters), from the hex of its id (anything
-/// else as it is).
-export function linkStation(key: string): string {
-  if (!/^[0-9a-f]{64}$/i.test(key)) return key;
-  const bytes = new Uint8Array(32);
-  for (let i = 0; i < 32; i++) bytes[i] = parseInt(key.slice(i * 2, i * 2 + 2), 16);
-  return base64url(bytes);
-}
-
-/// A snapshot's link, by the id of the station that keeps it: everything after `#`, so neither still.fail nor its logs
-/// ever see what it opens.
-export function linkOf(station: string, id: string, key: string): string {
-  return `${SHARE_ORIGIN}/#${linkStation(station)}.${id}.${key}`;
-}
-
-/// The snapshots a thread says its station keeps of it (none from a station before publishing), newest first.
-function heldOf(thread: J): J[] {
-  return arr(get(thread, "published")).filter((p) => isObject(p) && typeof p.id === "string" && typeof p.key === "string");
-}
-
-/// A snapshot as a chat's "…" lists it: its link (by its station's address: its id is its key), when and by whom (their
-/// picture as the workspace has it), and whether the viewer may revoke it.
-function linkShown(p: J, station: string, members: J[], may: (by: string | null) => boolean): J {
-  const by = str(p.by);
-  const picture = pictureOf(members, by);
-  return {
-    id: p.id,
-    link: linkOf(stationId(station), p.id, p.key),
-    createdAt: num(p.at),
-    byName: str(p.byName) ?? (by !== null ? by.split("@")[0] : ""),
-    ...(by !== null ? { by } : {}),
-    ...(picture !== null ? { byPicture: picture } : {}),
-    mayRevoke: may(by),
-  };
-}
-
-/// What a chat's "…" shows of its public snapshots (`ChatView.publish`), or null while it has no chat. `me`: the
-/// viewer's email; `role`: theirs in the chat's workspace. A read-only member (`viewer`) publishes nothing; a snapshot
-/// is revoked by whoever published it, or an owner or admin.
-export function shown(env: { me: string | null; role: string | null; members?: J[]; revoking: (id: string) => boolean }, station: string, thread: J): J | null {
+/// What a chat's "…" says of a picture of it (`ChatView.publish`), or null while it has no chat: a read-only member
+/// (`viewer`) makes none.
+export function shown(role: string | null, thread: J): J | null {
   if (!isObject(thread)) return null;
-  const manager = env.role === "owner" || env.role === "admin";
-  const mine = (by: string | null) => by !== null && env.me !== null && by.toLowerCase() === env.me.toLowerCase();
-  const links = heldOf(thread)
-    .filter((p) => !env.revoking(p.id))
-    .sort((a, b) => num(b.at) - num(a.at))
-    .map((p) => linkShown(p, station, env.members ?? [], (by) => manager || mine(by)));
-  return { may: env.role !== "viewer", links };
-}
-
-/// The names the snapshot gives people (`{email: name}`), from the chat's workspace's members: none while not read.
-function namesOf(inner: Inner, station: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const m of arr(get(inner.data.shared({ topic: "workspace", workspace: ofAddress(station) }), "members"))) {
-    const email = str(get(m, "email"));
-    const name = str(get(m, "name"));
-    if (email !== null && name !== null && name.trim() !== "") out[email] = name;
-  }
-  return out;
+  return { may: role !== "viewer" };
 }
 
 /// A member's picture by their address, as the workspace has it.
@@ -229,72 +153,86 @@ export function turnShown(answer: J, n: number): J {
 
 type Of<K extends Call["kind"]> = Extract<Call, { kind: K }>;
 
-/// A station from before publishing has none of its routes (an unknown chat is its own 404, said as the station says it).
-const oldStation = (e: CoreError) => (e.status === 404 && e.message.startsWith("no route ") ? new CoreError("http_404", t("core-misc.publish.oldStation"), 404) : e);
+/// Messages a picture holds at most: a chat with more is drawn from its latest ones (as a station's snapshot is).
+const MOST = 5000;
 
-/// `chat.publishPreview`: what a snapshot of the chat would hold now (`turn`: of the turn of that message alone).
-/// `chat.publish`: one kept, up to the message the preview ended at, with the attachments ticked; its link answered and
-/// its thread shows it at once.
-/// `chat.unpublish`: one revoked, gone from the list at once.
+/// What looks like a secret hidden in every word `x` says (a string, or all the strings in it), and how many.
+function hiddenIn(x: unknown, mark: string): { value: unknown; count: number } {
+  let count = 0;
+  const walk = (y: unknown): unknown => {
+    if (typeof y === "string") {
+      const done = redact(y, mark);
+      count += done.count;
+      return done.text;
+    }
+    if (Array.isArray(y)) return y.map(walk);
+    if (isObject(y)) return Object.fromEntries(Object.entries(y).map(([k, z]) => [k, walk(z)]));
+    return y;
+  };
+  return { value: walk(x), count };
+}
+
+/// What a picture of chat `thread` holds, of the entries this device holds of it (as its page has them; none read for
+/// it), what looks like a secret hidden in all they say: shaped as a station answers a preview (`previewShown` reads
+/// it), so it is drawn at once whatever its station is doing. Its title as the chat's list says it.
+export function heldPreview(inner: Inner, station: string, thread: number): J {
+  const span = inner.data.logSpan("entry", station, String(thread));
+  const held = span === null ? [] : [...inner.data.logRange("entry", station, String(thread), span.min, span.max).values()].filter(isObject);
+  held.sort((a, b) => num(get(a, "n")) - num(get(b, "n")));
+  const said = held.filter((e) => get(e, "kind") === "message");
+  const kept = said.slice(Math.max(0, said.length - MOST));
+  const from = kept.length > 0 ? num(get(kept[0], "n")) : 0;
+  const upto = kept.length > 0 ? num(get(kept[kept.length - 1], "n")) : 0;
+  const mark = t("station.publish.hidden");
+  // Each message's words as its last edit has them and its card as the last that restated it, hidden alike: how many
+  // in each (as the station's `viewsOf` counts them).
+  const counts = new Map<number, { words: number; card: number; text: string }>();
+  const views = held.filter((e) => num(get(e, get(e, "kind") === "message" ? "n" : "target")) >= from && (get(e, "kind") !== "message" || num(get(e, "n")) <= upto)).map((e) => {
+    const text = hiddenIn(get(e, "text"), mark);
+    const quotes = hiddenIn(get(e, "quotes"), mark);
+    const shownCard = hiddenIn(get(e, "card"), mark);
+    const v: J = { ...e, text: text.value, quotes: quotes.value, ...(get(e, "card") !== undefined ? { card: shownCard.value } : {}) };
+    const words = text.count + quotes.count;
+    const card = shownCard.count;
+    const n = v.kind === "message" ? num(v.n) : num(v.target);
+    const was = counts.get(n);
+    if (v.kind === "message") counts.set(n, { words, card, text: str(v.text) ?? "" });
+    else if (was !== undefined) {
+      if (v.card !== undefined) was.card = card;
+      if (v.card === undefined || (str(v.text) ?? "") !== was.text) Object.assign(was, { words, text: str(v.text) ?? "" });
+    }
+    return v;
+  });
+  const hidden = [...counts].flatMap(([n, c]) => (c.words + c.card > 0 ? [{ n, count: c.words + c.card }] : []));
+  const files: J[] = [];
+  const entries = kept.map((e) => {
+    const own = arr(get(e, "attachments")).filter(isObject).map((f) => {
+      const k = `f${files.length}`;
+      files.push({ ...f, k, n: num(get(e, "n")), type: "" });
+      return k;
+    });
+    const person = get(e, "authorKind") === "person" && (str(get(e, "author")) ?? "").includes("@") ? { person: get(e, "author") } : {};
+    return {
+      n: num(get(e, "n")), at: num(get(e, "at")), authorKind: get(e, "authorKind"), author: str(get(e, "authorName")) ?? str(get(e, "author")) ?? "",
+      text: redact(str(get(e, "text")) ?? "", mark).text, files: own, model: get(e, "authorModel"), runtime: get(e, "authorRuntime"), ...person,
+    };
+  });
+  const title = redact(format.chatTitle(inner.data.listedThread(station, thread) ?? {}), mark).text;
+  return { upto, title, entries, redacted: hidden, files, views: { entries: views, hidden } };
+}
+
+/// `chat.publishPreview`: what a picture of the chat would hold now (`turn`: of the turn of that message alone).
 export function install(inner: Inner): void {
   const clock = (): present.Clock => {
     const now = inner.host.nowMs();
     return { now, offsetMin: inner.host.utcOffsetMin(now) };
   };
-  const invalidate = (station: string) => inner.store.invalidateAll((topic) => topic.topic === "chat" && topic.station === station);
-  /// Puts what a thread's snapshots are now into it as held: the chat shows it without reading it again.
-  const putHeld = (station: string, thread: number, change: (was: J[]) => J[]) => {
-    const now = inner.data.thread(station, thread);
-    if (!isObject(now)) return;
-    const next = change(heldOf(now));
-    const { published: _, ...rest } = now as J;
-    inner.stations.putThread(station, next.length > 0 ? { ...rest, published: next } : rest);
-  };
-  const addr = (station: string) => Effect.try({ try: () => StationAddr.parse(station), catch: (e) => e as CoreError });
-
-  handlers.chatPublishPreview = (_inner, call, _progress, _at, ctx) => {
+  handlers.chatPublishPreview = (_inner, call) => {
     const c = call as Of<"chatPublishPreview">;
-    return Effect.gen(function* () {
-      const at = yield* addr(c.station);
-      const answer = yield* Effect.mapError(
-        inner.stations.requests.call(at, "POST", `/threads/${c.thread}/publish/preview`, { names: namesOf(inner, c.station) }, { ctx }),
-        oldStation,
-      );
+    return Effect.sync(() => {
+      const answer = heldPreview(inner, c.station, c.thread);
       const members = arr(get(inner.data.shared({ topic: "workspace", workspace: ofAddress(c.station) }), "members"));
       return previewShown(c.turn === null ? answer : turnShown(answer, c.turn), clock(), members, (entries) => inner.views.listed(c.station, c.thread, entries));
     });
   };
-  handlers.chatPublish = (_inner, call, _progress, _at, ctx) => {
-    const c = call as Of<"chatPublish">;
-    return Effect.gen(function* () {
-      const at = yield* addr(c.station);
-      const answer = yield* Effect.mapError(
-        inner.stations.requests.call(at, "POST", `/threads/${c.thread}/publish`, { upto: c.upto, files: c.files, names: namesOf(inner, c.station) }, { ctx }),
-        oldStation,
-      );
-      const made = get(answer, "published");
-      if (!isObject(made) || typeof made.id !== "string" || typeof made.key !== "string") return yield* Effect.fail(new CoreError("bad_reply", t("core-misc.publish.badReply")));
-      putHeld(c.station, c.thread, (was) => [made, ...was.filter((p) => p.id !== made.id)]);
-      invalidate(c.station);
-      return present.times(linkShown(made, c.station, [], () => true), clock());
-    });
-  };
-  handlers.chatUnpublish = (_inner, call, _progress, _at, ctx) => {
-    const c = call as Of<"chatUnpublish">;
-    const key = revokingKey(c.station, c.id);
-    return Effect.gen(function* () {
-      const at = yield* addr(c.station);
-      revokingOf(inner, c.station).add(key);
-      invalidate(c.station);
-      const done = yield* Effect.result(inner.stations.requests.call(at, "DELETE", `/published/${encode(c.id)}`, null, { ctx }));
-      revokingOf(inner, c.station).delete(key);
-      // Gone already (taken down from elsewhere): gone all the same. Not told its thread, the
-      // station's change to it says so.
-      if ((done._tag === "Success" || done.failure.status === 404) && c.thread !== null) putHeld(c.station, c.thread, (was) => was.filter((p) => p.id !== c.id));
-      invalidate(c.station);
-      if (done._tag === "Failure" && done.failure.status !== 404) return yield* Effect.fail(done.failure);
-      return { ok: true };
-    });
-  };
 }
-

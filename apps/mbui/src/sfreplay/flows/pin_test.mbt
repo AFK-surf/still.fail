@@ -7,7 +7,7 @@ test "27-pin" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("pin"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
-    f.see("=studio")
+    f.see("=willow")
     f.see("发消息")
     f.tap("icon:more")
     // the chat's menu risen: 固定 chosen, it goes

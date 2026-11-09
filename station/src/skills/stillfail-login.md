@@ -17,7 +17,7 @@ their still.fail app. What the card can take, by what the command does:
 - **A page to open** (the command polls by itself): every client.
 - **A password or token typed in the terminal**: nobody; it is refused. Use another way, or say it cannot be done here.
 
-Which command, as tested (docs/remote-login.md):
+Which command, as tested:
 
 | Tool | Use | Flow | Avoid |
 |---|---|---|---|

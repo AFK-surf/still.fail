@@ -1,4 +1,4 @@
-// The wide frame (wide.mbt) over the fixture, at a desktop's size; its calls kept as composer_wbtest.mbt keeps them.
+// The wide frame over the fixture, at a desktop's size; its calls kept as composer_wbtest.mbt keeps them.
 
 ///|
 /// The app over the fixture in a window `w` wide, its calls kept in `calls` (the fixture answers the rest).
@@ -22,7 +22,7 @@ fn wide_tester(
     },
   }
   if mode.has_prefix("chat") {
-    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   }
   // (what the run is made with, said after it is begun and before the window is: a window of its own's page)
   before(src)
@@ -117,7 +117,7 @@ test "wide: a row's menu from its right click pins it (chat.pin) and closes" {
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
   t.right_click(x, y)
   assert_true(t.find("重命名") is Some(_))
-  assert_true(t.find("复制会话链接") is Some(_))
+  assert_true(t.find("分享…") is Some(_))
   match t.find("固定") {
     Some(_) => {
       t.tap_text("固定")
@@ -127,7 +127,31 @@ test "wide: a row's menu from its right click pins it (chat.pin) and closes" {
     None => ()
   }
   t.key(@ui.key_escape)
-  assert_true(t.find("复制会话链接") is None)
+  assert_true(t.find("分享…") is None)
+}
+
+///|
+test "wide: a row's menu offers what its page's \"…\" does besides (分享给其他 workspace, 分享图片, 在 Slack 中打开) where its row says so; 分享图片 asks for the picture" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="home-share")
+  let (x, y) = t.find("夜里的构建又失败了").unwrap()
+  t.right_click(x, y)
+  // (in its 分享…, with the rest of what shares it)
+  open_share(t)
+  assert_true(t.query(MenuItem, label="分享给其他 workspace") is Some(_), msg=t.drawn_text())
+  assert_true(t.query(MenuItem, label="在 Slack 中打开") is Some(_), msg=t.drawn_text())
+  t.click(MenuItem, label="分享图片")
+  let asked = named(calls, "chat.publishPreview")
+  assert_eq(asked.length(), 1)
+  assert_eq(text(Some(asked[0].params), "station"), "ws1/st2")
+  // a row that says none of them: none
+  t.key(@ui.key_escape)
+  let (x, y) = t.find("给设置页加一个深色模式开关").unwrap()
+  t.right_click(x, y)
+  open_share(t)
+  assert_true(t.query(MenuItem, label="复制会话链接") is Some(_))
+  assert_true(t.query(MenuItem, label="分享图片") is None)
+  assert_true(t.query(MenuItem, label="分享给其他 workspace") is None)
 }
 
 ///|
@@ -153,17 +177,6 @@ test "wide: a row's menu keeps its chat out of the archive (保留, chat.keep) a
   assert_true(t.query(MenuItem, label="取消固定") is Some(_))
   assert_true(t.query(MenuItem, label="保留") is None)
   assert_true(t.query(MenuItem, label="取消保留") is None)
-}
-
-///|
-test "wide: a row's menu's 复制 session 文件路径 copies where each agent's session is kept (session.transcript)" {
-  let calls : Array[Made] = []
-  let t = wide_tester(calls)
-  let (x, y) = t.find("夜里的构建又失败了").unwrap()
-  t.right_click(x, y)
-  t.tap_text("复制 session 文件路径")
-  assert_true(named(calls, "session.transcript").length() > 0)
-  assert_true(t.clipboard().has_suffix(".jsonl"), msg=t.clipboard())
 }
 
 ///|
@@ -342,7 +355,7 @@ test "wide: where this machine is a station, files from the Finder let go on the
   let t = wide_tester(calls, mode="chat")
   @sfbase.machine_here.val = Some("ws1/st1")
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
-  let refs = fn() { @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files }).unwrap_or([]) }
+  let refs = fn() { @sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get() }).unwrap_or([]) }
   // on a message: each by where it is on this machine's station (named by its path: the chat's default)
   let (x, y) = t.find("做完了：").unwrap()
   t.drop_files(x, y, [("报告.pdf", b"%PDF"), ("截图/", b"")], paths=["/Users/lin/报告.pdf", "/Users/lin/截图"])
@@ -350,7 +363,7 @@ test "wide: where this machine is a station, files from the Finder let go on the
   t.frame()
   assert_eq(refs().length(), 2)
   assert_eq(text(field(refs().get(0), "ref"), "station"), "ws1/st1")
-  assert_eq(text(field(refs().get(0), "ref"), "stationName"), "Studio")
+  assert_eq(text(field(refs().get(0), "ref"), "stationName"), "Willow")
   assert_eq(text(field(refs().get(0), "ref"), "path"), "/Users/lin/报告.pdf")
   assert_eq(text(field(refs().get(0), "ref"), "mode"), "path")
   // (where the station reads it from, should it go as a file: its folder, its name there)
@@ -401,14 +414,83 @@ test "wide: ⌘F's bar in the chat's bar looks in all of it (chat.find), Enter t
   assert_eq(next, if at == total { 1 } else { at + 1 })
   assert_true(@sfpages.find_at() != first || @sfpages.find_k() > 0 || total == 1)
   assert_eq(@sfpages.find_words_in("ws1/st1\u{1}s-c1"), ["截图"])
+  t.run_for(@sfpages.found_draw_ms)
+  assert_true(t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L }), msg="the matches are not coloured in")
+  assert_true(search_stroke_under(t, "截图", @sf.theme().p.accent, @sf.message_stroke.width), msg="the current match has no stroke")
+  assert_false(search_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width), msg="other matches are stroked")
+  // Clearing the field removes the current message's mark as well as the other matches'.
+  t.backspace()
+  t.backspace()
+  t.frame()
+  assert_true(@sfpages.find_words_in("ws1/st1\u{1}s-c1").is_empty())
+  assert_false(t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L }))
+  assert_false(search_stroke_under(t, "截图", @sf.alpha(@sf.theme().p.accent, @sfpages.find_faint), @sf.message_stroke.width))
   t.key(@ui.key_escape)
   t.frame()
   assert_true(t.find("在对话中查找") is None)
   assert_eq(@sfpages.find_chat(), "")
-  assert_true(find_marking.val.is_empty())
   // opened again: empty
   t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
   assert_eq(@sfpages.find_query(), "")
+}
+
+///|
+test "wide: next and previous move the stroke between occurrences in one message, both coloured in" {
+  new_run()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      match name {
+        "chat.find" => done(Ok({ "words": ["一起"], "hits": [{ "seq": 8, "count": 2 }], "held": 11, "of": 11, "whole": true }))
+        "chat.find.go" => {
+          let at = field(Some(params), "at")
+          let by = number(Some(params), "by").to_int()
+          let k = if at is Some(Object(_)) { (number(at, "k").to_int() + by + 2) % 2 } else { 0 }
+          done(Ok({ "at": { "seq": 8, "k": Json::number(k.to_double()) }, "position": Json::number((k + 1).to_double()), "total": 2 }))
+        }
+        _ => (base.call)(name, params, done)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.key(@ui.key_of_char('f'), mods=@ui.mod_cmd)
+  t.type_text("一起")
+  t.run_for(@sfpages.find_typing_ms * 2.0 + @sf.stroke_ms)
+  t.frame()
+  let w = t.ctx().words_of("pick/ts8").unwrap()
+  let ranges = @sf.find_words(w.text, ["一起"])
+  assert_eq(ranges.length(), 2)
+  let first = w.rects(ranges[0].0, ranges[0].1)[0]
+  let second = w.rects(ranges[1].0, ranges[1].1)[0]
+  // (the matches coloured in: a band of it over a match's words)
+  let coloured = fn(rect : (Double, Double, Double, Double)) {
+    t.drawn_shapes().iter().any(fn(r) { r.5 == 0xFFCC00D9L && r.0 < rect.0 + rect.2 && r.0 + r.2 > rect.0 && r.1 < rect.1 + rect.3 && r.1 + r.3 > rect.1 })
+  }
+  let strong_under = fn(rect : (Double, Double, Double, Double)) {
+    t.drawn_lines().iter().any(fn(l) {
+      l.4 == @sf.message_stroke.width && l.5 == @sf.theme().p.accent &&
+      l.0 >= rect.0 - 3.0 && l.0 <= rect.0 + rect.2 + 3.0 && l.1 >= rect.1 && l.1 <= rect.1 + rect.3 + 8.0
+    })
+  }
+  assert_true(coloured(first) && coloured(second), msg="both occurrences coloured in")
+  assert_true(strong_under(first) && !strong_under(second))
+  t.enter()
+  t.frame()
+  t.frame()
+  assert_eq(@sfpages.find_k(), 1)
+  assert_true(reading_of("ws1/st1\u{1}s-c1").found_drawn.get(t.ctx()) < @sf.stroke_ms, msg="the stroke draws in again for the next occurrence")
+  assert_true(coloured(first) && coloured(second), msg="the colouring in is still, as the reader moves")
+  t.run_for(@sf.stroke_ms)
+  assert_true(!strong_under(first) && strong_under(second), msg="the second occurrence is current")
+  t.key(@ui.key_code_enter, mods=@ui.mod_shift_key)
+  t.frame()
+  t.frame()
+  t.run_for(@sf.stroke_ms)
+  assert_eq(@sfpages.find_k(), 0)
+  assert_true(strong_under(first) && !strong_under(second), msg="the previous occurrence is current again")
+  assert_true(coloured(first) && coloured(second))
 }
 
 ///|
@@ -423,14 +505,14 @@ test "wide: a new chat as the web's: its scene and the composer in the pane's mi
   let (_, y) = t.find("做任何事").unwrap()
   assert_true(y < 600.0, msg="in the middle")
   // where it runs: its stations in a panel beside it (the presenters')
-  let station = t.query(Button, label="Studio")
+  let station = t.query(Button, label="Willow")
   assert_true(station is Some(_))
-  t.click(Button, label="Studio")
+  t.click(Button, label="Willow")
   t.run_for(@kit.presence_in_ms)
-  assert_true(t.query(Button, label="MBA") is Some(_))
+  assert_true(t.query(Button, label="Maple") is Some(_))
   t.key(@ui.key_escape)
   t.run_for(@kit.presence_in_ms)
-  assert_true(t.query(Button, label="MBA") is None)
+  assert_true(t.query(Button, label="Maple") is None)
 }
 
 ///|
@@ -459,8 +541,8 @@ test "wide: the machine's own sessions offered under the composer as its station
         (base.call)(name, params, done)
       }
     },
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       match (name, t.value) {
         ("newChat", Some(Object(v))) => {
           let m = v.copy()
@@ -475,7 +557,7 @@ test "wide: the machine's own sessions offered under the composer as its station
   t.frame()
   t.frame()
   assert_true(app.nav.top() == NewChat)
-  let offer = "继续 Studio 终端中的会话"
+  let offer = "继续 Willow 终端中的会话"
   assert_true(t.find(offer) is None)
   let (bx, by, _, bh) = composer_glass(t)
   // the station says what its machine kept, a while after the page asked
@@ -516,8 +598,8 @@ test "wide: the machine's own sessions offered under the composer as its station
 }
 
 ///|
-/// The fixture's app over its new chat as the core gives it station by station: on Studio, read whole, its machine's
-/// own session to go on with; on MBA none, but what is wrong for now and what it waits for.
+/// The fixture's app over its new chat as the core gives it station by station: on Willow, read whole, its machine's
+/// own session to go on with; on Maple none, but what is wrong for now and what it waits for.
 fn new_chat_by_station(h? : Double = 800.0) -> @ui.Tester {
   new_run()
   let base = fixture("home")
@@ -541,15 +623,15 @@ fn new_chat_by_station(h? : Double = 800.0) -> @ui.Tester {
         _ => (base.call)(name, params, done)
       }
     },
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       match (name, t.value) {
         ("newChat", Some(Object(v))) => {
           let m = v.copy()
           if text(v.get("station"), "id") == "st2" {
             m["frequent"] = Json::array([])
             m["spent"] = Json::string("Opus 5.5 的额度已用完，发出的消息会等它恢复")
-            m["problem"] = Json::string("MBA 上还没有选好要用的模型")
+            m["problem"] = Json::string("Maple 上还没有选好要用的模型")
           } else {
             match v.get("station") {
               Some(Object(o)) => {
@@ -575,8 +657,8 @@ test "wide: a new chat's composer stays where it is as another station is picked
   t.frame()
   t.frame()
   assert_true(app.nav.top() == NewChat)
-  let offer = "继续 Studio 终端中的会话"
-  assert_true(t.find(offer) is Some(_), msg="Studio's machine's session offered")
+  let offer = "继续 Willow 终端中的会话"
+  assert_true(t.find(offer) is Some(_), msg="Willow's machine's session offered")
   let (bx, by, _, _) = composer_glass(t)
   let pick = fn(from : String, to : String) raise {
     t.click(Button, label=from)
@@ -584,14 +666,14 @@ test "wide: a new chat's composer stays where it is as another station is picked
     t.click(Button, label=to)
     t.run_for(@kit.presence_in_ms)
   }
-  // MBA: no session of its own; what is wrong for now and what it waits for in its place
-  pick("Studio", "MBA")
-  assert_true(t.find("MBA 上还没有选好要用的模型") is Some(_))
+  // Maple: no session of its own; what is wrong for now and what it waits for in its place
+  pick("Willow", "Maple")
+  assert_true(t.find("Maple 上还没有选好要用的模型") is Some(_))
   assert_true(t.find("Opus 5.5 的额度已用完，发出的消息会等它恢复") is Some(_))
   assert_true(t.find(offer) is None)
   assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
-  // Studio again: as it was
-  pick("MBA", "Studio")
+  // Willow again: as it was
+  pick("Maple", "Willow")
   assert_true(t.find(offer) is Some(_))
   assert_at((bx, by), { let (x, y, _, _) = composer_glass(t); (x, y) })
 }
@@ -601,9 +683,9 @@ test "wide: the machine's sessions open in a dialog in the window's middle, not 
   let t = new_chat_by_station()
   t.frame()
   t.frame()
-  t.click(Button, label="继续 Studio 终端中的会话")
+  t.click(Button, label="继续 Willow 终端中的会话")
   t.run_for(@ui.move_most_ms)
-  let (tx, ty) = match t.find("继续 Studio 上的会话") {
+  let (tx, ty) = match t.find("继续 Willow 上的会话") {
     Some(at) => at
     None => fail("no dialog")
   }
@@ -624,7 +706,7 @@ test "wide: in a window as short as it goes, what is under a new chat's composer
   t.frame()
   t.frame()
   t.frame()
-  let (_, oy) = match t.find("继续 Studio 终端中的会话") {
+  let (_, oy) = match t.find("继续 Willow 终端中的会话") {
     Some(at) => at
     None => fail("no offer")
   }
@@ -780,7 +862,7 @@ fn hint_drawn(t : @ui.Tester) -> Bool raise {
 ///|
 test "wide: a new chat's first words, the hint gone under them, into their bubble over the composer from the frame they are sent, whenever the core answers" {
   let held : Map[String, () -> Unit] = {}
-  let unread = Ref(true)
+  let unread = @signals.signal(true)
   let t = held_core(held, unread, w=1280.0, h=800.0, platform=0)
   t.frame()
   assert_true(app.nav.top() == NewChat)
@@ -803,7 +885,7 @@ test "wide: a new chat's first words, the hint gone under them, into their bubbl
   choices_in_ground(t)
   t.run_for(new_fade_ms + 1.0)
   let (gx, _, gw, _) = composer_glass(t)
-  assert_true(seen_words(t, "Studio").iter().all(fn(p) { p.0 < gx || p.0 > gx + gw }), msg="the choices gone")
+  assert_true(seen_words(t, "Willow").iter().all(fn(p) { p.0 < gx || p.0 > gx + gw }), msg="the choices gone")
   assert_false(hint_drawn(t), msg="the hint under the words sent, the composer gone to the chat's foot")
   // with the list, no frame where they are not, nor a jump
   let landed = one_way_till(t, words, sent + flight_carry_ms + 34.0, 120.0)
@@ -819,7 +901,7 @@ test "wide: a new chat's first words, the hint gone under them, into their bubbl
     }
     t.draw()
   }
-  unread.val = false
+  unread.set(false)
   t.draw()
   assert_at(landed, seen_once(t, words))
   // out of the composer: its hint still away while its field has the cursor, back once it is let go of
@@ -834,7 +916,7 @@ test "wide: a new chat's first words, the hint gone under them, into their bubbl
 /// The new chat's choices (its station's name) drawn within the composer's ground.
 fn choices_in_ground(t : @ui.Tester) -> Unit raise {
   let (gx, gy, gw, gh) = composer_glass(t)
-  let at = seen_words(t, "Studio").filter(fn(p) { p.0 > gx && p.0 < gx + gw })
+  let at = seen_words(t, "Willow").filter(fn(p) { p.0 > gx && p.0 < gx + gw })
   assert_true(
     at.length() > 0 && at.iter().all(fn(p) { p.1 >= gy && p.1 <= gy + gh }),
     msg="the choices at \{at}, the composer's ground \{(gx, gy, gw, gh)} at \{t.time()}",
@@ -842,9 +924,16 @@ fn choices_in_ground(t : @ui.Tester) -> Unit raise {
 }
 
 ///|
+/// How long a chat opened by a test has been seen before its sidebar is tapped: a hand taps what it has seen.
+let chat_seen_ms : Double = 300.0
+
+///|
 test "wide: a chat and a new chat switched by the sidebar: the composer goes between their places, a new chat left leaves by its own way, what comes in is there at once" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat")
+  // (the chat seen before the sidebar is tapped: its composer put there at once as it opened, at the run's first
+  // moment; a new chat tapped at that same moment is there at once too)
+  t.run_for(chat_seen_ms)
   let (_, cy, _, ch) = composer_glass(t)
   // to a new chat: the composer from the chat's foot up to its place in the page, the scene there at once (no page
   // crossfades)
@@ -915,7 +1004,7 @@ test "wide: a right click in a chat as the desktop app's: a link's 在浏览器�
   let (px, py, pw, ph) = words_rect(t, "第二屏的插画")
   t.right_click(px + pw / 2.0, py + ph / 2.0)
   t.frame()
-  assert_true(t.find("分享这一轮") is Some(_))
+  assert_true(t.find("多选") is Some(_))
   assert_true(@sfdesk.context.share is Some(_) && @sfdesk.context.link == "" && @sfdesk.context.words == "")
   t.key(@ui.key_escape)
   t.run_for(@kit.presence_out_ms)
@@ -1007,7 +1096,7 @@ test "wide: a right click on the composer's words as the desktop app's: 剪切, 
   t.tap_text("粘贴")
   t.frame()
   t.frame()
-  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.map(fn(f) { text(Some(f), "name") }) }), Some(["image.png"]))
+  assert_eq(@sfbase.writings.get(draft_key(r)).map(fn(d) { d.files.get().map(fn(f) { text(Some(f), "name") }) }), Some(["image.png"]))
 }
 
 ///|
@@ -1066,6 +1155,25 @@ test "wide: words picked in a message with the pointer: 引用 over them quotes 
   assert_eq(text(field(Some(quoted[0].params), "quote"), "text"), "高度先按 90 估")
   assert_eq(text(field(Some(quoted[0].params), "quote"), "author"), "Claude")
   assert_eq(t.ctx().selected_text(), "")
+}
+
+///|
+test "wide: words in a message that did not go can be picked, copied and quoted" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat-failed")
+  let (x, y, w, h) = words_rect(t, "好，就按这个改")
+  t.drag(x + 1.0, y + h / 2.0, x + w - 1.0, y + h / 2.0)
+  t.frame()
+  let selected = t.ctx().selected_text()
+  assert_true(selected != "")
+  t.key(@ui.key_code_copy, mods=@ui.mod_cmd)
+  assert_eq(t.clipboard(), selected)
+  t.tap_text("引用")
+  let quoted = named(calls, "composer.quote")
+  assert_eq(quoted.length(), 1)
+  let q = field(Some(quoted[0].params), "quote")
+  assert_eq(text(q, "text"), selected.trim(chars=" \n\t").to_string())
+  assert_eq(text(q, "ts"), "")
 }
 
 ///|
@@ -1129,8 +1237,8 @@ test "wide: settings' pages as the web's: 通知 (提醒方式, each kind), 权�
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("提示归档") is Some(_))
   assert_true(t.find("自动归档") is Some(_))
-  assert_true(t.find("Studio") is Some(_))
-  // a station's own (the settings' fixture's Studio: idle a day, Slack's three)
+  assert_true(t.find("Willow") is Some(_))
+  // a station's own (the settings' fixture's Willow: idle a day, Slack's three)
   let t = wide_tester([], mode="settings")
   t.draw()
   app.nav.push(Setting(@settings.Route::StationArchiving("ws1/st1")))
@@ -1196,10 +1304,10 @@ test "wide: 文件 shows favorites and stations; files can be chosen, opened, an
   for label in ["个人收藏", "Station"] {
     assert_true(t.find(label) is Some(_), msg=label)
   }
-  // how full Studio's disk is, by its row (MBA away: none)
-  assert_true(t.query(Image, label="剩 380 GB · 已用 62%") is Some(_))
+  // how full Willow's disk is, by its row (Maple away: none)
+  assert_true(t.query(Image, label="剩 420 GB · 已用 58%") is Some(_))
   // a station opened: its places (drive.folders), read once
-  t.click(Button, label="展开 Studio")
+  t.click(Button, label="展开 Willow")
   t.frame()
   assert_eq(named(calls, "drive.folders").length(), 1)
   assert_true(t.find("外接硬盘") is Some(_))
@@ -1287,7 +1395,7 @@ test "wide: 文件's tabs as Finder's: ⌘T a new one, the bar's split shows two
   }
   // the side pressed in front, gone into; the other still 文档
   let shown = t.all(Tab).filter(fn(n) { n.selected == Some(true) })
-  assert_eq(shown.map(fn(n) { n.label }), ["Studio › 会议记录 | Studio › 文档"])
+  assert_eq(shown.map(fn(n) { n.label }), ["Willow › 会议记录 | Willow › 文档"])
   assert_true(t.find("长篇小说.txt") is Some(_))
   // one again: the side in front kept
   t.click(Button, label="取消分栏")
@@ -1402,7 +1510,7 @@ test "wide: ⌘⇧G goes to a folder by its path (~ the home: the core's files.g
   assert_true(t.find("前往文件夹…") is Some(_))
   t.type_text("~/项目")
   t.frame()
-  assert_true(t.find("Studio › /Users/lin/项目") is Some(_), msg="where it goes")
+  assert_true(t.find("Willow › /Users/lin/项目") is Some(_), msg="where it goes")
   // (worked out by the core)
   assert_true(named(calls, "files.go").length() > 0)
   t.enter()
@@ -1415,7 +1523,7 @@ test "wide: ⌘⇧G goes to a folder by its path (~ the home: the core's files.g
   // its station's button: the stations
   t.click(Button, label="换 station")
   t.frame()
-  assert_true(t.find("MBA") is Some(_))
+  assert_true(t.find("Maple") is Some(_))
 }
 
 ///|
@@ -1584,7 +1692,7 @@ test "wide: 文件's preview beside the list (⌘⇧P): the row chosen, its star
 }
 
 ///|
-/// A folder of the files' page's tree (at Studio's 文档) opened, as its disclosure opens it (the made-up core told).
+/// A folder of the files' page's tree (at Willow's 文档) opened, as its disclosure opens it (the made-up core told).
 fn files_tree_open(path : String) -> Unit {
   fix_browse_do(None, "", "drive.browse", {
     "act": "tree",
@@ -1599,7 +1707,7 @@ fn files_tree_open(path : String) -> Unit {
 }
 
 ///|
-/// The files' page at Studio's 文档 in a list (or as `view` says), its calls kept in `calls`.
+/// The files' page at Willow's 文档 in a list (or as `view` says), its calls kept in `calls`.
 fn files_dragging(calls : Array[Made], view? : String = "list") -> @ui.Tester {
   let t = wide_tester(calls)
   app.nav.replace(Files)
@@ -1881,8 +1989,8 @@ test "wide: 连接 as the web's: one list of every station's, each its station's
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("星火助手") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("林（你）") is Some(_), msg="who added it")
-  assert_true(t.find("Studio") is Some(_), msg="its station's tag")
-  assert_true(t.find("MBA · 离线") is None, msg="no station's heading")
+  assert_true(t.find("Willow") is Some(_), msg="its station's tag")
+  assert_true(t.find("Maple · 离线") is None, msg="no station's heading")
   assert_true(t.query(Button, label="说明") is Some(_), msg="what a connect is")
   assert_true(t.query(Button, label="添加连接") is Some(_))
   // the filter under the title (MineFilter): its menu, 我的 picked
@@ -1921,7 +2029,7 @@ test "wide: a connect's page: back to the connects, who it is and how it is, how
   t.run_for(@ui.move_most_ms)
   // its head: back over it, its name, how it is, where it is reached, its station, who owns it
   assert_true(t.query(Link, label="连接") is Some(_), msg="back: " + t.words().map(fn(w) { w.0 }).join("|"))
-  for w in ["星火助手", "在线", "星火", "Studio", "所属"] {
+  for w in ["星火助手", "在线", "星火", "Willow", "所属"] {
     assert_true(t.find(w) is Some(_), msg=w)
   }
   // how it runs, in the core's words; its latest sessions
@@ -2052,8 +2160,8 @@ test "wide: ⌘V with a picture or files on the clipboard puts them in as files 
   t.frame()
   match @sfbase.writings.get(draft_key(r)) {
     Some(d) => {
-      assert_eq(d.files.length(), 1)
-      assert_eq(text(Some(d.files[0]), "name"), "image.png")
+      assert_eq(d.files.get().length(), 1)
+      assert_eq(text(Some(d.files.get()[0]), "name"), "image.png")
       assert_eq(d.text.get(), "")
     }
     None => fail("no draft")
@@ -2071,7 +2179,7 @@ test "wide: ⌘V with a picture or files on the clipboard puts them in as files 
   t.frame()
   match @sfbase.writings.get(draft_key(r)) {
     Some(d) => {
-      assert_eq(d.files.map(fn(f) { text(Some(f), "name") }), ["image.png", "发布清单.pdf", "截图.jpg"])
+      assert_eq(d.files.get().map(fn(f) { text(Some(f), "name") }), ["image.png", "发布清单.pdf", "截图.jpg"])
       assert_eq(d.text.get(), "再看一眼签名")
     }
     None => fail("no draft")
@@ -2101,7 +2209,7 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   let label = word("Claude · Opus 5.5")
   assert_eq(label.length(), 1, msg="its label in its card")
   let lines = word("读了 src/ui/list.mbt")
-  // (where it stands alone: no clock while it neither waits nor works, as AgentCard.tsx)
+  // (where it stands alone: no clock while it neither waits nor works)
   let status = word("做完了").filter(fn(w) {
     label.length() == 1 && lines.length() == 1 && w.2 > label[0].2 && w.2 < lines[0].2
   })
@@ -2120,8 +2228,9 @@ test "wide: an agent's card over its picture beside its message (AgentCard.tsx),
   // 288 wide, its words 16 in from the panel's edge (its padding, 6, and a row's 10): the quiet line as wide as it
   let left = quiet[0].1
   assert_eq(quiet[0].3, 288.0)
-  // the label after its 28 mark, 10 apart; where it stands and its lines 14 in, after the dot
-  assert_eq(label[0].1, left + 38.0)
+  // the label after its 28 mark, 10 apart, the mark the ladder's inset (8) in from its head's ground, 2 out of the
+  // words' line (hover.mbt agent_card_head_pad); where it stands and its lines 14 in, after the dot
+  assert_eq(label[0].1, left + 36.0)
   assert_eq(lines[0].1, left + 14.0)
   assert_true(status[0].1 >= left + 14.0 && status[0].1 < left + 15.0, msg="\{status[0].1 - left}")
   // the figures side by side on one line; each part under the one before
@@ -2250,7 +2359,7 @@ test "wide: a reference to a chat in a message has the chat's card while the poi
   let calls : Array[Made] = []
   let t = wide_tester(calls, mode="chat-peeks")
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
-  let said = "奏 · 分组的标题用相对日期还是具体日期？"
+  let said = "待处理 · 分组的标题用相对日期还是具体日期？"
   // (its @ and its title one link: from either, the same card)
   let (x, y) = peek_words_at(t, "@首页的列表改成按天分组")
   assert_eq(word(said).length(), 0)
@@ -2307,8 +2416,8 @@ test "wide: the station a chat's agent runs on, beside its mark in the bar, has 
   let t = wide_tester(calls, mode="chat-agent-card")
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   // its part of the tile: in the chat's bar, named for what it is
-  let part = t.locate("=Studio").filter(fn(p) { p.1 < 60.0 && p.0 > 400.0 })
-  assert_eq(part.length(), 1, msg="\{t.locate("=Studio")}")
+  let part = t.locate("=Willow").filter(fn(p) { p.1 < 60.0 && p.0 > 400.0 })
+  assert_eq(part.length(), 1, msg="\{t.locate("=Willow")}")
   assert_eq(word("机器详情").length(), 0)
   t.move(part[0].0, part[0].1)
   t.run_for(@sfpages.hover_open_ms * 2.0)
@@ -2321,14 +2430,15 @@ test "wide: the station a chat's agent runs on, beside its mark in the bar, has 
 }
 
 ///|
-test "wide: a working agent's card has its stop at the end of where it stands, under its label (the corner rule sees it)" {
+/// A working agent's card in the chat of fixture `chat-agent-card` (its agents at work, as a turn under way has them:
+/// chat_fixture.mbt), opened over its latest message's name; where it stands said in `stands` where given.
+fn working_agent_card(stands? : String) -> @ui.Tester {
   new_run()
   let base = fixture("chat-agent-card")
-  // (its agents at work, as a turn under way has them: chat_fixture.mbt)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       match (name, got.value) {
         ("chat", Some(Object(m))) => {
           let o = m.copy()
@@ -2338,6 +2448,14 @@ test "wide: a working agent's card has its stop at the end of where it stands, u
                 Object(am) => {
                   let w = am.copy()
                   w["status"] = Json::string("running")
+                  match (stands, w.get("session")) {
+                    (Some(words), Some(Object(sm))) => {
+                      let ss = sm.copy()
+                      ss["statusText"] = Json::string(words)
+                      w["session"] = Json::object(ss)
+                    }
+                    _ => ()
+                  }
                   Json::object(w)
                 }
                 _ => a
@@ -2350,39 +2468,68 @@ test "wide: a working agent's card has its stop at the end of where it stands, u
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
-  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
-  let last = word("Claude").iter().fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
-    match acc {
-      Some(a) if a.2 >= w.2 => acc
-      _ => Some(w)
-    }
-  })
-  guard last is Some(name) else { fail("no agent's message") }
+  let last = t
+    .words()
+    .filter(fn(w) { w.0 == "Claude" && w.5 > 0.5 })
+    .iter()
+    .fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
+      match acc {
+        Some(a) if a.2 >= w.2 => acc
+        _ => Some(w)
+      }
+    })
+  guard last is Some(name) else { abort("no agent's message") }
   t.move(name.1 - 20.0, name.2 + name.4 / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
-  // its stop shown on the line under its label's, not beside it (the label's line its own); nothing in the card's
-  // corners (nor anywhere) breaks the rule
-  let stop = word("停止当前任务")
-  let label = word("Claude · Opus 5.5")
-  assert_true(stop.length() == 1 && label.length() == 1, msg="\{(stop, label)}")
-  assert_true(stop[0].2 >= label[0].2 + label[0].4, msg="its stop under its label: \{(stop, label)}")
+  t
+}
+
+///|
+test "wide: a working agent's card has its stop at the end of where it stands, under its label (the corner rule sees it)" {
+  let t = working_agent_card()
+  let shown = t.words().filter(fn(w) { w.5 > 0.5 })
+  let label = shown.filter(fn(w) { w.0 == "Claude · Opus 5.5" })
+  let stands = shown.filter(fn(w) { w.0 == "做完了" })
+  // (the card's stop: right of the chat's column, where the activity's are)
+  let stop = t.locate("icon:stop").filter(fn(p) { label.length() == 1 && p.0 > label[0].1 })
+  assert_true(stop.length() == 1 && label.length() == 1 && stands.length() == 1, msg="\{(stop, label, stands)}")
+  // its stop under its label (the label's line its own), on the line of where it stands, at its end; nothing in the
+  // card's corners (nor anywhere) breaks the rule
+  let (s, (x, y)) = (stands[0], stop[0])
+  assert_true(y > label[0].2 + label[0].4, msg="its stop under its label: \{(stop, label)}")
+  assert_true(x > s.1 + s.3 && (y - (s.2 + s.4 / 2.0)).abs() < 1.0, msg="its stop by where it stands: \{(stop, s)}")
   assert_eq(t.corner_faults(), [])
 }
 
 ///|
-test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx useLinesMotion), the first gone leaving" {
+test "wide: a working agent's card whose standing is long (what it waits for) has it on whole lines, its stop by the first" {
+  let waits = "等待：最新主线与读取修复的合并验证；之后验证分页和读取调度"
+  let t = working_agent_card(stands=waits)
+  let shown = t.words().filter(fn(w) { w.5 > 0.5 })
+  let stands = shown.filter(fn(w) { w.0.has_prefix("等待：") })
+  let label = shown.filter(fn(w) { w.0 == "Claude · Opus 5.5" })
+  let stop = t.locate("icon:stop").filter(fn(p) { label.length() == 1 && p.0 > label[0].1 })
+  assert_true(stop.length() == 1 && stands.length() == 1 && label.length() == 1, msg="\{(stop, stands, label)}")
+  // its words on two lines (not squeezed into three by what is beside them), the stop at the first one's end
+  let (s, (x, y)) = (stands[0], stop[0])
+  assert_true(s.4 < 2.5 * label[0].4, msg="its words on two lines: \{(s, label)}")
+  assert_true(x > s.1 + s.3 && y > s.2 && y < s.2 + s.4 / 2.0, msg="its stop by their first line: \{(stop, s)}")
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+/// The chat of fixture `chat-agent-card` on 大屏 with its agents' cards' latest lines as `latest` says (its lines, the
+/// view's version), and where its latest agent's message's name is (the pointer resting there opens its card).
+fn lines_card(latest : @signals.Signal[(Array[(String, String)], Int)]) -> (@ui.Tester, Double, Double) raise {
   new_run()
-  let latest : Ref[(Array[(String, String)], Int)] = Ref(
-    ([("k1", "读了 src/ui/list.mbt"), ("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt")], 1),
-  )
   let base = fixture("chat-agent-card")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "agentCard" {
-        let (lines, v) = latest.val
+        let (lines, v) = latest.get()
         {
           value: Some({
             "latest": Json::array(
@@ -2394,21 +2541,68 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
           version: v,
         }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
-  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }) }
-  let last = word("Claude").iter().fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
-    match acc {
-      Some(a) if a.2 >= w.2 => acc
-      _ => Some(w)
-    }
-  })
+  let last = t
+    .words()
+    .filter(fn(w) { w.0 == "Claude" && w.5 > 0.0 })
+    .iter()
+    .fold(init=None, fn(acc : (String, Double, Double, Double, Double, Double)?, w) {
+      match acc {
+        Some(a) if a.2 >= w.2 => acc
+        _ => Some(w)
+      }
+    })
   guard last is Some(name) else { fail("no agent's message") }
-  t.move(name.1 - 20.0, name.2 + name.4 / 2.0)
+  (t, name.1 - 20.0, name.2 + name.4 / 2.0)
+}
+
+///|
+/// Long enough for an agent's card the pointer left to have closed and gone (its close delay, then its going).
+let card_gone_ms : Double = 1000.0
+
+///|
+/// A moment into an agent's card's coming, as it opens: its lines drawn, none moving yet were they to (lines_ms).
+let card_opening_ms : Double = 40.0
+
+///|
+test "wide: an agent's card opened again has its latest lines as they are then: none runs on from what it showed before" {
+  let latest : @signals.Signal[(Array[(String, String)], Int)] = @signals.signal(
+    ([("k1", "读了 src/ui/list.mbt"), ("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt")], 1),
+  )
+  let (t, x, y) = lines_card(latest)
+  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }) }
+  t.move(x, y)
+  t.run_for(@sfpages.hover_open_ms * 2.0)
+  assert_eq(word("读了 src/ui/list.mbt").length(), 1, msg="its card, its lines")
+  // the pointer gone from it: the card closed and gone
+  t.move(1270.0, 790.0)
+  t.run_for(card_gone_ms)
+  assert_eq(word("跑了列表的测试").length(), 0, msg="its card gone")
+  // one more done while it is closed; the pointer back, resting till it opens, and a little more
+  latest.set(([("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt"), ("k4", "提交了改动")], 2))
+  t.move(x, y)
+  t.run_for(@sfpages.hover_open_ms + card_opening_ms)
+  // as they are: no copy of the first leaving, the new one as whole as those that stayed, a line apart
+  assert_eq(word("读了 src/ui/list.mbt").length(), 0, msg="no copy of what it showed before")
+  let (a, b, n) = (word("跑了列表的测试"), word("改了 src/ui/list.mbt"), word("提交了改动"))
+  assert_true(a.length() == 1 && b.length() == 1 && n.length() == 1, msg="\{(a, b, n)}")
+  assert_true((n[0].5 - a[0].5).abs() < 0.01, msg="the new one as whole: \{(a, n)}")
+  assert_true(((n[0].2 - b[0].2) - (b[0].2 - a[0].2)).abs() < 0.01 && b[0].2 > a[0].2, msg="\{(a, b, n)}")
+}
+
+///|
+test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx useLinesMotion), the first gone leaving" {
+  let latest : @signals.Signal[(Array[(String, String)], Int)] = @signals.signal(
+    ([("k1", "读了 src/ui/list.mbt"), ("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt")], 1),
+  )
+  let (t, x, y) = lines_card(latest)
+  let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.0 }) }
+  t.move(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // where the three are at rest: a line apart
   let near = fn(a : Double, b : Double) { (a - b).abs() < 0.01 }
@@ -2419,7 +2613,7 @@ test "wide: an agent's card's latest lines run on as they change (AgentCard.tsx 
   let pitch = y2 - y1
   assert_true(pitch > 10.0 && near(y3 - y2, pitch), msg="\{(y1, y2, y3)}")
   // one more done: the first goes, the next comes
-  latest.val = ([("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt"), ("k4", "提交了改动")], 2)
+  latest.set(([("k2", "跑了列表的测试"), ("k3", "改了 src/ui/list.mbt"), ("k4", "提交了改动")], 2))
   t.frame()
   // as they were: those that stay where they were drawn, the new one faint a line beyond the last, the first's copy
   // where it was, whole
@@ -2577,7 +2771,7 @@ test "wide: adding a favorite chooses a station and folder without changing its 
   t.frame()
   // (two stations it can be done on: which first)
   assert_true(t.find("选择一台 station，然后选择要收藏的文件夹") is Some(_), msg="which station")
-  t.click(Button, label="Studio")
+  t.click(Button, label="Willow")
   t.frame()
   t.frame()
   assert_true(t.find("从 station 的主目录进入要收藏的文件夹") is Some(_), msg="the picker")
@@ -2616,8 +2810,8 @@ test "wide: a row pressed on its state line while the core says which message th
   let base = fixture("chat")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let r = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let r = base.topic(name, params).get().snapshot()
       if name != "chats" {
         return r
       }
@@ -2636,7 +2830,7 @@ test "wide: a row pressed on its state line while the core says which message th
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.draw()
   let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
@@ -2661,11 +2855,11 @@ test "wide: Esc goes to what the frame opened first (a row's menu), then to the 
   assert_true(@sfpages.find_chat() != "")
   let (x, y) = t.find("夜里的构建又失败了").unwrap()
   t.right_click(x, y)
-  assert_true(t.find("复制会话链接") is Some(_))
+  assert_true(t.find("分享…") is Some(_))
   // the menu closed, the bar still open
   t.key(@ui.key_escape)
   t.frame()
-  assert_true(t.find("复制会话链接") is None)
+  assert_true(t.find("分享…") is None)
   assert_true(@sfpages.find_chat() != "")
   // then the bar
   t.key(@ui.key_escape)
@@ -2701,7 +2895,7 @@ fn ref_rested() -> (Int, Bool) raise {
   let (x, y) = peek_words_at(t, "@首页的列表改成按天分组")
   t.move(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
-  let shown = t.words().filter(fn(w) { w.0 == "奏 · 分组的标题用相对日期还是具体日期？" && w.5 > 0.5 }).length() == 1
+  let shown = t.words().filter(fn(w) { w.0 == "待处理 · 分组的标题用相对日期还是具体日期？" && w.5 > 0.5 }).length() == 1
   (calls.filter(fn(m) { m.name == "link.parse" }).length(), shown)
 }
 
@@ -2711,4 +2905,31 @@ test "wide: a reference to a chat rested on in one run and again in the next: it
   let again = ref_rested()
   assert_true(first.0 <= 1 && first.1, msg="first: \{first}")
   assert_eq(again, (0, true))
+}
+
+///|
+test "大屏: a settings row pressed, its page opened as one change: the settings never put down on the way, the chats' sidebar never taken between" {
+  let calls : Array[Made] = []
+  let t = wide_tester(calls, mode="chat")
+  @sfdesk.open_settings()
+  t.run_for(@ui.move_most_ms)
+  // (what the stack is said to be at each change, as what follows it sees it)
+  let seen : Array[String] = []
+  let stop = @signals.effect(fn() {
+    app.nav.pages() |> ignore
+    seen.push(@sfdesk.side_place())
+  })
+  for row in ["密钥", "安全"] {
+    match t.find(row) {
+      Some((x, y)) => t.tap(x, y)
+      None => fail("no \{row} in " + t.words().map(fn(w) { w.0 }).join("|"))
+    }
+    t.run_for(@ui.move_most_ms)
+  }
+  stop()
+  match app.nav.top() {
+    Setting(@settings.Route::Security) => ()
+    _ => fail("not 安全 after its row")
+  }
+  assert_eq(seen.filter(fn(p) { p != "settings" }), [], msg="\{seen}")
 }

@@ -1,0 +1,8 @@
+#!/bin/sh
+# The scene's renderer, compatible with media.sh: a picture (MBUI_PICTURE) or a film (MBUI_FILM), in Wasm. A picture is
+# one frame, compiled once by V8's first tier alone; a film's many frames are worth its optimizing tier.
+set -eu
+D=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
+if [ -n "${MBUI_FILM:-}" ]; then exec node "$D/run.mjs" "$MBUI_FILM"; fi
+[ -n "${MBUI_PICTURE:-}" ] || { echo 'wasm-film: MBUI_PICTURE or MBUI_FILM is required' >&2; exit 2; }
+exec node --liftoff-only --no-wasm-tier-up --wasm-num-compilation-tasks=2 "$D/run.mjs" "$MBUI_PICTURE"

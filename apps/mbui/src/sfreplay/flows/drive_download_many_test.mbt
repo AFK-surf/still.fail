@@ -3,6 +3,7 @@
 // page wide: what is chosen several at a time, ⌘A): one of them 48 MB, read a part at a time (drive.read, 4 MB each);
 // each kept (@ui.keep_begin), each said. (The run's trace keeps none of the big file's bytes: that a file is kept byte
 // for byte is the end-to-end smoke's, 90-drive-download.)
+// before it: 15-drive-lend
 
 ///|
 test "91-drive-download-many" {
@@ -42,10 +43,14 @@ fn replay_drive_download_many() -> Unit raise {
       let names = f.t.kept().map(fn(k) { k.0 })
       names.contains("大文件.bin") && names.contains("附件.txt")
     })
-    let kept = f.t.kept().map(fn(k) { k.0 })
-    assert_true(kept.contains("大文件.bin"))
-    assert_true(kept.contains("附件.txt"))
-    assert_eq(f.t.kept().filter(fn(k) { k.0 == "附件.txt" })[0].2.length(), 40)
+    let kept = f.t.kept()
+    let names = kept.map(fn(k) { k.0 })
+    f.check(names.contains("大文件.bin"), "the large file was not kept")
+    f.check(names.contains("附件.txt"), "the attachment was not kept")
+    let attachments = kept.filter(fn(k) { k.0 == "附件.txt" })
+    if attachments.length() > 0 {
+      f.check(attachments[0].2.length() == 40, "the attachment was not kept whole")
+    }
     // its toast, up since the download began, its time shown
     f.run_for(@sfapp.toast_ms)
     f.end()

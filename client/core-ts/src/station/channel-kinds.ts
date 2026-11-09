@@ -26,7 +26,7 @@ export const ENTRIES: Kind = {
   path: (id, read) => {
     const entries = `/threads/${id}/entries`;
     if ("latest" in read) return `${entries}?limit=${PAGE}`;
-    if ("after" in read) return `${entries}?after=${read.after}`;
+    if ("after" in read) return `${entries}?after=${read.after}&limit=${PAGE}`;
     if ("before" in read) return `${entries}?before=${read.before}&limit=${PAGE}`;
     return `${entries}?from=${read.from}&to=${read.to}`;
   },
@@ -82,7 +82,7 @@ export const LETTERS: Kind = {
   path: (id, read) => {
     const letters = `/threads/${id}/letters`;
     if ("latest" in read) return `${letters}?limit=${PAGE}`;
-    if ("after" in read) return `${letters}?after=${read.after}`;
+    if ("after" in read) return `${letters}?after=${read.after}&limit=${PAGE}`;
     if ("before" in read) return `${letters}?before=${read.before}&limit=${PAGE}`;
     return `${letters}?from=${read.from}&to=${read.to}`;
   },

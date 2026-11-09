@@ -1,18 +1,11 @@
-// The rows not steady these tests still show (mbui's rows_steady.mbt: a row of a list going one way and back, or at a
-// speed off the frames round it, while what is in the list moves), a file at a time: how many a Tester made in it may
-// show. Each only falls: a jolt mended takes its file's number down, and a file at 0 leaves the list.
+// The rows not steady these tests still show (mbui's rows_steady.mbt: a row of a list turning back again soon
+// after it turned, or going at a speed off the frames round it, while what is in the list moves), a file at a time:
+// how many a Tester made in it may show. Each only falls: a jolt mended takes its file's number down, and a file at 0
+// leaves the list.
 
 ///|
 fn init {
   @ui.rows_steady_known([
-    ("src/sfapp/cards_wbtest.mbt", 1),
-    ("src/sfapp/decide_wbtest.mbt", 1),
     ("src/sfapp/desk_service_wbtest.mbt", 1),
-    ("src/sfapp/drive_wbtest.mbt", 1),
-    ("src/sfapp/quote_image_wbtest.mbt", 1),
-    ("src/sfapp/settings_wbtest.mbt", 1),
-    ("src/sfapp/tape.mbt", 8),
-    ("src/sfapp/wide_panel_wbtest.mbt", 2),
-    ("src/sfapp/wide_wbtest.mbt", 2),
   ])
 }

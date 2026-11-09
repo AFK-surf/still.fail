@@ -1,6 +1,7 @@
 // How long a run of the pipeline (.github/workflows/pipeline.yml) took, against what it should: the time from its
 // first job starting to its last ending, the jobs on the way, and the longest steps. A run over its budget says so,
-// and what to look at first (docs/development.md, "CI time").
+// and what to look at first: what got slower (a step, a missed cache, a test waiting in real time, a queue), fixed or
+// the budget changed on purpose.
 //   node scripts/ci-time.ts <run id> [attempt]   the run's times as text; exit 3 when over budget
 //   node scripts/ci-time.ts <run id> --json      the same, as JSON
 // Reads the run through `gh api` (GH_TOKEN in CI). The pipeline's last job (timing) runs it on itself, into the run's
@@ -15,7 +16,7 @@ export const BUDGET = {
   main: 180,
   /** A branch or main that checked the Android app (check-android, its build, and check-android-lint beside it on
    * GitHub's runners): lint, which reads each module whole on one of their four cores, takes 240-250 s of Gradle on a
-   * branch that changes the app, about 300 with its job's setup, and stays there as asked (2026-10-17: not mini1's);
+   * branch that changes the app, about 300 with its job's setup, and stays there as asked (2026-10-17: not the CI Mac's);
    * nothing deploys after it (2026-10-18, #607). */
   android: 330,
   /** main, releasing apps or the station: the check, the API, then the releases side by side (Android's the longest). */

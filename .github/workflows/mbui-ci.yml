@@ -35,7 +35,7 @@ jobs:
       - name: The steps' network is none (a connection out fails at once)
         run: if curl -fsS --max-time 5 -o /dev/null https://github.com; then echo "reached github.com"; exit 1; fi
       - uses: ./.github/actions/mbui-moonbit
-      - name: "Determinism: nothing waits on a guessed time or on settling, the app asks no frame (tools/detlint, docs/detlint.md)"
+      - name: "Determinism: nothing waits on a guessed time or on settling, the app asks no frame (tools/detlint)"
         run: scripts/detlint
       - name: "The outsides' kinds: each its own number in src/ui/hostcall.mbt, every host's named the same (scripts/chk outside-kinds)"
         run: scripts/chk outside-kinds
@@ -47,17 +47,21 @@ jobs:
         run: bash scripts/logwait_test.sh
       - name: Simulator termination exits on failure and leaves no client after a deadline
         run: bash scripts/ios-terminate-test.sh
+      - name: "Android's frame pacing (FramePacer, MBView's) on a clock of its own: each refresh a new frame while the app asks, the display's rate, a phone's recorded frames replayed (scripts/framepacer_test.sh; its known list only shortens)"
+        run: sh scripts/framepacer_test.sh
       - name: Check
         run: moon version --all && moon check --target native --output-json 2>&1 | scripts/chk errs
       - name: "Check, the web's (the browser host, src/host's js files: what scripts/web.sh builds and scripts/textdiff.sh web needs)"
         run: moon check --target js --output-json 2>&1 | scripts/chk errs
+      - name: "The browser host handles scale, pointer layers, stream restoration, browser zoom, voice input and the soft keyboard"
+        run: node --test test/host/web-scale.test.mjs test/web/keys.test.mjs test/web/wheel.test.mjs test/web/pointer.test.mjs test/web/context.test.mjs test/web/ime.test.mjs
       - name: "Unicode text (UAX #29, #14, #9 against Unicode's own tests)"
         run: |
           set -o pipefail
           moon test --target native -p mbui/text 2>&1 | tail -4
       - name: flexbox (Yoga's tests)
         run: moon test --target native -p mbui/flex 2>&1 | tail -3
-      - name: "signals (alien-signals ported: its own tests and the conformance suite it runs, docs/signals.md)"
+      - name: "signals (alien-signals ported: its own tests and the conformance suite it runs)"
         run: |
           set -o pipefail
           moon test --target native -p mbui/signals 2>&1 | tail -3
@@ -83,19 +87,113 @@ jobs:
     # mbui/hostapi), so it builds anywhere
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    name: native${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}
+    # (and the same tests again with frames drawn on run_for's way while the app asks for them (scripts/fps_check.sh),
+    # at 120, at 60, and at 24 then 7, a runner each beside it: what a test asserts at a moment the same however many
+    # frames came before it)
+    strategy:
+      fail-fast: false
+      matrix:
+        fps: ["", "120", "60", "24 7"]
+    # (what it builds kept between runs, as mbui-check's native job keeps the app's: moon's own build (moonc's C) and the
+    # units each test's C is split into, by content (MBC_STORE: main's newest and a branch's own together). Without,
+    # every run compiled all of mbui's C again: a change to ui 154 units of ui's blackbox tests and 230 of its whitebox
+    # tests, ~180 s of compile of the job's 5 minutes, and the job stopped at them (#3953, #3955, 2026-11-04))
+    env:
+      MBC_STORE: ${{ github.workspace }}/apps/mbui/mbui/_build/native/release/mbc-store
+      CACHE_PREFIX: mbui-ci-native-store-
+      # (at 60 and 120 how what moves goes is counted on every frame too, none failing: tester_fps.mbt)
+      MBUI_TEST_MOTION: ${{ (matrix.fps == '120' || matrix.fps == '60') && 'count' || '' }}
+      MOTION_OUT: ${{ github.workspace }}/motion.txt
+      OWN: ${{ github.ref == 'refs/heads/main' && 'm-' || 'b-' }}
     steps:
       - uses: actions/checkout@v4
       - name: "A network namespace of its own for the steps (Ubuntu 24.04's AppArmor keeps them from a user's: let)"
         shell: bash
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - uses: ./.github/actions/mbui-moonbit
+      # moon's own build as main's newest run left it (not the units' store, nor each test program's objects: the store
+      # keeps those), over it moon making again only what changed; each file an mtime of its content for that
+      - uses: actions/cache/restore@v4
+        id: moon
+        with:
+          path: |
+            apps/mbui/mbui/_build
+            !${{ env.MBC_STORE }}
+            !apps/mbui/mbui/_build/**/*.mbc
+          key: mbui-ci-native-moon-${{ github.sha }}
+          restore-keys: mbui-ci-native-moon-
+      - shell: bash
+        working-directory: .
+        run: bash apps/mbui/scripts/moon-mtimes.sh
+      # The units main's newest run kept, and on a branch its own last run's beside them (mbui-check.yml's, the same way)
+      - uses: actions/cache/restore@v4
+        id: main
+        with:
+          path: ${{ env.MBC_STORE }}
+          key: ${{ env.CACHE_PREFIX }}m-${{ github.sha }}
+          restore-keys: ${{ env.CACHE_PREFIX }}m-
+      - if: github.ref != 'refs/heads/main'
+        shell: bash
+        run: |
+          mkdir -p "$MBC_STORE"
+          mv "$MBC_STORE" "$RUNNER_TEMP/store-main"
+      - uses: actions/cache/restore@v4
+        id: own
+        if: github.ref != 'refs/heads/main'
+        with:
+          path: ${{ env.MBC_STORE }}
+          key: ${{ env.CACHE_PREFIX }}b-${{ github.sha }}
+          restore-keys: ${{ env.CACHE_PREFIX }}b-
+      - if: github.ref != 'refs/heads/main'
+        shell: bash
+        run: |
+          mkdir -p "$MBC_STORE"
+          cp -a -n "$RUNNER_TEMP/store-main/." "$MBC_STORE/"
+          echo "units: $(find "$MBC_STORE" -mindepth 2 -maxdepth 2 -type d | wc -l) (main's $(find "$RUNNER_TEMP/store-main" -mindepth 2 -maxdepth 2 -type d | wc -l))"
       - name: "ui, motion, the components, Markdown, the hosts' kept runs replayed (src/kitdemo/gallery/textrec_*), effect.mb and its demo over seeds (scripts/test_native.sh; SEED=<n> replays a failure)"
+        id: tests
         # (with no network: scripts/offline.sh)
         shell: bash scripts/offline.sh {0}
-        run: scripts/test_native.sh
-      - name: "The same tests with the display's frames drawn on the way, at 60, 120, 24 and 7 a second (scripts/fps_check.sh): the same results, the same programs as above run again"
-        shell: bash scripts/offline.sh {0}
-        run: bash scripts/fps_check.sh
+        run: |
+          touch "$RUNNER_TEMP/start"
+          if [ -z "${{ matrix.fps }}" ]; then scripts/test_native.sh; else FPS="${{ matrix.fps }}" bash scripts/fps_check.sh; fi
+      - name: How what moves goes
+        if: always() && env.MBUI_TEST_MOTION == 'count'
+        shell: bash
+        run: |
+          bash scripts/motion_said.sh "$MOTION_OUT" "how what moves goes at ${{ matrix.fps }} fps" >> "$GITHUB_STEP_SUMMARY"
+          touch "$MOTION_OUT"
+      - if: always() && env.MBUI_TEST_MOTION == 'count'
+        uses: actions/upload-artifact@v4
+        with: { name: "motion-mbui-${{ matrix.fps }}", path: "${{ env.MOTION_OUT }}", retention-days: 7 }
+      # (the units this run used, older ones gone (only after a run that went through: one stopped early used few), kept
+      # under a key by what they are: main's, and a branch's for its next push)
+      - name: The units kept
+        if: always()
+        shell: bash
+        run: |
+          S=$MBC_STORE
+          [ ! -d $S ] || find $S -name '*.lock' -delete
+          # (and only where this run took or made any: a run whose programs moon found built already, over its own
+          # build, split no C and used none, and would have kept none)
+          used=$( [ ! -d $S ] || find $S -mindepth 2 -maxdepth 2 -type d -newer "$RUNNER_TEMP/start" -print -quit)
+          [ -z "$used" ] || [ "${{ steps.tests.outcome }}" != success ] || find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/start" -exec rm -rf {} +
+          c=$( (cd $S 2>/dev/null && find . -mindepth 2 -maxdepth 2 -type d | sort) | sha256sum | cut -c1-16)
+          echo "BUILD_KEY=$CACHE_PREFIX$OWN$c" >> "$GITHUB_ENV"
+      - if: always() && env.BUILD_KEY != steps.main.outputs.cache-matched-key && env.BUILD_KEY != steps.own.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.MBC_STORE }}
+          key: ${{ env.BUILD_KEY }}
+      - if: always() && github.ref == 'refs/heads/main' && steps.moon.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/mbui/mbui/_build
+            !${{ env.MBC_STORE }}
+            !apps/mbui/mbui/_build/**/*.mbc
+          key: mbui-ci-native-moon-${{ github.sha }}
 
   macos:
     defaults:
@@ -111,7 +209,7 @@ jobs:
           for app in demo textdiff kitdemo; do
             /usr/bin/time -p env APP=$app scripts/mac.sh build 2>&1 | tail -4
           done
-      # (no screenshot against goldens/mac*.png here: those are Studio's, at its scale, and every run on this runner
+      # (no screenshot against goldens/mac*.png here: those are test station's, at its scale, and every run on this runner
       # differed from them in size; the pictures are the render workflows' against their machine's references, and the
       # host's picture is the draw list's below, to the byte)
       - name: "Text against Core Text's own (scripts/textdiff.sh mac: the corpus's 255 strings, not only kitdemo's)"
@@ -233,6 +331,14 @@ jobs:
         with: { api: "30", target: default, profile: pixel_6, phase: wait }
       - name: "Started on Android 11 (scripts/android-launch.sh: its first frame, or its crash)"
         run: bash scripts/android-launch.sh
+
+      # The phone owns its adb identity. Exercise its key store inside an Android app sandbox, where a hard link
+      # fails even though it works on the build host (client/shell/tests/android-adb-key).
+      - name: "The phone can create and reuse its adb identity"
+        working-directory: client/shell/tests/android-adb-key
+        run: |
+          rustup target add x86_64-linux-android
+          ABI=x86_64 SERIAL=emulator-5554 bash check.sh
 
   # MediaCodec is diagnostic, and must not consume the contract job's time budget. Once a day (and asked for), not each
   # push: it gates nothing, and its emulator and image were 1.1 GB of the Actions cache's downloads each push of mbui,

@@ -8,7 +8,7 @@ test "26-history" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("history"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
-    f.see("=studio")
+    f.see("=willow")
     f.tap("发消息")
     f.type_text("看看文档 083209 steps:文档目录看过了 083209")
     f.tap("icon:arrow-up")
@@ -30,6 +30,8 @@ test "26-history" {
     f.see("执行历史")
     f.see("文档目录看过了 083209")
     f.tap("icon:chevron-right")
+    // the group open, its room opened on its steps
+    f.run_for(@ui.move_most_ms)
     f.see("列出 docs 目录")
     f.tap("列出 docs 目录")
     // the command's words pushed over the history

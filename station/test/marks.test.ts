@@ -2,7 +2,7 @@
 // widget states.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Admin } from "../src/api/admin.ts";
+import { Admin, readOnlyMay } from "../src/api/admin.ts";
 import type { Request } from "../src/api/request.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 
@@ -12,7 +12,7 @@ const readers: any = { names: new Map(), read: async (op: string, a: any) => JSO
 function rig() {
   const store = Store.open(":memory:", null);
   store.insertSession({ key: "s1", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/s1", token: "t", createdAt: 1, lastActiveAt: 1 });
-  const chat = store.openThread("ember", "EMBER", "1.1", null, "a@x");
+  const chat = store.openThread("ember", "CHAT", "1.1", null, "a@x");
   const slack = store.openThread("slack", "C1", "2.2", null, null);
   store.insertMessage(newMessage(chat.id, "1.2", "person", "a@x", "hi"));
   store.insertMessage(newMessage(chat.id, "1.3", "agent", "s1", "which one?"));
@@ -45,6 +45,24 @@ test("read positions, names, keeping and dismissing", async () => {
   assert.equal((await ask("PUT", `/threads/${chat.id}/closed-card`, { n }))[0], 400);
   assert.deepEqual(await ask("PUT", `/threads/${chat.id}/closed-card`, { n, option: " no " }), [200, { closedCard: { thread: chat.id, n } }]);
   assert.equal(store.readPosition("a@x", chat.id), n);
+});
+
+test("hiding is a personal mark, can be undone, and does not archive the chat", async () => {
+  const { store, chat, ask } = rig();
+  const changes: unknown[] = [];
+  store.subscribe((change) => changes.push(change));
+  assert.equal(readOnlyMay({ method: "PUT", path: `/threads/${chat.id}/hidden` }), true);
+  assert.equal((await ask("PUT", `/threads/${chat.id}/hidden`, { hidden: "yes" }))[0], 400);
+  assert.deepEqual(await ask("PUT", `/threads/${chat.id}/hidden`, { hidden: true }), [200, { hidden: true }]);
+  assert.deepEqual(store.db.prepare("SELECT viewer, thread FROM hidden_chats").all().map((r) => [r.viewer, r.thread]), [["a@x", chat.id]]);
+  assert.equal(store.getThread(chat.id)!.hiddenAt, null);
+  assert.deepEqual(changes.at(-1), { type: "hidden", viewer: "a@x", thread: chat.id, hidden: true });
+  assert.deepEqual(await ask("PUT", `/threads/${chat.id}/hidden`, { hidden: false }), [200, { hidden: false }]);
+  assert.equal(store.db.prepare("SELECT COUNT(*) AS n FROM hidden_chats").get()!.n, 0);
+  assert.equal(readOnlyMay({ method: "PUT", path: `/threads/${chat.id}/muted` }), true);
+  assert.deepEqual(await ask("PUT", `/threads/${chat.id}/muted`, { muted: true }), [200, { muted: true }]);
+  assert.deepEqual(await ask("PUT", `/threads/${chat.id}/muted`, { muted: false }), [200, { muted: false }]);
+  store.close();
 });
 
 test("sessions' names, pins and widget states", async () => {

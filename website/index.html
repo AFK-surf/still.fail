@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!-- i18n:redirect -->
+<!-- Before the first paint: the devices scene is played by scrolling only on a large screen with motion allowed. -->
+<script>(function(){var r=document.documentElement;r.classList.remove("no-js");if(matchMedia("(min-width:1024px) and (min-height:760px) and (prefers-reduced-motion:no-preference)").matches)r.classList.add("scrolly")})()</script>
+<title data-t="meta.monoid-one-devices.499d">monoid · One devices</title>
+<meta name="description" content="monoid joins the agents on all your computers into one: one account pool, directed by your team from Slack, on every device." data-t-content="meta.monoid-joins-the-agents.ca91">
+<meta property="og:title" content="monoid · One devices" data-t-content="meta.monoid-one-devices.499d">
+<meta property="og:description" content="Account pool, teams, every device: the agents on all your computers, as one." data-t-content="meta.account-pool-teams-every.c744">
+<meta property="og:type" content="website">
+<!-- i18n:head -->
+<link rel="canonical" href="https://monoid.build/">
+<link rel="alternate" hreflang="en" href="https://monoid.build/">
+<link rel="alternate" hreflang="zh-CN" href="https://monoid.build/zh/">
+<link rel="alternate" hreflang="zh-TW" href="https://monoid.build/zh-tw/">
+<link rel="alternate" hreflang="ja" href="https://monoid.build/ja/">
+<link rel="alternate" hreflang="ko" href="https://monoid.build/ko/">
+<link rel="alternate" hreflang="x-default" href="https://monoid.build/">
+<meta property="og:url" content="https://monoid.build/">
+<meta property="og:locale" content="en_US">
+<meta property="og:locale:alternate" content="zh_CN">
+<meta property="og:locale:alternate" content="zh_TW">
+<meta property="og:locale:alternate" content="ja_JP">
+<meta property="og:locale:alternate" content="ko_KR">
+<meta property="og:image" content="https://monoid.build/assets/og/en.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<!-- /i18n:head -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#FAFAF8">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<!-- Newsreader, the headlines' Latin (22 KB), and Suisse Intl, the brand face (Regular for the text, Book for the
+     first screen's buttons and the lead's bold phrases), asked for with the page; Medium (the wordmark and sub-heads)
+     follows as the sheet needs it. Chinese, Japanese and Korean
+     use the system's fonts, so nothing is downloaded for them. -->
+<link rel="preload" href="assets/fonts/newsreader-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/suisse-intl-regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/suisse-intl-book.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Icons: Central style, 24 px grid, 2 px round stroke, no fill. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-pool" viewBox="0 0 24 24"><path d="M12 3 3 7.5 12 12l9-4.5L12 3Z"/><path d="m3 12 9 4.5 9-4.5"/><path d="m3 16.5 9 4.5 9-4.5"/></symbol>
+  <symbol id="i-team" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.4 3.4-5.5 6.5-5.5s5.7 2.1 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M17.5 14.7c2 .6 3.4 2.4 4 5.3"/></symbol>
+  <symbol id="i-devices" viewBox="0 0 24 24"><rect x="2" y="4" width="13" height="10" rx="2"/><path d="M5.5 18h6"/><rect x="16" y="8.5" width="6" height="12" rx="1.5"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.2 7.5 9.5 4.4-1.3 7.5-4.9 7.5-9.5V6L12 3Z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9"/><path d="m17 6 3 3"/><path d="m14.5 8.5 2 2"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3c.6 4.6 3.4 7.4 8 8-4.6.6-7.4 3.4-8 8-.6-4.6-3.4-7.4-8-8 4.6-.6 7.4-3.4 8-8Z"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></symbol>
+  <symbol id="i-out" viewBox="0 0 24 24"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-done" viewBox="0 0 24 24"><path d="M15 9.5 10.5 15l-2-2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></symbol>
+  <symbol id="i-run" viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M5.64 5.64l2.12 2.12M16.24 16.24l2.12 2.12M3 12h3M18 12h3M5.64 18.36l2.12-2.12M16.24 7.76l2.12-2.12"/></symbol>
+  <symbol id="i-review" viewBox="0 0 24 24"><path d="M12 8.5v2M12 20.54l2.74-2.27a1 1 0 0 1 .64-.23H18a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10.04a2 2 0 0 0 2 2h2.65a1 1 0 0 1 .64.23L12 20.54Z"/><path d="M12 13.5h.01"/></symbol>
+  <symbol id="i-cancel" viewBox="0 0 24 24"><path d="m15 9-6 6M15 15 9 9M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-7l-5 3v-3H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 8h15l-4-4"/><path d="M20 16H5l4 4"/></symbol>
+  <symbol id="i-screen" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M11 18.5h2"/></symbol>
+  <symbol id="i-duo" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="16" rx="2.5"/><path d="M12 4v16"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5v-3a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H14a3.5 3.5 0 0 0 0-7h-4a3.5 3.5 0 0 1 0-7h5.5"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 17a8 8 0 1 1 16 0"/><path d="m12 17 4-5"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/><path d="M12 8v4l2.5 1.5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5 12 5s9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5M16 7l5 5-5 5"/></symbol>
+  <symbol id="tail" viewBox="0 0 24 14" preserveAspectRatio="none"><path fill="currentColor" stroke="none" d="M21.8078 0C20.0078 1 19.7594 6.40089 23.4997 12.4998C24.2565 13.7338 23.6023 13.9471 21.4402 13.7338C13.9997 12.9998 9.00268 3.99981 0 3.99981C0.00810194 3.99979 13.0078 0.499757 13.0078 0.499757C15.5075 1.01693 21.8078 0 21.8078 0Z"/></symbol>
+  <!-- Third-party marks: their own shapes. -->
+  <symbol id="b-apple" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M16.4 12.6c0-2.4 2-3.5 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9s-1.9-.9-3.1-.8C6.8 7.3 5.3 8.2 4.5 9.6c-1.7 2.9-.4 7.2 1.2 9.6.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8s1.9.8 3.1.8c1.3 0 2.1-1.2 2.9-2.4.9-1.3 1.3-2.6 1.3-2.7 0 0-2.7-1-2.7-3.9ZM14.1 5.5c.6-.8 1.1-1.9 1-3-.9 0-2.1.6-2.7 1.4-.6.7-1.1 1.8-1 2.9 1 .1 2.1-.5 2.7-1.3Z"/></symbol>
+  <symbol id="b-windows" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M3 5.3 10.4 4.3v7.1H3V5.3Zm8.3-1.1L21 3v8.4h-9.7V4.2ZM3 12.4h7.4v7.2L3 18.6v-6.2Zm8.3 0H21V21l-9.7-1.3v-7.3Z"/></symbol>
+  <symbol id="b-android" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M17.6 9.5 19.4 6.4a.4.4 0 0 0-.7-.4l-1.8 3.1A11 11 0 0 0 12 8a11 11 0 0 0-4.9 1.1L5.3 6a.4.4 0 1 0-.7.4l1.8 3.1A10.4 10.4 0 0 0 1 17.8h22a10.4 10.4 0 0 0-5.4-8.3ZM7 15a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm10 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></symbol>
+  <symbol id="r-devin" viewBox="0 0 24 24"><path fill="currentColor" d="M1.984 8.248V3.495C1.984 3.287 2.096 3.093 2.277 2.989L6.391 0.613C6.572 0.509 6.795 0.509 6.976 0.613L11.091 2.989C11.272 3.093 11.383 3.287 11.383 3.495V5.923C11.402 6.729 11.828 7.507 12.578 7.94C13.327 8.373 14.214 8.353 14.922 7.965L17.024 6.752C17.205 6.647 17.428 6.647 17.609 6.752L21.723 9.128C21.904 9.232 22.016 9.425 22.016 9.634V14.385C22.016 14.594 21.904 14.787 21.723 14.892L17.609 17.268C17.428 17.372 17.205 17.372 17.024 17.268L14.939 16.064C14.228 15.667 13.334 15.643 12.578 16.08C11.828 16.513 11.402 17.291 11.384 18.097V20.524C11.384 20.733 11.272 20.926 11.091 21.03L6.976 23.406C6.795 23.51 6.573 23.51 6.392 23.406L2.277 21.03C2.096 20.926 1.984 20.733 1.984 20.524V15.772C1.984 15.563 2.096 15.37 2.277 15.266L6.392 12.89C6.573 12.786 6.795 12.786 6.976 12.89L9.083 14.106C9.79 14.491 10.674 14.51 11.422 14.078C12.178 13.642 12.605 12.855 12.617 12.042C12.598 11.235 12.172 10.374 11.422 9.941C10.673 9.508 9.786 9.528 9.078 9.915L6.967 11.142C6.785 11.247 6.561 11.247 6.379 11.141L2.275 8.754C2.095 8.649 1.984 8.456 1.984 8.248Z"/></symbol>
+  <symbol id="r-cursor" viewBox="0 0 24 24"><path fill="currentColor" d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23"/></symbol>
+  <symbol id="r-grok" viewBox="0 0 24 24"><path fill="currentColor" fill-rule="evenodd" d="M6.469 8.776L16.512 23h-4.464L2.005 8.776H6.47zm-.004 7.9l2.233 3.164L6.467 23H2l4.465-6.324zM22 2.582V23h-3.659V7.764L22 2.582zM22 1l-9.952 14.095-2.233-3.163L17.533 1H22z"/></symbol>
+  <symbol id="r-dsh" viewBox="0 0 50 50"><path fill="currentColor" d="M48.8354 10.0479C48.3232 9.79199 48.1025 10.2798 47.8032 10.5278C47.7007 10.6079 47.6143 10.7119 47.5273 10.8076C46.7793 11.624 45.9048 12.1597 44.7622 12.0957C43.0923 12 41.666 12.5356 40.4058 13.8398C40.1377 12.2319 39.2476 11.272 37.8926 10.6558C37.1836 10.3359 36.4668 10.0156 35.9702 9.31982C35.6235 8.82373 35.5293 8.27197 35.356 7.72754C35.2456 7.3999 35.1353 7.06396 34.7651 7.00781C34.3633 6.94385 34.2056 7.2876 34.0479 7.57568C33.418 8.75195 33.1733 10.0479 33.1973 11.3599C33.2524 14.312 34.4736 16.6641 36.8999 18.3359C37.1758 18.5278 37.2466 18.7197 37.1597 19C36.9946 19.5757 36.7974 20.1357 36.624 20.7119C36.5137 21.0801 36.3486 21.1597 35.9624 21C34.6309 20.4321 33.481 19.5918 32.4644 18.5757C30.7393 16.8721 29.1792 14.9917 27.2334 13.52C26.7764 13.1758 26.3193 12.856 25.8467 12.5518C23.8618 10.584 26.1069 8.96777 26.627 8.77588C27.1704 8.57568 26.8159 7.8877 25.0591 7.896C23.3022 7.90381 21.6953 8.50391 19.647 9.30371C19.3477 9.42383 19.0322 9.51172 18.7095 9.58398C16.8501 9.22363 14.9199 9.14355 12.9033 9.37598C9.10596 9.80762 6.07275 11.6396 3.84326 14.7681C1.16455 18.5278 0.53418 22.7998 1.30664 27.2559C2.11768 31.9521 4.46582 35.8398 8.07373 38.8799C11.8159 42.0322 16.1255 43.5762 21.041 43.2803C24.0269 43.104 27.3516 42.6963 31.1016 39.4561C32.0469 39.936 33.0396 40.1279 34.686 40.272C35.9546 40.3921 37.1758 40.208 38.1211 40.0078C39.6021 39.688 39.4995 38.2881 38.9639 38.0322C34.623 35.9678 35.5762 36.8081 34.71 36.1279C36.9155 33.4639 40.2402 30.6958 41.54 21.728C41.6426 21.0161 41.5557 20.5679 41.54 19.9917C41.5322 19.6396 41.6108 19.5039 42.0049 19.4639C43.0923 19.3359 44.1479 19.0317 45.1167 18.4878C47.9292 16.9199 49.064 14.3438 49.3315 11.2559C49.3711 10.7837 49.3237 10.2959 48.8354 10.0479ZM24.3262 37.8398C20.1196 34.4639 18.0791 33.3521 17.2358 33.3999C16.4482 33.4482 16.5898 34.3682 16.7632 34.9678C16.9443 35.5601 17.1812 35.9683 17.5117 36.4878C17.7402 36.832 17.8979 37.3442 17.2832 37.728C15.9282 38.584 13.5728 37.4399 13.4624 37.3838C10.7207 35.7358 8.42822 33.5601 6.81348 30.584C5.25342 27.7197 4.34766 24.6479 4.19775 21.3677C4.1582 20.5757 4.38672 20.2959 5.15869 20.1519C6.17529 19.96 7.22314 19.9199 8.23926 20.0718C12.5327 20.7119 16.1885 22.6719 19.2529 25.7759C21.002 27.5439 22.3252 29.6558 23.6885 31.7202C25.1377 33.9121 26.6978 36 28.6831 37.7119C29.3843 38.312 29.9434 38.7681 30.479 39.104C28.8643 39.2881 26.1699 39.3281 24.3262 37.8398ZM26.3433 24.6001C26.3433 24.248 26.6191 23.9678 26.9658 23.9678C27.0444 23.9678 27.1152 23.9839 27.1782 24.0078C27.2651 24.04 27.3438 24.0879 27.4067 24.1602C27.5171 24.272 27.5801 24.4321 27.5801 24.6001C27.5801 24.9521 27.3042 25.2319 26.9575 25.2319C26.6108 25.2319 26.3433 24.9521 26.3433 24.6001ZM32.6064 27.8799C32.2046 28.0479 31.8027 28.1919 31.4165 28.208C30.8179 28.2397 30.1641 27.9922 29.8096 27.688C29.2583 27.2158 28.8643 26.9521 28.6987 26.1279C28.6279 25.7759 28.6675 25.2319 28.7305 24.9199C28.8721 24.248 28.7144 23.8159 28.2495 23.4238C27.8716 23.104 27.3911 23.0161 26.8633 23.0161C26.666 23.0161 26.4849 22.9277 26.3511 22.856C26.1304 22.7441 25.9492 22.4639 26.1226 22.1201C26.1777 22.0078 26.4458 21.7358 26.5088 21.688C27.2256 21.272 28.0527 21.4077 28.8169 21.7197C29.5259 22.0161 30.0615 22.5601 30.834 23.3281C31.6216 24.2559 31.7632 24.5117 32.2124 25.208C32.5669 25.752 32.8901 26.312 33.1104 26.9521C33.2446 27.3521 33.0713 27.6802 32.6064 27.8799Z"/></symbol>
+  <symbol id="r-claude" viewBox="0 0 24 24"><path fill="#D97757" d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></symbol>
+  <symbol id="r-codex" viewBox="0 0 24 24"><path fill="currentColor" d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></symbol>
+  <symbol id="b-slack" viewBox="0 0 54 54"><path fill="#36C5F0" d="M19.712.133a5.381 5.381 0 0 0-5.376 5.387 5.381 5.381 0 0 0 5.376 5.386h5.376V5.52A5.381 5.381 0 0 0 19.712.133m0 14.365H5.376A5.381 5.381 0 0 0 0 19.884a5.381 5.381 0 0 0 5.376 5.387h14.336a5.381 5.381 0 0 0 5.376-5.387 5.381 5.381 0 0 0-5.376-5.386"/>
+      <path fill="#2EB67D" d="M53.76 19.884a5.381 5.381 0 0 0-5.376-5.386 5.381 5.381 0 0 0-5.376 5.386v5.387h5.376a5.381 5.381 0 0 0 5.376-5.387m-14.336 0V5.52A5.381 5.381 0 0 0 34.048.133a5.381 5.381 0 0 0-5.376 5.387v14.364a5.381 5.381 0 0 0 5.376 5.387 5.381 5.381 0 0 0 5.376-5.387"/>
+      <path fill="#ECB22E" d="M34.048 54a5.381 5.381 0 0 0 5.376-5.387 5.381 5.381 0 0 0-5.376-5.386h-5.376v5.386A5.381 5.381 0 0 0 34.048 54m0-14.365h14.336a5.381 5.381 0 0 0 5.376-5.386 5.381 5.381 0 0 0-5.376-5.387H34.048a5.381 5.381 0 0 0-5.376 5.387 5.381 5.381 0 0 0 5.376 5.386"/>
+      <path fill="#E01E5A" d="M0 34.249a5.381 5.381 0 0 0 5.376 5.386 5.381 5.381 0 0 0 5.376-5.386v-5.387H5.376A5.381 5.381 0 0 0 0 34.249m14.336 0v14.364A5.381 5.381 0 0 0 19.712 54a5.381 5.381 0 0 0 5.376-5.387V34.249a5.381 5.381 0 0 0-5.376-5.387 5.381 5.381 0 0 0-5.376 5.387"/></symbol>
+  
+  <symbol id="b-github" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.15-1.11-1.46-1.11-1.46-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.56 9.56 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></symbol>
+</svg>
+
+<!-- ============ Nav ============ -->
+<header class="nav" id="nav">
+  <div class="w">
+    <a class="brand" href="#top" aria-label="monoid"><img src="assets/mark.svg" alt="" width="26" height="26"><span class="wordmark">monoid</span></a>
+    <nav class="nav-list" id="nav-list" aria-label="Sections" data-t-aria="nav.sections.7ff5">
+      <a href="#pool"><span data-t="nav.pool.7786">Pool</span></a>
+      <a href="#teams"><span data-t="nav.teams.cbfd">Teams</span></a>
+      <a href="#devices"><span data-t="nav.devices.df48">Devices</span></a>
+      <a href="#security"><span data-t="nav.security.f25c">Security</span></a>
+      <a href="#changelog"><span data-t="nav.changelog.164b">Changelog</span></a>
+      <a href="#download"><span data-t="nav.download.a479">Download</span></a>
+      <a href="#faq"><span data-t="nav.faq.0368">FAQ</span></a>
+      <a class="btn btn-ink nav-cta" data-app href="https://app.monoid.build"><span data-t="nav.open-monoid.5754">Open monoid</span></a>
+      <span class="nav-ind" aria-hidden="true"></span>
+    </nav>
+    <div class="nav-tools">
+      <a class="icon-link" href="https://github.com/AFK-surf/still.fail" aria-label="GitHub" title="GitHub"><svg aria-hidden="true"><use href="#b-github"/></svg></a>
+      <a class="btn btn-ink sm" data-app href="https://app.monoid.build"><span data-t="nav.open-monoid.5754">Open monoid</span></a>
+      <button class="menu-btn" type="button" aria-label="Menu" data-t-aria="nav.menu.57f5" aria-expanded="false" aria-controls="nav-list"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path class="m1" d="M4 7h16"/><path class="m2" d="M4 12h16"/><path class="m3" d="M4 17h16"/></svg></button>
+    </div>
+  </div>
+  <div class="nav-scrim" aria-hidden="true"></div>
+</header>
+
+<main id="top">
+
+<!-- ============ Hero: paper, the headline beside its lead, a low band of the mark's field below ============ -->
+<section class="band hero" data-tone="paper" aria-labelledby="hero-title">
+  <div class="w hero-top">
+    <h1 id="hero-title" class="display"><span data-t="hero.one-devices.6d97">One devices</span></h1>
+    <div class="hero-body">
+      <p class="lead">
+        <span data-t="hero.monoid-joins-the-agents.7887">monoid joins the agents on all your computers into one: <b>one account pool</b>, <b>one team</b> in Slack, <b>every device</b> picking up where you left&nbsp;off.</span>
+      </p>
+      <div class="actions">
+        <a class="btn btn-ink lg" href="#download"><span data-t="hero.download-monoid.7e7d">Download monoid</span><svg class="ico arr" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <a class="btn btn-line lg" data-app href="https://app.monoid.build"><span data-t="hero.open-the-web-app.7646">Open the web app</span></a>
+      </div>
+    </div>
+  </div>
+  <!-- The field: the mark taken apart, its eyes (dots) and cheeks (pills) one to a cell on the 24U grid. A ripple runs
+       out from one Ink cell (you; main.js places it) and every cell answers in turn. No labels: the picture is abstract,
+       and the canvas's label carries the meaning. -->
+  <div class="field-wrap">
+    <canvas class="field" id="field" role="img" aria-label="You ask once and a ripple reaches every device: a station still running at 3 a.m. on Saturday, the pool moving to the next account at 80%." data-t-aria="hero.you-ask-once-and.1d0b"></canvas>
+    <button class="fpause" type="button" id="pause" aria-pressed="false" aria-label="Pause the animation" data-t-aria="hero.pause-the-animation.83e0" hidden><svg class="ps" viewBox="0 0 10 10" aria-hidden="true"><rect x="1.6" y="1.2" width="2.3" height="7.6" rx=".7"/><rect x="6.1" y="1.2" width="2.3" height="7.6" rx=".7"/></svg><svg class="pl" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.6 1.7v6.6a.6.6 0 0 0 .9.5l5.3-3.3a.6.6 0 0 0 0-1L3.5 1.2a.6.6 0 0 0-.9.5Z"/></svg></button>
+  </div>
+</section>
+
+<!-- ============ Works with ============ -->
+<section class="band" data-tone="paper" aria-label="Works with" data-t-aria="works-with.works-with.a129">
+  <div class="w">
+    <div class="strip">
+      <p><span data-t="works-with.connects-these-agents.74bd">Connects these agents</span></p>
+      <ul class="names agents">
+        <li><svg class="lg"><use href="#r-claude"/></svg>Claude Code</li><li><svg class="lg"><use href="#r-codex"/></svg>Codex</li><li><svg class="lg"><use href="#r-cursor"/></svg>Cursor</li><li><svg class="lg"><use href="#r-devin"/></svg>Devin</li><li><svg class="lg"><use href="#r-grok"/></svg>Grok Build</li><li><svg class="lg"><use href="#r-dsh"/></svg>DeepSeek Harness</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 01 Account pool ============ -->
+<section class="band sec" data-tone="paper" id="pool" aria-labelledby="pool-title">
+  <div class="w">
+    <div class="split-head rv">
+      <div>
+        <h2 id="pool-title"><span data-t="pool.one-pool-no-limit.44f4">One pool, no limit left unused</span></h2>
+      </div>
+      <p class="lead"><span data-t="pool.new-chats-favour-accounts.3839">New chats favour accounts that reset soonest with the most left, but never pile onto one.</span></p>
+    </div>
+
+    <div class="pool rv">
+      <div class="callouts">
+        <div class="callout">
+          <h3><span data-t="pool.picks-the-account.911e">Picks the account</span></h3>
+          <p><span data-t="pool.skips-accounts-signed-out.ba78">Skips accounts signed out, refused or out of quota; one past 80% of its 5-hour limit goes last.</span></p>
+        </div>
+        <div class="callout">
+          <h3><span data-t="pool.moves-without-losing-work.0dca">Moves without losing work</span></h3>
+          <p><span data-t="pool.a-chat-stays-on.3437">A chat stays on its account while it can; when it moves, the agent reads its history back.</span></p>
+        </div>
+      </div>
+
+      <figure class="pool-fig" aria-label="Three layers: new chats drop into the pool, each gets an account, and runs on a station" data-t-aria="pool.three-layers-new-chats.0812">
+        <div class="iso-box">
+          <svg class="iso" viewBox="0 0 324 596" fill="none" stroke-linejoin="round" aria-hidden="true"><path d="M6.1 108V294" stroke="#B5B3AD" stroke-dasharray="2 4" stroke-linecap="round"/><path d="M317.9 108V294" stroke="#B5B3AD" stroke-dasharray="2 4" stroke-linecap="round"/><path d="M6.1 304V490" stroke="#B5B3AD" stroke-dasharray="2 4" stroke-linecap="round"/><path d="M317.9 304V490" stroke="#B5B3AD" stroke-dasharray="2 4" stroke-linecap="round"/><polygon points="6.1,490 162,580 162,590 6.1,500" fill="#ECEBE7" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="317.9,490 162,580 162,590 317.9,500" fill="#E2E0DB" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="162,400 317.9,490 162,580 6.1,490" fill="#F7F6F3" stroke="#D6D4CE" stroke-width="0.75"/><path d="M182.8 418L37.3 502" stroke="#E6E4DF" stroke-width=".75"/><path d="M141.2 418L286.7 502" stroke="#E6E4DF" stroke-width=".75"/><path d="M208.8 433L63.3 517" stroke="#E6E4DF" stroke-width=".75"/><path d="M115.2 433L260.7 517" stroke="#E6E4DF" stroke-width=".75"/><path d="M234.7 448L89.3 532" stroke="#E6E4DF" stroke-width=".75"/><path d="M89.3 448L234.7 532" stroke="#E6E4DF" stroke-width=".75"/><path d="M260.7 463L115.2 547" stroke="#E6E4DF" stroke-width=".75"/><path d="M63.3 463L208.8 547" stroke="#E6E4DF" stroke-width=".75"/><path d="M286.7 478L141.2 562" stroke="#E6E4DF" stroke-width=".75"/><path d="M37.3 478L182.8 562" stroke="#E6E4DF" stroke-width=".75"/><g class="pl-run" data-n="1"><ellipse cx="155.1" cy="438" rx="36.7" ry="21.2" stroke="#1C1B1A" stroke-width="1.5"/></g><g class="pl-run" data-n="0"><ellipse cx="130.8" cy="508" rx="36.7" ry="21.2" stroke="#1C1B1A" stroke-width="1.5"/></g><g class="pl-run" data-n="2"><ellipse cx="179.3" cy="536" rx="36.7" ry="21.2" stroke="#1C1B1A" stroke-width="1.5"/></g><polygon points="120.4,420 155.1,440 155.1,458 120.4,438" fill="#ECEBE7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="189.7,420 155.1,440 155.1,458 189.7,438" fill="#DEDCD7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="155.1,400 189.7,420 155.1,440 120.4,420" fill="#FFFFFF" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="155.1,415 163.7,420 155.1,425 146.4,420" fill="#2D74CA"/><polygon points="168.9,448 203.6,468 203.6,486 168.9,466" fill="#ECEBE7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="238.2,448 203.6,468 203.6,486 238.2,466" fill="#DEDCD7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="203.6,428 238.2,448 203.6,468 168.9,448" fill="#FFFFFF" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="203.6,443 212.2,448 203.6,453 194.9,448" fill="#2F8F5B"/><polygon points="96.2,490 130.8,510 130.8,528 96.2,508" fill="#ECEBE7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="165.5,490 130.8,510 130.8,528 165.5,508" fill="#DEDCD7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="130.8,470 165.5,490 130.8,510 96.2,490" fill="#FFFFFF" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="130.8,485 139.5,490 130.8,495 122.2,490" fill="#B75400"/><polygon points="144.7,518 179.3,538 179.3,556 144.7,536" fill="#ECEBE7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="214,518 179.3,538 179.3,556 214,536" fill="#DEDCD7" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="179.3,498 214,518 179.3,538 144.7,518" fill="#FFFFFF" stroke="#C9C7C1" stroke-width="0.75"/><polygon points="179.3,513 188,518 179.3,523 170.7,518" fill="#835CBE"/><path class="pl-run" data-n="0" d="M130.8 312V487" stroke="#1C1B1A" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-run" data-n="1" d="M155.1 242V417" stroke="#1C1B1A" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-run" data-n="2" d="M179.3 340V515" stroke="#1C1B1A" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><polygon points="6.1,294 162,384 162,394 6.1,304" fill="#E6E4DF" stroke="#CFCDC7" stroke-width="0.75"/><polygon points="317.9,294 162,384 162,394 317.9,304" fill="#DEDCD7" stroke="#CFCDC7" stroke-width="0.75"/><polygon points="162,204 317.9,294 162,384 6.1,294" fill="#FFFFFF" stroke="#CFCDC7" stroke-width="0.75"/><polygon points="96.2,247 137.8,271 137.8,276 96.2,252" fill="#ECEBE7" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="203.6,233 137.8,271 137.8,276 203.6,238" fill="#E2E0DB" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="162,209 203.6,233 137.8,271 96.2,247" fill="#FFFFFF" stroke="#D6D4CE" stroke-width="0.75"/><g class="pl-lit" data-n="1"><polygon points="162,209 203.6,233 137.8,271 96.2,247" fill="#FFFFFF" stroke="#1C1B1A" stroke-width="1.5"/></g><ellipse cx="162" cy="220" rx="4.3" ry="2.5" fill="#1C1B1A"/><polygon points="113.5,241 119.6,244.5 112.6,248.5 106.6,245" fill="#2F8F5B"/><polygon points="120.6,245.1 126.7,248.6 119.7,252.6 113.7,249.1" fill="#2F8F5B"/><polygon points="127.7,249.2 133.8,252.7 126.8,256.7 120.8,253.2" fill="#2F8F5B"/><polygon points="134.8,253.3 140.9,256.8 133.9,260.8 127.9,257.3" fill="#2F8F5B"/><polygon points="141.9,257.4 148,260.9 141,264.9 135,261.4" fill="#E2E0DB"/><polygon points="144.7,275 186.2,299 186.2,304 144.7,280" fill="#ECEBE7" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="252.1,261 186.2,299 186.2,304 252.1,266" fill="#E2E0DB" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="210.5,237 252.1,261 186.2,299 144.7,275" fill="#FFFFFF" stroke="#D6D4CE" stroke-width="0.75"/><ellipse cx="210.5" cy="248" rx="4.3" ry="2.5" fill="#1C1B1A"/><polygon points="162,269 168.1,272.5 161.1,276.5 155.1,273" fill="#2F8F5B"/><polygon points="169.1,273.1 175.2,276.6 168.2,280.6 162.2,277.1" fill="#2F8F5B"/><polygon points="176.2,277.2 182.3,280.7 175.3,284.7 169.3,281.2" fill="#E2E0DB"/><polygon points="183.3,281.3 189.4,284.8 182.4,288.8 176.4,285.3" fill="#E2E0DB"/><polygon points="190.4,285.4 196.5,288.9 189.5,292.9 183.5,289.4" fill="#E2E0DB"/><polygon points="23.4,289 65,313 65,318 23.4,294" fill="#ECEBE7" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="130.8,275 65,313 65,318 130.8,280" fill="#E2E0DB" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="89.3,251 130.8,275 65,313 23.4,289" fill="#FFFFFF" stroke="#D6D4CE" stroke-width="0.75"/><ellipse cx="89.3" cy="262" rx="4.3" ry="2.5" fill="#1C1B1A"/><polygon points="40.8,283 46.8,286.5 39.9,290.5 33.8,287" fill="#E6A23C"/><polygon points="47.9,287.1 53.9,290.6 47,294.6 40.9,291.1" fill="#E2E0DB"/><polygon points="55,291.2 61,294.7 54.1,298.7 48,295.2" fill="#E2E0DB"/><polygon points="62.1,295.3 68.1,298.8 61.2,302.8 55.1,299.3" fill="#E2E0DB"/><polygon points="69.2,299.4 75.2,302.9 68.3,306.9 62.2,303.4" fill="#E2E0DB"/><polygon points="259,270 300.6,294 234.7,332 193.2,308" fill="#FAFAF8" stroke="#A3A19B" stroke-width="1" stroke-dasharray="3 3"/><ellipse cx="259" cy="281" rx="4.3" ry="2.5" stroke="#A3A19B" stroke-width="1"/><polygon points="210.5,302 216.6,305.5 209.6,309.5 203.6,306" fill="none" stroke="#C9C7C1" stroke-width=".75"/><polygon points="217.6,306.1 223.7,309.6 216.7,313.6 210.7,310.1" fill="none" stroke="#C9C7C1" stroke-width=".75"/><polygon points="224.7,310.2 230.8,313.7 223.8,317.7 217.8,314.2" fill="none" stroke="#C9C7C1" stroke-width=".75"/><polygon points="231.8,314.3 237.9,317.8 230.9,321.8 224.9,318.3" fill="none" stroke="#C9C7C1" stroke-width=".75"/><polygon points="238.9,318.4 245,321.9 238,325.9 232,322.4" fill="none" stroke="#C9C7C1" stroke-width=".75"/><polygon points="71.9,317 113.5,341 113.5,346 71.9,322" fill="#ECEBE7" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="179.3,303 113.5,341 113.5,346 179.3,308" fill="#E2E0DB" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="137.8,279 179.3,303 113.5,341 71.9,317" fill="#FFFFFF" stroke="#D6D4CE" stroke-width="0.75"/><g class="pl-lit" data-n="0"><polygon points="137.8,279 179.3,303 113.5,341 71.9,317" fill="#FFFFFF" stroke="#1C1B1A" stroke-width="1.5"/></g><ellipse cx="137.8" cy="290" rx="4.3" ry="2.5" fill="#1C1B1A"/><polygon points="89.3,311 95.3,314.5 88.4,318.5 82.3,315" fill="#2F8F5B"/><polygon points="96.4,315.1 102.4,318.6 95.5,322.6 89.4,319.1" fill="#2F8F5B"/><polygon points="103.5,319.2 109.5,322.7 102.6,326.7 96.5,323.2" fill="#2F8F5B"/><polygon points="110.6,323.3 116.6,326.8 109.7,330.8 103.6,327.3" fill="#2F8F5B"/><polygon points="117.7,327.4 123.7,330.9 116.8,334.9 110.7,331.4" fill="#2F8F5B"/><polygon points="120.4,345 162,369 162,374 120.4,350" fill="#ECEBE7" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="227.8,331 162,369 162,374 227.8,336" fill="#E2E0DB" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="186.2,307 227.8,331 162,369 120.4,345" fill="#FFFFFF" stroke="#D6D4CE" stroke-width="0.75"/><g class="pl-lit" data-n="2"><polygon points="186.2,307 227.8,331 162,369 120.4,345" fill="#FFFFFF" stroke="#1C1B1A" stroke-width="1.5"/></g><ellipse cx="186.2" cy="318" rx="4.3" ry="2.5" fill="#1C1B1A"/><polygon points="137.8,339 143.8,342.5 136.9,346.5 130.8,343" fill="#2F8F5B"/><polygon points="144.9,343.1 150.9,346.6 144,350.6 137.9,347.1" fill="#2F8F5B"/><polygon points="152,347.2 158,350.7 151.1,354.7 145,351.2" fill="#2F8F5B"/><polygon points="159.1,351.3 165.1,354.8 158.2,358.8 152.1,355.3" fill="#E2E0DB"/><polygon points="166.2,355.4 172.2,358.9 165.3,362.9 159.2,359.4" fill="#E2E0DB"/><polygon points="6.1,98 162,188 162,198 6.1,108" fill="#ECEBE7" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="317.9,98 162,188 162,198 317.9,108" fill="#E2E0DB" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="162,8 317.9,98 162,188 6.1,98" fill="#FFFFFF" stroke="#D6D4CE" stroke-width="0.75"/><polygon points="96.2,80 127.4,98 96.2,116 65,98" fill="#F7F6F3" stroke="#C9C7C1" stroke-width="1" stroke-dasharray="3 3"/><polygon points="162,80 193.2,98 162,116 130.8,98" fill="#F7F6F3" stroke="#C9C7C1" stroke-width="1" stroke-dasharray="3 3"/><polygon points="227.8,80 259,98 227.8,116 196.6,98" fill="#F7F6F3" stroke="#C9C7C1" stroke-width="1" stroke-dasharray="3 3"/><path class="pl-route" data-n="0" d="M96.2 98L130.8 305" stroke="#1C1B1A" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-route" data-n="1" d="M162 98L155.1 235" stroke="#1C1B1A" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><path class="pl-route" data-n="2" d="M227.8 98L179.3 333" stroke="#1C1B1A" stroke-width="1.25" stroke-dasharray="2 3" stroke-linecap="round"/><g class="pl-chat" data-n="0" style="--dx:-34.6px;--dy:-209px"><polygon points="106.6,303 130.8,317 130.8,321 106.6,307" fill="#2E2D2B" stroke="#1C1B1A" stroke-width="0.5"/><polygon points="155.1,303 130.8,317 130.8,321 155.1,307" fill="#0F0E0D" stroke="#1C1B1A" stroke-width="0.5"/><polygon points="130.8,289 155.1,303 130.8,317 106.6,303" fill="#1C1B1A" stroke="#1C1B1A" stroke-width="0.5"/><path d="M133.4 296.5L120.4 304" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M140.3 300.5L131.7 305.5" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/></g><g class="pl-chat" data-n="1" style="--dx:6.9px;--dy:-139px"><polygon points="130.8,233 155.1,247 155.1,251 130.8,237" fill="#2E2D2B" stroke="#1C1B1A" stroke-width="0.5"/><polygon points="179.3,233 155.1,247 155.1,251 179.3,237" fill="#0F0E0D" stroke="#1C1B1A" stroke-width="0.5"/><polygon points="155.1,219 179.3,233 155.1,247 130.8,233" fill="#1C1B1A" stroke="#1C1B1A" stroke-width="0.5"/><path d="M157.7 226.5L144.7 234" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M164.6 230.5L155.9 235.5" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/></g><g class="pl-chat" data-n="2" style="--dx:48.5px;--dy:-237px"><polygon points="155.1,331 179.3,345 179.3,349 155.1,335" fill="#2E2D2B" stroke="#1C1B1A" stroke-width="0.5"/><polygon points="203.6,331 179.3,345 179.3,349 203.6,335" fill="#0F0E0D" stroke="#1C1B1A" stroke-width="0.5"/><polygon points="179.3,317 203.6,331 179.3,345 155.1,331" fill="#1C1B1A" stroke="#1C1B1A" stroke-width="0.5"/><path d="M181.9 324.5L168.9 332" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M188.8 328.5L180.2 333.5" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/></g></svg>
+          <span class="pt" style="--x:98.1%;--y:16.4%" aria-hidden="true"><span data-t="pool.new-chats-3.2c25">new chats · 3</span></span>
+          <span class="pt pt-l" style="--x:1.9%;--y:49.3%;--xm:98.1%" aria-hidden="true"><span data-t="pool.6-accounts.3547">6 accounts</span></span>
+          <span class="pt" style="--x:98.1%;--y:82.2%" aria-hidden="true"><span data-t="pool.stations-4.dc28">stations · 4</span></span>
+        </div>
+      </figure>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 Teams ============ -->
+<section class="band sec" data-tone="paper" id="teams" aria-labelledby="teams-title">
+  <div class="w">
+    <div class="split-head rv">
+      <div>
+        <h2 id="teams-title"><span data-t="teams.one-asks-the-team.eb68">One asks, the team carries on</span></h2>
+      </div>
+      <p class="lead"><span data-t="teams.your-team-works-with.91ac">Your team works with one agent, right where it already talks.</span></p>
+    </div>
+
+    <div class="rails rv">
+      <div class="cells" role="region" aria-label="How teams use it" data-t-aria="teams.how-teams-use-it.4e4a">
+        <article class="cell" data-seq="900 1000 2000 2600 1000 2800" data-still="5">
+          <div class="vis">
+            <div class="tp tp-sl" aria-hidden="true">
+              <div class="sl-rail"><span class="sl-ws">A</span><i></i><i></i></div>
+              <div class="sl-pane">
+                <div class="sl-head"><b><span data-t="teams.thread.7863">Thread</span></b><span># eng-web</span></div>
+                <div class="sl-msgs" data-follow>
+                  <div class="sl-m" data-in="1"><i class="sl-av"><span data-t="teams.l.d160">L</span></i><div><p class="h"><b><span data-t="teams.lin-xiao.c10a">Lin Xiao</span></b><time>10:42</time></p><p><span class="sl-at">@monoid</span> <span data-t="teams.the-login-page-looks.324a">the login page looks wrong on phones, can you fix it?</span></p></div></div>
+                  <div class="sl-slot">
+                    <p class="sl-st" data-in="2" data-out="3"><span><b>monoid</b> <span data-t="teams.running-command.5112">Running command…</span></span></p>
+                    <div class="sl-m" data-in="3"><img class="sl-av" src="assets/mark.svg" alt="" width="30" height="30"><div><p class="h"><b>monoid</b><em>APP</em><time>10:44</time></p><p><span data-t="teams.the-button-was-fixed.f9c7">The button was fixed at 320px wide on phones. It now fills its container; checked at 375px.</span></p><p class="sl-ctx" data-in="3" data-out="5"><span data-t="teams.done-the-login-button.1e33">✓ Done: the login button fits at 375px</span></p></div></div>
+                  </div>
+                  <div class="sl-m" data-in="4"><i class="sl-av z"><span data-t="teams.z.909f">Z</span></i><div><p class="h"><b><span data-t="teams.zhou-ning.fb3b">Zhou Ning</span></b><time>10:45</time></p><p><span data-t="teams.in-dark-mode-the.a497">In dark mode the login button can't be seen either</span></p></div></div>
+                  <p class="sl-st" data-in="5"><span><b>monoid</b> <span data-t="teams.thinking.a60d">Thinking…</span></span></p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <h3><span data-t="teams.mention-it-in-slack.974c">Mention it in Slack</span></h3>
+          <p><span data-t="teams.mention-it-in-a.fb96">Mention it in a thread and it starts, replies there, and hears everyone in it.</span></p>
+        </article>
+        <article class="cell" data-seq="1500 4200">
+          <div class="vis">
+            <div class="tp frame mk tp-ws" aria-hidden="true">
+              <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span></div>
+              <div class="ws-side">
+                <div class="mk-nav"><i class="mk-i compose"></i><span data-t="teams.new-chat.009b">New chat</span><i class="mk-i filter"></i></div>
+                <div class="mk-day"><span data-t="teams.today.2434">Today</span></div>
+                <div class="ws-clip"><div class="ws-list" data-in="1">
+                  <div class="mk-row unread ws-new"><div class="l1"><i class="mk-busy"></i><b><span data-t="teams.why-api-p99-got.6d33">Why API p99 got slow</span></b></div><div class="l2"><span><span data-t="teams.since-yesterday-api-orders.0396">Since yesterday /api/orders p99 went from 150ms to almost 2 s</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z"><span data-t="teams.n.b51a">N</span></i></span></div></div>
+                  <div class="mk-row on"><div class="l1"><i class="mk-busy"></i><b><span data-t="teams.login-page-on-phones.36b2">Login page on phones</span></b><i class="mk-kind"><i class="mk-slack"></i></i></div><div class="l2"><span><span data-t="teams.the-button-was-fixed.f9c7">The button was fixed at 320px wide on phones. It now fills its container; checked at 375px.</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="teams.x.c032">X</span></i><i class="mk-face z"><span data-t="teams.n.b51a">N</span></i></span></div></div>
+                  <div class="mk-row unread"><div class="l1"><i class="mk-dot"></i><b><span data-t="teams.csv-export-for-orders.a0f6">CSV export for orders</span></b></div><div class="l2"><i class="mk-i check"></i><span><span data-t="teams.the-export-streams-with.de76">the export streams with the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span data-t="teams.x.c032">X</span></i></span></div></div>
+                  <div class="mk-row unread"><div class="l1"><i class="mk-dot r"></i><b><span data-t="teams.weekly-dependency-updates.8446">Weekly dependency updates</span></b></div><div class="l2"><span><span data-t="teams.the-other-23-packages.dae7">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z"><span data-t="teams.n.b51a">N</span></i></span></div></div>
+                </div></div>
+              </div>
+            </div>
+          </div>
+          <h3><span data-t="teams.one-workspace-one-list.b2c8">One workspace, one list</span></h3>
+          <p><span data-t="teams.teammates-see-the-same.a914">Teammates see the same chats, stations and jobs; a share link shows one chat to outsiders.</span></p>
+        </article>
+        <article class="cell" data-seq="900 1000 2600 1000 1400" data-still="2">
+          <div class="vis">
+            <div class="tp frame mk tp-st" aria-hidden="true">
+              <div class="mk-row on"><div class="l1"><i class="mk-st willow"><i class="mk-i monitor"></i></i><b>Willow</b><span class="run"><span data-t="teams.1-running.1e6f">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:19%"></i></span>CPU<span>81%</span></span><span class="mk-chip"><span class="meter"><i style="width:43%"></i></span><span data-t="teams.mem.2555">Mem</span><span>36.6G</span></span><span class="mk-chip"><span class="meter"><i style="width:38%"></i></span><span data-t="teams.disk.ef99">Disk</span><span>612G</span></span></div><div class="l3"><span data-t="teams.direct-12-ms.9f57">Direct · 12 ms</span></div></div>
+              <div class="st-lane"><i class="pk dn" data-in="1" data-out="2"></i><i class="pk up" data-in="3" data-out="4"></i><span class="st-say" data-in="1" data-out="3">pnpm test login</span><span class="st-say" data-in="3"><span data-t="teams.results-changes.e5d0">↑ results, changes</span></span></div>
+              <div class="mk-row st-srv"><div class="l1"><i class="mk-st server"><i class="mk-i server"></i></i><b><span data-t="teams.server.cb0c">Server</span></b><span class="st-swap"><span class="ok a"></span><span class="run b"><span data-t="teams.1-running.1e6f">1 running</span></span></span></div><div class="chips"><span class="mk-chip"><span class="meter cpu"><i style="width:37%"></i></span>CPU<span class="st-swap"><span class="a">63%</span><span class="b">24%</span></span></span><span class="mk-chip"><span class="meter"><i style="width:45%"></i></span><span data-t="teams.mem.2555">Mem</span><span>71G</span></span><span class="mk-chip rd"><span class="meter"><i style="width:99%"></i></span><span data-t="teams.disk.ef99">Disk</span><span>1.4G</span></span></div><div class="l3"><span data-t="teams.relay-46-ms.b49c">Relay · 46 ms</span></div></div>
+            </div>
+          </div>
+          <h3><span data-t="teams.stations-hand-off-work.ff6a">Stations hand off work</span></h3>
+          <p><span data-t="teams.an-agent-can-build.ba26">An agent can build or test on another computer, syncing only the changed files.</span></p>
+        </article>
+      </div>
+      <div class="tm-nav">
+        <div class="tm-dots"><i class="tm-pill" aria-hidden="true"></i><button type="button" aria-current="true"><span class="dv-vh"><span data-t="teams.mention-it-in-slack.974c">Mention it in Slack</span></span></button><button type="button"><span class="dv-vh"><span data-t="teams.one-workspace-one-list.b2c8">One workspace, one list</span></span></button><button type="button"><span class="dv-vh"><span data-t="teams.stations-hand-off-work.ff6a">Stations hand off work</span></span></button></div>
+        <span class="tm-count tnum" aria-hidden="true"><b>01</b> / 03</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 Every device ============ -->
+<section class="band sec" data-tone="paper" id="devices" aria-labelledby="devices-title">
+  <div class="w">
+    <div class="split-head rv">
+      <div>
+        <h2 id="devices-title"><span data-t="devices.switch-screens-and-carry.9a56">Switch screens and carry on</span></h2>
+      </div>
+      <p class="lead"><span data-t="devices.chats-and-files-stay.b6bc">Chats and files stay on your stations: start at your desk, review on your phone.</span></p>
+    </div>
+
+    <!-- Large screens with motion allowed (html.scrolly): the four devices, one a step, played by the scroll: the Duo
+         open on two panels, Android, the desktop app, the web app (main.js, GSAP ScrollTrigger). -->
+    <!-- The placeholder keeps the scene's height from the first paint; the scene itself is built from the template
+         only where it plays (main.js), so phones never parse or style it. -->
+    <div class="dv-show"></div>
+    <template id="dv-stage" data-i18n-section="devices-stage">
+      <div class="dv-stage">
+        <div class="dv-copy">
+          <p class="dv-no tnum" aria-hidden="true"><b>01</b><span> / 04</span></p>
+          <div class="dv-steps">
+          <article class="dv-step" data-i="0"><span class="eyebrow">iPhone · iPhone Duo</span><h3><span data-t="devices-stage.unfold-it-two-screens.8f30">Unfold it: two screens</span></h3><p><span data-t="devices-stage.chats-on-the-left.d736">Chats on the left, the running chat on the right. Drive a station's iOS Simulator, both screens and fold included.</span></p></article>
+          <article class="dv-step" data-i="1"><span class="eyebrow">Android</span><h3><span data-t="devices-stage.lend-your-phone-to.ec63">Lend your phone to the agent</span></h3><p><span data-t="devices-stage.the-agent-tests-on.1e13">The agent tests on its own virtual screen while you keep using the phone. The Android app is out.</span></p></article>
+          <article class="dv-step" data-i="2"><span class="eyebrow">Mac · Windows</span><h3><span data-t="devices-stage.every-computer-s-load.576b">Every computer's load, in one window</span></h3><p><span data-t="devices-stage.the-desktop-app-shows.5b0a">The desktop app shows each station's CPU, memory and disk; new tasks go to the least busy.</span></p></article>
+          <article class="dv-step" data-i="3"><span class="eyebrow"><span data-t="devices-stage.web.a832">Web</span></span><h3><span data-t="devices-stage.open-a-browser-and.fe3b">Open a browser and go</span></h3><p><span data-t="devices-stage.the-apps-interface-with.0328">The apps' interface with nothing to install, on Linux and iPad too.</span></p></article>
+          </div>
+          <ol class="dv-rail" aria-label="Devices" data-t-aria="devices-stage.devices.df48">
+            <li data-i="0"><button type="button"><svg class="ico"><use href="#i-duo"/></svg>iPhone</button></li>
+            <li data-i="1"><button type="button"><svg><use href="#b-android"/></svg>Android</button></li>
+            <li data-i="2"><button type="button"><svg class="ico"><use href="#i-screen"/></svg><span data-t="devices-stage.desktop.532c">Desktop</span></button></li>
+            <li data-i="3"><button type="button"><svg class="ico"><use href="#i-globe"/></svg><span data-t="devices-stage.web.a832">Web</span></button></li>
+          </ol>
+          <div class="dv-bar" aria-hidden="true"><i></i></div>
+        </div>
+        <!-- One device a step, upright and whole, in the middle of the stage at the size that fills it (main.js: --k);
+             the steps cross-fade as the scroll moves. -->
+        <div class="dv-view" aria-hidden="true">
+          <div class="d d-duo">
+            <div class="duo" aria-hidden="true">
+              <!-- Opened as a book (its inner screen 890 × 626 points, apps/mbui sfapp/tabletop_wbtest.mbt): the desktop's
+                   structure with touch's sizes, the panes as cards across (native_in 4 apart), the sidebar ending on the
+                   fold (sfdesk/frame.mbt side_on_fold); no rail of the app's own: iOS 27.1 lays the places, the chat's
+                   actions, the bell and the new chat out in its own glass down the trailing edge (sf/native_bars.mbt,
+                   host/ios_nav.h), the status bar in that column, the composer level with the round new-chat button. -->
+              <div class="duo-scr mk mk-m">
+                <div class="dc side">
+                  <div class="dws"><span class="gl ws"><i class="b">A</i>Acme<i class="mk-i chevd"></i></span><i class="mk-i filter"></i></div>
+                  <div class="mk-search"><i class="mk-i search"></i><span data-t="devices-stage.search-everything.09d8">Search everything</span></div>
+                  <div class="mk-mday"><span data-t="devices-stage.today.2434">Today</span></div>
+                  <div class="mk-mrow on"><div class="l1"><i class="mk-busy"></i><b><span data-t="devices-stage.login-page-on-phones.36b2">Login page on phones</span></b></div><div class="l2"><span><span data-t="devices-stage.the-login-button-was.490b">The login button was fixed at 320px wide on phones, wider than the screen.</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="devices-stage.x.c032">X</span></i><i class="mk-face z"><span data-t="devices-stage.n.b51a">N</span></i></span></div></div>
+                  <div class="mk-mrow unread"><div class="l1"><i class="mk-dot"></i><b><span data-t="devices-stage.csv-export-for-orders.a0f6">CSV export for orders</span></b></div><div class="l2"><i class="mk-i check"></i><span><span data-t="devices-stage.the-export-streams-by.f3ba">the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span data-t="devices-stage.x.c032">X</span></i></span></div></div>
+                  <div class="mk-mrow unread"><div class="l1"><i class="mk-dot r"></i><b><span data-t="devices-stage.weekly-dependency-updates.8446">Weekly dependency updates</span></b></div><div class="l2"><span><span data-t="devices-stage.the-other-23-packages.dae7">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z"><span data-t="devices-stage.n.b51a">N</span></i></span></div></div>
+                </div>
+                <div class="dc page">
+                  <div class="dbar"><h4><span data-t="devices-stage.login-page-on-phones.36b2">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices-stage.x.c032">X</span></i><i class="mk-face z"><span data-t="devices-stage.n.b51a">N</span></i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span>Willow</span></span></div>
+                  <div class="mk-mmsgs">
+                    <div class="mk-mmsg"><div class="hd"><i class="mk-face"><span data-t="devices-stage.x.c032">X</span></i><b><span data-t="devices-stage.lin-xiao.c10a">Lin Xiao</span></b><span class="tm"><span data-t="devices-stage.9-min-ago.3dae">9 min ago</span></span></div><div class="bd"><span data-t="devices-stage.the-login-page-looks.605b">The login page looks wrong on phones, can you fix it?</span></div></div>
+                    <div class="mk-mmsg"><div class="hd"><i class="mk-av"><i class="mk-lg a"></i></i><b>Opus 5.5</b><span class="tm"><span data-t="devices-stage.6-min-ago.0787">6 min ago</span></span></div><div class="bd md"><p><span data-t="devices-stage.the-login-button-was.490b">The login button was fixed at 320px wide on phones, wider than the screen.</span></p><ul><li><span data-t="devices-stage.it-now-fills-its.2b23">It now fills its container; checked in a screenshot at 375px, it fits</span></li><li><span data-t="devices-stage.branch.1627">Branch </span><code>fix/login-button</code></li></ul></div></div>
+                    <div class="act"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span data-t="devices-stage.running-pnpm-test-login.e38c">Running pnpm test login</span></span><span class="t">12s</span></div>
+                  </div>
+                  <div class="mk-mcomp"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="devices-stage.message.68f4">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
+                </div>
+                <div class="dcol">
+                  <div class="dst"><b>9:41</b><span><i class="wifi"></i><i class="bat"></i></span></div>
+                  <span class="gl two"><i class="mk-i more"></i><i class="mk-i info"></i><i class="mk-i panel"></i></span><span class="gl tabs"><span class="on"><i class="mk-i chats"></i></span><span><i class="mk-i folder"></i></span><span><i class="mk-i glyph"></i></span><span><i class="mk-i gear"></i></span><span><i class="mk-i bell"></i></span></span><span class="new"><i class="mk-i plus"></i></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="d d-android">
+            <div class="mk-phone droid" aria-hidden="true">
+              <span class="isl"></span><span class="gest"></span>
+              <div class="mk mk-m">
+                <div class="mk-sb"><span>9:41<i class="ni"></i></span><span class="ic"><i class="sig"></i><i class="wifi"></i><i class="bat"></i></span></div>
+                <div class="mk-mchat-top"><span class="back"><i class="mk-i chevl"></i></span><h4><span data-t="devices-stage.login-page-on-phones.36b2">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices-stage.x.c032">X</span></i><i class="mk-face z"><span data-t="devices-stage.n.b51a">N</span></i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span>Willow</span></span><span class="keys"><i class="mk-i info"></i><i class="mk-i more"></i></span></div>
+                <div class="mk-mmsgs">
+                  <div class="mk-mmsg"><div class="hd"><i class="mk-face"><span data-t="devices-stage.x.c032">X</span></i><b><span data-t="devices-stage.lin-xiao.c10a">Lin Xiao</span></b><span class="tm"><span data-t="devices-stage.9-min-ago.3dae">9 min ago</span></span></div><div class="bd"><span data-t="devices-stage.the-login-page-looks.605b">The login page looks wrong on phones, can you fix it?</span></div></div>
+                  <div class="mk-mmsg"><div class="hd"><i class="mk-av"><i class="mk-lg a"></i></i><b>Opus 5.5</b><span class="tm"><span data-t="devices-stage.6-min-ago.0787">6 min ago</span></span></div><div class="bd"><span data-t="devices-stage.the-login-button-was.50b4">The login button was fixed at 320px wide on phones, wider than the screen. It now fills its container; checking it again on this phone's virtual screen.</span></div></div>
+                  <div class="act"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span data-t="devices-stage.screenshot-login-page-at.9c76">Screenshot: login page at 375px</span></span><span class="t">4s</span></div>
+                </div>
+                <div class="mk-mcomp"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="devices-stage.message.68f4">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
+              </div>
+              <!-- Android's notification shade over the app, with the share's ongoing notification as AdbShare.java
+                   builds it for chats' grants (low importance: no pop-up; its small icon in the status bar) -->
+              <div class="shade"><div class="qs"><b>9:41</b><span data-t="devices-stage.fri-nov-6.63fd">Fri, Nov 6</span></div><p class="sil"><span data-t="devices-stage.silent.aa93">Silent</span></p><div class="notif"><i class="si"></i><div><span class="app">monoid · <span data-t="devices-stage.2m.aeae">2m</span><i class="mk-i chevd"></i></span><b><span data-t="devices-stage.debugging-shared-with-2.22ad">Debugging shared with 2 chats</span></b><span class="m"><span data-t="devices-stage.login-page-on-phones.3581">“Login page on phones” is using a virtual screen in the background</span></span><span class="acts"><span data-t="devices-stage.turn-off-debug-sharing.296a">Turn off debug sharing</span></span></div></div></div>
+            </div>
+          </div>
+          <div class="d d-desk">
+            <div class="mk mk-win">
+              <div class="mk-app mac">
+                <div class="mk-dock">
+                  <span class="mk-tl"><i></i><i></i><i></i></span>
+                  <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri on"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
+                  <div class="mk-side st">
+                    <div class="mk-nav"><i class="mk-i plus"></i><span data-t="devices-stage.add-station.a826">Add station</span></div>
+                    <div class="mk-row on"><div class="l1"><i class="mk-st willow"><i class="mk-i monitor"></i></i><b>Willow</b><span class="run"><span data-t="devices-stage.1-running.1e6f">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:19%"></i></span>CPU<span>81%</span></span><span class="mk-chip"><span class="meter"><i style="width:43%"></i></span><span data-t="devices-stage.mem.2555">Mem</span><span>36.6G</span></span><span class="mk-chip"><span class="meter"><i style="width:38%"></i></span><span data-t="devices-stage.disk.ef99">Disk</span><span>612G</span></span></div><div class="l3"><span data-t="devices-stage.direct-12-ms.9f57">Direct · 12 ms</span></div></div>
+                    <div class="mk-row"><div class="l1"><i class="mk-st mini"><i class="mk-i mini"></i></i><b>Mini</b><span class="ok"></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:12%"></i></span>CPU<span>88%</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span data-t="devices-stage.mem.2555">Mem</span><span>6.2G</span></span><span class="mk-chip"><span class="meter"><i style="width:58%"></i></span><span data-t="devices-stage.disk.ef99">Disk</span><span>214G</span></span></div><div class="l3"><span data-t="devices-stage.direct-18-ms.60e9">Direct · 18 ms</span></div></div>
+                    <div class="mk-row"><div class="l1"><i class="mk-st laptop"><i class="mk-i laptop"></i></i><b><span data-t="devices-stage.laptop.ed91">Laptop</span></b><span class="ok"></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:8%"></i></span>CPU<span>92%</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span data-t="devices-stage.mem.2555">Mem</span><span>14.1G</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span data-t="devices-stage.disk.ef99">Disk</span><span>388G</span></span></div><div class="l3"><span data-t="devices-stage.direct-9-ms.b605">Direct · 9 ms</span></div></div>
+                    <div class="mk-row"><div class="l1"><i class="mk-st server"><i class="mk-i server"></i></i><b><span data-t="devices-stage.server.cb0c">Server</span></b><span class="run"><span data-t="devices-stage.1-running.1e6f">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:37%"></i></span>CPU<span>63%</span></span><span class="mk-chip"><span class="meter"><i style="width:45%"></i></span><span data-t="devices-stage.mem.2555">Mem</span><span>71G</span></span><span class="mk-chip rd"><span class="meter"><i style="width:99%"></i></span><span data-t="devices-stage.disk.ef99">Disk</span><span>1.4G</span></span></div><div class="l3"><span data-t="devices-stage.relay-46-ms.b49c">Relay · 46 ms</span></div></div>
+                  </div>
+                </div>
+                <div class="mk-page">
+                  <div class="mk-pg">
+                    <div class="hd"><span class="tile"><i class="mk-st willow"><i class="mk-i monitor"></i></i></span><div><h4>Willow</h4><p><span class="dot"></span><span data-t="devices-stage.idle-apple-m4-max.fad1">Idle · Apple M4 Max · 64 GB · macOS 26.6.2</span></p></div><i class="mk-i more"></i></div>
+                    <div class="mk-seg"><span class="on"><span data-t="devices-stage.overview.0efc">Overview</span></span><span><span data-t="devices-stage.processes.ed73">Processes</span></span><span><span data-t="devices-stage.settings.c7f7">Settings</span></span><span><span data-t="devices-stage.software-device.3ae6">Software &amp; device</span></span></div>
+                    <h5><span data-t="devices-stage.resources.87df">Resources</span></h5>
+                    <div class="mk-dials">
+                      <div class="mk-dial"><b>81<small>%</small></b><span class="cells" style="--n:2"></span><span class="lb"><span data-t="devices-stage.cpu-idle.1a5d">CPU idle</span></span><span class="sb"><span data-t="devices-stage.load-3-1.0a75">Load 3.1</span></span></div>
+                      <div class="mk-dial"><b>36.6<small>GB</small></b><span class="cells" style="--n:4"></span><span class="lb"><span data-t="devices-stage.memory-left.1fac">Memory left</span></span><span class="sb"><span data-t="devices-stage.of-64-gb.28fa">of 64 GB</span></span></div>
+                      <div class="mk-dial"><b>612<small>GB</small></b><span class="cells" style="--n:4"></span><span class="lb"><span data-t="devices-stage.disk-left.f33b">Disk left</span></span><span class="sb"><span data-t="devices-stage.of-994-gb.5bad">of 994 GB</span></span></div>
+                    </div>
+                    <div class="mk-net"><span><span data-t="devices-stage.direct.bc81">Direct</span></span><span>↑ <b>0.4 KB/s</b></span><span><span data-t="devices-stage.latency.3e39">Latency</span> <b>12 ms</b></span><span>↓ <b>1.2 KB/s</b></span></div><p class="mk-line"><span data-t="devices-stage.3-agent-processes-266.ea19">3 agent processes 266 MB</span></p><p class="mk-uses"><span><span data-t="devices-stage.monoid-uses.2425">monoid uses</span></span><span>CPU <b>134%</b></span><span><span data-t="devices-stage.memory.89c8">Memory</span> <b>2.59 GB</b></span><span><span data-t="devices-stage.network.53eb">Network</span> <b>903 KB/s</b></span><i class="mk-i chevr"></i></p>
+                    <h5>Profile<span class="n">1</span></h5>
+                    <div class="mk-plist"><div class="mk-prow"><i class="pm"><i class="mk-lg a"></i></i><span class="t"><span class="tt">lin@acme.dev<span class="mk-rt"><i class="cc"></i>CC</span></span><small><span data-t="devices-stage.subscription-2-13-models.02cd">Subscription · 2 / 13 models on</span></small></span><i class="mk-i chevr"></i></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="d d-web">
+            <div class="mk mk-win web">
+              <div class="mk-browser"><span class="tl"><i></i><i></i><i></i></span><span class="nav"><i class="mk-i chevl"></i><i class="mk-i chevr"></i></span><span class="mk-url"><i class="mk-i lock"></i>app.monoid.build</span></div>
+              <div class="mk-app">
+                <div class="mk-dock">
+                  <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
+                  <div class="mk-side">
+                    <div class="mk-nav"><i class="mk-i compose"></i><span data-t="devices-stage.new-chat.009b">New chat</span><i class="mk-i filter"></i></div>
+                    <div class="mk-day"><span data-t="devices-stage.today.2434">Today</span></div>
+                    <div class="mk-row"><div class="l1"><i class="mk-busy"></i><b><span data-t="devices-stage.login-page-on-phones.36b2">Login page on phones</span></b></div><div class="l2"><span><span data-t="devices-stage.the-login-button-was.490b">The login button was fixed at 320px wide on phones, wider than the screen.</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="devices-stage.x.c032">X</span></i><i class="mk-face z"><span data-t="devices-stage.n.b51a">N</span></i></span></div></div>
+                    <div class="mk-row on"><div class="l1"><i class="mk-slot"></i><b><span data-t="devices-stage.csv-export-for-orders.a0f6">CSV export for orders</span></b></div><div class="l2"><i class="mk-i check"></i><span><span data-t="devices-stage.the-export-streams-by.f3ba">the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span data-t="devices-stage.x.c032">X</span></i></span></div></div>
+                    <div class="mk-row unread"><div class="l1"><i class="mk-dot r"></i><b><span data-t="devices-stage.weekly-dependency-updates.8446">Weekly dependency updates</span></b></div><div class="l2"><span><span data-t="devices-stage.the-other-23-packages.dae7">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z"><span data-t="devices-stage.n.b51a">N</span></i></span></div></div>
+                  </div>
+                </div>
+                <div class="mk-page">
+                  <div class="mk-bar"><h4><span data-t="devices-stage.csv-export-for-orders.a0f6">CSV export for orders</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices-stage.x.c032">X</span></i></span><span class="mk-pill"><span class="lg"><i class="mk-lg o"></i></span><span>Mini</span></span><span class="end"><i class="mk-i more"></i><i class="mk-i panel"></i></span></div>
+                  <div class="mk-msgs">
+                    <div class="mk-mine"><div class="bub"><span data-t="devices-stage.add-a-csv-export.1b4f">Add a CSV export to the orders list</span></div><span class="tm"><span data-t="devices-stage.26-min-ago.8b19">26 min ago</span></span></div>
+                    <div class="mk-msg"><i class="mk-av"><i class="mk-lg o"></i></i><div class="hd"><b>Codex</b><span class="tm"><span data-t="devices-stage.3-min-ago.ffa4">3 min ago</span></span></div><div class="bd md"><span data-t="devices-stage.done-the-export-streams.6fe0">Done: the export streams rows by the current filters, 100k rows in about 2.3 s, merged into main (<code>a3f9c21</code>).</span></div></div>
+                  </div>
+                  <div class="mk-composer"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="devices-stage.press-space-to-type.eb5a">Press Space to type</span></span><i class="b send"><i class="mk-i up"></i></i></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+    <!-- Small screens, and large ones without the scene: the devices as cards on a native horizontal scroller that snaps
+         card to card (the browser's own momentum), the next card peeking in. Dots below jump to a card and follow the
+         swipe; on a mouse, arrows step through (main.js: the devices swiper). -->
+    <div class="dv-swipe rv">
+      <div class="fpanels" id="dv-track" role="region" aria-roledescription="carousel" data-t-aria-roledescription="devices.carousel.9ef0" aria-labelledby="devices-title" tabindex="0">
+      <!-- iPhone · Duo -->
+      <div class="fpanel" id="dv-p1" role="group" aria-roledescription="slide" data-t-aria-roledescription="devices.slide.e75e" aria-labelledby="dv-h1">
+        <div class="txt">
+          <span class="eyebrow">iPhone · iPhone Duo</span>
+          <h3 id="dv-h1"><span data-t="devices.two-screens-open-folded.cd38">Two screens open; folded, it still replies</span></h3>
+          <p><span data-t="devices.chats-on-the-left.1f45">Chats on the left, the running chat on the right; for now, the web app on your home screen.</span></p>
+          <div class="actions"><a class="btn btn-ink" data-app href="https://app.monoid.build"><span data-t="devices.open-on-iphone.0e24">Open on iPhone</span><svg class="ico arr"><use href="#i-arrow"/></svg></a></div>
+        </div>
+        <div class="vis">
+          <div class="duo" aria-hidden="true">
+            <!-- Opened as a book (its inner screen 890 × 626 points, apps/mbui sfapp/tabletop_wbtest.mbt): the desktop's
+                 structure with touch's sizes, the panes as cards across (native_in 4 apart), the sidebar ending on the
+                 fold (sfdesk/frame.mbt side_on_fold); no rail of the app's own: iOS 27.1 lays the places, the chat's
+                 actions, the bell and the new chat out in its own glass down the trailing edge (sf/native_bars.mbt,
+                 host/ios_nav.h), the status bar in that column, the composer level with the round new-chat button. -->
+            <div class="duo-scr mk mk-m">
+              <div class="dc side">
+                <div class="dws"><span class="gl ws"><i class="b">A</i>Acme<i class="mk-i chevd"></i></span><i class="mk-i filter"></i></div>
+                <div class="mk-search"><i class="mk-i search"></i><span data-t="devices.search-everything.09d8">Search everything</span></div>
+                <div class="mk-mday"><span data-t="devices.today.2434">Today</span></div>
+                <div class="mk-mrow on"><div class="l1"><i class="mk-busy"></i><b><span data-t="devices.login-page-on-phones.36b2">Login page on phones</span></b></div><div class="l2"><span><span data-t="devices.the-login-button-was.490b">The login button was fixed at 320px wide on phones, wider than the screen.</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="devices.x.c032">X</span></i><i class="mk-face z"><span data-t="devices.n.b51a">N</span></i></span></div></div>
+                <div class="mk-mrow unread"><div class="l1"><i class="mk-dot"></i><b><span data-t="devices.csv-export-for-orders.a0f6">CSV export for orders</span></b></div><div class="l2"><i class="mk-i check"></i><span><span data-t="devices.the-export-streams-by.f3ba">the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span data-t="devices.x.c032">X</span></i></span></div></div>
+                <div class="mk-mrow unread"><div class="l1"><i class="mk-dot r"></i><b><span data-t="devices.weekly-dependency-updates.8446">Weekly dependency updates</span></b></div><div class="l2"><span><span data-t="devices.the-other-23-packages.dae7">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z"><span data-t="devices.n.b51a">N</span></i></span></div></div>
+              </div>
+              <div class="dc page">
+                <div class="dbar"><h4><span data-t="devices.login-page-on-phones.36b2">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices.x.c032">X</span></i><i class="mk-face z"><span data-t="devices.n.b51a">N</span></i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span>Willow</span></span></div>
+                <div class="mk-mmsgs">
+                  <div class="mk-mmsg"><div class="hd"><i class="mk-face"><span data-t="devices.x.c032">X</span></i><b><span data-t="devices.lin-xiao.c10a">Lin Xiao</span></b><span class="tm"><span data-t="devices.9-min-ago.3dae">9 min ago</span></span></div><div class="bd"><span data-t="devices.the-login-page-looks.605b">The login page looks wrong on phones, can you fix it?</span></div></div>
+                  <div class="mk-mmsg"><div class="hd"><i class="mk-av"><i class="mk-lg a"></i></i><b>Opus 5.5</b><span class="tm"><span data-t="devices.6-min-ago.0787">6 min ago</span></span></div><div class="bd md"><p><span data-t="devices.the-login-button-was.490b">The login button was fixed at 320px wide on phones, wider than the screen.</span></p><ul><li><span data-t="devices.it-now-fills-its.2b23">It now fills its container; checked in a screenshot at 375px, it fits</span></li><li><span data-t="devices.branch.1627">Branch </span><code>fix/login-button</code></li></ul></div></div>
+                  <div class="act"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span data-t="devices.running-pnpm-test-login.e38c">Running pnpm test login</span></span><span class="t">12s</span></div>
+                </div>
+                <div class="mk-mcomp"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="devices.message.68f4">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
+              </div>
+              <div class="dcol">
+                <div class="dst"><b>9:41</b><span><i class="wifi"></i><i class="bat"></i></span></div>
+                <span class="gl two"><i class="mk-i more"></i><i class="mk-i info"></i><i class="mk-i panel"></i></span><span class="gl tabs"><span class="on"><i class="mk-i chats"></i></span><span><i class="mk-i folder"></i></span><span><i class="mk-i glyph"></i></span><span><i class="mk-i gear"></i></span><span><i class="mk-i bell"></i></span></span><span class="new"><i class="mk-i plus"></i></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Android -->
+      <div class="fpanel" id="dv-p2" role="group" aria-roledescription="slide" data-t-aria-roledescription="devices.slide.e75e" aria-labelledby="dv-h2">
+        <div class="txt">
+          <span class="eyebrow">Android</span>
+          <h3 id="dv-h2"><span data-t="devices.lend-your-phone-to.ec63">Lend your phone to the agent</span></h3>
+          <p><span data-t="devices.the-agent-tests-on.4218">The agent tests on its own virtual screen, out of your way, closing after 10 idle minutes.</span></p>
+          <div class="actions">
+            <a class="btn btn-ink" href="https://app.monoid.build/releases/latest/android"><span data-t="devices.download-for-android.a35a">Download for Android</span><svg class="ico arr"><use href="#i-arrow"/></svg></a>
+            <span class="qr"><img src="assets/android-qr.svg" alt="" width="72" height="72"><span data-t="devices.scan-to-download.a9f8">Scan to download</span></span>
+          </div>
+        </div>
+        <div class="vis">
+          <div class="mk-phone droid" aria-hidden="true">
+            <span class="isl"></span><span class="gest"></span>
+            <div class="mk mk-m">
+              <div class="mk-sb"><span>9:41<i class="ni"></i></span><span class="ic"><i class="sig"></i><i class="wifi"></i><i class="bat"></i></span></div>
+              <div class="mk-mchat-top"><span class="back"><i class="mk-i chevl"></i></span><h4><span data-t="devices.login-page-on-phones.36b2">Login page on phones</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices.x.c032">X</span></i><i class="mk-face z"><span data-t="devices.n.b51a">N</span></i></span><span class="mk-pill"><span class="lg"><i class="mk-lg a"></i><i class="mk-busy"></i></span><span>Willow</span></span><span class="keys"><i class="mk-i info"></i><i class="mk-i more"></i></span></div>
+              <div class="mk-mmsgs">
+                <div class="mk-mmsg"><div class="hd"><i class="mk-face"><span data-t="devices.x.c032">X</span></i><b><span data-t="devices.lin-xiao.c10a">Lin Xiao</span></b><span class="tm"><span data-t="devices.9-min-ago.3dae">9 min ago</span></span></div><div class="bd"><span data-t="devices.the-login-page-looks.605b">The login page looks wrong on phones, can you fix it?</span></div></div>
+                <div class="mk-mmsg"><div class="hd"><i class="mk-av"><i class="mk-lg a"></i></i><b>Opus 5.5</b><span class="tm"><span data-t="devices.6-min-ago.0787">6 min ago</span></span></div><div class="bd"><span data-t="devices.the-login-button-was.50b4">The login button was fixed at 320px wide on phones, wider than the screen. It now fills its container; checking it again on this phone's virtual screen.</span></div></div>
+                <div class="act"><i class="mk-av ag"><i class="mk-lg a"></i></i><span><span data-t="devices.screenshot-login-page-at.9c76">Screenshot: login page at 375px</span></span><span class="t">4s</span></div>
+              </div>
+              <div class="mk-mcomp"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="devices.message.68f4">Message</span></span><i class="b send"><i class="mk-i up"></i></i></div>
+            </div>
+            <!-- Android's notification shade over the app, with the share's ongoing notification as AdbShare.java
+                 builds it for chats' grants (low importance: no pop-up; its small icon in the status bar) -->
+            <div class="shade"><div class="qs"><b>9:41</b><span data-t="devices.fri-nov-6.63fd">Fri, Nov 6</span></div><p class="sil"><span data-t="devices.silent.aa93">Silent</span></p><div class="notif"><i class="si"></i><div><span class="app">monoid · <span data-t="devices.2m.aeae">2m</span><i class="mk-i chevd"></i></span><b><span data-t="devices.debugging-shared-with-2.22ad">Debugging shared with 2 chats</span></b><span class="m"><span data-t="devices.login-page-on-phones.3581">“Login page on phones” is using a virtual screen in the background</span></span><span class="acts"><span data-t="devices.turn-off-debug-sharing.296a">Turn off debug sharing</span></span></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Desktop -->
+      <div class="fpanel" id="dv-p3" role="group" aria-roledescription="slide" data-t-aria-roledescription="devices.slide.e75e" aria-labelledby="dv-h3">
+        <div class="txt">
+          <span class="eyebrow">Mac · Windows</span>
+          <h3 id="dv-h3"><span data-t="devices.every-computer-s-load.576b">Every computer's load, in one window</span></h3>
+          <p><span data-t="devices.each-station-s-cpu.6b3c">Each station's CPU, memory and disk, with tasks queued by load. Mac (Apple silicon) and Windows x64.</span></p>
+          <div class="actions">
+            <a class="btn btn-ink" href="https://app.monoid.build/releases/latest/mac"><svg><use href="#b-apple"/></svg><span data-t="devices.download-for-mac.752c">Download for Mac</span></a>
+            <a class="btn btn-line" href="https://app.monoid.build/releases/latest/win"><svg><use href="#b-windows"/></svg>Windows</a>
+          </div>
+        </div>
+        <div class="vis">
+          <div class="mk-fit" aria-hidden="true"><div class="mk mk-win">
+            <div class="mk-app mac">
+              <div class="mk-dock">
+                <span class="mk-tl"><i></i><i></i><i></i></span>
+                <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri on"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
+                <div class="mk-side st">
+                  <div class="mk-nav"><i class="mk-i plus"></i><span data-t="devices.add-station.a826">Add station</span></div>
+                  <div class="mk-row on"><div class="l1"><i class="mk-st willow"><i class="mk-i monitor"></i></i><b>Willow</b><span class="run"><span data-t="devices.1-running.1e6f">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:19%"></i></span>CPU<span>81%</span></span><span class="mk-chip"><span class="meter"><i style="width:43%"></i></span><span data-t="devices.mem.2555">Mem</span><span>36.6G</span></span><span class="mk-chip"><span class="meter"><i style="width:38%"></i></span><span data-t="devices.disk.ef99">Disk</span><span>612G</span></span></div><div class="l3"><span data-t="devices.direct-12-ms.9f57">Direct · 12 ms</span></div></div>
+                  <div class="mk-row"><div class="l1"><i class="mk-st mini"><i class="mk-i mini"></i></i><b>Mini</b><span class="ok"></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:12%"></i></span>CPU<span>88%</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span data-t="devices.mem.2555">Mem</span><span>6.2G</span></span><span class="mk-chip"><span class="meter"><i style="width:58%"></i></span><span data-t="devices.disk.ef99">Disk</span><span>214G</span></span></div><div class="l3"><span data-t="devices.direct-18-ms.60e9">Direct · 18 ms</span></div></div>
+                  <div class="mk-row"><div class="l1"><i class="mk-st laptop"><i class="mk-i laptop"></i></i><b><span data-t="devices.laptop.ed91">Laptop</span></b><span class="ok"></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:8%"></i></span>CPU<span>92%</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span data-t="devices.mem.2555">Mem</span><span>14.1G</span></span><span class="mk-chip"><span class="meter"><i style="width:61%"></i></span><span data-t="devices.disk.ef99">Disk</span><span>388G</span></span></div><div class="l3"><span data-t="devices.direct-9-ms.b605">Direct · 9 ms</span></div></div>
+                  <div class="mk-row"><div class="l1"><i class="mk-st server"><i class="mk-i server"></i></i><b><span data-t="devices.server.cb0c">Server</span></b><span class="run"><span data-t="devices.1-running.1e6f">1 running</span></span></div><div class="chips"><span class="mk-chip"><span class="meter"><i style="width:37%"></i></span>CPU<span>63%</span></span><span class="mk-chip"><span class="meter"><i style="width:45%"></i></span><span data-t="devices.mem.2555">Mem</span><span>71G</span></span><span class="mk-chip rd"><span class="meter"><i style="width:99%"></i></span><span data-t="devices.disk.ef99">Disk</span><span>1.4G</span></span></div><div class="l3"><span data-t="devices.relay-46-ms.b49c">Relay · 46 ms</span></div></div>
+                </div>
+              </div>
+              <div class="mk-page">
+                <div class="mk-pg">
+                  <div class="hd"><span class="tile"><i class="mk-st willow"><i class="mk-i monitor"></i></i></span><div><h4>Willow</h4><p><span class="dot"></span><span data-t="devices.idle-apple-m4-max.fad1">Idle · Apple M4 Max · 64 GB · macOS 26.6.2</span></p></div><i class="mk-i more"></i></div>
+                  <div class="mk-seg"><span class="on"><span data-t="devices.overview.0efc">Overview</span></span><span><span data-t="devices.processes.ed73">Processes</span></span><span><span data-t="devices.settings.c7f7">Settings</span></span><span><span data-t="devices.software-device.3ae6">Software &amp; device</span></span></div>
+                  <h5><span data-t="devices.resources.87df">Resources</span></h5>
+                  <div class="mk-dials">
+                    <div class="mk-dial"><b>81<small>%</small></b><span class="cells" style="--n:2"></span><span class="lb"><span data-t="devices.cpu-idle.1a5d">CPU idle</span></span><span class="sb"><span data-t="devices.load-3-1.0a75">Load 3.1</span></span></div>
+                    <div class="mk-dial"><b>36.6<small>GB</small></b><span class="cells" style="--n:4"></span><span class="lb"><span data-t="devices.memory-left.1fac">Memory left</span></span><span class="sb"><span data-t="devices.of-64-gb.28fa">of 64 GB</span></span></div>
+                    <div class="mk-dial"><b>612<small>GB</small></b><span class="cells" style="--n:4"></span><span class="lb"><span data-t="devices.disk-left.f33b">Disk left</span></span><span class="sb"><span data-t="devices.of-994-gb.5bad">of 994 GB</span></span></div>
+                  </div>
+                  <div class="mk-net"><span><span data-t="devices.direct.bc81">Direct</span></span><span>↑ <b>0.4 KB/s</b></span><span><span data-t="devices.latency.3e39">Latency</span> <b>12 ms</b></span><span>↓ <b>1.2 KB/s</b></span></div><p class="mk-line"><span data-t="devices.3-agent-processes-266.ea19">3 agent processes 266 MB</span></p><p class="mk-uses"><span><span data-t="devices.monoid-uses.2425">monoid uses</span></span><span>CPU <b>134%</b></span><span><span data-t="devices.memory.89c8">Memory</span> <b>2.59 GB</b></span><span><span data-t="devices.network.53eb">Network</span> <b>903 KB/s</b></span><i class="mk-i chevr"></i></p>
+                  <h5>Profile<span class="n">1</span></h5>
+                  <div class="mk-plist"><div class="mk-prow"><i class="pm"><i class="mk-lg a"></i></i><span class="t"><span class="tt">lin@acme.dev<span class="mk-rt"><i class="cc"></i>CC</span></span><small><span data-t="devices.subscription-2-13-models.02cd">Subscription · 2 / 13 models on</span></small></span><i class="mk-i chevr"></i></div></div>
+                </div>
+              </div>
+            </div>
+          </div></div>
+        </div>
+      </div>
+
+      <!-- Web -->
+      <div class="fpanel" id="dv-p4" role="group" aria-roledescription="slide" data-t-aria-roledescription="devices.slide.e75e" aria-labelledby="dv-h4">
+        <div class="txt">
+          <span class="eyebrow"><span data-t="devices.web.a832">Web</span></span>
+          <h3 id="dv-h4"><span data-t="devices.open-a-browser-and.fe3b">Open a browser and go</span></h3>
+          <p><span data-t="devices.the-apps-interface-with.0328">The apps' interface with nothing to install, on Linux and iPad too.</span></p>
+          <div class="actions"><a class="btn btn-ink" data-app href="https://app.monoid.build"><span data-t="devices.open-the-web-app.7646">Open the web app</span><svg class="ico arr"><use href="#i-arrow"/></svg></a></div>
+        </div>
+        <div class="vis">
+          <div class="mk-fit" aria-hidden="true"><div class="mk mk-win web">
+            <div class="mk-browser"><span class="tl"><i></i><i></i><i></i></span><span class="nav"><i class="mk-i chevl"></i><i class="mk-i chevr"></i></span><span class="mk-url"><i class="mk-i lock"></i>app.monoid.build</span></div>
+            <div class="mk-app">
+              <div class="mk-dock">
+                <div class="mk-rail"><span class="mk-ri"><i class="mk-i bell"></i></span><span class="mk-ri on"><i class="mk-i chats"></i></span><span class="mk-ri"><i class="mk-i folder"></i></span><span class="mk-ri"><i class="mk-i glyph"></i></span><span class="mk-ri"><i class="mk-i quota"></i></span><span class="mk-ri"><i class="mk-i connects"></i></span><span class="mk-ri"><i class="mk-i chart"></i></span><span class="mk-ws">A</span><span class="mk-ri"><i class="mk-i gear"></i></span></div>
+                <div class="mk-side">
+                  <div class="mk-nav"><i class="mk-i compose"></i><span data-t="devices.new-chat.009b">New chat</span><i class="mk-i filter"></i></div>
+                  <div class="mk-day"><span data-t="devices.today.2434">Today</span></div>
+                  <div class="mk-row"><div class="l1"><i class="mk-busy"></i><b><span data-t="devices.login-page-on-phones.36b2">Login page on phones</span></b></div><div class="l2"><span><span data-t="devices.the-login-button-was.490b">The login button was fixed at 320px wide on phones, wider than the screen.</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face"><span data-t="devices.x.c032">X</span></i><i class="mk-face z"><span data-t="devices.n.b51a">N</span></i></span></div></div>
+                  <div class="mk-row on"><div class="l1"><i class="mk-slot"></i><b><span data-t="devices.csv-export-for-orders.a0f6">CSV export for orders</span></b></div><div class="l2"><i class="mk-i check"></i><span><span data-t="devices.the-export-streams-by.f3ba">the export streams by the current filters…</span></span><span class="mk-aside"><i class="mk-lg o"></i><i class="mk-face"><span data-t="devices.x.c032">X</span></i></span></div></div>
+                  <div class="mk-row unread"><div class="l1"><i class="mk-dot r"></i><b><span data-t="devices.weekly-dependency-updates.8446">Weekly dependency updates</span></b></div><div class="l2"><span><span data-t="devices.the-other-23-packages.dae7">The other 23 packages are updated…</span></span><span class="mk-aside"><i class="mk-lg a"></i><i class="mk-face z"><span data-t="devices.n.b51a">N</span></i></span></div></div>
+                </div>
+              </div>
+              <div class="mk-page">
+                <div class="mk-bar"><h4><span data-t="devices.csv-export-for-orders.a0f6">CSV export for orders</span></h4><span class="mk-faces"><i class="mk-face"><span data-t="devices.x.c032">X</span></i></span><span class="mk-pill"><span class="lg"><i class="mk-lg o"></i></span><span>Mini</span></span><span class="end"><i class="mk-i more"></i><i class="mk-i panel"></i></span></div>
+                <div class="mk-msgs">
+                  <div class="mk-mine"><div class="bub"><span data-t="devices.add-a-csv-export.1b4f">Add a CSV export to the orders list</span></div><span class="tm"><span data-t="devices.26-min-ago.8b19">26 min ago</span></span></div>
+                  <div class="mk-msg"><i class="mk-av"><i class="mk-lg o"></i></i><div class="hd"><b>Codex</b><span class="tm"><span data-t="devices.3-min-ago.ffa4">3 min ago</span></span></div><div class="bd md"><span data-t="devices.done-the-export-streams.6fe0">Done: the export streams rows by the current filters, 100k rows in about 2.3 s, merged into main (<code>a3f9c21</code>).</span></div></div>
+                </div>
+                <div class="mk-composer"><i class="b"><i class="mk-i plus"></i></i><span class="ph"><span data-t="devices.press-space-to-type.eb5a">Press Space to type</span></span><i class="b send"><i class="mk-i up"></i></i></div>
+              </div>
+            </div>
+          </div></div>
+        </div>
+      </div>
+      </div>
+      <div class="dv-nav">
+        <div class="dv-dots">
+          <i class="dv-pill" aria-hidden="true"></i>
+          <button type="button" aria-controls="dv-p1" aria-current="true"><span class="dv-vh">iPhone</span></button>
+          <button type="button" aria-controls="dv-p2"><span class="dv-vh">Android</span></button>
+          <button type="button" aria-controls="dv-p3"><span class="dv-vh"><span data-t="devices.desktop.532c">Desktop</span></span></button>
+          <button type="button" aria-controls="dv-p4"><span class="dv-vh"><span data-t="devices.web.a832">Web</span></span></button>
+        </div>
+        <span class="dv-count tnum" aria-hidden="true"><b>01</b> / 04</span>
+        <div class="dv-arrows">
+          <button type="button" data-step="-1" aria-controls="dv-track" disabled><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg><span class="dv-vh"><span data-t="devices.previous.50f9">Previous</span></span></button>
+          <button type="button" data-step="1" aria-controls="dv-track"><svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg><span class="dv-vh"><span data-t="devices.next.bc98">Next</span></span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Security ============ -->
+<section class="band sec" data-tone="paper" id="security" aria-labelledby="security-title">
+  <div class="w">
+    <div class="split-head rv">
+      <div>
+        <h2 id="security-title"><span data-t="security.your-chats-stay-on.97d5">Your chats stay on your computers</span></h2>
+      </div>
+      <p class="lead"><span data-t="security.devices-reach-your-stations.3086">Devices reach your stations directly or by encrypted relay; the cloud can’t read your content.</span></p>
+    </div>
+
+    <div class="sec-grid rv">
+      <ul class="sec-notes">
+        <li>
+          <h3><span data-t="security.peer-to-peer.4c21">Peer to peer</span></h3>
+          <p><span data-t="security.no-ports-to-open.85ee">No ports to open, no VPN, no tunnels.</span></p>
+        </li>
+        <li>
+          <h3><span data-t="security.data-on-your-machines.4dc3">Data on your machines</span></h3>
+          <p><span data-t="security.chats-files-and-history.f35e">Chats, files and history live on the station, not in a cloud database.</span></p>
+        </li>
+      </ul>
+
+      <figure class="sec-net">
+        <svg viewBox="0 0 358 358" fill="none" aria-hidden="true">
+          <defs>
+            <pattern id="sec-cell" width="14" height="14" patternUnits="userSpaceOnUse"><rect width="8" height="8" rx="1.5" fill="#ECEBE7"/></pattern>
+            <pattern id="sec-dot" width="14" height="14" patternUnits="userSpaceOnUse"><circle cx="11" cy="11" r=".9" fill="#C9C7C1"/></pattern>
+          </defs>
+          <!-- frame: a ring of cells, a few lit -->
+          <path d="M0 0h358v8H0zM0 350h358v8H0zM0 14h8v330H0zM350 14h8v330h-8z" fill="url(#sec-cell)"/>
+          <rect x="56" width="8" height="8" rx="1.5" fill="#1C1B1A"/><rect x="196" width="8" height="8" rx="1.5" fill="#C9C7C1"/><rect x="350" y="98" width="8" height="8" rx="1.5" fill="#C9C7C1"/><rect x="350" y="266" width="8" height="8" rx="1.5" fill="#1C1B1A"/><rect x="126" y="350" width="8" height="8" rx="1.5" fill="#C9C7C1"/><rect y="210" width="8" height="8" rx="1.5" fill="#A3A19B"/>
+          <rect x="16.5" y="16.5" width="325" height="325" rx="12" fill="#F4F3F0" stroke="#E6E4DF"/><rect x="16.5" y="16.5" width="325" height="325" rx="12" fill="url(#sec-dot)"/>
+          <!-- construction: every station on one circle, the relay on the half-radius one -->
+          <path d="M16.5 179h325M179 16.5v325" stroke="rgba(28,27,26,.06)"/>
+          <circle cx="179" cy="179" r="152" stroke="rgba(28,27,26,.18)" stroke-dasharray="3 5"/>
+          <circle cx="179" cy="179" r="76" stroke="rgba(28,27,26,.2)" stroke-dasharray="1 5" stroke-linecap="round"/>
+          <!-- links: three direct, one through the relay -->
+          <g class="sn-direct" stroke="#1C1B1A" stroke-width="1.25">
+            <path d="M179 179L82 62"/><path d="M179 179L276 62"/><path d="M179 179L82 296"/>
+          </g>
+          <path class="sn-relay" d="M179 179L276 296" stroke="#A3A19B" stroke-width="1.25" stroke-dasharray="4 5"/>
+          <!-- packets: all leave the phone together; each arrives after its own round trip -->
+          <g class="sn-pkts" fill="#1C1B1A">
+            <circle class="p1" cx="179" cy="179" r="3"/><circle class="p2" cx="179" cy="179" r="3"/><circle class="p3" cx="179" cy="179" r="3"/><circle class="p4" cx="179" cy="179" r="3"/>
+          </g>
+          <!-- stations: name, then how this phone reaches it (the app's own words and demo data) -->
+          <g class="sn-nodes">
+            <g class="n1"><rect x="30.5" y="40.5" width="103" height="43" rx="11"/><rect class="sn-hit" x="30.5" y="40.5" width="103" height="43" rx="11"/>
+              <text class="sn-name" x="82" y="58">Willow</text><text class="sn-via" x="82" y="74"><tspan data-t="security.direct-12-ms.9f57">Direct · 12 ms</tspan></text></g>
+            <g class="n2"><rect x="224.5" y="40.5" width="103" height="43" rx="11"/><rect class="sn-hit" x="224.5" y="40.5" width="103" height="43" rx="11"/>
+              <text class="sn-name" x="276" y="58">Mini</text><text class="sn-via" x="276" y="74"><tspan data-t="security.direct-18-ms.60e9">Direct · 18 ms</tspan></text></g>
+            <g class="n3"><rect x="30.5" y="274.5" width="103" height="43" rx="11"/><rect class="sn-hit" x="30.5" y="274.5" width="103" height="43" rx="11"/>
+              <text class="sn-name" x="82" y="292"><tspan data-t="security.laptop.ed91">Laptop</tspan></text><text class="sn-via" x="82" y="308"><tspan data-t="security.direct-9-ms.b605">Direct · 9 ms</tspan></text></g>
+            <g class="n4"><rect x="224.5" y="274.5" width="103" height="43" rx="11"/><rect class="sn-hit" x="224.5" y="274.5" width="103" height="43" rx="11"/>
+              <text class="sn-name" x="276" y="292"><tspan data-t="security.server.cb0c">Server</tspan></text><text class="sn-via" x="276" y="308"><tspan data-t="security.relay-46-ms.b49c">Relay · 46 ms</tspan></text></g>
+          </g>
+          <!-- the relay: it passes data on, locked -->
+          <g class="sn-lock">
+            <circle cx="227.5" cy="237.5" r="16" fill="#FFFFFF" stroke="#A3A19B" stroke-width="1.25"/>
+            <path class="sn-shackle" d="M224 236v-3a3.5 3.5 0 0 1 7 0v3" stroke="#6E6C68" stroke-width="1.6" stroke-linecap="round"/>
+            <rect x="221.5" y="236" width="12" height="9" rx="2" fill="#6E6C68"/>
+          </g>
+          <!-- this phone -->
+          <rect x="127" y="157" width="104" height="44" rx="11" fill="#1C1B1A"/>
+          <text class="sn-me" x="179" y="183.5"><tspan data-t="security.your-phone.8b1c">Your phone</tspan></text>
+        </svg>
+        <figcaption class="sec-vh"><span data-t="security.diagram-your-phone-reaches.e4f6">Diagram: your phone reaches Willow, Mini and the laptop directly, and the server through an encrypted relay.</span></figcaption>
+      </figure>
+
+      <ul class="sec-notes">
+        <li>
+          <h3><span data-t="security.security-mode.e5d8">Security mode</span></h3>
+          <p><span data-t="security.once-on-members-devices.e746">Once on, members, devices and stations need a trusted device’s signature. The cloud alone can’t add anyone.</span></p>
+        </li>
+        <li>
+          <h3><span data-t="security.vault.fb46">Vault</span></h3>
+          <p><span data-t="security.in-security-mode-the.629d">In security mode, the keys agents use stay encrypted until a person approves.</span></p>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Install ============ -->
+<section class="band sec" data-tone="paper" id="install" aria-labelledby="install-title">
+  <div class="w">
+    <div class="split-head rv">
+      <div>
+        <h2 id="install-title"><span data-t="install.one-command-adds-a.37ce">One command adds a computer</span></h2>
+      </div>
+      <p class="lead"><span data-t="install.stations-run-on-macos.acd8">Stations run on macOS (Apple silicon), Linux (x64, arm64) and Windows (x64), with that computer's user permissions.</span></p>
+    </div>
+    <div class="card install rv">
+      <ol class="steps">
+        <li><b>01</b><span data-t="install.open-the-app-and.4dd1">Open the app and create a workspace</span></li>
+        <li class="now"><b>02</b><span data-t="install.choose-add-station-and.4375">Choose Add station and run its command on the computer</span></li>
+        <li><b>03</b><span data-t="install.sign-in-to-claude.d315">Sign in to Claude Code or Codex; the account joins the pool</span></li>
+      </ol>
+      <div class="term" role="group" aria-label="Terminal" data-t-aria="install.terminal.a1f5">
+        <div class="term-bar">
+          <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="term-name" aria-hidden="true">station · install</span>
+          <button class="copy-btn" type="button" data-copy="curl -fsSL https://app.monoid.build/install.sh | sh -s -- &lt;token&gt;" aria-label="Copy the install command" data-t-aria="install.copy-the-install-command.6d2d"><span class="cb-ico" aria-hidden="true"><svg class="cb-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/></svg><svg class="cb-done" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="cb-l" aria-hidden="true"><span class="cb-a"><span data-t="install.copy.af74">Copy</span></span><span class="cb-b"><span data-t="install.copied.8e3d">Copied</span></span></span></button>
+        </div>
+        <div class="term-body">
+          <div class="row cmd"><span class="p" aria-hidden="true">$ </span><code>curl -fsSL https://app.monoid.build/<wbr>install.sh | sh -s -- &lt;token&gt;</code></div>
+          <div class="row out dim"><span data-t="install.downloading-the-station-joining.efbc">→ Downloading the station, joining workspace “Acme”</span></div>
+          <div class="row out dim"><span data-t="install.registering-it-to-start.67ad">→ Registering it to start at login</span></div>
+          <div class="row out ok"><span data-t="install.station-online-2-accounts.0cad">✓ Station online, 2 accounts in the pool</span></div>
+        </div>
+        <span class="copy-live" role="status"></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Shipped nightly ============ -->
+<section class="band sec" data-tone="paper" id="changelog" aria-labelledby="changelog-title">
+  <div class="w">
+    <div class="split-head rv">
+      <div>
+        <h2 id="changelog-title"><span data-t="changelog.a-new-versionevery-morning.1cd6">A new version<br>every morning</span></h2>
+      </div>
+      <p class="lead"><span data-t="changelog.stations-desktop-android-and.7dae">Stations, desktop, Android and the web update themselves together every night.</span></p>
+    </div>
+    <div class="posts rv">
+      <article class="post feature">
+        <div class="cover"><svg viewBox="0 0 640 352" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><pattern id="cva1" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DEDCD7"><rect x="1" y="1" width="14" height="14" rx="2"/></pattern><pattern id="cva2" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DEDCD7"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/></pattern><pattern id="cva4" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DEDCD7"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/></pattern><pattern id="cva6" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DEDCD7"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern><pattern id="cva9" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DEDCD7"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="17" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="49" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="17" y="49" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern><pattern id="cva12" width="64" height="64" patternUnits="userSpaceOnUse" fill="#DEDCD7"><rect x="1" y="1" width="14" height="14" rx="2"/><rect x="17" y="1" width="14" height="14" rx="2"/><rect x="33" y="1" width="14" height="14" rx="2"/><rect x="49" y="1" width="14" height="14" rx="2"/><rect x="17" y="17" width="14" height="14" rx="2"/><rect x="49" y="17" width="14" height="14" rx="2"/><rect x="1" y="33" width="14" height="14" rx="2"/><rect x="17" y="33" width="14" height="14" rx="2"/><rect x="33" y="33" width="14" height="14" rx="2"/><rect x="49" y="33" width="14" height="14" rx="2"/><rect x="17" y="49" width="14" height="14" rx="2"/><rect x="49" y="49" width="14" height="14" rx="2"/></pattern></defs><rect width="640" height="352" fill="#F4F3F0"/><rect y="320" width="640" height="32" fill="url(#cva12)"/><rect y="288" width="640" height="32" fill="url(#cva9)"/><rect y="256" width="640" height="32" fill="url(#cva6)"/><rect y="224" width="640" height="32" fill="url(#cva4)"/><rect y="192" width="640" height="32" fill="url(#cva2)"/><rect y="176" width="640" height="16" fill="url(#cva1)"/><rect x="529" y="49" width="14" height="14" rx="2" fill="#1C1B1A"/><rect x="577" y="97" width="14" height="14" rx="2" fill="#1C1B1A"/><rect x="465" y="17" width="14" height="14" rx="2" fill="#1C1B1A"/><text x="48" y="112" font-family="Newsreader, Georgia, serif" font-weight="400" font-size="76" letter-spacing="-1.5" fill="#1C1B1A">0.1.7394</text></svg></div>
+        <div class="post-body">
+          <div class="post-meta"><span class="tag"><span data-t="changelog.latest.decd">Latest</span></span><span class="tnum"><span data-t="changelog.november-6-2026.a449">November 6, 2026</span></span></div>
+          <h3><span data-t="changelog.this-release-12-fixes.8541">This release: 12 fixes and 5 new features</span></h3>
+          <div class="hbs">
+            <div class="hb"><span><span data-t="changelog.new.6403">New</span></span><span class="track"><span class="bar" style="--n:5;--c:var(--ink)"></span><span class="val">5</span></span></div>
+            <div class="hb"><span><span data-t="changelog.improved.bb6a">Improved</span></span><span class="track"><span class="bar" style="--n:3"></span><span class="val">3</span></span></div>
+            <div class="hb"><span><span data-t="changelog.fixed.ab98">Fixed</span></span><span class="track"><span class="bar" style="--n:12"></span><span class="val">12</span></span></div>
+          </div>
+          <ul class="changes">
+            <li><svg class="ico"><use href="#i-plus"/></svg><span><span data-t="changelog.a-phone-lent-to.2cde">A phone lent to an agent opens a virtual screen of its own, so you can keep using it</span></span></li>
+            <li><svg class="ico"><use href="#i-plus"/></svg><span><span data-t="changelog.see-which-device-holds.7e61">See which device holds a screen, and disconnect it or make it view-only</span></span></li>
+            <li><svg class="ico"><use href="#i-plus"/></svg><span><span data-t="changelog.antigravity-cli-signs-in.1853">Antigravity CLI signs in with a Google account and joins the pool</span></span></li>
+          </ul>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Download ============ -->
+<section class="band sec" data-tone="paper" id="download" aria-labelledby="download-title">
+  <div class="w">
+    <div class="split-head rv">
+      <div>
+        <h2 id="download-title"><span data-t="download.the-same-monoidon-every.f56d">The same monoid<br>on every device</span></h2>
+      </div>
+      <p class="lead"><span data-t="download.free-for-now-agents.3ee2">Free for now. Agents use your own subscriptions or API keys.</span></p>
+    </div>
+    <div class="dl rv" id="dl">
+      <a href="https://app.monoid.build/releases/latest/mac" data-for="mac">
+        <span class="os"><svg aria-hidden="true"><use href="#b-apple"/></svg></span><span class="tags"></span><svg class="ico go" aria-hidden="true"><use href="#i-out"/></svg>
+        <span class="txt"><b>Mac</b><small><span data-t="download.apple-silicon-desktop-app.846c">Apple silicon · desktop app</span></small></span>
+      </a>
+      <a href="https://app.monoid.build/releases/latest/win" data-for="windows">
+        <span class="os"><svg aria-hidden="true"><use href="#b-windows"/></svg></span><span class="tags"></span><svg class="ico go" aria-hidden="true"><use href="#i-out"/></svg>
+        <span class="txt"><b>Windows</b><small><span data-t="download.x64-desktop-app.3b5b">x64 · desktop app</span></small></span>
+      </a>
+      <a href="https://app.monoid.build/releases/latest/android" data-for="android">
+        <span class="os"><svg aria-hidden="true"><use href="#b-android"/></svg></span><span class="tags"></span><svg class="ico go" aria-hidden="true"><use href="#i-out"/></svg>
+        <span class="txt"><b>Android</b><small><span data-t="download.phone-app-can-be.8079">Phone app · can be lent to agents</span></small></span>
+      </a>
+      <a href="https://app.monoid.build" data-app data-for="ios">
+        <span class="os"><svg class="ico" aria-hidden="true"><use href="#i-duo"/></svg></span><span class="tags"><span class="tag"><span data-t="download.app-store-soon.766e">App Store soon</span></span></span><svg class="ico go" aria-hidden="true"><use href="#i-out"/></svg>
+        <span class="txt"><b>iPhone · iPhone Duo</b><small><span data-t="download.for-now-the-web.4cd0">For now, the web app on your home screen</span></small></span>
+      </a>
+      <a href="https://app.monoid.build" data-app data-for="web">
+        <span class="os"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg></span><span class="tags"></span><svg class="ico go" aria-hidden="true"><use href="#i-out"/></svg>
+        <span class="txt"><b><span data-t="download.web-app.2c46">Web app</span></b><small><span data-t="download.nothing-to-install-works.7fcf">Nothing to install · works on Linux</span></small></span>
+      </a>
+      <a href="#install" data-for="station">
+        <span class="os"><svg class="ico" aria-hidden="true"><use href="#i-term"/></svg></span><span class="tags"></span><svg class="ico go" aria-hidden="true"><use href="#i-arrow"/></svg>
+        <span class="txt"><b>Station</b><small><span data-t="download.macos-linux-windows-one.dc25">macOS · Linux · Windows, one command</span></small></span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="band sec" data-tone="paper" id="faq" aria-labelledby="faq-title">
+  <div class="w faq">
+    <div class="head rv" style="margin:0">
+      <h2 id="faq-title"><span data-t="faq.asked-most.39ee">Asked most</span></h2>
+    </div>
+    <div class="qa rv">
+      <details open><summary><span class="q"><span data-t="faq.how-does-the-pool.254c">How does the pool choose an account?</span></span><span class="pm" aria-hidden="true"><svg class="ico pm-plus"><use href="#i-plus"/></svg><svg class="ico pm-minus"><use href="#i-minus"/></svg></span></summary>
+        <div class="a"><div><p><span data-t="faq.among-working-accounts-with.3054">Among working accounts with the chosen model, those resetting soonest with the most left get more chats; one past 80% of its 5-hour limit goes last.</span></p></div></div></details>
+      <details><summary><span class="q"><span data-t="faq.does-switching-accounts-lose.b22b">Does switching accounts lose context?</span></span><span class="pm" aria-hidden="true"><svg class="ico pm-plus"><use href="#i-plus"/></svg><svg class="ico pm-minus"><use href="#i-minus"/></svg></span></summary>
+        <div class="a"><div><p><span data-t="faq.the-agent-reads-its.fe09">The agent reads its history back. A chat moves only when it must, or early around a compaction, never while background commands run.</span></p></div></div></details>
+      <details><summary><span class="q"><span data-t="faq.how-is-it-different.d2f1">How is it different from Claude Code in a terminal?</span></span><span class="pm" aria-hidden="true"><svg class="ico pm-plus"><use href="#i-plus"/></svg><svg class="ico pm-minus"><use href="#i-minus"/></svg></span></summary>
+        <div class="a"><div><p><span data-t="faq.a-terminal-agent-is.4454">A terminal agent is tied to one computer. monoid gathers them all: pooled accounts, direction from your phone or Slack, keys you approve. The agents are unchanged.</span></p></div></div></details>
+      <details><summary><span class="q"><span data-t="faq.does-it-cost-anything.16cb">Does it cost anything?</span></span><span class="pm" aria-hidden="true"><svg class="ico pm-plus"><use href="#i-plus"/></svg><svg class="ico pm-minus"><use href="#i-minus"/></svg></span></summary>
+        <div class="a"><div><p><span data-t="faq.free-for-now-plans.75c2">Free for now. Plans limit workspaces and members; a workspace holds up to 64 stations. Agents use your own subscriptions or API keys.</span></p></div></div></details>
+      <details><summary><span class="q"><span data-t="faq.do-my-code-and.b6ce">Do my code and chats go to the cloud?</span></span><span class="pm" aria-hidden="true"><svg class="ico pm-plus"><use href="#i-plus"/></svg><svg class="ico pm-minus"><use href="#i-minus"/></svg></span></summary>
+        <div class="a"><div><p><span data-t="faq.no-chats-files-and.046c">No. Chats, files and history stay on your computers; relays pass on only encrypted data they can't read.</span></p></div></div></details>
+      <details><summary><span class="q"><span data-t="faq.is-it-open-source.ad0a">Is it open source?</span></span><span class="pm" aria-hidden="true"><svg class="ico pm-plus"><use href="#i-plus"/></svg><svg class="ico pm-minus"><use href="#i-minus"/></svg></span></summary>
+        <div class="a"><div><p><span data-t="faq.yes-under-the-mit.f731">Yes, under the MIT license. The code is on <a href="https://github.com/AFK-surf/still.fail">GitHub</a>.</span></p></div></div></details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ End: the dark band, the headline leads, the field below; the footer continues it ============ -->
+<section class="band end" data-tone="ink" aria-labelledby="end-title">
+  <div class="w end-in">
+    <div class="end-say">
+      <h2 id="end-title"><span data-t="end.add-a-computer-it.c266">Add a computer, it does the rest</span></h2>
+      <p class="lead"><span data-t="end.ask-once-your-computers.6d9f">Ask once. Your computers work until it’s done.</span></p>
+    </div>
+    <div class="actions">
+      <a class="btn btn-ink lg" data-app href="https://app.monoid.build"><span data-t="end.open-monoid.5754">Open monoid</span><svg class="ico arr"><use href="#i-arrow"/></svg></a>
+      <a class="btn btn-line lg" href="#download"><span data-t="end.download.a479">Download</span></a>
+    </div>
+  </div>
+  <div class="field-wrap"><canvas class="field" id="field-end" aria-hidden="true"></canvas></div>
+</section>
+
+</main>
+
+<!-- ============ Footer ============ -->
+<footer class="band foot" data-tone="ink">
+  <div class="w">
+    <div class="foot-grid">
+      <div class="foot-id">
+        <a class="brand" href="#top" aria-label="monoid"><img src="assets/mark.svg" alt="" width="26" height="26"><span class="wordmark">monoid</span></a>
+        <p class="foot-tag"><span data-t="footer.the-agents-on-all.2021">The agents on all your computers, as one.</span></p>
+      </div>
+      <div><p class="fh"><span data-t="footer.product.dd3b">Product</span></p><ul>
+        <li><a href="#pool"><span data-t="footer.account-pool.abd8">Account pool</span></a></li>
+        <li><a href="#teams"><span data-t="footer.teams.cbfd">Teams</span></a></li>
+        <li><a href="#devices"><span data-t="footer.every-device.14f4">Every device</span></a></li>
+        <li><a href="#security"><span data-t="footer.security.f25c">Security</span></a></li>
+        <li><a href="https://comma.surf">Comma</a></li>
+      </ul></div>
+      <div><p class="fh"><span data-t="footer.download.a479">Download</span></p><ul>
+        <li><a href="https://app.monoid.build/releases/latest/mac">Mac</a></li>
+        <li><a href="https://app.monoid.build/releases/latest/win">Windows</a></li>
+        <li><a href="https://app.monoid.build/releases/latest/android">Android</a></li>
+        <li><a data-app href="https://app.monoid.build"><span data-t="footer.web-app.2c46">Web app</span></a></li>
+      </ul></div>
+      <div><p class="fh"><span data-t="footer.resources.87df">Resources</span></p><ul>
+        <li><a href="https://github.com/AFK-surf/still.fail">GitHub</a></li>
+        <li><a href="/status"><span data-t="footer.status.bae7">Status</span></a></li>
+        <li><a href="#install"><span data-t="footer.install-a-station.5e3a">Install a station</span></a></li>
+        <li><a href="#changelog"><span data-t="footer.changelog.164b">Changelog</span></a></li>
+        <li><a href="#faq"><span data-t="footer.faq.0368">FAQ</span></a></li>
+      </ul></div>
+      <div><p class="fh"><span data-t="footer.legal.902c">Legal</span></p><ul>
+        <li><a href="/en/terms" data-legal><span data-t="footer.terms.a55a">Terms</span></a></li>
+        <li><a href="/en/privacy" data-legal><span data-t="footer.privacy.cf01">Privacy</span></a></li>
+        <li><a href="/en/trademark" data-legal><span data-t="footer.trademark.a820">Trademark</span></a></li>
+      </ul></div>
+    </div>
+    <div class="foot-base">
+      <span>© 2026 AFK Inc · <span data-t="footer.open-source-mit.cad9">Open source, MIT</span></span>
+      <!-- i18n:switcher -->
+      <div class="footer-prefs">
+        <button class="language-trigger" type="button" popovertarget="languages" aria-haspopup="menu" aria-expanded="false" aria-label="Language: English"><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg><span lang="en">English</span><svg class="ico chev" aria-hidden="true"><use href="#i-chev"/></svg></button>
+        <div class="language-menu" id="languages" popover role="menu" aria-label="Language" data-t-aria="footer.language.89b8">
+          <a class="language-option" role="menuitemradio" aria-checked="true" hreflang="en" data-locale="en" href="/"><span lang="en">English</span><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></a>
+          <a class="language-option" role="menuitemradio" aria-checked="false" hreflang="zh-CN" data-locale="zh-CN" href="/zh/"><span lang="zh-CN">简体中文</span><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></a>
+          <a class="language-option" role="menuitemradio" aria-checked="false" hreflang="zh-TW" data-locale="zh-TW" href="/zh-tw/"><span lang="zh-TW">繁體中文</span><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></a>
+          <a class="language-option" role="menuitemradio" aria-checked="false" hreflang="ja" data-locale="ja" href="/ja/"><span lang="ja">日本語</span><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></a>
+          <a class="language-option" role="menuitemradio" aria-checked="false" hreflang="ko" data-locale="ko" href="/ko/"><span lang="ko">한국어</span><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></a>
+        </div>
+      </div>
+      <!-- /i18n:switcher -->
+    </div>
+  </div>
+</footer>
+
+<!-- ============ Script ============ -->
+<!-- Words main.js writes into the page (read by data-js), translated with the rest. -->
+<template id="i18n-js">
+  <span data-js="copied" data-t="script.command-copied.a2b6">Command copied</span>
+  <span data-js="selected" data-t="script.command-selected-copy-it.6d97">Command selected; copy it with your keyboard</span>
+  <span data-js="this-device" data-t="script.this-device.fa5a">This device</span>
+</template>
+<script src="main.js" defer></script>
+</body>
+</html>

@@ -12,11 +12,14 @@ import { Agents } from "../sessions/agents.ts";
 import type { ChatSurface } from "../sessions/chat.ts";
 import { INTERNAL_CONNECT } from "../sessions/internal.ts";
 import { ControlPlane, Events, Paths, StationConfig, Store } from "../services.ts";
+import { showEnded } from "./card-ends.ts";
 import type { ConnectState, Connection, EntryEdit } from "./connections.ts";
 import type { ConnectsOptions } from "./connects.ts";
+import type { NameBook } from "./names.ts";
 
 /// What the part needs of a platform's connects (connects.ts makeConnects').
 type Connects = {
+  names: NameBook;
   chats(id: string): ChatSurface | undefined;
   chat(id: string): Connection | undefined;
   connects(): { id: string }[];
@@ -55,13 +58,14 @@ export const connectsPart = <P extends Connects>(make: (options: ConnectsOptions
     const connects = yield* Effect.acquireRelease(
       Effect.sync(() =>
         make({
-          data, store, config, receive: (connect, event) => hub.receive(connect, event), bound: () => agents.taken() && agents.bound(),
+          data, store, config, receive: (connect, event) => agents.receive(connect, event), models: (connect) => hub.modelsFor(connect), bound: () => agents.taken() && agents.bound(),
           inWorkspace: (ws) => ws === null || cloud.membership(ws) !== null,
         }),
       ),
       (c) => Effect.promise(() => c.close()),
     );
     agents.surfaces((id) => connects.chats(id));
+    agents.nameBook(own.kind, connects.names);
     agents.connectKind(own.kind, {
       connection: (c) => connects.state(String(c?.id ?? "")),
       shown: (c) => own.shown(connects, c),
@@ -95,7 +99,10 @@ export const connectsPart = <P extends Connects>(make: (options: ConnectsOptions
     yield* Effect.acquireRelease(
       Effect.sync(() =>
         store.subscribe((change) => {
-          if (change.type === "thread") learn(change.id, [...new Set(change.entries.filter((e) => e.authorKind === "person").map((e) => e.author))]);
+          if (change.type !== "thread") return;
+          learn(change.id, [...new Set(change.entries.filter((e) => e.authorKind === "person").map((e) => e.author))]);
+          // A card that stopped waiting changes where its platform shows it.
+          showEnded(store, (connect) => connects.chat(connect), change);
         }),
       ),
       (unsubscribe) => Effect.sync(unsubscribe),
@@ -108,10 +115,7 @@ export const connectsPart = <P extends Connects>(make: (options: ConnectsOptions
           for (const c of connects.connects()) {
             if (learned.has(c.id) || connects.state(c.id)?.state !== "connected") continue;
             learned.add(c.id);
-            const prefix = `slack:${c.id}:`;
-            for (const t of store.listThreads("", null, null).slice(0, 200)) {
-              if (t.sessions.some((m) => m.connect === c.id)) learn(t.thread.id, t.people.flatMap((p) => (p.startsWith(prefix) ? [p.slice(prefix.length)] : [])));
-            }
+            for (const t of store.recentConnectPeople(c.id, 200)) learn(t.thread, t.people);
           }
         }),
       ),

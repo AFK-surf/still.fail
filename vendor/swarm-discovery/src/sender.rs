@@ -48,7 +48,7 @@ pub async fn sender(
     let mut swarm_size = 1;
     let mut extra_delay = Duration::ZERO;
     let mut has_responded = false;
-    // ember: the first query goes out 20–120 ms after starting (RFC 6762 §5.2), not a whole cadence later: a peer
+    // stillfail: the first query goes out 20–120 ms after starting (RFC 6762 §5.2), not a whole cadence later: a peer
     // just started wants to know who is there now (a device dialing a station it has not seen yet).
     let mut first = true;
 

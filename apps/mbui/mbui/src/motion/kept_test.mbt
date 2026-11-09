@@ -30,25 +30,27 @@ fn kept_drawn(t : @ui.Tester) -> Array[String] {
 /// Twelve rows, kept a while, then one put above them: what is drawn at each moment after, the rows drawn again where
 /// they can be (`again`) or built every frame; how many were drawn again before.
 fn kept_glide(again : Bool) -> (Array[Array[String]], Int) {
-  let keys = Array::makei(12, fn(i) { "r\{i}" })
+  let keys = @signals.signal(Array::makei(12, fn(i) { "r\{i}" }))
   let view = fn(c : @ui.Ctx) {
     // (the keys as they are this frame: a new array once they change, as a page makes them)
-    @motion.list_keys(c, "glide", keys.copy()) |> ignore
-    c.list("glide", keys.length(), 40.0, fn(i) {
-      let k = keys[i]
+    @motion.list_keys(c, "glide", keys.get().copy()) |> ignore
+    c.list("glide", keys.get().length(), 40.0, fn(i) {
+      let k = keys.get()[i]
       let b = c.box(h=Px(40.0), padx=10.0, fn() { c.text(k, size=12.0) |> ignore })
       @motion.layout(c, b, "row/" + k)
     })
     |> ignore
   }
   let t = @ui.Tester::new(view, w=320.0, h=420.0, platform=2)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(again)
   t.draw()
   t.run_for(kept_look_ms)
   t.run_for(kept_look_ms)
   let kept = t.rows_kept()
-  keys.insert(0, "new")
+  let more = keys.get().copy()
+  more.insert(0, "new")
+  keys.set(more)
   let out = []
   for _ in 0..<8 {
     t.run_for(kept_look_ms)

@@ -249,7 +249,7 @@ pub struct Sockets {
     v4: Option<Arc<UdpSocket>>,
     v6: Option<Arc<UdpSocket>>,
     interface_sockets_v4: Arc<RwLock<HashMap<Ipv4Addr, Arc<UdpSocket>>>>,
-    /// ember: whether the last send reached no interface, so that is said once (it recurs with every announcement:
+    /// stillfail: whether the last send reached no interface, so that is said once (it recurs with every announcement:
     /// a Mac that has not let the process reach the local network fails each time).
     failing: Arc<std::sync::atomic::AtomicBool>,
 }
@@ -477,7 +477,7 @@ impl Sockets {
         let interfaces = self.interface_sockets_v4.read().unwrap().clone();
         for (addr, socket) in interfaces.iter() {
             if let Err(e) = socket.send_to(bytes, (MDNS_IPV4, MDNS_PORT)).await {
-                // ember: debug, not error (vendor/README.md).
+                // stillfail: debug, not error (vendor/README.md).
                 tracing::debug!("error sending mDNS on interface {}: {}", addr, e);
                 last_error = Some(e);
             } else {
@@ -493,7 +493,7 @@ impl Sockets {
             }
         }
 
-        // ember: said when it starts failing (and when it works again), not with every announcement.
+        // stillfail: said when it starts failing (and when it works again), not with every announcement.
         use std::sync::atomic::Ordering;
         if sent_count == 0 {
             if !self.failing.swap(true, Ordering::Relaxed) {

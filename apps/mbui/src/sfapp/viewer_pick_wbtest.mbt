@@ -51,7 +51,7 @@ test "touch wide: words picked, then a picture in the chat tapped: the tap lets 
 test "touch wide, a tall window: a link held (its menu up), then a picture in the chat tapped: the tap closes the menu and opens nothing (the two never open at once); the next tap opens the picture, back closes it, the chat as it was" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=860.0, h=2400.0, platform=2)
   let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\nuntil 发消息\n")
   assert_true(log.contains("EXIT 0"), msg=log.join("\n"))

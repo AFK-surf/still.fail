@@ -35,7 +35,7 @@ fn disclosure(c : @ui.Ctx) -> Unit {
       })
       section(c, "Collapsible", fn() {
         more[h] = @kit.collapsible(c, "more", more[h], "3 more stations", fn() {
-            c.text("mini1, studio, ccvm", size=t.font, color=t.muted) |> ignore
+            c.text("cedar, willow, birch", size=t.font, color=t.muted) |> ignore
           }).value
       })
       section(c, "Scroll area", fn() {

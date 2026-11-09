@@ -7,7 +7,7 @@ import { Core } from "../src/core.ts";
 import { HostWire } from "../src/station/wire.ts";
 import { apply, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
-import { base, started } from "./station-fixture.ts";
+import { base, started, status } from "./station-fixture.ts";
 
 const S = "ws/st";
 const URL = "https://github.com/acme/app/pull/12";
@@ -81,5 +81,66 @@ test("a_file_a_message_names_is_read_under_its_session_as_its_card_shows_and_kep
   apply(host, values);
   assert.equal(reads(), 2);
   assert.deepEqual(v(values, 2).lines.text, ["const a = 2;"]);
+  core.close();
+});
+
+test("a_file_peek_stops_showing_a_kept_file_when_it_is_removed_and_recovers_when_it_returns", async () => {
+  const PEEK = `GET /sessions/s-1/peek?path=${encodeURIComponent("src/a.ts")}`;
+  const file = { path: "/w/src/a.ts", name: "a.ts", size: 1, mtime: 1, type: "text/plain", kind: "text" };
+  const said: Record<string, unknown> = { ...base(), [PEEK]: file };
+  const { core, host } = await started(said);
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  const topic = { topic: "filePeek", station: S, key: "s-1", path: "src/a.ts" };
+  subscribe(core, ui, 1, topic);
+  await host.time.pass(500, 10);
+  apply(host, values);
+  assert.equal(v(values, 1).name, "a.ts");
+
+  said[PEEK] = status(404, { error: "not found" });
+  core.receive(ui, { kind: "unsubscribe", id: 1, unsubscribe: true });
+  subscribe(core, ui, 2, topic);
+  await host.time.pass(500, 10);
+  const removed = host.takeEmitted().map(([, m]) => m as Record<string, unknown>).filter((m) => m.id === 2);
+  assert.ok(removed.some((m) => "error" in m), JSON.stringify(removed));
+
+  said[PEEK] = { ...file, size: 2 };
+  core.receive(ui, { kind: "unsubscribe", id: 2, unsubscribe: true });
+  subscribe(core, ui, 3, topic);
+  await host.time.pass(500, 10);
+  apply(host, values);
+  assert.equal(v(values, 3).size, 2);
+  core.close();
+});
+
+test("a_message_a_link_names_is_read_alone_as_its_card_shows_and_kept", async () => {
+  const ASK = "GET /threads/7/entries?from=2&to=2";
+  const entry = (text: string) => ({ last: 9, entries: [{ thread: 7, n: 2, kind: "message", authorKind: "agent", author: "s-1", authorName: "Claude", text, at: 1_000 }] });
+  const said: Record<string, unknown> = { ...base(), [ASK]: entry("**列表**按天分组\n做好了"), "GET /threads/7/entries?from=3&to=3": { last: 9, entries: [] } };
+  const { core, host } = await started(said);
+  const reads = () => host.requests.flatMap(readsOf).filter((u) => u.includes("/admin/api/threads/7/entries?from=2&to=2")).length;
+  const ui = core.connect();
+  const values = new Map<number, unknown>();
+  const topic = { topic: "messagePeek", station: S, thread: 7, seq: 2 };
+  subscribe(core, ui, 1, topic);
+  await host.time.pass(500, 10);
+  apply(host, values);
+  assert.equal(reads(), 1);
+  assert.equal(v(values, 1).author, "Claude");
+  assert.equal(v(values, 1).text, "列表按天分组 做好了", "its words as a chat's row has them");
+  assert.equal(typeof v(values, 1).time.at.ago, "string", "when it was said, in words");
+  // Shown again: read again.
+  said[ASK] = entry("改过了");
+  core.receive(ui, { kind: "unsubscribe", id: 1, unsubscribe: true });
+  subscribe(core, ui, 2, topic);
+  await host.time.pass(500, 10);
+  apply(host, values);
+  assert.equal(reads(), 2);
+  assert.equal(v(values, 2).text, "改过了");
+  // No such message: nothing, for the card to say so.
+  subscribe(core, ui, 3, { ...topic, seq: 3 });
+  await host.time.pass(500, 10);
+  apply(host, values);
+  assert.equal(values.get(3), null);
   core.close();
 });

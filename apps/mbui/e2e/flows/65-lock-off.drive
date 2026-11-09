@@ -1,0 +1,21 @@
+# Security mode turned off from this phone (设置 › 安全 › 关闭安全模式): what that gives up said, the workspace's name
+# typed to confirm it, the screen lock's PIN given for the vault's keys; then off, and the station's lock says so.
+#only android
+timeout 120000
+until 端到端测试
+tap icon:settings
+until =安全
+tap =安全
+until 关闭安全模式
+tap 关闭安全模式
+until 关闭安全模式？
+shot 1-confirm
+type Dev
+tap =关闭安全模式
+# (once: the vault's keys, taken out to the station in plain text, under the screen lock; that prompt says it turns
+# security mode off, and none comes after it)
+log do: android-unlock 1234
+done 1-android-unlock
+# (the app in front again, nothing else asked)
+until 安全模式未开启
+shot 2-off

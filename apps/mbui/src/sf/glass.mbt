@@ -1,10 +1,10 @@
-// still.fail's glass (Android ui/Glass.kt over Haze, web mobile/styles/pages.css.ts and ui/styles/glass.ts), as
+// still.fail's glass (web mobile/styles/pages.css.ts and ui/styles/glass.ts), as
 // @ui.Glass for a box's `glass=`. Haze's blur radius is cssBlur(px) = (px - 0.5) / 0.57735 dp, which RenderEffect
 // takes as a deviation of px dp: CSS blur(px)'s, what @ui.Glass's blur is. Each has its solid ground for where the
 // system asks for less transparency: what the glass would be with nothing under it (the page's paper under its tint).
 
 ///|
-/// A bar at the top of a page over the list running under it (Glass.kt glass, TopGlassBar; mGlass): the page's paper
+/// A bar at the top of a page over the list running under it (TopGlassBar; mGlass): the page's paper
 /// at 70% over a 24px blur, no line along its foot: the frost alone sets it off (2026-10-24, asked).
 pub fn glass_bar() -> @ui.Glass {
   let t = theme()
@@ -19,7 +19,7 @@ pub fn glass_foot() -> @ui.Glass {
 }
 
 ///|
-/// A capsule floating over the list (Glass.kt floating; mFloating, the composer's): `--raised` at 72% over a 20px
+/// A capsule floating over the list (mFloating, the composer's): `--raised` at 72% over a 20px
 /// blur; `tint` for glass of another colour. Its breath of shadow is the box's (shadow 2, black at 30%, 0.5 down),
 /// drawn outside it only.
 pub fn glass_floating(tint? : Int64) -> @ui.Glass {
@@ -29,7 +29,7 @@ pub fn glass_floating(tint? : Int64) -> @ui.Glass {
 }
 
 ///|
-/// The bottom bar's glass (Bar.kt: the floating capsule's, `raised` 72% over a 20px blur), its rim lit: a hairline
+/// The bottom bar's glass (`raised` 72% over a 20px blur), its rim lit: a hairline
 /// inside its edge, light along its top and left, less along its foot and right (white at 0.35 / 0.8 / 0.45; in the
 /// dark 0.14 / 0.3 / 0.16).
 pub fn glass_bottom_bar() -> @ui.Glass {
@@ -47,7 +47,7 @@ pub fn glass_bottom_bar() -> @ui.Glass {
 }
 
 ///|
-/// The bar's ball over the place in view (Bar.kt): the bar's glass with white over it (42%; 12% in the dark), a 24px
+/// The bar's ball over the place in view: the bar's glass with white over it (42%; 12% in the dark), a 24px
 /// blur, its rim brighter (0.5 / 0.95 / 0.55; dark 0.22 / 0.45 / 0.25).
 pub fn glass_bar_ball() -> @ui.Glass {
   let t = theme()
@@ -90,7 +90,7 @@ pub fn glass_knob() -> @ui.Glass {
 }
 
 ///|
-/// The page's primary action in the bar's notch (Bar.kt: 令, a "+"): the accent at 86% over a 20px blur, its rim
+/// The page's primary action in the bar's notch (a "+"): the accent at 86% over a 20px blur, its rim
 /// 0.4 / 0.75 / 0.4.
 pub fn glass_action() -> @ui.Glass {
   let t = theme()
@@ -106,34 +106,21 @@ pub fn glass_action() -> @ui.Glass {
 }
 
 ///|
-/// A sheet over the page (Sheet.kt): the surface at 90% over a 28px blur (the scrim is drawn under it, so it is in
-/// what the glass frosts, as on the web). 90%, not the 80% it was: what is written on a sheet keeps 4.5:1 whatever
-/// lies under it (the accent's words, the weakest ink a sheet's words are in, over the page at its darkest, black: the
-/// tint alone carries them), a sheet as tall as what it holds lying over any part of the page.
-pub fn glass_sheet() -> @ui.Glass {
-  let t = theme()
-  @ui.Glass::frosted(blur=28.0, tint=alpha(t.p.canvas, sheet_tint), solid=t.p.bg)
-}
-
-///|
-/// How much of a sheet's glass is its surface's colour (glass_sheet).
-let sheet_tint : Double = 0.9
-
-///|
 /// How far a sheet reaches on under the window's foot (sheet_look: its foot's corners out of sight).
-let sheet_under : Double = 26.0
+let sheet_under : Double = pane_corner
 
 ///|
-/// still.fail's sheet (Sheet.kt) as mbui's sheet draws it (@kit.sheet's look): the sheet's glass over the page, the
-/// scrim's black as far as it shows (`s.t`) under it, its top corners 26 round (26 more of it under the window's
-/// foot), a shadow; `ground` (not 0) a solid ground in the glass's place. What it holds starts with its grabber.
+/// still.fail's sheet as mbui's sheet draws it (@kit.sheet's look): the sheet's glass over the page, the
+/// scrim's black as far as it shows (`s.t`) under it, its top corners a panel's (pane_corner: it holds cards, the
+/// user 2026-11-03: 卡片里不能放卡片，面板里可以放卡片; sheet_under more of it under the window's foot), a shadow; `ground` (not 0) a solid ground in the glass's place. What it holds starts with its grabber.
 pub fn sheet_look(ground? : Int64 = 0L) -> (@ui.Ctx, @kit.SheetState, () -> Unit) -> Unit {
   fn(c, s, body) {
     let t = theme()
-    c.box(
+    // (the sheet: the surface of the look it comes in by: Ctx::surface)
+    let sheet = c.box(
       w=Fill(1.0),
       h=Px(s.h + sheet_under),
-      radius=26.0,
+      radius=pane_corner,
       bg=ground,
       glass?=if ground != 0L {
         None
@@ -147,10 +134,25 @@ pub fn sheet_look(ground? : Int64 = 0L) -> (@ui.Ctx, @kit.SheetState, () -> Unit
       pb=sheet_under,
       body,
     )
-    |> ignore
+    c.surface(sheet)
   }
 }
 
 ///|
-/// The scrim under a sheet at its fullest: black at 28% (Sheet.kt).
+/// The scrim under a sheet at its fullest: black at 28%.
 pub let sheet_scrim : Int64 = 0x00000047L
+
+///|
+/// A sheet over the page: the surface at 90% over a 28px blur (the scrim is drawn under it, so it is in
+/// what the glass frosts, as on the web). 90%, not the 80% it was: what is written on a sheet keeps 4.5:1 whatever
+/// lies under it (the accent's words, the weakest ink a sheet's words are in, over the page at its darkest, black: the
+/// tint alone carries them), a sheet as tall as what it holds lying over any part of the page.
+pub fn glass_sheet() -> @ui.Glass {
+  let t = theme()
+  @ui.Glass::frosted(blur=28.0, tint=alpha(t.p.canvas, sheet_tint), solid=t.p.bg)
+}
+
+///|
+/// How much of a sheet's glass is its surface's colour (glass_sheet).
+let sheet_tint : Double = 0.9
+

@@ -1,4 +1,4 @@
-// A model as people call it (shapes model.rs `name`), and who made it (client/core-ts format.ts `makerOf`): the accounts'
+// A model as people call it, and who made it (client/core-ts format.ts `makerOf`): the accounts'
 // pages and published snapshots name models so, and draw their makers' marks.
 import { modelKey } from "../read/usage.ts";
 

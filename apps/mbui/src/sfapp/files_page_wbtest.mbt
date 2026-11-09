@@ -4,7 +4,7 @@
 
 ///|
 /// The app over the fixture `w` by `h`, as `platform` plays it (2: a phone's system, a finger; 0: a Mac's, a mouse),
-/// at Studio's 文档.
+/// at Willow's 文档.
 fn files_page_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
   new_run()
   let src = fixture("home")
@@ -169,10 +169,10 @@ test "a folder opened in the columns while its station has not said what it hold
   // (设计稿 never read: as a station slow to answer)
   let held : @sfbase.Source = {
     ..src,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match params.get("path") {
         Some(String(p)) if name == "drive" && p == "设计稿" => { value: None, error: None, version: 0 }
-        _ => (src.topic)(name, params)
+        _ => src.topic(name, params).get().snapshot()
       }
     },
   }
@@ -258,7 +258,7 @@ test "adding a favorite on a narrow screen chooses a station and folder without 
   sheet_rested(t, "sf-present")
   // (two stations it can be done on: which first)
   assert_true(t.find("选择一台 station，然后选择要收藏的文件夹") is Some(_), msg="which station")
-  t.click(Button, label="Studio")
+  t.click(Button, label="Willow")
   t.frame()
   sheet_rested(t, "sf-present")
   assert_eq(named(calls, "drive.folders").length(), 1)
@@ -371,3 +371,40 @@ test "a phone's folder: a name changed in place, its row kept in view over the s
 ///|
 /// A phone's soft keyboard, about.
 let keyboard_h : Double = 340.0
+
+///|
+test "the files' keys: ⌘⇧G (the keymap's) opens 前往文件夹; in its field Tab completes what is typed, ↓ ↑ choose; Escape closes it" {
+  let t = files_page_tester(1280.0, 800.0, 0)
+  assert_true(t.find("前往文件夹…") is None)
+  t.key(@ui.key_of_char('g'), mods=@ui.mod_cmd + @ui.mod_shift_key)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("前往文件夹…") is Some(_))
+  // (the row chosen: the one its Tab is drawn after)
+  let chosen = fn() {
+    let words = t.words().map(fn(w) { w.0 })
+    match words.search("Tab") {
+      Some(i) if i > 0 => words[i - 1]
+      _ => ""
+    }
+  }
+  // (a station's name begun: the station chosen; Tab puts its home in, its folders offered then, the first chosen; ↓
+  // the next, ↑ back)
+  t.type_text("wil")
+  t.frame()
+  let first = chosen()
+  t.key(@ui.key_tab)
+  t.frame()
+  let completed = chosen()
+  t.key(@ui.key_code_down)
+  t.frame()
+  let down = chosen()
+  t.key(@ui.key_code_up)
+  t.frame()
+  assert_eq(
+    (first, completed, down, chosen()),
+    ("Willow", "Willow › /Users/lin/文档", "Willow › /Users/lin/项目", "Willow › /Users/lin/文档"),
+  )
+  t.key(@ui.key_escape)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("前往文件夹…") is None)
+}

@@ -1,4 +1,4 @@
-// 46-chat-audio (e2e/traces/chat-audio.trace: Mini1 against the local still.fail, 54 messages): a song sent in a chat
+// 46-chat-audio (e2e/traces/chat-audio.trace: a local still.fail, 54 messages): a song sent in a chat
 // by alice's other device (peer createfiles), opened from its card: the preview's small player (AudioViewer), its name,
 // play; the system's player reads the song through the core a part at a time (station.file.part, each part as it
 // comes, as the run's AVPlayer asked: its trace's read lines), and plays on (2 s in: 0:02). Back closes it.
@@ -31,9 +31,10 @@ test "46-chat-audio" {
     f.see("端到端测试")
     // (alice's other device sends the song: a live run's step beside the app)
     f.peer("peer createfiles 一段录音 104339 post:收到录音 104339 -- e2e-tune.m4a")
-    f.see("一段录音 104339")
+    // Wait for the named row, rather than matching its first message while the title is still pending.
+    f.see("=一段录音 104339")
     // (its chat to the top of the list as the recording comes, there where it goes: tapped once its room is open,
-    // where it shows, docs/list-motion.md)
+    // where it shows, mbui's view/list_motion.mbt)
     f.run_for(@ui.row_size_ms)
     f.tap("一段录音 104339")
     f.run_to(@ui.nav_rest())

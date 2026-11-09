@@ -1,4 +1,4 @@
-// The variables a station's owners set for everything it starts for its agents (config.json `agentEnv`, docs/agent-env.md):
+// The variables a station's owners set for everything it starts for its agents (config.json `agentEnv`):
 // an HTTP proxy the machine's network needs, mostly. They go to the runtimes (Claude Code, Codex, dsh), the logins
 // (profiles' and the machine's command-line tools'), the CLI checks and the agents' background jobs, over the
 // station's own environment and under a profile's variables. With a proxy among them the station's requests on a

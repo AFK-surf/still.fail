@@ -1,4 +1,4 @@
-// Where a chat is relayed (docs/relay.md): what the picker shows of the places `chat.relayPlaces` read (web/src/Relay.tsx,
+// Where a chat is relayed: what the picker shows of the places `chat.relayPlaces` read (web/src/Relay.tsx,
 // the mbui app's sfdesk/relay.mbt and its phone's sheet). The bot to go on through (the one picked, else the chat's
 // own, else the first), the bots offered when there are several, a Slack message's link typed in place of a search,
 // and the places of that bot: those whose name has what was typed (those starting with it first), relayed to before

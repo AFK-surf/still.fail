@@ -1,4 +1,4 @@
-// An agent's ask to sign in to a site, in place of its post's words (ember docs/vault.md 登录态, "Signing in from a
+// An agent's ask to sign in to a site, in place of its post's words ( 登录态, "Signing in from a
 // card"; station vault/signin.ts): the one card a sign-in takes. Its person signs in from it with their own password
 // manager, asked here as a page's login is filled from the remote screen (screen_fill.mbt: 1Password's command-line
 // tool, which asks them itself, or the system's autofill service), and what it gives goes to the station
@@ -151,17 +151,12 @@ fn signin_took(core : @settings.Core, station : String, ask : SignInAsk) -> Unit
     signin_send(core, station, ask, r.username, r.password, code)
     return
   }
-  if d.code != 0 {
-    let why = d.err.trim(chars=" \n").to_owned()
-    signin_said(
-      ask.id,
-      if d.code == -1 || why.contains("not found") || why.contains("not currently signed in") || why.contains("integration") {
-        @sf.t("android-misc.screen.fill.noOp")
-      } else {
-        @sf.t("android-misc.screen.fill.failed", args=[("why", why)])
-      },
-    )
-    return
+  match d.trouble() {
+    Some(t) => {
+      signin_said(ask.id, op_trouble_words(t))
+      return
+    }
+    None => ()
   }
   match step {
     "listing" => {
@@ -355,37 +350,45 @@ fn signin_foot(c : @ui.Ctx, core : @settings.Core, station : String, ask : SignI
       }
       // (reaching out to the foot's corners as the buttons under it do: the field's ends where theirs are, its words
       // where theirs are: vault_foot's typed field)
+      // (sent, by Enter or its button: the code as typed then)
+      let send = fn(words : String) {
+        let code = words.trim(chars=" ").to_owned()
+        if code != "" {
+          signin_code.remove(id)
+          signin_send(core, station, ask, "", "", code)
+        }
+      }
       let mut typed : @kit.Field = { text: "", submitted: false }
       @sf.card_foot_words(fn() {
         c.box(style=signin_typed.then(@sf.over_foot_reach(@sf.button_height())), fn() {
-          typed = @sf.input(c, "signin/" + id + "/code", placeholder=@sf.t("android-misc.signin.codeField"), solid=true, field=f)
+          typed = @sf.input(c, "signin/" + id + "/code", placeholder=@sf.t("android-misc.signin.codeField"), solid=true, field=f, on_submit=send)
         })
         |> ignore
       })
       let code = typed.text.trim(chars=" ").to_owned()
       @sf.ask_buttons(c, fn() {
-        if @sf.button(c, @sf.t("android-misc.signin.codeSend"), key="signin/" + id + "/code-go", tone=Primary, busy=step == "sending", disabled=code == "" || step == "sending") ||
-          (typed.submitted && code != "") {
-          c.tell("signin-code/" + id, fn() {
-            signin_code.remove(id)
-            signin_send(core, station, ask, "", "", code)
-          })
-        }
-        if @sf.button(c, @sf.t("android-misc.signin.openScreen"), key="signin/" + id + "/screen", tone=Ghost) {
+        @sf.button(c, @sf.t("android-misc.signin.codeSend"), key="signin/" + id + "/code-go", tone=Primary, busy=step == "sending", disabled=code == "" || step == "sending", on_press=fn() {
+          send(f.text())
+        })
+        |> ignore
+        @sf.button(c, @sf.t("android-misc.signin.openScreen"), key="signin/" + id + "/screen", tone=Ghost, on_press=fn() {
           (core.open_screen)(station, ask.screen)
-        }
+        })
+        |> ignore
       })
       return
     }
     "person" => {
       note(signin_person_words(ask))
       @sf.ask_buttons(c, fn() {
-        if @sf.button(c, @sf.t("android-misc.signin.openScreen"), key="signin/" + id + "/screen", tone=Primary) {
+        @sf.button(c, @sf.t("android-misc.signin.openScreen"), key="signin/" + id + "/screen", tone=Primary, on_press=fn() {
           (core.open_screen)(station, ask.screen)
-        }
-        if @sf.button(c, @sf.t("android-misc.signin.doneSelf"), key="signin/" + id + "/self-done", tone=Ghost) {
-          c.tell("signin-self/" + id, fn() { signin_self(core, station, ask, true) })
-        }
+        })
+        |> ignore
+        @sf.button(c, @sf.t("android-misc.signin.doneSelf"), key="signin/" + id + "/self-done", tone=Ghost, on_press=fn() {
+          signin_self(core, station, ask, true)
+        })
+        |> ignore
       })
       return
     }
@@ -396,6 +399,9 @@ fn signin_foot(c : @ui.Ctx, core : @settings.Core, station : String, ask : SignI
     "said" => note(signin_notes.get(id).unwrap_or(""))
     "auto" => note(@sf.t("android-misc.screen.fill.autoPick", args=[("host", ask.site)]))
     "choosing" => note(@sf.t("android-misc.screen.fill.pick", args=[("host", ask.site)]))
+    // (1Password can take a while, a request of its to its servers slow: what it waits for said, and the screen
+    // still there to sign in on instead)
+    "listing" | "getting" | "otp" => note(@sf.t("android-misc.screen.fill.asking"))
     _ => ()
   }
   let asking = step == "listing" || step == "getting" || step == "otp" || step == "sending"
@@ -403,28 +409,36 @@ fn signin_foot(c : @ui.Ctx, core : @settings.Core, station : String, ask : SignI
     if step == "choosing" {
       for i, l in signin_run(id).choices {
         let words = if l.username == "" { l.title } else { l.title + " · " + l.username }
-        if @sf.button(c, words, key="signin/" + id + "/pick/\{i}", tone=if i == 0 { Primary } else { Ghost }) {
-          let picked = l
-          c.tell("signin-pick/" + id, fn() { signin_pick(core, station, ask, picked) })
-        }
+        let picked = l
+        @sf.button(c, words, key="signin/" + id + "/pick/\{i}", tone=if i == 0 { Primary } else { Ghost }, on_press=fn() {
+          signin_pick(core, station, ask, picked)
+        })
+        |> ignore
       }
       return
     }
     if signin_manager() {
       let label = @sf.t(if @hostapi.passwords() { "android-misc.signin.withOp" } else { "android-misc.signin.withAuto" })
-      if @sf.button(c, label, key="signin/" + id + "/go", tone=Primary, busy=asking, disabled=asking) {
-        c.tell("signin-start/" + id, fn() { signin_start(core, station, ask) })
-      }
-      if @sf.button(c, @sf.t("android-misc.signin.onScreen"), key="signin/" + id + "/self", tone=Ghost, disabled=asking) {
-        c.tell("signin-self/" + id, fn() { signin_self(core, station, ask, false) })
-      }
-    } else if @sf.button(c, @sf.t("android-misc.signin.onScreen"), key="signin/" + id + "/self", tone=Primary) {
-      c.tell("signin-self/" + id, fn() { signin_self(core, station, ask, false) })
+      @sf.button(c, label, key="signin/" + id + "/go", tone=Primary, busy=asking, disabled=asking, on_press=fn() {
+        signin_start(core, station, ask)
+      })
+      |> ignore
+      // (while 1Password is asked too: it is let go of then)
+      @sf.button(c, @sf.t("android-misc.signin.onScreen"), key="signin/" + id + "/self", tone=Ghost, disabled=step == "sending", on_press=fn() {
+        signin_stop(id)
+        signin_self(core, station, ask, false)
+      })
+      |> ignore
+    } else {
+      @sf.button(c, @sf.t("android-misc.signin.onScreen"), key="signin/" + id + "/self", tone=Primary, on_press=fn() {
+        signin_self(core, station, ask, false)
+      })
+      |> ignore
     }
     // kept in the vault once signed in, unless said otherwise
     let keep = signin_keep.get(id).unwrap_or(true)
     let words = fn(k : Bool) { @sf.t(if k { "android-misc.signin.keep" } else { "android-misc.signin.keepNot" }) }
-    let m = @sf.chooser(
+    @sf.chooser(
       c,
       "signin/" + id + "/keep",
       words(keep),
@@ -439,14 +453,12 @@ fn signin_foot(c : @ui.Ctx, core : @settings.Core, station : String, ask : SignI
       },
       side=Top,
       as_button=true,
-    )
-    match m.chosen {
-      Some(v) => {
+      on_pick=fn(v) {
         signin_keep[id] = v == "keep"
         signin_menu.val = ""
-      }
-      None => ()
-    }
+      },
+    )
+    |> ignore
   })
 }
 

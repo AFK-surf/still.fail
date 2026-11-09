@@ -1,0 +1,45 @@
+import {
+  "station/host",
+  "station/wire",
+  "station/sql",
+  "station/marks",
+  "station/bindings",
+  "station/upjobs",
+  "station/widgets",
+  "station/cards",
+  "station/sessions",
+  "station/outflow",
+  "station/turns",
+  "station/said",
+  "station/archivelast",
+  "station/letters",
+  "station/cc",
+  "station/usage",
+  "station/recent",
+  "station/lookups",
+  "station/legacy",
+  "station/counts",
+  "station/activity",
+  "station/jobs",
+  "station/posts",
+  "station/usagefill",
+  "station/signin",
+  "station/vaultuses",
+  "station/locate",
+  "station/searchscope",
+  "station/search",
+  "station/history",
+  "station/readops",
+  "moonbitlang/core/json",
+}
+
+pkgtype(kind: "executable")
+
+options(
+  link: {
+    "native": {
+      // client/shell, as build.sh puts it in out/ (the Mac's: its static library and what it links)
+      "cc-link-flags": "out/libstillfail_shell.a -framework SystemConfiguration -framework Security -framework CoreFoundation -framework Foundation -liconv -lobjc -Wl,-dead_strip",
+    },
+  },
+)

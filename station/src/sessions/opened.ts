@@ -19,6 +19,7 @@ import { fromBefore, linkedStation, peersOf, sessionThreadOf } from "./others.ts
 import { sendable, sendAlong } from "./peer-files.ts";
 import { RUNTIME_KINDS, type RuntimeKind } from "../agents/runtime.ts";
 import { USED_WITHIN_MS, askWhich, candidates, choose } from "./model-choice.ts";
+import { STATION_AUTHOR } from "../store/rows.ts";
 
 type Json = any;
 
@@ -27,8 +28,6 @@ export const CREATE = "session.create";
 /// The method a station tells the opener of a chat how one of its turns ended.
 export const NOTICE = "session.notice";
 
-/// At most this many chats an agent opened are open at once (not ended all_done): more is for a person to ask for.
-export const MAX_OPEN = 8;
 /// At most this much text in the first message (as session_send's).
 const MAX_TEXT = 200_000;
 
@@ -67,15 +66,29 @@ function starterOf(hub: Hub, key: string): string {
 }
 
 /// A new session in a chat of its own for an opener: its runtime, model and effort as asked; the model and effort it
-/// takes after its opener's (`inherited`) are dropped where no profile here runs them. In workspace `ws` (the opener's).
+/// takes after its opener's (`inherited`) are dropped where no profile here runs them. Told no effort, it runs the one
+/// its starter `createdBy` uses most here with that runtime and model, dropped too where it is not run (the model's
+/// own default otherwise: Codex's for gpt-6.1-terra is low, where its people run max). In workspace `ws` (the opener's).
 function makeChat(hub: Hub, o: { runtime: RuntimeName; model: string | null; effort: string | null; inherited: boolean; title: string | null; createdBy: string; ws: string | null }) {
-  const options = { runtime: o.runtime, model: o.model, effort: o.effort, title: o.title, createdBy: o.createdBy, ws: o.ws };
+  const usual = o.effort === null ? usualEffort(hub, o.createdBy, o.runtime, o.model) : null;
+  const options = { runtime: o.runtime, model: o.model, effort: o.effort ?? usual, title: o.title, createdBy: o.createdBy, ws: o.ws };
   try {
     return newSession(hub, options);
   } catch (error) {
+    if (usual !== null) {
+      try {
+        return newSession(hub, { ...options, effort: null });
+      } catch {}
+    }
     if (!o.inherited || (o.model === null && o.effort === null)) throw error;
     return newSession(hub, { ...options, model: null, effort: null });
   }
+}
+
+/// The effort `createdBy` started most of their chats here on (runtime, model) with lately (the latest of those used
+/// as often), null when they named none.
+function usualEffort(hub: Hub, createdBy: string, runtime: RuntimeName, model: string | null): string | null {
+  return hub.store.effortsUsedBy(createdBy, runtime, model, hub.now() - USED_WITHIN_MS)[0]?.effort ?? null;
 }
 
 /// What a chat opened here runs when its opener named no model (model-choice.ts): what its starter `createdBy` uses
@@ -126,9 +139,33 @@ async function sayOpened(hub: Hub, key: string, title: string, link: string | nu
   const text = tr(stationLang(), "station.session.opened", { chat: chatNamed(latest.thread.surface, title, link) });
   try {
     const ts = await hub.chat(latest.connect).post({ channel: latest.thread.channel, threadTs: latest.thread.threadTs }, text, []);
-    hub.store.insertMessage({ thread: latest.thread.id, ts, authorKind: "ember", author: "ember", text, attachments: [] });
+    hub.store.insertMessage({ thread: latest.thread.id, ts, authorKind: STATION_AUTHOR, author: STATION_AUTHOR, text, attachments: [] });
   } catch (error) {
     log.warn("hub", "an opened chat was not said in its opener's", { session: key, error: (error as Error).message });
+  }
+}
+
+/// The retry check needs only author metadata, not each message's edited text.
+async function openerSaid(hub: Hub, thread: number, author: string, agentOnly: boolean): Promise<boolean> {
+  if (hub.openedChatSaid) return hub.openedChatSaid(thread, author, agentOnly);
+  return hub.store.messagesBefore(thread, null, 200).some((m) => m.author === author && (!agentOnly || m.authorKind === "agent"));
+}
+
+// A retry may arrive while another call is still checking or sending the first message. Keep that whole operation in
+// order for the chat, and let a later call retry after an earlier failure.
+const firstMessageGates = new WeakMap<Hub, Map<number, { tail: Promise<void>; waiting: number }>>();
+async function firstMessageInTurn(hub: Hub, thread: number, send: () => Promise<void>): Promise<void> {
+  let gates = firstMessageGates.get(hub);
+  if (!gates) firstMessageGates.set(hub, (gates = new Map()));
+  let gate = gates.get(thread);
+  if (!gate) gates.set(thread, (gate = { tail: Promise.resolve(), waiting: 0 }));
+  gate.waiting++;
+  const turn = gate.tail.then(send);
+  gate.tail = turn.then(() => {}, () => {});
+  try { await turn; }
+  finally {
+    if (--gate.waiting === 0 && gates.get(thread) === gate) gates.delete(thread);
+    if (gates.size === 0) firstMessageGates.delete(hub);
   }
 }
 
@@ -157,11 +194,11 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
   const createdBy = starterOf(hub, key);
   const [from, fromLink] = sender(hub, key);
   // Its first message here, with its files, unless it has come already.
-  const sendHere = async (child: string, thread: SessionThread) => {
-    if (hub.store.messagesBefore(thread.thread.id, null, 200).some((m) => m.authorKind === "agent" && m.author === key)) return;
+  const sendHere = (child: string, thread: SessionThread) => firstMessageInTurn(hub, thread.thread.id, async () => {
+    if (await openerSaid(hub, thread.thread.id, key, true)) return;
     const kept = files.length > 0 ? await attach(hub, key, files.map((f) => f.path), child) : [];
     await postFrom(hub, thread, key, from, fromLink, text, [child], kept, true);
-  };
+  });
 
   const before = hub.store.openedWith("", key, k, there ?? "");
   if (before !== null) {
@@ -173,17 +210,6 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
     }
     return opened({ session: before.child, link: before.link, thread }, there, true);
   }
-  // Those still going: not ended all_done, and (here) not archived or deleted.
-  const open = hub.store.openedBy(key).filter((o) => {
-    if (o.state === "all_done") return false;
-    if (o.childStation !== "") return true;
-    const row = hub.store.getSession(o.child);
-    return row !== null && row.archivedAt === null;
-  });
-  if (open.length >= MAX_OPEN) {
-    throw new Error(`${open.length} chats you opened have not ended all_done (${open.map((o) => o.link ?? o.child).join(", ")}): finish with them, or ask a person, before opening more`);
-  }
-
   if (there === null) {
     const chosen = model === null ? chosenHere(hub, createdBy, row.ws ?? null, runtime as RuntimeName | null) : choice;
     const [child, chat] = makeChat(hub, { ...choice, ...chosen, title, createdBy, ws: row.ws ?? null });
@@ -228,14 +254,14 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
 
 /// A chat another station's session opens here (chat_create there, from station `peer`): made once per its key, in the
 /// workspace it was asked in (`ws`); the answer says whether its first message has come yet.
-export function createForPeer(hub: Hub, peer: string, request: Json, ws: string | null = null): Json {
+export async function createForPeer(hub: Hub, peer: string, request: Json, ws: string | null = null): Promise<Json> {
   const parent = typeof request?.session === "string" ? request.session : "";
   if (parent === "") throw new Error("session is required");
   const k = keyOf(request);
   const before = hub.store.openedWith(peer, parent, k, "");
-  const answer = (child: string): Json => {
+  const answer = async (child: string): Promise<Json> => {
     const thread = sessionThreadOf(hub, child);
-    const said = hub.store.messagesBefore(thread.thread.id, null, 200).some((m) => m.author === `${peer}/${parent}`);
+    const said = await openerSaid(hub, thread.thread.id, `${peer}/${parent}`, false);
     return { session: child, link: hub.link(child) ?? null, thread: addressOf(thread), said };
   };
   if (before !== null && hub.store.getSession(before.child) !== null && (ws === null || hub.inWorkspace(before.child, ws))) return answer(before.child);
@@ -294,7 +320,7 @@ export function settled(hub: Hub, key: string, state: Settled, words: string | n
     const text = tr(stationLang(), "station.session.openerNotTold", { error: (error as Error).message });
     try {
       const ts = await hub.chat(latest.connect).post({ channel: latest.thread.channel, threadTs: latest.thread.threadTs }, text, []);
-      hub.store.insertMessage({ thread: latest.thread.id, ts, authorKind: "ember", author: "ember", text, attachments: [] });
+      hub.store.insertMessage({ thread: latest.thread.id, ts, authorKind: STATION_AUTHOR, author: STATION_AUTHOR, text, attachments: [] });
     } catch {}
   });
 }

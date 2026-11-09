@@ -1,0 +1,14 @@
+/* monoid · official site. The sheet is one file per section (css/); the build inlines them in this order. */
+@import url("css/00-base.css");
+@import url("css/05-components.css");
+@import url("css/10-nav.css");
+@import url("css/20-hero.css");
+@import url("css/25-strip.css");
+@import url("css/40-pool.css");
+@import url("css/50-teams.css");
+@import url("css/60-devices.css");
+@import url("css/70-security.css");
+@import url("css/80-install-changelog.css");
+@import url("css/85-download-faq.css");
+@import url("css/90-end.css");
+@import url("css/95-footer.css");

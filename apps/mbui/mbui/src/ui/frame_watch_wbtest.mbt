@@ -403,7 +403,7 @@ test "a frame built again for what a part or a list's row read names it and wher
     })
     |> ignore
   })
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
   t.frame()
   // (set in a batch, as a core's delta is: told as it ends, no set under way then)

@@ -71,8 +71,8 @@ function socketOf(conn: RunnerConnection): import("node:net").Socket {
 export type ProcessOptions = {
   /// For the log: what it is ("claude <session>", "codex app-server <profile>").
   label: string;
-  /// Each line of its stdout, in order; acknowledged once this returns.
-  line: (text: string) => void;
+  /// Each line of its stdout, in order, with where in its output it begins and ends; acknowledged once this returns.
+  line: (text: string, from: number, to: number) => void;
   /// It exited (all of its output handled), as `describeExit` says, unless it was let go first; with the last lines it
   /// wrote to stderr (STDERR_TAIL of them, "" when none): what a runtime that fails as it starts says of why.
   exit: (said: string, stderr: string) => void;
@@ -100,14 +100,14 @@ export class AgentProcess {
     this.info = info;
     let resolveExit!: (said: string) => void;
     this.exited = new Promise((resolve) => (resolveExit = resolve));
-    this.conn = new RunnerConnection(info, (stream, text) => {
+    this.conn = new RunnerConnection(info, (stream, text, from, to) => {
       // Frozen: the line stays unacknowledged, for whoever takes the process up next.
       if (this.frozen) return new Promise<void>(() => {});
       const line = text.endsWith("\r") ? text.slice(0, -1) : text;
       if (stream === "err") {
         debug("agents::process", "runtime stderr", { label: options.label, line: line.slice(0, 2000) });
         if (line.trim() !== "") this.stderr = [...this.stderr, line.trim().slice(0, STDERR_LINE)].slice(-STDERR_TAIL);
-      } else options.line(line);
+      } else options.line(line, from, to);
     });
     const socket = socketOf(this.conn);
     socket.on("error", (error) => {
@@ -169,6 +169,12 @@ export class AgentProcess {
   write(line: string) {
     if (this.frozen) return;
     this.conn.write(line.endsWith("\n") ? line : `${line}\n`);
+  }
+
+  /// The runner gives the disk back under its stdout only up to `at` (told with the next ack): what is read again after
+  /// a crash begins there.
+  keepFrom(at: number) {
+    this.conn.keep = at;
   }
 
   /// Stops handling its lines: the next station is sent them.
@@ -233,19 +239,21 @@ export async function endRunner(data: string, id: string, label: string) {
   for (let i = 0; i < 300 && pidAlive(info.runner); i++) await sleep(10);
 }
 
-/// Where the runner will start sending stdout from: the end of what the previous station acknowledged. Asked by
-/// attaching once without acknowledging anything (the runner sends from its acknowledged place on each attach).
-export function ackedOffset(info: RunnerInfo, out: string): Promise<number> {
+/// Where the runner will start sending stdout from: the end of what the previous station acknowledged; and where of
+/// stdout that station kept what is read again after a crash (`keep`, told with that same ack; null: a runner from
+/// before, or none told). Asked by attaching once without acknowledging anything (the runner sends from its
+/// acknowledged place on each attach, saying first where that is: one from before says nothing).
+export function ackedOffset(info: RunnerInfo, out: string): Promise<{ at: number; keep: number | null }> {
   return new Promise((resolve) => {
     const socket = createConnection(info.socket);
     let carry = "";
     let done = false;
-    const finish = (at: number) => {
+    const finish = (at: number, keep: number | null = null) => {
       if (done) return;
       done = true;
       quiet();
       socket.destroy();
-      resolve(at);
+      resolve({ at, keep });
     };
     const size = () => {
       try {
@@ -261,6 +269,7 @@ export function ackedOffset(info: RunnerInfo, out: string): Promise<number> {
       for (let i = carry.indexOf("\n"); i >= 0; i = carry.indexOf("\n")) {
         const message = JSON.parse(carry.slice(0, i));
         carry = carry.slice(i + 1);
+        if (message.op === "attached" && Number.isSafeInteger(message.out)) return finish(message.out, Number.isSafeInteger(message.keep) ? Math.min(message.keep, message.out) : null);
         if (message.op === "out" && message.stream === "out") return finish(message.at);
         // The exit comes after all output: nothing of stdout was left to send.
         if (message.op === "exit") return finish(size());
@@ -281,25 +290,42 @@ const READ_CHUNK = 1 << 20;
 /// The whole lines of `file` before byte `end` (a line boundary: acknowledgements are at line ends), one at a time: an
 /// app-server's output holds days of its threads (hundreds of MB), more than one string can, so it is never held whole.
 export function* linesBefore(file: string, end: number, chunk = READ_CHUNK): Generator<string> {
-  if (end <= 0) return;
+  for (const line of linesWithin(file, 0, end, chunk)) yield line.text;
+}
+
+/// The whole lines of `file` from byte `start` to byte `end` (both line boundaries), each with where it begins.
+export function* linesWithin(file: string, start: number, end: number, chunk = READ_CHUNK): Generator<{ text: string; at: number }> {
+  if (end <= start) return;
   const fd = openSync(file, "r");
   try {
     let carry = Buffer.alloc(0);
-    let at = 0;
+    let at = start;
+    // Where the first byte of `carry` is in the file.
+    let base = start;
     while (at < end) {
       const buf = Buffer.allocUnsafe(Math.min(chunk, end - at));
       const n = readSync(fd, buf, 0, buf.length, at);
       if (n <= 0) break;
+      // Where the runner gave the disk back (what was acknowledged long before: native/runner `punch`) it reads as
+      // zeros: skipped, with the line it cut (never carried on, a part at a time, as one line hundreds of MB long).
+      let skip = 0;
+      if (buf[0] === 0) {
+        while (skip < n && buf[skip] === 0) skip++;
+        carry = Buffer.alloc(0);
+        base = at + skip;
+      }
       at += n;
-      const bytes = carry.length === 0 ? buf.subarray(0, n) : Buffer.concat([carry, buf.subarray(0, n)]);
+      const bytes = carry.length === 0 ? buf.subarray(skip, n) : Buffer.concat([carry, buf.subarray(0, n)]);
       let from = 0;
       for (let i = bytes.indexOf(0x0a); i >= 0; i = bytes.indexOf(0x0a, from)) {
         const line = bytes.toString("utf8", from, i);
+        const lineAt = base + from;
         from = i + 1;
-        yield line.endsWith("\r") ? line.slice(0, -1) : line;
+        yield { text: line.endsWith("\r") ? line.slice(0, -1) : line, at: lineAt };
       }
       // A line longer than a chunk is carried whole into the next read.
       carry = Buffer.from(bytes.subarray(from));
+      base += from;
     }
   } finally {
     closeSync(fd);

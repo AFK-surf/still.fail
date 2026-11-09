@@ -1,5 +1,5 @@
 // Who this machine's own Claude Code and Codex are signed in as, in their usual homes (~/.claude, ~/.codex)
-// (the Rust station's machine_logins.rs `MachineLogins`): for the pages that ask for a first profile, and for making a
+// : for the pages that ask for a first profile, and for making a
 // `machine` profile. How such a profile uses the login is agents/machine-logins.ts's (and oauth.ts renews Claude's).
 //
 // Read at start, when a profile on it is made, after a runtime is installed, and when the overview is read with a
@@ -12,6 +12,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { codexHome, type Env, readClaudeCredentials } from "../agents/machine-logins.ts";
 import { liveClock } from "../ops/fibers.ts";
+import { withShellCommand } from "../ops/shell-path.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import type { ProfileQuota } from "./profiles.ts";
 import { platform } from "../platform/index.ts";
@@ -112,7 +113,8 @@ const machineEnv = (env: Env, drop: string[]): Env => Object.fromEntries(Object.
 const CLAUDE_DROP = ["CLAUDE_CONFIG_DIR", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"];
 
 /// What a command said, and how it ended: undefined when it could not be run at all (not installed).
-function run(command: string, args: string[], env: Env): Promise<{ ok: boolean; stdout: string; stderr: string } | undefined | Error> {
+async function run(command: string, args: string[], env: Env): Promise<{ ok: boolean; stdout: string; stderr: string } | undefined | Error> {
+  env = await withShellCommand(command, env);
   return new Promise((resolve) => {
     const r = platform.runnable(command, args, env as NodeJS.ProcessEnv);
     execFile(r.file, r.args, { env: env as NodeJS.ProcessEnv, timeout: 20_000, killSignal: "SIGKILL", windowsVerbatimArguments: r.windowsVerbatimArguments }, (error, stdout, stderr) => {

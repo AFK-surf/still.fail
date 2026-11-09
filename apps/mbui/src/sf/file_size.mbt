@@ -1,4 +1,4 @@
-// A file's size as people read it (web/ui fileSize.ts): 512 B, 38 KB, 4.2 MB, 1.25 GB.
+// A file's size as people read it: 512 B, 38 KB, 4.2 MB, 1.25 GB.
 
 ///|
 /// `bytes` in words: whole bytes under a KB, whole KB under a MB, a MB to one place, a GB to two (fileSize).

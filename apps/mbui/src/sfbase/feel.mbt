@@ -29,6 +29,14 @@ pub fn felt_change(c : @ui.Ctx, key : String, now : Bool, kind : @ui.Haptic) -> 
 }
 
 ///|
+/// `kind` felt as what `now` says comes to be while node `v` is there (felt_change's, of a part made once): after it
+/// was seen not to be, with the app in front; not as it is first seen, nor while it stays.
+pub fn felt_change_node(v : @view.View, now : () -> Bool, kind : @ui.Haptic) -> Unit {
+  // (as of its changes alone: turning true is coming to be after it was not, never what it is as it is first seen)
+  v.reacts(now, fn(holds) { if holds && app_in_front() { @ui.haptic(kind) } }, at_start=false)
+}
+
+///|
 /// The chat open as `v` coming to need the viewer (a card waiting for them, `asks`, or its agent saying it needs them:
 /// the state's `need`), felt as something done.
 pub fn feel_needed(c : @ui.Ctx, r : ChatRef, v : ChatView) -> Unit {

@@ -302,7 +302,7 @@ fn split_stable(
     None => ()
   }
   let layout_words = fn(off : Int) -> Bytes? {
-    // an entry is [size; child count; tagged child…] (runtime.c): by its words, two the same are the same layout
+    // an entry is [size; child count; tagged child…]: by its words, two the same are the same layout
     match table {
       Some(tb) =>
         if off + 1 < tb.length() {
@@ -482,7 +482,7 @@ fn split_stable(
   }
   // moonbit_init in its packages' pieces (init_pieces), each a function in its package's init unit
   // (init.<package>.c; those under init_small together, init.s<k>.c): a package changed compiles its own again;
-  // moonbit_init itself (init.c) calls them in order. MBC_INIT_SPLIT=0: one unit, as it was
+  // moonbit_init itself calls them in order. MBC_INIT_SPLIT=0: one unit, as it was
   let pieces = if env_is("MBC_INIT_SPLIT", "1") != b"0" {
     match init_pieces(init.text) {
       Some(ps) if ps.length() > 0 => Some(ps)

@@ -56,7 +56,7 @@ test "words let go beside a field go into it only on a box that takes them for i
       c.column(w=Fill(1.0), fn() {
         // a box pressed for its field (a composer's capsule): words let go on it beside the field are the field's
         let cap = c.id("cap")
-        c.clicked(cap) |> ignore
+        c.takes_presses(cap)
         if takes.val {
           c.words_into(cap, "e")
         }
@@ -175,12 +175,13 @@ test "files from the Finder let go on a field go in as their paths, a line each,
   let f = @ui.Field::new(text="see ")
   let t = @ui.Tester::new(
     fn(c) {
-      c.editor("e", field=f, placeholder="the field", font_size=10.0, plain=true, enter_sends=false) |> ignore
-      // (a view that would take files as they came)
-      match @ui.take_drop() {
-        Some(_) => abort("files let go on a field taken as files")
-        None => ()
-      }
+      // (a box around it that would take files as they came)
+      let page = c.id("page")
+      c.on_files(page, held=fn(_) {  }, take=fn(_, _) { abort("files let go on a field taken as files") })
+      c.box(id=page, w=Fill(1.0), h=Fill(1.0), taps=false, points=true, fn() {
+        c.editor("e", field=f, placeholder="the field", font_size=10.0, plain=true, enter_sends=false) |> ignore
+      })
+      |> ignore
     },
     w=300.0,
     h=200.0,
@@ -197,14 +198,15 @@ test "files from the Finder let go on a field go in as their paths, a line each,
 }
 
 ///|
-test "files let go on a box that takes words go in as their paths; on a view that takes files, as files, not their paths" {
+test "files let go on a box that takes words go in as their paths; on a box that takes files, as files, not their paths" {
   let f = @ui.Field::new(text="")
   let took : Array[@ui.Pick] = []
+  let held : Array[Bool] = []
   let t = @ui.Tester::new(
     fn(c) {
       c.column(w=Fill(1.0), fn() {
         let cap = c.id("cap")
-        c.clicked(cap) |> ignore
+        c.takes_presses(cap)
         c.words_into(cap, "e")
         c.box(id=cap, w=Fill(1.0), pad=40.0, fn() {
           c.editor("e", field=f, placeholder="the field", font_size=10.0, plain=true, enter_sends=false) |> ignore
@@ -212,16 +214,9 @@ test "files let go on a box that takes words go in as their paths; on a view tha
         |> ignore
         // a folder of a files page: what is let go on it goes up there
         let folder = c.id("folder")
-        c.clicked(folder) |> ignore
+        c.takes_presses(folder)
+        c.on_files(folder, held=fn(at) { held.push(at is Some(_)) }, take=fn(_, _) { Some(fn(pick) { took.push(pick) }) })
         c.box(id=folder, w=Fill(1.0), pad=20.0, fn() { c.text("a folder") |> ignore }) |> ignore
-        match @ui.take_drop() {
-          Some((x, y, pick)) =>
-            match c.rect_of(folder) {
-              Some((fx, fy, fw, fh)) if x >= fx && x < fx + fw && y >= fy && y < fy + fh => took.push(pick)
-              _ => ()
-            }
-          None => ()
-        }
       })
       |> ignore
     },
@@ -236,8 +231,15 @@ test "files let go on a box that takes words go in as their paths; on a view tha
   t.frame()
   assert_eq(f.text(), "/Users/lin/a.txt")
   assert_eq(took.length(), 0)
-  // on the folder: the files, read, and no paths in the field
+  assert_eq(held, [])
+  // held over the folder, then over the box: the folder told they are over it, then gone from over it
   let (fx, fy) = t.find("a folder").unwrap()
+  t.hold_files(Some((fx, fy)))
+  t.frame()
+  t.hold_files(Some((ex + 50.0, ey - 36.0)))
+  t.frame()
+  assert_eq(held, [true, false])
+  // on the folder: the files, read, and no paths in the field
   t.drop_files(fx, fy, [("b.txt", b"bb")], paths=["/Users/lin/b.txt"])
   t.frame()
   t.frame()
@@ -247,18 +249,17 @@ test "files let go on a box that takes words go in as their paths; on a view tha
 }
 
 ///|
-test "files let go where nothing takes them in the frame they came are let go, not taken by a later one" {
+test "files let go where nothing takes them as they come are let go, not taken by a box that takes files said later" {
   let takes = Ref(false)
   let took : Array[@ui.Pick] = []
   let t = @ui.Tester::new(
     fn(c) {
-      c.text("nothing here") |> ignore
+      let here = c.id("here")
+      c.takes_presses(here)
       if takes.val {
-        match @ui.take_drop() {
-          Some((_, _, pick)) => took.push(pick)
-          None => ()
-        }
+        c.on_files(here, held=fn(_) {  }, take=fn(_, _) { Some(fn(pick) { took.push(pick) }) })
       }
+      c.box(id=here, fn() { c.text("nothing here") |> ignore }) |> ignore
     },
     w=300.0,
     h=200.0,
@@ -282,7 +283,7 @@ test "a box that takes files by their paths takes those let go on it and on its 
   let t = @ui.Tester::new(
     fn(c) {
       let cap = c.id("cap")
-      c.clicked(cap) |> ignore
+      c.takes_presses(cap)
       match c.paths_into(cap, "e") {
         Some(paths) => took.push(paths)
         None => ()
@@ -293,10 +294,6 @@ test "a box that takes files by their paths takes those let go on it and on its 
         c.editor("g", field=g, placeholder="another field", font_size=10.0, plain=true, enter_sends=false) |> ignore
       })
       |> ignore
-      match @ui.take_drop() {
-        Some(_) => abort("files the box took by their paths taken as files")
-        None => ()
-      }
     },
     w=300.0,
     h=300.0,
@@ -330,31 +327,32 @@ test "a box that takes files by their paths takes those let go on it and on its 
 }
 
 ///|
-test "files let go beside a view that takes files only on its folders are left to what is there: a box's field takes their paths" {
+test "files let go beside a box that takes files only on its folders are left to what is there: a box's field takes their paths" {
   let f = @ui.Field::new(text="")
   let took : Array[@ui.Pick] = []
   let t = @ui.Tester::new(
     fn(c) {
-      c.column(w=Fill(1.0), fn() {
-        let folder = c.id("folder")
-        let cap = c.id("cap")
-        // (asked first: what it does not take, it leaves)
-        match
-          @ui.take_drop(over=fn(x, y) {
-            match c.rect_of(folder) {
-              Some((fx, fy, fw, fh)) => x >= fx && x < fx + fw && y >= fy && y < fy + fh
-              None => false
-            }
-          }) {
-          Some((_, _, pick)) => took.push(pick)
-          None => ()
+      let folder = c.id("folder")
+      let cap = c.id("cap")
+      // (the page holding both takes them on its folder alone: what it does not take, it leaves)
+      let page = c.id("page")
+      c.on_files(page, held=fn(_) {  }, take=fn(x, y) {
+        match c.rect_of(folder) {
+          Some((fx, fy, fw, fh)) if x >= fx && x < fx + fw && y >= fy && y < fy + fh =>
+            Some(fn(pick) { took.push(pick) })
+          _ => None
         }
-        c.clicked(folder) |> ignore
-        c.box(id=folder, w=Fill(1.0), pad=20.0, fn() { c.text("a folder") |> ignore }) |> ignore
-        c.clicked(cap) |> ignore
-        c.words_into(cap, "e")
-        c.box(id=cap, w=Fill(1.0), pad=40.0, fn() {
-          c.editor("e", field=f, placeholder="the field", font_size=10.0, plain=true, enter_sends=false) |> ignore
+      })
+      c.box(id=page, w=Fill(1.0), taps=false, points=true, fn() {
+        c.column(w=Fill(1.0), fn() {
+          c.takes_presses(folder)
+          c.box(id=folder, w=Fill(1.0), pad=20.0, fn() { c.text("a folder") |> ignore }) |> ignore
+          c.takes_presses(cap)
+          c.words_into(cap, "e")
+          c.box(id=cap, w=Fill(1.0), pad=40.0, fn() {
+            c.editor("e", field=f, placeholder="the field", font_size=10.0, plain=true, enter_sends=false) |> ignore
+          })
+          |> ignore
         })
         |> ignore
       })

@@ -24,7 +24,7 @@ function connection(withPackets = true) {
   const conn = {
     remoteId: () => "ab".repeat(32),
     stats: () => ({ ...t }),
-    paths: () => [{ selected: true, ip: "192.168.20.153:43112", rttMs: 9, txPackets: 0, lostPackets: 0 }],
+    paths: () => [{ selected: true, ip: "192.168.50.68:43112", rttMs: 9, txPackets: 0, lostPackets: 0 }],
     isClosed: () => state.closed !== null,
     close: (code: number, reason: string) => void (state.closed = [code, reason]),
   } as unknown as Connection;
@@ -65,7 +65,7 @@ test("a connection trading only empty packets, thousands a second, is said once 
     assert.equal(said.length, 1, "said once, as it begins");
     assert.equal(said[0]!.fields.rxPackets, 32_000);
     assert.equal(said[0]!.fields.txAcks, 16_000);
-    assert.match(String(said[0]!.fields.paths), /\*192\.168\.20\.153:43112 9ms/);
+    assert.match(String(said[0]!.fields.paths), /\*192\.168\.50\.68:43112 9ms/);
     c.second(32_000, 16_000);
     move(1000);
     storms.look();

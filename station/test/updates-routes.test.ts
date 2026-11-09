@@ -54,7 +54,7 @@ test("the update channel is said with the versions and set by an admin", async (
   const [status, lines] = await ask("POST", "/updates/check");
   assert.equal(status, 200);
   assert.equal(stationOf(lines).channel, "beta", "installed from the beta, on it");
-  assert.deepEqual(lines.map((l: any) => l.id), ["station", "claude", "codex", "dsh", "grok", "cursor", "devin", "hermes"]);
+  assert.deepEqual(lines.map((l: any) => l.id), ["station", "claude", "codex", "dsh", "grok", "cursor", "devin", "hermes", "agy"]);
   assert.equal(stationOf(lines).idleOnly, undefined, "automatic updates wait for nothing");
   assert.equal(typeof stationOf(lines).checkedAt, "number");
 
@@ -95,6 +95,9 @@ test("an update asked for is refused with what is wrong", async (t) => {
   await ask("POST", "/updates/check");
   assert.deepEqual(await ask("POST", "/updates", { id: "nope" }), [400, { error: "不存在 nope" }]);
   assert.deepEqual(await ask("POST", "/updates", {}), [400, { error: "不存在 " }]);
+  assert.equal((await ask("POST", "/updates", { id: "codex", repair: true }, "member"))[0], 403);
+  assert.equal((await ask("POST", "/updates", { id: "station", repair: true }, "admin"))[0], 400);
+  assert.equal((await ask("POST", "/updates", { id: "codex", repair: true }, "admin"))[0], 400, "a repair is not offered without a diagnosed incomplete installation");
 });
 
 test("a station with nothing to update has no channel to set", async () => {

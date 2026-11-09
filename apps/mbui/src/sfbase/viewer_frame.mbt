@@ -1,4 +1,4 @@
-// The viewer's frame, whatever the tier and the input (ember web/src/FilePreview.tsx; drawn by the library's
+// The viewer's frame, whatever the tier and the input (still.fail web/src/FilePreview.tsx; drawn by the library's
 // viewer_frame.mbt, what it says and does given from here): over the whole window, on the page's own canvas whatever
 // it shows (a PDF's a step greyer). In any tier but Small (the web's `docked`) the bar every file opened has across
 // the top (back to the chat or the folder by name, the file's name, which of how many, its size and kind; its tools,
@@ -28,7 +28,7 @@ pub fn viewer_place(vw : Viewer, src : Source) -> (Int, Int) {
         Some(th) => p["thread"] = Json::number(th)
         None => p["session"] = Json::string(session)
       }
-      let told = (src.topic)("imageNear", p).value
+      let told = src.topic("imageNear", p).get().value
       let at = match field(told, "index") {
         Some(Number(n, ..)) => n.to_int()
         _ => -1
@@ -48,7 +48,7 @@ pub fn viewer_place(vw : Viewer, src : Source) -> (Int, Int) {
 }
 
 ///|
-/// A kind's name, as the bar says it after the size (FilePreview.tsx KIND_LABEL: PDF and Markdown their own names).
+/// A kind's name, as the bar says it after the size.
 pub fn vf_kind_label(kind : PKind?) -> String {
   match kind {
     Some(KImage) => @sf.t("web-main.preview.kind.image")
@@ -65,7 +65,7 @@ pub fn vf_kind_label(kind : PKind?) -> String {
 }
 
 ///|
-/// The line under the name (FilePreview.tsx meta): which of how many, its size, its kind; an image's size in pixels
+/// The line under the name: which of how many, its size, its kind; an image's size in pixels
 /// after them, as its message says it (the station read it from its header), else as its whole picture was decoded.
 /// (A film's and a song's are their player's bar's: player.mbt.)
 pub fn vf_meta(vw : Viewer, src : Source) -> String {
@@ -118,10 +118,10 @@ fn vf_native(v : Viewer, c : @ui.Ctx, src : Source) -> Unit {
   }
   let z = v.zoom
   if !z.fitted {
-    @sf.native_over_act("fit", @sf.t("web-main.preview.fitKey"), "shrink", fn() { z.reset() })
+    @sf.native_over_act("fit", @sf.t("web-main.preview.fitKey"), "shrink", fn() { z.reset(at=c.moment()) })
   } else if z.fit() < 1.0 {
     @sf.native_over_act("actual", @sf.t("web-main.preview.actualKey"), "expand", fn() {
-      z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true)
+      z.zoom_to(1.0, z.bw / 2.0, z.bh / 2.0, true, at=c.moment())
     })
   }
   match v.bytes.get() {
@@ -186,7 +186,7 @@ fn vf_native_download(v : Viewer, c : @ui.Ctx, src : Source, there : Bool) -> Un
 }
 
 ///|
-/// 预览 / 源码 in the bar (FilePreview.css.ts: the Segmented 120 wide, less its 2 in).
+/// 预览 / 源码 in the bar (less its 2 in).
 let vf_tabs_item : Double = 58.0
 
 ///|
@@ -206,7 +206,7 @@ pub fn vf_read(vw : Viewer, c : @ui.Ctx, src : Source, b : Bytes) -> Unit {
 }
 
 ///|
-/// Whether a preview reads as a text on a desktop (FilePreview.tsx: a text and Markdown open in the reader).
+/// Whether a preview reads as a text on a desktop.
 pub fn vf_reads(vw : Viewer) -> Bool {
   vw.bytes.get() is Some(_) &&
   (vw.shown_kind() == Some(KMarkdown) || vw.shown_kind() == Some(KText)) &&

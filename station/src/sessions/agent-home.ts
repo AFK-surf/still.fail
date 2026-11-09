@@ -1,9 +1,9 @@
-// The agents' home (from the Rust station's agent_home.rs): one MEMORY.md and one skills/ directory used by every
+// The agents' home: one MEMORY.md and one skills/ directory used by every
 // profile of every runtime. It lives in the data dir, not the repository, since it holds team-specific memory. A
-// workspace the station joined has its own, beside it (`workspaceAgentHome`, docs/multi-workspace.md). A session is
+// workspace the station joined has its own, beside it (`workspaceAgentHome`). A session is
 // given its workspace's, not through the profile's home (a profile serves every workspace): the memory with its
 // instructions, the skills linked where it runs (`sessionSkills`). The station's own skills are written into each at
-// start. Their text is src/skills/*.md, read from there when running from source and from dist/skills/ (copied there by
+// start. Their text is src/skills/*.md (with the scripts some bring in src/skills/<name>/), read from there when running from source and from dist/skills/ (copied there by
 // the build) when bundled.
 import { closeSync, existsSync, linkSync as hardLinkSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, readSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -16,7 +16,7 @@ import type { Runtime } from "./config.ts";
 
 export const agentHomePaths = (agentHome: string): [string, string] => [join(agentHome, "MEMORY.md"), join(agentHome, "skills")];
 
-/// The agent home of workspace `ws` (docs/multi-workspace.md): the home workspace's (`home`; null outside any, when
+/// The agent home of workspace `ws`: the home workspace's (`home`; null outside any, when
 /// there is no telling) is the agent home itself, a joined one's workspaces/<ws> in it, made with its MEMORY.md and
 /// skills/ (the station's own skills in it, as the home workspace has them) when missing. A session is given its
 /// workspace's; the station shares the home workspace's skills only (share/index.ts).
@@ -38,13 +38,10 @@ export const agentHomes = (agentHome: string): string[] => [agentHome, ...entrie
 
 /// The skills the station brings, by directory name: about its own tools, so they are rewritten at every start and
 /// change with the station (the team's own skills sit beside them).
-const BUILTIN_SKILLS = ["stillfail-jobs", "stillfail-show", "stillfail-viz", "stillfail-browser", "stillfail-login", "stillfail-vault", "stillfail-cron"];
+const BUILTIN_SKILLS = ["stillfail-chats", "stillfail-jobs", "stillfail-show", "stillfail-viz", "stillfail-browser", "stillfail-login", "stillfail-vault", "stillfail-cron", "stillfail-github-ci"];
 /// When to offer a bug report to the still.fail team: only from a station on the stable channel, beside the
 /// `feedback_send` tool; gone from one on the test channel (the team's own).
 const FEEDBACK_SKILL = "stillfail-feedback";
-/// The station's own skills as they were named before the rename: gone once the new ones are written (they would be
-/// listed twice). A directory with more in it than the SKILL.md the station wrote is left.
-const FORMER_BUILTIN_SKILLS = ["ember-jobs", "ember-show", "ember-viz"];
 
 /// Where the skills' text is.
 const skillsSource = (): URL => (import.meta.url.endsWith(".ts") ? new URL("../skills/", import.meta.url) : new URL("./skills/", import.meta.url));
@@ -65,10 +62,6 @@ function onlySkill(dir: string): boolean {
 /// (else it is taken away, unless someone added to it).
 export function writeBuiltinSkills(agentHome: string, feedback: boolean) {
   const [, skills] = agentHomePaths(agentHome);
-  for (const name of FORMER_BUILTIN_SKILLS) {
-    const dir = join(skills, name);
-    if (onlySkill(dir)) rmSync(dir, { recursive: true, force: true });
-  }
   if (!feedback && onlySkill(join(skills, FEEDBACK_SKILL))) rmSync(join(skills, FEEDBACK_SKILL), { recursive: true, force: true });
   for (const name of feedback ? [...BUILTIN_SKILLS, FEEDBACK_SKILL] : BUILTIN_SKILLS) {
     const text = builtinSkill(name);
@@ -80,6 +73,24 @@ export function writeBuiltinSkills(agentHome: string, feedback: boolean) {
       now = readFileSync(path, "utf8");
     } catch {}
     if (now !== text) writeFileSync(path, text);
+    for (const [file, body] of builtinSkillFiles(name)) {
+      const at = join(dir, file);
+      let had: Buffer | null = null;
+      try {
+        had = readFileSync(at);
+      } catch {}
+      if (had === null || !had.equals(body)) writeFileSync(at, body, { mode: 0o755 });
+    }
+  }
+}
+
+/// The files a built-in skill brings beside its SKILL.md (scripts it runs), from src/skills/<name>/: none for most.
+function builtinSkillFiles(name: string): [string, Buffer][] {
+  const dir = new URL(`${name}/`, skillsSource());
+  try {
+    return readdirSync(dir).map((file) => [file, readFileSync(new URL(file, dir))]);
+  } catch {
+    return [];
   }
 }
 
@@ -96,7 +107,7 @@ const isLink = (path: string) => {
 /// The paths already said to be left alone: said once, not at each look.
 const leftAlone = new Set<string>();
 
-/// Whether `path` is a link to `target`, however either is spelled (~/.ember is a link to ~/.stillfail).
+/// Whether `path` is a link to `target`, however either is spelled (one may be a link to the other).
 function linksTo(path: string, target: string): boolean {
   try {
     return lstatSync(path).isSymbolicLink() && (readlinkSync(path) === target || realpathSync(path) === realpathSync(target));

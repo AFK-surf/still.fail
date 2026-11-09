@@ -1,9 +1,11 @@
-// Archived threads as files (store.rs `// ── archive`): `<archive>/threads/<id>.jsonl.zst`, one entry per line as serde
-// writes EntryRow (camelCase, fields in the struct's order, the skipped Nones left out), zstd level 3.
+// Archived threads as files, as the Rust station wrote them (store.rs `// ── archive`): `<archive>/threads/<id>.jsonl.zst`,
+// one entry per line as serde writes EntryRow (camelCase, fields in the struct's order, the skipped Nones left out),
+// zstd level 3. Read once, as a database of version 12 is brought up (store.ts `#upgradeFrom12`).
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { constants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
-import { type EntryRow, type Json, attachment, authorKind, quote, withLetter } from "./rows.ts";
+import { type EntryRow, type Json, attachment, authorKind, quote, withChange, withLetter } from "./rows.ts";
+import { STATION_AUTHOR } from "./rows.ts";
 
 export const threadFile = (archiveDir: string, thread: number): string => join(archiveDir, "threads", `${thread}.jsonl.zst`);
 
@@ -30,6 +32,7 @@ export function entryJson(e: EntryRow): Record<string, Json> {
   if (e.card !== undefined) v.card = e.card;
   v.at = e.at;
   if (e.letter !== undefined) v.letter = e.letter;
+  if (e.change !== undefined) v.change = e.change;
   return v;
 }
 
@@ -37,14 +40,14 @@ export function entryJson(e: EntryRow): Record<string, Json> {
 export function archivedEntry(e: Json): EntryRow {
   const kind = e.kind;
   if (kind !== "message" && kind !== "edit") throw new Error(`unknown entry kind ${kind}`);
-  if (!["person", "agent", "ember", "stillfail"].includes(e.authorKind)) throw new Error(`unknown author kind ${e.authorKind}`);
+  if (!["person", "agent", STATION_AUTHOR, "stillfail"].includes(e.authorKind)) throw new Error(`unknown author kind ${e.authorKind}`);
   const some = (v: Json) => (v === undefined || v === null ? undefined : v);
   return {
     agentIdentity: some(e.agentIdentity), thread: e.thread, n: e.n, kind, target: e.target ?? null, ts: e.ts ?? null,
     authorKind: authorKind(e.authorKind), author: e.author, text: e.text ?? null, attachments: (e.attachments ?? []).map(attachment),
     quotes: (e.quotes ?? []).map(quote), declared: e.declared ?? null, client: e.client ?? null, profile: e.profile ?? null, runtime: e.runtime ?? null,
     options: some(e.options), card: some(e.card), at: e.at,
-    ...withLetter(e.letter),
+    ...withLetter(e.letter), ...withChange(e.change),
   };
 }
 
@@ -58,7 +61,11 @@ export function readArchive(path: string): EntryRow[] {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw e;
   }
-  const text = zstdDecompressSync(bytes).toString("utf8");
+  return archiveEntries(zstdDecompressSync(bytes).toString("utf8"));
+}
+
+/// An archive file's text as entries (each a line of JSON).
+export function archiveEntries(text: string): EntryRow[] {
   return text
     .split("\n")
     .map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l))
@@ -66,5 +73,3 @@ export function readArchive(path: string): EntryRow[] {
     .map((l) => archivedEntry(JSON.parse(l)));
 }
 
-/// What archive_thread writes: each entry and a newline.
-export const archiveText = (entries: EntryRow[]): string => entries.map((e) => `${JSON.stringify(entryJson(e))}\n`).join("");

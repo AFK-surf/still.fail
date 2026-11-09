@@ -1,4 +1,4 @@
-// A page's parts (docs/architecture.md, the library: a page's parts): its frame, sections, groups of rows, rows (to
+// A page's parts (the library: a page's parts): its frame, sections, groups of rows, rows (to
 // another page, a value, a switch), cards, notes, choices. A page is drawn into whatever box it is given and laid out
 // by that box's width, once, by its frame (`page`): narrower than the web's narrow app (640), as the web's mobile pages
 // are (web/src/mobile/parts.tsx TopBack, LargeTitle, SectionHeader, ListCard, ListRow): back over a large title, its
@@ -48,7 +48,7 @@ let head_ends : Ref[Int] = Ref(0)
 /// `trailing`), 10 apart: as wide as it is beside the title, which keeps its words whole; where the line has not the
 /// room, what is here gives way first (a choice in it fitted to the room left: `segmented`), the title cut only where
 /// it is longer than the line leaves it then. A choice here is as wide as its options, not filling the line
-/// (web/src/mobile/Usage.tsx: its days' Seg, not `fill`).
+/// (not `fill`).
 pub fn head_end(c : @ui.Ctx, actions : () -> Unit) -> Unit {
   head_ends.val = head_ends.val + 1
   c.box(style=pg_head_end, actions) |> ignore
@@ -72,6 +72,16 @@ pub fn look_for(w : Double) -> Look {
 }
 
 ///|
+/// A page that takes no frame's arrangement (a remote screen's, whole in what it is given), drawn as a page `w` wide is
+/// arranged.
+pub fn arranged(w : Double, wide~ : () -> Unit, narrow~ : () -> Unit) -> Unit {
+  match look_for(w) {
+    Wide => wide()
+    Narrow => narrow()
+  }
+}
+
+///|
 /// The widest a page is laid out as the narrow app is (the web's: max-width 640, where its narrow app takes over).
 pub let narrow_most : Double = 640.0
 
@@ -89,6 +99,15 @@ pub(all) struct PageFrame {
   foot : Double
   named : Bool
 }
+
+///|
+/// What a page made once says of itself to the frame that names it (its bar: `named`), as it changes: its title, what
+/// it is for said by a mark beside it ("" none; not its lead, what it holds says under its title). Compared by what it
+/// says.
+pub(all) struct PageSaid {
+  title : String
+  about : String
+} derive(Eq)
 
 ///|
 /// A frame that gives a page nothing: nowhere back, no room over or under it.
@@ -115,7 +134,7 @@ pub let pane_bar : Ref[((@ui.Ctx, PageBar, () -> Unit) -> Unit)?] = Ref(None)
 
 ///|
 /// What a place's top page under the frame's own bar does (its `named`), given to that bar as the page is drawn: the
-/// bar holds it at its end and takes it from here (PlacePage.kt: TopGlassBar's `actions`, 用量's days, 连接's filter).
+/// bar holds it at its end and takes it from here (用量's days, 连接's filter).
 // kept across runs: said by the page as it is drawn, taken by the bar over it
 pub let named_actions : Ref[(() -> Unit)?] = Ref(None)
 
@@ -141,8 +160,14 @@ pub fn page(
   actions? : () -> Unit,
   head? : () -> Unit,
   small? : String = "",
+  keys? : Array[(String, String)],
 ) -> Unit {
   let l = look_for(c.width)
+  // (each block by its key and what it shows, while it is not waiting in its bones: page_keyed)
+  page_keyed.val = match keys {
+    Some(ks) if ks.length() == content.length() && page_bones.val is None => Some(ks)
+    _ => None
+  }
   let (title, content, head, actions, lead) = page_parts(c, title, content, head, actions, lead)
   // (what it holds drawn as its list lays it out, maybe after this returns: each block says its look as it is drawn)
   let content = content.map(fn(b) { fn() { with_look(l, b) } })
@@ -160,6 +185,8 @@ pub fn page(
       }
     })
   })
+  // (taken by its list as it was built, or by none: not another page's)
+  page_keyed.val = None
 }
 
 ///|
@@ -232,7 +259,7 @@ priv struct PageBones {
 let page_bones : Ref[PageBones?] = Ref(None)
 
 ///|
-/// A page while what it shows is read the first time (docs/ui-panels.md 等待): the page `view` draws, given made-up
+/// A page while what it shows is read the first time (sf/waiting.mbt): the page `view` draws, given made-up
 /// data (what it will show, made of made-up words, through a core that answers nothing), drawn with its frame as it
 /// is (its back; `title` the frame's, as the page's own is not known yet) and all it shows in its bones (its head, what
 /// it is for, what it does, its blocks), breathing; what it waits on (`text`, `note`) said to a screen reader; over it
@@ -264,6 +291,9 @@ fn under_pane_bar(c : @ui.Ctx, bar : PageBar, barred : () -> Unit, alone : () ->
 /// Under a bar of the frame's that holds its title, back and what it does (`pane_bar`): what is left of its head there
 /// (a head of its own, as the arrangement has a head's room, 8 or 16 under the bar; what it is for, the line under the
 /// title the bar holds, right under the bar), then what it holds as under a page's head, laid out as `l` lays them.
+/// Narrow, the head and the lead stand in the page's room as its cards do (pg_room_now: 16 in a panel), as they do
+/// under a large title (narrow_page); 2026-11-07 they were the frame's chrome there, against the panel's edge while
+/// the cards and the parts' choice stood 16 in (a station's page on an iPhone Duo).
 fn barred_page(
   c : @ui.Ctx,
   key : String,
@@ -280,25 +310,28 @@ fn barred_page(
   }
   if !lead.is_empty() {
     blocks.push(fn() {
-      c.box(style=if l == Narrow { pg_lead_box } else { desk_barred_lead }, fn() {
+      c.box(style=if l == Narrow { pg_lead_box } else { desk_barred_lead.then(desk_head_in_pane()) }, fn() {
         lead.draw(c, if l == Narrow { pg_lead } else { desk_muted })
       })
       |> ignore
     })
   }
+  let chrome = blocks.length()
   match l {
     Narrow => {
+      // (its head and what it is for in the page's room as its cards are, the page's own there: nothing of the
+      // frame's stands from the page's edges under the bar, which holds back and the title)
       for b in content {
         blocks.push(b)
       }
-      narrow_list(c, key, blocks, foot)
+      narrow_list(c, key, blocks, foot, chrome=0, own=chrome)
     }
     Wide => {
       // (what it holds as under a head: its first 16 under it, the head's own 12 over that)
       for i, b in content {
         blocks.push(fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore })
       }
-      desk_lanes(c, key, blocks, foot~)
+      desk_lanes(c, key, blocks, foot~, chrome~)
     }
   }
 }
@@ -360,9 +393,9 @@ fn narrow_page(
     Some(label) if !back_in_head =>
       blocks.push(fn() {
         c.box(style=pg_back_line, fn() {
-          if nav_back(c, "settings-back", label) {
+          nav_back(c, "settings-back", label, on_press=fn() {
             on_back()
-          }
+          })
         })
         |> ignore
       })
@@ -402,9 +435,9 @@ fn narrow_page(
     (Some(h), Some(label)) if back_in_head =>
       blocks.push(fn() {
         own_head_back.val = Some(fn() {
-          if nav_back(c, "settings-back", label) {
+          nav_back(c, "settings-back", label, on_press=fn() {
             on_back()
-          }
+          })
         })
         c.box(style=pg_card_room, h) |> ignore
         own_head_back.val = None
@@ -421,12 +454,13 @@ fn narrow_page(
   if !lead.is_empty() {
     blocks.push(fn() { c.box(style=pg_lead_box, fn() { lead.draw(c, pg_lead) }) |> ignore })
   }
+  let own = blocks.length()
   for b in content {
     blocks.push(b)
   }
   // (each drawn as its list lays it out, after this returns: its back, its title's line and what it does there in the
   // page's arrangement, as what it holds is)
-  narrow_list(c, key, blocks.map(fn(b) { fn() { with_look(Narrow, b) } }), foot, chrome~)
+  narrow_list(c, key, blocks.map(fn(b) { fn() { with_look(Narrow, b) } }), foot, chrome~, own~)
 }
 
 ///|
@@ -435,20 +469,92 @@ fn narrow_page(
 pub let page_list_opened : Ref[(@ui.Ctx, String, Int) -> Unit] = Ref(fn(_, _, _) {  })
 
 ///|
+/// The keys of the blocks of the page being drawn (`page`'s `keys`: each block's own and what it shows), taken by the
+/// list its blocks are laid out in (keyed_blocks); None: its blocks by their places.
+// kept across runs: set by each page as it is drawn and taken by its list in the same build
+let page_keyed : Ref[Array[(String, String)]?] = Ref(None)
+
+///|
+/// Each page's blocks as given and as its list made of them, by the list's key (keyed_blocks).
+// kept across runs: put back by page_rows_reset (the app's reset)
+let page_lists : Map[String, @ui.ListRows[(String, () -> Unit)]] = {}
+
+///|
+/// What every page's blocks were forgets (a run anew).
+pub fn page_rows_reset() -> Unit {
+  page_lists.clear()
+  page_keyed.val = None
+}
+
+///|
+/// List `key`'s `blocks` (the first `chrome` of them its page's own: back, title, head, what it is for), by the keys
+/// the page gave its blocks (page_keyed, as many as those after `chrome`): a block new to it opens its room where it
+/// is, one gone closes where it was, one showing another thing goes to its new height, as a chat's rows do (ListRows,
+/// mbui's ui/list_size.mbt; 2026-11-03 the user: 「只给那几页加身份」); its rows' heights so (the list's `sized`). As
+/// given, by their places, where the page gave no keys.
+fn keyed_blocks(
+  c : @ui.Ctx,
+  key : String,
+  blocks : Array[() -> Unit],
+  chrome : Int,
+) -> (Array[() -> Unit], @ui.RowCauses?) {
+  let ks = match page_keyed.val {
+    Some(ks) if ks.length() == blocks.length() - chrome => ks
+    _ => return (blocks, None)
+  }
+  page_keyed.val = None
+  let lr = match page_lists.get(key) {
+    Some(l) => l
+    None => {
+      let l = @ui.ListRows::new()
+      page_lists[key] = l
+      l
+    }
+  }
+  let keys = Array::makei(chrome, fn(i) { "~" + i.to_string() })
+  let versions : Map[String, String] = {}
+  for k in ks {
+    keys.push(k.0)
+    versions[k.0] = k.1
+  }
+  let items = Array::makei(blocks.length(), fn(i) { (keys[i], blocks[i]) })
+  let (items, keys) = lr.rows(c, keys, items, fn(it) { versions.get(it.0).unwrap_or("") })
+  let drawn = items.mapi(fn(i, it) {
+    let k = keys[i]
+    fn() {
+      let n = c.box(style=full_width, it.1)
+      lr.enter(c, n, k)
+      lr.leave(c, n, k)
+    }
+  })
+  (drawn, Some(lr.sized()))
+}
+
+///|
 /// A narrow page's blocks in its list, those from `chrome` on (what it holds: its own head, what it is for, its
 /// groups, cards, headings, notes) in the page's room 12 from its sides (pg_room), as a panel's are in the room it
 /// leaves; the frame's own over them (back, the large title) from the page's edges; 30 under the last, then `foot`.
-fn narrow_list(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], foot : Double, chrome? : Int = 0) -> Unit {
+fn narrow_list(
+  c : @ui.Ctx,
+  key : String,
+  blocks : Array[() -> Unit],
+  foot : Double,
+  chrome? : Int = 0,
+  own? : Int = chrome,
+) -> Unit {
+  // (`own`: how many of them are the page's own, before what it holds: its keys are those after)
+  let (blocks, sized) = keyed_blocks(c, "settings/" + key, blocks, own)
   let n = blocks.length()
-  c.list("settings/" + key, n + 1, 80.0, fn(i) {
+  let pane = pane_round.val
+  c.list("settings/" + key, n + 1, 80.0, sized?, fn(i) { with_pane(pane, fn() {
     if i == n {
       c.box(style=@ui.style(w=Full, h=Fixed(pg_foot + foot)), fn() {  }) |> ignore
     } else if i < chrome {
       (blocks[i])()
     } else {
-      c.box(style=pg_room, blocks[i]) |> ignore
+      c.box(style=pg_room_now(), blocks[i]) |> ignore
     }
-  })
+  }) })
   |> ignore
   (page_list_opened.val)(c, "settings/" + key, n + 1)
 }
@@ -482,7 +588,7 @@ fn wide_page(
     // as far down as a title's head stands
     Some(h) =>
       blocks.push(fn() {
-        c.box(style=if deep { desk_own_head_deep } else { desk_own_head }, fn() {
+        c.box(style=(if deep { desk_own_head_deep } else { desk_own_head }).then(desk_head_in_pane()), fn() {
           if deep {
             desk_back(c, label, on_back)
           }
@@ -492,7 +598,7 @@ fn wide_page(
       })
     None =>
       blocks.push(fn() {
-        c.box(style=if deep { desk_head_deep } else { desk_head }, fn() {
+        c.box(style=(if deep { desk_head_deep } else { desk_head }).then(desk_head_in_pane()), fn() {
           if deep {
             desk_back(c, label, on_back)
           }
@@ -519,10 +625,11 @@ fn wide_page(
         |> ignore
       })
   }
+  let chrome = blocks.length()
   for i, b in content {
     blocks.push(fn() { c.box(style=if i == 0 { desk_first } else { desk_block }, fn() { b() }) |> ignore })
   }
-  desk_lanes(c, key, blocks, foot~)
+  desk_lanes(c, key, blocks, foot~, chrome~)
 }
 
 ///|
@@ -530,9 +637,9 @@ fn wide_page(
 fn desk_back(c : @ui.Ctx, back : String, on_back : () -> Unit) -> Unit {
   let th = theme()
   let id = c.id("settings-back")
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     on_back()
-  }
+  })
   let lit = c.lit(id)
   let b = c.box(style=desk_back_line, id~, fn() {
     icon(c, "chevron-left", size=desk_back_icon, color=if lit { th.p.text } else { th.p.muted }) |> ignore
@@ -543,9 +650,18 @@ fn desk_back(c : @ui.Ctx, back : String, on_back : () -> Unit) -> Unit {
 
 ///|
 /// A page's blocks in a list, each laid out as it comes into view: in the pane's middle, 24 from its sides at least,
-/// 80 room at its foot (and the frame's room under that).
-pub fn desk_lanes(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], foot? : Double = 0.0) -> Unit {
-  c.list("settings/" + key, blocks.length() + 1, 80.0, fn(i) {
+/// 80 room at its foot (and the frame's room under that). `chrome`: how many of them are its page's own (back, title,
+/// head), before the blocks its page keys (keyed_blocks).
+pub fn desk_lanes(
+  c : @ui.Ctx,
+  key : String,
+  blocks : Array[() -> Unit],
+  foot? : Double = 0.0,
+  chrome? : Int = 0,
+) -> Unit {
+  let (blocks, sized) = keyed_blocks(c, "settings/" + key, blocks, chrome)
+  let pane = pane_round.val
+  c.list("settings/" + key, blocks.length() + 1, 80.0, sized?, fn(i) { with_pane(pane, fn() {
     if i == blocks.length() {
       if foot > 0.0 {
         c.box(style=@ui.style(w=Full, h=Fixed(desk_foot_h + foot)), fn() {  }) |> ignore
@@ -553,9 +669,9 @@ pub fn desk_lanes(c : @ui.Ctx, key : String, blocks : Array[() -> Unit], foot? :
         c.box(style=desk_foot, fn() {  }) |> ignore
       }
     } else {
-      c.box(style=desk_lane, fn() { c.box(style=desk_lane_column, fn() { (blocks[i])() }) |> ignore }) |> ignore
+      c.box(style=desk_lane_now(), fn() { c.box(style=desk_lane_column, fn() { (blocks[i])() }) |> ignore }) |> ignore
     }
-  })
+  }) })
   |> ignore
   (page_list_opened.val)(c, "settings/" + key, blocks.length() + 1)
 }
@@ -601,7 +717,7 @@ pub fn section(
 pub fn setting(c : @ui.Ctx, title : String, control : () -> Unit, note? : String = "") -> Unit {
   match look() {
     Wide => {
-      let row = fn() { control_row(c, title, fn() { in_setting(control) }, note~) }
+      let row = fn() { control_row(c, title, fn() { in_setting(control) }, note~, title_style=setting_title()) }
       if in_list.val > 0 {
         c.box(style=wide_in_list(), row) |> ignore
       } else {
@@ -640,36 +756,9 @@ pub fn setting(c : @ui.Ctx, title : String, control : () -> Unit, note? : String
 let setting_in_card_control : @ui.Style = @ui.css("w=Full py=S2")
 
 ///|
-/// A setting kept on a page of its own (字体: the faces chosen): its `title`, what it is for (`note`) and what it is
-/// now (`value`), pressed to open its page. Wide: a row of its list card (`group`), a link's (link_row): its title
-/// with its note under it at its start, what it is now and the chevron at its end; narrow: as a `setting`, its title
-/// over the control (a row of a card of its own saying what it is now, the chevron at its end), what it is for under
-/// it. True on the frame it is pressed.
-pub fn setting_link(c : @ui.Ctx, key : String, title : String, value : String, note? : String = "") -> Bool {
-  match look() {
-    Wide => link_row(c, key, title, value~, note~, title_style=theme().rows.title)
-    Narrow => {
-      let mut pressed = false
-      section(c, title, heads=true, fn() {
-        group(c, fn() { pressed = link_row(c, key, value) })
-        if note != "" {
-          page_note(c, note)
-        }
-      })
-      pressed
-    }
-  }
-}
-
-///|
-/// A page's settings (each drawing a `setting`) as the page's blocks: wide, the rows of one list card; narrow, a block
-/// each, its title over its control.
-pub fn settings(c : @ui.Ctx, each : Array[() -> Unit]) -> Array[() -> Unit] {
-  // (by the width it is drawn in: a page's blocks are made before its frame says how it is laid out, look())
-  match look_for(c.width) {
-    Wide => [fn() { group(c, fn() { each.each(fn(f) { f() }) }) }]
-    Narrow => each
-  }
+/// A wide setting's title, using the shared row-title weight at the input's text size.
+fn setting_title() -> @ui.TextStyle {
+  theme().rows.title.then(row_title_weight)
 }
 
 ///|
@@ -720,16 +809,32 @@ pub fn heading(c : @ui.Ctx, title : String, note? : String = "", actions? : () -
 }
 
 ///|
-/// Rows together, on a list card on every page (docs/ui-panels.md 页面卡片, 列表卡: what a group of settings is, the same
+/// Rows together, on a list card on every page (sf/page.mbt, 列表卡: what a group of settings is, the same
 /// on a narrow page and a wide one; the user, 2026-10-26, 「设置感觉很乱」: a wide page's rows on the page and its cards
 /// mixed for no reason): narrow, ListCard (12 from the page's sides, 10 under it, its rows 8 in); wide, at the column's
 /// edges, its rows' grounds 10 in from its edges and 2 apart, their words 20 in, as a content card's (`card`: words on a
 /// card, pages.css.ts card).
 pub fn group(c : @ui.Ctx, body : () -> Unit, card? : Bool = false) -> Unit {
+  // (in a panel's body (not a small panel's): a card of the panel's, `panel_card_in` from its sides, concentric with
+  // it, its rows the ladder's inset in, each on a ground of its own concentric with it, their words a row's padding in
+  // from that (a card's words, not the panel's line: the user, 2026-11-03, 面板里可以放卡片; 卡片里的字跟面板的字不需要对齐);
+  // wide, its rows as a list's are (in_list: wide_in_list's cells), narrow, as a card's)
+  if in_panel() && !in_small_panel() {
+    let listed = if look() is Narrow { 0 } else { 1 }
+    c.box(style=panel_card_group.then(panel_card_rows).then(panel_card_out()), fn() {
+      in_card.val += 1
+      in_list.val += listed
+      body()
+      in_list.val -= listed
+      in_card.val -= 1
+    })
+    |> ignore
+    return
+  }
   match look() {
     Narrow =>
       c.box(style=pg_card_room, fn() {
-        c.box(style=pg_card, fn() {
+        c.box(style=pg_card_now(), fn() {
           // (its rows' grounds round in its corner)
           in_card.val += 1
           body()
@@ -740,7 +845,7 @@ pub fn group(c : @ui.Ctx, body : () -> Unit, card? : Bool = false) -> Unit {
       |> ignore
     Wide =>
       wide_alone(c, fn() {
-        c.box(style=if card { desk_card } else { desk_list }, fn() {
+        c.box(style=if card { desk_card } else { desk_list_card() }, fn() {
           // (what is not one of its rows stands in as far as its rows' words; its rows' grounds round in its corners)
           in_list.val += if card { 0 } else { 1 }
           in_card.val += if card { 0 } else { 1 }
@@ -754,7 +859,21 @@ pub fn group(c : @ui.Ctx, body : () -> Unit, card? : Bool = false) -> Unit {
 }
 
 ///|
-/// A group's rows while they are read the first time (docs/ui-panels.md 等待: a list's first read, a section's as
+/// Several groups of a section, one under another: narrow, each its own 10 under it; wide, where a group has none, 12
+/// apart.
+pub fn groups(c : @ui.Ctx, body : () -> Unit) -> Unit {
+  match look() {
+    Narrow => body()
+    Wide => c.box(style=groups_wide, body) |> ignore
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let groups_wide : @ui.Style = @ui.css("w=Full gap=S3")
+
+///|
+/// A group's rows while they are read the first time (sf/waiting.mbt: a list's first read, a section's as
 /// well): its card with `rows` in it (its own rows, drawn by what draws them, of made-up words) in their bones,
 /// breathing, `text` what it waits on said to a screen reader. Its card as it will be, its rows where they will be:
 /// not a wait's line at the card's edge (2026-10-26, 账号's devices: 「这个 loading 很怪」).
@@ -774,8 +893,8 @@ pub fn rows_list(
   row : (Int) -> Unit,
   sized? : @ui.RowCauses,
 ) -> Int {
-  let l = look()
-  c.list(key, count, est, fn(i) { with_look(l, fn() { rows_room(c, fn() { row(i) }) }) }, sized?)
+  let (l, pane) = (look(), pane_round.val)
+  c.list(key, count, est, fn(i) { with_pane(pane, fn() { with_look(l, fn() { rows_room(c, fn() { row(i) }) }) }) }, sized?)
 }
 
 ///|
@@ -783,7 +902,7 @@ pub fn rows_list(
 /// holds: narrow_list); what stands where its rows will, while they are read (their head), as well.
 pub fn rows_room(c : @ui.Ctx, body : () -> Unit) -> Unit {
   if look() is Narrow {
-    c.box(style=pg_room, body) |> ignore
+    c.box(style=pg_room_now(), body) |> ignore
   } else {
     body()
   }
@@ -795,8 +914,8 @@ pub fn rows_room(c : @ui.Ctx, body : () -> Unit) -> Unit {
 /// the pane's middle, 792 at most, 24 from its sides at least).
 pub fn over_rows(c : @ui.Ctx, body : () -> Unit) -> Unit {
   match look() {
-    Narrow => c.box(style=pg_room, body) |> ignore
-    Wide => c.box(style=desk_lane, fn() { c.box(style=desk_lane_column, body) |> ignore }) |> ignore
+    Narrow => c.box(style=pg_room_now(), body) |> ignore
+    Wide => c.box(style=desk_lane_now(), fn() { c.box(style=desk_lane_column, body) |> ignore }) |> ignore
   }
 }
 
@@ -832,7 +951,7 @@ let rows_head_wide_first : @ui.Style = rows_head_wide.then(@ui.css("pt=S3"))
 
 ///|
 /// How far a card stands under the small title over it, whichever part says it (a section's title, a heading, a
-/// list's head): wide, the web's sectionHead's 10 (parts.css.ts); narrow, SectionHeader's 6 (Parts.kt).
+/// list's head): wide, the web's sectionHead's 10 (parts.css.ts); narrow, SectionHeader's 6.
 pub let title_card_wide : Double = 10.0
 
 ///|
@@ -896,7 +1015,7 @@ pub fn group_row(c : @ui.Ctx, first : Bool, last : Bool, body : () -> Unit, id? 
         c.box(style=if first || last { group_row_ground_end } else { group_row_ground }, bg?=ground, id~, fn() {
           body()
           if id != 0 {
-            press_ripple(c, id, if first || last { inner_corner(group_corner, list_pad) } else { row_corner })
+            press_ripple(c, id, if first || last { @ui.concentric(group_corner, list_pad) } else { row_corner })
           }
         })
         |> ignore
@@ -1060,15 +1179,22 @@ let in_words : Ref[Int] = Ref(0)
 ///|
 /// A choice of a few (`segmented`: narrow, as wide as the page less 12 each side; wide, at the column's start, each
 /// option `item_w` wide at least). Answers the one chosen (a press's, this frame).
-pub fn page_choice(c : @ui.Ctx, key : String, labels : Array[String], at : Int, item_w? : Double = 0.0) -> Int {
+pub fn page_choice(
+  c : @ui.Ctx,
+  key : String,
+  labels : Array[String],
+  at : Int,
+  item_w? : Double = 0.0,
+  on_pick? : (Int) -> Unit,
+) -> Int {
   // (a wide setting's control: at its row's end, as wide as its options)
   if settings_in.val > 0 {
-    return segmented(c, key, labels, at, item_w~)
+    return segmented(c, key, labels, at, item_w~, on_pick?)
   }
   let mut picked = at
   let choice = fn() {
     c.box(style=if look() is Narrow { pg_choice_box } else { desk_choice_row }, fn() {
-      picked = segmented(c, key, labels, at, item_w~)
+      picked = segmented(c, key, labels, at, item_w~, on_pick?)
     })
     |> ignore
   }
@@ -1101,22 +1227,23 @@ pub fn page_note(c : @ui.Ctx, words : String, bad? : Bool = false) -> Unit {
 /// say), its title `strong` where it names who or what the row is, in red where it takes something away (`danger`:
 /// 注销账号), and a chevron (none where not `chevron`: what it does is done here; down where it `folds` what follows
 /// it, up while that is open), or an arrow out where it goes `out` of the app; `lead` before its words (a mark, a dot), `tail` after what it says (a pill, a spinner); going nowhere
-/// where not `goes` (a value said); `below` under its note (its allowance's chips). Its note, what is wrong and what is
+/// where not `goes` (a value said); `chevron_room` keeps a chevron's space when there is none, so a list's ends align;
+/// `below` under its note (its allowance's chips). Its note, what is wrong and what is
 /// below are lines of their own as wide as its words, what it says, its tail and its chevron on its first line beside
 /// its title (row_top). One that `acts` (does something at once where it is: 检查未决策的 chat) says so at either width:
 /// its title in the link's ink, no chevron; one that `adds` one more to the list it ends (添加: an option, a station) is
 /// one that acts, a ＋ before its title. `note_cut`: its note one line, cut short (what is in a memory, how a connect
 /// runs). `face`: its `lead` is a round picture (a person's, a connect's: 28), which stands across the row's middle on
 /// every width: by its first line it stands in the row's corner, 10 from both its edges, its 14 round in the row's 18,
-/// which would want a corner of 24, on no step of the ladder (docs/ui-panels.md 圆角阶梯); a mark (an icon, a dot) is
+/// which would want a corner of 24, on no step of the ladder (pane_corner); a mark (an icon, a dot) is
 /// by its first line.
-/// `title_style` overrides a wide row's title (a setting's title follows the other settings' titles).
+/// `title_style` supplies a wide row's title size and other properties; its weight follows the shared row-title role.
 /// `title_after` after its title on its line (a pill: 你, 当前; a team's name), dropped before the title where
 /// the line has not the room for both; `control` at its
 /// end, last (a button, a switch, a choice: what is done here, no chevron), a button of words alone there with its
 /// words on the line of what rows say at their ends, its ground under the hand reaching out past them to the card's
-/// edge (row_end; docs/ui-panels.md 页面卡片: 文字按钮). `title_cut` and `value_cut` say when either is a summary that
-/// may be shortened on its line, rather than words expected to fit whole. True on the frame it is pressed.
+/// edge (row_end; sf/page.mbt: 文字按钮). `title_cut` and `value_cut` say when either is a summary that
+/// may be shortened on its line, rather than words expected to fit whole. `on_press`: what pressing it does, as it is let go (press_does).
 pub fn link_row(
   c : @ui.Ctx,
   key : String,
@@ -1129,6 +1256,7 @@ pub fn link_row(
   danger? : Bool = false,
   out? : Bool = false,
   chevron? : Bool = true,
+  chevron_room? : Bool = false,
   folds? : Bool,
   note? : String = "",
   lacks? : Bool = false,
@@ -1147,13 +1275,15 @@ pub fn link_row(
   title_style? : @ui.TextStyle,
   title_cut? : Bool = false,
   value_cut? : Bool = false,
-) -> Bool {
+  tile? : Bool = false,
+  on_press? : () -> Unit,
+) -> Unit {
   let th = theme()
   // (one that acts: its title in the link's ink, no chevron; one that adds, after a ＋)
   let acts = acts || adds
   let ink = if acts { Some(link_ink()) } else { None }
   let lead = if adds {
-    Some(fn() { icon(c, "plus", size=if look() == Narrow { pg_chevron } else { desk_chevron }, color=link_ink()) |> ignore })
+    Some(fn() { row_lead_mark(c, "plus", color=link_ink()) })
   } else {
     lead
   }
@@ -1165,6 +1295,10 @@ pub fn link_row(
       None => ()
     }
   }
+  // (wide under a finger, a control with lines under the first is by the whole row's side, as a face's: a wide row's
+  // first line is too low for a finger's least room, and the row is wide enough for its lines beside it)
+  let face = face ||
+    (look() is Wide && native_input() is Finger && control is Some(_) && (note != "" || trouble != "" || below is Some(_)))
   // (a face's row with a control at its end, lines under its first: its words cut short where the control leaves them
   // less, the control by the whole row's side rather than its first line's)
   let note_cut = note_cut || (face && control is Some(_) && (note != "" || trouble != "" || below is Some(_)))
@@ -1204,11 +1338,20 @@ pub fn link_row(
       _ => ()
     }
   }
+  // (a tile leading it: link_row_node's LeadTile, the row as tall as the tile and the ladder's inset over and under it, or
+  // its words and theirs, both across its middle)
+  let narrow_style = if tile {
+    narrow_row(goes).then(row_tile_row)
+  } else if under && !face {
+    narrow_row(goes).then(row_top)
+  } else {
+    narrow_row(goes)
+  }
   let b = match look() {
     Narrow =>
-      c.box(style=(if under && !face { narrow_row(goes).then(row_top) } else { narrow_row(goes) }).then(row_line(true)), id~, fn() {
+      c.box(style=narrow_style.then(row_line(true)), id~, fn() {
         match lead {
-          Some(f) => if under && !face { row_lead(c, Narrow, f) } else { f() }
+          Some(f) => if under && !face && !tile { row_lead(c, Narrow, f) } else { f() }
           None => ()
         }
         let said = fn() {
@@ -1244,6 +1387,8 @@ pub fn link_row(
           }
           if goes && (chevron || out) {
             icon(c, mark, size=pg_chevron, color=th.p.subtle) |> ignore
+          } else if chevron_room {
+            c.box(style=@ui.style(w=Fixed(pg_chevron), h=Fixed(pg_chevron)), fn() {  }) |> ignore
           }
           // (a face's row's control at the row's end in its middle, not on its first line: a control as tall as a
           // press's room (button_height) on a first line reaches past the row over it)
@@ -1275,8 +1420,11 @@ pub fn link_row(
                     after()
                   })
                   |> ignore
+                } else if note_cut || title_cut {
+                  // (cut short, in a box that takes the line's room: what is at its end stays at the row's end)
+                  c.box(style=pg_row_words, fn() { c.text(title, style=titled.then(cut_words), color?=ink) |> ignore }) |> ignore
                 } else {
-                  c.text(title, style=if note_cut || title_cut { titled.then(cut_words) } else { titled }, color?=ink) |> ignore
+                  c.text(title, style=titled, color?=ink) |> ignore
                 }
               } else {
                 // its title and what it says in a line (what it says under the title where the line has not the
@@ -1316,8 +1464,10 @@ pub fn link_row(
           row_ripple(c, id)
         }
       })
-    Wide =>
-      c.box(style=(if under && !face { (if goes { desk_list_link() } else { wide_list_row() }).then(row_top) } else if goes {
+    Wide => {
+      let mut row = None
+      link_reach(c, id, goes, fn() {
+      row = Some(c.box(style=(if under && !face { (if goes { desk_list_link() } else { wide_list_row() }).then(row_top) } else if goes {
         desk_list_link()
       } else {
         wide_list_row()
@@ -1327,7 +1477,7 @@ pub fn link_row(
           None => ()
         }
         let title_words = fn() {
-          let title_style = title_style.unwrap_or(desk_list_title)
+          let title_style = title_style.unwrap_or(desk_list_title).then(row_title_weight)
           let style = match (strong, danger) {
             (_, true) => title_style.then(bad)
             (true, false) => title_style.then(row_strong)
@@ -1371,6 +1521,8 @@ pub fn link_row(
           }
           if goes && (chevron || out) {
             icon(c, mark, size=desk_chevron, color=th.p.muted) |> ignore
+          } else if chevron_room {
+            c.box(style=@ui.style(w=Fixed(desk_chevron), h=Fixed(desk_chevron)), fn() {  }) |> ignore
           }
           // (a face's row's control at the row's end in its middle, as on a narrow page)
           if !(under && face) {
@@ -1401,12 +1553,15 @@ pub fn link_row(
             control_at_end(false)
           }
         }
+      }))
       })
+      row.unwrap()
+    }
   }
   if goes {
     c.semantics(b, Link, id~, label=title, expanded?=folds)
   }
-  goes && c.clicked(id)
+  press_does(c, id, goes, on_press)
 }
 
 ///|
@@ -1448,6 +1603,10 @@ pub fn at_row_end() -> Bool {
 }
 
 ///|
+/// A row's title, distinct from its note and value on every page width and input.
+let row_title_weight : @ui.TextStyle = @ui.text_style(weight=Medium)
+
+///|
 /// A row's title said strongly (`strong`: who or what a row is, the account's, the workspace's).
 // kept across runs: a value (no field of it changes)
 let row_strong : @ui.TextStyle = @ui.text_style(weight=Bold)
@@ -1461,9 +1620,13 @@ let value_dotted : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 /// A row with lines under its first (a note, what is wrong: words of no length known), each on a line of its own as
 /// wide as the row's words: what the row has at its end (what it says, a button, a switch, a chevron) stands on its
 /// first line, beside its title, and what it has before its words (`row_lead`) by that line too
-/// (docs/ui-panels.md 放不下的时候). Its parts from its top.
+/// (mbui ui/squeeze.mbt). Its parts from its top.
 // kept across runs: a value (no field of it changes)
 let row_top : @ui.Style = @ui.css("align=AStart")
+
+///|
+/// A row led by a tile (link_row's `tile`): the ladder's inset over and under what it holds.
+let row_tile_row : @ui.Style = @ui.style(py=room(corner_inset))
 
 ///|
 /// What a row has below its note (its allowance's chips), 6 under it, as wide as its words.
@@ -1507,7 +1670,7 @@ let figure_words_under : @ui.Style = @ui.css("w=Full gap=S2_5 align=AStart")
 ///|
 /// A name (a chat's, a file's, a station's), or a glimpse of what is in it (a chat's last words), taking what its line
 /// leaves the rest of what is on it (a time, a mark), cut short there (`w=Cut`: the one kind of words cut for what is
-/// beside them, docs/ui-panels.md 放不下的时候). Its words' node.
+/// beside them, mbui ui/squeeze.mbt). Its words' node.
 pub fn name_words(c : @ui.Ctx, name : String, style : @ui.TextStyle, color? : Int64) -> Int {
   let mut i = 0
   // (keeping four of its size before what may leave its row does: Ctx::box drop)
@@ -1527,7 +1690,7 @@ let name_cut : @ui.TextStyle = @ui.text_style(wrap=false, w=Cut)
 /// A row's words with what it has at its end, as the library's rows lay them (link_row, switch_row): `head`, its first
 /// line (its title and what stands at its end: a value, a button, a chevron), across the whole room, 12 apart; then
 /// `under`, the lines under it (a note, a time, what is wrong: words of no length known), each a line of its own as
-/// wide as the room (docs/ui-panels.md 放不下的时候), `spaced` 2 apart (a wide list's). In place of a row holding
+/// wide as the room (mbui ui/squeeze.mbt), `spaced` 2 apart (a wide list's). In place of a row holding
 /// a column of words and, beside all of it, what is at its end.
 pub fn row_lines(c : @ui.Ctx, head : () -> Unit, under : () -> Unit, spaced? : Bool = false) -> Unit {
   c.box(style=if spaced { desk_list_text } else { pg_row_words }, fn() {
@@ -1541,7 +1704,7 @@ pub fn row_lines(c : @ui.Ctx, head : () -> Unit, under : () -> Unit, spaced? : B
 /// What a row with lines under its first has at the end of that line when it is words (what it says, a button of words
 /// alone: `Ghost`), on that line and as high as it (narrow: the body's; wide: a list's title, the UI's 20), 12 apart:
 /// a button of words alone is as tall as a button, its words on the line and its ground under the hand reaching past
-/// it into the row's room (docs/ui-panels.md 页面卡片: 文字按钮), rather than the line as tall as the button and the
+/// it into the row's room (sf/page.mbt: 文字按钮), rather than the line as tall as the button and the
 /// lines under it lower than a row's without one (a 退出 or a 移除 on a device's or a person's first line put its
 /// times or its email 8 lower than its neighbours', 2026-10-26). A button drawn with a ground of its own is not one:
 /// its line is as tall as it.
@@ -1562,11 +1725,7 @@ let line_end_box : @ui.Style = @ui.css("row gap=S3 align=ACenter")
 /// middle of a line of its title's (narrow: the body's; wide: a list's title, the UI's 24), from the top where it is
 /// taller.
 fn row_lead(c : @ui.Ctx, look : Look, f : () -> Unit) -> Unit {
-  let line = match look {
-    Narrow => c.text_size(Body).1
-    Wide => c.theme().leading(L6).unwrap_or(c.text_size(Ui).1)
-  }
-  c.box(style=@ui.style(min_h=Fixed(c.sp(line)), justify=JCenter), f) |> ignore
+  c.box(style=@ui.style(min_h=Fixed(row_lead_line(c, at=look)), justify=JCenter), f) |> ignore
 }
 
 ///|
@@ -1575,7 +1734,7 @@ fn row_lead(c : @ui.Ctx, look : Look, f : () -> Unit) -> Unit {
 /// `trail` (a button of its own, which takes its own press) before a check at its end where it is the one chosen
 /// (turning while `busy`); the rest of the row takes the press, lit under the pointer or a finger's press (narrow: a
 /// card's row; wide: the web's list row), not while `disabled` (its words faint) or busy. `ink`: its label's own (red
-/// for one that takes something away). Said to be `label`. True on the frame it is pressed; `c.lit(c.id(key))` says it
+/// for one that takes something away). Said to be `label`. `on_press`: what pressing it does, as it is let go; `c.lit(c.id(key))` says it
 /// is pointed at.
 pub fn choice_row(
   c : @ui.Ctx,
@@ -1590,10 +1749,12 @@ pub fn choice_row(
   ink? : Int64,
   disabled? : Bool = false,
   busy? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let th = theme()
   let id = c.id(key)
   let goes = !disabled && !busy
+  press_does(c, id, goes, on_press)
   let narrow = look() is Narrow
   let end = fn(size : Double) {
     match trail {
@@ -1658,16 +1819,19 @@ pub fn choice_row(
       }
     })
   } else {
-    c.box(style=(if goes { desk_list_link() } else { wide_list_row() }).then(line).then(top), id=if goes { id } else { 0 }, fn() {
+    let mut row = None
+    link_reach(c, id, goes, fn() {
+    row = Some(c.box(style=(if goes { desk_list_link() } else { wide_list_row() }).then(line).then(top), id=if goes { id } else { 0 }, fn() {
       match body {
         Some(f) => f()
         None => words()
       }
       ended(desk_chevron)
+    }))
     })
+    row.unwrap()
   }
   c.semantics(b, Button, id~, label~, selected=chosen, disabled~)
-  goes && c.clicked(id)
 }
 
 ///|
@@ -1695,7 +1859,7 @@ pub fn dialog_foot_rows(c : @ui.Ctx, style : @ui.Style, body : () -> Unit) -> Un
 /// stands concentric with its corner.
 fn foot_rows_out() -> Double {
   // (and across the room a panel's dialog stands what it holds in from its padding: column_in_now)
-  dialog_pad - capsule_in(dialog_r, desk_row_least()) + column_in_now.val
+  dialog_pad - @ui.capsule_in(dialog_r, desk_row_least()) + column_in_now.val
 }
 
 ///|
@@ -1729,7 +1893,6 @@ fn row_line(narrow : Bool) -> @ui.Style {
   }
 }
 
-
 ///|
 /// A choice's label and what follows it on its line (a model's maker), 6 apart.
 // kept across runs: a value (no field of it changes)
@@ -1737,7 +1900,7 @@ let choice_label_line : @ui.Style = @ui.css("row w=Full gap=S1_5 align=ACenter")
 
 ///|
 /// A row that turns something on or off (parts.tsx SwitchRow): its title, `note` quieter under it, the switch at its
-/// end across their middle (a round control stays out of the row's corners: docs/ui-panels.md 放不下的时候); the switch
+/// end across their middle (a round control stays out of the row's corners: mbui ui/squeeze.mbt); the switch
 /// alone takes the press, at every width (its reach a finger's least however small it is drawn), its words none. `busy`: what it set is on its
 /// way (not turned again meanwhile). `lead`: what goes before its title on its line (a workspace's mark:
 /// workspace_badge). Answers whether it is on now.
@@ -1750,39 +1913,51 @@ pub fn switch_row(
   disabled? : Bool = false,
   busy? : Bool = false,
   lead? : (@ui.Ctx) -> Unit,
+  on_change? : (Bool) -> Unit,
 ) -> Bool {
   match look() {
     // (on a narrow page in the words of its narrow rows)
     Narrow if in_words.val > 0 && in_card.val == 0 =>
-      wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=pg_switch_title, note_style=meta.then(full_words), lead?)
+      wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=pg_switch_title, note_style=meta.then(full_words), lead?, on_change?)
     Wide =>
-      if in_list.val > 0 {
+      // (on a settings card holding its rows the ladder's inset in (rows_held) as in a list: its words a row's padding in,
+      // its switch out of the card's corner)
+      if in_list.val > 0 || rows_held_now.val {
+        // (its title as strong as its list's other rows' titles: link_row's, a setting's)
         let mut now = on
-        c.box(style=wide_in_list(), fn() { now = wide_switch_row(c, key, title, on, note~, disabled~, busy~, lead?) }) |> ignore
+        c.box(style=wide_in_list(), fn() {
+          now = wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=setting_title(), lead?, on_change?)
+        })
+        |> ignore
         now
       } else {
-        wide_switch_row(c, key, title, on, note~, disabled~, busy~, lead?)
+        wide_switch_row(c, key, title, on, note~, disabled~, busy~, title_style=setting_title(), lead?, on_change?)
       }
     Narrow => {
       // (the switch alone answers: the row is its words, not a press of its own; 2026-10-27 用户「只有开关响应」)
       let mut now = on
-      c.box(style=narrow_row(false), fn() {
+      c.box(style=narrow_row(false).then(row_line(true)), fn() {
         // (its switch across the middle of its words: on its title's line it stood in the row's corner, not
         // concentric with it; a switch is narrow, its note keeps most of the row)
         c.box(style=pg_row_words, fn() {
           led_title(c, title, pg_switch_title, lead)
           if note != "" {
-            c.text(note, style=meta.then(full_words)) |> ignore
+            // (in even lines where it takes two beside the switch, not a word or two left on the last)
+            c.text(note, style=switch_row_note) |> ignore
           }
         })
         |> ignore
-        now = switch(c, key, on, label=title, disabled~, busy~)
+        now = switch(c, key, on, label=title, disabled~, busy~, on_change?)
       })
       |> ignore
       now
     }
   }
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let switch_row_note : @ui.TextStyle = meta.then(full_words).then(@ui.text_style(balance=true))
 
 ///|
 /// A row that says how something stands, going nowhere: its title, a note under it, or `value` at its end (a control:
@@ -1888,7 +2063,7 @@ let card_foot_first : Ref[Bool] = Ref(false)
 ///|
 /// What a part does, at its heading's end (wide: the web's quiet button with its mark; narrow: SectionHeader's
 /// trailing words in the link's ink, room round them for a finger), a spinner in its place while it is `busy`; `bad`:
-/// one that takes something away (删除), in the red. True on the frame it is pressed.
+/// one that takes something away (删除), in the red. `on_press`: what pressing it does, as it is let go (press_does).
 pub fn action(
   c : @ui.Ctx,
   key : String,
@@ -1897,13 +2072,14 @@ pub fn action(
   busy? : Bool = false,
   disabled? : Bool = false,
   bad? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   match look() {
-    Wide => button(c, label, key~, tone=if bad { GhostDanger } else { Ghost }, icon~, busy~, disabled~)
+    Wide => button(c, label, key~, tone=if bad { GhostDanger } else { Ghost }, icon~, busy~, disabled~, on_press?)
     Narrow => {
       if busy {
         spinner(c, size=spinner_inline) |> ignore
-        return false
+        return
       }
       let id = if disabled { 0 } else { c.id(key) }
       let b = c.box(style=pg_action, id~, fn() {
@@ -1913,19 +2089,26 @@ pub fn action(
         }
       })
       c.semantics(b, Button, id~, label~)
-      id != 0 && c.clicked(id)
+      press_does(c, id, id != 0, on_press)
     }
   }
 }
 
 ///|
 /// A button of a mark alone (a page's head's: rename, check again, ⋯), said to be `label`: as wide as the screen's
-/// hand needs (a finger's 44, a pointer's 32). True on the frame it is pressed.
-pub fn icon_action(c : @ui.Ctx, icon : String, key : String, label : String, disabled? : Bool = false) -> Bool {
+/// hand needs (a finger's 44, a pointer's 32). `on_press`: what pressing it does, as it is let go (press_does).
+pub fn icon_action(
+  c : @ui.Ctx,
+  icon : String,
+  key : String,
+  label : String,
+  disabled? : Bool = false,
+  on_press? : () -> Unit,
+) -> Unit {
   if native_input() is Finger {
-    icon_button(c, icon, key~, size=touch_target, icon_size=touch_glyph, round=true, label~, disabled~)
+    icon_button(c, icon, key~, size=touch_target, icon_size=touch_glyph, round=true, label~, disabled~, on_press?)
   } else {
-    icon_button(c, icon, key~, label~, disabled~)
+    icon_button(c, icon, key~, label~, disabled~, on_press?)
   }
 }
 
@@ -1970,6 +2153,9 @@ pub(all) struct Dial {
   level : String
   label : String
   note : String
+  // what `label` and `note` say where their line has not the room ("": nothing shorter)
+  label_short : String
+  note_short : String
 }
 
 ///|
@@ -1977,11 +2163,11 @@ pub(all) struct Dial {
 /// the words' ink until it runs low. Wide, the web's: each 96 wide at least, 36 apart, on as many lines as they take
 /// (12 between). Narrow: sharing the line's width, 16 apart, their cells narrower (6, 2 apart), so three stand in a
 /// line on a phone's card.
-pub fn dials(c : @ui.Ctx, dials : Array[Dial]) -> Unit {
+pub fn dials(c : @ui.Ctx, dials : Array[Dial], details? : Array[String] = [], columns? : Int = 0) -> Unit {
   let narrow = look() == Narrow
   let t = theme()
-  c.box(style=if narrow { dl_row_narrow } else { dl_row_wide }, flow=!narrow, line_gap=dl_lines, fn() {
-    for d in dials {
+  let draw = fn(i : Int, short : Bool) {
+      let d = dials[i]
       let ink = match d.level {
         "amber" | "warn" => t.p.warn_ink
         "red" => t.p.red
@@ -1991,7 +2177,7 @@ pub fn dials(c : @ui.Ctx, dials : Array[Dial]) -> Unit {
       let fill = if d.fill < 0 { 0 } else if d.fill > 100 { 100 } else { d.fill }
       let lit = (fill.to_double() / 10.0).round().to_int()
       let cell = if narrow { dl_cell_narrow } else { dl_cell_wide }
-      c.box(style=if narrow { dl_dial_narrow } else { dl_dial_wide }, fn() {
+      c.box(style=if narrow { dl_dial_narrow } else if columns > 0 { dl_dial_wide_fixed } else { dl_dial_wide }, fn() {
         c.rich(
           [@ui.span(d.number), @ui.span(d.unit, weight=500, scale=t.t.meta / dl_number_size, color=t.p.muted)],
           style=if low { dl_number.then(@ui.text_style(color=Data(ink))) } else { dl_number },
@@ -2003,18 +2189,70 @@ pub fn dials(c : @ui.Ctx, dials : Array[Dial]) -> Unit {
           }
         })
         |> ignore
-        c.text(d.label, style=dl_label) |> ignore
-        c.text(if d.note == "" { " " } else { d.note }, style=dl_reset) |> ignore
+        c.text(if short && d.label_short != "" { d.label_short } else { d.label }, style=dl_label) |> ignore
+        c.text(
+          if d.note == "" { " " } else if short && d.note_short != "" { d.note_short } else { d.note },
+          style=if details.is_empty() { dl_reset } else { dl_detail },
+        )
+        |> ignore
+        match details.get(i) {
+          Some(detail) if detail != "" => c.text(detail, style=dl_detail) |> ignore
+          _ => ()
+        }
+      })
+      |> ignore
+  }
+  if narrow && columns > 0 {
+    c.box(style=dl_rows, fn() {
+      for k in 0..<((dials.length() + columns - 1) / columns) {
+        let start = k * columns
+        let end = @cmp.minimum(start + columns, dials.length())
+        c.box(style=dl_row_narrow, fn() {
+          for i in start..<end {
+            draw(i, false)
+          }
+          for _ in (end - start)..<columns {
+            c.box(style=dl_dial_narrow, fn() {  }) |> ignore
+          }
+        })
+        |> ignore
+      }
+    })
+    |> ignore
+  } else {
+    let row = fn(short : Bool) {
+      c.box(style=if narrow { dl_row_narrow } else { dl_row_wide }, flow=!narrow, line_gap=dl_lines, fn() {
+        for i in 0..<dials.length() {
+          draw(i, short)
+        }
       })
       |> ignore
     }
-  })
-  |> ignore
+    if narrow && dials.iter().any(fn(d) { d.label_short != "" || d.note_short != "" }) {
+      // all of them in their full words where the line has the room for all, else all in their short ones: one way for all
+      c.box(style=dl_row_ways, one_of=true, fn() {
+        row(false)
+        row(true)
+      })
+      |> ignore
+    } else {
+      row(false)
+    }
+  }
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
+let dl_rows : @ui.Style = @ui.css("w=Full gap=S4")
+
+///|
+// kept across runs: a value (no field of it changes)
 let dl_row_wide : @ui.Style = @ui.css("row gap=S9 align=AStart")
+
+///|
+/// The ways of a narrow row, the room of the line.
+// kept across runs: a value (no field of it changes)
+let dl_row_ways : @ui.Style = @ui.css("row w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2027,6 +2265,10 @@ let dl_lines : Double = 12.0
 ///|
 // kept across runs: a value (no field of it changes)
 let dl_dial_wide : @ui.Style = @ui.css("min_w=S24 gap=S0_5 align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let dl_dial_wide_fixed : @ui.Style = @ui.css("w=S24 gap=S0_5 align=AStart")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2068,6 +2310,10 @@ let dl_label : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium
 ///|
 // kept across runs: a value (no field of it changes)
 let dl_reset : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dl_detail : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, w=Full)
 
 ///|
 /// A page's own head (an account's, a station's, a connect's: who it is), in place of its title: its `mark` in its box
@@ -2165,9 +2411,9 @@ pub fn own_head(
                 let id = c.id("own-head-name")
                 let b = c.box(style=head_name_press, id~, words)
                 c.semantics(b, Button, id~, label=if rename_label == "" { name } else { rename_label })
-                if c.clicked(id) {
+                c.on_press(id, fn() {
                   f()
-                }
+                })
               }
               None => words()
             }
@@ -2208,7 +2454,7 @@ pub fn own_head(
             None => ()
           }
           match rename {
-            Some(f) => if icon_action(c, "edit", "own-head-rename", rename_label) { f() }
+            Some(f) => icon_action(c, "edit", "own-head-rename", rename_label, on_press=f)
             None => ()
           }
         })
@@ -2313,22 +2559,33 @@ pub let pg_room : @ui.Style = @ui.style(w=Full, px=room(pg_room_in))
 let pg_room_in : Double = 12.0
 
 ///|
-/// What reaches a narrow page's sides on purpose: out across the room it leaves there (pg_room); nothing on a wide one.
-pub fn page_bleed() -> @ui.Style {
-  if look() is Narrow {
-    pg_bleed
+/// A narrow page's room in a panel of its own (the tape's, laid out Medium: in_pane): its cards cards of the panel's,
+/// `panel_card_in` from its sides (the user, 2026-11-03: 面板里可以放卡片); on a phone's screen, pg_room.
+pub fn pg_room_now() -> @ui.Style {
+  if in_pane() {
+    pg_room_pane
   } else {
-    pg_no_bleed
+    pg_room
   }
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pg_bleed : @ui.Style = @ui.style(mx=room(-pg_room_in))
+let pg_room_pane : @ui.Style = @ui.style(w=Full, px=room(panel_card_in))
+
+///|
+/// A narrow page's card in a panel of its own: a card's corner, its rows the ladder's inset in.
+fn pg_card_now() -> @ui.Style {
+  if in_pane() {
+    pg_card_pane
+  } else {
+    pg_card
+  }
+}
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pg_no_bleed : @ui.Style = @ui.css("")
+let pg_card_pane : @ui.Style = @ui.css("w=Full bg=Card clip").then(@ui.style(p=room(corner_inset), radius=card_radius))
 
 ///|
 /// A card on a narrow page (in its room): 10 under each.
@@ -2349,9 +2606,6 @@ let pg_card : @ui.Style = @ui.style(w=Full, p=list_room, radius=list_card_radius
 /// A choice of a few on a narrow page: as far from what follows as a card is (pg_card_room's 10), a page's block.
 // kept across runs: a value (no field of it changes)
 let pg_choice_box : @ui.Style = @ui.css("w=Full pb=S2_5")
-
-///|
-let pg_choice_h : Double = 34.0
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2383,12 +2637,12 @@ pub let pg_row_words : @ui.Style = @ui.style(w=grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let pg_row_title : @ui.TextStyle = body.then(one_line).then(full_words)
+pub let pg_row_title : @ui.TextStyle = body.then(row_title_weight).then(one_line).then(full_words)
 
 ///|
 /// A row's title where what it says follows it in the line (narrow, over its note).
 // kept across runs: a value (no field of it changes)
-let pg_row_title_in : @ui.TextStyle = body.then(one_line)
+let pg_row_title_in : @ui.TextStyle = body.then(row_title_weight).then(one_line)
 
 ///|
 /// Its title and what it says, at the line's two ends (one under the other where the line has not the room), 12 apart.
@@ -2397,11 +2651,19 @@ let pg_title_value : @ui.Style = @ui.css("row w=Full gap=S3 justify=JBetween ali
 
 ///|
 // kept across runs: a value (no field of it changes)
-let pg_switch_title : @ui.TextStyle = body.then(full_words)
+let pg_switch_title : @ui.TextStyle = body.then(row_title_weight).then(full_words)
 
 ///|
 // kept across runs: a value (no field of it changes)
 pub let pg_value : @ui.TextStyle = value
+
+///|
+/// A link row's mark before its title (its `lead`): icon `name` as large as its chevron at either width, in the title's
+/// ink unless `color` says (the ＋ of one that adds, in the link's).
+pub fn row_lead_mark(c : @ui.Ctx, name : String, color? : Int64) -> Unit {
+  icon(c, name, size=if look() == Narrow { pg_chevron } else { desk_chevron }, color=color.unwrap_or(theme().p.text))
+  |> ignore
+}
 
 ///|
 pub let pg_chevron : Double = 14.0
@@ -2480,6 +2742,40 @@ let desk_back_lit : @ui.TextStyle = desk_back_words.then(@ui.text_style(color=Fg
 pub let desk_lane : @ui.Style = @ui.css("w=Full px=S6 align=ACenter")
 
 ///|
+/// The same in a panel of its own (the tape's: in_pane): none in from the panel's sides, its blocks' own 16 there the
+/// cards' panel_card_in (the user, 2026-11-03: 面板里可以放卡片), the column in the middle where it is wider.
+pub fn desk_lane_now() -> @ui.Style {
+  if in_pane() {
+    desk_lane_pane
+  } else {
+    desk_lane
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_lane_pane : @ui.Style = @ui.css("w=Full align=ACenter")
+
+///|
+/// A wide page's head in a panel of its own: its words on the panel's words' line (panel_words), its cards 16 in;
+/// none elsewhere.
+fn desk_head_in_pane() -> @ui.Style {
+  if in_pane() {
+    desk_head_pane
+  } else {
+    no_desk_head
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_head_pane : @ui.Style = @ui.style(px=room(panel_words))
+
+///|
+// kept across runs: a value (no field of it changes)
+let no_desk_head : @ui.Style = @ui.css("")
+
+///|
 // kept across runs: a value (no field of it changes)
 pub let desk_lane_column : @ui.Style = @ui.style(w=Full, max_w=Fixed(desk_lane_most))
 
@@ -2543,7 +2839,7 @@ pub let desk_hint_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, 
 /// A card of words (pages.css.ts card: 20 in, its rows 14 apart, the settings' corner on the card's ground; a row of
 /// it: cardRow, 12 apart in its middle; its words cardRowText, 2 apart, the ui's 13 on 20, the title in 600).
 // kept across runs: a value (no field of it changes)
-pub let desk_card : @ui.Style = @ui.css("w=Full p=S5 gap=S3_5 radius=Xl3 bg=Card")
+pub let desk_card : @ui.Style = @ui.css("w=Full gap=S3_5 radius=Xl3 bg=Card").then(@ui.style(p=room(card_pad)))
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2582,16 +2878,73 @@ pub let desk_chevron : Double = 16.0
 pub let desk_mark : Double = 14.0
 
 ///|
+/// A card of a panel's, on its ground as its other cards are (the ink at 5%: info_list's, a choice's): a card's own ground is
+/// the panel's, unseen on it.
 // kept across runs: a value (no field of it changes)
+let panel_card_group : @ui.Style = @ui.css("w=Full bg=A(Fg,O5) clip").then(@ui.style(radius=rounded(card_corner)))
+
+///|
+// kept across runs: a value (no field of it changes)
+let panel_card_rows : @ui.Style = @ui.style(p=room(corner_inset))
+
+///|
 pub let desk_list : @ui.Style = @ui.style(w=Full, p=list_room, gap=S0_5, radius=list_card_radius, bg=Card)
+
+///|
+/// The same in a panel of its own (in_pane): a card of the panel's, its words 24 in from its edges, its rows' grounds
+/// the ladder's inset in (wide_list_link_pane: reaching past their rows to there), a card's corner, its rows as close
+/// as a list card's; what stands at a row's end in its corners stands outside them, as far in as its words (the user,
+/// 2026-11-03: 就按第 3 版).
+pub fn desk_list_card() -> @ui.Style {
+  if in_pane() {
+    desk_list_pane
+  } else {
+    desk_list
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let desk_list_pane : @ui.Style = @ui.style(
+  w=Full,
+  px=room(corner_inset),
+  py=room(card_pad - wide_row_pad),
+  gap=S0_5,
+  radius=card_radius,
+  bg=Card,
+)
+
+///|
+/// How far a wide list's row's words stand under its top and over its foot (wide_list_row_ground's and
+/// wide_in_list's py=S2_5).
+let wide_row_pad : Double = 10.0
 
 ///|
 pub let desk_list_out : Double = 12.0
 
 ///|
 fn wide_list_row() -> @ui.Style {
-  wide_list_row_ground.then(@ui.style(min_h=Fixed(desk_row_least())))
+  // (in a panel's card no ground of its own (one only where pressed: desk_list_link), so none in its corners)
+  (if in_pane() { wide_list_row_bare } else { wide_list_row_ground }).then(@ui.style(min_h=Fixed(desk_row_least())))
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_list_row_bare : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  pl=list_words_room,
+  pr=room(card_control_end),
+  py=S2_5,
+  gap=S3,
+  align=ACenter,
+)
+
+///|
+/// How far in from its end a row on a panel's card has what it holds at its end (a model's picker, 更新): its words'
+/// room, or as far as holds it out of the card's corner where that is more (the card's 26 round, its words 24 in: 2
+/// more; the user's 第 3 版, 2026-11-03: a control stays out of its card's corner, its row's spacing as it was).
+pub let card_control_end : Double = text_in + dmax(0.0, card_corner - panel_words)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2607,8 +2960,61 @@ let wide_list_row_ground : @ui.Style = @ui.style(
 
 ///|
 fn desk_list_link() -> @ui.Style {
-  wide_list_row().then(link_hover)
+  if in_pane() && !rows_held_now.val {
+    // (its ground the box round it's: link_reach)
+    wide_list_row_bare.then(@ui.style(min_h=Fixed(desk_row_least())))
+  } else if rows_held_now.val {
+    // (on a card holding its rows the ladder's inset in: a ground of its own, concentric there)
+    wide_list_row_ground.then(@ui.style(min_h=Fixed(desk_row_least()))).then(link_hover)
+  } else {
+    wide_list_row().then(link_hover)
+  }
 }
+
+///|
+/// Whether the card the rows now made stand on holds them the ladder's inset from its top and foot, each its own ground
+/// (a settings page's list card: rows_held), so a pressed one's reaches past it none (link_reach).
+// kept across runs: said around a card's rows as they are made, put back after
+let rows_held_now : Ref[Bool] = Ref(false)
+
+///|
+/// `body`'s rows made on a card that holds them the ladder's inset from its top and foot (rows_held_now).
+/// They are on a card (in_card) as a group's are: their words a row's padding in from their grounds, which round in
+/// the card's corners (2026-11-06: a settings card's link rows 4 nearer its edge than its other rows' words, their
+/// grounds square).
+pub fn rows_held(body : () -> Unit) -> Unit {
+  let was = rows_held_now.val
+  rows_held_now.val = true
+  in_card.val += 1
+  body()
+  in_card.val -= 1
+  rows_held_now.val = was
+}
+
+///|
+/// A row pressed as a whole (`id`, where it `goes`) made by `row`: on a panel's card in a box round it whose ground,
+/// lit as the row is, reaches past it over and under to the card's rows' inset from its edges where it is first or
+/// last (desk_list_pane: its words 24 in, its grounds 8), as far past it every way; the row itself where it stands,
+/// what is pressed, a press beside it its neighbour's. Elsewhere the row alone.
+fn link_reach(c : @ui.Ctx, id : Int, goes : Bool, row : () -> Unit) -> Unit {
+  if goes && in_pane() && !rows_held_now.val {
+    let ground = if c.lit(id) { theme().p.hover } else { 0L }
+    c.box(style=wide_list_link_reach.then(@ui.style(bg=Data(ground))), row) |> ignore
+  } else {
+    row()
+  }
+}
+
+///|
+/// The box round a pressed row on a panel's card (link_reach): reaching `card_pad - wide_row_pad - corner_inset` past
+/// it over and under, the row back where it was by as much room.
+// kept across runs: a value (no field of it changes)
+let wide_list_link_reach : @ui.Style = @ui.style(
+  w=Full,
+  my=room(-(card_pad - wide_row_pad - corner_inset)),
+  py=room(card_pad - wide_row_pad - corner_inset),
+  radius=InnerOr(Xl2),
+)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2624,7 +3030,7 @@ pub let desk_named : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
-pub let desk_list_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Medium, color=Fg, wrap=false)
+pub let desk_list_title : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false).then(row_title_weight)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2832,14 +3238,25 @@ let head_mark_narrow_side : Double = 40.0
 /// holds in its middle, its corner the card's less the ladder's step (what stands in it, a switch at its end, is in
 /// its corners, not the card's).
 fn wide_in_list() -> @ui.Style {
-  wide_in_list_ground.then(@ui.style(min_h=Fixed(desk_row_least())))
+  // (in a panel's card no ground of its own: what stands at its end in the card's corners stands outside them)
+  (if in_pane() { wide_in_list_bare } else { wide_in_list_ground }).then(@ui.style(min_h=Fixed(desk_row_least())))
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
+let wide_in_list_bare : @ui.Style = @ui.css("w=Full py=S2_5 justify=JCenter").then(@ui.style(px=list_words_room))
+
+///|
+// kept across runs: a value (no field of it changes)
 let wide_in_list_ground : @ui.Style = @ui.css("w=Full py=S2_5 justify=JCenter").then(
-  @ui.style(px=list_words_room, radius=InnerOr(Xl2)),
+  @ui.style(pl=list_words_room, pr=room(list_control_end), radius=InnerOr(Xl2)),
 )
+
+///|
+/// How far in from its end a row on a list card (not a panel's: wide_in_list_bare) has what it holds at its end (a
+/// switch, a choice): its words' room, or as far as holds it out of the card's corner where that is more (a list
+/// card's 24 round, its rows 6 in: 18; the user's 第 3 版, 2026-11-03: a control stays out of its card's corner).
+pub let list_control_end : Double = dmax(text_in, list_card_corner - list_pad)
 
 ///|
 /// What stands on the page as a section of its own without a title (a fold's row): wide, as far from what follows as a
@@ -2866,3 +3283,22 @@ let head_line_narrow : @ui.TextStyle = pg_lead
 /// page's).
 // kept across runs: a value (no field of it changes)
 let head_name_press : @ui.Style = @ui.css("w=Full pressed{opacity=O60}")
+
+///|
+/// How tall a row's lead stands at least where lines are under its first (row_lead's): its first line, as drawn.
+pub fn row_lead_line(c : @ui.Ctx, at? : Look) -> Double {
+  c.sp(match at.unwrap_or(look()) {
+    Narrow => c.text_size(Body).1
+    Wide => c.theme().leading(L6).unwrap_or(c.text_size(Ui).1)
+  })
+}
+
+///|
+/// How far a page's row's words stand in from its foot (narrow: text_in; wide: a list row's 10): what lies in its foot's
+/// corner reaches out by that less the ladder's inset.
+pub fn row_words_foot() -> Double {
+  match look() {
+    Narrow => text_in
+    Wide => wide_row_pad
+  }
+}

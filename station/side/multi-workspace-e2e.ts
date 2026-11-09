@@ -1,4 +1,4 @@
-// One station in two workspaces end to end (docs/multi-workspace.md), on a dev cloud (cloud/test/dev.ts) and a real
+// One station in two workspaces end to end, on a dev cloud (cloud/test/dev.ts) and a real
 // station: alice's station, in her workspace Dev, joins bob's workspace Team B with a token bob made; each workspace's
 // members get in with their own credentials and see their own chats only; the station's own settings stay alice's;
 // bob taking it out of Team B leaves it in Dev. Devices are raw iroh endpoints speaking the admin API.

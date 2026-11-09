@@ -1,4 +1,4 @@
-// What a post asks, under it in its chat on the desktop (ember web/src/Decisions.tsx MessageDecision,
+// What a post asks, under it in its chat on the desktop (still.fail web/src/Decisions.tsx MessageDecision,
 // DecisionOptions; Chat.tsx AskDismiss; Decisions.css.ts decision, options, settledLine; Chat.css.ts askDismiss): who
 // decides, then the options while it waits for the viewer (numbered, pressing one answers with it: decision.answer);
 // once settled, how it went in one quiet line. A login card stays as its login goes; an agent's request about a vault
@@ -7,11 +7,12 @@
 // Turns::in_turn): the list's height changes only for what comes.
 
 ///|
-/// Whether post `seq` of chat `here` (None: where the chat stands) was on screen in its list as the frame before left
+/// Whether post `seq` of chat `here` (None: where the chat stands) was on screen in its list as the build before left
 /// it (Reading::sees); never out of a chat's list.
 fn seen_in(c : @ui.Ctx, here : MessageHere, seq : Double?) -> Bool {
+  ignore(c)
   match here.list {
-    Some(l) => reading_of(l.rk).sees(c.frame_number(), seq)
+    Some(l) => reading_of(l.rk).sees(seq)
     None => false
   }
 }
@@ -113,7 +114,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
             _ => ()
           }
           match m.card {
-            // an agent's request for a vault item: approved here (VaultApproval.tsx), not answered in words
+            // an agent's request for a vault item: approved here, not answered in words
             Some({ vault, assignee, .. }) if vault != "" =>
               match here.core {
                 Some(core) => @settings.vault_actions(c, core, workspace_of(here.station), vault, mine_to(here, assignee))
@@ -123,7 +124,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
               match (options, thread) {
                 (Some(list), Some(th)) if list.length() > 0 => decision_options(c, src, here, m, th, list, resolved, on_pick=fn(i) {
                     // the answer's row comes in first, in a turn kept for it now, they close in the next; the list
-                    // following its end for it, as for words sent (Decisions.tsx DecisionOptions' pick). An option
+                    // following its end for it, as for words sent. An option
                     // that closes the card says nothing: no row comes, nothing waits for one
                     match turns {
                       Some(tu) if !list[i].closes => {
@@ -181,7 +182,7 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
                       None,
                       chosen=list.search_by(fn(o) { Some(o.label) == chosen }),
                       history=true,
-                    ) |> ignore
+                    )
                   })
                 }) |> ignore
               }
@@ -197,10 +198,11 @@ fn message_decision(c : @ui.Ctx, src : Source, here : MessageHere, m : Message, 
 }
 
 ///|
-/// A result's read-only history: a pointer can rest on the line, while a press opens the same contents in a panel
-/// (a sheet on a small screen). Both use the original card's content rather than its now-inactive actions.
+/// A result's read-only history: a press on the line opens it in a panel (a sheet on a small screen), the original
+/// card's content rather than its now-inactive actions. Only a press: no hover card as well, two boxes of the same
+/// (the user, 2026-11-03: 「改成只允许点击吧」).
 fn card_history(c : @ui.Ctx, key : String, id : Int, padded? : Bool = true, body : (@ui.Ctx) -> Unit) -> Unit {
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     @sf.panel(
       @sf.t("web-main.history.details"),
       fn(p, _) {
@@ -212,14 +214,13 @@ fn card_history(c : @ui.Ctx, key : String, id : Int, padded? : Bool = true, body
       },
       from=Of(id),
     )
-  }
-  hover(c, "history/" + key, id, padded~, fn() { body(c) }) |> ignore
+  })
 }
 
 ///|
-/// An agent's request about a vault item, in place of its post `m`'s words (VaultAsk.tsx VaultAsk): what is asked as a
-/// card, as wide as what it says (320 at least where there is the room, 560 at most: VaultAsk.css.ts card), its answer
-/// at its foot as the core said it with the message (`ask.answer`: the vault it holds; VaultApproval.tsx VaultCard), so
+/// An agent's request about a vault item, in place of its post `m`'s words: what is asked as a
+/// card, as wide as what it says (320 at least where there is the room), its answer
+/// at its foot as the core said it with the message (`ask.answer`: the vault it holds), so
 /// the card is whole as it comes; once decided, one line saying how it ended. In a chat's list, decided on screen, the
 /// card stays as it is, the answer given marked and none pressed any more, and is that line once out of sight, as a
 /// post's answered options are (message_decision, Turns::in_turn). Where nothing is answered (no core: a letter's), the
@@ -307,14 +308,14 @@ fn vault_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask
 }
 
 ///|
-/// An agent's request for its person's phone in place of its post's words (docs/adb-share.md): its card while it waits
+/// An agent's request for its person's phone in place of its post's words: its card while it waits
 /// (answered with `adb.decide` on the chat's station), then a line saying how it went: decided on screen, the card
 /// stays, the answer given marked, till it is out of sight (vault_ask_card's).
 fn phone_ask_card(c : @ui.Ctx, here : MessageHere, m : Message, card : Card, ask : PhoneAsk) -> Unit {
   let decided = ask.status != ""
   let asking = fn() {
     c.box(style=@sf.ask_card_room.then(ask_card_under_head), fn() {
-      @settings.phone_card(c, here.core, here.station, ask.request, ask.reason, mine_to(here, card.assignee), lasts=ask.lasts, who=card.assignee_text, ended=if decided { Some((ask.status, ask.scope, ask.why)) } else { None }, how=fn() { open_page(Setting(@settings.phone_steps(here.core, here.station))) })
+      @settings.phone_card(c, here.core, here.station, ask.request, ask.reason, mine_to(here, card.assignee), lasts=ask.lasts, who=card.assignee_text, ended=if decided { Some((ask.status, ask.scope, ask.why)) } else { None }, how=fn() { open_page(Setting(@settings.phone_steps(here.core, here.station, request=ask.request))) })
     })
     |> ignore
   }
@@ -407,7 +408,7 @@ pub fn decision_options(
   ]
   // the one on its way (the core's doing: its option)
   let mut busy : Int? = None
-  for d in items((src.topic)("doing", {}).value, "doing") {
+  for d in items(src.topic("doing", {}).get().value, "doing") {
     let dv = Some(d)
     if text(dv, "call") == "decision.answer" && text(dv, "stage") != "failed" {
       let params = field(dv, "params")
@@ -424,38 +425,29 @@ pub fn decision_options(
   } else {
     None
   }
-  // (its agent in a turn: the station refuses closing the card meanwhile, an answer in the chat it takes)
-  let locked = !resolved && m.decision is Some({ locked: true, .. })
   // as wide as what it says, as wide as where it is at most
   c.box(style=options_room, fn() {
-    match
-      @sf.options_card(
-        c,
-        "options/" + m.ts,
-        options.map(fn(o) { (o.label, o.detail, o.recommended) }),
-        !resolved,
-        if resolved { None } else { busy },
-        chosen~,
-        wide=true,
-        waits=options.map(fn(o) { locked && o.closes }),
-        waits_why=@sf.t("web-main.decisions.locked"),
-      ) {
-      Some(i) if !resolved => {
+    @sf.options_card(
+      c,
+      "options/" + m.ts,
+      options.map(fn(o) { (o.label, o.detail, o.recommended) }),
+      !resolved,
+      if resolved { None } else { busy },
+      chosen~,
+      wide=true,
+      on_pick=fn(i) {
         let label = options[i].label
         on_pick(i)
-        c.tell("options/" + m.ts, fn() {
-          // picked, felt as something done (a no as something refused: act)
-          @ui.haptic(Confirm)
-          act(src, @sf.t("web-main.decisions.answerWhat", args=[("option", label)]), "", "decision.answer", {
-            "station": Json::string(here.station),
-            "thread": Json::number(thread),
-            "seq": Json::number(m.seq),
-            "option": Json::string(label),
-          })
+        // picked, felt as something done (a no as something refused: act)
+        @ui.haptic(Confirm)
+        act(src, @sf.t("web-main.decisions.answerWhat", args=[("option", label)]), "", "decision.answer", {
+          "station": Json::string(here.station),
+          "thread": Json::number(thread),
+          "seq": Json::number(m.seq),
+          "option": Json::string(label),
         })
-      }
-      _ => ()
-    }
+      },
+    )
   })
   |> ignore
 }
@@ -489,18 +481,18 @@ fn ask_dismiss(
   let (mine, own_at) = match here.list {
     Some(l) if !at_end => {
       let seen = seen_in(c, here, if state { None } else { Some(seq) })
-      (l.turns.in_turn(c, "dismiss/" + k, !dismissed.contains(k), dismiss_turn_ms, seen~), l.turns.start("dismiss/" + k))
+      (l.turns.in_turn(c, "dismiss/" + k, !dismissed.has(k), dismiss_turn_ms, seen~), l.turns.start("dismiss/" + k))
     }
-    _ => (!dismissed.contains(k), None)
+    _ => (!dismissed.has(k), None)
   }
   // (its room while it has one; pressed while it is asked, not let go nor answered)
   let shown = asking && mine
-  let live = shown && !resolved && !dismissed.contains(k)
+  let live = shown && !resolved && !dismissed.has(k)
   let at = if !asking { asked_at } else { own_at }
   let id = c.id("ask-dismiss/" + k)
-  if live && c.clicked(id) {
-    dismissed[k] = true
-    c.tell("ask-dismiss/" + k, fn() {
+  c.on_press(id, fn() {
+    if live {
+      dismissed.add(k)
       // let go, felt as an answer picked is
       @ui.haptic(Confirm)
       act(
@@ -509,10 +501,10 @@ fn ask_dismiss(
         "",
         "decision.dismiss",
         { "station": Json::string(here.station), "thread": Json::number(thread), "seq": Json::number(seq) },
-        failed=fn() { dismissed.remove(k) |> ignore },
+        failed=fn() { dismissed.remove(k) },
       )
-    })
-  }
+    }
+  })
   // (at the end of the card: there until the card goes, as the core says it let go; pressed once)
   if at_end {
     if asking {
@@ -553,8 +545,10 @@ fn need_dismiss(c : @ui.Ctx, key : String, live : Bool) -> Unit {
 }
 
 ///|
-/// What was let go here (by its post: seq_key), gone at once: back if letting it go failed.
-pub let dismissed : Map[String, Bool] = {}
+/// What was let go here (by its post: seq_key), gone at once: back if letting it go failed. Read by member, so that
+/// a chat's row kept as its nodes is built again as its 忽略 is pressed, and only that row.
+// kept across runs: put back by rows_reset
+pub let dismissed : @signals.Keyed[String] = @signals.keyed()
 
 ///|
 /// What is under a post (decision): 8 under its words, at the column's start.
@@ -568,7 +562,7 @@ let decision_box : @ui.Style = @ui.css("w=Full gap=S1_5 align=AStart")
 let decision_rooms : @ui.Style = @ui.css("w=Full align=AStart")
 
 ///|
-/// The options (Decisions.css.ts options): 8 over them.
+/// The options: 8 over them.
 // kept across runs: a value (no field of it changes)
 let options_room : @ui.Style = @ui.css("w=Full pt=S0_5 align=AStart")
 

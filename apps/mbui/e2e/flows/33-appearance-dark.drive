@@ -1,0 +1,11 @@
+# Set dark before the app starts again: appearance-kept checks that the core kept this choice.
+#env MBUI_PLATFORM=android
+timeout 90000
+tap icon:settings
+until =设置
+wheel 300
+until 外观
+tap 外观
+until 跟随系统
+tap =深色
+answered prefs.set

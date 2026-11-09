@@ -1,0 +1,1 @@
+check "the station's lock is off" '"$ROOT/scripts/e2e-local.sh" lock-state | grep -q "^LOCK off"'

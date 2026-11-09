@@ -1,0 +1,6 @@
+# 小屏, a finger: a long chat's messages held and dragged up and down, then let go where they were (Latency.java)
+timeout 20000
+until 发消息
+latency drag
+timeout 600000
+ends

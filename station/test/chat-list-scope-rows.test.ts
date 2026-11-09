@@ -1,0 +1,141 @@
+import assert from "node:assert/strict";
+import { constants } from "node:sqlite";
+import { test } from "node:test";
+import { RECENT_CHAT_LIST } from "../src/store/chat-list.ts";
+import { scanRecentWorkspaceStep, settleRecentWorkspaceMemberStep } from "../src/store/chat-list-scope-build.ts";
+import { installRecentScopeJournal, trackRecentScope } from "../src/store/chat-list-scope-journal.ts";
+import { putRecentScopeSource, readPreparedRecentWorkspace, removeRecentScopeSource } from "../src/store/chat-list-scope-rows.ts";
+import { Store } from "../src/store/store.ts";
+
+test("workspace contributions keep the original ordering and count once per shared chat", () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    for (const [key, ws] of [["one", "here"], ["two", "here"], ["other", "elsewhere"]] as const) {
+      store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+        token: key, createdAt: 1, lastActiveAt: 1, ws });
+    }
+    const put = db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',?)");
+    const make = (name: string, home: string | null, members: string[], created: number, at: number | null) => {
+      const id = store.openThread("ember", "CHAT", name, name, null).id;
+      db.prepare("UPDATE threads SET home = ?, created_at = ? WHERE id = ?").run(home, created, id);
+      for (const member of members) store.joinThread(id, member, "ember");
+      if (at !== null) put.run(id, at);
+      return BigInt(id);
+    };
+    const own = make("own", "one", ["other"], 1, 30);
+    const shared = make("shared", null, ["one", "two", "other"], 2, 20);
+    const empty = make("empty", null, ["two"], 5, null);
+    const foreign = make("foreign", "other", ["one"], 3, 40);
+    installRecentScopeJournal(db);
+    for (const workspace of ["here", "elsewhere"]) trackRecentScope(db, { kind: "workspace", workspace });
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "a partly built scope is not a page");
+    for (const [ws, thread, session] of [["here", own, "one"], ["here", shared, "one"], ["here", shared, "two"],
+      ["here", empty, "two"], ["elsewhere", shared, "other"], ["elsewhere", foreign, "other"]] as const) {
+      assert.equal(putRecentScopeSource(db, ws, thread, session), true);
+    }
+    assert.equal(putRecentScopeSource(db, "here", shared, "one"), true, "replaying a source is harmless");
+    assert.equal(putRecentScopeSource(db, "here", 99_999n, "one"), false, "a deleted thread adds no count");
+    assert.throws(() => putRecentScopeSource(db, "untracked", own, "one"), /not tracked/);
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1").run();
+    const original = (ws: string, limit: number) => {
+      const rows = db.prepare(RECENT_CHAT_LIST).all(ws, "home", limit) as { id: number; total: number }[];
+      return { ids: rows.map((row) => row.id), total: rows[0]?.total ?? 0 };
+    };
+    const cases = ["here", "elsewhere"].flatMap((ws) => [1, 3, 50].map((limit) => ({ ws, limit, expected: original(ws, limit) })));
+    db.setAuthorizer((action, name) => action === constants.SQLITE_READ &&
+      ["threads", "thread_state", "entries", "sessions", "thread_sessions"].includes(name ?? "") ? constants.SQLITE_DENY : constants.SQLITE_OK);
+    try { for (const { ws, limit, expected } of cases) assert.deepEqual(readPreparedRecentWorkspace(db, ws, limit), expected); }
+    finally { db.setAuthorizer(null); }
+
+    const before = readPreparedRecentWorkspace(db, "here", 50)!;
+    removeRecentScopeSource(db, "here", shared, "one");
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 50), before, "another session still contributes the chat");
+    removeRecentScopeSource(db, "here", shared, "two");
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 50),
+      { ids: before.ids.filter((id) => BigInt(id) !== shared), total: before.total - 1 });
+    removeRecentScopeSource(db, "here", shared, "two");
+    assert.equal(readPreparedRecentWorkspace(db, "here", 50)?.total, before.total - 1, "a replayed removal does not subtract twice");
+    const otherBefore = readPreparedRecentWorkspace(db, "elsewhere", 50);
+    db.prepare("UPDATE sessions SET ws = 'new' WHERE key = 'one'").run();
+    assert.equal(readPreparedRecentWorkspace(db, "here", 50), null, "a changed source needs another pass");
+    assert.deepEqual(readPreparedRecentWorkspace(db, "elsewhere", 50), otherBefore, "a different scope remains ready");
+  } finally { db.setAuthorizer(null); store.close(); }
+});
+
+for (const recursive of [false, true]) test(`a new membership cannot leave a ready workspace page stale (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "one", createdAt: 1, lastActiveAt: 1, ws: "here" });
+    const id = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 2).sourceDone) { /* Prepare before the membership arrives. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [], total: 0 });
+    store.joinThread(id, "one", "ember");
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "the new chat has not yet been accounted");
+    assert.deepEqual(settleRecentWorkspaceMemberStep(db, "here", 2), { membersDone: true, visited: 1 });
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [id], total: 1 });
+    store.leaveThread(id, "one");
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [id], total: 1 }, "leaving does not change membership");
+    db.prepare("DELETE FROM thread_sessions WHERE thread = ? AND session = 'one'").run(id);
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null);
+    assert.deepEqual(settleRecentWorkspaceMemberStep(db, "here", 2), { membersDone: true, visited: 1 });
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [], total: 0 });
+  } finally { store.close(); }
+});
+
+for (const recursive of [false, true]) for (const how of ["insert", "update"] as const) {
+  test(`a membership ${how} replacing another row keeps its workspace exact (recursive triggers ${recursive})`, () => {
+    const store = Store.open(":memory:");
+    const db = store.db;
+    try {
+      db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+      for (const key of ["one", "two"]) store.insertSession({ key, connect: "ember", runtime: "claude", profile: "cc",
+        workspace: "/work", token: key, createdAt: 1, lastActiveAt: 1, ws: "here" });
+      const first = store.openThread("ember", "CHAT", "first", "First", null).id;
+      const second = store.openThread("ember", "CHAT", "second", "Second", null).id;
+      store.joinThread(first, "one", "ember");
+      store.joinThread(second, "two", "ember");
+      const rowid = db.prepare("SELECT rowid FROM thread_sessions WHERE thread = ? AND session = 'one'").get(first)!.rowid as number;
+      installRecentScopeJournal(db);
+      trackRecentScope(db, { kind: "workspace", workspace: "here" });
+      while (!scanRecentWorkspaceStep(db, "here", 2).sourceDone) { /* Prepare the original memberships. */ }
+      db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+      assert.equal(readPreparedRecentWorkspace(db, "here", 5)?.total, 2);
+      if (how === "insert") db.prepare("INSERT OR REPLACE INTO thread_sessions(rowid,thread,session,connect,joined_at) VALUES (?,?, 'one','ember',1)")
+        .run(rowid, second);
+      else db.prepare("UPDATE OR REPLACE thread_sessions SET rowid = ? WHERE thread = ? AND session = 'two'").run(rowid, second);
+      assert.equal(readPreparedRecentWorkspace(db, "here", 5), null);
+      let done = false;
+      for (let i = 0; i < 10 && !done; i++) done = settleRecentWorkspaceMemberStep(db, "here", 1).membersDone;
+      assert.ok(done);
+      const rows = db.prepare(RECENT_CHAT_LIST).all("here", "home", 5) as { id: number; total: number }[];
+      assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: rows.map((row) => row.id), total: rows[0]?.total ?? 0 });
+    } finally { store.close(); }
+  });
+}
+
+for (const recursive of [false, true]) test(`a changed message cannot leave its workspace ordering stale (recursive triggers ${recursive})`, () => {
+  const store = Store.open(":memory:");
+  const db = store.db;
+  try {
+    db.exec(`PRAGMA recursive_triggers = ${recursive ? "ON" : "OFF"}`);
+    store.insertSession({ key: "one", connect: "ember", runtime: "claude", profile: "cc", workspace: "/work",
+      token: "one", createdAt: 1, lastActiveAt: 1, ws: "here" });
+    const id = store.openThread("ember", "CHAT", "chat", "Chat", null).id;
+    db.prepare("UPDATE threads SET home = 'one' WHERE id = ?").run(id);
+    db.prepare("INSERT INTO entries(thread,n,kind,author_kind,author,text,at) VALUES (?,1,'message','person','p','hello',1)").run(id);
+    installRecentScopeJournal(db);
+    trackRecentScope(db, { kind: "workspace", workspace: "here" });
+    while (!scanRecentWorkspaceStep(db, "here", 2).sourceDone) { /* Prepare before the message changes. */ }
+    db.prepare("UPDATE recent_scope_tracked SET complete = 1 WHERE kind = 1 AND ws = 'here'").run();
+    assert.deepEqual(readPreparedRecentWorkspace(db, "here", 5), { ids: [id], total: 1 });
+    db.prepare("UPDATE entries SET at = 30 WHERE thread = ? AND n = 1").run(id);
+    assert.equal(readPreparedRecentWorkspace(db, "here", 5), null, "the changed ordering has not yet been accounted");
+  } finally { store.close(); }
+});

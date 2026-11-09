@@ -47,7 +47,7 @@ export function parseRelays(kept: unknown): string[] {
 }
 
 /** The ways to a station that are no relay, which a workspace may turn off as it may a relay: straight on its LAN, over
- * Tailscale, and a path iroh punches through (docs/cloud.md, 连接方式). */
+ * Tailscale, and a path iroh punches through (连接方式). */
 export const WAY_KINDS = ["lan", "tailnet", "direct"] as const;
 
 /** Every way a workspace's devices may reach its stations: still.fail's relays, its own, then the kinds that are no

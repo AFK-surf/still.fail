@@ -1,5 +1,5 @@
 // A file the app has read (a drive's file, a folder zipped, a chat's picture) kept on the device, where the person
-// keeps files, as still.fail's Android app keeps a download (FileKinds.kt download: MediaStore's Downloads).
+// keeps files, as still.fail's Android app keeps a download.
 //
 // Three ways: `Downloads`, nothing asked, where the system keeps downloads (Android: Downloads through MediaStore;
 // macOS: ~/Downloads; Windows: the Downloads known folder); `Choose`, where the person says (Android: the documents

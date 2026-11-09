@@ -6,66 +6,184 @@
 // total, a barcode) and 终端 (a fetch run in a terminal: still.fail's mark beside who it is, a line a figure, the
 // palette). Each 360 wide as it is (@sf.share_w_most), nothing cut short, the same in either theme, as a poster is. The
 // code face only for what a till or a terminal prints in it (figures, dates, keys, the command): words of Chinese in
-// it stand a cell apart (「9  个对话」), so what is said is in the face of words.
+// it stand a cell apart (「9  个对话」), so what is said is in the face of words. More are to come (2026-11-02 用户：「我们
+// 后面会有很多分享模板」): a look is one entry of share_looks, offered as itself drawn small in a strip that scrolls.
 
 ///|
-/// The looks, in the order they are offered.
+/// A look the card to share can be drawn in: `key` what the prefs keep of it (`shareLook`), its name the app's words'
+/// `web-main.stations.shareLook.<key>`; `draw` the picture of the `fleet` view as box `id`, round as a card on the
+/// stage or `flat` (handed out: its ground to its edges). A new look is a `draw` and a line in share_looks: the picker,
+/// the fixtures (share-card-<key>) and the corners' check take it from there; the core keeps any key it is given.
+/// `group` the set it is offered in (share_groups), its looks alone in the strip while that set is shown.
+priv struct ShareLook {
+  key : String
+  group : String
+  draw : (@ui.Ctx, Json?, Int, Bool) -> Int
+}
+
+///|
+/// The sets the looks are offered in, in their order, each named by the app's words'
+/// `web-main.stations.shareGroup.<group>`: still.fail's own, and 千恋＊万花's thirty (share_senren.mbt), which in one strip
+/// put the others out of sight (2026-11-03 用户：「想办法分组吧，不然这一批分享卡放进去后其它的卡都看不到了」).
 // kept across runs: a table, never written
-let share_looks : Array[String] = ["night", "poster", "receipt", "terminal"]
+let share_groups : Array[String] = ["own", "senren"]
 
 ///|
-/// The look chosen (the prefs' `shareLook`; none kept, or one this build does not know: the night).
-fn share_look(src : Source) -> String {
-  let kept = text((src.topic)("prefs", Map::new()).value, "shareLook")
-  if share_looks.contains(kept) {
-    kept
-  } else {
-    "night"
-  }
+/// The looks, in the order they are offered; the first the one drawn while none is chosen.
+// kept across runs: a table, never written
+let share_looks : Array[ShareLook] = [
+  { key: "night", group: "own", draw: night_look },
+  { key: "poster", group: "own", draw: poster_look },
+  { key: "receipt", group: "own", draw: receipt_look },
+  { key: "terminal", group: "own", draw: terminal_look },
+  // 千恋＊万花's (share_senren.mbt): the heroines' own, 丛雨's ADV box, 芳乃's fortune slip, 茉子's mission report, 蕾娜's inn
+  // bill, 小春's menu, 芦花's ledger
+  senren("senren-adv", "a1-murasame-adv", sr_adv),
+  senren("senren-omikuji", "a2-yoshino-omikuji", sr_omikuji),
+  senren("senren-ninja", "a3-mako-roof", sr_ninja),
+  senren("senren-ryokan", "a4-lena-ryokan", sr_ryokan),
+  senren("senren-menu", "a5-koharu-sweets", sr_menu),
+  senren("senren-ledger", "a6-roka-ledger", sr_ledger),
+  // chibi: Ciallo's salute, 芳乃's dog ears, 丛雨's parfait, 小春's capsule toys, all six
+  senren("senren-ciallo", "b1-chibi-ciallo", sr_ciallo),
+  senren("senren-inumimi", "b2-chibi-yoshino-ears", sr_inumimi),
+  senren("senren-parfait", "b3-chibi-murasame-spoon", sr_parfait),
+  senren("senren-gacha", "b4-chibi-koharu-gacha", sr_gacha),
+  senren("senren-chibi", "b5-chibi-group", sr_chibi),
+  // the game's own screens: the title, the CG gallery, the routes' affection, the girls' group chat, the staff roll
+  senren("senren-title", "c1-title-kv", sr_title),
+  senren("senren-cg", "e1-murasame-beauty", sr_cg),
+  senren("senren-affection", "a2-yoshino-omikuji", sr_affection),
+  senren("senren-chat", "b2-chibi-yoshino-ears", sr_chat),
+  senren("senren-staff", "c5-staffroll-bg", sr_staff),
+  // 穗织's things: the sword's appraisal, the spring festival's kagura, the town's map, the votive plaques
+  senren("senren-sword", "b6-chibi-murasame-pout", sr_sword),
+  senren("senren-kagura", "d2-yoshino-kagura", sr_kagura),
+  senren("senren-map", "d3-hoori-map", sr_map),
+  senren("senren-ema", "d4-ema", sr_ema),
+  // 穗织画报, a magazine's covers, each heroine whole
+  senren("senren-gahou-murasame", "e1-murasame-beauty", sr_gahou_of("senren-gahou-murasame")),
+  senren("senren-gahou-mako", "e4-mako-beauty", sr_gahou_of("senren-gahou-mako")),
+  senren("senren-gahou-lena", "e3-lena-beauty", sr_gahou_of("senren-gahou-lena")),
+  senren("senren-gahou-roka", "e2-roka-beauty", sr_gahou_of("senren-gahou-roka")),
+  senren("senren-gahou-koharu", "e5-koharu-beauty", sr_gahou_of("senren-gahou-koharu")),
+  senren("senren-gahou-roka2", "f2-roka-cover", sr_gahou_of("senren-gahou-roka2")),
+  // together: the summer festival's photo, the sweets party, after school; 芦花's shop at night
+  senren("senren-photo", "h1-group-festival", sr_photo),
+  senren("senren-party", "h2-group-sweets", sr_party),
+  senren("senren-class", "h3-group-classroom", sr_class),
+  senren("senren-night", "f1-roka-night", sr_night),
+]
+
+///|
+/// The keys of the looks, in their order (the fixtures' share-card-<key>).
+pub fn share_look_keys() -> Array[String] {
+  share_looks.map(fn(l) { l.key })
 }
 
 ///|
-/// Under the picture, over its buttons: each look a small picture of it, its name under it, the chosen one ringed; a
-/// press on another draws the card in it at once and keeps it the device's (`prefs.set`).
-fn share_looks_pick(c : @ui.Ctx, src : Source) -> Unit {
-  let now = share_look(src)
-  c.box(style=looks_row, fn() {
-    for look in share_looks {
-      let id = c.id("share-card/look/" + look)
-      let on = look == now
-      let name = @sf.t("web-main.stations.shareLook." + look)
-      let b = c.box(style=looks_item, id~, fn() {
-        c.box(style=if on { looks_ring_on } else { looks_ring }, fn() { look_tile(c, look) }) |> ignore
-        c.text(name, style=if on || c.lit(id) { looks_name_on } else { looks_name }) |> ignore
-      })
-      c.semantics(b, Button, id~, label=name, selected=on)
-      if c.clicked(id) && !on {
-        (src.call)("prefs.set", { "shareLook": Json::string(look) }, fn(_) {  })
-      }
+/// The look chosen (the prefs' `shareLook`; none kept, or one this build does not know: the first).
+fn share_look(src : Source) -> ShareLook {
+  let kept = text(src.topic("prefs", Map::new()).get().value, "shareLook")
+  for l in share_looks {
+    if l.key == kept {
+      return l
     }
-  })
-  |> ignore
+  }
+  share_looks[0]
 }
 
 ///|
-/// A look's small picture: its ground, its dot, a line of its words and a shorter one dimmer.
-fn look_tile(c : @ui.Ctx, look : String) -> Unit {
-  let (ground, ink, dim, dot) = match look {
-    "poster" => (@sf.share_poster_ground, @sf.share_poster_ink, @sf.share_poster_dim, @sf.share_poster_ink)
-    "receipt" => (@sf.share_receipt_ground, @sf.share_receipt_ink, @sf.share_receipt_dim, @sf.share_receipt_orange)
-    "terminal" => (@sf.share_terminal_ground, @sf.share_orange, @sf.share_terminal_dim, @sf.share_terminal_dim)
-    _ => (@sf.share_ground, @sf.share_ink, @sf.share_dim, @sf.share_orange)
-  }
-  c.box(style=@sf.share_look_tile.then(@ui.style(bg=Data(ground))), fn() {
-    c.box(style=tile_inner, fn() {
-      c.box(style=tile_dot.then(@ui.style(bg=Data(dot))), fn() {  }) |> ignore
-      c.box(style=tile_line.then(@ui.style(bg=Data(ink))), fn() {  }) |> ignore
-      c.box(style=tile_short.then(@ui.style(bg=Data(dim))), fn() {  }) |> ignore
+/// Under the picture, over its buttons: the sets of looks by name (share_groups), the one shown in the white; under them
+/// that set's looks, each the picture itself drawn small (its top, as wide as its tile), its name under it, the chosen
+/// one ringed; a strip that scrolls sideways once there are more than the stage is wide for, the chosen one brought into
+/// view. The set shown is the chosen look's until another is pressed (share_group_shown). A press on a look draws the
+/// card in it at once and keeps it the device's (`prefs.set`).
+fn share_looks_pick(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+  let look_now = share_look(src)
+  let now = look_now.key
+  let fleet = share_fleet(src, w)
+  let chosen = c.id("share-card/look/" + now)
+  let shown = if share_group_shown.val == "" { look_now.group } else { share_group_shown.val }
+  c.box(style=groups_and_looks, fn() {
+    c.box(style=groups_row, fn() {
+      for group in share_groups {
+        let id = c.id("share-card/group/" + group)
+        let on = group == shown
+        let name = @sf.t("web-main.stations.shareGroup." + group)
+        let b = c.box(style=groups_item, id~, fn() {
+          c.text(name, style=if on { groups_name_on } else if c.lit(id) { groups_name_lit } else { groups_name }) |> ignore
+        })
+        c.semantics(b, Tab, id~, label=name, selected=on)
+        c.on_press(id, fn() {
+          share_group_shown.val = group
+        })
+      }
+    })
+    |> ignore
+    // (as wide as the picture is laid out: more looks than that has the room for scrolled in it, not the stage made as
+    // wide as all of them; no room of its own at its foot for a bar (`across`, one strip): the stage as tall as with
+    // four, the picture given the room it had, faded at the edge where more of it goes on)
+    c.sideways("share-card/looks/" + shown, w=Px(@sf.share_w_most), across=true, fill=true, show=chosen, fn() {
+      c.box(style=looks_row, fn() {
+        for look in share_looks {
+          if look.group != shown {
+            continue
+          }
+          let id = c.id("share-card/look/" + look.key)
+          let on = look.key == now
+          let name = @sf.t("web-main.stations.shareLook." + look.key)
+          let b = c.box(style=looks_item, id~, fn() {
+            c.box(style=if on { looks_ring_on } else { looks_ring }, fn() { look_tile(c, src, look, fleet) }) |> ignore
+            c.text(name, style=if on || c.lit(id) { looks_name_on } else { looks_name }) |> ignore
+          })
+          c.semantics(b, Button, id~, label=name, selected=on)
+          if !on {
+            c.on_press(id, fn() {
+              (src.call)("prefs.set", { "shareLook": Json::string(look.key) }, fn(_) {  })
+            })
+          }
+        }
+      })
+      |> ignore
     })
     |> ignore
   })
   |> ignore
 }
+
+///|
+/// A look's small picture: the picture it draws, laid out as wide as it is handed out (@sf.share_w_most) and drawn as
+/// wide as the tile, from its top (what is under the tile's foot cut); said by its name, not its words. Its own files of
+/// the looks (its small picture: senren_drawing) had on their own, how far in a spinner in its middle until they are
+/// here (2026-11-03 用户「每张独立下载并提供进度」).
+fn look_tile(c : @ui.Ctx, src : Source, look : ShareLook, fleet : Json?) -> Unit {
+  let k = @sf.share_look_tile_w / @sf.share_w_most
+  c.box(style=@sf.share_look_tile, fn() {
+    c.hidden_from_semantics(fn() {
+      let files : Ref[Array[String]] = Ref([])
+      let at = c.box(style=tile_whole, left=0.0, top=0.0, taps=false, fn() {
+        let was = look_tile_now.val
+        look_tile_now.val = true
+        files.val = senren_drawing(src, fn() { (look.draw)(c, fleet, 0, true) }).1
+        look_tile_now.val = was
+      })
+      c.look(at, @ui.look(scale=k, ox=0.0, oy=0.0))
+      if @sfbase.looks_stand(src, files.val) is LooksGoing(part) {
+        c.box(style=tile_waiting, left=0.0, top=0.0, fn() {
+          @sf.progress_spinner(c, "share-card/look/" + look.key + "/coming", part, size=@sf.theme().round.glyph) |> ignore
+        })
+        |> ignore
+      }
+    })
+  })
+  |> ignore
+}
+
+///|
+/// Over a look's tile while its files come: as large as the tile, its spinner in the middle.
+// kept across runs: a value (no field of it changes)
+let tile_waiting : @ui.Style = @sf.centred.then(@ui.style(w=Fixed(@sf.share_look_tile_w), h=Fixed(@sf.share_look_tile_h)))
 
 ///|
 /// The card as box `id`, in `ground`: round as a card on the stage, or `flat` (handed out: its ground to its edges).
@@ -335,12 +453,14 @@ fn terminal_look(c : @ui.Ctx, fleet : Json?, id : Int, flat : Bool) -> Int {
       }
     })
     |> ignore
-    c.box(style=term_palette, fn() {
+    // (a drawing of the terminal's colours, its swatches edge to edge as a terminal's palette shows them: read out as
+    // one picture, its blocks what it draws, not the app's to stand apart)
+    let palette = c.box(style=term_palette, fn() {
       for ink in @sf.share_terminal_palette {
         c.box(style=term_swatch.then(@ui.style(bg=Data(ink))), fn() {  }) |> ignore
       }
     })
-    |> ignore
+    c.semantics(palette, Image, label=@sf.t("web-main.stations.sharePalette"))
     c.box(style=term_prompt_row, fn() {
       code_words(c, "~ $", term_prompt)
       c.box(style=term_cursor, fn() {  }) |> ignore
@@ -381,12 +501,51 @@ fn prompt(c : @ui.Ctx, command : String) -> Unit {
   |> ignore
 }
 
+///|
+/// The set of looks shown in the strip, pressed while the card is open; "" none pressed: the chosen look's.
+let share_group_shown : Ref[String] = Ref("")
+
+///|
+fn share_looks_reset() -> Unit {
+  share_group_shown.val = ""
+}
+
 // ── the picker's styles ──────────────────────────────────────────────────
 
 ///|
-/// The looks side by side, 12 apart, in the stage's middle.
+/// The sets' names over the strip, 8 apart.
 // kept across runs: a value (no field of it changes)
-let looks_row : @ui.Style = @ui.css("row gap=S3 justify=JCenter")
+let groups_and_looks : @ui.Style = @ui.css("gap=S2 w=Full align=ACenter")
+
+///|
+/// The sets' names in a line in the middle, 16 apart.
+// kept across runs: a value (no field of it changes)
+let groups_row : @ui.Style = @ui.css("row gap=S4 justify=JCenter w=Full")
+
+///|
+/// A set's name, with room round it to be pressed.
+// kept across runs: a value (no field of it changes)
+let groups_item : @ui.Style = @ui.css("py=S1")
+
+///|
+/// A set's name: as the looks' names are (the white thinned; the one shown the white, a little bolder), a size larger.
+// kept across runs: a value (no field of it changes)
+let groups_name : @ui.TextStyle = looks_name.then(@ui.text_style(size=Sm))
+
+///|
+// kept across runs: a value (no field of it changes)
+let groups_name_on : @ui.TextStyle = groups_name.then(@ui.text_style(color=Data(@sf.share_ink), weight=Medium))
+
+///|
+/// Another set's name under the hand: the white, as it rests otherwise (the hand changes its ink alone).
+// kept across runs: a value (no field of it changes)
+let groups_name_lit : @ui.TextStyle = groups_name.then(@ui.text_style(color=Data(@sf.share_ink)))
+
+///|
+/// The looks side by side, 8 apart (four in a 360 phone's stage), from the strip's start: what is past its end
+/// scrolled to (34 of them since 千恋＊万花's), the chosen one brought into view.
+// kept across runs: a value (no field of it changes)
+let looks_row : @ui.Style = @ui.css("row gap=S2")
 
 ///|
 /// A look: its small picture over its name, 6 apart, as wide as its name or its ring.
@@ -412,21 +571,9 @@ let looks_name : @ui.TextStyle = @ui.text_style(size=Xs, color=Data(@sf.share_di
 let looks_name_on : @ui.TextStyle = looks_name.then(@ui.text_style(color=Data(@sf.share_ink)))
 
 ///|
-/// A small picture's insides: its dot, its line, its shorter line, 6 in, 4 apart.
+/// A small picture's picture: as wide as the picture handed out, drawn smaller from its top left.
 // kept across runs: a value (no field of it changes)
-let tile_inner : @ui.Style = @ui.css("w=Full p=S1_5 gap=S1")
-
-///|
-// kept across runs: a value (no field of it changes)
-let tile_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full")
-
-///|
-// kept across runs: a value (no field of it changes)
-let tile_line : @ui.Style = @ui.css("w=Full h=S1 radius=Sm")
-
-///|
-// kept across runs: a value (no field of it changes)
-let tile_short : @ui.Style = @ui.css("w=S4 h=S1 radius=Sm")
+let tile_whole : @ui.Style = @ui.style(w=Fixed(@sf.share_w_most))
 
 
 // ── 大字报's ────────────────────────────────────────────────────────────────
@@ -674,3 +821,9 @@ let term_prompt_row : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 /// Its cursor: a block of the orange, as a terminal's.
 // kept across runs: a value (no field of it changes)
 let term_cursor : @ui.Style = @ui.style(w=@sf.share_terminal_cursor_w, h=@sf.share_terminal_cursor_h, bg=Data(@sf.share_orange))
+
+///|
+/// Whether a look is drawn now as its tile in the strip (look_tile), not as the card on the stage nor as what is handed
+/// out (box 0 too: share_card_open's shot): a look with a picture of its own draws that alone there (share_senren.mbt).
+// kept across runs: set only while a tile is drawn, and put back
+let look_tile_now : Ref[Bool] = Ref(false)

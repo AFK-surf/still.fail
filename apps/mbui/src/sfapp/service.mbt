@@ -1,4 +1,4 @@
-// A web service an agent started (a dev server, a report it serves), full screen over its chat (ember apps/android
+// A web service an agent started (a dev server, a report it serves), full screen over its chat (still.fail apps/android
 // chat/screens/Preview.kt PreviewScreen, PreviewWeb.kt, PreviewLoad.kt; web mobile/Preview.tsx): found by its job (the
 // `job` topic), known by its name, never its port. Its page is a site view (src/ui/native.mbt `NativeView::site`: a
 // web view of a host of its own) whose every request is answered here from the station through the core
@@ -24,7 +24,8 @@
 //
 // Not yet, against the Android app (each waits on something mbui's hosts or the core do not do yet): a marked picture's
 // pin and edge as the page shows them (drawn as an image's marks are), and on Android the top page's fetch() on its
-// port (the WebView's cookies are not the app's to send along: it goes as the page's other requests do).
+// port (the WebView's cookies are not the app's to send along: it goes as the page's other requests do), and in a
+// browser marking it and what a visualization's widget keeps (its frame, cloud/src/preview.ts, runs no script of the app's).
 
 ///|
 /// A station's name as the workspace's stations say it.
@@ -33,7 +34,7 @@ fn station_name(src : Source, station : String) -> String {
     Some(i) => station.view(end_offset=i).to_owned()
     None => station
   }
-  match stations_of((src.topic)("stations", { "scope": Json::string(scope) }).value).iter().find_first(fn(s) {
+  match station_marks(src, scope).iter().find_first(fn(s) {
     s.address == station
   }) {
     Some(s) => s.name
@@ -42,10 +43,10 @@ fn station_name(src : Source, station : String) -> String {
 }
 
 ///|
-/// The service `job` of `station`'s page (Preview.kt PreviewScreen).
+/// The service `job` of `station`'s page.
 pub fn service_page(c : @ui.Ctx, src : Source, station : String, job : String) -> Unit {
   let t = @sf.theme()
-  let found = (src.topic)("job", { "station": Json::string(station), "id": Json::string(job) })
+  let found = src.topic("job", { "station": Json::string(station), "id": Json::string(job) }).get().snapshot()
   let j = found.value
   let name = match text(j, "name") {
     "" => svc("android-chat.preview.service")
@@ -86,14 +87,14 @@ pub fn service_page(c : @ui.Ctx, src : Source, station : String, job : String) -
 }
 
 ///|
-/// The page's compact bar (Parts.kt NavBar): 对话 back in the accent, the service's name and its station on one line (as
+/// The page's compact bar: 对话 back in the accent, the service's name and its station on one line (as
 /// an in-app browser's bar has its page's: what is over the page as little as it can be; the user, 2026-10-27:
 /// 是不是上面也应该少一点).
 fn service_bar(c : @ui.Ctx, title : String, station : String) -> Unit {
   let said = if station == "" { title } else { title + " · " + station }
-  if @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), said, top=status_top()) {
+  @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), said, top=status_top(), on_press=fn() {
     @sfbase.go_back() |> ignore
-  }
+  })
 }
 
 ///|

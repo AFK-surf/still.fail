@@ -1,10 +1,10 @@
 // Words and marks the clients show, decided here once (format.rs): numbers, times and durations in words, day
 // headings, a thread's name, an agent's label, a model's maker, a runtime's efforts, a connect's state. Times are the
 // viewer's local ones: `offsetMin` is their UTC offset at that moment (Host).
-import * as brand from "./brand.ts";
 import { current, tr, type Lang } from "./i18n.ts";
 import * as model from "./shapes/model.ts";
 import * as reasoning from "./shapes/reasoning.ts";
+import * as titles from "./titles.ts";
 import { get, str } from "./util.ts";
 
 const MINUTE = 60_000;
@@ -140,7 +140,8 @@ export function relativeTimeIn(lang: Lang, ms: number, now: number, offsetMin: n
   if (hours < 24) return tr(lang, "core-logic.format.ago.hours", { n: hours });
   const [, month, day] = local(ms, offsetMin);
   const time = clock(ms, offsetMin);
-  if (hours < 48) return tr(lang, "core-logic.format.ago.yesterday", { time });
+  // Yesterday is the calendar day before today, not 24 to 48 hours ago: 11/3 18:12 seen on 11/5 at noon is two days back.
+  if (localDay(now, offsetMin) - localDay(ms, offsetMin) === 1) return tr(lang, "core-logic.format.ago.yesterday", { time });
   return tr(lang, "core-logic.format.date_time", { date: monthDay(lang, month, day), time });
 }
 
@@ -162,6 +163,20 @@ export function timeUntilIn(lang: Lang, ms: number, now: number): string {
   const hours = round(minutes / 60);
   if (hours < 48) return tr(lang, "core-logic.format.until.hours", { n: hours });
   return tr(lang, "core-logic.format.until.days", { n: round(hours / 24) });
+}
+
+/// A deadline's remaining time, to the minute, without a unit that is zero: 3 天 5 小时后, 3 天后, 6 小时 35 分钟后,
+/// 1 小时后, 25 分钟后, 1 分钟内.
+export function preciseTimeUntil(ms: number, now: number): string {
+  const lang = current();
+  const remaining = Math.max(ms - now, 0);
+  const minutes = Math.floor(remaining / MINUTE);
+  if (remaining < MINUTE) return tr(lang, "core-logic.format.until.minute");
+  if (minutes < 60) return tr(lang, "core-logic.format.until.minutes", { n: minutes });
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return minutes % 60 === 0 ? tr(lang, "core-logic.format.until.hours", { n: hours }) : tr(lang, "core-logic.format.until.hours_minutes", { h: hours, m: minutes % 60 });
+  const days = Math.floor(hours / 24);
+  return hours % 24 === 0 ? tr(lang, "core-logic.format.until.days", { n: days }) : tr(lang, "core-logic.format.until.days_hours", { n: days, h: hours % 24 });
 }
 
 /// When a quota window refills, in words.
@@ -247,22 +262,7 @@ export function dayLabelIn(lang: Lang, ms: number, now: number, offsetMin: numbe
 
 /// Slack mentions and spacing out, for a title.
 export function cleanText(text: string): string {
-  let out = "";
-  let rest = text;
-  for (;;) {
-    const at = rest.indexOf("<@");
-    if (at < 0) break;
-    out += rest.slice(0, at);
-    const tail = rest.slice(at + 2);
-    const m = /^[A-Z0-9]*/.exec(tail)![0].length;
-    if (m > 0 && tail.slice(m).startsWith(">")) rest = tail.slice(m + 1);
-    else {
-      out += "<@";
-      rest = tail;
-    }
-  }
-  out += rest;
-  return splitWhitespace(out).join(" ");
+  return titles.splitWhitespace(titles.withoutMentions(text)).join(" ");
 }
 
 /// A message's text as plain words on a line, for where it is shown in brief (a chat's row, a notice): Markdown's and
@@ -281,7 +281,7 @@ export function plainText(text: string): string {
       .replace(/<!(here|channel|everyone)(\|[^>]*)?>/g, "@$1")
       .replace(/https?:\/\/[^\s<>()]+/g, () => words("link"))
       .replace(/(\*\*|__|~~)(?=\S)([^\n]*?\S)\1/g, "$2")
-      .replace(/(^|[^\w*~])([*_~])(?=[^\s*_~])([^\n]*?[^\s*_~])\2(?![\w*~])/gm, "$1$3")
+      .replace(/(^|[^\w*])([*_])(?=[^\s*_])([^\n]*?[^\s*_])\2(?![\w*])/gm, "$1$3")
       .replace(/\\([\\`*_{}[\]()#+\-.!|~>])/g, "$1")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
@@ -304,11 +304,24 @@ export function plainText(text: string): string {
 const IMAGE = /\.(png|jpe?g|gif|webp|svg|heic|avif)(\?[^)\s]*)?$/i;
 
 /// Rust's `split_whitespace`: Unicode white space.
-export function splitWhitespace(text: string): string[] {
-  return text.split(/[\s\u0085]+/u).filter((w) => w !== "");
+export const splitWhitespace = titles.splitWhitespace;
+
+
+/// Where a Slack or Feishu thread is, in words: #channel, 私信, the Feishu group; null for a still.fail chat.
+export function placeName(surface: string, channel: string, channelName: string): string | null {
+  return titles.placeName(surface, channel, channelName, { directMessage: tr(current(), "core-views.direct_message"), feishu: tr(current(), "core-logic.format.thread.feishu") });
 }
 
-/// A thread named for people: where (its channel by name, 私信, or a still.fail chat's title) and when it began.
+/// What a chat is called, as its station calls it (read/views.ts titleOf): the name people gave it, else the one its
+/// agent gave it; a chat of still.fail's own is a new chat until it has one, the same all along; a Slack or Feishu
+/// thread the first line a person wrote in it, else its channel.
+export function chatTitle(thread: unknown): string {
+  const words = { untitled: tr(current(), "core-views.new_chat"), directMessage: tr(current(), "core-views.direct_message") };
+  return titles.chatTitle(thread as titles.Titled, str(get(thread, "firstText")) ?? null, str(get(thread, "channelName")) ?? null, words);
+}
+
+/// A thread named for people: where (a still.fail chat by its title, chatTitle; a Slack or Feishu thread by its place,
+/// placeName) and when it began.
 export function threadName(threads: unknown[], channel: string, threadTs: string, offsetMin: number): [string, string] {
   const thread = threads.find((t) => str(get(t, "channel")) === channel && str(get(t, "threadTs")) === threadTs);
   const parsed = Number(threadTs);
@@ -317,29 +330,14 @@ export function threadName(threads: unknown[], channel: string, threadTs: string
   const started = Number.isFinite(parsed) && threadTs.trim() !== "" ? parsed * 1000 : typeof made === "number" ? made : 0;
   const [, month, day] = local(started, offsetMin);
   const when = tr(current(), "core-logic.format.date_time", { date: monthDay(current(), month, day), time: clock(started, offsetMin) });
-  const text = (k: string) => str(get(thread, k)) ?? "";
-  let where: string;
-  if (channel === "EMBER" || channel === "STILLFAIL") {
-    const title = text("title");
-    if (title !== "") where = title;
-    else {
-      const first = cleanText(text("firstText"));
-      where = first === "" ? tr(current(), "core-logic.format.thread.chat", { brand: brand.name() }) : first;
-    }
-  } else if (isFeishuChat(channel) || str(get(thread, "surface"))?.startsWith("feishu:")) {
-    // A Feishu chat (群, 私聊) by its name, as its station read it.
-    const n = text("channelName");
-    where = n === "" ? tr(current(), "core-logic.format.thread.feishu") : n;
-  } else if (channel.startsWith("D")) where = tr(current(), "core-logic.format.thread.dm");
-  else {
-    const n = text("channelName");
-    where = `#${n === "" ? channel : n}`;
-  }
+  const own = titles.isOwnChannel(channel);
+  // (a thread its station has not told of is a Slack one by its channel)
+  const where = own ? chatTitle({ ...(thread as object), surface: "chat" }) : placeName(str(get(thread, "surface")) || "slack", channel, str(get(thread, "channelName")) ?? "") ?? `#${channel}`;
   return [where, when];
 }
 
-/// A Feishu chat's id (`oc_…`, docs/feishu.md).
-export const isFeishuChat = (channel: string) => /^oc_[A-Za-z0-9_-]+$/.test(channel);
+/// A Feishu chat's id (`oc_…`).
+export const isFeishuChat = titles.isFeishuChat;
 
 /// "C0OPS/1727.0001" → its channel and thread; a Feishu chat's "oc_…/om_…" (or a topic's "omt_…") too.
 export function splitThread(address: string): [string, string] | null {
@@ -381,7 +379,7 @@ export function place(threads: unknown[], address: string, offsetMin: number, wo
   const thread = threads.find((t) => str(get(t, "channel")) === channel && str(get(t, "threadTs")) === ts);
   const first = (get(thread, "sessions") as unknown[] | undefined)?.[0];
   const session = str(get(first, "session")) ?? null;
-  if (channel === "EMBER" || channel === "STILLFAIL") return { name: n, surface: "ember", session };
+  if (titles.isOwnChannel(channel)) return { name: n, surface: "chat", session };
   const surface = str(get(thread, "surface"));
   if (isFeishuChat(channel) || surface?.startsWith("feishu:")) {
     const connect = surface?.startsWith("feishu:") ? workspaces.get(surface) : undefined;
@@ -402,18 +400,53 @@ export function makerOf(modelName: string): [string, string] | null {
   const m = modelName.toLowerCase();
   const has = (words: string[]) => words.some((w) => m.includes(w));
   const o = m.startsWith("o") && /^[0-9]/.test(m.slice(1));
-  if (has(["claude", "opus", "sonnet", "haiku", "fable"])) return ["anthropic", "Anthropic"];
-  if (has(["gpt", "codex", "openai"]) || o) return ["openai", "OpenAI"];
-  if (has(["deepseek"])) return ["deepseek", "DeepSeek"];
-  if (has(["qwen", "qwq"])) return ["qwen", "Qwen"];
-  if (has(["glm", "zhipu"])) return ["zhipu", said("core-logic.format.maker.zhipu")];
-  if (has(["gemini", "gemma"])) return ["gemini", "Google"];
-  if (has(["kimi", "moonshot"])) return ["kimi", "Kimi"];
-  if (has(["minimax", "abab"])) return ["minimax", "MiniMax"];
-  if (has(["grok"])) return ["xai", "xAI"];
-  if (has(["composer"])) return ["cursor", "Cursor"];
-  if (/^swe-/.test(m)) return ["devin", "Cognition"];
-  return null;
+  const id = has(["claude", "opus", "sonnet", "haiku", "fable"]) ? "anthropic"
+    : has(["gpt", "codex", "openai"]) || o ? "openai"
+    : has(["deepseek"]) ? "deepseek"
+    : has(["qwen", "qwq"]) ? "qwen"
+    : has(["glm", "zhipu"]) ? "zhipu"
+    : has(["gemini", "gemma"]) ? "gemini"
+    : has(["kimi", "moonshot"]) ? "kimi"
+    : has(["minimax", "abab"]) ? "minimax"
+    : has(["grok"]) ? "xai"
+    : has(["composer"]) ? "cursor"
+    : /^swe-/.test(m) ? "devin"
+    : null;
+  return id === null ? null : [id, makerName(id)!];
+}
+
+/// The marks of the labs models.dev names otherwise (its `maker`: google's is Gemini's mark).
+const LAB_MARKS: Record<string, string> = { google: "gemini", moonshotai: "kimi", zhipuai: "zhipu", alibaba: "qwen", inclusionai: "ant-ling" };
+
+/// A maker by its mark's id, as people call it; null for one not known here.
+function makerName(id: string): string | null {
+  switch (id) {
+    case "anthropic": return "Anthropic";
+    case "openai": return "OpenAI";
+    case "deepseek": return "DeepSeek";
+    case "qwen": return "Qwen";
+    case "zhipu": return said("core-logic.format.maker.zhipu");
+    case "gemini": return "Google";
+    case "kimi": return "Kimi";
+    case "minimax": return "MiniMax";
+    case "xai": return "xAI";
+    case "cursor": return "Cursor";
+    case "devin": return "Cognition";
+    case "ant-ling": return "Ant Ling";
+    case "xiaomi": return said("core-logic.format.maker.xiaomi");
+    case "meta": return "Meta";
+    case "stepfun": return said("core-logic.format.maker.stepfun");
+    case "tencent": return said("core-logic.format.maker.tencent");
+    case "meituan": return said("core-logic.format.maker.meituan");
+    default: return null;
+  }
+}
+
+/// Who made a model as the model catalog says (the station's `modelMakers`: `lab` as models.dev names it, `labName`
+/// as its own API is called), [id, name] for its mark: a lab named otherwise by the marks by theirs.
+export function labMaker(lab: string, labName: string | null): [string, string] {
+  const id = LAB_MARKS[lab] ?? lab;
+  return [id, makerName(id) ?? labName ?? lab.split("-").map((w) => (w === "" ? w : w[0]!.toUpperCase() + w.slice(1))).join(" ")];
 }
 
 /// How an agent is named: its model as people call it and its effort (GPT-6 Astra · medium).
@@ -437,10 +470,10 @@ export function efforts(runtime: string): string[] {
 }
 
 /// The runtimes a chat can run on, in the order they are offered.
-export const RUNTIMES = ["claude", "codex", "dsh", "grok", "cursor", "devin", "hermes"];
+export const RUNTIMES = ["claude", "codex", "dsh", "grok", "cursor", "devin", "hermes", "agy"];
 
 /// The runtimes by name, the same in every language.
-const RUNTIME_NAMES: Record<string, string> = { claude: "Claude Code", codex: "Codex", dsh: "DeepSeek Harness", grok: "Grok Build", cursor: "Cursor", devin: "Devin", hermes: "Hermes Agent" };
+const RUNTIME_NAMES: Record<string, string> = { claude: "Claude Code", codex: "Codex", dsh: "DeepSeek Harness", grok: "Grok Build", cursor: "Cursor", devin: "Devin", hermes: "Hermes Agent", agy: "Antigravity CLI" };
 
 export function runtimeLabel(runtime: string): string {
   return RUNTIME_NAMES[runtime] ?? "Claude Code";
@@ -475,14 +508,24 @@ export function modeText(mode: string, requireMention: boolean): [string, string
 /// Why a turn failed, in words, from its `detail`.
 export function failureText(detail: string): string {
   switch (detail.split(":")[0]!.trim()) {
-    case "rate_limit":
-      return said("core-logic.format.failure.rate_limit");
+    case "rate_limit": {
+      const model = modelLimitOf(detail);
+      return model !== null ? tr(current(), "core-logic.format.failure.model_limit", { model }) : said("core-logic.format.failure.rate_limit");
+    }
     case "overloaded":
       return said("core-logic.format.failure.overloaded");
+    case "network":
+      return said("core-logic.format.failure.network");
+    case "context":
+      return said("core-logic.format.failure.context");
     case "auth":
       return said("core-logic.format.failure.auth");
     case "refused":
       return said("core-logic.format.failure.refused");
+    case "blocked":
+      return said("core-logic.format.failure.blocked");
+    case "denied":
+      return said("core-logic.format.failure.denied");
     case "model":
       return said("core-logic.format.failure.model");
     case "exited":
@@ -490,6 +533,13 @@ export function failureText(detail: string): string {
     default:
       return said("core-logic.format.failure.other");
   }
+}
+
+/// The model whose own allowance a limit was, as the runtime named it (the station's agents/runtime.ts `modelLimitOf`):
+/// "You've reached your Fable limit." is not the account's, whose quota then still shows room (#4365).
+function modelLimitOf(text: string): string | null {
+  const name = /\breached your ([\w.\- ]+?) limit\b/i.exec(text)?.[1]?.trim();
+  return name && !/\b(?:usage|session|weekly|daily|monthly|spend|rate|\d+[- ]hour)\b/i.test(name) ? name : null;
 }
 
 /// A status in words, and its tone.

@@ -35,6 +35,15 @@ test("the figures across stations: tokens, chats archived, tasks across devices,
   assert.deepEqual(s.places.items.map((f: J) => [f.name, f.value]), [["still.fail", "11 个对话"], ["飞书", "4 个对话"], ["Slack", "2 个对话"]]);
 });
 
+test("a bounded year keeps its separate lifetime total and combines it with older stations", () => {
+  const bounded = history([day("2026-10-02", 20)], { tokens: 1_020, beforeDay: "2026-10-03" });
+  const old = history([day("2025-01-01", 30), day("2026-10-02", 40), day("2026-10-03", 999)]);
+  const summary = usageSummary([source("new", bounded), source("old", old)], NOW, 480, "")!;
+  assert.equal(summary.figures[0].value, "1,090");
+  assert.deepEqual(summary.stations.items.map((s: J) => s.name), ["new", "old"]);
+  assert.match(summary.activity.tips.at(-2), /60 token/);
+});
+
 test("one place: where the chats came from not said; no decision cards: no share", () => {
   const s = usageSummary([source("studio", history([day("2026-10-02", 1)]))], NOW, 480, "")!;
   assert.equal(s.places, undefined);
@@ -66,9 +75,89 @@ test("what each day and week says under the pointer: its date and tokens; a day 
 });
 
 test("a station from before tells no history: left out and said; none at all: no summary", () => {
-  const s = usageSummary([source("studio", history([day("2026-10-02", 1)])), source("old", undefined)], NOW, 480, "")!;
+  const s = usageSummary([source("studio", history([day("2026-10-02", 1)], { cards: 10, picked: 5 })), source("old", undefined)], NOW, 480, "")!;
   assert.ok(s.partial !== null);
+  assert.equal(s.figures[3].value, "—", "a missing station's decisions cannot be treated as zero");
   assert.equal(usageSummary([source("old", undefined)], NOW, 480, ""), null);
   const v = { ...usageView([source("studio", history([day("2026-10-02", 1)]))], 7, NOW, 480, { id: "a@x", email: "a@x" }, []), summary: s };
   assert.ok("ok" in conform("UsageView", v));
+});
+
+test("an incomplete station contributes the records it has and marks missing days as unknown", () => {
+  const partial: Source = { address: "ws/partial", name: "partial", online: true,
+    value: { ok: { ...station(undefined), historyUnavailable: true, partialHistory: history([day("2026-10-02", 20)]) } } };
+  const s = usageSummary([partial], NOW, 480, "")!;
+  assert.equal(s.figures[0].value, "20");
+  assert.equal(s.figures[0].label, "已计入 token");
+  assert.ok(s.partial, "the total is explicitly marked incomplete");
+  assert.equal(s.activity.cells.at(-2), 4, "the known call appears on its day");
+  assert.equal(s.activity.cells.at(-3), -1, "an unknown day is not presented as zero use");
+  assert.doesNotMatch(s.activity.tips.at(-3), /没有用 token/);
+  assert.doesNotMatch(s.activity.weekTips.at(-2), /没有用 token/);
+  assert.doesNotMatch(s.activity.runningTips.at(-2), /没有用 token/);
+  const empty: Source = { ...partial, value: { ok: { ...station(undefined), historyUnavailable: true, partialHistory: history([]) } } };
+  assert.doesNotMatch(usageSummary([empty], NOW, 480, "")!.activity.captions[0], /没有 token 用量/);
+});
+
+test("missing decisions do not hide complete usage or turn another station's rate into the total", () => {
+  const partial: Source = { address: "ws/partial", name: "partial", online: true,
+    value: { ok: { ...station(undefined), historyUnavailable: true,
+      partialHistory: history([day("2026-10-02", 20)], { cards: undefined, picked: undefined, cardsIncomplete: true, tokensComplete: true, archived: 2 }) } } };
+  const complete = source("complete", history([day("2026-10-02", 10)], { cards: 10, picked: 5, archived: 3 }));
+  const s = usageSummary([partial, complete], NOW, 480, "")!;
+  assert.equal(s.figures[0].value, "30");
+  assert.equal(s.figures[0].label, "累计 token");
+  assert.equal(s.figures[1].value, "5");
+  assert.equal(s.figures[3].value, "—", "the combined decision rate is unavailable");
+  assert.equal(s.activity.cells.at(-3), 0, "a fully covered day is not marked unknown");
+  assert.equal(s.partial, "部分旧决策记录不可用，决策点击率未显示");
+});
+
+test("missing decisions and incomplete token history are both said", () => {
+  const partial: Source = { address: "ws/partial", name: "partial", online: true,
+    value: { ok: { ...station(undefined), historyUnavailable: true,
+      partialHistory: history([day("2026-10-02", 20)], { cards: undefined, picked: undefined, cardsIncomplete: true }) } } };
+  const s = usageSummary([partial], NOW, 480, "")!;
+  assert.equal(s.figures[0].label, "已计入 token");
+  assert.equal(s.figures[3].value, "—");
+  assert.equal(s.activity.cells.at(-3), -1);
+  assert.match(s.partial, /统计不完整/);
+  assert.match(s.partial, /旧决策记录不可用/);
+});
+
+test("an empty day after partial recording began is known, while the cutover day remains incomplete", () => {
+  const partial: Source = { address: "ws/partial", name: "partial", online: true,
+    value: { ok: { ...station(undefined), historyUnavailable: true, detailSince: Date.UTC(2026, 9, 1, 4), partialHistory: history([]) } } };
+  const s = usageSummary([partial], NOW, 480, "")!;
+  assert.equal(s.activity.cells.at(-2), 0, "October 2 was followed for the whole day");
+  assert.equal(s.activity.cells.at(-3), -1, "October 1 was only partly followed");
+  assert.match(s.activity.tips.at(-2), /没有用 token/);
+  assert.doesNotMatch(s.activity.tips.at(-3), /没有用 token/);
+});
+
+test("each station must cover a day before an empty day can be called zero", () => {
+  const partial = (name: string, since: number): Source => ({ address: `ws/${name}`, name, online: true,
+    value: { ok: { ...station(undefined), historyUnavailable: true, detailSince: since, partialHistory: history([]) } } });
+  const older = partial("older", Date.UTC(2026, 8, 29));
+  const newer = partial("newer", Date.UTC(2026, 9, 1, 20)); // October 2 at +8
+  const s = usageSummary([older, newer], NOW, 480, "")!;
+  assert.equal(s.activity.cells.at(-2), -1, "the newest local cutover leaves today incomplete");
+  const withMissing = usageSummary([older, source("missing", undefined)], NOW, 480, "")!;
+  assert.equal(withMissing.activity.cells.at(-2), -1, "a missing station could have calls today");
+});
+
+test("a history counted from a time on: the days before it unknown, those after it known even when empty", () => {
+  // Counted from 2026-09-30 10:00 at +8: that day is part known, the days before not at all; 10-01 had nothing.
+  const counted = history([day("2026-09-30", 50), day("2026-10-02", 20)], { since: Date.UTC(2026, 8, 30, 2) });
+  const s = usageSummary([source("studio", counted)], NOW, 480, "")!;
+  // the last column: Sunday 9/27 .. Saturday 10/3
+  assert.deepEqual(s.activity.cells.slice(-7), [-1, -1, -1, 4, 0, 2, -1]);
+  assert.equal(s.figures[0].label, "已计入 token");
+  assert.notEqual(s.partial, null);
+});
+
+test("a station still filling its chat or task statistics leaves those figures unknown, not zero", () => {
+  const filling = history([day("2026-10-02", 20)], { archived: undefined, remoteRuns: undefined, places: {}, chatsIncomplete: true, cardsIncomplete: true });
+  const s = usageSummary([source("studio", filling), source("mba", history([], { archived: 3, remoteRuns: 2 }))], NOW, 480, "")!;
+  assert.deepEqual(s.figures.slice(1, 4).map((f: J) => f.value), ["—", "—", "—"]);
 });

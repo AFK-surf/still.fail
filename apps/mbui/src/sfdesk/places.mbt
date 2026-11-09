@@ -1,4 +1,4 @@
-// The rail's places beyond the chats and the files, as the web's (ember web/src/cloud/workspace.tsx StationsSidebar,
+// The rail's places beyond the chats and the files, as the web's (still.fail web/src/cloud/workspace.tsx StationsSidebar,
 // ProfilesSidebar; cloud/StationPage.tsx StationsNav, StationRow; ProfilesNav.tsx): Station and Profile each a list of
 // their own in the sidebar (添加 in the band over it), the one picked its page beside it (the first to begin with); 连接
 // and 用量 a page across the pane, no sidebar. A page merged for every frame is setting_route's (连接's, 用量's), the
@@ -64,7 +64,7 @@ fn place_route_first(src : Source, w : Workspace, place : String) -> @settings.R
       }
     // (the first that needs a look, else the first: what its settings' row counts is what shows)
     "profiles" => {
-      let list = items((src.topic)("profiles", { "scope": Json::string(w.id) }).value, "items")
+      let list = items(src.topic("profiles", { "scope": Json::string(w.id) }).get().value, "items")
       list.get(list.search_by(fn(e) { flag(Some(e), "look") }).or(0)).map(fn(e) { profile_route(Some(e)) })
     }
     _ => None
@@ -74,7 +74,7 @@ fn place_route_first(src : Source, w : Workspace, place : String) -> @settings.R
 ///|
 /// The workspace's stations, as the core lists them.
 fn stations_listed(src : Source, w : Workspace) -> Array[Json] {
-  match (src.topic)("stations", { "scope": Json::string(w.id) }).value {
+  match src.topic("stations", { "scope": Json::string(w.id) }).get().value {
     Some(Array(a)) => a
     _ => []
   }
@@ -95,19 +95,46 @@ fn place_split(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit
     match place_route(src, w, place) {
       // a station's: one page in every frame (src/sfpages station_page.mbt)
       Some(Station(a)) => @sfpages.station_page(c, core, @settings.here_of(core, w.id, w.name), { back: None, top: 0.0, foot: 0.0, named: false }, a)
-      // a profile's: one page in every frame (src/sfpages accounts.mbt)
-      Some(Profile(a, id)) => @sfpages.profile_page(c, core, @settings.here_of(core, w.id, w.name), { back: None, top: 0.0, foot: 0.0, named: false }, a, id)
       Some(r) => @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true)
       // none to pick yet: the first to add (the web's StationsFirst, RuntimeSettings' first)
-      None =>
-        if place == "profiles" {
-          profiles_first(c, core, @settings.here_of(core, w.id, w.name), stations_listed(src, w))
-        } else {
-          stations_first(c, core, @settings.here_of(core, w.id, w.name), src, w)
-        }
+      // (the profiles' place made once as nodes: profiles_place_node)
+      None => stations_first(c, core, @settings.here_of(core, w.id, w.name), src, w)
     }
   })
   |> ignore
+}
+
+///|
+/// The profiles' place in node `v` (pane_made's, tape_made's): the profile picked in its list (place_route's), made once
+/// as its page is (another, another page), at the stack's root; none to pick yet, the first to add.
+fn profiles_place_node(
+  v : @view.View,
+  src : Source,
+  core : @settings.Core,
+  here : () -> @settings.Here,
+  stint : () -> Int,
+  frame : () -> @sf.PageFrame,
+  width : () -> Double,
+  said? : (@sf.PageSaid) -> Unit,
+  tips? : @sf.TipLayer,
+) -> Unit {
+  let picked = fn() {
+    match @sfbase.workspace_in_view(src).0 {
+      Some(w) =>
+        match place_route(src, w, "profiles") {
+          Some(Profile(a, id)) => Some((a, id))
+          _ => None
+        }
+      None => None
+    }
+  }
+  v.pick(picked, fn(p, at) {
+    p.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+    match at {
+      Some((a, id)) => @sfpages.profile_node(p, core, here, a, id, on_back=core.pop, frame~, said?, width~, tips?, stint~)
+      None => @sfpages.profiles_first_node(p, core, here, on_back=core.pop, frame~, said?, width~, tips?)
+    }
+  })
 }
 
 ///|
@@ -118,7 +145,7 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let picked = place_route(src, w, "stations")
   c.box(style=place_side, fn() {
     side_top(c)
-    nav_action(c, "stations/add", @sf.t("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"))
+    nav_action(c, "stations/add", @sf.t("web-pages.settings.stations.add"), @settings.place_action(core, here, "stations"), trailing?=update_trailing(c, src), band=update_band(), at=side_at())
     side_scroll(c, "stations-nav/" + w.id, fn() {
       let listed = stations_listed(src, w)
       for i, s in listed {
@@ -141,8 +168,9 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// kept while it is away, every station's row as high.
 fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, more : Bool, pick : () -> Unit) -> Unit {
   let t = @sf.theme()
-  if nav_item(
+  nav_item(
       c,
+      at=side_at(),
       "stations/" + text(s, "station"),
       on,
       fn() { @sf.station_icon(c, text(s, "emoji"), text(s, "icon"), nav_mark_side, t.p.text) },
@@ -151,9 +179,8 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, more : Bool
       lines=fn() { @sfpages.station_figures(c, src, s) },
       keep_lines=2,
       more~,
-    ) {
-    pick()
-  }
+      on_press=pick,
+    )
 }
 
 // ── Profile ─────────────────────────────────────────────────────────────
@@ -166,10 +193,10 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let core = settings_core(src, w)
   let here = @settings.here_of(core, w.id, w.name)
   let picked = place_route(src, w, "profiles")
-  let list = items((src.topic)("profiles", { "scope": Json::string(w.id) }).value, "items")
+  let list = items(src.topic("profiles", { "scope": Json::string(w.id) }).get().value, "items")
   c.box(style=place_side, fn() {
     side_top(c)
-    nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"))
+    nav_action(c, "profiles/add", @sf.t("web-pages.settings.profiles.add"), @settings.place_action(core, here, "profiles"), trailing?=update_trailing(c, src), band=update_band(), at=side_at())
     side_scroll(c, "profiles-nav/" + w.id, fn() {
       let mut group = ""
       for i, e in list {
@@ -178,12 +205,12 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let more = i + 1 < list.length() && text(Some(list[i + 1]), "group") == text(e, "group")
         if text(e, "group") != group {
           group = text(e, "group")
-          @sf.list_heading(c, text(e, "groupTitle"), Side)
+          @sf.list_heading(c, text(e, "groupTitle"), side_at())
         }
         let p = field(e, "profile")
         let route = profile_route(e)
         let usable = flag(e, "usable")
-        // how it is where that is not simply fine, as the core says it, in its tone (ProfilesNav.tsx ProfileRow): what
+        // how it is where that is not simply fine, as the core says it, in its tone: what
         // needs a look in colour
         let trouble = text(field(e, "state"), "text")
         let tone = text(field(e, "state"), "tone")
@@ -203,8 +230,9 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let ok = text(quota, "state") == "ok"
         let windows = ok && items(quota, "windows").length() > 0
         let credits = ok && !windows && text(quota, "creditsText") != ""
-        if nav_item(
+        nav_item(
             c,
+            at=side_at(),
             "profiles/" + text(e, "key"),
             picked == Some(route),
             fn() { @sf.provider_logo(c, text(p, "runtime"), text(field(p, "access"), "kind"), nav_mark_side, text(p, "providerMark")) },
@@ -241,15 +269,16 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             },
             more~,
             foot?=if windows {
-              Some(fn() { @sf.nav_quota_chips(c, quota, key="profiles/" + text(e, "key")) })
+              Some(fn() { @sf.nav_quota_chips(c, quota, key="profiles/" + text(e, "key"), at=side_at()) })
             } else {
               None
             },
             foot_capsule?=if windows { Some(@sf.fill_chip_small_h) } else { None },
-          ) {
-          place_pick[place_key(w.id, "profiles")] = route
-          @sfbase.show_chosen()
-        }
+            on_press=fn() {
+              place_pick[place_key(w.id, "profiles")] = route
+              @sfbase.show_chosen()
+            },
+          )
       }
       // each station's own logins, not profiles yet
       for s in stations_listed(src, w) {
@@ -264,11 +293,12 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         if offers.length() == 0 {
           continue
         }
-        @sf.list_heading(c, @sf.t("web-pages.profiles.machineSignedIn", args=[("station", text(s, "name"))]), Side)
+        @sf.list_heading(c, @sf.t("web-pages.profiles.machineSignedIn", args=[("station", text(s, "name"))]), side_at())
         for j, l in offers {
           let l = Some(l)
-          if nav_item(
+          nav_item(
               c,
+              at=side_at(),
               "profiles/machine/" + station + "/" + text(l, "runtime"),
               false,
               fn() { @sf.maker_mark(c, "", text(l, "runtime"), nav_mark_side) |> ignore },
@@ -280,11 +310,12 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
                 })
               },
               more=j + 1 < offers.length(),
-            ) {
-            @sfbase.history_push()
-            app.nav.push(Setting(Route::NewProfile(station)))
-            @sfbase.show_chosen()
-          }
+              on_press=fn() {
+                @sfbase.history_push()
+                app.nav.push(Setting(Route::NewProfile(station)))
+                @sfbase.show_chosen()
+              },
+            )
         }
       }
       ignore(t)
@@ -306,7 +337,7 @@ let place_side : @ui.Style = @ui.css("w=Full h=Full")
 let place_grow : @ui.Style = @ui.style(w=@sf.grow, clip=true)
 
 ///|
-/// What is wrong, in its tone (ProfilesNav.css.ts trouble): amber, red, or muted (neutral).
+/// What is wrong, in its tone: amber, red, or muted (neutral).
 fn trouble_ink(tone : String) -> @ui.TextStyle {
   match tone {
     "red" => place_trouble_red
@@ -328,7 +359,7 @@ let place_trouble_amber : @ui.TextStyle = @ui.text_style(color=WarnInk)
 let place_trouble_neutral : @ui.TextStyle = @ui.text_style(color=Muted)
 
 ///|
-/// The words that give way first (SidebarList.css.ts fill).
+/// The words that give way first.
 // kept across runs: a value (no field of it changes)
 let place_fill : @ui.TextStyle = @ui.text_style(w=Cut)
 
@@ -341,7 +372,7 @@ let place_use : @ui.TextStyle = @ui.text_style(color=AccentText)
 /// No station picked: while they are read, said so; none in the workspace, the first to add (its scene, 添加 station).
 fn stations_first(c : @ui.Ctx, core : Core, here : Here, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
-  let read = (src.topic)("stations", { "scope": Json::string(w.id) }).value is Some(_)
+  let read = src.topic("stations", { "scope": Json::string(w.id) }).get().value is Some(_)
   // (while they are read: a station's page, the one picked once they are, in its bones)
   if !read {
     @sfpages.station_waiting(c, core, here, @sf.no_frame, "Station", @sf.t("common.readingStations"))
@@ -357,8 +388,12 @@ fn stations_first(c : @ui.Ctx, core : Core, here : Here, src : Source, w : Works
           // (its managers': the others wait for one)
           match @settings.place_action(core, here, "stations") {
             Some(add) =>
-              if @sf.button(c, @sf.t("web-pages.settings.stations.add"), key="stations-first/add", tone=Primary, icon="plus") {
-                add(Of(c.id("stations-first/add")))
+              {
+                let id = c.id("stations-first/add")
+                @sf.button(c, @sf.t("web-pages.settings.stations.add"), key="stations-first/add", tone=Primary, icon="plus", on_press=fn() {
+                  add(Of(id))
+                })
+                |> ignore
               }
             None => c.text(@sf.t("web-pages.settings.stations.noneYet"), style=desk_muted_line) |> ignore
           }
@@ -369,81 +404,7 @@ fn stations_first(c : @ui.Ctx, core : Core, here : Here, src : Source, w : Works
 }
 
 ///|
-/// Not one profile yet (RuntimeSettings' first): what a profile is, then each station in a row, where one is added (an
-/// online one's 添加 Profile; an offline one's, later), with its machine's own logins not used yet under it.
-fn profiles_first(c : @ui.Ctx, core : Core, here : Here, stations : Array[Json]) -> Unit {
-  let t = @sf.theme()
-  desk_page(c, core, "profiles-first", "Profile", [
-    fn() {
-      @sf.first_one(
-        c,
-        @sf.t("web-pages.settings.profiles.addFirst"),
-        lead=@sf.t("web-pages.settings.profiles.lead", args=[("name", "still.fail")]),
-        art=fn() { @sf.drawable(c, if t.dark { "illus_no_profile_dark" } else { "illus_no_profile" }, pl_art_w) |> ignore },
-        fn() {
-          c.box(style=pl_first_stations, fn() {
-            for st in stations {
-              let sv = Some(st)
-              let address = text(sv, "station")
-              let online = flag(sv, "online")
-              c.box(style=pl_first_station, fn() {
-                c.box(style=pl_first_row, fn() {
-                  @sf.status_dot(c, if online { "online" } else { "offline" })
-                  c.text(text(sv, "name"), style=pl_first_name) |> ignore
-                  if online {
-                    if @sf.button(
-                        c,
-                        @sf.t("web-pages.settings.profiles.add"),
-                        key="profiles-first/add/" + address,
-                        tone=if stations.length() == 1 { Primary } else { Plain },
-                        icon="plus",
-                      ) {
-                      (core.push)(NewProfile(address))
-                    }
-                  } else {
-                    c.text(@sf.t("web-pages.settings.profiles.offlineAdd"), style=desk_muted_line) |> ignore
-                  }
-                })
-                |> ignore
-                if online {
-                  machine_offers(c, core, sv, fn(rt) {
-                    // the machine's login signed in again as its vendor's plan, on the add page
-                    add_profile_start[address] = [("provider", str(if rt == "claude" { "anthropic" } else { "openai" })), ("method", str("plan"))]
-                    (core.push)(NewProfile(address))
-                  })
-                }
-              })
-              |> ignore
-            }
-          })
-          |> ignore
-        },
-      )
-    },
-  ])
-  ignore(here)
-}
-
-///|
 let pl_art_w : Double = 240.0
-
-///|
-/// Each station a row (firstStations: 28 apart, at the start; firstStationRow: 10 apart; its name semibold, taking the
-/// room; its machine's logins 14 under it).
-// kept across runs: a value (no field of it changes)
-let pl_first_stations : @ui.Style = @ui.css("w=Full gap=S7 align=AStretch")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pl_first_station : @ui.Style = @ui.css("w=Full gap=S3_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pl_first_row : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pl_first_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)

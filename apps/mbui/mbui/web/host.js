@@ -14,6 +14,7 @@
   let canvas, gl, prog, post, vao, instBuf, atlasTex, ta;
   const U = {}, PU = {};
   let cssW = 0, cssH = 0, dpr = 1;
+  let sizeDirty = true, sizeObserver = null;
   // the numbers of an instance (src/ui/scene.mbt)
   const INST = 60;
   let f32 = new Float32Array(INST * 4096);
@@ -41,7 +42,9 @@
     // (what it waits for said again by the frame, if it still does: H.wakeAfter, from its time)
     wakeFor = -1;
     buildingFor = t;
-    cb.frame(cssW, cssH, dpr, t);
+    // the soft keyboard over the canvas's foot: the app laid out above it, the canvas keeping its size (as the phones'
+    // apps keep their drawables', ios_app.m's drawFor)
+    cb.frame(cssW, Math.max(1, cssH - keyboardOver()), dpr, t);
     buildingFor = -1;
     inFrame = false;
     frames++;
@@ -264,9 +267,21 @@
     queueMicrotask(() => outside(kind, id, state));
   }
   function resize() {
-    dpr = window.devicePixelRatio || 1;
-    cssW = canvas.clientWidth;
-    cssH = canvas.clientHeight;
+    const scale = window.devicePixelRatio || 1;
+    if (scale !== dpr) {
+      dpr = scale;
+      // Glyph pictures in the atlas were rasterized at the old scale. The UI keeps their boxes and atlas places until
+      // the generation changes, so it must draw and place them again before presenting a frame at the new scale.
+      textChanged();
+      sizeDirty = true;
+    }
+    // The observer marks the size dirty only when it changes. On older browsers without one, measure each frame as
+    // before. A fractional CSS size matters at browser zoom: clientWidth/clientHeight round it too early.
+    if (!sizeDirty && sizeObserver) return;
+    sizeDirty = false;
+    const rect = canvas.getBoundingClientRect();
+    cssW = rect.width;
+    cssH = rect.height;
     const w = Math.round(cssW * dpr), h = Math.round(cssH * dpr);
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
@@ -324,16 +339,48 @@
   // corner.sl begin (scripts/chk corner-sl: not edited here)
   #define float2 vec2
   #define float4 vec4
-  // mbui's corners (src/ui/smooth.mbt: these are its smoothness, sd_corner and sd_box, number for number), the one copy
-  // every renderer draws by: Metal's, Direct3D's and both GLs' shaders take it in as it is (corner_sl.h; web/host.js
-  // between its "corner.sl" lines), written in what the four have in common (float2: GLSL's vec2, defined so before it).
-  // Made into those by scripts/chk corner-sl, which CI runs with --check.
+  // smooth.mbt's corners for the renderers; scripts/chk corner-sl makes corner_sl.h and web/host.js from it.
   //
   // How smooth a corner of radius r is where room is half its box's shorter side: 0 a circle's or a capsule's end, 1
   // superellipse(1.5) over r a quarter longer; between, as far as the room goes.
   float mb_smoothness(float r, float room) {
     return r <= 0.0 ? 0.0 : clamp((room - r) / (0.25 * r), 0.0, 1.0);
   }
+  // How much of its curve a capsule's end has room for along a side of half ha.
+  float mb_capsule_room(float ha, float rr) {
+    return min((ha - rr) / (0.4 * rr), 1.0);
+  }
+  // A capsule's end as Apple draws one (smooth.mbt capsule_ease): how much further in than the circle it lies, in r, u r
+  // from the tip, k the share of the room the curve takes along the edge the box has (mb_capsule_room); an octic from the circle's height and
+  // first three rates of change at 1 - 0.675 k to the edge's at 1 + 0.4 k, with k^2.5 t^4 (1 - t)^4: how much it bends
+  // never jumps or turns at once.
+  float mb_capsule_ease(float u, float k) {
+    float u0 = 1.0 - 0.675 * k;
+    float u1 = 1.0 + 0.4 * k;
+    if (k <= 0.0 || u <= u0 || u >= u1) return 0.0;
+    float h = u1 - u0;
+    float t = (u - u0) / h;
+    float t2 = t * t;
+    float t3 = t2 * t;
+    float t4 = t3 * t;
+    float m = 1.0 - t;
+    float m2 = m * m;
+    float s = sqrt(u0 * (2.0 - u0));
+    float v = 1.0 - u0;
+    float s3 = s * s * s;
+    float c0 = 1.0 - s;
+    float c1 = -v / s * h;
+    float c2 = h * h / s3;
+    float c3 = -3.0 * v * h * h * h / (s3 * s * s);
+    float w0 = 1.0 - t4 * (35.0 - 84.0 * t + 70.0 * t2 - 20.0 * t3);
+    float w1 = t - t4 * (20.0 - 45.0 * t + 36.0 * t2 - 10.0 * t3);
+    float w2 = (t2 - t4 * (10.0 - 20.0 * t + 15.0 * t2 - 4.0 * t3)) / 2.0;
+    float w3 = (t3 - t4 * (4.0 - 6.0 * t + 4.0 * t2 - t3)) / 6.0;
+    float eased = c0 * w0 + c1 * w1 + c2 * w2 + c3 * w3 + k * k * sqrt(k) * t4 * m2 * m2;
+    float circ = u < 1.0 ? 1.0 - sqrt(u * (2.0 - u)) : 0.0;
+    return eased - circ;
+  }
+  #ifndef MB_CORNER_SCALARS
   // The signed distance of p (from a box's middle) from that box, hs its half sides, its corners r (at most the shorter
   // half) s smooth: |x|^n + |y|^n = R^n about each corner's centre, n from 2 to 2^1.5 and R from r to 1.25 r as s goes
   // from 0 to 1. 0 on the curve; off it, the curve's value over how fast it grows there (along its normal, to first
@@ -362,42 +409,12 @@
     float u = pow(1.0 + tn, 1.0 / n);
     return (hi * u - R) * (1.0 + tn) / (u * sqrt(1.0 + tn1 * tn1));
   }
-  // A capsule's end as Apple draws one (smooth.mbt capsule_ease): how much further in than the circle it lies, in r, u r
-  // from the tip, k the share of the room it needs along the edge the box has; an octic from the circle's height and
-  // first three rates of change at 1 - 0.675 k to the edge's at 1 + 0.4 k, with k^2.5 t^4 (1 - t)^4: how much it bends
-  // never jumps or turns at once.
-  float mb_capsule_ease(float u, float k) {
-    float u0 = 1.0 - 0.675 * k;
-    float u1 = 1.0 + 0.4 * k;
-    if (k <= 0.0 || u <= u0 || u >= u1) return 0.0;
-    float h = u1 - u0;
-    float t = (u - u0) / h;
-    float t2 = t * t;
-    float t3 = t2 * t;
-    float t4 = t3 * t;
-    float m = 1.0 - t;
-    float m2 = m * m;
-    float s = sqrt(u0 * (2.0 - u0));
-    float v = 1.0 - u0;
-    float s3 = s * s * s;
-    float c0 = 1.0 - s;
-    float c1 = -v / s * h;
-    float c2 = h * h / s3;
-    float c3 = -3.0 * v * h * h * h / (s3 * s * s);
-    float w0 = 1.0 - t4 * (35.0 - 84.0 * t + 70.0 * t2 - 20.0 * t3);
-    float w1 = t - t4 * (20.0 - 45.0 * t + 36.0 * t2 - 10.0 * t3);
-    float w2 = (t2 - t4 * (10.0 - 20.0 * t + 15.0 * t2 - 4.0 * t3)) * 0.5;
-    float w3 = (t3 - t4 * (4.0 - 6.0 * t + 4.0 * t2 - t3)) / 6.0;
-    float eased = c0 * w0 + c1 * w1 + c2 * w2 + c3 * w3 + k * k * sqrt(k) * t4 * m2 * m2;
-    float circ = u < 1.0 ? 1.0 - sqrt(u * (2.0 - u)) : 0.0;
-    return eased - circ;
-  }
   // How much further out than the round corner's (rr) a point is once the corner eases into one of its box's edges:
   // along the point's coordinate that way and ha that half side, across and hc the other's (from the box's middle,
   // positive); as far as the corner has no room across, moved along the round corner's normal
   // (smooth.mbt capsule_tail).
   float mb_capsule_tail(float along, float across, float ha, float hc, float rr) {
-    float k = min((ha - rr) / rr, 1.0);
+    float k = mb_capsule_room(ha, rr);
     float tight = 1.0 - mb_smoothness(rr, hc);
     if (k <= 0.0 || tight <= 0.0) return 0.0;
     float e = mb_capsule_ease((ha - along) / rr, k);
@@ -607,6 +624,7 @@
     int m = ((y & 1) << 5) | ((x & 1) << 4) | ((y & 2) << 2) | ((x & 2) << 1) | ((y & 4) >> 1) | ((x & 4) >> 2);
     return float(m) / 64.0 - 63.0 / 128.0;
   }
+  #endif
   // corner.sl end
   `;
   const FS = `#version 300 es
@@ -978,7 +996,7 @@
     gl.uniform4f(PU.u_b, (sw - 0.5) / src.w, (sh - 0.5) / src.h, dx, dy);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
-  // ---- partial redraw (docs/partial-redraw.md) ----
+  // ---- partial redraw ----
   // A frame is drawn into a canvas of its own (cv, a framebuffer), kept across frames, and copied onto the page's
   // canvas (whose drawing buffer is gone once shown); where the app says only some parts differ from the frame before
   // (H.renderDirty, @hostapi.render_dirty), only those parts of it are drawn again, each cut to it (the scissor, `cut`:
@@ -1126,7 +1144,9 @@
     gl.useProgram(prog);
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-    gl.uniform2f(U.u_vp, cssW, cssH);
+    // The framebuffer's rounded size may not be exactly cssW*dpr. Mapping to cssW would stretch its pixels by that
+    // remainder, sampling glyphs between atlas texels. A point must cover exactly dpr pixels, including at 125% zoom.
+    gl.uniform2f(U.u_vp, canvas.width / dpr, canvas.height / dpr);
     gl.uniform1f(U.u_scale, dpr);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, atlasTex);
@@ -1313,7 +1333,9 @@
 
   // ---- native views over the canvas (src/ui/native.mbt) ----
   // DOM elements in a layer under the canvas, shown through its holes: a <video> whose bytes come through the app
-  // (read in parts, then played from a Blob), a sandboxed <iframe> (scripts only) for a page of HTML.
+  // (read in parts, then played from a Blob), a sandboxed <iframe> (scripts only) for a page of HTML, the frame of
+  // H.siteFrame for a site where the page has one (a host of its own, whose service worker hands every request of the
+  // site's page here over a port: still.fail's cloud/src/preview.ts says the messages).
   const views = new Map();
   let nextZ = 0;  // the z-index the next view raised takes (view_tell 5); one opened goes over those before it
   let nextView = 0, viewLayer = null;
@@ -1347,15 +1369,139 @@
       H.requestFrame();
     }
   });
+  // ---- a site's frame ----
+  const FROM_FRAME = /^(stillfail|ember)-preview-/;
+  const siteSay = (v, said) => { v.said.push(JSON.stringify(said)); H.requestFrame(); };
+  const siteSays = (v, words) => siteSay(v, { said: JSON.stringify(words) });
+  const toBase64 = (b) => { let s = ''; for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode.apply(null, b.subarray(i, i + 8192)); return btoa(s); };
+  const fromBase64 = (t) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0));
+  // What the frame's port says: a request of the site's page, one it gave up, its WebSockets. A socket is the app's as
+  // a page's own script would say it (mbuiHost.post); no request is `page`: the frame's service worker puts what a page
+  // needs first in it, the app has nothing to add. A request waits for its head as a browser's does (no `late`, no
+  // `slow`: this host keeps nothing of an answer to read too slowly).
+  const siteAsked = (v, m) => {
+    if (m.type === 'cancel') { v.bodies.delete(m.id); siteSay(v, { gone: m.id }); }
+    else if (m.type === 'socket') siteSays(v, { p: 'open', sid: m.sid, path: m.path, protocols: [].concat(m.protocols ?? []).join(', ') });
+    else if (m.type === 'socket-send') {
+      if (m.close) siteSays(v, { p: 'close', sid: m.sid, code: m.close[0], reason: m.close[1] || '' });
+      else if (typeof m.text === 'string') siteSays(v, { p: 'send', sid: m.sid, text: m.text });
+      else if (m.binary) siteSays(v, { p: 'sendBinary', sid: m.sid, b64: toBase64(new Uint8Array(m.binary)) });
+    } else if (typeof m.id === 'number') {
+      if (m.body) v.bodies.set(m.id, m.body);
+      siteSay(v, { req: m.id, method: m.method, path: m.path, headers: m.headers || [], page: false });
+    }
+  };
+  const sitePost = (v, m, transfer) => { if (v.port) v.port.postMessage(m, transfer || []); };
+  const siteNav = (v, action, path) => { if (v.el.contentWindow) v.el.contentWindow.postMessage({ type: 'stillfail-preview-nav', action, path }, v.origin); };
+  window.addEventListener('message', (e) => {
+    if (typeof e.data?.type !== 'string' || !FROM_FRAME.test(e.data.type)) return;
+    for (const v of views.values()) {
+      if (v.kind !== 3 || e.source !== v.el.contentWindow || e.origin !== v.origin || e.data.nonce !== v.nonce) continue;
+      const name = e.data.type.replace(FROM_FRAME, '');
+      if (name === 'ready' && !v.port) {
+        const { port1, port2 } = new MessageChannel();
+        v.port = port1;
+        port1.onmessage = (m) => siteAsked(v, m.data);
+        e.source.postMessage({ type: 'stillfail-preview-port', streams: true }, v.origin, [port2]);
+      } else if (name === 'at') {
+        Object.assign(v.at, { path: e.data.path, back: !!e.data.back, forward: !!e.data.forward, loading: false });
+        v.at = { ...v.at };
+        H.requestFrame();
+      }
+    }
+  });
+  // Where a press goes: the canvas lies over every view, so while a site is seen it takes none: they go to what is under
+  // it (`under`, behind the views: every press where no view takes it, and every press's capture, as it stays) and,
+  // over it, to one box for each rect the app says takes a press over a site (view_tell 4). Not by the canvas cut away
+  // (clip-path) where a site is: a press goes through that, Chromium's scrolling does not (a finger or a wheel on the
+  // site moves nothing); `pointer-events` both go by.
+  let under = null;
+  const coverBoxes = [];
+  const siteTakes = (v) => v.kind === 3 && v.seen && v.touch !== 'through';
+  const placeSitePresses = () => {
+    const sites = [...views.values()].filter(siteTakes);
+    canvas.style.pointerEvents = sites.length ? 'none' : '';
+    if (sites.length && !under) {
+      under = document.createElement('div');
+      under.style.cssText = 'position:fixed;inset:0;z-index:0;touch-action:none';
+      document.body.insertBefore(under, viewLayer);
+      takePresses(under);
+    }
+    const covers = sites.flatMap((v) => v.covers);
+    while (coverBoxes.length > covers.length) coverBoxes.pop().remove();
+    covers.forEach(([x0, y0, x1, y1], i) => {
+      if (!coverBoxes[i]) {
+        coverBoxes[i] = document.createElement('div');
+        coverBoxes[i].style.cssText = 'position:fixed;z-index:2;touch-action:none';
+        document.body.appendChild(coverBoxes[i]);
+        takePresses(coverBoxes[i]);
+      }
+      Object.assign(coverBoxes[i].style, { left: x0 + 'px', top: y0 + 'px', width: x1 - x0 + 'px', height: y1 - y0 + 'px' });
+    });
+  };
   H.viewSiteNext = (id) => {
     const v = views.get(id);
     return v && v.said && v.said.length ? v.said.shift() : '';
+  };
+  H.viewSiteBody = (id, req) => {
+    const v = views.get(id);
+    const body = v && v.bodies && v.bodies.get(req);
+    if (body) v.bodies.delete(req);
+    return body || new Uint8Array(0);
+  };
+  H.viewSiteHead = (id, req, status, headers) => {
+    const v = views.get(id);
+    if (!v || v.kind !== 3) return;
+    sitePost(v, { id: req, head: { status, headers: JSON.parse(headers) } });
+  };
+  H.viewSiteChunk = (id, req, data) => {
+    const v = views.get(id);
+    if (!v || v.kind !== 3) return;
+    const chunk = new Uint8Array(data);
+    sitePost(v, { id: req, chunk }, [chunk.buffer]);
+  };
+  H.viewSiteEnd = (id, req, error) => {
+    const v = views.get(id);
+    if (!v || v.kind !== 3) return;
+    sitePost(v, error ? { id: req, error } : { id: req, end: true });
+  };
+  // how a site stands, once as it changes
+  H.viewSiteState = (id) => {
+    const v = views.get(id);
+    if (!v || v.kind !== 3 || v.atSaid === v.at) return '';
+    v.atSaid = v.at;
+    return JSON.stringify(v.at);
+  };
+  H.viewSiteLoad = (id, path) => {
+    const v = views.get(id);
+    if (v && v.kind === 3) siteNav(v, 'go', path);
   };
   H.viewTell = (id, what, text) => {
     const v = views.get(id);
     // raised over all the others (the app paints it after them): by z-index, as moving an iframe in the page loads it
     // again
     if (v && what === 5) { v.clip.style.zIndex = String(++nextZ); return; }
+    if (v && v.kind === 3) {
+      if (what === 2) {
+        v.touch = text.split(' ')[0];
+        v.el.style.pointerEvents = v.touch === 'through' ? 'none' : 'auto';
+        placeSitePresses();
+      }
+      else if (what === 4) {
+        const n = text ? text.split(' ').map(Number) : [];
+        v.covers = [];
+        for (let i = 0; i + 3 < n.length; i += 4) v.covers.push(n.slice(i, i + 4));
+        placeSitePresses();
+      } else if (what === 7) {
+        // what a socket did, on to the frame (NativeView::tell_frame): [sid, what, …]
+        const [sid, kind, a, b, c] = JSON.parse(text);
+        if (kind === 'open') sitePost(v, { type: 'socket-open', sid, protocol: a });
+        else if (kind === 'text') sitePost(v, { type: 'socket-message', sid, text: a });
+        else if (kind === 'binary') { const binary = fromBase64(a); sitePost(v, { type: 'socket-message', sid, binary }, [binary.buffer]); }
+        else if (kind === 'close') sitePost(v, { type: 'socket-close', sid, code: a, reason: b, failed: c });
+      }
+      return;
+    }
     if (!v || v.kind !== 2) return;
     if (what === 1) { v.scripts.push(text); runScripts(v); }
   };
@@ -1366,7 +1512,7 @@
     tell(OUTSIDE_VIEW, id, state);
   };
   H.viewOpen = (kind, arg) => {
-    if (kind !== 1 && kind !== 2) return 0;
+    if (kind !== 1 && kind !== 2 && !(kind === 3 && H.siteFrame)) return 0;
     const id = ++nextView;
     const clip = document.createElement('div');
     clip.style.cssText = 'position:absolute;overflow:hidden;display:none;background:' + (kind === 1 ? '#000' : '#fff');
@@ -1417,6 +1563,23 @@
         H.requestFrame();
       };
       v.ask(0);
+    } else if (kind === 3) {
+      const el = document.createElement('iframe');
+      el.style.cssText = 'position:absolute;border:0;background:#fff;pointer-events:auto;transform-origin:0 0';
+      const frame = new URL(H.siteFrame, location.href);
+      v.origin = frame.origin;
+      v.nonce = crypto.randomUUID();
+      v.said = [];
+      v.bodies = new Map();
+      v.covers = [];
+      v.scale = 1;
+      v.at = { path: arg, back: false, forward: false, loading: true, title: '', cookies: false, frame: true };
+      frame.searchParams.set('n', v.nonce);
+      frame.searchParams.set('path', arg);
+      el.src = frame.href;
+      el.addEventListener('load', () => { v.state = 1; v.info[6] = 1; ready(id, v, 1); stood(id); });
+      el.addEventListener('error', () => { v.state = -1; ready(id, v, -1); stood(id); });
+      v.el = el;
     } else {
       const el = document.createElement('iframe');
       el.setAttribute('sandbox', 'allow-scripts');
@@ -1447,8 +1610,16 @@
     // (its corners round, each its own (top left, then round it), as the hole the app paints for it: the element cut
     // to them, what it shows with it)
     const rs = [r0, r1, r2, r3].map((k) => Math.max(0, k)), round = rs.some((k) => k > 0);
-    Object.assign(v.el.style, { left: x - cx0 + 'px', top: y - cy0 + 'px', width: w + 'px', height: h + 'px',
-      borderRadius: round ? rs.map((k) => k + 'px').join(' ') : '', overflow: round ? 'hidden' : '' });
+    // (a site laid out at its rect over its scale and drawn at it: view_control 8)
+    const k = v.scale || 1;
+    Object.assign(v.el.style, { left: x - cx0 + 'px', top: y - cy0 + 'px', width: w / k + 'px', height: h / k + 'px',
+      borderRadius: round ? rs.map((r) => r / k + 'px').join(' ') : '', overflow: round ? 'hidden' : '' });
+    if (v.kind === 3) {
+      v.el.style.transform = k === 1 ? '' : `scale(${k})`;
+      v.seen = shown && cx1 > cx0 && cy1 > cy0 ? [cx0, cy0, cx1, cy1] : null;
+      v.placed = [x, y, w, h, cx0, cy0, cx1, cy1, shown, r0, r1, r2, r3];
+      placeSitePresses();
+    }
     // where it is now, in device pixels, as the page laid it out (scripts/host_contract.sh web views: against VIEWTOLD)
     if (shown && H.log) {
       const d = window.devicePixelRatio || 1, r = v.el.getBoundingClientRect(), k = v.clip.getBoundingClientRect();
@@ -1469,10 +1640,22 @@
     if (!v) return;
     views.delete(id);
     if (v.kind === 1) { v.el.pause(); if (v.url) URL.revokeObjectURL(v.url); }
+    if (v.kind === 3 && v.port) v.port.close();
     v.clip.remove();
+    placeSitePresses();
   };
   H.viewControl = (id, op, value) => {
     const v = views.get(id);
+    if (v && v.kind === 3) {
+      if (op === 5) siteNav(v, 'back');
+      else if (op === 6) siteNav(v, 'forward');
+      else if (op === 7) siteNav(v, 'reload');
+      else if (op === 8 && value > 0 && value !== v.scale) {
+        v.scale = value;
+        if (v.placed) H.viewPlace(id, ...v.placed);
+      }
+      return;
+    }
     if (!v || v.kind !== 1) return;
     if (op === 1) v.el.play().catch(() => {});
     else if (op === 2) v.el.pause();
@@ -1579,7 +1762,7 @@
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      Object.assign(im, { state: 1, tex, w: bmp.width, h: bmp.height, ow, oh });
+      Object.assign(im, { state: 1, tex, w: bmp.width, h: bmp.height, ow, oh, blob, maxPx });
       bmp.close();
     } catch (e) {
       if (!images.has(id)) return;
@@ -1709,7 +1892,7 @@
   H.streamOpen = () => {
     const id = ++nextStream;
     streams.set(id, { id, events: [], decoded: [], inside: [], gen: 0, needKey: true, decoder: null, config: null,
-      tex: null, closed: false, jpegs: Promise.resolve() });
+      tex: null, shown: null, closed: false, jpegs: Promise.resolve() });
     return id;
   };
   H.streamH264 = (id, avcc, w, h) => {
@@ -1758,6 +1941,21 @@
     const s = streams.get(id);
     return s && s.events.length ? s.events.shift() : '';
   };
+  // The last shown frame stays until replaced or closed, so a lost GL texture can be made again even if the sender
+  // has stopped sending frames. This is one ImageBitmap or VideoFrame per open stream.
+  function uploadStream(s) {
+    if (!s.shown || gl.isContextLost()) return;
+    if (!s.tex) {
+      s.tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, s.tex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, s.tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, s.shown);
+  }
   H.streamShow = (id, ts) => {
     const s = streams.get(id);
     if (!s) return;
@@ -1770,17 +1968,9 @@
       if (g !== f) g.frame.close();
       return false;
     });
-    if (!s.tex) {
-      s.tex = gl.createTexture();
-      gl.bindTexture(gl.TEXTURE_2D, s.tex);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    }
-    gl.bindTexture(gl.TEXTURE_2D, s.tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, f.frame);
-    f.frame.close();
+    if (s.shown) s.shown.close();
+    s.shown = f.frame;
+    uploadStream(s);
   };
   H.streamClose = (id) => {
     const s = streams.get(id);
@@ -1789,6 +1979,7 @@
     s.closed = true;
     for (const f of s.decoded) f.frame.close();
     s.decoded = [];
+    if (s.shown) s.shown.close();
     if (s.tex) gl.deleteTexture(s.tex);
     streams.delete(id);
   };
@@ -1822,8 +2013,9 @@
     const f = faceOf(style);
     return `${style & 1 ? 'italic ' : ''}${weight} ${size}px ${f ? `"mbface${f}", ${own}` : own}`;
   };
-  // what was shaped and drawn before a face changed, forgotten (MoonBit drops its glyphs as the generation moves on)
-  const facesChanged = () => {
+  // what was shaped and drawn before a face or the scale changed, forgotten (MoonBit drops its glyphs as the
+  // generation moves on)
+  const textChanged = () => {
     advCache.clear();
     held = null;
     generation++;
@@ -1841,7 +2033,7 @@
     ff.load().then(() => {
       document.fonts.add(ff);
       faces.add(face);
-      facesChanged();
+      textChanged();
       H.requestFrame();
     }, () => {});
     return true;
@@ -1853,7 +2045,7 @@
     ff.load().then(() => {
       document.fonts.add(ff);
       faces.add(face);
-      facesChanged();
+      textChanged();
       H.requestFrame();
     }, () => {});
     return true;
@@ -1861,7 +2053,7 @@
   H.faceClear = (face) => {
     if (!faces.delete(face)) return;
     for (const ff of [...document.fonts]) if (ff.family === `mbface${face}` || ff.family === `"mbface${face}"`) document.fonts.delete(ff);
-    facesChanged();
+    textChanged();
   };
 
   H.fontMetrics = (size, weight, style, out) => {
@@ -2082,6 +2274,8 @@
 
   // ---- input ----
   let imeActive = false, composing = false;
+  // what the textarea held after the last edit of it (setIme's, or one the input event below has told the app of)
+  let taHad = '';
   H.setIme = (active, x, y, w, h, text, s, e) => {
     imeActive = active;
     ta.style.left = `${x}px`;
@@ -2093,10 +2287,29 @@
     if (active && !composing) {
       if (ta.value !== text) ta.value = text;
       if (ta.selectionStart !== s || ta.selectionEnd !== e) ta.setSelectionRange(s, e);
+      taHad = text;
     }
     if (active && document.activeElement !== ta) ta.focus({ preventScroll: true });
     if (!active && document.activeElement === ta) ta.blur();
   };
+
+  // What an edit changed of the textarea's words `was`, to `now` with the caret at `caret`: [from, to, put], the words
+  // of `was` from `from` to `to` replaced by `put`. What is after the caret is what it left alone, where `was` ends so
+  // (an "a" put in before "aa" is put in there, though "aaa" could be read as it after them); the halves of a surrogate
+  // pair stay together.
+  function taEdit(was, now, caret) {
+    const most = Math.min(was.length, now.length);
+    let tail = now.length - caret;
+    if (tail > was.length || !was.endsWith(now.slice(caret))) {
+      tail = 0;
+      while (tail < most && was[was.length - 1 - tail] === now[now.length - 1 - tail]) tail++;
+    }
+    let from = 0;
+    while (from < most - tail && was[from] === now[from]) from++;
+    if (from > 0 && (now.charCodeAt(from - 1) & 0xfc00) === 0xd800) from--;
+    if (tail > 0 && (now.charCodeAt(now.length - tail) & 0xfc00) === 0xdc00) tail--;
+    return [from, was.length - tail, now.slice(from, now.length - tail)];
+  }
 
   function pos(e) {
     const r = canvas.getBoundingClientRect();
@@ -2111,38 +2324,55 @@
     try { cb.pointer(kind, x, y, button); } finally { evT = -1; }
   }
 
+  let takePresses = null;
   function setupInput() {
     // (a touch screen's fingers each by its pointerId, as they come: kinds 10 down, 11 moved, 12 up, 13 called off, what
     // they come to the app's to work out, touches.mbt)
     const touch = (e) => e.pointerType === 'touch';
-    canvas.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      canvas.setPointerCapture(e.pointerId);
-      if (touch(e)) ptr(10, e, e.pointerId);
-      else ptr(0, e, e.button);
-      // keep the keyboard on the textarea while an editor has focus
-      if (imeActive) ta.focus({ preventScroll: true });
-    });
-    canvas.addEventListener('pointermove', (e) => (touch(e) ? ptr(11, e, e.pointerId) : ptr(1, e, 0)));
-    canvas.addEventListener('pointerup', (e) => (touch(e) ? ptr(12, e, e.pointerId) : ptr(2, e, e.button === 2 ? 2 : 0)));
-    canvas.addEventListener('pointercancel', (e) => (touch(e) ? ptr(13, e, e.pointerId) : ptr(3, e, 0)));
-    // the pointer gone out of the page (nothing hovered); a right click is the app's (its context menus)
-    canvas.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') cb.pointer(7, -1, -1, 0); });
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-    canvas.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? cssH : 1;
-      const [x, y] = pos(e);
-      // lines (a mouse wheel's notches, as Firefox says them): eased in by the app (phase 4)
-      // what is held with it, above the phase (ui's wheel_mod_*: a trackpad's pinch comes as ctrl and the wheel)
-      const mods = (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0);
-      cb.wheel(x, y, e.deltaX * k, e.deltaY * k, (e.deltaMode === 1 ? 4 : 0) | (mods << 4));
-    }, { passive: false });
+    // (the canvas's, and what takes them in its place while a site is seen)
+    takePresses = (el) => {
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        // (a box over a site goes as the app says, the press going on: `under` stays; when the canvas takes the
+        // press, it stays too and can capture it itself)
+        (el === canvas ? canvas : under || el).setPointerCapture(e.pointerId);
+        if (touch(e)) ptr(10, e, e.pointerId);
+        else ptr(0, e, e.button);
+        // keep the keyboard on the textarea while an editor has focus
+        if (imeActive) ta.focus({ preventScroll: true });
+      });
+      el.addEventListener('pointermove', (e) => (touch(e) ? ptr(11, e, e.pointerId) : ptr(1, e, 0)));
+      el.addEventListener('pointerup', (e) => (touch(e) ? ptr(12, e, e.pointerId) : ptr(2, e, e.button === 2 ? 2 : 0)));
+      el.addEventListener('pointercancel', (e) => (touch(e) ? ptr(13, e, e.pointerId) : ptr(3, e, 0)));
+      // A move or a capture transfer between the app's own input layers is not leaving the window. Leaving them for
+      // a site or the outside is: nothing of the app is hovered there.
+      el.addEventListener('pointerleave', (e) => {
+        const to = e.relatedTarget;
+        const appInput = to === canvas || (to != null && (to === under || coverBoxes.includes(to)));
+        if (e.pointerType === 'mouse' && !appInput) cb.pointer(7, -1, -1, 0);
+      });
+      el.addEventListener('contextmenu', (e) => e.preventDefault());
+      el.addEventListener('wheel', (e) => {
+        const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? cssH : 1;
+        const [x, y] = pos(e);
+        // lines (a mouse wheel's notches, as Firefox says them): eased in by the app (phase 4)
+        // what is held with it, above the phase (ui's wheel_mod_*: a trackpad's pinch comes as ctrl and the wheel, and
+        // ctrl with a mouse's wheel is the browser's zoom too: both a pinch, no list scrolls by it)
+        const mods = (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 | 16 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0);
+        H.wheelKept = true;
+        cb.wheel(x, y, e.deltaX * k, e.deltaY * k, (e.deltaMode === 1 ? 4 : 0) | (mods << 4));
+        // a pinch the app zoomed nothing by (@hostapi.wheel_kept: a picture, a remote screen) zooms the page
+        if (!e.ctrlKey || H.wheelKept) e.preventDefault();
+      }, { passive: false });
+    };
+    takePresses(canvas);
     const keymap = { Backspace: 1, Delete: 2, ArrowLeft: 3, ArrowRight: 4, ArrowUp: 5, ArrowDown: 6, Enter: 7, Home: 8, End: 9, PageUp: 15, PageDown: 16, Escape: 17, Tab: 18 };
-    // the browser's own shortcuts left to it (reload, close, a new tab or window, the address bar, quit)
+    // the browser's own shortcuts left to it (reload, close, a new tab or window, the address bar, quit, zoom)
     const browsers = new Set(['r', 'w', 't', 'n', 'l', 'q', 'v']);
     const modsOf = (e) => (e.shiftKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.altKey ? 4 : 0) | (e.metaKey ? 8 : 0);
     const command = (e) => keysCmd() === 8 ? e.metaKey : e.ctrlKey;
+    const browserKey = (e, c) => command(e) && (browsers.has(c) ||
+      (!e.altKey && !(e.ctrlKey && e.metaKey) && ['+', '=', '-', '0'].includes(c)));
     // Cocoa translates these Control keys to editing commands in a field (mac_app.m's doCommandBySelector).
     // The browser's hidden IME field cannot move the app's caret itself, so send the same commands to the editor.
     const macEdit = (e) => {
@@ -2159,7 +2389,7 @@
       // a key catcher's focus (device, below): Alt too makes a shortcut; select all, copy, cut are its keys
       if (catching && (e.metaKey || e.ctrlKey || e.altKey) && !keymap[e.key]) {
         const c = e.key.length === 1 ? e.key.toLowerCase() : '';
-        if (c && !(command(e) && browsers.has(c))) { cb.key(1000 + c.charCodeAt(0), mods); e.preventDefault(); }
+        if (c && !browserKey(e, c)) { cb.key(1000 + c.charCodeAt(0), mods); e.preventDefault(); }
         return;
       }
       // Cocoa's Control-O inserts a newline and leaves the caret before it (two text commands).
@@ -2172,7 +2402,7 @@
         const c = e.key.toLowerCase();
         const own = command(e) ? { a: 12, c: 13, x: 14 }[c] : undefined;
         if (own) { cb.key(own, mods); e.preventDefault(); }
-        else if (c.length === 1 && !(command(e) && browsers.has(c))) { cb.key(1000 + c.charCodeAt(0), mods); e.preventDefault(); }
+        else if (c.length === 1 && !browserKey(e, c)) { cb.key(1000 + c.charCodeAt(0), mods); e.preventDefault(); }
         return; // paste arrives as a paste event
       }
       const code = keymap[e.key];
@@ -2187,18 +2417,34 @@
       if (code) { cb.key(code, mods); e.preventDefault(); return; }
       const c = e.key.length === 1 ? e.key.toLowerCase() : '';
       if (!c) return;
-      if (command(e) && browsers.has(c)) return;
+      if (browserKey(e, c)) return;
       // select all, copy (the words picked with the pointer), cut: the editor's codes
       const own = command(e) ? { a: 12, c: 13, x: 14 }[c] : undefined;
       cb.key(own ?? 1000 + c.charCodeAt(0), mods);
       e.preventDefault();
     });
-    // (what is put in goes to the field as typed; the input method's field is given the field's words again as the
-    // app says them, setIme)
+    // What an input method did to its field goes to the app's as what it changed there, not as what it says it put in:
+    // voice input writes a guess and replaces it as it hears more (iOS's dictation selects its last guess and inserts
+    // the next over it; another's keyboard may delete it key by key and type the next), corrections and suggestions
+    // replace a word, each an event whose data is only the new words. (The textarea is given the field's words again
+    // as the app says them, setIme.)
     ta.addEventListener('input', (e) => {
-      if (e.isComposing) return;
-      if (e.inputType === 'insertText' || e.inputType === 'insertReplacementText') {
-        if (e.data) cb.text(0, e.data, 0, 0);
+      if (e.isComposing || composing) return;
+      const was = taHad, now = ta.value;
+      taHad = now;
+      const [from, to, put] = taEdit(was, now, ta.selectionStart);
+      // (a line's end typed by a keyboard that does not send the key: as the key, ios_app.m's insertText)
+      if (from === to && put === '\n') { cb.key(7, 0); return; }
+      if (to > from) cb.text(3, '', from, to);
+      if (to > from || put) cb.text(0, put, 0, 0);
+    });
+    // The keyboard put away by the person (Safari's Done over it), not by the app: the field lets go of the focus, as
+    // the phones' apps' do (or setIme would take the focus back and the keyboard come up again). (The page sent behind
+    // blurs the textarea too, and leaves it the focused element.)
+    ta.addEventListener('blur', () => {
+      if (imeActive && keyboardOver() > 0 && document.activeElement !== ta) {
+        cb.text(7, '', 0, 0);
+        H.requestFrame();
       }
     });
     // ⌘V (the browser's paste): files on the clipboard (copied in Finder, a screenshot's picture) are the app's ⌘V
@@ -2223,16 +2469,88 @@
     ta.addEventListener('compositionupdate', (e) => cb.text(1, e.data || '', (e.data || '').length, 0));
     ta.addEventListener('compositionend', (e) => {
       composing = false;
+      taHad = ta.value;
       cb.text(1, '', 0, 0);
       if (e.data) cb.text(0, e.data, 0, 0);
     });
-    window.addEventListener('resize', H.requestFrame);
+    const sizeChanged = () => { sizeDirty = true; H.requestFrame(); };
+    window.addEventListener('resize', sizeChanged);
+    // (the soft keyboard coming or going changes no size of the page's: keyboardOver)
+    window.visualViewport?.addEventListener('resize', H.requestFrame);
+    window.visualViewport?.addEventListener('scroll', H.requestFrame);
+    if (typeof ResizeObserver !== 'undefined') {
+      sizeObserver = new ResizeObserver(sizeChanged);
+      sizeObserver.observe(canvas);
+    }
+    // A window can move between displays with different scales without changing its CSS size (and so without a
+    // resize event). Watch the current resolution, then subscribe to the new one when it changes.
+    if (window.matchMedia) {
+      let resolution;
+      const watch = () => {
+        if (resolution) resolution.removeEventListener('change', changed);
+        resolution = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+        resolution.addEventListener('change', changed);
+      };
+      const changed = () => {
+        watch();
+        H.requestFrame();
+      };
+      watch();
+    }
   }
 
   // the pointer's shape (@hostapi.set_cursor)
   const cursors = ['default', 'pointer', 'text', 'ew-resize', 'ns-resize', 'grab', 'grabbing', 'crosshair', 'not-allowed'];
-  H.setCursor = (k) => { canvas.style.cursor = cursors[k] || 'default'; };
+  // (the page's, which all that takes presses inherits)
+  H.setCursor = (k) => { document.body.style.cursor = cursors[k] || 'default'; };
   H.clipboardSet = (s) => { navigator.clipboard?.writeText(s).catch(() => {}); };
+  // The floating text menu over words picked by a finger (@hostapi.text_menu: a field's, or the page's words a finger
+  // held, as Android's ActionMode and iOS's edit menu): a small bar of the page's own over the rectangle given (under
+  // it where there is no room over it), offering what `can` says (1 cut, 2 copy, 4 paste, 8 select all), each done as
+  // the native hosts' menus do (the field's keys 14, 13, 12; the clipboard's words put in as typed), in the
+  // browser's language; put away when not shown, and as one of it is pressed.
+  let menuEl = null;
+  H.textMenu = (shown, x, y, w, h, can) => {
+    if (!shown) {
+      if (menuEl) { menuEl.remove(); menuEl = null; }
+      return;
+    }
+    if (!menuEl) {
+      menuEl = document.createElement('div');
+      menuEl.style.cssText = 'position:fixed;z-index:10;display:flex;gap:2px;padding:4px;border-radius:999px;' +
+        'background:#2c2c2e;box-shadow:0 4px 16px rgba(0,0,0,.25);font:500 14px system-ui,sans-serif;' +
+        'transform:translate(-50%,0);touch-action:none;user-select:none;-webkit-user-select:none';
+      for (const ev of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'mouseup']) {
+        menuEl.addEventListener(ev, (e) => e.stopPropagation());
+      }
+      document.body.append(menuEl);
+    }
+    const zh = (navigator.language || '').toLowerCase().startsWith('zh');
+    const items = [
+      [1, zh ? '剪切' : 'Cut', () => cb.key(14, 0)],
+      [2, zh ? '复制' : 'Copy', () => cb.key(13, 0)],
+      [4, zh ? '粘贴' : 'Paste', () => navigator.clipboard?.readText().then((t) => { if (t) { cb.text(0, t, 0, 0); H.requestFrame(); } }).catch(() => {})],
+      [8, zh ? '全选' : 'Select all', () => cb.key(12, 0)],
+    ];
+    menuEl.replaceChildren();
+    for (const [bit, label, act] of items) {
+      if (!(can & bit)) continue;
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.style.cssText = 'border:0;background:none;color:#fff;font:inherit;padding:6px 12px;border-radius:999px;cursor:pointer';
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (menuEl) { menuEl.remove(); menuEl = null; }
+        act();
+        H.requestFrame();
+      });
+      menuEl.append(b);
+    }
+    const r = canvas.getBoundingClientRect();
+    const above = y - 48;
+    menuEl.style.left = (r.left + x + w / 2) + 'px';
+    menuEl.style.top = (r.top + (above >= 8 ? above : y + h + 12)) + 'px';
+  };
   // the word around a UTF-16 offset as the browser finds words (Intl.Segmenter: a dictionary's in Chinese), start × 2³²
   // + end; -1 without one
   const words = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'word' }) : null;
@@ -2267,10 +2585,50 @@
   window.addEventListener('keydown', (e) => { if (e.altKey && e.key === 'ArrowLeft') goBack(e); });
   window.addEventListener('mouseup', (e) => { if (e.button === 3) goBack(e); });
 
+  // A context lost (the GPU's process gone; a phone's browser takes it from a page sent behind): without
+  // preventDefault the browser never gives it back, and paints the canvas white with its broken-canvas mark, over the
+  // whole app. Given back, it holds nothing: all of it made again, the glyphs drawn again by MoonBit as the generation
+  // moves on, each picture decoded again and told again as it is uploaded (what draws it drawn again then).
+  let contextLoser = null, contextAnew = false;
+  const contextLost = (e) => {
+    e.preventDefault();
+    // (one lost by H.drive gives itself back; not within this event: allowed only once preventDefault has been seen)
+    if (contextLoser) requestAnimationFrame(() => contextLoser.restoreContext());
+  };
+  const contextRestored = () => {
+    setupGL();
+    lv = null; lvW = 0; lvH = 0; bdTex = null;
+    segsTex = null; segsRows = 0; segsHad = null; segsHadRows = 0;
+    uploadedFor = -1;
+    textChanged();
+    for (const s of streams.values()) { s.tex = null; uploadStream(s); }
+    for (const [id, im] of images) {
+      if (im.state !== 1) continue;
+      Object.assign(im, { state: 0, tex: null });
+      told.delete(OUTSIDE_IMAGE + ':' + id);
+      decodeImage(id, im.blob, im.maxPx);
+    }
+    contextLoser = null;
+    contextAnew = true;
+    H.requestFrame();
+  };
+  // (@hostapi.drive: 10 the context lost as a browser loses it, and given back; 11 whether it has been)
+  H.drive = (kind) => {
+    if (kind === 11) return contextAnew;
+    if (kind !== 10) return false;
+    contextLoser = gl.getExtension('WEBGL_lose_context');
+    if (!contextLoser) return false;
+    contextAnew = false;
+    contextLoser.loseContext();
+    return true;
+  };
+
   H.run = (title, frame, pointer, wheel, key, text) => {
     document.title = title;
     canvas = document.getElementById('c');
     ta = document.getElementById('ime');
+    canvas.addEventListener('webglcontextlost', contextLost);
+    canvas.addEventListener('webglcontextrestored', contextRestored);
     setupGL();
     setupInput();
     cb = { frame, pointer, wheel, key, text };
@@ -2310,16 +2668,22 @@
   };
 
   // ---- the device beyond the window (src/hostapi/device.mbt) ----
-  // A key catcher's focus (keyCatch: the textarea's keys, above); the soft keyboard's height as the visual viewport
-  // leaves it (a phone's browser); the clipboard read and written where the page may (navigator.clipboard: a picture
-  // of another kind made a PNG through a canvas; refused or absent, read as empty); the screen kept on (a wake lock);
-  // no haptics.
+  // A key catcher's focus (keyCatch: the textarea's keys, above); the soft keyboard's height (keyboardOver); the
+  // clipboard read and written where the page may (navigator.clipboard: a picture of another kind made a PNG through a
+  // canvas; refused or absent, read as empty); the screen kept on (a wake lock); no haptics.
   let catching = false;
   H.keyCatch = (on) => { catching = !!on; };
-  H.imeInset = () => {
+  // How far the soft keyboard reaches over the canvas's foot, in points. A phone's browser puts it over the page and
+  // leaves the page's size alone (Safari always, Chrome since 108): only the visual viewport ends above it. None while
+  // the page is pinched in (less of it shown, with no keyboard), nor for less than a point (a browser zoomed to a
+  // fraction rounds the two apart).
+  function keyboardOver() {
     const v = window.visualViewport;
-    return v ? Math.max(0, window.innerHeight - v.height - v.offsetTop) : 0;
-  };
+    if (!v || Math.abs(v.scale - 1) > 0.001) return 0;
+    const over = cssH - v.height - v.offsetTop;
+    return over >= 1 ? over : 0;
+  }
+  H.imeInset = keyboardOver;
   const PNG_MAX = 8 << 20, SOURCE_MAX = 32 << 20, PIXELS_MAX = 16 * 1024 * 1024;
   const clips = new Map();
   let clipNext = 1;

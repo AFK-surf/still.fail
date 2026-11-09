@@ -1,5 +1,5 @@
 // This device's passkeys, for an app that signs a sign-in it does not make itself (still.fail's: a page of a station's
-// browser seen and driven from the app asks for one, ember docs/remote-screens.md): the platform's authenticator asked
+// browser seen and driven from the app asks for one): the platform's authenticator asked
 // to sign the client data the app gives for a relying party, as a browser asks it. Windows (win_passkeys.c: its WebAuthn
 // API, which asks the person itself with Windows Hello, a phone or a security key, and the passkeys of a provider such
 // as 1Password); macOS 14 and later in an app entitled as a browser (apple_passwords.m: AuthenticationServices, which

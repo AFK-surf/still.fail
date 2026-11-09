@@ -12,11 +12,12 @@ import { Effect, Latch, Option } from "effect";
 import { ConfigFile } from "../ops/config.ts";
 import { flag } from "../ops/files.ts";
 import { stationLang, tr } from "../ops/i18n.ts";
+import { readJsonFile } from "../ops/json-file.ts";
 import { CHANNEL_ANSWER, CHANNEL_ASK, writeWhole } from "./updates.ts";
 import { type Channel, channelOf, channelOfId } from "./versions.ts";
 import { platform } from "../platform/index.ts";
 
-const configPath = (data: string) => process.env.STILLFAIL_CONFIG || process.env.EMBER_CONFIG || join(data, "config.json");
+const configPath = (data: string) => process.env.STILLFAIL_CONFIG || join(data, "config.json");
 
 /// Whether `pid` is a station (its command says so), as the installer checks it: a pid left in station.json may be
 /// another process's by now.
@@ -34,8 +35,6 @@ const alive = (pid: number) => {
 /// Sets the channel in the config (`stillfail update --beta`/`--stable` with no station running to ask). A config that
 /// is there but cannot be read is not written over.
 export function setChannelIn(data: string, channel: Channel) {
-  const path = configPath(data);
-  if (existsSync(path)) JSON.parse(readFileSync(path, "utf8"));
   new ConfigFile(data).update((raw) => {
     raw.updateChannel = channel;
   });
@@ -55,7 +54,7 @@ export async function setChannel(data: string, channel: Channel, waitMs: number,
   // (the channel its config already says: nothing to ask. `stillfail update --beta` on a station on beta, each
   // release's, waited on the running station and failed when it was too busy to answer in time, 2026-10-31)
   try {
-    if (JSON.parse(readFileSync(configPath(data), "utf8"))?.updateChannel === channel) return;
+    if (readJsonFile(configPath(data))?.updateChannel === channel) return;
   } catch {}
   const answer = join(run, CHANNEL_ANSWER);
   rmSync(answer, { force: true });
@@ -130,7 +129,7 @@ export async function channelCommand(args: string[], data: string): Promise<numb
     }
     let raw: any = {};
     const path = configPath(data);
-    if (existsSync(path)) raw = JSON.parse(readFileSync(path, "utf8"));
+    if (existsSync(path)) raw = readJsonFile(path);
     // No --app: as the Rust command, the release is "" (a CHANNEL beside where it runs).
     console.log(channelOf(raw, app ?? ""));
     return 0;

@@ -1,6 +1,7 @@
-// 16-drive-list (e2e/traces/drive-list.trace: Studio against the local still.fail): 文件 over Home, the folder the
+// 16-drive-list (e2e/traces/drive-list.trace: Mac against the local still.fail): 文件 over Home, the folder the
 // run's 15 lent (e2e-082940) listed: what it holds in a line, folders first; into its folder and back by the crumbs. The
 // station is only read (drive topics): the run's asks are all this one makes (Flow::end), no write among them.
+// before it: 15-drive-lend
 
 ///|
 test "16-drive-list" {

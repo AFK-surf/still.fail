@@ -1,0 +1,4 @@
+wait 2000
+tapxy 600 912
+clear
+wait 300

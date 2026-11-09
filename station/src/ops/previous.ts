@@ -1,4 +1,4 @@
-// The station process before this one (a launcher's handover, docs/station-ts.md): it holds the sessions, the agents'
+// The station process before this one (a launcher's handover): it holds the sessions, the agents'
 // door, Slack's socket and the mesh's fixed port until it exits. What only one process may have waits for it to be
 // gone; making the parts must not (the launcher stops the old process once this one says it is ready).
 import { readFileSync } from "node:fs";
@@ -28,6 +28,13 @@ export function previousProcess(run: string): { pid: number | null; gone: Promis
   } catch {}
   if (typeof pid !== "number" || pid === process.pid) return { pid: null, gone: Promise.resolve() };
   return { pid, gone: gone(pid) };
+}
+
+/// `gone` lets the station take up sessions after a timeout. Backfills have no such urgency: keep them from competing
+/// for the database until the old process actually exits, even if that timeout has passed.
+export async function previousExited(previous: { pid: number | null; gone: Promise<void> }, isAlive = alive, sleep = wall.sleep): Promise<void> {
+  await previous.gone;
+  while (previous.pid !== null && isAlive(previous.pid)) await sleep(100);
 }
 
 /// Waits for process `pid` to be gone, PREVIOUS_LIMIT_MS at most.

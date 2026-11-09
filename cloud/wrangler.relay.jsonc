@@ -3,7 +3,6 @@
   // still.fail's relay (src/relay-worker.ts), a Worker of its own so deploying the rest of still.fail cloud drops no
   // relay connection. Its paths are routes on PUBLIC_ORIGIN's host and on its old one, PUBLIC_ORIGIN_ALIASES (see
   // wrangler.jsonc). Existing installations transfer namespaces before deploying this configuration.
-  // The container application keeps its explicit identity until a separate container rollout retires it.
   "name": "stillfail-relay",
   "main": "src/relay-worker.ts",
   "compatibility_date": "2026-09-08",
@@ -22,7 +21,7 @@
   "preview_urls": false,
   "observability": { "enabled": true, "head_sampling_rate": 1 },
   "vars": { "PUBLIC_ORIGIN": "https://app.still.fail", "PUBLIC_ORIGIN_ALIASES": "https://ember.3720.org" },
-  "containers": [{ "name": "ember-relay-relay", "class_name": "Relay", "image": "./Dockerfile", "max_instances": 1, "instance_type": "lite" }],
+  "containers": [{ "name": "stillfail-relay-relay", "class_name": "Relay", "image": "./Dockerfile", "max_instances": 1, "instance_type": "lite" }],
   "durable_objects": {
     "bindings": [
       { "name": "RELAY_BUDGET", "class_name": "RelayBudget" },

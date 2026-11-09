@@ -91,6 +91,29 @@ test "a node's edge round what it holds, reaching its edges: its ground inside t
 }
 
 ///|
+test "a node's clear edge round what it holds: its ground inside the edge, the edge's band left clear, the instances an old view's box with a clear border draws" {
+  // (a tile ringed only while lit: off, a border of no colour, its ground stopping inside it all the same)
+  let _ = Tester::new(fn(c) {
+    c.box(tx=100.0, ty=100.0, w=Px(40.0), h=Px(24.0), radius=6.0, bg=0xFFFFFFFFL, border=2.0, border_color=0L, fn() {
+      c.box(w=Fill(1.0), h=Fill(1.0), bg=0x2050A0FFL, fn() {  }) |> ignore
+    })
+    |> ignore
+  })
+  let old = rects_sized(40.0, 24.0)
+  let t = Tester::new(fn(_c) {  })
+  set_view_app(fn(root) {
+    root.box(fn(n) {
+      n.offset(Is((100.0, 100.0))).width(Is(Some(40.0))).height(Is(Some(24.0))).radius(Is(6.0)).ground(Is(0xFFFFFFFFL)).edge(Is((2.0, 0L)))
+      |> ignore
+      n.box(fn(k) { k.grow(Is(1.0)).ground(Is(0x2050A0FFL)) |> ignore }) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  assert_eq(rects_sized(40.0, 24.0), old, msg="the node: as the old box's")
+}
+
+///|
 /// Where the frame just drawn has a rect instance edged in `ring` (its edge's colour, red at 8 bits in 12) or filled
 /// `fill`: its index, the first such.
 fn inst_where(pick : (Int) -> Bool) -> Int {
@@ -133,7 +156,7 @@ fn red_edged(at : Int) -> Bool {
 ///|
 test "a node's edge round what it holds, its ground drawn off and bigger and the node turned: the edge drawn off, bigger and turned as its ground is, after what it holds" {
   let (_, _) = edged_holder(0xFFFFFFFFL, fn(n) {
-    n.ground_drawn(Is((-4.0, -2.0, 8.0, 4.0))).turn(Is(0.3)) |> ignore
+    n.ground_drawn(Is({ dx: -4.0, dy: -2.0, dw: 8.0, dh: 4.0, corners: None })).turn(Is(0.3)) |> ignore
   })
   let c = g()
   let fill = inst_where(fn(at) { c.inst[at + 8] == 1.0 && c.inst[at + 9] == 1.0 && c.inst[at + 11] == 1.0 && c.inst[at + 2] > 40.0 })

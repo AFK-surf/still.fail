@@ -240,3 +240,92 @@ export function batch(fn: () => void): void {
   try { fn(); }
   finally { batching--; dispatch(); }
 }
+
+/// Change marks for state kept outside signals (a map of drafts, a station's link): a reader tracks the keys it reads
+/// (`read`), a writer marks the keys it changed (`touch`), and what read them is made again. `read()` with no key
+/// tracks every key: a reader of the whole, made again as any key changes. A key nobody reads costs nothing.
+export class Marks {
+  readonly #nodes = new Map<string, { node: Source<number>; n: number }>();
+
+  read(key: string = ALL): void {
+    if (!tracking()) return;
+    let mark = this.#nodes.get(key);
+    if (!mark) {
+      mark = { node: signal(0, () => this.#nodes.delete(key)), n: 0 };
+      this.#nodes.set(key, mark);
+    }
+    mark.node.get();
+  }
+
+  touch(...keys: string[]): void {
+    batch(() => {
+      for (const key of keys.length === 0 ? [ALL] : [...keys, ALL]) {
+        const mark = this.#nodes.get(key);
+        if (mark) mark.node.set(++mark.n);
+      }
+    });
+  }
+}
+const ALL = "\u0000all";
+
+/// A map whose reads are tracked: what read a key (`get`, `has`) is made again as that key is set or deleted, what read
+/// all of it (its size, its keys, its entries) as any is. Keys are told apart by their string form. (A map of its own, not
+/// a subclass of Map: the Hermes bundle lowers classes, and a lowered subclass of a builtin is not one.)
+export class SignalMap<K, V> {
+  readonly #map = new Map<K, V>();
+  readonly #marks = new Marks();
+
+  get(key: K): V | undefined {
+    this.#marks.read(String(key));
+    return this.#map.get(key);
+  }
+
+  has(key: K): boolean {
+    this.#marks.read(String(key));
+    return this.#map.has(key);
+  }
+
+  set(key: K, value: V): this {
+    const changed = !this.#map.has(key) || !Object.is(this.#map.get(key), value);
+    this.#map.set(key, value);
+    if (changed) this.#marks.touch(String(key));
+    return this;
+  }
+
+  delete(key: K): boolean {
+    const had = this.#map.delete(key);
+    if (had) this.#marks.touch(String(key));
+    return had;
+  }
+
+  clear(): void {
+    if (this.#map.size === 0) return;
+    const keys = [...this.#map.keys()].map(String);
+    this.#map.clear();
+    this.#marks.touch(...keys);
+  }
+
+  get size(): number {
+    this.#marks.read();
+    return this.#map.size;
+  }
+
+  keys(): MapIterator<K> {
+    this.#marks.read();
+    return this.#map.keys();
+  }
+
+  values(): MapIterator<V> {
+    this.#marks.read();
+    return this.#map.values();
+  }
+
+  entries(): MapIterator<[K, V]> {
+    this.#marks.read();
+    return this.#map.entries();
+  }
+
+  [Symbol.iterator](): MapIterator<[K, V]> {
+    return this.entries();
+  }
+}

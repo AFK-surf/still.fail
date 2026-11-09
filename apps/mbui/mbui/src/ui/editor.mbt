@@ -541,8 +541,83 @@ fn EditorState::erase(self : EditorState, r : Reach, up : Bool) -> Unit {
 
 ///|
 fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) -> Unit {
+  let (before, anchor, caret) = (self.text, self.anchor, self.caret)
   self.key_edit(code, mods, now)
   self.words_told()
+  self.typed_told(before, anchor, caret, Typed)
+}
+
+///|
+/// The person's edit just made, from words `before` and the selection from `anchor` to `caret` (`by`: typed, pasted,
+/// undone, the pointer's): told what its last build said that does, at once, outside any build: its words where they
+/// changed (Ctx::editor's `on_change`), its words or its selection where either did (`on_edit`).
+fn EditorState::typed_told(self : EditorState, before : String, anchor : Int, caret : Int, by : FieldEditBy) -> Unit {
+  let changed = self.text != before
+  guard changed || self.anchor != anchor || self.caret != caret else { return }
+  let words = self.text
+  let edit : FieldEdit = {
+    was: before,
+    was_selection: (anchor, caret),
+    now: words,
+    selection: (self.anchor, self.caret),
+    by,
+  }
+  @signals.start_batch()
+  @signals.untracked(fn() {
+    match self.on_change {
+      Some(f) if changed => f(words)
+      _ => ()
+    }
+    match self.on_edit {
+      Some(f) => f(edit)
+      None => ()
+    }
+  })
+  @signals.end_batch()
+}
+
+///|
+/// An edit of a field's words or selection by the person (EditorState::typed_told): its words and selection before it
+/// and after it, and what made it.
+pub(all) struct FieldEdit {
+  was : String
+  was_selection : (Int, Int)
+  now : String
+  selection : (Int, Int)
+  by : FieldEditBy
+} derive(Eq, Show, Debug)
+
+///|
+/// What made an edit of a field: keys typed (a key, the input method's text), a paste (and words let go on it), an undo
+/// or a redo, the pointer (its caret put or words picked with it).
+pub(all) enum FieldEditBy {
+  Typed
+  Pasted
+  Undone
+  Pointed
+} derive(Eq, Show, Debug)
+
+///|
+/// What the edit changed of its words (words_changed).
+pub fn FieldEdit::span(self : FieldEdit) -> (Int, Int, Int) {
+  words_changed(self.was, self.now)
+}
+
+///|
+/// What changed words `was` into `now`: the same in both up to `start`, then the end in `was` of what was taken and the
+/// end in `now` of what was put in (after them the same again in both).
+pub fn words_changed(was : String, now : String) -> (Int, Int, Int) {
+  let most = if was.length() < now.length() { was.length() } else { now.length() }
+  let mut start = 0
+  while start < most && was.unsafe_charcode_at(start) == now.unsafe_charcode_at(start) {
+    start += 1
+  }
+  let mut end = 0
+  while end < most - start &&
+        was.unsafe_charcode_at(was.length() - 1 - end) == now.unsafe_charcode_at(now.length() - 1 - end) {
+    end += 1
+  }
+  (start, was.length() - end, now.length() - end)
 }
 
 ///|
@@ -592,11 +667,17 @@ fn EditorState::key_edit(self : EditorState, code : Int, mods : Int, now : Doubl
           }
         }
       } else if code == key_enter {
-        if shift || !self.enter_sends {
+        // (⌘Enter, Ctrl+Enter elsewhere, where Enter is a new line and that sends: `command_sends`)
+        let command = (mods & (if h_keys() == 0 { mod_cmd } else { mod_ctrl })) != 0
+        if shift || !(self.enter_sends || (self.command_sends && command)) {
           if self.marked.length() > 0 {
             self.put_text(2, "", 0, 0, now)
           }
           self.insert("\n")
+        } else if self.marked.length() > 0 {
+          // (a composition under way: what it chose put in, nothing sent; a host's input method keeps its Enter, this is
+          // where one gave it on)
+          self.put_text(2, "", 0, 0, now)
         } else {
           // (the words stay: what is done with them, a message sent and its field emptied, is the app's; empty too,
           // whether there is anything to send is the app's: a picture waiting with no words, the web's form submitted)
@@ -606,6 +687,21 @@ fn EditorState::key_edit(self : EditorState, code : Int, mods : Int, now : Doubl
   }
   // kept to undo (editor_undo.mbt): a cut a step of its own, a deletion or a new line typing
   self.edited(t, anchor, caret, code != key_cut)
+}
+
+///|
+/// The words it gave up by the key just taken (Enter), told what its last build said giving them up does
+/// (Ctx::editor's `on_submit`), at once, outside any build, and taken from it: none said, left for the build to read.
+fn EditorState::submit_told(self : EditorState) -> Unit {
+  match (self.submitted, self.on_submit) {
+    (Some(words), Some(f)) => {
+      self.submitted = None
+      @signals.start_batch()
+      @signals.untracked(fn() { f(words) })
+      @signals.end_batch()
+    }
+    _ => ()
+  }
 }
 
 ///|
@@ -623,6 +719,7 @@ fn EditorState::text_input(
   self.put_text(kind, s, a, b, now)
   self.edited(text, anchor, caret, kind != text_paste)
   self.words_told()
+  self.typed_told(text, anchor, caret, if kind == text_paste { Pasted } else { Typed })
 }
 
 ///|
@@ -690,6 +787,9 @@ fn EditorState::text_set(self : EditorState, s : String, a : Int, b : Int) -> Un
   let grown = n - self.display().length()
   if self.limit > 0 && grown >= self.limit && sa == sb && sa >= grown {
     self.pasted = Some(sub(s, sa - grown, sa))
+    // (the host's words now hold it, the field's do not: unless told the field's again, each word typed after it
+    // comes with it, the whole of it a paste again and nothing typed taken)
+    self.retell = true
     return
   }
   if ca >= 0 && cb > ca && cb <= n && sa == sb && sa >= ca && sa <= cb {
@@ -720,10 +820,16 @@ pub fn enter_sends_by(max_lines : Int, ime_action : Int) -> Bool {
 /// A field of words. `enter_sends`: whether Enter gives the words up (`submitted`) rather than starting a new line;
 /// unsaid, the way the words come in decides (enter_sends_by): a keyboard's Enter gives them up (Shift+Enter a new
 /// line); a finger's keyboard's Enter is a new line where the field holds more than one and the keyboard has no key of
-/// its own for it (`ime_action`), else that key, giving them up. `placeholder`: what it shows while nothing is typed in
-/// it, on one line; `shorter`, other ways to say that where the field has less room, each shorter than the one before
+/// its own for it (`ime_action`), else that key, giving them up. `command_sends`: where Enter is a new line, ⌘Enter
+/// (Ctrl+Enter elsewhere) gives them up. `placeholder`: what it shows while nothing is typed in
+/// it, without soft wrapping; `min_lines`, the least lines it holds even while empty, up to `max_lines`; `shorter`, other ways to
+/// say the placeholder where the field has less room, each shorter than the one before
 /// (搜索全部内容, then 搜索): the longest of them all that fits is shown whole, the shortest cut with an ellipsis only
-/// where none does, as Ctx::text's words (Node::hint_shown).
+/// where none does, as Ctx::text's words (Node::hint_shown). `on_submit`: what giving its words up does, given them, as
+/// Enter is taken, outside any build (the result's `submitted` then none); `on_change`: what the person's edit of its
+/// words does (a key, the input method's text, a paste, an undo), given them, as it is made, outside any build (not
+/// what the app puts in it: Field::set); `on_edit`: what the person's edit of its words or its selection does (the
+/// pointer's too: its caret put, words picked), given the edit (FieldEdit), likewise.
 pub fn Ctx::editor(
   self : Ctx,
   key : String,
@@ -731,6 +837,7 @@ pub fn Ctx::editor(
   shorter? : Array[String] = no_words,
   w? : Size = Fill(1.0),
   font_size? : Double = 15.0,
+  min_lines? : Int = 1,
   max_lines? : Int = 5,
   plain? : Bool = false,
   line? : Double = 0.0,
@@ -739,6 +846,7 @@ pub fn Ctx::editor(
   placeholder_color? : Int64 = 0x8E8E93FFL,
   caret_color? : Int64 = 0x0A84FFFFL,
   enter_sends? : Bool,
+  command_sends? : Bool = false,
   leaves? : Array[Int] = [],
   ime_action? : Int = 0,
   paste_limit? : Int = 0,
@@ -747,16 +855,44 @@ pub fn Ctx::editor(
   look? : (String) -> (String, Array[(Int, Int, Int64)]),
   field? : Field,
   files? : Bool = false,
+  on_submit? : (String) -> Unit,
+  on_change? : (String) -> Unit,
+  on_edit? : (FieldEdit) -> Unit,
 ) -> EditorResult {
   let id = self.id(key)
-  // (what the hand does to it, read so: the keys and words typed, a press on it, the pointer while a press on it drags
+  // (what the hand does to it, read so: the keys and words typed (into a field of an old view: hand_typed), a press on it, the pointer while a press on it drags
   // its caret, what is picked in it or a handle of it: hand.mbt; not a press elsewhere)
   hand_presses_read()
+  hand.typed.get() |> ignore
   hand.down.get() |> ignore
   if self.down && (self.active == id || self.word_drag == id || self.handle_drag == id) {
     hand.pointer.get() |> ignore
   }
+  // (one Field, one editor: two editors over one Field would lay each other's lines and scroll over each other (by id:
+  // the same key in two scopes, a list's rows, is two editors); nor a Field a field of the window's tree holds still
+  // (ui's field). Given so, a fault (old_fault: the old view's boundary shows it), this one an editor of its own)
+  let taken = match field {
+    Some(f) if f.st.built_frame == self.build_no && f.st.built_id != id => {
+      old_fault(
+        "Ctx::editor: one Field given to two editors in one build (\{f.st.built_key} id \{f.st.built_id} and \{key} id \{id}): a Field is one editor's",
+      )
+      true
+    }
+    Some(f) if f.st.tree_node is Some(n) && tree_fields.contains(n) => {
+      old_fault("Ctx::editor: a Field given to \{key} that a field of the window's tree holds: a Field is one editor's")
+      true
+    }
+    _ => false
+  }
+  let given = field
+  let field = if taken { None } else { field }
   let st = match (self.editors.get(id), field) {
+    // given a Field another holds: one of its own, never the Field's
+    (Some(s), None) if taken && given is Some(f) && physical_equal(f.st, s) => {
+      let s = EditorState::fresh("", self.clock)
+      self.editors[id] = s
+      s
+    }
     // what the app keeps (Field): this editor shows it from now on
     (Some(s), Some(f)) if physical_equal(s, f.st) => s
     (had, Some(f)) => {
@@ -778,6 +914,10 @@ pub fn Ctx::editor(
   st.written.get() |> ignore
   st.limit = paste_limit
   st.enter_sends = enter_sends.unwrap_or(enter_sends_by(max_lines, ime_action))
+  st.command_sends = command_sends
+  st.on_submit = on_submit
+  st.on_change = on_change
+  st.on_edit = on_edit
   st.leaves = leaves
   st.ime_action = ime_action
   st.secret = secret
@@ -785,24 +925,12 @@ pub fn Ctx::editor(
   st.look = look
   // (what the look makes of the words worked out again, once, for this build: it may say other colours now)
   st.looked = None
-  // one Field, one editor: two editors over one Field would lay each other's lines and scroll over each other
-  // (by id: the same key in two scopes, a list's rows, is two editors)
-  if field is Some(_) && st.built_frame == self.build_no && st.built_id != id {
-    abort(
-      "Ctx::editor: one Field given to two editors in one build (\{st.built_key} id \{st.built_id} and \{key} id \{id}): a Field is one editor's",
-    )
-  }
-  // (nor a Field a field of the window's tree holds still: ui's field)
-  match st.tree_node {
-    Some(n) if field is Some(_) && tree_fields.contains(n) =>
-      abort("Ctx::editor: a Field given to \{key} that a field of the window's tree holds: a Field is one editor's")
-    _ => ()
-  }
   // (the focus asked for it before anything held it (Ctx::focus_field): given now this editor holds it, where the old
-  // view it is being built in takes input (that one: its node not made yet, nothing found of it by its id))
+  // view it is being built in takes input (that one: its node not made yet, nothing found of it by its id); under a
+  // modal layer of the tree's over that old view, kept for the layer to give back, as Ctx::focus_editor's)
   if field is Some(_) && st.focus_asked {
     st.focus_asked = false
-    if island_allows(self.island_said()) {
+    if !view_focus_kept_for(self, id) && island_allows(self.island_said()) {
       self.focus_moved(id)
     }
   }
@@ -894,7 +1022,7 @@ pub fn Ctx::editor(
   n.pad_r = z.pad_x
   n.pad_t = z.pad_y
   n.pad_b = z.pad_y
-  n.min_h = z.min_h
+  n.min_h = z.least_h(min_lines, max_lines)
   n.max_h = z.max_h
   if !plain {
     n.bg = 0xFFFFFFFFL
@@ -929,7 +1057,7 @@ pub let caret_blink_ms : Double = 530.0
 pub let caret_blinks_for_ms : Double = 30000.0
 
 ///|
-/// Android's: Compose's text field's, shown the first 500 ms of each second (TextFieldCursor.kt cursorAnimationSpec).
+/// Android's: Compose's text field's, shown the first 500 ms of each second.
 pub let caret_blink_android_ms : Double = 500.0
 
 ///|
@@ -953,6 +1081,13 @@ priv struct EditorSizing {
   pad_y : Double
   min_h : Double
   max_h : Double
+}
+
+///|
+/// How tall an editor so sized is at least while it holds `min_lines` lines (up to `max_lines`) even when empty.
+fn EditorSizing::least_h(self : EditorSizing, min_lines : Int, max_lines : Int) -> Double {
+  let least = if min_lines < 1 || max_lines < 1 { 1 } else if min_lines > max_lines { max_lines } else { min_lines }
+  self.min_h + (least - 1).to_double() * (self.min_h - 2.0 * self.pad_y)
 }
 
 ///|
@@ -1006,9 +1141,25 @@ pub fn Field::composed_said(self : Field) -> String {
 }
 
 ///|
+/// Whether the input method currently holds nonempty marked text. Followed independently of displayed words: a
+/// commit can leave those words unchanged while ending composition. Told together with the field's text.
+pub fn Field::composing(self : Field) -> Bool {
+  let st = self.st
+  match st.said_composing {
+    Some(s) => s.get()
+    None => {
+      let s = @signals.signal(st.marked != "", same=fn(a, b) { a == b })
+      st.said_composing = Some(s)
+      s.get()
+    }
+  }
+}
+
+///|
 /// What a plain field (Ctx::editor's `plain`, no look of its own, nothing secret) shows and how its words are set, as
 /// it is laid out by (FieldLaid::size): its words with what is composed in them, their size and line (as said to
-/// Ctx::editor, before the system's size of words; none said, the theme's share of its size), how many lines at most,
+/// Ctx::editor, before the system's size of words; none said, the theme's share of its size), how many lines at least
+/// and at most,
 /// `trim`.
 pub(all) struct FieldLaid {
   words : String
@@ -1016,6 +1167,7 @@ pub(all) struct FieldLaid {
   line : Double
   /// its line, where `line` is 0, of its size: the theme's its tree is drawn in (tree_theme)
   text_line : Double
+  min_lines : Int
   max_lines : Int
   trim : Bool
 } derive(Eq, Debug)
@@ -1023,10 +1175,17 @@ pub(all) struct FieldLaid {
 ///|
 /// What `field` shows, followed (Field::composed_said), as a plain Ctx::editor of it set so lays it out: for a node of
 /// the window's tree holding the old view it is built in, measured by it (View::measured, FieldLaid::size).
-pub fn Field::laid(self : Field, font_size? : Double = 15.0, line? : Double = 0.0, max_lines? : Int = 5, trim? : Bool = false) -> FieldLaid {
+pub fn Field::laid(
+  self : Field,
+  font_size? : Double = 15.0,
+  line? : Double = 0.0,
+  min_lines? : Int = 1,
+  max_lines? : Int = 5,
+  trim? : Bool = false,
+) -> FieldLaid {
   // (its line, where none is said, the theme's of the tree that holds it, followed: as its editor's is, built in it)
   let text_line = if line > 0.0 { 0.0 } else { tree_theme().text_line }
-  { words: self.composed_said(), font_size, line, text_line, max_lines, trim }
+  { words: self.composed_said(), font_size, line, text_line, min_lines, max_lines, trim }
 }
 
 ///|
@@ -1045,7 +1204,7 @@ pub fn FieldLaid::size(self : FieldLaid, w : Double?) -> (Double, Double) {
       Some(w) => w
       None => tw
     },
-    dclamp(th, z.min_h, z.max_h),
+    dclamp(th, z.least_h(self.min_lines, self.max_lines), z.max_h),
   )
 }
 
@@ -1141,15 +1300,183 @@ fn EditorState::caret_box(
 }
 
 ///|
+/// The keyboard's trackpad (iOS's floating cursor) moving a field's caret, as iOS's own fields move theirs (Flutter's
+/// copy of them: EditableTextState.updateFloatingCursor, RenderEditable.calculateBoundedFloatingCursorOffset,
+/// _CaretPainter): a caret of its own follows the finger's way, not stopping between letters, a little bigger than the
+/// caret and see-through; the field's caret put where it would land, drawn grey there; let go, the one it draws slides
+/// there (float_caret_back_ms) and is the caret again.
+struct FloatCaret {
+  /// where in the window the host said the finger began, and where the caret stood then in the field's words (from
+  /// their top left: where it stands, its line's middle)
+  fx : Double
+  fy : Double
+  cx : Double
+  cy : Double
+  /// how far the finger's way is taken off from where it began, set as it comes back from past an edge (Flutter's
+  /// _relativeOrigin): back from an edge, the caret turns at once, none of the way it went past it to undo first
+  mut rx : Double
+  mut ry : Double
+  /// where the finger's way had it at its last move, and the edges it went past since (-1 its start's or top, 1 its
+  /// end's or foot, 0 none)
+  mut px : Double
+  mut py : Double
+  mut past_x : Int
+  mut past_y : Int
+  /// where the caret it draws stands in the field's words (its x, its line's middle), kept in them
+  mut x : Double
+  mut y : Double
+  /// when it was let go (the frames' clock), -1 while it is held
+  mut let_go : Double
+  mover : Mover
+}
+
+///|
+/// How long the caret the keyboard's trackpad drew slides back to the caret once let go (Flutter's
+/// _floatingCursorResetTime, as iOS's).
+let float_caret_back_ms : Double = 125.0
+
+///|
+/// How much bigger than the caret the keyboard's trackpad's is, across and up and down (Flutter's
+/// _kFloatingCursorSizeIncrease, each side's twice), and how far from it the caret where it lands is drawn at all
+/// (_kShortestDistanceSquaredWithFloatingAndRegularCursors: under it, the two are seen as one).
+let float_caret_grow_w : Double = 1.0
+
+///|
+let float_caret_grow_h : Double = 2.0
+
+///|
+let float_caret_apart : Double = 15.0
+
+///|
+/// The keyboard's trackpad beginning at (`x`, `y`) in the window, the caret standing at (`cx`, `cy`) of the words.
+fn FloatCaret::new(x : Double, y : Double, cx : Double, cy : Double) -> FloatCaret {
+  {
+    fx: x,
+    fy: y,
+    cx,
+    cy,
+    rx: 0.0,
+    ry: 0.0,
+    px: cx,
+    py: cy,
+    past_x: 0,
+    past_y: 0,
+    x: cx,
+    y: cy,
+    let_go: -1.0,
+    mover: Mover::new(),
+  }
+}
+
+///|
+/// The finger at (`x`, `y`) in the window: the caret it draws as far from where the caret stood as that is from where
+/// the finger began, kept in words laid out as `tl` (as far as their widest line and a little more each way: Flutter's
+/// floatingCursorAddedMargin), turning at once back from an edge it went past.
+fn FloatCaret::follow(self : FloatCaret, tl : TextLayout, x : Double, y : Double) -> Unit {
+  let raw_x = self.cx + x - self.fx
+  let raw_y = self.cy + y - self.fy
+  let half = tl.line_h / 2.0
+  let (l, r) = (-4.0, tl.w + 4.0)
+  let (top, foot) = (half - 4.0, dmax(tl.h, tl.line_h) - half + 5.0)
+  let dx = raw_x - self.px
+  let dy = raw_y - self.py
+  if self.past_x == -1 && dx > 0.0 {
+    self.rx = raw_x - l
+    self.past_x = 0
+  } else if self.past_x == 1 && dx < 0.0 {
+    self.rx = raw_x - r
+    self.past_x = 0
+  }
+  if self.past_y == -1 && dy > 0.0 {
+    self.ry = raw_y - top
+    self.past_y = 0
+  } else if self.past_y == 1 && dy < 0.0 {
+    self.ry = raw_y - foot
+    self.past_y = 0
+  }
+  let at_x = raw_x - self.rx
+  let at_y = raw_y - self.ry
+  self.x = dmax(l, dmin(at_x, r))
+  self.y = dmax(top, dmin(at_y, foot))
+  if at_x < l && dx < 0.0 {
+    self.past_x = -1
+  } else if at_x > r && dx > 0.0 {
+    self.past_x = 1
+  }
+  if at_y < top && dy < 0.0 {
+    self.past_y = -1
+  } else if at_y > foot && dy > 0.0 {
+    self.past_y = 1
+  }
+  self.px = raw_x
+  self.py = raw_y
+}
+
+///|
+/// Let go, it is at rest once it has slid back to the caret; held, it is not said to move (it goes with the finger).
+impl Moving for FloatCaret with rest_at(self, now, frame) {
+  ignore(now)
+  ignore(frame)
+  if self.let_go < 0.0 {
+    -1.0
+  } else {
+    self.let_go + float_caret_back_ms
+  }
+}
+
+///|
+/// The caret of field `st` placed as `fb`, laid out as `tl`, while the keyboard's trackpad moves it (`f`), at `alpha`;
+/// whether `f` is still drawn (false: it has slid back, the caret drawn as ever from now).
+fn Ctx::paint_float_caret(
+  self : Ctx,
+  st : EditorState,
+  f : FloatCaret,
+  tl : TextLayout,
+  fb : FieldBox,
+  alpha : Double,
+) -> Bool {
+  // (sliding back: the clock followed till it lands, painted again each frame of its way)
+  let k = if f.let_go < 0.0 {
+    0.0
+  } else {
+    let now = self.now_before(f.let_go + float_caret_back_ms)
+    Ease::Out.at(dmin(1.0, dmax(0.0, (now - f.let_go) / float_caret_back_ms)))
+  }
+  if k >= 1.0 {
+    return false
+  }
+  // where it lands: the caret where the field has it
+  let (gx, gy, gw, gh) = st.caret_box(tl, fb, st.caret)
+  let lx = gx + gw / 2.0
+  let ly = gy + gh / 2.0
+  let fx = st.ox + f.x
+  let fy = st.oy + f.y
+  if f.let_go < 0.0 {
+    let (ax, ay) = (fx - lx, fy - ly)
+    if ax * ax + ay * ay >= float_caret_apart * float_caret_apart {
+      let grey = if (st.ph_color & 0xFFL) != 0L { st.ph_color } else { (st.color & 0xFFFFFF00L) | 0x66L }
+      self.emit_rect(gx, gy, gw, gh, gw / 2.0, grey, 0.0, 0L, alpha)
+    }
+  }
+  // (sliding back: to the caret's place, size and ink)
+  let x = fx + (lx - fx) * k
+  let y = fy + (ly - fy) * k
+  let w = gw + float_caret_grow_w * (1.0 - k)
+  let h = gh + float_caret_grow_h * (1.0 - k)
+  self.emit_rect(x - w / 2.0, y - h / 2.0, w, h, w / 2.0, st.caret_color, 0.0, 0L, alpha * (0.75 + 0.25 * k))
+  true
+}
+
+///|
 /// What the field `n` shows while nothing is typed in it, laid out on its line as its words are (FieldBox's line_h, the
-/// system's size of words applied): its placeholder on one line, as words that do not wrap, said the longest way that fits the room its words have (Ctx::editor `shorter`), the
+/// system's size of words applied): its placeholder without soft wrapping, said the longest way that fits the room its words have (Ctx::editor `shorter`), the
 /// shortest cut with an ellipsis where none does; never cut by the field's edge.
 fn Node::hint_shown(self : Node) -> TextLayout {
   self.field_box().hint_shown()
 }
 
 ///|
-/// How the field `n` lays its placeholder out on one line, on its line (FieldBox::hint_lay).
+/// How the field `n` lays its placeholder out without soft wrapping (FieldBox::hint_lay).
 fn Node::hint_lay(self : Node) -> (String) -> TextLayout {
   self.field_box().hint_lay()
 }
@@ -1162,7 +1489,7 @@ fn FieldBox::hint_shown(self : FieldBox) -> TextLayout {
 }
 
 ///|
-/// How the field placed as `b` lays its placeholder out on one line: on the line its words are laid out on (line_h, as
+/// How the field placed as `b` lays its placeholder out without soft wrapping: on the line its words are laid out on (line_h, as
 /// the system's size of words makes it), so that it stands where they would, not on the line as it was asked for.
 fn FieldBox::hint_lay(self : FieldBox) -> (String) -> TextLayout {
   fn(s) { layout_text(s, self.font_size, 400, 1.0e9, false, line=self.line_h, trim=self.trim) }
@@ -1216,10 +1543,11 @@ fn Node::field_box(self : Node) -> FieldBox {
 }
 
 ///|
-/// Its words' origin (st.ox, st.oy) where field `st` is placed as `b`, scrolled as it is.
+/// Its words' origin (st.ox, st.oy) and the room they show in where field `st` is placed as `b`, scrolled as it is.
 fn EditorState::placed_in(self : EditorState, b : FieldBox) -> Unit {
   self.ox = b.x + b.pad_l - self.scroll_x
   self.oy = b.y + b.pad_t - self.scroll
+  self.room = (b.x, b.y, b.w, b.h)
 }
 
 ///|
@@ -1315,8 +1643,18 @@ fn Ctx::paint_field(
       )
     }
   }
-  // caret
-  if focused {
+  // caret (the keyboard's trackpad's while it moves it)
+  let floating = match st.floating {
+    Some(f) if focused && ml == 0 =>
+      if self.paint_float_caret(st, f, tl, fb, alpha) {
+        true
+      } else {
+        st.floating = None
+        false
+      }
+    _ => false
+  }
+  if focused && !floating {
     let since = self.clock - st.blink0
     let (phase, next) = periods_at(self.clock, st.blink0, caret_blink())
     // blinking till caret_blinks_for_ms, then shown at rest
@@ -1327,6 +1665,10 @@ fn Ctx::paint_field(
     let coff = if ml > 0 { st.caret + st.msel_a } else { st.caret }
     if resting || phase % 2 == 0 {
       let (x, y, w, h) = st.caret_box(tl, fb, coff)
+      // on whole pixels across: at 150% a caret on a half pixel is smeared over one column more, and where it starts at
+      // the field's clip, that column's centre is on the clip's edge, kept on some rows and cut on others
+      let x = on_pixels(x, self.scale)
+      let w = on_pixels(w, self.scale)
       self.emit_rect(x, y, w, h, w / 2.0, st.caret_color, 0.0, 0L, alpha)
     }
   }
@@ -1422,10 +1764,11 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
     }
   }
   if catching {
-    let sig = "catch \{focus}"
+    let (x, y, h) = self.dev.catchers.get(focus).unwrap().place.unwrap_or((0.0, self.height, 1.0))
+    let sig = "catch \{focus} \{x} \{y} \{h}"
     if sig != self.ime_sig {
       self.ime_sig = sig
-      h_set_ime(true, 0.0, self.height, 1.0, 1.0, "", 0, 0)
+      h_set_ime(true, x, y, 1.0, h, "", 0, 0)
     }
     return
   }
@@ -1434,9 +1777,11 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
       match st.tl {
         Some(tl) => {
           // its input method's action said before the field takes it (the host starts the input method anew)
-          if st.ime_action != self.ime_action_told {
-            self.ime_action_told = st.ime_action
-            h_ime_action(st.ime_action)
+          // (a secret's whatever its own: the keyboard told to learn and suggest nothing of what is typed in it)
+          let action = if st.secret { @hostapi.ime_action_secret } else { st.ime_action }
+          if action != self.ime_action_told {
+            self.ime_action_told = action
+            h_ime_action(action)
           }
           let coff = st.caret + st.marked.length()
           let (cx, cl) = st.place_of(tl, coff)
@@ -1446,8 +1791,9 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
           let (x, y, w, h) = st.drawn_box(x, y, 2.0, tl.line_h)
           let (a, b) = st.sel()
           let sig = "\{x.to_int()},\{y.to_int()},\{w},\{h},\{a},\{b},\{st.text.length()},\{stable_hash(st.text)}"
-          if sig != self.ime_sig {
+          if sig != self.ime_sig || st.retell {
             self.ime_sig = sig
+            st.retell = false
             h_set_ime(true, x, y, w, h, st.text, a, b)
           }
         }
@@ -1493,6 +1839,9 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     ox: 0.0,
     oy: 0.0,
     submitted: None,
+    on_submit: None,
+    on_change: None,
+    on_edit: None,
     pref_x: -1.0,
     upstream: -1,
     floating: None,
@@ -1500,8 +1849,10 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     scroll_x: 0.0,
     followed: (-1, -1, -1),
     pasted: None,
+    retell: false,
     limit: 0,
     enter_sends: true,
+    command_sends: false,
     leaves: [],
     ime_action: 0,
     color: 0L,
@@ -1523,8 +1874,10 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     focus_asked: false,
     placed_x: 0.0,
     placed_y: 0.0,
+    room: (0.0, 0.0, 0.0, 0.0),
     said_words: None,
     said_composed: None,
+    said_composing: None,
     written: @signals.signal(0),
   }
 }
@@ -1551,6 +1904,10 @@ fn EditorState::words_told(self : EditorState) -> Unit {
   }
   match self.said_composed {
     Some(s) => s.set(self.display())
+    None => ()
+  }
+  match self.said_composing {
+    Some(s) => s.set(self.marked != "")
     None => ()
   }
   @signals.end_batch()
@@ -1668,7 +2025,7 @@ pub fn Field::set(self : Field, text : String, caret? : Int) -> Unit {
   st.blink_again = true
   // (told as the whole of it is so: its words, its caret, nothing composed)
   st.words_told()
-  st.written.set(@signals.untracked(fn() { st.written.get() }) + 1)
+  st.written.set(st.written.untracked() + 1)
   field_written()
 }
 
@@ -1695,7 +2052,7 @@ pub fn Field::pick(self : Field, from : Int, to : Int) -> Unit {
   st.blink_again = true
   // (what is composed shown at the caret where it is now: told so, Field::composed_said)
   st.words_told()
-  st.written.set(@signals.untracked(fn() { st.written.get() }) + 1)
+  st.written.set(st.written.untracked() + 1)
   field_written()
 }
 
@@ -1806,6 +2163,11 @@ pub fn Ctx::blur(self : Ctx) -> Unit {
 ///|
 /// How soon a second tap on a field picks the word there (ViewConfiguration's double tap timeout).
 pub let double_tap_ms : Double = 300.0
+
+///|
+/// How far from the first, in points, a finger's second tap may be let go and still be the second of two (the window's
+/// tree's: Tree::twice_within; a picture's viewer had it so).
+pub let double_tap_slop : Double = 40.0
 
 ///|
 /// The word at (`x`, `y`) in the field picked (a long press's, a double tap's): its two handles, the floating menu
@@ -2058,7 +2420,8 @@ fn Ctx::sync_text_menu(self : Ctx) -> Unit {
         }
         None => None
       }
-    _ => None
+    // (words a finger picked with the pointer, let go of: finger_select.mbt)
+    _ => finger_menu()
   }
   let sig = match want {
     Some((x, y, w, h, can)) => "\{x.to_int()},\{y.to_int()},\{w.to_int()},\{h.to_int()},\{can}"

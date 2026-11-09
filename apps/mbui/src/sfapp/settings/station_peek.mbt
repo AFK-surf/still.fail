@@ -1,4 +1,4 @@
-// A station's card, from a chat's agent (ember apps/android settings/screens/Stations.kt openStationPeek): whether it
+// A station's card, from a chat's agent: whether it
 // is up and what its agents do, its machine and network at a glance, and where to go on: its files where it lends some,
 // its page.
 
@@ -112,7 +112,7 @@ pub fn station_peek_part(c : @ui.Ctx, address : String) -> Unit {
 }
 
 ///|
-/// Its head as an agent card's (AgentCard.css.ts head): its mark's square and its name, 10 apart, in their middle.
+/// Its head as an agent card's: its mark's square and its name, 10 apart, in their middle.
 // kept across runs: a value (no field of it changes)
 let peek_part_head : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
 
@@ -143,7 +143,7 @@ let peek_part_dot : @ui.Style = @ui.css("w=S1_5 h=S1_5 radius=Full")
 let peek_part_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, w=Full, max_lines=3)
 
 ///|
-/// The hover card's: its words 10 in from its padding, 8 apart (Hover.css.ts card), its rows at its padding.
+/// The hover card's: its words 10 in from its padding, 8 apart, its rows at its padding.
 // kept across runs: a value (no field of it changes)
 let peek_card : @ui.Style = @ui.css("w=Full")
 
@@ -152,7 +152,7 @@ let peek_card : @ui.Style = @ui.css("w=Full")
 let peek_card_words : @ui.Style = @ui.css("w=Full p=S2_5 gap=S2")
 
 ///|
-/// Its dot, its mark and its name in a line, 8 apart (StationCards.css.ts peekHead).
+/// Its dot, its mark and its name in a line, 8 apart.
 // kept across runs: a value (no field of it changes)
 let peek_card_head : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
@@ -217,7 +217,7 @@ fn peek_station(core : Core, address : String) -> Json? {
     Some(i) => address.view(end_offset=i).to_owned()
     None => address
   }
-  match (core.topic)("stations", { "scope": str(ws) }).value {
+  match (core.topic)("stations", { "scope": str(ws) }).get().value {
     Some(Array(a)) =>
       for x in a {
         if text(Some(x), "station") == address {
@@ -254,9 +254,9 @@ fn station_peek(c : @ui.Ctx, core : Core, address : String, close : () -> Unit) 
 }
 
 ///|
-/// Where to go on from it: its files (docs/drive.md), where it has a drive, a way there from where it is named; its page.
+/// Where to go on from it: its files, where it has a drive, a way there from where it is named; its page.
 fn peek_ways(c : @ui.Ctx, core : Core, address : String, s : Json?, close : () -> Unit) -> Unit {
-  let screens = (core.topic)("screens", { "station": str(address) }).value
+  let screens = (core.topic)("screens", { "station": str(address) }).get().value
   let screen_items : Array[@sf.MenuItem?] = []
   for screen in items(screens, "screens") {
     let sc = Some(screen)
@@ -292,10 +292,10 @@ fn peek_ways(c : @ui.Ctx, core : Core, address : String, s : Json?, close : () -
     }
     _ => ()
   }
-  if @sf.menu_item(c, tr("android-chat.station.details"), key="peek-station/" + address, end="panel-open") {
+  @sf.menu_item(c, tr("android-chat.station.details"), key="peek-station/" + address, end="panel-open", on_press=fn() {
     close()
     (core.push)(Station(address))
-  }
+  })
 
 }
 
@@ -316,7 +316,13 @@ let peek_meters_room : @ui.Style = @ui.css("w=Full py=S1")
 ///|
 /// 20 high, 8 apart (MeterChips).
 // kept across runs: a value (no field of it changes)
-let peek_meters : @ui.Style = @ui.css("row h=S5 gap=S2 align=ACenter")
+let peek_meters : @ui.Style = @ui.css("row w=Full h=S5 gap=S2 align=ACenter")
+
+///|
+/// It said what this core cannot read: no reading is on its way, so nothing shows as if one were.
+fn unreadable(s : Json?) -> Bool {
+  items(s, "problems").iter().any(fn(p) { text(Some(p), "key") == "incompatible" })
+}
 
 ///|
 /// A machine's CPU, memory and disk made up, for what shows while they are read (their chips in their bones).
@@ -338,7 +344,7 @@ let peek_net : @ui.Style = @ui.css("w=Full pt=S1_5")
 
 ///|
 /// The machine in brief: what is left of it in the allowance's boxes (in their bones until it is read), its network
-/// under them (Stations.kt StationFigures, `peek`).
+/// under them (`peek`).
 fn peek_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
   let host = field(s, "host")
   let net = station_net(core, s)
@@ -347,13 +353,10 @@ fn peek_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
       match host {
         Some(Object(_)) =>
           c.box(style=peek_meters, fn() {
-            for m in items(host, "meters") {
-              let m = Some(m)
-              @sf.meter_chip(c, m, key="station-peek/" + text(s, "station"))
-            }
+            @sf.meter_line(c, items(host, "meters"), key="station-peek/" + text(s, "station"))
           })
           |> ignore
-        _ => sample_meters(c, "station-peek/" + text(s, "station"))
+        _ => if !unreadable(s) { sample_meters(c, "station-peek/" + text(s, "station")) }
       }
     })
     |> ignore
@@ -375,7 +378,7 @@ fn peek_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
 }
 
 ///|
-/// How this device reaches a station of the workspace's `stations` (StationLink.tsx useStationLink): `direct`,
+/// How this device reaches a station of the workspace's `stations`: `direct`,
 /// `relay`, `waiting` (coming back, or a way still being chosen), `offline`, or "" while there is no reading of it.
 /// One answer wherever a station's dot says it: its tile in a chat's bar, its card.
 pub fn station_via(s : Json?) -> String {

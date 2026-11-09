@@ -140,6 +140,8 @@ void mb_host_set_window_key(int32_t (*f)(int32_t, int32_t)) { window_key = f; }
 
 // the device beyond the window (device.mbt): a key catcher's keys, the clipboard, awake, haptics
 #include "apple_device.h"
+// input to the screen measured (a drive's `latency`, scripts/latency.sh)
+#include "mac_latency.h"
 
 static int32_t drop_pick(NSArray<NSURL *> *urls);
 
@@ -173,6 +175,9 @@ static double frame_late, last_tick = -1;
 // The frame the app waits for (@hostapi.wake_after: a resident cycle's next step), by its time (ms, mb_now_ms's
 // clock), or -1; the time of the frame being built (what wake_after counts from); the display's frame (ms).
 static double wake_for = -1, building_for = -1, link_period = 1000.0 / 60.0;
+// How many frames a second what moves on by the clock needs, as the last frame said it (mb_host_frames_paced; 0: the
+// display's every frame, as anything that asks for a frame has), and what the display link was last told of it.
+static double paced_hz, link_hz = -1;
 
 @implementation MBView
 
@@ -284,6 +289,7 @@ static double wake_for = -1, building_for = -1, link_period = 1000.0 / 60.0;
 
 - (void)requestFrame {
   self.wantFrame = YES;
+  paced_hz = 0;
   if (settle) {
     app_wants = YES;
     pump_soon();
@@ -316,6 +322,7 @@ static double record_t0 = -1;
   mb_text_set_scale(scale * window_content_zoom);
   mb_render_set_size(s.width / window_content_zoom, s.height / window_content_zoom, scale * window_content_zoom);
   self.wantFrame = NO;
+  lat_frame_begins();
   if (record_dir) {
     if (record_t0 < 0) {
       record_t0 = mb_now_ms();
@@ -431,6 +438,13 @@ static void pump(void) {
 - (void)tick:(CADisplayLink *)l {
   if (CACurrentMediaTime() - self.drawnWithWindowAt < l.targetTimestamp - l.timestamp) return;
   link_period = (l.targetTimestamp - l.timestamp) * 1000.0;
+  // the rate the frames want told the display link where it changed: the display's own, or that of what moves on by
+  // the clock alone (paced_hz), so a ProMotion screen refreshes as slowly (ios_app.m's link_rate)
+  if (link_hz != paced_hz) {
+    link_hz = paced_hz;
+    l.preferredFrameRateRange =
+        paced_hz > 0 ? CAFrameRateRangeMake(paced_hz, paced_hz, paced_hz) : CAFrameRateRangeDefault;
+  }
   // a frame waited for (wake_after): the first of the display's frames at or past its time (not when a timer happens
   // to fire and the link wakes after it, a step a frame or two late by as much as they fall, so a resident cycle's
   // steps unevenly apart); the ticks before it draw nothing (ios_app.m's the same)
@@ -612,6 +626,10 @@ static NSCursor *cursor_of(int kind) {
     if (editing) {
       if (self.imeActive) [self interpretKeyEvents:@[ e ]];
       else mb_cb.key(editing, mods);
+    } else if (e.keyCode == 36 || e.keyCode == 76) {
+      // ⌘Return: the Enter key held with ⌘ (a message sent where Enter is a new line); a composition under way keeps it
+      if (self.markedLen > 0) [self interpretKeyEvents:@[ e ]];
+      else mb_cb.key(7, mods);
     } else if ([c isEqualToString:@"q"]) [NSApp terminate:nil];
     else if ([c isEqualToString:@"a"]) mb_cb.key(12, mods);
     else if ([c isEqualToString:@"c"]) mb_cb.key(13, mods);
@@ -973,17 +991,22 @@ static bool full_screen_on;
 // AppKit itself, each time it lays their title bar out (the window resized, its appearance set, in and out of full
 // screen): the window's frame (NSThemeFrame) asks itself how high the bar is (_titlebarHeight), how far in from the
 // left its buttons start (_minXTitlebarWidgetInset) and whether they are centred in it (_shouldCenterTrafficLights),
-// and the window's is one of ours (MBWindow) that says 44, 16 and yes, as Chrome's has its buttons in its tab strip.
-// Moved there after AppKit had put them in its own place, they were in that place for a frame each time: shaking as
-// the window was resized, wrong as it came out of full screen. Not while the window is full screen or on its way
-// there (full_screen_on: the system's own bar there): AppKit's own answers. Where AppKit's frame has none of these, the
-// buttons stay in AppKit's own place.
+// and the window's is one of ours (MBWindow) that says 44 (taller where the app has them lower: buttons_down), 16 and
+// yes, as Chrome's has its buttons in its tab strip. Moved there after AppKit had put them in its own place, they were
+// in that place for a frame each time: shaking as the window was resized, wrong as it came out of full screen. Not
+// while the window is full screen or on its way there (full_screen_on: the system's own bar there): AppKit's own
+// answers. Where AppKit's frame has none of these, the buttons stay in AppKit's own place.
 static Class frame_base;
 
 static bool buttons_inset(void) { return setup_inset && !full_screen_on; }
 
+// How much lower than centred on the first 44 the app has its buttons (mb_host_window_buttons_down): its top row that
+// far under the window's top. The bar AppKit centres them in twice that taller.
+static double buttons_down;
+
 static double frame_bar_height(id self, SEL s) {
-  return buttons_inset() ? 44 : ((double (*)(id, SEL))class_getMethodImplementation(frame_base, s))(self, s);
+  return buttons_inset() ? 44 + 2 * buttons_down
+                         : ((double (*)(id, SEL))class_getMethodImplementation(frame_base, s))(self, s);
 }
 
 static double frame_buttons_left(id self, SEL s) {
@@ -1085,6 +1108,61 @@ int32_t mb_host_full_screen(void) {
   return the_view.window && full_screen_on ? 1 : 0;
 }
 
+// The window's buttons moved to `by` lower than centred on the app's top row's first 44 (@hostapi.window_buttons_down),
+// from where they are, over `ms` on a Move's way (mbui's Ease::Move: a critically damped spring's, move_k 7.4), each
+// display frame their title bar laid out again as AppKit lays it out itself (full_screen_going's). At once where there
+// is no way to see them go: `ms` none, the window not on the screen or held out of sight as it opens.
+static double buttons_from, buttons_to, buttons_t0, buttons_ms;
+static CADisplayLink *buttons_link;
+
+static void buttons_tile(void) {
+  NSView *frame = the_view.window.contentView.superview;
+  SEL tile = NSSelectorFromString(@"_tileTitlebarAndRedisplay:");
+  if (buttons_inset() && [frame respondsToSelector:tile]) ((void (*)(id, SEL, BOOL))objc_msgSend)(frame, tile, YES);
+}
+
+static double buttons_way(double t) {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  double k = 7.4, x = k * t;
+  return (1 - (1 + x) * exp(-x)) / (1 - (1 + k) * exp(-k));
+}
+
+@interface MBButtonsMove : NSObject
+@end
+@implementation MBButtonsMove
+- (void)tick:(CADisplayLink *)link {
+  double t = (CACurrentMediaTime() - buttons_t0) * 1000 / buttons_ms;
+  buttons_down = buttons_from + (buttons_to - buttons_from) * buttons_way(t);
+  if (t >= 1) {
+    buttons_down = buttons_to;
+    [link invalidate];
+    buttons_link = nil;
+  }
+  buttons_tile();
+}
+@end
+
+void mb_host_window_buttons_down(double by, double ms) {
+  if (by == buttons_to && (buttons_link || buttons_down == by)) return;
+  NSWindow *w = the_view.window;
+  [buttons_link invalidate];
+  buttons_link = nil;
+  buttons_to = by;
+  if (ms <= 0 || !w || !w.visible || (window_held && !window_shown)) {
+    buttons_down = by;
+    buttons_tile();
+    return;
+  }
+  static MBButtonsMove *mover;
+  if (!mover) mover = [MBButtonsMove new];
+  buttons_from = buttons_down;
+  buttons_t0 = CACurrentMediaTime();
+  buttons_ms = ms;
+  buttons_link = [the_view displayLinkWithTarget:mover selector:@selector(tick:)];
+  [buttons_link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+}
+
 void mb_host_set_full_screen(int32_t on) {
   NSWindow *w = the_view.window;
   if (w && (on != 0) != full_screen_on) [w toggleFullScreen:nil];
@@ -1157,7 +1235,7 @@ int32_t mb_host_mods_held(void) {
          ((m & NSEventModifierFlagOption) ? 4 : 0) | ((m & NSEventModifierFlagCommand) ? 8 : 0);
 }
 
-// This machine's station (@hostapi.local_station; apps/desktop/src/main.ts localStation, installed.ts): its data
+// This machine's station (@hostapi.local_station; apps/desktop/src/main.ts localStation): its data
 // (~/.stillfail), whether it runs (run/station.json's pid alive) and by what (a launchd service the installer made, or a
 // process started by hand), its release, whether the installer put one there, the workspace its data is in; what is
 // being done to it and what went wrong last. "" where there is neither data nor a service. Its acts (@hostapi.local_station_act) run off the main thread:
@@ -1166,9 +1244,19 @@ static NSString *local_doing = nil;
 static NSString *local_failed = nil;
 static int local_percent = -1;   // how far the installer's download is (local_heard, below), -1 not said
 static NSString *local_said = nil; // the last step the installer said
-static NSString *local_data(void) { return [NSHomeDirectory() stringByAppendingPathComponent:@".stillfail"]; }
+// (another product's app, its station's own: MBUI_STATION_ID's directory, MBUI_STATION_LABEL's service; cloud/src/
+// install.ts names them so, monoid's ~/.monoid and build.monoid.station beside still.fail's)
+static NSString *local_env(const char *name, NSString *otherwise) {
+  const char *v = getenv(name);
+  return v && *v ? @(v) : otherwise;
+}
+static NSString *local_data(void) {
+  return [NSHomeDirectory() stringByAppendingPathComponent:[@"." stringByAppendingString:local_env("MBUI_STATION_ID", @"stillfail")]];
+}
 static NSString *local_service(void) {
-  for (NSString *label in @[ @"fail.still.station", @"org.3720.ember.station" ]) {
+  NSString *own = local_env("MBUI_STATION_LABEL", @"fail.still.station");
+  NSArray *labels = [own isEqualToString:@"fail.still.station"] ? @[ own, @"org.3720.ember.station" ] : @[ own ];
+  for (NSString *label in labels) {
     NSString *plist = [NSString stringWithFormat:@"%@/Library/LaunchAgents/%@.plist", NSHomeDirectory(), label];
     if ([NSFileManager.defaultManager fileExistsAtPath:plist]) return label;
   }
@@ -1189,6 +1277,8 @@ static pid_t local_pid(NSString *data, NSString **version) {
   return [pid intValue];
 }
 moonbit_string_t mb_host_local_station(void) {
+  // An isolated end-to-end run must not inspect the person's installed station.
+  if (getenv("MBUI_ISOLATED_STATION")) return mb_string_from_ns(@"");
   NSString *data = local_data();
   NSString *service = local_service();
   BOOL there = [NSFileManager.defaultManager fileExistsAtPath:data];
@@ -1375,6 +1465,7 @@ static NSString *local_install(NSDictionary *ask) {
 }
 
 void mb_host_local_station_act(moonbit_string_t action) {
+  if (getenv("MBUI_ISOLATED_STATION")) return;
   NSString *a = mb_ns_from_string(action);
   NSString *data = local_data();
   // `install {…}`, `update {…}`: the installer (local_install), off the main thread, as the others
@@ -1499,7 +1590,9 @@ static BOOL window_run(void) {
 
 // Another window of the app's (@hostapi.window_open): the program run again (the bundle's executable, or this
 // program's own path run bare), its environment this one's with MBUI_WINDOW=<what>. It is an app of its own beside
-// this one (its own tile in the Dock, the same bundle's), ending as its window closes (windowShouldClose).
+// this one (its own tile in the Dock, the same bundle's), ending as its window closes (windowShouldClose) or as this
+// run ends (MBUI_WINDOW_OF, this run's pid: window_ends_with_opener).
+static NSMutableDictionary<NSString *, NSTask *> *window_tasks;  // what each was started for, the last for each
 int32_t mb_host_window_opens(void) { return 1; }
 int32_t mb_host_window_open(moonbit_string_t what_s) {
   NSString *what = mb_ns_from_string(what_s);
@@ -1507,6 +1600,7 @@ int32_t mb_host_window_open(moonbit_string_t what_s) {
   if (!what.length || !exe) return 0;
   NSMutableDictionary *env = [NSProcessInfo.processInfo.environment mutableCopy];
   env[@"MBUI_WINDOW"] = what;
+  env[@"MBUI_WINDOW_OF"] = @(getpid()).stringValue;
   NSTask *t = [NSTask new];
   t.executableURL = [NSURL fileURLWithPath:exe];
   t.environment = env;
@@ -1516,7 +1610,44 @@ int32_t mb_host_window_open(moonbit_string_t what_s) {
     fflush(stdout);
     return 0;
   }
+  if (!window_tasks) window_tasks = [NSMutableDictionary new];
+  window_tasks[what] = t;
   return 1;
+}
+
+// The notice by which a window of the app's own is told to come out (its pid the notice's object): only it can take
+// its window out of the Dock (window_front_heard); this run can only make that app the active one.
+static NSString *const window_front_notice = @"fail.still.mbui.window.front";
+
+// The window opened for `what` to the front, while it runs (@hostapi.window_front).
+int32_t mb_host_window_front(moonbit_string_t what_s) {
+  NSString *what = mb_ns_from_string(what_s);
+  NSTask *t = what.length ? window_tasks[what] : nil;
+  if (!t) return 0;
+  if (!t.running) {
+    [window_tasks removeObjectForKey:what];
+    return 0;
+  }
+  pid_t pid = t.processIdentifier;
+  [NSDistributedNotificationCenter.defaultCenter postNotificationName:window_front_notice
+                                                                object:@(pid).stringValue
+                                                              userInfo:nil
+                                                    deliverImmediately:YES];
+  [[NSRunningApplication runningApplicationWithProcessIdentifier:pid] activateWithOptions:NSApplicationActivateAllWindows];
+  return 1;
+}
+
+// A window of the app's own ends with the run that opened it, however that ends (a window run by hand, with no
+// MBUI_WINDOW_OF, is its own). Its opener gone before this looked: at once.
+static void window_ends_with_opener(void) {
+  const char *of = getenv("MBUI_WINDOW_OF");
+  pid_t pid = of ? atoi(of) : 0;
+  if (pid <= 0) return;
+  static dispatch_source_t watch;
+  watch = dispatch_source_create(DISPATCH_SOURCE_TYPE_PROC, pid, DISPATCH_PROC_EXIT, dispatch_get_main_queue());
+  dispatch_source_set_event_handler(watch, ^{ exit(0); });
+  dispatch_resume(watch);
+  if (kill(pid, 0) != 0 && errno == ESRCH) exit(0);
 }
 
 static uint64_t put_away_at;  // CLOCK_MONOTONIC's ns as the window was closed (0: it is out)
@@ -1542,6 +1673,10 @@ static void bring_back(void) {
 @interface MBAppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate>
 @end
 @implementation MBAppDelegate
+// (a window of the app's own, told by the run that opened it: mb_host_window_front)
+- (void)windowFrontHeard:(NSNotification *)n {
+  bring_back();
+}
 - (BOOL)windowShouldClose:(NSWindow *)w {
   if (!in_bundle() || window_run()) return YES;
   [w orderOut:nil];
@@ -1755,10 +1890,22 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   if (!getenv("MBUI_MACHINE") && gethostname(machine, sizeof machine) == 0) setenv("MBUI_MACHINE", machine, 0);
   @autoreleasepool {
     [NSApplication sharedApplication];
-    [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    // (a run measuring input to the screen, mac_latency.h: out of the way of whoever works here, its window shown
+    // without the app made active, and its wakes as the app in front's: App Nap would put them off by milliseconds)
+    [NSApp setActivationPolicy:latency_run() ? NSApplicationActivationPolicyAccessory : NSApplicationActivationPolicyRegular];
+    if (latency_run())
+      [NSProcessInfo.processInfo beginActivityWithOptions:NSActivityUserInitiated | NSActivityLatencyCritical
+                                                   reason:@"measuring input latency"];
     // the app's life (put away as its window closes, back from the Dock) and its menu bar's items: MBAppDelegate
     if (!app_delegate) app_delegate = [MBAppDelegate new];
     NSApp.delegate = app_delegate;
+    if (window_run()) {
+      [NSDistributedNotificationCenter.defaultCenter addObserver:app_delegate
+                                                        selector:@selector(windowFrontHeard:)
+                                                            name:window_front_notice
+                                                          object:@(getpid()).stringValue];
+      window_ends_with_opener();
+    }
     notice_start();
     // MBUI_WIN=<w>x<h>: the window's size (a phone's, for the narrow layouts)
     // (else the app's own, @hostapi.window_setup; else 900×720)
@@ -1835,7 +1982,8 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
       w.alphaValue = 0;
       w.ignoresMouseEvents = YES;
     }
-    [w makeKeyAndOrderFront:nil];
+    if (latency_run()) [w orderFrontRegardless];
+    else [w makeKeyAndOrderFront:nil];
     [w makeFirstResponder:the_view];
     // full screen from as the system starts taking the window there, a window from as it starts bringing it back
     // (full_screen_on)
@@ -1843,7 +1991,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
                                                   usingBlock:^(NSNotification *n) { full_screen_going(w, true); }];
     [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowWillExitFullScreenNotification object:w queue:nil
                                                   usingBlock:^(NSNotification *n) { full_screen_going(w, false); }];
-    [NSApp activateIgnoringOtherApps:YES];
+    if (!latency_run()) [NSApp activateIgnoringOtherApps:YES];
     // closed, the program ends (an app's bundle's window is put away instead: MBAppDelegate windowShouldClose)
     w.delegate = app_delegate;
     [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowWillCloseNotification
@@ -1951,12 +2099,33 @@ static int looked_at_run(void) {
          getenv("MBUI_BENCH") || getenv("MBUI_SHOT_DIR") || getenv("MBUI_WIN") || getenv("MBUI_RECORD");
 }
 
+// A frame for what moves on by the clock that needs only `hz` frames a second (@hostapi.frames_paced, said in the
+// frame): woken for (wake_after) at the display's frame a whole number of its fastest frames on, as near `hz` as they
+// come, the ticks between drawing nothing and the link told the rate (ios_app.m's the same); anything asking for a
+// frame before then (requestFrame) has the next tick and every one again. The next tick's, as any frame asked for, in
+// a run someone stands for (its frames are its steps', its recording's or its bench's) and where the frame asks for
+// it besides.
+void mb_host_frames_paced(double hz) {
+  NSScreen *screen = the_view.window.screen ?: NSScreen.mainScreen;
+  double top = screen ? (double)screen.maximumFramesPerSecond : 0;
+  double every = top > 0 && hz > 0 ? round(top / hz) : 1;
+  if (looked_at_run() || building_for < 0 || the_view.wantFrame || every <= 1) {
+    mb_host_request_frame();
+    return;
+  }
+  paced_hz = top / every;
+  // (half a display frame short of it: the first tick at it, whatever its time's rounding)
+  mb_host_wake_after((every - 0.5) * 1000.0 / top);
+}
+
+#include "groups.h"
+
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   // (a window nobody can see draws nothing: what drawing holds was given back as it went (mb_render_trim), and a
   // frame drawn now would take it again, the GPU drawing it for nobody, a frame for each answer the core gives; shown
   // again, tell_state asks a frame, which draws what it shows then, whole)
   if (!window_seen && !looked_at_run()) return;
-  mb_render_present(buf, count, r, g, b);
+  mb_render_present(mb_groups_draw_out(buf, count), count, r, g, b);
 }
 
 void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moonbit_string_t text,
@@ -2108,10 +2277,11 @@ int32_t mb_host_native_pointing(void) { return 2; }
 // Whether a keyboard is at hand (@hostapi.keyboard): a Mac's, always.
 int32_t mb_host_keyboard(void) { return 1; }
 // ---- the app's widgets for VoiceOver ----
-// As Android's A11y.java and Windows' win_a11y.cpp give them: an element of each node the app last said (a11y.mbt's
-// lines, @hostapi.a11y_tree), kept by its number from frame to frame (one whose node is gone is no element), under the
-// view; its role by the node's, its label, value, help, state and frame on the screen. What is asked of it (press, a
-// step up or down, words put in a field, focus, cancel) goes to the app on @hostapi.a11y_channel for its next frame.
+// As Android's A11y.java and Windows' win_a11y.cpp give them: an element of each node the app told (a11y.mbt's
+// updates, @hostapi.a11y_tree: what changed, kept by its number; one whose node is gone is no element), under the
+// view (those of no use of their own, flags v, left out: what they hold their holder's); its role by the node's, its
+// label, value, help, state and frame on the screen. What is asked of it (press, a step up or down, words put in a
+// field, focus, cancel) goes to the app on @hostapi.a11y_channel for its next frame.
 // The app tells its widgets once something asked the view for them (VoiceOver, Voice Control, Accessibility
 // Inspector); that first ask asks for a frame. As they change, the layout, the focus, a title or a value is said
 // changed. MBUI_A11Y_SELFCHECK=1 (host_contract.sh mac a11y): the view's elements walked as VoiceOver walks them once
@@ -2121,7 +2291,7 @@ int32_t mb_host_keyboard(void) { return 1; }
 @interface MBA11yNode : NSObject
 @property(nonatomic) int nid, parent, widget;
 @property(nonatomic, copy) NSString *role, *flags, *label, *value, *help, *actions;
-@property(nonatomic) NSRect rect;
+@property(nonatomic) NSRect rel;
 @property(nonatomic) BOOL range;
 @property(nonatomic) double low, at, high;
 @property(nonatomic, strong) NSMutableArray<NSNumber *> *kids;
@@ -2134,10 +2304,41 @@ int32_t mb_host_keyboard(void) { return 1; }
 @end
 
 static NSMutableDictionary<NSNumber *, MBA11yNode *> *a11y_nodes;
-static NSArray<NSNumber *> *a11y_tops;
 static NSMutableDictionary<NSNumber *, MBA11yElement *> *a11y_elements;
 static int a11y_focus;
 static BOOL a11y_asked, a11y_selfcheck_done;
+
+static BOOL a11y_has(NSString *letters, unichar c) {
+  return [letters rangeOfString:[NSString stringWithCharacters:&c length:1]].location != NSNotFound;
+}
+
+// where node `n` is in the view: its holders' places and its own, each from where its holder is (a11y.mbt's head)
+static NSRect a11y_rect(MBA11yNode *n) {
+  NSRect r = n.rel;
+  for (MBA11yNode *p = a11y_nodes[@(n.parent)]; p && p.nid; p = a11y_nodes[@(p.parent)])
+    r.origin.x += p.rel.origin.x, r.origin.y += p.rel.origin.y;
+  return r;
+}
+
+// what node `nid` holds as elements: those of no use of their own (flags v: what a column scrolls is held in) left out,
+// what they hold in their place
+static NSArray<NSNumber *> *a11y_shown_kids(int nid) {
+  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+  for (NSNumber *k in a11y_nodes[@(nid)].kids) {
+    MBA11yNode *c = a11y_nodes[k];
+    if (!c) continue;
+    if (a11y_has(c.flags, 'v')) [out addObjectsFromArray:a11y_shown_kids(c.nid)];
+    else [out addObject:k];
+  }
+  return out;
+}
+
+// the element that holds node `n`: its nearest holder of use of its own (0: the view)
+static int a11y_shown_holder(MBA11yNode *n) {
+  MBA11yNode *p = a11y_nodes[@(n.parent)];
+  while (p && p.nid && a11y_has(p.flags, 'v')) p = a11y_nodes[@(p.parent)];
+  return p ? p.nid : 0;
+}
 
 static MBA11yElement *a11y_element(int nid) {
   if (!a11y_nodes[@(nid)]) return nil;
@@ -2165,7 +2366,7 @@ static NSArray *a11y_children_of_view(void) {
     a11y_asked = YES;
     [the_view requestFrame];
   }
-  return a11y_elements_of(a11y_tops ?: @[]);
+  return a11y_elements_of(a11y_shown_kids(0));
 }
 
 static id a11y_hit(NSPoint screen) {
@@ -2174,8 +2375,10 @@ static id a11y_hit(NSPoint screen) {
   int best = 0;
   double area = -1;
   for (MBA11yNode *n in a11y_nodes.allValues) {
-    if (!NSPointInRect(p, n.rect)) continue;
-    double a = n.rect.size.width * n.rect.size.height;
+    if (!n.nid || a11y_has(n.flags, 'v')) continue;
+    NSRect r = a11y_rect(n);
+    if (!NSPointInRect(p, r)) continue;
+    double a = r.size.width * r.size.height;
     if (area < 0 || a < area) area = a, best = n.nid;
   }
   return best ? a11y_element(best) : nil;
@@ -2190,10 +2393,6 @@ static void a11y_ask(MBA11yNode *n, NSString *action, NSString *text) {
   if (text) m[@"text"] = text;
   NSData *json = [NSJSONSerialization dataWithJSONObject:m options:0 error:nil];
   if (json) mb_post("a11y", (const char *)json.bytes, json.length, NULL, 0);
-}
-
-static BOOL a11y_has(NSString *letters, unichar c) {
-  return [letters rangeOfString:[NSString stringWithCharacters:&c length:1]].location != NSNotFound;
 }
 
 @implementation MBA11yElement
@@ -2259,7 +2458,7 @@ static BOOL a11y_has(NSString *letters, unichar c) {
   return !a11y_has(self.node.flags, 'd');
 }
 - (BOOL)isAccessibilityFocused {
-  return a11y_has(self.node.flags, 'f');
+  return self.node && self.nid == a11y_focus;
 }
 - (BOOL)isAccessibilitySelected {
   return a11y_has(self.node.flags, 's');
@@ -2270,14 +2469,15 @@ static BOOL a11y_has(NSString *letters, unichar c) {
 - (NSRect)accessibilityFrame {
   MBA11yNode *n = self.node;
   if (!n || !the_view.window) return NSZeroRect;
-  return [the_view.window convertRectToScreen:[the_view convertRect:n.rect toView:nil]];
+  return [the_view.window convertRectToScreen:[the_view convertRect:a11y_rect(n) toView:nil]];
 }
 - (id)accessibilityParent {
   MBA11yNode *n = self.node;
-  return n && n.parent ? (a11y_element(n.parent) ?: (id)the_view) : (id)the_view;
+  int p = n ? a11y_shown_holder(n) : 0;
+  return p ? (a11y_element(p) ?: (id)the_view) : (id)the_view;
 }
 - (NSArray *)accessibilityChildren {
-  return a11y_elements_of(self.node.kids ?: @[]);
+  return a11y_elements_of(a11y_shown_kids(self.nid));
 }
 // what may be asked of it: what its node takes
 - (BOOL)isAccessibilitySelectorAllowed:(SEL)sel {
@@ -2354,56 +2554,75 @@ int32_t mb_host_a11y_on(void) {
   return a11y_asked ? 1 : 0;
 }
 
-// What the widgets are now (@hostapi.a11y_tree): the nodes made anew, what reads them told what changed
+// What the widgets are now (@hostapi.a11y_tree): an update of them (a11y.mbt's head: the nodes that changed, each
+// whole, and the focus), kept; one in nothing that holds it gone with what it holds; what reads them told what changed
 void mb_host_a11y_tree(moonbit_string_t s) {
   NSString *all = mb_ns_from_string(s);
-  NSMutableDictionary<NSNumber *, MBA11yNode *> *next = [NSMutableDictionary dictionary];
-  NSMutableArray<NSNumber *> *order = [NSMutableArray array], *tops = [NSMutableArray array];
-  for (NSString *line in [all componentsSeparatedByString:@"\n"]) {
-    NSArray<NSString *> *f = [line componentsSeparatedByString:@"\x1f"];
-    if (f.count < 16) continue;
+  NSArray<NSString *> *lines = [all componentsSeparatedByString:@"\n"];
+  NSArray<NSString *> *head = [lines.firstObject componentsSeparatedByString:@"\x1f"];
+  if (head.count < 3 || ![head[0] isEqualToString:@"T"]) return;
+  BOOL full = [head[1] isEqualToString:@"1"];
+  int focus = head[2].intValue;
+  if (!a11y_nodes) a11y_nodes = [NSMutableDictionary dictionary];
+  if (full) {
+    [a11y_nodes removeAllObjects];
+    [a11y_elements removeAllObjects];
+  }
+  NSMutableArray<MBA11yNode *> *told = [NSMutableArray array];
+  NSMutableSet<NSNumber *> *held = [NSMutableSet set];
+  NSMutableArray<NSNumber *> *let_go = [NSMutableArray array];
+  NSMutableArray<MBA11yNode *> *titled = [NSMutableArray array], *valued = [NSMutableArray array];
+  BOOL shape = full;
+  for (NSUInteger i = 1; i < lines.count; i++) {
+    NSArray<NSString *> *f = [lines[i] componentsSeparatedByString:@"\x1f"];
+    if (f.count < 17 || ![f[0] isEqualToString:@"N"]) continue;
     MBA11yNode *n = [MBA11yNode new];
-    n.nid = f[0].intValue, n.parent = f[1].intValue, n.widget = f[2].intValue;
-    n.role = f[3], n.flags = f[4];
-    n.rect = NSMakeRect(f[5].doubleValue, f[6].doubleValue, f[7].doubleValue, f[8].doubleValue);
-    n.label = f[9], n.value = f[10], n.help = f[11];
-    n.range = f[13].length > 0;
-    n.low = f[12].doubleValue, n.at = f[13].doubleValue, n.high = f[14].doubleValue;
-    n.actions = f[15];
+    n.nid = f[1].intValue, n.role = f[2], n.flags = f[3];
+    n.rel = NSMakeRect(f[4].doubleValue, f[5].doubleValue, f[6].doubleValue, f[7].doubleValue);
+    n.label = f[8], n.value = f[9], n.help = f[10];
+    n.range = f[12].length > 0;
+    n.low = f[11].doubleValue, n.at = f[12].doubleValue, n.high = f[13].doubleValue;
+    n.actions = f[14], n.widget = f[15].intValue;
     n.kids = [NSMutableArray array];
-    if (!n.nid || next[@(n.nid)]) continue;
-    next[@(n.nid)] = n;
-    [order addObject:@(n.nid)];
-  }
-  int focus = 0;
-  for (NSNumber *k in order) {
-    MBA11yNode *n = next[k];
-    MBA11yNode *p = n.parent ? next[@(n.parent)] : nil;
-    if (p) [p.kids addObject:k];
-    else n.parent = 0, [tops addObject:k];
-    if (a11y_has(n.flags, 'f')) focus = n.nid;
-  }
-  NSDictionary<NSNumber *, MBA11yNode *> *old = a11y_nodes;
-  BOOL shape = ![tops isEqualToArray:a11y_tops ?: @[]] || next.count != old.count;
-  for (NSNumber *k in order) {
-    MBA11yNode *n = next[k], *o = old[k];
-    if (!o || o.parent != n.parent || ![o.kids isEqualToArray:n.kids]) shape = YES;
-  }
-  a11y_nodes = next;
-  a11y_tops = tops;
-  for (NSNumber *k in a11y_elements.allKeys)
-    if (!next[k]) [a11y_elements removeObjectForKey:k];
-  if (a11y_asked) {
-    for (NSNumber *k in a11y_elements) {
-      MBA11yNode *n = next[k], *o = old[k];
-      if (!o) continue;
-      if (![o.label isEqualToString:n.label]) NSAccessibilityPostNotification(a11y_elements[k], NSAccessibilityTitleChangedNotification);
-      if (![o.value isEqualToString:n.value] || ![o.flags isEqualToString:n.flags] || o.at != n.at)
-        NSAccessibilityPostNotification(a11y_elements[k], NSAccessibilityValueChangedNotification);
+    if (f[16].length)
+      for (NSString *k in [f[16] componentsSeparatedByString:@","]) [n.kids addObject:@(k.intValue)];
+    MBA11yNode *o = a11y_nodes[@(n.nid)];
+    if (o) {
+      n.parent = o.parent;
+      for (NSNumber *k in o.kids)
+        if (![n.kids containsObject:k]) [let_go addObject:k];
+      if (![o.kids isEqualToArray:n.kids]) shape = YES;
+      if (![o.label isEqualToString:n.label]) [titled addObject:n];
+      if (![o.value isEqualToString:n.value] || ![o.flags isEqualToString:n.flags] || o.at != n.at) [valued addObject:n];
+    } else {
+      shape = YES;
     }
-    if (shape) NSAccessibilityPostNotification(the_view, NSAccessibilityLayoutChangedNotification);
-    if (focus != a11y_focus && focus) NSAccessibilityPostNotification(a11y_element(focus), NSAccessibilityFocusedUIElementChangedNotification);
+    a11y_nodes[@(n.nid)] = n;
+    [told addObject:n];
+    [held addObjectsFromArray:n.kids];
   }
+  for (MBA11yNode *n in told)
+    for (NSNumber *k in n.kids) a11y_nodes[k].parent = n.nid;
+  // (one in nothing told holds: gone, with what it holds)
+  while (let_go.count) {
+    NSNumber *k = let_go.lastObject;
+    [let_go removeLastObject];
+    if ([held containsObject:k]) continue;
+    MBA11yNode *n = a11y_nodes[k];
+    if (!n) continue;
+    [let_go addObjectsFromArray:n.kids];
+    [a11y_nodes removeObjectForKey:k];
+    [a11y_elements removeObjectForKey:k];
+  }
+  if (a11y_asked && !full) {
+    for (MBA11yNode *n in titled)
+      if (a11y_elements[@(n.nid)]) NSAccessibilityPostNotification(a11y_elements[@(n.nid)], NSAccessibilityTitleChangedNotification);
+    for (MBA11yNode *n in valued)
+      if (a11y_elements[@(n.nid)]) NSAccessibilityPostNotification(a11y_elements[@(n.nid)], NSAccessibilityValueChangedNotification);
+  }
+  if (a11y_asked && shape) NSAccessibilityPostNotification(the_view, NSAccessibilityLayoutChangedNotification);
+  if (a11y_asked && focus != a11y_focus && focus && a11y_element(focus))
+    NSAccessibilityPostNotification(a11y_element(focus), NSAccessibilityFocusedUIElementChangedNotification);
   a11y_focus = focus;
   if (getenv("MBUI_A11Y_SELFCHECK") && !a11y_selfcheck_done) dispatch_async(dispatch_get_main_queue(), ^{
       a11y_selfcheck();
@@ -2662,6 +2881,8 @@ static NSString *update_download(NSString *dir, NSURL *url, NSString *sha256, lo
   for (;;) {
     long long before = (long long)[[fm attributesOfItemAtPath:part error:NULL] fileSize];
     BOOL retry = NO;
+    // (why an earlier try failed is not this one's: left, the build staged after it was thrown away as failed)
+    *why = nil;
     if (update_fetch(url, part, size, &retry, why)) break;
     if (!retry) return nil;
     if ((long long)[[fm attributesOfItemAtPath:part error:NULL] fileSize] > before) failures = 0;
@@ -2874,6 +3095,7 @@ int32_t mb_host_perf_state(void) { return -1; }
 void mb_host_set_perf(int32_t on) { (void)on; }
 void mb_host_perf_line(moonbit_string_t line) { (void)line; }
 moonbit_string_t mb_host_perf_where(void) { return moonbit_make_string_raw(0); }
+int32_t mb_host_perf_open(int32_t go) { (void)go; return 0; }
 double mb_host_perf_size(void) { return 0; }
 moonbit_bytes_t mb_host_perf_read(void) { return moonbit_make_bytes(0, 0); }
 
@@ -3102,6 +3324,9 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
     case 7: return notice_drive(kind == 6, s);
     // the directory the run's runner says what it has done in, watched (done_watch.h)
     case 9: return mb_done_watch(text);
+    // input to the screen measured, "MODE X Y" (mac_latency.h): the run's own events from now on, the process ending
+    // with what it measured
+    case 12: return lat_start(s);
     default: return 0;
   }
   [v requestFrame];

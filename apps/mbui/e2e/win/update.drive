@@ -9,6 +9,7 @@ timeout 90000
 answered {"topic":"accounts"}
 gone 登录或注册
 tap icon:settings
+wheelat 500 此设备
 tap =关于
 until 更新到 0.1.
 tap1 更新到 0.1.

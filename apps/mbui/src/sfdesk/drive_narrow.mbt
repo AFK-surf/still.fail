@@ -1,4 +1,4 @@
-// A station's folders pinned laid out narrow, as the web's narrow app has them (ember web/src/mobile/Drive.tsx
+// A station's folders pinned laid out narrow, as the web's narrow app has them (still.fail web/src/mobile/Drive.tsx
 // RootsPage, RootRow, Empty; Drive.css.ts m*), in a box narrower than @sf.page_narrow_most, in whichever frame (the
 // phone's stack, a tablet's pane); and what a narrow page is given of its frame (NarrowOf), its bar, the rows on a
 // card. A folder's own page is one on every screen (drive_page.mbt).
@@ -20,13 +20,13 @@ pub fn narrow_bare() -> NarrowOf {
 
 ///|
 /// The narrow bar (NavBar): back where the frame says (its words), the title in the middle, what it does at its end;
-/// true on the frame back was pressed.
-fn narrow_bar(c : @ui.Ctx, n : NarrowOf, title : String, trailing : () -> Unit) -> Bool {
+/// `on_press` as back is pressed.
+fn narrow_bar(c : @ui.Ctx, n : NarrowOf, title : String, trailing : () -> Unit, on_press~ : () -> Unit) -> Unit {
   // (in a panel of its own on the tape: a chat's bar, as a settings page's there; back only where there is somewhere
   // to go)
   if @sf.in_pane() {
     pane_bar(c, n.frame.back.map(fn(label) { (label, n.back) }), title, actions=trailing)
-    return false
+    return
   }
   @sf.nav_bar(
     c,
@@ -41,13 +41,8 @@ fn narrow_bar(c : @ui.Ctx, n : NarrowOf, title : String, trailing : () -> Unit) 
     },
     bg=@sf.theme().p.bg,
     top=n.frame.top,
+    on_press~,
   )
-}
-
-///|
-/// A round button of the bar (NavButton): 34 across, its icon 18 (`size`), what it is said to be.
-fn narrow_bar_button(c : @ui.Ctx, key : String, icon : String, label : String, size? : Double = narrow_bar_icon) -> Bool {
-  @sf.icon_button(c, icon, key~, size=narrow_bar_button_w, icon_size=size, round=true, label~)
 }
 
 ///|
@@ -70,9 +65,9 @@ fn narrow_retry(c : @ui.Ctx, words : String, look : @ui.TextStyle, retry : () ->
   c.box(style=narrow_problem, fn() {
     c.box(style=narrow_problem_words, fn() { c.text(words, style=look) |> ignore }) |> ignore
     let id = c.id("files/narrow/retry")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       retry()
-    }
+    })
     c.box(style=narrow_link, id~, fn() { c.text(@sf.t("web-pages.drive.retry"), style=narrow_link_words) |> ignore }) |> ignore
   })
   |> ignore
@@ -86,7 +81,7 @@ fn narrow_empty(c : @ui.Ctx, words : String, action : (String, () -> Unit)?) -> 
     @sf.icon(c, "folder", size=narrow_empty_icon, color=t.p.subtle) |> ignore
     c.text(words, style=narrow_empty_words) |> ignore
     match action {
-      Some((label, go)) => if @sf.button(c, label, key="files/narrow/empty", tone=Ghost) { go() }
+      Some((label, go)) => @sf.button(c, label, key="files/narrow/empty", tone=Ghost, on_press=go) |> ignore
       None => ()
     }
   })
@@ -96,7 +91,7 @@ fn narrow_empty(c : @ui.Ctx, words : String, action : (String, () -> Unit)?) -> 
 ///|
 /// How far a text has been read on this device, once opened (the core's `drivePlace`): its share, 读完 at its end.
 fn read_share(c : @ui.Ctx, src : Source, station : String, root : String, path : String) -> Unit {
-  let place = (src.topic)("drivePlace", { "station": Json::string(station), "root": Json::string(root), "path": Json::string(path) }).value
+  let place = src.topic("drivePlace", { "station": Json::string(station), "root": Json::string(root), "path": Json::string(path) }).get().value
   let of = number(place, "of")
   if of <= 0.0 {
     return
@@ -119,19 +114,18 @@ let read_whole : Double = 0.995
 
 ///|
 /// How far a file of the drive has come while it is downloaded (FillChip's `progress`): a rounded box, its ground filled
-/// in the accent from the left as it comes (moving to each new share over 500 ms), n% on it.
+/// in the accent from the left as it comes (moving to each new share over 500 ms), n% on it. The fill is laid out
+/// across the whole track and drawn narrowed from its left to its share as it is painted (a square-cornered rect, cut to
+/// the capsule by the track: narrowed, it is the rect as wide as its share), nothing built as it goes.
 fn download_chip(c : @ui.Ctx, key : String, percent : Int) -> Unit {
   let p = if percent < 0 { 0 } else if percent > 100 { 100 } else { percent }
-  let drawn = @motion.animate(c, "files/narrow/fetch/" + key, p.to_double(), spec=chip_fill)
+  let drawn = @motion.told(c, "files/narrow/fetch/" + key, p.to_double(), spec=chip_fill)
   c.box(style=chip_box, fn() {
-    if drawn > 0.0 {
+    if p > 0 || !drawn.over(c) {
       c.layer(fn() {
         c.box(style=chip_track, fn() {
-          c.box(style=chip_done.then(@ui.style(w=Grow(drawn))), fn() {  }) |> ignore
-          let rest = chip_whole - drawn
-          if rest > 0.0 {
-            c.box(style=@ui.style(h=Full, w=Grow(rest)), fn() {  }) |> ignore
-          }
+          let fill = c.box(style=chip_done, fn() {  })
+          c.look_by(fill, fn() { @ui.look(sx=dmax(0.0, drawn.get(c)) / chip_whole, sy=1.0, ox=0.0) })
         })
         |> ignore
       })
@@ -168,7 +162,7 @@ let chip_track : @ui.Style = @ui.css("row w=Full h=Full radius=Full clip")
 
 ///|
 // kept across runs: a value (no field of it changes)
-let chip_done : @ui.Style = @ui.css("h=Full bg=A(Accent,O20)")
+let chip_done : @ui.Style = @ui.css("w=Full h=Full bg=A(Accent,O20)")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -178,15 +172,6 @@ let chip_words_box : @ui.Style = @ui.css("row px=S2 align=ACenter")
 // kept across runs: a value (no field of it changes)
 let chip_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=Fg, wrap=false)
 
-
-///|
-/// How tall a row is taken to be before it is laid out.
-let narrow_row_est : Double = 62.0
-
-///|
-/// Under the list, 30 over the frame's foot (contentPadding).
-let narrow_list_foot : Double = 30.0
-
 ///|
 /// Back's words at least 80 wide, at most what the bar has beside the title (half less 120).
 let narrow_back_least : Double = 80.0
@@ -195,33 +180,10 @@ let narrow_back_least : Double = 80.0
 let narrow_back_room : Double = 120.0
 
 ///|
-/// The bar's buttons (NavButton: 34, its icon 18; ＋'s 20).
-let narrow_bar_button_w : Double = 34.0
-
-///|
-let narrow_bar_icon : Double = 18.0
-
-
-///|
-/// The rows' marks (22), a folder's chevron (14), a crumb's (12), the empty folder's mark (40), a row's spinner (12), a
-/// row's key (34).
-let narrow_kind_icon : Double = 22.0
-
-///|
-let narrow_chevron_icon : Double = 14.0
-
-///|
 let narrow_crumb_chevron : Double = 12.0
 
 ///|
 let narrow_empty_icon : Double = 40.0
-
-
-
-
-
-
-
 
 ///|
 /// Why it could not be read (mProblem): 20 in, 12 over and under, its 重试 in the link's ink.
@@ -246,15 +208,6 @@ let narrow_link_words : @ui.TextStyle = @ui.text_style(size=Body, color=Link, wr
 let narrow_failed_words : @ui.TextStyle = @ui.text_style(size=Body, color=Danger, w=Full)
 
 ///|
-/// What it holds in a line (mCount): 28 in, 2 over, 8 under, the meta's words, muted.
-// kept across runs: a value (no field of it changes)
-let narrow_count_box : @ui.Style = @ui.css("w=Full px=S7 pt=S0_5 pb=S2")
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_count_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-///|
 /// The crumbs (mCrumbs): 20 in, a crumb 4 round, the way's muted, where it is in the words' colour.
 // kept across runs: a value (no field of it changes)
 let narrow_crumbs_row : @ui.Style = @ui.css("row pl=S5 pr=S5 pt=S0_5 pb=S1 align=ACenter")
@@ -271,12 +224,6 @@ let narrow_crumb_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, 
 // kept across runs: a value (no field of it changes)
 let narrow_crumb_here : @ui.TextStyle = @ui.text_style(size=Ui, weight=Medium, color=Fg, wrap=false)
 
-
-
-
-
-
-
 ///|
 /// Nothing here (mEmpty): in the middle, 56 by 32 in, 12 apart.
 // kept across runs: a value (no field of it changes)
@@ -285,49 +232,3 @@ let narrow_empty_box : @ui.Style = @ui.css("w=Full px=S8 py=S14 gap=S3 align=ACe
 ///|
 // kept across runs: a value (no field of it changes)
 let narrow_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, w=Full)
-
-///|
-/// A row (mRow): 12 by 11 in (the card's 8 and its own), its mark, its words, what is at its end 12 apart.
-// kept across runs: a value (no field of it changes)
-let narrow_entry : @ui.Style = @ui.css("row w=Full px=S2 py=S2_5 gap=S3 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_entry_words : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-/// Its name (mName: the body's 15 on 20), what it is under it (mMeta: 12 on 16, muted).
-// kept across runs: a value (no field of it changes)
-let narrow_entry_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Fg, wrap=false, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_entry_meta : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_trouble : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, weight=Semibold, color=Danger, w=Full)
-
-///|
-// kept across runs: a value (no field of it changes)
-let narrow_trouble_hint : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, color=Muted, w=Full)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

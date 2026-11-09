@@ -64,9 +64,9 @@ test "a box in bones takes no press, says nothing to a screen reader; a coloured
     fn(c) {
       c.bones(bones_ink, fn() {
         let id = c.id("press")
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           pressed.val = true
-        }
+        })
         let b = c.box(id~, w=Px(80.0), h=Px(40.0), bg=0xE5532DFFL, fn() { c.text("按我") |> ignore })
         c.semantics(b, Button, id~, label="按我")
         c.box(w=Px(80.0), h=Px(40.0), bg=0xF6F6F7FFL, fn() {  }) |> ignore

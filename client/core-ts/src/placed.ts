@@ -2,9 +2,9 @@
 // links and images give (views.ts drawn(): a message's `placed`), and the images beside one a chat's preview shows, in
 // the order its page shows them (the `imageNear` view): told only for the one open, not the chat's every image.
 
-/** The file a link or image in the text names, by its file name (the last part of its path): `shot.png`, `/w/shot.png`, `ember-file://…/shot.png`. */
+/** The file a link or image in the text names, by its file name (the last part of its path): `shot.png`, `/w/shot.png`, `file:///w/shot.png`. */
 export function nameOf(url: string): string {
-  let u = url.trim().replace(/^(ember-)?file:\/\//, "");
+  let u = url.trim().replace(/^file:\/\//, "");
   try { u = decodeURIComponent(u); } catch { /* kept as written */ }
   return u.slice(u.lastIndexOf("/") + 1);
 }

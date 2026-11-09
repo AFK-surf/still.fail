@@ -65,9 +65,10 @@ test "大屏: the sidebar folded and opened again while the block goes: from whe
 }
 
 ///|
-/// Where the block is drawn across and how wide (its box: the dock's).
+/// Where the block is drawn across and how wide: its ground (a node of the window's tree, among the tree's: as tall as
+/// the window less its bars, at its left edge, the only ground there narrower than the window).
 fn dock_drawn(t : @ui.Tester) -> (Double, Double) {
-  match t.boxes().iter().find_first(fn(b) { b.moves == "dock" }) {
+  match t.boxes_held().iter().find_first(dock_ground) {
     Some(b) => (b.x, b.w)
     None => (-1.0, -1.0)
   }

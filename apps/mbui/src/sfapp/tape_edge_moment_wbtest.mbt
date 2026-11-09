@@ -201,7 +201,7 @@ test "中屏: the sidebar's edge held by a finger, the touch called off by the s
 fn edge_gap_pressed(nav_able : Bool, dx : Double) -> (Bool, @sfdesk.TapePane) raise {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=840.0, platform=1, native=Mouse, nav_able~)
   t.run_for(@ui.move_most_ms)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
@@ -245,7 +245,7 @@ test "中屏 (a finger's: its bar always shown): the sidebar's edge as the tape 
   for scale in [1.0, 2.0] {
     new_run()
     let src = fixture("chat")
-    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
     let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=840.0, platform=2, scale~)
     say_room(t, "medium", "medium")
     t.run_for(@ui.move_most_ms)

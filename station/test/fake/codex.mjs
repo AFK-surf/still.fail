@@ -10,9 +10,11 @@
 //   hold:<k>      k deltas, then waits until steered (the steers its deltas) or interrupted
 //   gate:<n>:<k>:<name>   k of n deltas; the rest once FAKE_DUMP.<name>.a (a fifo) is written, then FAKE_DUMP.<name>.said
 //                 made; the end once FAKE_DUMP.<name>.b is (what the test lets happen when, not a time)
+// thread/unsubscribe is answered once FAKE_DUMP.unsub.a (a fifo) is written, when there is one.
 // FAKE_DUMP: its argv and env are appended there as a JSON line, and every line of stdin to FAKE_DUMP.stdin. The
 // version it says it is (`--version`, its userAgent) is FAKE_DUMP.version's when there is one, else 0.
 import fs from "node:fs";
+import { join } from "node:path";
 import readline from "node:readline";
 
 const dump = process.env.FAKE_DUMP;
@@ -23,6 +25,11 @@ if (process.argv[2] === "--version") {
 }
 if (dump) fs.appendFileSync(dump, JSON.stringify({ argv: process.argv.slice(2), env: process.env, pid: process.pid }) + "\n");
 
+/// The one wait every thread/unsubscribe has while FAKE_DUMP.unsub.a is held (written once, all go on).
+let unsubHeld = null;
+let mcpHeld = null;
+// FAKE_TERM_MS: it takes that long to go once told to (SIGTERM).
+if (process.env.FAKE_TERM_MS) process.on("SIGTERM", () => setTimeout(() => process.exit(0), Number(process.env.FAKE_TERM_MS)));
 const say = (msg) => fs.writeSync(1, JSON.stringify(msg) + "\n");
 const notify = (method, params) => say({ method, params });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -52,7 +59,8 @@ function thread(id) {
 /// Loads thread `id` with `config`'s MCP url, unless it is loaded.
 function load(id, config) {
   const t = thread(id);
-  t.mcp ??= String(config?.["mcp_servers.stillfail.url"] ?? "").includes(":1/") ? "failed" : "connected";
+  const url = config?.["mcp_servers.stillfail.url"];
+  t.mcp ??= process.env.FAKE_MCP_UNAVOIDABLE === "1" ? "connected" : config?.mcp_servers?.configured?.enabled === false ? "disabled" : process.env.FAKE_MCP_CONFIGURED === "1" || process.env.FAKE_MCP_PROJECT === "1" ? "connected" : typeof url === "string" ? (url.includes(":1/") ? "failed" : "connected") : null;
 }
 
 /// A reply of `texts`, `gap` ms apart; `before(i)`, if given, waited for before the i-th (and before its end, at i =
@@ -155,11 +163,17 @@ function handle(msg) {
   if (method === "thread/start") {
     const threadId = `th-${++n}`;
     load(threadId, params.config);
-    return reply({ thread: { id: threadId } });
+    const path = process.env.FAKE_ROLLOUT ? join(process.env.CODEX_HOME, "sessions", "2026", "11", "03", `rollout-${threadId}.jsonl`) : undefined;
+    return reply({ thread: { id: threadId, ...(path ? { path } : {}) } });
   }
   if (method === "thread/resume") {
     load(params.threadId, params.config);
-    return reply({ thread: { id: params.threadId } });
+    const path = process.env.FAKE_ROLLOUT ? join(process.env.CODEX_HOME, "sessions", "2026", "11", "03", `rollout-${params.threadId}.jsonl`) : undefined;
+    return reply({ thread: { id: params.threadId, ...(path ? { path } : {}) } });
+  }
+  if (method === "thread/read") {
+    const path = process.env.FAKE_ROLLOUT || process.env.FAKE_ROLLOUT_ON_READ ? join(process.env.CODEX_HOME, "sessions", "2026", "11", "03", `rollout-${params.threadId}.jsonl`) : undefined;
+    return reply({ thread: { id: params.threadId, ...(path ? { path } : {}) } });
   }
   if (method === "turn/start") {
     const t = thread(params.threadId);
@@ -188,9 +202,20 @@ function handle(msg) {
   }
   if (method === "thread/unsubscribe") {
     thread(params.threadId).mcp = null;
+    // Refused while FAKE_DUMP.unsub.fail is there; held until FAKE_DUMP.unsub.a (a fifo) is written, when the test
+    // made it: an unsubscribe still on its way.
+    if (dump && fs.existsSync(`${dump}.unsub.fail`)) return fail("not let go of");
+    if (dump && fs.existsSync(`${dump}.unsub.a`)) return void (unsubHeld ??= gate(`${dump}.unsub.a`)).then(() => reply({ status: "unsubscribed" }));
     return reply({ status: "unsubscribed" });
   }
-  if (method === "mcpServerStatus/list") return reply({ data: [{ name: "stillfail", runtimeStatus: thread(params.threadId).mcp, tools: {} }], nextCursor: null });
+  if (method === "mcpServerStatus/list" && params?.threadId !== undefined && dump && fs.existsSync(`${dump}.mcp.a`) && !params.held) {
+    // Held until FAKE_DUMP.mcp.a (a fifo) is written, when the test made it.
+    return void (mcpHeld ??= gate(`${dump}.mcp.a`)).then(() => handle({ ...msg, params: { ...params, held: true } }));
+  }
+  if (method === "mcpServerStatus/list") {
+    if (params.threadId === undefined) return reply({ data: process.env.FAKE_MCP_CONFIGURED === "1" || process.env.FAKE_MCP_UNAVOIDABLE === "1" ? [{ name: "configured" }] : [], nextCursor: null });
+    return reply({ data: thread(params.threadId).mcp === null ? [] : [{ name: process.env.FAKE_MCP_CONFIGURED === "1" || process.env.FAKE_MCP_PROJECT === "1" || process.env.FAKE_MCP_UNAVOIDABLE === "1" ? "configured" : "stillfail", runtimeStatus: thread(params.threadId).mcp, tools: {} }], nextCursor: null });
+  }
   if (method === "account/rateLimits/read") return reply({ rateLimits: { primary: { usedPercent: 5 } } });
   if (method === "account/read") return reply({ account: { type: "chatgpt", email: "a@x.test", planType: "plus" }, requiresOpenaiAuth: true });
   if (method === "model/list") {

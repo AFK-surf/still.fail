@@ -33,7 +33,7 @@ priv enum Scope {
 ///|
 /// vitesse-light's colour (its tokenColors), each made to read on a code block's ground (4.5:1, WCAG's AA: its hue
 /// and chroma, its lightness moved the least; a string's and a property's quotes as the words they hold, not faded,
-/// docs/ui-panels.md 对比度).
+/// mbui ui/contrast.mbt).
 fn Scope::light(self : Scope) -> Int64 {
   match self {
     Text => 0x393A34FFL
@@ -164,6 +164,10 @@ fn ink_keep(key : String, ink : String?) -> Unit {
 /// What each piece of `code` in `lang` is (the core's `code.ink`), once the core has said: None while it is asked;
 /// Some(None) for code shown as it is (plain text, Markdown, too long). Asked once by the language and the code.
 pub fn code_ink(c : @ui.Ctx, code : String, lang : String) -> String?? {
+  // (made-up code in a page's bones: shown as it is, nothing asked of the core or read of what it said, Ctx::in_bones)
+  if c.in_bones() {
+    return Some(None)
+  }
   let key = lang + "\u{1}" + code
   match inks.get(key) {
     Some(ink) => return Some(ink)

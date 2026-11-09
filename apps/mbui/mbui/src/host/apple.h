@@ -93,6 +93,7 @@ enum {
   MB_OUTSIDE_POSTED = 11,
   MB_OUTSIDE_STREAMED = 12,
   MB_OUTSIDE_STOOD = 13,
+  MB_OUTSIDE_PERF = 14,
 };
 void mb_host_outside(int32_t kind, int32_t id, int32_t state);
 // whether a native view's picture for snapshots is being taken (apple_views.m): a snapshot waits for it

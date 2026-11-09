@@ -1,4 +1,4 @@
-// The native mesh addon (native/mesh, docs/station-ts-native.md §3): what it offers (iroh, and the image codecs of the
+// The native mesh addon (native/mesh §3): what it offers (iroh, and the image codecs of the
 // thumbnails), and where it is. A release has it beside the station's code (mesh.node); a checkout has it where cargo
 // built it; STILLFAIL_MESH_NATIVE says otherwise.
 import { existsSync } from "node:fs";
@@ -81,6 +81,9 @@ export type Mesh = {
   /// local.rs `peer_process`: the process at the other end of a connected Unix socket (its pid; on macOS its audit token,
   /// hex), null when the system does not say. Absent from an addon from before.
   peerProcess?(fd: number): { pid: number; auditToken: string | null } | null;
+  /// verify.rs `verify`: whether the signature is the key's over the message, by libcrux (formally verified). Absent from
+  /// an addon from before.
+  verify?(alg: "Ed25519" | "ES256" | "ES256-der", key: Buffer, signature: Buffer, message: Buffer): boolean;
   processUsage?(pids: number[]): ({ cpuNs: number; footprint: number; wakeups: number; energyNj: number; diskRead?: number; diskWritten?: number } | null)[];
 };
 

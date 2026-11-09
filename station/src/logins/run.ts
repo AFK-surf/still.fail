@@ -1,4 +1,4 @@
-// One login (docs/remote-login.md, 怎么做到): a login command run on this machine in a pseudo-terminal (the system's
+// One login (怎么做到): a login command run on this machine in a pseudo-terminal (the system's
 // `script`, 200 × 40), with stand-ins for the browser (BROWSER, and `open`, `xdg-open`, `osascript` first on its PATH)
 // that hand the page it would open to the station instead. What a person has to do is read from three places: the page
 // it opens, what it prints (pages, a device code, prompts), and whether it has stopped on a prompt. Its screen is kept by
@@ -12,8 +12,10 @@ import xterm from "@xterm/headless";
 import type { Fibers } from "../ops/fibers.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
+import { withShellCommand } from "../ops/shell-path.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
+import { started } from "../platform/processes.ts";
 import { type Loopback, asksEnter, assignmentsOf, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, saysDone, secretAsked, storesSecret, unwrapped, urlsIn } from "../ops/command-output.ts";
 
 export const COLS = 200;
@@ -136,7 +138,7 @@ export class LoginRun {
     const given = assignmentsOf(this.command, platform.home(this.#o.env));
     const [program, ...args] = given.rest;
     if (program === undefined) return this.#fail(tr(this.#o.lang, "station.machineLogin.badCommand"));
-    const env: Record<string, string> = { ...(platform.prependPath(this.#o.env, this.#o.shims) as Record<string, string>) };
+    let env: Record<string, string> = { ...(platform.prependPath(this.#o.env, this.#o.shims) as Record<string, string>) };
     const browser = `${this.#o.shims}/${platform.exe("browser")}`;
     // What it is given, but not the stand-ins for the browser: the page it opens is the person's to open.
     Object.assign(env, given.env, {
@@ -147,6 +149,9 @@ export class LoginRun {
       GH_BROWSER: browser,
       STILLFAIL_LOGIN_OPENED: this.#o.opened,
     });
+    const foundEnv = await withShellCommand(program, env);
+    if (!this.active) return;
+    if (foundEnv !== env) env = platform.prependPath(foundEnv, this.#o.shims) as Record<string, string>;
     keychainOutOfGit(env);
     const wrapped = platform.terminal(program!, args, COLS, ROWS) ?? [program!, args];
     const r = platform.runnable(wrapped[0], wrapped[1], env);
@@ -157,10 +162,7 @@ export class LoginRun {
       return this.#fail(tr(this.#o.lang, "station.machineLogin.cannotRun", { error: (e as Error).message }));
     }
     this.#child = child;
-    const spawned = await new Promise<Error | null>((resolve) => {
-      child.once("spawn", () => resolve(null));
-      child.once("error", (e) => resolve(e));
-    });
+    const spawned = await started(child);
     if (spawned) {
       this.#exited = true;
       return this.#fail(tr(this.#o.lang, "station.machineLogin.cannotRun", { error: spawned.message }));

@@ -1,4 +1,4 @@
-// tiny-skia's path dashing (path/src/dash.rs, after Skia's SkDashPath.cpp and SkContourMeasure.cpp).
+// tiny-skia's path dashing (after Skia's SkDashPath.cpp and SkContourMeasure.cpp).
 
 ///|
 pub(all) struct StrokeDash {

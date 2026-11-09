@@ -5,7 +5,7 @@ import { parseCall } from "../src/core/calls.ts";
 
 type Scope = keyof typeof SCOPES;
 
-/// `code`'s `ink` holds what `expected` says of each piece (as the Android app's Highlight.kt coloured it), where a
+/// `code`'s `ink` holds what `expected` says of each piece, where a
 /// colour shows: spaces and line ends go with the run before them.
 function paints(code: string, language: string, expected: [string, Scope][]) {
   assert.equal(expected.map(([t]) => t).join(""), code, "the expected pieces are the code");

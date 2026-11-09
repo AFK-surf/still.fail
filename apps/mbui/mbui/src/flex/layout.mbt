@@ -413,6 +413,29 @@ pub fn compute(
 }
 
 ///|
+/// Whether `node` was last laid out given both its width and its height (asked for a size, not for what it holds):
+/// its size is then what it was asked, whatever is under it; what is under it may be laid out again alone
+/// (relayout), nothing above it, where what holds it gave it that size by none of what it holds.
+pub fn Node::laid_given(self : Node) -> Bool {
+  self.p_ok && known(self.p_kw) && known(self.p_kh) && self.style.height_kind() == LEN_PT
+}
+
+///|
+/// `node` laid out again as it was last asked (Node::laid_given), what is under it with it, as compute() with `reuse`
+/// lays out what changed: where it is in what holds it, and its size, stand. A compute of its own (computes() counts it).
+pub fn relayout(node : Node) -> Unit {
+  generation.val = generation.val + 1
+  reusing.val = true
+  absolute_seen.val = false
+  let kw = node.p_kw
+  let kh = node.p_kh
+  size_node(node, kw, kh, kw, kh, node.p_cbw, node.p_cbh, true) |> ignore
+  if absolute_seen.val {
+    layout_static_absolute(node, node, 0.0, 0.0)
+  }
+}
+
+///|
 /// How tall `node` would be `width` wide with no bound on its height, as its subtree stands since the last compute():
 /// measured only, its measures kept among those of that compute: what that compute laid out stands as it was, where
 /// nothing in it is aligned by baseline (finding one lays items out while measuring their container, as compute's reuse
@@ -423,6 +446,25 @@ pub fn measured_height(node : Node, width : Double) -> Double {
   size_node(node, w, undef, w, undef, w, undef, false) |> ignore
   out_h.val
 }
+
+///|
+/// How wide `node` comes to with no bound on its width, `height` tall where that is known (undef: as tall as it comes
+/// to), as its subtree stands since the last compute(): measured only, as measured_height is.
+pub fn measured_width(node : Node, height : Double) -> Double {
+  let b = box_of(node.style, undef, height)
+  let h = or_else(b.h, height)
+  size_node(node, undef, h, undef, h, undef, h, false)
+}
+
+///|
+/// Whether the room a node is told (its `room`'s measure, layout_flex) is the room it is laid out in, not one it is
+/// measured in first.
+pub fn performing() -> Bool {
+  performing_now.val
+}
+
+///|
+let performing_now : Ref[Bool] = { val: false }
 
 ///|
 /// The offset of a relatively positioned box from its insets.
@@ -526,8 +568,9 @@ fn size_node(
       node.p_ok &&
       same(node.p_kw, kw) &&
       same(node.p_kh, kh) &&
-      same(node.p_cbw, cb_w) &&
-      same(node.p_cbh, cb_h) {
+      laid_in_cb(node, kw, kh, cb_w, cb_h) {
+      node.p_cbw = cb_w
+      node.p_cbh = cb_h
       node.skip_gen = generation.val
       counters[1] = counters[1] + 1
       out_h.val = node.p_h
@@ -616,6 +659,26 @@ fn size_node(
 }
 
 ///|
+/// Whether `node`'s last layout, asked `kw` × `kh` again, holds in the containing block `cb_w` × `cb_h`: the one it was
+/// laid out in, or, given both its sizes, another its box takes nothing from (of_cb_w, of_cb_h), as a size measured in
+/// one holds in another (size_node). Given both, nothing else of its layout reads the containing block: what it holds
+/// is laid out in its own content box, its insets are moved by what holds it, what is absolute in it by its own
+/// containing block (not given them, a root, the containing block is the room it has). A list's column growing as a row
+/// comes in gives every row in it a containing block as tall, which none of them reads.
+fn laid_in_cb(node : Node, kw : Double, kh : Double, cb_w : Double, cb_h : Double) -> Bool {
+  let w_same = same(node.p_cbw, cb_w)
+  let h_same = same(node.p_cbh, cb_h)
+  if w_same && h_same {
+    return true
+  }
+  if !known(kw) || !known(kh) {
+    return false
+  }
+  let b = box_for(node, cb_w, cb_h)
+  (w_same || !b.of_cb_w) && (h_same || !b.of_cb_h)
+}
+
+///|
 fn size_uncached(
   node : Node,
   kw : Double,
@@ -627,6 +690,21 @@ fn size_uncached(
   perform : Bool,
 ) -> Double {
   let s = node.style
+  // an item coming or going: as tall as its way has got of what it comes to (as its style says, or what it holds comes
+  // to), what it holds laid out whole from its top in that (Style's come_*); not where what lays it out gives it its
+  // height
+  if known(s.come_now) && !known(kh) {
+    let now = s.come_now
+    s.come_now = undef
+    let fw = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, false)
+    s.come_now = now
+    let tall = come_height(s, out_h.val)
+    if known(tall) {
+      return size_uncached(node, if known(kw) { kw } else { fw }, tall, aw, ah, cb_w, cb_h, perform)
+    }
+  } else if !known(s.come_now) {
+    s.come_k = 1.0
+  }
   let b = box_for(node, cb_w, cb_h)
   // (its max-sizes only what it asks: given a size, it takes it; Style's stretch_past_max)
   let b = if s.stretch_past_max && ((known(kw) && known(b.max_w)) || (known(kh) && known(b.max_h))) {
@@ -661,7 +739,7 @@ fn size_uncached(
   let pbh = b.pbh()
   // leaves measured from their content
   match node.measure {
-    Some(m) =>
+    Some(m) if !node.room =>
       if node.children.length() == 0 {
         if known(w) && known(h) {
           out_h.val = h
@@ -723,6 +801,8 @@ fn size_uncached(
           clamp_size(pbw, b.min_w, b.max_w) - pbw + pbw
         }
       }
+    // (told its room: laid out by what it holds, below)
+    Some(_) => ()
   }
   // as tall as its share of what it holds comes to at its width, what it holds laid out whole in that (Style's
   // content_share): what it holds sized first, then laid out in the height that comes to
@@ -1038,6 +1118,42 @@ fn layout_flex(
   // percentages of children resolve against this content box
   let cb_w = inner_w
   let cb_h = inner_h
+  // one told its room (its `room`) told the room its content box gives what it holds, before that is laid out (the
+  // view's View::by_room, which makes what it holds by that room): what that made or changed in it laid out in this
+  // same layout, below; where it came out otherwise (its first answer more than 0), nothing it was measured to come to
+  // before kept (another room's, or what it held before)
+  match node.measure {
+    Some(m) if node.room => {
+      let wm = if known(inner_w) {
+        Exactly
+      } else if known(avail_inner_w) {
+        AtMost
+      } else {
+        Undefined
+      }
+      let hm = if known(inner_h) {
+        Exactly
+      } else if known(avail_inner_h) {
+        AtMost
+      } else {
+        Undefined
+      }
+      let was_performing = performing_now.val
+      performing_now.val = perform
+      let (changed, _) = m(
+        if known(avail_inner_w) { avail_inner_w } else { 0.0 },
+        wm,
+        if known(avail_inner_h) { avail_inner_h } else { 0.0 },
+        hm,
+      )
+      performing_now.val = was_performing
+      if changed > 0.0 {
+        node.pre_gen = -1
+        node.cache_n = 0
+      }
+    }
+    _ => ()
+  }
   // flex items, from the pool of this depth
   let d = depth.val
   depth.val = d + 1
@@ -1205,15 +1321,18 @@ fn layout_flex(
       if !known(cross_style) || cb.of_cb_h {
         cross_by_height = true
       }
-      let min_main = if row { cb.min_w } else { cb.min_h }
-      // (one never narrower than what it holds: at least as wide as that comes to, measured here, as a basis of auto
-      // would be: what changes in it makes it so again, as anything it holds changing lays its line out again)
-      let min_main = if row && cs.min_held {
-        let held = size_node(c, undef, undef, undef, undef, cb_w, cb_h, false)
+      // (along a row, with what it holds where it is never narrower than that: row_item_min)
+      let min_main = if row { row_item_min(c, cb, cb_w, cb_h) } else { cb.min_h }
+      // (in a row that wraps by its items' least, one that gives way never less than what it holds at their least:
+      // Style's wrap_least)
+      let min_main = if row && s.wrap != NoWrap && s.wrap_least && cs.shrink != 0.0 {
+        let least = least_held(c, cb_w, cb_h)
         if known(min_main) {
-          fmax(min_main, held)
+          fmax(min_main, least)
+        } else if least > 0.0 {
+          least
         } else {
-          held
+          min_main
         }
       } else {
         min_main
@@ -1237,27 +1356,17 @@ fn layout_flex(
       f.unsafe_set(i + SHRINK, if s.fits && cs.drop != 0 { 0.0 } else { cs.shrink })
       // flex base size
       let basis_style = resolve_of(cs.basis_k, cs.basis_v, inner_main)
-      let main_style = if row { cb.w } else { cb.h }
       // (a container sized by what it holds counts a growing item at the more of its flex basis and what it holds, as
       // Chrome sizes one: flex: 1 1 0 words in a fit-content card are as wide as they are, not nothing; flex: 1 1 200
       // with nothing in it still 200)
       let grows_in_unknown = cs.grow > 0.0 && !known(inner_main)
       let mut declared = undef
-      let mut basis = if known(basis_style) && cs.basis_k != LEN_AUTO {
-        if cs.box_sizing == ContentBox {
-          basis_style + (if row { cb.pbw() } else { cb.pbh() })
-        } else {
-          basis_style
-        }
-      } else if known(main_style) {
-        main_style
-      } else {
-        undef
-      }
+      let mut basis = basis_said(cs, cb, row, inner_main)
       if grows_in_unknown && known(basis_style) && cs.basis_k != LEN_AUTO {
         declared = basis
         basis = undef
       }
+      let said_main = known(basis)
       if !known(basis) {
         // size from content: cross known if fixed or stretched in a known line
         let mut kc = cross_style
@@ -1299,8 +1408,22 @@ fn layout_flex(
       let pb_main = if row { cb.pbw() } else { cb.pbh() }
       f.unsafe_set(i + PB_MAIN, pb_main)
       basis = fmax(basis, pb_main)
+      // (coming or going down a column, as tall as its way has got of what it comes to, however tall it is said to be,
+      // its least too: Style's come_*; as what it holds comes to, worked out so as it was sized above)
+      if !row && known(cs.come_now) {
+        if said_main {
+          let tall = come_height(cs, basis)
+          if known(tall) {
+            basis = tall
+          }
+        }
+        if cs.come_k < 1.0 {
+          f.unsafe_set(i + MIN_MAIN, undef)
+          f.unsafe_set(i + PB_MAIN, 0.0)
+        }
+      }
       f.unsafe_set(i + BASIS, basis)
-      f.unsafe_set(i + HYP, clamp_size(basis, min_main, max_main))
+      f.unsafe_set(i + HYP, clamp_size(basis, f.unsafe_get(i + MIN_MAIN), max_main))
     }
     // (no more items: their numbers stay where they are)
     let f = pool.f
@@ -1308,6 +1431,18 @@ fn layout_flex(
     let count = pool.count
     let at = pool.at
     let aligns = pool.aligns
+    // (the gap before each item where one comes or goes in a column: as much of it as that one is there and some before
+    // it is (Style's come_k); none such, none worked out)
+    let mut comes = false
+    if !row {
+      for k in 0..<count {
+        if flow.unsafe_get(at.unsafe_get(k)).style.come_k < 1.0 {
+          comes = true
+          break
+        }
+      }
+    }
+    let gap_before : Array[Double] = if comes { Array::make(count, gap_main) } else { [] }
     // lines
     let lines = pool.lines
     let wrap = s.wrap != NoWrap
@@ -1317,7 +1452,13 @@ fn layout_flex(
     // (without wrapping, all are on one line)
     if wrap {
       for k in 0..<count {
-        let outer = f.unsafe_get(k * ITEM + HYP) + f.unsafe_get(k * ITEM + MARGIN_MAIN)
+        // (each at its flex basis; or, by its items' least, at the least it comes to: Style's wrap_least)
+        let size = if row && s.wrap_least && f.unsafe_get(k * ITEM + SHRINK) != 0.0 {
+          fmax(or_else(f.unsafe_get(k * ITEM + MIN_MAIN), 0.0), f.unsafe_get(k * ITEM + PB_MAIN))
+        } else {
+          f.unsafe_get(k * ITEM + HYP)
+        }
+        let outer = size + f.unsafe_get(k * ITEM + MARGIN_MAIN)
         if k > start &&
           known(line_limit) &&
           sum + gap_main + outer > line_limit + 0.0001 {
@@ -1336,7 +1477,22 @@ fn layout_flex(
     let mut max_line_main = 0.0
     for ln in lines {
       let n = ln.end - ln.start
-      let gaps = if n > 1 { gap_main * (n - 1).to_double() } else { 0.0 }
+      let gaps = if comes {
+        let mut seen = 0.0
+        let mut all = 0.0
+        for k in ln.start..<ln.end {
+          let here = flow.unsafe_get(at.unsafe_get(k)).style.come_k
+          let g = if k == ln.start { 0.0 } else { gap_main * fmin(here, seen) }
+          gap_before.unsafe_set(k, g)
+          all = all + g
+          seen = fmax(seen, here)
+        }
+        all
+      } else if n > 1 {
+        gap_main * (n - 1).to_double()
+      } else {
+        0.0
+      }
       let mut sum_hyp = gaps
       // (and without them, for resolve_flexible)
       let mut items_hyp = 0.0
@@ -1377,6 +1533,14 @@ fn layout_flex(
       } else {
         for k in ln.start..<ln.end {
           f.unsafe_set(k * ITEM + MAIN, f.unsafe_get(k * ITEM + HYP))
+        }
+      }
+      // (a page's list's rows on a host's pixels: each as tall as whole pixels, Style's rows_grid)
+      let g = s.rows_grid
+      if g > 0.0 && !row {
+        for k in ln.start..<ln.end {
+          let m = f.unsafe_get(k * ITEM + MAIN)
+          f.unsafe_set(k * ITEM + MAIN, (m * g - 0.000001).ceil() / g)
         }
       }
       let mut used = gaps
@@ -1580,6 +1744,10 @@ fn layout_flex(
       let mut p = lead
       for k in ln.start..<ln.end {
         let i = k * ITEM
+        // (the gap before it its share of it where one comes or goes: gap_before)
+        if comes && k > ln.start {
+          p = p - gap_main + gap_before.unsafe_get(k)
+        }
         let fl = flags.unsafe_get(k)
         let m_start = f.unsafe_get(i + MAR_MAIN_START)
         let m_end = f.unsafe_get(i + MAR_MAIN_END)
@@ -1850,9 +2018,10 @@ fn first_fit(flow : Array[Node], room : Double, cb_w : Double, cb_h : Double) ->
 
 ///|
 /// What each of a row's items `flow` takes along it as fit_flow measures it, with its margins (0 for what is put where
-/// it is said): what may leave is there whole or not at all, and what never gives way (shrink 0: kept as wide as what
-/// it holds) is never narrower: each as wide as what it holds; the rest at least their least, or what the row keeps
-/// of them (fit_need: words cut short keep some of them). And which is its ⋯ (Style's `drop` -1; -1 none).
+/// it is said): what may leave is there whole or not at all, what is kept whole while something may leave (Style's
+/// fit_whole), what never gives way (shrink 0: kept as wide as what it holds) or is never narrower than what it holds (Style's min_held, as the line lays it out: row_item_min) is never
+/// narrower: each as wide as what it holds; the rest at least their least, or what the row keeps of them (fit_need:
+/// words cut short keep some of them). And which is its ⋯ (Style's `drop` -1; -1 none).
 fn fit_needs(flow : Array[Node], cb_w : Double, cb_h : Double) -> (Array[Double], Int) {
   let need = Array::make(flow.length(), 0.0)
   let mut more = -1
@@ -1862,8 +2031,10 @@ fn fit_needs(flow : Array[Node], cb_w : Double, cb_h : Double) -> (Array[Double]
     }
     let b = box_for(c, cb_w, cb_h)
     let least = if known(b.min_w) { b.min_w } else { 0.0 }
-    let w = if c.style.drop != 0 || (c.style.shrink == 0.0 && !known(b.w)) {
+    let w = if c.style.drop != 0 || c.style.fit_whole || (c.style.shrink == 0.0 && !known(b.w)) {
       size_node(c, undef, undef, undef, undef, cb_w, cb_h, false)
+    } else if c.style.min_held {
+      row_item_min(c, b, cb_w, cb_h)
     } else if known(b.w) {
       b.w
     } else if known(c.style.fit_need) {
@@ -1877,6 +2048,89 @@ fn fit_needs(flow : Array[Node], cb_w : Double, cb_h : Double) -> (Array[Double]
     }
   }
   (need, more)
+}
+
+///|
+/// The least an item `c` of a row (its box `cb`, in a container `cb_w` × `cb_h`) may come to along it, as compute's
+/// line has it (its MIN_MAIN): its min-width, no less than its padding and border (box_of); where it is never narrower
+/// than what it holds (Style's min_held), that measured, if more.
+fn row_item_min(c : Node, cb : Box, cb_w : Double, cb_h : Double) -> Double {
+  // (one never narrower than what it holds: at least as wide as that comes to, measured here, as a basis of auto
+  // would be: what changes in it makes it so again, as anything it holds changing lays its line out again)
+  if c.style.min_held {
+    let held = size_node(c, undef, undef, undef, undef, cb_w, cb_h, false)
+    if known(cb.min_w) {
+      fmax(cb.min_w, held)
+    } else {
+      held
+    }
+  } else {
+    cb.min_w
+  }
+}
+
+///|
+/// An item's flex base size as its style `cs` says it (its box `cb`, along a row or a column, `inner_main` the room
+/// along it where known), as compute's line has it: its basis in points, or a share of that room, with its padding and
+/// border in a content box; else its width (its height, in a column); NaN where what it holds decides it.
+fn basis_said(cs : Style, cb : Box, row : Bool, inner_main : Double) -> Double {
+  let basis_style = resolve_of(cs.basis_k, cs.basis_v, inner_main)
+  let main_style = if row { cb.w } else { cb.h }
+  if known(basis_style) && cs.basis_k != LEN_AUTO {
+    if cs.box_sizing == ContentBox {
+      basis_style + (if row { cb.pbw() } else { cb.pbh() })
+    } else {
+      basis_style
+    }
+  } else if known(main_style) {
+    main_style
+  } else {
+    undef
+  }
+}
+
+///|
+/// The least a row `c` comes to along it from what it holds (Style's wrap_least), in a container `cb_w` × `cb_h`: its
+/// padding and border, its gaps and each of its items at the least compute's line may bring it to, with their margins:
+/// what never gives way (shrink 0) at its HYP as least_hyp has it; the rest at their least (row_item_min: min-width,
+/// padding and border, min_held), and, a row, no less than what they hold at its least. 0 for what is not a row: its
+/// items go across it, its least its own (row_item_min).
+fn least_held(c : Node, cb_w : Double, cb_h : Double) -> Double {
+  if !is_row(c.style.direction) {
+    return 0.0
+  }
+  let b = box_for(c, cb_w, cb_h)
+  let mut w = b.pbw()
+  let mut n = 0
+  for k in flow_children(c) {
+    if k.style.position == Absolute {
+      continue
+    }
+    let kb = box_for(k, undef, undef)
+    let least = if k.style.shrink == 0.0 {
+      least_hyp(k, kb)
+    } else {
+      fmax(or_else(row_item_min(k, kb, undef, undef), 0.0), least_held(k, undef, undef))
+    }
+    w = w + least + kb.mar_l + kb.mar_r
+    n = n + 1
+  }
+  if n > 1 {
+    w = w + edge_of(c.style.gap_col_k, c.style.gap_col_v, undef) * (n - 1).to_double()
+  }
+  w
+}
+
+///|
+/// The HYP of an item `k` (its box `kb`) that never gives way in a row whose width is not known yet, as compute's line
+/// works it out there: its flex base size (basis_said; a share of the row's room not known, as none said), else what
+/// it holds measured with nothing given it across or along; no less than its padding and border; within its least
+/// (row_item_min) and its max-width. Not what the line does past that where the row's room is known: a growing item's
+/// basis kept with what it holds (grows_in_unknown), a row that leaves out what it has not the room for (FITS).
+fn least_hyp(k : Node, kb : Box) -> Double {
+  let basis = basis_said(k.style, kb, true, undef)
+  let basis = if known(basis) { basis } else { size_node(k, undef, undef, undef, undef, undef, undef, false) }
+  clamp_size(fmax(basis, kb.pbw()), row_item_min(k, kb, undef, undef), kb.max_w)
 }
 
 ///|
@@ -2150,9 +2404,17 @@ fn resolve_flexible(
     let mut sum_factors = 0.0
     let mut free = space
     let mut sum_scaled = 0.0
+    let mut remaining = space
+    let mut unfrozen = 0
     for k in a..<b {
       let i = k * ITEM
       let frozen = (flags.unsafe_get(k) & FROZEN) != 0
+      remaining = remaining - f.unsafe_get(i + MARGIN_MAIN)
+      if frozen {
+        remaining = remaining - f.unsafe_get(i + TARGET)
+      } else {
+        unfrozen += 1
+      }
       free = free -
         f.unsafe_get(i + MARGIN_MAIN) -
         (if frozen { f.unsafe_get(i + TARGET) } else { f.unsafe_get(i + BASIS) })
@@ -2175,7 +2437,11 @@ fn resolve_flexible(
       }
       let i = k * ITEM
       let basis = f.unsafe_get(i + BASIS)
-      let t = if grow {
+      // One item taking all the remaining room takes that room itself. Reconstructing it from its basis and a
+      // scaled difference can alternate between adjacent floating-point values as its content is measured again.
+      let t = if unfrozen == 1 && sum_factors >= 1.0 && (grow || sum_scaled > 0.0) {
+        remaining
+      } else if grow {
         basis + free * f.unsafe_get(i + FACTOR) / sum_factors
       } else {
         let scaled = f.unsafe_get(i + FACTOR) * basis

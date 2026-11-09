@@ -26,11 +26,11 @@ test "an agent's history read up to its top asks for the page before once, what 
   let asked : Array[Int] = []
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "history" {
         { value: Some(older_history(from.get())), error: None, version: 1 }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -43,7 +43,7 @@ test "an agent's history read up to its top asks for the page before once, what 
       }
     },
   }
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
@@ -72,4 +72,92 @@ test "an agent's history read up to its top asks for the page before once, what 
     None => fail("what was read went out of view")
   }
   assert_true(t.find("第 3 页第 0 条") is None)
+}
+
+///|
+test "an agent's history asks for the page before again only once the core no longer says its read failed" {
+  new_run()
+  let base = fixture("chat")
+  let older = @signals.signal("")
+  let asked = Ref(0)
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      if name == "history" {
+        let h = match older_history(4) {
+          Object(m) => {
+            let m = m.copy()
+            if older.get() != "" {
+              m["older"] = Json::string(older.get())
+              m["edge"] = Json::string("读取更早的执行历史失败：busy，稍后重试")
+            }
+            Json::object(m)
+          }
+          j => j
+        }
+        { value: Some(h), error: None, version: 1 }
+      } else {
+        base.topic(name, params).get().snapshot()
+      }
+    },
+    call: fn(name, params, done) {
+      if name == "history.older" {
+        asked.val = asked.val + 1
+        older.set("failed")
+        done(Err("busy"))
+      } else {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  app.nav.push(History(r, "s-c1", None))
+  t.run_for(@ui.move_most_ms)
+  for _ in 0..<60 {
+    if asked.val > 0 {
+      break
+    }
+    t.drag(195.0, 300.0, 195.0, 420.0, steps=40)
+  }
+  assert_eq(asked.val, 1)
+  t.run_for(history_fling_ms)
+  // at its top, the core saying why: not asked again meanwhile, however it is moved
+  t.drag(195.0, 300.0, 195.0, 420.0, steps=40)
+  t.run_for(history_fling_ms)
+  assert_eq(asked.val, 1)
+  assert_true(t.find("读取更早的执行历史失败：busy，稍后重试") is Some(_))
+  // its while up: asked again
+  older.set("")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(asked.val, 2)
+}
+
+///|
+test "an agent's history whose first read failed says why over its bones" {
+  new_run()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      if name == "history" {
+        {
+          value: Some({ "items": [], "live": [], "usage": [], "edge": "正在读取执行历史", "empty": true, "loaded": false, "failed": "station 正忙" }),
+          error: None,
+          version: 1,
+        }
+      } else {
+        base.topic(name, params).get().snapshot()
+      }
+    },
+  }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  open_chat(r)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  app.nav.push(History(r, "s-c1", None))
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("station 正忙") is Some(_))
 }

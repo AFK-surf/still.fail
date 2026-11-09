@@ -7,10 +7,19 @@
 // those said to be: `w=Cut`), what a row says may go left out of it (Ctx::box `drop`, into its ⋯ where it has one),
 // what scrolls or is cut by its own box (a list, a scroll, `sideways`, `clip`). What overlaps on purpose says so: a
 // margin below 0 (faces in a stack), a layer, something put where it is said.
+//
+// Controls neither scroll sideways nor wrap (the user, 2026-10-25: both ugly). The last-resort cutting is so the
+// worst case stays readable (2026-10-26: 「保证在最差的情况下也没有现在这么差」). Words of uncertain length get
+// their own line (2026-10-26: 「如果文字长度是不可确定的，那就应该尽量让它独立」).
 
 ///|
 /// How far two things may run into each other, or past the window, and still be apart: the layout's rounding.
 let squeeze_slack : Double = 1.0
+
+///|
+/// The fewest characters a note's last line may hold where it goes on in lines beside a control (sub_lines_beside):
+/// fewer, a letter or two alone on a line, is said as the row squeezing it.
+let squeeze_last_chars : Int = 3
 
 ///|
 /// How many characters of words cut short with an ellipsis must still show: fewer, and the words were squeezed out.
@@ -97,7 +106,9 @@ fn Ctx::squeeze_faults(self : Ctx) -> Array[String] {
       seen[i] = seen[p] && b.opacity > 0.01
       // (what scrolls sideways may run past its edges; a list or a scroll runs up and down, and cuts across as a box
       // that clips does)
-      if a.sideways {
+      // (nor what is drawn at another size than it is laid out at, a picture of a page drawn small: what holds it cuts
+      // it as drawn, its words lie where they are laid out)
+      if a.sideways || self.squeeze_scaled(p) {
         room[i * 2] = -1.0e9
         room[i * 2 + 1] = 1.0e9
       } else if a.squeeze_cuts() {
@@ -296,22 +307,25 @@ fn Ctx::view_squeeze_faults(self : Ctx) -> Array[String] {
       return
     }
     let say = fn(kept : Int, need : Double) {
+      // (and where it was made: tester_sources.mbt)
+      let src = tree_source_said(c.id, paren=true)
       if kept < squeeze_kept_chars {
-        out.push("window tree ‘\{c.words}’: its words cut to \{kept} characters (they need \{need.round()})")
+        out.push("window tree ‘\{c.words}’: its words cut to \{kept} characters (they need \{need.round()})\{src}")
       } else if !tree.allows_ellipsis(c.id) {
-        out.push("window tree ‘\{c.words}’: its words cut short without saying they may be")
+        out.push("window tree ‘\{c.words}’: its words cut short without saying they may be\{src}")
       }
     }
     let k = c.words_look
     if c.runs.is_empty() {
-      let (size, line, style) = (self.sp(k.size), self.sp(k.line), view_words_style())
-      let whole = layout_text(c.words, size, k.weight, 1.0e9, false, line~, style~)
+      let (size, line, style, spacing) = (self.sp(k.size), view_line(self, k), view_words_style(), view_spacing(self, k))
+      let words = view_words_set(c.words, k)
+      let whole = layout_text(words, size, k.weight, 1.0e9, false, line~, style~, spacing~)
       if whole.w > c.w + 0.5 {
-        let shown = ellipsized(c.words, whole, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~) })
+        let shown = ellipsized(words, whole, c.w, fn(s) { layout_text(s, size, k.weight, 1.0e9, false, line~, style~, spacing~) })
         say(shown.shaped.starts.length() - 1, whole.w)
       }
     } else {
-      let rich = view_rich(c.runs, k)
+      let rich = view_rich(c.runs, k, c.runs_look)
       let whole = layout_rich(rich, 1.0e9)
       if whole.w > c.w + 0.5 {
         let cut = cut_rich({ ..rich, max_lines: 1 }, whole, c.w)
@@ -411,11 +425,23 @@ fn Node::squeeze_cuts(self : Node) -> Bool {
 }
 
 ///|
-/// Whether a node lies apart from its parent's flow, over what is beside it on purpose: a layer, a pager's page, one put
-/// where it is said, what is over the whole window, one drawn moved off its place (`tx`, `ty`: a face over the one
+/// Whether node `i` is drawn at another size than it is laid out at (its look scales it).
+fn Ctx::squeeze_scaled(self : Ctx, i : Int) -> Bool {
+  match self.drawn_entry(i) {
+    Some(e) => {
+      let l = e.look_now()
+      l.sx != 1.0 || l.sy != 1.0
+    }
+    None => false
+  }
+}
+
+///|
+/// Whether a node lies apart from its parent's flow, over what is beside it on purpose: a layer, one put where it
+/// is said, what is over the whole window, one drawn moved off its place (`tx`, `ty`: a face over the one
 /// before it, something on its way).
 fn Node::squeeze_aside(self : Node) -> Bool {
-  self.layer || self.portal || self.pager != 0 || self.placed_at() || self.moved_off()
+  self.layer || self.portal || self.placed_at() || self.moved_off()
 }
 
 ///|
@@ -452,6 +478,17 @@ fn Ctx::beside_faults(self : Ctx, seen : Array[Bool]) -> Array[String] {
         Some(f) => f.w > b.fw + squeeze_slack
         None => false
       })
+    if b.wrap {
+      match self.gives_beside(i) {
+        Some(o) => {
+          out.push(
+            "\{self.named(i)}: may go on in lines beside \{self.named(o)}, after it in their row, which gives way too: how far each gives is the other's length (a short name broken beside long words)",
+          )
+          continue
+        }
+        None => ()
+      }
+    }
     guard wrapped || cut else { continue }
     // the room taken by what else shows in the nearest row it shares (not one that goes on in lines: what does not fit
     // there has a line of its own)
@@ -491,13 +528,81 @@ fn Ctx::beside_faults(self : Ctx, seen : Array[Bool]) -> Array[String] {
       spacing=b.spacing,
       style=b.words_style(),
     )
-    if wrapped && tl.line_start.length() == 1 {
+    // (a note under a title beside a control across their middle takes the lines the row leaves it: sub_lines_beside;
+    // not a letter or two left on a line of its own)
+    let left = b.text.length() - shown.line_start[lines - 1]
+    if wrapped && tl.line_start.length() == 1 && !(left >= squeeze_last_chars && self.sub_lines_beside(i)) {
       out.push("\{self.named(i)}: \{lines} lines for what shares their row (alone there, one: \{tl.w.round()} of \{alone.round()})")
     } else if cut && tl.w <= alone + squeeze_slack {
       out.push("\{self.named(i)}: cut short for what shares their row (alone there, whole: \{tl.w.round()} of \{alone.round()})")
     }
   }
   out
+}
+
+///|
+/// What shows after words `i` that may go on in lines, in the nearest row they share (not one that goes on in lines),
+/// and gives way there as well: a row short of room squeezes both, each by the other's length, so short words (a
+/// station's name) are broken onto lines beside long ones (what its machine is) that could have been cut instead,
+/// whatever the fixture's words. Nothing when the words, or a box on their way to that row, keep their own width
+/// (`keep`, `Px`) or are said to give way first (`w=Cut`), when they share a column with more (what is beside it is
+/// not on their line), or when what is after them in that row keeps its own.
+fn Ctx::gives_beside(self : Ctx, i : Int) -> Int? {
+  let n = self.count
+  let mut k = i
+  let mut p = self.nodes[i].parent
+  while p >= 0 && p < n {
+    let on = self.nodes[k]
+    if on.keep || on.w is Px(_) || on.w is Cut {
+      return None
+    }
+    let a = self.nodes[p]
+    // (a box that cuts what it holds still squeezes it in its row; one that scrolls has the room)
+    if a.sideways || a.kind == kind_list || a.kind == kind_scroll || a.kind == kind_page {
+      return None
+    }
+    if a.dir == Row && !a.flow {
+      let shared = on.w is Fill(_)
+      let mut ch = on.next
+      while ch >= 0 {
+        let cn = self.nodes[ch]
+        if !(shared && cn.w is Fill(_)) && cn.fw > squeeze_slack && cn.least + squeeze_slack < cn.fw &&
+          self.squeeze_gives(ch) {
+          return Some(ch)
+        }
+        ch = cn.next
+      }
+      return None
+    }
+    // (a column holding more than them: what is beside it is beside the column, not on their line)
+    if a.first != k || on.next >= 0 {
+      return None
+    }
+    k = p
+    p = a.parent
+  }
+  None
+}
+
+///|
+/// Whether node `k`, shown, gives way where its row is short of room: words in it that go on in lines or are cut
+/// short, nothing on their way keeping its width (`keep`, `Px`).
+fn Ctx::squeeze_gives(self : Ctx, k : Int) -> Bool {
+  let b = self.nodes[k]
+  if b.keep || b.w is Px(_) || b.squeeze_aside() || b.opacity <= 0.01 || b.fw <= squeeze_slack {
+    return false
+  }
+  if b.kind == kind_text {
+    return b.text != "" && (b.wrap || b.w is Cut)
+  }
+  let mut ch = b.first
+  while ch >= 0 {
+    if self.squeeze_gives(ch) {
+      return true
+    }
+    ch = self.nodes[ch].next
+  }
+  false
 }
 
 ///|
@@ -514,6 +619,74 @@ fn Ctx::shows_after(self : Ctx, k : Int) -> Bool {
       return true
     }
     ch = cn.next
+  }
+  false
+}
+
+///|
+/// Whether words `i` that go on in lines are a line under a title (in a column of words, after what stands over them)
+/// beside what keeps its width standing across the middle of the whole column, not on their line (a switch, a
+/// button at a row's end, across the middle of a title and its note: settings' rows, @sf.switch_row): there they
+/// may take the lines the row leaves them, as a note beside a control does. A title itself, words beside words that
+/// give way too, or what is on the line of its words are not.
+fn Ctx::sub_lines_beside(self : Ctx, i : Int) -> Bool {
+  let n = self.count
+  let mut k = i
+  let mut p = self.nodes[i].parent
+  let mut under = false
+  while p >= 0 && p < n {
+    let a = self.nodes[p]
+    if a.sideways || a.kind == kind_list || a.kind == kind_scroll || a.kind == kind_page {
+      return false
+    }
+    if a.dir == Row && !a.flow {
+      guard under else { return false }
+      let words = self.nodes[k]
+      let middle = words.y + words.fh / 2.0
+      let mut beside = false
+      let mut ch = words.next
+      while ch >= 0 {
+        let cn = self.nodes[ch]
+        if !cn.squeeze_aside() && cn.fw > squeeze_slack && cn.opacity > 0.01 && (cn.first >= 0 || cn.squeeze_shows()) {
+          // (what gives way too, or stands on a line of the words, not across their middle: as before)
+          if self.squeeze_gives(ch) || cn.fh + squeeze_slack >= words.fh ||
+            (cn.y + cn.fh / 2.0 - middle).abs() > squeeze_slack {
+            return false
+          }
+          beside = true
+        }
+        ch = cn.next
+      }
+      return beside
+    }
+    // (in a column of words after a title shown over them: words, not only room or what is hidden)
+    let mut over = a.first
+    while over >= 0 && over != k && !under {
+      under = self.shows_words(over)
+      over = self.nodes[over].next
+    }
+    k = p
+    p = a.parent
+  }
+  false
+}
+
+///|
+/// Whether node `k` shows words: words of its own or in what it holds, drawn, not apart from the flow.
+fn Ctx::shows_words(self : Ctx, k : Int) -> Bool {
+  let b = self.nodes[k]
+  if b.squeeze_aside() || b.opacity <= 0.01 || b.fw <= squeeze_slack || b.fh <= squeeze_slack {
+    return false
+  }
+  if b.kind == kind_text {
+    return b.text.trim().length() > 0
+  }
+  let mut ch = b.first
+  while ch >= 0 {
+    if self.shows_words(ch) {
+      return true
+    }
+    ch = self.nodes[ch].next
   }
   false
 }

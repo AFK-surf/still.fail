@@ -1,4 +1,4 @@
-// 用量's days (usage.mbt usage_chart, the web's Usage.tsx DaysChart): each day's bar in the middle of its day over its
+// 用量's days (usage.mbt usage_chart): each day's bar in the middle of its day over its
 // date, standing on the days' foot as high as its share of the scale's top; all in full until a day is picked, then
 // the others faded, the day pressed again let go. And the page: what someone opening it wants to know, most first.
 
@@ -36,11 +36,33 @@ fn usage_week(parts : Array[Array[Double]]) -> Json {
   }
   {
     "daily": Json::array(daily),
+    "split": "models",
     "series": Json::array(series),
     "max": Json::number(max),
     "top": Json::number(100.0),
     "ticks": [{ "value": 50.0, "label": "50" }, { "value": 100.0, "label": "100" }],
   }
+}
+
+///|
+test "usage: the chosen series keeps its colour and shows its own peak on the whole period's scale" {
+  let t = days_tester(
+    usage_week([[80.0, 2.0], [1.0, 20.0], [0.0, 15.0], [4.0, 3.0], [3.0, 2.0], [2.0, 1.0], [1.0, 0.0]]),
+    filtered=Some(usage_week([[2.0], [20.0], [15.0], [3.0], [2.0], [1.0], [0.0]])),
+  )
+  let date = t.rect_of("10/18").unwrap()
+  usage_pick.only.set(("models", "b"))
+  t.draw()
+  assert_eq(t.rect_of("10/18"), Some(date))
+  // (the whole period's peak closing its room as the series' own comes, gone once it has)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("$20") is Some(_))
+  assert_true(t.find("$82") is None)
+  assert_true(t.drawn_rects().iter().any(fn(r) { r.2 == 24.0 && r.4 == @sf.usage_series(1) }))
+  assert_true(!t.drawn_rects().iter().any(fn(r) { r.2 == 24.0 && r.4 == @sf.usage_series(0) }))
+  t.tap_text("10/17")
+  t.draw()
+  assert_true(t.find("$2") is Some(_))
 }
 
 ///|
@@ -56,16 +78,29 @@ fn usage_faded_bars(t : @ui.Tester) -> Array[(Double, Double, Double, Double, In
 }
 
 ///|
-/// usage_chart over `v` in a card's width (282: a phone's 346 less the page's 12 and the card's 20 each side).
-fn days_tester(v : Json) -> @ui.Tester {
+/// usage_chart_node over `v` in a card's width (282: a phone's 346 less the page's 12 and the card's 20 each side), made
+/// once in the window's tree, the page's look narrow.
+fn days_tester(v : Json, filtered? : Json? = None) -> @ui.Tester {
   usage_reset()
   @sf.set_dark(Some(false))
-  let t = @ui.Tester::new(fn(c) {
-    @sf.begin(c) |> ignore
-    c.with_theme(@sf.ui_theme(), fn() {
-      c.box(align=AStart, fn() { c.box(w=Px(282.0), fn() { usage_chart(c, Some(v)) |> ignore }) |> ignore }) |> ignore
-    })
-  }, platform=2)
+  let t = @ui.Tester::new(fn(_c) {  }, platform=2)
+  @ui.set_view_app(
+    fn(root) {
+      // (its nodes drawn in still.fail's theme, as the app's are: app_tree's; told as the tree is made, set_view_app
+      // having forgotten what was told before it)
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      root.box(fn(b) {
+        b.width(Is(Some(282.0))) |> ignore
+        @sf.look_lent(b, @sf.Look::Narrow)
+        usage_chart_node(b, fn() { Some(v) }, fn() { if usage_pick.only.get().0 != "" { filtered } else { Some(v) } })
+      })
+      |> ignore
+    },
+    around=fn(c) {
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() { @ui.old_views_here(c) })
+    },
+  )
   t.draw()
   t
 }
@@ -167,40 +202,51 @@ fn usage_year_now() -> Json {
 test "the year: a month whose weeks have not the room for its name says none, not an ellipsis; a day pointed at says its date and tokens" {
   usage_reset()
   @sf.set_dark(Some(false))
-  let cell = Ref(None)
-  let t = @ui.Tester::new(
-    fn(c) {
-      @sf.begin(c) |> ignore
-      c.with_theme(@sf.ui_theme(), fn() {
-        c.box(align=AStart, fn() {
-          c.box(w=Px(720.0), fn() {
-            usage_year(c, Some(usage_year_now()), 52)
-            cell.val = c.rect_of(c.id("usage-year/50/3"))
-          })
-          |> ignore
-        })
-        |> ignore
+  let t = @ui.Tester::new(fn(_c) {  }, w=800.0, h=600.0, native=Mouse, pointing=Mouse)
+  @ui.set_view_app(
+    fn(root) {
+      // (its nodes drawn in still.fail's theme, as the app's are: app_tree's; told as the tree is made, set_view_app
+      // having forgotten what was told before it)
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      let tips_at : Ref[@view.View?] = Ref(None)
+      let tips = @sf.TipLayer::new(fn() { tips_at.val })
+      root.box(fn(b) {
+        b.width(Is(Some(720.0))) |> ignore
+        @sf.look_lent(b, @sf.Look::Wide)
+        usage_year_node(b, fn() { Some(usage_year_now()) }, fn() { 52 }, tips~)
       })
+      |> ignore
+      tips_at.val = Some(root.box(fn(l) { l.over(Is(true)) |> ignore }))
     },
-    w=800.0,
-    h=600.0,
-    native=Mouse,
-    pointing=Mouse,
+    around=fn(c) {
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() { @ui.old_views_here(c) })
+    },
   )
   t.draw()
   t.draw()
   assert_true(t.rect_of("10月") is Some(_))
   let last = t.lines_of("11月")
   assert_true(last.iter().all(fn(l) { !l.has_suffix("…") }), msg="\{last}")
-  // a day pointed at: its date and tokens a moment later
-  let (x, y, w, h) = cell.val.unwrap()
-  t.move(x + w / 2.0, y + h / 2.0)
+  // a day pointed at: its date and tokens a moment later (week 50's fourth day: its column and row among the cells,
+  // each a square under the months' row)
+  let squares = t.drawn_rects().filter(fn(r) { r.2 == r.3 && r.2 > 4.0 && r.2 < 20.0 })
+  let ys = squares.map(fn(r) { r.1 })
+  ys.sort()
+  ys.dedup()
+  // (the weekdays' rows: the first seven down; the levels' squares under them none of the grid's)
+  let cells = squares.filter(fn(r) { ys.length() >= 7 && r.1 <= ys[6] })
+  let xs = cells.map(fn(r) { r.0 })
+  xs.sort()
+  xs.dedup()
+  assert_true(xs.length() >= 52 && ys.length() >= 7, msg="the grid's columns \{xs.length()}, rows \{ys.length()}")
+  let side = cells[0].2
+  t.move(xs[50] + side / 2.0, ys[3] + side / 2.0)
   t.run_for(@sf.tip_delay_ms * 2.0)
-  assert_true(t.find("第 \{50 * 7 + 3} 天 · 1 token") is Some(_))
+  assert_true(t.find("第 \{50 * 7 + 3} 天 · 1 token") is Some(_), msg="\{t.drawn_text()}")
   t.leave()
   t.run_for(@sf.tip_delay_ms * 2.0)
 }
-
 ///|
 test "用量, at each width and with either hand: the cost and its change, the days split by person or by model, the chats; a day picked, then let go; 30 天 picked" {
   for case in page_cases {
@@ -222,7 +268,7 @@ test "用量, at each width and with either hand: the cost and its change, the d
     assert_true(t.find("$118") is Some(_) && t.find("↑18%") is Some(_) && t.find("比前 7 天") is Some(_), msg=at)
     assert_true(t.find("Ana") is Some(_) && t.find("按人") is Some(_) && t.find("按模型") is Some(_), msg=at)
     // the chats that cost the most, each with who and which model
-    assert_true(t.find("整理发布清单") is Some(_) && t.find("林 · Opus 5.5 · Studio") is Some(_), msg=at)
+    assert_true(t.find("整理发布清单") is Some(_) && t.find("林 · Opus 5.5 · Willow") is Some(_), msg=at)
     // not here: the allowances (the profiles' page), the calls and tokens, the accounts
     assert_true(t.find("lin@example.com") is None && t.find("1,416 次") is None && t.find("按账号") is None, msg=at)
     // split by model instead: each model named
@@ -245,6 +291,55 @@ test "用量, at each width and with either hand: the cost and its change, the d
     // 30 days: a date a week under the bars (the core's `tick`), today's among them
     assert_true(t.find("10/23") is Some(_), msg=at)
     assert_true(t.find("10/24") is None, msg=at)
+  }
+}
+
+///|
+test "用量: selecting a model keeps every legend and the chart in place while its filtered view is read and after it arrives" {
+  for case in page_cases {
+    let (w, platform) = case
+    let pending = @signals.signal(true, same=fn(a, b) { a == b })
+    let t = setting_tester(Usage, w, platform~, h=2400.0, over=fn(base) {
+      { ..base, topic_read: fn(name, params) {
+        let answer = base.topic(name, params).get().snapshot()
+        if name != "usage" || params.get("only") is None {
+          answer
+        } else if pending.get() {
+          { ..answer, value: None }
+        } else {
+          answer
+        }
+      } }
+    })
+    let at = "\{w} platform \{platform}"
+    t.tap_text("按模型")
+    t.draw()
+    let opus = t.rect_of("Opus 5.5").unwrap()
+    let gpt = t.rect_of("GPT-6").unwrap()
+    let date = t.rect_of("10/3").unwrap()
+    t.tap_text("GPT-6")
+    t.draw()
+    assert_eq(usage_pick.only.get(), ("models", "gpt-6"), msg=at)
+    assert_eq(t.rect_of("Opus 5.5"), Some(opus), msg=at)
+    assert_eq(t.rect_of("GPT-6"), Some(gpt), msg=at)
+    assert_eq(t.rect_of("10/3"), Some(date), msg=at)
+    assert_true(t.drawn_rects().iter().any(fn(r) { r.2 == 24.0 && r.4 == @sf.usage_series(1) }), msg=at)
+    assert_true(!t.drawn_rects().iter().any(fn(r) { r.2 == 24.0 && r.4 == @sf.usage_series(0) }), msg=at)
+    pending.set(false)
+    t.draw()
+    assert_eq(t.rect_of("Opus 5.5"), Some(opus), msg=at)
+    assert_eq(t.rect_of("GPT-6"), Some(gpt), msg=at)
+    assert_eq(t.rect_of("10/3"), Some(date), msg=at)
+    assert_true(t.find("$50") is Some(_), msg=at)
+    // A different legend can be chosen directly; pressing it again restores all.
+    t.tap_text("Opus 5.5")
+    t.draw()
+    assert_eq(usage_pick.only.get(), ("models", "claude-opus-5-5"), msg=at)
+    t.tap_text("Opus 5.5")
+    t.draw()
+    assert_eq(usage_pick.only.get(), ("", ""), msg=at)
+    assert_eq(t.rect_of("GPT-6"), Some(gpt), msg=at)
+    assert_true(t.find("$118") is Some(_), msg=at)
   }
 }
 
@@ -281,10 +376,8 @@ test "用量: the overview follows the page's theme, including after a day is pi
 test "价目表: the first column starts in line with the card's note at every width" {
   for w in [390.0, 1280.0] {
     let t = setting_tester(UsagePrices(7), w, platform=0)
-    t.draw()
-    t.draw()
-    let (note, _, _, _) = t.rect_of("每百万 token 的美元价格").unwrap()
-    let (first, _) = t.drawn_of("Opus 5.5").unwrap()
+    guard t.rect_of("每百万 token 的美元价格") is Some((note, _, _, _)) else { fail("\{w}: no note") }
+    guard t.rect_of("Opus 5.5") is Some((first, _, _, _)) else { fail("\{w}: no first column") }
     assert_true((first - note).abs() < 0.5, msg="\{w}: table \{first}, note \{note}")
   }
 }

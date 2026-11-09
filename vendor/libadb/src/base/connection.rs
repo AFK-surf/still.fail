@@ -1,0 +1,994 @@
+use bytes::BytesMut;
+use core::future::Future;
+use core::task::Poll;
+use embedded_io::ErrorType;
+use embedded_io_async::{Read, Write};
+
+use alloc::collections::VecDeque;
+
+use super::channel::{
+    channel_ids_of, clse_closes, dispatch_packet, Channel, ChannelId, ChannelSlot, ChannelState,
+    DispatchOutcome, PendingOpen, SelectResult,
+};
+use super::device_banner::DeviceBanner;
+use super::error::Error;
+use super::protocol::command::Command;
+use super::protocol::features::Feature;
+use super::protocol::Checksum;
+use super::protocol::Packet;
+use super::wire::{recv_pkt, send_okay_to, send_pkt, send_raw, DesyncFlag, Staged, MIN_READ};
+pub use config::{ConnectionConfig, MIN_MAX_PAYLOAD};
+
+pub const DEFAULT_MAX_CHANNELS: usize = 32;
+pub const DEFAULT_MAX_PROPERTIES: usize = 64;
+pub const DEFAULT_MAX_FEATURES: usize = 24;
+
+/// ADB connection over an async transport.
+pub struct Connection<
+    T,
+    const MAX_CHANNELS: usize = DEFAULT_MAX_CHANNELS,
+    const MAX_PROPERTIES: usize = DEFAULT_MAX_PROPERTIES,
+    const MAX_FEATURES: usize = DEFAULT_MAX_FEATURES,
+> where
+    T: Read + Write,
+{
+    transport: T,
+    channels: [Option<ChannelSlot>; MAX_CHANNELS],
+    max_payload: u32,
+    protocol_version: u32,
+    config: ConnectionConfig,
+    device_banner: Option<DeviceBanner<MAX_PROPERTIES, MAX_FEATURES>>,
+    local_id_counter: u32,
+    delayed_ack: bool,
+    recv_buf: BytesMut,
+    pub(crate) desync: DesyncFlag,
+    /// Device-initiated OPENs awaiting [`accept_incoming`]. Bounded by
+    /// the channel table size; overflow is refused with CLSE on
+    /// arrival.
+    ///
+    /// [`accept_incoming`]: Self::accept_incoming
+    incoming: VecDeque<PendingOpen>,
+}
+
+/// A device-initiated channel awaiting a verdict.
+///
+/// Borrow of the connection: decide with [`accept`](Self::accept) or
+/// [`reject`](Self::reject). Dropping it undecided puts the request
+/// back at the head of the queue.
+pub struct Incoming<'c, T, const MC: usize, const MP: usize, const MF: usize>
+where
+    T: Read + Write,
+{
+    conn: &'c mut Connection<T, MC, MP, MF>,
+    pending: Option<PendingOpen>,
+    /// A slot reserved by `accept` before READY is on the wire. If the
+    /// future is cancelled or errors before that, `Drop` frees it —
+    /// otherwise a cancelled accept would occupy it forever.
+    reserved: Option<usize>,
+}
+
+impl<T, const MC: usize, const MP: usize, const MF: usize> Incoming<'_, T, MC, MP, MF>
+where
+    T: Read + Write,
+{
+    /// The destination the device asked for, e.g. `tcp:8080\0`.
+    pub fn destination(&self) -> &[u8] {
+        &self.pending.as_ref().expect("undecided").destination
+    }
+
+    /// Take the channel: allocates a slot, answers READY (carrying our
+    /// receive credit when delayed ack is on) and returns the channel,
+    /// ready for [`read_channel`](Connection::read_channel) and
+    /// [`write_channel`](Connection::write_channel).
+    ///
+    /// With every slot in use the request is refused with CLSE and
+    /// [`Error::NoFreeChannels`] comes back.
+    ///
+    /// Dropping this future never loses the request: the reserved slot
+    /// is released and the request returns to the queue. The connection
+    /// itself survives only a drop that lands before the READY write is
+    /// first polled — from that poll on, a drop abandons a packet
+    /// mid-write and the connection is marked desynchronized, as with
+    /// any cancelled write.
+    pub async fn accept(mut self) -> Result<ChannelId, Error<<T as ErrorType>::Error>> {
+        let pending = self.pending.as_ref().expect("undecided");
+        let (remote_id, credit) = (pending.remote_id, pending.credit);
+        let checksum = self.conn.checksum();
+
+        let Some(slot_idx) = self.conn.channels.iter().position(|s| s.is_none()) else {
+            send_pkt(
+                &mut self.conn.transport,
+                &self.conn.desync,
+                &Packet::close(0, remote_id),
+                checksum,
+            )
+            .await?;
+            self.pending.take();
+            return Err(Error::NoFreeChannels);
+        };
+
+        let local_id = self.conn.next_local_id();
+        let mut slot = ChannelSlot::new(local_id);
+        slot.remote_id = remote_id;
+        slot.state = ChannelState::Open;
+        if self.conn.delayed_ack {
+            // OPEN's arg1 is the device's receive credit — our budget.
+            slot.send_budget = i64::from(credit);
+        }
+        self.conn.channels[slot_idx] = Some(slot);
+        // Armed for rollback until READY is committed.
+        self.reserved = Some(slot_idx);
+
+        let credit_bytes;
+        let payload: &[u8] = if self.conn.delayed_ack {
+            credit_bytes = self.conn.config.advertised_ack_bytes().to_le_bytes();
+            &credit_bytes
+        } else {
+            &[]
+        };
+        send_pkt(
+            &mut self.conn.transport,
+            &self.conn.desync,
+            &Packet::new(Command::Ready, local_id, remote_id, payload.to_vec()),
+            checksum,
+        )
+        .await?;
+
+        // READY is out: the slot is committed and the request consumed.
+        self.reserved = None;
+        self.pending.take();
+        Ok(ChannelId {
+            slot: slot_idx,
+            local_id,
+        })
+    }
+
+    /// Refuse the channel: answers CLSE and frees nothing, since
+    /// nothing was allocated.
+    ///
+    /// Dropping this future never loses the request — it returns to the
+    /// queue. The connection itself survives only a drop that lands
+    /// before the CLSE write is first polled; after that it is marked
+    /// desynchronized, as with any cancelled write.
+    pub async fn reject(mut self) -> Result<(), Error<<T as ErrorType>::Error>> {
+        let remote_id = self.pending.as_ref().expect("undecided").remote_id;
+        let checksum = self.conn.checksum();
+        send_pkt(
+            &mut self.conn.transport,
+            &self.conn.desync,
+            &Packet::close(0, remote_id),
+            checksum,
+        )
+        .await?;
+        self.pending.take();
+        Ok(())
+    }
+}
+
+impl<T, const MC: usize, const MP: usize, const MF: usize> Drop for Incoming<'_, T, MC, MP, MF>
+where
+    T: Read + Write,
+{
+    fn drop(&mut self) {
+        // A slot reserved but never confirmed by READY: release it.
+        if let Some(idx) = self.reserved.take() {
+            if let Some(slot) = self.conn.channels.get_mut(idx) {
+                *slot = None;
+            }
+        }
+        if let Some(pending) = self.pending.take() {
+            self.conn.incoming.push_front(pending);
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn dispatch_to<T: Write>(
+    transport: &mut T,
+    desync: &DesyncFlag,
+    channels: &mut [Option<ChannelSlot>],
+    incoming: &mut VecDeque<PendingOpen>,
+    delayed_ack: bool,
+    rx_cap: usize,
+    watermark: usize,
+    checksum: Checksum,
+    pkt: Packet,
+) -> Result<(), Error<T::Error>> {
+    match dispatch_packet(channels, &pkt, delayed_ack, rx_cap, watermark) {
+        DispatchOutcome::AckWrite {
+            local_id,
+            remote_id,
+            len,
+            ..
+        } => {
+            send_okay_to(
+                transport,
+                desync,
+                delayed_ack,
+                local_id,
+                remote_id,
+                len,
+                checksum,
+            )
+            .await?;
+        }
+        DispatchOutcome::IncomingOpen {
+            remote_id,
+            credit,
+            destination,
+        } => {
+            // The queue is bounded by the channel table: past that, an
+            // OPEN storm is refused on arrival rather than remembered.
+            if incoming.len() >= channels.len() {
+                send_pkt(transport, desync, &Packet::close(0, remote_id), checksum).await?;
+            } else {
+                incoming.push_back(PendingOpen {
+                    remote_id,
+                    credit,
+                    destination,
+                });
+            }
+        }
+        DispatchOutcome::CancelPendingOpen { remote_id } => {
+            incoming.retain(|p| p.remote_id != remote_id);
+        }
+        DispatchOutcome::StrayReady {
+            local_id,
+            remote_id,
+        } => {
+            send_pkt(
+                transport,
+                desync,
+                &Packet::close(local_id, remote_id),
+                checksum,
+            )
+            .await?;
+        }
+        // The fault surfaces on whichever call is driving the
+        // connection, and the channel itself stays as it was.
+        DispatchOutcome::ChannelFault { fault, .. } => return Err(fault.error()),
+        _ => {}
+    }
+    Ok(())
+}
+
+impl<T, const MAX_CHANNELS: usize, const MAX_PROPERTIES: usize, const MAX_FEATURES: usize>
+    Connection<T, MAX_CHANNELS, MAX_PROPERTIES, MAX_FEATURES>
+where
+    T: Read + Write,
+{
+    /// Maximum payload size for outbound packets: the smaller of what
+    /// the device advertised in its CNXN and what this library can
+    /// encode.
+    pub fn max_payload(&self) -> u32 {
+        self.max_payload
+    }
+
+    /// Resource limits this connection was opened with.
+    ///
+    /// [`ConnectionConfig::max_payload`] is the inbound direction — what
+    /// this host advertised to the device — while
+    /// [`max_payload`](Self::max_payload) is the outbound one.
+    pub fn config(&self) -> &ConnectionConfig {
+        &self.config
+    }
+
+    /// Protocol version in effect: `min(ADB_VERSION, device version)`.
+    ///
+    /// At or above
+    /// [`ADB_VERSION_SKIP_CHECKSUM`](crate::protocol::constant::ADB_VERSION_SKIP_CHECKSUM)
+    /// outgoing packets leave `data_check` zero, as `adb` itself does.
+    pub fn protocol_version(&self) -> u32 {
+        self.protocol_version
+    }
+
+    fn checksum(&self) -> Checksum {
+        Checksum::for_version(self.protocol_version)
+    }
+
+    /// Raw device banner bytes received during CNXN handshake.
+    pub fn device_banner(&self) -> Option<&[u8]> {
+        self.device_banner.as_ref().map(|v| v.raw())
+    }
+
+    /// Parsed device banner received during CNXN handshake.
+    pub fn device_banner_parsed(&self) -> Option<&DeviceBanner<MAX_PROPERTIES, MAX_FEATURES>> {
+        self.device_banner.as_ref()
+    }
+
+    /// Fail with [`Error::MissingFeature`] if the device banner was
+    /// parsed and does not list `feature`.
+    ///
+    /// Returns `Ok(())` when the device advertises `feature` or when
+    /// no parseable banner is available (e.g. custom transports that
+    /// skip the handshake) — the latter is permissive by design so
+    /// that feature checks never block a connection that lacks a
+    /// banner altogether.
+    pub fn require_feature(&self, feature: Feature) -> Result<(), Error<<T as ErrorType>::Error>> {
+        match &self.device_banner {
+            Some(b) if b.has_feature(&feature) => Ok(()),
+            Some(_) => Err(Error::MissingFeature(feature)),
+            None => Ok(()),
+        }
+    }
+
+    /// Whether delayed ACK (credit-based flow control) is enabled.
+    pub fn delayed_ack(&self) -> bool {
+        self.delayed_ack
+    }
+
+    /// Reference to the underlying transport.
+    pub fn transport(&self) -> &T {
+        &self.transport
+    }
+
+    /// Mutable reference to the underlying transport.
+    pub fn transport_mut(&mut self) -> &mut T {
+        &mut self.transport
+    }
+
+    /// Consume the connection, returning the transport.
+    pub fn into_transport(self) -> T {
+        self.transport
+    }
+
+    /// Consume the connection, returning the transport and the internal
+    /// receive buffer (which may contain a partial packet read earlier).
+    pub fn into_parts(self) -> (T, BytesMut) {
+        (self.transport, self.recv_buf)
+    }
+
+    /// Consume the connection and split it into a [`Reader`](crate::Reader)
+    /// / [`Writer`](crate::Writer) pair that can be driven from different
+    /// threads/tasks concurrently.
+    ///
+    /// Requires the transport to implement [`Splittable`](crate::Splittable).
+    /// Splitting can fail if the underlying transport cannot duplicate its
+    /// endpoint (e.g. [`std::net::TcpStream::try_clone`] returning an
+    /// error); in that case the connection is consumed and the error is
+    /// returned.
+    #[cfg(feature = "split")]
+    #[allow(clippy::type_complexity)]
+    pub fn split(
+        self,
+    ) -> Result<
+        (
+            crate::split::Reader<
+                <T as crate::Splittable>::ReadHalf,
+                <T as crate::Splittable>::WriteHalf,
+                MAX_CHANNELS,
+                MAX_PROPERTIES,
+                MAX_FEATURES,
+            >,
+            crate::split::Writer<
+                <T as crate::Splittable>::WriteHalf,
+                MAX_CHANNELS,
+                MAX_PROPERTIES,
+                MAX_FEATURES,
+            >,
+        ),
+        Error<<T as ErrorType>::Error>,
+    >
+    where
+        T: crate::Splittable,
+    {
+        use crate::split::{Reader, Shared, Writer};
+        use alloc::sync::Arc;
+        use core::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize};
+
+        let (read_half, write_half) = self.transport.split().map_err(Error::Io)?;
+
+        let shared = Arc::new(Shared {
+            write_half: async_lock::Mutex::new(write_half),
+            channels: std::sync::Mutex::new(self.channels),
+            signals: core::array::from_fn(|_| crate::split::FlowSignal::new()),
+            max_payload: self.max_payload,
+            protocol_version: self.protocol_version,
+            config: self.config,
+            delayed_ack: self.delayed_ack,
+            device_banner: self.device_banner,
+            local_id_counter: AtomicU32::new(self.local_id_counter),
+            desync: self.desync,
+            incoming: std::sync::Mutex::new(self.incoming),
+            staged: std::sync::Mutex::new(alloc::vec::Vec::new()),
+            stopped: AtomicBool::new(false),
+            listeners: AtomicUsize::new(0),
+            incoming_signal: event_listener::Event::new(),
+            owed_closes: std::sync::Mutex::new(alloc::vec::Vec::new()),
+        });
+
+        let reader = Reader::new(read_half, self.recv_buf, Arc::clone(&shared));
+        let writer = Writer::new(shared);
+        Ok((reader, writer))
+    }
+
+    /// Open a channel and return a [`Channel`] handle that borrows this
+    /// connection.
+    ///
+    /// Only one `Channel` can exist at a time (it holds `&mut self`).
+    /// For multiplexed access to several channels, use
+    /// [`open_channel`](Self::open_channel) + [`ChannelId`]-based methods.
+    pub async fn open(
+        &mut self,
+        destination: &[u8],
+    ) -> Result<Channel<'_, Self>, Error<<T as ErrorType>::Error>>
+    where
+        T: crate::transport::ReadCancelSafety,
+    {
+        crate::base::session::Session::open(self, destination).await
+    }
+
+    /// Open a channel, returning a [`ChannelId`] for multiplexed use.
+    ///
+    /// The destination is a null-terminated string like `b"shell:ls\0"`,
+    /// `b"tcp:8080\0"`, `b"sync:\0"`, etc.
+    ///
+    /// In delayed ACK mode, `arg1` of the OPEN message carries the desired
+    /// Available Send Bytes (ASB), and the OKAY response payload contains
+    /// the initial send budget granted by the device.
+    ///
+    /// **Not cancellation-safe.** Dropping the future after the OPEN
+    /// packet has been sent gives the channel up before the device
+    /// answers. Should it accept after all, the next call that reads
+    /// the connection answers its READY with CLSE, so the device's end
+    /// does not stay open; the same goes for an `Err` returned before
+    /// the answer. Dropping it mid-packet is worse: see
+    /// [`write_channel`](Self::write_channel).
+    pub async fn open_channel(
+        &mut self,
+        destination: &[u8],
+    ) -> Result<ChannelId, Error<<T as ErrorType>::Error>> {
+        self.desync.check()?;
+        let slot_idx = self
+            .channels
+            .iter()
+            .position(|s| s.is_none())
+            .ok_or(Error::NoFreeChannels)?;
+
+        let local_id = self.next_local_id();
+        let open_arg1 = if self.delayed_ack {
+            self.config.advertised_ack_bytes()
+        } else {
+            0
+        };
+        let pkt = Packet::new(Command::Open, local_id, open_arg1, destination.to_vec());
+        let checksum = self.checksum();
+        send_pkt(&mut self.transport, &self.desync, &pkt, checksum).await?;
+
+        self.await_open_ack(local_id, slot_idx).await
+    }
+
+    async fn await_open_ack(
+        &mut self,
+        local_id: u32,
+        slot_idx: usize,
+    ) -> Result<ChannelId, Error<<T as ErrorType>::Error>> {
+        loop {
+            let pkt = recv_pkt(
+                &mut self.transport,
+                &mut self.recv_buf,
+                self.config.max_payload(),
+            )
+            .await?;
+            match pkt.command {
+                Command::Ready if pkt.arg1 == local_id => {
+                    let mut slot = ChannelSlot::new(local_id);
+                    if let Err(e) = slot.accept_open_ready(pkt.arg0, &pkt.data, self.delayed_ack) {
+                        // The device holds an end it takes for open:
+                        // close it by its id.
+                        let checksum = self.checksum();
+                        send_pkt(
+                            &mut self.transport,
+                            &self.desync,
+                            &Packet::close(local_id, pkt.arg0),
+                            checksum,
+                        )
+                        .await?;
+                        return Err(e.into());
+                    }
+                    self.channels[slot_idx] = Some(slot);
+                    return Ok(ChannelId {
+                        slot: slot_idx,
+                        local_id,
+                    });
+                }
+                Command::Close if pkt.arg1 == local_id => {
+                    return Err(Error::ChannelClosed);
+                }
+                _ => {
+                    self.dispatch(pkt).await?;
+                }
+            }
+        }
+    }
+
+    /// Read data from a channel into `buf`. Returns the number of bytes read.
+    ///
+    /// If data is already buffered, returns immediately. Otherwise blocks until
+    /// a WRTE message arrives for this channel (buffering messages for others).
+    ///
+    /// Reading is what re-opens the sender's window. With delayed ACK,
+    /// credit is returned for exactly the bytes taken here, and what
+    /// was advertised in OPEN bounds the rest. Without it, an inbound
+    /// write is still acknowledged on arrival while the channel holds
+    /// less than [`ConnectionConfig::rx_watermark`] unread bytes; past
+    /// that, the acknowledgement waits for the read. Either way a
+    /// channel nobody reads stops the device writing to it rather than
+    /// growing without bound.
+    ///
+    /// [`ConnectionConfig::rx_watermark`]: crate::ConnectionConfig::rx_watermark
+    pub async fn read_channel(
+        &mut self,
+        ch: ChannelId,
+        buf: &mut [u8],
+    ) -> Result<usize, Error<<T as ErrorType>::Error>> {
+        self.desync.check()?;
+        let delayed_ack = self.delayed_ack;
+        let watermark = self.config.rx_watermark();
+        let buffered = self
+            .slot_mut(ch)?
+            .take_buffered(buf, delayed_ack, watermark)?;
+        if let Some((n, ack)) = buffered {
+            if let Some((local_id, remote_id, len)) = ack {
+                self.send_okay(local_id, remote_id, len).await?;
+            }
+            return Ok(n);
+        }
+
+        let (local_id, remote_id) = self.channel_ids(ch)?;
+        let rx_cap = self.config.rx_cap();
+
+        loop {
+            let pkt = recv_pkt(
+                &mut self.transport,
+                &mut self.recv_buf,
+                self.config.max_payload(),
+            )
+            .await?;
+            match pkt.command {
+                Command::Write if pkt.arg1 == local_id => {
+                    let n = buf.len().min(pkt.data.len());
+                    buf[..n].copy_from_slice(&pkt.data[..n]);
+                    let ack = match self.channels[ch.slot].as_mut() {
+                        Some(slot) => slot.deliver(&pkt.data, n, rx_cap, delayed_ack, watermark)?,
+                        None => None,
+                    };
+                    if let Some((local_id, remote_id, len)) = ack {
+                        self.send_okay(local_id, remote_id, len).await?;
+                    }
+                    return Ok(n);
+                }
+                Command::Close if clse_closes(pkt.arg0, pkt.arg1, local_id, remote_id) => {
+                    if let Some(slot) = self.channels[ch.slot].as_mut() {
+                        slot.apply_close();
+                    }
+                    return Err(Error::ChannelClosed);
+                }
+                _ => {
+                    self.dispatch(pkt).await?;
+                }
+            }
+        }
+    }
+
+    /// Write data to a channel.
+    ///
+    /// Splits `data` into chunks bounded by `max_payload` and the
+    /// currently-granted send budget, waiting for flow-control
+    /// acknowledgements between chunks.
+    ///
+    /// **Not cancellation-safe.** A packet goes out as a header write
+    /// followed by a payload write, and dropping the future between
+    /// them leaves the device reading whatever we send next as the rest
+    /// of that packet. The connection is marked desynchronized instead:
+    /// every later operation on it fails with
+    /// [`Error::Desynchronized`].
+    ///
+    /// The mark goes up from the moment the header write is first
+    /// polled, not only between the two writes — a transport that took
+    /// bytes before returning `Pending` looks no different from one
+    /// that took none.
+    pub async fn write_channel(
+        &mut self,
+        ch: ChannelId,
+        data: &[u8],
+    ) -> Result<(), Error<<T as ErrorType>::Error>> {
+        self.desync.check()?;
+        if data.is_empty() {
+            return Ok(());
+        }
+
+        let max = (self.max_payload as usize).max(1);
+        let delayed_ack = self.delayed_ack;
+        let checksum = self.checksum();
+
+        let mut offset = 0;
+        while offset < data.len() {
+            self.wait_ack(ch).await?;
+
+            let mut n = (data.len() - offset).min(max);
+            if delayed_ack {
+                let slot = self.slot_mut(ch)?;
+                let budget = slot.send_budget.max(0) as usize;
+                n = n.min(budget);
+                debug_assert!(n > 0, "wait_ack returned with zero budget");
+            }
+
+            let (local_id, remote_id) = self.channel_ids(ch)?;
+            send_raw(
+                &mut self.transport,
+                &self.desync,
+                Command::Write,
+                local_id,
+                remote_id,
+                &data[offset..offset + n],
+                checksum,
+            )
+            .await?;
+
+            let slot = self.slot_mut(ch)?;
+            if delayed_ack {
+                slot.send_budget -= n as i64;
+            } else {
+                slot.wrte_acked = false;
+            }
+            offset += n;
+        }
+
+        Ok(())
+    }
+
+    /// Wait for a device-initiated channel (`adb reverse` traffic and
+    /// the like) and hand it over for a verdict.
+    ///
+    /// Packets for other channels keep being dispatched while waiting,
+    /// exactly as in [`read_channel`](Self::read_channel). The returned
+    /// [`Incoming`] borrows the connection until [`Incoming::accept`]
+    /// or [`Incoming::reject`] resolves it; dropping the verdict
+    /// undecided puts the request back at the head of the queue and
+    /// loses nothing.
+    ///
+    /// Dropping the future while it still *waits* for a packet is
+    /// another matter: the wait is a transport read, so cancelling it
+    /// inherits the transport's
+    /// [`ReadCancelSafety`](crate::transport::ReadCancelSafety) — where
+    /// reads are not cancel-safe (USB), an abandoned in-flight read can
+    /// lose packet bytes, exactly as with a cancelled
+    /// [`read_channel`](Self::read_channel).
+    ///
+    /// Pending requests are bounded by the channel table size: past
+    /// that, new OPENs are refused with CLSE on arrival.
+    pub async fn accept_incoming(
+        &mut self,
+    ) -> Result<
+        Incoming<'_, T, MAX_CHANNELS, MAX_PROPERTIES, MAX_FEATURES>,
+        Error<<T as ErrorType>::Error>,
+    > {
+        self.desync.check()?;
+        loop {
+            if let Some(pending) = self.incoming.pop_front() {
+                return Ok(Incoming {
+                    conn: self,
+                    pending: Some(pending),
+                    reserved: None,
+                });
+            }
+            let pkt = recv_pkt(
+                &mut self.transport,
+                &mut self.recv_buf,
+                self.config.max_payload(),
+            )
+            .await?;
+            self.dispatch(pkt).await?;
+        }
+    }
+
+    /// [`accept_incoming`](Self::accept_incoming) without waiting:
+    /// takes a request that already arrived, if any.
+    pub fn try_accept_incoming(
+        &mut self,
+    ) -> Option<Incoming<'_, T, MAX_CHANNELS, MAX_PROPERTIES, MAX_FEATURES>> {
+        let pending = self.incoming.pop_front()?;
+        Some(Incoming {
+            conn: self,
+            pending: Some(pending),
+            reserved: None,
+        })
+    }
+
+    /// Close a channel.
+    pub async fn close_channel(
+        &mut self,
+        ch: ChannelId,
+    ) -> Result<(), Error<<T as ErrorType>::Error>> {
+        self.desync.check()?;
+        let (local_id, remote_id) = self.channel_ids(ch)?;
+        let checksum = self.checksum();
+        send_pkt(
+            &mut self.transport,
+            &self.desync,
+            &Packet::close(local_id, remote_id),
+            checksum,
+        )
+        .await?;
+        self.channels[ch.slot] = None;
+        Ok(())
+    }
+
+    /// Read from a channel, returning early if `interrupt` resolves first.
+    ///
+    /// How early depends on the transport. Where dropping a read loses
+    /// nothing (TCP), the read is raced against the interrupt and
+    /// cancelled the moment it is due. Where it would lose data (USB),
+    /// the interrupt is checked between reads instead: a read already
+    /// in flight completes first and may return its data ahead of a
+    /// ready interrupt. See
+    /// [`ReadCancelSafety`](crate::transport::ReadCancelSafety).
+    ///
+    /// After a [`SelectResult::Interrupted`] result the caller can
+    /// [`write_channel`](Self::write_channel) and call this method
+    /// again — the read resumes cleanly without losing data.
+    pub async fn select_channel<F>(
+        &mut self,
+        ch: ChannelId,
+        buf: &mut [u8],
+        interrupt: F,
+    ) -> Result<SelectResult<F::Output>, Error<<T as ErrorType>::Error>>
+    where
+        F: Future,
+        T: crate::transport::ReadCancelSafety,
+    {
+        self.desync.check()?;
+        let cancel_safe = self.transport.read_cancel_safe();
+        let delayed_ack_now = self.delayed_ack;
+        let watermark_now = self.config.rx_watermark();
+        let buffered = self
+            .slot_mut(ch)?
+            .take_buffered(buf, delayed_ack_now, watermark_now)?;
+        if let Some((n, ack)) = buffered {
+            if let Some((local_id, remote_id, len)) = ack {
+                self.send_okay(local_id, remote_id, len).await?;
+            }
+            return Ok(SelectResult::Data(n));
+        }
+
+        let (local_id, remote_id) = self.channel_ids(ch)?;
+        let delayed_ack = self.delayed_ack;
+        let rx_cap = self.config.rx_cap();
+        let watermark = self.config.rx_watermark();
+        let checksum = self.checksum();
+
+        let mut interrupt = core::pin::pin!(interrupt);
+
+        loop {
+            if let Some(pkt) = Packet::decode(&mut self.recv_buf, self.config.max_payload())? {
+                match pkt.command {
+                    Command::Write if pkt.arg1 == local_id => {
+                        let n = buf.len().min(pkt.data.len());
+                        buf[..n].copy_from_slice(&pkt.data[..n]);
+                        let ack = match self.channels[ch.slot].as_mut() {
+                            Some(slot) => {
+                                slot.deliver(&pkt.data, n, rx_cap, delayed_ack, watermark)?
+                            }
+                            None => None,
+                        };
+                        if let Some((local_id, remote_id, len)) = ack {
+                            send_okay_to(
+                                &mut self.transport,
+                                &self.desync,
+                                delayed_ack,
+                                local_id,
+                                remote_id,
+                                len,
+                                checksum,
+                            )
+                            .await?;
+                        }
+                        return Ok(SelectResult::Data(n));
+                    }
+                    Command::Close if clse_closes(pkt.arg0, pkt.arg1, local_id, remote_id) => {
+                        if let Some(slot) = self.channels[ch.slot].as_mut() {
+                            slot.apply_close();
+                        }
+                        return Err(Error::ChannelClosed);
+                    }
+                    _ => {
+                        dispatch_to(
+                            &mut self.transport,
+                            &self.desync,
+                            &mut self.channels,
+                            &mut self.incoming,
+                            delayed_ack,
+                            rx_cap,
+                            watermark,
+                            checksum,
+                            pkt,
+                        )
+                        .await?;
+                        continue;
+                    }
+                }
+            }
+
+            {
+                enum Wakeup<O> {
+                    Read(usize),
+                    Interrupt(O),
+                }
+
+                let want = Packet::missing(&self.recv_buf).max(MIN_READ);
+                let this = &mut *self;
+                let mut staged = Staged::new(&mut this.recv_buf, want);
+                let transport = &mut this.transport;
+
+                // Read into the one stretch until the packet is whole, as
+                // `recv_pkt` does. There is nothing to dispatch before then,
+                // and `interrupt` is asked afresh for each read. However the
+                // loop ends, `staged` trims the untouched tail as it drops.
+                loop {
+                    let wakeup = if cancel_safe {
+                        let mut read_fut = core::pin::pin!(transport.read(staged.spare()));
+
+                        core::future::poll_fn(|cx| {
+                            if let Poll::Ready(val) = interrupt.as_mut().poll(cx) {
+                                return Poll::Ready(Ok(Wakeup::Interrupt(val)));
+                            }
+                            match read_fut.as_mut().poll(cx) {
+                                Poll::Ready(Ok(0)) => Poll::Ready(Err(Error::UnexpectedEof)),
+                                Poll::Ready(Ok(n)) => Poll::Ready(Ok(Wakeup::Read(n))),
+                                Poll::Ready(Err(e)) => Poll::Ready(Err(Error::Io(e))),
+                                Poll::Pending => Poll::Pending,
+                            }
+                        })
+                        .await?
+                    } else {
+                        // The transport loses whatever it has already been
+                        // handed if a read is dropped, so `interrupt` only
+                        // gets its answer between reads: due now, or once
+                        // this read has run its course.
+                        let due =
+                            core::future::poll_fn(|cx| Poll::Ready(interrupt.as_mut().poll(cx)))
+                                .await;
+                        if let Poll::Ready(val) = due {
+                            return Ok(SelectResult::Interrupted(val));
+                        }
+                        match transport.read(staged.spare()).await {
+                            Ok(0) => return Err(Error::UnexpectedEof),
+                            Ok(n) => Wakeup::Read(n),
+                            Err(e) => return Err(Error::Io(e)),
+                        }
+                    };
+                    match wakeup {
+                        Wakeup::Read(n) => staged.commit(n),
+                        Wakeup::Interrupt(val) => return Ok(SelectResult::Interrupted(val)),
+                    }
+                    if !staged.wants_more() {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    fn next_local_id(&mut self) -> u32 {
+        const RESERVED_ADB_ID: u32 = 0;
+        let id = self.local_id_counter;
+        self.local_id_counter = self.local_id_counter.wrapping_add(1);
+        if self.local_id_counter == RESERVED_ADB_ID {
+            self.local_id_counter = 1;
+        }
+        id
+    }
+
+    fn slot_mut(
+        &mut self,
+        ch: ChannelId,
+    ) -> Result<&mut ChannelSlot, Error<<T as ErrorType>::Error>> {
+        self.channels
+            .get_mut(ch.slot)
+            .and_then(|s| s.as_mut())
+            .filter(|s| s.local_id == ch.local_id)
+            .ok_or(Error::ChannelClosed)
+    }
+
+    pub(crate) fn channel_ids(
+        &self,
+        ch: ChannelId,
+    ) -> Result<(u32, u32), Error<<T as ErrorType>::Error>> {
+        channel_ids_of(&self.channels, ch)
+    }
+
+    async fn send_okay(
+        &mut self,
+        local_id: u32,
+        remote_id: u32,
+        wrte_len: usize,
+    ) -> Result<(), Error<<T as ErrorType>::Error>> {
+        let checksum = self.checksum();
+        let delayed_ack = self.delayed_ack;
+        send_okay_to(
+            &mut self.transport,
+            &self.desync,
+            delayed_ack,
+            local_id,
+            remote_id,
+            wrte_len,
+            checksum,
+        )
+        .await
+    }
+
+    async fn dispatch(&mut self, pkt: Packet) -> Result<(), Error<<T as ErrorType>::Error>> {
+        let watermark = self.config.rx_watermark();
+        let delayed_ack = self.delayed_ack;
+        let rx_cap = self.config.rx_cap();
+        let checksum = self.checksum();
+        dispatch_to(
+            &mut self.transport,
+            &self.desync,
+            &mut self.channels,
+            &mut self.incoming,
+            delayed_ack,
+            rx_cap,
+            watermark,
+            checksum,
+            pkt,
+        )
+        .await
+    }
+
+    async fn wait_ack(&mut self, ch: ChannelId) -> Result<(), Error<<T as ErrorType>::Error>> {
+        let delayed_ack = self.delayed_ack;
+        loop {
+            {
+                let slot = self.slot_mut(ch)?;
+                if delayed_ack {
+                    if slot.send_budget > 0 {
+                        return Ok(());
+                    }
+                } else if slot.wrte_acked {
+                    return Ok(());
+                }
+                if slot.is_closed() {
+                    return Err(Error::ChannelClosed);
+                }
+            }
+
+            let (local_id, remote_id) = self.channel_ids(ch)?;
+            let pkt = recv_pkt(
+                &mut self.transport,
+                &mut self.recv_buf,
+                self.config.max_payload(),
+            )
+            .await?;
+
+            match pkt.command {
+                Command::Ready if pkt.arg1 == local_id => {
+                    if let Some(slot) = self.channels[ch.slot].as_mut() {
+                        slot.apply_ready(&pkt.data, delayed_ack)?;
+                        if !delayed_ack {
+                            return Ok(());
+                        }
+                    }
+                }
+                Command::Close if clse_closes(pkt.arg0, pkt.arg1, local_id, remote_id) => {
+                    if let Some(slot) = self.channels[ch.slot].as_mut() {
+                        slot.apply_close();
+                    }
+                    return Err(Error::ChannelClosed);
+                }
+                _ => {
+                    self.dispatch(pkt).await?;
+                }
+            }
+        }
+    }
+}
+
+mod config;
+mod handshake;
+#[cfg(feature = "tls")]
+mod tls;
+
+#[cfg(test)]
+mod tests;

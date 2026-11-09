@@ -1,5 +1,4 @@
-// What is at work steps round (Spokes.kt): a step every 100 ms, the brightest a step further, the same again after
-// eight; nothing drawn between the steps.
+// What is at work steps round: a step every 100 ms, the same again after eight; nothing drawn between the steps.
 
 ///|
 fn spokes_tester(f : (@ui.Ctx) -> Unit) -> @ui.Tester {
@@ -9,7 +8,7 @@ fn spokes_tester(f : (@ui.Ctx) -> Unit) -> @ui.Tester {
 ///|
 test "spokes and segments: a step every 100 ms, back where they were after eight" {
   for draw in [
-    fn(c : @ui.Ctx) { @sf.spokes(c, 10.0, 0xF2B01EFFL) |> ignore },
+    fn(c : @ui.Ctx) { @sf.spokes(c, 10.0, @sf.mark_yellow) |> ignore },
     fn(c : @ui.Ctx) { @sf.segments(c, 24.0, 1.5, 0xF57E4DFFL, 0xFFFFFFFFL) |> ignore },
   ] {
     let t = spokes_tester(draw)

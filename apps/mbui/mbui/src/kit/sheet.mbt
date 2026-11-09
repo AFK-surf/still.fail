@@ -46,7 +46,7 @@ pub(all) struct Sheet {
 pub let sheet_scrim_ms : Double = 300.0
 
 ///|
-/// The scrim's fade: sheet_scrim_ms on CSS's ease (Sheet.kt's scrim tween).
+/// The scrim's fade: sheet_scrim_ms on CSS's ease.
 fn scrim_fade() -> @motion.Spec {
   @motion.tween(sheet_scrim_ms, ease=Out)
 }
@@ -67,11 +67,12 @@ priv struct SheetKept {
   mut held : Double
   /// how much of its scrim shows (0 … 1), fading in and out over sheet_scrim_ms
   fade : @motion.Anim
-  /// open last frame; drawn (until it has sunk away); the height it was asked for last; the frame it was opened in
+  /// open last frame; drawn (until it has sunk away); the height it was asked for last; opened and not
+  /// risen yet from below (its height told as what it holds is first laid out comes from below at that)
   mut was_open : Bool
   mut shown : Bool
   mut asked : Double
-  mut opened : Int
+  mut rising : Bool
 }
 
 ///|
@@ -116,7 +117,7 @@ pub fn sheet(
         was_open: false,
         shown: false,
         asked: -1.0,
-        opened: -1,
+        rising: false,
       }
       kit.val.sheets[id] = s
       s
@@ -135,13 +136,17 @@ pub fn sheet(
       s.h.go_at(c, target)
     }
     s.below.go_at(c, 0.0)
-    s.fade.animate(1.0, scrim_fade())
+    s.fade.animate(c, 1.0, scrim_fade())
     s.shown = true
     s.asked = target
-    s.opened = c.frame_number()
-  } else if open && target != s.asked {
-    if s.opened == c.frame_number() {
-      // (opened this frame, its height known only as this frame lays out what it holds: from below at that)
+    s.rising = true
+  } else if open && s.rising && s.below.value_at(c) < s.asked - 0.5 {
+    // (risen some way: what it is asked for from now on is another height while open)
+    s.rising = false
+  }
+  if open && s.was_open && target != s.asked {
+    if s.rising {
+      // (opened and not risen yet, its height known only as what it holds is laid out: from below at that)
       s.h.put(target)
       s.below.put(target)
       s.below.go_at(c, 0.0)
@@ -213,7 +218,7 @@ pub fn sheet(
     let at = s.h.value_at(c)
     s.h.put(at)
     s.below.go_at(c, dmax(at + raised, sinks))
-    s.fade.animate(0.0, scrim_fade())
+    s.fade.animate(c, 0.0, scrim_fade())
   } else if !now && sinks > s.below.target() {
     // (told how far after it closed, as one under it closed with it: on as far as that, as fast as it goes)
     s.below.go_at(c, sinks)
@@ -225,25 +230,32 @@ pub fn sheet(
   }
   let hx = s.h.value_at(c)
   let bx = s.below.value_at(c)
-  let scrim_t = s.fade.get()
-  // (logic on a motion's end, to be told at once instead: shown is false only once it has sunk away and its scrim
-  // faded, the sheet drawn until then from what it is)
-  if !now && bx >= dmax(hx + raised, sinks) - 0.5 && !s.fade.moving() {
+  // (shown is false only once it has sunk away and its scrim's fade is over, by its declared end, the sheet drawn until
+  // then from what it is; sunk as far as it was told to go, not less: one closing with it gone first, the furthest they
+  // went no more what it sinks to, it still goes on to where it set out for, not ending where the others' going leaves
+  // it)
+  if !now && bx >= dmax(dmax(hx + raised, sinks), s.below.target()) - 0.5 && s.fade.over(c) {
     // sunk away
     s.shown = false
-    s.fade.snap(0.0)
+    s.fade.snap(c, 0.0)
     s.was_open = false
     return { open: false, shown: false, dragged }
   }
   // (Tab kept in it, but no field in it given the focus as it opens: a sheet is a touch screen's, where a field
   // focused brings the keyboard up over what the sheet shows; one that asks for words gives its field the focus itself)
-  let o = c.overlay(key, modal=true, initial_focus=0, on_escape?, scrim=@ui.alpha(scrim.unwrap_or(th.scrim), scrim_t), inert=!now, fn() {
+  // (the scrim as far as it has come, as it is drawn: Ctx::bg_by on the layer's ground)
+  let scrim = scrim.unwrap_or(th.scrim)
+  let o = c.overlay(key, modal=true, initial_focus=0, on_escape?, scrim~, inert=!now, fn() {
     let i = c.box(w=Fill(1.0), h=Px(hx), ty=total - hx + bx - raised, fn() {
-      look(c, { t: scrim_t, h: hx, below: bx }, fn() {
+      // (its look given the scrim's share as it is built: the sheet's own glass drawn solid darkens with it, a colour
+      // with no form read as it is drawn; the sheet is laid out again as it goes anyway, its height and place its
+      // springs' as they are built)
+      look(c, { t: s.fade.get(c), h: hx, below: bx }, fn() {
         // behind what it shows (its buttons take their taps), over the sheet (it takes the drags): what lies on it
         // (its title, its grabber) pressed through it, while it takes presses (not as it sinks away, nor raised under
-        // another, which takes them: its top may be past the window's then)
-        if now && raised <= 0.0 {
+        // another, which takes them: its top may be past the window's then; nor while what it drags by is above the
+        // window, the sheet pulled past its most and giving way, springing back: nothing of it there to press)
+        if now && raised <= 0.0 && total - hx + bx - raised + drag_h > 0.0 {
           c.presses_to(top_id)
         }
         c.layer(fn() { c.drag_area(top_id, axis=Vertical, w=Fill(1.0), h=Px(drag_h), fn() {  }) |> ignore }) |> ignore
@@ -254,12 +266,15 @@ pub fn sheet(
     // (where it stands, for what is to stay clear of it: sheet_top)
     @motion.measure(c, i, sheet_measured)
   })
+  if o.scrim >= 0 {
+    c.bg_by(o.scrim, fn() { @ui.alpha(scrim, s.fade.get(c)) })
+  }
   if now && o.dismissed is Some(_) {
     now = false
     s.held = -1.0
     s.h.put(hx)
     s.below.go_at(c, dmax(hx + raised, sinks))
-    s.fade.animate(0.0, scrim_fade())
+    s.fade.animate(c, 0.0, scrim_fade())
   }
   s.was_open = now
   { open: now, shown: true, dragged }
@@ -288,6 +303,16 @@ let sheet_give : Double = 0.55
 pub fn sheet_top(c : @ui.Ctx) -> Double? {
   match @motion.measured_rect(c, sheet_measured) {
     Some((_, y, _, _)) => Some(y)
+    None => None
+  }
+}
+
+///|
+/// Where the top of the sheet up is in the window this frame and how tall it is, as it is laid out (None where none is
+/// up): sheet_top's, with how far it has to come up (for what keeps clear of it once it is all the way up).
+pub fn sheet_place(c : @ui.Ctx) -> (Double, Double)? {
+  match @motion.measured_rect(c, sheet_measured) {
+    Some((_, y, _, h)) => Some((y, h))
     None => None
   }
 }
@@ -331,7 +356,7 @@ fn nearest(shares : Array[Double], f : Double) -> Double {
 }
 
 ///|
-/// A sheet's grabber (still.fail's Sheet.kt SheetGrab): 38 by 5 in the theme's line colour, 12 above it and 8 under.
+/// A sheet's grabber: 38 by 5 in the theme's line colour, 12 above it and 8 under.
 pub fn sheet_grabber(c : @ui.Ctx) -> Unit {
   let t = c.theme()
   c.box(w=Fill(1.0), pt=12.0, pb=8.0, align=ACenter, fn() {

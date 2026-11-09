@@ -70,7 +70,7 @@ fn outer_viewer(
   if native {
     t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":84}}")
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   match made {
     Some(a) => open_preview("ws1/st1", "s-c1", a)
     None => ()

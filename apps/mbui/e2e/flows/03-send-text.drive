@@ -5,7 +5,7 @@
 # the chat: each message here is followed by 本轮 agent 未在对话中回复, as it should be.)
 timeout 60000
 tap 端到端测试
-until =studio
+until =willow
 until 发消息
 shot 1-chat
 tap 发消息

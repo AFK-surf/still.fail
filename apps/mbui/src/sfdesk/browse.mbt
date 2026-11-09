@@ -1,4 +1,4 @@
-// How a station's files are worked with on a wide screen, as a local file browser does (ember web/src/drive/browse.ts
+// How a station's files are worked with on a wide screen, as a local file browser does (still.fail web/src/drive/browse.ts
 // useBrowse): a press chooses (⌘ adds or takes one away, ⇧ the ones between), a double click opens, the keys move and
 // act on what is chosen; names are changed where they are. The files' page and a chat's 文件 tab go through it, each
 // saying what may be done there. What is chosen, the order, a tree's folders open, the columns' widths and where a
@@ -161,7 +161,7 @@ pub fn Browse::arrangement(self : Browse) -> Arrangement {
 /// The folder `folder`'s entries in the order shown, as the core says them; None while it has not.
 pub fn Browse::arranged(self : Browse, folder : String, entries : Array[DvEntry]) -> Array[DvEntry]? {
   match self.shown {
-    Some(v) => dv_in_order(v.folders.get(folder), entries)
+    Some(v) => @sfbase.dv_in_order_held(self.key + "|" + folder, v.folders.get(folder), entries)
     None => None
   }
 }

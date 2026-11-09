@@ -17,6 +17,8 @@ const store = () => {
   const host = new FakeHost();
   const s = new Store(host, new Runner(host.time.clock));
   s.setSource({ start: () => {}, stop: () => {} });
+  // (the station's overview kept up, as the form's page keeps it by reading it as the form is made)
+  s.watch({ topic: "overview", station: "ws/st" }, () => {});
   return s;
 };
 const overview: Topic = { topic: "overview", station: "ws/st" };
@@ -150,6 +152,8 @@ test("a_closed_and_reopened_form_does_not_take_the_old_result", () => {
 
 const flow = () => {
   const s = store();
+  // (and its workspace, for the viewer's role: whether they may install a runtime)
+  s.watch({ topic: "workspace", workspace: "ws" }, () => {});
   return { s, flows: new ProfileFlows(s), topic: { topic: "profileFlow", station: "ws/st", form: "t" } as Topic };
 };
 
@@ -323,6 +327,34 @@ test("supergrok_is_xais_plan_and_an_xai_key_runs_grok_build_where_the_station_ru
   flows.change(topic, 1, "edit", { provider: "xai" });
   view = flows.value(topic);
   assert.deepEqual([view.step, view.tile.hasPlan, view.tile.runtime, view.showKey, view.usesLine], ["connect", false, null, true, "添加后可用于：Codex"]);
+});
+
+test("a_google_account_is_googles_plan_running_the_antigravity_cli_beside_its_key_where_the_station_runs_it", () => {
+  const { s, flows, topic } = flow();
+  flows.change(topic, 1, "open", {});
+  s.set(overview, { ok: { apiProviders: [{ id: "google" }], updates: [{ id: "station" }, { id: "dsh" }, { id: "agy", name: "Antigravity CLI", installed: true }] } });
+  let view = flows.value(topic);
+  assert.ok("ok" in conform("ProfileFlowView", view), JSON.stringify(conform("ProfileFlowView", view)));
+  const google = view.groups.flatMap((g: J) => g.providers).find((p: J) => p.id === "google");
+  assert.deepEqual([google.hasKey, google.hasPlan, google.runtime], [true, true, "agy"]);
+  // The plan (signed in with Google) or the key.
+  flows.change(topic, 1, "edit", { provider: "google" });
+  view = flows.value(topic);
+  assert.deepEqual([view.step, view.choices.map((c: J) => [c.id, c.title])], ["method", [["plan", "订阅 · Google AI"], ["key", "API key"]]]);
+  assert.match(view.choices[0].hint, /^Google AI Pro \/ Ultra.*Antigravity CLI.*账号可能被停用。$/);
+  flows.change(topic, 1, "edit", { method: "plan" });
+  view = flows.value(topic);
+  assert.ok("ok" in conform("ProfileFlowView", view), JSON.stringify(conform("ProfileFlowView", view)));
+  assert.deepEqual([view.step, view.signIn, view.usesLine], ["connect", { runtime: "agy", provider: "Google" }, "添加后可用于：Antigravity CLI"]);
+  flows.change(topic, 1, "edit", { method: "key" });
+  flows.change(topic, 1, "edit", { key: "AIza-1" });
+  assert.deepEqual(flows.begin(topic, 1), { access: { kind: "api-provider", key: "AIza-1", provider: "google" } });
+  flows.finish(topic, 1, null);
+  // A station that does not run it: no plan, the key straight to its form.
+  s.set(overview, { ok: { apiProviders: [{ id: "google" }], updates: [{ id: "station" }, { id: "dsh" }] } });
+  flows.change(topic, 1, "edit", { provider: "google" });
+  view = flows.value(topic);
+  assert.deepEqual([view.step, view.tile.hasPlan, view.tile.runtime, view.showKey], ["connect", false, null, true]);
 });
 
 test("cursor_is_a_plan_alone_last_of_the_makers_and_runs_on_variables_by_hand_where_the_station_runs_it", () => {

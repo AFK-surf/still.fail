@@ -1,4 +1,4 @@
-// What macOS lets a Mac station's still.fail Helper do (docs/remote-screens.md "Grants"), as the station's page shows it:
+// What macOS lets a Mac station's still.fail Helper do, as the station's page shows it:
 // the overview's `permissions` put in words. Each grant with what it is for, or, while its window is up on the Mac, how
 // it is given there; what is unavailable now for want of one; the desktop's page when its screen can be seen and
 // driven (a person asks for a grant and grants it from wherever they are, through it); and whether the viewer may ask.

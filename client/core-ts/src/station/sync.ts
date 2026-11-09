@@ -1,4 +1,4 @@
-// What the core keeps in sync with the stations, by itself, whatever the UI shows (docs/core-ts.md, rule 6; station.rs
+// What the core keeps in sync with the stations, by itself, whatever the UI shows (rule 6; station.rs
 // and sync.rs for what a station says and how). Every station of every workspace an account reaches has a link
 // (link.ts): its events stream, held open while the station is reached. What a station holds is of two sorts, kept in
 // sync each its own way:
@@ -14,7 +14,7 @@
 //
 // Then the rest is brought onto the device in the background, the most urgent first (`#history`): every session's
 // detail, and every channel. The UI makes some of it more urgent (`prioritize`), never more or less.
-import { Deferred, Effect, Exit, Scope } from "effect";
+import { Deferred, Effect, Exit, Scope, type Fiber } from "effect";
 import type { Inner } from "../core.ts";
 import { join } from "../data.ts";
 import { CoreError, asCoreError } from "../error.ts";
@@ -24,19 +24,27 @@ import { topicKey, type Topic } from "../protocol.ts";
 import { Kind, type SpanContext } from "../trace.ts";
 import { equal, get, isObject, parseJson } from "../util.ts";
 import { Priority } from "../sync/scheduler.ts";
+import * as present from "../present.ts";
 import { activity as historyActivity } from "../history.ts";
 import { StationAddr } from "./addr.ts";
-import { IDEMPOTENCY_KEY, READS, Requests, httpError } from "./requests.ts";
+import { IDEMPOTENCY_KEY, JSON_IDLE_MS, READS, Requests, httpError } from "./requests.ts";
 import { digest } from "../digest.ts";
 import { type Channel, Channels } from "../channels/channels.ts";
 import { ENTRIES, LETTERS, PAGE, TRANSCRIPT, TRANSCRIPT_PAGE, entriesOf, heldIn, lettersOf, transcriptOf } from "./channel-kinds.ts";
-import { type HistoryRead, type Link, Links, type LiveView, MEMORY, OUTFLOW, PRESETS, filePeekKey, linkPreviewKey, logKey } from "./link.ts";
-import { readAll, replyHeader, type StationWire } from "./wire.ts";
+import { type HistoryRead, type Link, Links, type LiveView, MEMORY, RECONNECT_MAX_MS, PRESETS, filePeekKey, linkPreviewKey, logKey, messagePeekKey } from "./link.ts";
+import { concat, readAll, replyHeader, type StationWire } from "./wire.ts";
 import { SseParser } from "./sse.ts";
 import * as logins from "./machine-logins.ts";
 import { Relays } from "./machine-logins.ts";
 import { Retold } from "./retold.ts";
+import { Seen } from "./seen.ts";
+import { dayOf, holdsWhole, sameDetailCoverage, usageHistoryRange, withPart } from "./usage-part.ts";
+import { threadAfter, threadAfterLetters } from "./thread-after.ts";
+import { type After, rowAfterDismiss, rowAfterKept, rowAfterPin, rowAfterSaid, rowAfterSession } from "./rows-after.ts";
+import { type Marks, marksOf, marksWith, rowsMade, rowsShared } from "./rows-made.ts";
+import { current, tr } from "../i18n.ts";
 import { timed } from "../spent.ts";
+import { isOwnSurface } from "../titles.ts";
 
 export { HOST_KEY, LINK_KEY, LONG_MISSES, MISSES, OFFLINE_RETRY_MS, RECONNECT_MAX_MS, RECONNECT_MS, STREAM_IDLE_MS, STREAM_QUIET_MS, Link } from "./link.ts";
 export type { EventsFor, LiveView } from "./link.ts";
@@ -48,6 +56,9 @@ export const RECHECK_MS = 5 * 60 * 1000;
 /// A read that failed in passing (a 5xx, the link dropping) is tried again after this, doubling, this many times.
 export const READ_RETRY_MS = 2_000;
 export const READ_RETRIES = 5;
+/// How long a read that failed `n` times in a row before waits to be asked again: twice as long each time, at most
+/// RECONNECT_MAX_MS.
+export const retryAfter = (n: number): number => Math.min(READ_RETRY_MS * 2 ** Math.min(n, 10), RECONNECT_MAX_MS);
 /// The field naming a row of each list read whole that may be asked as what changed of it (POST /changed/<list>).
 const LIST_ID: Record<string, string> = { chatRows: "id", archivedRows: "id", threads: "id", sessions: "key" };
 /// A station from before POST /changed/<list> reads its lists whole, and is tried again after this.
@@ -55,25 +66,39 @@ export const CHANGES_RETRY_MS = 3_600_000;
 /// How much of a station's history one batch asks (POST /batch, #history): a page of entries or a session's detail is
 /// one, a page of a transcript (200 steps in brief) five (each channel's kind says, channel-kinds.ts).
 export const HISTORY_BATCH = 40;
+/// Background history work shares the engine with page input. Give other work a turn after a small slice, and sooner
+/// when a few large answers already took time. The count also bounds work when a test's clock is stopped.
+const HISTORY_SLICE_ITEMS = 64;
+const HISTORY_SLICE_MS = 8;
+const HISTORY_SESSION_GROUP = 32;
+/// A session's detail as the device reads it: without its turns. Its summary says how many it had, how long they ran and
+/// its latest (db/account.ts `counted`), what its every turn was read for; a station from before lists them all.
+/// And its jobs that may matter now (`jobs=now`: those up, and its latest), what its list shows (jobs.ts `isCurrent`).
+const sessionPath = (key: string) => `/sessions/${encode(key)}?turns=0&jobs=now`;
 
 export const RECHECKING = "等它回来确认";
 /// The station's events that change what a search of it finds.
+/// The station's open jobs, without the chat each is in: named here from the sidebar held (views.ts `longJobs`); a
+/// station from before names them all the same.
+const JOBS = "/jobs?chats=0";
 const SEARCHED = new Set(["session", "session-removed", "thread", "thread-removed", "chat", "chat-removed", "job", "job-removed"]);
 /// The station's events that say what its reads bring too: told again on top of what a read asked before them brought
 /// (retold.ts).
-const RETOLD = new Set(["session", "session-removed", "thread-view", "thread-removed", "read", "chat", "chat-removed", "job", "job-removed", "overview", "footprint"]);
+const RETOLD = new Set(["session", "session-pending", "session-removed", "thread-view", "thread-removed", "read", "chat", "chat-removed", "chat-shared", "chat-shared-removed", "job", "job-removed", "overview", "footprint", "pin", "dismiss", "kept", "hidden", "muted"]);
+const SHARED_RETOLD = new Set(["chat-shared", "chat-shared-removed"]);
 /// How long the words of a search stay as they are before the stations are asked what they find.
 export const SEARCH_SETTLE_MS = 150;
 /// A station's changes ask the searches of it shown again at most this often: a busy station tells of its chats many
-/// times a second, each search asked again a search of the machine's files there (docs/search.md).
+/// times a second, each search asked again a search of the machine's files there.
 export const SEARCH_STALE_MS = 2_000;
-/// How often a shown resources page asks a station from before telling them again (the station, asked, looks as often
-/// itself); and how long one that tells them is waited on after its last before the stream is taken for gone.
+/// How long after a station's resources stream ended it is opened again; and how long one that tells them is waited on
+/// after its last before the stream is taken for gone.
 export const RESOURCES_EVERY_MS = 5_000;
 const RESOURCES_SILENT_MS = 4 * RESOURCES_EVERY_MS;
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 /// A row's id as text (sessions' and chats' are strings, threads' numbers).
 const idText = (v: unknown): string | null => (typeof v === "string" ? v : typeof v === "number" ? String(v) : null);
 
@@ -96,7 +121,7 @@ export function applyStep(view: LiveView, event: unknown, now: number, held = 0)
     if (typeof parent === "string" && parent !== "") step.parent = parent;
     view.steps.push(step);
   } else if (kind === "end") {
-    // On new steps: the ones there are in the live topic's value as it was made (shared, docs/core-ts.md).
+    // On new steps: the ones there are in the live topic's value as it was made (shared).
     view.steps = view.steps.map((s) => (equal(get(s, "id"), id) && isObject(s) ? { ...s, ended: true, held } : s));
   }
 }
@@ -110,10 +135,13 @@ export function stepShown(step: unknown, held: number): boolean {
   return typeof at === "number" && held <= at;
 }
 
-/// How long a folder's watch waits before asking again, the station not reached or its asking failed.
-const WATCH_AGAIN_MS = 5_000;
+/// How long a folder's watch waits before opening its stream again after it failed: doubling, up to WATCH_AGAIN_MAX_MS.
+const WATCH_AGAIN_MS = 1_000;
+const WATCH_AGAIN_MAX_MS = 30_000;
 
 export class StationsSync {
+  /// Reads held on the device that their station has not taken yet (`read`), by `<address>\u0001<thread>`.
+  readonly #heldReads = new Map<string, number>();
   readonly #core: Inner;
   readonly requests: Requests;
   /// What its stations hold that is only added to (threads' entries, sessions' transcripts), kept in sync by number.
@@ -122,13 +150,43 @@ export class StationsSync {
   readonly #links: Links;
   /// What their streams told while a read was out, to tell again on top of what it brings.
   readonly #retold = new Retold();
+  /// The transcripts of the histories shown whose reads failed, how many times in a row.
+  readonly #transcriptMisses = new Map<string, number>();
+  readonly #transcriptAgain = new Set<string>();
   /// The stations whose searches shown are to be asked again once SEARCH_STALE_MS is up.
   readonly #staleSearches = new Set<string>();
+  /// A usage preparation can take many bounded batches; it has its own cancellable stream, outside the sync lane.
+  readonly #usageReading = new Map<string, { link: Link; fiber: Fiber.Fiber<void, never> | null }>();
   /// What the station topics want of a stream beyond what the sync wants (host samples, logs, sessions shown).
   wanted: (address: string) => { host: boolean; live: string[]; logs: [string, number][]; logins?: string[] } = () => ({ host: false, live: [], logs: [] });
-  /// Told when what a station holds beyond the records changed (link, live views, host, logs).
-  onChange: (address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string) => void = () => {};
-  /// The loopback relays of logins this device takes the callback of (docs/remote-login.md).
+  /// What a station holds beyond the records (link, live views, host, logs), as its readers see it change.
+  readonly seen = new Seen();
+  /// Told when what a station holds beyond the records changed, after its readers (`seen`).
+  onTouched: (address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string) => void = () => {};
+
+  onChange(address: string, what: "link" | "live" | "host" | "log" | "errors" | "screens" | "logins" | "loginScreen", key?: string): void {
+    this.seen.touch(address, what === "errors" ? "log" : what, key);
+    this.onTouched(address, what, key);
+    if (what === "link") {
+      const waiting = this.#linkWaits.get(address);
+      this.#linkWaits.delete(address);
+      if (waiting) Deferred.doneUnsafe(waiting, Effect.void);
+    }
+  }
+
+  /// Those waiting for a station's link to change (`#linkChange`).
+  readonly #linkWaits = new Map<string, Deferred.Deferred<void>>();
+
+  /// Until the station's link changes (it came up, say).
+  #linkChange(address: string): Effect.Effect<void> {
+    let waiting = this.#linkWaits.get(address);
+    if (!waiting) {
+      waiting = Deferred.makeUnsafe<void>();
+      this.#linkWaits.set(address, waiting);
+    }
+    return Deferred.await(waiting);
+  }
+  /// The loopback relays of logins this device takes the callback of.
   readonly relays: Relays;
   /// Told of entries that came as they were said (an event): they come in with a motion.
   onTold: (address: string, id: number, entries: unknown[]) => void = () => {};
@@ -163,9 +221,11 @@ export class StationsSync {
       enqueue: (station, task, priority, work) => this.#enqueue(station, task, priority, work),
       later: (station, work) => {
         const link = this.#links.get(station);
-        if (link) core.runner.fork(Effect.sleep(EVENTS_COALESCE_MS).pipe(Effect.andThen(Effect.sync(work))), link.scoped);
-        else work();
+        if (link) core.runner.fork(Effect.sleep(EVENTS_COALESCE_MS).pipe(Effect.andThen(work)), link.scoped);
+        else core.runner.fork(work);
       },
+      now: () => core.host.monotonicMs(),
+      firstWaiting: () => core.store.firstValuesPending(),
       answered: (channel, error, nothing) => this.#channelAnswered(channel, error, nothing),
     });
   }
@@ -260,9 +320,10 @@ export class StationsSync {
       this.#enqueue(address, "overview", p, read({ topic: "overview", station: address }, "/overview")),
       this.#enqueue(address, "sessions", p, Effect.andThen(read({ topic: "sessions", station: address }, "/sessions"), Effect.sync(() => this.#historyStart(address)))),
       this.#enqueue(address, "threads", p, Effect.andThen(read({ topic: "threads", station: address }, "/threads"), Effect.sync(() => this.#historyStart(address)))),
-      this.#enqueue(address, "chats", p, Effect.andThen(read({ topic: "chatRows", station: address }, "/chats"), Effect.sync(() => this.openEvents(address, false)))),
+      this.#enqueue(address, "chats", p, Effect.andThen(this.#chats(address, ctx, unread), Effect.sync(() => this.openEvents(address, false)))),
+      ...(link?.shared ? [this.#enqueue(address, "shared", p, this.#sharedWhole(address, ctx, unread))] : []),
       ...this.#archivedChanged(address, ctx),
-      this.#enqueue(address, "jobs", p, read({ topic: "jobs", station: address }, "/jobs")),
+      this.#enqueue(address, "jobs", p, read({ topic: "jobs", station: address }, JOBS)),
       this.#enqueue(address, "footprint", Priority.background, read({ topic: "footprint", station: address }, "/footprint")),
       this.#enqueue(address, "screens", Priority.background, this.#screens(address, ctx)),
       this.#enqueue(address, "machineLogins", Priority.background, this.#machineLogins(address, ctx)),
@@ -336,7 +397,7 @@ export class StationsSync {
       };
       let thread = bound();
       if (thread === null) {
-        yield* this.ask(address, "chats", this.#read(address, { topic: "chatRows", station: address }, "/chats"));
+        yield* this.ask(address, "chats", this.#chats(address));
         thread = bound();
       }
       if (thread !== null) yield* this.channels.pushed(entriesOf(address, thread), seq, Priority.focused);
@@ -348,12 +409,20 @@ export class StationsSync {
   #catchUpShown(address: string): void {
     for (const topic of this.#core.store.liveTopics()) {
       if (topic.station !== address) continue;
-      if (topic.topic === "thread" && typeof topic.thread === "number") this.channels.catchUp(entriesOf(address, topic.thread), Priority.shown);
+      if (topic.topic === "thread" && typeof topic.thread === "number") {
+        this.channels.catchUp(entriesOf(address, topic.thread), Priority.shown);
+        // An opening around an unread or saved position may still be missing even if a later page is held. Recompute it
+        // so its failed range read is asked again, independently of whether the catch-up read brings anything new.
+        this.#core.store.invalidate(topic);
+      }
+      // A history shown: its first read may have failed while the stream was away, and a station that follows the
+      // sessions at work tells nothing of one at rest, so it would wait for ever.
+      else if (topic.topic === "live" && this.#links.get(address)?.followsRunning === true) this.channels.bring(transcriptOf(address, String(topic.key)), Priority.shown, "latest");
       else if (topic.topic === "drive" && this.#core.store.inUse(topic)) this.driveShown(address, String(topic.root), String(topic.path));
     }
   }
 
-  /// The station's screens as it has them now (docs/remote-screens.md), in its link's memory (kept: what was said last
+  /// The station's screens as it has them now, in its link's memory (kept: what was said last
   /// shows as the app opens again, until they are read). A station from before screens has none (404): it is held so,
   /// and said (`outdated`).
   #screens(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
@@ -437,32 +506,6 @@ export class StationsSync {
     });
   }
 
-  /// The programs granted the station's data (GET /outflow/grants, the `outflowGrants` topic, docs/data-outflow.md),
-  /// read each time a page shows them; then as the station tells (`outflow-grants`). A station from before: none.
-  outflowShown(address: string): void {
-    this.#enqueue(address, "outflowGrants", Priority.shown, this.#outflow(address));
-  }
-
-  #outflow(address: string): Effect.Effect<void, CoreError> {
-    const key = topicKey({ topic: "outflowGrants", station: address });
-    return Effect.gen({ self: this }, function* () {
-      const link = this.#links.get(address);
-      if (!link || !this.reachable(address)) return;
-      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/outflow/grants", null, { quiet: true }));
-      if (answer._tag === "Success") {
-        link.errors.delete(key);
-        link.memory.set(OUTFLOW, answer.success);
-        this.onChange(address, "log", key);
-      } else if (answer.failure.status === 404) {
-        link.errors.delete(key);
-        link.memory.set(OUTFLOW, { unsupported: true });
-        this.onChange(address, "log", key);
-      } else if (answer.failure.status !== undefined && !link.memory.has(OUTFLOW)) {
-        link.errors.set(key, answer.failure);
-        this.onChange(address, "errors", key);
-      }
-    });
-  }
 
   /// What a web link in a message is (GET /link-preview, the `linkPreview` topic), read as its card shows it (cardShown).
   linkPreviewShown(address: string, url: string): void {
@@ -475,6 +518,12 @@ export class StationsSync {
     const topic: Topic = { topic: "filePeek", station: address, key, path, ...(line !== null ? { line } : {}) };
     const at = `/sessions/${encode(key)}/peek?path=${encode(path)}${line !== null ? `&line=${line}` : ""}`;
     this.#cardShown(address, topic, at, filePeekKey(key, path, line));
+  }
+
+  /// One message of a chat a link names (GET /threads/:id/entries of that entry alone, the `messagePeek` topic), read as
+  /// its card shows it (cardShown).
+  messagePeekShown(address: string, thread: number, seq: number): void {
+    this.#cardShown(address, { topic: "messagePeek", station: address, thread, seq }, `/threads/${thread}/entries?from=${seq}&to=${seq}`, messagePeekKey(thread, seq));
   }
 
   /// What a link in a message is, for its card (`topic`, the station's `path`), read each time the card shows it (a pull
@@ -490,7 +539,9 @@ export class StationsSync {
         link.errors.delete(key);
         link.memory.set(kept, answer.success);
         this.onChange(address, "log", key);
-      } else if (answer.failure.status !== undefined && !link.memory.has(kept)) {
+      } else if (answer.failure.status !== undefined && (topic.topic === "filePeek" || !link.memory.has(kept))) {
+        // A path may no longer exist (or be readable). Its previous preview must not conceal the station's answer.
+        if (topic.topic === "filePeek") link.memory.delete(kept);
         link.errors.set(key, answer.failure);
         this.onChange(address, "errors", key);
       }
@@ -499,7 +550,7 @@ export class StationsSync {
 
   /// A job's log as it is now (its `lines` last lines), once a run: its topic opened (what was kept of it shows
   /// meanwhile). The station's stream says how it grows from then on (an older station's does not: its log is as it was
-  /// when opened, docs/core-ts.md).
+  /// when opened).
   readLog(address: string, job: string, lines: number): void {
     const key = logKey(job, lines);
     if (this.#links.get(address)?.memory.fresh(key)) return;
@@ -521,7 +572,7 @@ export class StationsSync {
     );
   }
 
-  /// What a search finds on the station (`stationSearch`, docs/search.md): asked a moment after the words stop changing
+  /// What a search finds on the station (`stationSearch`): asked a moment after the words stop changing
   /// (one shown that long), at the urgency of what is shown, and again as it is shown again; held in memory while
   /// shown, the station's answer as it came. A station from before search answers 404: said so (its `err`), and it is not asked again while shown.
   /// `again`: asked again as the station's chats changed (said to it: `again=1`, answered as found lately).
@@ -552,6 +603,7 @@ export class StationsSync {
       const params = [`q=${encode(topic.q as string)}`];
       if (typeof topic.kind === "string") params.push(`kinds=${encode(topic.kind)}`);
       if (typeof topic.limit === "number") params.push(`limit=${topic.limit}`);
+      if (topic.archived === true) params.push("archived=1");
       if (again) params.push("again=1");
       const answer = yield* Effect.result(this.requests.call(link.addr, "GET", `/search?${params.join("&")}`, null, { quiet: true }));
       if (answer._tag === "Success") {
@@ -635,6 +687,7 @@ export class StationsSync {
         link.errors.delete(key);
         this.#core.data.set(topic, shape ? shape(answer.success) : answer.success);
         this.#retell(address, read);
+        if (topic.topic === "sessions" || topic.topic === "threads") this.#remake(address);
         return;
       }
       // Not answered (a station's no is how it stands, read again or not).
@@ -704,7 +757,7 @@ export class StationsSync {
     });
   }
 
-  /// The station's logins (docs/remote-login.md), read whole: in its link's memory, as its stream then tells them. A
+  /// The station's logins, read whole: in its link's memory, as its stream then tells them. A
   /// station from before them answers 404: it has none (the page offers none).
   #machineLogins(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
@@ -729,11 +782,16 @@ export class StationsSync {
 
   /// The station's usage changed (or may have: read again): read while a page shows it, else only marked to be read once
   /// one does. It is some 200 KB and changes with every model call an agent makes: read on each whatever was shown, it
-  /// was most of what a slow link carried. The read asked for, if any.
-  #usageChanged(address: string, ctx: SpanContext | null = null): Deferred.Deferred<void, CoreError>[] {
+  /// was most of what a slow link carried. `from`: when the earliest call recorded since was made, as the station said
+  /// (only the days from then on are read again); null: all of it. The read asked for, if any.
+  #usageChanged(address: string, ctx: SpanContext | null = null, from: number | null = null): Deferred.Deferred<void, CoreError>[] {
     const link = this.#links.get(address);
-    if (link) link.usageCurrent = false;
+    if (link) {
+      link.usageCurrent = false;
+      link.usageFrom = from === null || link.usageFrom === null ? null : Math.min(link.usageFrom ?? Infinity, from);
+    }
     if (!this.#core.store.inUse({ topic: "stationUsage", station: address })) return [];
+    if (this.#usageReading.get(address)?.link === link) return [];
     return [this.#enqueue(address, "usage", Priority.background, this.#usage(address, ctx))];
   }
 
@@ -753,12 +811,73 @@ export class StationsSync {
     if (link && !link.archivedCurrent) this.#enqueue(address, "archived", Priority.shown, this.#archived(address));
   }
 
+  /// The station's archive, read a page at a time from its latest (`?page=`, its next where the one before ended): each
+  /// page put in with what is held of those older than it, until its end, then what was read alone. Read whole at once,
+  /// the archive of many chats took 60 s on a station, every other read of devices waiting (2026-11-03). A station from
+  /// before pages none: its answer, the whole list, is put in as it was. A page not answered is asked again a little later
+  /// (as `#read`); given up on, what was read stays, said to fall short (`archiveFailed`), and it is read again as it is shown again.
   #archived(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
       const link = this.#links.get(address);
-      if (link) link.archivedCurrent = true;
-      return this.#read(address, { topic: "archivedRows", station: address }, "/chats?archived=1", undefined, ctx);
+      if (link) {
+        link.archivedCurrent = true;
+        link.archiveReading = true;
+        link.archiveFailed = null;
+        this.onChange(address, "link");
+      }
+      const topic = { topic: "archivedRows", station: address };
+      return this.#archivedFrom(address, topic, "", [], ctx);
     });
+  }
+
+  #archivedFrom(address: string, topic: Topic, page: string, read: unknown[], ctx: SpanContext | null, attempt = 0): Effect.Effect<void, CoreError> {
+    return this.#asked((asked) => Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link) return;
+      const stopped = (why: string | null) => {
+        link.archivedCurrent = false;
+        link.archiveReading = false;
+        link.archiveFailed = why;
+        this.onChange(address, "link");
+      };
+      if (!this.reachable(address)) return stopped(null);
+      const said = yield* Effect.result(this.requests.call(link.addr, "GET", `/chats?archived=1&page=${encode(page)}`, null, { quiet: true, ctx }));
+      if (said._tag === "Failure") {
+        const { status, message } = said.failure;
+        if ((status !== undefined && status < 500) || attempt >= READ_RETRIES) return stopped(message);
+        const again = Effect.sleep(READ_RETRY_MS * 2 ** attempt).pipe(
+          Effect.andThen(Effect.sync(() => void this.#enqueue(address, `archived/${page}`, Priority.background, this.#archivedFrom(address, topic, page, read, null, attempt + 1)))),
+        );
+        this.#core.runner.fork(again, link.scoped);
+        return;
+      }
+      const answer = said.success;
+      const key = topicKey(topic);
+      link.errors.delete(key);
+      if (Array.isArray(answer)) {
+        link.archiveReading = false;
+        this.#core.data.set(topic, answer);
+        this.#retell(address, asked);
+        this.onChange(address, "link");
+        return;
+      }
+      // A page's rows are all that its items touch, so a chat of several agents can be in more than one page: once.
+      const seen = new Set(read.map((r) => str(get(r, "id"))));
+      const rows = [...read];
+      for (const r of arr(get(answer, "rows"))) {
+        if (seen.has(str(get(r, "id")))) continue;
+        seen.add(str(get(r, "id")));
+        rows.push(r);
+      }
+      const next = str(get(answer, "next"));
+      const end = next === null ? null : Number(next.slice(0, next.indexOf(":")));
+      const held = end === null ? [] : arr(this.#core.data.shared(topic)).filter((r) => !seen.has(str(get(r, "id"))) && (u64(get(get(r, "archived"), "at")) ?? 0) < end);
+      if (next === null) link.archiveReading = false;
+      this.#core.data.set(topic, [...rows, ...held]);
+      this.#retell(address, asked);
+      if (next === null) this.onChange(address, "link");
+      else this.#enqueue(address, `archived/${next}`, Priority.background, this.#archivedFrom(address, topic, next, rows, null));
+    }));
   }
 
   /// A page shows the station's usage: read, unless what is held is as the station has it.
@@ -795,12 +914,13 @@ export class StationsSync {
   }
 
   /// A folder of the drive shown, kept as it is on the station's disk (an agent writing there, a file renamed on the
-  /// machine): the station answers GET /drive/watch once something in it changes (else after a while), and it is read
-  /// again. A station from before watching, or a folder gone, answers 4xx: then it is read only as it is shown.
+  /// machine): the station tells of each change on a stream (GET /drive/watch as events), and the folder is read again.
+  /// The stream is opened as the station is reached; one that ended is opened again, the folder read then for what
+  /// changed meanwhile. A station from before streaming it, or a folder gone, refuses it: then it is read only as shown.
   /// What still.fail uses of the station's machine now (GET /resources), while shown (a fiber of the topic's,
   /// topics.ts) and a page of the app is in view: the station tells it as it looks, on a stream of its own (asked as
-  /// events). A station from before answers it once instead: asked again every RESOURCES_EVERY_MS. One that has none
-  /// says so (its refusal), asked again as often.
+  /// events), opened again RESOURCES_EVERY_MS after it ends. A station from before answers it once instead, and one
+  /// that has none says so (its refusal): either is what is shown, not asked again on a timer.
   resourcesWatch(address: string): Effect.Effect<void, never> {
     const key = topicKey({ topic: "stationResources", station: address });
     const attend = this.#core.attention?.attend;
@@ -809,18 +929,20 @@ export class StationsSync {
       link.memory.set(key, value);
       this.onChange(address, "log", key);
     };
+    /// Follows the station's stream; false once there is nothing to follow (a refusal, a station from before streams).
     const follow = Effect.scoped(
       Effect.gen({ self: this }, function* () {
         const link = this.#links.get(address);
-        if (!link || !this.reachable(address)) return;
+        if (!link || !this.reachable(address)) return true;
         const opened = yield* Effect.result(this.requests.stream(link.addr, "/resources", null));
         if (opened._tag === "Failure") {
           const status = opened.failure.status;
           if (status !== undefined && status < 500) {
             link.errors.set(key, opened.failure);
             this.onChange(address, "errors", key);
+            return false;
           }
-          return;
+          return true;
         }
         const reply = opened.success;
         // From before: what it is now, once.
@@ -828,13 +950,13 @@ export class StationsSync {
           const bytes = yield* Effect.result(readAll(reply.body));
           const value = bytes._tag === "Success" ? parseJson(bytes.success) : undefined;
           if (value !== undefined) told(link, value);
-          return;
+          return false;
         }
         const parser = new SseParser();
         const silent = Effect.sleep(RESOURCES_SILENT_MS).pipe(Effect.as(null));
         for (;;) {
           const next = yield* Effect.raceFirst(Effect.result(reply.body.take), silent);
-          if (next === null || next._tag === "Failure" || next.success === null) return;
+          if (next === null || next._tag === "Failure" || next.success === null) return true;
           for (const [name, data] of parser.feed(next.success)) {
             const value = name === "resources" ? parseJson(data) : undefined;
             if (value !== undefined) told(link, value);
@@ -843,28 +965,49 @@ export class StationsSync {
       }),
     );
     // (not while no page of the app is in view: a phone in a pocket asks nothing)
-    const whileShown = attend ? Effect.andThen(Effect.suspend(() => attend.untilShown()), Effect.raceFirst(follow, Effect.suspend(() => attend.untilHidden()))) : follow;
-    return Effect.forever(Effect.andThen(whileShown, Effect.sleep(RESOURCES_EVERY_MS)));
+    const whileShown = attend
+      ? Effect.andThen(Effect.suspend(() => attend.untilShown()), Effect.raceFirst(follow, Effect.as(Effect.suspend(() => attend.untilHidden()), true)))
+      : follow;
+    return Effect.gen(function* () {
+      while (yield* whileShown) yield* Effect.sleep(RESOURCES_EVERY_MS);
+    });
   }
 
   driveWatch(address: string, root: string, path: string): Effect.Effect<void, never> {
-    const id = Array.from(crypto.getRandomValues(new Uint8Array(9)), (b) => b.toString(16).padStart(2, "0")).join("");
-    const asked = `/drive/watch?root=${encode(root)}&path=${encode(path)}&id=${id}`;
+    const asked = `/drive/watch?root=${encode(root)}&path=${encode(path)}`;
+    // (asked when it runs: `ask` asks as it is called)
+    const read = Effect.suspend(() => Effect.ignore(this.ask(address, `drive/${root}/${path}`, this.#drive(address, root, path)), { log: "Unhandled", message: "drive read" }));
     return Effect.gen({ self: this }, function* () {
+      let wait = WATCH_AGAIN_MS;
+      let opened = 0;
       for (;;) {
         const link = this.#links.get(address);
         if (!link || !this.reachable(address)) {
-          yield* Effect.sleep(WATCH_AGAIN_MS);
+          yield* this.#linkChange(address);
           continue;
         }
-        const answer = yield* Effect.result(this.requests.call(link.addr, "GET", asked, null, { quiet: true }));
-        if (answer._tag === "Failure") {
-          const status = answer.failure.status;
-          if (status !== undefined && status >= 400 && status < 500) return;
-          yield* Effect.sleep(WATCH_AGAIN_MS);
-          continue;
-        }
-        if (get(answer.success, "changed") === true) yield* Effect.ignore(this.ask(address, `drive/${root}/${path}`, this.#drive(address, root, path)), { log: "Unhandled", message: "drive read" });
+        const ended = yield* Effect.scoped(
+          Effect.gen({ self: this }, function* () {
+            const reply = yield* Effect.result(this.requests.stream(link.addr, asked, null));
+            if (reply._tag === "Failure") {
+              const status = reply.failure.status;
+              return status !== undefined && status >= 400 && status < 500 ? ("refused" as const) : ("failed" as const);
+            }
+            if (!(replyHeader(reply.success, "content-type") ?? "").startsWith("text/event-stream")) return "refused" as const;
+            wait = WATCH_AGAIN_MS;
+            // Opened again: what changed while none was open is read now.
+            if (opened++ > 0) yield* read;
+            const parser = new SseParser();
+            for (;;) {
+              const next = yield* Effect.result(reply.success.body.take);
+              if (next._tag === "Failure" || next.success === null) return "ended" as const;
+              if (parser.feed(next.success).some(([name]) => name === "changed")) yield* read;
+            }
+          }),
+        );
+        if (ended === "refused") return;
+        yield* Effect.raceFirst(Effect.sleep(wait), this.#linkChange(address));
+        wait = Math.min(wait * 2, WATCH_AGAIN_MAX_MS);
       }
     });
   }
@@ -879,20 +1022,149 @@ export class StationsSync {
     if (link && !link.usageCurrent) this.#enqueue(address, "usage", Priority.shown, this.#usage(address));
   }
 
+  /// A topic kept after its last viewer is eventually stopped. A preparation which is still open goes with it.
+  usageHidden(address: string): void {
+    const active = this.#usageReading.get(address);
+    if (!active) return;
+    this.#usageReading.delete(address);
+    active.link.usageCurrent = false;
+    active.link.usageFrom = null;
+    if (active.fiber) this.#core.runner.interrupt(active.fiber);
+  }
+
+  /// A stream tells the independent history while preparing recent details, then the complete read. Events received
+  /// in between only mark the earliest changed day; after the complete answer that part is read once more. The wait
+  /// does not hold a sync lane or retain unrelated station events, and leaving it closes its request scope.
+  #usageRead(address: string, topic: Topic, path: string, shape?: (answer: unknown) => unknown,
+    ctx: SpanContext | null = null, attempt = 0): Effect.Effect<void, CoreError> {
+    return Effect.sync(() => {
+      const link = this.#links.get(address);
+      if (!link) return;
+      if (!this.reachable(address) || !this.#core.store.inUse(topic)) {
+        link.usageCurrent = false;
+        link.usageFrom = null;
+        return;
+      }
+      const previous = this.#usageReading.get(address);
+      if (previous?.link === link) return;
+      if (previous?.fiber) this.#core.runner.interrupt(previous.fiber);
+      const active: { link: Link; fiber: Fiber.Fiber<void, never> | null } = { link, fiber: null };
+      this.#usageReading.set(address, active);
+      const stillHere = () => this.#links.get(address) === link && this.#usageReading.get(address) === active;
+      const timeout = () => new CoreError("timeout", t("core-logic.mesh.timed_out"));
+      const read = Effect.scoped(Effect.gen({ self: this }, function* () {
+        const reply = yield* Effect.timeoutOrElse(this.requests.stream(link.addr, path, ctx), {
+          duration: JSON_IDLE_MS, orElse: () => Effect.fail(timeout()),
+        });
+        const take = () => Effect.timeoutOrElse(Effect.mapError(reply.body.take, asCoreError), {
+          duration: JSON_IDLE_MS, orElse: () => Effect.fail(timeout()),
+        });
+        const told = (value: unknown) => {
+          if (!stillHere() || !this.#core.store.inUse(topic)) return false;
+          link.errors.delete(topicKey(topic));
+          this.#core.data.set(topic, shape ? shape(value) : value);
+          return true;
+        };
+        if (!(replyHeader(reply, "content-type") ?? "").startsWith("text/event-stream")) {
+          // A station from before streams answers with its ordinary complete JSON.
+          const chunks: Uint8Array[] = [];
+          for (;;) {
+            const chunk = yield* take();
+            if (chunk === null) break;
+            chunks.push(chunk);
+          }
+          const value = parseJson(concat(chunks));
+          if (value === undefined) return yield* Effect.fail(new CoreError("bad_response", t("station.core.invalidReply")));
+          return told(value);
+        }
+        const parser = new SseParser();
+        for (;;) {
+          const chunk = yield* take();
+          if (!stillHere() || !this.#core.store.inUse(topic)) return false;
+          if (chunk === null) return yield* Effect.fail(new CoreError("bad_response", t("station.core.invalidReply")));
+          for (const [name, data] of parser.feed(chunk)) {
+            if (name === "error") {
+              const failure = parseJson(data);
+              const status = get(failure, "status");
+              return yield* Effect.fail(httpError(typeof status === "number" ? status : 500, get(failure, "body")));
+            }
+            if (name !== "usage") continue;
+            const value = parseJson(data);
+            if (value === undefined) return yield* Effect.fail(new CoreError("bad_response", t("station.core.invalidReply")));
+            if (!told(value)) return false;
+            if (get(value, "detailsPreparing") !== true) return true;
+          }
+        }
+      }));
+      const work = Effect.gen({ self: this }, function* () {
+        const answer = yield* Effect.result(read);
+        if (!stillHere()) return;
+        if (answer._tag === "Success" && answer.success) {
+          this.#usageReading.delete(address);
+          if (!link.usageCurrent && this.#core.store.inUse(topic)) this.#enqueue(address, "usage", Priority.background, this.#usage(address));
+          return;
+        }
+        link.usageCurrent = false;
+        link.usageFrom = null;
+        if (answer._tag === "Success") { this.#usageReading.delete(address); return; }
+        const key = topicKey(topic), status = answer.failure.status;
+        if (status !== undefined && status >= 400 && status < 500) {
+          this.#usageReading.delete(address);
+          this.#core.data.forgetTopic(topic);
+          link.errors.set(key, answer.failure);
+          this.onChange(address, "errors", key);
+        } else if (this.#core.store.inUse(topic)) {
+          const delay = Math.min(READ_RETRY_MS * 2 ** Math.min(attempt, 4), 30_000);
+          // Remain the one active read during the delay: usage events are coalesced instead of bypassing backoff.
+          yield* Effect.sleep(delay);
+          if (stillHere()) {
+            this.#usageReading.delete(address);
+            if (this.#core.store.inUse(topic)) this.#enqueue(address, "usage", Priority.background, this.#usage(address, null, attempt + 1));
+          }
+        }
+      }).pipe(Effect.ensuring(Effect.sync(() => {
+        if (this.#usageReading.get(address) === active) this.#usageReading.delete(address);
+      })));
+      active.fiber = this.#core.runner.fork(work, link.scoped);
+    });
+  }
+
   /// What the station's agents spent over the last 60 days, days as this device's clock has them: the usage page's 30 at
   /// most and as many before, to say its totals against (views/usage.ts); and everything since it began counting by
   /// day (`history`: the page's summary, views/usage-summary.ts). Current from when it is asked: a change said
-  /// meanwhile has it read again.
-  #usage(address: string, ctx: SpanContext | null = null): Effect.Effect<void, CoreError> {
+  /// meanwhile has it read again. Held whole for these same days, only the days a change since touched are read again
+  /// (usage-part.ts), from the earliest call the station said it recorded.
+  #usage(address: string, ctx: SpanContext | null = null, attempt = 0): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
       const link = this.#links.get(address);
-      if (link) link.usageCurrent = true;
+      if (link && this.#usageReading.get(address)?.link === link) return Effect.void;
+      const changed = link?.usageFrom;
+      if (link) {
+        link.usageCurrent = true;
+        link.usageFrom = undefined;
+      }
       const now = this.#core.host.nowMs();
       const offset = this.#core.host.utcOffsetMin(now);
-      const day = 86_400_000;
-      const local = Math.trunc(now) + offset * 60_000;
-      const from = local - (((local % day) + day) % day) - 59 * day - offset * 60_000;
-      return this.#read(address, { topic: "stationUsage", station: address }, `/usage?from=${from}&tz=${offset}&history=1`, undefined, ctx);
+      const from = dayOf(now, offset).from - 59 * 86_400_000;
+      const topic: Topic = { topic: "stationUsage", station: address };
+      if (typeof changed === "number" && changed >= from && holdsWhole(this.#core.data.shared(topic), from)) {
+        const part = dayOf(changed, offset);
+        const put = (answer: unknown) => {
+          const held = this.#core.data.shared(topic);
+          if (holdsWhole(held, from) && sameDetailCoverage(held, answer)) return withPart(held, answer, part.day, part.from);
+          // What is held was let go meanwhile: read whole as it is shown next.
+          if (link) {
+            link.usageCurrent = false;
+            link.usageFrom = null;
+            this.#enqueue(address, "usage/coverage", Priority.shown, this.#usage(address));
+          }
+          return held;
+        };
+        return this.#usageRead(address, topic, `/usage?from=${part.from}&tz=${offset}`, put, ctx, attempt);
+      }
+      const range = usageHistoryRange(now, offset);
+      const path = `/usage?from=${from}&tz=${offset}&history=1&historyFrom=${range.from}&historyTo=${range.to}`;
+      return this.#usageRead(address, topic, `${path}&allowPartial=1`, undefined, ctx, attempt);
     });
   }
 
@@ -905,16 +1177,21 @@ export class StationsSync {
   #historyStart(address: string): void {
     const link = this.#links.get(address);
     if (!link) return;
-    link.historyAsked.clear();
-    link.history = this.#historyReads(address);
-    this.#enqueue(address, "history", Priority.background, this.#history(address, 0));
+    const sweep = ++link.historySweep;
+    this.#enqueue(address, `history/prepare/${sweep}`, Priority.background, Effect.gen({ self: this }, function* () {
+      const reads = yield* this.#historyReads(address, link, sweep);
+      if (reads === null || this.#links.get(address) !== link || link.historySweep !== sweep) return;
+      link.historyAsked.clear();
+      link.history = reads;
+      this.#enqueue(address, "history", Priority.background, this.#history(address, 0));
+    }));
   }
 
   #history(address: string, attempt: number): Effect.Effect<void, CoreError> {
     return this.#asked((asked) => Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
       if (!link || !this.reachable(address)) return;
-      if (link.batchRefused !== null && this.#core.host.nowMs() - link.batchRefused < CHANGES_RETRY_MS) return this.#historyEach(address);
+      if (link.batchRefused !== null && this.#core.host.nowMs() - link.batchRefused < CHANGES_RETRY_MS) return yield* this.#historyEach(address);
       const batch: HistoryRead[] = [];
       let cost = 0;
       while (link.history.length > 0 && (batch.length === 0 || cost + link.history[0]!.cost <= HISTORY_BATCH)) {
@@ -932,7 +1209,7 @@ export class StationsSync {
         link.history.unshift(...batch);
         if (e.status === 404 && e.message.startsWith("no route ")) {
           link.batchRefused = this.#core.host.nowMs();
-          return this.#historyEach(address);
+          return yield* this.#historyEach(address);
         }
         // Not answered (its link went, say): asked again a little later, a few times.
         if ((e.status === undefined || e.status >= 500) && attempt < READ_RETRIES) {
@@ -941,10 +1218,24 @@ export class StationsSync {
         }
         return;
       }
-      batch.forEach((read, i) => {
+      let sliceAt = this.#core.host.monotonicMs();
+      let sliced = 0;
+      for (let i = 0; i < batch.length; i++) {
+        // A link may have been let go while another task ran between answers.
+        if (this.#links.get(address) !== link) return;
+        const read = batch[i]!;
         const after = read.apply(answered.success[i]!);
         if (after !== null && !link.historyAsked.has(after.path)) link.history.push(after);
-      });
+        sliced++;
+        if (i + 1 < batch.length && (i === 1 || this.#core.store.firstValuesPending() || sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - sliceAt >= HISTORY_SLICE_MS)) {
+          // A stream may have said something newer while the batch was away or between slices. Put it back before a
+          // view can see this slice; later answers may overlap it too. A slice runs without anything else seeing it.
+          this.#retell(address, asked);
+          yield* Effect.yieldNow;
+          sliceAt = this.#core.host.monotonicMs();
+          sliced = 0;
+        }
+      }
       this.#retell(address, asked);
       // More to bring: asked again, behind what is more urgent.
       if (link.history.length > 0) this.#enqueue(address, "history", Priority.background, this.#history(address, 0));
@@ -954,20 +1245,54 @@ export class StationsSync {
   /// What a station's history has yet to bring onto the device, in the order it is brought: each listed session's
   /// detail where its turns changed, each thread's next page of entries (the latest threads first), each listed
   /// session's latest page of its transcript where none is held.
-  #historyReads(address: string): HistoryRead[] {
-    const data = this.#core.data;
-    const sessions = data.sessionsToRead(address);
-    const reads: HistoryRead[] = [];
-    for (const [key, again] of sessions) {
-      if (!again) continue;
-      const topic = { topic: "session", station: address, key };
-      reads.push({ path: `/sessions/${encode(key)}`, cost: 1, apply: (a) => (this.#took(address, topic, a), null) });
-    }
-    for (const channel of [...data.threadIds(address).map((id) => entriesOf(address, id)), ...sessions.map(([key]) => transcriptOf(address, key))]) {
-      const read = this.#channelRead(channel);
-      if (read !== null) reads.push(read);
-    }
-    return reads;
+  #historyReads(address: string, link: Link, sweep: number): Effect.Effect<HistoryRead[] | null> {
+    return Effect.gen({ self: this }, function* () {
+      if (this.#links.get(address) !== link || link.historySweep !== sweep) return null;
+      const data = this.#core.data;
+      const keys = data.sessionKeys(address);
+      const sessions: [string, boolean][] = [];
+      let sliceAt = this.#core.host.monotonicMs();
+      let sliced = 0;
+      for (let at = 0; at < keys.length; at += HISTORY_SESSION_GROUP) {
+        if (this.#links.get(address) !== link || link.historySweep !== sweep) return null;
+        const group = keys.slice(at, at + HISTORY_SESSION_GROUP);
+        sessions.push(...data.sessionsToRead(address, group));
+        sliced += group.length;
+        if (at === 0 || this.#core.store.firstValuesPending() || sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - sliceAt >= HISTORY_SLICE_MS) {
+          yield* Effect.yieldNow;
+          sliceAt = this.#core.host.monotonicMs();
+          sliced = 0;
+        }
+      }
+      const reads: HistoryRead[] = [];
+      for (const [key, again] of sessions) {
+        if (this.#links.get(address) !== link || link.historySweep !== sweep) return null;
+        if (again) {
+          const topic = { topic: "session", station: address, key };
+          reads.push({ path: sessionPath(key), cost: 1, apply: (a) => (this.#took(address, topic, a), null) });
+        }
+        if (this.#core.store.firstValuesPending() || ++sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - sliceAt >= HISTORY_SLICE_MS) {
+          yield* Effect.yieldNow;
+          sliceAt = this.#core.host.monotonicMs();
+          sliced = 0;
+        }
+      }
+      const channels = [...data.threadIds(address).map((id) => entriesOf(address, id)), ...sessions.map(([key]) => transcriptOf(address, key))];
+      let visited = 0;
+      for (const channel of channels) {
+        if (this.#links.get(address) !== link || link.historySweep !== sweep) return null;
+        const read = this.#channelRead(channel);
+        if (read !== null) reads.push(read);
+        // Finding the next page can read a chat's index from the database. Do not make a page being opened wait for
+        // every other chat's index to be read first.
+        if (visited++ === 0 || this.#core.store.firstValuesPending() || ++sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - sliceAt >= HISTORY_SLICE_MS) {
+          yield* Effect.yieldNow;
+          sliceAt = this.#core.host.monotonicMs();
+          sliced = 0;
+        }
+      }
+      return reads;
+    });
   }
 
   /// A channel's next read (channels/channels.ts `next`) as a read of its station's history, the read after it while
@@ -987,9 +1312,12 @@ export class StationsSync {
   #channelAnswered(channel: Channel, error: CoreError | null, nothing: boolean): void {
     const link = this.#links.get(channel.station);
     if (!link) return;
-    // A transcript read: what the station has of it is known (a history with nothing in it is not still loading).
+    // A transcript read: what the station has of it is known (a history with nothing in it is not still loading). One
+    // that failed is said, and asked again while it is shown: nothing else would ask (a stream that follows the sessions
+    // at work tells nothing of one at rest, and it stays open).
     if (channel.kind === TRANSCRIPT) {
       if (error === null) this.#transcriptKnown(link, channel.id);
+      else this.#transcriptFailed(link, channel.id, error);
       return;
     }
     if (channel.kind !== ENTRIES) return;
@@ -1021,18 +1349,45 @@ export class StationsSync {
   }
 
   /// A station from before batches: its history a read a task, each its own request.
-  #historyEach(address: string): void {
-    const link = this.#links.get(address);
-    if (link) link.history = [];
-    for (const [key, again] of this.#core.data.sessionsToRead(address)) {
-      if (again) this.#enqueue(address, `session/${key}`, Priority.background, this.#session(address, key));
-      this.channels.bring(transcriptOf(address, key), Priority.background - 1);
-    }
-    for (const id of this.#core.data.threadIds(address)) this.channels.bring(entriesOf(address, id), Priority.background);
+  #historyEach(address: string): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link) return;
+      const sweep = link.historySweep;
+      link.history = [];
+      const data = this.#core.data;
+      const keys = data.sessionKeys(address);
+      let at = this.#core.host.monotonicMs();
+      let sliced = 0;
+      for (let start = 0; start < keys.length; start += HISTORY_SESSION_GROUP) {
+        if (this.#links.get(address) !== link || link.historySweep !== sweep) return;
+        for (const [key, again] of data.sessionsToRead(address, keys.slice(start, start + HISTORY_SESSION_GROUP))) {
+          if (again) this.#enqueue(address, `session/${key}`, Priority.background, this.#session(address, key));
+          this.channels.bring(transcriptOf(address, key), Priority.background - 1);
+          sliced++;
+        }
+        if (start === 0 || this.#core.store.firstValuesPending() || sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - at >= HISTORY_SLICE_MS) {
+          yield* Effect.yieldNow;
+          at = this.#core.host.monotonicMs();
+          sliced = 0;
+        }
+      }
+      let visited = 0;
+      for (const id of data.threadIds(address)) {
+        if (this.#links.get(address) !== link || link.historySweep !== sweep) return;
+        this.channels.bring(entriesOf(address, id), Priority.background);
+        sliced++;
+        if (visited++ === 0 || this.#core.store.firstValuesPending() || sliced >= HISTORY_SLICE_ITEMS || this.#core.host.monotonicMs() - at >= HISTORY_SLICE_MS) {
+          yield* Effect.yieldNow;
+          at = this.#core.host.monotonicMs();
+          sliced = 0;
+        }
+      }
+    });
   }
 
   #session(address: string, key: string): Effect.Effect<void, CoreError> {
-    return this.#read(address, { topic: "session", station: address, key }, `/sessions/${encode(key)}`);
+    return this.#read(address, { topic: "session", station: address, key }, sessionPath(key));
   }
 
   /// A session's transcript entries `from` to `to` whole, in place of what is held of them in brief (`history.detail`):
@@ -1046,6 +1401,7 @@ export class StationsSync {
   /// A thread gone from its station: its row and its entries go, and its topic says so.
   #threadGone(address: string, id: number): void {
     this.#core.data.dropThread(address, id);
+    this.#remake(address);
     const link = this.#links.get(address);
     if (link) {
       const key = topicKey({ topic: "thread", station: address, thread: id });
@@ -1079,13 +1435,30 @@ export class StationsSync {
         const entries = (get(data, "entries") as unknown[] | undefined) ?? [];
         const items = ENTRIES.items(data, { latest: true });
         const newest = Math.max(-1, ...items.map(([n]) => n));
+        // Its summary as held before what was said goes into its channel (which takes its `last` on to it).
+        const was = this.#core.data.of(address)?.thread(address, id);
+        const before = isObject(was) ? { ...was } : undefined;
         this.onTold(address, id, entries);
+        // Its rows, as what was said makes them (told again on top of a read asked before it, as the station's own were).
+        this.#retold.told(address, "said", data);
+        this.#held(address, "said", data);
         // Into its channel: the thread goes that far at once (the rest of its summary is read below), and a gap what
         // was told left is read. A chat let go for room (and not opened since) is not kept current: what it said is
         // read when it is opened. History older than what is held comes with the station's (#history).
         this.channels.told(entriesOf(address, id), items);
-        // Its summary for the viewer: told by the station (`thread-view`) when it tells it, else read.
-        const viewed = this.#links.get(address)?.viewed.get(id);
+        // Its summary for the viewer, brought on by what was said (thread-after.ts): the station leaves it to the device
+        // (`views=1`); one from before tells it after (`thread-view`), in place of this. Where it cannot be made here,
+        // read.
+        const link = this.#links.get(address);
+        const me = this.#me(address);
+        const next = me === null ? null : threadAfter(before, entries, me);
+        if (next !== null && link) {
+          this.putThread(address, next);
+          link.viewed.set(id, Math.max(link.viewed.get(id) ?? 0, u64(get(next, "last")) ?? 0));
+          link.dirty.delete(id);
+          return;
+        }
+        const viewed = link?.viewed.get(id);
         if (viewed === undefined || viewed < newest) this.#markDirty(address, id);
         return;
       }
@@ -1095,6 +1468,12 @@ export class StationsSync {
         const id = u64(get(data, "id"));
         if (id === null) return;
         this.channels.told(lettersOf(address, id), LETTERS.items(data, { latest: true }));
+        // How many it has and how far its log goes, in its summary (thread-after.ts); read where that cannot be said.
+        const held = this.#core.data.of(address)?.thread(address, id);
+        if (held === undefined) return;
+        const next = threadAfterLetters(held, (get(data, "letters") as unknown[] | undefined) ?? []);
+        if (next === null) this.#markDirty(address, id);
+        else if (next !== held) this.putThread(address, next);
         return;
       }
       case "live": {
@@ -1112,6 +1491,10 @@ export class StationsSync {
         }
         return;
       }
+      case "made":
+      case "chat-mark":
+      case "chat-changed":
+        return this.#held(address, name, data);
       // The stream that took over could not be told all that came since the last its predecessor gave: read again.
       case "missed":
         return this.snapshot(address);
@@ -1120,17 +1503,24 @@ export class StationsSync {
         if (link) {
           link.memory.set("host", data);
           this.onChange(address, "host");
+          const unreadable = !present.hostFits(data);
+          if (unreadable !== link.hostUnreadable) {
+            link.hostUnreadable = unreadable;
+            this.onChange(address, "link");
+          }
         }
         return;
       }
-      case "usage":
-        this.#usageChanged(address);
+      case "usage": {
+        const from = get(data, "from");
+        this.#usageChanged(address, null, typeof from === "number" && Number.isFinite(from) ? from : null);
         return;
-      // Its screens came or went, or who is on them changed (docs/remote-screens.md).
+      }
+      // Its screens came or went, or who is on them changed.
       case "screens":
         this.#heldScreens(address, { screens: Array.isArray(get(data, "screens")) ? (get(data, "screens") as unknown[]) : [], outdated: false });
         return;
-      // A login of the station's (docs/remote-login.md).
+      // A login of the station's.
       case "machine-logins": {
         const link = this.#links.get(address);
         if (!link) return;
@@ -1142,14 +1532,6 @@ export class StationsSync {
       case "presets":
         if (this.#core.store.inUse({ topic: "presets", station: address }) || this.#links.get(address)?.memory.has(PRESETS)) this.presetsShown(address);
         return;
-      // The programs granted the station's data changed, or read it (docs/data-outflow.md).
-      case "outflow-grants": {
-        const link = this.#links.get(address);
-        if (!link || !Array.isArray(get(data, "grants"))) return;
-        link.memory.set(OUTFLOW, data);
-        this.onChange(address, "log", topicKey({ topic: "outflowGrants", station: address }));
-        return;
-      }
       // A login's terminal as it changes (while one is shown).
       case "login-screen": {
         const link = this.#links.get(address);
@@ -1169,6 +1551,20 @@ export class StationsSync {
     switch (name) {
       case "session":
         return this.#onSession(address, data);
+      case "session-pending": {
+        // Its messages taken (how many it has yet to take): in its summary at once, its summary told after.
+        const key = str(get(data, "key"));
+        const pending = u64(get(data, "pending"));
+        const held = key === null ? undefined : this.#core.data.of(address)?.summary(address, key);
+        if (key === null || pending === null || !isObject(held) || get(held, "pending") === pending) return;
+        // Fewer: taken by its agent, into the turn it runs (begun, or steered), which the summary told after says. Its
+        // last turn held may be one that ended asking a person: not standing asking again until then.
+        const taken = pending < (u64(get(held, "pending")) ?? 0);
+        const now = taken ? { ...held, pending, process: "running" } : { ...held, pending };
+        this.#rowsAfterSession(address, key, held, now);
+        this.#core.data.putSummary(address, now);
+        return;
+      }
       case "session-removed": {
         const key = str(get(data, "key"));
         if (key) this.#onSessionRemoved(address, key);
@@ -1187,17 +1583,180 @@ export class StationsSync {
       }
       case "thread-removed": {
         const id = u64(get(data, "id"));
-        if (id !== null) this.#threadGone(address, id);
+        if (id === null) return;
+        this.#threadGone(address, id);
+        // Its rows go with it, where the station leaves them to the device.
+        if (this.#links.get(address)?.makesRows) for (const row of core.data.chatsOf(address, { thread: id })) this.#dropRow(address, row);
         return;
       }
       case "read": {
         const thread = u64(get(data, "thread"));
         const n = u64(get(data, "n"));
         if (thread !== null && n !== null) this.putRead(address, thread, n);
+        // Where the viewer read to, theirs on the chat list's rows.
+        const link = this.#links.get(address);
+        if (thread !== null && n !== null && link?.shared && link.marks) {
+          link.marks.reads[String(thread)] = Math.max(link.marks.reads[String(thread)] ?? 0, n);
+          this.#remake(address);
+        }
+        return;
+      }
+      case "hidden": {
+        const thread = u64(get(data, "thread"));
+        const hidden = get(data, "hidden");
+        if (thread === null || typeof hidden !== "boolean") return;
+        const marks = this.#links.get(address)?.marks;
+        if (marks) {
+          marks.hidden = [...(marks.hidden ?? []).filter((id) => id !== thread), ...(hidden ? [thread] : [])];
+          return this.#remake(address);
+        }
+        for (const row of core.data.chatsOf(address, { thread })) if (isObject(row)) core.data.putChat(address, { ...row, hidden });
+        return;
+      }
+      case "muted": {
+        const thread = u64(get(data, "thread"));
+        const muted = get(data, "muted");
+        if (thread === null || typeof muted !== "boolean") return;
+        const marks = this.#links.get(address)?.marks;
+        if (marks) {
+          marks.muted = [...(marks.muted ?? []).filter((id) => id !== thread), ...(muted ? [thread] : [])];
+          return this.#remake(address);
+        }
+        for (const row of core.data.chatsOf(address, { thread })) if (isObject(row)) core.data.putChat(address, { ...row, muted });
+        return;
+      }
+      case "pin": {
+        // What the viewer pinned (or let go), into its row (rows-after.ts).
+        const session = str(get(data, "session"));
+        const at = u64(get(data, "at"));
+        const marks = this.#links.get(address)?.marks;
+        if (marks && session !== null) {
+          if (at === null) delete marks.pins[session];
+          else marks.pins[session] = at;
+          return this.#remake(address);
+        }
+        const row = session === null ? undefined : core.data.chat(address, session);
+        const after = rowAfterPin(row, at);
+        if (after !== null && after !== "read") core.data.putChat(address, after);
+        return;
+      }
+      case "dismiss": {
+        // What waits in a chat the viewer will not take up (its card, its agent's need), in its rows.
+        const thread = u64(get(data, "thread"));
+        const n = u64(get(data, "n"));
+        if (thread === null || n === null) return;
+        const marks = this.#links.get(address)?.marks;
+        if (marks) {
+          if (!marks.dismissed.includes(`${thread}:${n}`)) marks.dismissed.push(`${thread}:${n}`);
+          for (const kind of [marks.card, marks.need]) {
+            const v = kind[String(thread)];
+            if (isObject(v) && get(v, "seq") === n) kind[String(thread)] = { ...v, dismissed: true };
+          }
+          return this.#remake(address);
+        }
+        for (const row of core.data.chatsOf(address, { thread })) {
+          const after = rowAfterDismiss(row, n);
+          if (after !== null && after !== "read") core.data.putChat(address, after);
+        }
+        return;
+      }
+      case "kept": {
+        // A chat the viewer kept from being offered for archiving, or let be again.
+        const thread = u64(get(data, "thread"));
+        if (thread === null || typeof get(data, "kept") !== "boolean") return;
+        const marks = this.#links.get(address)?.marks;
+        if (marks) {
+          marks.kept = [...marks.kept.filter((t) => t !== thread), ...(get(data, "kept") === true ? [thread] : [])];
+          return this.#remake(address);
+        }
+        for (const row of core.data.chatsOf(address, { thread })) {
+          const after = rowAfterKept(row, get(data, "kept") === true);
+          if (after !== null && after !== "read") core.data.putChat(address, after);
+        }
+        return;
+      }
+      case "said": {
+        // What was said in a chat, into the rows it touches (rows-after.ts), where the station leaves them to the device.
+        const link = this.#links.get(address);
+        const id = u64(get(data, "id"));
+        const me = this.#me(address);
+        if (link?.marks && id !== null) {
+          const entries = ((get(data, "entries") as unknown[] | undefined) ?? []).filter(isObject);
+          // The review's marks hold while the chat stands as it looked at it; a card posted, or a person writing (what
+          // waits answered), is the station's to say.
+          link.marks.suggested = link.marks.suggested.filter((t) => t !== id);
+          delete link.marks.verdicts[String(id)];
+          if (entries.some((e) => get(e, "card") !== undefined || get(e, "authorKind") === "person" || get(e, "kind") === "edit")) this.#marksRead(address, { threads: [id] });
+          this.#remake(address);
+          return;
+        }
+        if (!link?.makesRows || id === null || me === null) return;
+        const entries = (get(data, "entries") as unknown[] | undefined) ?? [];
+        const rows = core.data.chatsOf(address, { thread: id });
+        // A chat new to the list, or one whose rows only lend their title (a Slack thread): the station's to say, once
+        // a person wrote in it.
+        if (rows.length === 0) {
+          const own = isOwnSurface(get(core.data.of(address)?.thread(address, id), "surface"));
+          if (own || entries.some((e) => get(e, "authorKind") === "person")) this.#rowsRead(address, { threads: [id] });
+          return;
+        }
+        for (const row of rows) this.#rowAfter(address, row, rowAfterSaid(row, entries, me), { threads: [id] });
         return;
       }
       case "chat":
         return core.data.putChat(address, data);
+      case "made": {
+        // The station leaves its sidebar rows' changes to the device (`rows=1`): made here from now (rows-after.ts); one
+        // that keeps the marks beside the summaries (`marks`), the whole sidebar made here (rows-made.ts).
+        const link = this.#links.get(address);
+        if (!link) return;
+        link.makesRows = get(data, "rows") === true;
+        if (this.#core.data.record("keepsMarks", address) !== (get(data, "marks") === true)) this.#core.data.put("keepsMarks", address, get(data, "marks") === true);
+        if (get(data, "marks") === true && link.marks === null) this.#enqueue(address, "chats", Priority.shown, this.#marksWhole(address));
+        // The chat list the station makes once for everyone: the sidebar made of it and what is the viewer's own.
+        link.shared = get(data, "shared") === true;
+        if (link.shared && link.sharedRows === null) this.#enqueue(address, "shared", Priority.shown, this.#sharedWhole(address));
+        return;
+      }
+      case "chat-shared": {
+        // A row of the chat list as it is now, as the station made it for everyone who sees it.
+        const id = str(get(data, "id"));
+        const link = this.#links.get(address);
+        if (id === null || !link?.sharedRows) return;
+        link.sharedRows.set(id, data as Record<string, any>);
+        return this.#remake(address);
+      }
+      case "chat-shared-removed": {
+        const id = str(get(data, "id"));
+        const link = this.#links.get(address);
+        if (id === null || !link?.sharedRows) return;
+        link.sharedRows.delete(id);
+        return this.#remake(address);
+      }
+      case "chat-changed": {
+        // What changes which rows there are and what they say, and only the station can say (a chat's sessions, its
+        // settings, who the viewer is on Slack): those of a chat read again, or all of them.
+        const thread = u64(get(data, "thread"));
+        if (this.#links.get(address)?.marks) {
+          // Its sessions or shares changed: its summary and marks read again; or anything (settings): all the marks.
+          if (thread === null) return this.#marksRead(address, { whole: true });
+          this.#markDirty(address, thread);
+          return this.#marksRead(address, { threads: [thread] });
+        }
+        if (!this.#links.get(address)?.makesRows) return;
+        if (thread !== null) this.#rowsRead(address, { threads: [thread] });
+        else this.#enqueue(address, "chats", Priority.shown, this.#chats(address));
+        return;
+      }
+      case "chat-mark": {
+        // What was written of a chat beside what is said in it (the review's marks, who it is shared with, a chat opened
+        // from it): its rows as the station has them now, where it leaves them to the device.
+        const session = str(get(data, "session"));
+        const thread = u64(get(data, "thread"));
+        if (this.#links.get(address)?.marks && session !== null) return this.#marksRead(address, { sessions: [session], threads: thread === null ? [] : [thread] });
+        if (this.#links.get(address)?.makesRows && session !== null) this.#rowsRead(address, { sessions: [session], threads: thread === null ? [] : [thread] });
+        return;
+      }
       case "chat-removed": {
         const id = str(get(data, "id"));
         if (id) core.data.dropChat(address, id);
@@ -1222,8 +1781,10 @@ export class StationsSync {
   }
 
   /// What `address`'s stream told since `read` was asked, on top of what it brought (retold.ts).
-  #retell(address: string, read: number): void {
-    for (const { name, data } of this.#retold.since(read, address)) this.#held(address, name, data);
+  #retell(address: string, read: number, shared = false): void {
+    // Only a shared-list read replaces sharedRows. Replaying its events after an unrelated, slower read could put an
+    // older row back over a newer shared-list answer.
+    for (const { name, data } of this.#retold.since(read, address)) if (SHARED_RETOLD.has(name) === shared) this.#held(address, name, data);
   }
 
   /// A session's summary changed: in place among the listed (and in its detail); its detail is read again when its
@@ -1231,15 +1792,202 @@ export class StationsSync {
   #onSession(address: string, summary: unknown): void {
     const key = str(get(summary, "key"));
     if (!key) return;
+    const before = this.#core.data.of(address)?.summary(address, key);
+    this.#rowsAfterSession(address, key, before, summary);
     if (this.#core.data.putSummary(address, summary)) this.#enqueue(address, `session/${key}`, Priority.shown, this.#session(address, key));
     // How far its transcript goes: what the device lacks of it after what it holds is read (channels.ts `settle`).
     const length = u64(get(summary, "transcriptLength"));
     if (length !== null && length > 0) this.channels.goesTo(transcriptOf(address, key), length - 1);
   }
 
+  /// A session's summary into the rows it is among the agents of, where the station leaves them to the device
+  /// (rows-after.ts); a session listed and in none is new to the list: its row is the station's to say.
+  #rowsAfterSession(address: string, key: string, before: unknown, summary: unknown): void {
+    const link = this.#links.get(address);
+    if (link?.marks) {
+      // New to the device, or its last turn now asks something of a person or no longer does: the station's marks of it.
+      const ask = (s: unknown) => JSON.stringify(get(s, "lastTurn") ?? null);
+      if (!isObject(before) || ask(before) !== ask(summary)) {
+        const threads = (this.#core.data.shared({ topic: "threads", station: address }) as unknown[] | undefined ?? [])
+          .filter((t) => Array.isArray(get(t, "sessions")) && (get(t, "sessions") as unknown[]).some((m) => get(m, "session") === key))
+          .flatMap((t) => u64(get(t, "id")) ?? []);
+        this.#marksRead(address, { sessions: [key], threads });
+      }
+      this.#remake(address);
+      return;
+    }
+    if (!link?.makesRows) return;
+    const rows = this.#core.data.chatsOf(address, { session: key });
+    const archived = (get(summary, "archivedAt") ?? null) !== null;
+    if (rows.length === 0) {
+      if (!archived && JSON.stringify(before ?? null) !== JSON.stringify(summary)) this.#rowsRead(address, { sessions: [key] });
+      return;
+    }
+    for (const row of rows) this.#rowAfter(address, row, rowAfterSession(row, before, summary), { sessions: [key] });
+  }
+
+  /// A row as a change of the station's makes it (rows-after.ts): in place, read where only the station can say it
+  /// (`of`: what changed).
+  #rowAfter(address: string, row: unknown, after: After, of: { sessions?: string[]; threads?: number[] }): void {
+    if (after === "read") this.#rowsRead(address, of);
+    else if (after !== null) this.#core.data.putChat(address, after);
+  }
+
+  /// The rows a change of these sessions and threads touches, read from the station (GET /chats?sessions=&threads=,
+  /// read/views.ts `chatRows`): what it asks is gathered while the read waits, one read for all of it.
+  #rowsRead(address: string, of: { sessions?: string[]; threads?: number[] }): void {
+    const link = this.#links.get(address);
+    if (!link) return;
+    for (const key of of.sessions ?? []) link.rowsWanted.sessions.add(key);
+    for (const id of of.threads ?? []) link.rowsWanted.threads.add(id);
+    this.#enqueue(address, "rows", Priority.shown, this.#asked((asked) => Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return;
+      const sessions = [...link.rowsWanted.sessions];
+      const threads = [...link.rowsWanted.threads];
+      link.rowsWanted.sessions.clear();
+      link.rowsWanted.threads.clear();
+      if (sessions.length === 0 && threads.length === 0) return;
+      const query = [...sessions.map((k) => `session=${encode(k)}`), ...threads.map((id) => `thread=${id}`)].join("&");
+      const answer = yield* this.requests.call(link.addr, "GET", `/chats?${query}`, null, { quiet: true });
+      // A station from before answers its whole list: as such.
+      if (Array.isArray(answer)) {
+        this.#core.data.set({ topic: "chatRows", station: address }, answer);
+      } else {
+        const rows = arr(get(answer, "rows"));
+        const now = new Set(rows.map((r) => str(get(r, "id"))));
+        for (const row of rows) this.#core.data.putChat(address, row);
+        for (const id of arr(get(answer, "scope"))) if (typeof id === "string" && !now.has(id)) this.#core.data.dropChat(address, id);
+      }
+      this.#retell(address, asked);
+    })));
+  }
+
+  /// The station's sidebar: made here (rows-made.ts) from the summaries held and what the station keeps beside them
+  /// (GET /chats?marks=1), once its stream said it keeps them (`made`); else read made, as from a station from before.
+  #chats(address: string, ctx: SpanContext | null = null, unread?: () => void): Effect.Effect<void, CoreError> {
+    // Said so by its stream before (kept: a device started again reads the station whole, as each did, some 2 min on a station).
+    const keeps = () => this.#links.get(address)?.marks || this.#core.data.record("keepsMarks", address) === true;
+    return Effect.suspend(() => (keeps() ? this.#marksWhole(address, ctx, unread) : this.#read(address, { topic: "chatRows", station: address }, "/chats", undefined, ctx, 0, unread)));
+  }
+
+  /// The chat list as the station makes it for everyone (GET /chats?shared=1), what the viewer sees of it; the sidebar
+  /// made of it.
+  #sharedWhole(address: string, ctx: SpanContext | null = null, unread?: () => void, attempt = 0): Effect.Effect<void, CoreError> {
+    return this.#asked((asked) => Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return unread?.();
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/chats?shared=1", null, { quiet: true, ctx }));
+      if (answer._tag === "Failure") {
+        unread?.();
+        if ((answer.failure.status === undefined || answer.failure.status >= 500) && attempt < READ_RETRIES) {
+          const again = Effect.sleep(READ_RETRY_MS * 2 ** attempt).pipe(
+            Effect.andThen(Effect.sync(() => void this.#enqueue(address, "shared", Priority.background, this.#sharedWhole(address, null, undefined, attempt + 1)))),
+          );
+          this.#core.runner.fork(again, link.scoped);
+        }
+        return;
+      }
+      if (!Array.isArray(answer.success)) return unread?.();
+      link.sharedRows = new Map(answer.success.flatMap((r) => (isObject(r) && typeof get(r, "id") === "string" ? [[get(r, "id") as string, r as Record<string, any>]] : [])));
+      this.#retell(address, asked, true);
+      this.#made(address);
+    }));
+  }
+
+  #marksWhole(address: string, ctx: SpanContext | null = null, unread?: () => void): Effect.Effect<void, CoreError> {
+    return this.#asked((asked) => Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link || !this.reachable(address)) return unread?.();
+      const answer = yield* Effect.result(this.requests.call(link.addr, "GET", "/chats?marks=1", null, { quiet: true, ctx }));
+      if (answer._tag === "Failure") {
+        if (answer.failure.status === undefined || answer.failure.status >= 500) unread?.();
+        return yield* Effect.fail(answer.failure);
+      }
+      const marks = marksOf(answer.success);
+      if (marks === null) {
+        link.marks = null;
+        this.#core.data.put("keepsMarks", address, false);
+        this.#core.data.set({ topic: "chatRows", station: address }, answer.success);
+      } else {
+        link.marks = marks;
+        this.#made(address);
+      }
+      this.#retell(address, asked);
+    }));
+  }
+
+  /// What the station keeps beside the summaries of some chats (or all: `whole`), read again: what it asks is gathered
+  /// while the read waits, one read for all of it. Then the sidebar made again.
+  #marksRead(address: string, of: { sessions?: string[]; threads?: number[]; whole?: boolean }): void {
+    const link = this.#links.get(address);
+    if (!link?.marks) return;
+    for (const key of of.sessions ?? []) link.marksWanted.sessions.add(key);
+    for (const id of of.threads ?? []) link.marksWanted.threads.add(id);
+    if (of.whole) link.marksWanted.whole = true;
+    this.#enqueue(address, "marks", Priority.shown, this.#asked((asked) => Effect.gen({ self: this }, function* () {
+      const link = this.#links.get(address);
+      if (!link?.marks || !this.reachable(address)) return;
+      const whole = link.marksWanted.whole;
+      const scope = { sessions: [...link.marksWanted.sessions], threads: [...link.marksWanted.threads] };
+      link.marksWanted.sessions.clear();
+      link.marksWanted.threads.clear();
+      link.marksWanted.whole = false;
+      if (!whole && scope.sessions.length === 0 && scope.threads.length === 0) return;
+      const query = whole ? "" : [...scope.sessions.map((k) => `&session=${encode(k)}`), ...scope.threads.map((id) => `&thread=${id}`)].join("");
+      const read = marksOf(yield* this.requests.call(link.addr, "GET", `/chats?marks=1${query}`, null, { quiet: true }));
+      if (read === null || !link.marks) return;
+      link.marks = whole ? read : marksWith(link.marks, read, scope);
+      this.#made(address);
+      this.#retell(address, asked);
+    })));
+  }
+
+  /// The sidebar made again from what is held, once what is being told now is in (rows-made.ts).
+  #remake(address: string): void {
+    if (!this.#links.get(address)?.marks) return;
+    this.#enqueue(address, "remake", Priority.shown, Effect.sync(() => this.#made(address)));
+  }
+
+  #made(address: string): void {
+    const link = this.#links.get(address);
+    const me = this.#me(address);
+    if (!link?.marks || me === null) return;
+    const data = this.#core.data;
+    if (link.shared) {
+      // Of the chat list the station makes for everyone, once it is read: till then the rows held stand.
+      if (link.sharedRows === null) return;
+      const lang = current();
+      const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly"), admin: tr(lang, "station.author.admin") };
+      return data.set({ topic: "chatRows", station: address }, rowsShared(link.sharedRows.values(), link.marks, me, words));
+    }
+    const sessions = data.shared({ topic: "sessions", station: address });
+    const threads = data.shared({ topic: "threads", station: address });
+    if (!Array.isArray(sessions) || !Array.isArray(threads)) return;
+    const lang = current();
+    const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly"), admin: tr(lang, "station.author.admin") };
+    data.set({ topic: "chatRows", station: address }, rowsMade(sessions, threads, link.marks, me, words));
+  }
+
+  /// A row gone from the list, by its id.
+  #dropRow(address: string, row: unknown): void {
+    const id = str(get(row, "id"));
+    if (id !== null) this.#core.data.dropChat(address, id);
+  }
+
   #onSessionRemoved(address: string, key: string): void {
     const core = this.#core;
+    // Where the station leaves the rows to the device: its own goes, and those it was among the agents of are read
+    // (where it makes the sidebar itself, made again below).
+    if (this.#links.get(address)?.makesRows && !this.#links.get(address)?.marks) {
+      for (const row of core.data.chatsOf(address, { session: key })) {
+        const thread = u64(get(row, "thread"));
+        if (str(get(row, "id")) === key) this.#dropRow(address, row);
+        if (thread !== null) this.#rowsRead(address, { threads: [thread] });
+      }
+    }
     core.data.dropSession(address, key);
+    this.#remake(address);
     const link = this.#links.get(address);
     if (link) {
       const topic = topicKey({ topic: "session", station: address, key });
@@ -1263,13 +2011,14 @@ export class StationsSync {
     const state = get(job, "state");
     const open = state === "running" || (state === "exited" && (get(job, "port") ?? null) !== null);
     // A new one: which chat it is in is the station's to say.
-    if (core.data.putJob(address, job, open)) this.#enqueue(address, "jobs", Priority.shown, this.#read(address, { topic: "jobs", station: address }, "/jobs"));
+    if (core.data.putJob(address, job, open)) this.#enqueue(address, "jobs", Priority.shown, this.#read(address, { topic: "jobs", station: address }, JOBS));
   }
 
   /// A thread's summary into the station's threads, and the details of the sessions taking part. It says how far the
   /// thread goes: its channel is read if the device is behind on it.
   putThread(address: string, view: unknown): void {
     this.#core.data.putThread(address, view);
+    this.#remake(address);
     const id = u64(get(view, "id"));
     const last = u64(get(view, "last"));
     if (id !== null && last !== null) this.channels.goesTo(entriesOf(address, id), last);
@@ -1288,6 +2037,19 @@ export class StationsSync {
   /// entry (otherwise the count is read again).
   putRead(address: string, thread: number, n: number): void {
     if (this.#core.data.setRead(address, thread, n)) this.#markDirty(address, thread);
+    this.#remake(address);
+  }
+
+  /// The email the viewer reaches `address`'s workspace with: whose messages there are their own.
+  #me(address: string): string | null {
+    let workspace: string;
+    try {
+      workspace = StationAddr.parse(address).workspace;
+    } catch {
+      return null;
+    }
+    const sub = this.#core.workspaces.of(workspace).owner;
+    return sub === null ? null : (this.#core.accounts.list().find((a) => a.sub === sub)?.email ?? null);
   }
 
   /// A thread's summary read again once the burst of events is over.
@@ -1312,13 +2074,19 @@ export class StationsSync {
     );
   }
 
+  /// A chat opened with no summary held (made since the threads were read, elsewhere or while away; opened from a
+  /// link): its summary read at once, as its entries are (topics.ts `start`).
+  summaryOf(address: string, id: number): void {
+    if (this.#links.has(address)) this.#enqueue(address, `thread/${id}`, Priority.shown, this.#threadSummary(address, id));
+  }
+
   #threadSummary(address: string, id: number): Effect.Effect<void, CoreError> {
     return this.#asked((read) => Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
       if (!link) return;
       const view = yield* Effect.result(this.requests.call(link.addr, "GET", `/threads/${id}`, null, { quiet: true }));
       if (view._tag === "Success") this.putThread(address, view.success);
-      else if (view.failure.status === 404) this.#core.data.unlistThread(address, id);
+      else if (view.failure.status === 404) this.#threadGone(address, id);
       this.#retell(address, read);
     }));
   }
@@ -1381,9 +2149,39 @@ export class StationsSync {
   #transcriptKnown(link: Link, key: string): void {
     let view = link.lives.get(key);
     if (!view) link.lives.set(key, (view = { steps: [], phase: null, rate: null, usage: null, loaded: false }));
-    if (view.loaded) return;
+    this.#transcriptMisses.delete(`${link.address}\u0001${key}`);
+    if (view.loaded && view.failed === undefined) return;
     view.loaded = true;
+    delete view.failed;
     this.onChange(link.address, "live", key);
+  }
+
+  /// A read of a session's transcript failed: why, for its history to say, and read again after a while, less often each
+  /// time it fails in a row, while its history is shown.
+  #transcriptFailed(link: Link, key: string, error: CoreError): void {
+    let view = link.lives.get(key);
+    if (!view) link.lives.set(key, (view = { steps: [], phase: null, rate: null, usage: null, loaded: false }));
+    if (view.failed !== error.message) {
+      view.failed = error.message;
+      this.onChange(link.address, "live", key);
+    }
+    const topic: Topic = { topic: "live", station: link.address, key };
+    if (!this.#core.store.inUse(topic)) return;
+    const miss = `${link.address}\u0001${key}`;
+    // (one read again at a time: two that failed together wait as one)
+    if (this.#transcriptAgain.has(miss)) return;
+    this.#transcriptAgain.add(miss);
+    const n = this.#transcriptMisses.get(miss) ?? 0;
+    this.#transcriptMisses.set(miss, n + 1);
+    // timer: retry after a failure, with a backoff
+    const again = Effect.sleep(retryAfter(n)).pipe(
+      Effect.andThen(Effect.sync(() => {
+        this.#transcriptAgain.delete(miss);
+        if (this.#core.store.inUse(topic)) this.channels.bring(transcriptOf(link.address, key), Priority.shown, "latest");
+      })),
+      Effect.onInterrupt(() => Effect.sync(() => this.#transcriptAgain.delete(miss))),
+    );
+    this.#core.runner.fork(again, link.scoped);
   }
 
   /// What the chat shows of a session at work (activity.ts), from its live view.
@@ -1421,7 +2219,7 @@ export class StationsSync {
     return Effect.gen({ self: this }, function* () {
       const reads: [string, Effect.Effect<void, CoreError>][] = [];
       const read = (what: string, topic: Topic, path: string) => reads.push([what, this.#read(address, topic, path)]);
-      const rows = () => read("chats", { topic: "chatRows", station: address }, "/chats");
+      const rows = () => reads.push(["chats", this.#chats(address)]);
       // The archive: read again before the call answers only while a page shows it, else marked to be (#archivedChanged).
       const archived = () => {
         const link = this.#links.get(address);
@@ -1484,9 +2282,6 @@ export class StationsSync {
         // What the agents' memory says of it changed (a skill shared or no longer): read again where it is shown or held.
         case "memory":
           if (this.#core.store.inUse({ topic: "memory", station: address }) || this.#links.get(address)?.memory.has(MEMORY)) reads.push(["memory", this.#memory(address)]);
-          break;
-        case "outflowGrants":
-          reads.push(["outflowGrants", this.#outflow(address)]);
           break;
         case "presets":
           reads.push(["presets", this.#presets(address)]);
@@ -1602,9 +2397,18 @@ export class StationsSync {
   /// Records how far the viewer has read a thread; nothing is sent when it is read that far already.
   read(address: string, thread: number, n: number, ctx: SpanContext | null): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      const key = `${address}\u0001${thread}`;
       const position = this.readPosition(address, thread);
-      if (position !== null && position >= n) return;
+      // (read so far as the station has it: not as far as a read held here that it has not taken yet)
+      const held = this.#heldReads.get(key);
+      if (position !== null && position >= n && !(held !== undefined && held >= n)) return;
+      // Held read here as it is asked, not once the station answers: the list's row and its workspace's mark were
+      // unread for that round trip, and read again after it (2026-11-08). The station's next summary says otherwise
+      // if it does not take it, and the read is asked again (attend.ts `failed`).
+      this.#heldReads.set(key, Math.max(held ?? 0, n));
+      this.putRead(address, thread, n);
       const answer = yield* this.requests.call(StationAddr.parse(address), "PUT", `/threads/${thread}/read`, { n }, { ctx });
+      if ((this.#heldReads.get(key) ?? 0) <= n) this.#heldReads.delete(key);
       this.putRead(address, thread, u64(get(answer, "n")) ?? n);
     });
   }

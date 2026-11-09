@@ -1,6 +1,7 @@
 // Links to a station's screens and its 共享调试 in an agent's words (screen_links.mbt, over chat_fixture.mbt's
 // chat-screens): their cards alone in a paragraph, their titles bare in a sentence, a tap opening the link; a tab's
-// preview asked for while its card is on the screen and the app shown, its frames acknowledged peek_ms apart.
+// preview asked for while its card is on the screen and the app shown, its frames acknowledged peek_ms apart; an
+// Android device's (H.264 alone) decoded in its card, two such at once.
 
 ///|
 /// A streamed call the app made: its params, and what is told its values.
@@ -17,6 +18,7 @@ fn screen_links_core(
   cancelled : Array[Int],
   calls : Array[Made],
   over? : (String, Topic) -> Topic = fn(_, t) { t },
+  h264? : Bool = false,
 ) -> @ui.Tester {
   new_run()
   let base = fixture("chat-screens")
@@ -31,10 +33,10 @@ fn screen_links_core(
       streams.length()
     },
     cancel: fn(id) { cancelled.push(id) },
-    topic: fn(name, params) { over(name, (base.topic)(name, params)) },
+    topic_read: fn(name, params) { over(name, base.topic(name, params).get().snapshot()) },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2, h264~)
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -95,7 +97,7 @@ test "a link alone in a paragraph is its card, a bare one in a sentence reads as
   // 共享调试 bare in a sentence: its title, a link; alone: its card
   assert_true(t.run_rects("共享调试").length() > 0)
   assert_eq(t.run_rects("https://still.fail/w/ws1/s/st1/adb").length(), 0)
-  assert_true(t.find("允许 Studio 的 agent 调试此设备？") is Some(_))
+  assert_true(t.find("允许 Willow 的 agent 调试此设备？") is Some(_))
   // a link to anywhere else as it was
   assert_true(t.run_rects("https://example.com/login-v2").length() > 0)
   // the title in the sentence opens the link, the card too, as a tap on the link would
@@ -129,7 +131,7 @@ test "a link to the chat's web service alone in a paragraph is its card: its sta
   // (clear of the composer over the list's foot, where a tap is the composer's)
   middle_words(t, "打开定价页")
   // the link's own words its title, over the service's station with its port and how it stands, as the core says
-  assert_true(t.find("Studio :5173 · 在线") is Some(_))
+  assert_true(t.find("Willow :5173 · 在线") is Some(_))
   assert_eq(t.run_rects("打开定价页").length(), 0, msg="a card, not a link in the words")
   t.tap_text("打开定价页")
   t.frame()
@@ -148,7 +150,7 @@ test "a screen its station no longer has: its title muted; a live one's in the i
   let t = screen_links_core(streams, cancelled, calls)
   scroll_to_words(t, "此屏幕已不存在")
   let c = t.ctx()
-  // (the phone's muted, as the card's line under it: ScreenLinks.kt's C.muted for both)
+  // (the phone's muted)
   assert_eq(inks_of(t, "浏览器标签页"), inks_of(t, "此屏幕已不存在"))
   assert_true(inks_of(t, "浏览器标签页") != [c.color(Fg)])
   scroll_to_words(t, "发布清单预览")
@@ -203,7 +205,7 @@ test "共享调试's card: lent from the chat where the phone has all it takes; 
   assert_eq(started.length(), 1)
   guard started[0].1 is Object(m) else { fail("adb.start's params") }
   assert_eq(m.get("station"), Some(Json::string("ws1/st1")))
-  assert_eq(m.get("name"), Some(Json::string("Studio")))
+  assert_eq(m.get("name"), Some(Json::string("Willow")))
   assert_eq(t.opened(), [])
   for c in t.native_calls() {
     t.answer_native(c.0, {})
@@ -244,7 +246,7 @@ test "共享调试's card while it is lent there: how it stands, 停止共享 st
   })
   t.wheel(195.0, 400.0, 2000.0)
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("正在共享调试给 Studio") is Some(_))
+  assert_true(t.find("正在共享调试给 Willow") is Some(_))
   assert_true(t.find("共享中 · 剩余 58 分钟") is Some(_))
   guard adb_button_at(t, "停止共享") is Some((x, y)) else { fail("the card's 停止共享") }
   t.tap(x, y)
@@ -347,7 +349,7 @@ test "a tall browser picture fills its preview from the top of the page" {
 
 ///|
 test "a browser's card keeps its size as the browser is opened and closed on a small screen" {
-  let size = Ref((1280.0, 800.0))
+  let size = @signals.signal((1280.0, 800.0))
   let streams = []
   let cancelled = []
   let calls : Array[Made] = []
@@ -355,8 +357,8 @@ test "a browser's card keeps its size as the browser is opened and closed on a s
     guard name == "screenCard" && topic.value is Some(Object(card)) && text(topic.value, "kind") == "browser" &&
       !flag(topic.value, "gone") else { topic }
     let next = card.copy()
-    next["width"] = Json::number(size.val.0)
-    next["height"] = Json::number(size.val.1)
+    next["width"] = Json::number(size.get().0)
+    next["height"] = Json::number(size.get().1)
     { ..topic, value: Some(Json::object(next)) }
   })
   scroll_to_words(t, "发布清单预览")
@@ -369,7 +371,7 @@ test "a browser's card keeps its size as the browser is opened and closed on a s
   assert_eq(gap(), before, msg="the picture arriving does not change the card")
   // The browser is laid out for a small screen while its viewer is open. Its reported viewport changes in the
   // screen list, including while the chat is still visible; it goes back when the viewer closes.
-  size.val = (390.0, 760.0)
+  size.set((390.0, 760.0))
   t.frame()
   assert_eq(gap(), before, msg="the browser adapting to its viewer does not resize its card")
   // A new, portrait picture can arrive too; it replaces the old one inside the same card.
@@ -384,30 +386,30 @@ test "a browser's card keeps its size as the browser is opened and closed on a s
   t.back()
   t.run_for(@ui.move_most_ms)
   assert_eq(gap(), before, msg="the card has the same size on returning to the chat")
-  size.val = (1280.0, 800.0)
+  size.set((1280.0, 800.0))
   t.frame()
   assert_eq(gap(), before, msg="the browser returning to its former size does not resize its card")
-  size.val = (0.0, 0.0)
+  size.set((0.0, 0.0))
   t.frame()
   assert_eq(gap(), before, msg="the screen's size not yet known does not resize its card")
 }
 
 ///|
 test "a simulator's preview follows the simulated screen when it turns" {
-  let size = Ref((390.0, 844.0))
+  let size = @signals.signal((390.0, 844.0))
   let t = screen_links_core([], [], [], over=fn(name, topic) {
     guard name == "screenCard" && topic.value is Some(Object(card)) && text(topic.value, "kind") == "browser" &&
       !flag(topic.value, "gone") else { topic }
     let next = card.copy()
     next["kind"] = Json::string("simulator")
-    next["width"] = Json::number(size.val.0)
-    next["height"] = Json::number(size.val.1)
+    next["width"] = Json::number(size.get().0)
+    next["height"] = Json::number(size.get().1)
     { ..topic, value: Some(Json::object(next)) }
   })
   scroll_to_words(t, "发布清单预览")
   middle_words(t, "发布清单预览")
   let before = preview_gap(t)
-  size.val = (844.0, 390.0)
+  size.set((844.0, 390.0))
   t.frame()
   assert_true(preview_gap(t) < before, msg="the landscape simulator has a shorter preview")
 }
@@ -426,7 +428,7 @@ test "a preview goes on while its card's row is drawn again, not built: asked fo
   t.frame()
   t.run_for(@ui.move_most_ms)
   assert_true(image_line(t, "mem:sf/peek/\{view}/0") != "")
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   // frames with nothing from outside (the pointer moved about the chat): its row drawn again as it was
   t.move(100.0, 300.0)
   t.move(140.0, 300.0)
@@ -493,4 +495,74 @@ test "a preview stops as the app goes behind, and is asked for again as it comes
   assert_eq(running(streams, cancelled).length(), 1)
   assert_eq(streams.length(), 2)
   t.assert_idle()
+}
+
+///|
+/// The card's preview as the app keeps it (one card in the fixture's chat has one).
+fn only_peek() -> @sfbase.Peek raise {
+  let all = @sfbase.peeks.values().to_array()
+  assert_eq(all.length(), 1)
+  all[0]
+}
+
+///|
+test "an Android device's preview: H.264 where the host decodes it, drawn from the card's decoder, each frame acknowledged once shown" {
+  let streams = []
+  let cancelled = []
+  let calls : Array[Made] = []
+  let t = screen_links_core(streams, cancelled, calls, h264=true)
+  scroll_to_words(t, "发布清单预览")
+  let s = streams[running(streams, cancelled)[0] - 1]
+  assert_eq(field(Some(s.params), "codecs"), Some(["jpeg", "h264"]))
+  let view = text(Some(s.params), "view")
+  let acks = fn() { named(calls, "screen.ack") }
+  (s.on_value)({ "config": { "codec": "h264", "width": 320, "height": 640 } }, Some(b"\x01\x42\x00\x1f"))
+  (s.on_value)({ "frame": { "ts": 101, "key": true } }, Some(b"\x00\x00\x00\x01\x65"))
+  t.frame()
+  let st = only_peek().stream.unwrap()
+  assert_eq(@sfbase.video_peeks.val, 1)
+  // not acknowledged until its decoder says what became of it
+  assert_eq(acks().length(), 0)
+  t.stream_shows(st.id(), 101.0, 320, 640)
+  t.frame()
+  assert_eq(acks().length(), 1)
+  assert_eq(text(Some(acks()[0].params), "view"), view)
+  assert_eq(number(Some(acks()[0].params), "ts"), 101.0)
+  assert_true(t.drawlist().contains("stream 320x640"), msg="its picture drawn in the card")
+  // the next acknowledged as it is shown, nothing else built in between (the station paces it)
+  (s.on_value)({ "frame": { "ts": 102, "key": false } }, Some(b"\x00\x00\x00\x01\x41"))
+  t.frame()
+  t.stream_shows(st.id(), 102.0, 320, 640)
+  t.frame()
+  assert_eq(acks().length(), 2)
+  assert_eq(number(Some(acks()[1].params), "ts"), 102.0)
+  // gone from view: its decoder stopped, its place given back
+  t.app_state(false, false)
+  assert_eq(running(streams, cancelled).length(), 0)
+  assert_eq(@sfbase.video_peeks.val, 0)
+}
+
+///|
+test "an Android device's preview past the app's two videos: let go, its mark shown, asked again peek_again_ms on" {
+  let streams = []
+  let cancelled = []
+  let calls : Array[Made] = []
+  let t = screen_links_core(streams, cancelled, calls, h264=true)
+  scroll_to_words(t, "发布清单预览")
+  // (two previews decoded elsewhere)
+  @sfbase.video_peeks.val = @sfbase.video_peeks_most
+  let s = streams[running(streams, cancelled)[0] - 1]
+  (s.on_value)({ "config": { "codec": "h264", "width": 320, "height": 640 } }, Some(b"\x01\x42\x00\x1f"))
+  t.frame()
+  assert_eq(running(streams, cancelled).length(), 0)
+  assert_true(only_peek().stream is None)
+  assert_eq(@sfbase.video_peeks.val, @sfbase.video_peeks_most)
+  // one of them gone; a while on, this one asks again
+  @sfbase.video_peeks.val = 1
+  t.run_for(@sfbase.peek_again_ms / 2.0)
+  assert_eq(streams.length(), 1)
+  t.run_for(@sfbase.peek_again_ms / 2.0 + @ui.move_most_ms)
+  assert_eq(streams.length(), 2)
+  assert_eq(running(streams, cancelled).length(), 1)
+  @sfbase.video_peeks.val = 0
 }

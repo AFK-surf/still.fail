@@ -1,28 +1,34 @@
-// still.fail cloud's API (the Worker ember-cloud): accounts and sign-in, workspaces and their stations, the operator's
+// still.fail cloud's API (the Worker stillfail-cloud): accounts and sign-in, workspaces and their stations, the operator's
 // console API, and installing a station. It answers only the paths routed to it (wrangler.jsonc) on PUBLIC_ORIGIN's
 // and ADMIN_ORIGIN's hosts; the web apps are static Workers of their own on those hosts' Custom Domains (routes take
 // precedence over them), and the relay is a Worker of its own (relay-worker.ts), so deploying this one drops no relay
 // connection and serves no page. Each host has an old name too (ember.3720.org, admin.ember.3720.org: the
 // *_ORIGIN_ALIASES, compat.ts), answered the same; links, and signing in with Google, use the new ones.
-import { installScript, releaseType } from "./install.ts";
+import { installScript, releaseType, sharedRelease } from "./install.ts";
 import { windowsInstallScript } from "./install-windows.ts";
-import { requestLang, tr } from "./i18n.ts";
-import { latestDownload, serveRelease } from "./releases.ts";
+import { cloudProduct, requestLang, setCloud, tr } from "./i18n.ts";
+import { latestDownload, serveRelease, upstreamRelease } from "./releases.ts";
 import { authConfigured, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
 import { devicePage, googleStart, consumeLoginRate, signedInPage } from "./login";
 import { passwordSignIn } from "./password";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import type { Env } from "./env";
-import { adminApi, api, blockAccount, socketToken } from "./api";
+import { adminApi, api, blockAccount, feedbackList, socketToken } from "./api";
 import { noted, parseTraceparent, recordCall, relayToAxiom, takeNotes, unverifiedNotes } from "./tracing";
 export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
 export { Directory } from "./directory";
 export { LoginAttempt, LoginLimiter } from "./login";
 export { RelayLoad } from "./relay-load";
+export { ServiceStatus } from "./status";
 import { sampleOwnRelay } from "./relay-load";
+import { checkServices } from "./status";
+import { checkModels } from "./models";
 import { PROBE_EVERY_MIN, probeRelays } from "./probes";
 import { relayUrls } from "./relays";
+
+/** The minute of each hour the models' catalog is made afresh (`scheduled`). */
+const MODELS_MINUTE = 7;
 
 // The admin's console has a host of its own, ADMIN_ORIGIN: its /v1/ calls come here too — the calls its client core
 // makes to sign in and stay signed in (the core talks to the page's origin), and the console's API; nothing else. A
@@ -55,6 +61,7 @@ const toPublic = (env: Env, url: URL) => new Response(null, { status: 302, heade
 export default {
   // A /v1/* call in a recorded trace (a client core's) is a span of it, sent once the answer is out.
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    setCloud(env.PUBLIC_ORIGIN);
     const parent = new URL(request.url).pathname.startsWith("/v1/") && request.headers.get("upgrade") === null ? parseTraceparent(request.headers.get("traceparent")) : null;
     const started = Date.now();
     // What the handler noted for the span never goes out with the answer.
@@ -62,11 +69,22 @@ export default {
     if (parent?.sampled) ctx.waitUntil(recordCall(env, parent, request, response, started, Date.now(), notes));
     return response;
   },
-  // Every minute (wrangler.jsonc triggers): still.fail's own relay's counters, for the console (relay-load.ts); every
-  // PROBE_EVERY_MIN, the relays probed from China's networks (probes.ts), where RELAY_PROBES says so.
+  // Every minute (wrangler.jsonc triggers): still.fail's own relay's counters, for the console (relay-load.ts; the
+  // operator's devices told they were sampled), then the services checked for still.fail/status (status.ts); every
+  // PROBE_EVERY_MIN, the relays probed from China's networks (probes.ts), where RELAY_PROBES says so; hourly, the
+  // models' catalog made afresh from models.dev, the stations told when it changed (models.ts).
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(sampleOwnRelay(env));
-    if (env.RELAY_PROBES === "globalping" && Math.floor(controller.scheduledTime / 60_000) % PROBE_EVERY_MIN === 0) ctx.waitUntil(probeAndSay(env));
+    const minute = Math.floor(controller.scheduledTime / 60_000);
+    ctx.waitUntil(
+      sampleOwnRelay(env)
+        .catch(() => [])
+        .then(async (full) => {
+          await env.DIRECTORY.getByName("primary").tellAdmins({ type: "relays" }).catch(() => undefined);
+          await checkServices(env, full);
+        }),
+    );
+    if (minute % 60 === MODELS_MINUTE) ctx.waitUntil(checkModels(env).catch(() => undefined));
+    if (env.RELAY_PROBES === "globalping" && minute % PROBE_EVERY_MIN === 0) ctx.waitUntil(probeAndSay(env));
   },
 } satisfies ExportedHandler<Env>;
 
@@ -92,7 +110,10 @@ async function handle(request: Request, env: Env): Promise<Response> {
     const release = asked === "android/beta/beta/latest.json" ? "android/beta/latest.json" : asked;
     const type = release ? releaseType(release) : null;
     if (release && type) {
-      return serveRelease(request, env.RELEASES, release, type);
+      const own = await serveRelease(request, env.RELEASES, release, type);
+      // (a cloud whose bucket holds its own apps' alone: the station's from still.fail's, install.ts sharedRelease)
+      if (own.status !== 404 || !env.RELEASES_UPSTREAM || !sharedRelease(release)) return own;
+      return upstreamRelease(request, env.RELEASES_UPSTREAM, release);
     }
     // The apps' latest builds at links that stay (the site's download buttons; under /releases/, which cloud's routes send here).
     const app = /^\/releases\/latest\/(mac|android|win|mac-beta|android-beta|win-beta|android-mbui|mac-mbui|win-mbui|linux-mbui|linux-arm64-mbui)$/.exec(path)?.[1];
@@ -202,9 +223,15 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return reply({ error: "invalid_request" }, 400);
     }
   }
+  // The console's bug reports for the team's feedback monitor: FEEDBACK_TOKEN reads them and nothing else.
+  if (path === "/v1/admin/feedback/list" && request.method === "POST") {
+    const supplied = bearerToken(request);
+    if (!env.FEEDBACK_TOKEN || env.FEEDBACK_TOKEN.length < 43 || !supplied || (await digest(supplied)) !== (await digest(env.FEEDBACK_TOKEN))) return denied();
+    return reply({ feedback: await feedbackList(env) });
+  }
   // The Android app opens an item's link (/o/…) itself: this says the domain is its (App Links).
   if (path === "/.well-known/assetlinks.json") {
-    return new Response(JSON.stringify(ASSET_LINKS), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3600" } });
+    return new Response(JSON.stringify(assetLinks()), { headers: { "content-type": "application/json", "cache-control": "public, max-age=3600" } });
   }
   const handled = await api(request, env, url);
   if (handled) return handled;
@@ -218,11 +245,10 @@ async function handle(request: Request, env: Env): Promise<Response> {
 }
 
 /**
- * Android App Links: the app, signed with this certificate, opens https://<its host>/o/… itself. Both the app from
- * before the rename (dev.ember.android) and the new one (fail.still.android), on every host: each says in its
- * manifest which hosts it opens.
+ * Android App Links: the app, signed with this certificate, opens https://<its host>/o/… itself, on every host: its
+ * manifest says which hosts it opens. Another product's cloud its own apps' (monoid's: build.monoid.android and .beta).
  */
-const ASSET_LINKS = ["fail.still.android", "dev.ember.android"].map((package_name) => ({
+const assetLinks = () => (cloudProduct().id === "stillfail" ? ["fail.still.android"] : [`${cloudProduct().reverse}.android`, `${cloudProduct().reverse}.android.beta`]).map((package_name) => ({
   relation: ["delegate_permission/common.handle_all_urls"],
   target: {
     namespace: "android_app",

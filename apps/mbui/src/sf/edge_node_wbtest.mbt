@@ -4,11 +4,12 @@
 ///|
 /// A window 400 by 300, a mouse's: in it, at (`at`), a box drawn `scale` as big about its top left, holding an edge 20
 /// by 200 at its left; its tips over all of it. The pointer rested on the edge at (110, 100) a while, then what holds the
-/// edge moved down `by` (the pointer still on it), the frame it asks for drawn: where its tip was each time, in the
-/// window.
+/// edge moved down `by` (the pointer still on it), the frame it asks for drawn (`away`: the pointer gone off it, a
+/// moment into its tip's going, instead): where its tip was each time, in the window.
 fn edge_tip_rects(
   scale : Double,
   by : Double,
+  away? : Bool = false,
 ) -> ((Double, Double, Double, Double), (Double, Double, Double, Double)) raise {
   let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform=0)
   t.check_looks(false)
@@ -53,8 +54,14 @@ fn edge_tip_rects(
   t.move(110.0, 100.0)
   t.run_for(edge_tip_ms + tip_settled_ms)
   let first = tip()
-  shift.set(by)
-  t.frame()
+  if away {
+    // (the pointer off the edge: its tip going, a moment into it)
+    t.move(300.0, 250.0)
+    t.run_for(@kit.pop_out_ms / 2.0)
+  } else {
+    shift.set(by)
+    t.frame()
+  }
   (first, tip())
 }
 
@@ -205,4 +212,84 @@ test "an edge drawn bigger, a mouse's let go 10 across the window from where it 
       msg="scale \{scale}",
     )
   }
+}
+
+///|
+/// A window 400 by 300 (`platform`: 0 a mouse's, 2 a finger's) holding an edge 20 by 200 at (100, 20), of a column
+/// 240 wide between 200 and 300: pressed at (105, 100) at `t0`, held still long_press_ms twice over, moved `moves`
+/// along (each slow_drag_ms after the one before), let go at the last. What was felt, in order, and the widths said.
+fn edge_felt(platform : Int, moves : Array[Double]) -> (Array[@ui.Haptic], Array[Double]) {
+  let widths : Array[Double] = []
+  let t = @ui.Tester::new(fn(_c) {  }, w=400.0, h=300.0, platform~)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    root.box(fn(h) {
+      h.over(Is(true)).offset(Is((100.0, 20.0))) |> ignore
+      h.box(fn(e) {
+        e.width(Is(Some(20.0))).height(Is(Some(200.0))) |> ignore
+        edge_node(
+          e,
+          fn() { "调整宽度" },
+          fn() { 240.0 },
+          fn() { 200.0 },
+          fn() { 300.0 },
+          Right,
+          fn(r, _) {
+            match r {
+              Dragging(w) | Dropped(w) => widths.push(w)
+              _ => ()
+            }
+          },
+          fn(_) {  },
+        )
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let tree = @ui.view_tree().unwrap()
+  let t0 = t.time() + edge_gap_ms
+  t.advance(edge_gap_ms)
+  t.touch_at(0, 105.0, 100.0, t0)
+  let held_at = t0 + @ui.long_press_ms * 2.0
+  t.advance(held_at - t.time())
+  tree.bring_to(held_at)
+  let mut at = held_at
+  for m in moves {
+    at = at + edge_slow_ms
+    t.advance(at - t.time())
+    t.touch_at(1, 105.0 + m, 100.0, at)
+  }
+  at = at + edge_slow_ms
+  t.advance(at - t.time())
+  t.touch_at(2, 105.0 + (if moves.length() > 0 { moves[moves.length() - 1] } else { 0.0 }), 100.0, at)
+  (t.haptics(), widths)
+}
+
+///|
+let edge_slow_ms : Double = 50.0
+
+///|
+test "an edge felt: a finger's hold taken (LongPress), then its most reached (TextHandleMove), its least (again), the way between felt no more; a mouse's needs no hold and nothing is felt but the ends" {
+  // (a finger: +60 is its most (300), +70 past it still there (felt once), -40 back between, -100 its least (200))
+  let (felt, widths) = edge_felt(2, [30.0, 60.0, 70.0, -40.0, -100.0])
+  assert_eq(felt, [LongPress, TextHandleMove, TextHandleMove], msg="\{felt} \{widths}")
+  assert_eq(widths, [270.0, 300.0, 300.0, 200.0, 200.0, 200.0])
+  // (a mouse: no hold, the ends alone)
+  let (felt, _) = edge_felt(0, [60.0, -100.0])
+  assert_eq(felt, [TextHandleMove, TextHandleMove], msg="\{felt}")
+  // (held and let go where it went down: nothing felt but the hold; let go after a hold, a drag's end at its width)
+  let (felt, widths) = edge_felt(2, [])
+  assert_eq((felt, widths), ([LongPress], [240.0]))
+}
+
+///|
+test "an edge's tip by the pointer, the pointer gone off the edge: it goes where it was, not after the pointer nor to the edge's middle" {
+  let (first, going) = edge_tip_rects(1.0, 0.0, away=true)
+  // (drawn a little smaller as it goes, about its edge by the pointer's point: that edge and its middle where they were)
+  let (x, y, _, h) = first
+  let (gx, gy, _, gh) = going
+  assert_true((gx - x).abs() < 0.5 && (gy + gh / 2.0 - (y + h / 2.0)).abs() < 0.5, msg="going: \{going} from \{first}")
 }

@@ -1,5 +1,5 @@
 #!/bin/bash
-# The draw list the renderer's references are of, goldens/render/controls.dl (kitdemo's controls page over mini1's kept
+# The draw list the renderer's references are of, goldens/render/controls.dl (kitdemo's controls page over its kept
 # text, as a Tester printed it: src/kitdemo/gallery/dl_print_wbtest.mbt), copied into $1 (default
 # out/render/controls.dl). Kept beside the references, not printed each run: they say what each renderer draws of one
 # list, so only a renderer or the list's format (src/ui/drawlist.mbt) changes them, never a control drawn otherwise
@@ -39,7 +39,27 @@ render_dl() {
       awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$(dirname "$out")/$k.dl"
     [ -s "$(dirname "$out")/$k.dl" ] || { echo "render_dl: no $k draw list"; return 1; }
   done
+  render_strips_dl "$(dirname "$out")"
   render_matte_dl "$(dirname "$out")"
+}
+
+# What the renderers draw in strips (src/host/bands.h; src/kitdemo/gallery/dl_print_wbtest.mbt strips_shown), strips.dl
+# in $1: drawn in strips and drawn whole (MBUI_STRIPS=0), strips.png and strips.whole.png, render_strips.
+render_strips_dl() {
+  MBUI_DL_PRINT=strips moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
+    awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > "$1/strips.dl"
+  [ -s "$1/strips.dl" ] || { echo "render_strips_dl: no strips draw list"; return 1; }
+}
+
+# out/render/strips.png the same to the byte as strips.whole.png ($1: the host's name, said; $2 the directory).
+render_strips() {
+  local dir=${2:-out/render}
+  if cmp -s "$dir/strips.png" "$dir/strips.whole.png"; then
+    echo "render_$1: what is drawn in strips is what is drawn whole, to the byte"
+  else
+    echo "render_$1: what is drawn in strips is not what is drawn whole ($dir/strips.png, strips.whole.png)"
+    return 1
+  fi
 }
 
 # Light pictures over a matte, filling a rounded frame or letterboxed, and references with the same appearance.
@@ -63,7 +83,7 @@ render_matte() {
   echo "render_$host: pictures and mattes share their rounded frames"
 }
 
-# Partial redraw (docs/partial-redraw.md): out/render/partial.png, partial-b.dl drawn only where it differs from
+# Partial redraw: out/render/partial.png, partial-b.dl drawn only where it differs from
 # partial-a.dl drawn before it, the same to the byte as partial.whole.png, partial-b.dl drawn whole ($1: the host's
 # name, said).
 render_partial() {

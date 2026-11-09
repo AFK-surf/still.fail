@@ -31,6 +31,9 @@ pub struct Atlas {
   priv mut open : Int
   // the frame being drawn
   priv mut frame : Int
+  // what marks what the frame draws from before a plot is emptied (Atlas::before_full), and the frame it last did
+  priv mut before_full : (() -> Unit)?
+  priv mut full_frame : Int
 }
 
 ///|
@@ -44,7 +47,7 @@ pub fn Atlas::new(side : Int) -> Atlas {
       plots.push({ x: i * plot, y: j * plot, shelf_y: 0, shelf_x: 0, shelf_h: 0, keys: [], drawn: -1 })
     }
   }
-  { plot, plots, open: 0, frame: 0 }
+  { plot, plots, open: 0, frame: 0, before_full: None, full_frame: -1 }
 }
 
 ///|
@@ -57,6 +60,14 @@ pub fn Atlas::next_frame(self : Atlas) -> Unit {
 /// Plot `plot` (Atlas::place's) drawn from in this frame.
 pub fn Atlas::drawn(self : Atlas, plot : Int) -> Unit {
   self.plots[plot].drawn = self.frame
+}
+
+///|
+/// `f` asked, once a frame, before a plot is emptied for what comes next: it says each plot the frame draws from
+/// (Atlas::drawn) that was not said as it was drawn, kept so through the frame. What draws from the atlas frame after
+/// frame (what is made once and composed again) need not say so each frame, only when a plot is to be emptied.
+pub fn Atlas::before_full(self : Atlas, f : () -> Unit) -> Unit {
+  self.before_full = Some(f)
 }
 
 ///|
@@ -80,6 +91,14 @@ pub fn Atlas::place(self : Atlas, key : Int, w : Int, h : Int, gone : (Int) -> U
     return None
   }
   if self.spot(self.open, w, h) is None {
+    // (what the frame draws from said first, once a frame: Atlas::before_full)
+    match self.before_full {
+      Some(f) if self.full_frame != self.frame => {
+        self.full_frame = self.frame
+        f()
+      }
+      _ => ()
+    }
     // another plot: one never filled, else the one drawn from longest ago
     let mut next = -1
     for i, p in self.plots {

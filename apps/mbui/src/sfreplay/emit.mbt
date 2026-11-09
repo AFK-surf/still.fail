@@ -17,9 +17,15 @@ let script : Ref[Array[String]?] = Ref::new(None)
 let now_next : Ref[Bool] = Ref::new(false)
 
 ///|
+/// Additional calls whose presence in the live run is incidental to the current step.
+// kept across runs: reset for each flow
+let incidental_calls : Ref[Array[String]] = Ref::new([])
+
+///|
 /// Starts writing the flow, when FLOW_EMIT asks and this is its first order (seed 0).
 fn emit_start(seed : UInt, w : Double, h : Double, env : Array[(String, String)]) -> Unit {
   now_next.val = false
+  incidental_calls.val = []
   if seed != 0 || emit_path() == "" {
     script.val = None
     return
@@ -68,7 +74,10 @@ fn emit(line : String) -> Unit {
 /// The flow over: nothing more is written.
 fn emit_end() -> Unit {
   match script.val {
-    Some(_) => script.val = None
+    Some(_) => {
+      emit("# flow complete")
+      script.val = None
+    }
     None => ()
   }
 }
@@ -142,7 +151,7 @@ fn emit_answered(names : Array[String]) -> Unit {
   match script.val {
     Some(_) =>
       for n in names {
-        if !unawaited.contains(n) {
+        if !unawaited.contains(n) && !incidental_calls.val.contains(n) {
           emit("answered " + n)
         }
       }
@@ -151,15 +160,25 @@ fn emit_answered(names : Array[String]) -> Unit {
 }
 
 ///|
-/// Calls a scripted run does not wait for after a step: the app makes them by its own clock, not by the step
+/// Calls a scripted run does not wait for after a step: their timing or presence is not determined by the step
 /// (session.warm: once a minute while typing, composer.mbt; draft.put: a moment after the words last changed;
-/// client.focus: whenever the chat's end comes into view or leaves it, as the list glides after rows that came;
-/// composer.text and composer.comment: as what is typed lands in the field the run focused, its answer read by nothing), so a
+/// client.focus and chat.place: as the list glides after rows that came and its visible position changes; drive.place:
+/// as a player periodically saves where it was left;
+/// composer.text and composer.comment: as what is typed lands in the field the run focused, its answer read by nothing;
+/// picture and machineSessions.list: an avatar or a station’s session offer may already be cached), so a
 /// trace's run at another pace made them where this one does not (a run re-recorded from a trace whose replies came
 /// slower: its second message warmed again, the live one's a second later does not). A flow that needs one waits for
 /// it by name (Flow::answered).
 // kept across runs: a value (nothing is added to it)
-let unawaited : Array[String] = ["session.warm", "draft.put", "client.focus", "composer.text", "composer.comment"]
+let unawaited : Array[String] = ["session.warm", "draft.put", "client.focus", "chat.place", "drive.place", "composer.text", "composer.comment", "picture", "machineSessions.list"]
+
+///|
+/// Calls the host may make an incidental number of times while these steps run. This changes script emission only;
+/// explicit `answered` steps still wait for their answers. Pass an empty array once the incidental steps are over.
+pub fn Flow::incidental_calls(self : Flow, calls : Array[String]) -> Unit {
+  ignore(self)
+  incidental_calls.val = calls.copy()
+}
 
 ///|
 /// The script written's `answered CALL` lines up to `n` of them (the run's n-th answer: drive counts them from the
@@ -175,4 +194,3 @@ fn emit_answered_to(call : String, n : Int) -> Unit {
     None => ()
   }
 }
-

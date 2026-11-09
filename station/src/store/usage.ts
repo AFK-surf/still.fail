@@ -1,7 +1,11 @@
 // What the agents spent, as the station records it (the Rust station's store/usage.rs): one row per model call, with the
 // turn it was in, whom that turn worked for, in which thread and on which profile. The Store's usage methods call these.
 import type { DatabaseSync } from "node:sqlite";
-import { type Json, QUARTER_MS, STILLFAIL_SURFACE } from "./rows.ts";
+import { type Json, STILLFAIL_SURFACE } from "./rows.ts";
+import { detailQuery, usageDetailGeneration, usageDetailReady, usageDetailSince, usageTotalsComplete, USAGE_DETAIL_PENDING } from "./usage-detail.ts";
+import { usageCompactionsReady } from "./usage-compactions.ts";
+import { compactQuery, compactScopeReady, compactUsageSince, hasCompactUsage, noteCompactContexts, compactContexts, seedCompactContext } from "./usage-compact.ts";
+import { retiredUsage } from "./usage-retire.ts";
 
 /// A model call read from a transcript (or a turn's calls, told at once: `calls` of them). Tokens as the provider bills
 /// them. `context`: of a main-thread call, what its session's context held after it (null: not told); `window`: the
@@ -30,36 +34,104 @@ export type UsageGroup = {
 /// Stands for i64::MIN as a turn's start: before every call.
 const EARLIEST = Number.MIN_SAFE_INTEGER;
 
+/// The counter starts recording at installation. Its last completed sweep lets a restart find only turns which may
+/// have produced new usage while it was stopped, without walking the station's older sessions.
+export function installUsageCounter(db: DatabaseSync, now: number): void {
+  const has = (name: string) => db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== undefined;
+  const columnsOf = () => new Set((db.prepare("PRAGMA table_info(usage_files)").all() as { name: string }[]).map((row) => row.name));
+  const columns = columnsOf();
+  if (has("usage_counter") && columns.has("counter_cutoff") && columns.has("counter_anchor")) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.exec("CREATE TABLE IF NOT EXISTS usage_counter (id INTEGER PRIMARY KEY CHECK (id = 1), since INTEGER NOT NULL, through INTEGER NOT NULL)");
+    db.prepare("INSERT OR IGNORE INTO usage_counter VALUES (1, ?, ?)").run(now, now);
+    const current = columnsOf();
+    if (!current.has("counter_cutoff")) db.exec("ALTER TABLE usage_files ADD COLUMN counter_cutoff INTEGER");
+    if (!current.has("counter_anchor")) db.exec("ALTER TABLE usage_files ADD COLUMN counter_anchor TEXT");
+    db.exec("COMMIT");
+  } catch (error) { db.exec("ROLLBACK"); throw error; }
+}
+
+export type CounterFile = { cutoff: number; anchor: string | null };
+
+/// The boundary at which a file began being followed, and the bytes immediately before its saved offset.
+export function usageCounterFile(db: DatabaseSync, path: string): CounterFile | null {
+  const row = db.prepare("SELECT counter_cutoff AS cutoff, counter_anchor AS anchor FROM usage_files WHERE path = ?").get(path) as { cutoff: number | null; anchor: string | null } | undefined;
+  return row?.cutoff == null ? null : { cutoff: row.cutoff, anchor: row.anchor };
+}
+
+/// Save the boundary and position together before reading. A replaced file must not inherit the old position after a crash.
+export function beginUsageCounterFile(db: DatabaseSync, path: string, file: UsageFile, counter: CounterFile, reset: boolean): CounterFile {
+  db.prepare(`INSERT INTO usage_files (path, session, offset, model, counter_cutoff, counter_anchor)
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+    ON CONFLICT(path) DO UPDATE SET
+      session = CASE WHEN ?7 THEN excluded.session ELSE usage_files.session END,
+      offset = CASE WHEN ?7 THEN excluded.offset ELSE usage_files.offset END,
+      model = CASE WHEN ?7 THEN excluded.model ELSE usage_files.model END,
+      counter_cutoff = CASE WHEN ?7 THEN excluded.counter_cutoff ELSE COALESCE(usage_files.counter_cutoff, excluded.counter_cutoff) END,
+      counter_anchor = CASE WHEN ?7 THEN excluded.counter_anchor ELSE COALESCE(usage_files.counter_anchor, excluded.counter_anchor) END`)
+    .run(path, file.session, file.offset, file.model, counter.cutoff, counter.anchor, reset ? 1 : 0);
+  return usageCounterFile(db, path)!;
+}
+
 /// usage_files: every transcript read for usage so far, by path.
 export function usageFiles(db: DatabaseSync): Map<string, UsageFile> {
   const rows = db.prepare("SELECT path, session, offset, model FROM usage_files").all() as Json[];
   return new Map(rows.map((r) => [r.path, { session: r.session, offset: r.offset, model: r.model }]));
 }
 
+/// One transcript's saved position, by its path's primary key.
+export function usageFile(db: DatabaseSync, path: string): UsageFile | undefined {
+  return db.prepare("SELECT session, offset, model FROM usage_files WHERE path = ?").get(path) as UsageFile | undefined;
+}
+
+export type UsageWriteOptions = { minNewAt?: number; changed?: { from: number }; counter?: CounterFile };
+
 /// record_usage: a transcript's calls read up to `file.offset`, each with what it was for; a call recorded before keeps
 /// its row (its output grown). How many were new. Run in a transaction by the caller.
-export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, runtime: string, calls: [UsageCall, UsageFor][]): number {
+export function recordUsage(db: DatabaseSync, path: string, file: UsageFile, runtime: string, calls: [UsageCall, UsageFor][], options?: UsageWriteOptions): number {
   let added = 0;
+  const compact = hasCompactUsage(db);
+  const recent: [UsageCall, UsageFor][] = [];
   if (file.session !== null) {
+    let seeded = false;
     const insert = db.prepare(
-      `INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read, cache_write, cache_write_long, output, calls, context, context_window)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
-       ON CONFLICT (id) DO UPDATE SET output = MAX(output, excluded.output)`,
+      `INSERT INTO usage (id, at, session, turn, thread, person, profile, runtime, model, subagent, fast, input, cache_read, cache_write, cache_write_long, output, calls, context, context_window${compact ? ", compact_counted" : ""})
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19${compact ? ", 1" : ""})
+       ${compact ? "" : "ON CONFLICT (id) DO UPDATE SET output = MAX(output, excluded.output)"}`,
     );
-    const known = db.prepare("SELECT 1 FROM usage WHERE id = ?");
+    const known = db.prepare("SELECT output FROM usage WHERE id = ?");
+    const grow = compact ? db.prepare("UPDATE usage SET output = ?1 WHERE id = ?2 AND output < ?1") : null;
     for (const [c, of] of calls) {
-      const was = known.get(c.id) !== undefined;
-      insert.run(
+      const was = known.get(c.id) as { output: number } | undefined;
+      // An old call may grow after the cutover, but an unseen old call is not historical work to fill in.
+      if (was === undefined && options?.minNewAt !== undefined && c.at < options.minNewAt) continue;
+      // The same response can occur in several transcript lines or be replayed after an interrupted read.
+      if (was !== undefined && c.output <= was.output) continue;
+      // Seed from the saved summary before the first real change, including a subagent's. A replay that changes no
+      // call must neither read nor write the context, and seeding after a write could mistake the saved total for stale.
+      if (compact && !seeded) {
+        seeded = true;
+        if (usageTotalsComplete(db, file.session)) seedCompactContext(db, file.session);
+      }
+      if (was !== undefined && grow !== null) grow.run(c.output, c.id);
+      else insert.run(
         c.id, c.at, file.session, of.turn, of.thread, of.person, of.profile, runtime, c.model, c.subagent ? 1 : 0, c.fast ? 1 : 0,
         c.input, c.cacheRead, c.cacheWrite, c.cacheWriteLong, c.output, c.calls, c.context, c.window,
       );
-      if (!was) added++;
+      if (was === undefined) { added++; if (compact && !c.subagent) recent.push([c, of]); }
+      if (options?.changed !== undefined) options.changed.from = Math.min(options.changed.from, c.at);
     }
+    if (recent.length > 0) noteCompactContexts(db, file.session, runtime, recent);
   }
   db.prepare(
-    `INSERT INTO usage_files (path, session, offset, model) VALUES (?1, ?2, ?3, ?4)
-     ON CONFLICT (path) DO UPDATE SET session = excluded.session, offset = excluded.offset, model = excluded.model`,
-  ).run(path, file.session, file.offset, file.model);
+    `INSERT INTO usage_files (path, session, offset, model, counter_cutoff, counter_anchor) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+     ON CONFLICT (path) DO UPDATE SET session = excluded.session, offset = excluded.offset, model = excluded.model,
+       counter_cutoff = COALESCE(excluded.counter_cutoff, usage_files.counter_cutoff),
+       counter_anchor = CASE WHEN excluded.counter_cutoff IS NULL THEN usage_files.counter_anchor ELSE excluded.counter_anchor END
+     WHERE usage_files.session IS NOT excluded.session OR usage_files.offset IS NOT excluded.offset OR usage_files.model IS NOT excluded.model
+       OR (excluded.counter_cutoff IS NOT NULL AND (usage_files.counter_cutoff IS NOT excluded.counter_cutoff OR usage_files.counter_anchor IS NOT excluded.counter_anchor))`,
+  ).run(path, file.session, file.offset, file.model, options?.counter?.cutoff ?? null, options?.counter?.anchor ?? null);
   return added;
 }
 
@@ -70,7 +142,7 @@ export const ACTIVE_SESSIONS = "SELECT session_key FROM turns WHERE ended_at IS 
 export function usageActiveSessions(db: DatabaseSync, since: number): string[] {
   // Each half by the index on when turns ended, the sessions made distinct here: asked as one OR, or as a UNION or a
   // DISTINCT, the station's SQLite (node's, 3.53; not the sqlite3 command's) answers it in order of session by reading
-  // every turn of the station's, 33 s on ccvm with its pages put out (2026-10-25).
+  // every turn of the station's, 33 s on a station with its pages put out (2026-10-25).
   const rows = db.prepare(ACTIVE_SESSIONS).all(since) as Json[];
   return [...new Set(rows.map((r) => r.session_key as string))];
 }
@@ -133,10 +205,14 @@ export type ContextCall = {
 };
 
 /// A session's last `limit` main-thread calls, oldest first.
+export const LAST_CONTEXTS = `SELECT u.turn, u.profile, u.model, u.context, u.context_window, u.at, u.fast, u.cache_write, u.cache_write_long
+  FROM usage_main_calls m JOIN usage u ON u.id = m.id WHERE m.session = ?1 ORDER BY m.at DESC, m.id DESC LIMIT ?2`;
 export function lastContexts(db: DatabaseSync, session: string, limit: number): ContextCall[] {
-  const rows = db
-    .prepare("SELECT turn, profile, model, context, context_window, at, fast, cache_write, cache_write_long FROM usage WHERE session = ?1 AND subagent = 0 ORDER BY at DESC LIMIT ?2")
-    .all(session, limit) as Json[];
+  if (hasCompactUsage(db)) return compactContexts(db, session, limit);
+  // A partially built index cannot prove which call was last. Do not scan the raw history or present an older call as
+  // current; the context is unavailable until it can be maintained independently of the old index.
+  if (!usageCompactionsReady(db)) return [];
+  const rows = db.prepare(LAST_CONTEXTS).all(session, limit) as Json[];
   return rows.reverse().map((r) => ({
     turn: r.turn, profile: r.profile, model: r.model, context: r.context, window: r.context_window,
     at: r.at, fast: r.fast !== 0 && r.fast !== null, cacheWrite: r.cache_write, cacheWriteLong: r.cache_write_long,
@@ -147,48 +223,40 @@ export function lastContexts(db: DatabaseSync, session: string, limit: number): 
 /// the next, on the same account and model, sent under half of it (at least COMPACTED_FROM before), as the database
 /// keeps them (schema.ts USAGE_COMPACTIONS): a few rows, by their time's index.
 export function compactionPoints(db: DatabaseSync, since: number): Map<string, number> {
-  const rows = db.prepare("SELECT model, MAX(point) AS point FROM usage_compactions WHERE at >= ? GROUP BY model").all(since) as Json[];
+  if (!usageCompactionsReady(db)) return new Map();
+  const rows = db.prepare("SELECT model, MAX(point) AS point FROM usage_compaction_events WHERE at >= ? GROUP BY model").all(since) as Json[];
   return new Map(rows.map((r) => [r.model, r.point]));
 }
 
-/// The calls from `?1` until `?2` (ms), added up by day in the asker's time zone (`?3`, minutes east of UTC) and by
-/// thread, person, profile and model: as the station adds them up and as its readers do for the usage page
-/// (read/store.ts usageGroups). The whole quarters of an hour between them as kept added up (schema.ts USAGE_QUARTERS),
-/// the calls before the first and from the last one by one; all of them one by one for a time zone that is not whole
-/// quarters. Bounds said as numbers are bound as reals (node:sqlite): taken as the integers they are, as the quarters'
-/// arithmetic needs.
-export const USAGE_GROUPS = `WITH a AS (SELECT CAST(?1 AS INTEGER) AS f, CAST(?2 AS INTEGER) AS t, CAST(?3 AS INTEGER) AS tz),
-  b AS (SELECT f, t, tz, tz % 15 = 0 AS whole, (MAX(f, 0) + ${QUARTER_MS} - 1) / ${QUARTER_MS} AS q0, t / ${QUARTER_MS} AS q1 FROM a)
-  SELECT strftime('%Y-%m-%d', (at + tz * 60000) / 1000, 'unixepoch') AS day, session, thread, person, profile, runtime, model, fast,
-    SUM(calls) AS calls, SUM(input) AS input, SUM(cache_read) AS cache_read, SUM(cache_write) AS cache_write,
-    SUM(cache_write_long) AS cache_write_long, SUM(output) AS output
-  FROM (
-    SELECT quarter * ${QUARTER_MS} AS at, session, NULLIF(thread, 0) AS thread, NULLIF(person, '') AS person, NULLIF(profile, '') AS profile, runtime,
-      NULLIF(model, '') AS model, fast, calls, input, cache_read, cache_write, cache_write_long, output
-    FROM usage_quarters, b WHERE whole AND quarter >= q0 AND quarter < q1
-    UNION ALL
-    SELECT at, session, thread, person, profile, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output
-    FROM usage, b WHERE at >= f AND at < CASE WHEN whole THEN MIN(t, q0 * ${QUARTER_MS}) ELSE t END
-    UNION ALL
-    SELECT at, session, thread, person, profile, runtime, model, fast, calls, input, cache_read, cache_write, cache_write_long, output
-    FROM usage, b WHERE whole AND at >= MAX(f, q0 * ${QUARTER_MS}, q1 * ${QUARTER_MS}) AND at < t
-  ), b
-  GROUP BY day, session, thread, person, profile, runtime, model, fast`;
+/// A row of the detailed statistics (or of a session's totals, its day and where left empty) as a UsageGroup.
+export function usageGroupOf(r: Json): UsageGroup {
+  return {
+    day: r.day ?? "", session: r.session, thread: r.thread ?? null, person: r.person ?? null, profile: r.profile ?? null, runtime: r.runtime,
+    model: r.model, fast: r.fast !== 0 && r.fast !== null, calls: r.calls, input: r.input, cacheRead: r.cache_read, cacheWrite: r.cache_write,
+    cacheWriteLong: r.cache_write_long, output: r.output,
+  };
+}
 
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and
 /// by thread, person, profile and model.
 export function usageGroups(db: DatabaseSync, from: number, to: number, utcOffsetMin: number): UsageGroup[] {
-  return (db.prepare(USAGE_GROUPS).all(from, to, utcOffsetMin) as Json[]).map((r) => ({
-    day: r.day, session: r.session, thread: r.thread, person: r.person, profile: r.profile, runtime: r.runtime, model: r.model,
-    fast: r.fast !== 0 && r.fast !== null, calls: r.calls, input: r.input, cacheRead: r.cache_read, cacheWrite: r.cache_write,
-    cacheWriteLong: r.cache_write_long, output: r.output,
-  }));
+  if (hasCompactUsage(db)) {
+    if (!compactScopeReady(db, null)) throw new Error("usage statistics are moving between workspaces");
+    const query = compactQuery(BigInt(Math.trunc(from)), BigInt(Math.trunc(to)), BigInt(Math.trunc(utcOffsetMin)), null);
+    return (db.prepare(query.sql).all(...query.args) as Json[]).map(usageGroupOf);
+  }
+  if (retiredUsage(db)) throw new Error("usage detail statistics are unavailable");
+  const generation = usageDetailGeneration(db);
+  if (!usageDetailReady(db, null, generation)) throw new Error(USAGE_DETAIL_PENDING);
+  const query = detailQuery(BigInt(Math.trunc(from)), BigInt(Math.trunc(to)), BigInt(Math.trunc(utcOffsetMin)), null, generation);
+  return query === null ? [] : (db.prepare(query.sql).all(...query.args) as Json[]).map(usageGroupOf);
 }
 
 /// A session's calls, added up by model (its day, thread, person and profile left empty): what its execution details
 /// show of it. As the database keeps them added up (schema.ts USAGE_TOTALS): asked each time the live view of a session
 /// at work tells its usage.
 export function usageOfSession(db: DatabaseSync, session: string): UsageGroup[] {
+  if (!usageTotalsComplete(db, session)) return [];
   return (
     db
       .prepare(
@@ -196,13 +264,13 @@ export function usageOfSession(db: DatabaseSync, session: string): UsageGroup[] 
          FROM usage_totals WHERE session = ?1 AND calls > 0 ORDER BY runtime, model, fast`,
       )
       .all(session) as Json[]
-  ).map((r) => ({
-    day: "", session, thread: null, person: null, profile: null, runtime: r.runtime, model: r.model, fast: r.fast !== 0 && r.fast !== null,
-    calls: r.calls, input: r.input, cacheRead: r.cache_read, cacheWrite: r.cache_write, cacheWriteLong: r.cache_write_long, output: r.output,
-  }));
+  ).map((r) => usageGroupOf({ ...r, session }));
 }
 
 /// usage_since: when the earliest call recorded was made.
 export function usageSince(db: DatabaseSync): number | null {
-  return (db.prepare("SELECT MIN(at) AS at FROM usage").get() as Json).at ?? null;
+  if (hasCompactUsage(db)) return compactUsageSince(db);
+  const first = (db.prepare("SELECT first_at FROM usage_span WHERE id = 1").get() as Json).first_at as number | null;
+  const cutover = usageDetailSince(db);
+  return cutover === null ? first : Math.max(first ?? cutover, cutover);
 }

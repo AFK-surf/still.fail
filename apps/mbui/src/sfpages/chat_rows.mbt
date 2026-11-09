@@ -1,4 +1,4 @@
-// What a chat's list holds on the desktop besides its messages (ember web/src/Chat.tsx ChatRows, OutboxRow, Activity,
+// What a chat's list holds on the desktop besides its messages (still.fail web/src/Chat.tsx ChatRows, OutboxRow, Activity,
 // useSteady; Chat.css.ts chatUnreadLine, chatOlder, chatNewer, chatEmpty, msgUnsent, msgUnsentBtn, agentActivity,
 // activityLine, activityAvatar, activityRing, activityTail, activityNowText, activityElapsed, activityStop): the line
 // over what is new, the pages being brought in, what was sent from here and is not in the chat yet, where it stands,
@@ -39,8 +39,8 @@ fn chat_state(c : @ui.Ctx, src : Source, here : MessageHere, words : String, lea
   let turn = lead == "need"
   let said = (if turn { look.state_turn } else { look.state_quiet }).then(chat_state_wraps)
   // what it needs of the viewer and can be let go: one card, the bell and its words, 忽略 at its end; let go (the core
-  // says so at once), on screen the card stays, saying so, 忽略 no longer pressed, and out of sight it is the line
-  // saying it was let go, as a post's answered options are (Turns::in_turn)
+  // says so at once), on screen or not, the card goes as its room closes and the line saying it was let go fades in
+  // after it, as a post's answered options do (Turns::in_turn; need_card_wbtest.mbt)
   let asking = match here.view.state_ask {
     Some(seq) if turn => Some(seq)
     _ => None
@@ -193,7 +193,7 @@ fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Un
         |> ignore
       }
       if o.text != "" {
-        mine_bubble(c, here, o.text, "o:" + o.id, marks=sent_marks(o))
+        mine_bubble(c, src, here, o.text, "o:" + o.id, "", o.seq, "o:" + o.id, runs=o.words)
       }
     })
     |> ignore
@@ -230,7 +230,7 @@ fn outbox_row(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Un
 /// done (the core's doing), a red mark there a few seconds if it failed.
 fn outbox_unsent(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) -> Unit {
   let p = @sf.theme().p
-  let locked = here.view.offline || here.view.archived
+  let locked = here.view.offline
   let on = [("station", here.station), ("id", o.id)]
   let retrying = core_doing(src, ["chat.retry"], on)
   let dropping = core_doing(src, ["chat.discard"], on)
@@ -255,17 +255,17 @@ fn outbox_unsent(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) ->
     }, repeats=true)
     if o.final {
       // refused as it is (a file this station does not have): its words back in the composer, to be sent anew
-      if unsent_button(c, "unsent/edit/" + o.id, "edit", @sf.t("common.edit"), !locked && !busy, false, None) {
-        let draft = here.station + ":" + here.session
-        let words = o.text
-        let id = o.id
-        c.tell("unsent/edit/" + o.id, fn() {
-          let w = writing(src, draft)
-          writing_text(src, w, words)
-          outbox_call(src, here, "chat.discard", id)
-        })
-      }
-    } else if unsent_button(
+      let draft = here.station + ":" + here.session
+      let words = o.text
+      let id = o.id
+      unsent_button(c, "unsent/edit/" + o.id, "edit", @sf.t("common.edit"), !locked && !busy, false, None, on_press=fn() {
+        let w = writing(src, draft)
+        writing_text(src, w, words)
+        outbox_call(src, here, "chat.discard", id)
+      })
+    } else {
+      let id = o.id
+      unsent_button(
         c,
         "unsent/retry/" + o.id,
         "retry",
@@ -273,22 +273,20 @@ fn outbox_unsent(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) ->
         !locked && !busy,
         retrying,
         core_failed(src, ["chat.retry"], on),
-      ) {
-      let id = o.id
-      c.tell("unsent/retry/" + o.id, fn() { outbox_call(src, here, "chat.retry", id) })
+        on_press=fn() { outbox_call(src, here, "chat.retry", id) },
+      )
     }
-    if unsent_button(
-        c,
-        "unsent/drop/" + o.id,
-        "trash",
-        @sf.t("common.delete"),
-        !busy,
-        dropping,
-        core_failed(src, ["chat.discard"], on),
-      ) {
-      let id = o.id
-      c.tell("unsent/drop/" + o.id, fn() { outbox_call(src, here, "chat.discard", id) })
-    }
+    let id = o.id
+    unsent_button(
+      c,
+      "unsent/drop/" + o.id,
+      "trash",
+      @sf.t("common.delete"),
+      !busy,
+      dropping,
+      core_failed(src, ["chat.discard"], on),
+      on_press=fn() { outbox_call(src, here, "chat.discard", id) },
+    )
   })
   |> ignore
 }
@@ -314,7 +312,7 @@ fn outbox_call(src : Source, here : MessageHere, call : String, id : String) -> 
 ///|
 /// One of the buttons under what did not go (msgUnsentBtn): its icon (a spinner while it is done; a red mark a few
 /// seconds once that failed) and its word, the hover ground and the text's ink under the pointer; at 55% while it may
-/// not be pressed. Whether it was pressed.
+/// not be pressed; `on_press`, what a press on it does while it may be.
 fn unsent_button(
   c : @ui.Ctx,
   key : String,
@@ -323,9 +321,13 @@ fn unsent_button(
   enabled : Bool,
   busy : Bool,
   failed : String?,
-) -> Bool {
+  on_press~ : () -> Unit,
+) -> Unit {
   let p = @sf.theme().p
   let id = c.id(key)
+  if enabled {
+    c.on_press(id, on_press)
+  }
   let hot = enabled && c.hovered(id)
   let b = c.box(style=if !enabled { unsent_button_off } else if hot { unsent_button_hot } else { unsent_button_box }, id~, fn() {
     if busy {
@@ -342,7 +344,6 @@ fn unsent_button(
     None => ()
   }
   c.semantics(b, Button, id~, label~, disabled=!enabled)
-  enabled && c.clicked(id)
 }
 
 ///|
@@ -358,7 +359,7 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
   let live = @sfbase.hold(src, @sfbase.chat_scope(here.station, here.session), "live", {
     "station": Json::string(here.station),
     "key": Json::string(a.key),
-  })
+  }).get().snapshot()
   let said = match a.wait {
     Some((_, _, w)) => ("wait", if w != "" { w } else { @sf.t("web-main.activity.waiting") }, false, true)
     None => {
@@ -395,9 +396,9 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
       }
   }
   let id = c.id("activity/" + a.key)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     open_detail(src, here_ref(here), a.key)
-  }
+  })
   let row = c.id("activity-row/" + a.key)
   let row_key = rk + "\u{1}" + a.key
   let show_stop = here.view.agents.length() > 1 && (c.hovered(row) || c.hovered(id))
@@ -464,7 +465,7 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
         @sf.icon(c, "stop", size=stop_icon, color=if c.hovered(stop) { p.text } else { p.muted }) |> ignore
       })
       c.semantics(b, Button, id=stop, label~)
-      if c.clicked(stop) {
+      c.on_press(stop, fn() {
         let key = a.key
         let station = here.station
         c.tell("activity-stop/" + a.key, fn() {
@@ -473,7 +474,7 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
             "key": Json::string(key),
           }, done=@sf.t("web-pages.chat.stopAsked"))
         })
-      }
+      })
     }
   })
   @motion.measure(c, area, "activity-area/" + row_key)
@@ -533,12 +534,12 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
     st.at = at
     st.pending = None
     st.important_next = None
-    swap.snap(1.0)
-    reveal.snap(0.0)
+    swap.snap(c, 1.0)
+    reveal.snap(c, 0.0)
     // A list can reserve this row's turn in the future, while the message above it is still landing. A delayed
     // tween waits for that turn; an already-started turn catches up from its declared start.
     let later = dmax(at - c.moment(), 0.0)
-    reveal.animate(1.0, @motion.tween(activity_glyph_in_ms, ease=Linear, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
+    reveal.animate(c, 1.0, @motion.tween(activity_glyph_in_ms, ease=Linear, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
   } else {
     let now = c.moment()
     let mut next : (String, String, Bool, Bool, Double)? = None
@@ -617,8 +618,8 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
       st.mono = next_mono
       st.important = next_important
       st.at = at
-      swap.snap(0.0)
-      reveal.snap(0.0)
+      swap.snap(c, 0.0)
+      reveal.snap(c, 0.0)
       // (a Move as long as the line's change in width)
       let style = if hot { now_words_hot } else { now_words }
       let old_cells = c.words_glyph_cells(st.was, style, mono=st.was_mono)
@@ -626,12 +627,12 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
       // The reading order spans the part that can actually be seen, even when one step is much longer than the line.
       let visible = activity_visible_width(c, row, clock, stop_room)
       st.places = activity_change_places(old_cells, new_cells, visible)
-      reveal.animate(1.0, @motion.tween(@sfbase.glyph_change_in_ms, ease=Linear), start_at=at)
+      reveal.animate(c, 1.0, @motion.tween(@sfbase.glyph_change_in_ms, ease=Linear), start_at=at)
       let widened = dmin(c.words_across(st.words, style, mono=st.mono), visible) - dmin(c.words_across(st.was, style, mono=st.was_mono), visible)
-      swap.animate(1.0, @motion.move(over=dmax(c.text_size(Meta).1, widened.abs())), start_at=at)
+      swap.animate(c, 1.0, @motion.move(over=dmax(c.text_size(Meta).1, widened.abs())), start_at=at)
     }
   }
-  let k = swap.get()
+  let k = swap.get(c)
   let style = if hot { now_words_hot } else { now_words }
   // the line short of what they asked of it last frame: it cuts them where it ends during the turn too
   let cut = match @motion.measured_size(c, "now-room/" + row) {
@@ -639,7 +640,7 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
     None => false
   }
   let room = c.box(style=now_room, fn() {
-    if k < 1.0 || (!reveal.over() && st.was != "") {
+    if k < 1.0 || (!reveal.over(c) && st.was != "") {
       // Both steps keep their shaped text. At each place the outgoing glyph fades before the incoming one arrives,
       // so their ink does not overlap. The window keeps the line no wider than it has room for.
       let line = c.text_size(Meta).1
@@ -717,7 +718,7 @@ fn activity_change_glyphs(
   c.glyphs_by(node, fn(at) {
     let intervals = if places > 1 { places - 1 } else { 1 }
     let along = dmin(at.index.to_double() / intervals.to_double(), 1.0)
-    let look = @sfbase.glyph_change(reveal.get() * @sfbase.glyph_change_in_ms, along * @sfbase.glyph_change_line_ms, at.index, row.length(), incoming)
+    let look = @sfbase.glyph_change(reveal.get(c) * @sfbase.glyph_change_in_ms, along * @sfbase.glyph_change_line_ms, at.index, row.length(), incoming)
     let (dx, sx) = if at.index < old_cells.length() && at.index < new_cells.length() {
       let (old_x, old_w) = old_cells[at.index]
       let (new_x, new_w) = new_cells[at.index]
@@ -748,7 +749,7 @@ fn activity_change_glyphs(
 /// The first activity uses the message's per-glyph arrival. Existing activity when a chat opens has no arrival clock
 /// and is shown whole.
 fn activity_glyphs(c : @ui.Ctx, node : Int, row : String, reveal : @motion.Anim) -> Unit {
-  if reveal.over() {
+  if reveal.over(c) {
     return
   }
   let key = "now-glyph-box/" + row
@@ -757,7 +758,7 @@ fn activity_glyphs(c : @ui.Ctx, node : Int, row : String, reveal : @motion.Anim)
     match @motion.measured_rect(c, key) {
       Some((x, _, w, _)) => {
         let along = if w > 0.0 { dmax(dmin((at.x - x) / w, 1.0), 0.0) } else { 0.0 }
-        let elapsed = reveal.get() * activity_glyph_in_ms - activity_glyph_delay_ms
+        let elapsed = reveal.get(c) * activity_glyph_in_ms - activity_glyph_delay_ms
         @sfbase.glyph_in(elapsed, along * @sfbase.glyph_line_ms, at.index, row.length())
       }
       None => { alpha: 0.0, dx: 0.0, dy: 0.0, scale: 1.0, sx: 1.0 }
@@ -802,7 +803,7 @@ let steadies : Map[String, Steady] = {}
 /// What the rows keep of their own, let go (the package's reset).
 fn rows_reset() -> Unit {
   steadies.clear()
-  dismissed.clear()
+  dismissed.set([])
 }
 
 ///|
@@ -870,7 +871,7 @@ let chat_empty_words : @ui.TextStyle = @ui.text_style(size=Ui, color=Muted)
 
 ///|
 /// What was sent from here, its words and files; what did not go as they are, not faded (at 55% its words were 3.4 to 1:
-/// docs/ui-panels.md 对比度), the red under it saying so.
+/// mbui ui/contrast.mbt), the red under it saying so.
 // kept across runs: a value (no field of it changes)
 let outbox_words : @ui.Style = @ui.css("w=Full gap=S1 align=AEnd")
 

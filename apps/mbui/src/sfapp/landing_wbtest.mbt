@@ -1,4 +1,4 @@
-// Signed in with no workspace yet (landing.mbt; Workspaces.kt Landing, Blocked), over the fixture's landing modes, the
+// Signed in with no workspace yet (Blocked), over the fixture's landing modes, the
 // calls kept and answered by `answer`.
 
 ///|

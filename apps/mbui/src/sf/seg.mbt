@@ -1,4 +1,4 @@
-// A segmented choice as the web's narrow pages have it (web/src/mobile/parts.tsx Seg; Android's Parts.kt Seg): mbui's
+// A segmented choice as the web's narrow pages have it (web/src/mobile/parts.tsx Seg): mbui's
 // sliding toggle group in Seg's look. Not a part of its own: `segmented` (parts.mbt) draws it on a narrow page, the
 // web's Segmented on a wide one.
 
@@ -26,6 +26,7 @@ fn seg(
   radius? : Double = 10.0,
   pill? : Bool = false,
   compact? : Bool = false,
+  on_pick? : (Int) -> Unit,
 ) -> Int {
   let t = theme()
   let fill = fill && !pill
@@ -64,14 +65,14 @@ fn seg(
       id=track,
       h=Px(height),
       radius~,
-      // det-ok(style-literal): the ink at 6%, Seg's own (Parts.kt)
+      // det-ok(style-literal): the ink at 6%, Seg's own
       bg=alpha(t.p.text, 0.06),
       inner,
     )
   }
   // (not side by side: the chosen one in its track, as wide; all of them in a pick)
   if fit is Some({ fit: Menu, .. }) {
-    return choice_pick(c, key, track, options, selected, fn(c, _, words) {
+    return choice_pick(c, key, track, options, selected, on_pick?, fn(c, _, words) {
       track_box(fn() {
         c.box(style=seg_menu, fn() {
           c.text(words, style=seg_menu_words) |> ignore
@@ -119,13 +120,14 @@ fn seg(
       // Seg's first placement jumps)
       thumb=fn(c, w, h) {
         // det-ok(box-loose, style-literal): the thumb's size the group works out, its corner concentric in the track's
-        c.box(w=Px(w), h=Px(h), radius=inner_corner(radius, inset), bg=thumb, border=0.5, border_color=t.p.line, fn() {  })
+        c.box(w=Px(w), h=Px(h), radius=@ui.concentric(radius, inset), bg=thumb, border=0.5, border_color=t.p.line, fn() {  })
         |> ignore
       },
       // a finger on an option: the thumb there as a lens of liquid glass over them (iOS 26's), a capsule
       lens=glass_knob(),
       // (larger than the track, out over its edges: lifted off it, as iOS 26's)
       lens_grow=seg_lens_grow,
+      on_change?=on_pick.map(fn(f) { fn(now : Array[String]) { picked_of(now, options, selected, f) } }),
       ground=fn(c, _, options) {
         // (in a row, as wide as its options: not stretched to its parent's width)
         if pill {
@@ -157,9 +159,23 @@ fn seg_room(c : @ui.Ctx, options : Array[String]) -> (Double, Double) {
 
 ///|
 /// How wide a choice's words `s` are on one line at `size` and `weight`, as they are drawn: the app's own words, their
-/// digits all one width where the theme says so (@ui.Theme `tabular`: 「7 天」's 7 as wide as 30's digits each).
+/// digits all one width where the theme they are drawn in says so (@ui.Theme `tabular`: 「7 天」's 7 as wide as 30's
+/// digits each): an old view's, `c`'s (a node's: node_words_w).
 fn choice_words_w(c : @ui.Ctx, s : String, size : Double, weight? : Int = 400) -> Double {
-  @ui.text_advance(s, size~, weight~, style=if c.theme().tabular { @hostapi.style_tabular } else { 0 })
+  words_w(c.theme().tabular, s, size, weight~)
+}
+
+///|
+/// The same of a node's words: in the theme the window's tree's words are drawn in (@ui.tree_theme, view_host's
+/// words_style), whatever theme an old view was left in.
+fn node_words_w(s : String, size : Double, weight? : Int = 400) -> Double {
+  words_w(@ui.tree_theme().tabular, s, size, weight~)
+}
+
+///|
+/// How wide words `s` are on one line at `size` and `weight`, their digits all one width where `tabular`.
+fn words_w(tabular : Bool, s : String, size : Double, weight? : Int = 400) -> Double {
+  @ui.text_advance(s, size~, weight~, style=if tabular { @hostapi.style_tabular } else { 0 })
 }
 
 ///|
@@ -284,8 +300,24 @@ fn fitted(
   side : Double,
   least : Double,
 ) -> Fitted {
-  let size = c.sp(base)
-  let words = labels.map(fn(l) { choice_words_w(c, l, size, weight~) })
+  fitted_by(fn(x) { c.sp(x) }, c.theme().tabular, labels, room, base, weight, side, least)
+}
+
+///|
+/// The same, their words drawn at `sp` of the size said (Ctx::sp, an old view's; node_sp, a node's), their digits all
+/// one width where `tabular` (the theme they are drawn in says so).
+fn fitted_by(
+  sp : (Double) -> Double,
+  tabular : Bool,
+  labels : Array[String],
+  room : Double,
+  base : Double,
+  weight : Int,
+  side : Double,
+  least : Double,
+) -> Fitted {
+  let size = sp(base)
+  let words = labels.map(fn(l) { words_w(tabular, l, size, weight~) })
   // (no smaller than the app says them: the size the system's own size of words draws)
   let smallest = dmin(1.0, base / size)
   let (widths, fit) = option_widths(words, room, side, least, smallest)
@@ -296,14 +328,14 @@ fn fitted(
     Smaller(k0) => {
       let most = room - 2.0 * least * labels.length().to_double()
       let mut k = k0
-      let mut drawn = labels.map(fn(l) { choice_words_w(c, l, size * k, weight~) })
+      let mut drawn = labels.map(fn(l) { words_w(tabular, l, size * k, weight~) })
       let mut sum = drawn.fold(init=0.0, fn(s, w) { s + w })
       for _ in 0..<4 {
         if sum <= most + 0.01 || sum <= 0.0 || k < smallest {
           break
         }
         k = k * most / sum
-        drawn = labels.map(fn(l) { choice_words_w(c, l, size * k, weight~) })
+        drawn = labels.map(fn(l) { words_w(tabular, l, size * k, weight~) })
         sum = drawn.fold(init=0.0, fn(s, w) { s + w })
       }
       if k < smallest || sum > most + 0.01 {
@@ -344,6 +376,7 @@ fn choice_pick(
   id : Int,
   labels : Array[String],
   chosen : Int,
+  on_pick? : (Int) -> Unit,
   look : (@ui.Ctx, Int, String) -> Int,
 ) -> Int {
   let p = match choice_picks.get(key) {
@@ -361,16 +394,38 @@ fn choice_pick(
       chosen
     }
   }
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     let choices = labels.mapi(fn(i, l) { choice(i.to_string(), l) })
     // (a segmented control's options, short words each: nothing to search them by)
-    pick("", choices, now.to_string(), fn(k) { p.picked = Some(labels_at(labels, k, now)) }, from=Of(id), search=false)
+    pick("", choices, now.to_string(), fn(k) {
+      let i = labels_at(labels, k, now)
+      p.picked = Some(i)
+      match on_pick {
+        Some(f) if i != now => f(i)
+        _ => ()
+      }
+    }, from=Of(id), search=false)
     p.serial = last_presented()
-  }
+  })
   let words = labels.get(now).unwrap_or("")
   let b = look(c, id, words)
   c.semantics(b, Button, id~, label=words, expanded=p.serial != 0 && presented_drawn_of(p.serial))
   now
+}
+
+///|
+/// What a segmented choice's group (@kit.toggle_group) pressed to (`now`, its options by their places) chooses, told
+/// `f` where it is another than `chosen` (the chosen one pressed again stays chosen).
+fn picked_of(now : Array[String], labels : Array[String], chosen : Int, f : (Int) -> Unit) -> Unit {
+  match now {
+    [v] => {
+      let i = labels_at(labels, v, chosen)
+      if i != chosen {
+        f(i)
+      }
+    }
+    _ => ()
+  }
 }
 
 ///|

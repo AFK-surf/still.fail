@@ -3,6 +3,7 @@
 set -euo pipefail
 D=$(cd "$(dirname "$0")" && pwd)
 . "$D/testflight-sign.sh"
+. "$D/testflight-product.sh"
 fail() { echo "testflight: $*" >&2; exit 1; }
 bash "$D/testflight-guard.sh" checkout
 [ "${RUNNER_ENVIRONMENT:-}" = github-hosted ] && [ "${RUNNER_OS:-}" = macOS ] || fail 'requires disposable GitHub macOS runner'
@@ -10,7 +11,7 @@ for name in IOS_DISTRIBUTION_P12_B64 IOS_DISTRIBUTION_P12_PASSWORD IOS_APP_PROFI
   [ -n "${!name:-}" ] || fail "configure environment secret $name"
 done
 [ "${IOS_TEAM_ID:-}" = D9AAN3VJK8 ] || fail 'confirm IOS_TEAM_ID=D9AAN3VJK8'
-[ "${IOS_APP_GROUP:-}" = group.fail.still.iphone ] || fail 'confirm existing IOS_APP_GROUP=group.fail.still.iphone'
+[ "${IOS_APP_GROUP:-}" = "$IOS_EXPECTED_APP_GROUP" ] || fail "confirm IOS_APP_GROUP=$IOS_EXPECTED_APP_GROUP"
 [ "${IOS_RELEASE_REVIEWED:-}" = true ] || fail 'environment IOS_RELEASE_REVIEWED must confirm migration, capabilities and encryption review'
 [[ $IOS_SIGNING_SHA1 =~ ^[0-9A-Fa-f]{40}$ ]] || fail 'IOS_SIGNING_SHA1 must identify the Apple Distribution certificate'
 [[ $ASC_KEY_ID =~ ^[A-Z0-9]{10}$ ]] || fail 'invalid ASC key ID'
@@ -65,21 +66,34 @@ profile() {
     '{"application-identifier":$app,"com.apple.developer.team-identifier":$team,"com.apple.security.application-groups":[$group],"get-task-allow":false,"beta-reports-active":true} + $aps' > "$T/$kind.entitlements"
   plutil -convert xml1 "$T/$kind.entitlements"
 }
-profile app fail.still.iphone
-profile share fail.still.iphone.share
-export APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.iphone
-export MBUI_IOS_BUILD=$RELEASE_BUILD MBUI_IOS_VERSION=$RELEASE_VERSION EMBER=$PWD
+profile app "$IOS_BUNDLE_ID"
+profile share "$IOS_BUNDLE_ID.share"
+# PostHog's key the app reports its crashes with (src/host/apple_reports.m, scripts/ios-core.sh: its Info.plist), as
+# the Android release has it (beta.sh build): the file STILLFAIL_POSTHOG names, from POSTHOG_JSON, removed with $T.
+# Without it (the environment has none) the build sends nothing.
+if [ -n "${POSTHOG_JSON:-}" ]; then
+  printf '%s' "$POSTHOG_JSON" > "$T/posthog.json"
+  export STILLFAIL_POSTHOG=$T/posthog.json
+else
+  echo '::warning::no POSTHOG_JSON in the ios-testflight environment: this build sends no crash reports'
+fi
+export APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=$IOS_BUNDLE_ID MBUI_IOS_PRODUCT=$RELEASE_PRODUCT
+export MBUI_IOS_BUILD=$RELEASE_BUILD MBUI_IOS_VERSION=$RELEASE_VERSION SF_SRC=$PWD
 bash "$D/ios.sh" build
 APPDIR=$PWD/apps/mbui/out/ios-device/MBUI.app
 SHARE=$APPDIR/PlugIns/Share.appex
 for kind in app share; do
-  bundle=$APPDIR; bid=fail.still.iphone
+  bundle=$APPDIR; bid=$IOS_BUNDLE_ID
   if [ "$kind" = share ]; then bundle=$SHARE; bid=$bid.share; fi
-  for pair in "CFBundleIdentifier=$bid" "CFBundleName=still.fail" "CFBundleDisplayName=still.fail" "CFBundleVersion=$RELEASE_BUILD" "CFBundleShortVersionString=$RELEASE_VERSION" "MBUIAppGroup=$IOS_APP_GROUP"; do
+  for pair in "CFBundleIdentifier=$bid" "CFBundleName=$IOS_APP_NAME" "CFBundleDisplayName=$IOS_APP_NAME" "CFBundleVersion=$RELEASE_BUILD" "CFBundleShortVersionString=$RELEASE_VERSION" "MBUIAppGroup=$IOS_APP_GROUP"; do
     [ "$(/usr/libexec/PlistBuddy -c "Print :${pair%%=*}" "$bundle/Info.plist")" = "${pair#*=}" ] || fail "built $kind ${pair%%=*} mismatch"
   done
   cp "$T/$kind.mobileprovision" "$bundle/embedded.mobileprovision"
 done
+if [ "$RELEASE_PRODUCT" = monoid ]; then
+  [ "$(/usr/libexec/PlistBuddy -c 'Print :MBUIEnvironment:MBUI_CLOUD' "$APPDIR/Info.plist")" = https://app.monoid.build ] || fail 'monoid cloud mismatch'
+  [ "$(/usr/libexec/PlistBuddy -c 'Print :MBUIEnvironment:MBUI_PRODUCT' "$APPDIR/Info.plist")" = monoid ] || fail 'monoid product mismatch'
+fi
 password=$(openssl rand -hex 32)
 security create-keychain -p "$password" "$KEYCHAIN"
 security set-keychain-settings -lut 21600 "$KEYCHAIN"
@@ -97,19 +111,24 @@ cp -R "$APPDIR" "$T/Payload/"
 (cd "$T" && zip -qry app.ipa Payload)
 # Check again after build/sign, and after environment approval; no automatic retry of upload.
 bash "$D/testflight-guard.sh" checkout
+# Built and signed beside the tests: uploaded only once they all passed, unless the dispatch said not to wait for them.
+if [ "${RELEASE_SKIP_TESTS:-}" = true ]; then
+  echo '::warning::skip_tests: uploading without waiting for the tests'
+else
+  bash "$D/../../../scripts/testflight-tests.sh"
+fi
 asc_preflight
 # altool changed its option spelling in newer Xcode. Select from this runner's
-# advertised help, never trial-upload/retry against Apple.
+# advertised help, never trial-upload/retry against Apple. (No --validate-app first: an upload is validated as it is
+# taken, and the two together were ~3.5 min of the release, 2026-11-02 builds 24 and 25.)
 xcrun altool --help > "$T/altool-help.txt" 2>&1
 if grep -q -- '--api-key ' "$T/altool-help.txt"; then
-  xcrun altool --validate-app "$T/app.ipa" --api-key "$ASC_KEY_ID" --api-issuer "$ASC_ISSUER_ID"
   xcrun altool --upload-app -f "$T/app.ipa" --api-key "$ASC_KEY_ID" --api-issuer "$ASC_ISSUER_ID"
 elif grep -q -- '--apiKey' "$T/altool-help.txt"; then
-  xcrun altool --validate-app --file "$T/app.ipa" --type ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
   xcrun altool --upload-app --file "$T/app.ipa" --type ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
 else
   fail 'unsupported altool authentication syntax'
 fi
-echo "Upload accepted for 6818750243: $RELEASE_VERSION ($RELEASE_BUILD), $RELEASE_SHA. Processing/tester availability is NOT confirmed." >> "$GITHUB_STEP_SUMMARY"
+echo "Upload accepted for $RELEASE_PRODUCT ($IOS_ASC_APP_ID): $RELEASE_VERSION ($RELEASE_BUILD), $RELEASE_SHA. Processing/tester availability is NOT confirmed." >> "$GITHUB_STEP_SUMMARY"
 printf '%s\n' "$RELEASE_SHA" > "$RUNNER_TEMP/mbui-testflight-uploaded"
 TESTFLIGHT_UPLOADED=yes

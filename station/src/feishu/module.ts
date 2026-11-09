@@ -1,4 +1,4 @@
-// The Feishu connects as a part of the agents' side (docs/feishu.md; connects/part.ts says what every platform's
+// The Feishu connects as a part of the agents' side (connects/part.ts says what every platform's
 // connects are there): a Feishu connect as the overview shows it and the pages edit it, the apps being made by a scan,
 // the Feishu routes, and feishu_api for the agents.
 import { Effect, Layer } from "effect";
@@ -17,13 +17,14 @@ export const FeishuLive = Layer.effectDiscard(
     const parts = yield* Parts;
     const agents = yield* Agents;
     const feishu = yield* connectsPart(makeFeishu, { kind: "feishu", shown: (f, c) => f.shown(c), entry: feishuEntry });
-    parts.overview("feishuRegistrations", (viewer) => feishu.registrations.of(viewer.email).map(shownRegistration));
+    parts.overview("feishuRegistrations", (viewer) => feishu.registrations.of(viewer.email, viewer.workspace).map(shownRegistration));
     parts.routes(
       feishuRoutes({
         feishu, config, data,
         hub: () => agents.hub,
         overview: (viewer, lang) => agents.overview(viewer, lang),
         place: () => agents.place(),
+        heldBy: agents.heldBy,
       }),
     );
     const isFeishu = (connect: string) => feishu.connects().some((c) => c.id === connect);

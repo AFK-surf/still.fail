@@ -1,0 +1,93 @@
+#!/bin/bash
+# Offline: a curl of its own answers as App Store Connect does and says what it was asked. No Apple calls, no secrets.
+set -euo pipefail
+D=$(cd "$(dirname "$0")" && pwd)
+W=$(mktemp -d)
+trap 'rm -rf "$W"' EXIT
+mkdir "$W/bin"
+cat > "$W/bin/curl" <<'C'
+#!/bin/bash
+url=${*: -1}
+method=GET
+for a in "$@"; do [ "$a" = POST ] && method=POST; done
+echo "$method ${url#https://api.appstoreconnect.apple.com/v1/}" >> "$FAKE/calls"
+case $url in
+  */apps/*) echo "{\"data\":{\"type\":\"apps\",\"id\":\"${ANSWER_APP:-$IOS_ASC_APP_ID}\",\"attributes\":{\"bundleId\":\"${ANSWER_BUNDLE:-$IOS_BUNDLE_ID}\"}}}" ;;
+  */builds\?*)
+    n=$(cat "$FAKE/polls" 2>/dev/null || echo 0); echo $((n + 1)) > "$FAKE/polls"
+    state=$(sed -n "$((n + 1))p" "$FAKE/states")
+    case $state in
+      '') state=$(tail -1 "$FAKE/states") ;;
+    esac
+    case $state in
+      DOWN) exit 22 ;;
+      NONE) echo '{"data":[]}' ;;
+      *) echo "{\"data\":[{\"id\":\"b1\",\"attributes\":{\"processingState\":\"$state\"}}]}" ;;
+    esac ;;
+  *betaGroups\?*Internal*) cat "$FAKE/internal" ;;
+  *betaGroups\?*external*) cat "$FAKE/external" ;;
+  *) [ ! -e "$FAKE/refuse" ] || { echo '{"errors":[{"detail":"refused"}]}'; exit 22; }; cat > /dev/null ;;
+esac
+C
+cat > "$W/bin/gh" <<'C'
+#!/bin/bash
+echo "gh $*" >> "$FAKE/dispatched"
+C
+chmod +x "$W/bin/curl" "$W/bin/gh"
+export PATH=$W/bin:$PATH RUNNER_TEMP=$W GITHUB_STEP_SUMMARY=$W/summary ASC_POLL_SECONDS=0 ASC_POLL_TRIES=6 GITHUB_REPOSITORY=AFK-surf/still.fail
+export RELEASE_BUILD=5 RELEASE_VERSION=0.1.0 ASC_KEY_ID=ABCDE12345 ASC_ISSUER_ID=issuer
+export RELEASE_PRODUCT=stillfail
+export ASC_PRIVATE_KEY_B64=$(openssl ecparam -name prime256v1 -genkey -noout | openssl base64 -A)
+good_internal='{"data":[{"id":"gi","attributes":{"isInternalGroup":true}}]}'
+good_external='{"data":[{"id":"ge","attributes":{"isInternalGroup":false}}]}'
+run() {
+  export FAKE=$W/fake
+  rm -rf "$FAKE"; mkdir "$FAKE"
+  printf '%s\n' $1 > "$FAKE/states"
+  echo "${INTERNAL_ANSWER:-$good_internal}" > "$FAKE/internal"
+  echo "${EXTERNAL_ANSWER:-$good_external}" > "$FAKE/external"
+  [ -z "${REFUSE:-}" ] || touch "$FAKE/refuse"
+  touch "$FAKE/calls"
+  RELEASE_ROUND=${ROUND:-1} RELEASE_EXTERNAL=${2:-false} bash -c '. "$1/../apps/mbui/scripts/testflight-product.sh"; export IOS_ASC_APP_ID IOS_BUNDLE_ID; bash "$1/testflight-distribute.sh"' _ "$D" > "$W/out" 2>&1
+}
+posts() { grep '^POST' "$FAKE/calls" || true; }
+expect_posts() { [ "$(posts)" = "$1" ] || { echo "expected posts: $1"$'\n'"got: $(posts)" >&2; cat "$W/out" >&2; exit 1; }; }
+refuses() { if run "$@"; then echo "unexpected success: $*" >&2; exit 1; fi; }
+
+# Waits through not visible yet, processing and a failed request; internal alone by default.
+run 'NONE PROCESSING DOWN VALID'
+expect_posts 'POST betaGroups/gi/relationships/builds'
+[ "$(cat "$FAKE/polls")" = 4 ]
+# The switch: the external group too, then the review.
+run VALID true
+expect_posts 'POST betaGroups/gi/relationships/builds
+POST betaGroups/ge/relationships/builds
+POST betaAppReviewSubmissions'
+# Still processing as a round's wait ends: the next round, with what it was given, nothing added.
+run PROCESSING true
+expect_posts ''
+grep -q 'external=true -f round=2' "$FAKE/dispatched"
+# Apple refused the build, or never finished, or the requests keep failing: nothing added.
+refuses INVALID; expect_posts ''
+refuses FAILED; expect_posts ''
+ROUND=10 refuses PROCESSING; expect_posts ''
+refuses DOWN; expect_posts ''
+# A group named so that is the other kind, or not found: never added to.
+INTERNAL_ANSWER=$good_external refuses VALID; expect_posts ''
+EXTERNAL_ANSWER=$good_internal refuses VALID true; expect_posts 'POST betaGroups/gi/relationships/builds'
+EXTERNAL_ANSWER='{"data":[]}' refuses VALID true; expect_posts 'POST betaGroups/gi/relationships/builds'
+# Apple refusing the addition fails the job.
+REFUSE=1 refuses VALID
+grep -q refused "$W/out"
+# monoid's build lookup and subsequent wait rounds stay on monoid; another app's record refuses before any write.
+export RELEASE_PRODUCT=monoid
+run VALID true
+grep -qF 'GET builds?filter[app]=6832495462&filter[version]=5' "$FAKE/calls"
+expect_posts 'POST betaGroups/gi/relationships/builds
+POST betaGroups/ge/relationships/builds
+POST betaAppReviewSubmissions'
+run PROCESSING true
+grep -q 'product=monoid' "$FAKE/dispatched"
+ANSWER_BUNDLE=fail.still.iphone refuses VALID; expect_posts ''
+ANSWER_APP=6818750243 refuses VALID; expect_posts ''
+echo 'testflight-distribute: ok'

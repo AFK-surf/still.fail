@@ -12,7 +12,7 @@ MODE=${MODE:-release}
 FLAG=""; [ "$MODE" = release ] && FLAG=--release
 PKG=${APP:-demo}
 EXE=$(pkg_build $PKG native $MODE)/$PKG.exe
-# the photos app (still.fail's apps/mbui) shows made-up pictures from out/pictures (src/photos/pictures_native.mbt)
+# the photos app (still.fail's apps/mbui) shows made-up pictures from out/pictures
 [ $PKG = photos ] && [ "${1:-build}" != build ] && gallery_pictures
 case "${1:-build}" in
   build)

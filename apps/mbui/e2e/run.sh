@@ -8,8 +8,10 @@
 #     E2E_APK=FILE E2E_PKG=PACKAGE: that APK instead of a debug build (the beta app: fail.still.mbui; not debuggable, so
 #     the files to attach are not put in it and the core's store is not read back: flows that need them fail)
 #   e2e/run.sh ios [NAME…]        the same on the iOS simulator (a simulator of our own: MBUI_IOS_DEVICE, default
-#     ios-mbui-sf, as mbui's; scripts/ios.sh; on Mini1: Studio's simulators open no app), the app installed afresh, its
+#     ios-mbui-sf, as mbui's; scripts/ios.sh), the app installed afresh, its
 #     log followed (e2e/ios-flow.sh), recorded; with no NAME its smoke flows only (01, 03, 05)
+#   Outside CI the app is Wasm in mbui's native shell on each (scripts/wasm-app.sh: no C of it compiled); E2E_NATIVE=1
+#   the native app.
 #
 # A flow's `log do: WORDS` runs `scripts/e2e-local.sh WORDS` beside it (a peer's words, the station frozen or thawed;
 # `{LOG}` in it is the flow's own log, as it is so far), then says so to the app (e2e/runner-do.sh: the drive's
@@ -153,10 +155,34 @@ if [ $PLATFORM = android ]; then
   SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
   ADB="$SDK/platform-tools/adb -s emulator-$EMU_PORT"
   export E2E_PKG=${E2E_PKG:-fail.still.android.dev}
-  [ -n "${E2E_NOBUILD:-}${E2E_APK:-}" ] || APP=stillfail scripts/android.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+  # (in development the app in Wasm in mbui's Android shell, scripts/wasm-app.sh: no C of it compiled; in CI, with
+  # E2E_NATIVE=1 or an APK given, the native app)
+  wasm=1
+  [ -z "${GITHUB_ACTIONS:-}${E2E_APK:-}" ] && [ "${E2E_NATIVE:-}" != 1 ] || wasm=
+  if [ -n "$wasm" ]; then
+    [ -n "${E2E_NOBUILD:-}" ] || PLATFORM=android bash scripts/wasm-app.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+  else
+    [ -n "${E2E_NOBUILD:-}${E2E_APK:-}" ] || APP=stillfail scripts/android.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+  fi
   scripts/android.sh emu >$OUT/emu.log 2>&1 || { tail $OUT/emu.log; exit 1; }
+  # (no screen lock left from a run before, whose flows set one: the app's files are reached by run-as, which a locked
+  # device's keeps from it)
+  # (booted with one, the device's own files stay locked until it is given: verified first, which unlocks them)
+  # (`locksettings verify` with no credential: verified where none is set)
+  unlocked() { $ADB shell locksettings verify 2>&1 | grep -qi "verified successfully"; }
+  if ! unlocked; then
+    $ADB shell locksettings verify --old ${E2E_PIN:-1234} >/dev/null 2>&1
+    $ADB shell locksettings clear --old ${E2E_PIN:-1234} >/dev/null 2>&1
+    unlocked || { echo "the emulator keeps a screen lock this run cannot clear (not ${E2E_PIN:-1234}): wipe it (scripts/android.sh)"; exit 1; }
+  fi
+  $ADB shell wm dismiss-keyguard >/dev/null 2>&1
+  # (no system dialog over the app for another app's "isn't responding": the launcher's or System UI's on a loaded
+  # machine, which took the run's taps and typing; the system's own setting for test harnesses)
+  $ADB shell settings put global hide_error_dialogs 1 >/dev/null 2>&1
   $ADB install -r ${E2E_APK:-android/app/build/outputs/apk/debug/app-debug.apk} >/dev/null || exit 1
   $ADB shell pm clear $E2E_PKG >/dev/null
+  # (the program after the app's data is cleared: it lies in its files)
+  [ -z "$wasm" ] || scripts/android.sh put out/wasm-app/app-android.cwasm app.cwasm || exit 1
   # notifications allowed, as a person who said yes once has them (else the first sign-in's ask is a system dialog over
   # the flows; 40-44 look at what is shown)
   $ADB shell pm grant $E2E_PKG android.permission.POST_NOTIFICATIONS >/dev/null 2>&1
@@ -174,7 +200,14 @@ if [ $PLATFORM = ios ]; then
   # this Mac's path, as on macOS); 127.0.0.1 in the simulator is this Mac's, so the local still.fail needs no forwarding
   export MBUI_IOS_DEVICE=${MBUI_IOS_DEVICE:-ios-mbui-sf}
   export E2E_PKG=${E2E_PKG:-fail.still.mbui.debug}
-  [ -n "${E2E_NOBUILD:-}" ] || APP=stillfail scripts/ios.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+  # (in development the app in Wasm in mbui's iOS shell, scripts/wasm-app.sh, read where it lies here; in CI or with
+  # E2E_NATIVE=1 the native app)
+  if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${E2E_NATIVE:-}" = 1 ]; then
+    [ -n "${E2E_NOBUILD:-}" ] || APP=stillfail scripts/ios.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+  else
+    [ -n "${E2E_NOBUILD:-}" ] || PLATFORM=ios bash scripts/wasm-app.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+    export SIMCTL_CHILD_MBUI_WASM_APP=$ROOT/$(pkg_build stillfail wasm release)/stillfail.wasm
+  fi
   IOS_DEV=$(scripts/ios.sh device 2>$OUT/device.log | tail -1)
   [ -n "$IOS_DEV" ] || { cat $OUT/device.log; exit 1; }
   export IOS_DEV CORE FILES
@@ -182,9 +215,17 @@ if [ $PLATFORM = ios ]; then
   xcrun simctl install $IOS_DEV out/ios/MBUI.app || exit 1
 fi
 if [ $PLATFORM = mac ]; then
-  [ -n "${E2E_NOBUILD:-}" ] || APP=stillfail scripts/mac.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+  # (in development the app in Wasm in mbui's native shell, scripts/wasm-app.sh: no C of it compiled, the user
+  # 2026-11-03; in CI (GITHUB_ACTIONS) or with E2E_NATIVE=1 the native app)
+  if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${E2E_NATIVE:-}" = 1 ]; then
+    [ -n "${E2E_NOBUILD:-}" ] || APP=stillfail scripts/mac.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+    built=$ROOT/_build/native/release/build/stillfail/stillfail/stillfail.exe
+  else
+    [ -n "${E2E_NOBUILD:-}" ] || bash scripts/wasm-app.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+    built=$ROOT/out/wasm-app/stillfail
+  fi
   # (E2E_EXE: another build of it, as the app bundle's, out/mac/still.fail mbui.app/Contents/MacOS/stillfail-mbui)
-  EXE=${E2E_EXE:-$ROOT/_build/native/release/build/stillfail/stillfail/stillfail.exe}
+  EXE=${E2E_EXE:-$built}
   export MB_CORE_BUNDLE=$ROOT/out/core/core.hbc
 fi
 
@@ -223,7 +264,7 @@ run_flow() {
   if [ $PLATFORM = mac ]; then
     # (a phone's window unless the flow's #env says otherwise: the wide flows' MBUI_WIN=1280x800; no machine's own name,
     # what the app tells the core the same wherever the trace is recorded: sfcore's apple_engine.m keeps one given)
-    on_screen env MBUI_WIN=390x844 MBUI_DEVICE_NAME= $extra MBUI_CLOUD=$MBUI_CLOUD MBUI_CORE_ACCOUNT_B64=$E2E_ACCOUNT_B64 MBUI_CORE_DATA=$CORE MBUI_KEYS_IN_FILES=1 \
+    on_screen env MBUI_WIN=390x844 MBUI_DEVICE_NAME= $extra MBUI_ISOLATED_STATION=1 MBUI_CLOUD=$MBUI_CLOUD MBUI_CORE_ACCOUNT_B64=$E2E_ACCOUNT_B64 MBUI_CORE_DATA=$CORE MBUI_KEYS_IN_FILES=1 \
       MBUI_SHOT_DIR=$OUT/$name MBUI_DONE_DIR=$OUT/$name/done MBUI_DRIVE_B64=$(base64 < $script | tr -d '\n') \
       MBUI_PICK_FILES="$FILES/e2e-photo.jpg|$FILES/e2e-data.bin" MBUI_CALL_LOG=1 MBUI_MOTION_LOG=1 \
       MBUI_DOWNLOADS_DIR=$OUT/$name/downloads \
@@ -288,6 +329,9 @@ for f in $flows; do
     echo "FAIL $name (${FAILS#|})" | tee -a $TABLE
   fi
 done
+# (a screen lock a flow set, cleared while the device is unlocked still: booted with one, the next run's emulator would
+# keep the app's files locked until it was typed)
+[ $PLATFORM != android ] || $ADB shell locksettings clear --old ${E2E_PIN:-1234} >/dev/null 2>&1
 echo "$passed of $total flows passed ($PLATFORM)" | tee -a $TABLE
 # this run's drive folder goes with it (one per run would push the newest out of the drive's picker)
 rm -rf "${DRIVE:?}"

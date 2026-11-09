@@ -1,10 +1,10 @@
-// An agent's execution history in the desktop's side panel, its head as the web's (ember web/src/History.tsx's head,
+// An agent's execution history in the desktop's side panel, its head as the web's (still.fail web/src/History.tsx's head,
 // pages/ChatPage.tsx SessionHead, SessionDetails, HistorySummary; History.css.ts, ChatPage.css.ts): how it runs in one
 // control (the model, how hard it thinks, the account: model_triple.mbt), what needs seeing to beside it; at the
 // head's end 只看收发 and 详情. 详情 unfold under the head, open to begin with: what it has used (the large figures, a
 // quiet line), then a line each, its mark leading: what runs it (Profile 详情), the station it runs on (what runs low
 // on it), its context (管理: compacted, or cleared, asked first), where its runtime keeps the session's transcript
-// (复制路径). Its steps under them are the page's to give.
+// (复制路径). Its steps under them are nodes of the window's tree (sfpages' history_steps_node.mbt: side_body_node).
 
 ///|
 /// What the history keeps of its own (the rest is the core's): 只看收发 (for every history, as the web keeps it), its
@@ -25,7 +25,7 @@ fn history_reset() -> Unit {
 
 ///|
 /// Agent `key`'s history beside its chat `r`, in front (not toggled), brought to transcript entry `entry` if one is
-/// asked (ChatPage.tsx history): the page the chat's, in place of the one that asked.
+/// asked: the page the chat's, in place of the one that asked.
 fn history_beside(src : Source, r : ChatRef, key : String, entry : Int?) -> Unit {
   match app.nav.top() {
     History(_, _, _) => app.nav.replace(Chat(r))
@@ -39,15 +39,23 @@ fn history_beside(src : Source, r : ChatRef, key : String, entry : Int?) -> Unit
 }
 
 ///|
-/// Agent `key`'s history on `station` (`a` as its chat's view has it): its head and, unfolded, its details, a line
-/// under them; its steps in the rest (sfpages' history_steps.mbt).
-fn agent_history(c : @ui.Ctx, src : Source, station : String, key : String, a : Json?) -> Unit {
-  history_head(c, src, station, key, a)
-  c.box(style=wh_fill, fn() { @sfpages.history_steps(c, src, station, key) }) |> ignore
+/// Agent `key`'s history's top in chat `r`'s panel (`tabs`, it in front), an old view as tall as it is: the panel's bar,
+/// the head and, unfolded, its details, a line under them. Its steps under it are the tree's (side_body_node).
+fn history_top(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, tabs : Array[String], key : String) -> Unit {
+  c.box(style=history_top_box, fn() {
+    side_bar_row(c, src, r, v, tabs, key)
+    history_head(c, src, r.station, key, agent_json(src.topic("chat", chat_params(r)).get().value, key))
+  })
+  |> ignore
 }
 
 ///|
-/// The head (History.tsx historyHead) and, unfolded, its details; a line under them.
+/// The history's top: across the panel, on its ground.
+// kept across runs: a value (no field of it changes)
+let history_top_box : @ui.Style = @ui.css("w=Full bg=Bg")
+
+///|
+/// The head and, unfolded, its details; a line under them.
 fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : Json?) -> Unit {
   let t = @sf.theme()
   c.box(style=wh_head, fn() {
@@ -60,9 +68,9 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
     |> ignore
     c.box(style=@sf.keys_row(), fn() {
       let io = c.id("history/only-io")
-      if c.clicked(io) {
+      c.on_press(io, fn() {
         @sfpages.history_only_io_flip()
-      }
+      })
       let on = @sfpages.history_only_io()
       let b = c.box(style=if on { wh_toggle_on } else { wh_toggle }, id=io, fn() {
         @sf.icon(c, "filter", size=14.0, color=if on || c.lit(io) { t.p.text } else { t.p.muted }) |> ignore
@@ -72,9 +80,9 @@ fn history_head(c : @ui.Ctx, src : Source, station : String, key : String, a : J
       c.semantics(b, Button, id=io, label=@sf.t("web-main.history.onlyIo"))
       @sf.tip(c, "history/only-io-tip", io, @sf.t("web-main.history.onlyIoTip"))
       let more = c.id("history/details")
-      if c.clicked(more) {
+      c.on_press(more, fn() {
         history_own.shut = !history_own.shut
-      }
+      })
       let hot = c.lit(more)
       let d = c.box(style=wh_toggle, id=more, fn() {
         c.text(@sf.t("web-main.history.details"), style=if hot { wh_toggle_hot } else { wh_toggle_words }) |> ignore
@@ -131,8 +139,8 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
   let s = field(a, "session")
   let on = [("station", station), ("key", key)]
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
-  let card = (src.topic)("agentCard", params).value
-  let host = @sfbase.hold(src, @sfbase.history_scope(station, key), "host", { "station": Json::string(station) }).value
+  let card = src.topic("agentCard", params).get().value
+  let host = @sfbase.hold(src, @sfbase.history_scope(station, key), "host", { "station": Json::string(station) }).get().value
   let compacts = flag(s, "canCompact")
   let clears = flag(s, "canClear")
   // (what is under way and what failed a moment ago, as the core's `doing` says: useContextActions)
@@ -176,14 +184,14 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
         }
       },
       fn() {
-        if wh_link(c, "history/profile", @sf.t("web-pages.chat.profileDetails")) {
+        wh_link(c, "history/profile", @sf.t("web-pages.chat.profileDetails"), on_press=fn() {
           @sfbase.history_push()
           app.nav.push(Setting(@settings.Route::Profile(station, text(s, "profile"))))
-        }
+        })
       },
     )
     // the station it runs on, what runs low on it at its end
-    let look = stations_of((src.topic)("stations", { "scope": Json::string(scope_of(station)) }).value)
+    let look = @sfbase.station_marks(src, scope_of(station))
       .iter()
       .find_first(fn(x) { x.address == station })
     wh_line(
@@ -203,7 +211,7 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
               h => h
             }
         }
-        c.text(name, style=wh_name) |> ignore
+        c.text(name, style=wh_name, allow_ellipsis=true) |> ignore
         match text(host, "identity") {
           "" => ()
           i => c.text(" · " + i, style=wh_words) |> ignore
@@ -228,9 +236,10 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
         },
         fn() {
           @settings.doing_mark(c, busy, failed, inline=true)
-          if wh_link(c, "history/context", @sf.t("web-pages.chat.contextManage")) {
-            @sfpages.open_context_actions(src, station, key, s, Of(c.id("history/context")))
-          }
+          let from = c.id("history/context")
+          wh_link(c, "history/context", @sf.t("web-pages.chat.contextManage"), on_press=fn() {
+            @sfpages.open_context_actions(src, station, key, s, Of(from))
+          })
         },
       )
     }
@@ -245,16 +254,18 @@ fn wh_details(c : @ui.Ctx, src : Source, station : String, key : String, a : Jso
 fn wh_evict(c : @ui.Ctx, src : Source, station : String, key : String) -> Unit {
   let on = [("station", station), ("key", key)]
   let evicting = core_doing(src, ["session.evict"], on)
-  if wh_link(c, "history/evict", @sf.t("web-pages.chat.evict")) && !evicting {
-    act(
-      src,
-      @sf.t("web-pages.chat.evict"),
-      "",
-      "session.evict",
-      { "station": Json::string(station), "key": Json::string(key) },
-      done=@sf.t("web-pages.chat.evicted"),
-    )
-  }
+  wh_link(c, "history/evict", @sf.t("web-pages.chat.evict"), on_press=fn() {
+    if !evicting {
+      act(
+        src,
+        @sf.t("web-pages.chat.evict"),
+        "",
+        "session.evict",
+        { "station": Json::string(station), "key": Json::string(key) },
+        done=@sf.t("web-pages.chat.evicted"),
+      )
+    }
+  })
   @settings.doing_mark(c, evicting, core_failed(src, ["session.evict"], on), inline=true)
 }
 
@@ -299,10 +310,10 @@ fn wh_transcript(c : @ui.Ctx, src : Source, station : String, key : String, me :
           @sf.tip(c, "history/transcript", words, path)
         },
         fn() {
-          if wh_link(c, "history/copy-path", @sf.t("web-pages.chat.copyPath")) {
+          wh_link(c, "history/copy-path", @sf.t("web-pages.chat.copyPath"), on_press=fn() {
             c.copy_text(path)
             say(c, @sf.t("web-main.chat.transcriptCopied"))
-          }
+          })
         },
       )
     }
@@ -322,14 +333,17 @@ fn wh_line(c : @ui.Ctx, mark : () -> Unit, words : () -> Unit, end : () -> Unit)
 }
 
 ///|
-/// A link of the details (detailLink): its words, underlined on hover. True on the frame after a press.
-fn wh_link(c : @ui.Ctx, key : String, words : String) -> Bool {
+/// A link of the details (detailLink): its words, underlined on hover. `on_press` as it is pressed.
+fn wh_link(c : @ui.Ctx, key : String, words : String, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = c.box(id~, style=wh_link_box, fn() {
     c.text(words, style=if c.lit(id) { wh_link_hot } else { wh_dot }) |> ignore
   })
   c.semantics(b, Button, id~, label=words)
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
@@ -384,10 +398,6 @@ let wh_toggle_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=fal
 let wh_details_box : @ui.Style = @ui.css("w=Full px=S4 pt=S0_5 pb=S3_5 gap=S2_5")
 
 ///|
-// kept across runs: a value (no field of it changes)
-let wh_quiet : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted)
-
-///|
 /// The quiet line 4 nearer what is over it (sessionQuiet: outsetTop(4)).
 // kept across runs: a value (no field of it changes)
 let wh_quiet_box : @ui.Style = @ui.css("w=Full").then(@sf.outset_top(4.0))
@@ -408,7 +418,7 @@ let wh_quiet_one : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=f
 let wh_quiet_link : @ui.TextStyle = @ui.text_style(size=Meta, color=Link, wrap=false)
 
 ///|
-/// What needs seeing to, in its tone (ChatPage.css.ts attention: 12; the disk amber, an account red).
+/// What needs seeing to, in its tone (the disk amber, an account red).
 // kept across runs: a value (no field of it changes)
 let wh_amber : @ui.TextStyle = @ui.text_style(size=Meta, color=WarnInk, wrap=false)
 
@@ -438,8 +448,10 @@ let wh_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false
 let wh_dot : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
+/// The station's name: whole on its one line, what its machine is after it cut short first (itself only where it is
+/// longer than the line, as a last resort).
 // kept across runs: a value (no field of it changes)
-let wh_name : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg)
+let wh_name : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -452,8 +464,3 @@ let wh_link_box : @ui.Style = @ui.css("row align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let wh_link_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
-
-///|
-/// The steps under the head: the rest of the panel.
-// kept across runs: a value (no field of it changes)
-let wh_fill : @ui.Style = @ui.css("w=Full h=Full")

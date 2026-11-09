@@ -1,4 +1,4 @@
-// What a chat's agents and other chats' agents wrote each other (session_send), in a tab beside the chat (ember
+// What a chat's agents and other chats' agents wrote each other (session_send), in a tab beside the chat (still.fail
 // web/src/Letters.tsx, Letters.css.ts; the core's `chatLetters` view): first the chats it wrote with, a row each, the
 // last written with first; one opened, its letters both ways in the order written, each drawn as the chat draws a
 // message out of its list (StaticMessage: message.mbt).
@@ -27,9 +27,9 @@ fn letters_list_of(c : @ui.Ctx, key : String, chats : Array[Json]) -> Unit {
       let cv = Some(ch)
       let ck = text(cv, "key")
       let id = c.id("letters/row/" + ck)
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         letters_opened[key] = ck
-      }
+      })
       let b = c.box(style=letters_row, id~, fn() {
         c.box(style=letters_row_head, fn() {
           c.box(style=letters_grow, fn() { c.text(text(cv, "title"), style=letters_row_title, allow_ellipsis=true) |> ignore })
@@ -65,7 +65,7 @@ fn letters_sample() -> Array[Json] {
 /// as the chat draws one, its files kept by the chat's sessions; a chat's title pressed opened as a link in it is.
 fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Double) -> Unit {
   let key = chat_key(r)
-  let view = (src.topic)("chatLetters", { "station": Json::string(r.station), "thread": Json::number(thread) }).value
+  let view = src.topic("chatLetters", { "station": Json::string(r.station), "thread": Json::number(thread) }).get().value
   let chats = items(view, "chats")
   let whole = flag(view, "whole")
   if !(view is Some(Object(_))) || (chats.length() == 0 && !whole) {
@@ -89,18 +89,16 @@ fn letters_tab(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, thread : Do
       rows.push(fn() {
         // back to the list, and its title (which opens that chat)
         c.box(style=letters_head, fn() {
-          if @sf.icon_button(c, "arrow-left", key="letters/back", round=true, label=@sf.t("web-main.letters.back")) {
+          @sf.icon_button(c, "arrow-left", key="letters/back", round=true, label=@sf.t("web-main.letters.back"), on_press=fn() {
             letters_opened.remove(key)
-          }
+          }) |> ignore
           let title = text(cv, "title")
           let to = text(cv, "link")
           if to == "" {
             c.text(title, style=letters_name, allow_ellipsis=true) |> ignore
           } else {
             let nid = c.id("letters/name")
-            if c.clicked(nid) {
-              c.tell("letters/name", fn() { open_link(to) })
-            }
+            c.on_press(nid, fn() { open_link(to) })
             let b = c.box(style=letters_name_box, id=nid, fn() {
               // (underlined on hover)
               c.rich([@ui.span(title, underline=c.lit(nid))], style=letters_name, allow_ellipsis=true) |> ignore

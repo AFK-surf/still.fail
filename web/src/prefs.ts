@@ -5,10 +5,9 @@
 // left (the sidebar filtered, the theme set; index.html reads the appearance's own copy before the page's code runs). The
 // core is what they are: its value overwrites the copy whenever it comes. A core from before prefs answers the topic
 // with an error: the copy is then all there is, written here as before.
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "preact/compat";
 import { core, knownOf } from "./core/react.ts";
 import type { DeviceView, PrefsView } from "./core/shapes.ts";
-import { legacyPrefs } from "./core/migrate.ts";
 
 const COPY = "stillfail.prefs";
 /** The appearance's own copy, read by index.html before the first paint (and by pages from before prefs). */
@@ -17,9 +16,9 @@ const APPEARANCE = "stillfail.appearance";
 const MOTION = "stillfail.motion";
 
 /** The prefs with what the core fills in when nothing was chosen (its shape leaves them optional). */
-export type Prefs = Required<Omit<PrefsView, "productName" | "workspace" | "invite" | "device" | "windowZoom" | "language" | "lang" | "badge" | "badgeKinds" | "rail" | "dropAs" | "archiveHint" | "motion" | "haptics" | "screenTouch" | "screenQuality" | "screenFps" | "screenCodec" | "screenMouse" | "faces" | "keymap" | "railView" | "fillOff" | "fillMax" | "shareLook">> & Pick<PrefsView, "workspace" | "invite" | "windowZoom" | "language" | "lang" | "badge" | "badgeKinds" | "rail" | "dropAs" | "archiveHint" | "motion" | "haptics" | "screenTouch" | "screenQuality" | "screenFps" | "screenCodec" | "screenMouse" | "faces" | "keymap" | "railView" | "fillOff" | "fillMax" | "shareLook"> & { device: Required<Omit<DeviceView, "locale">> & Pick<DeviceView, "locale"> };
+export type Prefs = Required<Omit<PrefsView, "productName" | "product" | "workspace" | "invite" | "device" | "windowZoom" | "language" | "lang" | "badge" | "badgeKinds" | "rail" | "dropAs" | "archiveHint" | "accent" | "motion" | "haptics" | "appUpdate" | "screenTouch" | "screenQuality" | "screenFps" | "screenCodec" | "screenMouse" | "faces" | "keymap" | "railView" | "fillOff" | "fillMax" | "shareLook" | "sendKey">> & Pick<PrefsView, "workspace" | "invite" | "windowZoom" | "language" | "lang" | "badge" | "badgeKinds" | "rail" | "dropAs" | "archiveHint" | "accent" | "motion" | "haptics" | "appUpdate" | "screenTouch" | "screenQuality" | "screenFps" | "screenCodec" | "screenMouse" | "faces" | "keymap" | "railView" | "fillOff" | "fillMax" | "shareLook" | "sendKey"> & { device: Required<Omit<DeviceView, "locale">> & Pick<DeviceView, "locale"> };
 /** What `prefs.set` takes: a field, or a map's entries (null: gone). */
-export type PrefsPatch = { [K in keyof Omit<Prefs, "device">]?: NonNullable<Prefs[K]> extends Record<string, infer V> ? Record<string, V | null> : Prefs[K] | null };
+type PrefsPatch = { [K in keyof Omit<Prefs, "device">]?: NonNullable<Prefs[K]> extends Record<string, infer V> ? Record<string, V | null> : Prefs[K] | null };
 
 const DEFAULTS: Prefs = {
   onlyMine: false, onlyWatching: false, listFilter: {}, appearance: "system", rowPicture: "auto", absoluteTime: false, keys: {}, lastChat: {}, openChat: {}, chatTabs: {}, dropFiles: {}, driveViews: {}, filesTabs: {}, driveFavorites: {}, driveFavoritesHidden: {}, resume: {}, stationUpdatesDismissed: {}, rails: {}, barsBy: {}, fonts: {}, previewSizes: {}, sidebars: {}, trouble: {}, jobsSeen: {}, failsGone: {},
@@ -46,8 +45,7 @@ function copied(): Prefs {
     const raw = storage()?.getItem(COPY);
     if (raw) return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Prefs>) };
   } catch { /* unreadable: the defaults */ }
-  const from = storage();
-  return { ...DEFAULTS, ...(from ? legacyPrefs(from) : {}), device: DEFAULTS.device };
+  return DEFAULTS;
 }
 
 let current: Prefs | null = null;
@@ -84,12 +82,6 @@ export function prefs(): Prefs {
   current ??= copied();
   listen();
   return current;
-}
-
-/** Forgets them, so that they are read again as the page knows them now: for a page built to HTML more than once in one
- *  run, its core saying otherwise each time (the site's demo in another language: demo/prerender.tsx). */
-export function forgetPrefs(): void {
-  current = null;
 }
 
 /** Changes them: shown at once, then as the core has them. */

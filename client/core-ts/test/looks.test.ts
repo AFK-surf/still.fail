@@ -10,13 +10,13 @@ type J = any;
 const station = (address: string, name: string, state: string) => ({ station: address, id: address, name, state, message: null });
 
 test("the_glyph_counts_stations_by_their_links_and_says_who_works", () => {
-  const stations = [station("w/a", "Studio", "online"), station("w/b", "MBA", "online"), station("w/c", "Pi", "offline"), station("w/d", "X", "error")];
+  const stations = [station("w/a", "orchard", "online"), station("w/b", "MBA", "online"), station("w/c", "Pi", "offline"), station("w/d", "X", "error")];
   const days = [{ items: [{ station: "w/a", state: "run" }, { station: "w/c", state: "run" }, { station: "w/b", state: null }] }];
   let g = glyph(stations, days);
   assert.deepEqual([g.online, g.dim, g.failing, g.working], [2, 1, 1, 1]);
   assert.equal(g.summary, "4 台 station · 1 台运行中");
   assert.equal(g.label, "4 台 station，2 台在线，1 台运行中，1 台离线，1 台出错");
-  assert.equal(glyph([station("w/a", "Studio", "online")], days).summary, "Studio · 运行中");
+  assert.equal(glyph([station("w/a", "orchard", "online")], days).summary, "orchard · 运行中");
   assert.equal(glyph([], []).label, "0 台 station，0 台在线");
   g = glyph([station("w/a", "A", "connecting"), station("w/b", "B", "offline")], []);
   assert.deepEqual([g.dim, g.connecting], [2, 1]);
@@ -45,18 +45,18 @@ test("the_stations_card_says_how_many_agents_each_station_has_at_work_and_all_of
   assert.deepEqual(doing("connecting", undefined, undefined).doing, "正在连接");
   // All of them: the card's head, and what follows the number on the card shared.
   const at = (address: string, name: string, running: number) => ({ ...station(address, name, "online"), running });
-  const g = glyph([at("w/a", "Studio", 5), at("w/b", "ccvm", 3), station("w/c", "MBA", "offline")], []);
+  const g = glyph([at("w/a", "orchard", 5), at("w/b", "cedar", 3), station("w/c", "MBA", "offline")], []);
   assert.deepEqual([g.running, g.now, g.unit], [8, "8 个 agent 正在运行", "个 agent 正在运行"]);
-  assert.deepEqual([glyph([at("w/a", "Studio", 0)], []).running, glyph([at("w/a", "Studio", 0)], []).now], [0, "暂无 agent 在运行"]);
+  assert.deepEqual([glyph([at("w/a", "orchard", 0)], []).running, glyph([at("w/a", "orchard", 0)], []).now], [0, "暂无 agent 在运行"]);
 });
 
 test("a_view_gathered_from_stations_says_whom_it_waits_on_and_who_failed", () => {
   assert.deepEqual(waitNote(null), { reading: true, text: "正在读取 station", failing: [], empty: false });
   assert.deepEqual(waitNote([], [], true), { reading: false, text: null, failing: [], empty: true });
   assert.deepEqual(waitNote([], [], false).empty, false);
-  assert.equal(waitNote(["Studio"]).text, "正在从 Studio 读取");
-  assert.equal(waitNote(["Studio", "MBA"]).text, "正在从 2 台 station 读取");
-  const failed = waitNote(["Studio"], [{ station: "w/b", name: "MBA", message: "timeout" }], true);
+  assert.equal(waitNote(["orchard"]).text, "正在从 orchard 读取");
+  assert.equal(waitNote(["orchard", "MBA"]).text, "正在从 2 台 station 读取");
+  const failed = waitNote(["orchard"], [{ station: "w/b", name: "MBA", message: "timeout" }], true);
   assert.deepEqual([failed.reading, failed.empty], [true, false]);
   assert.deepEqual(failed.failing, [{ station: "w/b", text: "无法从「MBA」读取", message: "timeout" }]);
 });
@@ -129,9 +129,9 @@ test("the_memory_reads_in_parts_with_how_long_each_is", () => {
 });
 
 test("a_chat_link_is_said_only_while_down_or_coming_back", () => {
-  assert.deepEqual(linkShown({ state: "error", message: "无法连接此 station：超时" }, "Studio"), { tone: "trouble", text: "无法连接「Studio」", detail: "超时" });
+  assert.deepEqual(linkShown({ state: "error", message: "无法连接此 station：超时" }, "orchard"), { tone: "trouble", text: "无法连接「orchard」", detail: "超时" });
   assert.equal(linkShown({ state: "offline", message: "别的：原因" }, "").detail, "别的：原因");
-  assert.equal(linkShown({ state: "error", message: "无法连接此 station" }, "Studio").detail, null);
+  assert.equal(linkShown({ state: "error", message: "无法连接此 station" }, "orchard").detail, null);
   assert.equal(linkShown({ state: "offline" }, "").text, "无法连接 station");
   assert.deepEqual(linkShown({ state: "reconnecting" }, "S"), { tone: "busy", text: "正在重新连接「S」" });
   assert.deepEqual(linkShown({ state: "connecting", retrying: true }, "S"), { tone: "busy", text: "正在重新连接「S」" });
@@ -147,9 +147,9 @@ test("update_progress_and_pending_messages_survive_disconnect_and_clear_on_new_o
   assert.equal(stationUpdate(overview, chat, null, false, true).detail, "正在下载新版本");
   chat.link.state = "reconnecting";
   chat.outbox = [{ id: "one", state: "sending" }];
-  const notice = stationUpdate(overview, chat, null, false, true, "Mac Studio");
-  assert.equal(notice.text, "「Mac Studio」正在更新");
-  assert.equal(notice.station, "Mac Studio");
+  const notice = stationUpdate(overview, chat, null, false, true, "orchard");
+  assert.equal(notice.text, "「orchard」正在更新");
+  assert.equal(notice.station, "orchard");
   assert.ok(notice.detail.includes("消息仍在发送"));
   chat.outbox[0].state = "failed";
   assert.ok(!stationUpdate(overview, chat, null, false, true).detail.includes("消息仍在发送"));
@@ -190,13 +190,13 @@ test("dismissal_is_version_and_channel_scoped_and_never_hides_progress", () => {
 test("update_says_which_station_and_versions", () => {
   const overview: J = { updates: [{ id: "station", state: "updating", version: "0.1.10", latest: "0.1.12", percent: 140, progress: "正在下载新版本" }] };
   const chat: J = { link: { state: "online" }, outbox: [] };
-  const notice = stationUpdate(overview, chat, null, false, true, "studio");
-  assert.equal(notice.station, "studio");
+  const notice = stationUpdate(overview, chat, null, false, true, "orchard");
+  assert.equal(notice.station, "orchard");
   assert.equal(notice.from, "0.1.10");
   assert.equal(notice.to, "0.1.12");
   assert.equal(notice.percent, 100);
   chat.link.state = "reconnecting";
-  assert.equal(stationUpdate(overview, chat, null, false, true, "studio").percent, null);
+  assert.equal(stationUpdate(overview, chat, null, false, true, "orchard").percent, null);
   overview.updates[0].latest = "0.1.10";
   assert.equal(stationUpdate(overview, null, null, false, true).to, null);
   assert.equal(stationUpdate(overview, null, null, false, true).station, "station");

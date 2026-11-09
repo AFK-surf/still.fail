@@ -1,11 +1,11 @@
-// Android's composer taken by a tap (Composer.kt, Compose's tap on a field: the focus as the finger lifts), however long
+// Android's composer taken by a tap (Compose's tap on a field: the focus as the finger lifts), however long
 // the finger stayed down without moving.
 
 ///|
 fn composer_tap_tester() -> @ui.Tester {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t

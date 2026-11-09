@@ -9,7 +9,7 @@ test "census: the window's tree's nodes counted with an old view's" {
     root.box(fn(card) {
       card.pad(Is(7.0)).gap(Is(5.0)).radius(Is(9.0)).ground(Is(0xABCDEFFFL)) |> ignore
       card.box(fn(w) {
-        w.words(Is("words"), ink=0x123456FFL, look={ size: 19.0, weight: 700, line: 27.0, wrap: true }) |> ignore
+        w.words(Is("words"), ink=0x123456FFL, look={ size: 19.0, weight: 700, line: 27.0, wrap: true, tracking: @view.letters_own, balance: false }) |> ignore
       })
       |> ignore
       card.box(fn(r) {

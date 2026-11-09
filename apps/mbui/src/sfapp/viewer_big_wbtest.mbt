@@ -80,7 +80,7 @@ test "a picture too big to show, from a drive, beside an iPhone Duo's own bars: 
 }
 
 ///|
-test "a picture too big to show, from a drive, 下载 pressed: the same viewer reading it (正在打开 in 下载's place) till its whole comes, then 下载 again" {
+test "a picture too big to show, from a drive, 下载 pressed: the same viewer reading it (下载 at work, saying 正在读取) till its whole comes, then 下载 again" {
   new_run()
   let base = fixture("drive")
   let held : Array[(Result[(Json, Bytes), Json]) -> Unit] = []
@@ -114,14 +114,14 @@ test "a picture too big to show, from a drive, 下载 pressed: the same viewer r
   t.click(@ui.Role::Button, label="下载")
   t.run_for(@ui.move_most_ms)
   assert_true(physical_equal(viewer.get().unwrap(), v) && v.asked && v.bytes.get() is None, msg="asked, reading")
-  assert_true(t.find("正在打开") is Some(_) && !buttons_said(t).contains("下载"), msg="reading in 下载's place: \{buttons_said(t)}")
+  assert_true(buttons_said(t).contains("正在读取") && !buttons_said(t).contains("下载"), msg="下载 at work: \{buttons_said(t)}")
   assert_true(!held.is_empty(), msg="its whole asked for")
   for done in held {
     done(Ok(({ "total": Json::number(1024.0) }, Bytes::make(1024, b'\x00'))))
   }
   t.draw()
   t.run_for(@ui.move_most_ms)
-  assert_true(v.bytes.get() is Some(_) && t.find("正在打开") is None, msg="read whole: no longer reading")
+  assert_true(v.bytes.get() is Some(_) && buttons_said(t).contains("下载"), msg="read whole: no longer reading")
 }
 
 ///|
@@ -173,8 +173,8 @@ test "a table too big to show, from a drive, 下载 pressed on it: its bar's 下
   let reading = bar_now()
   assert_true(reading.length() == 1 && reading[0].disabled, msg="its bar's 下载 there, held off: \{reading}")
   assert_true(
-    t.find("正在打开") is Some(_) && t.all(@ui.Role::Button, label="下载").length() == 1,
-    msg="its facts reading in 下载's place: \{t.all(@ui.Role::Button, label="下载")}",
+    t.all(@ui.Role::Button, label="正在读取").length() == 1 && t.all(@ui.Role::Button, label="下载").length() == 1,
+    msg="its facts' 下载 at work, saying 正在读取: \{t.all(@ui.Role::Button, label="下载")}",
   )
   for done in held {
     done(Ok(({ "total": Json::number(1024.0) }, Bytes::make(1024, b'a'))))

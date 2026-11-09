@@ -1,12 +1,12 @@
 // Pages open what they open through the shell (sfbase's Shell: @sfbase.open_page, open_detail); where it goes is the
-// layout's at that moment (docs/architecture.md, the pane table), never the page's.
+// layout's at that moment (the pane table), never the page's.
 
 ///|
 /// The fixture's chat open in a window `w` × `h` of `platform`, and what it is over.
 fn open_tester(w : Double, h : Double, platform : Int) -> (@ui.Tester, Source, ChatRef) {
   new_run()
   let src = fixture("chat")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
   t.run_for(@ui.move_most_ms)

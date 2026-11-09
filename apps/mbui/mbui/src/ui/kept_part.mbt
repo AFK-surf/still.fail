@@ -1,6 +1,6 @@
 // A part kept as its nodes (Ctx::kept_part): what the view builds in it is kept as the nodes it built, under a watch of
 // its own, and built again only as what it read changes, what it is built from besides (`key`) does, or what is no
-// signal came (kept_nodes.mbt). `own`: an island (docs/retained.md, the way there's 3), kept whatever else the frame
+// signal came (kept_nodes.mbt). `own`: an island (the way there's 3), kept whatever else the frame
 // built anew.
 //
 // What a build reads of time is read as signals here (KeptClock): the frame, where what it shows changes each frame (a
@@ -12,13 +12,11 @@
 ///|
 priv struct PartsRun {
   mut ctx : Ctx?
-  /// the runtime's steps as the last frame began (an event of its own since then is one from outside)
-  mut steps : Int
 }
 
 ///|
 // kept across runs: the run it holds is compared with the frame's as each frame begins (parts_frame_start)
-let parts_run : PartsRun = { ctx: None, steps: -1 }
+let parts_run : PartsRun = { ctx: None }
 
 /// How many events have come from outside the hand: an input other than a pointer
 /// moved or a wheel turned, a message, a host's answer, a step of the runtime's fibers or timers, a test's draw.
@@ -41,20 +39,20 @@ pub fn came_from_outside() -> Unit {
 }
 
 ///|
-/// A list's rows laid on the device's pixels as a host lays them (Ctx::rows_on_grid), from now on, or not (as every
-/// frame of a Tester's was always laid out).
-pub fn Tester::keep_parts(self : Tester, on : Bool) -> Unit {
-  ignore(self)
+/// A list's rows laid on the device's pixels as every platform's host lays them (Ctx::rows_on_grid), from now on, or
+/// not (a host that sets them anywhere, as a Tester's fake host does unless told).
+pub fn Tester::set_rows_on_pixels(self : Tester, on : Bool) -> Unit {
+  self.fake.rows_on_pixels = on
   // (how frames are built changed by the test, a list's rows set on the pixels with it: the next built whole)
-  if rows_grid_test.val != on {
+  if rows_on_pixels_said.val != (if on { 1 } else { 0 }) {
+    rows_on_pixels_said.val = -1
     test_stepped()
   }
-  rows_grid_test.val = on
 }
 
 ///|
-/// A frame begins: what is kept of another run forgotten; the runtime's steps since the last frame an event from
-/// outside.
+/// A frame begins: what is kept of another run forgotten. (A fiber's step is no event from outside: what it changes
+/// it says by the signals it sets, and only what reads them is built again.)
 fn parts_frame_start(c : Ctx) -> Unit {
   match parts_run.ctx {
     Some(was) if physical_equal(was, c) => ()
@@ -63,11 +61,6 @@ fn parts_frame_start(c : Ctx) -> Unit {
       parts_run.ctx = Some(c)
     }
   }
-  let steps = fx.val.steps
-  if steps != parts_run.steps {
-    parts_run.steps = steps
-    outside_came()
-  }
 }
 
 ///|
@@ -75,12 +68,16 @@ fn parts_frame_start(c : Ctx) -> Unit {
 /// did read are waited for.
 fn parts_frame_end(c : Ctx) -> Unit {
   rows_nodes_end(c)
+  c.list_hand_end()
   clock_frame_end(c)
+  // (what the frame no longer built told so: Ctx::on_unbuilt)
+  unbuilt_told(c)
 }
 
 ///|
 fn parts_forget() -> Unit {
   kept_clock.dues.clear()
+  unbuilt_watch.clear()
 }
 
 /// What `body` builds, in a box of its own filling the one being built (out of the flow: the one being built laid out
@@ -99,12 +96,18 @@ pub fn Ctx::kept_part(
   body : () -> Unit,
   read_out? : Bool = false,
   own? : Bool = false,
+  rows_stay? : Bool = false,
+  typed_stays? : Bool = false,
   loc~ : SourceLoc,
 ) -> Unit {
   // kept as its nodes, under a watch of its own (kept_nodes.mbt); `own`: built from its key and what it reads alone,
-  // nothing handed it as what builds it was built, so kept whatever else the frame built anew (docs/retained.md, the
-  // way there's 3: an island)
-  self.part_nodes(id, key, body, read_out, own~, made_at=loc)
+  // nothing handed it as what builds it was built, so kept whatever else the frame built anew (the
+  // way there's 3: an island). `rows_stay`: a part in what is built again: built from its key and what it reads alone as
+  // well, and the rows of the lists in it go on as it does (a frame built anew builds a list's rows anew otherwise).
+  // `typed_stays`: a part beside a field in its old view, kept with its lists' rows through a frame built anew for what
+  // was typed into that field alone (view_host.mbt typed_part), built anew for anything else that comes: what it reads
+  // that is no signal is not what is typed there
+  self.part_nodes(id, key, body, read_out, own~, rows_stay~, typed_stays~, made_at=loc)
 }
 
 ///|
@@ -224,7 +227,7 @@ pub fn Ctx::shows_until(self : Ctx, t : Double) -> Unit {
 /// read a moment come.
 fn clock_frame_start(t : Double) -> Unit {
   @signals.start_batch()
-  kept_clock.frame.set(@signals.untracked(fn() { kept_clock.frame.get() }) + 1)
+  kept_clock.frame.set(kept_clock.frame.untracked() + 1)
   let dues = kept_clock.dues
   let mut n = 0
   while n < dues.length() && dues[n].at <= t {

@@ -12,7 +12,7 @@ export const shell = style({
       gridTemplateColumns: "var(--sidebar-w, 240px) minmax(0, 1fr)",
       selectors: {
         "[data-sidebar=\"closed\"] &": { gridTemplateColumns: "0px minmax(0, 1fr)" },
-        // A workspace's: the rail (Rail.tsx) and the sidebar beside it in one block (dock), which closes to the rail.
+        // A workspace's: the rail and the sidebar beside it in one block (dock), which closes to the rail.
         "&[data-rail]": { gridTemplateColumns: "calc(56px + var(--sidebar-w, 240px)) minmax(0, 1fr)" },
         "[data-sidebar=\"closed\"] &[data-rail]": { gridTemplateColumns: "56px minmax(0, 1fr)" },
       },
@@ -63,7 +63,7 @@ export const dock = style({
         // Over the page while it moves too: opened from shown a while, it was under the page (no longer closed) at once,
         // the part reaching over the page cut off until the page had moved out from under it.
         "[data-sidebar-moving] &": { zIndex: 20 },
-        // Folded but shown a while (Rail.tsx peekSidebar): the bar reaching over the page's column as wide as the rail
+        // Folded but shown a while: the bar reaching over the page's column as wide as the rail
         // and the sidebar (its margin, eased as the bar's others), the page moved aside under it (main, below), and a
         // floating panel's shadow.
         '[data-sidebar="closed"][data-sidebar-peek] &': {
@@ -96,7 +96,7 @@ export const main = style({
     },
     "(min-width: 701px)": {
       selectors: {
-        // Out of the way of a folded sidebar shown a while (Rail.tsx peekSidebar), as far as what it shows needs and
+        // Out of the way of a folded sidebar shown a while, as far as what it shows needs and
         // the room on its right allows (--peek-shift), as wide as it was: moved, not laid out anew, so nothing in it
         // wraps differently (moved with the bar, brand.tsx moveSidebar). Its own place, not a transform: what is fixed
         // in it stays by the window.

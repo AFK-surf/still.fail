@@ -1,8 +1,9 @@
 // Markdown read into the nodes markdown.ts makes its tree of (mdast's, as far as it reads them), by markdown-it.
 // micromark read it before: as GitHub's flavour, the same, but in Hermes (the phones' engine, which has no JIT) at
-// ~370 000 characters a second on a Mac Studio, a chat's page of agents' replies ~0.2 s; markdown-it reads ten times
-// as fast there (bench/md-parse.ts). What it reads as micromark's GFM did: tables, strikethrough with one tilde or
-// two, task lists; raw HTML left out; links as written (not encoded, none refused: a client keeps what it may open);
+// a substantial share of opening a chat; markdown-it is faster in that engine (bench/md-parse.ts). What it reads as
+// micromark's GFM did, save one thing: tables, strikethrough with two tildes (GFM's one tilde is words here: a
+// range written "12~20" next to "100~300" struck everything between them), task lists; raw HTML left out; links as
+// written (not encoded, none refused: a client keeps what it may open);
 // formulas in `$$` fences and `\[ \]` blocks, `\( \)` in a line (a `$` in prose is a dollar).
 //
 // The nodes say where in the text they stand where markdown.ts reads its runs from (`position`): a block by its lines,
@@ -31,21 +32,21 @@ reader.inline.ruler.before("escape", "math_paren", mathParen);
 const interrupts = { alt: ["paragraph", "reference", "blockquote", "list"] };
 reader.block.ruler.before("fence", "math_fence", mathFence, interrupts);
 reader.block.ruler.before("fence", "math_bracket", mathBracket, interrupts);
+const gfmTable = (reader.block.ruler as J).__rules__.find((r: J) => r.name === "table").fn;
+reader.block.ruler.at("table", mathTable, { alt: ["paragraph", "reference"] });
 
 const isSpace = (c: number) => c === 0x20 || c === 0x09;
 
-// ── strikethrough as GFM has it: a run of one tilde or two, closed by a run of as many ──
+// ── strikethrough: a run of two tildes, closed by a run of two (one or three or more: words) ──
 
-const ONE = 0x7e;
-const TWO = 0x7e7e;
+const TILDE = 0x7e;
 
 function tilde(state: J, silent: boolean): boolean {
-  if (silent || state.src.charCodeAt(state.pos) !== ONE) return false;
+  if (silent || state.src.charCodeAt(state.pos) !== TILDE) return false;
   const scanned = state.scanDelims(state.pos, true);
   const token = state.push("text", "", 0);
   token.content = "~".repeat(scanned.length);
-  // (three or more: words)
-  if (scanned.length <= 2) state.delimiters.push({ marker: scanned.length === 1 ? ONE : TWO, length: 0, token: state.tokens.length - 1, end: -1, open: scanned.can_open, close: scanned.can_close });
+  if (scanned.length === 2) state.delimiters.push({ marker: TILDE, length: 0, token: state.tokens.length - 1, end: -1, open: scanned.can_open, close: scanned.can_close });
   state.pos += scanned.length;
   return true;
 }
@@ -53,7 +54,7 @@ function tilde(state: J, silent: boolean): boolean {
 function tildePairs(state: J): boolean {
   const pairs = (delimiters: J[]) => {
     for (const open of delimiters) {
-      if ((open.marker !== ONE && open.marker !== TWO) || open.end === -1) continue;
+      if (open.marker !== TILDE || open.end === -1) continue;
       const close = delimiters[open.end];
       for (const [d, type, nesting] of [[open, "s_open", 1], [close, "s_close", -1]] as const) {
         const token = state.tokens[d.token];
@@ -72,7 +73,7 @@ function tildePairs(state: J): boolean {
 
 // ── formulas ──
 
-/// `$$` fenced, as a code fence is (its meta without a `$`).
+/// `$$` alone on its line, fenced as a code fence is.
 function mathFence(state: J, startLine: number, endLine: number, silent: boolean): boolean {
   let pos = state.bMarks[startLine] + state.tShift[startLine];
   let max = state.eMarks[startLine];
@@ -83,7 +84,8 @@ function mathFence(state: J, startLine: number, endLine: number, silent: boolean
   if (size < 2) return false;
   const markup = state.src.slice(mem, pos);
   const params = state.src.slice(pos, max);
-  if (params.includes("$")) return false;
+  // (words after it: the formula starts there, mathBracket)
+  if (params.trim() !== "") return false;
   if (silent) return true;
   let next = startLine;
   let closed = false;
@@ -113,29 +115,34 @@ function mathFence(state: J, startLine: number, endLine: number, silent: boolean
 /// `\[` at a line's start, to `\]` with nothing after it on its line; a backslash takes the character after it with it
 /// (`\\]` closes nothing). It interrupts a paragraph on its opening alone, as micromark's did; open, it is no formula
 /// (its `\[` an escaped bracket), nor where a line of it is not its container's (a lazy line, one left of a list).
+/// `$$` read so too where the formula starts on its line (`$$x$$`, `$$x` … `y$$`), as agents write it: a `$$` alone
+/// on its line is a fence (mathFence). Its opening interrupts a paragraph only closed (`$$5 和 $10` stays words).
 function mathBracket(state: J, startLine: number, endLine: number, silent: boolean): boolean {
   const src: string = state.src;
   const first = state.bMarks[startLine] + state.tShift[startLine];
-  if (state.sCount[startLine] - state.blkIndent >= 4 || src.charCodeAt(first) !== 0x5c || src.charCodeAt(first + 1) !== 0x5b) return false;
-  if (silent) return true;
+  if (state.sCount[startLine] - state.blkIndent >= 4) return false;
+  const dollars = src.startsWith("$$", first);
+  if (dollars ? src.charCodeAt(first + 2) === 0x24 || src.slice(first + 2, state.eMarks[startLine]).trim() === "" : src.charCodeAt(first) !== 0x5c || src.charCodeAt(first + 1) !== 0x5b) return false;
+  if (silent && !dollars) return true;
   let value = "";
   let line = startLine;
   let at = first + 2;
   let end = state.eMarks[line];
   for (;;) {
     while (at < end) {
+      if (dollars ? src.startsWith("$$", at) : src.charCodeAt(at) === 0x5c && src.charCodeAt(at + 1) === 0x5d) {
+        let after = at + 2;
+        while (after < end && isSpace(src.charCodeAt(after))) after++;
+        if (after < end) return false;
+        if (silent) return true;
+        state.line = line + 1;
+        const token = state.push("math_bracket", "math", 0);
+        token.content = value;
+        token.markup = dollars ? "$$" : "\\[";
+        token.map = [startLine, state.line];
+        return true;
+      }
       if (src.charCodeAt(at) === 0x5c) {
-        if (src.charCodeAt(at + 1) === 0x5d) {
-          let after = at + 2;
-          while (after < end && isSpace(src.charCodeAt(after))) after++;
-          if (after < end) return false;
-          state.line = line + 1;
-          const token = state.push("math_bracket", "math", 0);
-          token.content = value;
-          token.markup = "\\[";
-          token.map = [startLine, state.line];
-          return true;
-        }
         const step = Math.min(2, end - at);
         value += src.slice(at, at + step);
         at += step;
@@ -180,6 +187,51 @@ function mathParen(state: J, silent: boolean): boolean {
     at += at + 1 < state.posMax && src.charCodeAt(at + 1) !== 0x0a ? 2 : 1;
   }
   return false;
+}
+
+/// A table, its cells split at bars outside formulas: `| \(|x| \le 1\) | 2 |` is two cells, not four. Its rows'
+/// bars within a `\(…\)` are hidden from GFM's own rule (as NUL, which no text read has: markdown-it reads it as
+/// U+FFFD), and its cells given them back.
+function mathTable(state: J, startLine: number, endLine: number, silent: boolean): boolean {
+  const src: string = state.src;
+  // (no line of bars and dashes under it: no table, and nothing to look through)
+  const under = startLine + 1 < endLine ? src.slice(state.bMarks[startLine + 1] + state.tShift[startLine + 1], state.eMarks[startLine + 1]) : "";
+  if (!/^[-:|][-:|\s]*$/.test(under)) return false;
+  let end = startLine;
+  while (end < endLine && state.bMarks[end] + state.tShift[end] < state.eMarks[end]) end++;
+  const from = state.bMarks[startLine];
+  const to = state.eMarks[Math.max(startLine, end - 1)];
+  let hidden = "";
+  let last = from;
+  for (let at = from; at < to; ) {
+    if (src.charCodeAt(at) !== 0x5c) {
+      at++;
+      continue;
+    }
+    if (src.charCodeAt(at + 1) !== 0x28) {
+      at += 2;
+      continue;
+    }
+    let close = at + 2;
+    while (close < to && src.charCodeAt(close) !== 0x0a && !(src.charCodeAt(close) === 0x5c && src.charCodeAt(close + 1) === 0x29)) close += src.charCodeAt(close) === 0x5c ? 2 : 1;
+    if (close >= to || src.charCodeAt(close) === 0x0a) {
+      at = close;
+      continue;
+    }
+    hidden += src.slice(last, at) + src.slice(at, close).replaceAll("|", "\0");
+    last = at = close + 2;
+    hidden += "\\)";
+  }
+  if (hidden === "") return gfmTable(state, startLine, endLine, silent);
+  const first = state.tokens.length;
+  state.src = src.slice(0, from) + hidden + src.slice(last);
+  try {
+    if (!gfmTable(state, startLine, endLine, silent)) return false;
+  } finally {
+    state.src = src;
+  }
+  for (let i = first; i < state.tokens.length; i++) if (state.tokens[i].type === "inline") state.tokens[i].content = state.tokens[i].content.replaceAll("\0", "|");
+  return true;
 }
 
 // ── tokens into nodes ──

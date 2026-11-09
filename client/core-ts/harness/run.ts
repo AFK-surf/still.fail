@@ -1,11 +1,11 @@
-// The side-by-side run (docs/core-ts.md, 怎么验证): the same script of UI messages, against the same fake still.fail
+// The side-by-side run (怎么验证): the same script of UI messages, against the same fake still.fail
 // cloud (harness/cloud.ts, started afresh for each), given to the Rust core (its Node addon, built from a commit that still has it: 7091dc84) and to the TS
 // core (hosts/node.ts); every message each sends to the UI is recorded per step and compared.
 //
 //   node harness/run.ts <path to stillfail_core.node> [--only rust|ts] [--keep]
 //
 // The Rust addon: `cargo build --release -p stillfail-core-node --features testing` in client/ (from a
-// commit that still has the Rust core, docs/core-ts.md); its stations then answer at the cloud's origin, as the TS
+// commit that still has the Rust core); its stations then answer at the cloud's origin, as the TS
 // core's do here (harness/station.ts).
 //
 // Normalized, as truly nondeterministic: the PKCE `state` and `code_challenge` in auth.begin's url (random), a

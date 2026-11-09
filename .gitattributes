@@ -3,3 +3,4 @@
 * text=auto eol=lf
 *.cmd text eol=crlf
 *.bat text eol=crlf
+station/src/screens/scrcpy-server binary

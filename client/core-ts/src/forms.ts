@@ -29,15 +29,15 @@ function overviewOf(store: Store, station: string): J {
   return v === undefined ? null : v.ok;
 }
 
-// ── an automatic-decision rule (decision_form.rs) ──
+// ── an automatic-decision rule ──
 
-type DecisionDraft = { owner: ClientId; value: J; pickedModel: string | null; pending: boolean; watch: Watch };
+type DecisionDraft = { owner: ClientId; value: J; pickedModel: string | null; pending: boolean };
 
 /// The model control, with only verified decision candidates.
 function modelPick(overview: J, value: J, pickedModel: string | null): J {
   const options = arr(get(get(overview, "automaticDecisions"), "models"))
     .filter((m) => typeof get(m, "id") === "string")
-    .map((m) => ({ model: m.id, name: m.name ?? null, ids: [m.id], family: model.family(m.id), maker: present.maker(m.id), runtimes: [], efforts: {}, accounts: {} }))
+    .map((m) => ({ model: m.id, name: m.name ?? null, ids: [m.id], family: model.family(m.id), maker: present.maker(m.id, get(get(overview, "modelMakers"), m.id)), runtimes: [], efforts: {}, accounts: {} }))
     .sort((a, b) => model.compareOrder(a.model, b.model));
   const m = str(value.model);
   const picked = pickedModel ?? m;
@@ -76,7 +76,6 @@ export class DecisionForms {
   disconnect(owner: ClientId): void {
     for (const [k, d] of [...this.#drafts]) {
       if (d.owner !== owner) continue;
-      d.watch.drop();
       this.#drafts.delete(k);
     }
   }
@@ -108,7 +107,6 @@ export class DecisionForms {
     const existing = this.#drafts.get(key);
     if (existing && existing.owner !== owner) throw CoreError.invalid(t("core-misc.decisionForm.notYours"));
     if (action === "drop") {
-      existing?.watch.drop();
       this.#drafts.delete(key);
       this.#store.invalidate(topic);
       return null;
@@ -117,8 +115,7 @@ export class DecisionForms {
     if (!d) {
       const saved = this.#saved(station);
       const value = { enabled: get(saved, "enabled") === true, model: str(get(saved, "model")), dirty: false, pending: false };
-      const watch = this.#store.watch({ topic: "overview", station }, () => this.#store.invalidate(topic));
-      d = { owner, value, pickedModel: null, pending: false, watch };
+      d = { owner, value, pickedModel: null, pending: false };
       this.#drafts.set(key, d);
     }
     if (action === "edit") {
@@ -169,7 +166,7 @@ export class DecisionForms {
 // ── the archive policy, as one page edits it ──
 
 type PolicyOption = { key: string; id: string | null; name: string; rubric: string; archive: boolean };
-type PolicyDraft = { owner: ClientId; policy: string; options: PolicyOption[]; next: number; dirty: boolean; pending: boolean; watch: Watch };
+type PolicyDraft = { owner: ClientId; policy: string; options: PolicyOption[]; next: number; dirty: boolean; pending: boolean };
 
 /// The station's policy as it is now (its overview's), for a draft to start from and to tell whether it changed.
 function savedPolicy(store: Store, station: string): { policy: string; options: Omit<PolicyOption, "key">[] } | null {
@@ -195,7 +192,6 @@ export class PolicyForms {
   disconnect(owner: ClientId): void {
     for (const [k, d] of [...this.#drafts]) {
       if (d.owner !== owner) continue;
-      d.watch.drop();
       this.#drafts.delete(k);
     }
   }
@@ -221,15 +217,13 @@ export class PolicyForms {
     const existing = this.#drafts.get(key);
     if (existing && existing.owner !== owner) throw CoreError.invalid(t("core-misc.policy.notYours"));
     if (action === "drop") {
-      existing?.watch.drop();
       this.#drafts.delete(key);
       this.#store.invalidate(topic);
       return null;
     }
     let d = existing;
     if (!d) {
-      const watch = this.#store.watch({ topic: "overview", station }, () => this.#store.invalidate(topic));
-      d = { owner, policy: "", options: [], next: 0, dirty: false, pending: false, watch };
+      d = { owner, policy: "", options: [], next: 0, dirty: false, pending: false };
       this.#reset(d, station);
       this.#drafts.set(key, d);
     }
@@ -294,7 +288,7 @@ export class PolicyForms {
   }
 }
 
-// ── a Slack token form (slack_tokens.rs) ──
+// ── a Slack token form ──
 
 type TokenDraft = { owner: ClientId; revision: number; checking: boolean; input: J; verified: J; errors: string[] };
 
@@ -389,7 +383,7 @@ export class Tokens {
   }
 }
 
-// ── the Slack connection wizard (connect_flow.rs) ──
+// ── the Slack connection wizard ──
 
 export const pickOf = (station: string, form: string): Topic => ({ topic: "pick", station, of: `connect-new:${form}` });
 export const tokensOf = (station: string, form: string): Topic => ({ topic: "slackTokens", station, form });
@@ -406,6 +400,12 @@ const feishuKey = (f: J) => JSON.stringify([str(f.appId).trim(), str(f.appSecret
 
 const FEISHU_STEPS = ["feishuBind", "feishuWay", "feishuScan", "feishuApp"];
 
+/// The Comma path's own: its agents' model, then the line Comma's still.fail plugin shows (`comma <server> <token>`).
+const COMMA_STEPS = ["commaBind", "commaLine"];
+
+/// Whether `line` reads as the line Comma shows: `comma`, Comma's address, the token.
+const commaLineReady = (line: string) => /^comma\s+https?:\/\/\S+\s+[A-Za-z0-9_-]{8,512}$/.test(line.trim());
+
 function initial(input: J): J {
   const name = brand.name();
   const resume = typeof get(input, "resume") === "string";
@@ -414,6 +414,7 @@ function initial(input: J): J {
     step: resume ? "install" : "platform",
     platform: resume ? "slack" : null,
     feishu: feishuBlank(),
+    comma: { line: "", error: null },
     resume: get(input, "resume") ?? null,
     mobile: get(input, "mobile") === true,
     team: null,
@@ -432,14 +433,14 @@ function initial(input: J): J {
     config: "",
     mode: "multi-session",
     requireMention: true,
+    threads: false,
   };
 }
 
 type FlowDraft = { owner: ClientId; generation: number; pending: boolean; value: J; watches: Watch[] };
 
-/// What the wizard has done beside its own calls: a Feishu bot being made let go of (`cancel`, the station's
-/// registration), and the overview changed (`ready`: its bot made, the connect is added without being asked).
-export type FlowHooks = { cancel(station: string, registration: string): void; ready(topic: Topic): void };
+/// A Feishu bot has been made: older stations still need the client to ask for the connect to be added.
+export type FlowHooks = { ready(topic: Topic): void };
 
 /// A registration's state as the station follows it (the overview), else as it was started.
 function registrationOf(overview: J, f: J): J {
@@ -459,7 +460,7 @@ export class ConnectFlows {
 
   readonly #hooks: FlowHooks;
 
-  constructor(store: Store, pick: PickOf, clearPick: (station: string, form: string) => void, hooks: FlowHooks = { cancel: () => {}, ready: () => {} }) {
+  constructor(store: Store, pick: PickOf, clearPick: (station: string, form: string) => void, hooks: FlowHooks = { ready: () => {} }) {
     this.#store = store;
     this.#pick = pick;
     this.#clearPick = clearPick;
@@ -475,10 +476,10 @@ export class ConnectFlows {
     }
     const station = topic.station as string;
     const form = topic.form as string;
+    // (kept up while it is open, the station's tokens with them; what it shows of them is read as it is made, store.ts)
     const watches = [{ topic: "overview", station } as Topic, pickOf(station, form), tokensOf(station, form)].map((s) =>
       this.#store.watch(s, () => {
-        this.#store.invalidate(topic);
-        if (s.topic === "overview") this.#hooks.ready(topic);
+        if (s.topic === "overview" || s.topic === "pick") this.#hooks.ready(topic);
       }),
     );
     this.#drafts.set(key, { owner, generation: ++this.#next, pending: false, value: initial(input), watches });
@@ -489,7 +490,6 @@ export class ConnectFlows {
     const key = topicKey(topic);
     const d = this.#drafts.get(key);
     if (d && d.owner === owner) {
-      this.#letGo(topic, d);
       this.#drafts.delete(key);
       for (const w of d.watches) w.drop();
       this.#clearPick(topic.station as string, topic.form as string);
@@ -506,19 +506,6 @@ export class ConnectFlows {
       this.drop(topic, owner);
     }
     return gone;
-  }
-
-  /// Its Feishu bot still waiting to be made by scanning: the station stops waiting for it.
-  #letGo(topic: Topic, d: FlowDraft): void {
-    const station = topic.station as string;
-    let overview: J = null;
-    try {
-      overview = overviewOf(this.#store, station);
-    } catch {
-      // Not read: as it was started.
-    }
-    const r = registrationOf(overview, d.value.feishu);
-    if (r !== null && get(r, "state") === "waiting") this.#hooks.cancel(station, str(get(r, "id")));
   }
 
   #own(topic: Topic, owner: ClientId): FlowDraft {
@@ -539,10 +526,15 @@ export class ConnectFlows {
       if (v !== undefined && v !== null && typeof v !== "string") throw CoreError.invalid(t("core-misc.params.not_text"));
     }
     if (get(patch, "config") !== undefined && typeof patch.config !== "string") throw CoreError.invalid(t("core-misc.connect.config_not_text"));
-    for (const field of ["adding", "requireMention"]) if (get(patch, field) !== undefined && typeof patch[field] !== "boolean") throw CoreError.invalid(t("core-misc.params.not_bool"));
+    for (const field of ["adding", "requireMention", "threads"]) if (get(patch, field) !== undefined && typeof patch[field] !== "boolean") throw CoreError.invalid(t("core-misc.params.not_bool"));
     if (get(patch, "mode") !== undefined && patch.mode !== "single-session" && patch.mode !== "multi-session") throw CoreError.invalid(t("core-misc.connect.no_such_mode"));
     const platform = get(patch, "platform");
-    if (platform !== undefined && platform !== "slack" && platform !== "feishu") throw CoreError.invalid(t("core-misc.connect.not_ready"));
+    if (platform !== undefined && platform !== "slack" && platform !== "feishu" && platform !== "comma") throw CoreError.invalid(t("core-misc.connect.not_ready"));
+    const comma = get(patch, "comma");
+    if (comma !== undefined) {
+      if (!isObject(comma) || (get(comma, "line") !== undefined && typeof comma.line !== "string")) throw CoreError.invalid(t("core-misc.params.not_text"));
+      if (typeof comma.line === "string") Object.assign(d.value.comma, { line: comma.line, error: null });
+    }
     const feishu = get(patch, "feishu");
     if (feishu !== undefined) {
       if (!isObject(feishu)) throw CoreError.invalid(t("core-misc.params.not_text"));
@@ -551,7 +543,7 @@ export class ConnectFlows {
       if (get(feishu, "way") !== undefined && feishu.way !== "scan" && feishu.way !== "app") throw CoreError.invalid(t("core-misc.connect.not_ready"));
       for (const field of ["way", "appId", "appSecret", "lark"]) if (get(feishu, field) !== undefined) d.value.feishu[field] = feishu[field];
     }
-    for (const field of ["team", "adding", "settings", "icon", "iconError", "config", "mode", "requireMention", "platform"]) if (get(patch, field) !== undefined) d.value[field] = patch[field];
+    for (const field of ["team", "adding", "settings", "icon", "iconError", "config", "mode", "requireMention", "threads", "platform"]) if (get(patch, field) !== undefined) d.value[field] = patch[field];
     if (typeof get(patch, "config") === "string") d.value.config = patch.config.trim();
     this.#store.invalidate(topic);
   }
@@ -563,7 +555,8 @@ export class ConnectFlows {
     const step = str(view.step, "team");
     const allowed =
       to === "back" ||
-      (step === "platform" && (target === "team" || (target === "feishuBind" && view.platforms.includes("feishu")))) ||
+      (step === "platform" && (target === "team" || (target === "feishuBind" && view.platforms.includes("feishu")) || (target === "commaBind" && view.platforms.includes("comma")))) ||
+      (step === "commaBind" && target === "commaLine" && view.canCreate === true) ||
       (step === "feishuBind" && target === "feishuWay" && view.canCreate === true) ||
       (step === "feishuWay" && target === "feishuApp") ||
       ((step === "feishuScan" || step === "feishuApp") && target === "feishuWay") ||
@@ -574,8 +567,7 @@ export class ConnectFlows {
     if (!allowed) throw CoreError.invalid(t("core-misc.connect.not_ready"));
     const d = this.#own(topic, owner);
     if (d.pending) throw CoreError.invalid(t("core-misc.connect.busy"));
-    if (step === "feishuScan" && target !== "feishuScan") this.#letGo(topic, d);
-    if (step === "platform") d.value.platform = target === "team" ? "slack" : "feishu";
+    if (step === "platform") d.value.platform = target === "team" ? "slack" : target === "commaBind" ? "comma" : "feishu";
     d.value.step = target;
     this.#store.invalidate(topic);
     return {};
@@ -596,14 +588,17 @@ export class ConnectFlows {
     const picked = p !== undefined ? p.ok : null;
     // A station without the Feishu connect (one from before it) says no `feishuRegistrations`: Slack's at once.
     const feishuOffered = Array.isArray(get(overview, "feishuRegistrations"));
-    v.platforms = feishuOffered ? ["slack", "feishu"] : ["slack"];
+    // One with the Comma connect says `comma` in its overview.
+    v.platforms = [...(feishuOffered ? ["slack", "feishu"] : ["slack"]), ...(get(overview, "comma") === true ? ["comma"] : [])];
     let step = str(v.step, "team");
     if (step === "platform" && !feishuOffered) step = "team";
     v.step = step;
     const feishu = v.platform === "feishu" && (FEISHU_STEPS.includes(step) || step === "done");
+    const comma = v.platform === "comma" && (COMMA_STEPS.includes(step) || step === "done");
     const mobile = v.mobile === true;
     const title = step === "platform" ? "core-misc.connect.title.platform"
-      : step === "feishuBind" ? "core-misc.connect.title.bind"
+      : step === "feishuBind" || step === "commaBind" ? "core-misc.connect.title.bind"
+      : step === "commaLine" ? "core-misc.connect.title.commaLine"
       : FEISHU_STEPS.includes(step) ? `core-misc.connect.title.${step}`
       : step === "team" && !mobile && teams.length === 0
         ? "core-misc.connect.title.get_token"
@@ -615,12 +610,15 @@ export class ConnectFlows {
               ? `core-misc.connect.title.${step}`
               : "core-misc.connect.title.bind";
     const slackOrder = step === "manual" || (step === "bind" && (v.madeId === null || v.madeId === undefined)) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
-    const order = feishu
+    const order = comma
+      ? ["platform", ...COMMA_STEPS]
+      : feishu
       ? ["platform", "feishuBind", "feishuWay", step === "feishuApp" ? "feishuApp" : "feishuScan"]
       : feishuOffered && typeof v.resume !== "string" ? ["platform", ...slackOrder] : slackOrder;
     const back =
       step === "platform" ? "close"
-        : step === "feishuBind" ? "platform"
+        : step === "feishuBind" || step === "commaBind" ? "platform"
+        : step === "commaLine" ? "commaBind"
         : step === "feishuWay" ? "feishuBind"
         : step === "feishuScan" || step === "feishuApp" ? "feishuWay"
         : step === "team"
@@ -649,6 +647,7 @@ export class ConnectFlows {
     v.made = made;
     v.pick = picked;
     v.feishu = feishuView(v.feishu, overview, d.pending);
+    v.comma = { line: str(v.comma?.line), ready: commaLineReady(str(v.comma?.line)), error: v.comma?.error ?? null };
     v.modeWords = present.modeWords(feishu ? "feishu" : null);
     v.sections = present.slackSections();
     return v;
@@ -664,12 +663,13 @@ export class ConnectFlows {
     if (action === "config" && (step === "token" || v.gettingToken === true) && v.configReady === true) [name, p] = ["slack.addConfigToken", { refreshToken: v.config }];
     else if (action === "make" && step === "app" && v.canMake === true) [name, p] = ["slack.makeApp", { team: get(v.chosen, "teamId") ?? null, settings: v.settings, icon: v.icon ?? null }];
     else if (action === "verify" && (step === "install" || step === "manual")) [name, p] = ["slack.verify", { ...tokenInput, install: get(v.made, "state") ?? null }];
-    else if (action === "register" && (step === "feishuWay" || (step === "feishuScan" && v.feishu.failed === true))) [name, p] = ["feishu.register", {}];
+    else if (action === "register" && v.canCreate === true && (step === "feishuWay" || (step === "feishuScan" && v.feishu.failed === true))) [name, p] = ["feishu.register", { bind: bindOf(v.pick), mode: v.mode, requireMention: v.requireMention, threads: v.threads }];
     else if (action === "verify" && step === "feishuApp" && v.feishu.canVerify === true) [name, p] = ["feishu.verify", feishuApp(v.feishu)];
     else if (action === "create" && v.canCreate === true && ((step === "feishuApp" && v.feishu.verified === true) || (step === "feishuScan" && get(v.feishu.registration, "state") === "done"))) {
       const app = step === "feishuApp" ? feishuApp(v.feishu) : { registration: get(v.feishu.registration, "id") };
-      [name, p] = ["feishu.createConnect", { feishu: app, bind: bindOf(v.pick), mode: v.mode, requireMention: v.requireMention }];
+      [name, p] = ["feishu.createConnect", { feishu: v.threads === true ? { ...app, threads: true } : app, bind: bindOf(v.pick), mode: v.mode, requireMention: v.requireMention }];
     }
+    else if (action === "create" && step === "commaLine" && v.canCreate === true && v.comma.ready === true) [name, p] = ["comma.createConnect", { line: v.comma.line.trim(), bind: bindOf(v.pick) }];
     else if (action === "create" && step === "bind" && v.canCreate === true && verified) {
       let slack: J = { ...tokenInput };
       if (typeof get(v.made, "state") === "string") slack = { appToken: tokenInput.appToken ?? null, install: v.made.state };
@@ -693,12 +693,25 @@ export class ConnectFlows {
     return d.owner;
   }
 
-  /// Its bot made by scanning and nothing tried with it yet: the connect is to be added now (once for each bot made).
+  /// A newer station may already have saved the bot even if the picker is no longer available. Older stations need a
+  /// create request once its app and the picker are ready.
   ready(topic: Topic): boolean {
     const d = this.#drafts.get(topicKey(topic));
     if (!d || d.pending || d.value.platform !== "feishu" || d.value.step !== "feishuScan") return false;
     let v: J;
     try {
+      const overview = overviewOf(this.#store, topic.station as string);
+      const r = registrationOf(overview, d.value.feishu);
+      const appId = get(r, "appId");
+      const saved = typeof appId === "string" && appId !== "" && get(r, "state") === "done"
+        ? arr(get(overview, "connects")).find((c) => get(c, "kind") === "feishu" && get(get(c, "feishu"), "appId") === appId)
+        : undefined;
+      if (typeof get(saved, "id") === "string") {
+        d.value.feishu.connect = saved.id;
+        d.value.step = "done";
+        this.#store.invalidate(topic);
+        return false;
+      }
       v = this.value(topic);
     } catch {
       return false;
@@ -715,6 +728,7 @@ export class ConnectFlows {
     d.pending = false;
     if (action === "create") d.value.feishu.creating = false;
     if ("err" in result && d.value.platform === "feishu" && (action === "create" || action === "register")) d.value.feishu.error = result.err.message;
+    if ("err" in result && d.value.platform === "comma" && action === "create") d.value.comma.error = result.err.message;
     if ("ok" in result) {
       const r = result.ok;
       if (action === "config") Object.assign(d.value, { team: get(r, "teamId") ?? null, config: "", adding: false, step: "app" });
@@ -733,6 +747,7 @@ export class ConnectFlows {
       else if (action === "verify" && get(r, "identity") !== undefined && r.identity !== null && Array.isArray(get(r, "errors")) && r.errors.length === 0) d.value.step = "bind";
     }
     this.#store.invalidate(topic);
+    if (d.value.platform === "feishu" && d.value.step === "feishuScan") this.#hooks.ready(topic);
     return true;
   }
 }
@@ -793,14 +808,14 @@ function feishuView(f: J, overview: J, pending: boolean): J {
   return out;
 }
 
-// ── the add-profile pages (profile_flow.rs) ──
+// ── the add-profile pages ──
 
-const usesNames = (u: providers.Uses) => ([[u.claude, "claude"], [u.codex, "codex"], [u.dsh, "dsh"], [u.grok, "grok"], [u.decision, "decision"]] as [boolean, string][]).filter(([on]) => on).map(([, id]) => id);
+const usesNames = (u: providers.Uses) => ([[u.claude, "claude"], [u.codex, "codex"], [u.dsh, "dsh"], [u.grok, "grok"], [u.agy, "agy"], [u.decision, "decision"]] as [boolean, string][]).filter(([on]) => on).map(([, id]) => id);
 const usesTextOf = present.usesText;
 const runtimeName = format.runtimeLabel;
 
 /// The runtimes a station runs only where its overview's `updates` lists them.
-const LISTED = ["dsh", "grok", "cursor", "devin", "hermes"];
+const LISTED = ["dsh", "grok", "cursor", "devin", "hermes", "agy"];
 
 /// The runtimes a station can run: Claude Code and Codex on any; DeepSeek Harness, Grok Build, Cursor and Devin each on one
 /// that lists its version (a station from before it does not, and is not offered it).
@@ -816,6 +831,7 @@ const PLANS: Record<string, { plan: string; provider: string }> = {
   grok: { plan: "SuperGrok", provider: "Grok" },
   cursor: { plan: "Cursor", provider: "Cursor" },
   devin: { plan: "Devin", provider: "Devin" },
+  agy: { plan: "Google AI", provider: "Google" },
 };
 const planOf = (runtime: string) => PLANS[runtime] ?? PLANS.claude!;
 
@@ -828,8 +844,8 @@ function usesOf(source: providers.Source, endpoint: string | null, protocol: str
 
 function tileOf(source: providers.Source, hasKey: boolean, hasPlan: boolean, runtimes: string[]): J {
   const kind = source.legacy === "opencode-go" ? "opencode-go" : source.legacy === "anthropic-api" ? "anthropic-api" : "api-provider";
-  // xAI's plan (SuperGrok) runs Grok Build.
-  const runtime = source.id === "openai" ? "codex" : source.id === "anthropic" ? "claude" : source.id === "xai" && hasPlan ? "grok" : null;
+  // xAI's plan (SuperGrok) runs Grok Build; Google's (a Google account signed in to) the Antigravity CLI.
+  const runtime = source.id === "openai" ? "codex" : source.id === "anthropic" ? "claude" : source.id === "xai" && hasPlan ? "grok" : source.id === "google" && hasPlan ? "agy" : null;
   // Kimi's plan (Kimi Code signed in to) runs Claude Code, besides what its open platform's key does.
   const planned = source.id === "moonshotai" && hasPlan && runtimes.includes("claude") ? ["claude"] : [];
   const uses = [...planned, ...usesOf(source, null, null, runtimes).filter((u) => !planned.includes(u))];
@@ -866,14 +882,15 @@ function planTile(runtime: string): J {
 /// each runtime it can run, `runtimes`). `console`: the station signs OpenCode Go in to the OpenCode Console (its plan); one
 /// that lists Kimi Code signs Kimi in to the person's Kimi account (Kimi's plan, as ChatGPT's is OpenAI's: one tile,
 /// the open platform's key beside it; Kimi Code has no tile of its own). xAI
-/// has a plan (SuperGrok) where the station runs Grok Build; Cursor and Devin, last of the makers, where it runs them.
+/// has a plan (SuperGrok) where the station runs Grok Build, Google one (its account signed in to) where it runs the
+/// Antigravity CLI; Cursor and Devin, last of the makers, where it runs them.
 export function groups(supported: string[] | null, runtimes: string[] = format.RUNTIMES, console = false): J[] {
   const listed = (id: string) => supported !== null && supported.includes(id);
   const out: J[] = [];
   for (const group of providers.GROUPS) {
     const tiles = providers.SOURCES.filter((s) => s.group === group && !providers.isChinaVariant(s.id) && s.id !== "kimi-code").flatMap((s) => {
       const hasKey = s.legacy !== undefined || listed(s.id);
-      const hasPlan = s.id === "openai" || s.id === "anthropic" || (s.id === "opencode-go" && console) || (s.id === "moonshotai" && listed("kimi-code")) || (s.id === "xai" && runtimes.includes("grok"));
+      const hasPlan = s.id === "openai" || s.id === "anthropic" || (s.id === "opencode-go" && console) || (s.id === "moonshotai" && listed("kimi-code")) || (s.id === "xai" && runtimes.includes("grok")) || (s.id === "google" && runtimes.includes("agy"));
       return hasKey || hasPlan ? [tileOf(s, hasKey, hasPlan, runtimes)] : [];
     });
     if (group === "labs") for (const r of PLAN_ALONE) if (runtimes.includes(r)) tiles.push(planTile(r));
@@ -984,8 +1001,7 @@ function profileView(station: string, draft: J, overview: J, manages = false): J
   return out;
 }
 
-/// `watch`: the station's overview and its workspace (the viewer's role: whether they may install a runtime).
-type ProfileDraft = { owner: ClientId; value: J; pending: boolean; watch: Watch[] };
+type ProfileDraft = { owner: ClientId; value: J; pending: boolean };
 
 export class ProfileFlows {
   readonly #store: Store;
@@ -998,7 +1014,6 @@ export class ProfileFlows {
   disconnect(owner: ClientId): void {
     for (const [k, d] of [...this.#drafts]) {
       if (d.owner !== owner) continue;
-      for (const w of d.watch) w.drop();
       this.#drafts.delete(k);
     }
   }
@@ -1017,15 +1032,13 @@ export class ProfileFlows {
     const existing = this.#drafts.get(key);
     if (existing && existing.owner !== owner) throw CoreError.invalid(t("core-views.flow.not_yours"));
     if (action === "drop") {
-      for (const w of existing?.watch ?? []) w.drop();
       this.#drafts.delete(key);
       this.#store.invalidate(topic);
       return null;
     }
     let d = existing;
     if (!d) {
-      const watch = [{ topic: "overview", station }, { topic: "workspace", workspace: ofAddress(station) }].map((t) => this.#store.watch(t, () => this.#store.invalidate(topic)));
-      d = { owner, value: blank(), pending: false, watch };
+      d = { owner, value: blank(), pending: false };
       this.#drafts.set(key, d);
     }
     if (action === "edit") {

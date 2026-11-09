@@ -1,4 +1,4 @@
-// The agents' tools for the vault's secrets (docs/vault.md, agent 用密钥): secret_list, secret_use, secret_run, and
+// The agents' tools for the vault's secrets (agent 用密钥): secret_list, secret_use, secret_run, and
 // secret_save to ask to keep one (agent 存入). The value of a secret is never what a tool gives back: a command is run
 // with it, through the proxy, an ssh-agent or its environment, and the agent sees what the command said, with the value
 // hidden; one to keep is sealed to its owner's devices, printed by a command whose output the agent never sees, or typed
@@ -55,7 +55,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
         required: ["site"],
         additionalProperties: false,
       },
-      run: (key: string, args: Record<string, unknown>) =>
+      run: (key: string, args: Record<string, unknown>, signal?: AbortSignal) =>
         signIns.ask(key, {
           site: text(args, "site"),
           ...(text(args, "reason") ? { reason: text(args, "reason") } : {}),
@@ -64,7 +64,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
           ...(args.reask === true ? { reask: true } : {}),
           ...(args.done === true ? { done: true } : {}),
           ...(typeof args.stuck === "string" ? { stuck: args.stuck } : {}),
-        }),
+        }, signal),
     } satisfies Tool]),
     {
       name: "secret_list",
@@ -112,7 +112,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
       inputSchema: {
         type: "object",
         properties: {
-          name: { type: "string", description: "What it will be known by, to the person and agents (e.g. UniFi UX7 管理员, GitHub token)." },
+          name: { type: "string", description: "What it will be known by, to the person and agents (e.g. 测试服务登录, GitHub token)." },
           kind: { type: "string", enum: ["token", "login", "ssh_key", "file", "browser"], description: "token (an API key, a token), login (an account's password, with username), ssh_key (a private key), file (a credential that is a whole file, at most 64 KB: a kubeconfig, a service account's key, a certificate; given to commands as a file, its path in env), browser (a sign-in to websites: the cookies and passkeys of hosts, read from a browser; no value, command or path)." },
           reason: { type: "string", description: "Why it is worth keeping, for the person deciding, in the language they use." },
           command: { type: "string", description: "A command run here (sh -c, in your workspace) that prints the secret on standard output and nothing else (e.g. op read 'op://Personal/Ui/password'); what it prints is never shown to you." },
@@ -124,7 +124,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
           modes: { type: "array", items: { type: "string", enum: ["proxy", "ssh", "env", "file", "browser"] }, description: "How agents may be given it later; default proxy with hosts, else env (ssh for an SSH key, file for a file). proxy swaps a placeholder in HTTPS request headers to the hosts only." },
           hosts: { type: "array", items: { type: "string" }, description: "proxy: the hosts it may go to (e.g. api.github.com). browser: the sites the sign-in is for, each with its subdomains (e.g. github.com)." },
           browser: { type: "string", enum: ["chat", "station"], description: "browser: where the sign-in is read from: this chat's browser (default), or the station's own (sign-ins made before each chat had its own)." },
-          env: { type: "string", description: "The variable a command gets it in (e.g. GH_TOKEN, UX7_PASSWORD; a file's path: KUBECONFIG, GOOGLE_APPLICATION_CREDENTIALS)." },
+          env: { type: "string", description: "The variable a command gets it in (e.g. GH_TOKEN, SERVICE_PASSWORD; a file's path: KUBECONFIG, GOOGLE_APPLICATION_CREDENTIALS)." },
           station: { type: "string", description: "Another station of the workspace (its name or id) to run command on, where the password manager is signed in; default this one." },
         },
         required: ["name", "kind", "reason"],
@@ -162,7 +162,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
         required: ["request"],
         additionalProperties: false,
       },
-      run: (key, args) => secrets.reask(key, text(args, "request")),
+      run: (key, args, signal) => secrets.reask(key, text(args, "request"), signal),
     },
     {
       name: "secret_run",

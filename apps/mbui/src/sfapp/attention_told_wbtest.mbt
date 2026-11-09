@@ -73,7 +73,7 @@ fn trouble_again(close : (@ui.Tester, Double, Double) -> Unit, frames : Bool) ->
   let (x, y) = (bx + bw / 2.0, by + bh / 2.0)
   t.tap(x, y)
   t.frame()
-  let kept = trouble_said(calls, "ws1\nseen") == Some(Json::string("MBA 连不上了")) && t.find("MBA 连不上了") is Some(_)
+  let kept = trouble_said(calls, "ws1\nseen") == Some(Json::string("Maple 连不上了")) && t.find("Maple 连不上了") is Some(_)
   close(t, x, y)
   if frames {
     t.frame()
@@ -81,7 +81,7 @@ fn trouble_again(close : (@ui.Tester, Double, Double) -> Unit, frames : Bool) ->
   t.touch_at(0, x, y, t.time())
   t.touch_at(2, x, y, t.time())
   t.draw()
-  (t.find("MBA 连不上了") is Some(_), t.find("暂无待处理") is Some(_), kept, (app.nav.depth(), app.nav.top()) == page)
+  (t.find("Maple 连不上了") is Some(_), t.find("暂无待处理") is Some(_), kept, (app.nav.depth(), app.nav.top()) == page)
 }
 
 ///|

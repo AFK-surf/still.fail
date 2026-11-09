@@ -91,7 +91,7 @@ pub fn tip_node(
     rest.val = None
   }
   let set_open = fn(on : Bool) {
-    if on == @signals.untracked(fn() { open.get() }) {
+    if on == open.untracked() {
       return
     }
     let at = anchor.cause_at()
@@ -128,7 +128,7 @@ pub fn tip_node(
     let (over, pressed, focused, takes, says, held) = s
     let (was_over, was_focused, was_held) = before.val
     before.val = (over, focused, held)
-    if made.val && @signals.untracked(fn() { open.get() }) && takes && says &&
+    if made.val && open.untracked() && takes && says &&
       (held != Free || (!pressed && !shut.val)) &&
       ((over && !was_over) || (focused && !was_focused) || (held != Free && was_held == Free)) {
       @kit.tip_claim(owner)
@@ -155,7 +155,7 @@ pub fn tip_node(
     }
     if !says || !takes || shut.val || (!over && !focused) {
       set_open(false)
-    } else if focused || @signals.untracked(fn() { open.get() }) {
+    } else if focused || open.untracked() {
       set_open(true)
     } else if skip && at - tips.went_at <= @kit.tooltip_skip_ms {
       // (another of the layer's went a moment ago: at once)
@@ -180,8 +180,17 @@ pub fn tip_node(
   }
   // (let go by a finger that held it open: shown on a while, gone at the next press wherever it lands, or then)
   anchor.reacts(fn() { anchor.window_downs() }, fn(_) {
-    if @signals.untracked(fn() { hand.get() }) == Lifted {
+    if hand.untracked() == Lifted {
       (lifted_end.val)()
+      hand.set(Free)
+    }
+  })
+  // (opened on its control (TipHand::open): shown till the next tap, wherever it lands (the window's taps,
+  // View::window_taps: a press let go without dragging, as about's tapped_anywhere; a finger's tap that opened it told
+  // after its control took it, so the one after that); a press held, dragged or called off shuts it not)
+  let opened_at = Ref(0)
+  anchor.reacts(fn() { anchor.window_taps() }, fn(n) {
+    if hand.untracked() == Opened && n > opened_at.val + 1 {
       hand.set(Free)
     }
   })
@@ -201,8 +210,17 @@ pub fn tip_node(
       (lifted_end.val)()
       hand.set(Free)
     },
+    open: fn(tapped) {
+      (lifted_end.val)()
+      // (the tap opening it told the window after its control took it: the one after it shuts it; opened otherwise (a
+      // key, a screen reader), the next)
+      let now = @signals.untracked(fn() { anchor.window_taps() })
+      opened_at.val = if tapped { now } else { now - 1 }
+      hand.set(Opened)
+    },
+    opened: fn() { hand.untracked() == Opened },
     lift: fn() {
-      if @signals.untracked(fn() { hand.get() }) == Held {
+      if hand.untracked() == Held {
         hand.set(Lifted)
         lifted_end.val = anchor.at_moment(anchor.cause_at() + @kit.tooltip_lifted_ms, fn() { hand.set(Free) })
       }
@@ -211,11 +229,13 @@ pub fn tip_node(
 }
 
 ///|
-/// How a finger holds a tip open (tip_node): not at all, held down on its control, let go of it a moment ago.
+/// How a finger holds a tip open (tip_node): not at all, held down on its control, let go of it a moment ago, tapped open
+/// (till the next tap).
 enum TipHeld {
   Free
   Held
   Lifted
+  Opened
 } derive(Eq)
 
 ///|
@@ -227,6 +247,11 @@ pub struct TipHand {
   hold : () -> Unit
   lift : () -> Unit
   cancel : () -> Unit
+  /// shown till the next tap, wherever it lands (about's): after the finger's tap on its control that opens it where
+  /// `tapped` (told the window after its control took it), else (a key, a screen reader) the next one
+  open : (Bool) -> Unit
+  /// whether it is so opened now (not shut since: a tap after, `cancel`)
+  opened : () -> Bool
 }
 
 ///|
@@ -297,6 +322,7 @@ fn TipFade::shown(self : TipFade, t : @view.View) -> Double {
 ///|
 /// A tip's node `t` as tip_look draws it (tip_box, tip_words), beside `anchor` on `side`, saying `label`: its look and
 /// its words set as the window's theme says, as that changes; in and out as `fade` says.
+#callsite(autofill(loc))
 fn tip_look_node(
   t : @view.View,
   anchor : @view.NodeId,
@@ -306,6 +332,7 @@ fn tip_look_node(
   gap : Double,
   at_pointer : Bool,
   owner : @kit.TipOwner,
+  loc~ : SourceLoc,
 ) -> Unit {
   let theme = fn() { @ui.tree_theme() }
   let px = @ui.Space::px(S2_5)
@@ -346,12 +373,12 @@ fn tip_look_node(
   .says(By(fn() { Some(@view.said(Tooltip, label=label())) }))
   .hides(By(fn() { !@kit.tip_owns(owner) }))
   |> ignore
-  t.box(fn(w) {
+  t.box(made_for=loc, fn(w) {
     w
     .words(By(fn() { label() }))
     .words_look(By(fn() {
       let (size, line) = theme().text_size(Meta)
-      { size, weight: 400, line, wrap: true }
+      { size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false }
     }))
     .ink(By(fn() { theme().color(OnPrimary) }))
     .alpha(By(fn() {

@@ -1,4 +1,4 @@
-// The machine's files found by a search (docs/search.md): on macOS what Spotlight has indexed of the whole machine, its
+// The machine's files found by a search: on macOS what Spotlight has indexed of the whole machine, its
 // files' names and what they say (asked as a search comes, `mdfind`); elsewhere the home's files walked as a search
 // comes, for a few seconds, the nearest the top first (nothing is indexed). As the drive lends them: a member
 // who may write finds the whole machine, a read-only one only the folders their workspace pinned; the station's own

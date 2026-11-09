@@ -1,4 +1,4 @@
-// Every model a run can move to (ember apps/android shared/screens/SettingParts.kt ModelList), by series as the core
+// Every model a run can move to, by series as the core
 // lists them: a field to filter them by once there are more than 8, a series' name over its models where there is
 // more than one series, each model with its maker's mark, where it comes from after its name (ModelFrom), faint until
 // borrowed when it is not usable here yet; said so when none matches.
@@ -15,7 +15,7 @@ let model_list_page : @ui.Style = @ui.css("w=Full h=Full")
 let model_filter_room : @ui.Style = @ui.css("w=Full pt=S2 pb=S1")
 
 ///|
-/// A series' name (Controls.kt GroupLabel: 13, muted, 14 over it and 4 under), at the rows' words.
+/// A series' name (muted, 14 over it and 4 under), at the rows' words.
 // kept across runs: a value (no field of it changes)
 let model_group_room : @ui.Style = @ui.css("w=Full px=S5 pt=S3_5 pb=S1")
 
@@ -102,10 +102,10 @@ fn model_list(
             None => false
           }
           // not usable here till borrowed: its name in the muted grey, until it is the one picked (where it comes from as
-          // it is: at half it was 1.9 to 1, docs/ui-panels.md 对比度)
+          // it is: at half it was 1.9 to 1, mbui ui/contrast.mbt)
           let faint = text(mv, "availability") == "borrowable" && !is_on
           let from = field(mv, "fromStation")
-          if @sf.choice_row(c, key + "/" + model, is_on, text(mv, "name"), ink=if faint { t.p.muted } else { t.p.text }, lead=fn() { @sf.maker_mark(c, text(field(mv, "maker"), "id"), runtime, 18.0) |> ignore }, tag?=match from {
+          @sf.choice_row(c, key + "/" + model, is_on, text(mv, "name"), ink=if faint { t.p.muted } else { t.p.text }, lead=fn() { @sf.maker_mark(c, text(field(mv, "maker"), "id"), runtime, 18.0) |> ignore }, tag?=match from {
                 Some(Object(_)) =>
                   Some(fn() {
                     if @sf.has_station_mark(text(from, "emoji"), text(from, "icon")) {
@@ -115,9 +115,9 @@ fn model_list(
                     }
                   })
                 _ => None
-              }) {
-            on_pick(model)
-          }
+              },
+            on_press=fn() { on_pick(model) },
+          )
         })
       }
     }

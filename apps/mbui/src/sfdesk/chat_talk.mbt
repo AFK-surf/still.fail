@@ -1,4 +1,4 @@
-// A chat's talk on the desktop (ember web/src/Chat.tsx ChatShown): its list (sfpages chat_list.mbt) over the pane, the
+// A chat's talk on the desktop (still.fail web/src/Chat.tsx ChatShown): its list (sfpages chat_list.mbt) over the pane, the
 // bar over it, the composer at its foot, what is picked and dropped over them.
 
 ///|
@@ -56,11 +56,10 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
   }
   chat_drop(c, src, r.station, draft, pane)
   // words dragged in from another app and let go anywhere on the pane but a field (a field takes them where they
-  // were let go: ⌘F's, the composer's): into the composer's field at its caret, as a paste's; not an archived chat's,
-  // whose composer a press does not open either
+  // were let go: ⌘F's, the composer's): into the composer's field at its caret, as a paste's
   // files from this machine's Finder let go anywhere on it but another field, where it is a station: into the draft by
   // their station and path, as a row of the 文件 tab let go there (chat_drop); elsewhere as words, as above
-  if !(view is Some({ archived: true, .. })) && @sfbase.finder_by_station() {
+  if @sfbase.finder_by_station() {
     match c.paths_into(pane, @sfpages.composer_field_key) {
       Some(paths) => {
         let dragged = @sfbase.finder_dragged(src, paths)
@@ -71,30 +70,27 @@ pub fn chat_talk(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, pane : I
       None => ()
     }
   }
-  if !(view is Some({ archived: true, .. })) {
-    c.words_into(pane, @sfpages.composer_field_key)
-  }
+  c.words_into(pane, @sfpages.composer_field_key)
 }
 
 ///|
-/// ⌘↓ (chat.latest): the list to its end, following it again; short of the chat's end, its latest page.
+/// ⌘↓ (chat.latest), an action of the chat's as it is built, done at its key's moment: the list to its end, following
+/// it again; short of the chat's end, its latest page.
 fn latest_key(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
-  if @settings.action_pressed(c, prefs, "chat.latest") {
+  c.on_action("chat.latest", fn() {
     if !v.newer {
-      c.list_to_end(list_key(r))
+      // (asked of the list where it is built, as a row's way to the end asks it: the action runs outside the scope
+      // the list is built in, where its key names no list and the key did nothing, chat_keys_wbtest.mbt)
+      reading_of(r.station + "\u{1}" + r.session).end_asked = true
     } else {
       match v.thread {
-        Some(th) => {
-          let station = r.station
-          c.tell("chat.latest", fn() {
-            (src.call)("chat.latest", { "station": Json::string(station), "thread": Json::number(th) }, fn(_) {  })
-          })
-        }
+        Some(th) =>
+          (src.call)("chat.latest", { "station": Json::string(r.station), "thread": Json::number(th) }, fn(_) {  })
         None => ()
       }
     }
-  }
+    true
+  })
 }
 
 ///|

@@ -1,4 +1,4 @@
-// The directories and files people and agents name for the station, on a Mac (src/ops/places.ts; docs/drive.md "Folders
+// The directories and files people and agents name for the station, on a Mac (src/ops/places.ts "Folders
 // macOS protects"): one in a folder macOS protects is never touched by the station's thread: still.fail Helper is asked
 // (`files.stat`, a file copied with `files.read`), or, with no helper for it, a child process killed after its time; a
 // grant the helper lacks refuses it naming the folder and puts the helper's window up once (helper/grants.ts), the agent

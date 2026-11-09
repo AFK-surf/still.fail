@@ -1,4 +1,4 @@
-// The core's data (docs/core-db.md): one SQLite database per signed-in account (db/account.ts, its tables in
+// The core's data: one SQLite database per signed-in account (db/account.ts, its tables in
 // db/schema.ts), and the few values that are the device's (preferences, the changelog seen) in the host's storage.
 // What is a station's or a workspace's is kept in the database of the account that reaches it (Workspaces' owner);
 // what an account did is in its own. Signing out removes the account's database.
@@ -11,9 +11,11 @@ import type { Host, Sql, SqlRow, SqlValue } from "./host.ts";
 import { HostError, SqlError, sqlError } from "./host.ts";
 import type { MdStore } from "./markdown.ts";
 import { topicKey, type Topic } from "./protocol.ts";
-import { signal, tracking, type Source as ReactiveSource } from "./reactive.ts";
+import { Marks, signal, tracking, untracked, type Source as ReactiveSource } from "./reactive.ts";
 import type { Runner } from "./runtime.ts";
 import { equal, get, isObject, parseJson, toJsonBytes } from "./util.ts";
+import { worded } from "./chat-row.ts";
+import { current, tr } from "./i18n.ts";
 import { ofAddress } from "./workspace.ts";
 
 export { frozen };
@@ -288,6 +290,8 @@ export class Data {
   /// An older drawable Markdown tree was shown; its current reading is made in the background.
   onOldMd: ((station: string, of: string, text: string) => void) | null = null;
   readonly #chatsChanged: ((station: string, changes: RowChange[], first: boolean) => void)[] = [];
+  /// What reads what is kept of a thread's or a session's read Markdown (`mdStore`), by `station of`.
+  readonly #mdSeen = new Marks();
   /// Indexed reads can follow changes without loading a whole topic or keeping a network watch open.
   readonly #queryReads = new Map<string, { signal: ReactiveSource<number>; revision: number }>();
   readonly #listReads = new Map<string, { signal: ReactiveSource<boolean>; station: string; kind: ListKind }>();
@@ -316,6 +320,8 @@ export class Data {
   /// The most a database may take (KEPT); the logs a UI shows now, with how many show each; when room was last looked at.
   readonly #kept: number;
   readonly #shown = new Map<string, number>();
+  /// A room check already running for an account; writes during it do not start another one.
+  readonly #keeping = new Set<AccountDb>();
   #keptAt = -Infinity;
 
   constructor(host: Host, runner: Runner, options: DataOptions) {
@@ -528,6 +534,8 @@ export class Data {
     const slackStations = new Set<string>();
     for (const [table, station, id] of changes.logs.values()) {
       this.#tellQuery({ topic: "$log", table, station, id });
+      // (what is found of what was said on the station: a search's)
+      if (table === "entry") this.#tellQuery({ topic: "$said", station });
       if (table === "slack") {
         this.#tellQuery({ topic: "$slack-said", station, session: id });
         slackStations.add(station);
@@ -633,6 +641,8 @@ export class Data {
   /// A held topic's value, kept as it is (frozen: shared, the same object while it does not change); undefined while
   /// nothing is known of it. A list is loaded the first time it is asked for.
   shared(topic: Topic): unknown {
+    // (read in a computed, it is made again as the topic changes: #tell)
+    this.#readQuery(topic);
     const s = (k: string) => String(topic[k]);
     if (topic.topic === "prefs") return this.device.get("prefs", "device");
     if (topic.topic === "drivePlace") return this.device.get("drive_place", placeOf(topic));
@@ -790,9 +800,9 @@ export class Data {
     const list = Array.isArray(value) ? value : [];
     switch (topic.topic) {
       case "chatRows":
-        return db.setChats(station, false, list, at);
+        return db.setChats(station, false, list.map(inWords), at);
       case "archivedRows":
-        return db.setChats(station, true, list, at);
+        return db.setChats(station, true, list.map(inWords), at);
       case "sessions":
         return db.setSessions(station, list, at);
       case "threads":
@@ -859,6 +869,12 @@ export class Data {
 
   /// A held topic known no more (a draft sent or emptied).
   forgetTopic(topic: Topic): void {
+    if (topic.topic === "stationUsage") {
+      const station = String(topic.station);
+      const db = this.of(station);
+      if (db && db.stationDoc(station, "usage") !== undefined) db.dropStationDoc(station, "usage", topic);
+      return;
+    }
     if (topic.topic === "drive") {
       const station = String(topic.station);
       const kind = driveDoc(String(topic.root), String(topic.path));
@@ -951,7 +967,7 @@ export class Data {
       const ws = ofAddress(key);
       return [this.#ofWorkspace(ws) ?? null, [ws, `vaultItems:${key.slice(ws.length + 1)}`]];
     }
-    if (table === "place" || table === "link" || table === "heard" || table === "memberships") {
+    if (table === "place" || table === "link" || table === "heard" || table === "memberships" || table === "keepsMarks") {
       // A station's own, kept by its address (`<workspace>/<station>…`), in its workspace's: where a chat was left
       // (`place`, `<address>/<thread>`), how its link was last time (`link`), the last event its stream told (`heard`,
       // written with what it told), the workspaces it is in (`memberships`, views/memberships.ts). Read with what shows
@@ -1019,7 +1035,7 @@ export class Data {
 
   /// A sidebar row as an event has it.
   putChat(station: string, row: unknown): void {
-    this.of(station)?.putChat(station, row);
+    this.of(station)?.putChat(station, inWords(row));
   }
 
   dropChat(station: string, id: string): void {
@@ -1045,6 +1061,11 @@ export class Data {
     void this.listed(station, "chats");
     this.#readQuery({ topic: "$chat-thread", station, thread });
     return this.of(station)?.chatOfThread(station, thread);
+  }
+
+  /// The sidebar rows a thread's or a session's changes touch (account.ts `chatsOf`), for what the station's stream tells.
+  chatsOf(station: string, of: { thread: number } | { session: string }): unknown[] {
+    return this.of(station)?.chatsOf(station, of) ?? [];
   }
 
   chatOfSession(station: string, session: string): unknown {
@@ -1100,11 +1121,13 @@ export class Data {
 
   /// The messages of one thread that have all of `terms`, oldest first (AccountDb.findInThread).
   findInThread(station: string, thread: number, terms: string[]): ReturnType<AccountDb["findInThread"]> {
+    this.#readQuery({ topic: "$log", table: "entry", station, id: String(thread) });
     return this.of(station)?.findInThread(station, thread, terms) ?? [];
   }
 
   /// The messages of these stations that have all of `terms`, newest first, across their databases (AccountDb.findSaid).
   findSaid(stations: string[], terms: string[], limit: number): ReturnType<AccountDb["findSaid"]> {
+    for (const station of stations) this.#readQuery({ topic: "$said", station });
     const by = new Map<AccountDb, string[]>();
     for (const s of stations) {
       const db = this.of(s);
@@ -1132,23 +1155,39 @@ export class Data {
     return db !== undefined && !db.readOnly ? db.opened(kind, station, id, this.#host.nowMs()) && open : false;
   }
 
-  /// Past its room: the agents' transcripts not shown, least recently used first, let go down to KEPT_TO.
+  /// Past its room: the agents' transcripts not shown, least recently used first, let go down to KEPT_TO. Each
+  /// transcript is a separate turn, so the app and the other accounts can be answered while room is being made.
   #keepWithin(db: AccountDb): void {
-    if (db.readOnly || db.used() <= this.#kept) return;
-    const to = this.#kept * KEPT_TO;
-    const gone = new Set<string>();
-    for (;;) {
-      const logs = db.transcriptsByUse(50).filter((l) => {
-        const key = `transcript\u0001${l.station}\u0001${l.id}`;
-        return !this.#shown.has(key) && !gone.has(key);
-      });
-      if (logs.length === 0) return;
-      for (const l of logs) {
-        gone.add(`transcript\u0001${l.station}\u0001${l.id}`);
-        db.evict(l.station, l.id);
-        if (db.used() <= to) return;
+    if (db.readOnly || this.#keeping.has(db)) return;
+    this.#keeping.add(db);
+    this.#runner.fork(Effect.gen({ self: this }, function* () {
+      try {
+        // Do not make the account's first values or a committed change wait for maintenance.
+        yield* Effect.yieldNow;
+        if (this.#dbs.get(db.sub) !== db || db.used() <= this.#kept) return;
+        const to = this.#kept * KEPT_TO;
+        const gone = new Set<string>();
+        for (;;) {
+          const logs = db.transcriptsByUse(50).filter((l) => {
+            const key = `transcript\u0001${l.station}\u0001${l.id}`;
+            return !this.#shown.has(key) && !gone.has(key);
+          });
+          if (logs.length === 0) return;
+          for (const l of logs) {
+            if (this.#dbs.get(db.sub) !== db) return;
+            const key = `transcript\u0001${l.station}\u0001${l.id}`;
+            // A chat may have opened since this list was read.
+            if (this.#shown.has(key)) continue;
+            gone.add(key);
+            db.evict(l.station, l.id);
+            if (db.used() <= to) return;
+            yield* Effect.yieldNow;
+          }
+        }
+      } finally {
+        this.#keeping.delete(db);
       }
-    }
+    }));
   }
 
   running(station: string): unknown[] {
@@ -1203,8 +1242,12 @@ export class Data {
     this.of(station)?.patchDetail(station, key, change);
   }
 
-  sessionsToRead(station: string): [string, boolean][] {
-    return this.of(station)?.sessionsToRead(station) ?? [];
+  sessionKeys(station: string): string[] {
+    return this.of(station)?.sessionKeys(station) ?? [];
+  }
+
+  sessionsToRead(station: string, keys?: readonly string[]): [string, boolean][] {
+    return this.of(station)?.sessionsToRead(station, keys) ?? [];
   }
 
   listedThread(station: string, id: number): any {
@@ -1252,10 +1295,6 @@ export class Data {
 
   dropThread(station: string, id: number): void {
     this.of(station)?.dropThread(station, id);
-  }
-
-  unlistThread(station: string, id: number): void {
-    this.of(station)?.unlistThread(station, id);
   }
 
   raiseLast(station: string, id: number, n: number): void {
@@ -1358,15 +1397,25 @@ export class Data {
     this.of(station)?.keepFile(station, session, name, kind, type, bytes, this.#host.nowMs());
   }
 
+  /// What `of` (a thread's, `t:<id>`; a session's, `s:<key>`) keeps of read Markdown was read again in the background
+  /// (md-ahead.ts): what showed it is made again.
+  mdChanged(station: string, of: string): void {
+    this.#mdSeen.touch(`${station} ${of}`);
+  }
+
   /// Where the trees of the Markdown `station`'s agents said for `of` (a chat, `t:<thread>`; an agent, `s:<session>`) are
   /// kept on the device (AccountDb.keptMd): none without its account's database.
   mdStore(station: string, of: string): MdStore | undefined {
+    // (read again in the background, what it keeps changes: md-ahead.ts `mdChanged`)
+    this.#mdSeen.read(`${station} ${of}`);
     const db = this.of(station);
     if (db === undefined) return undefined;
+    // (when each was last used: no time a reader's words change by)
+    const now = () => untracked(() => this.#host.nowMs());
     return {
       has: (key) => db.hasMd(station, key),
-      get: (key) => db.keptMd(station, key, this.#host.nowMs()),
-      put: (key, json, replaces) => db.keepMd(station, of, key, json, Math.floor(this.#host.nowMs()), replaces),
+      get: (key) => db.keptMd(station, key, now()),
+      put: (key, json, replaces) => db.keepMd(station, of, key, json, Math.floor(now()), replaces),
       ...(this.onOldMd === null ? {} : { refresh: (text: string) => this.onOldMd?.(station, of, text) }),
     };
   }
@@ -1380,4 +1429,12 @@ export class Data {
   static detail(e: unknown): string {
     return e instanceof HostError || e instanceof Error ? e.message : String(e);
   }
+}
+
+/// A chat's row as its station gives it (station/src/read/views.ts `chats`: what names it, `named`, and a last message
+/// that only quotes, marked so) in this device's words; one a station from before worded itself, as it is.
+function inWords(row: unknown): unknown {
+  if (!isObject(row)) return row;
+  const lang = current();
+  return worded(row as Record<string, any>, { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly"), admin: tr(lang, "station.author.admin") });
 }

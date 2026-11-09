@@ -191,8 +191,8 @@ fn Tree::hand_on(self : Tree, th : Through, why : Handed, x : Double, y : Double
       let said = n.drag_said
       // (the finger's own events from where it went down, by their own times, as the one that held it first counted
       // them: how fast it goes as it is handed on, the move that handed it counted as it is told)
-      let (dvx, dvy) = match self.held_tracks.get(th.finger) {
-        Some((tx, ty)) => (tx.velocity(), ty.velocity())
+      let down_speed = match self.held_tracks.get(th.finger) {
+        Some((tx, ty)) => { across: Some(tx.said_at(now)), down: Some(ty.said_at(now)) }
         None => self.tracked(th.finger, true, [], th.down_at, dx, dy)
       }
       @signals.untracked(fn() {
@@ -209,16 +209,15 @@ fn Tree::hand_on(self : Tree, th : Through, why : Handed, x : Double, y : Double
           since: th.down_at,
           w: n.flex.width,
           h: n.flex.height,
-          vx: dvx,
-          vy: dvy,
+          speed: down_speed,
         })
       })
       // (moved: the move that handed it its, from where it went down, while it holds it still)
       if why is Moved(_, _) && self.held == Some(u) && bound_still(self.nodes[u.at], u, said) {
         // (the move that handed it on counted once already, as the one holding it was told it: its speed as of then)
-        let (mvx, mvy) = match self.held_tracks.get(th.finger) {
-          Some((tx, ty)) => (tx.velocity(), ty.velocity())
-          None => (0.0, 0.0)
+        let moved_speed = match self.held_tracks.get(th.finger) {
+          Some((tx, ty)) => { across: Some(tx.said_at(now)), down: Some(ty.said_at(now)) }
+          None => drag_still
         }
         @signals.untracked(fn() {
           f({
@@ -234,8 +233,7 @@ fn Tree::hand_on(self : Tree, th : Through, why : Handed, x : Double, y : Double
             since: th.down_at,
             w: self.nodes[u.at].flex.width,
             h: self.nodes[u.at].flex.height,
-            vx: mvx,
-            vy: mvy,
+            speed: moved_speed,
           })
         })
       }

@@ -64,6 +64,8 @@ struct Bench {
 /// old frame around the old views it holds, put where `view` says: old_views_here), else `view` its one old view
 /// (view_host.mbt).
 pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
+  // (an app's run on a host: what faults is told and its boundary shows it, the app going on: @view's boundary.mbt)
+  @view.faults_stop.val = false
   match tree {
     Some(make) => set_view_app(make, around=view)
     None => set_view_app(fn(root) { old(root, view).grow(Is(1.0)) |> ignore })
@@ -75,7 +77,7 @@ pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -
   @hostapi.set_back(fn(k, x, p, e) { on_back(k, x, p, e) })
   @hostapi.set_window_key(fn(code, mods) {
     let taken = Ref(false)
-    view_event(fn() { taken.val = window_key_taken(code, mods) })
+    view_event(fn() { taken.val = window_key_taken(code, mods) }, what="key")
     if taken.val { 1 } else { 0 }
   })
   @hostapi.set_app_state(fn(s) { on_app_state(s) })
@@ -88,6 +90,29 @@ pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -
     fn(k, m) { on_key(k, m) },
     fn(k, s, a, b) { on_text(k, s, a, b) },
   )
+}
+
+///|
+// Resources whose readers change during one frame may finish their handover at its end.
+let frame_afters : Ref[Array[() -> Unit]] = Ref([])
+
+///|
+/// Run at the end of the current frame, or of the current outside event between frames; otherwise run now.
+pub fn after_frame(f : () -> Unit) -> Unit {
+  if frame_running.val || event_depth.val > 0 {
+    frame_afters.val.push(f)
+  } else {
+    f()
+  }
+}
+
+///|
+fn frame_afters_run() -> Unit {
+  while !frame_afters.val.is_empty() {
+    let pending = frame_afters.val
+    frame_afters.val = []
+    for f in pending { f() }
+  }
 }
 
 ///|
@@ -109,16 +134,25 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   inputs_taken.val = false
   in_frame.val = true
   frame_running.val = true
+  frame_moment.val = t
+  frame_serial.val += 1
   paint_phase.val = 0
+  scroll_paint_uncompared.val = false
+  lists_scrolled.clear()
   // (the soft keyboard's height as the frame begins: device.mbt; the system's settings it is drawn by, kept with the
   // run's input: envrec.mbt)
   c.device_frame_start()
+  // (the host's settings, each read of the host so: what read one built again as it changes, host_said.mbt)
+  host_settings_arrive()
   env_at_frame()
   // (built whole where what it read changed, painted alone where only what its paint read did, or of its looks by the
   // clock alone: frame_watch.mbt)
   // what is made once laid out, placed and drawn as its frame does; the old view in the room its node is given
   // (view_host.mbt)
-  view_frame(w, h, t)
+  // (what comes before the frame's own work, timed for the probe: the window's tree brought, its nodes built and laid
+  // out, and what came from outside handed on as the frame begins, frame_drawn's start)
+  let tw = work_now()
+  view_frame(w, h, scale, t)
   let t0 = frame_drawn(c, w, h, scale, t)
   in_frame.val = false
   // inputs came before this frame: one more, for what they changed late in it (inputrec.mbt `took_input`), built where
@@ -129,8 +163,11 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   }
   let t3 = work_now()
   h_present(c.inst, c.ninst)
+  if perf_touch_at.val >= 0.0 {
+    perf_touch_submitted(work_now())
+  }
   // what the shots being taken drew read back (shot.mbt)
-  c.shots_after_present()
+  c.shots_after_present(t)
   log_drawn(w, h, scale, t)
   // (a frame of the looks alone drew no picture of its own: none is let go for it)
   if !looks_drawn.val {
@@ -141,15 +178,25 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   if bench.mode > 0 {
     bench_step(c, t3 - t0, t4 - t3)
   }
-  slow_probe(c, t, t3 - t0, t4 - t3)
+  // (the frame into the window thread's journal, the interval it closes looked over: journal.mbt)
+  journal_frame(c, tw, t0, t3, t4)
+  slow_probe(c, t, t3 - t0, t4 - t3, tree=t0 - tw)
   perf_log(c, t, t3 - t0, t4 - t3)
   drive_frame(c)
+  // (what the stacks the window's tree holds say of the frame, as it ends: built whole, painted alone or of its looks
+  // alone, and what came in as it was drawn taken (a scripted run's steps, drive_frame): a page one of them has in the
+  // hand moves with no clock read, nav_view.mbt)
+  nav_views_framed(c)
   // a motion said, not at its end; one read going (built or painted from where it is now: Ctx::shows_motion); a cycle
   // shown (motion_data.mbt)
   c.motion_left = c.motion_owed() || c.motion_read
   c.motion_read = false
   // (what the window's tree has going: drawn as the clock goes; what ends at a moment, woken then: view_host.mbt)
   view_frame_end(c)
+  frame_afters_run()
+  // what of the widgets changed, for a screen reader reading them, as the frame left them (its layers, its focus, where
+  // what a page in the hand moved is: a11y.mbt)
+  c.a11y_after_paint()
   // (a layout read back that moved: what was placed from it, placed again)
   if c.read_back_moved {
     c.wants_frame = true
@@ -160,15 +207,30 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let held = bench.held
   bench.held = false
   looks_left(c, held)
-  if c.wants_frame || c.took_input || bench.mode > 0 || held || paint_left() || layout_left() {
+  if c.wants_frame || c.took_input || bench.mode > 0 || held || paint_left() || layout_left() || glyphs_short_owed() {
+    pace_none()
     h_request_frame()
   } else if c.motion_left || c.cycling || c.fiber_frame {
     // what moves on (a motion, a fiber stepping a frame at a time) is drawn as the clock goes, on the host's next
-    // frame: no frame is owed at this moment (a Tester's draw draws none for it; its run_for does, as its time goes)
+    // frame: no frame is owed at this moment (a Tester's draw draws none for it; its run_for does, as its time goes);
+    // a motion as often as it needs where it is seen (frame_pace.mbt), a fiber every frame
     c.wants_frame = true
-    h_request_frame_on()
-  } else if c.wake_at > 0.0 {
-    h_wake_after(dmax(c.wake_at - t, 1.0))
+    let pace = if c.fiber_frame {
+      pace_none()
+      0.0
+    } else {
+      pace_by_clock(t)
+    }
+    if pace > 0.0 {
+      @hostapi.frames_paced(pace)
+    } else {
+      h_request_frame_on()
+    }
+  } else {
+    pace_none()
+    if c.wake_at > 0.0 {
+      h_wake_after(dmax(c.wake_at - t, 1.0))
+    }
   }
   // what is still awaited from the host (an image decoding, a view loading): a run to a declared moment keeps its
   // clock still while any is (mac_app.m, MBView, web/host.js), so its picture does not hang on how fast the machine is
@@ -177,7 +239,10 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
     let what = rt.awaited().map(fn(a) { a.0 }).join(", ")
     @hostapi.frame_awaiting(rt.awaiting(), what)
   }
+  frame_afters_run()
+  journal_frame_ended(t4)
   frame_running.val = false
+  frame_moment.val = -1.0
   frame_built.val = false
 }
 
@@ -194,8 +259,46 @@ pub fn frame_offscreen(
   t : Double,
 ) -> Ctx {
   g_view.val = view
+  // Offscreen frames bypass frame_drawn, so they read the host generation here (and tell nothing of the window's:
+  // its size and pixels are the window's, not this frame's).
+  atlas_said.val = Some(h_atlas_generation())
+  text_arrive()
+  frame_moment.val = t
+  frame_serial.val += 1
   frame_body(g(), w, h, scale, t) |> ignore
+  // (drawn out where a header stands for what a host keeps: as a host that keeps no groups draws it)
+  g().flat_from(0)
+  frame_moment.val = -1.0
   g()
+}
+
+///|
+/// What looks at each pass of a frame's build as it is over (`at` 0 as it is laid out, 1 as nothing else builds it
+/// again; `kept0` the rows kept before it), where something does (a Tester's: rows_pass_looked): true, the frame
+/// built again.
+// kept across runs: set by each Tester as it is made, let go as its run ends
+let pass_look : Ref[((Ctx, Int, Int) -> Bool)?] = Ref(None)
+
+///|
+fn pass_looked(c : Ctx, at : Int, kept0 : Int) -> Bool {
+  match pass_look.val {
+    Some(f) => f(c, at, kept0)
+    None => false
+  }
+}
+
+///|
+/// What is told what the frame says besides its drawing (said.mbt) as its builds are over (`at` 0) and as it is painted
+/// (1), where something asks (a Tester's: Tester::said).
+// kept across runs: set by a Tester that asks, let go by each Tester as it is made
+let frame_said : Ref[((Ctx, Int) -> Unit)?] = Ref(None)
+
+///|
+fn frame_said_told(c : Ctx, at : Int) -> Unit {
+  match frame_said.val {
+    Some(f) => f(c, at)
+    None => ()
+  }
 }
 
 ///|
@@ -204,41 +307,37 @@ pub fn frame_offscreen(
 let frame_hook : Ref[(() -> Unit)?] = Ref::new(None)
 
 ///|
-/// Builds, lays out and paints a frame; returns when it started.
-fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
+/// The frame painted, told where a test asks (frame_hook): drawn out first where a header stands for what a host keeps,
+/// as the host draws it, what it reads read so.
+fn frame_hook_told(c : Ctx) -> Unit {
+  match frame_hook.val {
+    Some(f) => {
+      c.flat_from(0)
+      f()
+    }
+    None => ()
+  }
+}
+
+///|
+/// Builds, lays out and paints a frame; returns when it started. `tell` false: what its builds say to tell outside is
+/// not told (a frame built again only to be looked at: tester_looks.mbt).
+fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell? : Bool = true) -> Double {
   c.width = w
   c.height = h
   c.window_w = w
   c.window_h = h
   // the theme set for this width (a phone's when narrower than its bound: Ctx::set_theme)
   c.pick_theme()
-  if scale != c.scale {
-    // images are as large as their pixels at this scale
-    c.epoch = c.epoch + 1
-  }
   c.scale = scale
-  // (lengths laid out on whole pixels or not: every layout made anew when that changes)
-  let whole = whole_px_layout()
-  if whole != c.whole_px {
-    c.whole_px = whole
-    c.epoch = c.epoch + 1
-  }
-  // the system's size of words: every layout made anew when it changes
-  let fs = font_scale()
-  if fs != c.font_scale && fs > 0.0 {
-    c.font_scale = fs
-    c.epoch = c.epoch + 1
-    view_words_rescaled()
-  }
+  // (what was laid out on other pixels laid out again, a node's and a row's kept as laid out: layout.mbt, kept_nodes.mbt)
+  c.whole_px = whole_px_layout()
   c.clock = t
   c.dt = if c.last_now < 0.0 { 16.67 } else { dclamp(t - c.last_now, 0.0, 100.0) }
   c.last_now = t
   c.frame_no = c.frame_no + 1
   c.hand_moved = c.px != c.hand_was.0 || c.py != c.hand_was.1
   c.hand_was = (c.px, c.py)
-  if !layout_reuse.val {
-    c.epoch = c.epoch + 1
-  }
   // (no wake but a look's asked yet: frame_watch.mbt)
   looks_frame_start()
   c.wants_frame = false
@@ -246,9 +345,10 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.wake_waited = -1.0
   c.frame_by = None
   c.wake_by = None
+  // what was said to be done at a moment by now, done before anything is built (Ctx::at_moment)
+  c.dues_frame_start()
   c.page_in_hand = false
   c.cycling = false
-  c.reads_out = h_a11y_on()
   c.cycles.clear()
   c.periodic.clear()
   c.nav_rest = -1.0
@@ -314,7 +414,6 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     layout_coming.val = true
     c.read_back_moved = false
     c.read_back_whole = false
-    old_built.val = false
     building.val = true
     c.build_no = next_build()
     // (a hold handed an old view: the frame it comes to, as its build begins; gone once that frame is)
@@ -375,25 +474,25 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     // (and into the first of what a layer of the window's tree holds that takes it, as this pass built it: view_host.mbt)
     view_layers_first(c)
     hand_focus_said(c)
+    // (the window's tree told as this pass was built: where it places an old view otherwise now, built again for that)
+    view_told_as_built(c)
     // (what this pass took of the inputs is taken: one built again sees none of them, the clicks, keys, menus and
     // actions since the last frame)
     c.clicked.clear()
     c.double_clicked.clear()
-    c.click_at = None
     c.tapped = None
     desk.keys.clear()
     desk.menus.clear()
     c.actions.clear()
     building.val = false
-    // (built again keeping no row, for a Tester: compared with the pass that kept them, and built once more where they
-    // part, kept_nodes.mbt)
-    if c.rows_check_end() {
+    // (what looks at each pass, where something does (a Tester's: tester_rows.mbt): true, built again)
+    if pass_looked(c, 0, kept0) {
       continue
     }
     if c.read_back_moved && pass < frame_passes_most {
       continue
     }
-    if c.rows_check_begin(kept0) {
+    if pass_looked(c, 1, kept0) {
       continue
     }
     break
@@ -410,33 +509,41 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   // words picked with the pointer held: to what is under it as laid out now (desktop.mbt), drawn so
   c.select_after_layout()
   // what the builds said, where a Tester asks (said.mbt)
-  c.said_built_logged()
+  frame_said_told(c, 0)
   // what the last build said to tell outside, told now, once by its key: the last said of it, where the first was
   // (Ctx::after_build)
+  // (those that follow where lists stand, kept: told again as a list moves with nothing built, list_scroll_fast.mbt)
+  list_fast_tells.clear()
+  list_fast_tells.append(tells_once(c.tells.filter(fn(t) { tells_follow_lists.contains(t.0) })))
   let tell_ids = c.tells.map(fn(t) { t.0 })
   let tells = tells_once(c.tells)
   c.tells.clear()
   // (what is told changes what the next frame builds, though nothing came from outside: built again, frame_watch.mbt)
   looks_told(tell_ids, c.told.map(fn(t) { t.0 }))
-  for f in tells {
-    f()
-  }
   // what any of its builds said to tell, once each (Ctx::tell)
   let told = c.told.copy()
   c.told.clear()
-  for t in told {
-    (t.1)()
-  }
-  // (what is told may answer at once (a cache, a test's core): what the answer changes is shown by the frame after,
-  // owed now, at this moment, not by whatever frame comes next)
-  if !told.is_empty() {
-    c.owe_next()
+  if tell {
+    for f in tells {
+      f()
+    }
+    for t in told {
+      (t.1)()
+    }
+    // (what is told may answer at once (a cache, a test's core): what the answer changes is shown by the frame after,
+    // owed now, at this moment, not by whatever frame comes next)
+    if !told.is_empty() {
+      c.owe_next()
+    }
   }
   if scroll_logging() {
     c.log_scroll()
   }
   // (what it laid out, said as one number: whether the next frame may paint it again alone, frame_watch.mbt)
   laid_kept(c, root)
+  // (a finger held on words to pick, its builds over and nothing of them having taken its press: picked as this frame
+  // paints, finger_select.mbt)
+  c.finger_hold()
   let t2 = work_now()
   // painted under a watch of its own: what only its paint reads (a look worked out as it is painted) paints the next
   // frame again, nothing built (frame_watch.mbt)
@@ -465,15 +572,14 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   // what is placed by the clock placed where it is now (Ctx::moved_by: a page sliding), read as it is painted
   c.moved_place()
   c.ninst = 0
-  match fake.val {
-    Some(f) => f.frame_failed_images.clear()
-    None => ()
-  }
+  c.spans_cut()
+  frame_failed_images.clear()
   cycle_looks_begin()
   dr.tops.clear()
-  c.segs.clear()
+  c.segs_cut(0)
   text_runs.runs.clear()
   words_alpha.val = 1.0
+  look_surface.val = (1.0, -1)
   c.next_hit_ids.clear()
   c.next_hit_rects.clear()
   c.next_hit_clips.clear()
@@ -500,6 +606,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.raise_tops()
   // (what is over everything, the layers over the page too)
   c.paint_over_layers()
+  // (the handles of words a finger picked, over everything, as a field's: finger_select.mbt)
+  c.paint_finger_ends()
   // what was shaped and not drawn, for the host to draw ahead while it presents this frame (text.mbt)
   glyphs_ahead()
   c.emit_segs()
@@ -510,10 +618,8 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   // the shots being taken, each into instances of its own (shot.mbt)
   c.paint_shots()
   c.sync_views()
-  // what the widgets are, for a screen reader reading them (a11y.mbt)
-  c.a11y_after_paint()
   // what the paint said, where a Tester asks (said.mbt)
-  c.said_logged()
+  frame_said_told(c, 1)
   // the streams' frames taken in this frame said shown (stream.mbt)
   streams_after_paint()
   // back goes where the stack drawn now says (Ctx::nav, while building)
@@ -522,10 +628,6 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.back_island = c.back_island_next
   c.back_edge = c.back_edge_next
   c.back_chain = c.back_chain_next
-  c.back_stack = match c.back_chain {
-    Said(e, _) => e.stack
-    Unsaid => -3
-  }
   // (a layer's that took back already, said again as it was kept: what it was said over, in its place)
   c.back_layer_spent()
   // (the host told whether the app takes back, as what the old views said now has it: Ctx::back_told_host)
@@ -564,8 +666,6 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.next_bars = bs
   // (the old views' kept as painted, each where it is, what scrolls in them and their bars too: view_host.mbt)
   old_hits_framed(c)
-  // (what said its presses are another's, under a Tester: that one takes them there)
-  c.check_press_owners()
   // (its targets published whole: what nodes yield to of them told, view_host.mbt)
   yields_published(c)
   // (and where what of the tree follows of them is: old_anchor, view_host.mbt)
@@ -585,10 +685,7 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   c.sync_ime()
   c.sync_text_menu()
   c.sync_edit_can()
-  match frame_hook.val {
-    Some(f) if !looks_rebuilt.val => f()
-    _ => ()
-  }
+  frame_hook_told(c)
   paint_phase.val = 2
 }
 
@@ -604,6 +701,16 @@ pub fn Ctx::after_build(self : Ctx, key : String, f : () -> Unit) -> Unit {
     return
   }
   self.tells.push((self.id("\u{2}after-build/" + key), f))
+}
+
+///|
+/// As Ctx::after_build, and told again after each frame in which a list moved with nothing built for it (a scroll
+/// whose rows stay: list_scroll_fast.mbt): `f` reads where the lists stand as it is told (a ListReader), not as built.
+pub fn Ctx::after_build_or_scroll(self : Ctx, key : String, f : () -> Unit) -> Unit {
+  if building.val {
+    tells_follow_lists[self.id("\u{2}after-build/" + key)] = true
+  }
+  self.after_build(key, f)
 }
 
 ///|
@@ -681,7 +788,11 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.nodes[root].w = Px(w)
   c.nodes[root].h = Px(h)
   // (under a change of theme spreading from where it was asked, while it does: reveal.mbt)
-  c.with_parent(root, fn() { c.revealed(w, h, fn() { (g_view.val)(c) }) })
+  c.with_parent(root, fn() {
+    c.revealed(w, h, fn() { (g_view.val)(c) })
+    // (and the pictures made as nodes apart, laid out at this frame: shot.mbt take_picture)
+    c.pictures_built()
+  })
   // what lies over the page over everything else (overlay.mbt)
   c.raise_layers()
   root
@@ -793,6 +904,10 @@ fn input_came() -> Unit {
 
 ///|
 fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
+  // (a press or a let-go, a mouse's or a finger's: what the list does after it is its answer, rows_steady.mbt)
+  if kind == 0 || kind == 2 || kind == 10 || kind == 12 {
+    rows_steady_hand()
+  }
   // a touch screen's finger as the host has it, by the system's id for it (touches.mbt)
   if kind >= 10 && kind <= 13 {
     touch_in(kind - 10, button, x, y)
@@ -811,11 +926,41 @@ fn pointer_in(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? 
   // takes it (the tree's nodes, what they take presses by bound to it, or the old view) this one: view_host.mbt)
   view_event_said(fn() { pointing_said_by_host(by) }, fn() {
     pointer_in_now(kind, x, y, button, mods, by~)
-  })
+  }, what="pointer")
 }
 
 ///|
 fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? : Int = -1) -> Unit {
+  // (what the event does to the fields' selections, the old view's and the tree's: told each field's as the event
+  // is taken, EditorState::typed_told)
+  pointed_edits(fn() { pointer_event_now(kind, x, y, button, mods, by~) })
+}
+
+///|
+/// What `f`, the pointer's (an event of it, a hold it made at its moment), does to the selection of each field (the
+/// old view's and the tree's, each among the editors): told as `f` is done, for each whose selection it moved in the
+/// words it had, from the selection it had. A field whose words `f` changed is not told so: an edit of them by the
+/// person told already, as it was made (words let go on it), and what the app put in it as it answered (a chat picked
+/// from a menu put in: Field::set, its caret with it) no one's edit.
+fn pointed_edits(f : () -> Unit) -> Unit {
+  let had : Array[(EditorState, String, Int, Int)] = []
+  for _, st in g().editors {
+    // (one Field's held by two ids, its old editor's and its node's: once)
+    if !had.iter().any(fn(e) { physical_equal(e.0, st) }) {
+      had.push((st, st.text, st.anchor, st.caret))
+    }
+  }
+  f()
+  for e in had {
+    let (st, words, anchor, caret) = e
+    if st.text == words {
+      st.typed_told(words, anchor, caret, Pointed)
+    }
+  }
+}
+
+///|
+fn pointer_event_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, by? : Int = -1) -> Unit {
   let args = [kind.to_double(), x, y, button.to_double(), mods.to_double()]
   if by >= 0 {
     args.push(by.to_double())
@@ -842,6 +987,9 @@ fn pointer_in_now(kind : Int, x : Double, y : Double, button : Int, mods : Int, 
     // (a hold of the old view's it has not made its own, moved: what of the tree's holds it may take it over)
     if kind == 1 {
       view_old_moved(x, y)
+      // (what the old view found under the pointer as it moved, by its own targets, told it again as the tree finds it
+      // there: nothing of its where something of the tree's is pointed at over it, View::points)
+      view_pointed()
     }
   }
   // (a finger or button down, wherever it went (a node of the tree's, the old view): a press of its own from here, a
@@ -867,6 +1015,20 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
   // a second finger (4 down, 5 moved, 6 up: hosts with touch screens; 8 the first let go, the second the first from
   // here), for a pinch (native.mbt `second_pointer`)
   if (kind >= 4 && kind <= 6) || kind == 8 {
+    // a list being dragged follows the newest finger, as Android's RecyclerView (the first's moves meanwhile move
+    // nothing)
+    if kind == 5 && second_ptr[2] > 0.0 && c.down && c.dragging && c.following {
+      c.list_drag(c.drag_scroll, -(y - second_ptr[1]))
+      h_frame_owed()
+    }
+    // the first let go: the second's moves come as the first's from where the second is, the press's slop measured as
+    // far as the first had gone (from where the first was, the list would jump by the two fingers' distance)
+    if kind == 8 && second_ptr[2] > 0.0 {
+      c.press_x += second_ptr[0] - c.last_x
+      c.press_y += second_ptr[1] - c.last_y
+      c.last_x = second_ptr[0]
+      c.last_y = second_ptr[1]
+    }
     on_second(if kind == 8 { 6 } else { kind }, x, y)
     // one of two lifted: the moves from here may be the other's, its own track
     if kind == 6 || kind == 8 {
@@ -891,11 +1053,15 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
   c.py = y
   // the event's own time (`t`): events handled together happened apart
   c.pointer_t = t
+  // (after the latest key: Ctx::pointer_after_keys)
+  c.pointer_after_keys = true
   if scroll_logging() {
     h_log("TOUCH \{kind} \{t} \{x} \{y} \{h_now()}")
   }
   if kind == 0 {
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
+    // (what follows a press that goes down on it, told: Ctx::follow_press)
+    press_follow_down(target, x, y)
     // a scroll bar's thumb (a mouse's, scroll_bar.mbt): held from here, the press nothing else's (no tap, no words
     // picked, the focus where it is)
     if c.bar_press(target) {
@@ -937,11 +1103,18 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     // words picked with the pointer (desktop.mbt), not in a field, nor on what keeps them (Ctx::keeps_selection);
     // picking them lets go of what the focused field had picked, the focus staying its (focus.mbt): one thing picked
     // in the window, as in a browser, and it is what ⌘C copies
-    if !c.editors.contains(target) && !keeps_selection_on(target) {
-      c.select_press(x, y, c.clicks)
-      match c.editors.get(c.focus_allowed()) {
-        Some(st) if picked.from.base != 0 => st.anchor = st.caret
-        _ => ()
+    if !keeps_selection_on(target) {
+      if c.editors.contains(target) {
+        // A click in a field lets go of a page selection; the field's own selection is separate.
+        if pointing() is Mouse && picked.from.base != NoSel {
+          select_none()
+        }
+      } else {
+        c.select_press(x, y, c.clicks)
+        match c.editors.get(c.focus_allowed()) {
+          Some(st) if picked.from.base != NoSel => st.anchor = st.caret
+          _ => ()
+        }
       }
     }
     // what lies over the page sees it (overlay.mbt); the focus goes as a press moves it (focus.mbt)
@@ -965,6 +1138,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     c.last_t = t
     c.vel = 0.0
     c.dragging = false
+    c.following = false
     track_x.reset()
     track_y.reset()
     track_x.add(t, x)
@@ -977,6 +1151,19 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     c.editor_drag = false
     c.handle_drag = 0
     c.word_drag = 0
+    // a handle of words a finger picked with the pointer under it: that end follows the finger, nothing under it
+    // pressed or scrolled (finger_select.mbt)
+    if c.finger_handle_down(x, y) {
+      c.claimed = true
+      for other in c.press_chain {
+        drag_cancel(other)
+      }
+      c.active = 0
+      c.edge = 0
+      c.taken_at = c.press_at
+      h_request_frame()
+      return
+    }
     // a selection's handle under the finger (Android's): the finger moves that end, the menu away meanwhile
     // (the finger where it is in the field's words, as they are placed: EditorState::local)
     let in_words = match c.editors.get(c.focus_allowed()) {
@@ -1024,12 +1211,10 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
         c.edge = 0
       }
     }
-    // a desktop's page: the mouse drags no list and swipes no page back (the wheel scrolls; Ctx::mouse_drags_lists)
+    // a desktop's page: the mouse swipes no page back (and drags no list: none under the press waits for it,
+    // claim_down; the wheel scrolls; Ctx::mouse_drags_lists)
     if !desk.mouse_drags {
       c.edge = 0
-      if c.lists.contains(c.drag_scroll) {
-        c.drag_scroll = 0
-      }
     }
     c.press_late = h_feel() == 2 && c.drag_scroll != 0
     // a list moving on its own (flung, springing back from an end) is caught wherever on it the finger lands, and the
@@ -1111,6 +1296,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     }
     c.bar_pointer(x, y)
     if c.down {
+      press_follow_moved(x, y)
       track_x.add(t, x)
       track_y.add(t, y)
       // moved past the slop: no long press of it (Android's), and on a field no tap either
@@ -1159,39 +1345,36 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
         quiet = true
       } else if sideways.contains(c.drag_scroll) &&
         !sideways_move(c, c.drag_scroll, x, y) {
-        // dragged sideways (or not yet past the slop); moved up or down first, the list takes it below
-        ()
+        // dragged sideways (or not yet past the slop); moved up or down first, the list takes it below. Dragged across,
+        // where it is is what its paint reads (Ctx::sideways_drawn): the frame painted again, nothing built for it, as
+        // a list following the finger is (one up and down is placed as it is built: Ctx::capped)
+        quiet = c.dragging && sideways_across(c.drag_scroll)
       } else if drags.contains(c.drag_scroll) {
         if drag_move(c.drag_scroll, x, y) && !c.dragging {
           c.dragging = true
           c.active = 0
         }
       } else if c.drag_scroll != 0 && !captures.contains(c.drag_scroll) {
-        // a pager follows the finger sideways, a list up and down
-        let pager = pagers.contains(c.drag_scroll)
+        // a list follows the finger up and down
         if !c.dragging {
-          let moved = if pager { x - c.press_x } else { y - c.press_y }
+          let moved = y - c.press_y
           let slop = touch_slop()
           if moved.abs() > slop {
             c.dragging = true
+            c.following = true
             c.active = 0
-            if !pager {
-              c.scroll_lets_go(c.drag_scroll)
-            }
+            c.scroll_lets_go(c.drag_scroll)
             // from where the slop ends, as Compose starts a drag: nothing
             // jumps, and what moved past the slop is not lost
             let past = if moved > 0.0 { moved - slop } else { moved + slop }
-            if pager {
-              c.pager_drag(c.drag_scroll, past) |> ignore
-            } else {
-              c.list_drag(c.drag_scroll, -past)
-            }
+            c.list_drag(c.drag_scroll, -past)
           } else {
             // (within the slop: nothing moves)
             quiet = true
           }
-        } else if pager {
-          c.pager_drag(c.drag_scroll, x - c.last_x) |> ignore
+        } else if second_ptr[2] > 0.0 && c.following {
+          // (a second finger down: the list follows it, above)
+          quiet = true
         } else {
           // (the list follows the finger: where it stands is its signal's, ListState::hand_moved)
           c.list_drag(c.drag_scroll, -(y - c.last_y))
@@ -1207,10 +1390,14 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     if c.bar_press_off() {
       return
     }
+    press_follow_up(x, y, false)
     if c.down {
-      track_x.add(t, x)
-      track_y.add(t, y)
+      track_x.up(t, x)
+      track_y.up(t, y)
     }
+    // how fast as it was let go (Tracker::velocity_at): none where it was held still first
+    let lift_x = dclamp(track_x.velocity_at(t), -max_fling, max_fling)
+    let lift_y = dclamp(track_y.velocity_at(t), -max_fling, max_fling)
     if c.edge == 2 {
       c.back_gesture(2, x, t) |> ignore
     }
@@ -1218,22 +1405,33 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
     if c.active != 0 && target == c.active && !c.dragging {
       c.clicked.push(c.active)
-      c.click_at = Some((x, y))
-      // the second of two (Ctx::double_clicked): on the same, soon enough and near enough; then none is first
+      // the second of two (Ctx::on_double_press): on the same, soon enough and near enough; then none is first
       let (was, at, ax, ay) = c.last_click
-      if was == c.active && t - at <= double_click_ms && (x - ax).abs() <= double_click_slop &&
-        (y - ay).abs() <= double_click_slop {
+      let second = was == c.active &&
+        t - at <= double_click_ms &&
+        (x - ax).abs() <= double_click_slop &&
+        (y - ay).abs() <= double_click_slop
+      if second {
         c.double_clicked.push(c.active)
         c.last_click = (0, 0.0, 0.0, 0.0)
       } else {
         c.last_click = (c.active, t, x, y)
       }
-      // (what was said a press on it does, done as it is let go, where it was let go: Ctx::on_press, made.mbt)
-      made_pressed(c.active)
+      // (what was said a press on it does, done as it is let go, where it was let go: Ctx::on_press,
+      // on_double_press, made.mbt)
+      if !(second && made_double_pressed(c.active)) {
+        made_pressed(c.active)
+      }
     }
     // a tap wherever it lands (Ctx::tapped_anywhere), not a drag, not a press the app took
     if !c.dragging && c.taken_at != c.press_at {
       c.tapped = Some((x, y))
+      // (the window's tree told it too: what of it a tap anywhere lets go of)
+      view_tapped_old()
+      // (words a finger picked elsewhere let go: finger_select.mbt)
+      if !c.press_strayed {
+        c.finger_tapped(target)
+      }
     }
     // taken by none: the innermost's tap (as a press on it alone); the others let it go
     for other in c.press_chain {
@@ -1246,29 +1444,17 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
         c.drag_scroll,
         x,
         y,
-        dclamp(track_x.velocity(), -max_fling, max_fling),
-        dclamp(track_y.velocity(), -max_fling, max_fling),
+        lift_x,
+        lift_y,
         c.taken_at == c.press_at,
       )
     }
     if c.dragging {
       match c.lists.get(c.drag_scroll) {
-        Some(st) =>
-          c.release(st, dclamp(-track_y.velocity(), -max_fling, max_fling), t)
+        Some(st) => c.release(st, -lift_y, t)
         None => ()
       }
-      sideways_up(
-        c,
-        c.drag_scroll,
-        dclamp(track_x.velocity(), -max_fling, max_fling),
-        dclamp(track_y.velocity(), -max_fling, max_fling),
-      )
-      if pagers.contains(c.drag_scroll) {
-        c.pager_release(
-          c.drag_scroll,
-          dclamp(track_x.velocity(), -max_fling, max_fling),
-        )
-      }
+      sideways_up(c, c.drag_scroll, lift_x, lift_y)
     }
     // a tap on a field (Android's): the focus and the caret where it was tapped, its handle under the caret
     if c.editor_tap != 0 &&
@@ -1335,6 +1521,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     c.editor_drag = false
     c.handle_drag = 0
     picked.dragging = false
+    finger_let_go()
     select_edge_stop()
     second_ptr[2] = 0.0
   } else {
@@ -1380,6 +1567,7 @@ fn Ctx::press_called_off(self : Ctx, x : Double, y : Double, t : Double) -> Unit
   c.word_drag = 0
   // (a hold handed here and not taken yet: called off with the press)
   view_handed.val = None
+  press_follow_up(x, y, true)
   if c.edge == 2 {
     c.back_gesture(3, x, t) |> ignore
   }
@@ -1396,12 +1584,10 @@ fn Ctx::press_called_off(self : Ctx, x : Double, y : Double, t : Double) -> Unit
       None => ()
     }
     sideways_up(c, c.drag_scroll, 0.0, 0.0)
-    if pagers.contains(c.drag_scroll) {
-      c.pager_release(c.drag_scroll, 0.0)
-    }
   }
   // (words being picked by it: picked as far as they are, no more, nothing scrolled on at an edge for it)
   picked.dragging = false
+  finger_let_go()
   select_edge_stop()
   c.down = false
   c.dragging = false
@@ -1417,6 +1603,7 @@ fn Ctx::list_drag(self : Ctx, id : Int, d : Double) -> Unit {
       st.held = true
       self.feed(st, d, 1)
       st.hand_moved()
+      list_hand_dirty[id] = true
     }
     None => ()
   }
@@ -1545,8 +1732,9 @@ fn Ctx::edge_move(self : Ctx, x : Double, y : Double, t : Double) -> Bool {
 /// with no gesture. Its steps are the hand's events but where it is as it goes: that is where what follows it reads it
 /// (Nav's `finger`), as a pointer moved is (inputrec.mbt).
 fn on_back(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
+  rows_steady_hand()
   // (one event, at its own moment: view_host.mbt)
-  view_event(fn() { on_back_now(kind, x, progress, edge) })
+  view_event(fn() { on_back_now(kind, x, progress, edge) }, what="back")
 }
 
 ///|
@@ -1610,8 +1798,11 @@ fn on_back_now(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
 
 ///|
 fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
+  rows_steady_hand()
   // (one event, at its own moment: view_host.mbt)
-  view_event(fn() { on_wheel_now(x, y, dx, dy, phase) })
+  zoom_wheel_kept.val = false
+  view_event(fn() { on_wheel_now(x, y, dx, dy, phase) }, what="wheel")
+  h_wheel_kept(zoom_wheel_kept.val)
 }
 
 ///|
@@ -1630,7 +1821,9 @@ fn on_wheel_now(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -
     old_wheel(x, y, dx, dy, phase, island=Some(island))
     true
   }
-  if view_wheel(x, y, dx, dy, mods, old~) {
+  // (a wheel's notch said so to the tree's: a page's list of it eases it in, as an old view's list does)
+  let notch = if phase % 16 == 4 { @view.wheel_notch } else { 0 }
+  if view_wheel(x, y, dx, dy, mods | notch, old~) {
     if !old_took.val {
       input_taped("wheel", h_event_time(), [x, y, dx, dy, phase.to_double()])
     }
@@ -1757,6 +1950,9 @@ fn old_wheel(
     wheels[target] = wheels.get(target).unwrap_or(0.0) + dy
     wheels_x[target] = wheels_x.get(target).unwrap_or(0.0) + dx
     wheel_mods[target] = mods
+    if captures.get(target).unwrap_or(false) && (mods & (wheel_mod_ctrl | wheel_mod_cmd | wheel_mod_pinch)) != 0 {
+      keep_zoom_wheel()
+    }
     wheel_taken()
     h_request_frame()
     return
@@ -1779,7 +1975,9 @@ fn old_wheel(
       // (where it stands its signal's: what lays it out lays it out again, nothing taken by what is built; where parts
       // are kept as drawn, kept_part.mbt, an event from outside for the part or the row it turns in)
       st.hand_moved()
-      h_request_frame()
+      list_hand_dirty[target] = true
+      // The list's hand signal already says what changed; do not mark unrelated, non-signal input as changed.
+      h_frame_owed()
     }
     None => wheel_taken()
   }
@@ -1795,6 +1993,7 @@ fn wheel_taken() -> Unit {
 
 ///|
 fn on_key(code : Int, mods : Int) -> Unit {
+  rows_steady_hand()
   // (one event, at its own moment: view_host.mbt)
   view_event(fn() {
     if !window_key_taken(code, mods) {
@@ -1802,7 +2001,7 @@ fn on_key(code : Int, mods : Int) -> Unit {
     }
     // (what a field of the window's tree gave up of its words by it, told at its moment: tree_field.mbt)
     tree_field_said()
-  })
+  }, what="key")
 }
 
 ///|
@@ -1832,8 +2031,9 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
     input_taped("key", h_now(), [code.to_double(), mods.to_double()])
     return
   }
-  took_input("key", h_now(), [code.to_double(), mods.to_double()])
-  hand_event()
+  let typed = typed_key_part(code, mods)
+  took_input("key", h_now(), [code.to_double(), mods.to_double()], typed~)
+  typed_event(typed)
   key_in(code, mods)
   // (Escape to the topmost layer it dismisses, at its moment: overlay.mbt)
   if code == key_escape {
@@ -1845,6 +2045,8 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
 /// A key, taken as it came (on_key) or as the input method's deleting stands for it (on_text).
 fn key_in(code : Int, mods : Int) -> Unit {
   let c = g()
+  // (the keys came after the pointer's latest event: Ctx::pointer_after_keys)
+  c.pointer_after_keys = false
   // (the focus where a modal layer of the window's tree lets it take input; else none's, for this key: island_allows)
   let focus = c.focus_allowed()
   // a key catcher's while it has the focus: all of it (device.mbt)
@@ -1875,6 +2077,16 @@ fn key_in(code : Int, mods : Int) -> Unit {
   // focus through a press on the page's words, which lets go of what it had picked: the press above)
   if code == key_copy && selected_words() != "" && !field_picks(c) {
     h_clipboard_set(selected_words())
+    // (a finger's, from the system's menu: let go of once copied, as a phone's text is)
+    if picked.finger {
+      select_none()
+      h_request_frame()
+    }
+    return
+  }
+  // the system's menu's select all over words a finger picked: all of what they are in (finger_select.mbt)
+  if code == key_select_all && picked.finger && !field_picks(c) {
+    c.finger_select_all()
     return
   }
   match (c.editors.get(focus), step) {
@@ -1892,6 +2104,8 @@ fn key_in(code : Int, mods : Int) -> Unit {
   match c.editors.get(focus) {
     Some(st) => {
       st.key(code, mods, h_now())
+      // (its words given up by it: told what its build said that does, now: Ctx::editor's on_submit)
+      st.submit_told()
       h_request_frame()
     }
     None => {
@@ -1901,7 +2115,7 @@ fn key_in(code : Int, mods : Int) -> Unit {
       if target != 0 &&
         island_allows(c.island_of_id(target)) &&
         !c.focus_takes(code) &&
-        (c.list_key(target, code) || c.pager_key(target, code)) {
+        c.list_key(target, code) {
         h_request_frame()
       }
     }
@@ -1910,18 +2124,20 @@ fn key_in(code : Int, mods : Int) -> Unit {
 
 ///|
 fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
+  rows_steady_hand()
   // (one event, at its own moment: view_host.mbt)
   view_event(fn() {
     on_text_now(kind, s, a, b)
     // (what a field of the window's tree gave up of its words by it, told at its moment: tree_field.mbt)
     tree_field_said()
-  })
+  }, what="text")
 }
 
 ///|
 fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
-  took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s)
-  hand_event()
+  let typed = typed_text_part(kind)
+  took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s, typed~)
+  typed_event(typed)
   let c = g()
   // (words for a focus a modal layer of the window's tree keeps from input: none's, island_allows; but a field it
   // leaves what is typed to, its: Ctx::typing_allowed)
@@ -1956,8 +2172,8 @@ fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
     return
   }
   match c.editors.get(c.focus) {
-    Some(st) if kind == text_float_begin || kind == text_float_move => {
-      float_caret(st, kind, a.to_double(), b.to_double(), h_now())
+    Some(st) if kind == text_float_begin || kind == text_float_move || kind == text_float_end => {
+      float_caret(c, st, kind, a.to_double() / text_float_unit, b.to_double() / text_float_unit, h_now())
       h_request_frame()
     }
     Some(st) => {
@@ -1969,19 +2185,27 @@ fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
 }
 
 ///|
-/// The keyboard's trackpad in field `st` (on_text's text_float_begin, text_float_move, at (`x`, `y`) in the window):
-/// the caret put as a pointer would put it as far from where the caret was when it began as (`x`, `y`) is from where it
-/// began, as iOS's own fields move theirs (the host's point is the finger's way, not a place in the words); counted in
-/// the field's words, as the field scrolls under it to follow the caret.
-fn float_caret(st : EditorState, kind : Int, x : Double, y : Double, t : Double) -> Unit {
+/// The keyboard's trackpad in field `st` (on_text's text_float_begin, text_float_move, text_float_end, at (`x`, `y`) in
+/// the window): the caret it draws goes as far from where the caret was when it began as (`x`, `y`) is from where it
+/// began, as iOS's own fields move theirs (the host's point is the finger's way, not a place in the words), kept in the
+/// field's words (FloatCaret::follow); the field's caret put where it is, as a pointer there would put it, counted in
+/// the words as the field scrolls under it to follow the caret. Let go, the caret it draws slides back to the caret.
+fn float_caret(c : Ctx, st : EditorState, kind : Int, x : Double, y : Double, t : Double) -> Unit {
   guard st.tl is Some(tl) else { return }
   if kind == text_float_begin {
     let (cx, line) = st.place_of(tl, st.caret + st.marked.length())
-    st.floating = Some((x, y, cx, (line.to_double() + 0.5) * tl.line_h))
+    st.floating = Some(FloatCaret::new(x, y, cx, (line.to_double() + 0.5) * tl.line_h))
     return
   }
-  guard st.floating is Some((fx, fy, cx, cy)) else { return }
-  place_caret(st, st.ox + cx + x - fx, st.oy + cy + y - fy, t)
+  guard st.floating is Some(f) && f.let_go < 0.0 else { return }
+  if kind == text_float_end {
+    f.let_go = c.set_out(f.mover, f, what="the keyboard's trackpad's caret sliding back to the caret")
+    // (shown, not blinking, as it lands: blinking again from there)
+    st.blink0 = f.let_go + float_caret_back_ms
+    return
+  }
+  f.follow(tl, x, y)
+  place_caret(st, st.ox + f.x, st.oy + f.y, t)
 }
 
 ///|
@@ -2076,7 +2300,7 @@ let app_change : Ref[((Bool, Bool) -> Unit)?] = Ref::new(None)
 ///|
 fn on_app_state(s : Int) -> Unit {
   // (one event, at its own moment: view_host.mbt)
-  view_event(fn() { on_app_state_now(s) })
+  view_event(fn() { on_app_state_now(s) }, what="app-state")
 }
 
 ///|
@@ -2109,6 +2333,10 @@ fn app_state_taken(s : Int) -> Unit {
     return
   }
   app_state.val = s
+  // (not shown: the window thread's interval closed as the event that said so ends, journal.mbt)
+  if (s & 1) == 0 {
+    journal_hidden.val = true
+  }
   // (no longer in front: the fingers down called off, all of it (touches.mbt); a finger held on the window's tree let
   // go of now)
   if (s & 2) == 0 {
@@ -2160,10 +2388,10 @@ pub let bench_app : Int = 3
 /// A bench of the app's own (a page's, as still.fail's chat bench scrolls its list) draws every frame while it asks
 /// (`on`, asked each frame): only where the host was opened for it (MBUI_BENCH=3, bench_app), with the app as it
 /// ships, no other path. Anywhere else (a run of the app, the framework's own bench, a scripted run's stable output,
-/// a Tester) it does nothing: no frame is asked for by it.
+/// a Tester, which runs no host's run) it does nothing: no frame is asked for by it.
 pub fn Ctx::bench_frames(self : Ctx, on : Bool) -> Unit {
   ignore(self)
-  if on && bench.host == bench_app && fake.val is None {
+  if on && bench.host == bench_app {
     bench.held = true
   }
 }
@@ -2212,7 +2440,13 @@ let probe_work : Ref[Double] = { val: 0.0 }
 
 ///|
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
-let probe_phase : FixedArray[Double] = FixedArray::make(5, 0.0)
+let probe_phase : FixedArray[Double] = FixedArray::make(6, 0.0)
+
+///|
+/// The memory the process holds (@hostapi.mem_bytes, MB) at the most of the span's frames, and as its last was drawn:
+/// a rise and fall within a span shows, not only where it is every 5 s.
+// kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
+let probe_mem : FixedArray[Double] = FixedArray::make(2, -1.0)
 
 ///|
 // kept across runs: the probe's (MBUI_PROBE, a host's run), read by nothing else
@@ -2380,7 +2614,7 @@ let probe_record_ms : Double = 5000.0
 /// The probe (above): on the log every 2 s with MBUI_PROBE=1, a line for each slow frame too; into the device's
 /// performance record (@hostapi.perf_line, the person's 性能记录) every 5 s while it is kept, its slow frames counted
 /// only. Neither: nothing summed.
-fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
+fn slow_probe(c : Ctx, t : Double, work : Double, present : Double, tree? : Double = 0.0) -> Unit {
   if probe_on.val < 0 {
     probe_on.val = if @hostapi.env("MBUI_PROBE") == "1" { 1 } else { 0 }
     presented.tell(@hostapi.env("MBUI_PROBE_DAMAGE") == "1")
@@ -2405,6 +2639,10 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   } else {
     looks_why()
   }
+  // (the window's tree brought before the frame's own work, `tree`, the frame's work too: what the window's nodes cost,
+  // a page made once as nodes, is in what the frames cost; where it is most of it, said first)
+  let why = if tree > work + present { "tree: " + why } else { why }
+  let work = work + tree
   // (a summary is of its span's frames, said as the first frame after it comes: a span with none drawn after it, a
   // burst of frames at its start, is said whole, its seconds' busiest beside its average, not with the frames that
   // come after a pause)
@@ -2416,11 +2654,18 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   // (how many frames a second, said every 2 s it draws: 5 s into the record alone)
   probe_frames.val = probe_frames.val + 1
   probe_work.val = probe_work.val + work + present
-  probe_phase[0] = probe_phase[0] + probe_msgs_ms.val
-  probe_phase[1] = probe_phase[1] + c.t_build - probe_msgs_ms.val
-  probe_phase[2] = probe_phase[2] + c.t_layout
-  probe_phase[3] = probe_phase[3] + c.t_paint
-  probe_phase[4] = probe_phase[4] + present
+  probe_phase[0] = probe_phase[0] + tree
+  probe_phase[1] = probe_phase[1] + probe_msgs_ms.val
+  probe_phase[2] = probe_phase[2] + c.t_build - probe_msgs_ms.val
+  probe_phase[3] = probe_phase[3] + c.t_layout
+  probe_phase[4] = probe_phase[4] + c.t_paint
+  probe_phase[5] = probe_phase[5] + present
+  // (the memory held as it was drawn, and the most of the span's frames)
+  let mem = h_mem_mb()
+  probe_mem[1] = mem
+  if mem > probe_mem[0] {
+    probe_mem[0] = mem
+  }
   probe_last_why.val = why
   // (what the frames were for, by why: the record's, and the log's with MBUI_PROBE=1)
   if recording || probe_on.val == 1 {
@@ -2434,7 +2679,7 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
       probe_worst.val = (work + present, why)
     }
   }
-  // (how much of the window each drew again, docs/partial-redraw.md; the GPU's time of the last done)
+  // (how much of the window each drew again; the GPU's time of the last done)
   let share = presented_share.val
   probe_parts[if share >= 1.0 { 0 } else if share > 0.0 { 1 } else { 2 }] += 1
   probe_why[presented.why()] += 1
@@ -2467,7 +2712,7 @@ fn slow_probe(c : Ctx, t : Double, work : Double, present : Double) -> Unit {
   }
   if probe_on.val == 1 && (work > probe_slow_ms || gap > 3.0 * probe_slow_ms) {
     h_log(
-      "PROBE slow frame: work=\{work.round()}ms (messages=\{probe_msgs_ms.val.round()} build=\{c.t_build.round()} " +
+      "PROBE slow frame: work=\{work.round()}ms (tree=\{tree.round()} messages=\{probe_msgs_ms.val.round()} build=\{c.t_build.round()} " +
       "layout=\{c.t_layout.round()} paint=\{c.t_paint.round()} present=\{present.round()}) since_last=\{gap.round()}ms " +
       "handed=\{messages_handed.val} nodes=\{c.count}",
     )
@@ -2491,7 +2736,8 @@ fn probe_said(c : Ctx, t : Double, recording : Bool) -> Unit {
   let n = probe_frames.val.to_double()
   let said = "fps=\{(n * 1000.0 / span).round()} fps_peak=\{probe_peak.val} span=\{(span / 100.0).round() / 10.0}s cpu=\{cpu}% looks_alone=\{stepped} painted_alone=\{painted} (last: \{probe_last_why.val}) main_busy=\{(probe_work.val * 100.0 / span).round()}% " +
     "work_avg=\{(probe_work.val / n * 10.0).round() / 10.0}ms " +
-    "avg msgs/build/layout/paint/present=\{probe_phase.map(fn(x) { (x / n * 10.0).round() / 10.0 })} nodes=\{c.count} " +
+    "mem=\{probe_mem[1].round()}MB mem_peak=\{probe_mem[0].round()}MB " +
+    "avg tree/msgs/build/layout/paint/present=\{probe_phase.map(fn(x) { (x / n * 10.0).round() / 10.0 })} nodes=\{c.count} " +
     "drawn whole/part/none=\{probe_parts[0]}/\{probe_parts[1]}/\{probe_parts[2]} whole_why=\{probe_why} damage_avg=\{(probe_damage.val / n * 100.0).round() / 100.0}ms share_avg=\{(probe_share.val * 100.0 / n).round()}% " +
     "gpu_avg=\{if probe_gpu_n.val > 0 { (probe_gpu.val / probe_gpu_n.val.to_double() * 100.0).round() / 100.0 } else { -1.0 }}ms slow=\{probe_slow.val}"
   // (each line into the record, and on the log with MBUI_PROBE=1: a Mac's, which keeps no record)
@@ -2561,9 +2807,11 @@ fn probe_reset(t : Double) -> Unit {
   probe_damage.val = 0.0
   probe_gpu.val = 0.0
   probe_gpu_n.val = 0
-  for i in 0..<5 {
+  for i in 0..<6 {
     probe_phase[i] = 0.0
   }
+  probe_mem[0] = -1.0
+  probe_mem[1] = -1.0
   probe_frames.val = 0
   probe_work.val = 0.0
   probe_slow.val = 0

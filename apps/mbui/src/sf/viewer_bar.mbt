@@ -1,4 +1,4 @@
-// The bar every file opened shows across the window's top on a desktop (web/ui viewer/ViewerBar.tsx, ViewerBar.css.ts):
+// The bar every file opened shows across the window's top on a desktop:
 // a picture's, a PDF's or code's preview (the app's FilePreview), a text read (reader.mbt), a film played (player.mbt). Always there, along the window's top, 45 high: the way back on the left (where to, by name), the
 // file's name and a line about it in the middle, its tools on the right as icons, download last. Its ground is the
 // file's (the paper under a text) at 82% over a 20 blur, saturated, a line of its own under it at 70%; it drags the
@@ -30,7 +30,7 @@ pub fn page_viewer_ink() -> ViewerInk {
 /// they are pointed at: ViewerBar.tsx's title), `tools` at its end (viewer_tool, viewer_download); `hidden`, gone up
 /// out of the way. Its last tool stands at the window's top right corner as a page's bar's last button does
 /// (window_end_in: following the window's corner, as far in as from the bar's top), or clear of it where the last is
-/// a capsule of words (`capsule_end`: window_clear_in). True on the frame after its way back was pressed.
+/// a capsule of words (`capsule_end`: window_clear_in). `on_back` as its way back is pressed.
 pub fn viewer_bar(
   c : @ui.Ctx,
   key : String,
@@ -42,13 +42,16 @@ pub fn viewer_bar(
   tools : () -> Unit,
   title? : String = "",
   capsule_end? : Bool = false,
-) -> Bool {
-  let gone = @motion.animate(c, key + "/gone", if hidden { 1.0 } else { 0.0 }, spec=@motion.tween(
+  on_back? : () -> Unit = fn() {  },
+) -> Unit {
+  // (gone up as it is drawn: told as it is built, read where it is painted)
+  let gone = @motion.told(c, key + "/gone", if hidden { 1.0 } else { 0.0 }, spec=@motion.tween(
       viewer_bar_ms,
       ease=Out,
     ))
   let bar = c.id(key)
-  let live = gone < 1.0 && !hidden
+  // (it takes presses from the moment it is told to come, gone or going it takes none: as its node does)
+  let live = !hidden
   if live && @ui.window_inset() {
     c.window_drag(bar)
   }
@@ -58,7 +61,6 @@ pub fn viewer_bar(
     solid=ink.ground,
     saturation=viewer_bar_saturation,
   )
-  let mut went = false
   // (its ground on under the status bar where the system's bars are over the window: a tablet's)
   let top = (viewer_host().room)().0
   let node = c.box(style=viewer_bar_box, glass~, id=if live { bar } else { 0 }, fn() {
@@ -70,14 +72,14 @@ pub fn viewer_bar(
     let alone = c.theme().corner(Xl)
     let start = if at_corner { viewer_bar_start_in(alone, @ui.corner_roots()) } else { viewer_bar_in }
     c.box(style=viewer_bar_row.then(@ui.style(pl=room(start))), fn() {
-      // clear of the window's buttons at its left, the system's (ViewerBar.css.ts: 84 in, not in full screen)
+      // clear of the window's buttons at its left, the system's (not in full screen)
       if @ui.window_keys_left() {
         c.box(style=viewer_bar_buttons, fn() {  }) |> ignore
       }
       c.box(style=viewer_bar_start, fn() {
         let id = c.id(key + "/back")
-        if live && c.clicked(id) {
-          went = true
+        if live {
+          c.on_press(id, on_back)
         }
         let corner = if at_corner { @ui.style(radius=Linked(viewer_back_corner(alone))) } else { @ui.style() }
         let b = c.box(style=viewer_back_box.then(corner).then(viewer_lit(ink)), id=if live { id } else { 0 }, fn() {
@@ -123,8 +125,10 @@ pub fn viewer_bar(
     })
     |> ignore
   })
-  c.look(node, @ui.look(alpha=1.0 - gone, dy=-(viewer_bar_h + top) * gone))
-  went
+  c.look_by(node, fn() {
+    let gone = gone.get(c)
+    @ui.look(alpha=1.0 - gone, dy=-(viewer_bar_h + top) * gone)
+  })
 }
 
 ///|
@@ -134,8 +138,8 @@ pub fn viewer_bar(
 let tools_across : Ref[Bool] = Ref(false)
 
 ///|
-/// One of a bar's tools (ViewerBar.tsx ViewerTool): an 18 icon in a 32 button, in the file's quieter ink until
-/// pointed at or `on` (its ground then the page's chosen one), named on hover. True on the frame after it was pressed.
+/// One of a bar's tools: an 18 icon in a 32 button, in the file's quieter ink until
+/// pointed at or `on` (its ground then the page's chosen one), named on hover. `on_press` as it is pressed.
 pub fn viewer_tool(
   c : @ui.Ctx,
   key : String,
@@ -144,7 +148,8 @@ pub fn viewer_tool(
   ink : ViewerInk,
   on? : Bool = false,
   disabled? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let id = c.id(key)
   let live = !disabled
   let hot = live && (c.lit(id) || c.pressed(id))
@@ -155,7 +160,10 @@ pub fn viewer_tool(
   if live {
     tip(c, key + "/tip", id, label, side=Bottom)
   }
-  live && c.clicked(id)
+  match on_press {
+    Some(f) if live => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|
@@ -170,9 +178,16 @@ pub fn viewer_tool_corner() -> @ui.Style {
 }
 
 ///|
-/// Download, as every bar has it last (ViewerDownload). True on the frame after it was pressed. `coming`: how far a
-/// download of it has come (0 to 1), a ring of the file's ink in its place meanwhile, not pressed again.
-pub fn viewer_download(c : @ui.Ctx, key : String, ink : ViewerInk, disabled? : Bool = false, coming? : Double) -> Bool {
+/// Download, as every bar has it last (ViewerDownload); `on_press` as it is pressed. `coming`: how far a download of it
+/// has come (0 to 1), a ring of the file's ink in its place meanwhile, not pressed again.
+pub fn viewer_download(
+  c : @ui.Ctx,
+  key : String,
+  ink : ViewerInk,
+  disabled? : Bool = false,
+  coming? : Double,
+  on_press? : () -> Unit,
+) -> Unit {
   match coming {
     Some(part) => {
       let label = t("web-main.preview.download")
@@ -180,9 +195,8 @@ pub fn viewer_download(c : @ui.Ctx, key : String, ink : ViewerInk, disabled? : B
         progress_ring(c, viewer_tool_icon, part, ink.ink) |> ignore
       })
       c.semantics(b, Button, label~, disabled=true)
-      false
     }
-    None => viewer_tool(c, key, "download", t("web-main.preview.download"), ink, disabled~)
+    None => viewer_tool(c, key, "download", t("web-main.preview.download"), ink, disabled~, on_press?)
   }
 }
 
@@ -249,7 +263,7 @@ pub fn viewer_bar_under() -> Double {
 }
 
 ///|
-/// Its going and coming (ViewerBar.css.ts: transform and opacity, 240 ms ease-out).
+/// Its going and coming (240 ms ease-out).
 pub let viewer_bar_ms : Double = 240.0
 
 ///|
@@ -339,7 +353,7 @@ fn viewer_bar_end() -> @ui.Style {
 let viewer_bar_middle : @ui.Style = @ui.css("align=ACenter clip")
 
 ///|
-/// The way back (ViewerBar.css.ts back): 32 high, 4 before the chevron and 10 after the words, the page's corner.
+/// The way back: 32 high, 4 before the chevron and 10 after the words, the page's corner.
 // kept across runs: a value (no field of it changes)
 let viewer_back_box : @ui.Style = @ui.css("row h=S8 pl=S1 pr=S2_5 gap=S0_5 align=ACenter radius=Xl")
 

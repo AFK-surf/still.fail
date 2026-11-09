@@ -1,7 +1,7 @@
 // The app's keyboard shortcuts (the prefs' `keymap`; `keys.set`): each action, where it works, the keys of its own and
 // those changed on this device (the prefs' `keys`, the desktop app's only), as a key cap shows them on this device.
 // A client only turns a key press into a binding (its key events are its own) and looks it up here. Of the core it
-// reads only its words: the web's demo makes its keymap with it (web/src/demo/mount.tsx).
+// reads only its words: the web's demo makes its keymap with it.
 import { t } from "./i18n.ts";
 
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -93,6 +93,25 @@ function keysOf(action: string, f: ReturnType<typeof facts>): string[] {
   return (f.desktop && spec.desktop ? [...spec.desktop, ...spec.keys] : spec.keys).map((b) => binding(b)!);
 }
 
+/// How a message is sent from the composer (the prefs' `sendKey`): Enter, ⇧Enter a new line (the default, none kept); or
+/// ⌘Enter (Ctrl+Enter elsewhere), Enter and ⇧Enter each a new line. Not changeable as the actions' keys are: these two.
+export const SEND_KEYS = ["enter", "mod"] as const;
+
+/// What the composer's keys are, the two ways to choose between and the keys that send and make a new line, in words.
+function sendView(prefs: unknown, mac: boolean): unknown {
+  const by = isObject(prefs) && prefs.sendKey === "mod" ? "mod" : "enter";
+  const send = label(by === "mod" ? "Mod+Enter" : "Enter", mac);
+  const newline = by === "mod" ? `${label("Enter", mac)} / ${label("Shift+Enter", mac)}` : label("Shift+Enter", mac);
+  const named = { enter: "Enter", mod: mac ? "⌘ Enter" : "Ctrl+Enter" };
+  return {
+    by,
+    choices: SEND_KEYS.map((k) => ({ by: k, name: t("web-main.shortcuts.sendWith", { keys: named[k] }) })),
+    send,
+    newline,
+    text: t("web-main.shortcuts.sendNote", { send, newline }),
+  };
+}
+
 /// The keymap as the prefs say it (`keymap`, of the `prefs` topic).
 export function view(prefs: unknown): unknown {
   const f = facts(prefs);
@@ -118,6 +137,7 @@ export function view(prefs: unknown): unknown {
     actions,
     // ⌃1…⌃9 on a Mac, Alt+1…9 elsewhere (Ctrl+digit is the browser's own tabs): not changeable.
     workspace: [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => label(f.mac ? `Ctrl+${n}` : `Alt+${n}`, f.mac)),
+    send: sendView(prefs, f.mac),
   };
 }
 

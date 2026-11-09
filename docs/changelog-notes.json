@@ -1,4 +1,33 @@
 {
+  "e72209af97": {
+    "text": ["修复：左滑归档不再容易误触：上下滑列表时手指稍微偏左不会再被当成左滑，轻轻一甩也不会归档，要划过一半再甩或拖过归档线松手"],
+    "parts": ["android", "web"]
+  },
+  "fa85117187": {
+    "text": []
+  },
+  "5cd4f72de4": {
+    "text": ["改进：减少自动命名对话时读取的历史记录"],
+    "parts": ["station"]
+  },
+  "7b136e037a": {
+    "text": []
+  },
+  "9d4d4b52f4": {
+    "text": ["修复：侧栏的待办标记和远程工作区记录读得更快，不再让 station 卡住几秒"],
+    "parts": ["station"]
+  },
+  "88842189ac": {
+    "text": ["修复：长对话的历史在后台补时不再占满磁盘，发消息和打开对话不再被它拖慢"],
+    "parts": ["station"]
+  },
+  "033a9c3a1a": {
+    "text": ["改进：消息列表里几件事接连发生（回答卡片、「处理中」出现、回复进来）时，合成一次移动，不再来回晃"],
+    "parts": ["android", "desktop", "web"]
+  },
+  "278a3cea93": {
+    "text": []
+  },
   "91a5abe7bf": {
     "text": ["修复：安全模式下批准新设备时，设备上的批准码或申请页面可能无法显示"],
     "parts": ["android", "desktop"]
@@ -572,5 +601,34 @@
   },
   "37e79d5024": {
     "parts": ["android", "desktop"]
+  },
+  "7000b5c7c8": {
+    "text": ["修复：会话很多时切到「会话」不再卡几秒，长列表滚动也更顺"],
+    "parts": ["android", "desktop"]
+  },
+  "cb7a1f82a1": {
+    "text": ["修复：agent 发了要粘贴登录码的登录卡片后，对话打开时不再显示「这部分显示出错了」"],
+    "parts": ["android", "desktop"]
+  },
+  "096c0933ad": {
+    "text": ["改进：打开 Claude 授权页面前先确认一次"],
+    "parts": ["android", "desktop"]
+  },
+  "edbc74824d": {
+    "text": ["新功能：API key 的 Profile 可以停用、再启用，key 和设置都保留"],
+    "parts": ["station", "android", "desktop"]
+  },
+  "af6bd167b0": {
+    "fixes": [1],
+    "parts": ["station"]
+  },
+  "c77bd2089ed": {
+    "fixes": [2],
+    "parts": ["cloud"]
+  },
+  "257b89c894": {
+    "text": ["修复：网页版打开 agent 起的网页服务不再是一片空白"],
+    "fixes": [8, 9],
+    "parts": ["web"]
   }
 }

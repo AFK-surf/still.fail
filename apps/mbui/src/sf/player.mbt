@@ -1,4 +1,4 @@
-// The one player of films and songs (web/ui viewer/Player.tsx, the web's one player too): a video is a video,
+// The one player of films and songs (the web's one player too): a video is a video,
 // whether a chat's recording of a screen or a film of a station's drive, and is watched both ways. To look closely:
 // paused, a step to the frame before or after (the file's own frames, read by the host), the time to the millisecond
 // and which frame of how many at what rate, slow speeds (0.1×, 0.25×, 0.5×), the picture zoomed and moved, the frame
@@ -37,7 +37,7 @@ pub fn clock(ms : Double) -> String {
 }
 
 ///|
-/// `m:ss.mmm` (`h:mm:ss.mmm` past an hour): a frame's time, to the millisecond (web/ui viewer/playing.ts clockMs).
+/// `m:ss.mmm` (`h:mm:ss.mmm` past an hour): a frame's time, to the millisecond.
 pub fn clock_ms(ms : Double) -> String {
   let all = (if ms < 0.0 { 0.0 } else { ms }).round().to_int64()
   let total = all / 1000L
@@ -50,15 +50,6 @@ pub fn clock_ms(ms : Double) -> String {
     "\{h}:\{two_digits(m)}:\{two_digits(s)}.\{mmm}"
   } else {
     "\{m}:\{two_digits(s)}.\{mmm}"
-  }
-}
-
-///|
-fn two_digits(n : Int64) -> String {
-  if n < 10L {
-    "0\{n}"
-  } else {
-    "\{n}"
   }
 }
 
@@ -611,7 +602,7 @@ fn where_runs(p : @kit.Media, fr : Frames, s : @kit.MediaStatus, playing : Bool,
 
 ///|
 /// The frame shown saved as a picture once the host has it (`<name>-<frame>.png`, to the device: the host's keep).
-fn take_grab(v : PlayerView, p : @kit.Media, name : String) -> Unit {
+fn take_grab(c : @ui.Ctx, v : PlayerView, p : @kit.Media, name : String) -> Unit {
   if !v.grabbing {
     return
   }
@@ -630,7 +621,12 @@ fn take_grab(v : PlayerView, p : @kit.Media, name : String) -> Unit {
             (viewer_host().say)(t("android-chat.video.saveFrame.failed"))
           }
         }
-        None => ()
+        None =>
+          if @kit.media_grab_stalled(c, n) {
+            v.grabbing = false
+            c.tell(p.key() + "/grab-given-up", fn() { n.give_up_grab() })
+            (viewer_host().say)(t("android-chat.video.saveFrame.failed"))
+          }
       }
     None => v.grabbing = false
   }
@@ -651,8 +647,9 @@ fn grab(v : PlayerView, p : @kit.Media, fr : Frames) -> Unit {
 
 ///|
 /// Where the picture shows in the stage `w` × `h`: zoomed as the view's zoom has it (fitted until zoomed in), or
-/// filling the screen turned sideways (cropped); its size not known yet, a point in the middle.
+/// filling the screen turned sideways (cropped); its size not known yet, a point in the middle. As the old view `c` has it.
 fn picture_place(
+  c : @ui.Ctx,
   v : PlayerView,
   p : @kit.Media,
   s : @kit.MediaStatus,
@@ -663,21 +660,21 @@ fn picture_place(
   foot? : Double = 0.0,
 ) -> (Double, Double, Double, Double) {
   let z = v.zoom
-  z.boxed(w, h - top - foot)
+  z.boxed(w, h - top - foot, at=c.moment())
   if s.width > 0.0 && s.height > 0.0 {
-    z.natural(s.width, s.height)
+    z.natural(s.width, s.height, at=c.moment())
   } else {
     // (its size not said yet: its still's, which is of it)
     match @ui.image_natural(still) {
-      Some((sw, sh)) if still != "" && sw > 0.0 && sh > 0.0 => z.natural(sw, sh)
+      Some((sw, sh)) if still != "" && sw > 0.0 && sh > 0.0 => z.natural(sw, sh, at=c.moment())
       _ => ()
     }
   }
-  z.step()
+  z.step(c)
   if p.fills() && p.is_sideways() {
     return p.picture_rect(s, w, h)
   }
-  match z.rect() {
+  match z.rect(c) {
     Some((x, y, pw, ph)) => (x, y + top, pw, ph)
     None => p.picture_rect(s, w, h)
   }
@@ -773,12 +770,12 @@ fn ended_card(c : @ui.Ctx, v : PlayerView, p : @kit.Media, f : @kit.MediaFrame, 
         t("web-pages.drive.player.nextIn", args=[("n", left.to_string())])
       player_ask(c, ink, t("android-misc.drive.player.ended"), note, fn() {
         // (as a confirming dialog's: the way out first, what it does last)
-        if button(c, t("common.cancel"), key=key + "/off", tone=Ghost) {
+        button(c, t("common.cancel"), key=key + "/off", tone=Ghost, on_press=fn() {
           v.ended_off = other
-        }
-        if button(c, t("android-misc.drive.player.next"), key=key + "/now", tone=Primary) {
+        }) |> ignore
+        button(c, t("android-misc.drive.player.next"), key=key + "/now", tone=Primary, on_press=fn() {
           go_now()
-        }
+        }) |> ignore
       })
     })
     |> ignore
@@ -847,6 +844,8 @@ fn player_format(mime : String) -> String? {
     "video/webm" | "audio/webm" => Some("WebM")
     "video/mp4" | "audio/mp4" => Some("MP4")
     "video/quicktime" => Some("MOV")
+    "video/3gpp" => Some("3GP")
+    "video/3gpp2" => Some("3G2")
     "video/x-matroska" => Some("MKV")
     "video/x-msvideo" => Some("AVI")
     "video/ogg" | "audio/ogg" => Some("Ogg")
@@ -899,9 +898,9 @@ fn player_waits(c : @ui.Ctx, p : @kit.Media, f : @kit.MediaFrame, ink : MediaInk
             _ => ""
           }
           player_ask(c, ink, title, note, fn() {
-            if button(c, t("android-misc.drive.player.retry"), key=p.key() + "/retry", tone=Primary) {
+            button(c, t("android-misc.drive.player.retry"), key=p.key() + "/retry", tone=Primary, on_press=fn() {
               p.retry()
-            }
+            }) |> ignore
           }, show_buttons=f.status.state != -2 && f.status.state != -3 && f.status.state != -4)
         }
         _ => ()
@@ -930,7 +929,9 @@ fn player_cover(c : @ui.Ctx, name : String, ink : MediaInk) -> Unit {
 /// the one playing among them), `on_go` another of them opened, back to `back_label`; `still` (an image's key) shown
 /// where its picture will be until its first frame is. A phone's or a desktop's, as the page is. `flying`: its picture
 /// flown in from a thumbnail or back into it by what opened it (the preview's, sfbase viewer.mbt), only its bars and
-/// controls drawn over that, on no ground of their own, answering nothing.
+/// controls drawn over that, on no ground of their own, answering nothing. `going`: closed and still drawn as it leaves
+/// (its fade), its controls away at once as when a finger takes it down, so that none of their words is seen over the
+/// page as that shows through.
 pub fn player_view(
   c : @ui.Ctx,
   p : @kit.Media,
@@ -941,6 +942,7 @@ pub fn player_view(
   on_go~ : (String) -> Unit,
   still? : String = "",
   flying? : Bool = false,
+  going? : Bool = false,
 ) -> Unit {
   // what the view holds of the file it shows (zoomed in, its end's card, a frame being saved) not held of the next one
   // played in its place; what it holds of the player (选集 open, its speeds' menu) stays
@@ -948,7 +950,7 @@ pub fn player_view(
   if v.file != file.key {
     v.file = file.key
     native_full.set(false)
-    v.zoom.fit_now()
+    v.zoom.fit_now(at=c.moment())
     v.grabbing = false
     v.ended_off = ""
     v.taken_down = false
@@ -956,9 +958,9 @@ pub fn player_view(
   }
   // laid out Small: a phone's player, as the viewer's frame
   if layout(c.width) is Small {
-    phone_player(c, p, file, list, back_label, on_back, on_go, still, flying)
+    phone_player(c, p, file, list, back_label, on_back, on_go, still, flying, going)
   } else {
-    desk_player(c, p, file, list, back_label, on_back, on_go, still, flying)
+    desk_player(c, p, file, list, back_label, on_back, on_go, still, flying, going)
   }
 }
 
@@ -976,6 +978,7 @@ fn desk_player(
   on_go : (String) -> Unit,
   still : String,
   flying : Bool,
+  going : Bool,
 ) -> Unit {
   let f = p.frame(c)
   let s = f.status
@@ -1006,7 +1009,7 @@ fn desk_player(
   let playing = plays(p, f)
   let fr = frames_of(p, s, p.scrubbing().unwrap_or(s.position))
   let mac = @ui.platform() == 0
-  take_grab(v, p, name)
+  take_grab(c, v, p, name)
   // a click (a finger's tap, on a tablet's screen too) shows or hides the controls; a mouse's pointer over the bar or
   // the controls shows them while it is there
   let finger = @ui.pointing() is Finger
@@ -1018,7 +1021,7 @@ fn desk_player(
   let full = fn() {
     // (beside the system's bars, an iPhone Duo's: the window filled, the bars put away: native_full)
     if native_on() {
-      native_full.set(!@signals.untracked(fn() { native_full.get() }))
+      native_full.set(!native_full.untracked())
       p.wake()
       return
     }
@@ -1033,89 +1036,80 @@ fn desk_player(
   let z = v.zoom
   let (room_top, room_foot) = player_room(c.width)
   p.near(!finger && py >= 0.0 && (py < room_top || py >= c.height - room_foot))
-  // the keys (see the file's head), once it is up
+  // the keys (see the file's head), once it is up: the keymap's player.* (player_bindings), done at their key's moment
   if !flying {
-    let char = fn(ch : Char) { c.key_pressed(@ui.key_of_char(ch)) }
-    let shifted = fn(ch : Char) {
-      c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key) || c.key_pressed(@ui.key_of_char(ch.to_ascii_uppercase()))
+    c.key_context("Player")
+    let on = fn(action : String, f : () -> Unit) {
+      c.on_action("player." + action, fn() {
+        f()
+        true
+      })
     }
-    if c.key_pressed(@ui.key_space) || char('k') {
+    on("play", fn() {
       p.play_pause()
       p.wake()
-    }
-    if char(',') {
-      step_frame(c, p, fr, -1)
-    }
-    if char('.') {
-      step_frame(c, p, fr, 1)
-    }
-    if c.key_pressed(@ui.key_code_left) {
+    })
+    on("frame_back", fn() { step_frame(c, p, fr, -1) })
+    on("frame_on", fn() { step_frame(c, p, fr, 1) })
+    on("back", fn() {
       if playing {
         p.seek_by(-p.nudge_ms())
         p.wake()
       } else {
         step_frame(c, p, fr, -1)
       }
-    }
-    if c.key_pressed(@ui.key_code_right) {
+    })
+    on("on", fn() {
       if playing {
         p.seek_by(p.nudge_ms())
         p.wake()
       } else {
         step_frame(c, p, fr, 1)
       }
-    }
-    if char('j') {
+    })
+    on("jump_back", fn() {
       p.seek_by(-p.nudge_ms())
       p.wake()
-    }
-    if char('l') {
+    })
+    on("jump_on", fn() {
       p.seek_by(p.nudge_ms())
       p.wake()
-    }
-    if c.key_pressed(@ui.key_code_up) || c.key_pressed(@ui.key_code_down) {
+    })
+    let loud = fn(by : Double) {
       let (volume, _) = p.volume()
-      p.set_volume(volume + (if c.key_pressed(@ui.key_code_up) { player_volume_key } else { -player_volume_key }))
+      p.set_volume(volume + by)
       p.wake()
     }
-    if char('m') {
+    on("louder", fn() { loud(player_volume_key) })
+    on("quieter", fn() { loud(-player_volume_key) })
+    on("mute", fn() {
       p.toggle_mute()
       p.wake()
+    })
+    if picture && mac {
+      on("full", full)
     }
-    if char('f') && picture && mac {
-      full()
+    if p.subtitle().0 {
+      on("subtitle", fn() {
+        p.toggle_subtitle()
+        p.wake()
+      })
     }
-    if char('c') && p.subtitle().0 {
-      p.toggle_subtitle()
-      p.wake()
+    match next {
+      Some(other) => on("next", fn() { go(other) })
+      None => ()
     }
-    if shifted('n') {
-      match next {
-        Some(other) => go(other)
-        None => ()
-      }
-    }
-    if shifted('p') {
-      match prev {
-        Some(other) => go(other)
-        None => ()
-      }
+    match prev {
+      Some(other) => on("prev", fn() { go(other) })
+      None => ()
     }
     if picture && z.nw > 0.0 {
-      let zoom_key = fn(ch : Char) {
-        c.key_pressed(@ui.key_of_char(ch)) || c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key)
-      }
-      if zoom_key('+') || zoom_key('=') {
-        z.zoom_to(z.scale * player_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-      } else if zoom_key('-') || zoom_key('_') {
-        z.zoom_to(z.scale / player_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-      } else if char('0') {
-        z.reset()
-      } else if char('1') {
-        z.zoom_to(player_whole, z.bw / 2.0, z.bh / 2.0, true)
-      }
+      on("zoom_in", fn() { z.zoom_to(z.scale * player_zoom_step, z.bw / 2.0, z.bh / 2.0, true, at=c.moment()) })
+      on("zoom_out", fn() { z.zoom_to(z.scale / player_zoom_step, z.bw / 2.0, z.bh / 2.0, true, at=c.moment()) })
+      on("zoom_reset", fn() { z.reset(at=c.moment()) })
+      on("zoom_whole", fn() { z.zoom_to(player_whole, z.bw / 2.0, z.bh / 2.0, true, at=c.moment()) })
     }
-    if c.key_pressed(@ui.key_escape) {
+    on("escape", fn() {
       if v.rates {
         v.rates = false
       } else if listing {
@@ -1123,14 +1117,14 @@ fn desk_player(
       } else {
         desk_leave(c, v, on_back)
       }
-    }
+    })
   }
   c.box(style=desk_play_ground.then(@ui.style(bg=Data(if flying { no_ground } else { ink.stage }))), fn() {
     // the picture, in the window less the list beside it, as a phone's (Media::stage): a click or a finger's tap shows
     // or hides the controls, a double one in the middle plays or pauses, on the left third back, on the right on (the
     // user, 2026-10-28); the screen filled by F or its key
     let stage = c.id(key + "/desk-stage")
-    @ui.capture(c, stage)
+    @ui.capture(c, stage, zooms=picture)
     if !flying {
       p.stage(c, stage, c.width - panel)
     }
@@ -1139,12 +1133,12 @@ fn desk_player(
     if picture && z.nw > 0.0 && (wx != 0.0 || wy != 0.0) {
       if (mods & (@ui.wheel_mod_ctrl | @ui.wheel_mod_cmd)) != 0 {
         let fine = (mods & @ui.wheel_mod_ctrl) != 0 && wy.abs() < player_pinch_step
-        z.zoom_to(z.scale * @dmath.exp(-wy * (if fine { player_pinch_rate } else { player_wheel_rate })), px, py - room_top, false)
-      } else if z.zoomed() {
+        z.zoom_to(z.scale * @dmath.exp(-wy * (if fine { player_pinch_rate } else { player_wheel_rate })), px, py - room_top, false, at=c.moment())
+      } else if z.zoomed(c) {
         if (mods & @ui.wheel_mod_shift) != 0 && wx == 0.0 {
-          z.pan(-wy, 0.0)
+          z.pan(-wy, 0.0, at=c.moment())
         } else {
-          z.pan(-wx, -wy)
+          z.pan(-wx, -wy, at=c.moment())
         }
       }
     }
@@ -1153,7 +1147,7 @@ fn desk_player(
         let w = dmax(desk_none, c.width - panel)
         match p.native() {
           Some(n) if n.here() && !flying => {
-            let (x, y, pw, ph) = picture_place(v, p, s, w, c.height, still, top=room_top, foot=room_foot)
+            let (x, y, pw, ph) = picture_place(c, v, p, s, w, c.height, still, top=room_top, foot=room_foot)
             v.placed = Some((x, y, pw, ph))
             c.native(n, content=Some((x, y, pw, ph))) |> ignore
             player_still(c, n, still, x, y, pw, ph)
@@ -1177,16 +1171,18 @@ fn desk_player(
         // which of the folder's, its size; a film's own facts after them
         let facts = if picture { film_facts(file.facts, s, fr) } else { "" }
         let meta = joined([if many && index >= 0 { "\{index + 1} / \{list.length()}" } else { "" }, file_size(file.size), facts], " · ")
-        if viewer_bar(c, key + "/bar", back_label, name, meta, !f.on && !listing, bar_ink, title=file.title, fn() {
-            if many && viewer_tool(c, key + "/list", "list", t("web-pages.drive.player.list"), bar_ink, on=listing) {
+        viewer_bar(c, key + "/bar", back_label, name, meta, !f.on && !listing, bar_ink, title=file.title, fn() {
+          if many {
+            viewer_tool(c, key + "/list", "list", t("web-pages.drive.player.list"), bar_ink, on=listing, on_press=fn() {
               v.listing = !listing
-            }
-            if viewer_download(c, key + "/download", bar_ink) {
-              (file.save)()
-            }
-          }) {
+            })
+          }
+          viewer_download(c, key + "/download", bar_ink, on_press=fn() {
+            (file.save)()
+          })
+        }, on_back=fn() {
           desk_leave(c, v, on_back)
-        }
+        })
       })
       |> ignore
     }
@@ -1204,7 +1200,7 @@ fn desk_player(
             let n = c.box(style=media_bar_box().then(@ui.style(w=Fixed(most), pt=room(over), bg=Data(ink.ground))), id=c.id(key + "/desk-controls"), fn() {
               desk_play_controls(c, v, p, s, f, fr, many, prev, next, go, full, picture, ink)
             })
-            c.look(n, @ui.look(alpha=f.shown))
+            c.look(n, @ui.look(alpha=if going { desk_none } else { f.shown }))
           })
           |> ignore
           c.box(style=@ui.style(w=Fixed(panel)), fn() {  }) |> ignore
@@ -1269,35 +1265,43 @@ fn desk_play_controls(
   desk_play_timeline(c, p, s, fr, on, ink)
   c.box(style=media_row(), fn() {
     c.box(style=media_group(), fn() {
-      if many && media_key(c, key + "/prev", "skip-back", t("web-pages.drive.player.prev"), on && prev is Some(_), small=true, ink~) {
-        match prev {
-          Some(other) => go(other)
-          None => ()
-        }
+      if many {
+        media_key(c, key + "/prev", "skip-back", t("web-pages.drive.player.prev"), on && prev is Some(_), small=true, ink~, on_press=fn() {
+          match prev {
+            Some(other) => go(other)
+            None => ()
+          }
+        })
       }
-      if media_key(c, key + "/back15", "back-15", t("web-pages.drive.player.back15"), on, ink~) {
+      media_key(c, key + "/back15", "back-15", t("web-pages.drive.player.back15"), on, ink~, on_press=fn() {
         p.seek_by(-p.nudge_ms())
         p.wake()
+      })
+      if picture {
+        media_key(c, key + "/frame-back", "chevron-left", t("android-chat.video.prev"), on && ready, small=true, ink~, on_press=fn() {
+          step_frame(c, p, fr, -1)
+        })
       }
-      if picture && media_key(c, key + "/frame-back", "chevron-left", t("android-chat.video.prev"), on && ready, small=true, ink~) {
-        step_frame(c, p, fr, -1)
-      }
-      if media_key(c, key + "/play", if playing { "pause" } else { "play" }, t(if playing { "web-main.video.pauseKey" } else { "web-main.video.playKey" }), on, bright=true, ink~) {
+      media_key(c, key + "/play", if playing { "pause" } else { "play" }, t(if playing { "web-main.video.pauseKey" } else { "web-main.video.playKey" }), on, bright=true, ink~, on_press=fn() {
         p.play_pause()
         p.wake()
+      })
+      if picture {
+        media_key(c, key + "/frame-on", "chevron-right", t("android-chat.video.next"), on && ready, small=true, ink~, on_press=fn() {
+          step_frame(c, p, fr, 1)
+        })
       }
-      if picture && media_key(c, key + "/frame-on", "chevron-right", t("android-chat.video.next"), on && ready, small=true, ink~) {
-        step_frame(c, p, fr, 1)
-      }
-      if media_key(c, key + "/forward15", "forward-15", t("web-pages.drive.player.forward15"), on, ink~) {
+      media_key(c, key + "/forward15", "forward-15", t("web-pages.drive.player.forward15"), on, ink~, on_press=fn() {
         p.seek_by(p.nudge_ms())
         p.wake()
-      }
-      if many && media_key(c, key + "/next", "skip-forward", t("web-pages.drive.player.next"), on && next is Some(_), small=true, ink~) {
-        match next {
-          Some(other) => go(other)
-          None => ()
-        }
+      })
+      if many {
+        media_key(c, key + "/next", "skip-forward", t("web-pages.drive.player.next"), on && next is Some(_), small=true, ink~, on_press=fn() {
+          match next {
+            Some(other) => go(other)
+            None => ()
+          }
+        })
       }
     })
     |> ignore
@@ -1336,9 +1340,9 @@ fn desk_play_controls(
       if subtitle {
         let slot = c.id(key + "/captions-slot")
         c.box(id=slot, taps=false, drop=player_drop_subtitle, fn() {
-          if media_key(c, key + "/captions", "captions", subs_label, on, small=true, lit=subs_on, ink~) {
+          media_key(c, key + "/captions", "captions", subs_label, on, small=true, lit=subs_on, ink~, on_press=fn() {
             subs_flip()
-          }
+          })
         })
         |> ignore
         if c.left_out(slot) {
@@ -1350,10 +1354,10 @@ fn desk_play_controls(
       if picture {
         let slot = c.id(key + "/save-frame-slot")
         c.box(id=slot, taps=false, drop=player_drop_grab, fn() {
-          if media_key(c, key + "/save-frame", "camera", t("android-chat.video.saveFrame"), grabs, small=true, ink~) {
+          media_key(c, key + "/save-frame", "camera", t("android-chat.video.saveFrame"), grabs, small=true, ink~, on_press=fn() {
             grab(v, p, fr)
             p.wake()
-          }
+          })
         })
         |> ignore
         if c.left_out(slot) {
@@ -1388,13 +1392,13 @@ fn desk_play_controls(
       // bars, the window filled, the bars put away (native_full)
       if picture && (@ui.platform() == 0 || native_on()) {
         let is_full = if native_on() { native_full.get() } else { @ui.full_screen() }
-        if media_key(c, key + "/full", if is_full { "shrink" } else { "expand" }, t(if is_full { "web-pages.drive.player.unfull" } else { "web-pages.drive.player.full" }), on, small=true, ink~) {
+        media_key(c, key + "/full", if is_full { "shrink" } else { "expand" }, t(if is_full { "web-pages.drive.player.unfull" } else { "web-pages.drive.player.full" }), on, small=true, ink~, on_press=fn() {
           full()
-        }
+        })
       }
       // what left the row, in its ⋯ (there only while something did), opened over it as the speeds are
       let more = key + "/more"
-      let open = menu_now() == more
+      let open = menu_is(more)
       c.box(more=true, fn() {
         media_key(c, more, "more", t("web-main.menu.more"), on, small=true, lit=open, ink~) |> ignore
         // (pressed as it is let go, while it can be: open or not as it is then)
@@ -1421,10 +1425,10 @@ fn desk_volume(c : @ui.Ctx, p : @kit.Media, on : Bool, ink : MediaInk) -> Unit {
   let (volume, muted) = p.volume()
   let silent = muted || volume == 0.0
   c.box(style=desk_volume_row(), fn() {
-    if media_key(c, key + "/mute", if silent { "volume-x" } else { "volume" }, t(if silent { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }), on, small=true, ink~) {
+    media_key(c, key + "/mute", if silent { "volume-x" } else { "volume" }, t(if silent { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }), on, small=true, ink~, on_press=fn() {
       p.toggle_mute()
       p.wake()
-    }
+    })
     let id = c.id(key + "/volume")
     // (pressed along it, not clicked: it takes presses all the same)
     if on {
@@ -1527,18 +1531,20 @@ fn desk_play_list(
             c.text("\{index + 1} / \{list.length()}", style=desk_panel_note.then(@ui.text_style(color=Data(quiet)))) |> ignore
           })
           |> ignore
-          if viewer_tool(c, key + "/list-close", "close", t("common.close"), ink) {
+          viewer_tool(c, key + "/list-close", "close", t("common.close"), ink, on_press=fn() {
             v.listing = false
-          }
+          })
         })
         |> ignore
         c.box(style=desk_panel_list, fn() {
           c.list(key + "/list", list.length(), desk_row_h, fn(i) {
             let id = c.id(key + "/list/\{i}")
             let now = i == index
-            if !now && c.clicked(id) {
-              go(list[i])
-            }
+            c.on_press(id, fn() {
+              if !now {
+                go(list[i])
+              }
+            })
             let hot = c.lit(id) || c.pressed(id)
             c.box(style=desk_list_row.then(@ui.style(bg=Data(if now { chosen } else if hot { alpha(words, media_hot_share) } else { no_ground }))), id~, fn() {
               c.box(style=desk_chapter_number, fn() {
@@ -1583,6 +1589,7 @@ fn phone_player(
   on_go : (String) -> Unit,
   still : String,
   flying : Bool,
+  going : Bool,
 ) -> Unit {
   ignore(back_label)
   let f = p.frame(c)
@@ -1598,7 +1605,7 @@ fn phone_player(
   let prev = if index > 0 { list.get(index - 1) } else { None }
   let many = list.length() > 1
   let fr = frames_of(p, s, p.scrubbing().unwrap_or(s.position))
-  take_grab(v, p, name)
+  take_grab(c, v, p, name)
   let go = fn(other : String) {
     p.pause()
     on_go(other)
@@ -1622,7 +1629,7 @@ fn phone_player(
     c.box(style=player_fill, id=stage, fn() {
       match p.native() {
         Some(n) if n.here() && !flying => {
-          let (x, y, w, h) = picture_place(v, p, s, c.width, c.height, still)
+          let (x, y, w, h) = picture_place(c, v, p, s, c.width, c.height, still)
           v.placed = Some((x, y + v.drag_dy, w, h))
           c.native(n, content=Some((x, y + v.drag_dy, w, h))) |> ignore
           player_still(c, n, still, x, y + v.drag_dy, w, h)
@@ -1655,8 +1662,8 @@ fn phone_player(
       })
       |> ignore
     }
-    let shown = if v.drag == DownClose || v.taken_down { desk_none } else { f.shown }
-    let live = f.on && v.drag != DownClose && !v.taken_down && !flying
+    let shown = if v.drag == DownClose || v.taken_down || going { desk_none } else { f.shown }
+    let live = f.on && v.drag != DownClose && !v.taken_down && !flying && !going
     // the bar at the top: back, the name, which of the folder's it is, 选集 (beside the system's bars, an iPhone Duo's:
     // its actions in them, the viewer's vf_native_media)
     if !native_on() {
@@ -1665,9 +1672,9 @@ fn phone_player(
         let n = c.box(style=phone_head_place.then(sides_clear(@ui.Space::S2.px())), fn() {
           c.box(style=phone_head_box.then(@ui.style(bg=Data(ink.ground))), fn() {
             // (said 返回 to a screen reader, as a phone's way back is; where to is the name beside it)
-            if phone_key(c, key + "/back", "chevron-left", live, t("common.back"), ink) {
+            phone_key(c, key + "/back", "chevron-left", live, t("common.back"), ink, on_press=fn() {
               back()
-            }
+            })
             c.box(style=phone_name_box, fn() {
               c.text(name, style=phone_name_words.then(@ui.text_style(color=Data(ink.text)))) |> ignore
             })
@@ -1675,14 +1682,16 @@ fn phone_player(
             if many && index >= 0 {
               c.text("\{index + 1} / \{list.length()}", style=phone_index_words.then(@ui.text_style(color=Data(ink.muted)))) |> ignore
             }
-            if many && phone_key(c, key + "/list", "list", live, t("web-pages.drive.player.list"), ink, lit=v.listing) {
-              v.listing = true
-              p.wake()
+            if many {
+              phone_key(c, key + "/list", "list", live, t("web-pages.drive.player.list"), ink, lit=v.listing, on_press=fn() {
+                v.listing = true
+                p.wake()
+              })
             }
             // 下载, as every file opened has it
-            if phone_key(c, key + "/download", "download", live, t("web-main.preview.download"), ink) {
+            phone_key(c, key + "/download", "download", live, t("web-main.preview.download"), ink, on_press=fn() {
               (file.save)()
-            }
+            })
           })
           |> ignore
         })
@@ -1723,6 +1732,12 @@ fn phone_gestures(
   back : () -> Unit,
 ) -> Unit {
   let z = v.zoom
+  // a finger come down on it flinging stops it there (caught: no tap)
+  c.follow_press(stage, fn(step) {
+    if step is Down(_, _, _) {
+      v.caught = z.stop_fling(at=c.moment())
+    }
+  })
   let (px, py, down) = c.pointer()
   let press = c.press()
   // two fingers: a pinch round the point between them, which moves the picture as it moves
@@ -1733,7 +1748,7 @@ fn phone_gestures(
       let d = ((px - x2) * (px - x2) + (py - y2) * (py - y2)).sqrt()
       let (was_d, was_x, was_y) = v.pinch
       if was_d > 0.0 && d > 0.0 {
-        z.transform(cx, cy, d / was_d, cx - was_x, cy - was_y)
+        z.transform(cx, cy, d / was_d, cx - was_x, cy - was_y, at=c.moment())
       }
       v.pinch = (d, cx, cy)
       v.pinched = true
@@ -1742,16 +1757,13 @@ fn phone_gestures(
     }
     _ => v.pinch = (0.0, 0.0, 0.0)
   }
-  if press.fresh && (c.held_down(stage) || c.clicked(stage)) {
-    v.caught = z.stop_fling()
-  }
   // (held from the moment it went down: what it does follows the finger from there, whatever shows it pressed later
   // over what scrolls, Ctx::pressed)
   if down && c.held_down(stage) {
     let dx = px - press.x
     let dy = py - press.y
     if v.drag == NoDrag && press.moved && !v.pinched {
-      v.drag = if z.zoomed() {
+      v.drag = if z.zoomed(c) {
         MoveZoom
       } else if dx.abs() > dy.abs() && s.duration > 0.0 {
         AlongTime
@@ -1775,7 +1787,7 @@ fn phone_gestures(
       MoveZoom => {
         let (lx, ly) = v.last
         if press.moved && !v.pinched {
-          z.pan(px - lx, py - ly)
+          z.pan(px - lx, py - ly, at=c.moment())
         }
       }
       NoDrag => ()
@@ -1801,7 +1813,7 @@ fn phone_gestures(
       MoveZoom =>
         if !v.pinched {
           let (fx, fy) = c.pointer_velocity()
-          z.fling(fx, fy)
+          z.fling(fx, fy, at=c.moment())
         }
       _ => ()
     }
@@ -1865,73 +1877,80 @@ fn phone_controls(
     |> ignore
     phone_timeline(c, v, p, s, fr, on, ink)
     c.box(style=phone_keys_row(), fn() {
-      if many &&
-        phone_key(c, key + "/prev", "skip-back", on && prev is Some(_), t("android-misc.drive.player.prev"), ink, drop=phone_drop_steps) {
-        match prev {
-          Some(other) => go(other)
-          None => ()
-        }
+      if many {
+        phone_key(c, key + "/prev", "skip-back", on && prev is Some(_), t("android-misc.drive.player.prev"), ink, drop=phone_drop_steps, on_press=fn() {
+          match prev {
+            Some(other) => go(other)
+            None => ()
+          }
+        })
       }
       if inspect {
-        if phone_key(c, key + "/frame-back", "chevron-left", on, t("android-chat.video.prev"), ink) {
+        phone_key(c, key + "/frame-back", "chevron-left", on, t("android-chat.video.prev"), ink, on_press=fn() {
           step_frame(c, p, fr, -1)
-        }
-      } else if phone_key(c, key + "/back15", "back-15", on, t("android-misc.drive.player.back15"), ink) {
-        p.seek_by(-p.nudge_ms())
-        p.wake()
+        })
+      } else {
+        phone_key(c, key + "/back15", "back-15", on, t("android-misc.drive.player.back15"), ink, on_press=fn() {
+          p.seek_by(-p.nudge_ms())
+          p.wake()
+        })
       }
-      if phone_key(c, key + "/play", if playing { "pause" } else { "play" }, on, t(if playing { "android-chat.video.pause" } else { "android-chat.video.play" }), ink) {
+      phone_key(c, key + "/play", if playing { "pause" } else { "play" }, on, t(if playing { "android-chat.video.pause" } else { "android-chat.video.play" }), ink, on_press=fn() {
         p.play_pause()
         p.wake()
-      }
+      })
       if inspect {
-        if phone_key(c, key + "/frame-on", "chevron-right", on, t("android-chat.video.next"), ink) {
+        phone_key(c, key + "/frame-on", "chevron-right", on, t("android-chat.video.next"), ink, on_press=fn() {
           step_frame(c, p, fr, 1)
-        }
-      } else if phone_key(c, key + "/forward15", "forward-15", on, t("android-misc.drive.player.forward15"), ink) {
-        p.seek_by(p.nudge_ms())
-        p.wake()
+        })
+      } else {
+        phone_key(c, key + "/forward15", "forward-15", on, t("android-misc.drive.player.forward15"), ink, on_press=fn() {
+          p.seek_by(p.nudge_ms())
+          p.wake()
+        })
       }
-      if many &&
-        phone_key(c, key + "/next", "skip-forward", on && next is Some(_), t("android-misc.drive.player.next"), ink, drop=phone_drop_steps) {
-        match next {
-          Some(other) => go(other)
-          None => ()
-        }
+      if many {
+        phone_key(c, key + "/next", "skip-forward", on && next is Some(_), t("android-misc.drive.player.next"), ink, drop=phone_drop_steps, on_press=fn() {
+          match next {
+            Some(other) => go(other)
+            None => ()
+          }
+        })
       }
       c.box(style=desk_grow, fn() {  }) |> ignore
       // the speed, as a figure: its menu of speeds
       let sid = c.id(key + "/speed")
-      phone_speed(c, key + "/speed", speed_label(p.speed()), on, t("android-misc.drive.player.speed"), ink, lit=v.rates) |> ignore
       // (pressed as it is let go, while it can be: open or not as it is then)
-      if on {
-        c.on_press(sid, fn() {
-          v.rates = !v.rates
+      phone_speed(c, key + "/speed", speed_label(p.speed()), on, t("android-misc.drive.player.speed"), ink, lit=v.rates, on_press=fn() {
+        v.rates = !v.rates
+        p.wake()
+      })
+      speed_menu(c, v, p, sid)
+      let (subtitle, subs_on) = p.subtitle()
+      if subtitle {
+        phone_key(c, key + "/captions", "captions", on, t(if subs_on { "android-misc.drive.player.subtitlesOff" } else { "android-misc.drive.player.subtitlesOn" }), ink, lit=subs_on, on_press=fn() {
+          p.toggle_subtitle()
           p.wake()
         })
       }
-      speed_menu(c, v, p, sid)
-      let (subtitle, subs_on) = p.subtitle()
-      if subtitle &&
-        phone_key(c, key + "/captions", "captions", on, t(if subs_on { "android-misc.drive.player.subtitlesOff" } else { "android-misc.drive.player.subtitlesOn" }), ink, lit=subs_on) {
-        p.toggle_subtitle()
-        p.wake()
-      }
-      if inspect && phone_key(c, key + "/save-frame", "camera", on && !v.grabbing, t("android-chat.video.saveFrame"), ink, drop=phone_drop_grab) {
-        grab(v, p, fr)
-        p.wake()
+      if inspect {
+        phone_key(c, key + "/save-frame", "camera", on && !v.grabbing, t("android-chat.video.saveFrame"), ink, drop=phone_drop_grab, on_press=fn() {
+          grab(v, p, fr)
+          p.wake()
+        })
       }
       // turned sideways the picture can fill the screen (cropped) or fit in it
-      if picture &&
-        p.is_sideways() &&
-        phone_key(c, key + "/fill", if p.fills() { "shrink" } else { "expand" }, on, t(if p.fills() { "android-misc.drive.player.fit" } else { "android-misc.drive.player.fill" }), ink, lit=p.fills()) {
-        p.toggle_fill()
-        p.wake()
+      if picture && p.is_sideways() {
+        phone_key(c, key + "/fill", if p.fills() { "shrink" } else { "expand" }, on, t(if p.fills() { "android-misc.drive.player.fit" } else { "android-misc.drive.player.fill" }), ink, lit=p.fills(), on_press=fn() {
+          p.toggle_fill()
+          p.wake()
+        })
       }
-      if picture &&
-        phone_key(c, key + "/sideways", "landscape", on, t(if p.is_sideways() { "android-misc.drive.player.unfull" } else { "android-misc.drive.player.full" }), ink, lit=p.is_sideways()) {
-        p.toggle_sideways()
-        p.wake()
+      if picture {
+        phone_key(c, key + "/sideways", "landscape", on, t(if p.is_sideways() { "android-misc.drive.player.unfull" } else { "android-misc.drive.player.full" }), ink, lit=p.is_sideways(), on_press=fn() {
+          p.toggle_sideways()
+          p.wake()
+        })
       }
     })
     |> ignore
@@ -1966,7 +1985,7 @@ fn phone_timeline(c : @ui.Ctx, v : PlayerView, p : @kit.Media, s : @kit.MediaSta
 
 ///|
 /// A round key on the controls: 40, a 20 icon in the words; `lit`, a soft light behind it while what it turns on is
-/// on; `drop`, the k-th to leave the row short of room (Ctx::box drop, phone_drop_grab). True on the frame it was
+/// on; `drop`, the k-th to leave the row short of room (Ctx::box drop, phone_drop_grab). `on_press` as it is
 /// tapped; `on` false, it takes no tap (what is under it does).
 fn phone_key(
   c : @ui.Ctx,
@@ -1977,7 +1996,8 @@ fn phone_key(
   ink : MediaInk,
   lit? : Bool = false,
   drop? : Int = 0,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let id = c.id(key)
   let b = c.box(style=phone_key_box.then(@ui.style(bg=Data(if lit { alpha(ink.text, media_lit_share) } else { no_ground }))), aspect=1.0, id=if on { id } else { 0 }, drop~, fn() {
     icon(c, icon_name, size=viewer_back_icon, color=ink.text) |> ignore
@@ -1986,12 +2006,15 @@ fn phone_key(
     }
   })
   c.semantics(b, Button, id~, label=said, disabled=!on, pressed=lit)
-  on && c.clicked(id)
+  match on_press {
+    Some(f) if on => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|
 /// The speed on the controls, as their keys are (40 high, bare until pressed or while its menu is open): its figure.
-fn phone_speed(c : @ui.Ctx, key : String, words : String, on : Bool, said : String, ink : MediaInk, lit? : Bool = false) -> Bool {
+fn phone_speed(c : @ui.Ctx, key : String, words : String, on : Bool, said : String, ink : MediaInk, lit? : Bool = false, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = c.box(style=phone_speed_box.then(@ui.style(bg=Data(if lit { alpha(ink.text, media_lit_share) } else { no_ground }))), id=if on { id } else { 0 }, fn() {
     c.rich([@ui.span(words, weight=media_strong, mono=true, color=ink.text)], style=media_rate_words) |> ignore
@@ -2000,7 +2023,10 @@ fn phone_speed(c : @ui.Ctx, key : String, words : String, on : Bool, said : Stri
     }
   })
   c.semantics(b, Button, id~, label=said, disabled=!on, pressed=lit)
-  on && c.clicked(id)
+  match on_press {
+    Some(f) if on => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|
@@ -2031,12 +2057,12 @@ fn phone_list_sheet(c : @ui.Ctx, v : PlayerView, p : @kit.Media, list : Array[St
         c.list(p.key() + "/sheet-list", list.length(), desk_row_h, fn(i) {
           let id = c.id(p.key() + "/sheet-list/\{i}")
           let now = i == index
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             close()
             if !now {
               go(list[i])
             }
-          }
+          })
           c.box(style=desk_list_row.then(@ui.style(bg=Data(if now { pal.selected } else { no_ground }))), id~, fn() {
             c.box(style=desk_chapter_number, fn() {
               c.text("\{i + 1}", style=desk_chapter_n_words.then(@ui.text_style(color=Data(pal.muted)))) |> ignore
@@ -2219,7 +2245,7 @@ fn phone_controls_box() -> @ui.Style {
 }
 
 ///|
-let phone_keys_in : Double = capsule_in(card_corner, 40.0)
+let phone_keys_in : Double = @ui.capsule_in(card_corner, 40.0)
 
 ///|
 /// Under the keys' row: as much less than phone_keys_in as the row is taller than its keys (phone_keys_row), the keys
@@ -2246,7 +2272,7 @@ fn phone_timeline_box() -> @ui.Style {
 }
 
 ///|
-/// The keys' row: 2 apart at least (media.css.ts vvGroup), so the one kept on (the subtitle, sideways) never meets the
+/// The keys' row: 2 apart at least, so the one kept on (the subtitle, sideways) never meets the
 /// one pressed, as far as makes each a press's room across (keys_gap); 40 high, as tall as a press's room where that is
 /// more (its keys in its middle).
 fn phone_keys_row() -> @ui.Style {
@@ -2307,7 +2333,7 @@ let desk_cover_icon : Double = 72.0
 let desk_half : Double = 0.5
 
 ///|
-/// The time where the pointer is (Player.css.ts pointed): over the timeline, 4 above it, on black at 75%, 11 in white.
+/// The time where the pointer is: over the timeline, 4 above it, on black at 75%, 11 in white.
 let desk_pointed_w : Double = 56.0
 
 ///|
@@ -2382,7 +2408,7 @@ fn desk_cue_over(width : Double) -> Double {
 let desk_cue_apart : Double = 16.0
 
 ///|
-/// Over a phone's controls: 112 off the foot (Player.kt), and as much more as the controls are taller where their
+/// Over a phone's controls: 112 off the foot, and as much more as the controls are taller where their
 /// timeline and keys' row are a press's room (phone_timeline_h, phone_row_h, phone_controls_foot).
 fn phone_cue_over() -> Double {
   phone_cue_least + (phone_timeline_h() - phone_timeline_least) + (phone_row_h() - phone_key_side) / 2.0
@@ -2464,4 +2490,53 @@ let desk_time_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4, wrap
 /// A line of the controls' ⋯ (desk_play_controls): what a key that left their row does, `on_press` once it is chosen.
 fn more_line(label : String, icon : String, disabled~ : Bool, on_press~ : () -> Unit) -> MenuItem {
   menu_item_of(label, on_press, icon~, disabled~)
+}
+
+///|
+fn two_digits(n : Int64) -> String {
+  if n < 10L {
+    "0\{n}"
+  } else {
+    "\{n}"
+  }
+}
+
+
+///|
+/// The player's keys (the file's head), the keymap's own, never changed: where a player is up (`Player`), not with the
+/// cursor in a field. Each its action, `player.` and what it does (desk_player's): Space and K play or pause, , and .
+/// step a frame, ← → step or jump, J L jump, ↑ ↓ the sound, M mutes, F fills the screen, C the subtitle, ⇧N ⇧P the
+/// next and the one before, + = − _ 0 1 zoom, Escape closes what is open over it, or it.
+pub fn player_bindings() -> Array[@view.Binding] {
+  let when : @view.KeyWhen = All([In("Player"), Not(In("Field"))])
+  let ch = fn(c : Char) { @ui.key_of_char(c) }
+  let shift = @ui.mod_shift_key
+  let keys : Array[(String, Array[(Int, Int)])] = [
+    ("play", [(@ui.key_space, 0), (ch('k'), 0)]),
+    ("frame_back", [(ch(','), 0)]),
+    ("frame_on", [(ch('.'), 0)]),
+    ("back", [(@ui.key_code_left, 0)]),
+    ("on", [(@ui.key_code_right, 0)]),
+    ("jump_back", [(ch('j'), 0)]),
+    ("jump_on", [(ch('l'), 0)]),
+    ("louder", [(@ui.key_code_up, 0)]),
+    ("quieter", [(@ui.key_code_down, 0)]),
+    ("mute", [(ch('m'), 0)]),
+    ("full", [(ch('f'), 0)]),
+    ("subtitle", [(ch('c'), 0)]),
+    ("next", [(ch('n'), shift), (ch('N'), 0)]),
+    ("prev", [(ch('p'), shift), (ch('P'), 0)]),
+    ("zoom_in", [(ch('+'), 0), (ch('+'), shift), (ch('='), 0), (ch('='), shift)]),
+    ("zoom_out", [(ch('-'), 0), (ch('-'), shift), (ch('_'), 0), (ch('_'), shift)]),
+    ("zoom_reset", [(ch('0'), 0)]),
+    ("zoom_whole", [(ch('1'), 0)]),
+    ("escape", [(@ui.key_escape, 0)]),
+  ]
+  let out : Array[@view.Binding] = []
+  for k in keys {
+    for s in k.1 {
+      out.push({ keys: [{ code: s.0, mods: s.1 }], action: "player." + k.0, when })
+    }
+  }
+  out
 }

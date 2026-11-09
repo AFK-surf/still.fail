@@ -1,5 +1,10 @@
 #!/bin/bash
 # Build the renderer when needed, or use a prebuilt runtime, then render one or several mbui graphics.
+#   figure.sh NAME OUT.png [FONT] | --batch OUT_DIR NAME… | --scene SCENE.json OUT.png, from apps/mbui on a Mac: the
+#   coded figures (wrap, align, wrap-normal, wrap-reverse, align-edge, align-text: the sign-in card's real parts), or a
+#   scene as data (version, width, height, scale, background, children of `center`, `panel`, `words`, `sign-in-card`;
+#   anything else fails). MBUI_FIGURE_RUNTIME uses a prebuilt renderer (scripts/native.ts file mbui-figure darwin-arm64),
+#   MBUI_FIGURE_FONT one font for a batch. Nothing is published unless all of it rendered.
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"

@@ -1,4 +1,4 @@
-// What a finger holds for its menu, lifted toward it (iOS's context menu; docs/motion.md kind 7, a control answering:
+// What a finger holds for its menu, lifted toward it (iOS's context menu; sf/motion.mbt kind 7, a control answering:
 // held, its menu open): a little as it is held, all the way once its menu opens, back down as the menu goes. Lifted,
 // it is drawn over the menu's scrim and under the menu (Stratum's OverScrim), so that what the menu is of stands out of what
 // it dims; a sheet coming up over where it is, it goes up before it, clear of it, and back down with it as it goes.
@@ -35,8 +35,13 @@ pub fn lift_over(c : @ui.Ctx, i : Int, key : String, lift : Double, scale : Doub
   @motion.measure(c, i, at)
   @motion.placed(c, i, fn() {
     match (@kit.sheet_top(c), @motion.measured_rect(c, at)) {
-      (Some(top), Some((_, y, _, h))) if y + h + lift_clear > top =>
-        { ..@ui.still_look, dy: top - lift_clear - (y + h) }
+      (Some(top), Some((_, y, _, h))) if y + h + lift_clear > top => {
+        // no further than the sheet has come up into the window: what hangs past the window's foot is not thrown up
+        // as the sheet starts out from under it, nor dropped back as it goes
+        let (_, total) = c.window_size()
+        let dy = dmin(0.0, dmax(top - lift_clear - (y + h), top - total))
+        { ..@ui.still_look, dy }
+      }
       _ => @ui.still_look
     }
   })
@@ -53,3 +58,10 @@ let lift_spring : @motion.Spec = @motion.lift_spring
 ///|
 /// How far over a sheet coming up over it what is lifted stays.
 let lift_clear : Double = 12.0
+
+///|
+/// What of the window's tree is lifted over the scrim (View::over_scrim: a chat's row) kept clear of the sheet up, as
+/// lift_over keeps an old view's, and clear of it all the way once it is up (where it is and how tall).
+fn init {
+  @ui.over_scrim_floor.val = fn(c) { @kit.sheet_place(c) }
+}

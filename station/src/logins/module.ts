@@ -1,4 +1,4 @@
-// The station's logins to command-line tools (docs/remote-login.md) as a part of the station (parts.ts): each told on
+// The station's logins to command-line tools as a part of the station (parts.ts): each told on
 // the event streams as it changes, its screen followed by the pages; one an agent started tells that agent as it asks
 // something and as it ends, its cards closed. Its routes (machine-logins) and the agents' `login` tool. A login on
 // another station of the workspace (the tool's `station`) is that station's, asked over the station transport
@@ -14,7 +14,7 @@ import { Agents } from "../sessions/agents.ts";
 import { sender } from "../sessions/messages.ts";
 import { ControlPlane, Events, Parts, Paths, Peers, Readers, ScreenRegistry, Store } from "../services.ts";
 import { act, endedNotice, loginTools, promptNotice, type Where } from "./tool.ts";
-import { Logins, type Starter } from "./index.ts";
+import { Logins, slackPage, type Starter } from "./index.ts";
 import { LoginPages } from "./pages.ts";
 
 export const LoginsLive = Layer.effectDiscard(
@@ -94,7 +94,19 @@ export const LoginsLive = Layer.effectDiscard(
         }
       }),
     ];
-    yield* Effect.addFinalizer(() => Effect.sync(() => unlisten.forEach((stop) => stop())));
+    // A Slack login card: shown only for a login waiting for a code from its page or entered on a device code's page,
+    // that page and the device code on it (its field handed to the login).
+    hub.logins = {
+      page: (id) => {
+        const login = logins.get(id);
+        return login ? slackPage(login) : null;
+      },
+      answer: (id, code, by) => void logins.answer(id, code, by),
+    };
+    yield* Effect.addFinalizer(() => Effect.sync(() => {
+      unlisten.forEach((stop) => stop());
+      hub.logins = null;
+    }));
     // A login's screen, followed on the event streams (`login=`).
     events.follow({ loginScreen: (id, send) => logins.follow(id, send) });
     parts.routes(routes(() => logins));
@@ -103,15 +115,12 @@ export const LoginsLive = Layer.effectDiscard(
     const starterOf = (session: string): Starter => {
       const row = store.getSession(session);
       const email = row?.createdBy ?? "";
-      // Its chat's name; one not named yet, by what was first said in it (as a shared chat is titled).
+      // Its chat's name, as the chat list calls it (sender).
       let chatTitle: string | null = null;
       try {
         chatTitle = sender(hub, session)[0];
       } catch {}
-      if (chatTitle === null || chatTitle === session) {
-        const first = store.listThreads("", session, null)[0]?.firstText?.trim() ?? "";
-        chatTitle = first !== "" ? Array.from(first.split(/\s+/u).join(" ")).slice(0, 80).join("") : null;
-      }
+      if (chatTitle === session) chatTitle = null;
       return { by: { email, name: readers.names.get(email) ?? "" }, workspace: row?.ws ?? place()?.workspace ?? null, chat: session, chatTitle };
     };
     // Another station's agent logging this one in: its call acted on here, on the logins it started; and a login of

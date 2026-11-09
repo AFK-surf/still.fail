@@ -1,4 +1,4 @@
-// What changed in still.fail, for people (changelog.rs; the `changelog` topic, docs/changelog.md): still.fail cloud's
+// What changed in still.fail, for people (the `changelog` topic, scripts/changelog.ts): still.fail cloud's
 // changelog with what each part has out on this app's channel, one tab a part (this app's first; this app's alone where
 // they would all be the same, as the stable channel's are: a release an entry, each every part's), by day, newest first;
 // and what this app got since it
@@ -42,7 +42,7 @@ function inTab(tab: string, parts: string[]): boolean {
   return (tab === "cloud" && parts.length === 0) || parts.some((p) => tabParts(tab).includes(p));
 }
 
-/// A line's kind, from how it starts (修复：, 改进：, 新功能：; docs/changelog.md), and the rest of it.
+/// A line's kind, from how it starts (修复：, 改进：, 新功能：; scripts/changelog.ts), and the rest of it.
 const KINDS: [RegExp, string][] = [[/^(新功能|新增)[：:]\s*/, "new"], [/^(改进|优化|调整|移除)[：:]\s*/, "improve"], [/^修复[：:]\s*/, "fix"]];
 function line(text: string): J {
   for (const [start, kind] of KINDS) {
@@ -178,13 +178,16 @@ export class Changelog implements Owner {
       if (it.mine && build !== null && version <= build && seen !== null && version > seen && news.length < NEWS) news.push(it);
       const ms = (typeof get(entry, "at") === "number" ? entry.at : 0) * 1000;
       const label = format.dayLabel(ms, now, offset);
+      // the day it is of where the device is: which day of the list it is, the same whatever else that day lists or
+      // what the list leaves off (its label only says it)
+      const day = format.localDay(ms, offset);
       const parts: string[] = arr(get(entry, "parts")).filter((p): p is string => typeof p === "string");
       for (const tab of tabs) {
         if (!inTab(tab.part, parts)) continue;
         const shown = item(entry, app, build, released, tab.part);
         const last = tab.days[tab.days.length - 1];
-        if (last && last.label === label) last.entries.push(shown);
-        else tab.days.push({ label, entries: [shown] });
+        if (last && last.day === day) last.entries.push(shown);
+        else tab.days.push({ day, label, entries: [shown] });
       }
     }
     // A tab a part only where they part what is said: where each would list the same changes, this app's alone.

@@ -1,23 +1,18 @@
 // A login's browser came back to a loopback port on the person's device, and their client handed the request here
-// (docs/remote-login.md, 回环回调): it goes to the login command, once, on the port its page named, and only when that
+// (回环回调): it goes to the login command, once, on the port its page named, and only when that
 // port is the command's own (lsof: the command or what it started listens there). Nothing is ever sent to the callback
 // to try it: a request with a wrong state ends most of these commands (gcloud, aws, Claude Code, wrangler). The
 // command's answer (its 登录成功 page) goes back as it was.
 import { request as httpRequest } from "node:http";
 import { platform } from "../platform/index.ts";
 import type { LoginRun } from "./run.ts";
+import { Refused } from "../api/request.ts";
 
 export type Callback = { method: string; path: string; headers: Record<string, string>; body?: string };
 export type Answered = { status: number; headers: Record<string, string>; body: string };
 
-/// Why a callback was not relayed: its words, and the status it is answered with.
-export class Refused extends Error {
-  readonly status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
+/// Why a callback was not relayed: its words, and the status it is answered with (the routes' own).
+export { Refused };
 
 /// Headers that are the connection's, not the request's.
 const HOP = new Set(["connection", "keep-alive", "transfer-encoding", "upgrade", "proxy-connection", "proxy-authorization", "te", "trailer", "content-length"]);

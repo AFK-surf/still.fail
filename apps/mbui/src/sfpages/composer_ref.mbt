@@ -19,7 +19,7 @@ pub fn ref_panel_put(src : Source, key : String, station : String, id : String, 
 ///|
 fn ref_panel_body(c : @ui.Ctx, src : Source, key : String, station : String, id : String) -> Unit {
   let w = @sfbase.writing(src, key)
-  guard w.files.iter().find_first(fn(f) { text(Some(f), "id") == id }) is Some(f) else { return }
+  guard w.files.get().iter().find_first(fn(f) { text(Some(f), "id") == id }) is Some(f) else { return }
   let r = field(Some(f), "ref")
   let path = text(r, "path")
   let dir = flag(r, "dir")
@@ -48,8 +48,9 @@ fn ref_panel_body(c : @ui.Ctx, src : Source, key : String, station : String, id 
     |> ignore
   }
   let chat = drops_as_files(src, key)
-  // (this chat's say, a row as the page's rows are: on its card where narrow)
-  c.box(style=ref_block, fn() {
+  // (this chat's say, a row as the page's rows are: on its card where narrow; the last of it, as far over the
+  // dialog's foot as from its sides)
+  c.box(style=ref_block.then(@sf.panel_card_last()), fn() {
     @sf.group(c, fn() {
       if @sf.switch_row(c, "composer/ref/chat-files", @sf.t("web-main.file.chatAsFiles"), chat) != chat {
         set_drops_as_files(src, key, !chat)
@@ -63,7 +64,7 @@ fn ref_panel_body(c : @ui.Ctx, src : Source, key : String, station : String, id 
 /// Draft `key`'s chat set to take them as files or not (AppState.setDropsAsFiles): its own say dropped when it is the
 /// device's anyway (prefs `dropAs`).
 fn set_drops_as_files(src : Source, key : String, on : Bool) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
+  let prefs = src.topic("prefs", {}).get().value
   let own : Json = if on == (text(prefs, "dropAs") == "file") { Json::null() } else { Json::boolean(on) }
   let files : Map[String, Json] = {}
   files[key] = own

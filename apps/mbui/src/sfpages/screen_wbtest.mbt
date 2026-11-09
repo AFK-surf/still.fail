@@ -16,9 +16,9 @@ priv struct ScreenRig {
   /// how the fake core answers a call (None: as the fixture does)
   answer : Ref[(String, Json) -> Result[Json, Json]?]
   /// the prefs' `screenTouch`, `screenQuality`, `screenFps` (0: none)
-  touch : Ref[String]
-  quality : Ref[String]
-  fps : Ref[Int]
+  touch : @signals.Signal[String]
+  quality : @signals.Signal[String]
+  fps : @signals.Signal[Int]
 }
 
 ///|
@@ -38,6 +38,7 @@ fn screen_rig(
   screen? : String = "browser:tab-1",
   here? : String = "",
   h264? : Bool = false,
+  os? : String = "",
 ) -> ScreenRig {
   @sfbase.reset()
   // this machine's station, as its host says (`here`); none by default
@@ -57,9 +58,9 @@ fn screen_rig(
   let views : Array[((Json, Bytes?) -> Unit, (Result[Json, Json]) -> Unit)] = []
   let cancelled : Array[Int] = []
   let answer : Ref[(String, Json) -> Result[Json, Json]?] = Ref(fn(_, _) { None })
-  let touch_ = Ref(touch)
-  let quality_ = Ref("")
-  let fps_ = Ref(0)
+  let touch_ = @signals.signal(touch)
+  let quality_ = @signals.signal("")
+  let fps_ = @signals.signal(0)
   let ask = fn(name : String, params : Json, bytes : Bytes?, done : (Result[Json, Json]) -> Unit, fallback : () -> Unit) {
     calls.push((name, params, bytes))
     match (answer.val)(name, params) {
@@ -74,21 +75,23 @@ fn screen_rig(
   }
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let tp = (base.topic)(name, params)
-      if name == "prefs" && (touch_.val != "" || quality_.val != "" || fps_.val != 0) {
+    topic_read: fn(name, params) {
+      let tp = base.topic(name, params).get().snapshot()
+      if name == "stations" && os != "" {
+        { ..tp, value: Some([{ "station": "ws-1/st-1", "host": { "os": os } }]) }
+      } else if name == "prefs" && (touch_.get() != "" || quality_.get() != "" || fps_.get() != 0) {
         let m = match tp.value {
           Some(Object(m)) => m.copy()
           _ => {}
         }
-        if touch_.val != "" {
-          m["screenTouch"] = Json::string(touch_.val)
+        if touch_.get() != "" {
+          m["screenTouch"] = Json::string(touch_.get())
         }
-        if quality_.val != "" {
-          m["screenQuality"] = Json::string(quality_.val)
+        if quality_.get() != "" {
+          m["screenQuality"] = Json::string(quality_.get())
         }
-        if fps_.val != 0 {
-          m["screenFps"] = Json::number(fps_.val.to_double())
+        if fps_.get() != 0 {
+          m["screenFps"] = Json::number(fps_.get().to_double())
         }
         { ..tp, value: Some(Json::object(m)) }
       } else {
@@ -98,18 +101,18 @@ fn screen_rig(
     call: fn(name, params, done) {
       if name == "prefs.set" {
         match field(Some(params), "screenTouch") {
-          Some(String(v)) => touch_.val = v
-          Some(Null) => touch_.val = ""
+          Some(String(v)) => touch_.set(v)
+          Some(Null) => touch_.set("")
           _ => ()
         }
         match field(Some(params), "screenQuality") {
-          Some(String(v)) => quality_.val = v
-          Some(Null) => quality_.val = ""
+          Some(String(v)) => quality_.set(v)
+          Some(Null) => quality_.set("")
           _ => ()
         }
         match field(Some(params), "screenFps") {
-          Some(Number(n, ..)) => fps_.val = n.to_int()
-          Some(Null) => fps_.val = 0
+          Some(Number(n, ..)) => fps_.set(n.to_int())
+          Some(Null) => fps_.set(0)
           _ => ()
         }
       }
@@ -129,30 +132,41 @@ fn screen_rig(
     cancel: fn(id) { cancelled.push(id) },
   }
   // the page alone, while it is the stack's top, the presenters over it; left (closed), let go of as the shell lets a
-  // page go (screen_left)
-  let shown : Ref[ScreenAt?] = Ref(None)
+  // page go (screen_left): by a node of the window's tree for each screen on top, which lets it go as it goes
   let t = @ui.Tester::new(
+    // (the old frame around the window's tree, its old view put here, in still.fail's theme, as the app's)
     fn(c) {
       @sf.begin(c) |> ignore
-      c.with_theme(@sf.ui_theme(), fn() {
-        match app.nav.top() {
-          Screen(at) => {
-            shown.val = Some(at)
-            screen_page(c, src, at, @sf.no_frame)
+      c.with_theme(@sf.ui_theme(), fn() { @ui.old_views_here(c) })
+    },
+    tree=fn(root) {
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      root.each(
+        fn() {
+          match app.nav.top() {
+            Screen(at) => [(at.station, at.screen)]
+            _ => []
           }
-          _ =>
-            match shown.val {
-              Some(at) => {
-                shown.val = None
-                c.after_build("screen-left", fn() { screen_left(src, at.station, at.screen) })
-              }
-              None => ()
-            }
+        },
+        fn(k) { k },
+        fn(row, k) {
+          let (station, screen) = k.untracked()
+          row.owns(fn() { screen_left(src, station, screen) }) |> ignore
+        },
+      )
+      @ui.old(root, fn(c) {
+        match app.nav.top() {
+          Screen(at) => screen_page(c, src, at, @sf.no_frame)
+          _ => ()
         }
         @sf.presented(c)
-        // what the page said, as the shell shows it (sfbase's toasts, at the window's foot)
-        @sfbase.toasts(c, @sf.toast_bottom)
       })
+      .grow(Is(1.0))
+      |> ignore
+      // what of the presented the tree draws, over the page (as the app's tree has it)
+      @sf.presented_nodes(root)
+      // what the page said, as the shell shows it (sfbase's toasts_node, at the window's foot)
+      @sfbase.toasts_node(root, fn() { @sf.toast_bottom }) |> ignore
     },
     w~,
     h~,
@@ -168,13 +182,20 @@ fn screen_rig(
 ///|
 fn ScreenRig::sess(self : ScreenRig) -> ScreenSess {
   ignore(self)
-  screens_open.get(screen_key("ws-1/st-1", "browser:tab-1")).unwrap()
+  // (the one this rig opened, whichever screen it was asked for)
+  for _, sess in screens_open {
+    return sess
+  }
+  abort("no screen open")
 }
 
 ///|
 fn ScreenRig::ui(self : ScreenRig) -> ScreenUi {
   ignore(self)
-  screen_uis.get(screen_key("ws-1/st-1", "browser:tab-1")).unwrap()
+  for _, ui in screen_uis {
+    return ui
+  }
+  abort("no screen open")
 }
 
 ///|
@@ -293,7 +314,7 @@ fn ScreenRig::frame(self : ScreenRig, ts : Double) -> Unit {
 /// A point of the frame (0..1 each way), in the window.
 fn ScreenRig::at(self : ScreenRig, x : Double, y : Double) -> (Double, Double) {
   let u = self.ui()
-  let s = u.shown()
+  let s = u.shown(self.t.ctx())
   (u.stage_x + s.x + x * s.w, u.stage_y + s.y + y * s.h)
 }
 
@@ -421,8 +442,24 @@ test "live frames are drawn and acknowledged; driven directly a tap clicks, a pr
   assert_true(drag.iter().filter(fn(j) { kind_of_input(j) == "move" }).count() >= 2)
   assert_eq(kind_of_input(drag[drag.length() - 1]), "up")
   assert_true(close_to(number(Some(drag[drag.length() - 1]), "x"), 0.6))
+  // a drag held still: no move again, however many frames are drawn while it is
+  let was = r.inputs().length()
+  r.t.press_at(ax, ay)
+  r.t.move(bx, by)
+  let moved = r.inputs()[was:].to_array()
+  assert_eq(kind_of_input(moved[0]), "down")
+  assert_eq(kind_of_input(moved[moved.length() - 1]), "move")
+  let still = r.inputs().length()
+  r.t.run_for(held_still_ms)
+  assert_eq(r.inputs().length(), still)
+  r.t.release(bx, by)
+  assert_eq(kind_of_input(r.inputs()[r.inputs().length() - 1]), "up")
   screen_done(r.t)
 }
+
+///|
+/// How long a drag is held still in it: a dozen frames and more at any rate.
+let held_still_ms : Double = 200.0
 
 ///|
 test "turned sideways the same view goes on, the controls down the side" {
@@ -469,18 +506,18 @@ test "zoomed in, the part in sight is asked for, as sharp as it is shown; its fr
   let u = r.ui()
   // not zoomed: nothing told
   assert_eq(r.told("screen.look").length(), 0)
-  u.zoom.zoom_to(u.zoom.fit() * 4.0, u.box_w / 2.0, u.box_h / 2.0, false)
+  u.zoom.zoom_to(u.zoom.fit() * 4.0, u.box_w.get() / 2.0, u.box_h.get() / 2.0, false, at=r.t.ctx().moment())
   r.t.draw()
   r.t.draw()
   let looks = r.told("screen.look")
   assert_eq(looks.length(), 1)
   let region = field(Some(looks[0]), "region")
-  let shown = u.shown()
+  let shown = u.shown(r.t.ctx())
   // a quarter of its width in the middle, all the stage's height of it, in the pixels it is shown in
   assert_true(close_to(number(region, "x"), 0.375))
   assert_true(close_to(number(region, "w"), 0.25))
   let rh = number(region, "h")
-  assert_true(close_to(rh, u.box_h / shown.h))
+  assert_true(close_to(rh, u.box_h.get() / shown.h))
   assert_true(close_to(number(Some(looks[0]), "width") / number(Some(looks[0]), "height"), 0.25 * shown.w / (rh * shown.h)))
   // the part's frames (the station's config saying the part): a decoder of their own, drawn over the whole there
   let part : Json = { "x": 0.375, "y": number(region, "y"), "w": 0.25, "h": rh }
@@ -502,7 +539,7 @@ test "zoomed in, the part in sight is asked for, as sharp as it is shown; its fr
   // laid out by the whole screen's size still
   assert_eq(r.sess().frame_size(), Some((1280, 720)))
   // zoomed out: the whole told; the part drawn until the whole's frame comes, then the whole alone
-  u.zoom.fit_now()
+  u.zoom.fit_now(at=r.t.ctx().moment())
   r.t.draw()
   r.t.draw()
   assert_eq(r.told("screen.look").length(), 2)
@@ -607,25 +644,25 @@ test "only looking, a double tap zooms in where it is and another back to fitted
   r.config()
   r.frame(1000.0)
   let u = r.ui()
-  assert_false(u.zoom.zoomed())
+  assert_false(u.zoom.zoomed(r.t.ctx()))
   r.tap_at(0.25, 0.25)
   r.tap_at(0.25, 0.25)
   r.t.run_for(@ui.move_most_ms)
-  assert_true(u.zoom.zoomed())
+  assert_true(u.zoom.zoomed(r.t.ctx()))
   assert_eq(r.inputs().length(), 0)
   // the same point of the screen, still under the finger
   r.t.run_for(screen_double_tap_ms)
   r.tap_at(0.25, 0.25)
   r.tap_at(0.25, 0.25)
   r.t.run_for(@ui.move_most_ms)
-  assert_false(u.zoom.zoomed())
+  assert_false(u.zoom.zoomed(r.t.ctx()))
   // one tap, then the wait over before the next: no zoom
   r.t.run_for(screen_double_tap_ms)
   r.tap_at(0.25, 0.25)
   r.t.run_for(screen_double_tap_ms)
   r.tap_at(0.25, 0.25)
   r.t.run_for(@ui.move_most_ms)
-  assert_false(u.zoom.zoomed())
+  assert_false(u.zoom.zoomed(r.t.ctx()))
   screen_done(r.t)
 }
 
@@ -691,9 +728,9 @@ test "全屏 (控制中心's upright): the screen alone, sideways, its tools fol
   r.t.resize(844.0, 390.0)
   r.t.draw()
   let u = r.ui()
-  assert_true(u.full)
+  assert_true(u.full.get())
   // edge to edge: the stage is the whole window
-  assert_eq((u.box_w, u.box_h), (844.0, 390.0))
+  assert_eq((u.box_w.get(), u.box_h.get()), (844.0, 390.0))
   assert_true(r.labelled("工具") is Some(_))
   assert_true(r.labelled("关闭") is None)
   r.tap_label("工具")
@@ -702,7 +739,7 @@ test "全屏 (控制中心's upright): the screen alone, sideways, its tools fol
   r.tap_label("退出全屏")
   r.t.resize(390.0, 844.0)
   r.t.draw()
-  assert_true(!r.ui().full)
+  assert_true(!r.ui().full.get())
   assert_true(r.labelled("控制中心") is Some(_))
   screen_done(r.t)
 }
@@ -710,17 +747,17 @@ test "全屏 (控制中心's upright): the screen alone, sideways, its tools fol
 ///|
 test "the keyboard up keeps the frame as large, the pointer in sight; down again, fitted as before" {
   let zoom = screen_zoom()
-  zoom.natural(1280.0, 720.0)
-  zoom.boxed(800.0, 360.0)
+  zoom.natural(1280.0, 720.0, at=@ui.current().moment())
+  zoom.boxed(800.0, 360.0, at=@ui.current().moment())
   let before = fit_in(800.0, 360.0, 1280.0, 720.0)
-  zoom.resize_keeping(800.0, 150.0, Some((0.5, 0.9)), 40.0)
-  let (_, sy, sw, sh) = zoom.rect().unwrap()
+  zoom.resize_keeping(800.0, 150.0, Some((0.5, 0.9)), 40.0, when=@ui.current().moment())
+  let (_, sy, sw, sh) = zoom.rect(@ui.current()).unwrap()
   assert_true((sw - before.w).abs() < 1.0)
   let y = sy + 0.9 * sh
   assert_true(y >= 0.0 && y <= 150.0)
-  zoom.resize_keeping(800.0, 360.0, Some((0.5, 0.9)), 40.0)
-  assert_true(!zoom.zoomed())
-  let (x, y, w, h) = zoom.rect().unwrap()
+  zoom.resize_keeping(800.0, 360.0, Some((0.5, 0.9)), 40.0, when=@ui.current().moment())
+  assert_true(!zoom.zoomed(@ui.current()))
+  let (x, y, w, h) = zoom.rect(@ui.current()).unwrap()
   assert_true((x - before.x).abs() < 0.001 && (y - before.y).abs() < 0.001)
   assert_true((w - before.w).abs() < 0.001 && (h - before.h).abs() < 0.001)
 }
@@ -761,6 +798,26 @@ test "an agent driving it: only looking, who drives said with 接管; 接管 ask
   assert_true(r.t.find("接管") is None)
   assert_true(r.t.find("控制 · \{agent} 已暂停 · Bob 也在查看") is Some(_))
   // (只看/控制's thumb gone over to 控制: its slide's declared length)
+  r.t.run_for(@ui.cover_slide_ms)
+  screen_done(r.t)
+}
+
+///|
+test "made to only look from elsewhere: 只看 chosen for it, input not sent, 控制 a tap away" {
+  let r = screen_rig()
+  r.state("live", control=true)
+  r.config()
+  r.frame(1000.0)
+  assert_true(r.sess().controlling())
+  r.state("live", control=false, line="只看 · 还开在 still.fail iOS", more={ "watchOnly": Json::number(1.0) })
+  assert_false(r.sess().controlling())
+  assert_true(r.t.find("只看 · 还开在 still.fail iOS") is Some(_))
+  r.tap_at(0.5, 0.5)
+  assert_eq(r.inputs().length(), 0)
+  r.t.tap_text("控制")
+  let asked = r.told("screen.control")
+  assert_eq(asked.length(), 1)
+  assert_eq(field(Some(asked[0]), "control"), Some(Json::boolean(true)))
   r.t.run_for(@ui.cover_slide_ms)
   screen_done(r.t)
 }
@@ -867,13 +924,45 @@ test "denied for a grant the station lacks: its station's 权限 a tap away (前
 }
 
 ///|
+test "a Linux desktop failure offers reopening without a macOS permissions button" {
+  let r = screen_rig(os="Linux 6.8")
+  r.state(
+    "denied",
+    message="正在为 Linux 屏幕控制准备所需组件，完成后请重新打开。",
+    access={ "capture": false, "control": false, "message": "正在为 Linux 屏幕控制准备所需组件，完成后请重新打开。" },
+  )
+  r.finish()
+  assert_true(r.t.find("重新打开") is Some(_))
+  assert_true(r.t.find("前往权限设置") is None)
+  assert_true(r.t.find("安装说明") is None)
+  screen_done(r.t)
+}
+
+///|
+test "a Linux component failure offers the installation guide at either page width" {
+  for w in [390.0, 1200.0] {
+    let r = screen_rig(w~, os="Linux 6.8")
+    r.state(
+      "denied",
+      message="无法连接 Wayland 桌面。",
+      access={ "capture": false, "control": false, "message": "无法连接 Wayland 桌面。", "help": "linux-desktop" },
+    )
+    r.finish()
+    assert_true(r.t.find("重新打开") is Some(_))
+    r.t.tap_text("安装说明")
+    assert_true(r.t.opened().contains("https://github.com/AFK-surf/still.fail/blob/main/docs/linux-desktop-setup.md"))
+    screen_done(r.t)
+  }
+}
+
+///|
 test "on a phone a page of the station's browser is laid out for the stage it is shown on, and a tap is where it is; one opened for a login goes back by itself once its tab is gone" {
   let r = screen_rig(until_gone=true)
   let u = r.ui()
   let fit = field(Some(r.told("screen.view")[0]), "fit")
-  assert_true(u.box_w > 0.0 && u.box_h > 0.0)
-  assert_eq(number(fit, "width"), u.box_w.round())
-  assert_eq(number(fit, "height"), u.box_h.round())
+  assert_true(u.box_w.get() > 0.0 && u.box_h.get() > 0.0)
+  assert_eq(number(fit, "width"), u.box_w.get().round())
+  assert_eq(number(fit, "height"), u.box_h.get().round())
   assert_true(number(fit, "scale") > 0.0)
   r.live()
   assert_true(!r.sess().pad(r.sess().src), msg="driven directly, as the phone's own browser")
@@ -957,15 +1046,15 @@ test "a login field in focus while driving a tab: 用 1Password 填入; its logi
   assert_eq(@ui.fake_op_runs[0], ["item", "list", "--categories", "Login", "--format", "json"])
   assert_true(r.t.find("选一个 github.com 的登录") is Some(_))
   assert_true(r.labelled("GitLab") is None)
-  r.tap_label("GitHub 工作 · zzj-work")
+  r.tap_label("GitHub 工作 · demo-work")
   r.t.draw()
   r.t.draw()
   assert_eq(@ui.fake_op_runs[1], ["item", "get", "gh2", "--fields", "label=username,label=password", "--reveal", "--format", "json"])
   let fill = r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" })
   assert_eq(fill.length(), 1)
   assert_eq(text(Some(fill[0]), "host"), "github.com")
-  assert_eq(text(Some(fill[0]), "username"), "zzj-work")
-  assert_eq(text(Some(fill[0]), "password"), "pw-zzj-work")
+  assert_eq(text(Some(fill[0]), "username"), "demo-work")
+  assert_eq(text(Some(fill[0]), "password"), "pw-demo-work")
   // the focus left the login: nothing offered
   r.state("live", others=[])
   r.t.draw()
@@ -977,8 +1066,10 @@ test "a login field in focus while driving a tab: 用 1Password 填入; its logi
   r.t.draw()
   r.t.draw()
   assert_true(r.t.find("1Password 里没有 example.org 的登录") is Some(_))
-  @ui.fake_op.val = None
   screen_done(r.t)
+  // (the host's 1Password let go of once the run is done: taken away before, the page lost its offer between two
+  // frames with nothing said, a frame painted from the last build showing it still, MBUI_TEST_FPS=24)
+  @ui.fake_op.val = None
 }
 
 ///|
@@ -995,18 +1086,18 @@ test "no 1Password tool but the system's autofill: 用密码管理器填入 asks
   assert_eq(@ui.fake_autofill_asks, ["github.com"])
   assert_true(r.t.find("在密码管理器里选一个 github.com 的登录") is Some(_))
   // a login for another site than the one asked for: not filled
-  @ui.fake_autofill_picks("evil.example", "zzj", "pw-evil")
+  @ui.fake_autofill_picks("evil.example", "demo-user", "pw-evil")
   r.t.draw()
   r.t.draw()
   assert_eq(r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" }).length(), 0)
-  @ui.fake_autofill_picks("github.com", "zzj-work", "pw-zzj-work")
+  @ui.fake_autofill_picks("github.com", "demo-work", "pw-demo-work")
   r.t.draw()
   r.t.draw()
   let fill = r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" })
   assert_eq(fill.length(), 1)
   assert_eq(text(Some(fill[0]), "host"), "github.com")
-  assert_eq(text(Some(fill[0]), "username"), "zzj-work")
-  assert_eq(text(Some(fill[0]), "password"), "pw-zzj-work")
+  assert_eq(text(Some(fill[0]), "username"), "demo-work")
+  assert_eq(text(Some(fill[0]), "password"), "pw-demo-work")
   assert_eq(@ui.fake_autofill_asks, ["github.com", ""])
   assert_true(r.t.find("用密码管理器填入") is Some(_))
   // asked again, and the page's focus leaves the login while the service is asked (as the station says it as the app
@@ -1021,12 +1112,12 @@ test "no 1Password tool but the system's autofill: 用密码管理器填入 asks
   r.t.draw()
   assert_eq(@ui.fake_autofill_asks, ["github.com", "", "github.com"])
   assert_true(r.t.find("在密码管理器里选一个 github.com 的登录") is Some(_))
-  @ui.fake_autofill_picks("github.com", "zzj", "pw-zzj")
+  @ui.fake_autofill_picks("github.com", "demo-user", "pw-demo-user")
   r.t.draw()
   r.t.draw()
   let fill = r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" })
   assert_eq(fill.length(), 2)
-  assert_eq(text(Some(fill[1]), "username"), "zzj")
+  assert_eq(text(Some(fill[1]), "username"), "demo-user")
   assert_eq(@ui.fake_autofill_asks, ["github.com", "", "github.com", ""])
   assert_true(r.t.find("在密码管理器里选一个 github.com 的登录") is None)
   screen_done(r.t)
@@ -1044,7 +1135,7 @@ test "the autofill service's sign-in takes the app out of sight: the login picke
   // 1Password asks for a fingerprint in a screen of its own: the app goes out of sight, the view is let go of
   r.t.app_state(false, false)
   r.t.draw()
-  @ui.fake_autofill_picks("github.com", "zzj-work", "pw-zzj-work")
+  @ui.fake_autofill_picks("github.com", "demo-work", "pw-demo-work")
   r.t.draw()
   r.t.draw()
   let fills = fn() { r.inputs().filter(fn(i) { text(Some(i), "t") == "fill" }) }
@@ -1060,7 +1151,7 @@ test "the autofill service's sign-in takes the app out of sight: the login picke
   r.t.draw()
   assert_eq(fills().length(), 1)
   assert_eq(text(Some(fills()[0]), "host"), "github.com")
-  assert_eq(text(Some(fills()[0]), "username"), "zzj-work")
+  assert_eq(text(Some(fills()[0]), "username"), "demo-work")
   r.t.draw()
   assert_eq(fills().length(), 1)
   screen_done(r.t)
@@ -1223,6 +1314,8 @@ test "files go onto the machine one after another, the first beside the one of i
 /// A test's end: what moves when it ends run to its declared rest (the bar's springs as the viewer comes and goes, a
 /// toast's time out then its leaving), then nothing left moving or waited on.
 fn screen_done(t : @ui.Tester) -> Unit {
+  // (只看/控制's thumb at rest, gone over where a state turned the view to only looking)
+  t.run_for(@ui.cover_slide_ms)
   to_sheet_rest(t)
   if @kit.toast_rest("toast") != -1.0 {
     t.run_for(@sf.toast_ms)
@@ -1321,7 +1414,7 @@ test "全屏 and sideways, driving: 左键 and 右键 in a capsule of their own 
   r.t.run_for(@kit.presence_out_ms + @sf.later_ms)
   r.t.resize(844.0, 390.0)
   r.t.draw()
-  assert_true(r.ui().full)
+  assert_true(r.ui().full.get())
   assert_true(r.labelled("退出全屏") is None)
   r.tap_label(tr("android-misc.screen.key.mouseLeft"))
   let left = r.inputs()[2:].to_array()

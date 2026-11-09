@@ -1,7 +1,7 @@
 // still.fail's links as what is written names them, read alike by every client: a reference to another chat (in the
 // composer a short mark, `@[its title]`; sent, a link, `[its title](its page)`), the link a chat is given away by, and
 // the chat, screen or 共享调试 a link names. Read as a message or a draft is drawn, so the web takes them as they are
-// (web/src/chatRefs.ts), as it takes markdown.ts's words; nothing here reads the device or the station. The core's own
+// , as it takes markdown.ts's words; nothing here reads the device or the station. The core's own
 // keeping of a mark's link until it is sent is refs.ts's.
 
 import { bareLinks } from "./bareLinks.ts";
@@ -115,7 +115,7 @@ export function screenOfLink(href: string): { station: string; screen: string } 
 }
 
 /// The station a link to its 共享调试 names (`…/w/<workspace>/s/<station>/adb`, as its agents' `adb_devices` tool links
-/// it: docs/adb-share.md), as `<workspace>/<station>`. Null otherwise.
+/// it), as `<workspace>/<station>`. Null otherwise.
 export function adbOfLink(href: string): string | null {
   const m = /^(?:https?:\/\/[^/]+)?\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/adb\/?$/.exec(href);
   if (!m) return null;
@@ -124,6 +124,49 @@ export function adbOfLink(href: string): string | null {
   } catch {
     return null;
   }
+}
+
+/// The web service a link names: a chat's item with its service, as its agent links to it
+/// (`…/o/<workspace>/<station>/<chat>?service=<job>`, after a host or alone): its station and its job. Null otherwise.
+export function serviceOfLink(href: string): { station: string; job: string } | null {
+  const m = /^(?:https?:\/\/[^/]+)?\/o\/([^/?#\s]+)\/([^/?#\s]+)\/[^/?#\s]+\/?\?([^#]*)/.exec(href);
+  if (!m) return null;
+  // (by hand: Hermes on Android has no URLSearchParams, hermes-safe.test.ts)
+  const pair = m[3]!.split("&").find((kv) => kv.startsWith("service="));
+  if (!pair || pair.length === 8) return null;
+  try {
+    return { station: `${decodeURIComponent(m[1]!)}/${decodeURIComponent(m[2]!)}`, job: decodeURIComponent(pair.slice(8)) };
+  } catch {
+    return null;
+  }
+}
+
+/// A GitHub pull request's or issue's link (`https://github.com/<owner>/<repo>/pull/<n>`, `…/issues/<n>`, anything
+/// after its number): which, its repository and its number; else null. Its card is a rich one (linkTo `peek`), and a
+/// pull request is one of a chat's things (things.ts).
+export function githubOf(url: string): { kind: "pull" | "issue"; repository: string; number: number } | null {
+  const m = /^https?:\/\/(?:www\.)?github\.com\/([^/\s?#]+)\/([^/\s?#]+)\/(pull|issues)\/(\d+)(?:[/?#]|$)/i.exec(url);
+  if (m === null) return null;
+  return { kind: m[3]!.toLowerCase() === "pull" ? "pull" : "issue", repository: `${m[1]}/${m[2]}`, number: Number(m[4]) };
+}
+
+/// What a link is to, as every client draws it: a chat's (`chat`: a reference to it), a screen's, a station's 共享调试 or
+/// a chat's web service's (`card`: a card alone in a paragraph, its title bare in a sentence), with what names it; a
+/// pull request's or an issue's (`peek`: its card over it is that one's, bars while it is read). Null for any other
+/// link. The clients take it from the core with each link (markdown.ts, personWords, things.ts), reading none of it
+/// themselves.
+export type LinkTo = { chat?: true; card?: "screen" | "adb" | "service"; station?: string; screen?: string; job?: string; peek?: "pull" | "issue" };
+export function linkTo(href: string): LinkTo | null {
+  const chat = isChatLink(href) ? { chat: true as const } : {};
+  const screen = screenOfLink(href);
+  if (screen) return { ...chat, card: "screen", station: screen.station, screen: screen.screen };
+  const adb = adbOfLink(href);
+  if (adb) return { ...chat, card: "adb", station: adb };
+  const service = serviceOfLink(href);
+  if (service) return { ...chat, card: "service", station: service.station, job: service.job };
+  const github = githubOf(href);
+  if (github) return { ...chat, peek: github.kind };
+  return chat.chat ? chat : null;
 }
 
 /// The `@words` the caret is at the end of (`@` and a few letters ask for a chat to refer to), and where its `@` is;
@@ -155,4 +198,43 @@ export function pastedRefs(pasted: string, here: string): { start: number; end: 
     const chat = chatOfLink(m[2]!);
     return chat && scope(chat.station) === scope(here) ? [{ start: m.index, end: m.index + m[0].length, title: m[1]!, station: chat.station, id: chat.id, history: chat.history || chat.message }] : [];
   });
+}
+
+/// A run of a person's words as the clients draw it: as they wrote it, a web address written bare (`link`), or a
+/// reference to a chat (`ref`: its title is `text` where they wrote one, `[title](its page)`; a chat's page written bare
+/// is one too, `text` its address, the message's `chats` saying its title).
+export type WordsRun = { text: string; link?: string; ref?: true; to?: LinkTo };
+
+/// What a person wrote, in runs (WordsRun): references to chats, and web addresses written bare (bareLinks.ts). The one
+/// reading the clients draw a person's words by (what is not a message yet: draftWords).
+export function personWords(text: string): WordsRun[] {
+  const out: WordsRun[] = [];
+  for (const part of splitBy(text, REF_LINK)) {
+    if (typeof part !== "string") {
+      const to = linkTo(part[2]!);
+      out.push({ text: part[1]!, link: part[2]!, ref: true, ...(to ? { to } : {}) });
+      continue;
+    }
+    for (const bit of bareLinks(part)) {
+      if (typeof bit === "string") {
+        if (bit !== "") out.push({ text: bit });
+      } else {
+        const to = linkTo(bit.url);
+        out.push({ text: bit.url, link: bit.url, ...(to?.chat ? { ref: true as const } : {}), ...(to ? { to } : {}) });
+      }
+    }
+  }
+  return out;
+}
+
+/// What is being written, and what was sent from here before the core has it as a message (its outbox's `words`
+/// otherwise), in the runs its message will be drawn in: the composer's marks (`@[its title]`) references to their chats
+/// (their links the core's till sent: refs.ts), the rest read as personWords.
+export function draftWords(text: string): WordsRun[] {
+  const out: WordsRun[] = [];
+  for (const part of splitBy(text, REF_MARK)) {
+    if (typeof part === "string") out.push(...personWords(part));
+    else out.push({ text: part[1]!, ref: true });
+  }
+  return out;
 }

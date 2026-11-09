@@ -27,7 +27,7 @@ const built = await build({
   target: "es2020",
   // Hermes 0.81 has no async functions: as generators (mermaid's, mermaid.ts's)
   supported: { "async-await": false, "async-generator": false },
-  // STILLFAIL_CORE_NAMES keeps the core's own names (a profile of it read as written: CoreProfileReceiver.kt).
+  // STILLFAIL_CORE_NAMES keeps the core's own names.
   minifyWhitespace: true,
   minifySyntax: true,
   minifyIdentifiers: !process.env.STILLFAIL_CORE_NAMES,

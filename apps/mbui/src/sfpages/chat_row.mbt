@@ -1,4 +1,4 @@
-// A chat's row in the chats' lists (ember web/src/Sidebar.tsx ChatRow, ArchiveButton, Rename.tsx TitleInput;
+// A chat's row in the chats' lists (still.fail web/src/Sidebar.tsx ChatRow, ArchiveButton, Rename.tsx TitleInput;
 // web/src/mobile/Home.tsx ChatRow, SwipeArchive, useRowMenu, useRowArchive; Sidebar.css.ts navSession…, mobile/Home.css.ts
 // mChatRow…): one row in every tier, the web's desktop row with a mouse and its phone row with a finger. Its state's
 // mark before its title (bolder while something in it is unread), its station's mark, then where it stands or the
@@ -6,7 +6,9 @@
 // pointed at, its time in that place and 归档 at its top right; right clicked, its menu at the pointer; renamed in
 // place. With a finger: 66 high and in the phone's type; held, its time, and held long its menu; a chat is swiped left
 // to archive it. The menu is the presenters' (@sf.menu): 固定,
-// 重命名, 保留, 复制会话链接, 转到频道, 复制 session 文件路径, 归档, each where the chat has it.
+// 重命名, 保留, 复制会话链接, 转到频道, 归档, 分享给其他 workspace, 分享图片, each where the chat has it.
+//
+// One mark for one meaning everywhere (the user, 2026-10-28: 「agent 各种颜色和形状的点很混乱」).
 
 ///|
 /// What the rows keep: the row whose title is being written in place (a mouse's 重命名, its key; "" none) and its field,
@@ -14,46 +16,50 @@
 /// presenter it is (lit meanwhile); the rows swiped off to be archived, until they have gone; each swiped row's being
 /// past its line as last felt, and the press whose menu was last felt.
 priv struct Rows {
-  mut renaming : String
   mut rename_for : String
   mut rename_seen : Bool
+  mut rename_opened_at : Int
   rename_field : @ui.Field
   mut menu_for : String
   mut menu_serial : Int
   swiped_off : Map[String, Bool]
-  mut transcripts : (String, Array[String])?
   felt_past : Map[String, Bool]
 }
 
 ///|
 let rows : Rows = {
-  renaming: "",
   rename_for: "",
   rename_seen: false,
+  rename_opened_at: -1,
   rename_field: @ui.Field::new(),
   menu_for: "",
   menu_serial: -1,
   swiped_off: {},
-  transcripts: None,
   felt_past: {},
 }
 
 ///|
 fn chat_rows_reset() -> Unit {
+  match row_primed.val {
+    Some(reader) => { row_primed.val = None; reader.cancel() }
+    None => ()
+  }
+  row_held.val = (0, false)
   row_left.val = ("", false)
-  rows.renaming = ""
+  row_left_said.set("")
+  row_renaming.set("")
   rows.rename_for = ""
   rows.rename_seen = false
+  rows.rename_opened_at = -1
   rows.rename_field.set("")
   rows.menu_for = ""
   rows.menu_serial = -1
   rows.swiped_off.clear()
-  rows.transcripts = None
   rows.felt_past.clear()
 }
 
 ///|
-/// How long a finger holds a row before its time shows (mobile/Home.tsx: 450 ms).
+/// How long a finger holds a row before its time shows.
 pub let hold_ms : Double = 450.0
 
 ///|
@@ -85,11 +91,12 @@ fn row_failed(src : Source, item : ChatItem) -> String? {
 let row_calls : Array[String] = ["chat.pin", "chat.rename", "chat.archive"]
 
 ///|
-/// A row let go without opening its chat (a scroll, a hold): what it read ahead let go too, unless its page is open.
-fn unprime(src : Source, r : ChatRef) -> Unit {
+/// A row let go without opening its chat (a scroll, a hold): release only the read made by this press.
+fn unprime(src : Source, r : ChatRef, reader : @sfbase.TopicLease?) -> Unit {
   if !src.read_only && !readings.contains(r.station + "\u{1}" + r.session) {
-    (src.leave)("chat", chat_params(r))
+    @sfbase.chat_inputs_left_from(src, r)
   }
+  match reader { Some(reader) => reader.cancel(); None => () }
 }
 
 ///|
@@ -98,7 +105,10 @@ fn unprime(src : Source, r : ChatRef) -> Unit {
 let row_held : Ref[(Int, Bool)] = Ref((0, false))
 
 ///|
-/// A chat's row in a list (Sidebar.tsx ChatRow, mobile/Home.tsx ChatRow): `lead` whose pictures lead, `on` its chat the
+let row_primed : Ref[@sfbase.TopicLease?] = Ref(None)
+
+///|
+/// A chat's row in a list: `lead` whose pictures lead, `on` its chat the
 /// page in view, `list_ground` the list's ground (round its faces), `more` another row under it (@sf.list_more).
 /// `lifted`: how far it is in going ahead of others (its ground of its own over them; -1 not); `unghost` whether it
 /// leaves the list without a copy (swiped off), or with one again. `found`: a chat a search found, or a recent chat
@@ -120,7 +130,7 @@ pub fn chat_row(
   at? : @sf.ListAt = Whole,
 ) -> Int {
   let t = @sf.theme()
-  // (its sizes the theme's, by the screen; how it answers by the hand: docs/architecture.md)
+  // (its sizes the theme's, by the screen; how it answers by the hand)
   let look = @sf.theme().chat_list
   // (a finger rests on nothing: a press reads ahead, a hold shows the time; a pointer's over it shows them)
   let finger = !@sf.pointer_rests()
@@ -136,28 +146,34 @@ pub fn chat_row(
   let archive = c.id("row/archive/" + key)
   let parts = [id, slot, kind, away, line, opener]
   let r = row_ref(item)
-  let renaming = rows.renaming == key
+  let renaming = row_renaming.get() == key
   let pressed = parts.iter().any(fn(p) { c.pressed(p) })
   let down = parts.iter().any(fn(p) { c.held_down(p) })
   // Start reading when the finger goes down: the visible press can be delayed in a scrolling list.
   if finger && down && row_held.val.0 != id {
+    match row_primed.val { Some(reader) => { row_primed.val = None; reader.cancel() }; None => () }
     row_held.val = (id, false)
     if !src.read_only {
-      (src.topic)("chat", chat_params(r)) |> ignore
+      row_primed.val = Some(src.lease_topic("chat", chat_params(r)))
     }
   }
-  // (one under way still has it: Sidebar.tsx; what it asks again waits on the station)
+  // (what it asks again waits on the station)
   let menu = item.offline is None && !item.pending && !found
   // right clicked, or held long by a finger (Ctx::menu_asked, each part asked once): its menu
   let asked = parts.fold(init=None, fn(at, p) { if at is Some(_) { at } else { c.menu_asked(p) } })
   match asked {
     Some((x, y)) if menu => {
       row_held.val = (id, true)
+      if finger {
+        let reader = row_primed.val
+        row_primed.val = None
+        unprime(src, r, reader)
+      }
       row_menu(c, src, item, id, x, y)
     }
     _ => ()
   }
-  // held by a finger a while: its time shows (mobile/Home.tsx `held`)
+  // held by a finger a while: its time shows
   let held = finger && !found && @kit.after(c, "row-hold/" + key, pressed && row_held.val.0 == id, hold_ms)
   let menu_on = row_menu_open(item)
   // pressed and let go: its chat opened then, before the next frame is built (Ctx::on_press: a frame that built the
@@ -165,34 +181,51 @@ pub fn chat_row(
   c.on_press(id, fn() {
     // (being renamed: a press is the field's)
     if renaming {
+      let reader = row_primed.val
+      row_primed.val = None
+      unprime(src, r, reader)
       return
     }
     let long = row_held.val.0 == id && row_held.val.1
     row_held.val = (0, false)
     if long {
       if finger {
-        unprime(src, r)
+        let reader = row_primed.val
+        row_primed.val = None
+        unprime(src, r, reader)
       }
     } else {
+      let primed = match row_primed.val {
+        Some(reader) => Some(reader)
+        None if !src.read_only => Some(src.lease_topic("chat", chat_params(r)))
+        None => None
+      }
+      row_primed.val = None
+      let reader = match primed { Some(reader) => @sfbase.prepare_chat_handoff(reader); None => None }
       match opened {
         Some(f) => f(r)
         None => {
           // pressed on its state line while the core says which message that is about, nothing in it unread: its
-          // chat goes there as it opens (ChatMark.tsx jumpFromLine)
+          // chat goes there as it opens (Enter on the row, or a reader's Activate, presses the row itself: opened
+          // as it is)
           match item.state_about {
-            Some(seq) if c.clicked_on(id, line) && !item.unread && item.thread is Some(_) =>
+            Some(seq) if c.press_within(line) && !item.unread && item.thread is Some(_) =>
               @sfbase.go_to(r, seq)
             _ => ()
           }
           open_page(Chat(r))
         }
       }
+      match reader { Some(reader) => @sfbase.handoff_chat_open(r, reader); None => () }
     }
   })
-  if !down && row_held.val.0 == id && !menu_on && !c.clicked(id) {
+  // (let go held, no press of it taken: a press taken let it go as it ran, above)
+  if !down && row_held.val.0 == id && !menu_on {
     row_held.val = (0, false)
     if finger {
-      unprime(src, r)
+      let reader = row_primed.val
+      row_primed.val = None
+      unprime(src, r, reader)
     }
   }
   // pointed at by a mouse (its menu open beside it too); a finger's, held or its menu open
@@ -238,7 +271,7 @@ pub fn chat_row(
     spec=if lit_on { @motion.Snap(0.0) } else { @motion.tween(left_fade_ms, ease=Leave) },
   )
   // (the same motion says its end for the row to forget it: no clock read as it is built)
-  if left && !lit_on && lit.over() {
+  if left && !lit_on && lit.over(c) {
     row_left.val = ("", false)
   }
   let draw = fn(tx : Double, apart : Bool) -> Int {
@@ -247,7 +280,7 @@ pub fn chat_row(
       if held || menu_on || (pressed && tx == 0.0 && !found) {
         @sf.alpha(t.p.text, 0.05)
       } else {
-        let share = lit.get()
+        let share = lit.get(c)
         if share > 0.0 {
           @sf.alpha(t.p.selected, share)
         } else if lifted >= 0.0 {
@@ -276,7 +309,7 @@ pub fn chat_row(
     }
     // (in a side column who is in it stands in the row's foot's end corner, placed there by the corner rule; across
     // the whole screen at its second line's end; the row pointed at says when instead)
-    let cornered = at == Side && !shows_time && row_aside_shows(item, lead)
+    let cornered = at != Whole && !shows_time && row_aside_shows(item, lead)
     let place = if apart { @sf.list_more(at) } else { row_last }
     let row_box = c.box(
       style=if lifted_ink > 0.0 { place.then(row_lifted(lifted_ink)) } else { place },
@@ -310,10 +343,11 @@ pub fn chat_row(
               c.box(style=mark_slot, fn() { row_mark(c, key, tone) }) |> ignore
             }
             if renaming {
-              row_rename(c, src, item)
+              row_rename(c, src, item, at)
             } else {
               let title = if item.unread { look.title_unread } else { look.title }
-              @sf.name_words(c, item.title, if offline || item.settled { title.then(title_dim) } else { title }) |> ignore
+              let named = if item.hidden == Some(true) { item.title + " · " + @sf.t("web-main.filter.hidden") } else { item.title }
+              @sf.name_words(c, named, if offline || item.settled { title.then(title_dim) } else { title }) |> ignore
             }
             // pinned, renamed or archived: nothing while its station answers (the core's list has it so at once);
             // failed, a red mark a few seconds, why on it (the menu that asked has closed, the core put it back)
@@ -329,7 +363,7 @@ pub fn chat_row(
               None => ()
             }
             // its station offline, or its link coming back: unplugged (the core says which, row by row); one that came
-            // from elsewhere (Slack) says so
+            // from elsewhere (Slack, Feishu) says so, by its platform's mark
             match (item.offline, item.reconnecting) {
               (Some(why), _) | (None, Some(why)) => {
                 let b = c.box(style=kind_slot, id=away, taps=false, points=true, fn() {
@@ -346,7 +380,15 @@ pub fn chat_row(
               _ =>
                 if item.connect {
                   let said = if item.origin_text != "" { item.origin_text } else { "Slack" }
-                  let b = c.box(style=kind_slot, id=away, taps=false, points=true, fn() { @sf.slack_mark(c, kind_mark) |> ignore })
+                  let b = c.box(style=kind_slot, id=away, taps=false, points=true, fn() {
+                    // (Comma's mark is one colour: in the page's ink, as a one-colour maker's is)
+                    @sf.drawable(c, @sf.origin_mark_name(item.origin_kind), kind_mark, tint?=if item.origin_kind == "comma" {
+                      Some(t.p.text)
+                    } else {
+                      None
+                    })
+                    |> ignore
+                  })
                   c.semantics(b, Image, id=away, label=said)
                   @sf.tip(c, "row/away-tip/" + key, away, said)
                 }
@@ -423,9 +465,9 @@ pub fn chat_row(
       // 归档, at the row's top right while a mouse points at it (concentric with the row's corner: @sf.row_corner_keys)
       if archive_key {
         @sf.row_corner_keys(c, fn() {
-          if c.clicked(archive) {
+          c.on_press(archive, fn() {
             archive_row(src, item)
-          }
+          })
           let b = c.box(style=@sf.row_key_box, id=archive, fn() {
             @sf.icon(c, "archive", size=row_icon, color=if c.lit(archive) { t.p.text } else { t.p.muted }) |> ignore
           })
@@ -478,17 +520,6 @@ pub fn opened_icon(o : @sfbase.OpenedChat) -> String {
       ("done", _) => "check"
       _ => "spawned"
     }
-  }
-}
-
-///|
-/// Chats' rows to come while their list is read the first time (the library's Waiting, in its bones): under a day's
-/// heading, `count` rows as chat_row draws them where their list stands (`at`), of made-up words: each a title and the
-/// line under it, an agent's mark at its end.
-pub fn chat_rows_sample(c : @ui.Ctx, count : Int, at : @sf.ListAt) -> Unit {
-  @sf.list_heading(c, @sf.sample_words(2), at)
-  for i in 0..<count {
-    chat_row(c, @sfbase.sample_source, sample_chat(i), "agents", at~, more=i + 1 < count, found=true) |> ignore
   }
 }
 
@@ -556,14 +587,8 @@ let row_left : Ref[(String, Bool)] = Ref(("", false))
 let lift_ms : Double = 480.0
 
 ///|
-/// A finger's row's height (the theme's touch lists': mobile/Home.css.ts mChatRow).
+/// A finger's row's height.
 pub let touch_row_h : Double = @sf.touch_list_row_h
-
-///|
-/// A row in its list with another under it, 2 over it (Sidebar.css.ts navSessionWrap + navSessionWrap: the computer's
-/// lists', ChatList::more).
-// kept across runs: a value (no field of it changes)
-pub let row_more : @ui.Style = @sf.mouse_chat_list.more
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -578,7 +603,7 @@ let mark_slot : @ui.Style = @ui.css("w=S2_5 align=ACenter")
 /// The title of a chat settled (all its work done or dropped) or of an offline station's, stepped back: in the muted
 /// grey (navSession[data-settled], [data-offline]); a settled one says so by the archive box leading its second line
 /// (@sfbase.row_lead), its words going no lighter. Not faded: half its ink was 2.7 to 1 on the sidebar, too faint to read
-/// for a row that still opens (docs/ui-panels.md 对比度).
+/// for a row that still opens (mbui ui/contrast.mbt).
 // kept across runs: a value (no field of it changes)
 let title_dim : @ui.TextStyle = @ui.text_style(color=Muted)
 
@@ -626,23 +651,32 @@ let kind_glyph : Double = 16.0
 let row_icon : Double = 16.0
 
 ///|
-/// A row's menu (Sidebar.tsx ContextMenu, mobile/Home.tsx useRowMenu), from row `id` at (`x`, `y`): 固定 / 取消固定 (a
+/// A row's menu, from row `id` at (`x`, `y`): 固定 / 取消固定 (a
 /// station from before pins says nothing: none), 重命名, 保留 / 取消保留 (a chat of its own: a thread; pinned, none: a
-/// pin keeps it out of the archive already), 打开「…」 (one an agent opened: the chat it opened it from), 复制会话链接,
-/// 转到频道 (a thread with an agent), 复制 session 文件路径, 归档. Held by a finger, felt as it opens and from the row
-/// (a sheet, or under it); right clicked, at the pointer.
+/// pin keeps it out of the archive already), 归档; 打开「…」 (one an agent opened: the chat it opened it from), 分享…
+/// (chat_menu_items): two groups, a line between. Held by a finger, felt as it opens and from the row (a sheet, or under
+/// it); right clicked, at the pointer.
 fn row_menu(c : @ui.Ctx, src : Source, item : ChatItem, id : Int, x : Double, y : Double) -> Unit {
   // (held by a finger: the press is the menu's, felt; the menu from the row)
   let finger = @sf.menu_held(c, "row")
-  @sf.menu(chat_menu_items(src, item, []), from=if finger { Of(id) } else { @sf.at_point(x, y) })
+  let from : @sf.Beside = if finger { Of(id) } else { @sf.at_point(x, y) }
+  @sf.menu(chat_menu_items(src, item, share_from=fn() { from }), from~)
   rows.menu_for = @sfbase.row_name(item)
   rows.menu_serial = @sf.last_presented()
 }
 
 ///|
-/// What a chat's menu offers (a row's, and the "…" of the chat's page, one and the same): `extra` the page's own, before
-/// the transcript and archive that end it (sharing it, a picture of it, it in Slack: what a row has not the core's words for).
-fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) -> Array[@sf.MenuItem?] {
+/// What a chat's menu offers (a row's, and the "…" of the chat's page, one and the same, 2026-11-06 Peng Xiao: 「这里的...和
+/// 侧边栏右键点击 chat，我感觉需要统一一下」). `page`: the page's own of share_items (chat_extra_items, from its view, which it
+/// has read already), in place of the row's. What shares it or takes it elsewhere (复制会话链接, 接力到频道 for a thread with an
+/// agent, and share_items: 分享给其他 workspace, 分享图片, 在 Slack／飞书打开) is one item, 分享…, its own menu from
+/// `share_from` (where the menu was opened), where there are two or more of them (左子健, 2026-11-09: 菜单有点太多了，只把分享收进一个).
+fn chat_menu_items(
+  src : Source,
+  item : ChatItem,
+  share_from~ : () -> @sf.Beside,
+  page? : Array[@sf.MenuItem?],
+) -> Array[@sf.MenuItem?] {
   let r = row_ref(item)
   let items : Array[@sf.MenuItem?] = []
   match item.pinned {
@@ -666,13 +700,17 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
   items.push(
     Some(
       @sf.menu_item_of(@sf.t("web-main.chat.rename"), icon="edit", fn() {
-        // asked where the presenters ask it: with keyboard and mouse the row's title its own field (Rename.tsx TitleInput), on a
-        // touch over the page (mobile/Home.tsx ask)
+        // asked where the presenters ask it: with keyboard and mouse the row's title its own field, on a
+        // touch over the page
         @sf.ask_here(
           @sf.t("android-chat.rename.title"),
           @sf.t("common.save"),
           fn(title) { rename(src, item, title) },
-          fn() { rows.renaming = @sfbase.row_name(item) },
+          fn() {
+            rows.rename_for = ""
+            rows.rename_seen = false
+            row_renaming.set(@sfbase.row_name(item))
+          },
           value=item.title,
           placeholder=@sf.t("android-chat.rename.field"),
           hint=@sf.t("android-chat.rename.note"),
@@ -680,6 +718,27 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
       }),
     ),
   )
+  match item.thread {
+    Some(th) if !item.connect && item.agents.length() > 0 =>
+      items.push(
+        Some(
+          @sf.menu_item_of(@sf.t("web-main.chat.regenerateTitle"), icon="refresh", fn() {
+            if !src.read_only {
+              toast_later(@sf.t("web-main.chat.regenerateTitle.start"))
+            }
+            act(
+              src,
+              @sf.t("web-main.chat.regenerateTitle.verb"),
+              "",
+              "chat.regenerateTitle",
+              { "station": Json::string(item.station), "thread": Json::number(th) },
+              done=@sf.t("web-main.chat.regenerateTitle.done"),
+            )
+          }),
+        ),
+      )
+    _ => ()
+  }
   match item.thread {
     Some(th) if item.pinned != Some(true) =>
       items.push(
@@ -698,6 +757,33 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
       )
     _ => ()
   }
+  match (item.thread, item.hidden) {
+    (Some(_), Some(hidden)) =>
+      items.push(Some(@sf.menu_item_of(@sf.t(if hidden { "web-main.chat.unhide" } else { "web-main.chat.hide" }), icon=if hidden { "eye" } else { "eye-off" }, fn() {
+        hide_row(src, item, !hidden)
+      })))
+    _ => ()
+  }
+  match (item.thread, item.muted) {
+    (Some(thread), Some(muted)) =>
+      items.push(Some(@sf.menu_item_of(@sf.t(if muted { "web-main.chat.unmute" } else { "web-main.chat.mute" }), icon="bell", fn() {
+        act(
+          src,
+          @sf.t(if muted { "web-main.chat.unmute" } else { "web-main.chat.mute" }),
+          "",
+          "chat.mute",
+          { "station": Json::string(item.station), "thread": Json::number(thread), "muted": Json::boolean(!muted) },
+          done=@sf.t(if muted { "web-main.chat.unmutedNotice" } else { "web-main.chat.mutedNotice" }),
+          at_once=true,
+        )
+      })))
+    _ => ()
+  }
+  // with the chat's own state (pinned, kept), not last: a sheet's last row is over the screen's foot, where a thumb
+  // going home or back lands on it
+  items.push(Some(@sf.menu_item_of(@sf.t("web-main.chat.archive"), icon="archive", fn() { archive_row(src, item) })))
+  // (a line between the groups: the chat itself; where else it is and goes)
+  rule_after(items)
   // the chat an agent opened it from: gone to (its own page, its row as it is)
   match item.opener {
     Some(o) =>
@@ -710,20 +796,22 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
       )
     None => ()
   }
+  // what shares it or takes it elsewhere: one 分享… where there are two or more
+  let shared : Array[@sf.MenuItem?] = []
   let link = @sfbase.chat_link(item.station, item.session)
   if link != "" {
-    items.push(
+    shared.push(
       Some(
         @sf.menu_item_of(@sf.t("web-main.chat.copyLink"), icon="copy", fn() {
-          @sfbase.copy_chat_link(@ui.current(), item.title, link)
+          @sfbase.copy_chat_link(item.title, link)
         }),
       ),
     )
   }
-  // relayed to a channel (docs/relay.md): a chat with an agent to go on there
+  // relayed to a channel: a chat with an agent to go on there
   match item.thread {
     Some(th) if item.agents.length() > 0 =>
-      items.push(
+      shared.push(
         Some(
           @sf.menu_item_of(@sf.t("web-main.relay.action"), icon="arrow-up-right", fn() {
             open_relay(src, r, th, from=Unanchored)
@@ -732,33 +820,53 @@ fn chat_menu_items(src : Source, item : ChatItem, extra : Array[@sf.MenuItem?]) 
       )
     _ => ()
   }
-  items.append(extra)
-  items.push(
-    Some(
-      @sf.menu_item_of(@sf.t("web-main.chat.copyTranscript"), icon="file", fn() {
-        // (asked of its station once the frame after it is built: rows_frame)
-        rows.transcripts = Some((item.station, match item.agents.map(fn(a) { a.key }).filter(fn(k) { k != "" }) {
-          [] => [item.session]
-          keys => keys
-        }))
-      }),
-    ),
+  // shared, a picture of it, it in Slack or Feishu: the page's and a row's alike (share_items)
+  shared.append(
+    match page {
+      Some(own) => own
+      None =>
+        share_items(
+          src,
+          r,
+          item.thread,
+          may_share=item.may_share,
+          may_publish=item.may_publish,
+          slack_url=item.slack_url,
+          slack_app=item.slack_app,
+          feishu_url=item.feishu_url,
+        )
+    },
   )
-  items.push(Some(@sf.menu_item_of(@sf.t("web-main.chat.archive"), icon="archive", fn() { archive_row(src, item) })))
+  items.append(share_menu(shared, share_from))
+  // (no line closing the menu: nothing after the chat's own group)
+  if items.last() is Some(None) {
+    items.pop() |> ignore
+  }
   items
 }
 
+/// Hide only from this person's lists, or put the chat back; undo uses the same personal mark.
+fn hide_row(src : Source, item : ChatItem, hidden : Bool) -> Unit {
+  guard item.thread is Some(thread) else { return }
+  let words = @sf.t(if hidden { "web-main.chat.hide" } else { "web-main.chat.unhide" })
+  act(
+    src,
+    words,
+    "",
+    "chat.hide",
+    { "station": Json::string(item.station), "thread": Json::number(thread), "hidden": Json::boolean(hidden) },
+    done=@sf.t(if hidden { "web-main.chat.hiddenNotice" } else { "web-main.chat.unhiddenNotice" }),
+    done_action=if hidden { @sf.t("android-chat.archived.undo") } else { "" },
+    done_run=fn() { hide_row(src, item, false) },
+    at_once=true,
+  )
+}
+
 ///|
-/// What a row's menu left to do, done as the frame's builds are over (a chat's transcripts' paths asked of its
-/// station): called by the lists as they are drawn.
-pub fn rows_frame(c : @ui.Ctx, src : Source) -> Unit {
-  match rows.transcripts {
-    Some((station, keys)) => {
-      // (taken at once: a page's frame and the list's both call it, the paths copied once)
-      rows.transcripts = None
-      c.after_build("rows/transcripts", fn() { copy_transcripts(c, src, station, keys) })
-    }
-    None => ()
+/// A line ending a menu's group: after an item only (none first, none twice).
+fn rule_after(items : Array[@sf.MenuItem?]) -> Unit {
+  if items.last() is Some(Some(_)) {
+    items.push(None)
   }
 }
 
@@ -782,60 +890,35 @@ fn rename(src : Source, item : ChatItem, title : String) -> Unit {
 }
 
 ///|
-/// Where a chat's agents' sessions are kept on their station's machine (ChatRef.tsx useCopyTranscripts:
-/// `session.transcript` each), copied one a line; said if none is written yet.
-fn copy_transcripts(c : @ui.Ctx, src : Source, station : String, keys : Array[String]) -> Unit {
-  let paths : Array[String?] = keys.map(fn(_) { None })
-  let mut left = keys.length()
-  let mut failed : String? = None
-  let done = fn() {
-    match failed {
-      Some(e) => say(c, @sf.t("web-main.chat.copyFailed", args=[("error", e)]))
-      None => {
-        let found = paths.filter_map(fn(p) { p })
-        if found.length() == 0 {
-          say(c, @sf.t("web-main.chat.transcriptNone"))
-        } else {
-          c.copy_text(found.join("\n"))
-          say(c, if found.length() > 1 {
-            @sf.t("web-main.chat.transcriptsCopied", args=[("n", found.length().to_string())])
-          } else {
-            @sf.t("web-main.chat.transcriptCopied")
-          })
-        }
-      }
-    }
-  }
-  for i, key in keys {
-    (src.call)("session.transcript", { "station": Json::string(station), "key": Json::string(key) }, fn(r) {
-      match r {
-        Ok(v) =>
-          match text(Some(v), "path") {
-            "" => ()
-            p => paths[i] = Some(p)
-          }
-        Err(e) => failed = Some(text(Some(e), "message"))
-      }
-      left = left - 1
-      if left == 0 {
-        done()
-      }
-    })
-  }
-}
-
-///|
-/// A row's title as a field (Rename.tsx TitleInput, from a mouse's 重命名): Enter saves it (`chat.rename`), Esc or
-/// leaving it lets it be.
-fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
+/// A row's title as a field (from a mouse's 重命名): Enter saves it (`chat.rename`), Esc or
+/// leaving it lets it be; as far in as where its list stands (`at`) has it (rename_box).
+fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem, at : @sf.ListAt) -> Unit {
   let key = "row/rename"
   let whose = @sfbase.row_name(item)
-  if rows.rename_for != whose {
+  let press = c.press()
+  let starting = rows.rename_for != whose
+  if starting {
     rows.rename_for = whose
+    rows.rename_seen = false
+    rows.rename_opened_at = press.frame
     rows.rename_field.set(item.title)
     c.focus_editor(key)
   }
-  c.box(style=rename_box().then(@ui.style(border_color=Data(@sf.theme().p.line_strong))), fn() {
+  // A row is not necessarily focusable, so a press on another row can leave a field holding the keyboard. A rename
+  // belongs only to its field: a press elsewhere lets it go, while the press still reaches what it was on.
+  if !starting && press.fresh && press.frame != rows.rename_opened_at && !c.press_within(c.id(key)) {
+    if c.editor_focused(key) {
+      c.blur()
+    }
+    stop_rename()
+    return
+  }
+  // Check before drawing: after a focus move the title must replace the editor in that same frame.
+  if !starting && rows.rename_seen && !c.editor_focused(key) {
+    stop_rename()
+    return
+  }
+  c.box(style=rename_box(at).then(@ui.style(border_color=Data(@sf.theme().p.line_strong))), fn() {
     let res = c.editor(
       key,
       font_size=rename_size,
@@ -849,12 +932,11 @@ fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
     )
     match res.submitted {
       Some(title) => {
-        rows.renaming = ""
-        rows.rename_for = ""
+        stop_rename()
         c.blur()
         rename(src, item, title)
       }
-      None => if !res.focused && rows.rename_for != "" && rows.rename_seen { rows.renaming = "" }
+      None => ()
     }
     rows.rename_seen = res.focused
   })
@@ -862,16 +944,31 @@ fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
 }
 
 ///|
-/// The field in the title's place (Rename.css.ts titleInput): the row's head across, its mark's place too (the mark
+/// Let a rename go, including the field's identity, so the same row can be renamed again.
+fn stop_rename() -> Unit {
+  row_renaming.set("")
+  rows.rename_for = ""
+  rows.rename_seen = false
+  rows.rename_opened_at = -1
+}
+
+///|
+/// The field in the title's place: the row's head across, its mark's place too (the mark
 /// left out while it shows), 24 high on the canvas, 4 taller than the title's line without making the row taller; a 1
 /// line round it in the strong grey; the title's words (13 on 24). In the row's top corners: a capsule (its shape its
 /// height's) standing where it is concentric with both (@sf.capsule_in: the row's 18 its distance and its half, 6), as
 /// far from the row's top as from its sides; all four corners alike, not the row's followed in two and its own 6 in the
 /// others (the user, 2026-10-26). Its words its half in from its end, as a capsule field's are (@sf.input's), not 6 in
-/// where the title's were (the user, 2026-10-26: 离首字太近).
-fn rename_box() -> @ui.Style {
-  let d = @sf.capsule_in(@sf.row_corner, rename_h)
-  let side = @sf.theme().chat_list.band_pad - d
+/// where the title's were (the user, 2026-10-26: 离首字太近). Its sides where its list stands (`at`): in a side column a
+/// row's words' (band_pad_in); across the whole screen the ladder's inset, 8, as #3806 (5b8b71713d) made it (the user,
+/// 2026-11-09, asked a phone's search fields back to 12, not this).
+fn rename_box(at : @sf.ListAt) -> @ui.Style {
+  let d = @ui.capsule_in(@sf.row_corner, rename_h)
+  let words_in = match at {
+    Side | Tape => @sf.band_pad_in(at)
+    Whole => @sf.corner_inset
+  }
+  let side = words_in - d
   let over = @sf.row_top_in_y - d
   rename_look.then(
     @ui.style(
@@ -910,11 +1007,17 @@ let rename_line : Double = 24.0
 let listed : Ref[Array[ChatItem]] = Ref([])
 
 ///|
-/// Archives a row's chat (Sidebar.tsx useArchive, mobile/Home.tsx useRowArchive): its 归档 key, its menu's, its swipe;
-/// one keeping watch only once asked, in the core's words. Its chat in view goes to
+/// Archives a row's chat: its 归档 key, its menu's, its swipe;
+/// one keeping watch only once asked, in the core's words (its swipe also one at work: `ask`, the core's swipeAsk). Its chat in view goes to
 /// the chat after it in the list (else before it; else the list alone) at once. Said at once, by its title (the core's
 /// list has it gone); why not, when not (`failed` told then).
-fn archive_row(src : Source, item : ChatItem, then? : () -> Unit = fn() {  }, failed? : () -> Unit = fn() {  }) -> Unit {
+fn archive_row(
+  src : Source,
+  item : ChatItem,
+  ask? : String? = item.watch_ask,
+  then? : () -> Unit = fn() {  },
+  failed? : () -> Unit = fn() {  },
+) -> Unit {
   let params : Map[String, Json] = {
     "station": Json::string(item.station),
     "session": Json::string(item.session),
@@ -940,7 +1043,7 @@ fn archive_row(src : Source, item : ChatItem, then? : () -> Unit = fn() {  }, fa
       failed~,
     )
   }
-  match item.watch_ask {
+  match ask {
     Some(ask) =>
       @sf.confirm(@sf.t("android-chat.archive.ask", args=[("title", item.title)]), ask, @sf.t("android-chat.archive"), run)
     None => run()
@@ -971,15 +1074,33 @@ fn leave_archived(item : ChatItem) -> Unit {
 }
 
 ///|
-/// Let go past this share of its width (or flung left), a swiped row is archived (mobile/Home.tsx TAKES).
+/// Let go past this share of its width (or flung left), a swiped row is archived.
 let archive_at_share : Double = 0.35
 
 ///|
-/// How fast a fling left must be (points per ms) to archive a row that went at least `fling_from` across.
-let fling_speed : Double = 0.5
+/// How fast a fling left must be (points per ms) to archive a row that went at least `fling_from_share` of the line
+/// across: a deliberate flick, not the sideways drift of a finger scrolling the list.
+let fling_speed : Double = 1.0
 
 ///|
-let fling_from : Double = 16.0
+/// How far towards the line (`archive_at_share`) a row flung left must have gone for the fling to archive it.
+let fling_from_share : Double = 0.5
+
+///|
+/// Whether a row `w` wide let go `at` across (to the left: negative), its finger going `vx` (points per ms), is
+/// archived: past the line, or flung left from past `fling_from_share` of the way to it.
+fn swipe_archives(at : Double, w : Double, vx : Double) -> Bool {
+  let line = w * archive_at_share
+  at < -line || (vx < -fling_speed && at < -line * fling_from_share)
+}
+
+///|
+/// Whether a finger moved (dx, dy) from where it went down on a row takes it for the row's swipe to archive: left
+/// past the slop and plainly across (at most half as far up or down), so one scrolling the list that drifts a little
+/// sideways as it sets off scrolls it.
+fn swipe_claims(dx : Double, dy : Double) -> Bool {
+  dx < -@ui.touch_slop() && dx.abs() > 2.0 * dy.abs()
+}
 
 ///|
 /// How long a swiped row's 归档 takes to fill in ink. Let go to archive, it goes off to the left on a Move as long as
@@ -987,11 +1108,11 @@ let fling_from : Double = 16.0
 let swipe_fill_ms : Double = 140.0
 
 ///|
-/// A finger's row (mobile/Home.tsx SwipeArchive), swiped left to archive it: it follows the finger in its
+/// A finger's row, swiped left to archive it: it follows the finger in its
 /// slot (cut to its corners where its list stands, `at`), uncovering 归档 at the right edge (filled in ink once letting
 /// go would archive it); let go past `archive_at_share` of its width or flung left, it goes off to the left and is
-/// archived, else it springs back. Archiving refused, it comes back; one keeping watch springs back and asks first, as
-/// its menu's 归档. Across first it is the swipe (the row's tap and hold let go); up or down first it is the list's.
+/// archived, else it springs back. Archiving refused, it comes back; one the core asks about (keeping watch, at work)
+/// springs back and asks first. Across first it is the swipe (the row's tap and hold let go); up or down first it is the list's.
 /// `row` draws the row moved across by so much; `unghost` says whether it leaves the list without a copy (swiped off),
 /// or with one again (its archiving refused). Its answer is the box holding it all.
 fn swipe_to_archive(
@@ -1008,30 +1129,29 @@ fn swipe_to_archive(
   let id = c.id(key)
   let width = dmax(c.width, 1.0)
   let off = @motion.anim(c, key, 0.0, global=true)
-  let back = fn(v : Double) { off.animate(0.0, @motion.move_spring, velocity=v) }
+  let back = fn(v : Double) { off.animate(c, 0.0, @motion.move_spring, velocity=v) }
   let going = rows.swiped_off.contains(key)
   match c.drag_of(id) {
     // (gone off already: nothing more to swipe)
     Some(d) if !going => {
       let (dx, _) = d.take_move()
       if dx != 0.0 {
-        off.snap(dclamp(off.get() + dx, -width, 0.0))
+        off.snap(c, dclamp(off.get(c) + dx, -width, 0.0))
       }
       if d.take_end() {
-        let at = off.get()
+        let at = off.get(c)
         let v = d.vx * 1000.0
-        let fling = d.vx < -fling_speed && at < -fling_from
-        if at < -width * archive_at_share || fling {
+        if swipe_archives(at, width, d.vx) {
           if busy {
             back(v)
-          } else if item.watch_ask is Some(_) {
+          } else if item.swipe_ask is Some(_) {
             back(v)
-            archive_row(src, item)
+            archive_row(src, item, ask=item.swipe_ask)
           } else {
             // off to the left, then archived (no copy of it left behind as it leaves the list: it is out of sight)
             rows.swiped_off[key] = true
             unghost(true)
-            off.animate(-width, @motion.move(), velocity=v)
+            off.animate(c, -width, @motion.move(), velocity=v)
           }
         } else {
           back(v)
@@ -1040,19 +1160,19 @@ fn swipe_to_archive(
     }
     _ => ()
   }
-  let moved = off.get()
+  let moved = off.get(c)
   // gone off: archived (the call once the row has gone, as declared as it set off), drawn off this frame and its place
   // forgotten, so the row asked back (its toast's 撤销) is where it rests; refused, it comes back from off to the left
-  if going && off.over() {
+  if going && off.over(c) {
     rows.swiped_off.remove(key)
-    off.snap(0.0)
+    off.snap(c, 0.0)
     archive_row(src, item, failed=fn() {
       unghost(false)
-      off.snap(-width)
+      off.snap(c, -width)
       back(0.0)
     })
   }
-  // past the line letting go archives at: felt as it is passed (Home.kt SwipeToArchive: TextHandleMove)
+  // past the line letting go archives at: felt as it is passed
   let past = moved < -width * archive_at_share
   // (only while it is past the line or was: a row at rest tells nothing, as one coming into view as its list scrolls
   // would tell otherwise than the frame before and build the next whole, frame_watch.mbt's told_same)
@@ -1068,7 +1188,7 @@ fn swipe_to_archive(
   c.drag_area(id, axis=Horizontal, w=Fill(1.0), fn() {
     c.box(style=@sf.list_row_slot(at), fn() {
       if moved < 0.0 {
-        // at the end it uncovers, as far as the row has gone and no further (mobile/Home.tsx mSwipeUnder): quiet until
+        // at the end it uncovers, as far as the row has gone and no further: quiet until
         // letting go would archive it, then ink. Never under the row, whose edges would show round it.
         let ground = @ui.style(w=Fixed(-moved), bg=Data(@sf.mix(t.p.text, fill, t.p.chip)))
         c.box(style=ground, top=0.0, right=0.0, bottom=0.0, fn() {  }) |> ignore
@@ -1105,44 +1225,46 @@ let swipe_words_line : @ui.Style = @ui.style(
 let swipe_words : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, wrap=false)
 
 ///|
-fn dclamp(v : Double, lo : Double, hi : Double) -> Double {
-  if v < lo {
-    lo
-  } else if v > hi {
-    hi
-  } else {
-    v
-  }
-}
-
-///|
 /// Whether a row's title is being written in place (what the frame holds open meanwhile).
 pub fn renaming() -> Bool {
-  rows.renaming != ""
+  row_renaming.get() != ""
 }
 
 ///|
-/// Esc to a row's title being written in place: let be. Whether there was one.
-pub fn rename_escape(c : @ui.Ctx) -> Bool {
-  if rows.renaming == "" {
+/// Esc to a row's title being written in place: let be, the keyboard let go (`blur`). Whether there was one.
+pub fn rename_escape(blur : () -> Unit) -> Bool {
+  if row_renaming.untracked() == "" {
     return false
   }
-  rows.renaming = ""
-  c.blur()
+  stop_rename()
+  blur()
   true
 }
 
-
 ///|
-/// The chat in view's "…" (a menu from `from`): what a row's menu offers (chat_menu_items) for the row the core's list
-/// has of it, else (an archived one, one it does not list) its link alone; `extra` the page's own (chat_extra_items).
+/// The chat in view's "…" (a menu from `from`): its items (chat_menu_of) shown.
 pub fn open_chat_menu(
   src : Source,
   scope : String,
   r : ChatRef,
   extra : Array[@sf.MenuItem?],
   from~ : @sf.Beside,
+  along? : @ui.Along = Start,
 ) -> Unit {
+  @sf.menu(chat_menu_of(src, scope, r, extra, share_from=fn() { from }), from~, along~)
+}
+
+///|
+/// What the chat in view's "…" offers: what a row's menu offers (chat_menu_items) for the row the core's list has of
+/// it, else (an archived one, one it does not list) its link alone; `extra` the page's own (chat_extra_items). Apart
+/// from showing them: the system's bars take them as a menu of their own (rail_native.mbt bar_chat).
+pub fn chat_menu_of(
+  src : Source,
+  scope : String,
+  r : ChatRef,
+  extra : Array[@sf.MenuItem?],
+  share_from~ : () -> @sf.Beside,
+) -> Array[@sf.MenuItem?] {
   let mut found : ChatItem? = None
   match @sfbase.chats_of(src, scope, "all").0 {
     Some(view) =>
@@ -1155,35 +1277,87 @@ pub fn open_chat_menu(
       }
     None => ()
   }
+  if found is None {
+    match @sfbase.chats_of(src, scope, "hidden").0 {
+      Some(view) =>
+        for d in view.days {
+          for i in d.items {
+            if found is None && @sfbase.row_is(i, r) {
+              found = Some(i)
+            }
+          }
+        }
+      None => ()
+    }
+  }
   let items : Array[@sf.MenuItem?] = match found {
-    Some(item) => chat_menu_items(src, item, extra)
+    Some(item) => chat_menu_items(src, item, share_from~, page=extra)
     None => {
       let link = @sfbase.chat_link(r.station, r.session)
-      let items : Array[@sf.MenuItem?] = []
+      let shared : Array[@sf.MenuItem?] = []
       if link != "" {
-        items.push(
+        shared.push(
           Some(
             @sf.menu_item_of(@sf.t("web-main.chat.copyLink"), icon="copy", fn() {
-              @sfbase.copy_chat_link(@ui.current(), r.title, link)
+              @sfbase.copy_chat_link(r.title, link)
             }),
           ),
         )
       }
-      items.append(extra)
-      items
+      shared.append(extra)
+      share_menu(shared, share_from)
     }
   }
-  @sf.menu(items, from~)
+  items
 }
 
 ///|
-/// What the chat's page adds to its menu (`chat`, the core's view of it): sharing it with others, a picture of it (for
-/// those who may), it opened where it came from (Slack, Feishu).
+/// What shares a chat or takes it elsewhere (`shared`), in its menu: one item, 分享…, its own menu from `share_from`, where
+/// there are two or more; else as they are.
+fn share_menu(shared : Array[@sf.MenuItem?], share_from : () -> @sf.Beside) -> Array[@sf.MenuItem?] {
+  if shared.length() < 2 {
+    return shared
+  }
+  [
+    Some(
+      @sf.menu_item_of(@sf.t("web-main.chat.share"), icon="share", fn() {
+        @sf.menu(shared, from=share_from(), title=@sf.t("web-main.chat.share.title"))
+      }),
+    ),
+  ]
+}
+
+///|
+/// What the chat's page's menu has beyond the list's own (`chat`, the core's view of it): as a row's (share_items), from
+/// its page's view.
 pub fn chat_extra_items(src : Source, r : ChatRef, chat : Json?) -> Array[@sf.MenuItem?] {
+  share_items(
+    src,
+    r,
+    opt_number(field(chat, "thread"), "id"),
+    may_share=flag(field(chat, "xshare"), "may"),
+    may_publish=flag(field(chat, "publish"), "may"),
+    slack_url=text(chat, "slackUrl"),
+    slack_app=text(chat, "slackApp"),
+    feishu_url=text(chat, "feishuUrl"),
+  )
+}
+
+///|
+/// What is done with chat `r` (its `thread`) beyond the list's own, in a row's menu and its page's "…" alike: 分享给其他
+/// workspace, 分享图片, 在 Slack 打开 or 在飞书打开, each where the viewer may.
+fn share_items(
+  src : Source,
+  r : ChatRef,
+  thread : Double?,
+  may_share~ : Bool,
+  may_publish~ : Bool,
+  slack_url~ : String,
+  slack_app~ : String,
+  feishu_url~ : String,
+) -> Array[@sf.MenuItem?] {
   let items : Array[@sf.MenuItem?] = []
-  let thread = opt_number(field(chat, "thread"), "id")
-  let share = field(chat, "xshare")
-  if flag(share, "may") {
+  if may_share {
     items.push(
       Some(
         @sf.menu_item_of(@sf.t("web-pages.chat.xshare"), icon="users", fn() {
@@ -1192,9 +1366,8 @@ pub fn chat_extra_items(src : Source, r : ChatRef, chat : Json?) -> Array[@sf.Me
       ),
     )
   }
-  let publish = field(chat, "publish")
   match thread {
-    Some(th) if flag(publish, "may") =>
+    Some(th) if may_publish =>
       items.push(
         Some(
           @sf.menu_item_of(@sf.t("web-pages.chat.shareImage"), icon="image-upload", fn() { open_publish(src, r, th) }),
@@ -1202,25 +1375,23 @@ pub fn chat_extra_items(src : Source, r : ChatRef, chat : Json?) -> Array[@sf.Me
       )
     _ => ()
   }
-  let slack = text(chat, "slackUrl")
-  if slack != "" {
+  if slack_url != "" {
     items.push(
       Some(
         @sf.menu_item_of(@sf.t("web-pages.chat.openInSlack"), icon="external", fn() {
-          if !@sfbase.open_slack(text(chat, "slackApp"), slack) {
-            @sfbase.say(@ui.current(), @sf.t("android-chat.link.failed"))
+          if !@sfbase.open_slack(slack_app, slack_url) {
+            @sfbase.toast_later(@sf.t("android-chat.link.failed"))
           }
         }),
       ),
     )
   }
-  let feishu = text(chat, "feishuUrl")
-  if feishu != "" {
+  if feishu_url != "" {
     items.push(
       Some(
         @sf.menu_item_of(@sf.t("web-pages.chat.openInFeishu"), icon="external", fn() {
-          if !@ui.open_url(feishu) {
-            @sfbase.say(@ui.current(), @sf.t("android-chat.link.failed"))
+          if !@ui.open_url(feishu_url) {
+            @sfbase.toast_later(@sf.t("android-chat.link.failed"))
           }
         }),
       ),

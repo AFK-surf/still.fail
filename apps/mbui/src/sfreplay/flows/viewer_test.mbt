@@ -7,6 +7,8 @@
 test "96-viewer" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("viewer"), seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
+    // The recording used a Mac window whose buttons occupy the app's top row.
+    f.t.set_window_inset(true)
     // (what the host drew of the marks, as the run's gave it: the PNG it sent up)
     // (handed to the core whole: composer.add; a run from before, its parts: station.upload.part)
     let handed = match f.r.sent_bytes_from("composer.add", "name", "e2e-photo-标注-") {
@@ -22,9 +24,13 @@ test "96-viewer" {
     f.peer("peer createfiles 两张图片 201493 post:收到两张图片 201493 -- e2e-photo.jpg e2e-photo2.png")
     f.see("两张图片 201493")
     // The new row is moving into place; tap it after the list has made room for it.
-    f.run_to_rest("a list's rows' heights")
+    // (where the run's pace had the row come with the list's first rows, nothing of the list moved: where it rests)
+    let rows_end = @sfpages.rows_rest()
+    if rows_end >= 0.0 {
+      f.run_to(rows_end)
+    }
     f.tap("两张图片 201493")
-    f.see("=studio")
+    f.see("=willow")
     f.see("img:e2e-photo.jpg")
     f.tap("img:e2e-photo.jpg")
     // flown open from its thumbnail, its bars on once it is in
@@ -39,6 +45,8 @@ test "96-viewer" {
     f.see("e2e-photo.jpg")
     f.tap("icon:edit")
     f.see("icon:scribble")
+    // Let the marking tools take their room before placing a mark on the picture.
+    f.run_for(@ui.move_most_ms)
     // a box drawn, its note said
     f.drag_at(120.0, 360.0, 140.0, 90.0, steps=ms300)
     // its note's box: its tick, 完成 (as Android's test finds it: its contentDescription)

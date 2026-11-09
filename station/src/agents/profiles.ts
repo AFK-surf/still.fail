@@ -1,4 +1,4 @@
-// How a profile's account reaches its models (the Rust station's profiles.rs `access_env`, `codex_overrides`), and the
+// How a profile's account reaches its models (`codex_overrides`), and the
 // environment a profile's runtime is started with, as config.rs parse_config makes it (`envs`: what the access kind
 // needs there plus the profile's own variables, which win). A profile here is config.json's, its home made absolute.
 import { join } from "node:path";
@@ -36,9 +36,20 @@ export const kimiSignedIn = (p: Profile): boolean => accessKind(p) === "api-prov
 export const keyFile = (p: Profile): string | undefined => (kimiSignedIn(p) ? join(p.home, KIMI_TOKEN_FILE) : undefined);
 /// Its model, when it names one.
 export const profileModel = (p: Profile): string | undefined => str(p.model);
-/// On the machine's own login (machine_logins.rs).
+/// On the machine's own login.
 export const isMachine = (p: Profile): boolean => p.machine === true;
 export const profileFast = (p: Profile): boolean => p.fast === true;
+/// The runtimes a session can be set to Fast on (its own `fast`, else its profile's).
+export const FAST_RUNTIMES: readonly string[] = ["codex", "claude"];
+/// Whether a profile's account takes Fast: an OpenAI subscription on Codex (its service tier); on Claude Code (its
+/// `fastMode` setting) an Anthropic key, or a Claude subscription, whose Fast is billed to its usage credits (offered
+/// only while they are on: `fastNeedsCredits`; Claude Code runs at standard speed without them).
+export const takesFast = (p: Profile): boolean => {
+  const kind = accessKind(p);
+  return (p.runtime === "codex" && kind === "subscription") || (p.runtime === "claude" && (kind === "anthropic-api" || kind === "subscription"));
+};
+/// A Claude subscription: its Fast is offered only while its allowance says its usage credits are on.
+export const fastNeedsCredits = (p: Profile): boolean => p.runtime === "claude" && accessKind(p) === "subscription";
 export const profileVia = (p: Profile): Via => {
   const a = access(p);
   return { provider: str(a.provider), endpoint: a.endpoint === undefined ? undefined : cleanEndpoint(a.endpoint), protocol: str(a.protocol) };
@@ -55,7 +66,7 @@ export function apiSource(via: Via): [Source, Endpoints] | undefined {
 const NO_KEY = "none";
 export const OPENCODE = "https://opencode.ai/zen/go";
 /// The variable a Codex provider config reads an API provider's key from.
-const CODEX_KEY = "EMBER_API_KEY";
+const CODEX_KEY = "STILLFAIL_API_KEY";
 /// The variable DeepSeek Harness reads a profile's key from (its route's `apiKeyEnv`, dsh.ts); DeepSeek's own route
 /// and its web search read DEEPSEEK_API_KEY.
 export const DSH_KEY = "STILLFAIL_DSH_KEY";
@@ -74,11 +85,12 @@ export function accessEnv(runtime: Runtime, kind: AccessKind, key: string, model
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
     };
   }
-  // The provider's session key keeps the name of before the rename: its sessions go on under it.
-  if (kind === "opencode-go" && runtime === "codex") return { OPENCODE_GO_KEY: key, OPENCODE_SESSION: "ember-{route}" };
+  if (kind === "opencode-go" && runtime === "codex") return { OPENCODE_GO_KEY: key, OPENCODE_SESSION: "stillfail-{route}" };
   if ((kind === "opencode-go" || kind === "anthropic-api") && runtime === "dsh") return { [DSH_KEY]: key };
   // Grok Build on SuperGrok signs in in its own home (grok.ts); on an xAI key, it is given it.
   if (runtime === "grok") return kind === "api-provider" && via.provider === "xai" ? { XAI_API_KEY: key } : {};
+  // The Antigravity CLI signed in to a Google account keeps it in its own home (agy.ts); on a Gemini key, it is given it.
+  if (runtime === "agy") return kind === "api-provider" && via.provider === "google" ? { GEMINI_API_KEY: key } : {};
   if (kind === "anthropic-api") return { ANTHROPIC_API_KEY: key };
   if (kind === "api-provider") return apiEnv(runtime, key, model, via);
   return {};
@@ -111,7 +123,7 @@ function apiEnv(runtime: Runtime, key: string, model: string | undefined, via: V
   }
   if (at.responses === undefined) return {};
   const env: Record<string, string> = { [CODEX_KEY]: keyOrNone };
-  if (source.sessionHeader) env.OPENCODE_SESSION = "ember-{route}";
+  if (source.sessionHeader) env.OPENCODE_SESSION = "stillfail-{route}";
   return env;
 }
 
@@ -161,7 +173,7 @@ export type DshRoute =
 
 export function dshRoute(p: Profile): DshRoute | null {
   const kind = accessKind(p);
-  const session = { "x-opencode-session": "ember-{route}" };
+  const session = { "x-opencode-session": "stillfail-{route}" };
   if (kind === "opencode-go") return { kind: "pi", name: "OpenCode Go", api: "openai-completions", baseURL: `${OPENCODE}/v1`, headers: session };
   if (kind === "anthropic-api") return { kind: "pi", name: "Anthropic", api: "anthropic-messages", baseURL: "https://api.anthropic.com" };
   if (kind !== "api-provider") return null;
@@ -177,7 +189,7 @@ export function dshRoute(p: Profile): DshRoute | null {
   return null;
 }
 
-/// The runtimes an account runs (profiles.rs runtimes_for): an OpenCode Go key all three, an Anthropic key Claude Code
+/// The runtimes an account runs: an OpenCode Go key all three, an Anthropic key Claude Code
 /// and DeepSeek Harness, a provider's what it speaks; a subscription (and custom variables) the runtime it was made for.
 export function profileRuntimes(p: Profile): Runtime[] {
   const kind = accessKind(p);
@@ -187,7 +199,8 @@ export function profileRuntimes(p: Profile): Runtime[] {
     // xAI's key runs Grok Build too (its own API, not one of the protocols). A Kimi sign-in runs Claude Code alone: only
     // it reads its key again as the token is renewed (`keyFile`).
     if (kimiSignedIn(p)) return ["claude"];
-    return found[0].id === "xai" ? [...runtimesOf(found[1]), "grok"] : runtimesOf(found[1]);
+    // A Gemini key runs the Antigravity CLI too.
+    return found[0].id === "xai" ? [...runtimesOf(found[1]), "grok"] : found[0].id === "google" ? [...runtimesOf(found[1]), "agy"] : runtimesOf(found[1]);
   }
   if (kind === "opencode-go") return ["claude", "codex", "dsh"];
   if (kind === "anthropic-api") return ["claude", "dsh"];
@@ -215,6 +228,3 @@ export function profileEnv(p: Profile, runtime: Runtime): Record<string, string>
 export const expandRoute = (env: Record<string, string>, route: string): Record<string, string> =>
   Object.fromEntries(Object.entries(env).map(([k, v]) => [k, v.replaceAll("{route}", route)]));
 
-/// Both names of a variable the station sets for what it starts (former.rs `both`): the new one, and the old one for
-/// scripts written against it.
-export const bothNames = (name: string): [string, string] => [`STILLFAIL_${name}`, `EMBER_${name}`];

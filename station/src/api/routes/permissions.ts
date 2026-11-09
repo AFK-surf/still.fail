@@ -1,4 +1,4 @@
-// What macOS lets still.fail Helper do on this Mac (helper/grants.ts; docs/remote-screens.md "Grants"), as members ask
+// What macOS lets still.fail Helper do on this Mac (helper/grants.ts), as members ask
 // it. The overview says the grants (`permissions`); POST /permissions/request `{grant}` puts the helper's window up on
 // the Mac for that one (a member who may change the station: the admin API refuses a read-only one's), again however
 // lately it was shown (the person asks: a client retrying is answered once, by its idempotency key), and answers `{window, screen}`: `up` (shown, or up already asking for it) or `granted` (nothing

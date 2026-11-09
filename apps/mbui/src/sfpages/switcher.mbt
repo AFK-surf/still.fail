@@ -1,14 +1,14 @@
-// The search (ember web/src/Switcher.tsx Finder, Found; web/src/mobile/Home.tsx SearchPage, FoundRow, FoundChatRow,
+// The search (still.fail web/src/Switcher.tsx Finder, Found; web/src/mobile/Home.tsx SearchPage, FoundRow, FoundChatRow,
 // FoundItemRow; Switcher.css.ts, mobile/Home.css.ts mFound…): one in every tier, its words and what they find; where
 // it sits is its frame's (⌘K's panel over the window, the phone's page over Home's list: sfdesk's switcher.mbt, sfapp's
-// search.mbt). What a few words find in the workspace is the core's `search` (docs/search.md: its chats, the messages
+// search.mbt). What a few words find in the workspace is the core's `search` (its chats, the messages
 // that have them, what every station finds besides, each kind under its heading, a few of each; 查看更多 that kind
 // alone, 全部结果 back to all), and what can be done here by its name the core's `commands.find` of what the frame
 // offers. With nothing typed, the latest chats where the frame says so (⌘K), then what can be done. One line for all it
 // finds (its sizes the theme's: @sf.Found); where the screen has keys, ↑ / ↓ choose and Enter opens, a press anywhere.
 
 ///|
-/// What can be done here, as the frame offers it (Switcher.tsx Offered): a key's action it answers now, or one of its
+/// What can be done here, as the frame offers it: a key's action it answers now, or one of its
 /// own; for one the core does not name (a settings page), its `label`, `group`, other `words`, and whether it is only
 /// found by typing; for one whose name the core words with something, the version an update goes to and the station
 /// updated ("" none); its icon, its keys (a key's action's, as kept on this device), what it does.
@@ -26,7 +26,7 @@ pub(all) struct Offered {
 }
 
 ///|
-/// A command as the list shows it (Switcher.tsx Listed): its part, its part's heading, its name, as the core says.
+/// A command as the list shows it: its part, its part's heading, its name, as the core says.
 priv struct Listed {
   id : String
   group : String
@@ -35,7 +35,7 @@ priv struct Listed {
 }
 
 ///|
-/// A line of the list (Switcher.tsx Found, SearchPage's rows, and the headings and words between).
+/// A line of the list (SearchPage's rows, and the headings and words between).
 priv enum FindLine {
   Head(String)
   /// over one kind alone: back to every kind (全部结果)
@@ -55,15 +55,16 @@ priv enum FindLine {
 }
 
 ///|
-/// The search as it stands: the kind looked at alone ("" every kind); the row chosen, and whether it is shown so (a
-/// mouse's lines mark it; a finger's mark none, so its keyboard's search key opens nothing); its field and what is
+/// The search as it stands: the kind looked at alone ("" every kind); the row chosen (a signal: the rows it was built
+/// into, kept as their nodes, built again as it changes), and whether it is shown so (a mouse's lines mark it; a
+/// finger's mark none, so its keyboard's search key opens nothing); its field and what is
 /// typed; the view last read (kept while the next words are looked up) and whether reading it failed; what was last
 /// asked of `commands.find`, its last answer and what it answered (kept: the list opened again with the same words has
 /// it at once; for other words none until the core has answered them); the lines as last drawn (what Enter opens); the
 /// list to go back to its top (into one kind or out of it).
 priv struct Finder {
   mut kind : String
-  mut chosen : Int
+  chosen : @signals.Signal[Int]
   mut chosen_shown : Bool
   field : @ui.Field
   mut query : String
@@ -76,6 +77,9 @@ priv struct Finder {
   lines : @signals.Signal[Array[FindLine]]
   picks : @signals.Signal[Array[Int]]
   mut to_top : Bool
+  /// how many times ↑ ↓ chose a line (Ctx::on_key's), and as of which the line chosen was last brought into view
+  keyed : @signals.Signal[Int]
+  mut keyed_shown : Int
   /// the `search` topic read last (its params), let go of as the next words are read or the search closes: one read
   /// and kept is shown to the core, which asks its stations again with each change of theirs (each a search of the
   /// machine's files there)
@@ -85,7 +89,7 @@ priv struct Finder {
 ///|
 let finder : Finder = {
   kind: "",
-  chosen: 0,
+  chosen: @signals.signal(0, same=fn(a, b) { a == b }),
   chosen_shown: false,
   field: @ui.Field::new(),
   query: "",
@@ -98,6 +102,8 @@ let finder : Finder = {
   lines: @signals.signal([]),
   picks: @signals.signal([]),
   to_top: false,
+  keyed: @signals.signal(0, same=fn(a, b) { a == b }),
+  keyed_shown: 0,
   held: None,
 }
 
@@ -123,7 +129,7 @@ pub fn finder_cleared() -> Unit {
   finder_leave.val = None
   finder.held = None
   finder.kind = ""
-  finder.chosen = 0
+  finder.chosen.set(0)
   finder.query = ""
   finder.field.set("")
   // (as it is, nothing set: what is cleared as a page is built changes nothing it reads where it was clear)
@@ -141,6 +147,8 @@ pub fn finder_cleared() -> Unit {
   finder.kept_of.set((-1, "", ""))
   finder.failed.set(false)
   finder.to_top = false
+  finder.keyed.set(0)
+  finder.keyed_shown = 0
 }
 
 ///|
@@ -175,7 +183,7 @@ pub fn finder_query() -> String {
 pub fn finder_typed(words : String) -> Unit {
   if words != finder.query {
     finder.query = words
-    finder.chosen = if finder.kind != "" { 1 } else { 0 }
+    finder.chosen.set(if finder.kind != "" { 1 } else { 0 })
   }
 }
 
@@ -186,7 +194,7 @@ pub fn finder_back() -> Bool {
     return false
   }
   finder.kind = ""
-  finder.chosen = 0
+  finder.chosen.set(0)
   finder.to_top = true
   true
 }
@@ -195,7 +203,7 @@ pub fn finder_back() -> Bool {
 /// Enter: the line chosen opened where it is shown chosen (`close` first, where the frame closes the search as one
 /// opens).
 pub fn finder_enter(close : () -> Unit) -> Unit {
-  match finder.picks.get().get(finder.chosen) {
+  match finder.picks.get().get(finder.chosen.untracked()) {
     Some(k) if finder.chosen_shown => finder_go(finder.lines.get()[k], close)
     _ => ()
   }
@@ -289,12 +297,12 @@ fn search_of(src : Source, scope : String, query : String) -> SearchView? {
     params["kind"] = Json::string(finder.kind)
   }
   match finder.held {
-    Some(before) if before != params => (src.leave)("search", before)
+    Some(before) if before != params => (src.leave)("search", before, @sfbase.TopicLeave::Legacy)
     _ => ()
   }
   finder.held = Some(params)
-  finder_leave.val = Some(fn() { (src.leave)("search", params) })
-  let topic = (src.topic)("search", params)
+  finder_leave.val = Some(fn() { (src.leave)("search", params, @sfbase.TopicLeave::Legacy) })
+  let topic = src.topic("search", params).get().snapshot()
   finder.failed.set(topic.error is Some(_))
   match topic.value {
     Some(v) => {
@@ -409,7 +417,7 @@ fn finder_go(line : FindLine, close : () -> Unit) -> Unit {
     Back => ignore(finder_back())
     More(kind) => {
       finder.kind = kind
-      finder.chosen = 1
+      finder.chosen.set(1)
       finder.to_top = true
     }
     Command(_, o) => {
@@ -461,6 +469,8 @@ pub fn finder_list(
   foot_in? : Double = 0.0,
 ) -> Unit {
   let f = @sf.theme().chat_list
+  // (the words as the field has them, followed: built again as they are typed, whatever field it is)
+  finder_typed(finder.field.text())
   let query = finder.query.trim(chars=" \t\n\r\u{3000}").to_string()
   let typed = query != ""
   let commands = commands_of(c, src, query, offered)
@@ -480,21 +490,29 @@ pub fn finder_list(
   finder.picks.set(picks)
   // (chosen by the keys where the screen has them: shown so, Enter opens it)
   finder.chosen_shown = f.keys
-  if finder.chosen >= picks.length() {
-    finder.chosen = if picks.length() > 0 { picks.length() - 1 } else { 0 }
+  // (read by the rows it shows in, not by what builds them: the rows alone built again as it changes)
+  let mut chosen = finder.chosen.untracked()
+  if chosen >= picks.length() {
+    chosen = if picks.length() > 0 { picks.length() - 1 } else { 0 }
   }
-  let mut keyed = false
-  if c.key_pressed(@ui.key_code_down, in_field=true) && finder.chosen < picks.length() - 1 {
-    finder.chosen += 1
-    keyed = true
-  }
-  if c.key_pressed(@ui.key_code_up, in_field=true) && finder.chosen > 0 {
-    finder.chosen -= 1
-    keyed = true
-  }
+  finder.chosen.set(chosen)
+  // ↑ ↓ choose a line, each as it comes to the field with the focus, before it sees it (Ctx::on_key); the line chosen
+  // by them brought into view as it is built after
+  let count = picks.length()
+  c.on_key(c.focused_id(), fn(code, mods) {
+    guard mods == 0 && (code == @ui.key_code_down || code == @ui.key_code_up) else { return false }
+    let at = finder.chosen.get() + (if code == @ui.key_code_down { 1 } else { -1 })
+    if at >= 0 && at < count {
+      finder.chosen.set(at)
+      finder.keyed.set(finder.keyed.get() + 1)
+    }
+    true
+  })
+  let keyed = finder.keyed.get() != finder.keyed_shown
+  finder.keyed_shown = finder.keyed.get()
   let key = "switcher/list"
   if keyed {
-    match picks.get(finder.chosen) {
+    match picks.get(chosen) {
       Some(k) => c.list_scroll_to(key, if k > switcher_lead { k - switcher_lead } else { 0 })
       None => ()
     }
@@ -504,10 +522,7 @@ pub fn finder_list(
     c.list_scroll_to(key, 0)
   }
   // (several stations: what is found says which it is on)
-  let several = match (src.topic)("stations", { "scope": Json::string(w.id) }).value {
-    Some(Array(a)) => a.length() > 1
-    _ => false
-  }
+  let several = @sfbase.station_marks(src, w.id).length() > 1
   let stacked = found_stacked(c.width)
   let est = lines.fold(init=foot_in, fn(h, l) { h + finder_h(l, f.found, stacked) })
   let h : @ui.Size = match most {
@@ -531,14 +546,12 @@ pub fn finder_list(
         return
       }
       let id = c.id(lk)
-      if c.clicked(id) {
-        finder_go(line, close)
-      }
+      c.on_press(id, fn() { finder_go(line, close) })
       // (the pointer over a line chooses it, as the keys do)
       if f.keys && c.hand_on(id) {
-        finder.chosen = k
+        finder.chosen.set(k)
       }
-      found_line(c, lk, id, line, f.keys && k == finder.chosen, several, at, stacked)
+      found_line(c, lk, id, line, f.keys && k == finder.chosen.get(), several, at, stacked)
     },
     h~,
   )
@@ -624,6 +637,7 @@ fn found_line(
     Chat(ch) =>
       [
         if ch.archived { @sf.t("web-main.switcher.archived") } else { "" },
+        if ch.item.hidden == Some(true) { @sf.t("web-main.filter.hidden") } else { "" },
         if several { ch.item.station_name } else { "" },
         ch.item.ago,
       ]

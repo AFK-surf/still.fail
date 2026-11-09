@@ -98,6 +98,45 @@ test "a frequent model with a different runtime is applied as its panel leaves w
 }
 
 ///|
+test "a new chat's model panel opens where it stays: what the page has shown until its own is read, not first in its bones elsewhere" {
+  // (its own pick read a while after it opens, as a core across a thread answers it; the page's already there)
+  let held = Ref(true)
+  let base = fixture_app("newchat-crowded-model")
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      @settings.fixture_followed()
+      if name == "pick" && held.val {
+        { value: None, error: None, version: -1 }
+      } else {
+        base.topic(name, params).get().snapshot()
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  @sffixture.fix_later(120.0, fn() { held.val = false })
+  let rects : Array[(Double, Double, Double, Double)] = []
+  let till = t.time() + 400.0
+  while t.time() < till {
+    t.frame()
+    match t.query(@ui.Role::Dialog) {
+      Some(d) => if rects.last() != Some(d.rect) { rects.push(d.rect) }
+      None => ()
+    }
+  }
+  assert_true(!held.val, msg="its own read")
+  // (each frame as it ends up, only grown into it from the side it opens from as it comes in: the same corner, the
+  // same shape)
+  let (fx, fy, fw, fh) = rects.last().unwrap()
+  assert_true(
+    rects.iter().all(fn(r) {
+      (r.0 - fx).abs() < 1.0 && (r.1 + r.3 - (fy + fh)).abs() < 1.0 && (r.2 / r.3 - fw / fh).abs() < 0.02 * fw / fh
+    }),
+    msg="\{rects}",
+  )
+}
+
+///|
 /// Whether `a`, `b`, `c` lie in that order along the panel, one way or the other.
 fn in_line(a : Double, b : Double, c : Double) -> Bool {
   (a < b && b < c) || (a > b && b > c)
@@ -212,3 +251,23 @@ test "wide: how hard it thinks picked in the panel is made what it runs on at on
     assert_true(now.0 == opened.0 && now.2 == opened.2, msg="\{label} picked: \{now}, opened \{opened}")
   }
 }
+
+///|
+test "wide: how much context at the foot after who runs it, as how fast is; its steps in a pick, one picked made what it runs on at once" {
+  let t = model_pop("newchat-model")
+  let (px, py, pw, ph) = t.get(@ui.Role::Dialog).rect
+  let high = t.get(Radio, label="高").rect
+  // (at the foot, with who runs it: 2026-11-03 用户「直接放最下面跟速度一样吧」)
+  let context = t.get(Button, label="完整 · 1M").rect
+  assert_true(context.1 > high.1 + high.3 && context.1 + context.3 <= py + ph && context.0 + context.2 <= px + pw, msg="\{context}, the panel \{(px, py, pw, ph)}")
+  assert_true(t.words().iter().any(fn(w) { w.0 == "上下文" }), msg="no name before it")
+  t.click(Button, label="完整 · 1M")
+  t.run_for(@ui.move_most_ms)
+  let steps = t.all(MenuItemRadio).map(fn(s) { (s.label, s.check) })
+  assert_eq(steps, [("完整 · 1M", Some(On)), ("500K", Some(Off)), ("300K", Some(Off)), ("200K", Some(Off))])
+  t.tap_text("300K")
+  t.run_for(squeeze_opening)
+  assert_eq(new_fix.context, "300000")
+  assert_true(t.query(Button, label="300K") is Some(_), msg="the foot says the step picked")
+}
+

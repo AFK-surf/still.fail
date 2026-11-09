@@ -58,7 +58,7 @@ fn hold(t : @ui.Tester, s : String) -> Unit {
 ///|
 test "文件: favorites and each station with a drive, with an offline station said so" {
   let t = drive_tester("files")
-  for words in ["文件", "个人收藏", "Station", "Studio", "离线", "文档", "照片"] {
+  for words in ["文件", "个人收藏", "Station", "Willow", "离线", "文档", "照片"] {
     assert_true(t.find(words) is Some(_), msg=words)
   }
   // back says the page under it
@@ -142,7 +142,7 @@ test "a picture goes to the preview, read by drive.read" {
   assert_eq(v.file.name, "首页截图.png")
   assert_true(v.drive is Some(_))
   assert_true(v.bytes.get() is Some(_))
-  // kept on the device as read from its start, as its folder lists it (DriveCache.kt; the core's drive-kept.ts)
+  // kept on the device as read from its start, as its folder lists it (the core's drive-kept.ts)
   let asked = fix_reads.filter(fn(p) { text(Some(p), "path").has_suffix("首页截图.png") })
   assert_true(asked.length() > 0)
   for p in asked {
@@ -197,7 +197,7 @@ test "a text read: where it was left, a tap brings its bars, the contents go to 
 test "＋'s Station 文件: a file ticked in a folder lent goes into the chat's draft, named by its path" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   let log = t.drive(
     "tap icon:plus\ntap Station 文件\nuntil 所有位置\nuntil 主目录\ntap =文档\nuntil 整个文件夹\ntap 发布清单.md\ntap 添加 1 个\ngone 所有位置\n",
@@ -205,7 +205,7 @@ test "＋'s Station 文件: a file ticked in a folder lent goes into the chat's 
   assert_true(log.contains("EXIT 0"), msg="\{log}")
   // in the draft as the core keeps it, where it is on the station (sent, the core names it in the message)
   t.draw()
-  let files = @sfbase.writing(src, "ws1/st1:s-c1").files
+  let files = @sfbase.writing(src, "ws1/st1:s-c1").files.get()
   assert_eq(files.length(), 1)
   assert_eq(text(field(Some(files[0]), "ref"), "path"), "/Users/lin/文档/发布清单.md")
   assert_true(t.find("发布清单") is Some(_))

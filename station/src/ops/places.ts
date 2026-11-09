@@ -1,9 +1,9 @@
 // The directories and files people and agents name for the station (a chat's directory continued from a terminal, a
 // job's, a task's synced folder, a file attached to a message): looked at, and a file copied, without the station's own
 // thread ever touching a folder macOS protects (drive/fs.ts `protectedPlace`, the drive's own classification;
-// docs/drive.md "Folders macOS protects"). A station launchd runs that opens ~/Documents, ~/Desktop, ~/Downloads, a disk
+//). A station launchd runs that opens ~/Documents, ~/Desktop, ~/Downloads, a disk
 // in /Volumes or iCloud Drive makes macOS put up a prompt for its launcher and hold the call until someone answers:
-// the station's main thread stopped in `opendir`, the whole station silent (seen on studio, macOS 27).
+// the station's main thread can stop in `opendir`, leaving the whole station silent.
 //
 // On macOS a path is walked here link by link with lstat, never stepping into such a folder: what is outside them is
 // looked at as before (there, a folder, listable); what is in one (by its name or through a link) is asked of still.fail
@@ -15,7 +15,7 @@
 // (Linux, Windows) a path is looked at directly, as before.
 //
 // The agents' own commands still run as the station's launcher does: macOS may keep them out of these folders, or
-// prompt for them (docs/drive.md); only the station's own looking is kept off its thread here.
+// prompt for them; only the station's own looking is kept off its thread here.
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { lstatSync, mkdirSync, readlinkSync, realpathSync, rmSync, statSync } from "node:fs";
@@ -24,7 +24,7 @@ import { basename, join, resolve } from "node:path";
 import type { Fs, Grant } from "../drive/fs.ts";
 import { protectedPlace } from "../drive/fs.ts";
 import { platform } from "../platform/index.ts";
-import { type Lang, tr } from "./i18n.ts";
+import { type Lang, Said, tr } from "./i18n.ts";
 import { unreadableDir, unreadableDirMessage } from "./files.ts";
 import { log } from "./log.ts";
 
@@ -43,7 +43,7 @@ type Code = "gone" | "not_a_directory" | "not_a_file" | "too_large" | "denied" |
 
 /// Why a directory or file may not be used, in words for whoever asked (`code` for the callers that tell them apart;
 /// `grant` and `window` when still.fail Helper lacks the grant for it).
-export class PlaceRefused extends Error {
+export class PlaceRefused extends Said {
   readonly code: Code;
   readonly grant?: Grant;
   readonly window?: "up" | "closed" | "none";

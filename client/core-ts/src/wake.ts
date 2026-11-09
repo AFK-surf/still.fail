@@ -1,4 +1,4 @@
-// The UI coming back after being away, or the network changing under it: what is under way is suspect (wake.rs).
+// The UI coming back after being away, or the network changing under it: what is under way is suspect.
 //
 // - a request still unanswered that has waited a while (QUIET_MS) fails, for its caller to ask again;
 // - a stream that heard nothing for a while ends, and is opened again;
@@ -6,6 +6,7 @@
 // - the host lets its connections go (`Host.resetConnections`).
 // When the network changed, everything under way fails. A person asking to try again (`retry`) is taken as the
 // connections suspect, not gone. WakingHost does the first two for everything that goes through the host.
+import * as clock from "./clock.ts";
 import { Deferred, Effect, Scope } from "effect";
 import { HostError } from "./error.ts";
 import type { Host, HttpRequest, HttpResponse, Pull, StreamResponse } from "./host.ts";
@@ -152,6 +153,10 @@ export class WakingHost implements Host {
   get recorder(): Host["recorder"] {
     return this.inner.recorder;
   }
+  /// This device's own adb session is held independently of any station or UI wake.
+  get adb(): Host["adb"] {
+    return this.inner.adb;
+  }
   readonly tcp?: Host["tcp"];
   readonly appKeys?: boolean;
   readonly openDb?: Host["openDb"];
@@ -162,10 +167,13 @@ export class WakingHost implements Host {
   readonly secureGet?: Host["secureGet"];
   readonly secureSet?: Host["secureSet"];
   readonly secureDelete?: Host["secureDelete"];
+  readonly securePast?: Host["securePast"];
   readonly secureAsk?: Host["secureAsk"];
   readonly savedRead?: Host["savedRead"];
+  readonly stage?: Host["stage"];
   readonly unzstd?: Host["unzstd"];
   readonly ed25519Sign?: Host["ed25519Sign"];
+  readonly verify?: Host["verify"];
 
   constructor(inner: Host, wakes: Wakes) {
     this.inner = inner;
@@ -182,13 +190,16 @@ export class WakingHost implements Host {
     if (inner.secureGet) this.secureGet = (key, opts) => inner.secureGet!(key, opts);
     if (inner.secureSet) this.secureSet = (key, value, opts) => inner.secureSet!(key, value, opts);
     if (inner.secureDelete) this.secureDelete = (key) => inner.secureDelete!(key);
+    if (inner.securePast) this.securePast = (key) => inner.securePast!(key);
     if (inner.secureAsk) this.secureAsk = (reason) => inner.secureAsk!(reason);
     // A file the app saved on the device, read back: the device's too.
     if (inner.savedRead) this.savedRead = (at, start, end) => inner.savedRead!(at, start, end);
+    if (inner.stage) this.stage = (name, offset, bytes) => inner.stage!(name, offset, bytes);
     // A reply taken apart: on the device, as it comes.
     if (inner.unzstd) this.unzstd = () => inner.unzstd!();
     // A signature: the device's, at once.
     if (inner.ed25519Sign) this.ed25519Sign = (seed, message) => inner.ed25519Sign!(seed, message);
+    if (inner.verify) this.verify = (alg, key, signature, message) => inner.verify!(alg, key, signature, message);
   }
 
   /// Names in the order people read them: the system's, at once (the files page's: drive-browse.ts).
@@ -199,6 +210,11 @@ export class WakingHost implements Host {
   /// Where a value is kept as a file: the device's, at once.
   storagePath(key: string): string | null {
     return this.inner.storagePath?.(key) ?? null;
+  }
+
+  /// Where a picture is fetched from: the device's, at once.
+  pictureVia(url: string): string {
+    return this.inner.pictureVia?.(url) ?? url;
   }
 
   /// A loopback listener (a login's callback): the device's, nothing of a UI's to wait on.
@@ -230,7 +246,7 @@ export class WakingHost implements Host {
     return Effect.map(opening, (response) => ({ ...response, body: quietEnds(this.inner, this.wakes, response.body) }));
   }
 
-  /// Its frames are left to the core (account_state.ts `followSocket`); only its opening is given up.
+  /// Its frames are left to the core; only its opening is given up.
   websocket(url: string, protocols: string[]): Effect.Effect<Pull<string>, HostError, Scope.Scope> {
     return Effect.suspend(() => unlessDropped(this.wakes, this.inner.nowMs(), this.inner.websocket(url, protocols)));
   }
@@ -245,7 +261,9 @@ export class WakingHost implements Host {
     return this.inner.storageDelete(key);
   }
 
+  /// Now; read in a computed, by the minute (clock.ts): what it made is made again as the minute moves on.
   nowMs(): number {
+    clock.minute.get();
     return this.inner.nowMs();
   }
   monotonicMs(): number {

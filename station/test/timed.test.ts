@@ -34,6 +34,25 @@ test("a statement run or an exec taking SLOW_MS or more is said, by its SQL and 
   db.close();
 });
 
+test("a statement that fails after SLOW_MS or more is said with what it failed with, and still fails", () => {
+  const said: [string, number, string | undefined][] = [];
+  let takes = 0;
+  let at = 0;
+  const db = timed(new DatabaseSync(":memory:"), (sql, ms, _rows, _by, failed) => void said.push([sql, ms, failed]), () => (at += takes));
+  takes = 1;
+  db.exec("CREATE TABLE t (a TEXT PRIMARY KEY)");
+  db.prepare("INSERT INTO t (a) VALUES (?)").run("x");
+  // As a write that waited the whole busy time for another connection's lock: it fails, after as long.
+  takes = SLOW_MS;
+  assert.throws(() => db.prepare("INSERT INTO t (a) VALUES (?)").run("x"), /UNIQUE/);
+  assert.throws(() => db.exec("INSERT INTO nowhere VALUES (1)"), /no such table/);
+  assert.equal(said.length, 2);
+  assert.deepEqual(said[0]!.slice(0, 2), ["INSERT INTO t (a) VALUES (?)", SLOW_MS]);
+  assert.match(said[0]![2]!, /UNIQUE/);
+  assert.match(said[1]![2]!, /no such table/);
+  db.close();
+});
+
 test("every statement's time is put down, those of WAITED_MS or more by who asked them, for the held line", () => {
   let takes = 0;
   let at = 0;

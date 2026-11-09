@@ -102,7 +102,7 @@ fn focus_held(
   let id : Ref[@view.NodeId?] = Ref(None)
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { show.get() }, leave~, fn(v) {
+      root.show(at_once=true, fn() { show.get() }, leave~, fn(v) {
         v.presses(By(fn() { presses.get() })) |> ignore
         v.box(fn(f) {
           id.val = Some(f.id())
@@ -208,12 +208,12 @@ test "focus: one said to take it, Tab passing it (tab=false): given it by the pr
   let views : Map[String, @view.View] = {}
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { first.get() }, fn(p) {
+      root.show(at_once=true, fn() { first.get() }, fn(p) {
         ids["p"] = p.id()
         views["p"] = p
         p.focusable(Is(true), keys=0, tab=false) |> ignore
       })
-      root.show(fn() { second.get() }, fn(r) {
+      root.show(at_once=true, fn() { second.get() }, fn(r) {
         ids["r"] = r.id()
         r.focusable(Is(true)) |> ignore
       })

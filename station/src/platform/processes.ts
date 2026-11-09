@@ -3,6 +3,7 @@
 import type { ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync } from "node:fs";
+import { cpus } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -109,3 +110,23 @@ export function holder(child: ChildProcess): () => void {
     child.kill();
   };
 }
+
+/// Busy and all CPU time since boot, as Node's os counts it (the counters Task Manager and HOST_CPU_LOAD_INFO read, in
+/// ms rather than ticks: the share is the same); null where it says none.
+export function osCpuTicks(): [number, number] | null {
+  const all = cpus();
+  if (all.length === 0) return null;
+  let [busy, total] = [0, 0];
+  for (const { times: t } of all) {
+    busy += t.user + t.sys + t.nice;
+    total += t.user + t.sys + t.idle + t.nice;
+  }
+  return [busy, total];
+}
+
+/// Whether a child just spawned started: null once it has, the error that kept it from starting otherwise.
+export const started = (child: ChildProcess): Promise<Error | null> =>
+  new Promise((resolve) => {
+    child.once("spawn", () => resolve(null));
+    child.once("error", (e) => resolve(e));
+  });

@@ -13,8 +13,8 @@ fn activity_extreme_clock_positions(
   let src : Source = if two_agents {
     {
       ..base,
-      topic: fn(name, params) {
-        let got = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let got = base.topic(name, params).get().snapshot()
         guard name == "chat" && got.value is Some(Object(chat)) else { return got }
         let agents = items(got.value, "agents").copy()
         agents.push({
@@ -45,8 +45,7 @@ fn activity_extreme_clock_positions(
     t.frame()
     assert_true(t.all(Button).iter().any(fn(s) { s.label == "停止 Claude" }), msg="the stop control is visible")
   }
-  @sffixture.fix_due.push(fn() { @sffixture.fix_working_now.val = ("call:2", next) })
-  @settings.fixture_changed()
+  @sffixture.fix_now(fn() { @sffixture.fix_working_now.val = ("call:2", next) })
   t.draw()
   t.run_for(@sfbase.glyph_change_in_ms)
   let positions : Array[Double] = []

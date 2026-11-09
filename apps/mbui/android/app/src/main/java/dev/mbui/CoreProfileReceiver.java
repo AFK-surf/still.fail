@@ -7,7 +7,7 @@ import android.content.Intent;
 import java.io.File;
 
 /**
- * What the core spends its time on, asked from adb (still.fail's CoreProfileReceiver.kt): only the shell (DUMP) may send it.
+ * What the core spends its time on, asked from adb: only the shell (DUMP) may send it.
  *   adb shell am broadcast -n <app id>/dev.mbui.CoreProfileReceiver --ei seconds 60
  * writes Android/data/<app id>/files/core-<time>.cpuprofile once the time is up (logcat StillFailCore says so).
  */

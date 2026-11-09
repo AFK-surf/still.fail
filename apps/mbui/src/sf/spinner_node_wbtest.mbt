@@ -75,3 +75,67 @@ test "the spinner as a node drawn as the old view's spinner is, at its first fra
     msg="old \{about(old1)[:1]}, node \{about(new1)[:1]}",
   )
 }
+
+///|
+/// How long a page with spinners is watched turning (a second at the display's rate), from a turn after it is first
+/// drawn (the frame after its first lays it out once more, as any page's does).
+let spinning_watched_ms : Double = 1000.0
+
+///|
+/// A page that waits: words, the old view's spinner, the spinner a transfer shows before its size is known, a progress
+/// bar not known, and the spinner as a node of the window's tree. What only turns as the clock goes is drawn by the
+/// frames' looks or paint alone: the page's build reads no time.
+fn spinning_page() -> @ui.Tester {
+  let t = @ui.Tester::new(fn(_c) {  }, w=600.0, h=200.0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    root.row(Is(true)).lines_up(Is(Some(Start))) |> ignore
+    root.box(fn(h) {
+      h.width(Is(Some(300.0))).height(Is(Some(120.0))) |> ignore
+      @ui.old(h, fn(c) {
+        c.box(dir=Column, gap=8.0, fn() {
+          c.text("正在读取会话", style=wait_words) |> ignore
+          spinner(c) |> ignore
+          progress_spinner(c, "spinning/transfer", None) |> ignore
+          progress(c, "spinning/bar", None, w=Px(120.0))
+        })
+        |> ignore
+      }).grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+    spinner_node(root) |> ignore
+  })
+  t.draw()
+  t
+}
+
+///|
+test "a page whose spinners turn: each frame of their turning is painted alone or of its looks alone, nothing built" {
+  let t = spinning_page()
+  t.run_for(spinner_turn_ms)
+  let (old0, new0) = spinner_drawn(t)
+  let until = t.time() + spinning_watched_ms
+  let built : Array[String] = []
+  let mut frames = 0
+  while t.time() < until {
+    let w = t.wanted_after()
+    if w == @double.infinity {
+      break
+    }
+    t.frame_at(if w <= t.time() { t.next_frame_time() } else { t.display_frame(w) })
+    frames += 1
+    let perf = t.frame_perf()
+    if t.built_why() != "" || !(perf.looks || perf.painted) {
+      built.push("\{t.time()}: \{t.built_why()} \{perf}")
+    }
+  }
+  let (old1, new1) = spinner_drawn(t)
+  // (they turn: a frame asked for each of the display's, each drawing them turned on)
+  assert_eq(
+    (frames >= 55, old1 != old0, new1 != new0),
+    (true, true, true),
+    msg="\{frames} frames; old \{old0.length()} \{old0[:1]} -> \{old1[:1]}; node \{new0.length()} \{new0[:1]} -> \{new1[:1]}; \{t.time()}; built \{built[:2]}",
+  )
+  assert_eq(built, [], msg="\{built.length()} of \{frames} frames built")
+}

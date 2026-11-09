@@ -10,8 +10,8 @@
 
 ///|
 /// A confirm in `parent` while `open()` (going over pop_out_ms once not): `title`, its `words`, `action` (solid red
-/// when `danger`, the primary's otherwise) beside the library's cancel. Where it is in the window's stack of layers is
-/// what holds it's (View::stacked on the root's node it is in: presented_nodes).
+/// when `danger`, the primary's otherwise) beside the library's cancel, with an optional red `warning`. Where it is in
+/// the window's stack of layers is what holds it's (View::stacked on the root's node it is in: presented_nodes).
 /// `shown`: as its layer is made (it opens); `gone`: once its way out is over (let go).
 pub fn confirm_node(
   parent : @view.View,
@@ -22,6 +22,7 @@ pub fn confirm_node(
   danger : Bool,
   cancel : () -> Unit,
   confirm : () -> Unit,
+  warning? : String = "",
   shown? : () -> Unit = fn() {  },
   gone? : () -> Unit = fn() {  },
   dims? : () -> Bool = fn() { true },
@@ -29,7 +30,7 @@ pub fn confirm_node(
 ) -> Unit {
   // (a press outside an alert does not close it: confirm_dialog's outside=false)
   dialog_layer_node(parent, open, cancel, shown~, gone~, dims~, covered~, fn(across, layer, look, veil) {
-    confirm_panel(across, layer, look, veil, title, words, action, danger, cancel, confirm) |> ignore
+    confirm_panel(across, layer, look, veil, title, words, warning, action, danger, cancel, confirm) |> ignore
     // (the focus on its own ground as it opens, as confirm_dialog's (an overlay that traps it, with no stop of its own:
     // the layer's own), Enter and Space doing nothing there; back to what had it as it goes)
     layer
@@ -46,7 +47,9 @@ pub fn confirm_node(
 /// is under it dimmed only while `dims` (read as it changes: one presented under it that dims
 /// already, presenters' scrim_owner, and its ground clear). `first_stop`: the focus given as it opens to the first of
 /// what it holds that takes it, where the panel names no node of its own for it (Ctx::overlay's initial_focus by
-/// default: a panel's, with its fields; a confirm's ground is its own).
+/// default: a panel's, with its fields; a confirm's ground is its own). `scrim`: what dims what is under it, as far as
+/// its ground has come (the theme's; a stage's its own night, stage_scrim), over `ground_ms` (a stage's night its
+/// surface, in by the time what it holds begins to come: stage_node).
 fn dialog_layer_node(
   parent : @view.View,
   open : () -> Bool,
@@ -59,6 +62,9 @@ fn dialog_layer_node(
   covered? : () -> Bool = fn() { false },
   within? : () -> Bool = fn() { false },
   first_stop? : Bool = false,
+  scrim? : () -> Int64 = fn() { @ui.tree_theme().scrim },
+  ground_ms? : Double = confirm_ground_ms,
+  night_with_ground? : Bool = false,
 ) -> Unit {
   parent.show(
     open,
@@ -79,7 +85,7 @@ fn dialog_layer_node(
           dim.go(layer, 0.0, @kit.pop_out_ms, ease=Leave)
         } else {
           shown.go(layer, 1.0, @kit.dialog_ms)
-          dim.go(layer, 1.0, confirm_ground_ms)
+          dim.go(layer, 1.0, ground_ms)
         }
       })
       let look = fn() {
@@ -95,10 +101,23 @@ fn dialog_layer_node(
       .over(Is(true))
       // (modal while open: closing, what is under it its own again as it begins to go)
       .modal(By(live))
+      // (going, nothing of it read out: as an old layer on its way out, inert, is hidden from what reads the screen, as
+      // panel_node's)
+      .hides(By(fn() { layer.leaving() }))
       // (a back gesture under way as it opens goes on to what it began on, as the old frame's layers let it: chosen as
       // it began; the next its)
       .held_back_goes_on()
-      .ground(By(fn() { if dims() { confirm_faded(@ui.tree_theme().scrim, dim.shown(layer)) } else { 0L } }))
+      // (`night_with_ground`: as far in as what it shows' ground (its look's, ground first): the night whole as its words
+      // begin, gone only after they have, never words over the page's seen through a night not yet in)
+      .ground(By(fn() {
+        if !dims() {
+          0L
+        } else if night_with_ground {
+          confirm_faded(scrim(), look().alpha)
+        } else {
+          confirm_faded(scrim(), dim.shown(layer))
+        }
+      }))
       // (a press outside its panel its own, nothing under it pressed: closing it as it goes down where it is a dialog's,
       // as the old frame's layer is dismissed then (Ctx::overlay's outside), whatever the finger does after; nothing
       // where an alert's)
@@ -152,6 +171,7 @@ fn dialog_layer_node(
 ///|
 /// The confirm's panel in `parent` (confirm_node's), as confirm_dialog's look: looking as `look()` says, its words as
 /// far in as it says. Its cancel button.
+#callsite(autofill(loc))
 fn confirm_panel(
   parent : @view.View,
   layer : @view.View,
@@ -159,14 +179,16 @@ fn confirm_panel(
   veil : () -> Int64,
   title : () -> String,
   words : () -> String,
+  warning : String,
   action : () -> String,
   danger : Bool,
   cancel : () -> Unit,
   confirm : () -> Unit,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let theme = fn() { @ui.tree_theme() }
   let cancel_at : Ref[@view.View?] = Ref(None)
-  parent.box(fn(d) {
+  parent.box(made_for=loc, fn(d) {
     d
     .width(By(fn() { Some(dmin(confirm_w, layer.window().0 - dialog_margin)) }))
     // (confirm_box: 24 in at its sides, 28 over its title, 8 between its title, its words and its foot)
@@ -179,8 +201,10 @@ fn confirm_panel(
     .alpha(By(fn() { look().alpha }))
     .scale(By(fn() { look().sx }))
     .offset(By(fn() { (look().dx, look().dy) }))
-    .says(By(fn() { Some(@view.said(Dialog, label=title(), description=words())) }))
+    .says(By(fn() { Some(@view.said(Dialog, label=title(), description=if warning == "" { words() } else { words() + "\n" + warning })) }))
     |> ignore
+    // (all it holds as far in as its look says, past its own ground, edge and shadow: each part of it, its title, its
+    // words, its foot and its buttons, the same, Look's `words` as a surface's are)
     let words_in = fn() { look().words }
     d.box(fn(t) {
       t
@@ -198,20 +222,32 @@ fn confirm_panel(
       |> ignore
     })
     |> ignore
+    if warning != "" {
+      d.box(fn(t) {
+        t
+        .words(Is(warning), look=toast_words_look(Meta, L6, 400, true))
+        .ink(By(fn() { theme().color(Danger) }))
+        .alpha(By(words_in))
+        |> ignore
+      })
+      |> ignore
+    }
     // (its foot: its buttons at its end, 8 apart, 8 over them; as far from its foot and sides as its corner has them:
     // dialog_corner_foot)
     d.box(fn(f) {
-      let at = capsule_in(dialog_r, button_height())
+      let at = @ui.capsule_in(dialog_r, button_height())
       f
       .row(Is(true))
       .lines_up(Is(Some(Middle)))
       .gap(Is(@ui.Space::px(S2)))
       .padding(Is((at - dialog_pad, @ui.Space::px(S2), at - dialog_pad, at)))
+      // (its buttons, their grounds and words, as far in as the rest of what it holds)
+      .alpha(By(words_in))
       |> ignore
       f.box(fn(s) { s.grow(Is(1.0)) |> ignore }) |> ignore
       // (going, they take nothing: what is leaving takes no press, focus or key; drawn as they were, going with it)
-      let no = button_node(f, fn() { t("common.cancel") }, cancel, tone=Ghost, words_in~)
-      button_node(f, action, confirm, tone=if danger { DangerSolid } else { Primary }, words_in~) |> ignore
+      let no = button_node(f, fn() { t("common.cancel") }, cancel, tone=Ghost)
+      button_node(f, action, confirm, tone=if danger { DangerSolid } else { Primary }) |> ignore
       cancel_at.val = Some(no)
     })
     |> ignore

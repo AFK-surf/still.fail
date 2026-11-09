@@ -1,6 +1,7 @@
-// What an agent at work is doing, as a chat shows it (activity.rs): one line, the thing it does now. From a `live`
+// What an agent at work is doing, as a chat shows it: one line, the thing it does now. From a `live`
 // topic's value into `activity`: `{ now: { key, text } }`.
 import { t } from "./i18n.ts";
+import { closeCut as close } from "./tool-step.ts";
 import { get } from "./util.ts";
 
 /// A tool's name without its MCP prefix.
@@ -124,31 +125,6 @@ function cutShort(json: string): Record<string, J> | null {
   return comma < 0 ? null : parseObject(close(json.slice(0, comma)));
 }
 
-/// JSON cut short, closed where it stops: the string it was in ends with an ellipsis, and what was open is closed.
-function close(json: string): string {
-  const open: string[] = [];
-  let quoted = false;
-  let escaped = false;
-  for (const c of json) {
-    if (escaped) escaped = false;
-    else if (quoted) {
-      if (c === "\\") escaped = true;
-      else if (c === '"') quoted = false;
-    } else if (c === '"') quoted = true;
-    else if (c === "{") open.push("}");
-    else if (c === "[") open.push("]");
-    else if (c === "}" || c === "]") open.pop();
-  }
-  let out = json;
-  if (quoted) {
-    if (escaped) out = out.slice(0, -1);
-    out += '…"';
-  }
-  out = out.trimEnd();
-  if (out.endsWith(":")) out += "null";
-  else if (out.endsWith(",")) out = out.slice(0, -1);
-  return out + open.reverse().join("");
-}
 
 const firstLine = (s: string) => (s.split(/\r?\n/).find((l) => l.trim() !== "") ?? "").trim();
 

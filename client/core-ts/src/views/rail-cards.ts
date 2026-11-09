@@ -48,6 +48,7 @@ export function chatsCard(rows: J[], mark: J, archived: number[], now: number, o
 /// each day's cost a bar (today's said); the models that cost most, each with its cost and share; 分享卡片 (`share`).
 /// Nothing spent: its line says so, alone, nothing to share.
 export function usageCard(usage: J): J {
+  if (get(usage, "detailsPreparing") === true) return { head: t("core-logic.looks.reading"), stats: [], rows: [] };
   if (get(usage, "empty") === true) return { head: t("core-logic.rail.usage.none"), stats: [], rows: [] };
   const tiles = arr(get(usage, "tiles"));
   const daily = arr(get(usage, "daily"));

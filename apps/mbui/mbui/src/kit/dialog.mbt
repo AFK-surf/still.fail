@@ -231,7 +231,8 @@ fn faded(colour : Int64, t : Double) -> Int64 {
 pub fn dialog_look_of(pad? : Double = 24.0, gap? : Double = 16.0) -> (@ui.Ctx, DialogState, () -> Unit) -> Unit {
   fn(c, s, body) {
     let t = c.theme()
-    c.box(
+    // (the dialog: its look's surface, coming first, all on it after: Ctx::surface)
+    let panel = c.box(
       w=Px(s.w),
       pad~,
       // the title's middle on the close button's: 26 + 16, the dialog's corner (the button in it, concentric)
@@ -259,7 +260,7 @@ pub fn dialog_look_of(pad? : Double = 24.0, gap? : Double = 16.0) -> (@ui.Ctx, D
         body()
       },
     )
-    |> ignore
+    c.surface(panel)
   }
 }
 

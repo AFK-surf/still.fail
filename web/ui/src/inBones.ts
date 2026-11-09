@@ -1,6 +1,6 @@
 // Whether what is drawn is a page's bones (waiting.tsx Bones): on its own, without the drawing, for what reads it far from
 // any (web/src/core/react.ts, which tests load in node).
-import { createContext } from "react";
+import { createContext } from "preact/compat";
 
 /**
  * Whether what is drawn now is a page's bones (`Bones`): drawn of made-up data, it reads nothing of the core (no topic

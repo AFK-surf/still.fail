@@ -1,4 +1,4 @@
-// References to other chats in what is written, and finding chats by a few words (refs.rs): the `chatSearch` view
+// References to other chats in what is written, and finding chats by a few words: the `chatSearch` view
 // (the composer's `@` menu and ⌘K's switcher). In the composer a reference is a short mark, `@[its title]`; sent, a
 // link, `[its title](its page)`. The link of each title picked (`chat.ref`) is kept on the device, the latest 200 of
 // each workspace, and a mark is made its link as it is sent in a chat of the same workspace.

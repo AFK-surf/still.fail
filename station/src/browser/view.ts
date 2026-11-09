@@ -1,4 +1,4 @@
-// A person's view of a tab of the station's browser (docs/remote-screens.md): CDP's screencast for the frames (JPEG),
+// A person's view of a tab of the station's browser: CDP's screencast for the frames (JPEG),
 // Input.dispatch* for what they do, on a connection and a session of the view's own, so the agents' own sessions on
 // the tab are left as they are.
 //
@@ -12,6 +12,7 @@
 // having frames pile up. Of two waiting, the newer is given and the older let go.
 import { type Clip, type Frame, type FrameConfig, type LoginField, type LoginFill, type PasskeyAnswer, type PasskeyAsk, type ScreenInput, type ScreenVideo, type ScreenView, type ViewOptions, CLIP_TEXT_MAX } from "../screens/source.ts";
 import type { Cdp, CdpEvent } from "./cdp.ts";
+import { sizeOf } from "../sessions/image-size.ts";
 
 /// The page's viewport in CSS pixels, as Page.getLayoutMetrics says it (what the screencast's frames show); null when
 /// it says none.
@@ -32,31 +33,12 @@ const HELD = 2;
 const CLICK_MS = 500;
 const CLICK_PX = 4;
 
-/// A JPEG's size, from its frame header (SOFn); null when there is none.
+/// A JPEG's size, from its frame header (SOFn); null when there is none (or it is no JPEG). The media reader's
+/// (sessions/image-size.ts).
 export function jpegSize(data: Uint8Array): { width: number; height: number } | null {
   if (data.length < 4 || data[0] !== 0xff || data[1] !== 0xd8) return null;
-  let i = 2;
-  while (i + 3 < data.length) {
-    if (data[i] !== 0xff) return null;
-    const marker = data[i + 1]!;
-    // Fill bytes before a marker, and the markers that carry no length.
-    if (marker === 0xff) {
-      i++;
-      continue;
-    }
-    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)) {
-      i += 2;
-      continue;
-    }
-    const length = (data[i + 2]! << 8) | data[i + 3]!;
-    const sof = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
-    if (sof) {
-      if (i + 8 >= data.length) return null;
-      return { height: (data[i + 5]! << 8) | data[i + 6]!, width: (data[i + 7]! << 8) | data[i + 8]! };
-    }
-    i += 2 + length;
-  }
-  return null;
+  const size = sizeOf(data);
+  return size && { width: size[0], height: size[1] };
 }
 
 /// A point given as 0..1 of the frame, in the page's CSS pixels (what Input.dispatchMouseEvent takes).

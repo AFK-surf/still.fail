@@ -1,4 +1,4 @@
-// 字体, one setting for every frame (web/src/FontSetting.tsx, mobile/Fonts.tsx FontScreen, the Android app's Fonts.kt):
+// 字体, one setting for every frame:
 // a face chosen for each of three places (界面, 正文, 代码) and the chat they make seen as it is chosen. What it is for is
 // one thing on every screen, so it is one design: the place in view by a choice of three; a chat as the faces set it
 // right under that, where the eye is as a face is chosen; the place's faces in a group, each row its name and a line
@@ -29,10 +29,10 @@ let fonts_pointed : Ref[String] = Ref("")
 /// 字体's setting, a block at a time: the places' choice, the chat as their faces set it, the faces of the place in
 /// view.
 fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
-  let prefs = (core.topic)("prefs", Map::new()).value
+  let prefs = (core.topic)("prefs", Map::new()).get().value
   let chosen_of = fn(place : String) { text(field(prefs, "fonts"), place) }
   let all = items(field(prefs, "faces"), "list")
-  let files_state = (core.topic)("fonts", Map::new()).value
+  let files_state = (core.topic)("fonts", Map::new()).get().value
   // the faces whose files this device keeps (chosen or not): no size said, choosing one fetches nothing
   let kept = items(files_state, "kept")
   let place = @settings.font_places[@settings.fonts_at.get()]
@@ -138,7 +138,7 @@ fn fonts_blocks(c : @ui.Ctx, core : Core) -> Array[() -> Unit] {
                 (@sf.t("android-settings.fonts.failed", args=[("error", failed)]), true)
               } else if damaged != "" {
                 (@sf.t("android-settings.fonts.failed", args=[("error", damaged)]), true)
-              } else if (core.face_here)(id) || kept.contains(id.to_json()) {
+              } else if (core.face_here)(id) || kept.contains(ToJson::to_json(id)) {
                 ("", false)
               } else {
                 (face_size(number(fv, "bytes")), false)
@@ -182,9 +182,9 @@ fn face_row(
   if c.lit(c.id(rkey)) {
     fonts_pointed.val = if id == "" { "\u{1}" } else { id }
   }
-  if @sf.choice_row(c, rkey, on, name, body=fn() { face_words(c, rkey, name, face, status, bad) }) {
+  @sf.choice_row(c, rkey, on, name, body=fn() { face_words(c, rkey, name, face, status, bad) }, on_press=fn() {
     @settings.set_font(core, place, if id == "" { None } else { Some(id) })
-  }
+  }) |> ignore
 }
 
 ///|
@@ -205,7 +205,7 @@ fn face_words(c : @ui.Ctx, key : String, name : String, face : Int, status : Str
 }
 
 ///|
-/// 本机字体 (FontSetting.tsx LocalTile): a row, the family chosen's name in itself where one is (else 本机字体);
+/// 本机字体: a row, the family chosen's name in itself where one is (else 本机字体);
 /// pressed, a list of the families installed here under it, a field to find one, each pointed at tried in the chat,
 /// one chosen as the place's face (`local:<family>`).
 fn local_face_row(c : @ui.Ctx, core : Core, place : String, chosen : String) -> Unit {
@@ -268,10 +268,10 @@ fn local_faces(c : @ui.Ctx, core : Core, place : String, tid : Int, picked : Str
             if c.lit(rid) {
               fonts_pointed.val = local_prefix + f
             }
-            if c.clicked(rid) {
+            c.on_press(rid, fn() {
               @settings.set_font(core, place, Some(local_prefix + f))
               local_open.val = false
-            }
+            })
             c.box(style=(if f == picked || c.lit(rid) { local_row_hot } else { local_row }).then(@sf.pick_high()), id=rid, fn() {
               c.text(f, style=local_name) |> ignore
               if f == picked {
@@ -289,7 +289,7 @@ fn local_faces(c : @ui.Ctx, core : Core, place : String, tid : Int, picked : Str
 }
 
 ///|
-/// A chat as the faces set it (FontSetting.tsx Preview, Fonts.kt FontPreview): their message in its bubble, an agent's
+/// A chat as the faces set it: their message in its bubble, an agent's
 /// under its name and when, its words as a chat's are (body_size), on a card of the page; their bubble in its
 /// top right corner the ladder's inset in (a block of the ladder's, tall enough not to be a capsule), the agent's words
 /// 20 in. `ui_face` is the interface's host face (0: as chosen); `text_face` and `code_face` are tried in their

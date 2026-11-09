@@ -1,4 +1,4 @@
-// The frame round a file opened over the whole window, whatever the tier and the input (ember web/src/FilePreview.tsx,
+// The frame round a file opened over the whole window, whatever the tier and the input (still.fail web/src/FilePreview.tsx,
 // FilePreview.css.ts): what draws it gives what it says and does (sfbase's viewer: the file, its stages, what is read).
 // In the Small tier one bar floats at the top, as wide as what it holds and never narrower once open (fpHead: the
 // file's name, its kind and size, its tools and close); otherwise the bar every file opened has across the top
@@ -6,7 +6,7 @@
 // canvas at its sides; a file not shown is told of in the middle. Under 640 the web's phone sizes.
 
 ///|
-/// The width under which a viewer is laid out as a phone's (FilePreview.css.ts `max-width: 640px`).
+/// The width under which a viewer is laid out as a phone's.
 pub let viewer_small_w : Double = 640.0
 
 ///|
@@ -14,8 +14,8 @@ pub let viewer_small_w : Double = 640.0
 /// in the Small tier, awake while `awake` (fading out over 320 ms and in over 120 ms, as the web's `data-awake`), at
 /// least `widest` wide (what it was laid out at before: the second of what this gives back); across the top
 /// otherwise, gone while `hidden`, back to `back` by name (`title`, where the file is, over its name while pointed at).
-/// `tools`: the file's own, then download. The first of
-/// what it gives back is whether it was closed (its ×, or its way back), the frame after.
+/// `tools`: the file's own, then download. `on_close` as it is closed (its ×, or its way back). What it gives back:
+/// the width it was laid out at (the floating bar's; none across the top).
 pub fn viewer_frame_bar(
   c : @ui.Ctx,
   key : String,
@@ -29,14 +29,16 @@ pub fn viewer_frame_bar(
   ink : ViewerInk,
   tools : () -> Unit,
   title? : String = "",
-) -> (Bool, Double) {
+  on_close~ : () -> Unit,
+) -> Double {
   if layout(c.width) is Small {
-    return viewer_head(c, key, name, meta, awake, widest, shown, ink, tools)
+    return viewer_head(c, key, name, meta, awake, widest, shown, ink, tools, on_close~)
   }
-  let mut went = false
-  let n = c.box(style=vfr_layer, fn() { went = viewer_bar(c, key + "/bar", back, name, meta, hidden, ink, tools, title~) })
+  let n = c.box(style=vfr_layer, fn() {
+    viewer_bar(c, key + "/bar", back, name, meta, hidden, ink, tools, title~, on_back=on_close)
+  })
   c.look(n, @ui.look(alpha=shown))
-  (went, 0.0)
+  0.0
 }
 
 ///|
@@ -45,6 +47,22 @@ pub fn viewer_frame_bar(
 pub fn viewer_bar_floats(w : Double) -> Bool {
   layout(w) is Small
 }
+
+///|
+/// How far down from the window's top what a file opened `w` wide has for a bar reaches: the bar floating at its top, or
+/// the one across it (viewer_bar_under).
+pub fn viewer_bar_clear(w : Double) -> Double {
+  if viewer_bar_floats(w) {
+    let top = (viewer_host().room)().0
+    dmax(top, if w <= viewer_small_w { vfr_head_top_small } else { vfr_head_top }) + vfr_head_h
+  } else {
+    viewer_bar_under()
+  }
+}
+
+///|
+/// The floating bar's height (vfr_head_box's S11).
+let vfr_head_h : Double = 44.0
 
 ///|
 /// The bar floating at the top (fpHead): page glass, its corner 14, 44 high, the room's top or 16 down (8 under 640),
@@ -60,9 +78,11 @@ fn viewer_head(
   shown : Double,
   ink : ViewerInk,
   tools : () -> Unit,
-) -> (Bool, Double) {
+  on_close~ : () -> Unit,
+) -> Double {
   let small = c.width <= viewer_small_w
-  let seen = @motion.animate(c, key + "/head-seen", if awake { 1.0 } else { 0.0 }, spec=@motion.tween(
+  // (there and gone as it is drawn: told as it is built, read where it is painted)
+  let seen = @motion.told(c, key + "/head-seen", if awake { 1.0 } else { 0.0 }, spec=@motion.tween(
       if awake {
         wake_ms
       } else {
@@ -74,7 +94,6 @@ fn viewer_head(
   let down = dmax(top, if small { vfr_head_top_small } else { vfr_head_top })
   let most = dmin(c.width - (if small { vfr_head_side_small } else { vfr_head_side }), vfr_head_most)
   let head = c.id(key + "/head")
-  let mut closed = false
   let n = c.box(style=vfr_head_room, fn() {
     c.box(style=@ui.style(w=Full, h=Fixed(down)), fn() {  }) |> ignore
     c.box(
@@ -95,17 +114,15 @@ fn viewer_head(
         // (short of room, the tools kept whole: the name gives way)
         c.box(style=keys_row(), keep=true, fn() {
           tools()
-          if viewer_tool(c, key + "/close", "close", t("web-main.preview.closeKey"), ink) {
-            closed = true
-          }
+          viewer_tool(c, key + "/close", "close", t("web-main.preview.closeKey"), ink, on_press=on_close)
         })
         |> ignore
       },
     )
     |> ignore
   })
-  c.look(n, @ui.look(alpha=seen * shown))
-  (closed, c.laid_size(head).map(fn(s) { s.0 }).unwrap_or(0.0))
+  c.look_by(n, fn() { @ui.look(alpha=seen.get(c) * shown) })
+  c.laid_size(head).map(fn(s) { s.0 }).unwrap_or(0.0)
 }
 
 ///|
@@ -113,8 +130,10 @@ fn viewer_head(
 /// wide screen the bar a file opened has (viewer_bar: back to `back` by name, `name` and `meta`), the doing a button in
 /// words (`label`) at its end; on a small screen no bar over it, but a band of glass along the window's foot with 取消
 /// and the doing side by side, as wide as each other (2026-10-26 用户「应该放下面，俩按钮，一个取消一个保存到相册」「pc 的话直接跟附件
-/// 预览一样，有顶栏」「pc 也用文字按钮，不要用图标」). `busy`: the doing under way; `disabled`: nothing to do it to yet. What it
-/// gives back: whether it was closed (its way back, 取消), whether the doing was pressed, the frame after.
+/// 预览一样，有顶栏」「pc 也用文字按钮，不要用图标」). `copy`: a second doing before it, copying (a phone's 复制图片 beside
+/// its 保存到相册, 2026-11-06 用户「手机上都加复制」), at the foot 取消 and it as wide as their words, the doing the
+/// rest. `busy`: a doing under way (`busy_copy`: the copying), the other not pressed meanwhile; `disabled`: nothing to
+/// do it to yet. As they are pressed: `on_close` (its way back, 取消), `on_act` (the doing), `on_copy` (the copying).
 pub fn viewer_frame_act(
   c : @ui.Ctx,
   key : String,
@@ -123,11 +142,18 @@ pub fn viewer_frame_act(
   meta : String,
   ink : ViewerInk,
   label : String,
+  copy? : String,
   busy? : Bool = false,
+  busy_copy? : Bool = false,
   disabled? : Bool = false,
-) -> (Bool, Bool) {
-  let mut closed = false
-  let mut acted = false
+  on_close~ : () -> Unit,
+  on_act~ : () -> Unit,
+  on_copy? : () -> Unit = fn() {  },
+) -> Unit {
+  let act_busy = busy && !busy_copy
+  let act_off = disabled || (busy && busy_copy)
+  let copy_busy = busy && busy_copy
+  let copy_off = disabled || (busy && !busy_copy)
   if layout(c.width) is Small {
     c.box(style=vfr_act_room, fn() {
       c.spacer()
@@ -139,12 +165,16 @@ pub fn viewer_frame_act(
       let right = vfr_act_side_at(@ui.window_corner_at(2), bottom)
       c.box(style=vfr_act_band.then(@ui.style(pl=room(left), pr=room(right), pb=room(bottom))), glass=glass_foot(), fn() {
         c.box(style=vfr_act_row, fn() {
-          if button(c, t("common.cancel"), key=key + "/cancel", w=Fill(1.0)) {
-            closed = true
+          // (with a copying beside it, 取消 and it as wide as their words, the doing the rest: three as wide as each
+          // other cut 保存到相册 short on a phone, 保存到…, as the Mac's text drew it at 390, and Save to Photos further,
+          // 2026-11-06)
+          button(c, t("common.cancel"), key=key + "/cancel", w=if copy is Some(_) { Auto } else { Fill(1.0) }, on_press=on_close) |> ignore
+          match copy {
+            Some(words) =>
+              button(c, words, key=key + "/copy", busy=copy_busy, disabled=copy_off, on_press=on_copy) |> ignore
+            None => ()
           }
-          if button(c, label, key=key + "/act", tone=Primary, busy~, disabled~, w=Fill(1.0)) {
-            acted = true
-          }
+          button(c, label, key=key + "/act", tone=Primary, busy=act_busy, disabled=act_off, w=Fill(1.0), on_press=on_act) |> ignore
         })
         |> ignore
       })
@@ -153,15 +183,17 @@ pub fn viewer_frame_act(
     |> ignore
   } else {
     c.box(style=vfr_layer, fn() {
-      closed = viewer_bar(c, key + "/bar", back, name, meta, false, ink, fn() {
-        if button(c, label, key=key + "/act", tone=Primary, busy~, disabled~) {
-          acted = true
+      viewer_bar(c, key + "/bar", back, name, meta, false, ink, fn() {
+        match copy {
+          Some(words) =>
+            button(c, words, key=key + "/copy", busy=copy_busy, disabled=copy_off, on_press=on_copy) |> ignore
+          None => ()
         }
-      }, capsule_end=true)
+        button(c, label, key=key + "/act", tone=Primary, busy=act_busy, disabled=act_off, on_press=on_act) |> ignore
+      }, capsule_end=true, on_back=on_close)
     })
     |> ignore
   }
-  (closed, acted)
 }
 
 ///|
@@ -223,7 +255,7 @@ let vfr_act_band : @ui.Style = @ui.css("w=Full pt=S3 px=S4 radius=InnerOr(Sharp)
 let vfr_act_row : @ui.Style = @ui.css("row w=Full gap=S2 align=ACenter")
 
 ///|
-/// Frosted glass over a page of the theme's colours (FilePreview.css.ts pageGlass): the surface at 72% (dark, the
+/// Frosted glass over a page of the theme's colours: the surface at 72% (dark, the
 /// raised one's) over a 20 blur, over the viewer's canvas.
 pub fn viewer_page_glass() -> @ui.Glass {
   let th = theme()
@@ -278,8 +310,16 @@ let viewer_step_blur : Double = 12.0
 let viewer_step_share : Double = 0.8
 
 ///|
-/// A file told of: its mark (44), an extension said up to 12 letters.
+/// A file told of: its mark (44) where it has no extension, an extension said up to 12 letters.
 pub let viewer_facts_icon : Double = 44.0
+
+///|
+/// A file told of's card, its extension in its middle: as wide, as high, and its corner.
+pub let viewer_facts_card : (Double, Double, Double) = (64.0, 80.0, 14.0)
+
+///|
+/// How wide a file told of's buttons are, one over the other.
+pub let viewer_facts_actions : Double = 240.0
 
 ///|
 let viewer_ext_most : Int = 12
@@ -335,9 +375,9 @@ let vfr_head_name : @ui.TextStyle = @ui.text_style(size=Body, weight=Semibold, c
 let vfr_head_meta : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
 
 ///|
-/// A file told of's size and extension (up to 12 letters, as capitals), as a file told of says them under its name (the viewer's facts' node).
-pub fn facts_size(name : String, size : Double) -> String {
-  let ext = match lower(name).rev_find(".") {
+/// A file's extension, up to 12 letters, as capitals; "" for none (or a longer one).
+pub fn file_ext(name : String) -> String {
+  match lower(name).rev_find(".") {
     Some(i) if i > 0 && name.length() - i - 1 <= viewer_ext_most => {
       let b = StringBuilder::new()
       for ch in name.view(start_offset=i + 1) {
@@ -347,6 +387,12 @@ pub fn facts_size(name : String, size : Double) -> String {
     }
     _ => ""
   }
+}
+
+///|
+/// A file told of's size and extension (file_ext), as a file told of says them under its name (the viewer's facts' node).
+pub fn facts_size(name : String, size : Double) -> String {
+  let ext = file_ext(name)
   if ext == "" {
     file_size(size)
   } else {

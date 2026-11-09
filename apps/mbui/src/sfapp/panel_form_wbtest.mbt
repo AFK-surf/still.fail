@@ -99,13 +99,13 @@ test "panel a form, 大屏 keyboard and mouse and a tablet by touch: at a point,
   // (as main has it: drawn by the old frame, the same test, before this)
   assert_eq((out, drawn), (
     [
-      "at: dialog Some((380, 288.1, 520, 223.8)) field Some((414, 363.1, 452, 39)) ok Some((818.2, 460.1, 44, 24)) focus focused Some(TextField 填一下) ime (true, , 0, 0) | field 甲 | escape: presenting false focus focused Some(TextField 发消息) ime (true, , 0, 0)",
-      "tall at: dialog Some((380, 288.1, 520, 223.8)) field Some((414, 363.1, 452, 39)) ok Some((818.2, 460.1, 44, 24)) focus focused Some(TextField 填一下) ime (true, , 0, 0) | field 甲 | escape: presenting false focus focused Some(TextField 发消息) ime (true, , 0, 0)",
-      "middle: dialog Some((380, 275.1, 520, 249.8)) field Some((414, 376.1, 452, 39)) ok Some((818.2, 473.1, 44, 24)) focus focused Some(TextField 填一下) ime (true, , 0, 0) | field 甲 | escape: presenting false focus focused Some(TextField 发消息) ime (true, , 0, 0)",
-      "short: dialog Some((380, 24, 520, 452)) field Some((414, 99, 452, 39)) ok Some((818.2, 1336, 44, 24)) focus focused Some(TextField 填一下) ime (true, , 0, 0) | field 甲 | far: ok Some((818.2, 424.2, 44, 24)) last [(424, 344.2, 432, 22)] seen [true] | ok pressed: said [ok] presenting false focus focused None ime (false, , 0, 0) | escape: presenting false focus focused None ime (false, , 0, 0)",
-      "tablet: dialog Some((160, 338.1, 520, 223.8)) field Some((194, 413.1, 452, 39)) ok Some((596.2, 510.1, 46, 24)) focus focused Some(TextField 填一下) ime (true, , 0, 0) | field 甲 | escape: presenting false focus focused None ime (false, , 0, 0)",
-      "grown: dialog Some((380, 288.1, 520, 223.8)) field Some((414, 363.1, 452, 39)) ok Some((818.2, 460.1, 44, 24)) focus focused Some(TextField 填一下) ime (true, , 0, 0) | field 甲 | more: dialog Some((380, 136.1, 520, 527.8)) ok Some((818.2, 612.1, 44, 24)) less: dialog Some((380, 250.1, 520, 299.8)) ok Some((818.2, 498.1, 44, 24)) | escape: presenting false focus focused Some(TextField 发消息) ime (true, , 0, 0)",
-      "unfield: dialog Some((380, 288.1, 520, 223.8)) field Some((414, 363.1, 452, 39)) ok Some((818.2, 460.1, 44, 24)) focus focused Some(TextField 填一下) ime (true, , 0, 0) | field 甲 | escape: presenting false focus focused Some(TextField 发消息) ime (true, , 0, 0)",
+      "at: dialog Some((380, 287, 520, 226)) field Some((404, 362, 472, 39)) ok Some((826, 459, 44, 24)) focus focused Some(TextField 填一下) ime (true, , 0, 0) | field 甲 | escape: presenting false focus focused Some(TextField 发消息) ime (true, , 0, 0)",
+      "tall at: dialog Some((380, 287, 520, 226)) field Some((404, 362, 472, 39)) ok Some((826, 459, 44, 24)) focus focused Some(TextField 填一下) ime (true, , 0, 0) | field 甲 | escape: presenting false focus focused Some(TextField 发消息) ime (true, , 0, 0)",
+      "middle: dialog Some((380, 274, 520, 252)) field Some((404, 375, 472, 39)) ok Some((826, 472, 44, 24)) focus focused Some(TextField 填一下) ime (true, , 0, 0) | field 甲 | escape: presenting false focus focused Some(TextField 发消息) ime (true, , 0, 0)",
+      "short: dialog Some((380, 24, 520, 452)) field Some((404, 99, 472, 39)) ok Some((826, 1336, 44, 24)) focus focused Some(TextField 填一下) ime (true, , 0, 0) | field 甲 | far: ok Some((826, 422, 44, 24)) last [(414, 342, 452, 22)] seen [true] | ok pressed: said [ok] presenting false focus focused None ime (false, , 0, 0) | escape: presenting false focus focused None ime (false, , 0, 0)",
+      "tablet: dialog Some((160, 337, 520, 226)) field Some((184, 412, 472, 39)) ok Some((604, 509, 46, 24)) focus focused Some(TextField 填一下) ime (true, , 0, 0) | field 甲 | escape: presenting false focus focused None ime (false, , 0, 0)",
+      "grown: dialog Some((380, 287, 520, 226)) field Some((404, 362, 472, 39)) ok Some((826, 459, 44, 24)) focus focused Some(TextField 填一下) ime (true, , 0, 0) | field 甲 | more: dialog Some((380, 135, 520, 530)) ok Some((826, 611, 44, 24)) less: dialog Some((380, 249, 520, 302)) ok Some((826, 497, 44, 24)) | escape: presenting false focus focused Some(TextField 发消息) ime (true, , 0, 0)",
+      "unfield: dialog Some((380, 287, 520, 226)) field Some((404, 362, 472, 39)) ok Some((826, 459, 44, 24)) focus focused Some(TextField 填一下) ime (true, , 0, 0) | field 甲 | escape: presenting false focus focused Some(TextField 发消息) ime (true, , 0, 0)",
     ],
     [true, true, true, true, true, true, true],
   ))
@@ -154,11 +154,11 @@ test "panel a form at a point, its field holding the focus, its own button closi
   @sf.panel("面板", from=At(600.0, 100.0, 0.0, 0.0), form=true, field="form field", fn(c, close) {
     c.editor("form field", field=pf, placeholder="填一下") |> ignore
     @sf.panel_foot(c, fn() {
-      if @sf.panel_button(c, "ok", "好的", tone=Filled) {
+      @sf.panel_button(c, "ok", "好的", tone=Filled, on_press=fn() {
         said.push("ok")
         close()
         @sf.panel("另一个", next, from=At(600.0, 100.0, 0.0, 0.0), form=true, field="next field")
-      }
+      }) |> ignore
     })
   })
   t.run_for(@ui.move_most_ms)

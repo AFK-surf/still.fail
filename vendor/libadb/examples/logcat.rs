@@ -1,0 +1,129 @@
+//! Example: stream or dump logcat from an ADB device.
+//!
+//! ```text
+//! # Stream all log buffers (binary parsed entries):
+//! cargo run --example logcat --features tokio,host-keys -- 127.0.0.1:5555
+//! cargo run --example logcat --no-default-features --features smol,host-keys -- 127.0.0.1:5555
+//!
+//! # Stream specific buffers:
+//! cargo run --example logcat --features tokio,host-keys -- 127.0.0.1:5555 -b main,system
+//!
+//! # Dump last 50 entries and exit:
+//! cargo run --example logcat --features tokio,host-keys -- 127.0.0.1:5555 -d -t 50
+//!
+//! # Filter by tag:
+//! cargo run --example logcat --features tokio,host-keys -- 127.0.0.1:5555 -s ActivityManager:I
+//! ```
+//!
+//! Reuses `~/.android/adbkey`; if there is none, a key is generated
+//! and saved on first run — confirm it on the device when asked.
+
+#[cfg(not(any(feature = "tokio", feature = "smol")))]
+compile_error!("this example requires --features tokio,host-keys or --features smol,host-keys");
+
+use std::io::{self, Write};
+use std::{env, process};
+
+use libadb::logcat;
+use libadb::{Connection, Error, Feature};
+
+#[path = "common/adb_key_auth.rs"]
+mod adb_key_auth;
+async fn run(addr: &str, extra_args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let auth = adb_key_auth::load_or_generate()?;
+
+    #[cfg(feature = "tokio")]
+    let transport = {
+        let stream = tokio::net::TcpStream::connect(addr).await?;
+        stream.set_nodelay(true)?;
+        libadb::TokioTcp::new(stream)
+    };
+    #[cfg(all(feature = "smol", not(feature = "tokio")))]
+    let transport = {
+        let stream = smol::net::TcpStream::connect(addr).await?;
+        stream.set_nodelay(true)?;
+        libadb::SmolTcp::new(stream)
+    };
+
+    eprintln!("[*] connecting to {addr} ...");
+    let mut conn = Connection::<_>::connect(transport, auth, &[Feature::ShellV2])
+        .await
+        .map_err(|e| format!("connect: {e}"))?;
+
+    eprintln!("[*] connected, device: {:?}", conn.device_banner());
+
+    let args: Vec<&str> = extra_args.iter().map(|s| s.as_str()).collect();
+
+    let mut rx = [0u8; 64 * 1024];
+    let mut session = logcat::open(&mut conn, &args, &mut rx)
+        .await
+        .map_err(|e| format!("open: {e}"))?;
+
+    eprintln!("[*] streaming logcat (Ctrl-C to stop) ...");
+
+    loop {
+        match session.read_entry().await {
+            Ok(entry) => {
+                let res = writeln!(
+                    io::stdout(),
+                    "{}.{:03} {:>5} {:>5} {} {}/{}: {}",
+                    entry.sec,
+                    entry.nsec / 1_000_000,
+                    entry.pid,
+                    entry.tid,
+                    entry.log_id,
+                    entry.priority.as_char(),
+                    entry.tag_lossy(),
+                    entry.message_lossy(),
+                );
+                if let Err(e) = res {
+                    if e.kind() == io::ErrorKind::BrokenPipe {
+                        break;
+                    }
+                    return Err(e.into());
+                }
+            }
+            Err(Error::ChannelClosed) => {
+                eprintln!("[*] logcat session ended");
+                break;
+            }
+            Err(e) => return Err(format!("read: {e}").into()),
+        }
+    }
+
+    Ok(())
+}
+
+async fn async_main() {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() < 2 {
+        eprintln!("Usage: {} <host:port> [logcat args...]", args[0]);
+        eprintln!();
+        eprintln!("  Stream all buffers:");
+        eprintln!("    {} 127.0.0.1:5555", args[0]);
+        eprintln!();
+        eprintln!("  Stream specific buffers:");
+        eprintln!("    {} 127.0.0.1:5555 -b main,system", args[0]);
+        eprintln!();
+        eprintln!("  Dump last 50 entries:");
+        eprintln!("    {} 127.0.0.1:5555 -d -t 50", args[0]);
+        process::exit(2);
+    }
+
+    if let Err(e) = run(&args[1], &args[2..]).await {
+        eprintln!("error: {e}");
+        process::exit(1);
+    }
+}
+
+#[cfg(feature = "tokio")]
+#[tokio::main]
+async fn main() {
+    async_main().await;
+}
+
+#[cfg(all(feature = "smol", not(feature = "tokio")))]
+fn main() {
+    smol::block_on(async_main());
+}

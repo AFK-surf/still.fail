@@ -15,13 +15,13 @@ fn hosted_scaled(s : @signals.Signal[Double], pressed : Map[String, Int], field 
   let holder = fn(h : @view.View) {
     old(h, fn(c) {
       let button = c.id("old button")
-      if c.clicked(button) {
+      c.on_press(button, fn() {
         count("button")
-      }
+      })
       let over = c.id("over")
-      if c.clicked(over) {
+      c.on_press(over, fn() {
         count("over")
-      }
+      })
       c.box(w=Px(200.0), h=Px(20.0), fn() { c.editor("e", field~, font_size=10.0) |> ignore }) |> ignore
       c.box(dir=Row, w=Px(200.0), h=Px(50.0), fn() {
         c.box(w=Px(100.0), h=Px(50.0), fn() {  }) |> ignore
@@ -248,9 +248,9 @@ test "an old view hosted in a node laid out off the window's corner, drawn moved
       |> ignore
       old(h, fn(c) {
         let b = c.id("old button")
-        if c.clicked(b) {
+        c.on_press(b, fn() {
           clicks.val += 1
-        }
+        })
         c.box(w=Px(200.0), h=Px(20.0), fn() { c.editor("e", field~, font_size=10.0) |> ignore }) |> ignore
         c.box(dir=Row, w=Px(200.0), h=Px(50.0), fn() {
           c.box(w=Px(100.0), h=Px(50.0), fn() {  }) |> ignore
@@ -304,9 +304,9 @@ test "an old view hosted in a node drawn half as big, then moved and drawn whole
       |> ignore
       old(h, fn(c) {
         let b = c.id("old button")
-        if c.clicked(b) {
+        c.on_press(b, fn() {
           pressed["button"] = pressed.get("button").unwrap_or(0) + 1
-        }
+        })
         c.box(w=Px(200.0), h=Px(20.0), fn() { c.editor("e", field~, font_size=10.0) |> ignore }) |> ignore
         c.box(dir=Row, w=Px(200.0), h=Px(50.0), fn() {
           c.box(w=Px(100.0), h=Px(50.0), fn() {  }) |> ignore
@@ -532,9 +532,9 @@ test "an old view hosted in a node drawn half as big, a button in it cut round (
       |> ignore
       old(h, fn(c) {
         let b = c.id("round")
-        if c.clicked(b) {
+        c.on_press(b, fn() {
           clicks.val += 1
-        }
+        })
         c.box(w=Px(80.0), h=Px(80.0), radius=40.0, clip=true, fn() {
           c.box(w=Px(80.0), h=Px(80.0), bg=0x3366CCFFL, id=b, fn() {  }) |> ignore
         })
@@ -665,9 +665,9 @@ fn hosted_own(s : @signals.Signal[Double], pressed : Map[String, Int]) -> Tester
       |> ignore
       old(h, fn(c) {
         let button = c.id("old button")
-        if c.clicked(button) {
+        c.on_press(button, fn() {
           count("button")
-        }
+        })
         c.box(w=Px(200.0), h=Px(20.0), fn() {  }) |> ignore
         c.box(dir=Row, w=Px(200.0), h=Px(50.0), fn() {
           c.box(w=Px(100.0), h=Px(50.0), fn() {  }) |> ignore
@@ -829,7 +829,7 @@ test "an old view hosted in a node drawn half as big, a native view in it all of
         c.layer(fn() { c.native(page) |> ignore }) |> ignore
         c.layer(fn() {
           let id = c.id("over")
-          c.clicked(id) |> ignore
+          c.takes_presses(id)
           c.box(w=Px(80.0), h=Px(40.0), tx=100.0, id~, fn() {  }) |> ignore
         })
         |> ignore
@@ -958,7 +958,7 @@ test "a press's room in an old view hosted in a node drawn whole, half as big, w
         c.box(dir=Row, w=Px(200.0), h=Px(44.0), fn() {
           for k in ["a", "b"] {
             let id = c.id(k)
-            c.clicked(id) |> ignore
+            c.takes_presses(id)
             c.box(w=Px(44.0), h=Px(44.0), bg=0x3366CCFFL, id~, fn() {  }) |> ignore
           }
         })

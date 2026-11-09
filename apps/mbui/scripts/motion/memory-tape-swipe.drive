@@ -1,0 +1,10 @@
+# 一台 station 的记忆 over 记忆 on the tape (MBUI_FIXTURE=settings-memories MBUI_WIN=700x760): Willow's memory opened,
+# then swiped back by a finger from its panel's edge (an iPad's: a mouse swipes no page back), 300 across, let go.
+timeout 20000
+until 全局记忆 · 项目记忆
+wait 1200
+tap Willow
+wait 1800
+drag 70 400 300 0 600
+wait 1500
+exit

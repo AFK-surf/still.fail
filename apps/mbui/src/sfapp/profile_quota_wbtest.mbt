@@ -24,7 +24,7 @@ fn profile_quota_tester(
   }
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "profiles" {
         { value: Some({
           "items": [{
@@ -34,8 +34,8 @@ fn profile_quota_tester(
             "title": "lin@example.com",
             "station": "ws1/st1",
             "usable": Json::boolean(online.get()),
-            "state": if online.get() { Json::null() } else { { "text": "Studio 离线", "tone": "red" } },
-            "where": "Studio 可用",
+            "state": if online.get() { Json::null() } else { { "text": "Willow 离线", "tone": "red" } },
+            "where": "Willow 可用",
             "profile": {
               "id": "open-code",
               "runtime": "opencode",
@@ -48,7 +48,7 @@ fn profile_quota_tester(
           "wait": { "reading": false, "failing": [], "empty": false },
         }), error: None, version: if online.get() { 2 } else { 1 } }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
   }
@@ -126,14 +126,14 @@ test "a profile's offline state and its three allowance windows each have room t
     }
     whole("offline")
     // The state is not beside the figures: even a long station name cannot squeeze the three chips.
-    let state = sidebar_runs().filter(fn(r) { r.text == "Studio 离线" })[0]
+    let state = sidebar_runs().filter(fn(r) { r.text == "Willow 离线" })[0]
     let first = sidebar_runs().filter(fn(r) { r.text == "5H" })[0]
     assert_true(first.top >= state.bottom, msg="state \{state}, first chip \{first}")
     assert_eq(t.squeeze_faults(), [])
     // Coming back changes the state line to where the account can be used; the allowance stays in place.
     online.set(true)
     t.draw()
-    assert_true(sidebar_runs().iter().any(fn(r) { r.text == "Studio 可用" }))
+    assert_true(sidebar_runs().iter().any(fn(r) { r.text == "Willow 可用" }))
     whole("online")
     assert_eq(sidebar_runs().filter(fn(r) { r.text == "5H" })[0].top, first.top)
     // The person's narrowest sidebar still keeps all three windows whole.

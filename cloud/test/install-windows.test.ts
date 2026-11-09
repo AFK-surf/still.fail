@@ -101,6 +101,30 @@ test("the Windows installer is one PowerShell parses", { skip: spawnSync("powers
 /** PowerShell here, if any: Windows' own, or pwsh (STILLFAIL_PWSH names one elsewhere). */
 const powershell = [process.env.STILLFAIL_PWSH, "powershell", "pwsh"].find((p) => p && spawnSync(p, ["-NoProfile", "-Command", "exit 0"]).status === 0);
 
+test("the Windows installer reports the new process's handover reason, falling back to the launcher", { skip: !powershell && "no PowerShell" }, () => {
+  const dir = mkdtempSync(join(tmpdir(), "handoff-why-"));
+  try {
+    const script = windowsInstallScript("https://ember.test", "stable", "en");
+    const fn = script.match(/^function HandoffWhy \{.*?^\}/ms)?.[0];
+    assert.ok(fn);
+    const file = join(dir, "why.ps1");
+    writeFileSync(file, "\ufeff" + `$run = $env:TEST_DIR\n${fn}\nHandoffWhy\n`);
+    const why = () => {
+      const result = spawnSync(powershell!, ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", file], {
+        env: { ...process.env, TEST_DIR: dir }, encoding: "utf8",
+      });
+      assert.equal(result.status, 0, result.stderr);
+      return result.stdout.trim();
+    };
+    writeFileSync(join(dir, "handoff-failed"), "the new station exited with 1\n");
+    assert.equal(why(), "the new station exited with 1");
+    writeFileSync(join(dir, "handoff-error"), "Cannot read config: encrypted or damaged\n");
+    assert.equal(why(), "Cannot read config: encrypted or damaged");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("a Windows station updating itself installs only the release its signed words name, by that release's own installer", { skip: !powershell && "no PowerShell" }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "install-signed-"));
   const { createHash } = await import("node:crypto");

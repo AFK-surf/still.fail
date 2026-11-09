@@ -20,7 +20,8 @@
 // reads it then into the view's signals, and what reads them (a time shown, a timeline) is told.
 //
 // Hosts: Android (NativeViews.java: Media3's ExoPlayer on a TextureView, a WebView), macOS and iOS (apple_views.m:
-// AVPlayerLayer, WKWebView), the browser (web/host.js: <video>, a sandboxed <iframe>), Windows (win_views.cpp: WebView2,
+// AVPlayerLayer, WKWebView), the browser (web/host.js: <video>, a sandboxed <iframe>, the frame of H.siteFrame), Windows
+// (win_views.cpp: WebView2,
 // its players a page of its own with a <video>; no view where WebView2's runtime is not installed: `here` is false, the
 // app says it cannot show it), Linux (linux_views.c: WebKitGTK 6.0's pages and sites, none without it; its players
 // linux_player.h's, GStreamer's playbin, their pictures drawn in the canvas as Android's are, none without GStreamer).
@@ -39,6 +40,10 @@ pub struct NativeView {
   /// how it stands, as its host last said (view_info's numbers, its state: `stood`), each a signal of its own
   priv info : FixedArray[@signals.Signal[Double]]
   priv state : @signals.Signal[Int]
+  /// When the host said all file bytes had reached a player still awaiting its first frame; -1 otherwise.
+  priv mut decode_since : Double
+  /// when the grab going was asked for, by the app's clock (-1: none going)
+  priv mut grab_since : Double
   /// the frame it was last painted in, and where: content x y w h, clip x0 y0 x1 y1, its corners (top left, then round it)
   priv mut painted : Int
   /// where in that frame's paint it was (how many instances were before it): the views are stacked so
@@ -72,6 +77,8 @@ pub struct NativeView {
   priv too_slow : String
   priv mut touch : Touch
   priv mut keeps_cookies : Bool
+  /// a site in a frame of its host's (the browser's), which runs no script of the app's: `tell_frame`
+  priv mut framed : Bool
   /// how many presses' rects the frame had when it was painted (those after it are drawn over it), and the rects of
   /// those over it the host was last told (`covers`)
   priv mut hits_before : Int
@@ -109,7 +116,7 @@ fn touch_name(t : Touch) -> String {
 
 ///|
 /// How long a site's request waits for the head of its answer before the app's words for that (`site`'s `no_answer`)
-/// answer it instead (PreviewWeb.kt HEAD_WAIT_S): the host says when (`{"late":N}`), what the app sees is that event.
+/// answer it instead: the host says when (`{"late":N}`), what the app sees is that event.
 pub let site_head_wait_ms : Double = 60000.0
 
 ///|
@@ -215,6 +222,7 @@ fn NativeView::make(
     too_slow,
     touch: All,
     keeps_cookies: false,
+    framed: false,
     hits_before: 0,
     island: None,
     told_covers: "",
@@ -233,6 +241,8 @@ fn NativeView::make(
     told_page_scale: 1.0,
     info: FixedArray::makei(10, fn(_) { @signals.signal(0.0, same=fn(a, b) { a == b }) }),
     state: @signals.signal(0, same=fn(a, b) { a == b }),
+    decode_since: -1.0,
+    grab_since: -1.0,
     painted: -1,
     seq: 0,
     at: FixedArray::make(12, 0.0),
@@ -295,14 +305,16 @@ pub fn NativeView::page(html : String, said? : (String) -> Unit) -> NativeView {
 }
 
 ///|
-/// A site served by the app (still.fail's preview of a service: Preview.kt, PreviewWeb.kt): a web view of a host of
+/// A site served by the app: a web view of a host of
 /// its own at `start` (a path), each request its page makes of that host handed to `serve` to answer, as a browser
 /// would have it from a server (its scripts on, its cookies kept by the app as it answers); a link elsewhere is not
 /// followed but told to `leave`. Android's WebView and Windows' WebView2 (their requests intercepted), Apple's
-/// WKWebView and Linux's WebKitGTK (a scheme of its own); the browser has none. What its scripts say to the app goes to `said`, as a page's
+/// WKWebView and Linux's WebKitGTK (a scheme of its own); the browser a frame on a host of its own where its page gives one (H.siteFrame, its service
+/// worker handing requests over; else none), which runs no script of the app's (`framed`). What its scripts say to the app goes to `said`, as a page's
 /// (`NativeView::page`). A request whose head has not come in `site_head_wait_ms` is answered 502 with `no_answer`;
 /// one whose page reads it so slowly that more than `site_backlog_max` of it waits is stopped with `too_slow` (the
-/// app's words for each: a person may read them on the page), and let go of (its `when_gone`).
+/// app's words for each: a person may read them on the page), and let go of (its `when_gone`); in the browser's frame
+/// it waits as a browser's request does.
 pub fn NativeView::site(
   start : String,
   serve : (SiteRequest, SiteReply) -> Unit,
@@ -341,6 +353,21 @@ fn script_hash(js : String) -> String {
     out.write_char(digits.get_char(d).unwrap())
   }
   out.to_string()
+}
+
+///|
+/// Whether this site's page is in a frame of its host's (`NativeView::site`): nothing of the app's runs in it (no
+/// `script`); its sockets are told with `tell_frame`.
+pub fn NativeView::framed(self : NativeView) -> Bool {
+  self.framed
+}
+
+///|
+/// What one of the page's sockets did, to a framed site's frame: `[sid, what, …]` in JSON.
+pub fn NativeView::tell_frame(self : NativeView, message : String) -> Unit {
+  if self.id != 0 && !self.closed {
+    h_view_tell(self.id, 7, message)
+  }
 }
 
 ///|
@@ -492,6 +519,7 @@ pub fn NativeView::grab_frame(self : NativeView, ms : Double) -> Unit {
       abort(s)
     }
     outside_start(outside_grab, self.id, "a frame of view \{self.id} grabbed")
+    self.grab_since = view_now()
     h_view_control(self.id, 21, ms)
   }
 }
@@ -509,6 +537,7 @@ pub fn NativeView::grab_shown(self : NativeView, side : Double) -> Unit {
       abort(s)
     }
     outside_start(outside_grab, self.id, "the frame view \{self.id} shows grabbed")
+    self.grab_since = view_now()
     h_view_control(self.id, 22, side)
   }
 }
@@ -540,10 +569,30 @@ pub fn NativeView::grabbed(self : NativeView) -> Bytes? {
     _ => None
   }
   if got is Some(_) {
+    self.grab_since = -1.0
     answer_taken(outside_grab, self.id)
     outside_end(outside_grab, self.id)
   }
   got
+}
+
+///|
+/// When the grab going was asked for, by the app's clock (-1: none going): what decides how long to wait for its answer
+/// reads it (@kit.media_grab_stalled).
+pub fn NativeView::grab_since(self : NativeView) -> Double {
+  self.grab_since
+}
+
+///|
+/// The grab going given up, its answer no longer waited on: another may be asked at once. A host that can end it stops
+/// looking for that frame; one that answers all the same is not read until the next grab has been answered.
+pub fn NativeView::give_up_grab(self : NativeView) -> Unit {
+  if self.id != 0 && !self.closed && self.grab_since >= 0.0 {
+    self.grab_since = -1.0
+    answer_taken(outside_grab, self.id)
+    outside_end(outside_grab, self.id)
+    h_view_control(self.id, 23, 0.0)
+  }
 }
 
 ///|
@@ -603,9 +652,15 @@ pub fn NativeView::rate(self : NativeView, rate : Double) -> Unit {
 
 ///|
 /// -1 failed (or no such view here), -2 a player's format unsupported, -3 its file not parseable, -4 unsupported or
-/// damaged, 0 opening, 1 ready.
+/// damaged, 0 opening, 1 ready, 2 all file bytes delivered but still waiting for its first frame.
 pub fn NativeView::state(self : NativeView) -> Int {
   self.state.get()
+}
+
+///|
+/// When all file bytes were delivered while this player still awaited its first frame (-1 if not said).
+pub fn NativeView::decode_since(self : NativeView) -> Double {
+  self.decode_since
 }
 
 ///|
@@ -827,12 +882,28 @@ let views_stirred : Array[Int] = []
 let info_out : FixedArray[Double] = FixedArray::make(10, 0.0)
 
 ///|
+/// The moment a view's host said something, or the frames' clock where it says none.
+fn view_now() -> Double {
+  let at = view_moment()
+  if at >= 0.0 {
+    at
+  } else {
+    g().clock
+  }
+}
+
+///|
 /// How it stands, read of its host now into its signals: what reads them told where it changed.
 fn NativeView::stood(self : NativeView) -> Unit {
   if self.closed || self.id == 0 {
     return
   }
   let state = h_view_info(self.id, info_out)
+  if state == 2 && self.decode_since < 0.0 {
+    self.decode_since = view_now()
+  } else if state != 2 {
+    self.decode_since = -1.0
+  }
   @signals.start_batch()
   for k in 0..<self.info.length() {
     self.info[k].set(info_out[k])
@@ -843,7 +914,15 @@ fn NativeView::stood(self : NativeView) -> Unit {
 
 ///|
 /// Its host said how view `id` stands changed (hostcall.mbt's outside_stood): a frame, which reads it as it begins.
-fn view_stood(id : Int) -> Unit {
+fn view_stood(id : Int, state : Int) -> Unit {
+  if state == 2 {
+    let at = view_now()
+    for v in open_views {
+      if v.id == id && v.decode_since < 0.0 {
+        v.decode_since = at
+      }
+    }
+  }
   if !views_stirred.contains(id) {
     views_stirred.push(id)
   }
@@ -854,11 +933,6 @@ fn view_stood(id : Int) -> Unit {
 /// As a frame begins, before it is decided what it does again (frame_watch.mbt): each view whose host said how it
 /// stands changed read of it (its signals set: what reads them is built again).
 fn views_arrive() -> Unit {
-  // (a Tester's fake pages run what was sent to them once they are there, as a frame begins)
-  match fake.val {
-    Some(f) => for v in open_views { fake_scripts_flush(f, v.id) }
-    None => ()
-  }
   if views_stirred.is_empty() {
     return
   }
@@ -913,7 +987,7 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
       // on a run's log (MBUI_DRAW_LOG): where it was told to go, in device pixels, for the host's own saying where it
       // put it (VIEWAT) to be compared with (scripts/host_contract.sh HOST views): its rect, its clip, its roundest
       // corner, then each corner (top left, then round it)
-      if draw_logging() && fake.val is None && shown {
+      if draw_logging() && shown {
         let px = StringBuilder()
         let most = dmax(dmax(v.at[8], v.at[9]), dmax(v.at[10], v.at[11]))
         for x in [v.at[0], v.at[1], v.at[2], v.at[3], v.at[4], v.at[5], v.at[6], v.at[7], most, v.at[8], v.at[9], v.at[10], v.at[11]] {
@@ -1021,7 +1095,7 @@ fn Ctx::stack_views(self : Ctx) -> Unit {
   }
   // on a run's log (MBUI_DRAW_LOG): the order told, for the host's own saying how it stacked them (VIEWSTACK) to be
   // compared with (scripts/host_contract.sh HOST views)
-  if draw_logging() && fake.val is None {
+  if draw_logging() {
     h_log("VIEWSTACKTOLD " + ids.map(fn(id) { id.to_string() }).join(" "))
   }
 }
@@ -1034,11 +1108,13 @@ fn Ctx::stack_views(self : Ctx) -> Unit {
 fn Ctx::follow_holes(self : Ctx) -> Unit {
   let at : Map[Int, Int] = {}
   let a = self.inst
-  for k in 0..<self.ninst {
+  let mut k = 0
+  while k < self.ninst {
     let b = k * inst_size
     if a[b + 5] == 9.0 {
       at[a[b + 20].to_int() - @hostapi.view_tex_base] = b
     }
+    k = inst_after(a, k)
   }
   if at.is_empty() {
     return
@@ -1333,6 +1409,7 @@ fn NativeView::take_site(self : NativeView) -> Unit {
           _ => ()
         }
         v.keeps_cookies = flag("cookies")
+        v.framed = flag("frame")
         v.can_back = flag("back")
         v.can_forward = flag("forward")
         v.loading = flag("loading")
@@ -1396,6 +1473,7 @@ pub fn Pdf::close(self : Pdf) -> Unit {
     if src.has_prefix(prefix) {
       for e in list {
         h_image_free(e.id)
+        image_dropped(e)
       }
       gone.push(src)
     }
@@ -1507,10 +1585,11 @@ pub let wheel_mod_pinch : Int = 16
 
 ///|
 /// The box of `id` (given to it this frame) takes the pointer: a finger dragging on it keeps it pressed (`pressed`,
-/// `pointer`: a pan), nothing under it scrolls, and the wheel over it is kept for `wheel`.
-pub fn capture(c : Ctx, id : Int) -> Unit {
+/// `pointer`: a pan), nothing under it scrolls, and the wheel over it is kept for `wheel`. `zooms`: it zooms by a pinch
+/// (or a wheel with ⌃ held), which a browser's page then leaves to it (keep_zoom_wheel); else the page zooms by one.
+pub fn capture(c : Ctx, id : Int, zooms? : Bool = false) -> Unit {
   ignore(c)
-  captures[id] = true
+  captures[id] = zooms || captures.get(id).unwrap_or(false)
 }
 
 ///|

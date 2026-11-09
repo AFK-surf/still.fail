@@ -1,15 +1,16 @@
 #!/bin/sh
-# The determinism lint (tools/detlint, in MoonBit; docs/detlint.md, its main.mbt says how it is run): detlint [ROOT]
+# The determinism lint (tools/detlint, in MoonBit, its main.mbt says how it is run): detlint [ROOT]
 # [--update | --list RULE], ROOT this module when none is given. Built here only when there is none built from these
 # very sources (by content).
 D=$(cd "$(dirname "$0")" && pwd)
 T=$D/../tools
-B=$T/_build/native/release/build/detlint/detlint.exe
+TOOLS_SCRIPTS=$D; . "$D/tooltarget.sh"
+B=$T/_build/$TT/release/build/detlint/detlint.$TX
 src=$(cd "$T" && find detlint sys re rjson moon.mod moon.work -type f | LC_ALL=C sort | xargs cat | cksum)
 # (`key`: what it is built from, said: the key CI keeps the tool by, .github/actions/mbui-moonbit)
 [ "${1:-}" != key ] || { echo "$src" | tr ' ' -; exit 0; }
-if [ ! -x "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
-  (cd "$T" && env -u MOON_CC moon build --target native --release detlint >&2) || { echo "detlint: tools/detlint did not build" >&2; exit 1; }
+if [ ! -f "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
+  (cd "$T" && env -u MOON_CC moon build --target $TT --release detlint >&2) || { echo "detlint: tools/detlint did not build" >&2; exit 1; }
   echo "$src" > "$B.src"
 fi
-DETLINT_HOME=$D exec "$B" "$@"
+DETLINT_HOME=$D tool_exec "$B" "$@"

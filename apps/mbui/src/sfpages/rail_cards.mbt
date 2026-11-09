@@ -6,83 +6,83 @@
 // the core offers it (用量's).
 
 ///|
-/// Place `place`'s card of workspace `w` (chats, usage), as its core says it.
-pub fn rail_card(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit {
-  let card = (src.topic)("railCard", { "scope": Json::string(w.id), "place": Json::string(place) }).value
-  c.box(style=rc_box, fn() {
-    c.text(text(card, "head"), style=rc_head) |> ignore
-    let stats = items(card, "stats")
-    if stats.length() > 0 {
-      c.box(style=rc_stats, fn() {
-        for s in stats {
-          let s = Some(s)
-          c.box(style=rc_stat, fn() {
-            c.text(text(s, "value"), style=rc_value.then(toned(text(s, "tone")))) |> ignore
-            c.text(text(s, "label"), style=rc_label) |> ignore
-          })
-          |> ignore
-        }
+/// Place `place`'s card of the workspace `ws` says (chats, usage) as nodes in `parent`, as its core says it now: its
+/// line, its figures side by side, the last 7 days as bars, its lines, 分享卡片 where the core offers it.
+pub fn rail_card_node(parent : @view.View, src : Source, ws : () -> Workspace?, place : String) -> Unit {
+  let card = fn() {
+    match ws() {
+      Some(w) => src.topic("railCard", { "scope": Json::string(w.id), "place": Json::string(place) }).get().value
+      None => None
+    }
+  }
+  parent.box(fn(b) {
+    @sf.style_node(b, fn() { rc_box })
+    @sf.words_node(b, fn() { text(card(), "head") }, fn() { rc_head }) |> ignore
+    b.show(fn() { items(card(), "stats").length() > 0 }, fn(row) {
+      @sf.style_node(row, fn() { rc_stats })
+      row.each(fn() { items(card(), "stats") }, fn(s) { text(Some(s), "label") }, fn(st, s) {
+        @sf.style_node(st, fn() { rc_stat }, in_row=true)
+        @sf.words_node(st, fn() { text(Some(s.get()), "value") }, fn() { rc_value.then(toned(text(Some(s.get()), "tone"))) })
+        |> ignore
+        @sf.words_node(st, fn() { text(Some(s.get()), "label") }, fn() { rc_label }) |> ignore
       })
-      |> ignore
-    }
-    let days = items(card, "days")
-    if days.length() > 0 {
-      rc_days(c, days)
-    }
-    let rows = items(card, "rows")
-    if rows.length() > 0 {
-      c.box(style=rc_rows, fn() {
-        for r in rows {
-          rc_row(c, Some(r))
-        }
-      })
-      |> ignore
-    }
-    if flag(card, "share") {
-      let id = c.id("rail/share")
-      if c.clicked(id) {
-        share_card_open(src, w)
-      }
-      c.box(style=rc_share, id~, label=@sf.t("web-main.stations.shareCard"), fn() {
-        @sf.icon(c, "photo", size=16.0, color=@sf.theme().p.text) |> ignore
-        c.text(@sf.t("web-main.stations.shareCard"), style=rc_share_words) |> ignore
-      })
-      |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
-/// What a line is made of: its name, what is at its end (a model's, what it cost).
-fn rc_row(c : @ui.Ctx, r : Json?) -> Unit {
-  c.box(style=rc_line, fn() {
-    c.box(style=rc_name_room, fn() { c.text(text(r, "name"), style=rc_name) |> ignore }) |> ignore
-    c.text(text(r, "value"), style=rc_end) |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The last 7 days, a bar each as tall as its share of the most on a day (3 at least: a day with nothing still seen),
-/// today's in the words' colour, each day's date under it.
-fn rc_days(c : @ui.Ctx, days : Array[Json]) -> Unit {
-  c.box(style=rc_days_row, fn() {
-    for d in days {
-      let d = Some(d)
-      let today = flag(d, "today")
-      let h = dmax(rc_bar_least, number(d, "share") * rc_bars_h)
-      c.box(style=rc_day, fn() {
-        c.box(style=rc_bar_room, fn() {
-          c.box(style=(if today { rc_bar_today } else { rc_bar }).then(@ui.style(h=Fixed(h))), fn() {  }) |> ignore
+    })
+    b.show(fn() { items(card(), "days").length() > 0 }, fn(days) { rc_days_node(days, fn() { items(card(), "days") }) })
+    b.show(fn() { items(card(), "rows").length() > 0 }, fn(rows) {
+      @sf.style_node(rows, fn() { rc_rows })
+      rows.each(fn() { items(card(), "rows") }, fn(r) { text(Some(r), "name") }, fn(line, r) {
+        @sf.style_node(line, fn() { rc_line })
+        line.box(fn(n) {
+          @sf.style_node(n, fn() { rc_name_room }, in_row=true)
+          @sf.words_node(n, fn() { text(Some(r.get()), "name") }, fn() { rc_name }) |> ignore
         })
         |> ignore
-        c.text(text(d, "label"), style=if today { rc_day_today } else { rc_day_label }) |> ignore
+        @sf.words_node(line, fn() { text(Some(r.get()), "value") }, fn() { rc_end }) |> ignore
       })
+    })
+    b.show(fn() { flag(card(), "share") }, fn(k) {
+      let label = fn() { @sf.t("web-main.stations.shareCard") }
+      @sf.style_node(k, fn() { rc_share })
+      k
+      .presses(Is(true))
+      .focusable(Is(true))
+      .says(By(fn() { Some(@view.said(Button, label=label())) }))
+      .on_press(fn() {
+        match @signals.untracked(ws) {
+          Some(w) => share_card_open(src, w)
+          None => ()
+        }
+      })
+      // (its ground the hover's as the hand is on it: rc_share's hovered)
+      .ground(By(fn() { if @sf.lit_node(k) { @sf.theme().p.hover } else { @sf.alpha(@sf.theme().p.text, 0.05) } }))
       |> ignore
-    }
+      @sf.icon_node(k, "share", 16.0, By(fn() { @sf.theme().p.text })) |> ignore
+      @sf.words_node(k, label, fn() { rc_share_words }) |> ignore
+    })
   })
   |> ignore
+}
+
+///|
+/// The last 7 days as nodes in `row` (`days` as the core says them now), a bar each as tall as its share of the most
+/// on a day (3 at least: a day with nothing still seen), today's in the words' colour, each day's date under it.
+fn rc_days_node(row : @view.View, days : () -> Array[Json]) -> Unit {
+  @sf.style_node(row, fn() { rc_days_row })
+  row.each(days, fn(d) { text(Some(d), "label") }, fn(day, d) {
+    let today = fn() { flag(Some(d.get()), "today") }
+    @sf.style_node(day, fn() { rc_day }, in_row=true)
+    day.box(fn(room) {
+      @sf.style_node(room, fn() { rc_bar_room })
+      room.box(fn(bar) {
+        @sf.style_node(bar, fn() { if today() { rc_bar_today } else { rc_bar } })
+        bar.height(By(fn() { Some(dmax(rc_bar_least, number(Some(d.get()), "share") * rc_bars_h)) })) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+    @sf.words_node(day, fn() { text(Some(d.get()), "label") }, fn() { if today() { rc_day_today } else { rc_day_label } })
+    |> ignore
+  })
 }
 
 ///|
@@ -193,10 +193,12 @@ let rc_day_label : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wra
 let rc_day_today : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=Fg, wrap=false)
 
 ///|
-/// 分享卡片: a block across the card at its foot, round as its corners (login_card's lc_open).
+/// 分享卡片: a block across the card at its foot, out past its words to its padding (hover_words_in: the panel's 6 from
+/// its edges), 36 high, a small panel's row: a capsule concentric with its corners there (6 and 18, 24; login_card's lc_open);
+/// on the words' colour at 5%, the hover's as the hand is on it (rail_card_node).
 // kept across runs: a value (no field of it changes)
-let rc_share : @ui.Style = @ui.css(
-  "row w=Full h=S8 mt=S1 px=S3 gap=S1_5 radius=Inner bg=A(Fg,O5) align=ACenter justify=JCenter hovered{bg=Hover}",
+let rc_share : @ui.Style = @ui.css("row w=Full h=S9 mt=S1 px=S3 gap=S1_5 radius=Inner align=ACenter justify=JCenter").then(
+  @ui.style(mx=@sf.room_of(-hover_words_in), mb=@sf.room_of(-hover_words_in)),
 )
 
 ///|

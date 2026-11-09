@@ -2,47 +2,6 @@
 // path's kind, the environment, the working directory, stdout and stderr, an exit.
 
 ///|
-extern "C" fn c_ok() -> Int = "tsys_ok"
-
-///|
-#borrow(path)
-extern "C" fn c_read(path : Bytes) -> Bytes = "tsys_read"
-
-///|
-#borrow(path, data)
-extern "C" fn c_write(path : Bytes, data : Bytes) -> Int = "tsys_write"
-
-///|
-#borrow(path)
-extern "C" fn c_kind(path : Bytes) -> Int = "tsys_kind"
-
-///|
-#borrow(path)
-extern "C" fn c_mkdir(path : Bytes) -> Int = "tsys_mkdir"
-
-///|
-#borrow(path)
-extern "C" fn c_remove(path : Bytes) -> Int = "tsys_remove"
-
-///|
-#borrow(path)
-extern "C" fn c_list(path : Bytes) -> Bytes = "tsys_list"
-
-///|
-#borrow(name)
-extern "C" fn c_getenv(name : Bytes) -> Bytes = "tsys_getenv"
-
-///|
-extern "C" fn c_getcwd() -> Bytes = "tsys_getcwd"
-
-///|
-#borrow(s)
-extern "C" fn c_out(s : Bytes, err : Int) -> Unit = "tsys_out"
-
-///|
-extern "C" fn c_exit(code : Int) -> Unit = "tsys_exit"
-
-///|
 fn enc(s : String) -> Bytes {
   @utf8.encode(s)
 }
@@ -216,17 +175,10 @@ pub fn abspath(p : String) -> String {
 }
 
 ///|
-#borrow(path)
-extern "C" fn c_is_link(path : Bytes) -> Int = "tsys_is_link"
-
-///|
 /// Whether path is a symbolic link (not followed)
 pub fn is_link(path : String) -> Bool {
   c_is_link(enc(path)) != 0
 }
-
-///|
-extern "C" fn c_read_stdin() -> Bytes = "tsys_read_stdin"
 
 ///|
 /// What stdin gives, to its end
@@ -323,10 +275,6 @@ pub fn glob(root : String, pat : String) -> Array[String] {
   }
   out
 }
-
-///|
-#borrow(cmd)
-extern "C" fn c_run_out(cmd : Bytes) -> Bytes = "tsys_run_out"
 
 ///|
 /// A shell command's stdout, None when it could not be run or did not end with 0

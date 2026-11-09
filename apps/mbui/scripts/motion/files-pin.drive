@@ -5,6 +5,6 @@ until 设计稿
 wait 600
 tap 添加到收藏
 wait 900
-tap Studio
+tap Willow
 wait 1500
 exit

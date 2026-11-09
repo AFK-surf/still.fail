@@ -1,4 +1,4 @@
-// A message's files on the desktop (ember web/src/Chat.tsx Files, FileItem, MessageFileCard, imageBox.ts; Chat.css.ts
+// A message's files on the desktop (still.fail web/src/Chat.tsx Files, FileItem, MessageFileCard, imageBox.ts; Chat.css.ts
 // msgFiles, msgImage, msgImageWait, msgVideo, fileCardOpen; styles/later.css.ts): side by side, wrapping 6 apart; an
 // image in a box of its own proportions (known before it loads), brushed in from its top once decoded; a video's
 // still on black with its capsule (its length) in its foot's corner; anything else a card. Pressed, each opens in the file viewer
@@ -82,9 +82,30 @@ fn media_content(c : @ui.Ctx, p : MediaPicture, w : Double, h : Double, fit : @u
 }
 
 ///|
-/// A picture held by a composer that has not got a message attachment for it yet.
-pub fn local_picture(c : @ui.Ctx, key : String, name : String, w : Double, h : Double) -> Unit {
-  media_content(c, local_media(key, file_kind(name)), w, h, FitCover, 0.0)
+/// The station moves a staged file from its uploads folder into the session's uploads folder when its message is
+/// accepted, keeping its unique stored name. Only those paths can be matched across that move.
+fn staged_file_name(key : String) -> String {
+  let path = key.replace_all(old="\\", new="/")
+  match path.rev_find("/") {
+    Some(i) => {
+      let parent = path.view(end_offset=i).to_string()
+      if @sfbase.base_name(parent) == "uploads" { @sfbase.base_name(path) } else { "" }
+    }
+    None => ""
+  }
+}
+
+///|
+/// Where this message's file lands: first its exact key, then a staged file's unchanged stored name if it identifies
+/// exactly one file on both sides of the handoff. Ambiguous names and unrelated paths keep their own keys.
+fn file_flight_key(key : String, files : Array[String], flying : Array[String]) -> String {
+  if flying.contains(key) { return key }
+  let name = staged_file_name(key)
+  if name == "" || files.filter(fn(k) { staged_file_name(k) == name }).length() != 1 {
+    return key
+  }
+  let matches = flying.filter(fn(k) { staged_file_name(k) == name })
+  if matches.length() == 1 { matches[0] } else { key }
 }
 
 ///|
@@ -132,6 +153,13 @@ pub fn message_files(
     }
   }
   let column = if mine { files_column_end } else { files_column }
+  let flight = flight_here(here)
+  let flying_keys = match flight {
+    Some(f) if landing_key == "" => f.files.map(fn(ff) { ff.key })
+    None => []
+    _ => []
+  }
+  let file_keys = if flying_keys.length() > 0 { list.map(fn(a) { @sfbase.file_key(a) }) } else { [] }
   // (the gap between rows the room the ✕ hangs in past the next's top on top of their own, out to the scale's next step)
   let column = if hung > 0.0 {
     column.then(@ui.style(pt=@sf.room_of(hung), gap=@sf.room_of(scale_up(files_gap + hung))))
@@ -145,14 +173,20 @@ pub fn message_files(
           // (each in a box of its own: where a file sent from the composer flies to, sfbase's flight.mbt)
           // (as wide as laid out for it: a card does not give way to the picture beside it)
           let a = list[i]
-          let key = if landing_key == "" { @sfbase.file_key(a) } else { landing_key }
+          let key = if landing_key != "" {
+            landing_key
+          } else if flying_keys.length() > 0 {
+            file_flight_key(file_keys[i], file_keys, flying_keys)
+          } else {
+            @sfbase.file_key(a)
+          }
           let media = match file_kind(a.name) {
             "image" | "video" => Some(message_media(c, src, here.station, owner_of(here, a), a))
             _ => None
           }
           let item = c.box(style=@ui.style(w=Fixed(widths[i] + hung)), fn() { file_item(c, src, here, a, widths[i], by~, landing_key=key, media~, corner~, at~) })
           let paint = media.map(fn(p) { fn(w, h, fit, radius) { media_content(c, p, w, h, fit, radius) } })
-          match flight_here(here) {
+          match flight {
             Some(f) => flight_landing(
               c, f, item, key, share=landing_share(a),
               top_crop=file_kind(a.name) == "image" && tall_image_cropped(a), paint~,
@@ -196,31 +230,48 @@ fn open_file(here : MessageHere, a : Attachment, at? : String = "") -> Unit {
 }
 
 ///|
-/// A file a message of agent `agent` names by its path opened in the preview (Peeks.tsx FileRef open), read through
-/// the agent's session as it is now; not a directory.
-fn open_named(here : MessageHere, agent : String, path : String) -> Unit {
+/// The last request to open a named path: a late answer cannot replace a later choice.
+let named_open_serial : Ref[Int] = Ref(0)
+
+///|
+/// A file an agent names by its path: check it in the agent's session before opening it. A path in code can name
+/// something that was never a file, or one removed since the pointer last rested on it.
+fn open_named(src : Source, station : String, agent : String, path : String) -> Unit {
+  named_open_serial.val += 1
+  let serial = named_open_serial.val
   guard agent != "" && !path.has_suffix("/") else { return }
-  let a = attachment_of({ "name": Json::string(stored_name(path)), "path": Json::string(path) })
-  open_preview(here.station, agent, a, named=true)
+  let page = @sfbase.app.nav.top()
+  let params : Map[String, Json] = {
+    "station": Json::string(station),
+    "key": Json::string(agent),
+    "path": Json::string(path),
+  }
+  (src.call)("file.peek", Json::object(params), fn(answer) {
+    guard named_open_serial.val == serial && @sfbase.app.nav.top() == page && @sfbase.viewer.get() is None else { return }
+    match answer {
+      Ok(Object(_) as file) if text(Some(file), "kind") != "" && text(Some(file), "kind") != "dir" => {
+        let a = attachment_of({ "name": Json::string(stored_name(path)), "path": Json::string(path) })
+        open_preview(station, agent, a, named=true)
+      }
+      // (not opened is said, as the web's FileRef says a failed open: the press is not left without an answer)
+      Ok(_) => toast_later(@sf.t("web-main.preview.openFailed", args=[("name", stored_name(path)), ("error", @sf.t("web-main.preview.openFolder"))]))
+      Err(e) => toast_later(@sf.t("web-main.preview.openFailed", args=[("name", stored_name(path)), ("error", text(Some(e), "message"))]))
+    }
+  })
 }
 
 ///|
-/// What a file is by its name (FilePreview.tsx kindOf, as the chat tells them apart): image, video, or anything else.
+/// What a file is by its name (as the chat tells them apart): image, video, or anything else.
 pub fn file_kind(name : String) -> String {
-  let lower = @sf.lower(name)
-  let ext = match lower.rev_find(".") {
-    Some(i) if i > 0 => lower.view(start_offset=i + 1).to_string()
-    _ => ""
-  }
-  match ext {
-    "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "avif" | "bmp" | "ico" => "image"
-    "mp4" | "m4v" | "webm" | "mov" | "ogv" => "video"
+  match @sfbase.preview_kind(name).0 {
+    Some(@sfbase.KImage) => "image"
+    Some(@sfbase.KVideo) => "video"
     _ => ""
   }
 }
 
 ///|
-/// The box an image takes in the chat, known before it loads (imageBox.ts): its own proportions (sent with it, or its
+/// The box an image takes in the chat, known before it loads: its own proportions (sent with it, or its
 /// ThumbHash's) within 360×300, a tiny one drawn to 40 on its longer side; a strip thinner than `least` letterboxed in
 /// a box that thick; 240×160 for one sent before sizes were kept. An image at the height limit is cropped to at least
 /// `min_side` across, one at the width limit to at least `min_side` high. (width, height, letterboxed)
@@ -279,7 +330,7 @@ fn tall_image_cropped(a : Attachment) -> Bool {
 
 ///|
 /// The share of its box's width and height a picture takes in it (image_box's, `least` thick): all of it, or a
-/// letterboxed one's, its own proportions fitted inside, centred (imageBox.ts letterbox).
+/// letterboxed one's, its own proportions fitted inside, centred.
 pub fn picture_share(a : Attachment, least : Double, min_side? : Double = 0.0) -> (Double, Double) {
   let (bw, bh, letterbox) = image_box(a, least, min_side~)
   match own_size(a) {
@@ -332,6 +383,25 @@ fn quote_of(here : MessageHere, a : Attachment, owner : String, by : (String, St
 }
 
 ///|
+/// Download this attachment through the core, with the chat and original attachment so the transfer leads back here.
+fn download_option(src : Source, here : MessageHere, a : Attachment, owner : String) -> @sf.MenuItem? {
+  let (station, name, size) = (here.station, stored_name(a.path), a.size)
+  let going_up = a.upload != "" && a.path == @sfbase.upload_path(a.upload)
+  let active = flag(download_of(src, station, owner, name), "active")
+  let from : Map[String, Json] = { "session": Json::string(here.session), "file": attachment_json(a, a.owner) }
+  match here.view.thread {
+    Some(n) => from["thread"] = Json::number(n)
+    None => ()
+  }
+  Some(@sf.menu_item_of(
+    @sf.t("web-main.preview.download"),
+    fn() { download_start(src, station, owner, name, size, from=Json::object(from)) },
+    icon="download",
+    disabled=going_up || name == "" || active,
+  ))
+}
+
+///|
 /// A message's file as the chat draws it, by its kind.
 fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, by~ : (String, String, String)?, landing_key? : String = "", media? : MediaPicture? = None, corner? : Double = @sf.message_file_corner, at? : String = "") -> Unit {
   match file_kind(a.name) {
@@ -353,7 +423,7 @@ fn file_drawn(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 ///|
 /// An image (FileItem's image): in its box on the neutral ground, what it waits on until it is decoded (a field of its
 /// colours), then brushed in from its top; one sent from here the picture it was picked as, there at once; one that
-/// cannot be had says so. Pressed, the preview; right-clicked, 复制图片.
+/// cannot be had says so. Pressed, the preview; held or right-clicked, 下载 and 复制图片.
 fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, p : MediaPicture, by~ : (String, String, String)?, corner~ : Double, at~ : String) -> Unit {
 
   let place = @sfbase.thumb_occurrence(here.station, here.session, at)
@@ -367,15 +437,16 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   // could not be had for want of its station (not its station having none): pressed, asked again
   let id = @sfbase.file_image_id(here.station, owner, stored_name(a.path))
   let unreached = p.unreached
-  if c.clicked(open) {
+  c.on_press(open, fn() {
     if unreached {
       src.images.again(here.station)
     } else {
       open_file(here, a, at~)
     }
-  }
+  })
   let thumb = @sfbase.thumb_place(here.station + "/" + owner + "/" + a.path, here.station, here.session, at)
-  file_menu(c, open, key, quote=quote_of(here, a, owner, by))
+  let downloading = download_of(src, here.station, owner, stored_name(a.path))
+  file_menu(c, open, key, quote=quote_of(here, a, owner, by), more=[download_option(src, here, a, owner)])
   // the picture covering the whole box; a letterboxed one's covering its own proportions centred in it, all it and
   // what it waits on take, the box's corners cutting it (imageBox.ts letterbox; any: its frame's, concentric with
   // what holds it where it is in a corner of that, a quote's card)
@@ -401,7 +472,7 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   // breathing gently, a page's bones' breath (the user, 2026-10-30: 整个 placeholder 的轻微加载动态), back to whole over
   // dur_ms once it is here
   let asked = key == "" && !going_up
-  let breath = @motion.animate(c, "msg-breath/" + thumb, if asked { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
+  let breath = @motion.told(c, "msg-breath/" + thumb, if asked { 1.0 } else { 0.0 }, spec=@motion.tween(@sf.dur_ms, ease=Out))
   let b = c.box(style=image_box_style(w, h, key != "!" || letterbox, corner), id=open, fn() {
     if key == "!" {
       media_content(c, p, w, h, fit, 0.0)
@@ -417,7 +488,10 @@ fn image_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
       @sf.breathe(c, stand_in, share=breath)
     }
     // how far it has come, at its foot's end
-    if asked {
+    if flag(downloading, "active") {
+      let total = number(downloading, "size")
+      image_coming(c, "msg-download/" + thumb, Some((number(downloading, "loaded"), if total > 0.0 { Some(total) } else { None })), corner)
+    } else if asked {
       image_coming(c, "msg-coming/" + thumb, src.images.coming(id), corner)
     }
   })
@@ -489,10 +563,9 @@ let coming_pill_h : Double = 18.0
 let coming_ring_in : Double = (coming_pill_h - coming_ring) / 2.0
 
 ///|
-/// How far the pill is from the picture's sides and foot: concentric with its corner, the ladder's (8 in, its ends were
-/// rounder than that corner left room for, which the corners' check refused); where the corner is too square for it,
-/// 8 in.
-let coming_in : Double = @sf.capsule_fit(@sf.message_file_corner, coming_pill_h, coming_alone_in)
+/// How far the pill is from the picture's sides and foot: concentric with its corner (26 less its half: 17; 8 in, its
+/// ends were rounder than that corner left room for, which the corners' check refused).
+let coming_in : Double = @ui.capsule_in(@sf.message_file_corner, coming_pill_h)
 
 ///|
 /// How far the pill is from the picture's sides and foot where no corner leads it.
@@ -524,7 +597,6 @@ let coming_pill : @ui.Style = @ui.style(
   align=ACenter,
 )
 
-
 ///|
 // kept across runs: a value (no field of it changes)
 let coming_words : @ui.TextStyle = @ui.text_style(size=Caption, color=@sf.white_ink, wrap=false, tabular=true)
@@ -544,7 +616,7 @@ fn image_box_style(w : Double, h : Double, shown : Bool, corner : Double) -> @ui
 /// A video (FileItem's video): its still on black (the frame the preview was left at, else the station's), its
 /// capsule in its foot's start corner: a play mark and how long it is; while the core downloads it, or brings it
 /// (loaded, or after everything else once opened and let go: fill.ts), how far there. Held or right clicked, its menu:
-/// 引用; 加载 (brought onto this device by the core before everything else, from what of it is here, whatever page
+/// 引用, 下载; 加载 (brought onto this device by the core before everything else, from what of it is here, whatever page
 /// shows, to play from here at once), 停止加载 while it is brought either way (what came stays).
 fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w : Double, p : MediaPicture, landing_key : String, by~ : (String, String, String)?, corner~ : Double, at~ : String) -> Unit {
 
@@ -553,8 +625,10 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
   let owner = owner_of(here, a)
   // (still going up: no station has it to play or ask its still of yet)
   let going_up = a.upload != "" && a.path == @sfbase.upload_path(a.upload)
-  if c.clicked(open) && !going_up {
-    open_file(here, a, at~)
+  if !going_up {
+    c.on_press(open, fn() {
+      open_file(here, a, at~)
+    })
   }
   let name = stored_name(a.path)
   let saving = download_of(src, here.station, owner, name)
@@ -579,7 +653,9 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
       ),
     ]
   }
-  file_menu(c, open, "", quote=quote_of(here, a, owner, by), more=load)
+  let more = [download_option(src, here, a, owner)]
+  more.append(load)
+  file_menu(c, open, "", quote=quote_of(here, a, owner, by), more~)
   // (its name, which nothing over its picture says)
   @sf.tip(c, "msg-file/" + place + "/" + @sfbase.file_key(a), open, a.name, repeats=true)
   let (bw, bh, letterbox) = image_box(a, video_least)
@@ -648,7 +724,7 @@ fn video_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, w :
 
 ///|
 /// Any other file as a card (MessageFileCard): pressed, the preview; while the core downloads it, or brings it after
-/// everything else once opened and let go (fill.ts), how far in its size's place, ✕ at its end to call it off; failed, why, ↻ to ask it again. Held or right clicked, its menu (引用).
+/// everything else once opened and let go (fill.ts), how far in its size's place, ✕ at its end to call it off; failed, why, ↻ to ask it again. Held or right clicked, its menu (引用, 下载).
 fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ : (String, String, String)?, at~ : String) -> Unit {
   let owner = owner_of(here, a)
   let (dl, kept) = card_coming(src, here, a)
@@ -656,13 +732,13 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ 
   let failed = text(dl, "state") == "failed"
   let place = @sfbase.thumb_occurrence(here.station, here.session, at)
   let key = "msg-card/" + place + "/" + @sfbase.file_key(a)
-  file_menu(c, c.id(key), "", quote=quote_of(here, a, owner, by))
-  let done = @sf.file_card(
+  file_menu(c, c.id(key), "", quote=quote_of(here, a, owner, by), more=[download_option(src, here, a, owner)])
+  let id = text(dl, "id")
+  @sf.file_card(
     c,
     key,
     a.name,
     a.size,
-    path=a.path,
     error=if failed && !active { text(dl, "statusText") } else { "" },
     download=if active { Some((number(dl, "progress"), text(dl, "statusText"))) } else { None },
     remove=active,
@@ -670,15 +746,15 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ 
     open=true,
     remove_label=if kept is Some(_) { @sf.t("web-pages.files.stopKeeping") } else { @sf.t("web-main.file.cancelDownload") },
     retry_label=@sf.t("web-main.file.retryDownload"),
+    on_press=fn(on) {
+      match on {
+        Remove => if kept is Some(_) { keeping_stop(src, id) } else { download_cancel(src, id) }
+        Retry => download_retry(src, id)
+        Open => open_file(here, a, at~)
+        Restore => ()
+      }
+    },
   )
-  let id = text(dl, "id")
-  if done.removed {
-    c.tell(key + "/cancel", fn() { if kept is Some(_) { keeping_stop(src, id) } else { download_cancel(src, id) } })
-  } else if done.retried {
-    c.tell(key + "/retry", fn() { download_retry(src, id) })
-  } else if done.opened {
-    open_file(here, a, at~)
-  }
 }
 
 ///|
@@ -752,9 +828,9 @@ pub fn image_reveal(
   let p = match way {
     Some(a) if ready => {
       if a.target() == 0.0 {
-        a.animate(1.0, @motion.tween(reveal_ms, ease=Linear))
+        a.animate(c, 1.0, @motion.tween(reveal_ms, ease=Linear))
       }
-      a.get()
+      a.get(c)
     }
     Some(_) => 0.0
     None => 1.0
@@ -838,6 +914,7 @@ let reveals : Map[String, @motion.Anim?] = {}
 ///|
 /// What the messages keep of their own, let go (the package's reset).
 fn message_reset() -> Unit {
+  named_open_serial.val += 1
   reveals.clear()
   notices_open.clear()
 }
@@ -871,7 +948,7 @@ let image_px_most : Double = 8192.0
 
 ///|
 /// The least an image's box is across (16) and a video's (96: room round its capsule); the box of one sent before
-/// sizes were kept (240×160); the most (360×300); a tiny one drawn to 40 on its longer side (imageBox.ts).
+/// sizes were kept (240×160); the most (360×300); a tiny one drawn to 40 on its longer side.
 pub let image_least : Double = 16.0
 
 ///|

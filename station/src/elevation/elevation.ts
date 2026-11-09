@@ -1,4 +1,4 @@
-// Running a Windows station as the machine's administrator (docs/station-ts-native.md, "以管理员运行"), switched on and
+// Running a Windows station as the machine's administrator ("以管理员运行"), switched on and
 // off from its page rather than only by `install.ps1 -Admin`. The station is never stopped before the change can take:
 // - Windows asks (UAC) in a PowerShell of its own, which the station ends after ASK_MS: a prompt nobody can answer (on
 //   the secure desktop, which no remote screen shows) leaves the station as it was, said `unanswered`; one refused,

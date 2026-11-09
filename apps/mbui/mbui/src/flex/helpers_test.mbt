@@ -16,7 +16,7 @@ fn check(
 }
 
 ///|
-/// Yoga's intrinsicSizeMeasureFunc (javascript/tests/tools/utils.ts): text
+/// Yoga's intrinsicSizeMeasureFunc: text
 /// whose characters are 10 × 10, wrapping at spaces.
 fn text_measure(text : String, row~ : Bool) -> @flex.MeasureFn {
   fn(width, wm, height, hm) {

@@ -1,4 +1,4 @@
-// A stand-in for Feishu on a local port (docs/feishu.md「测试」): its OpenAPI (each call recorded and answered by the
+// A stand-in for Feishu on a local port (「测试」): its OpenAPI (each call recorded and answered by the
 // test), its long connection (/callback/ws/endpoint gives a socket on the same port, frames as Feishu encodes them;
 // the test sends events down it and sees what the station acknowledges), and the app registration's device flow.
 // Nothing reaches the real Feishu.

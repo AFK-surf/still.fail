@@ -9,6 +9,7 @@ import { answers, apply, call, subscribe, v } from "./helpers.ts";
 import { CoreFiles, PageFiles } from "../src/hosts/file-port.ts";
 import { FileSource } from "../src/file-source.ts";
 import { CoreError } from "../src/error.ts";
+import { flush } from "../src/testing.ts";
 import { Raw, stationReplies, started } from "./station-fixture.ts";
 import { HostWire } from "../src/station/wire.ts";
 import { Requests } from "../src/station/requests.ts";
@@ -175,7 +176,7 @@ test("desktop_files_reach_upload_and_release_on_success_or_removal_after_failure
   send(102);
   page.close();
   await t.settle();
-  assert.match(v(t.values, 1).files[1].error, /no longer available/);
+  assert.match(v(t.values, 1).files[1].error, /^image\.png 的上传源已丢失/);
   assert.equal(v(t.values, 1).uploading, false);
   assert.deepEqual(released, [1]);
   await t.ask("remove", { key: "ws/st:k", id: "f102" });
@@ -213,6 +214,30 @@ async function setupBare() {
   };
   return { ...s, ui, values, settle, ask, watch };
 }
+
+test("reopening_before_the_composer_flush_replays_the_old_cache_then_the_same_revision_edit", async () => {
+  const t = await setup();
+  const key = "new:ws";
+  await t.watch(1, key);
+  const before = v(t.values, 1);
+  call(t.core, t.ui, 101, "composer.text", { key, text: "local edit" });
+  t.core.receive(t.ui, { kind: "unsubscribe", id: 1, unsubscribe: true });
+  // Run the call and its answer without advancing the coalescing clock that sends topic changes.
+  await flush();
+  const ack = answers(t.host.takeEmitted(), 101);
+  assert.deepEqual(ack?.ok, { version: before.version });
+  subscribe(t.core, t.ui, 2, { topic: "composer", key });
+  const opened = t.host.takeEmitted().map(([, message]) => message as J).find((message) => message.id === 2);
+  assert.equal(opened?.value?.text, before.text, "the new subscriber receives the previously sent cache first");
+  assert.equal(opened.value.rev, before.rev);
+  assert.equal(opened.value.version, before.version);
+  t.values.set(2, opened.value);
+  await t.settle();
+  assert.equal(v(t.values, 2).text, "local edit");
+  assert.equal(v(t.values, 2).rev, before.rev);
+  assert.equal(v(t.values, 2).version, before.version);
+  t.core.close();
+});
 
 test("what_is_written_shows_with_what_it_can_do_and_is_kept_as_the_chats_draft", async () => {
   const t = await setup();

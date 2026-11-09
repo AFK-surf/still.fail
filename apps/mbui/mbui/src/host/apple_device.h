@@ -117,7 +117,7 @@ static BOOL clip_is_png(NSData *d) {
   return d.length >= 8 && memcmp(d.bytes, sig, 8) == 0;
 }
 
-// A picture's bytes (another kind than PNG) as PNG, within the bounds (still.fail's ScreenClips.kt asPng).
+// A picture's bytes (another kind than PNG) as PNG, within the bounds.
 static int clip_make_png(NSData *src, NSData **out) {
   if (src.length == 0) return CLIP_UNREADABLE;
   if (clip_is_png(src)) {
@@ -306,7 +306,7 @@ void mb_host_keep_awake(int32_t on) {
 }
 
 // device.mbt's haptic_*: long press, context click, a handle moved, confirm, reject, a key tapped.
-// the input method's action for the field about to type (hostapi ime_action: 0 none, 1 search): iOS's return key
+// the input method's action for the field about to type (hostapi ime_action: 0 none, 1 search, 2 an address's, 3 a number's, 4 a secret's): iOS's keyboard and return key
 // (ios_app.m returnKeyType), the keyboard told again as it changes; nothing on a Mac
 static int32_t ime_action_kind;
 void mb_host_ime_action(int32_t kind) {

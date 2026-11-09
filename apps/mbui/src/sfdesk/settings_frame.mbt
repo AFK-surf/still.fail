@@ -1,4 +1,4 @@
-// The settings as the desktop has them (ember web/src/cloud/settings.tsx SettingsPage, SettingsNav): the sidebar of
+// The settings as the desktop has them (SettingsNav): the sidebar of
 // their pages by where they act, and the page picked beside it: the desktop's own ported from the web's (account.mbt,
 // notifications.mbt, …, in settings_page.mbt's frame), the others the settings' package's (src/sfapp/settings) in the
 // wide frame's scale until they are ported. What both read and call (the core's calls, the models) is that
@@ -31,18 +31,16 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, route : Route) -> Unit
   }
   @settings.frame(core, here)
   settings_fixture(src, core)
-  match route {
-    NewProfile(a) => add_profile_page(c, core, here, a)
-    _ => @settings.page(c, core, here, route)
-  }
+  @settings.page(c, core, here, route)
 }
 
 ///|
 /// The settings' pages, one for every frame, by route: drawn in the frame it is shown in (the Small stack's, the wide
-/// frame's pane: back, the room over and under it). False for a route whose pages are not one yet (its frame draws its
+/// frame's pane: back, the room over and under it). False for a route whose page every frame makes once in its place
+/// (关于, 更新日志, 记忆, 一台 station 的记忆, 用量, 价目表: pane_made, tape_made, narrow_made), and for one whose pages are not one yet (its frame draws its
 /// own copy).
 pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, frame : PageFrame) -> Bool {
-  if !(route is (Home | Appearance | Fonts | BarSettings | About | Changelog | Memories | Memory(_) | AutoDecisions | Permissions | UsagePrices(_) | Usage | Archiving | StationArchiving(_) | Notifications | Shortcuts | Me | Workspace | Security | SecurityOpen | Vault | VaultItems | VaultItem(_, _) | Connects(_) | Connect(_, _) | Station(_) | Profile(_, _) | LocalStation | MemoryDoc(_, _, _) | AutoCompletion | AutoPolicy(_))) {
+  if !(route is (Fonts | BarSettings | Me | Vault | VaultItem(_, _))) {
     return false
   }
   let core = settings_core(src, w)
@@ -50,42 +48,11 @@ pub fn setting_route(c : @ui.Ctx, src : Source, w : Workspace, route : Route, fr
   @settings.frame(core, here)
   settings_fixture(src, core)
   match route {
-    // the settings' list as a page of its own (a small screen's: sfpages' settings_list.mbt), a row pressed its page
-    // pushed
-    Home =>
-      @sf.page(c, on_back=core.pop, frame~, "home", @sf.t("android-settings.title"), @sfpages.settings_blocks(c, core, here, fn(r) {
-        (core.push)(r)
-      }))
-    Appearance => @sfpages.appearance_page(c, core, frame)
     Fonts => @sfpages.fonts_page(c, core, frame)
     BarSettings => @sfpages.bars_page(c, core, frame)
-    About => @sfpages.about_page(c, core, frame)
-    Changelog => @sfpages.changelog_page(c, core, frame)
-    Memories => @sfpages.memories_page(c, core, here, frame)
-    Memory(a) => @sfpages.memory_page(c, core, here, frame, a)
-    AutoDecisions => @sfpages.decisions_page(c, core, here, frame)
-    Permissions => @sfpages.permissions_page(c, core, frame)
-    UsagePrices(days) => @sfpages.usage_prices_page(c, core, here, frame, days)
-    Usage => @sfpages.usage_page(c, core, here, frame)
-    Archiving => @sfpages.archiving_page(c, core, here, frame)
-    StationArchiving(st) => @sfpages.station_archiving_page(c, core, here, frame, st)
-    Notifications => @sfpages.notify_page(c, core, here, frame)
-    Shortcuts => @sfpages.shortcuts_page(c, core, frame)
     Me => @sfpages.me_page(c, core, here, frame)
-    Workspace => @sfpages.workspace_page(c, core, here, frame)
-    Security => @sfpages.security_page(c, core, here, frame)
-    SecurityOpen => @sfpages.security_open_page(c, core, here, frame)
     Vault => @sfpages.vault_page(c, core, here, frame)
-    VaultItems => @sfpages.vault_items_page(c, core, here, frame)
     VaultItem(v, item) => @sfpages.vault_item_page(c, core, here, frame, v, item)
-    Connects(only) => @sfpages.connects_page(c, src, core, here, frame, only)
-    Connect(station, id) => @sfpages.connect_page(c, src, core, here, frame, station, id)
-    Station(a) => @sfpages.station_page(c, core, here, frame, a)
-    Profile(a, id) => @sfpages.profile_page(c, core, here, frame, a, id)
-    LocalStation => @sfpages.local_station_page(c, core, frame)
-    MemoryDoc(a, skill, at) => @sfpages.memory_doc_page(c, core, here, frame, a, skill, at)
-    AutoCompletion => @sfpages.completion_page(c, core, here, frame)
-    AutoPolicy(s) => @sfpages.policy_page(c, core, here, frame, s)
     _ => ()
   }
   true
@@ -98,16 +65,17 @@ let settings_deep : Ref[Bool] = Ref(false)
 
 ///|
 /// A dialog a fixture's mode puts up over its page (MBUI_FIXTURE=settings-policy-text, settings-security-join, …:
-/// @settings.fixture_desk), once the page is drawn with what it needs.
-fn settings_fixture(src : Source, core : Core) -> Unit {
+/// @settings.fixture_desk), once the page is drawn with what it needs; before it is made where a frame makes it once
+/// (pane_made, tape_made, the narrow frame's).
+pub fn settings_fixture(src : Source, core : Core) -> Unit {
   match @settings.fixture_desk() {
     "policy-text" => @sfpages.fx_policy_up.val = "text"
     "policy-option" => @sfpages.fx_policy_up.val = "option"
-    "lock-join" => join_dialog(core, "ws1", "st2", "MBA")
+    "lock-join" => join_dialog(core, "ws1", "st2", "Maple")
     "lock-off" => turn_off_dialog(core, "ws1", "星火工作室")
     "local-fonts" => @sfpages.local_open.val = true
     "connect-mode" =>
-      match items((core.topic)("connects", { "scope": str("ws1"), "mine": Json::boolean(false) }).value, "items") {
+      match items((core.topic)("connects", { "scope": str("ws1"), "mine": Json::boolean(false) }).get().value, "items") {
         [item, ..] => @sfpages.cd_mode_dialog(core, "ws1/st1", Some(item))
         _ => ()
       }
@@ -130,9 +98,8 @@ fn settings_reset() -> Unit {
 /// same groups as a small screen's settings page), the row of the page beside it lit; a row pressed, its page beside
 /// it, in place of the one there.
 fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let t = @sf.theme()
   let lit = match app.nav.top() {
-    Setting(r) => Some(@sfpages.settings_row_of(r))
+    Setting(r) => Some(r)
     // (the settings come to: their first row's page, settings_landing)
     Settings => Some(settings_landing)
     _ => None
@@ -143,41 +110,58 @@ fn settings_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     side_top(c)
     // The way back belongs to the sidebar's band, not to the list that scrolls beneath it.
     // (none beside the system's tabs: 对话 is one of them, rail_native.mbt)
-    if !@sf.native_on() {
-      c.box(style=@sf.side_list().then(settings_back_band), fn() {
-        if nav_row(c, "settings-nav/back", false, fn() {
-            @sf.icon(c, "arrow-left", size=settings_nav_icon, color=t.p.muted) |> ignore
-            nav_words(c, @sf.t("web-pages.settings.nav.backToChats"))
-          }) {
-          @sfbase.history_push()
-          while app.nav.depth() > 1 {
-            if !app.nav.pop() {
-              break
-            }
+    let updating = update_shown()
+    if updating {
+      // The update and the back action share the same band as the other sidebars' actions: the band's spacing gives
+      // each key its press room, and keeps the update concentric with the sidebar's corner.
+      let band = if @sf.native_on() { update_band() } else { update_back_band() }
+      c.box(style=band, fn() {
+        c.box(style=side_full, fn() {
+          if !@sf.native_on() {
+            settings_back(c, true)
           }
-          if app.nav.top() != Home {
-            app.nav.replace(Home)
-          }
-          wide.landed.set("")
-        }
+        })
+        |> ignore
+        update_in_row(c, src)
       })
       |> ignore
+    } else if !@sf.native_on() {
+      c.box(style=@sf.side_list().then(settings_back_band), fn() { settings_back(c, false) }) |> ignore
     }
+    // Without the back row, keep the field below the sidebar's upper corners.
+    let search_band = if @sf.native_on() { settings_search_native_band } else { settings_search_band }
+    c.box(style=@sf.side_list().then(search_band), fn() { @sfpages.settings_search(c, side_at()) }) |> ignore
     side_scroll(c, "settings-nav", fn() {
       // (a row's page in place of the one open; on the tape brought over to show it)
       @sfpages.settings_side_rows(c, core, here, lit, fn(r) {
         @sfbase.history_push()
-        while app.nav.depth() > 1 {
-          if !app.nav.pop() {
-            break
-          }
-        }
-        app.nav.push(Setting(r))
+        app.nav.replace_above(1, [Setting(r)])
         @sfbase.show_chosen()
-      })
+      }, side_at())
     })
   })
   |> ignore
+}
+
+///|
+/// The way back, a band's action when the update is beside it; otherwise the settings list's own row.
+fn settings_back(c : @ui.Ctx, band : Bool) -> Unit {
+  let t = @sf.theme()
+  let body = fn() {
+    @sf.icon(c, "arrow-left", size=settings_nav_icon, color=t.p.muted) |> ignore
+    nav_words(c, @sf.t("web-pages.settings.nav.backToChats"))
+  }
+  let back = fn() {
+    @sfpages.settings_search_reset()
+    @sfbase.history_push()
+    @sfbase.nav_over_home([])
+    wide.landed.set("")
+  }
+  if band {
+    band_row(c, "settings-nav/back", false, body, at=side_at(), on_press=back)
+  } else {
+    nav_row(c, "settings-nav/back", false, body, at=side_at(), on_press=back)
+  }
 }
 
 ///|
@@ -198,3 +182,10 @@ let settings_side_fill : @ui.Style = @ui.css("w=Full h=Full")
 // kept across runs: a value (no field of it changes)
 let settings_back_band : @ui.Style = @ui.css("h=Hug pb=S2_5")
 
+///|
+// kept across runs: a value (no field of it changes)
+let settings_search_band : @ui.Style = @ui.css("w=Full h=Hug pt=S0 pb=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let settings_search_native_band : @ui.Style = @ui.css("w=Full h=Hug pt=S5 pb=S2")

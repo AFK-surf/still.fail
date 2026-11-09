@@ -3,9 +3,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect, Exit, Queue, type Fiber } from "effect";
 import { HostError } from "../src/error.ts";
-import type { HttpRequest, HttpResponse, Pull } from "../src/host.ts";
+import type { Host, HttpRequest, HttpResponse, Pull } from "../src/host.ts";
 import { FakeHost, flush, jsonResponse } from "../src/testing.ts";
 import { DROPPED, GONE, HEDGE, NETWORK, QUIET_MS, STREAM_AWAY_MS, Wake, WakingHost, Wakes, hedgeable, hedged, quietEnds, unlessDropped } from "../src/wake.ts";
+
+// Optional host capabilities must also be considered by the wrapper used by a running core.
+type Assert<T extends true> = T;
+type _WakingHostCoversHost = Assert<Exclude<keyof Host, keyof WakingHost> extends never ? true : false>;
 
 const wake = (at: number, away: number) => new Wake(at, away, false, false);
 

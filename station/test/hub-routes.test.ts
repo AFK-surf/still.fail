@@ -18,11 +18,12 @@ import { Hub } from "../src/sessions/hub.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
 import { Store, newMessage } from "../src/store/store.ts";
 import { digest } from "../src/read/digest.ts";
-import { openStore } from "../src/read/store.ts";
-import { chatRows, chats } from "../src/read/views.ts";
+import { answersSince, openStore } from "../src/read/store.ts";
+import { chatMarks, chatRows, chats } from "../src/read/views.ts";
+import { marksOf, rowsMade } from "../../client/core-ts/src/station/rows-made.ts";
 import { isDeepStrictEqual } from "node:util";
-import { fileAway } from "./archived-before.ts";
 import { FakeDriver, settle } from "./hub-fakes.ts";
+import { referenceAnswersSince } from "./card-answer-reference.ts";
 import { UsageCounter, claudeProject } from "../src/usage/counter.ts";
 import { keepCounted } from "../src/usage/module.ts";
 
@@ -91,6 +92,25 @@ test("a new chat: its session and its thread, refused without a runtime or with 
   }
 });
 
+test("a chat's regenerate title action names it after its text-only request finishes", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "codex", title: "manual" });
+    const id = made.thread.id;
+    r.store.insertMessage(newMessage(id, "1.1", "person", viewer.email, "fix login"));
+    const answer = r.ask("POST", `/threads/${id}/regenerate-title`);
+    await until("the title helper has started", () => r.codex.sessions.some((s) => s.options.textOnly === true && s.prompts.length > 0));
+    const helper = r.codex.sessions.find((s) => s.options.textOnly === true)!;
+    helper.says("Login fix");
+    helper.complete();
+    const [status, named] = await answer;
+    assert.equal(status, 200);
+    assert.equal(named.autoTitle, "Login fix");
+    assert.equal(named.title, null);
+    assert.equal(r.store.getSession(made.key)?.running, false);
+  } finally { await r.close(); }
+});
+
 test("retrying a new chat after the station restarts returns the same chat", async () => {
   const r = rig();
   try {
@@ -117,7 +137,7 @@ test("retrying a new chat after the station restarts returns the same chat", asy
   }
 });
 
-test("a chat's relaying through the routes (docs/relay.md): where to, read past the thread's other actions; to where, checked", async () => {
+test("a chat's relaying through the routes: where to, read past the thread's other actions; to where, checked", async () => {
   const r = rig();
   try {
     const [, made] = await r.ask("POST", "/sessions", { runtime: "claude" });
@@ -154,7 +174,9 @@ test("another chat with a session, and a session brought into a chat", async () 
     const slack = r.store.openThread("slack:T1", "C1", "1.1", null, null);
     assert.deepEqual(await r.ask("POST", `/threads/${slack.id}/sessions`, { session: b.key }), [400, { error: `no still.fail chat ${slack.id}` }]);
     // chat_list's threads, as the readers read them: what the store lists.
-    assert.deepEqual(JSON.parse(await r.readers.read("threadList", {}, "en")), JSON.parse(JSON.stringify(r.store.listThreads("", null, null))));
+    assert.deepEqual(JSON.parse(await r.readers.read("threadList", {}, "en")), JSON.parse(JSON.stringify(r.store.listThreads("", null, null, "none"))));
+    assert.deepEqual(JSON.parse(await r.readers.read("recentChatList", { ws: null, home: null, limit: 2 }, "en")), JSON.parse(JSON.stringify(r.store.recentChatList(null, null, 2))));
+    assert.deepEqual(JSON.parse(await r.readers.read("searchChatList", { ws: null, home: null, limit: 2, query: "side" }, "en")), JSON.parse(JSON.stringify(r.store.searchChatList(null, null, 2, "side"))));
     // The archive review's messages, as the readers read them: what the store has.
     assert.deepEqual(JSON.parse(await r.readers.read("latestMessages", { thread: chat.id, limit: 2 }, "en")), JSON.parse(JSON.stringify(r.store.messagesBefore(chat.id, null, 2))));
   } finally {
@@ -304,12 +326,143 @@ test("a pending card: an option chosen by an old client is refused; an answer qu
     r.store.insertMessage(newMessage(id, "1700000000.000200", "agent", made.key, "later"));
     const quote = [{ text: "deploy?", ts: "1700000000.000100" }];
     assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: quote }), [409, { error: en("station.admin.updateClientForOption") }]);
+    // The old-client check uses raw quotes, even those omitted from the message by quotesOf.
+    assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: quote[0]!.ts }] }), [409, { error: en("station.admin.updateClientForOption") }]);
+    const laterQuote = [...Array.from({ length: 20 }, () => ({ text: "other" })), ...quote];
+    assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: laterQuote }), [409, { error: en("station.admin.updateClientForOption") }]);
     const [status] = await r.ask("POST", `/threads/${id}/messages`, { text: "yes", quotes: quote });
     assert.equal(status, 200);
     assert.equal(r.store.readPosition("a@x", id), n, "read up to the card, not past it");
   } finally {
     await r.close();
   }
+});
+
+test("an old card without a timestamp still matches an empty raw quote timestamp", async () => {
+  const r = rig();
+  try {
+    const id = r.store.openThread("ember", "CHAT", "old-card-without-ts", null, null).id;
+    const [n] = r.store.insertMessage({ ...newMessage(id, "1.1", "agent", "worker", "choose"),
+      card: { type: "options", options: [{ label: "no", action: "close" }] } });
+    r.store.db.prepare("UPDATE entries SET ts=NULL WHERE thread=? AND n=?").run(id, n);
+    assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: "" }] }),
+      [409, { error: en("station.admin.updateClientForOption") }]);
+  } finally { await r.close(); }
+});
+
+test("checking a quoted card for an old client does not merge its message", async () => {
+  const r = rig(), db = r.store.db;
+  try {
+    const id = r.store.openThread("ember", "CHAT", "quoted-card-identity", null, null).id;
+    db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,card,at) VALUES(?,1,'message','1.1','agent','worker','choose',?,1)")
+      .run(id, JSON.stringify({ type: "options", options: [{ label: "no", action: "close" }] }));
+    Object.defineProperty(r.store, "db", { configurable: true, value: new Proxy(db, { get(target, key) {
+      if (key === "prepare") return (sql: string) => {
+        if (/\bFROM\s+merged\b/i.test(sql)) throw new Error("quoted card lookup merged its message");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } }) });
+    try {
+      assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: "1.1", text: "choose" }] }),
+        [409, { error: en("station.admin.updateClientForOption") }]);
+    } finally { Object.defineProperty(r.store, "db", { configurable: true, value: db }); }
+  } finally { await r.close(); }
+});
+
+test("a quoted old card is checked after its card-post index is prepared", async () => {
+  const r = rig(), db = r.store.db;
+  try {
+    const id = r.store.openThread("ember", "CHAT", "quoted-old-card", null, null).id;
+    db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,card,at) VALUES(?,1,'message','1.1','agent','worker','choose',?,1)")
+      .run(id, JSON.stringify({ type: "options", options: [{ label: "no", action: "close" }] }));
+    db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(id);
+    db.prepare("DELETE FROM card_posts WHERE thread=?").run(id);
+    (r.hub as any).prepareCardPosts = (threads: number[]) => r.readers.prepareCardPosts(threads);
+    Object.defineProperty(r.store, "db", { configurable: true, value: new Proxy(db, { get(target, key) {
+      if (key === "prepare") return (sql: string) => {
+        if (/SELECT n FROM entries WHERE thread = \? AND kind = 'message' AND (card|options) IS NOT NULL/i.test(sql))
+          throw new Error("the station scanned an unprepared card index");
+        return target.prepare(sql);
+      };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } }) });
+    try {
+      assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: "1.1", text: "choose" }] }),
+        [409, { error: en("station.admin.updateClientForOption") }]);
+    } finally { Object.defineProperty(r.store, "db", { configurable: true, value: db }); }
+  } finally { await r.close(); }
+});
+
+test("a quoted card answered during old index preparation no longer blocks the person's message", async () => {
+  const r = rig(), release = Promise.withResolvers<void>(), started = Promise.withResolvers<void>();
+  try {
+    const id = r.store.openThread("ember", "CHAT", "quoted-old-card-answered", null, null).id;
+    r.store.db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,card,at) VALUES(?,1,'message','1.1','agent','worker','choose',?,1)")
+      .run(id, JSON.stringify({ type: "options", options: [{ label: "no", action: "close" }] }));
+    r.store.db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(id);
+    r.store.db.prepare("DELETE FROM card_posts WHERE thread=?").run(id);
+    (r.hub as any).prepareCardPosts = async (threads: number[]) => {
+      started.resolve();
+      await release.promise;
+      await r.readers.prepareCardPosts(threads);
+    };
+    const send = r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: "1.1", text: "choose" }] });
+    const waiting = await Promise.race([started.promise.then(() => true), send.then(() => false)]);
+    assert.equal(waiting, true, "the request waits for old card preparation");
+    r.store.db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,at) VALUES(?,2,'message','2.2','person','p','answer',2)").run(id);
+    release.resolve();
+    const [status] = await send;
+    assert.equal(status, 200);
+  } finally { release.resolve(); await r.close(); }
+});
+
+for (const index of ["entries_cards", "entries_options"]) {
+  test(`a quoted old card is prepared when ${index} was removed`, async () => {
+    const r = rig(), db = r.store.db;
+    try {
+      const id = r.store.openThread("ember", "CHAT", `quoted-card-${index}`, null, null).id;
+      db.prepare("INSERT INTO entries(thread,n,kind,ts,author_kind,author,text,options,at) VALUES(?,1,'message','1.1','agent','worker','choose',?,1)")
+        .run(id, JSON.stringify([{ label: "no", action: "close" }]));
+      db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(id);
+      db.prepare("DELETE FROM card_posts WHERE thread=?").run(id);
+      db.exec(`DROP INDEX ${index}`);
+      (r.hub as any).prepareCardPosts = (threads: number[]) => r.readers.prepareCardPosts(threads);
+      assert.deepEqual(await r.ask("POST", `/threads/${id}/messages`, { text: "no", quotes: [{ ts: "1.1", text: "choose" }] }),
+        [409, { error: en("station.admin.updateClientForOption") }]);
+    } finally { await r.close(); }
+  });
+}
+
+test("an old thread with no cards does not wait for card-post preparation", async () => {
+  const r = rig();
+  try {
+    const id = r.store.openThread("ember", "CHAT", "old-without-cards", null, null).id;
+    r.store.db.prepare("DELETE FROM card_post_scopes WHERE thread=?").run(id);
+    (r.hub as any).prepareCardPosts = async () => { throw new Error("unneeded card preparation"); };
+    const [status] = await r.ask("POST", `/threads/${id}/messages`, { text: "hello", quotes: [{ ts: "1.1", text: "earlier" }] });
+    assert.equal(status, 200);
+  } finally { await r.close(); }
+});
+
+test("a person can send without looking up a card when no quote names a message", async () => {
+  const r = rig();
+  try {
+    for (const [i, quotes] of [undefined, [], [{ text: "earlier" }], "not an array"].entries()) {
+      const id = r.store.openThread("ember", "CHAT", `without-card-quote-${i}`, null, null).id;
+      r.store.insertMessage({ ...newMessage(id, "1.1", "agent", "worker", "choose"), card: { type: "text" } });
+      const pending = r.store.pendingCardHeaderIfReady;
+      try {
+        r.store.pendingCardHeaderIfReady = () => { throw new Error("unneeded pending card lookup"); };
+        const [status, sent] = await r.ask("POST", `/threads/${id}/messages`, { text: "hello", quotes });
+        assert.equal(status, 200, JSON.stringify(sent));
+        assert.equal(r.store.messagesBefore(id, null, 1)[0]?.n, sent.n);
+      } finally { r.store.pendingCardHeaderIfReady = pending; }
+      assert.equal(r.store.pendingCard(id), null, "the person's message still ends the card's wait");
+    }
+  } finally { await r.close(); }
 });
 
 test("archiving a session and a chat, and deleting a session", async () => {
@@ -384,6 +537,18 @@ test("stopping, evicting, warming and changing a session", async () => {
     assert.deepEqual((await r.ask("GET", `/sessions/${made.key}`))[1].session.contextActions, ["compact", "clear"]);
 
     assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { fast: "yes" }), [400, { error: en("station.admin.badFast") }]);
+    // Kept to less context than its model's window, and back to all of it; none too small for its runtime.
+    assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { context: 5000 }), [400, { error: en("station.session.badContext", { least: 100_000 }) }]);
+    // (its process started without it: only a new one takes it)
+    await r.ask("POST", `/sessions/${made.key}/warm`);
+    await until("it warms again", () => r.claude.count() === 2 && !r.claude.last().disposed);
+    assert.deepEqual((await r.ask("POST", `/sessions/${made.key}/settings`, { context: 300_000 }))[0], 200);
+    await until("its process ends for it", () => r.claude.last().disposed);
+    assert.equal(r.store.getSession(made.key)!.context, 300_000);
+    assert.equal((await r.ask("GET", `/sessions/${made.key}`))[1].session.context, 300_000);
+    await r.ask("POST", `/sessions/${made.key}/settings`, { context: null });
+    assert.equal(r.store.getSession(made.key)!.context, null);
+    assert.equal((await r.ask("GET", `/sessions/${made.key}`))[1].session.context, undefined);
     assert.equal((await r.ask("POST", "/sessions/nope/settings", { model: "opus" }))[0], 400);
     assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { model: "opus", profile: "cc" }), [200, { ok: true, profile: "cc" }]);
     const row = r.store.getSession(made.key)!;
@@ -434,6 +599,9 @@ test("open jobs name their chats: the session's own, listed or archived", async 
     const chatOf = (id: string) => open.find((j: any) => j.id === id)?.chat;
     assert.deepEqual([chatOf(a.id)?.id, chatOf(a.id)?.archived], [listed.key, false]);
     assert.deepEqual([chatOf(b.id)?.id, chatOf(b.id)?.archived], [gone.key, true]);
+    // For a device that names them from the sidebar it holds: the jobs alone, no chat made for them.
+    const [, alone] = await r.ask("GET", "/jobs", undefined, [["chats", "0"]]);
+    assert.deepEqual(alone.map((j: any) => [j.id, "chat" in j]).sort(), [[a.id, false], [b.id, false]].sort());
     await r.ask("POST", `/jobs/${a.id}/stop`);
     await r.ask("POST", `/jobs/${b.id}/stop`);
   } finally {
@@ -485,6 +653,9 @@ test("going on with one of the machine's own sessions", async () => {
     assert.deepEqual([row.runtimeSessionId, row.cwd, row.title], [id, project, "fix the build"]);
     // Asked again: the session already going on with it.
     assert.equal((await r.ask("POST", "/machine-sessions", { runtime: "claude", id }))[1].key, made.key);
+    // Listed with it, by the index of runtime sessions alone.
+    const [, listed] = await r.ask("GET", "/machine-sessions");
+    assert.equal(listed.sessions.find((x: any) => x.id === id)?.session, made.key);
   } finally {
     process.env.HOME = home;
     await r.close();
@@ -633,7 +804,8 @@ test("a session at work: the station follows it, its summary says how long its t
   try {
     const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
     const key = made.key;
-    const dir = join(r.data, "homes", "cc", "projects", "p");
+    // Where Claude Code writes a session it runs: the project of its working directory (the live view looks there alone).
+    const dir = join(r.data, "homes", "cc", "projects", claudeProject(r.store.getSession(key)!.workspace));
     mkdirSync(dir, { recursive: true });
     const said = (text: string, id: string) => `${JSON.stringify({ type: "assistant", timestamp: "2026-10-24T00:00:00Z", message: { id, content: [{ type: "text", text }] } })}\n`;
     writeFileSync(join(dir, "rs1.jsonl"), ["one", "two", "three", "four", "five"].map((t, i) => said(t, `m${i}`)).join(""));
@@ -674,6 +846,8 @@ test("a session's summary says what its calls used as the usage counter recorded
     r.store.setRuntimeSessionId(key, "rs1");
     const summary = async () => (await r.ask("GET", `/sessions/${encodeURIComponent(key)}`))[1].session;
     assert.equal((await summary()).usage, undefined, "no call read yet: not said");
+    r.store.startTurn("usage-summary-turn", key, "input");
+    r.store.endTurn("usage-summary-turn", "completed", null, null, null);
     await counter.read();
     const usage = (await summary()).usage;
     assert.deepEqual([usage.modelCalls, usage.inputTokens, usage.cachedTokens, usage.outputTokens, usage.contextTokens, usage.model], [2, 203, 200, 14, 102, "claude-opus-5-5"]);
@@ -694,7 +868,7 @@ test("a session's summary says what its calls used as the usage counter recorded
   }
 });
 
-test("as the station starts, a summary a station from before kept is kept as it says it now, and devices are told", async () => {
+test("a saved summary is left alone on startup and updated when its usage changes", async () => {
   const r = rig();
   const counter = new UsageCounter({ store: r.store, config: () => ({ dataDir: r.data, profiles: [{ home: join(r.data, "homes", "cc") }] }) });
   let stop = keepCounted(r.store, r.hub.live, counter);
@@ -707,6 +881,8 @@ test("as the station starts, a summary a station from before kept is kept as it 
     writeFileSync(join(dir, "rs1.jsonl"), `${JSON.stringify({ type: "assistant", timestamp: new Date(r.store.now() + 1000).toISOString(), message: { id: "m1", model: "claude-opus-5-5", content: [], usage } })}\n`);
     r.store.ranIn(key, "rs1", "cc");
     r.store.setRuntimeSessionId(key, "rs1");
+    r.store.startTurn("saved-usage-turn", key, "input");
+    r.store.endTurn("saved-usage-turn", "completed", null, null, null);
     await counter.read();
     const now = r.store.sessionUsage(key);
     assert.equal(now.cacheMs, 3_600_000);
@@ -719,9 +895,12 @@ test("as the station starts, a summary a station from before kept is kept as it 
       if (c.type === "session") told.push(c.key);
     });
     stop = keepCounted(r.store, r.hub.live, counter);
+    assert.deepEqual(r.store.sessionUsage(key), before, "starting does not rewrite old summaries");
+    assert.equal(told.length, 0, "starting does not tell an unchanged summary");
+    r.store.usageChanged([key]);
     unsubscribe();
-    assert.deepEqual(r.store.sessionUsage(key), now, "kept as this station says it");
-    assert.deepEqual(told, [key], "told, as a device holds the summary from before");
+    assert.deepEqual(r.store.sessionUsage(key), now, "a later usage change updates the summary");
+    assert.deepEqual(told, [key], "the updated summary is told");
     told.length = 0;
     stop();
     const again = r.store.subscribe((c) => {
@@ -745,19 +924,205 @@ test("the sidebar items a change can touch are read as the whole sidebar has the
     // b brought into a's chat: a's item has both; c alone.
     assert.equal((await r.ask("POST", `/threads/${made[0].thread.id}/sessions`, { session: made[1].key }))[0], 200);
     r.store.insertMessage(newMessage(made[0].thread.id, "1.2", "person", "a@x", "hi"));
+    r.store.setPin(viewer.email, made[0].key, true);
+    r.store.setPin(viewer.email, made[2].key, true);
     const store = openStore(r.data);
     const whole = chats(store, viewer, false);
     const byId = new Map(whole.map((row: any) => [String(row.id), row]));
+    // Unrelated histories must not be read every time one row changes. Count actual rows returned to the reader,
+    // rather than timing it: the result must stay bounded even when these pages are cold on disk.
+    const mark = r.store.db.prepare("INSERT INTO dismissed VALUES (?, ?, 1, ?)");
+    const keep = r.store.db.prepare("INSERT INTO kept_chats VALUES (?, ?)");
+    const closeCard = r.store.db.prepare("INSERT INTO closed_cards VALUES (?, 1, ?, ?)");
+    const pin = r.store.db.prepare("INSERT INTO pins VALUES (?, ?, ?)");
+    for (let i = 0; i < 500; i++) {
+      const thread = 100_000 + i;
+      mark.run(viewer.email, thread, Date.now());
+      keep.run(viewer.email, thread);
+      closeCard.run(thread, viewer.email, Date.now());
+      pin.run(viewer.email, `unrelated-${i}`, i);
+    }
+    let unrelated = 0;
+    const db = store.db;
+    store.db = new Proxy(db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          return new Proxy(statement, {
+            get(query, method) {
+              if (method === "all") return (...args: any[]) => {
+                const result = query.all(...args);
+                if (/\bFROM (dismissed|kept_chats|closed_cards)\b/i.test(sql)) unrelated += result.filter((row) => Number(row.thread) >= 100_000).length;
+                if (/\bFROM pins\b/i.test(sql)) unrelated += result.filter((row) => String(row.session).startsWith("unrelated-")).length;
+                return result;
+              };
+              const value = Reflect.get(query, method, query);
+              return typeof value === "function" ? value.bind(query) : value;
+            },
+          });
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
     for (const [sessions, threads] of [[[made[1].key], []], [[], [made[0].thread.id]], [[made[2].key], []]] as [string[], number[]][]) {
       const some = chatRows(store, viewer, sessions, threads);
       assert.ok(some.rows.length > 0 && some.rows.length < whole.length, JSON.stringify(some.scope));
       for (const row of some.rows) assert.deepEqual(row, byId.get(String(row.id)));
       for (const row of some.rows) assert.ok(some.scope.includes(String(row.id)));
     }
+    const marks = chatMarks(store, viewer, { sessions: [made[0].key], threads: [made[0].thread.id] });
+    assert.deepEqual(Object.keys(marks.pins), [made[0].key]);
+    assert.equal(unrelated, 0, "a scoped update did not read marks, pins or answers of unrelated chats");
     store.db.close();
   } finally {
     await r.close();
   }
+});
+
+test("sidebar answers read only chats that can have a card answer", async () => {
+  const r = rig();
+  try {
+    const quiet = (await r.ask("POST", "/sessions", { runtime: "claude", title: "No cards" }))[1] as any;
+    const asked = (await r.ask("POST", "/sessions", { runtime: "claude", title: "A card" }))[1] as any;
+    for (let i = 0; i < 40; i++) r.store.insertMessage(newMessage(quiet.thread.id, `quiet-${i}`, "person", viewer.email, `message ${i}`));
+    r.store.insertMessage({ ...newMessage(asked.thread.id, "card", "agent", asked.key, "Choose"), card: { type: "options", options: [{ label: "Yes" }] } });
+    r.store.insertMessage(newMessage(asked.thread.id, "answer", "person", viewer.email, "Yes"));
+    const store = openStore(r.data);
+    let quietMessages = 0;
+    const db = store.db;
+    store.db = new Proxy(db, {
+      get(target, property) {
+        if (property === "prepare") return (sql: string) => {
+          const statement = target.prepare(sql);
+          return new Proxy(statement, {
+            get(query, method) {
+              if (method === "all") return (...args: any[]) => {
+                const rows = query.all(...args);
+                if (/SELECT thread, n FROM entries WHERE (?:thread = \? AND )?author_kind = 'person' AND kind = 'message' AND at >= \?/i.test(sql))
+                  quietMessages += rows.filter((row) => Number(row.thread) === quiet.thread.id).length;
+                return rows;
+              };
+              const value = Reflect.get(query, method, query);
+              return typeof value === "function" ? value.bind(query) : value;
+            },
+          });
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const whole = chats(store, viewer, false);
+    const scoped = chatRows(store, viewer, [quiet.key], []);
+    assert.deepEqual(scoped.rows, whole.filter((row: any) => row.id === quiet.key));
+    assert.equal(whole.find((row: any) => row.id === asked.key).answered.length, 1);
+    assert.equal(quietMessages, 0, "neither a full nor a scoped sidebar reads people’s messages from a chat with no cards");
+    store.db.close();
+  } finally { await r.close(); }
+});
+
+test("the cards answered in some chats are those the whole station's say, read by their cards", async () => {
+  const r = rig();
+  try {
+    const made = (await r.ask("POST", "/sessions", { runtime: "claude", title: "Cards" }))[1] as any;
+    const id = made.thread.id;
+    const card = (ts: string, text: string) => ({ ...newMessage(id, ts, "agent", made.key, text), card: { type: "options", options: [{ label: "Yes" }] } });
+    // Said before any card; a card answered, then said more; a card followed by another before anyone answered; that
+    // one answered; a card no one answered yet.
+    r.store.insertMessage(newMessage(id, "p0", "person", viewer.email, "hi"));
+    r.store.insertMessage(card("c1", "One?"));
+    r.store.insertMessage(newMessage(id, "p1", "person", viewer.email, "Yes"));
+    r.store.insertMessage(newMessage(id, "p2", "person", viewer.email, "and more"));
+    r.store.insertMessage(card("c2", "Two?"));
+    r.store.insertMessage(card("c3", "Three?"));
+    r.store.insertMessage(newMessage(id, "p3", "person", viewer.email, "Three it is"));
+    r.store.insertMessage(card("c4", "Four?"));
+    const store = openStore(r.data);
+    const said = (a: any[]) => a.filter((x) => x.answer !== null && x.question.thread === id).map((x) => [x.question.text, x.answer.text]);
+    const whole = referenceAnswersSince(r.store, 0);
+    const scoped = answersSince(store, 0, [id]);
+    assert.deepEqual(said(scoped), [["One?", "Yes"], ["Three?", "Three it is"]]);
+    assert.deepEqual(said(scoped), said(whole));
+    store.db.close();
+  } finally { await r.close(); }
+});
+
+test("a job's chat named from the sidebar's items as they are, none of their messages, cards or marks read for it", async () => {
+  const r = rig();
+  try {
+    const a = (await r.ask("POST", "/sessions", { runtime: "claude", title: "Deploy" }))[1] as any;
+    const b = (await r.ask("POST", "/sessions", { runtime: "claude" }))[1] as any;
+    r.store.insertMessage(newMessage(b.thread.id, "1.1", "person", viewer.email, "what do we do first"));
+    r.store.insertMessage({ ...newMessage(a.thread.id, "card", "agent", a.key, "Choose"), card: { type: "options", options: [{ label: "Yes" }] } });
+    const store = openStore(r.data);
+    const look = (rows: any[]) => rows.map((row) => [row.id, row.title, row.agents.map((x: any) => x.key)]);
+    const full = chats(store, viewer, false);
+    const named = chats(store, viewer, false, null, true);
+    assert.deepEqual(look(named), look(full));
+    assert.ok(full.some((row: any) => row.card !== undefined) && named.every((row: any) => row.card === undefined && row.last === null), "nothing else read for them");
+    store.db.close();
+  } finally { await r.close(); }
+});
+
+test("a device makes the sidebar from the summaries and marks as the station makes it", async () => {
+  // The station made every row again for every viewer at every change, 3 to 10 s each on a station (2026-11-03): a device
+  // makes it from what it holds (client/core-ts/src/station/rows-made.ts), by the same rules.
+  const r = rig();
+  try {
+    const made: any[] = [];
+    for (const title of ["a", "b", "c", "d"]) made.push((await r.ask("POST", "/sessions", { runtime: "claude", title }))[1]);
+    // b brought into a's chat; said in it, a card waiting there; c's chat pinned and kept; d's from a Slack thread.
+    assert.equal((await r.ask("POST", `/threads/${made[0].thread.id}/sessions`, { session: made[1].key }))[0], 200);
+    r.store.insertMessage(newMessage(made[0].thread.id, "1.2", "person", "a@x", "  看一下 "));
+    r.store.insertMessage({ ...newMessage(made[0].thread.id, "1.3", "agent", made[0].key, "选一个"), card: { type: "options", options: [{ label: "好" }] } } as any);
+    r.store.insertMessage(newMessage(made[2].thread.id, "2.1", "agent", made[2].key, "做完了"));
+    r.store.setPin("a@x", made[2].key, true);
+    r.store.keepChat("a@x", made[2].thread.id);
+    const slack = r.store.openThread("slack:T1", "C1", "9.1", null, "slack:cs:U1");
+    r.store.joinThread(slack.id, made[3].key, "cs");
+    r.store.insertMessage(newMessage(slack.id, "9.1", "person", "U1", "从 Slack 来的"));
+    r.store.suggestArchive(made[2].key, made[2].thread.id, r.store.lastEntry(made[2].thread.id));
+    const station = (await r.ask("GET", "/chats"))[1];
+    const sessions = (await r.ask("GET", "/sessions"))[1];
+    const threads = (await r.ask("GET", "/threads"))[1];
+    const [status, answer] = await r.ask("GET", "/chats", undefined, [["marks", "1"]]);
+    assert.equal(status, 200);
+    const marks = marksOf(answer);
+    assert.ok(marks !== null, JSON.stringify(answer));
+    const words = { untitled: tr("en", "station.chat.untitled"), directMessage: tr("en", "station.chat.directMessage"), quotedOnly: tr("en", "station.chat.quotedOnly") };
+    const device = rowsMade(sessions, threads, marks!, viewer.email, words);
+    const byId = (rows: any[]) => Object.fromEntries(rows.map((row) => [String(row.id), row]));
+    assert.deepEqual(byId(device), byId(station));
+    assert.ok(station.some((row: any) => row.card) && station.some((row: any) => row.pinned !== null) && station.length >= 3, "the cases looked at");
+    // Of some chats alone: what they are now, the rest as held.
+    const [, some] = await r.ask("GET", "/chats", undefined, [["marks", "1"], ["thread", String(made[0].thread.id)], ["session", made[0].key]]);
+    assert.deepEqual(Object.keys(marksOf(some)!.card), [String(made[0].thread.id)]);
+  } finally {
+    await r.close();
+  }
+});
+
+test("a catch-up may ask for a bounded page of messages and letters", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude" });
+    const id = made.thread.id;
+    for (let n = 1; n <= 5; n++) {
+      r.store.insertMessage(newMessage(id, `1.${n}`, "person", "a@x", `message ${n}`));
+      r.store.insertLetter({ thread: id, ts: `2.${n}`, authorKind: "agent", author: "another", text: `letter ${n}`, letter: { way: "in", title: "another", link: null } });
+    }
+    for (const kind of ["entries", "letters"] as const) {
+      const path = `/threads/${id}/${kind}`;
+      const [status, first] = await r.ask("GET", path, undefined, [["after", "0"], ["limit", "2"]]);
+      assert.equal(status, 200);
+      assert.deepEqual(first[kind].map((e: any) => e.n), [1, 2]);
+      assert.equal(first.last, 5);
+      const [, second] = await r.ask("GET", path, undefined, [["after", "2"], ["limit", "2"]]);
+      assert.deepEqual(second[kind].map((e: any) => e.n), [3, 4]);
+      const [, old] = await r.ask("GET", path, undefined, [["after", "0"]]);
+      assert.equal(old[kind].length, 5, "older clients retain the unlimited form");
+    }
+  } finally { await r.close(); }
 });
 
 test("writing in an agent's Slack thread makes its item the viewer's (我参与的), chat or no chat", async () => {
@@ -792,7 +1157,7 @@ test("writing in an agent's Slack thread makes its item the viewer's (我参与�
   }
 });
 
-test("an archived chat is listed as it was, from the database or from the file a station before wrote it out to", async () => {
+test("an archived chat is listed as it was, from the database", async () => {
   const r = rig();
   try {
     const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
@@ -806,13 +1171,8 @@ test("an archived chat is listed as it was, from the database or from the file a
     assert.ok(!existsSync(file));
     const archived = await listed();
     assert.deepEqual([archived.last, archived.lastMessage.text, archived.unread, archived.people], [before.last, "first", before.unread, before.people]);
-    // Written out to its file by a station before: read from there the same (once: a second list is the same).
-    fileAway(r.store, id);
-    assert.deepEqual(await listed(), archived);
-    assert.deepEqual(await listed(), archived);
-    // Brought back by what is said in it and archived again: listed as it is now.
+    // Said in again and archived again: listed as it is now.
     r.store.insertMessage(newMessage(id, "1.3", "person", "b@x", "second"));
-    assert.ok(!existsSync(file));
     assert.equal((await r.ask("POST", `/sessions/${made.key}/archive`))[0], 200);
     const again = await listed();
     assert.deepEqual([again.last, again.lastMessage.text, again.people.map((p: any) => p.email)], [archived.last + 1, "second", ["a@x", "b@x"]]);

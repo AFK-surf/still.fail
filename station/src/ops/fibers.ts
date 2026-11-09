@@ -1,6 +1,6 @@
 // Time and long-lived work for a part that is a class rather than an Effect itself (a service holds it: services.ts):
 // its `now` and its waits from the Clock it was given (a TestClock in its tests; the live one otherwise), each wait or
-// piece of background work a fiber in a scope of its own, all interrupted when it closes (docs/station-ts.md, 写法).
+// piece of background work a fiber in a scope of its own, all interrupted when it closes (写法).
 // Outside `wall` below, the station reads no Date.now and arms no Node timer: a test moves its time, and nothing of the
 // station's own escapes it. (A deadline on a fetch, AbortSignal.timeout, is the network's time, as `wall` is.)
 import { Clock, Duration, Effect, Exit, Fiber, FiberSet, Scope } from "effect";

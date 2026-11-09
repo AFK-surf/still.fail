@@ -1,4 +1,4 @@
-// A link held in a message (ember apps/android ui/Links.kt linkHold, in Sheet.kt MenuHost's look): its own menu, open it
+// A link held in a message: its own menu, open it
 // or copy it, rather than the message's (picking its words) and rather than the link opening as the finger lifts; a tap
 // stays the link's. The menu is 180 wide, under the line held (over it when there is no room below), centred on the
 // finger; it comes as the app's menus do (MenuSpring, from its corner by the line) over the menu's scrim. Other words
@@ -32,24 +32,13 @@ let link_menu : LinkMenu = {
 }
 
 ///|
-/// What a message's words give their rich text for a link held by a finger, or right clicked: its menu opened there.
-fn link_held(c : @ui.Ctx, href : String, line : (Double, Double, Double, Double)) -> Unit {
-  // under the piece of line: where the finger held it; right clicked (a mouse, whose press is not the click's), its
-  // middle
-  let press = c.press()
-  let x = @sf.menu_along(c, line.0 + line.2 / 2.0)
-  link_menu_at(href, x, line.1, line.1 + line.3)
-  link_menu.at = press.frame
-}
-
-///|
 /// The link's menu, open it or copy it, centred on `x` under (or over) the line from `top` to `bottom`.
 fn link_menu_at(href : String, x : Double, top : Double, bottom : Double) -> Unit {
   link_menu.href = href
   menu_under([(tr("common.link.open"), "external"), (tr("common.link.copy"), "copy")], x, top, bottom, fn(c, i) {
     if i == 0 {
       // as a tap on it: a chat's link opens it here, any other in the browser
-      c.after_build("link-menu-open", fn() { open_link(href) })
+      open_link(href)
     } else {
       c.copy_text(href)
       say(c, tr("common.link.copied"))
@@ -80,7 +69,7 @@ fn menu_under(
 /// The menu over the page, while open and as it goes: mbui's dropdown menu (the arrows and Enter as a menu's; a tap
 /// beside it, Esc or back close it) at the line held, in MenuHost's look.
 fn link_menu_layer(c : @ui.Ctx) -> Unit {
-  // opened by a link held: felt as it opens (Links.kt)
+  // opened by a link held: felt as it opens
   if link_menu.open && link_menu.at == c.press().frame {
     feel_hold(c, "link")
   }
@@ -101,18 +90,18 @@ fn link_menu_layer(c : @ui.Ctx) -> Unit {
     exit=@motion.trans(fade=0.0, scale=0.9, ox=0.5, oy=0.0, spec=@motion.menu_spring, fade_spec=@motion.tween(120.0, ease=Leave), ground_first=true),
     look=menu_panel_look,
     item_look=fn(c, s) { menu_row_look(c, s, link_icon(s.entry.value)) },
-  )
-  if link_menu.open && !m.open {
-    link_menu.open = false
-  }
-  match m.chosen {
-    Some(v) =>
+    // (what an item does, as it is chosen)
+    on_pick=fn(v) {
+      link_menu.open = false
       for i, _ in link_menu.items {
         if i.to_string() == v {
           (link_menu.pick)(c, i)
         }
       }
-    None => ()
+    },
+  )
+  if link_menu.open && !m.open {
+    link_menu.open = false
   }
 }
 

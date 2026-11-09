@@ -41,4 +41,7 @@ test("用量's card: the last 7 days' cost, today's and the input tokens, a bar 
   assert.equal(card.share, true);
   // nothing spent: said so, nothing to share
   assert.deepEqual(usageCard({ empty: true }), { head: "近 7 天没有用量", stats: [], rows: [] });
+  const waiting = usageCard({ empty: true, detailsPreparing: true });
+  assert.notEqual(waiting.head, "近 7 天没有用量");
+  assert.deepEqual([waiting.stats, waiting.rows, waiting.share], [[], [], undefined]);
 });

@@ -1,4 +1,4 @@
-// Files copied (or moved) into this station's drive (docs/drive.md "Copying between stations"): from a folder of its
+// Files copied (or moved) into this station's drive: from a folder of its
 // own, or from another station of the workspace, whose files this station reads over the station transport with what
 // that station granted the member who asked (`grants.ts`). Each is a transfer of its own here, on the station the files
 // go to, so it goes on whatever becomes of the page that started it: one at a time, in the order asked, each file put

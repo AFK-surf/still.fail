@@ -1,5 +1,5 @@
-// The file viewers on a desktop (the library's viewer_bar.mbt, reader.mbt; preview_desk.mbt): over the wide frame's whole
-// window, as the desktop app's (FilePreview.tsx docked, viewer/Reader.tsx with a mouse).
+// The file viewers on a desktop (the library's viewer_bar.mbt, reader.mbt): over the wide frame's whole
+// window, as the desktop app's.
 
 ///|
 /// The fixture's `mode` in a desktop's window: a chat's file open in its preview (chat-preview-…), a drive's text read
@@ -9,7 +9,7 @@ fn desk_tester(mode : String) -> @ui.Tester {
   let src = fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   if mode.has_prefix("chat-preview") {
-    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   }
   t.draw()
   if mode.has_prefix("reader") || mode.has_prefix("player") {
@@ -81,7 +81,7 @@ test "desk: Esc closes a chat's film as it flies in, before its player is up" {
   new_run()
   let src = fixture("chat-preview-video")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms / 4.0)
   assert_true(viewer.get() is Some(_))
@@ -98,11 +98,11 @@ test "desk: a click on the image hides the bar, another brings it back; one roun
   assert_true(v.bars_shown())
   // 600 × 400 in 1280 × 800, fitted 32 in: in the middle as it is
   t.tap(640.0, 400.0)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_click_ms)
   assert_true(viewer.get() is Some(_))
   assert_true(!v.bars_shown())
   t.tap(640.0, 400.0)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_click_ms)
   assert_true(v.bars_shown())
   t.tap(150.0, 700.0)
   assert_true(viewer.get() is None)
@@ -113,7 +113,7 @@ test "desk: the bar hidden by a click shows while the pointer is along the top, 
   let t = desk_tester("chat-preview-image")
   let v = viewer.get().unwrap()
   t.tap(640.0, 400.0)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_click_ms)
   assert_true(!v.bars_shown())
   t.move(640.0, 20.0)
   t.draw()
@@ -156,7 +156,8 @@ test "desk: ⌘ and the wheel (or a pinch) zoom round the pointer, the wheel alo
 test "desk: a file told of says so, 下载 the page's button; the bar's own download too" {
   let t = desk_tester("chat-preview-none")
   assert_true(t.find("此文件类型不支持预览") is Some(_))
-  assert_true(t.find("4 KB · BIN") is Some(_))
+  // (its kind on its card, its size under its name)
+  assert_true(t.find("BIN") is Some(_) && t.find("4 KB") is Some(_))
   t.tap_text("下载")
   t.frame()
   // downloaded by the core: how far, in the button's place

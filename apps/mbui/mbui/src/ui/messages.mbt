@@ -1,4 +1,4 @@
-// Messages from outside the frames (docs/determinism.md, rule 1): what a core answers, posted on its channel by the
+// Messages from outside the frames (rule 1): what a core answers, posted on its channel by the
 // host from any thread (src/host/post.h `mb_post`, web/host.js `post`) or by a test (Tester::post), is the
 // framework's to keep until a frame begins. Then all that came are taken and handed, in the order posted, to their
 // channel's handler (`on_message`), before the frame reads anything: how much of it a frame sees depends on frames,
@@ -129,20 +129,10 @@ let messages_in : Array[(String, String, Bytes?)] = []
 fn messages_arrive() -> Unit {
   messages_handed.val = 0
   let came : Array[(String, String, Bytes?)] = []
-  match fake.val {
-    Some(_) =>
-      if fake_posted.length() > 0 {
-        for m in fake_posted {
-          came.push(m)
-        }
-        fake_posted.clear()
-      }
-    None =>
-      if @hostapi.post_take() > 0 {
-        while @hostapi.post_next() is Some((channel, json, b)) {
-          came.push((channel, json, if b.length() > 0 { Some(b) } else { None }))
-        }
-      }
+  if @hostapi.post_take() > 0 {
+    while @hostapi.post_next() is Some((channel, json, b)) {
+      came.push((channel, json, if b.length() > 0 { Some(b) } else { None }))
+    }
   }
   messages_take(came)
   if messages_in.length() > 0 {
@@ -153,10 +143,10 @@ fn messages_arrive() -> Unit {
 ///|
 /// Between frames, something was posted (hostcall.mbt's outside_posted: a host that says so rather than asking for a
 /// frame): taken now, what changes only signals handed to its handler as it comes (a topic's change, a remote screen's
-/// frame), the rest kept for the next frame, which is asked for only then. Under a Tester the frame takes what came.
+/// frame), the rest kept for the next frame, which is asked for only then.
 fn messages_between() -> Unit {
-  // (while a frame runs, or under a Tester: the frame takes it, as it begins)
-  if fake.val is Some(_) || in_frame.val || frame_running.val {
+  // (while a frame runs: the frame takes it, as it begins)
+  if in_frame.val || frame_running.val {
     outside_counted()
     return
   }
@@ -179,7 +169,7 @@ fn messages_between() -> Unit {
 /// (`on_message_said`); from the first that is not, it and all after it left for the frame (messages_in).
 fn messages_take(came : Array[(String, String, Bytes?)]) -> Unit {
   // (one event, at its own moment: what had ended by then settled before any handler runs, view_host.mbt)
-  view_event(fn() { messages_take_now(came) })
+  view_event(fn() { messages_take_now(came) }, what="messages")
 }
 
 ///|

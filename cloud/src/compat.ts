@@ -1,11 +1,12 @@
-// still.fail was called ember (docs/rename-still-fail.md), and stations, apps and pages from before the rename keep
-// running for a long time. So the cloud answers both names: its old hosts (the *_ORIGIN_ALIASES, bound to the same
-// Workers, kept for good and never redirected wholesale: only the web app's pages move to the new host, src/web.ts), the old request headers (x-ember-*, read when the
-// x-stillfail-* one is missing), the old names inside signed messages and subprotocols, and the preview host's old
-// /_ember/ paths. What it says itself (links, headers it sets) uses the new names.
+// still.fail was called ember. No station, app or page from before the rename is left
+// (2026-11-05: none in two weeks of telemetry), so the cloud answers only the new names, but for its old hosts (the
+// *_ORIGIN_ALIASES, bound to the same Workers: stations enrolled then may still be told them in their own settings,
+// which they move off themselves) and the tag of a station's notices (push.ts: stations of now still sign with it).
 
-/** The prefixes of the names on the wire, the new one first. */
-export const PREFIXES = ["stillfail", "ember"] as const;
+/** The prefix of the names on the wire. */
+const PREFIX = "stillfail";
+/** The prefix a station's notices are still signed under, by stations from before 2026-11-05 (station/src/cloud/provider.ts). */
+export const FORMER_NOTICE_PREFIX = "ember";
 
 /** `primary` and its aliases (a comma-separated list of origins), primary first, no empties. */
 export function originList(primary: string, aliases?: string): string[] {
@@ -22,17 +23,13 @@ export const adminOrigins = (env: { ADMIN_ORIGIN: string; ADMIN_ORIGIN_ALIASES?:
 /** The test channel's origin (BETA_ORIGIN), or null when there is none. Not an alias: what it serves is gated (index.ts). */
 export const betaOrigin = (env: { BETA_ORIGIN?: string }): string | null => env.BETA_ORIGIN?.trim() || null;
 
-/** A still.fail request header by its name after the prefix (`station` for x-stillfail-station), or its x-ember- one. */
+/** A still.fail request header by its name after the prefix (`station` for x-stillfail-station). */
 export function header(from: Request | Headers, name: string): string | null {
-  const headers = from instanceof Headers ? from : from.headers;
-  for (const prefix of PREFIXES) {
-    const value = headers.get(`x-${prefix}-${name}`);
-    if (value !== null) return value;
-  }
-  return null;
+  return (from instanceof Headers ? from : from.headers).get(`x-${PREFIX}-${name}`);
 }
 
-/** The ways a signed station message may read: `<prefix>-<tag>:<origin>:<rest>`, for each prefix and origin. */
-export function signedMessages(tag: string, origins: string[], rest: string): string[] {
-  return PREFIXES.flatMap((prefix) => origins.map((origin) => `${prefix}-${tag}:${origin}:${rest}`));
+/** The ways a signed station message may read: `stillfail-<tag>:<origin>:<rest>` for each origin (and each of
+ *  `former`'s prefixes). */
+export function signedMessages(tag: string, origins: string[], rest: string, former: readonly string[] = []): string[] {
+  return [PREFIX, ...former].flatMap((prefix) => origins.map((origin) => `${prefix}-${tag}:${origin}:${rest}`));
 }

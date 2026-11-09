@@ -1,10 +1,11 @@
-// The workspace lock on this device (docs/workspace-lock.md): what the device signs and how it says which device it
+// The workspace lock on this device: what the device signs and how it says which device it
 // is. The stations decide (station/src/cloud/lock.ts); the cloud only keeps and carries the chain. The hashing is the
-// stations' and the cloud's, tested on the same values (test/lock.test.ts).
+// same forms as the stations' and the cloud's (lock-form.ts), tested on the same values (test/lock.test.ts).
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { Effect } from "effect";
 import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
+import * as form from "./lock-form.ts";
 import { hex, sha256, utf8 } from "./util.ts";
 
 export type Sig = { key: string; alg: "Ed25519"; sig: string };
@@ -13,28 +14,21 @@ export type Entry = { v: 1; ws: string; seq: number; prev: string | null; at: nu
 export type Head = { seq: number; hash: string; genesis: string };
 /// What a connection says of the device in its hello: its base key, and that key's signature for this endpoint;
 /// `entries`, what put it in the lock lately, for a station that has not heard of it yet (views/lock.ts `carried`).
-export type LockClaim = { device: string; proof: string; entries?: Entry[] };
+/// `person`: the chain of the person's own lock, where its member bound it in the workspace's (views/lock.ts
+/// `carriedPerson`).
+/// `kind`, `label`: what the device is, for the station to list it for a lock's owner (station/src/mesh/seen-devices.ts).
+export type LockClaim = { device: string; proof: string; kind?: string; label?: string; entries?: Entry[]; person?: Entry[] };
+/// How much of the locks a hello brings at most (a station reads its first line up to 16 KiB).
+export const CARRY_BYTES = 12 * 1024;
 
 /// JSON with object keys sorted, no space: what is hashed. Only integers, strings, booleans, null, arrays, objects.
 export function canonical(v: unknown): string {
-  if (v === null || typeof v === "boolean" || typeof v === "string") return JSON.stringify(v);
-  if (typeof v === "number") {
-    if (!Number.isSafeInteger(v)) throw CoreError.invalid("lock entries hold integers only");
-    return String(v);
-  }
-  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
-  if (typeof v === "object") {
-    const o = v as Record<string, unknown>;
-    const keys = Object.keys(o).filter((k) => o[k] !== undefined).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonical(o[k])}`).join(",")}}`;
-  }
-  throw CoreError.invalid("not a lock value");
+  return form.canonical(v, CoreError.invalid);
 }
 
 /// An entry's hash (hex): of everything but its signature.
 export function entryHash(e: Omit<Entry, "sig">): string {
-  const { v, ws, seq, prev, at, kind, body } = e;
-  return hex(sha256(utf8(`stillfail-lock/1\n${canonical({ v, ws, seq, prev, at, kind, body })}`)));
+  return hex(sha256(utf8(form.entryText(e, CoreError.invalid))));
 }
 
 const concat = (a: Uint8Array, b: Uint8Array) => {
@@ -53,11 +47,7 @@ export const endpointBytes = (ws: string, endpoint: string) => utf8(`stillfail-l
 
 /// A device's short code: what a person compares, on the new device and where it is confirmed.
 export function shortCode(base: string): string {
-  const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const h = sha256(utf8(`stillfail-lock-code/1\0${base}`));
-  let out = "";
-  for (let i = 0; i < 6; i++) out += alphabet[h[i]! % 32];
-  return `${out.slice(0, 3)}-${out.slice(3)}`;
+  return form.shortCodeOf(sha256(utf8(form.codeText(base))));
 }
 
 /// The device's claim for an endpoint, signed with its base key (the mesh's device key, an Ed25519 seed): by the host
@@ -107,6 +97,18 @@ export class Signer {
       if (!back || hex(back) !== hex(old)) return yield* Effect.fail(new CoreError("host", "the lock's signing key did not read back as it was sealed"));
       yield* Effect.mapError(host.storageDelete(Signer.KEY), asCoreError);
       return new Signer(old);
+    });
+  }
+
+  /// The one an earlier install kept whose id is `id` (`Host.securePast`), kept again as this one: null when none is.
+  static recover(host: Host, id: string): Effect.Effect<Signer | null, CoreError> {
+    return Effect.gen(function* () {
+      if (!host.appKeys || !host.securePast || !host.secureSet) return null;
+      const past = yield* Effect.mapError(host.securePast(Signer.KEY), asCoreError);
+      const seed = past.find((v) => v.length === 32 && new Signer(v).id === id);
+      if (!seed) return null;
+      yield* Effect.mapError(host.secureSet(Signer.KEY, seed, { user: false }), asCoreError);
+      return new Signer(seed);
     });
   }
 

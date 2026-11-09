@@ -164,8 +164,12 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
       None => ()
     }
   }
-  // det-ok(app-clock): the core's own input, as the real one reads its host's clock for a letter typed (Host.nowMs)
-  let now = if text(params, "act") == "type" { @ui.now() } else { 0.0 }
+  // (the core's own input, as the real one reads its host's clock for a letter typed (Host.nowMs): the moment of the
+  // call, as the window's context has it)
+  let now = match (text(params, "act"), fix_ctx.val) {
+    ("type", Some(c)) => c.moment()
+    _ => 0.0
+  }
   let prefs : Map[String, Json] = {}
   for k in ["driveViews", "filesTabs"] {
     prefs[k] = Json::object(fix_browse.prefs.get(k).unwrap_or({}).copy())
@@ -210,9 +214,9 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
 ///|
 /// The `driveBrowse` or `filesTabs` topic's value, as the core gives it now.
 pub fn fix_browse_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
-  if fix_browse.version != f.version {
+  if fix_browse.version != f.changes() {
     fix_browse.shown.clear()
-    fix_browse.version = f.version
+    fix_browse.version = f.changes()
   }
   let topic : Map[String, Json] = { "topic": Json::string(name) }
   for k, v in params {

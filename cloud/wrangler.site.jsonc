@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  // The official site, still.fail: static files only (`pnpm run build:site` → dist/site, the page built to HTML with
-  // the demo's opening frame in it), no code. youdid.wtf, the test channel's, is a build of its own (wrangler.site-beta.jsonc).
+  // The official site, still.fail: static files only (website/build.mjs --site still.fail → dist/site, one page per
+  // language), no code. youdid.wtf, the test channel's, is a build of its own (wrangler.site-beta.jsonc).
   "name": "still-fail-site",
   "compatibility_date": "2026-09-08",
   "workers_dev": false,

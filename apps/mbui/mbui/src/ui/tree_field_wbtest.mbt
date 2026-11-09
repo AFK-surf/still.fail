@@ -31,11 +31,11 @@ fn one_field(
       |> ignore
       if tree && off == (0.0, 0.0) {
         // (as tall as its words lay out, as the old view's editor is in its box: what holds it no taller)
-        field(h, f, font_size=10.0, max_lines=1, submitted=fn(w) { said.push(w) }) |> ignore
+        field(h, f, label="字", font_size=10.0, max_lines=1, submitted=fn(w) { said.push(w) }) |> ignore
       } else if tree {
         h.box(fn(v) {
           v.over(Is(true)).offset(Is(off)).width(Is(Some(200.0))) |> ignore
-          field(v, f, font_size=10.0, max_lines=1, submitted=fn(w) { said.push(w) }) |> ignore
+          field(v, f, label="字", font_size=10.0, max_lines=1, submitted=fn(w) { said.push(w) }) |> ignore
         })
         |> ignore
       } else {
@@ -150,6 +150,16 @@ test "a field of the tree's: no old view in the window, its node read out as a f
 }
 
 ///|
+test "a field of the tree's as an old view's: a step finds it by the words in it (field:), not by others" {
+  for tree in [true, false] {
+    let s = @signals.signal(1.0, same=fn(a, b) { a == b })
+    let t = one_field(tree, s, Field::new(text="KEY=value"), [])
+    assert_eq(t.locate("field:KEY=val").length(), 1, msg="by its words (tree: \{tree})")
+    assert_eq(t.locate("field:other").length(), 0, msg="not by others (tree: \{tree})")
+  }
+}
+
+///|
 test "a field of the tree's as an old view's: the keyboard put away, the field let go of, the host told so" {
   for tree in [false, true] {
     let s = @signals.signal(1.0, same=fn(a, b) { a == b })
@@ -176,7 +186,7 @@ fn field_cut_half(tree : Bool, words : String) -> Array[(Int, Double, Double, Do
       o.box(fn(h) {
         h.width(Is(Some(200.0))).height(Is(Some(20.0))).scale(Is(0.5), about=At(0.0, 0.0)) |> ignore
         if tree {
-          field(h, f, font_size=10.0, max_lines=1) |> ignore
+          field(h, f, label="字", font_size=10.0, max_lines=1) |> ignore
         } else {
           old(h, fn(c) { c.box(w=Px(200.0), h=Px(20.0), fn() { c.editor("e", field=f, font_size=10.0, max_lines=1, plain=true) |> ignore }) |> ignore })
           .grow(Is(1.0))
@@ -223,7 +233,7 @@ test "a field of the tree's let go, its Field then an old view's editor's: no lo
       h.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(200.0))).height(Is(Some(20.0))).scale(Is(0.5), about=At(0.0, 0.0)) |> ignore
       h.show(fn() { tree.get() }, fn(v) {
         v.width(Is(Some(200.0))).height(Is(Some(20.0))) |> ignore
-        field(v, f, font_size=10.0, max_lines=1) |> ignore
+        field(v, f, label="字", font_size=10.0, max_lines=1) |> ignore
       })
       h.show(fn() { !tree.get() }, fn(v) {
         v.width(Is(Some(200.0))).height(Is(Some(20.0))) |> ignore
@@ -417,7 +427,7 @@ fn field_over_after(tree : Bool, f : Field, at : @signals.Signal[Double]) -> Tes
       o.box(fn(h) {
         h.width(Is(Some(200.0))).offset(By(fn() { (0.0, at.get()) })) |> ignore
         if tree {
-          field(h, f, font_size=10.0, max_lines=4) |> ignore
+          field(h, f, label="字", font_size=10.0, max_lines=4) |> ignore
           h.box(fn(a) { a.height(Is(Some(10.0))).says(Is(Some(@view.said(Button, label="after")))) |> ignore }) |> ignore
         } else {
           old(h, fn(c) {
@@ -513,7 +523,7 @@ fn field_said_so(
     root.box(fn(h) {
       h.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(120.0))).height(Is(Some(20.0))) |> ignore
       if tree {
-        field(h, f, font_size=10.0, max_lines=1, placeholder~, shorter~, secret~, look?, ime_action~, submitted=fn(w) {
+        field(h, f, label=if placeholder == "" { "字" } else { "" }, font_size=10.0, max_lines=1, placeholder~, shorter~, secret~, look?, ime_action~, submitted=fn(w) {
           said.push(w)
         })
         |> ignore
@@ -592,7 +602,7 @@ fn field_in(
     c.box(fn(h) {
       h.offset(Is((20.0, 20.0))).width(Is(Some(w))).scale(Is(scale), about=At(0.0, 0.0)) |> ignore
       if tree {
-        field(h, f, font_size=10.0, max_lines~, secret~, look?, paste_limit~, pasted=fn(p) { pasted.push(p) }) |> ignore
+        field(h, f, label="字", font_size=10.0, max_lines~, secret~, look?, paste_limit~, pasted=fn(p) { pasted.push(p) }) |> ignore
       } else {
         old(h, fn(c) {
           c.box(w=Px(w), fn() {
@@ -641,6 +651,29 @@ test "a field of the tree's: what its look reads changed, its words and node not
   t.frame()
   let after = t.drawn_glyphs().map(fn(gl) { gl.2 })
   assert_eq((before, after), ([0xFF0000FFL, 0xFF0000FFL, 0xFF0000FFL], [0x00FF00FFL, 0x00FF00FFL, 0x00FF00FFL]))
+}
+
+///|
+test "a field of the tree's: what its look reads changed, its size not: the host handed its words' place to draw again, the frame asked for" {
+  let ink = @signals.signal(0xFF0000FFL, same=fn(a, b) { a == b })
+  let f = Field::new(text="abc")
+  let t = field_in(true, f, 200.0, [], look=fn(d) { (d, [(0, d.length(), ink.get())]) })
+  t.record_host()
+  ink.set(0x00FF00FFL)
+  t.run_as_host(1000.0 / 60.0)
+  let frames = t.host_frames()
+  guard frames is [fr, ..] else { fail("no frame") }
+  // (what a host that keeps what it drew shows: the parts it is handed drawn anew, the rest as it was)
+  let handed = fn(x : Double, y : Double) {
+    fr.damage.any(fn(d) { d.2 < 0.0 || (x >= d.0 && x < d.0 + d.2 && y >= d.1 && y < d.1 + d.3) })
+  }
+  let glyphs = t.drawn_glyphs()
+  assert_eq(glyphs.length(), 3)
+  assert_true(fr.asked && fr.changed, msg="\{fr}")
+  for gl in glyphs {
+    assert_true(handed(gl.0 + 1.0, gl.1 + 1.0), msg="\{gl} not in \{fr.damage}")
+    assert_eq(gl.2, 0x00FF00FFL)
+  }
 }
 
 ///|
@@ -905,7 +938,7 @@ fn bar_field(
   set_view_app(fn(root) {
     root.box(fn(h) {
       h.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(200.0))).scale(Is(scale), about=At(0.0, 0.0)) |> ignore
-      field(h, f, font_size=10.0, max_lines=shows) |> ignore
+      field(h, f, label="字", font_size=10.0, max_lines=shows) |> ignore
     })
     |> ignore
     // (an old view of its own beside it, 10 by 10 at the window's foot, nothing over the field; its modal layer, open,
@@ -915,7 +948,7 @@ fn bar_field(
         c.overlay("cover", modal=modal_layer, outside=false, fn() {
           // (pressed where it is: its own, whatever is under it)
           let k = c.id("cover box")
-          c.clicked(k) |> ignore
+          c.takes_presses(k)
           c.box(id=k, w=Px(300.0), h=Px(200.0), bg=0x00000020L, fn() {  }) |> ignore
         })
         |> ignore
@@ -1062,7 +1095,7 @@ fn files_pasted(tree : Bool, give : (Tester) -> Unit) -> (String, Array[Array[(S
     root.box(fn(h) {
       h.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(200.0))) |> ignore
       if tree {
-        field(h, f, font_size=10.0, max_lines=1, files=fn(fs) { told.push(fs) }) |> ignore
+        field(h, f, label="字", font_size=10.0, max_lines=1, files=fn(fs) { told.push(fs) }) |> ignore
       } else {
         old(h, fn(c) {
           c.box(w=Px(200.0), fn() {
@@ -1116,7 +1149,7 @@ test "a field of the tree's of a size and colours followed: as each changes alon
   set_view_app(fn(root) {
     root.box(fn(h) {
       h.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(200.0))) |> ignore
-      field(h, f, max_lines=1, size_by=fn() { size.get() }, colors_by=fn() {
+      field(h, f, label="字", max_lines=1, size_by=fn() { size.get() }, colors_by=fn() {
         let k = ink.get()
         (k, k, k)
       })
@@ -1151,7 +1184,7 @@ test "a field of the tree's focus asked before its node is made: given it as the
   set_view_app(fn(root) {
     root.show(fn() { on.get() }, fn(h) {
       h.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(200.0))) |> ignore
-      field(h, f, font_size=10.0, max_lines=1) |> ignore
+      field(h, f, label="字", font_size=10.0, max_lines=1) |> ignore
     })
   })
   t.draw()
@@ -1169,7 +1202,7 @@ test "a field of the tree's focus asked under a modal layer over it that holds t
   set_view_app(fn(root) {
     root.box(fn(h) {
       h.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(200.0))) |> ignore
-      field(h, f, font_size=10.0, max_lines=1) |> ignore
+      field(h, f, label="字", font_size=10.0, max_lines=1) |> ignore
     })
     |> ignore
     root.box(fn(m) {
@@ -1214,7 +1247,7 @@ test "a field given the focus by Ctx::focus_field in a window that is a tree: an
     |> ignore
     root.show(fn() { on.get() }, fn(h) {
       h.over(Is(true)).offset(Is((20.0, 80.0))).width(Is(Some(200.0))) |> ignore
-      field(h, later, font_size=10.0, max_lines=1) |> ignore
+      field(h, later, label="字", font_size=10.0, max_lines=1) |> ignore
     })
     root.show(fn() { old_on.get() }, fn(h) {
       h.over(Is(true)).offset(Is((20.0, 140.0))).width(Is(Some(200.0))).height(Is(Some(20.0))) |> ignore
@@ -1260,7 +1293,7 @@ test "Ctx::focus_field: an old view's editor holding a Field taken away, the Fie
     })
     root.show(fn() { tree_on.get() }, fn(h) {
       h.over(Is(true)).offset(Is((20.0, 80.0))).width(Is(Some(200.0))) |> ignore
-      field(h, f, font_size=10.0, max_lines=1) |> ignore
+      field(h, f, label="字", font_size=10.0, max_lines=1) |> ignore
     })
   })
   t.draw()
@@ -1281,7 +1314,7 @@ test "Ctx::focus_field under a modal layer of the tree's holding the focus: a Fi
   set_view_app(fn(root) {
     root.show(fn() { on.get() }, fn(h) {
       h.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(200.0))) |> ignore
-      field(h, f, font_size=10.0, max_lines=1) |> ignore
+      field(h, f, label="字", font_size=10.0, max_lines=1) |> ignore
     })
     root.box(fn(m) {
       m
@@ -1323,7 +1356,7 @@ fn under_modal(old_one : Bool, on : @signals.Signal[Bool], f : Field) -> Tester 
         .grow(Is(1.0))
         |> ignore
       } else {
-        field(h, f, font_size=10.0, max_lines=1) |> ignore
+        field(h, f, label="字", font_size=10.0, max_lines=1) |> ignore
       }
     })
     root.box(fn(m) {
@@ -1405,7 +1438,7 @@ test "a field of the tree's of more lines than it shows, drawn half as big about
       h.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(200.0))).scale(Is(0.5), about=At(0.0, 1.0)) |> ignore
       // (six lines of 20 shown: a bar long enough to keep clear of what is over it, the 20 under the system's bar where
       // it is laid out and all, bar_track; not so short that it runs the whole edge whatever is over it)
-      field(h, f, font_size=10.0, line=20.0, max_lines=6) |> ignore
+      field(h, f, label="字", font_size=10.0, line=20.0, max_lines=6) |> ignore
     })
     |> ignore
   })
@@ -1454,11 +1487,11 @@ fn field_or_words(
         v.over(Is(true)).offset(By(fn() { local.get() })).width(Is(Some(200.0))) |> ignore
         if words {
           v
-          .words(Is("abcdefghij"), look={ size: 10.0, weight: 400, line: tree_theme().text_line * 10.0, wrap: false })
+          .words(Is("abcdefghij"), look={ size: 10.0, weight: 400, line: tree_theme().text_line * 10.0, wrap: false, tracking: @view.letters_own, balance: false })
           .ink(By(fn() { tree_theme().color(Fg) }))
           |> ignore
         } else {
-          field(v, f, font_size=10.0, max_lines=1) |> ignore
+          field(v, f, label="字", font_size=10.0, max_lines=1) |> ignore
         }
       })
       |> ignore
@@ -1494,4 +1527,124 @@ test "a field of the tree's and words of the tree's in its place: its node off t
       fields[k].iter().zip(words[k].iter()).all(fn(q) { (q.0.0 - q.1.0).abs() <= 1.0e-9 && (q.0.1 - q.1.1).abs() <= 1.0e-9 })
     assert_true(alike, msg="\{p}: the field's glyphs where the words' are: \{fields[k]}, the words' \{words[k]}")
   }
+}
+
+///|
+test "a field of the tree's as an old view's: the pointer on its words an I-beam, off it the arrow" {
+  let got = []
+  for tree in [false, true] {
+    let s = @signals.signal(1.0, same=fn(a, b) { a == b })
+    let t = one_field(tree, s, Field::new(text="abc"), [])
+    t.move(60.0, 30.0)
+    let on = t.cursor()
+    t.move(260.0, 150.0)
+    got.push((on, t.cursor()))
+  }
+  assert_eq(got, [(IBeam, Arrow), (IBeam, Arrow)])
+}
+
+///|
+test "a field written in: one in an old view, nothing over it, is a field focused here; one in a modal layer of the tree's over that old view is focused, but not here (what the old view asks is kept for the layer)" {
+  let open = @signals.signal(false)
+  let seen : Ref[(Bool, Bool)] = Ref((false, false))
+  let asked = Ref(true)
+  let f = Field::new()
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0, platform=0)
+  set_view_app(fn(root) {
+    old(root, fn(c) {
+      c.editor("e", placeholder="底下", max_lines=1) |> ignore
+      if asked.val {
+        asked.val = false
+        c.focus_editor("e")
+      }
+      seen.val = (c.field_focused(), c.field_focused_here())
+    })
+    .grow(Is(1.0))
+    |> ignore
+    root.show(fn() { open.get() }, fn(layer) {
+      layer.over(Is(true)).modal(Is(true)).width(Is(Some(300.0))).height(Is(Some(200.0))) |> ignore
+      let v = field(layer, f, placeholder="上面", max_lines=1)
+      layer.focus_opens(v) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  t.draw()
+  let under_alone = (t.focused().map(fn(s) { s.label }), seen.val)
+  open.set(true)
+  t.draw()
+  t.draw()
+  let covered = (t.focused().map(fn(s) { s.label }), seen.val)
+  assert_eq((under_alone, covered), ((Some("底下"), (true, true)), (Some("上面"), (true, false))))
+}
+
+///|
+test "a mouse press in either kind of field lets go of page words picked before it, and the field can be edited" {
+  for tree in [false, true] {
+    let f = Field::new(text="draft")
+    let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+    t.check_looks(false)
+    set_view_app(fn(root) {
+      root.box(fn(page) {
+        page.height(Is(Some(40.0))) |> ignore
+        old(page, fn(c) {
+          c.mouse_drags_lists(false)
+          c.selectable(fn() { c.rich([plain("page words to pick")], size=15.0) |> ignore })
+        }).grow(Is(1.0)) |> ignore
+      }) |> ignore
+      root.box(fn(box) {
+        box.width(Is(Some(200.0))).height(Is(Some(40.0))) |> ignore
+        if tree {
+          field(box, f, label="字", font_size=15.0, max_lines=1) |> ignore
+        } else {
+          old(box, fn(c) { c.editor("field", field=f, font_size=15.0, max_lines=1) |> ignore }).grow(Is(1.0)) |> ignore
+        }
+      }) |> ignore
+    })
+    t.draw()
+    t.drag(1.0, 10.0, 180.0, 10.0)
+    assert_true(t.ctx().selected_text() != "", msg="page selected, tree=\{tree}")
+    t.tap(15.0, 50.0)
+    assert_eq(t.ctx().selected_text(), "", msg="page selection cleared, tree=\{tree}")
+    t.type_text("X")
+    assert_true(f.text().contains("X"), msg="field edited, tree=\{tree}")
+  }
+}
+
+///|
+test "Field::focused: whether the editor holding it has the focus, an old view's or the tree's, followed as the focus comes and goes" {
+  let held = Field::new()
+  let later = Field::new()
+  let told : Array[Bool] = []
+  let t = Tester::new(fn(_c) {  }, w=300.0, h=200.0)
+  set_view_app(fn(root) {
+    root.box(fn(h) {
+      h.over(Is(true)).offset(Is((20.0, 20.0))).width(Is(Some(200.0))).height(Is(Some(20.0))) |> ignore
+      old(h, fn(c) { c.box(w=Px(200.0), h=Px(20.0), fn() { c.editor("held", field=held, font_size=10.0, max_lines=1, plain=true) |> ignore }) |> ignore })
+      .grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+    root.box(fn(h) {
+      h.over(Is(true)).offset(Is((20.0, 80.0))).width(Is(Some(200.0))) |> ignore
+      field(h, later, label="字", font_size=10.0, max_lines=1) |> ignore
+      // (what reads it in the tree: told as it changes)
+      h.reacts(fn() { later.focused() }, fn(on) { told.push(on) }) |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let none = (held.focused(), later.focused())
+  g().focus_field(held)
+  t.draw()
+  let old_one = (held.focused(), later.focused())
+  later.focus()
+  t.draw()
+  let tree_one = (held.focused(), later.focused())
+  later.let_go()
+  t.draw()
+  assert_eq(
+    (none, old_one, tree_one, later.focused(), told),
+    ((false, false), (true, false), (false, true), false, [false, true, false]),
+  )
 }

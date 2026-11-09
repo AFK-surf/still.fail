@@ -1,4 +1,4 @@
-// The search (docs/search.md, views/search.ts): what the device holds and what each station finds, one list.
+// The search (views/search.ts): what the device holds and what each station finds, one list.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { SEARCH_SETTLE_MS, SEARCH_STALE_MS } from "../src/station/sync.ts";

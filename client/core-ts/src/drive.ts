@@ -1,4 +1,4 @@
-// A folder of a station's drive as the clients show it (the `drive` topic; docs/drive.md): each entry with what kind it
+// A folder of a station's drive as the clients show it (the `drive` topic): each entry with what kind it
 // is (which mark it has) and what a press on it does, its size and time in words, and the folder's count in a line.
 import { bytes, clock, local, localDay } from "./format.ts";
 import { current, tr, type Lang } from "./i18n.ts";

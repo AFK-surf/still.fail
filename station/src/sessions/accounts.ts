@@ -1,15 +1,17 @@
-// Which account a session runs on (the Rust station's hub.rs: run_on, spend, pick, health_of, model_efforts, configure): the
+// Which account a session runs on (spend, pick, health_of, model_efforts, configure): the
 // pool's choice among the station's profiles, kept while usable, moved off one whose allowance ran out, and changed by
 // hand (profile, model, effort, fast). How profiles are doing comes from outside (the accounts module's checks and
 // allowances: `setHealth`); which ran into their allowance lately is kept here.
 import type { Clock } from "effect";
 import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
+import { checkContext } from "./context-cap.ts";
 import type { Store } from "../store/store.ts";
 import { type HubConfig, type Profile, runs, runtimeNamed, runtimeTitle, sameModel, spelling } from "./config.ts";
-import { availableEfforts, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, serves, urgency, usable, windowsOf } from "./pool.ts";
+import { modelKey } from "../read/usage.ts";
+import { availableEfforts, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, reportedEfforts, serves, urgency, usable, windowsOf } from "./pool.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
-import { billedPerUse } from "../agents/profiles.ts";
+import { billedPerUse, FAST_RUNTIMES } from "../agents/profiles.ts";
 
 /// How long a profile a turn ran into the allowance of is passed over when its allowance is not read again.
 const SPENT_FOR_MS = 60 * 60 * 1000;
@@ -21,7 +23,7 @@ const CALLS_LOOKED_AT = 200;
 
 /// How a session runs from its next turn on. A field left out: unchanged; null: back to the default. `repick`: back to the
 /// station's choice (no profile given), its account picked again now, as a new session's would be (`Accounts.repick`).
-export type SessionChange = { profile?: string | null; model?: string | null; effort?: string | null; fast?: boolean | null; repick?: boolean; afresh?: boolean | null };
+export type SessionChange = { runtime?: string; profile?: string | null; model?: string | null; effort?: string | null; fast?: boolean | null; context?: number | null; repick?: boolean; afresh?: boolean | null };
 
 /// A profile as a session's runtime starts on it, with its spelling of the session's model.
 export type RunOn = Profile & { spelling(model: string): string | null };
@@ -35,7 +37,7 @@ export type AccountsDeps = {
   running(except?: string): string[];
   /// Its time.
   clock: Clock.Clock;
-  /// Whether session `key` may run on a profile: one allowed in its workspace (docs/multi-workspace.md); absent: any.
+  /// Whether session `key` may run on a profile: one allowed in its workspace; absent: any.
   allows?(key: string, profile: Profile): boolean;
 };
 
@@ -48,6 +50,10 @@ export class Accounts {
   /// Accounts a turn ran into the allowance of, and when: passed over until their allowance is read again, or for
   /// SPENT_FOR_MS when it is not.
   private spent = new Map<string, number>();
+  /// Models that ran into their own limit on an account (Claude Code's "You've reached your Fable limit."), by account:
+  /// the model as the runtime named it, as the session ran it (null: its profile's default) and when. That model alone
+  /// is passed over there, for SPENT_FOR_MS (the runtime says no refill time); the account's others run on (#4643).
+  private modelSpent = new Map<string, { named: string; ran: string | null; at: number }[]>();
   /// Where each model's context is compacted on this station, and when that was learnt.
   private compactions: [number, Map<string, number>] | null = null;
 
@@ -85,6 +91,16 @@ export class Accounts {
     return typeof health.account === "string" && health.account !== "" ? `account:${health.account}` : `profile:${id}`;
   }
 
+  /// Profiles can be different logins to the same account, whose allowance they share.
+  sameAccount(a: string, b: string): boolean {
+    return this.accountKey(a) === this.accountKey(b);
+  }
+
+  /// An explicit reset supersedes the failure which made this account unavailable to the pool.
+  resetAllowance(id: string): void {
+    this.spent.delete(this.accountKey(id));
+  }
+
   healthOf(id: string): ProfileHealth {
     const health: ProfileHealth = { ...this.health(id) };
     const key = this.accountKey(id, health);
@@ -108,6 +124,28 @@ export class Accounts {
     return health;
   }
 
+  /// How profile `id` is doing for running `model` (null: its own default): spent as well while that model is passed
+  /// over on its account, having run into its own limit there.
+  private healthFor(id: string, model: string | null | undefined): ProfileHealth {
+    const health = this.healthOf(id);
+    return this.modelSpentAt(id, model) !== undefined ? { ...health, spent: true } : health;
+  }
+
+  /// When `model` (null: profile `id`'s default) ran into its own limit on `id`'s account, while it is passed over.
+  private modelSpentAt(id: string, model: string | null | undefined): number | undefined {
+    const key = this.accountKey(id);
+    const now = this.deps.clock.currentTimeMillisUnsafe();
+    const kept = (this.modelSpent.get(key) ?? []).filter((s) => now - s.at <= SPENT_FOR_MS);
+    if (kept.length > 0) this.modelSpent.set(key, kept);
+    else this.modelSpent.delete(key);
+    const runs = model ?? this.deps.config().profiles.find((p) => p.id === id)?.model ?? null;
+    const words = (m: string) => m.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w !== "");
+    // The runtime names it in words ("Fable" for claude-fable-5-1); one run by its default, unknown, is the same default.
+    const named = (s: { named: string; ran: string | null }) =>
+      runs === null ? s.ran === null : (s.ran !== null && sameModel(runs, s.ran)) || words(s.named).every((w) => words(modelKey(runs)).includes(w));
+    return kept.filter(named).at(-1)?.at;
+  }
+
   /// Chooses the profile a session runs on (pool.ts); `except`: the session it is chosen for, whose own process is not
   /// counted.
   pick(candidates: Profile[], model: string | null | undefined, strict: boolean, except?: string): Profile {
@@ -117,14 +155,14 @@ export class Accounts {
       const key = this.accountKey(id);
       load.set(key, (load.get(key) ?? 0) + 1);
     }
-    const profile = pickProfile(candidates, model, { health: (id) => this.healthOf(id), load: (id) => load.get(this.accountKey(id)) ?? 0, lastPicked: (id) => this.picked.get(this.accountKey(id)) ?? 0, now: () => this.deps.clock.currentTimeMillisUnsafe() }, strict);
+    const profile = pickProfile(candidates, model, { health: (id) => this.healthFor(id, model), load: (id) => load.get(this.accountKey(id)) ?? 0, lastPicked: (id) => this.picked.get(this.accountKey(id)) ?? 0, now: () => this.deps.clock.currentTimeMillisUnsafe() }, strict);
     this.picked.set(this.accountKey(profile.id), this.deps.clock.currentTimeMillisUnsafe());
     return profile;
   }
 
-  /// Whether session `key` may run on `profile` (its workspace's, docs/multi-workspace.md).
+  /// Whether session `key` may run on `profile` (its workspace's).
   allows(key: string, profile: Profile): boolean {
-    return this.deps.allows?.(key, profile) ?? true;
+    return profile.enabled !== false && (this.deps.allows?.(key, profile) ?? true);
   }
 
   /// The profile a session's runtime starts on, asked again before each turn: its own while usable (on another it goes
@@ -148,7 +186,7 @@ export class Accounts {
     const current = candidates.find((p) => p.id === row.profile);
     const now = this.deps.clock.currentTimeMillisUnsafe();
     const crowded = (p: Profile) => urgency(this.healthOf(p.id).quota, now).crowded;
-    const keeps = current && (row.profilePinned || (usable(this.healthOf(current.id)) && serves(current, row.model)));
+    const keeps = current && (row.profilePinned || (usable(this.healthFor(current.id, row.model)) && serves(current, row.model)));
     let among = candidates;
     if (current && keeps) {
       if (row.profilePinned) return withSpelling(current);
@@ -157,7 +195,7 @@ export class Accounts {
       // little.
       const paid = (p: Profile) => !billedPerUse(p);
       const better = (p: Profile) =>
-        p.id !== current.id && serves(p, row.model) && usable(this.healthOf(p.id)) && (paid(p) === paid(current) ? crowded(current) && !crowded(p) : paid(p));
+        p.id !== current.id && serves(p, row.model) && usable(this.healthFor(p.id, row.model)) && (paid(p) === paid(current) ? crowded(current) && !crowded(p) : paid(p));
       among = candidates.filter(better);
       if (among.length === 0 || holding || !this.cheapToLeave(key)) return withSpelling(current);
     }
@@ -190,6 +228,8 @@ export class Accounts {
   private cheapToLeave(key: string): boolean {
     const now = this.deps.clock.currentTimeMillisUnsafe();
     const { store } = this.deps;
+    if (store.recentlyCompacted(key)) return true;
+    if (!store.compactionsReady()) return cheapToLeave(store.lastContexts(key, CALLS_LOOKED_AT), new Map());
     if (this.compactions === null || now - this.compactions[0] > COMPACTIONS_EVERY_MS) this.compactions = [now, store.compactionPoints(now - COMPACTIONS_OVER_MS)];
     return cheapToLeave(store.lastContexts(key, CALLS_LOOKED_AT), this.compactions[1]);
   }
@@ -203,15 +243,21 @@ export class Accounts {
   /// A turn of the session ran into the allowance of `ranOn`, the profile its process was started on (null: the
   /// session's own): that profile is passed over for now, and a session left to the station moves to another of its
   /// runtime's that can run it now; one moved off it while the turn ran (changed by hand, its profile deleted) goes on
-  /// where it was moved. The names of the one left and the one taken when it moved; null when it is kept to its profile
-  /// or none other can.
-  spend(key: string, ranOn: string | null): [string, string] | null {
+  /// where it was moved. `model`: the model whose own limit it was, as the runtime named it (runtime.ts `modelLimitOf`),
+  /// which alone is passed over on that account, its other models still run there (#4643). The names of the one left and
+  /// the one taken when it moved; null when it is kept to its profile or none other can.
+  spend(key: string, ranOn: string | null, model: string | null = null): [string, string] | null {
     const { store } = this.deps;
     const row = store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
     const left = ranOn ?? row.profile;
-    this.spent.set(this.accountKey(left), this.deps.clock.currentTimeMillisUnsafe());
     const config = this.deps.config();
+    const now = this.deps.clock.currentTimeMillisUnsafe();
+    if (model === null) this.spent.set(this.accountKey(left), now);
+    else {
+      const ran = row.model ?? config.profiles.find((p) => p.id === left)?.model ?? null;
+      this.modelSpent.set(this.accountKey(left), [...(this.modelSpent.get(this.accountKey(left)) ?? []), { named: model, ran, at: now }]);
+    }
     const name = (id: string) => config.profiles.find((p) => p.id === id)?.name ?? id;
     if (row.profile !== left) return [name(left), name(row.profile)];
     if (row.profilePinned) return null;
@@ -221,7 +267,7 @@ export class Accounts {
     // enabled), all of its runtime's.
     const all = config.profiles.filter((p) => p.runtimes.includes(runtime) && this.allows(key, p));
     const strict = all.some((p) => serves(p, row.model));
-    const candidates = all.filter((p) => p.id !== left && (!strict || serves(p, row.model)) && usable(this.healthOf(p.id)));
+    const candidates = all.filter((p) => p.id !== left && (!strict || serves(p, row.model)) && usable(this.healthFor(p.id, row.model)));
     if (candidates.length === 0) return null;
     const next = this.pick(candidates, row.model, false);
     store.setSessionProfile(key, next.id, false);
@@ -229,29 +275,30 @@ export class Accounts {
     return [name(left), next.name];
   }
 
-  /// When the profile of session `key`, which ran into its allowance, is expected to run again: the last refill of its
-  /// used-up windows, or, none known, when it stops being passed over.
+  /// When the profile of session `key`, which ran into its allowance (or its model into its own limit), is expected to run
+  /// again: the last refill of its used-up windows, or, none known, when it stops being passed over.
   refillsAt(key: string): number {
     const row = this.deps.store.getSession(key);
     const now = this.deps.clock.currentTimeMillisUnsafe();
     if (!row) return now + SPENT_FOR_MS;
     const full = windowsOf(this.healthOf(row.profile).quota).filter((w) => Number(w.usedPercent) >= 100 && typeof w.resetsAt === "number" && w.resetsAt > now);
     if (full.length > 0) return Math.max(...full.map((w) => w.resetsAt as number));
-    return (this.spent.get(this.accountKey(row.profile)) ?? now) + SPENT_FOR_MS;
+    return (this.spent.get(this.accountKey(row.profile)) ?? this.modelSpentAt(row.profile, row.model) ?? this.deps.store.lastTurn(key)?.endedAt ?? now) + SPENT_FOR_MS;
   }
 
-  /// The reasoning levels every eligible account offers for a model (a pinned account may offer more): automatic
-  /// selection must work on every one, quota failover included. `allowed`: the profiles of the workspace asked for.
+  /// The reasoning levels every eligible account that has said offers for a model (a pinned account may offer more):
+  /// automatic selection must work on every one, quota failover included. `allowed`: the profiles of the workspace asked for.
   modelEfforts(runtime: RuntimeKind, model: string | null, pinned: string | null, allowed: (p: Profile) => boolean = () => true): string[] {
     const profiles = this.deps
       .config()
-      .profiles.filter((p) => p.runtimes.includes(runtime) && allowed(p))
+      .profiles.filter((p) => p.enabled !== false && p.runtimes.includes(runtime) && allowed(p))
       .filter((p) => pinned === null || p.id === pinned)
       .filter((p) => model === null || runs(p, model));
-    return commonEfforts(
-      profiles.map((p) => availableEfforts(runtime, model ?? p.model ?? null, this.healthOf(p.id).check?.modelEfforts ?? null)),
-      runtime,
-    );
+    // One that has reported no levels (its check not done, or failed) is not known to lack any: it does not hold back
+    // those that have.
+    const catalog = (p: Profile) => this.healthOf(p.id).check?.modelEfforts ?? null;
+    const said = profiles.map((p) => reportedEfforts(runtime, model ?? p.model ?? null, catalog(p))).filter((levels) => levels !== null);
+    return commonEfforts(said.length > 0 ? said : profiles.map((p) => availableEfforts(runtime, model ?? p.model ?? null, catalog(p))), runtime);
   }
 
   /// Checks a change (configure) and works out what it makes of the session: its profile (and whether kept to it), its
@@ -270,11 +317,32 @@ export class Accounts {
     const wantedProfile = change.repick === true && (change.profile === undefined || change.profile === null) ? null : nonEmpty(change.profile);
     const newModel = nonEmpty(change.model);
     const newEffort = nonEmpty(change.effort);
-    if (change.fast !== undefined && change.fast !== null && runtime !== "codex") throw new Error(t("station.session.fastOpenAiOnly"));
     const allowed = (p: Profile) => this.allows(key, p);
+    if (change.runtime !== undefined && change.runtime !== row.runtime) {
+      const target = runtimeNamed(change.runtime);
+      if (!target) throw new Error(`unknown runtime ${change.runtime}`);
+      const model = newModel ?? null;
+      const candidates = config.profiles.filter((p) => p.runtimes.includes(target) && this.allows(key, p));
+      if (candidates.length === 0) throw new Error(t("station.session.noProfileHere", { runtime: runtimeTitle(target) }));
+      if (model !== null && !candidates.some((p) => runs(p, model))) throw new Error(t("station.session.noProfileForModel", { model, runtime: runtimeTitle(target) }));
+      const picked = typeof wantedProfile === "string" ? candidates.find((p) => p.id === wantedProfile) : this.pick(candidates, model, true, key);
+      if (!picked) throw new Error(`unknown profile ${wantedProfile}`);
+      if (model !== null && !runs(picked, model)) throw new Error(t("station.session.modelOff", { profile: picked.name, model }));
+      const effort = newEffort ?? null;
+      if (effort !== null) {
+        const efforts = this.modelEfforts(target, model, typeof wantedProfile === "string" ? picked.id : null, allowed);
+        if (!efforts.includes(effort)) throw new Error(t("station.profile.efforts", { runtime: runtimeTitle(target), efforts: efforts.join(t("station.list.separator")) }));
+      }
+      if (change.fast != null && !FAST_RUNTIMES.includes(target)) throw new Error(t("station.session.fastOpenAiOnly"));
+      checkContext(target, change.context, lang);
+      return { row, runtime: target, model, effort, profile: picked.id, pinned: typeof wantedProfile === "string", repick: false };
+    }
+    if (change.fast !== undefined && change.fast !== null && !FAST_RUNTIMES.includes(runtime)) throw new Error(t("station.session.fastOpenAiOnly"));
+    checkContext(runtime, change.context, lang);
     if (typeof wantedProfile === "string") {
       const next = config.profiles.find((p) => p.id === wantedProfile);
       if (!next) throw new Error(`unknown profile ${wantedProfile}`);
+      if (next.enabled === false) throw new Error(t("station.profile.disabled", { profile: next.name }));
       if (!next.runtimes.includes(runtime)) throw new Error(t("station.profile.cannotRun", { profile: next.name, runtime: name }));
       if (!allowed(next)) throw new Error(t("station.profile.notHere", { profile: next.name }));
       const model = newModel !== undefined ? newModel : row.model;
@@ -295,6 +363,6 @@ export class Accounts {
       if (!efforts.includes(effort)) throw new Error(t("station.profile.efforts", { runtime: name, efforts: efforts.join(t("station.list.separator")) }));
     }
     const profile = wantedProfile !== undefined ? wantedProfile : remodel ? null : undefined;
-    return { row, model, effort, profile, repick: change.repick === true && profile === null };
+    return { row, runtime, model, effort, profile, pinned: undefined, repick: change.repick === true && profile === null };
   }
 }

@@ -1,4 +1,4 @@
-// The station's watch over the memory of what its agents run (docs/station-scheduling.md): their jobs and other
+// The station's watch over the memory of what its agents run: their jobs and other
 // stations' tasks here, and the commands the agents' runtimes run themselves (a test an agent starts in its own shell).
 // Nothing is stopped for using much: its agent is told. Only when the system says it is about to run out of memory
 // (critical) is the largest of them stopped, one at a time, its agent told why: the machine is kept up.
@@ -21,8 +21,10 @@ import { liveRunners, type RunnerInfo } from "../agents/runner.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
-import { type ProcessInfo, platform } from "../platform/index.ts";
+import { type ProcessInfo, platform, treeOf } from "../platform/index.ts";
 import type { Store } from "../store/store.ts";
+import type { DirectorySession } from "../store/session-directory.ts";
+import type { ProcessJob } from "../store/process-jobs.ts";
 import type { Pressure } from "./admit.ts";
 import { type Jobs, named } from "./jobs.ts";
 
@@ -56,12 +58,7 @@ export type WatchedAgent = { pid: number; session: string | null };
 
 /// The units of `table`: the jobs' groups first, then the commands each runtime started (children of `agents`' pids).
 export function unitsOf(table: readonly ProcessInfo[], jobs: readonly WatchedJob[], agents: readonly WatchedAgent[], self: number): Unit[] {
-  const children = new Map<number, number[]>();
-  const byPid = new Map<number, ProcessInfo>();
-  for (const p of table) {
-    byPid.set(p.pid, p);
-    if (p.pid !== p.ppid) children.set(p.ppid, [...(children.get(p.ppid) ?? []), p.pid]);
-  }
+  const { byPid, children } = treeOf(table);
   const taken = new Set<number>([self]);
   // What runs the agents is never part of a unit.
   for (const a of agents) taken.add(a.pid);
@@ -157,11 +154,20 @@ export class MemoryWatch {
     const table = await this.#o.table(pressed).catch(() => null);
     if (table === null) return pressure;
     const units = unitsOf(table, this.#o.jobs(), await this.#o.agents(), this.#o.self).sort((a, b) => b.bytes - a.bytes);
-    await this.#whose(units);
     const present = new Set(units.map((u) => u.key));
     for (const key of this.#told.keys()) if (!present.has(key)) this.#told.delete(key);
 
     const limit = limitOf(this.#o.totalBytes());
+    // A shared runtime's commands need their directories only when their agents are about to be told.
+    const toTell = new Set<Unit>();
+    for (const u of units) {
+      const last = this.#told.get(u.key);
+      if (u.bytes > limit && (last === undefined || u.bytes >= last * 2)) toTell.add(u);
+    }
+    if (pressed) for (const u of units.slice(0, TOLD_PRESSED)) {
+      if (u.bytes >= TOLD_MIN && !this.#toldPressed.has(u.key) && !this.#stopping.has(u.key)) toTell.add(u);
+    }
+    await this.#whose([...toTell]);
     for (const u of units) {
       const last = this.#told.get(u.key);
       if (u.bytes <= limit || (last !== undefined && u.bytes < last * 2)) continue;
@@ -185,7 +191,9 @@ export class MemoryWatch {
     if (pressure === "critical" && (this.#lastStop === null || now - this.#lastStop >= SETTLE_MS)) {
       const largest = units.find((u) => u.bytes >= TOLD_MIN && !this.#stopping.has(u.key));
       if (largest) {
-        this.#lastStop = now;
+        // A unit already told under pressure may still be the next one stopped.
+        if (!toTell.has(largest)) await this.#whose([largest]);
+        this.#lastStop = this.#fibers.now();
         await this.#stop(largest);
       }
     }
@@ -198,9 +206,12 @@ export class MemoryWatch {
     const unknown = units.filter((u) => u.session === null && u.job === null);
     if (unknown.length === 0) return;
     const cwds = await this.#o.cwds(unknown.map((u) => u.pids[0]!)).catch(() => new Map<number, string>());
+    const owners = new Map<string, string | null>();
     for (const u of unknown) {
       const dir = cwds.get(u.pids[0]!);
-      if (dir !== undefined) u.session = this.#o.sessionAt(dir);
+      if (dir === undefined) continue;
+      if (!owners.has(dir)) owners.set(dir, this.#o.sessionAt(dir));
+      u.session = owners.get(dir)!;
     }
   }
 
@@ -233,8 +244,13 @@ export class MemoryWatch {
 }
 
 /// The jobs running now, as the watches see them (the resources' too, resources/watch.ts).
-export function watchedJobs(store: Store): WatchedJob[] {
-  return store.jobsRunning().flatMap((j) => (j.pgid !== null ? [{ id: j.id, session: j.sessionKey, pgid: j.pgid, label: named(j) }] : []));
+export type ProcessJobsLookup = { read(): ProcessJob[] | null; consider(running: number): void };
+export function watchedJobs(store: Store, lookup?: ProcessJobsLookup): WatchedJob[] {
+  const indexed = lookup?.read() ?? null;
+  if (indexed !== null) return indexed.map((j) => ({ id: j.id, session: j.sessionKey, pgid: j.pgid, label: named(j) }));
+  const running = store.jobsRunning();
+  lookup?.consider(running.length);
+  return running.flatMap((j) => (j.pgid !== null ? [{ id: j.id, session: j.sessionKey, pgid: j.pgid, label: named(j) }] : []));
 }
 
 /// The session of `sessions` whose directory (its workspace, or where it runs) holds `dir`, the deepest; null for none.
@@ -250,9 +266,10 @@ function sessionIn(sessions: { key: string; workspace: string; cwd: string | nul
 }
 
 /// Which session each runner id is (a runner is a session's, its id made of the session's key, or a profile's, shared
-/// by its sessions): the sessions shown asked each time; every session ever only as a runner none of them names comes
-/// (an archived session's left on, a profile's), and what that found kept.
-export function runnerSessions(store: Store): (ids: string[]) => Map<string, string> {
+/// by its sessions). If the shared lookup is not ready, keep the immediate answer used before while it is prepared.
+export type RunnerNameLookup = (runners: readonly { id: string; part: string }[]) => Map<string, string> | "fallback";
+
+export function runnerSessions(store: Store, lookup?: RunnerNameLookup): (ids: string[]) => Map<string, string> {
   let all: Map<string, string> | null = null;
   const unnamed = new Set<string>();
   const of = (sessions: { key: string }[]) => {
@@ -261,6 +278,16 @@ export function runnerSessions(store: Store): (ids: string[]) => Map<string, str
     return whose;
   };
   return (ids) => {
+    if (ids.length === 0) { lookup?.([]); return new Map(); }
+    if (lookup !== undefined) {
+      const runners = ids.flatMap((id) => {
+        const kind = RUNTIME_KINDS.find((k) => id.startsWith(`${k}-`));
+        return kind === undefined ? [] : [{ id, part: id.slice(kind.length + 1) }];
+      });
+      if (runners.length === 0) { lookup([]); return new Map(); }
+      const named = lookup(runners);
+      if (named !== "fallback") return named;
+    }
     const whose = of(store.liveSessions());
     const rest = ids.filter((id) => !whose.has(id));
     if (rest.some((id) => !unnamed.has(id) && !all?.has(id))) {
@@ -284,19 +311,35 @@ export async function runnersWithSessions(data: string, whose: (ids: string[]) =
 
 /// The watch as the station runs it: over its jobs (`jobs`' store) and the commands of its runtimes (the runners of
 /// before and now, <data>/run/runners), on this machine's memory.
-export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: (session: string, text: string) => void; clock?: Clock.Clock }): MemoryWatch {
+export function liveMemory(o: { data: string; store: Store; jobs: Jobs; notify: (session: string, text: string) => void; clock?: Clock.Clock; runnerNames?: RunnerNameLookup;
+  directory?: (dir: string) => DirectorySession | null; processJobs?: ProcessJobsLookup }): MemoryWatch {
   const { store } = o;
-  const whose = runnerSessions(store);
+  const whose = runnerSessions(store, o.runnerNames);
+  // A directory none of the sessions shown has, and whose it is among every session ever (none: null): a session made
+  // since is shown, found among those first.
+  const found = new Map<string, string | null>();
+  const elsewhere = (dir: string): string | null => {
+    if (!found.has(dir)) found.set(dir, sessionIn(store.listSessions(), dir));
+    return found.get(dir)!;
+  };
   return new MemoryWatch({
     clock: o.clock,
     pressure: () => platform.memoryPressure(),
     table: (exact) => platform.processTable(exact),
     totalBytes: () => totalmem(),
     cwds: (pids) => platform.cwds(pids),
-    jobs: () => watchedJobs(store),
+    jobs: () => watchedJobs(store, o.processJobs),
     agents: async () => (await runnersWithSessions(o.data, whose)).map((r) => ({ pid: r.pid, session: r.session })),
-    // Among the sessions shown first; every session ever only for a directory none of them has (an archived one's).
-    sessionAt: (dir) => sessionIn(store.liveSessions(), dir) ?? sessionIn(store.listSessions(), dir),
+    // Among the sessions shown first; every session ever only for a directory none of them has (an archived one's),
+    // and what that found kept: under memory pressure (the whole while on a station) the watch looks every few seconds, and
+    // every session read each time held the main thread 3.2 s (2026-11-02).
+    sessionAt: (dir) => {
+      const match = o.directory?.(dir);
+      if (match === null || match === undefined) return sessionIn(store.liveSessions(), dir) ?? elsewhere(dir);
+      if (match.live) return match.key;
+      if (!found.has(dir)) found.set(dir, match.key);
+      return found.get(dir)!;
+    },
     tell: (unit, text) => {
       const job = unit.job !== null ? store.getJob(unit.job) : null;
       // Another station's task: its notices, which go back to the session that asked for it (jobs/remote.ts).

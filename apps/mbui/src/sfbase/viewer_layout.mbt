@@ -1,14 +1,14 @@
-// What the viewer lays out as the web's (ember web/src/FilePreview.tsx, FilePreview.css.ts), read by its stages
+// What the viewer lays out as the web's, read by its stages
 // (viewer.mbt), and how it says where a file was opened from.
 
 ///|
-/// Back to where it was opened from, by name (FilePreview.tsx backLabel): a drive's file its folder (mobile/Drive.tsx
+/// Back to where it was opened from, by name: a drive's file its folder (mobile/Drive.tsx
 /// DrivePreview), a chat's its chat's title; 关闭 when neither is known.
 pub fn Viewer::desk_back(self : Viewer, src : Source) -> String {
   match self.drive {
     Some(d) => viewer_folder_label(src, d.station, d.root, dv_parent(d.path))
     None => {
-      let title = text((src.topic)("chat", { "station": Json::string(self.station), "session": Json::string(self.key) }).value, "title")
+      let title = text(src.topic("chat", { "station": Json::string(self.station), "session": Json::string(self.key) }).get().value, "title")
       if title != "" {
         title
       } else {
@@ -19,7 +19,7 @@ pub fn Viewer::desk_back(self : Viewer, src : Source) -> String {
 }
 
 ///|
-/// A folder of a station's drive by name (drive/Drive.tsx useOpened `back`): its last part, the folder lent by its
+/// A folder of a station's drive by name: its last part, the folder lent by its
 /// name at its root.
 pub fn viewer_folder_label(src : Source, station : String, root : String, folder : String) -> String {
   if folder != "" {
@@ -41,7 +41,7 @@ pub fn viewer_folder_label(src : Source, station : String, root : String, folder
 }
 
 ///|
-/// How a PDF's pages lie on a desktop (FilePreview.css.ts fpPdf): as wide as 1000 allows less 28 either side, 76 under
+/// How a PDF's pages lie on a desktop: as wide as 1000 allows less 28 either side, 76 under
 /// the window's top, 20 apart, 28 at the foot.
 pub fn desk_pdf_width(window : Double) -> Double {
   dmax(0.0, dmin(desk_pdf_most, window) - 2.0 * desk_pdf_side)
@@ -61,14 +61,10 @@ pub let desk_page_top : Double = 76.0
 pub let desk_table_top : Double = 68.0
 
 ///|
-/// How far the system's status bar reaches over the window (a tablet's), where the bar is across the top (not laid
-/// out Small, whose bar floats: @sf.viewer_frame_bar): what a document under it starts that much lower for.
-fn viewer_top(c : @ui.Ctx) -> Double {
-  if @sf.layout(c.width) is Small {
-    0.0
-  } else {
-    (@sf.viewer_host().room)().0
-  }
+/// How far the system's status bar reaches over the window: what a document under the bar, across the top or floating
+/// (@sf.viewer_frame_bar), starts that much lower for.
+fn viewer_top(_c : @ui.Ctx) -> Double {
+  (@sf.viewer_host().room)().0
 }
 
 ///|
@@ -124,7 +120,7 @@ pub let desk_whole : Double = 1.0
 
 
 ///|
-/// Under 640 (FilePreview.css.ts's phone widths): a page and a PDF 60 down, a PDF's pages 12 in and apart, a text 16 in
+/// Under 640: a page and a PDF 60 down, a PDF's pages 12 in and apart, a text 16 in
 /// and 48 under.
 pub let page_small_top : Double = 60.0
 

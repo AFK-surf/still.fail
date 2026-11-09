@@ -3,7 +3,8 @@
 # [drive] | log | stop | delete) on this module's apps, packed by this module's Gradle project (android/: the still.fail
 # mbui app, fail.still.mbui; the debug build fail.still.android.dev, still.fail dev), with the still.fail core in coredemo and stillfail
 # (scripts/android-core.sh; listen-test, its own command). APP=stillfail by default; VARIANT=release the build of every push (still.fail mbui, fail.still.mbui);
-# VARIANT=stable and beta still.fail's Android app's own (fail.still.android, fail.still.android.beta: android/apk.json).
+# VARIANT=stable and beta still.fail's Android app's own (fail.still.android, fail.still.android.beta: android/apk.json);
+# monoid and monoid-beta monoid's (build.monoid.android, .beta: the same app on monoid's cloud).
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 export APP=${APP:-stillfail}
@@ -12,6 +13,8 @@ case "${VARIANT:-debug}" in
   release) export MBUI_APP_ID=${MBUI_APP_ID:-fail.still.mbui} ;;
   stable) export MBUI_APP_ID=${MBUI_APP_ID:-fail.still.android} ;;
   beta) export MBUI_APP_ID=${MBUI_APP_ID:-fail.still.android.beta} ;;
+  monoid) export MBUI_APP_ID=${MBUI_APP_ID:-build.monoid.android} ;;
+  monoid-beta) export MBUI_APP_ID=${MBUI_APP_ID:-build.monoid.android.beta} ;;
   *) export MBUI_APP_ID=${MBUI_APP_ID:-fail.still.android.dev} ;;
 esac
 case $APP in coredemo | stillfail) export MBUI_ANDROID_HOOK=$D/android-core.sh ;; esac

@@ -1,6 +1,5 @@
-// Sharing a chat as a picture on a phone (sfpages' publish.mbt, the same as keyboard and mouse's; publish.mbt the
-// info's rows) over the fixture's chat: its sheet's 分享图片 and the public links made before, the page with the picture
-// as it would be, the attachments ticked, the picture taken and kept in the photo album, and a link revoked once asked.
+// Sharing a chat as a picture on a phone (sfpages' publish.mbt, the same as keyboard and mouse's) over the fixture's
+// chat: the page with the picture as it would be, the attachments ticked, the picture taken and kept in the photo album.
 
 ///|
 /// The source the last publish_core made.
@@ -9,14 +8,13 @@ let publish_src : Ref[Source?] = Ref(None)
 ///|
 /// The page that draws the chat as a picture opened, as 分享图片 in the chat's "…" does (the menu's own: wide_publish_wbtest).
 fn open_publish_page() -> Unit {
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   @sfpages.open_publish(publish_src.val.unwrap(), r, 7.0)
 }
 
 ///|
 /// The chat's sheet open over the fixture's chat (`menu`: the chat in its detail with no sheet over it, its page opened by open_publish_page as its "…"'s
-/// 分享图片 does); `chat.publishPreview` answered with fix_preview, `chat.publish` with
-/// its link, the rest with nothing; `preview` in its place, where given; `finish` false: what is asked of the host (a
+/// 分享图片 does); `chat.publishPreview` answered with fix_preview, the rest with nothing; `preview` in its place, where given; `finish` false: what is asked of the host (a
 /// picture decoded) done only as the test says (Tester::finish).
 fn publish_core(
   calls : Array[Made],
@@ -25,6 +23,8 @@ fn publish_core(
   menu? : Bool = false,
   platform? : Int = 2,
   width? : Double = 390.0,
+  height? : Double = 844.0,
+  nav_able? : Bool = false,
 ) -> @ui.Tester {
   new_run()
   let mode = if menu { "chat-detail" } else { "chat-info" }
@@ -35,23 +35,13 @@ fn publish_core(
       calls.push({ name, params, bytes: None, done, heard: None })
       match name {
         "chat.publishPreview" => done(Ok(preview()))
-        "chat.publish" =>
-          done(
-            Ok({
-              "id": "p3",
-              "link": "https://share.still.fail/#st1key.p3.k3",
-              "createdAt": 0,
-              "byName": "林",
-              "mayRevoke": true,
-            }),
-          )
         _ => done(Ok(Json::object({})))
       }
     },
   }
   publish_src.val = Some(src)
   open_fixture_over(mode, src)
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=844.0, platform~, finish~)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=width, h=height, platform~, finish~, nav_able~)
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -99,32 +89,7 @@ test "sharing a chat on a small screen: a table wider than the screen and the us
 }
 
 ///|
-test "分享图片: the chat's sheet lists the public links made before (making one is its menu's); 复制 copies one" {
-  let calls : Array[Made] = []
-  let t = publish_core(calls)
-  assert_true(t.find("分享图片") is None)
-  // when, then who: their face (their initial, without a picture) before their name
-  assert_true(t.find("10 分钟前 · ") is Some(_) && t.find("Alice") is Some(_))
-  assert_true(t.find("2 天前 · ") is Some(_) && t.find("Bob") is Some(_))
-  // Bob's only copied: the viewer did not publish it (the one 撤销 is on the viewer's own row)
-  let (_, mine) = t.find("Alice").unwrap()
-  let (_, revoke) = t.find_last("撤销").unwrap()
-  assert_true((revoke - mine).abs() < 1.0)
-  // (Bob's 复制, the last, under 复制会话链接: the sheet's last row, brought up from under its foot)
-  match t.find_last("复制") {
-    Some((_, y)) if y > publish_fold => t.wheel(195.0, publish_fold, y - publish_fold)
-    _ => ()
-  }
-  tap_last(t, "复制")
-  assert_eq(t.clipboard(), "https://share.still.fail/#B5CrvEZwwZq7oct4Vs0Ld90SJHgZO4uOwQdhtJsLRNE.Qm9vSzVnUkN2dUdS.k3Yq-p1")
-  // (said at once, read out: seen as it has come in, toast_said)
-  assert_true(toast_said(t, "已复制链接"))
-  t.run_for(@kit.presence_in_ms)
-  assert_true(t.find("已复制链接") is Some(_))
-}
-
-///|
-test "分享图片: the page shows the picture as it would be, 取消 and 保存到相册 at its foot; 保存到相册 keeps it in the album, without what was left out" {
+test "分享图片: the page shows the picture as it would be, 取消, 复制 and 保存到相册 at its foot; 保存到相册 keeps it in the album, without what was left out; 复制 copies it" {
   let calls : Array[Made] = []
   let t = publish_core(calls, menu=true)
   open_publish_page()
@@ -158,10 +123,8 @@ test "分享图片: the page shows the picture as it would be, 取消 and 保存
   assert_true(@sfpages.publish_left_out("f1") && @sfpages.publish_left_out("f2"))
   assert_true(viewer.get() is None)
   // nothing is published
-  assert_true(t.query(Button, label="复制图片") is None)
   t.click(Button, label="保存到相册")
   t.run_for(@kit.presence_in_ms)
-  assert_eq(named(calls, "chat.publish").length(), 0)
   // the picture taken: the chat's name, its messages, their times as dates, still.fail's; not the attachments left
   // out, nor the notes of what was hidden (for the one sharing it)
   let shots = t.shots()
@@ -178,10 +141,78 @@ test "分享图片: the page shows the picture as it would be, 取消 and 保存
     None => fail("not a PNG")
   }
   assert_true(t.find("已保存到相册") is Some(_))
-  // 取消, beside it at the foot, closes it: gone as a dialog goes
+  // 复制 between 取消 and 保存到相册 (2026-11-06 用户「手机上都加复制」), the two before it as wide as their words, none
+  // cut short; pressed, the picture on the clipboard, nothing more in the album, the button 已复制 a moment
+  let cancel = t.query(Button, label="取消").unwrap().rect
+  let copy = t.query(Button, label="复制").unwrap().rect
+  let save = t.query(Button, label="保存到相册").unwrap().rect
+  assert_true(cancel.0 < copy.0 && copy.0 < save.0 && cancel.1 == copy.1 && copy.1 == save.1, msg="\{(cancel, copy, save)}")
+  assert_true(copy.2 < save.2, msg="\{(cancel, copy, save)}")
+  assert_true(t.find("保存到…") is None, msg=t.words().map(fn(w) { w.0 }).join("|"))
+  t.click(Button, label="复制")
+  t.frame()
+  t.frame()
+  match t.clipboard_png().bind(png_size) {
+    Some((pw, _)) => assert_eq(pw, 1520)
+    None => fail("no picture copied")
+  }
+  assert_eq(t.kept().length(), 1)
+  assert_true(t.query(Button, label="已复制") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
+  // 取消, beside them at the foot, closes it: gone as a dialog goes
   t.click(Button, label="取消")
   t.run_for(@kit.pop_out_ms)
   assert_true(t.find("部署登录页") is None)
+}
+
+///|
+test "分享图片 on an iPhone Duo: the system's tabs put away, its way back and 保存到相册 in the system's bars, its own bar and band none; kept from there, closed from there, the tabs back" {
+  // (on its side, the system's column down its trailing edge; upright, its bars across the top)
+  for size in [(951.0, 669.0, 84.0), (669.0, 951.0, 0.0)] {
+    let (w, h, side) = size
+    let calls : Array[Made] = []
+    let t = publish_core(calls, menu=true, platform=1, width=w, height=h, nav_able=true)
+    t.post(@hostapi.system_channel, "{\"bars\":{\"top\":0,\"bottom\":20,\"left\":0,\"right\":\{side}}}")
+    t.run_for(@ui.move_most_ms)
+    open_publish_page()
+    t.run_for(@ui.move_most_ms)
+    assert_true(t.find("部署登录页") is Some(_))
+    let said = t.nav_said()
+    for id in ["\"bare\":true", "lead/over/close", "over/copy", "复制图片", "over/act", "保存到相册"] {
+      if !said.contains(id) {
+        fail("\{size}: the bars handed hold no \{id}: \{said}")
+      }
+    }
+    // (its title upright, in the bar across the top; on its side none, the system floating it over the page's top)
+    assert_eq(said.contains("\"title\":\"分享图片"), side == 0.0, msg=said)
+    // (none of the tabs' own buttons while it is up: the chat's)
+    assert_false(said.contains("page/chat/"), msg=said)
+    // (none of its own: no bar across the top, no band of 取消 and 保存到相册 at the foot)
+    assert_true(t.query(Button, label="保存到相册") is None)
+    assert_true(t.query(Button, label="复制图片") is None)
+    assert_true(t.query(Button, label="取消") is None)
+    // (its boxes to tick and the rest of it clear of the system's column)
+    for s in t.semantics() {
+      let (x, _, sw, _) = s.rect
+      if !s.hidden && s.label != "收起侧边栏" && s.role == @ui.Role::Button && s.label != "" && sw > 0.0 && x + sw > w - side + 0.5 {
+        fail("\{size}: \{s.label} under the system's column: \{s.rect}")
+      }
+    }
+    // 保存到相册 chosen there: the picture kept in the photo album
+    t.post(@hostapi.system_channel, "{\"nav\":\"over/act\"}")
+    t.run_for(@kit.presence_in_ms)
+    assert_eq(t.kept_ways().map(fn(k) { (k.0, k.1.to_string()) }), [("still.fail.png", "Photos")])
+    // 复制图片 chosen there: the picture on the clipboard, nothing more in the album, 已复制 there a moment
+    t.post(@hostapi.system_channel, "{\"nav\":\"over/copy\"}")
+    t.run_for(@ui.move_most_ms / 4.0)
+    assert_true(t.clipboard_png() is Some(_), msg="\{size}: nothing copied")
+    assert_eq(t.kept_ways().length(), 1)
+    assert_true(t.nav_said().contains("已复制"), msg=t.nav_said())
+    // closed there: gone as a dialog goes, the tabs back
+    t.post(@hostapi.system_channel, "{\"nav\":\"lead/over/close\"}")
+    t.run_for(@kit.pop_out_ms)
+    assert_true(t.find("部署登录页") is None)
+    assert_true(t.nav_said().contains("\"bare\":false"), msg=t.nav_said())
+  }
 }
 
 ///|
@@ -221,6 +252,86 @@ test "分享图片: a message unticked fades on the page and is not in the pictu
 }
 
 ///|
+test "多选: the chat's picture opened from a message has that message alone ticked, brought into sight; the others ticked join it" {
+  let calls : Array[Made] = []
+  // (short, so that Ana's message, the last, is under the window's foot as the page opens)
+  let t = publish_core(calls, menu=true, height=520.0)
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  @sfpages.open_publish(publish_src.val.unwrap(), r, 7.0, picked=Some(9.0))
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  // the whole chat asked for, as 分享图片 asks it
+  let asked = named(calls, "chat.publishPreview")
+  assert_eq(asked.length(), 1)
+  assert_true(field(Some(asked[0].params), "turn") is None)
+  assert_eq(t.all(Checkbox, label="放进图片").map(fn(n) { n.check == Some(On) }), [false, false, false, true])
+  assert_true(@sfpages.publish_message_left_out(4.0) && @sfpages.publish_message_left_out(6.0))
+  assert_true(!@sfpages.publish_message_left_out(9.0))
+  match t.rect_of("截图、日志和构建缓存都附上了") {
+    Some((_, y, _, h)) => assert_true(y > 0.0 && y + h < 520.0, msg="\{(y, h)}")
+    None => fail("Ana's message not drawn")
+  }
+  // another ticked (the one over it, scrolled back to): both in the picture, the rest not
+  t.wheel(195.0, 260.0, -150.0)
+  t.run_for(@ui.move_most_ms)
+  let (x, y, w, h) = t.all(Checkbox, label="放进图片")[2].rect
+  assert_true(y > 0.0 && y + h < 520.0, msg="\{(y, h)}")
+  t.tap(x + w / 2.0, y + h / 2.0)
+  assert_true(!@sfpages.publish_message_left_out(7.0) && @sfpages.publish_message_left_out(6.0))
+  t.click(Button, label="保存到相册")
+  t.run_for(@kit.presence_in_ms)
+  let words = t.shots()[0].join("|")
+  assert_true(words.contains("截图、日志和构建缓存都附上了") && words.contains("Axiom 查询 token") && !words.contains("跑了 42 秒") && !words.contains("帮我把登录页部署到预发"), msg=words)
+}
+
+///|
+test "多选: a message not ticked fades, its box to tick does not" {
+  let calls : Array[Made] = []
+  let t = publish_core(calls, menu=true)
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  @sfpages.open_publish(publish_src.val.unwrap(), r, 7.0, picked=Some(9.0))
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(@sfpages.publish_message_left_out(6.0))
+  // the boxes of those not ticked drawn whole, not faded with their messages
+  // (how opaque the box of message `i` is drawn: its own and every box's it is in)
+  let box_alpha = fn(i : Int) -> Double {
+    let (x, y, w, h) = t.all(Checkbox, label="放进图片")[i].rect
+    let laid = t.boxes()
+    let by_index : Map[Int, @ui.Laid] = {}
+    for b in laid {
+      by_index[b.index] = b
+    }
+    let mut most = 0.0
+    for b in laid {
+      if (b.x - x).abs() < 0.5 && (b.y - y).abs() < 0.5 && (b.w - w).abs() < 0.5 && (b.h - h).abs() < 0.5 {
+        let mut a = 1.0
+        let mut at = Some(b)
+        while at is Some(n) {
+          a = a * n.opacity
+          at = by_index.get(n.parent)
+        }
+        most = dmax(most, a)
+      }
+    }
+    most
+  }
+  t.run_for(@ui.move_most_ms)
+  assert_eq(box_alpha(1), 1.0)
+}
+
+///|
+test "多选 from a message the preview does not hold: all of it ticked" {
+  let calls : Array[Made] = []
+  let t = publish_core(calls, menu=true)
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
+  @sfpages.open_publish(publish_src.val.unwrap(), r, 7.0, picked=Some(11.0))
+  t.frame()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(t.all(Checkbox, label="放进图片").iter().all(fn(n) { n.check == Some(On) }))
+}
+
+///|
 /// Whether the picture's boxes to tick (one for each of fix_preview's four messages) stand in one column of their own
 /// before its words, 12 short of where they start (its title's start, less the pictures' `reach` out in the margin
 /// before them), not over a message; each on the middle of its message's first line: the viewer's own words, Ana's
@@ -254,31 +365,6 @@ fn picture_mine_at_end(t : @ui.Tester) -> Bool {
   match (t.rect_of("帮我把登录页部署到预发，token 是 [已隐藏]"), t.rect_of("截图、日志和构建缓存都附上了")) {
     (Some((mx, _, _, _)), Some((ox, _, _, _))) => mx > ox
     _ => false
-  }
-}
-
-///|
-test "分享图片: 撤销 asks first, then revokes that public link" {
-  let calls : Array[Made] = []
-  let t = publish_core(calls)
-  t.tap_text("撤销")
-  assert_eq(named(calls, "chat.unpublish").length(), 0)
-  assert_true(t.find("撤销此链接？") is Some(_))
-  let felt = t.haptics().length()
-  tap_last(t, "撤销")
-  let revoked = named(calls, "chat.unpublish")
-  assert_eq(revoked.length(), 1)
-  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
-  assert_eq(text(Some(revoked[0].params), "id"), "p2")
-  assert_eq(number(Some(revoked[0].params), "thread"), 7.0)
-}
-
-///|
-/// Taps the last words holding `s` (drawn last: the sheet's, over what is under it).
-fn tap_last(t : @ui.Tester, s : String) -> Unit {
-  match t.find_last(s) {
-    Some((x, y)) => t.tap(x, y)
-    None => abort("no text \"\{s}\" on screen")
   }
 }
 

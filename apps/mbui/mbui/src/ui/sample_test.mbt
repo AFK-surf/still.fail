@@ -47,7 +47,7 @@ test "set out after a long rest: its start that frame's time, each frame handed 
       w.start = c.set_out(w.mover, w as &@ui.Moving, what="a way")
     }
     if w.start >= 0.0 {
-      seen.push((c.now(), w.at(c.now())))
+      seen.push((c.moment(), w.at(c.moment())))
     }
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })

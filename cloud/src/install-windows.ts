@@ -1,7 +1,7 @@
 // The still.fail station's installer for Windows, served at /install.ps1 (install.ts is macOS's and Linux's): in
 // PowerShell on the machine that is to be a station, `& ([scriptblock]::Create((irm <origin>/install.ps1))) <token> [<lock>]`
-// (the workspace lock's hash to pin, docs/workspace-lock.md).
-// It does what install.sh does, the Windows way (docs/station-ts-native.md, "Windows"):
+// (the workspace lock's hash to pin).
+// It does what install.sh does, the Windows way ("Windows"):
 // - the release (stillfail-station-win32-x64.zip) in ~\.stillfail\app; the Node it runs on (NODE_VERSION) downloaded
 //   once per version into ~\.stillfail\node\v<version> and checked, then copied to <app>\node (no links: they take a
 //   privilege on Windows); the machine's own node.exe when it is that very version;
@@ -16,6 +16,7 @@
 // The script uses no backtick and no "${" (it is a template here): PowerShell's escapes are not needed in it.
 
 import { tr, type Lang } from "./i18n.ts";
+import { PRODUCTS } from "../../client/i18n/brand.ts";
 
 /** A message as a PowerShell expression: its words, its {arguments} the PowerShell variables named in `args`. */
 function say(lang: Lang, key: string, args: Record<string, string> = {}): string {
@@ -33,6 +34,7 @@ function say(lang: Lang, key: string, args: Record<string, string> = {}): string
 export function windowsInstallScript(origin: string, channel: "stable" | "beta" = "stable", lang: Lang = "zh"): string {
   const s = (key: string, args?: Record<string, string>) => say(lang, key, args);
   return SCRIPT.replaceAll("__ORIGIN__", origin.replaceAll("'", "''"))
+    .replace("__PRODUCTS__", () => productCases())
     .replaceAll("__CHANNEL__", channel)
     .replaceAll("__LANG__", lang)
     .replace(/__SAY\(([a-zA-Z.]+)(?:, ([^)]*))?\)/g, (_, key: string, args?: string) =>
@@ -52,17 +54,30 @@ export const bundledWindowsInstallScript = (lang: Lang) =>
     "$origin = $env:STILLFAIL_ORIGIN\nif (-not $origin) { [Console]::Error.WriteLine('STILLFAIL_ORIGIN is not set'); exit 2 }",
   );
 
+/** The installer's choice of product for each other than still.fail (client/i18n/brand.ts): a cloud on its domains or
+ * under them. */
+function productCases(): string {
+  return PRODUCTS.map(({ zones, product }) => {
+    const hosts = zones.map((zone) => zone.replaceAll(".", "\\.")).join("|");
+    return `if ($origin -match '^https?://([^/]*\\.)?(${hosts})(:[0-9]+)?$') { $product = '${product.id}'; $productName = '${product.name}' }`;
+  }).join("\n");
+}
+
 // __SAY(key, name=$variable; …) is a message (say above).
 const SCRIPT = `# still.fail station installer for Windows (cloud/src/install-windows.ts).
 param([string]$Token = '', [string]$Lock = '', [switch]$Admin)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $origin = '__ORIGIN__'
+# The product its cloud is (client/i18n/brand.ts): another product's station has a data directory, a command and a task
+# of its own beside still.fail's on the same machine (monoid's: ~\\.monoid, monoid.cmd, 「monoid station」).
+$product = 'stillfail'; $productName = 'still.fail'
+__PRODUCTS__
 if (-not $Token -and $env:STILLFAIL_TOKEN) { $Token = $env:STILLFAIL_TOKEN }
 function Say([string]$text) { Write-Host $text }
 function Fail([string]$text) { [Console]::Error.WriteLine($text); exit 1 }
 
-$data = if ($env:STILLFAIL_DATA) { $env:STILLFAIL_DATA } elseif ($env:EMBER_DATA) { $env:EMBER_DATA } else { Join-Path $env:USERPROFILE '.stillfail' }
+$data = if ($env:STILLFAIL_DATA) { $env:STILLFAIL_DATA } else { Join-Path $env:USERPROFILE ('.' + $product) }
 $run = Join-Path $data 'run'
 # Where the update is, for the station to show on its pages: download, restart.
 function Step([string]$what) { if (Test-Path $run) { Set-Content -Path (Join-Path $run 'update.step') -Value $what -ErrorAction SilentlyContinue } }
@@ -81,7 +96,7 @@ $app = Join-Path $data 'app'
 # Kept in windows.json for its updates (the station's own update is not told them).
 $apart = $null
 try { $apart = Get-Content -Raw (Join-Path $data 'windows.json') | ConvertFrom-Json } catch {}
-if ($env:STILLFAIL_TASK) { $task = $env:STILLFAIL_TASK } elseif ($apart.task) { $task = $apart.task } else { $task = 'still.fail station' }
+if ($env:STILLFAIL_TASK) { $task = $env:STILLFAIL_TASK } elseif ($apart.task) { $task = $apart.task } else { $task = "$productName station" }
 if ($env:STILLFAIL_BIN) { $binApart = $env:STILLFAIL_BIN } elseif ($apart.bin) { $binApart = $apart.bin } else { $binApart = $null }
 # The station's logon task runs elevated (RunLevel Highest) when asked for with -Admin, kept in windows.json so its own
 # updates stay so (station/src/platform/windows.ts reads it for the update task too). Then agents it starts inherit
@@ -218,6 +233,14 @@ function Ask([string]$op) {
   }
 }
 function Said { try { Get-Content (Join-Path $run 'station.json') -Raw | ConvertFrom-Json } catch { $null } }
+function HandoffWhy {
+  # A new station may know why it could not start; an older launcher only records its exit code.
+  $detail = Get-Content (Join-Path $run 'handoff-error') -Raw -Encoding UTF8 -ErrorAction SilentlyContinue
+  if ($detail) { return $detail.Trim() }
+  $why = Get-Content (Join-Path $run 'handoff-failed') -Raw -ErrorAction SilentlyContinue
+  if ($why) { return $why.Trim() }
+  return ''
+}
 
 # Handed over without stopping (as install.sh does): the new release goes where the old one was, and the launcher,
 # which stays, starts it beside the one serving; that one hands its sessions over once the new one is up, and the
@@ -226,6 +249,7 @@ $handed = ''
 if (-not $Token -and $station -and $sameTask -and $said.handoff -eq 1) {
   $started = $said.startedAt
   Remove-Item (Join-Path $run 'handoff-failed') -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $run 'handoff-error') -ErrorAction SilentlyContinue
   Step 'handoff'
   Say (__SAY(cloud.install.handoff.start))
   Swap
@@ -244,7 +268,7 @@ if (-not $Token -and $station -and $sameTask -and $said.handoff -eq 1) {
     }
   }
   if (-not $handed) {
-    $why = Get-Content (Join-Path $run 'handoff-failed') -Raw -ErrorAction SilentlyContinue
+    $why = HandoffWhy
     $now = Said
     if ($why -and $swap.aside -and (Get-Process -Id $station.ProcessId -ErrorAction SilentlyContinue) -and $now -and $now.startedAt -eq $started) {
       # The new release did not come up or take over, and the station is the launcher it was: the release before goes
@@ -320,19 +344,21 @@ function CmdPath([string]$path) {
 # A .cmd that runs $target with its arguments: the path as CmdPath names it; under no such variable, written in the
 # system's OEM code page (cmd's) when that can say it; else refused, rather than a command that runs nothing.
 function WriteCmd([string]$file, [string]$target) {
+  # (another product's command runs on its own data directory, which the release's command does not default to)
+  $own = if ($product -ne 'stillfail') { '@setlocal' + [char]13 + [char]10 + '@set "STILLFAIL_DATA=' + $data + '"' + [char]13 + [char]10 } else { '' }
   $named = CmdPath $target
-  if ($named) { Set-Content -Path $file -Encoding ASCII -Value ('@"' + $named + '" %*'); return }
+  if ($named -and -not $own) { Set-Content -Path $file -Encoding ASCII -Value ('@"' + $named + '" %*'); return }
   $oem = [Text.Encoding]::GetEncoding([Globalization.CultureInfo]::CurrentCulture.TextInfo.OEMCodePage)
-  if ($oem.GetString($oem.GetBytes($target)) -cne $target) { Fail (__SAY(cloud.install.win.cmdPath, path=$target)) }
-  [IO.File]::WriteAllText($file, '@"' + $target + '" %*' + [char]13 + [char]10, $oem)
+  if ($oem.GetString($oem.GetBytes($own + $target)) -cne ($own + $target)) { Fail (__SAY(cloud.install.win.cmdPath, path=$target)) }
+  [IO.File]::WriteAllText($file, $own + '@"' + $target + '" %*' + [char]13 + [char]10, $oem)
 }
 
 # The command: ~\\.local\\bin\\stillfail.cmd, that directory on the user's PATH.
 $bin = if ($binApart) { $binApart } else { Join-Path $env:USERPROFILE '.local\\bin' }
 New-Item -ItemType Directory -Force $bin | Out-Null
-WriteCmd (Join-Path $bin 'stillfail.cmd') (Join-Path $app 'bin\\stillfail.cmd')
+WriteCmd (Join-Path $bin "$product.cmd") (Join-Path $app 'bin\\stillfail.cmd')
 $kept = @{}
-if ($task -ne 'still.fail station') { $kept.task = $task }
+if ($task -ne "$productName station") { $kept.task = $task }
 if ($binApart) { $kept.bin = $binApart }
 if ($adminRun) { $kept.admin = $true }
 if ($kept.Count -gt 0) { $kept | ConvertTo-Json | Set-Content -Path (Join-Path $data 'windows.json') -Encoding UTF8 }

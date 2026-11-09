@@ -9,7 +9,7 @@ test "通知, at each width and with either hand: the ways, each kind with what 
     assert_true(t.find("提醒方式") is Some(_), msg=at)
     assert_true(t.find("通知类别") is Some(_), msg=at)
     assert_true(t.find("待你决定") is Some(_), msg=at)
-    // a done turn: its banner while away (the core's `done`), not counted in the badge (the core's badgeKinds)
+    // a done turn: its banner while away (the core's `done`), counted in the badge (the core's badgeKinds)
     assert_true(t.find("横幅（离开时）") is Some(_), msg=at)
     // (the kind's head, not the preview's banner that says it too)
     t.click(Button, label="待你决定")
@@ -17,6 +17,18 @@ test "通知, at each width and with either hand: the ways, each kind with what 
     // the badge a way where the system shows the app's number (a Mac's Dock), none on Android (its dot the system's)
     assert_eq(t.find("计入红点") is Some(_), platform == 0, msg=at)
     assert_eq(t.words().iter().any(fn(w) { w.0 == "红点" }), platform == 0, msg=at)
+  }
+}
+
+///|
+test "notification workspace rows do not repeat an unmarked workspace's initial" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Notifications, w, platform~, h=2400.0)
+    // (the tree's nodes among them: the page is made once)
+    let boxes = t.boxes_held()
+    let at = "\{w} platform \{platform}"
+    assert_true(boxes.iter().any(fn(b) { b.text == "个人" }), msg=at)
+    assert_true(boxes.filter(fn(b) { b.text == "个" }).is_empty(), msg=at)
   }
 }
 

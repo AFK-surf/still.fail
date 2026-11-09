@@ -1,15 +1,16 @@
-// Renewing a Claude login without sending a prompt (the Rust station's claude_oauth.rs): under Claude Code's own locks (its
+// Renewing a Claude login without sending a prompt: under Claude Code's own locks (its
 // current one in the config directory and its legacy one beside it), read again once locked, and saved back where it
 // was (the keychain for the machine's login on macOS, else the file), never as a copy. Used for the machine profile's
 // token (the Claude driver's `machineToken`), for checking a profile and for reading a subscription's allowance. A login
 // that can no longer be renewed (none to renew it with, or its refresh token refused) is over: RenewRefused.
 import { execFile, spawn } from "node:child_process";
 import { closeSync, fstatSync, mkdirSync, openSync, readFileSync, realpathSync, rmdirSync, statSync, futimesSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type Env, readClaudeKeychain } from "../agents/machine-logins.ts";
 import { writePrivate } from "../agents/no-keychain.ts";
 import { wall } from "../ops/fibers.ts";
-import { type Lang, stationLang, tr } from "../ops/i18n.ts";
+import { type Lang, Said, stationLang, tr } from "../ops/i18n.ts";
 import { platform } from "../platform/index.ts";
 import { profileFetch } from "../ops/agent-env.ts";
 import { RenewRefused } from "./console.ts";
@@ -23,7 +24,7 @@ const LOCK_WAIT_MS = 40_000;
 const LOCK_STALE_MS = 60_000;
 const HEARTBEAT_MS = 5_000;
 
-/// The OAuth access token Claude Code keeps in this config directory's file (quota.rs claude_token).
+/// The OAuth access token Claude Code keeps in this config directory's file.
 export function claudeToken(home: string): string | undefined {
   try {
     const token = JSON.parse(readFileSync(join(home, ".credentials.json"), "utf8"))?.claudeAiOauth?.accessToken;
@@ -38,7 +39,7 @@ type Credentials = { data: Json; keychain: boolean };
 function access(c: Credentials, lang: Lang): [string, number] {
   const oauth = c.data?.claudeAiOauth;
   const token = oauth?.accessToken;
-  if (typeof token !== "string" || token === "") throw new Error(tr(lang, "station.claudeAuth.noCredentials"));
+  if (typeof token !== "string" || token === "") throw new Said(tr(lang, "station.claudeAuth.noCredentials"));
   return [token, Number.isInteger(oauth.expiresAt) ? oauth.expiresAt : 0];
 }
 
@@ -68,26 +69,27 @@ function run(command: string, args: string[], env: Env, input?: string): Promise
 async function read(env: Env, home: string, machine: boolean, lang: Lang): Promise<Credentials> {
   if (machine && platform.hasKeychain) {
     const found = await readClaudeKeychain(env);
-    if (found.kind === "unreadable") throw new Error(tr(lang, "station.claudeAuth.keychainUnreadable"));
+    if (found.kind === "unreadable") throw new Said(tr(lang, "station.claudeAuth.keychainUnreadable"));
     if (found.kind === "found") {
       // An unreadable keychain entry must not be replaced with a stale file's login.
       try {
         return { data: JSON.parse(found.text), keychain: true };
       } catch {
-        throw new Error(tr(lang, "station.claudeAuth.keychainUnreadable"));
+        throw new Said(tr(lang, "station.claudeAuth.keychainUnreadable"));
       }
     }
   }
   let text: string;
   try {
-    text = readFileSync(join(home, ".credentials.json"), "utf8");
+    // Off the station's thread: six of these at once held it 1 s on a station short of memory (2026-11-03).
+    text = await readFile(join(home, ".credentials.json"), "utf8");
   } catch {
-    throw new Error(tr(lang, "station.claudeAuth.noCredentials"));
+    throw new Said(tr(lang, "station.claudeAuth.noCredentials"));
   }
   try {
     return { data: JSON.parse(text), keychain: false };
   } catch {
-    throw new Error(tr(lang, "station.claudeAuth.credentialsUnreadable"));
+    throw new Said(tr(lang, "station.claudeAuth.credentialsUnreadable"));
   }
 }
 
@@ -97,28 +99,28 @@ async function save(env: Env, home: string, c: Credentials, lang: Lang) {
       writePrivate(join(home, ".credentials.json"), JSON.stringify(c.data));
       return;
     } catch {
-      throw new Error(tr(lang, "station.claudeAuth.saveFailed"));
+      throw new Said(tr(lang, "station.claudeAuth.saveFailed"));
     }
   }
   // Secrets kept off argv, as Claude Code does: `security -i` reads its commands from stdin.
   const who = await run("/usr/bin/id", ["-un"], process.env as Env);
   const account = who?.stdout.trim() ?? "";
-  if (!who?.ok || account === "" || /["\\\n\r]/.test(account)) throw new Error(tr(lang, "station.claudeAuth.keychainAccount"));
+  if (!who?.ok || account === "" || /["\\\n\r]/.test(account)) throw new Said(tr(lang, "station.claudeAuth.keychainAccount"));
   const input = `add-generic-password -U -a "${account}" -s "${ITEM}" -X "${Buffer.from(JSON.stringify(c.data)).toString("hex")}"\n`;
   await new Promise<void>((resolve, reject) => {
     const child = spawn("security", ["-i"], { env: env as NodeJS.ProcessEnv, stdio: ["pipe", "ignore", "ignore"] });
     const timer = wall.after(10_000, () => {
       child.kill("SIGKILL");
-      reject(new Error(tr(lang, "station.claudeAuth.keychainTimeout")));
+      reject(new Said(tr(lang, "station.claudeAuth.keychainTimeout")));
     });
     child.on("error", () => {
       timer();
-      reject(new Error(tr(lang, "station.claudeAuth.keychainWrite")));
+      reject(new Said(tr(lang, "station.claudeAuth.keychainWrite")));
     });
     child.on("exit", (code) => {
       timer();
       if (code === 0) resolve();
-      else reject(new Error(tr(lang, "station.claudeAuth.keychainSaveFailed")));
+      else reject(new Said(tr(lang, "station.claudeAuth.keychainSaveFailed")));
     });
     child.stdin.end(input);
   });
@@ -171,7 +173,7 @@ async function renew(env: Env, home: string, machine: boolean, rejected: string 
   try {
     response = await profileFetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), redirect: "manual", signal: AbortSignal.timeout(30_000) });
   } catch {
-    throw new Error(t("station.claudeAuth.refreshFailed"));
+    throw new Said(t("station.claudeAuth.refreshFailed"));
   }
   if (!response.ok) {
     // A CLI version using different locks may have won: its credentials are never erased or rolled back.
@@ -179,24 +181,24 @@ async function renew(env: Env, home: string, machine: boolean, rejected: string 
     if (usable(latest, rejected, lang)) return access(latest, lang);
     const status = response.status;
     if (status === 400 || status === 401) throw new RenewRefused(status, t("station.claudeAuth.refreshRefused", { status }));
-    throw new Error(t("station.claudeAuth.refreshUnavailable", { status }));
+    throw new Said(t("station.claudeAuth.refreshUnavailable", { status }));
   }
   let answer: Json;
   try {
     answer = await response.json();
   } catch {
-    throw new Error(t("station.claudeAuth.badResponse"));
+    throw new Said(t("station.claudeAuth.badResponse"));
   }
   const token = answer?.access_token;
-  if (typeof token !== "string" || token === "") throw new Error(t("station.claudeAuth.noAccessToken"));
+  if (typeof token !== "string" || token === "") throw new Said(t("station.claudeAuth.noAccessToken"));
   const seconds = answer?.expires_in;
   const sane = (s: unknown): s is number => Number.isInteger(s) && (s as number) > 0 && (s as number) < Number.MAX_SAFE_INTEGER / 2000;
-  if (!sane(seconds)) throw new Error(t("station.claudeAuth.noExpiry"));
+  if (!sane(seconds)) throw new Said(t("station.claudeAuth.noExpiry"));
   const latest = await read(env, home, machine, lang);
   if (latest.keychain !== credentials.keychain || JSON.stringify(latest.data?.claudeAiOauth?.refreshToken) !== JSON.stringify(oauth.refreshToken)) {
     // A simultaneous login wins over this refresh, even of another account.
     if (usable(latest, null, lang)) return access(latest, lang);
-    throw new Error(t("station.claudeAuth.changedDuringRefresh"));
+    throw new Said(t("station.claudeAuth.changedDuringRefresh"));
   }
   const updated = latest.data.claudeAiOauth;
   updated.accessToken = token;
@@ -239,7 +241,7 @@ export class RefreshLock {
         mkdirSync(path);
         break;
       } catch (e) {
-        if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw new Error(tr(lang, "station.claudeAuth.lockFailed"));
+        if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw new Said(tr(lang, "station.claudeAuth.lockFailed"));
         let age = 0;
         try {
           age = wall.now() - statSync(path).mtimeMs;
@@ -254,7 +256,7 @@ export class RefreshLock {
             if ((e as NodeJS.ErrnoException).code === "ENOENT") continue;
           }
         }
-        if (wall.now() >= deadline) throw new Error(tr(lang, "station.claudeAuth.refreshLocked"));
+        if (wall.now() >= deadline) throw new Said(tr(lang, "station.claudeAuth.refreshLocked"));
         await wall.sleep(100);
       }
     }

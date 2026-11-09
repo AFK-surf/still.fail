@@ -299,9 +299,9 @@ fn buttoned() -> (Tester, Nav[String], Map[String, Int]) {
       nav,
       fn(c, p) {
         let id = c.id("button " + p)
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           pressed[p] = pressed.get(p).unwrap_or(0) + 1
-        }
+        })
         c.box(w=Px(100.0), h=Px(100.0), bg=0x3366CCFFL, id~, fn() { c.text(p, size=12.0) |> ignore }) |> ignore
       },
       bg=fn() { 0xFFFFFFFFL },

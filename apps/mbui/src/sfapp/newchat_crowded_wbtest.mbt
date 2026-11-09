@@ -59,7 +59,7 @@ test "narrow: the preset's, the station's and the model's controls side by side,
   let preset_words = runs_in(t, (preset.x, preset.y, preset.w, preset.h))
   assert_true(preset_words.iter().all(fn(r) { r.text == "预设" }), msg="\{preset_words.map(fn(r) { r.text })}")
   let station_words = runs_in(t, (station.x, station.y, station.w, station.h))
-  assert_true(station_words.iter().all(fn(r) { r.text == "Studio" }), msg="\{station_words.map(fn(r) { r.text })}")
+  assert_true(station_words.iter().all(fn(r) { r.text == "Willow" }), msg="\{station_words.map(fn(r) { r.text })}")
   // the model's: as wide as what it keeps (its padding past the last of it, no more)
   let kept = t
     .boxes()
@@ -279,4 +279,17 @@ test "wide: how hard it thinks one under another, from the least to the most" {
   let (px, py, pw, ph) = t.get(@ui.Role::Dialog).rect
   let last = order[order.length() - 1]
   assert_true(last.0 + last.2 <= px + pw && last.1 + last.3 <= py + ph, msg="past the panel")
+}
+
+///|
+test "narrow, a short window, many models starred: the one picked in view as the sheet opens, the lowest of them though it is" {
+  // (2026-11-05 用户「模型选择面板打开不会自动滚动到能看见已选择模型的地方」)
+  let t = crowded("newchat-providers-model-far", h=crowded_short)
+  run_to_sheet_rest(t)
+  let sheet = t.get(@ui.Role::Dialog).rect
+  let picked = "Sonnet 5"
+  let row = t.get(Button, label=picked).rect
+  // (those used most stay put under what scrolls: the one picked between the sheet's top and them)
+  let used = t.get(Button, label="GPT-6 Astra").rect
+  assert_true(row.1 >= sheet.1 && row.1 + row.3 <= used.1, msg="\{picked} \{row}: the sheet \{sheet}, those used most from \{used}")
 }

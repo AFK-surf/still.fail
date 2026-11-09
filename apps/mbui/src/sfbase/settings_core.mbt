@@ -51,8 +51,14 @@ fn settings_core_of(
   }
   {
     topic: fn(name, params) {
-      let t = (src.topic)(name, params)
-      { value: t.value, error: t.error, version: t.version }
+      let topic = src.topic(name, params)
+      let read = fn() -> @settings.Read {
+        let t = topic.get()
+        { value: t.value, error: t.error, version: t.version }
+      }
+      @signals.computed_scoped(fn(_) { read() }, untracked_read=Some(fn() {
+        if held_building.val { Some(read()) } else { None }
+      }))
     },
     call: fn(name, params, done) { (src.call)(name, params, done) },
     push: fn(r) {
@@ -66,7 +72,7 @@ fn settings_core_of(
     home,
     open_chat: fn(station, session, title) {
       // its station's name, as the chats' rows have it
-      let stations = (src.topic)("stations", { "scope": Json::string(w.id) })
+      let stations = src.topic("stations", { "scope": Json::string(w.id) }).get().snapshot()
       let mut name = ""
       match stations.value {
         Some(Array(a)) =>
@@ -98,6 +104,8 @@ fn settings_core_of(
     },
     version_now: fn() { update_stands() },
     version_tap: fn() { update_row_tapped(src) },
+    version_check: fn() { update_dialog(src) },
+    update_auto_on,
     local_install: fn(join) { if join { local_station_install(src, w.id) } else { local_station_update() } },
     // the system's browser (LocalUriHandler.openUri); nothing took it, said so (android-misc.link.cantOpen)
     open_link: fn(url) {
@@ -119,7 +127,7 @@ fn settings_core_of(
     set_bars: fn(sets, cur) { set_bars(src, w.id, sets, cur) },
     place_icon: fn(c, place, color) {
       if place == "stations" {
-        // one station on, as no station is meant (BarSettings.kt Still)
+        // one station on, as no station is meant
         let still : @sf.GlyphCounts = { online: 1, dim: 0, failing: 0, working: 0, asleep: false, connecting: 0 }
         @sf.station_glyph(c, still, 28.0, color, @sf.theme().p.red) |> ignore
       } else {
@@ -134,7 +142,7 @@ fn settings_core_of(
       match reporting_host.get() {
         Some(h) => {
           (h.set)(on)
-          reporting_said.set(@signals.untracked(fn() { reporting_said.get() }) + 1)
+          reporting_said.set(Some(on))
         }
         None => ()
       }
@@ -167,6 +175,7 @@ pub(all) struct ReportingHost {
 pub let reporting_host : @signals.Signal[ReportingHost?] = @signals.signal(None)
 
 ///|
-/// Told as this device is set to send them or not (what reads it reads the host again).
-// kept across runs: only counts on
-let reporting_said : @signals.Signal[Int] = @signals.signal(0)
+/// What this device was last set here to send them or not (None: not set here; what reads it reads the host again as
+/// it is set otherwise).
+// kept across runs: put back with the host (pages_reset)
+let reporting_said : @signals.Signal[Bool?] = @signals.signal(None, same=fn(a, b) { a == b })

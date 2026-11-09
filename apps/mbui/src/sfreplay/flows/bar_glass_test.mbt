@@ -15,14 +15,14 @@ test "50-bar-glass" {
     f.tap("icon:chats")
     f.run_for(@sfapp.icon_swap_ms)
     f.see("端到端测试")
-    f.drag("icon:chats", 0.0, -64.0, steps=bar_draw_steps)
-    // 已归档 tapped where it lands (the last of the three), as the bar chosen comes down
-    f.tap_at(340.0, -50.0)
+    f.drag("icon:chats", 100.0, -64.0, steps=bar_draw_steps)
+    // 已归档 tapped where it lands (the first of the four), as the bar chosen comes down
+    f.tap_at(50.0, -50.0)
     f.see("=已归档")
     f.run_for(@ui.move_most_ms)
     // the bar chosen lands on its own spring, untouched by a finger: the panel is drawn up again once it has
     f.run_to(@sfapp.bar_landed())
-    f.drag("icon:chart", 0.0, -64.0, steps=bar_draw_steps)
+    f.drag("icon:chart", -100.0, -64.0, steps=bar_draw_steps)
     f.run_for(@sfapp.switch_fade_ms)
     f.see("端到端测试")
     // the bottom bar's springs and tweens to their declared end (the ball's ride on the bar chosen included)

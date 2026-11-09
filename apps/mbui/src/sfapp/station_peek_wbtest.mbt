@@ -1,6 +1,6 @@
-// From a chat's agent (AgentSheet.kt): its station opens the station's card in place of the agent's (Stations.kt
+// From a chat's agent: its station opens the station's card in place of the agent's (Stations.kt
 // openStationPeek: what it says of itself, what is left of its machine, its network, its files, its page); its account
-// opens how it runs (RunSettingsScreen).
+// opens how it runs in the shared model picker.
 
 ///|
 test "an agent's labels and values stay in columns in both languages, including at a larger text size" {
@@ -47,18 +47,18 @@ fn peek_from_agent(calls : Array[Made]) -> @ui.Tester raise {
 test "an agent's station: its card in place of the agent's, what it says of itself, its machine and network" {
   let calls : Array[Made] = []
   let t = peek_from_agent(calls)
-  assert_true(t.find("Apple M2 Max · 2 个 agent 在工作") is Some(_))
+  assert_true(t.find("Apple M1 Pro · 2 个 agent 在工作") is Some(_))
   // what is left of it in the allowance's boxes, each of them
   assert_true(t.find("空闲 72%") is Some(_))
-  assert_true(t.find("剩 11.5 G") is Some(_))
-  assert_true(t.find("剩 380 G") is Some(_))
+  assert_true(t.find("剩 5.8 G") is Some(_))
+  assert_true(t.find("剩 420 G") is Some(_))
   // its network under them
   assert_true(t.find("直连") is Some(_))
   assert_true(t.find("38 ms") is Some(_))
   // where to go on: its files (2 folders lent), its page
   assert_true(t.find("文件") is Some(_))
   assert_true(t.find("机器详情") is Some(_))
-  let (_, meters) = t.find("剩 11.5 G").unwrap()
+  let (_, meters) = t.find("剩 5.8 G").unwrap()
   let (_, net) = t.find("直连").unwrap()
   let (_, files) = t.find("文件").unwrap()
   assert_true(meters < net && net < files, msg="the boxes, the network under them, the rows under that")
@@ -96,19 +96,45 @@ test "a station's card while it is offline: says so, no figures; its page still 
   let t = decide_core(calls, "chat")
   @settings.open_station_peek("ws1/st2", from=Unanchored)
   t.frame()
-  assert_true(t.find("MBA") is Some(_))
+  assert_true(t.find("Maple") is Some(_))
   assert_true(t.find("离线：在该机器上打开 still.fail 即可重新连接") is Some(_))
   assert_true(t.find("直连") is None)
   assert_true(t.find("机器详情") is Some(_))
 }
 
 ///|
-test "an agent's account: how it runs, the agent's sheet gone" {
+test "an agent's account opens its model picker, where the context limit can be changed" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-agent")
   t.tap_text("账号")
-  assert_true(!@sf.presenting(), msg="the agent's card went down")
-  assert_true(app.nav.top() == Setting(@settings.Route::RunSettings("ws1/st1", "s-c1")))
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("完整 · 1M") is Some(_), msg="the model picker offers the current context limit")
+  t.tap_text("完整 · 1M")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("300K")
+  let saved = named(calls, "pick.save")
+  assert_eq(saved.length(), 1)
+  assert_eq(text(Some(saved[0].params), "station"), "ws1/st1")
+  assert_eq(text(Some(saved[0].params), "of"), "session:s-c1")
+  assert_eq(text(Some(saved[0].params), "context"), "300000")
+}
+
+///|
+test "a chat's history opens the same model picker to change the context limit" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "history-details")
+  let row = t.words().iter().find_first(fn(w) { w.0 == "Opus 5.5" }).unwrap()
+  t.tap(row.1 + row.3 / 2.0, row.2 + row.4 / 2.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("完整 · 1M") is Some(_), msg="the model picker offers the current context limit")
+  t.tap_text("完整 · 1M")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("500K")
+  let saved = named(calls, "pick.save")
+  assert_eq(saved.length(), 1)
+  assert_eq(text(Some(saved[0].params), "station"), "ws1/st1")
+  assert_eq(text(Some(saved[0].params), "of"), "session:s-c1")
+  assert_eq(text(Some(saved[0].params), "context"), "500000")
 }
 
 ///|
@@ -116,14 +142,14 @@ test "a chat with no agent yet, on a desktop: its station's card under its tag i
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-station-tag", wide=true)
   // the tag: its name in the chat's bar (where it is: its middle)
-  let before = t.locate("Studio")
+  let before = t.locate("Willow")
   let tag = before.filter(fn(p) { p.1 < 40.0 })
   assert_true(tag.length() > 0, msg="the station's tag in the bar: \{before}")
   let (x, y) = tag[0]
   t.move(x, y)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   // the card's name (the name there now that was not before): beside the tag (under it), not in the window's middle
-  let card = t.locate("Studio").filter(fn(p) { !before.contains(p) })
+  let card = t.locate("Willow").filter(fn(p) { !before.contains(p) })
   assert_true(card.length() > 0, msg="its card")
   assert_true(card.iter().all(fn(p) { p.1 > y && p.1 < 200.0 && (p.0 - x).abs() < 240.0 }), msg="under the tag: \{card}")
   assert_true(t.find("机器详情") is Some(_), msg="its way on")
@@ -137,7 +163,7 @@ test "a chat with no agent yet, on a desktop: its station's card under its tag i
 test "a chat with no agent yet, tapped by a finger on a desktop: its station's card from the presenters" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-station-tag", wide=true, pointing=Finger)
-  let tag = t.locate("Studio").filter(fn(p) { p.1 < 40.0 })
+  let tag = t.locate("Willow").filter(fn(p) { p.1 < 40.0 })
   assert_true(tag.length() > 0)
   t.tap(tag[0].0, tag[0].1)
   t.frame()
@@ -174,22 +200,22 @@ test "station screen submenu stays reachable outside its hover card and opens a 
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-station-tag", wide=true)
   let before = app.nav.top()
-  let tag = t.locate("Studio").filter(fn(p) { p.1 < 40.0 })[0]
+  let tag = t.locate("Willow").filter(fn(p) { p.1 < 40.0 })[0]
   t.move(tag.0, tag.1)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   t.tap_text("屏幕")
   t.run_for(@kit.presence_in_ms)
-  let screen = t.find("Studio 的屏幕").unwrap()
+  let screen = t.find("Willow 的屏幕").unwrap()
   t.move(screen.0, screen.1)
   t.run_for(@sfpages.hover_close_ms * 2.0)
   assert_true(t.find("机器详情") is Some(_))
-  assert_true(t.find("Studio 的屏幕") is Some(_))
+  assert_true(t.find("Willow 的屏幕") is Some(_))
   t.key(@ui.key_code_left)
   t.frame()
-  assert_true(t.query(@ui.Role::MenuItem, label="Studio 的屏幕") is None)
+  assert_true(t.query(@ui.Role::MenuItem, label="Willow 的屏幕") is None)
   t.tap_text("屏幕")
   t.run_for(@kit.presence_in_ms)
-  t.tap_text("Studio 的屏幕")
+  t.tap_text("Willow 的屏幕")
   t.frame()
   assert_true(app.nav.top() == before)
   let opened = named(calls, "chat.tabs.open")
@@ -214,7 +240,7 @@ test "station tabs show their page beside the chat, preserve folders and release
       (base.call)(name, params, done)
     },
   }
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
@@ -233,7 +259,7 @@ test "station tabs show their page beside the chat, preserve folders and release
   @sfbase.open_page(Setting(@settings.Route::Station("ws1/st1")))
   t.frame()
   assert_eq(side_now(r).0.length(), 2)
-  @sfbase.open_page(Screen({ station: "ws1/st1", screen: "desktop", title: "Studio 的屏幕", until_gone: false }))
+  @sfbase.open_page(Screen({ station: "ws1/st1", screen: "desktop", title: "Willow 的屏幕", until_gone: false }))
   t.frame()
   assert_true(app.nav.top() is Chat(_))
   assert_eq(side_now(r).1, "screen:[\"ws1/st1\",\"desktop\"]")
@@ -257,7 +283,7 @@ test "a screen beside a chat goes to a window of its own from the panel's bar (a
     },
     cancel: fn(id) { cancelled.push(id); (base.cancel)(id) },
   }
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
@@ -268,7 +294,7 @@ test "a screen beside a chat goes to a window of its own from the panel's bar (a
   t.set_window_opens(true)
   t.frame()
   assert_true(adb_button_at(t, "在新窗口打开") is None)
-  @sfbase.open_page(Screen({ station: "ws1/st1", screen: "desktop", title: "Studio 的屏幕", until_gone: false }))
+  @sfbase.open_page(Screen({ station: "ws1/st1", screen: "desktop", title: "Willow 的屏幕", until_gone: false }))
   t.frame()
   assert_eq(side_now(r).1, "screen:[\"ws1/st1\",\"desktop\"]")
   let (x, y) = adb_button_at(t, "在新窗口打开").unwrap()
@@ -278,20 +304,38 @@ test "a screen beside a chat goes to a window of its own from the panel's bar (a
   assert_eq(opened.length(), 1)
   assert_true(
     @sfbase.window_page(opened[0]) ==
-    Some(Screen({ station: "ws1/st1", screen: "desktop", title: "Studio 的屏幕", until_gone: false })),
+    Some(Screen({ station: "ws1/st1", screen: "desktop", title: "Willow 的屏幕", until_gone: false })),
   )
   // its tab closed, its view let go of; the other tab in front
   assert_true(!side_now(r).0.contains("screen:[\"ws1/st1\",\"desktop\"]"))
   assert_eq(side_now(r).1, "drive:[\"ws1/st1\"]")
   t.frame()
   assert_true(cancelled.contains(7001))
+  // while that window is open, a way to the screen again (a chat's link, its title another) brings it to the front:
+  // no second window, no tab here
+  @sfbase.open_page(Screen({ station: "ws1/st1", screen: "desktop", title: "", until_gone: false }))
+  @sfbase.open_page_over(Screen({ station: "ws1/st1", screen: "desktop", title: "", until_gone: true }))
+  t.frame()
+  assert_eq(t.windows_fronted(), [opened[0], opened[0]])
+  assert_eq(@sfbase.toast_words(), "这个屏幕已在独立窗口中打开")
+  assert_eq(t.windows_opened().length(), 1)
+  assert_true(!side_now(r).0.contains("screen:[\"ws1/st1\",\"desktop\"]"))
+  // another screen is its own: that window not asked for
+  assert_true(!@sfbase.window_front(Screen({ station: "ws1/st1", screen: "browser:tab-1", title: "", until_gone: false })))
+  assert_eq(t.windows_fronted().length(), 2)
+  // that window closed: the screen opens here again, as before
+  t.close_window(opened[0])
+  @sfbase.open_page(Screen({ station: "ws1/st1", screen: "desktop", title: "Willow 的屏幕", until_gone: false }))
+  t.frame()
+  assert_eq(side_now(r).1, "screen:[\"ws1/st1\",\"desktop\"]")
+  assert_eq(t.windows_fronted().length(), 2)
 }
 
 ///|
 test "共享调试 opened from a wide chat: beside it in a tab, the chats' sidebar and the chat staying as they are" {
   new_run()
   let src = fixture("chat")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.native_answers("adb.phone", fn(_) { adb_phone_of(wireless=true) })
@@ -323,7 +367,7 @@ test "a login screen opened beside a chat closes its tab when the login browser 
       } else { (base.stream)(name, params, bytes, value, done) }
     },
   }
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)

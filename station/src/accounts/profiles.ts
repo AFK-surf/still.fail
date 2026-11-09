@@ -16,13 +16,15 @@ import { claudeOAuthToken, claudeToken as tokenOf } from "./oauth.ts";
 import { CONSOLE, RenewRefused } from "./console.ts";
 import { CURSOR, type CursorUrls, cursorMe, cursorModels, readCursor } from "./cursor.ts";
 import { devinCatalog, devinData } from "../agents/devin.ts";
+import { agyEmailIn, agyHome, agyToken } from "../agents/agy.ts";
 import { platform } from "../platform/index.ts";
 import { profileFetch } from "../ops/agent-env.ts";
+import { withShellCommand } from "../ops/shell-path.ts";
 import { claudePlan, codexClaims } from "./machine.ts";
 
 type Json = any;
 
-/// Whether a profile works, and what models it offers (profiles.rs ProfileCheck, the same JSON).
+/// Whether a profile works, and what models it offers (the same JSON).
 export type ProfileCheck = {
   decision?: Capability;
   /// The subscription tier as reported by its login; absent when the runtime does not say.
@@ -33,6 +35,8 @@ export type ProfileCheck = {
   modelEffortDefaults?: Record<string, Record<string, string>>;
   /// ok: usable; login: needs a subscription sign-in; failed: the key or login was rejected; unknown.
   state: string;
+  /// A Codex token was refused by the provider; a local login-status check alone cannot clear it.
+  codexRevoked?: boolean;
   detail: string;
   /// Models the account can use, when the provider lists them.
   models: string[] | null;
@@ -43,7 +47,7 @@ export type ProfileCheck = {
 export type QuotaWindow = { label: string; usedPercent: number; resetsAt: number | null; minutes?: number | null };
 export type QuotaCredits = { hasCredits: boolean; unlimited: boolean; balance: string | null };
 
-/// How much of a profile's allowance is used, where the provider says (profiles.rs ProfileQuota).
+/// How much of a profile's allowance is used, where the provider says.
 export type ProfileQuota = {
   /// ok: windows filled; unsupported: nothing to show for this kind; unavailable: could not ask; blocked: the provider
   /// refuses the account.
@@ -51,11 +55,16 @@ export type ProfileQuota = {
   windows: QuotaWindow[];
   credits?: QuotaCredits;
   resetCount?: number;
+  /// Expiries of available reset credits for which the provider returned details, in epoch milliseconds.
+  resetExpiries?: number[];
   /// The subscription tier, when the provider reports it with the allowance.
   plan?: string;
+  /// Whether a Claude subscription has usage credits (extra usage) turned on: what its Fast is billed to, so only then
+  /// can it run Fast.
+  extraUsage?: boolean;
   detail: string | null;
   checkedAt: number;
-  /// Asked with a login that turned out to be over (oauth.ts RenewRefused): its profile is checked again. Not kept.
+  /// Asked with a login that turned out to be over: its profile's check is updated. Not kept in the allowance.
   signedOut?: boolean;
 };
 
@@ -90,6 +99,8 @@ export const URLS: Urls = {
 /// The access kinds each runtime can use.
 export function accessKinds(runtime: Runtime): AccessKind[] {
   if (runtime === "hermes") return ["env"];
+  // Antigravity CLI: a Google account signed in to (its plan: Google AI Pro / Ultra), a Gemini key, or its own variables.
+  if (runtime === "agy") return ["subscription", "api-provider", "env"];
   if (runtime === "claude") return ["subscription", "opencode-go", "anthropic-api", "api-provider", "env"];
   // DeepSeek Harness has no subscription to sign in to here: an account of its own is set up by variables.
   if (runtime === "dsh") return ["opencode-go", "anthropic-api", "api-provider", "env"];
@@ -109,7 +120,7 @@ export const keyed = (kind: AccessKind) => kind === "opencode-go" || kind === "a
 export const needsKey = (kind: AccessKind, provider: string | undefined): boolean =>
   keyed(kind) && !(kind === "api-provider" && provider !== undefined && find(provider)?.keyOptional === true);
 
-/// The runtimes an access kind runs without its provider (profiles.rs runtimes_of): a provider's follow from where it
+/// The runtimes an access kind runs without its provider: a provider's follow from where it
 /// speaks (`runtimesFor`).
 export function runtimesOf(kind: AccessKind, runtime: Runtime | undefined): Runtime[] {
   if (kind === "opencode-go") return ["claude", "codex", "dsh"];
@@ -132,6 +143,7 @@ export const loginCommand = (runtime: Runtime, home: string, machine = false) =>
   : runtime === "codex" ? `CODEX_HOME=${home} codex login`
   : runtime === "grok" ? `GROK_HOME=${join(home, "grok")} grok login --device-auth`
   : runtime === "devin" ? `XDG_DATA_HOME=${devinData(home)} devin auth login --force-manual-token-flow`
+  : runtime === "agy" ? `HOME=${agyHome(home)} agy`
   : "";
 
 /// What a check is given: the account and where it lives.
@@ -172,7 +184,8 @@ async function modelIds(response: Response): Promise<string[]> {
 const sorted = (list: string[]) => list.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 /// Runs a runtime's own status command, in `env` only; what it said and how it ended.
-function statusOf(command: string, args: string[], env: Env): Promise<{ code: number | null; stdout: string; stderr: string }> {
+async function statusOf(command: string, args: string[], env: Env): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  env = await withShellCommand(command, env);
   return new Promise((resolve, reject) => {
     const r = platform.runnable(command, args, env as NodeJS.ProcessEnv);
     execFile(r.file, r.args, { env: env as NodeJS.ProcessEnv, timeout: 20_000, killSignal: "SIGKILL", windowsVerbatimArguments: r.windowsVerbatimArguments }, (error, stdout, stderr) => {
@@ -312,6 +325,17 @@ async function checkInner(o: CheckOptions, lang: Lang): Promise<ProfileCheck> {
     const done = check("ok", [t("station.profile.signedIn"), email ?? ""].filter((s) => s !== "").join(t("station.list.comma")), catalog !== null && catalog.models.length > 0 ? catalog.models : null);
     if (catalog !== null) done.modelEfforts = { devin: catalog.efforts };
     return done;
+  }
+  if (o.kind === "subscription" && o.runtime === "agy") {
+    // Signed in when its sign-in's file is in the profile's (agents/agy.ts), whose account it says; whether it works,
+    // and its models, a session opened only to ask says (index.ts).
+    let text: string;
+    try {
+      text = readFileSync(agyToken(o.home), "utf8");
+    } catch {
+      return check("login", t("station.profile.signedOut"), null);
+    }
+    return check("ok", [t("station.profile.signedIn"), agyEmailIn(text) ?? ""].filter((s) => s !== "").join(t("station.list.comma")), null);
   }
   return check("unknown", t("station.profile.envUnchecked"), null);
 }

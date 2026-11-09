@@ -1,4 +1,4 @@
-// The library not locked (docs/vault.md 不加锁的库): in a workspace without security mode, a person's secrets kept on
+// The library not locked ( 不加锁的库): in a workspace without security mode, a person's secrets kept on
 // this station as they are, in plain text, beside the profiles' keys in config.json. Nothing here is encrypted: who
 // may read an item is only who it is (its owner, by the email the cloud's credential says), and the agents of the
 // station could read the database. What it gives is the same way of using them as the vault's (a request, its card,
@@ -94,6 +94,8 @@ export function plainOk(prev: PlainItem | null, next: PlainItem, owner: string):
 
 export class PlainStore {
   readonly #db: DatabaseSync;
+  #itemRead: ReturnType<DatabaseSync["prepare"]> | undefined;
+  #lastsRead: ReturnType<DatabaseSync["prepare"]> | undefined;
 
   constructor(db: DatabaseSync) {
     this.#db = db;
@@ -105,14 +107,33 @@ export class PlainStore {
     return (this.#db.prepare("SELECT body FROM vault_plain WHERE ws = ? AND owner = ? ORDER BY id").all(ws, owner) as { body: string }[]).map((r) => JSON.parse(r.body));
   }
 
+  /// The first few of the same ordered list, including deleted versions.
+  firstItems(ws: string, owner: string, limit: number): { id: string; value: PlainItem }[] {
+    return (this.#db.prepare("SELECT id, body FROM vault_plain WHERE ws = ? AND owner = ? ORDER BY id LIMIT ?").all(ws, owner, limit) as { id: string; body: string }[])
+      .map((r) => ({ id: r.id, value: JSON.parse(r.body) }));
+  }
+
+  /// The rest of that list after a stored id, in the caller's snapshot.
+  itemsAfter(ws: string, owner: string, id: string): PlainItem[] {
+    return (this.#db.prepare("SELECT body FROM vault_plain WHERE ws = ? AND owner = ? AND id > ? ORDER BY id").all(ws, owner, id) as { body: string }[])
+      .map((r) => JSON.parse(r.body));
+  }
+
   item(ws: string, id: string): PlainItem | null {
-    const row = this.#db.prepare("SELECT body FROM vault_plain WHERE ws = ? AND id = ?").get(ws, id) as { body: string } | undefined;
-    return row ? JSON.parse(row.body) : null;
+    return this.itemSnapshot(ws, id)?.value ?? null;
+  }
+
+  /// Keep the exact stored body with the value so a later write can check that its decision is still current.
+  itemSnapshot(ws: string, id: string): { value: PlainItem; body: string } | null {
+    this.#itemRead ??= this.#db.prepare("SELECT body FROM vault_plain WHERE ws = ? AND id = ?");
+    const row = this.#itemRead.get(ws, id) as { body: string } | undefined;
+    return row ? { value: JSON.parse(row.body) as PlainItem, body: row.body } : null;
   }
 
   /// The longest grant `owner`'s items are given for where an item says none, and when they said so (none: any).
   lasts(ws: string, owner: string): { lasts: Scope; at: number } | null {
-    const row = this.#db.prepare("SELECT lasts, at FROM vault_plain_lasts WHERE ws = ? AND owner = ?").get(ws, owner) as { lasts: Scope; at: number } | undefined;
+    this.#lastsRead ??= this.#db.prepare("SELECT lasts, at FROM vault_plain_lasts WHERE ws = ? AND owner = ?");
+    const row = this.#lastsRead.get(ws, owner) as { lasts: Scope; at: number } | undefined;
     return row ? { lasts: row.lasts, at: row.at } : null;
   }
 

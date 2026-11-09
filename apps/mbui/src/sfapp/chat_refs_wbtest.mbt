@@ -2,6 +2,38 @@
 // markPasted): what the field holds read as the core reads it (its answers kept, src/sfkept).
 
 ///|
+test "a finger scrolls the @ menu while the composer and its keyboard keep focus" {
+  let rows : Array[Json] = []
+  for i in 0..<8 {
+    rows.push(row("ref-\{i}", "候选对话 \{i}", "ws1/st1", "刚才", {}))
+  }
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, topic) {
+    if name == "chatSearch" {
+      { ..topic, value: Some({ "items": Json::array(rows) }) }
+    } else {
+      topic
+    }
+  })
+  t.tap_text("发消息")
+  t.type_text("@")
+  t.frame()
+  let (x, y, w, h) = t.get(Button, label="候选对话 2").rect
+  let (_, before_y, _, _) = t.rect_of("候选对话 7").unwrap()
+  assert_true(t.ctx().field_focused(), msg="the composer starts focused")
+  t.drag(x + w / 2.0, y + h / 2.0, x + w / 2.0, y + h / 2.0 - 120.0)
+  assert_true(t.ctx().field_focused(), msg="the composer keeps its focus")
+  assert_true(t.ime().0, msg="the keyboard stays open")
+  let (_, after_y, _, _) = t.rect_of("候选对话 7").unwrap()
+  assert_true(after_y < before_y, msg="the results moved up")
+  t.tap_text("候选对话 7")
+  t.draw()
+  let picked = named(calls, "chat.ref")
+  assert_eq(picked.length(), 1)
+  assert_eq(text(Some(picked[0].params), "id"), "ref-7")
+}
+
+///|
 test "`@` and words: the chats they find over the composer; one picked goes in as its mark, a backspace takes it whole" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
@@ -34,10 +66,10 @@ test "`@` and words: the workspace's other stations' chats too, each with its st
   let calls : Array[Made] = []
   let t = fake_core(calls)
   t.tap_text("发消息")
-  // written in a chat of Studio's (ws1/st1); 夜里的构建又失败了 is MBA's (ws1/st2)
+  // written in a chat of Willow's (ws1/st1); 夜里的构建又失败了 is Maple's (ws1/st2)
   t.type_text("@的")
   // (then when it was last active)
-  assert_true(after_on_its_row(t, "夜里的构建又失败了") == ["MBA", "15 分钟前"], msg=about_its_row(t, "夜里的构建又失败了"))
+  assert_true(after_on_its_row(t, "夜里的构建又失败了") == ["Maple", "15 分钟前"], msg=about_its_row(t, "夜里的构建又失败了"))
   assert_true(after_on_its_row(t, "首页的列表改成按天分组") == ["8 分钟前"], msg=about_its_row(t, "首页的列表改成按天分组"))
   // a finger's row: 44 high at least (Theme::rows pick)
   let (_, _, _, high) = t.get(Button, label="夜里的构建又失败了").rect
@@ -149,7 +181,7 @@ test "words sent with a mark draw it as the field did, as their message will: ne
   assert_eq(named(calls, "chat.send").length(), 1)
   assert_eq(text(Some(named(calls, "chat.send")[0].params), "text"), "@[首页] 吧")
   match sending_of("ws1/st1\u{1}s-c1") {
-    [l] => assert_eq(sent_marks(l.row), [(0, 5)])
+    [l] => assert_true(l.row.words is Some(_))
     _ => fail("not in the list")
   }
   t.draw()
@@ -157,6 +189,110 @@ test "words sent with a mark draw it as the field did, as their message will: ne
   t.run_for(flight_ms)
   assert_true(t.find("@[首页]") is None)
   assert_true(t.find("首页") is Some(_))
+}
+
+///|
+test "the same words with a mark sent again are read again: their row draws the mark, not its brackets" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  t.tap_text("发消息")
+  for n in 0..<2 {
+    t.type_text("@[首页] 吧")
+    t.draw()
+    t.draw()
+    assert_eq(named(calls, "ref.words").filter(fn(m) { text(Some(m.params), "text") == "@[首页] 吧" }).length(), n + 1)
+    tap_send(t)
+    (named(calls, "chat.outsideRefs")[n].done)(Ok(Json::object({})))
+    t.draw()
+    t.draw()
+    let sent = sending_of("ws1/st1\u{1}s-c1")
+    assert_true(sent[sent.length() - 1].row.words is Some(_))
+    t.run_for(@ui.move_most_ms)
+    t.run_for(draft_keep_ms)
+  }
+}
+
+///|
+test "words with a mark sent before the core has read them: their row has the mark a reference from the frame it is sent" {
+  new_run()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    // (the core's reading of the words not answered yet, nor the words sent in its view)
+    call: fn(name, params, done) {
+      if name != "ref.words" && name != "chat.send" {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  t.paste("[首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2)")
+  t.type_text(" 吧")
+  t.draw()
+  t.draw()
+  t.draw()
+  let (_, words, _, _) = t.ime()
+  assert_eq(words, "@[首页] 吧")
+  tap_send(t)
+  t.draw()
+  t.draw()
+  match sending_of("ws1/st1\u{1}s-c1") {
+    [l] => {
+      let parts = match l.row.words {
+        Some(Array(a)) => a
+        _ => []
+      }
+      assert_eq(parts.map(fn(p) { text(Some(p), "text") }), ["首页", " 吧"])
+      assert_true(field(Some(parts[0]), "ref") is Some(True))
+    }
+    _ => fail("not in the list")
+  }
+}
+
+///|
+test "words with a mark leave the field as they stand: the same inks from the frame sent, in pieces, as their message has them" {
+  new_run()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    // (the words sent stay what was sent from here)
+    call: fn(name, params, done) {
+      if name != "chat.send" {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0, pointing=Mouse)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  t.paste("[首页](https://app.still.fail/w/ws1/s/st1/chats/s-c2)")
+  t.type_text(" 吧")
+  t.draw()
+  t.draw()
+  t.draw()
+  let inks = fn() {
+    let out : Array[Int64] = []
+    for g in t.drawn_glyphs() {
+      if g.1 > 700.0 && g.0 > 390.0 && g.0 < 500.0 && g.2 != 0L && !out.contains(g.2) {
+        out.push(g.2)
+      }
+    }
+    out.sort()
+    out
+  }
+  let field = inks()
+  assert_eq(field.length(), 3)
+  tap_send(t)
+  t.draw()
+  assert_eq(inks(), field)
+  let f = flight_of("ws1/st1:s-c1").unwrap()
+  assert_true(@sfbase.flight_said(f) == "@首页 吧")
+  t.draw()
+  assert_true(t.run_rects("吧").length() == 1)
 }
 
 ///|

@@ -45,3 +45,32 @@ test("the agents' door answers /mcp, /jobs/notify and /health, and finishes its 
   await closing;
   await assert.rejects(fetch(`${base}/health`));
 });
+
+test("a disconnected tool request cancels its waiting read", async () => {
+  const called = Promise.withResolvers<AbortSignal | undefined>(), stopped = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>(), controller = new AbortController();
+  const mcp = new McpEndpoint(() => "s1", [{ name: "read", description: "", inputSchema: {},
+    run: async (_key, _args, signal?: AbortSignal) => {
+      signal?.addEventListener("abort", () => stopped.resolve(), { once: true });
+      called.resolve(signal);
+      await release.promise;
+      return "done";
+    } }]);
+  const door = await openAgentsDoor({ port: 0 }, mcp, () => ({ status: 404, body: undefined }));
+  try {
+    const call = fetch(door.url, { method: "POST", headers: { authorization: "Bearer token", "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "read", arguments: {} } }),
+      signal: controller.signal });
+    const rejected = assert.rejects(call);
+    const signal = await called.promise;
+    assert.ok(signal, "a waiting tool receives its request's cancellation signal");
+    controller.abort();
+    await rejected;
+    await stopped.promise;
+    assert.equal(signal.aborted, true);
+  } finally {
+    controller.abort();
+    release.resolve();
+    await door.close();
+  }
+});

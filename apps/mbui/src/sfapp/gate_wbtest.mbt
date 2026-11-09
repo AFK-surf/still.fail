@@ -213,8 +213,8 @@ fn gate_cold(
   let src : Source = {
     ..base,
     sign_in_step: fn() { step.get() },
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       if name == "prefs" && lang != "" {
         let prefs = match got.value {
           Some(Object(m)) => m.copy()

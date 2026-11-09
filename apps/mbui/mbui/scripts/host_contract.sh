@@ -1,12 +1,12 @@
 #!/bin/bash
-# The host's contract and the text's (docs/determinism.md, "What is compared, and where"), on one host:
+# The host's contract and the text's ("What is compared, and where"), on one host:
 #
 #   scripts/host_contract.sh HOST build         kitdemo built for the host
 #   scripts/host_contract.sh HOST record        kitdemo's controls page run on the host, with test/host/controls.drive's
 #        taps (MBUI_DRIVE) and its tape on the log (MBUI_DRAW_LOG=1 MBUI_TEXT_RECORD=1): out/host/HOST/run.log; made a
 #        Tester's test (scripts/chk textrec, as ci_HOST) and run there: every frame the same, or it fails.
 #        NAME=HOST_controls keeps the tape as the one committed (src/kitdemo/gallery/textrec_HOST_controls*.mbt)
-#   scripts/host_contract.sh HOST text [NAME]   the kept run NAME's text (HOST_controls by default; mac: mini1_controls) asked of the host's
+#   scripts/host_contract.sh HOST text [NAME]   the kept run NAME's text (HOST_controls by default; mac: mac_capture_controls) asked of the host's
 #        text system again (MBUI_TEXTCHECK, src/kitdemo/gallery/textcheck.mbt): each answer the same, or it fails
 #   scripts/host_contract.sh HOST marks         (mac, ios, android) test/marks/marks.json drawn by the host onto
 #        test/marks/base.png (@hostapi.draw_marks; kitdemo's MBUI_MARKS, src/kitdemo/gallery/markscheck.mbt), twice: the two PNGs
@@ -37,6 +37,9 @@
 #   scripts/host_contract.sh HOST pdf           test/host/pdfcheck.pdf's two pages read and drawn by the host, the
 #        second turned a quarter clockwise as its /Rotate says: their sizes, and each drawn page's colours (kitdemo's
 #        MBUI_PDFCHECK, src/kitdemo/gallery/pdfcheck.mbt)
+#   scripts/host_contract.sh linux|web images   a picture shown, the canvas's GL context made anew as one lost (kitdemo's
+#        MBUI_IMAGECHECK, src/kitdemo/gallery/imagecheck.mbt): the picture told ready again once the host has it in the
+#        new context, and drawn again there, red in the window's picture (scripts/chk images)
 #   scripts/host_contract.sh HOST play          test/host/playcheck.mp4 played by the host's player, its bytes read
 #        through the app: its length and size once ready, (Linux) the middle of its first frame as the canvas drew it
 #        red and its frames' times read, played to its end, a frame grabbed (kitdemo's MBUI_PLAYCHECK,
@@ -54,6 +57,9 @@
 #        the app (kitdemo's MBUI_FONTSCALECHECK, src/kitdemo/gallery/fontscalecheck.mbt): 1.5
 #   scripts/host_contract.sh mac a11y           the app's widgets as VoiceOver walks the view's elements (in the app:
 #        MBUI_A11Y_SELFCHECK), words put in a field and a button pressed through them
+#   scripts/host_contract.sh ios a11y           the same on the simulator: the view's accessibility elements walked in the
+#        app, the button activated through its own element
+#   scripts/host_contract.sh linux a11y         the canvas's GtkAccessibles walked in the app as AT-SPI walks them
 #   scripts/host_contract.sh windows a11y       the app's widgets read out by UI Automation's client (kitdemo's
 #        MBUI_A11YCHECK, src/kitdemo/gallery/a11ycheck.mbt; test/host/a11ycheck.ps1): a button and a checkbox found by
 #        their names, as their control types and the checkbox's state, words put in a field, the button invoked and the
@@ -206,7 +212,7 @@ run() {
       [[ $pid =~ ^[0-9]+$ ]] || { echo "host_contract: the app did not start"; tail -20 "$2"; return 1; }
       # the app's own named end, or its process gone without it (a crash); then its exit (the drive's and the check's
       # own, @hostapi.exit), so that its log is all written (scripts/chk logwait: kqueue's events, no time)
-      scripts/chk logwait --log "$2" --line "DRIVE (PASS|END|FAIL)|TEXTCHECK (done|no kept)|MARKS (done|none|failed)|VIEWCHECK done|SITECHECK done" --pid $pid \
+      scripts/chk logwait --log "$2" --line "DRIVE (PASS|END|FAIL)|TEXTCHECK (done|no kept)|MARKS (done|none|failed)|VIEWCHECK done|SITECHECK done|A11YCHECK activated" --pid $pid \
         || { echo "host_contract: the app ($pid) ended, or hung, saying nothing of its end"; tail -20 "$2"; return 1; }
       scripts/chk logwait --pid $pid ;;
   esac
@@ -330,12 +336,16 @@ case $CMD in
     fi
     echo "host contract ($H): the Tester drew every frame the host drew" ;;
   text)
-    # (macOS: the run Mini1 kept, src/kitdemo/gallery/textrec_mini1_controls.mbt; the other hosts' are their CI's)
-    DEF=${H}_controls; [ $H = mac ] && DEF=mini1_controls
+    # (macOS: the run the Mac kept, src/kitdemo/gallery/textrec_mac_capture_controls.mbt; the other hosts' are their CI's)
+    DEF=${H}_controls; [ $H = mac ] && DEF=mac_capture_controls
     NAME=${3:-$DEF}
     code=0
     run "MBUI_TEXTCHECK=$NAME" $O/text.log || code=$?
     tr -d '\r' < $O/text.log | grep -a "TEXTCHECK" | head -40
+    if grep -aq "TEXTCHECK zero-width" $O/text.log; then
+      echo "text contract ($H): a zero width character is not shaped as none (textcheck.mbt's zero_width_check: the host's shaping, src/host/apple_text.m's offset_at), not a run to record again"
+      exit 1
+    fi
     if [ $code != 0 ] || ! grep -aq "TEXTCHECK done $NAME: [1-9][0-9]* answers, 0 differ" $O/text.log; then
       echo "text contract ($H): the host's text is not what $NAME kept. 重录：scripts/host_contract.sh $H build && NAME=$NAME scripts/host_contract.sh $H record（或从 CI 的 host-$H 产物：scripts/chk textrec --keep run.log $NAME $PAGE - - $PLATFORM），提交 src/kitdemo/gallery/textrec_${NAME}*.mbt、textrec_runs.txt 与 textrec_runs.mbt"
       exit 1
@@ -678,6 +688,21 @@ INSTALL
       echo "play contract ($H): the host said \"$have\", not \"$want\""; tail -30 $O/play.log; exit 1
     fi
     echo "play contract ($H): $have"
+    if [ "$H" = mac ]; then
+      # System WebM playback reads through the app, plays to the end and gives it a frame.
+      play_mac_format() {
+        local name=$1 file=$2 kind=$3 log=$O/play-$1.log
+        local vars="$kind=1 MBUI_PLAYCHECK=$(base64 < "$file" | tr -d '\n\r')" have
+        local want="PLAYCHECK ready 1000 64x48|PLAYCHECK ended|PLAYCHECK grabbed"
+        run "$vars" "$log" || true
+        have=$(grep -a "PLAYCHECK" "$log" | sed 's/.*PLAYCHECK/PLAYCHECK/' | tr -d '\r' | paste -sd'|' -)
+        if [ "$have" != "$want" ]; then
+          echo "$name play contract ($H): the host said \"$have\", not \"$want\""; tail -30 "$log"; return 1
+        fi
+        echo "$name play contract ($H): $have"
+      }
+      play_mac_format WebM test/host/playcheck.webm MBUI_PLAYCHECK_WEBM
+    fi
     if [ "$H" = android ]; then
       # (sent behind as it plays, at a tenth of its speed, and brought back: paused as the app went, not played on
       # behind to its end; the app's log and the system's events from its start, as scripts/android-keyboard.sh's)
@@ -724,7 +749,29 @@ INSTALL
       echo "a11y contract (mac): a field, a button and a checkbox told VoiceOver, words written in the field and the button pressed through them"
       exit 0
     fi
-    [ "$H" = windows ] || { echo "a11y contract: Windows' and the Mac's (Android's is TalkBack's on its emulator)"; exit 1; }
+    if [ "$H" = ios ]; then
+      # (iOS: the view's accessibility elements walked in the app itself as VoiceOver walks them, MBUI_A11Y_SELFCHECK, as on
+      # the Mac; the simulator runs no VoiceOver of its own a run could drive)
+      run "MBUI_A11YCHECK=1 MBUI_A11Y_SELFCHECK=1" $O/a11y.log || true
+      grep -a "^A11Y\|A11YCHECK" $O/a11y.log
+      grep -aq "A11Y node Button A11YCHECK press" $O/a11y.log && grep -aq "A11Y node Checkbox A11YCHECK check" $O/a11y.log &&
+        grep -aq "A11Y button traits [0-9]* activated 1" $O/a11y.log && grep -aq "A11YCHECK activated" $O/a11y.log ||
+        { echo "a11y contract (ios): not told VoiceOver and pressed as told"; tail -20 $O/a11y.log; exit 1; }
+      echo "a11y contract (ios): a button and a checkbox told VoiceOver, the button pressed through it"
+      exit 0
+    fi
+    if [ "$H" = linux ]; then
+      # (Linux: the canvas's accessibles walked in the app itself as AT-SPI walks them, MBUI_A11Y_SELFCHECK; GTK 4.14 gives
+      # an accessible that is no widget no action, so the button is asked of the app as a reader's would be)
+      run "MBUI_A11YCHECK=1 MBUI_A11Y_SELFCHECK=1" $O/a11y.log || true
+      grep -a "^A11Y\|A11YCHECK" $O/a11y.log
+      grep -aq "A11Y node Button A11YCHECK press$" $O/a11y.log && grep -aq "A11Y node Checkbox A11YCHECK check$" $O/a11y.log &&
+        grep -aq "A11Y walked" $O/a11y.log && grep -aq "A11YCHECK activated" $O/a11y.log ||
+        { echo "a11y contract (linux): not told GTK's accessibility, or not walked as told"; tail -20 $O/a11y.log; exit 1; }
+      echo "a11y contract (linux): a button and a checkbox told GTK's accessibility, walked as AT-SPI walks them, with their bounds"
+      exit 0
+    fi
+    [ "$H" = windows ] || { echo "a11y contract: Windows', the Mac's, iOS's and Linux's (Android's is TalkBack's on its emulator)"; exit 1; }
     # the app's widgets as UI Automation's client finds them (test/host/a11ycheck.ps1), the button pressed through it
     A=$PWD/$O/a11y
     rm -rf "$A" && mkdir -p "$A"
@@ -782,6 +829,15 @@ INSTALL
       echo "pdf contract ($H): the host said \"$have\", not \"$want\""; tail -20 $O/pdf.log; exit 1
     fi
     echo "pdf contract ($H): $have" ;;
+  images)
+    run "MBUI_IMAGECHECK=$PWD/$O/images.png" $O/images.log || true
+    have=$(grep -a "IMAGECHECK" $O/images.log | sed 's/.*IMAGECHECK/IMAGECHECK/' | tr -d '\r' | paste -sd'|' -)
+    case "$have" in
+      *"IMAGECHECK told 2"*"IMAGECHECK drawn "*) ;;
+      *) echo "images contract ($H): the host said \"$have\""; tail -20 $O/images.log; exit 1 ;;
+    esac
+    # (the browser's host pictures no window: drive 4)
+    [ "$H" = web ] || scripts/chk images $O/images.log ;;
   notices)
     # (Linux) the app as its desktop entry runs it (MBUI_APP_ID: its notifications the desktop's, linux_life.h), a
     # notification shown, then clicked by the run's script as the desktop's click would be: the app says what it opened

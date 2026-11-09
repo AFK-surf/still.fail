@@ -23,6 +23,9 @@ pub(all) enum BackStep {
 /// takes it before any other (Tree::back_taker). Said in the place of what it followed back by (View::follows_back).
 pub fn View::takes_back(self : View, f : () -> Unit) -> View {
   guard self.live() is Some(n) else { return self }
+  if n.on_back is None && n.on_back_step is None {
+    self.tree.backs = self.tree.backs + 1
+  }
   n.on_back = Some(f)
   n.on_back_step = None
   n.back_said = n.back_said + 1
@@ -48,6 +51,9 @@ pub fn View::held_back_goes_on(self : View) -> View {
 /// back by (View::takes_back); said anew, a gesture under way goes on to it no more.
 pub fn View::follows_back(self : View, f : (BackStep) -> Unit) -> View {
   guard self.live() is Some(n) else { return self }
+  if n.on_back is None && n.on_back_step is None {
+    self.tree.backs = self.tree.backs + 1
+  }
   n.on_back_step = Some(f)
   n.on_back = None
   n.back_said = n.back_said + 1
@@ -59,7 +65,7 @@ pub fn View::follows_back(self : View, f : (BackStep) -> Unit) -> View {
 /// What takes back now of the tree's: the node drawn last that takes back (View::takes_back, View::follows_back) and may
 /// take input; none where no node does.
 pub fn Tree::back_taker(self : Tree) -> NodeId? {
-  if self.nodes.length() == 0 || !self.nodes[0].live {
+  if self.backs == 0 || self.nodes.length() == 0 || !self.nodes[0].live {
     return None
   }
   let found : Array[Int] = []

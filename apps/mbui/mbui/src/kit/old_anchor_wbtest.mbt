@@ -18,7 +18,7 @@ test "old_anchor: where kit's open dropdown goes beside, each frame: never drawn
         c.box(w=Px(10.0), h=Px(at.get()), fn() {  }) |> ignore
         if drawn.get() {
           c.box(id~, w=Px(50.0), h=Px(20.0), fn() {  }) |> ignore
-          c.clicked(id) |> ignore
+          c.takes_presses(id)
         }
       })
       |> ignore

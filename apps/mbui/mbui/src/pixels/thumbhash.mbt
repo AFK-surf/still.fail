@@ -1,4 +1,4 @@
-// ThumbHash (evanw/thumbhash, as still.fail's web/src/thumbhash.ts has it): a photo's look in some 25 bytes, drawn
+// ThumbHash (evanw/thumbhash): a photo's look in some 25 bytes, drawn
 // back as a small blurred picture to show while the photo itself comes.
 
 ///|

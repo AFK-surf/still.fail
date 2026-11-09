@@ -1,4 +1,4 @@
-// The station's logins to the command-line tools its agents use (docs/remote-login.md): each station logs in itself,
+// The station's logins to the command-line tools its agents use: each station logs in itself,
 // the login landing in its own user's home and keychain (machine-wide: every chat's agent uses it); a person finishes it
 // from their client, in their own browser. One way for every tool (用户定: no service supported one by one): the tool's
 // own login command is run (run.ts), and what it asks of a person is read from what it does. Only agents start one (用户
@@ -92,6 +92,19 @@ function stationPage(r: LoginRun): string | null {
   if (!r.active || r.state === "verifying") return null;
   const url = r.step === "device" ? (r.codeUrl ?? r.url) : r.step === "loopback" || r.step === "open" ? r.url : null;
   return webPage(url) ? url : null;
+}
+
+/// What a Slack login card shows of a login (sessions/hub.ts `logins.page`): the page a person opens and, for a device
+/// code, the code they enter there; `paste` when that page gives a code to enter back on the card. Null when its step
+/// cannot be taken from Slack (a loopback one, nothing to open yet) or it ended.
+export type CardPage = { url: string; domain: string; code?: string; paste: boolean };
+export function slackPage(login: Login): CardPage | null {
+  if (login.endedAt !== undefined || login.state === "verifying") return null;
+  const url = login.step === "device" ? (login.codeUrl ?? login.url) : login.step === "open" && login.paste === true ? login.url : null;
+  if (!webPage(url)) return null;
+  const domain = domainOf(url) ?? url;
+  if (login.step === "open") return { url, domain, paste: true };
+  return login.code ? { url, domain, code: login.code, paste: false } : null;
 }
 
 export class Logins {

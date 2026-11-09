@@ -1,4 +1,4 @@
-// An agent's request about a vault item on its card (vault_approval.mbt; VaultAsk.tsx). The vault's page itself:
+// An agent's request about a vault item on its card. The vault's page itself:
 // src/sfpages vault_wbtest.mbt.
 
 ///|
@@ -16,7 +16,7 @@ fn vault_src(
   let base = fixture("settings")
   {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "vaults" {
         {
           value: Some(
@@ -31,7 +31,7 @@ fn vault_src(
                     o["lasts"] = Json::string(lasts)
                   }
                   if save {
-                    o["save"] = Json::object({ "kind": Json::string("login"), "username": Json::string("zzj") })
+                    o["save"] = Json::object({ "kind": Json::string("login"), "username": Json::string("demo-user") })
                   }
                   Json::object(o)
                 }),
@@ -42,7 +42,7 @@ fn vault_src(
           version: 1,
         }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -54,7 +54,7 @@ fn vault_src(
 
 ///|
 /// A post of an agent asking to use GitHub token in its chat at ws1/st1, its card in place of its words (sfpages'
-/// message row; `save`: to keep a password for zzj; `typed`: to keep one of that kind the person types in, OpenCode Go;
+/// message row; `save`: to keep a password for demo-user; `typed`: to keep one of that kind the person types in, OpenCode Go;
 /// `status`: how it ended), answered here as the core says with it (`answer`, `lasts`: its vaultAsk's).
 fn ask_card(
   c : @ui.Ctx,
@@ -71,7 +71,7 @@ fn ask_card(
 ) -> Unit {
   let viewer = Json::object({ "me": Json::object({ "email": Json::string("me@x.com") }) })
   let ask : Map[String, Json] = {
-    "name": Json::string(if typed != "" { "OpenCode Go" } else if save { "UniFi UX7" } else { "GitHub token" }),
+    "name": Json::string(if typed != "" { "OpenCode Go" } else if save { "测试服务登录" } else { "GitHub token" }),
     "mode": Json::string(mode),
     "answer": Json::string(answer),
   }
@@ -82,7 +82,7 @@ fn ask_card(
   if typed != "" {
     ask["save"] = Json::object({ "kind": Json::string(typed), "typed": Json::boolean(true) })
   } else if save {
-    ask["save"] = Json::object({ "kind": Json::string("login"), "username": Json::string("zzj") })
+    ask["save"] = Json::object({ "kind": Json::string("login"), "username": Json::string("demo-user") })
   } else {
     ask["command"] = Json::string("gh run rerun 1846 --failed")
   }
@@ -191,9 +191,9 @@ test "a request's card is whole with its post: its answer the core's with it, no
   let base = vault_src([], true, [])
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       asked.push(name)
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
   }
   let t = @ui.Tester::new(fn(c) { ask_card(c, src) }, w=390.0, h=844.0, platform=2)
@@ -253,7 +253,7 @@ test "a request to keep a secret: 存入 or 不存, kept as once; its kind and a
   let src = vault_src(["r1"], true, calls, save=true)
   let t = @ui.Tester::new(fn(c) { ask_card(c, src, save=true) }, w=390.0, h=844.0, platform=2)
   t.draw()
-  for w in ["存入密码 UniFi UX7", "zzj", "存入", "不存"] {
+  for w in ["存入密码 测试服务登录", "demo-user", "存入", "不存"] {
     assert_true(t.find(w) is Some(_), msg=w)
   }
   assert_true(t.find("本对话内") is None)
@@ -413,7 +413,7 @@ fn vault_ask(c : @ui.Ctx, src : Source) -> Unit {
 test "how a request ended: one line, its item named" {
   new_run()
   let src = vault_src([], true, [])
-  for case in [(false, "granted", "已允许使用 GitHub token · 本对话内"), (true, "granted", "已存入密码 UniFi UX7"), (false, "denied", "已拒绝使用 GitHub token"), (true, "denied", "未存入 UniFi UX7")] {
+  for case in [(false, "granted", "已允许使用 GitHub token · 本对话内"), (true, "granted", "已存入密码 测试服务登录"), (false, "denied", "已拒绝使用 GitHub token"), (true, "denied", "未存入 测试服务登录")] {
     let (save, status, words) = case
     let t = @ui.Tester::new(fn(c) { ask_card(c, src, save~, status~) }, w=390.0, h=844.0, platform=2)
     t.draw()

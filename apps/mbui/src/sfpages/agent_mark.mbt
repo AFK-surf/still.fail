@@ -1,4 +1,4 @@
-// An agent's mark (ember web/src/ui.tsx AgentMark, ui.css.ts agentMark): its model's maker on a tile of the neutral
+// An agent's mark (still.fail web/src/ui.tsx AgentMark, ui.css.ts agentMark): its model's maker on a tile of the neutral
 // ground, its corner .3 of its side; where it stands a mark at the corner, the chat list's own (chat_mark.mbt): a
 // yellow disc with white blades turning at work, blue when it waits on a person, red when it failed, ringed in the
 // ground it is on.

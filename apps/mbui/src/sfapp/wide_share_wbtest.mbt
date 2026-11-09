@@ -1,4 +1,4 @@
-// Sharing a chat with keyboard and mouse (sfpages xshare.mbt, ChatPage.tsx ShareDialog: the presenters' dialog): from the chat's info, the workspaces
+// Sharing a chat with keyboard and mouse (sfpages xshare.mbt): from the chat's info, the workspaces
 // it may be shared with, ticked as it is shared; 完成 tells the core (chat.xshare).
 
 ///|
@@ -13,12 +13,13 @@ test "wide: 分享给其他 workspace from the chat's info: a dialog lists the w
       (base.call)(name, params, done)
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   t.click(Button, label="更多")
   t.frame()
   t.frame()
+  open_share(t)
   t.tap_text("分享给其他 workspace")
   // (the dialog come in, @kit.dialog_in, and still: the corner rule holds every frame drawn so, its tick rows' boxes
   // clear of their corners)
