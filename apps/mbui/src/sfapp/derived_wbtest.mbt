@@ -85,7 +85,7 @@ test "what is worked out of a topic and a signal of the page's is worked out aga
   let seen = Ref("")
   let t = @ui.Tester::new(fn(_) {
     for _ in 0..<3 {
-      seen.val = made.read("rows", fn(_) {
+      seen.val = made.read(src, "rows", fn(_) {
         worked.val += 1
         let n = src.topic("counted", {}).get().value.unwrap().as_number().unwrap_or(0.0)
         "\{n.to_int()} \{only_io.get()}"
@@ -124,7 +124,7 @@ test "a computed of what was worked out of a topic follows the topic, the topic 
   let seen = Ref("")
   let t = @ui.Tester::new(fn(_) {
     // (only the outer one read here: the topic is read by the inner one, in the outer's getter)
-    seen.val = outer.read("line", fn(_) {
+    seen.val = outer.read(src, "line", fn(_) {
       worked.val += 1
       "seen \{inner.read(src, {}).0.unwrap_or(0.0).to_int()}"
     })

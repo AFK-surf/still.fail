@@ -1463,6 +1463,7 @@ let steps_head : @sfbase.Kept[StepsHead] = @sfbase.Kept::new()
 ///|
 fn steps_head_of(src : Source, params : Map[String, Json], lkey : String) -> StepsHead {
   steps_head.read(
+    src,
     lkey,
     fn(_) {
       let h = src.topic("history", params).get().value
@@ -1490,7 +1491,7 @@ fn steps_head_of(src : Source, params : Map[String, Json], lkey : String) -> Ste
 ///|
 /// Agent `key`'s history's rows (steps_rows).
 fn steps_rows_of_topic(src : Source, params : Map[String, Json], lkey : String) -> (Array[Json], Array[StepsRow]) {
-  steps_rows.read(lkey, fn(_) {
+  steps_rows.read(src, lkey, fn(_) {
     let h = src.topic("history", params).get().value
     steps_rows_of(h, items(h, "items"), steps_own.only_io.get())
   })
@@ -2064,6 +2065,7 @@ let tool_none : @ui.TextStyle = @ui.text_style(size=Caption, color=Subtle, w=Ful
 pub fn history_usage_line(src : Source, station : String, key : String) -> String {
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
   steps_usage_line.read(
+    src,
     station + "\u{1}" + key,
     fn(_) { text(src.topic("history", params).get().value, "usageLine") },
     same=fn(a, b) { a == b },
@@ -2075,6 +2077,7 @@ pub fn history_usage_line(src : Source, station : String, key : String) -> Strin
 pub fn history_usage(src : Source, station : String, key : String) -> Array[Json] {
   let params : Map[String, Json] = { "station": Json::string(station), "key": Json::string(key) }
   let usage = steps_usage.read(
+    src,
     station + "\u{1}" + key,
     fn(_) { field(src.topic("history", params).get().value, "usage") },
     same=fn(a, b) {
