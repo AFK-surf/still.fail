@@ -750,13 +750,15 @@ fn composer_text(
             warm(c, src, spec)
           }
       }
-      // nothing typed: the chat above or below, as the list shows them now
-      if res.focused && w.text.get() == "" && !(@sfbase.neighbour_held.val)() && !menu {
-        if c.key_pressed(@ui.key_code_up, in_field=true) {
-          (@sfbase.neighbour_go.val)(src, ws, -1)
-        } else if c.key_pressed(@ui.key_code_down, in_field=true) {
-          (@sfbase.neighbour_go.val)(src, ws, 1)
-        }
+      // nothing typed: ↑ ↓ the chat above or below, as the list shows them now, each as it comes, before the field
+      // sees it (Ctx::on_key: what is typed then, whether the chat beside is held then)
+      if res.focused && !menu {
+        c.on_key(c.focused_id(), fn(code, mods) {
+          guard mods == 0 && (code == @ui.key_code_up || code == @ui.key_code_down) else { return false }
+          guard w.text.get() == "" && !(@sfbase.neighbour_held.val)() else { return false }
+          (@sfbase.neighbour_go.val)(src, ws, if code == @ui.key_code_up { -1 } else { 1 })
+          true
+        })
       }
     })
   })
