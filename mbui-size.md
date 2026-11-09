@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [7582e5326](https://github.com/AFK-surf/still.fail/commit/7582e53263e9803ebba40596785683332afe72f6) feat(ios): configure monoid TestFlight and APNs id | 1.71 | 2.28 | 9.52 | 28.01 | 33.18 | 25.02 | 45.7 | 93.06 | 156.81 |
 | [857ada016](https://github.com/AFK-surf/still.fail/commit/857ada016ff4dd68978e863ca62228353a111232) core: a station's stream silent past its keepalive | 1.72 | 2.29 | 9.52 | 28.01 | 33.19 | 25.02 | 45.72 | 93.06 | 156.81 |
 | [dfbe26655](https://github.com/AFK-surf/still.fail/commit/dfbe266551d1dd9d363defbe0d9e9d4ea09a9d6d) mbui: what a row coming in costs as big as the row | 1.72 | 2.29 | 9.52 | 28.01 | 33.19 | 25.03 | 45.72 | 93.06 | 156.81 |
 | [d1aff8e78](https://github.com/AFK-surf/still.fail/commit/d1aff8e78a8d3ba61d94e9822a88498c54ed53f7) mbui: the chat bar's screen button says how many s | 1.71 | 2.28 | 9.52 | 28.01 | 33.18 | 25.02 | 45.7 | 93.06 | 156.81 |
