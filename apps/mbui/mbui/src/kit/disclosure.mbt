@@ -77,8 +77,8 @@ fn unfolding(
   spec : @motion.Spec,
 ) -> Unit {
   // (closing: as much of its room left as its told end says, none, what it holds past it till it has gone in under its
-  // foot; open, as tall as it is (it may grow))
-  let room = c.box(h=if p.leaving() { Px(p.t.target()) } else { Auto }, fn() {
+  // foot, cut only by its way there; open, as tall as it is (it may grow), what it holds cut to it)
+  let room = c.box(h=if p.leaving() { Px(p.t.target()) } else { Auto }, clip=!p.leaving(), fn() {
     if p.built {
       let i = c.box(id=c.id(key + "/content"), fn() {
         if p.leaving() {
