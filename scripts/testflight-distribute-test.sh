@@ -80,9 +80,9 @@ EXTERNAL_ANSWER='{"data":[]}' refuses VALID true; expect_posts 'POST betaGroups/
 REFUSE=1 refuses VALID
 grep -q refused "$W/out"
 # monoid's build lookup and subsequent wait rounds stay on monoid; another app's record refuses before any write.
-export RELEASE_PRODUCT=monoid MONOID_ASC_APP_ID=6999999999
+export RELEASE_PRODUCT=monoid
 run VALID true
-grep -qF 'GET builds?filter[app]=6999999999&filter[version]=5' "$FAKE/calls"
+grep -qF 'GET builds?filter[app]=6832495462&filter[version]=5' "$FAKE/calls"
 expect_posts 'POST betaGroups/gi/relationships/builds
 POST betaGroups/ge/relationships/builds
 POST betaAppReviewSubmissions'

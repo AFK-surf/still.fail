@@ -1,7 +1,7 @@
 name: mbui TestFlight (manual)
 # Its environment `ios-testflight` is held to main by a deployment rule (no tags; a second person's approval where set).
 # Variables: IOS_TEAM_ID, IOS_APP_GROUP, IOS_RELEASE_REVIEWED (true only once the release is reviewed). monoid uses
-# MONOID_ASC_APP_ID, MONOID_IOS_APP_GROUP, MONOID_IOS_RELEASE_REVIEWED and MONOID_IOS_{APP,SHARE}_PROFILE_B64.
+# MONOID_IOS_APP_GROUP, MONOID_IOS_RELEASE_REVIEWED and MONOID_IOS_{APP,SHARE}_PROFILE_B64.
 # Secrets:
 # IOS_DISTRIBUTION_P12_B64 and _PASSWORD, IOS_SIGNING_SHA1, IOS_APP_PROFILE_B64, IOS_SHARE_PROFILE_B64, ASC_KEY_ID,
 # ASC_ISSUER_ID, ASC_PRIVATE_KEY_B64: credentials made for CI alone.
@@ -86,7 +86,6 @@ jobs:
       RELEASE_VERSION: ${{ inputs.version }}
       RELEASE_BUILD: ${{ inputs.build }}
       RELEASE_PRODUCT: ${{ inputs.product || 'stillfail' }}
-      MONOID_ASC_APP_ID: ${{ vars.MONOID_ASC_APP_ID }}
       RELEASE_SKIP_TESTS: ${{ inputs.skip_tests }}
     steps:
       - uses: actions/checkout@v5

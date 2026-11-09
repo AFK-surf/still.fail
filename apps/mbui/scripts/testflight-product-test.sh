@@ -25,8 +25,8 @@ check() {
 }
 unset RELEASE_PRODUCT
 check 'still.fail/fail.still.iphone/group.fail.still.iphone/6818750243'
-export RELEASE_PRODUCT=monoid MONOID_ASC_APP_ID=6999999999
-check 'monoid/build.monoid.iphone/group.build.monoid.iphone/6999999999'
+export RELEASE_PRODUCT=monoid
+check 'monoid/build.monoid.iphone/group.build.monoid.iphone/6832495462'
 reject() { if ( "$@" ) > "$T/out" 2>&1; then fail 'accepted mismatched identity'; fi; }
 ANSWER_BUNDLE=fail.still.iphone reject asc_preflight
 ANSWER_APP=6818750243 reject asc_preflight
