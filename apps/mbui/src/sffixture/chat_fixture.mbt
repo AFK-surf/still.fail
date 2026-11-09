@@ -493,6 +493,8 @@ pub fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]
             with_state(rich_chat(f.older), done_state)
           } else if f.mode == "chat-download" || f.mode == "chat-keeping" {
             with_download_message(rich_chat(f.older))
+          } else if f.mode == "chat-download-on" {
+            with_reply_after(with_download_message(rich_chat(f.older)))
           } else {
             rich_chat(f.older)
           }
