@@ -392,6 +392,8 @@ pub fn Tester::new(
     nav_said: "",
     a11y: false,
     a11y_said: "",
+    a11y_told: A11yMirror::new(),
+    a11y_held: 0,
     env: Map::from_array(env),
     app_version,
     notices: [],
@@ -844,6 +846,7 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   on_frame(self.w, self.h, self.fake.scale, if shown > at { shown } else { at })
   // (a bench's measured frame ends here: what follows is the Tester's own checks of it, which a device runs not)
   bench_frame_ends()
+  self.hold_a11y_whole()
   self.frames = self.frames + 1
   // (each box's presses said to be another's that one's to take, where the box is: presses.mbt)
   g().check_press_owners()

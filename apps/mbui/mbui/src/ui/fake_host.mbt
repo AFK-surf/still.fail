@@ -615,6 +615,11 @@ impl @hostapi.Host for FakeHost with a11y_on(self) {
 ///|
 impl @hostapi.Host for FakeHost with a11y_tree(self, tree) {
   self.a11y_said = tree
+  // (kept as a host keeps it: A11yMirror::apply)
+  match a11y_update_read(tree) {
+    Some((full, focus, told)) => self.a11y_told.apply(full, focus, told) |> ignore
+    None => ()
+  }
 }
 
 ///|

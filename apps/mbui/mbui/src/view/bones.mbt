@@ -28,6 +28,7 @@ pub fn View::bones(self : View, color : Live[Int64]) -> View {
     }
     let was = n.bones
     n.bones = k
+    self.tree.said_marked(self.at, state=true, kids=true)
     self.tree.bones_marked_below(self.at)
     // (into them or out: what takes input in it is not there, or is again)
     if (was == 0L) != (k == 0L) {

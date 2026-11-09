@@ -837,10 +837,6 @@ fn looks_frame(c : Ctx, t : Double) -> Double {
     looks_apply(c)
     looks_heads_only.val = true
   }
-  // (what is read out as the frame has it, said as a paint says it, the paint not run for it: a list moved by its
-  // header alone, what the window's tree was told that changed nothing drawn (whether a node takes the focus); said
-  // only where something reads it out, told only where it changed)
-  c.a11y_after_paint()
   c.t_build = 0.0
   c.t_layout = 0.0
   c.t_paint = work_now() - t0

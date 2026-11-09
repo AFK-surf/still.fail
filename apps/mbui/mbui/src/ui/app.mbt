@@ -194,6 +194,9 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // (what the window's tree has going: drawn as the clock goes; what ends at a moment, woken then: view_host.mbt)
   view_frame_end(c)
   frame_afters_run()
+  // what of the widgets changed, for a screen reader reading them, as the frame left them (its layers, its focus, where
+  // what a page in the hand moved is: a11y.mbt)
+  c.a11y_after_paint()
   // (a layout read back that moved: what was placed from it, placed again)
   if c.read_back_moved {
     c.wants_frame = true
@@ -600,8 +603,6 @@ fn frame_paint(c : Ctx, root : Int, alone? : Bool = false) -> Unit {
   // the shots being taken, each into instances of its own (shot.mbt)
   c.paint_shots()
   c.sync_views()
-  // what the widgets are, for a screen reader reading them (a11y.mbt)
-  c.a11y_after_paint()
   // what the paint said, where a Tester asks (said.mbt)
   frame_said_told(c, 1)
   // the streams' frames taken in this frame said shown (stream.mbt)

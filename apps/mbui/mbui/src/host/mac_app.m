@@ -2174,10 +2174,11 @@ int32_t mb_host_native_pointing(void) { return 2; }
 // Whether a keyboard is at hand (@hostapi.keyboard): a Mac's, always.
 int32_t mb_host_keyboard(void) { return 1; }
 // ---- the app's widgets for VoiceOver ----
-// As Android's A11y.java and Windows' win_a11y.cpp give them: an element of each node the app last said (a11y.mbt's
-// lines, @hostapi.a11y_tree), kept by its number from frame to frame (one whose node is gone is no element), under the
-// view; its role by the node's, its label, value, help, state and frame on the screen. What is asked of it (press, a
-// step up or down, words put in a field, focus, cancel) goes to the app on @hostapi.a11y_channel for its next frame.
+// As Android's A11y.java and Windows' win_a11y.cpp give them: an element of each node the app told (a11y.mbt's
+// updates, @hostapi.a11y_tree: what changed, kept by its number; one whose node is gone is no element), under the
+// view (those of no use of their own, flags v, left out: what they hold their holder's); its role by the node's, its
+// label, value, help, state and frame on the screen. What is asked of it (press, a step up or down, words put in a
+// field, focus, cancel) goes to the app on @hostapi.a11y_channel for its next frame.
 // The app tells its widgets once something asked the view for them (VoiceOver, Voice Control, Accessibility
 // Inspector); that first ask asks for a frame. As they change, the layout, the focus, a title or a value is said
 // changed. MBUI_A11Y_SELFCHECK=1 (host_contract.sh mac a11y): the view's elements walked as VoiceOver walks them once
@@ -2187,7 +2188,7 @@ int32_t mb_host_keyboard(void) { return 1; }
 @interface MBA11yNode : NSObject
 @property(nonatomic) int nid, parent, widget;
 @property(nonatomic, copy) NSString *role, *flags, *label, *value, *help, *actions;
-@property(nonatomic) NSRect rect;
+@property(nonatomic) NSRect rel;
 @property(nonatomic) BOOL range;
 @property(nonatomic) double low, at, high;
 @property(nonatomic, strong) NSMutableArray<NSNumber *> *kids;
@@ -2200,10 +2201,41 @@ int32_t mb_host_keyboard(void) { return 1; }
 @end
 
 static NSMutableDictionary<NSNumber *, MBA11yNode *> *a11y_nodes;
-static NSArray<NSNumber *> *a11y_tops;
 static NSMutableDictionary<NSNumber *, MBA11yElement *> *a11y_elements;
 static int a11y_focus;
 static BOOL a11y_asked, a11y_selfcheck_done;
+
+static BOOL a11y_has(NSString *letters, unichar c) {
+  return [letters rangeOfString:[NSString stringWithCharacters:&c length:1]].location != NSNotFound;
+}
+
+// where node `n` is in the view: its holders' places and its own, each from where its holder is (a11y.mbt's head)
+static NSRect a11y_rect(MBA11yNode *n) {
+  NSRect r = n.rel;
+  for (MBA11yNode *p = a11y_nodes[@(n.parent)]; p && p.nid; p = a11y_nodes[@(p.parent)])
+    r.origin.x += p.rel.origin.x, r.origin.y += p.rel.origin.y;
+  return r;
+}
+
+// what node `nid` holds as elements: those of no use of their own (flags v: what a column scrolls is held in) left out,
+// what they hold in their place
+static NSArray<NSNumber *> *a11y_shown_kids(int nid) {
+  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+  for (NSNumber *k in a11y_nodes[@(nid)].kids) {
+    MBA11yNode *c = a11y_nodes[k];
+    if (!c) continue;
+    if (a11y_has(c.flags, 'v')) [out addObjectsFromArray:a11y_shown_kids(c.nid)];
+    else [out addObject:k];
+  }
+  return out;
+}
+
+// the element that holds node `n`: its nearest holder of use of its own (0: the view)
+static int a11y_shown_holder(MBA11yNode *n) {
+  MBA11yNode *p = a11y_nodes[@(n.parent)];
+  while (p && p.nid && a11y_has(p.flags, 'v')) p = a11y_nodes[@(p.parent)];
+  return p ? p.nid : 0;
+}
 
 static MBA11yElement *a11y_element(int nid) {
   if (!a11y_nodes[@(nid)]) return nil;
@@ -2231,7 +2263,7 @@ static NSArray *a11y_children_of_view(void) {
     a11y_asked = YES;
     [the_view requestFrame];
   }
-  return a11y_elements_of(a11y_tops ?: @[]);
+  return a11y_elements_of(a11y_shown_kids(0));
 }
 
 static id a11y_hit(NSPoint screen) {
@@ -2240,8 +2272,10 @@ static id a11y_hit(NSPoint screen) {
   int best = 0;
   double area = -1;
   for (MBA11yNode *n in a11y_nodes.allValues) {
-    if (!NSPointInRect(p, n.rect)) continue;
-    double a = n.rect.size.width * n.rect.size.height;
+    if (!n.nid || a11y_has(n.flags, 'v')) continue;
+    NSRect r = a11y_rect(n);
+    if (!NSPointInRect(p, r)) continue;
+    double a = r.size.width * r.size.height;
     if (area < 0 || a < area) area = a, best = n.nid;
   }
   return best ? a11y_element(best) : nil;
@@ -2256,10 +2290,6 @@ static void a11y_ask(MBA11yNode *n, NSString *action, NSString *text) {
   if (text) m[@"text"] = text;
   NSData *json = [NSJSONSerialization dataWithJSONObject:m options:0 error:nil];
   if (json) mb_post("a11y", (const char *)json.bytes, json.length, NULL, 0);
-}
-
-static BOOL a11y_has(NSString *letters, unichar c) {
-  return [letters rangeOfString:[NSString stringWithCharacters:&c length:1]].location != NSNotFound;
 }
 
 @implementation MBA11yElement
@@ -2325,7 +2355,7 @@ static BOOL a11y_has(NSString *letters, unichar c) {
   return !a11y_has(self.node.flags, 'd');
 }
 - (BOOL)isAccessibilityFocused {
-  return a11y_has(self.node.flags, 'f');
+  return self.node && self.nid == a11y_focus;
 }
 - (BOOL)isAccessibilitySelected {
   return a11y_has(self.node.flags, 's');
@@ -2336,14 +2366,15 @@ static BOOL a11y_has(NSString *letters, unichar c) {
 - (NSRect)accessibilityFrame {
   MBA11yNode *n = self.node;
   if (!n || !the_view.window) return NSZeroRect;
-  return [the_view.window convertRectToScreen:[the_view convertRect:n.rect toView:nil]];
+  return [the_view.window convertRectToScreen:[the_view convertRect:a11y_rect(n) toView:nil]];
 }
 - (id)accessibilityParent {
   MBA11yNode *n = self.node;
-  return n && n.parent ? (a11y_element(n.parent) ?: (id)the_view) : (id)the_view;
+  int p = n ? a11y_shown_holder(n) : 0;
+  return p ? (a11y_element(p) ?: (id)the_view) : (id)the_view;
 }
 - (NSArray *)accessibilityChildren {
-  return a11y_elements_of(self.node.kids ?: @[]);
+  return a11y_elements_of(a11y_shown_kids(self.nid));
 }
 // what may be asked of it: what its node takes
 - (BOOL)isAccessibilitySelectorAllowed:(SEL)sel {
@@ -2420,56 +2451,75 @@ int32_t mb_host_a11y_on(void) {
   return a11y_asked ? 1 : 0;
 }
 
-// What the widgets are now (@hostapi.a11y_tree): the nodes made anew, what reads them told what changed
+// What the widgets are now (@hostapi.a11y_tree): an update of them (a11y.mbt's head: the nodes that changed, each
+// whole, and the focus), kept; one in nothing that holds it gone with what it holds; what reads them told what changed
 void mb_host_a11y_tree(moonbit_string_t s) {
   NSString *all = mb_ns_from_string(s);
-  NSMutableDictionary<NSNumber *, MBA11yNode *> *next = [NSMutableDictionary dictionary];
-  NSMutableArray<NSNumber *> *order = [NSMutableArray array], *tops = [NSMutableArray array];
-  for (NSString *line in [all componentsSeparatedByString:@"\n"]) {
-    NSArray<NSString *> *f = [line componentsSeparatedByString:@"\x1f"];
-    if (f.count < 16) continue;
+  NSArray<NSString *> *lines = [all componentsSeparatedByString:@"\n"];
+  NSArray<NSString *> *head = [lines.firstObject componentsSeparatedByString:@"\x1f"];
+  if (head.count < 3 || ![head[0] isEqualToString:@"T"]) return;
+  BOOL full = [head[1] isEqualToString:@"1"];
+  int focus = head[2].intValue;
+  if (!a11y_nodes) a11y_nodes = [NSMutableDictionary dictionary];
+  if (full) {
+    [a11y_nodes removeAllObjects];
+    [a11y_elements removeAllObjects];
+  }
+  NSMutableArray<MBA11yNode *> *told = [NSMutableArray array];
+  NSMutableSet<NSNumber *> *held = [NSMutableSet set];
+  NSMutableArray<NSNumber *> *let_go = [NSMutableArray array];
+  NSMutableArray<MBA11yNode *> *titled = [NSMutableArray array], *valued = [NSMutableArray array];
+  BOOL shape = full;
+  for (NSUInteger i = 1; i < lines.count; i++) {
+    NSArray<NSString *> *f = [lines[i] componentsSeparatedByString:@"\x1f"];
+    if (f.count < 17 || ![f[0] isEqualToString:@"N"]) continue;
     MBA11yNode *n = [MBA11yNode new];
-    n.nid = f[0].intValue, n.parent = f[1].intValue, n.widget = f[2].intValue;
-    n.role = f[3], n.flags = f[4];
-    n.rect = NSMakeRect(f[5].doubleValue, f[6].doubleValue, f[7].doubleValue, f[8].doubleValue);
-    n.label = f[9], n.value = f[10], n.help = f[11];
-    n.range = f[13].length > 0;
-    n.low = f[12].doubleValue, n.at = f[13].doubleValue, n.high = f[14].doubleValue;
-    n.actions = f[15];
+    n.nid = f[1].intValue, n.role = f[2], n.flags = f[3];
+    n.rel = NSMakeRect(f[4].doubleValue, f[5].doubleValue, f[6].doubleValue, f[7].doubleValue);
+    n.label = f[8], n.value = f[9], n.help = f[10];
+    n.range = f[12].length > 0;
+    n.low = f[11].doubleValue, n.at = f[12].doubleValue, n.high = f[13].doubleValue;
+    n.actions = f[14], n.widget = f[15].intValue;
     n.kids = [NSMutableArray array];
-    if (!n.nid || next[@(n.nid)]) continue;
-    next[@(n.nid)] = n;
-    [order addObject:@(n.nid)];
-  }
-  int focus = 0;
-  for (NSNumber *k in order) {
-    MBA11yNode *n = next[k];
-    MBA11yNode *p = n.parent ? next[@(n.parent)] : nil;
-    if (p) [p.kids addObject:k];
-    else n.parent = 0, [tops addObject:k];
-    if (a11y_has(n.flags, 'f')) focus = n.nid;
-  }
-  NSDictionary<NSNumber *, MBA11yNode *> *old = a11y_nodes;
-  BOOL shape = ![tops isEqualToArray:a11y_tops ?: @[]] || next.count != old.count;
-  for (NSNumber *k in order) {
-    MBA11yNode *n = next[k], *o = old[k];
-    if (!o || o.parent != n.parent || ![o.kids isEqualToArray:n.kids]) shape = YES;
-  }
-  a11y_nodes = next;
-  a11y_tops = tops;
-  for (NSNumber *k in a11y_elements.allKeys)
-    if (!next[k]) [a11y_elements removeObjectForKey:k];
-  if (a11y_asked) {
-    for (NSNumber *k in a11y_elements) {
-      MBA11yNode *n = next[k], *o = old[k];
-      if (!o) continue;
-      if (![o.label isEqualToString:n.label]) NSAccessibilityPostNotification(a11y_elements[k], NSAccessibilityTitleChangedNotification);
-      if (![o.value isEqualToString:n.value] || ![o.flags isEqualToString:n.flags] || o.at != n.at)
-        NSAccessibilityPostNotification(a11y_elements[k], NSAccessibilityValueChangedNotification);
+    if (f[16].length)
+      for (NSString *k in [f[16] componentsSeparatedByString:@","]) [n.kids addObject:@(k.intValue)];
+    MBA11yNode *o = a11y_nodes[@(n.nid)];
+    if (o) {
+      n.parent = o.parent;
+      for (NSNumber *k in o.kids)
+        if (![n.kids containsObject:k]) [let_go addObject:k];
+      if (![o.kids isEqualToArray:n.kids]) shape = YES;
+      if (![o.label isEqualToString:n.label]) [titled addObject:n];
+      if (![o.value isEqualToString:n.value] || ![o.flags isEqualToString:n.flags] || o.at != n.at) [valued addObject:n];
+    } else {
+      shape = YES;
     }
-    if (shape) NSAccessibilityPostNotification(the_view, NSAccessibilityLayoutChangedNotification);
-    if (focus != a11y_focus && focus) NSAccessibilityPostNotification(a11y_element(focus), NSAccessibilityFocusedUIElementChangedNotification);
+    a11y_nodes[@(n.nid)] = n;
+    [told addObject:n];
+    [held addObjectsFromArray:n.kids];
   }
+  for (MBA11yNode *n in told)
+    for (NSNumber *k in n.kids) a11y_nodes[k].parent = n.nid;
+  // (one in nothing told holds: gone, with what it holds)
+  while (let_go.count) {
+    NSNumber *k = let_go.lastObject;
+    [let_go removeLastObject];
+    if ([held containsObject:k]) continue;
+    MBA11yNode *n = a11y_nodes[k];
+    if (!n) continue;
+    [let_go addObjectsFromArray:n.kids];
+    [a11y_nodes removeObjectForKey:k];
+    [a11y_elements removeObjectForKey:k];
+  }
+  if (a11y_asked && !full) {
+    for (MBA11yNode *n in titled)
+      if (a11y_elements[@(n.nid)]) NSAccessibilityPostNotification(a11y_elements[@(n.nid)], NSAccessibilityTitleChangedNotification);
+    for (MBA11yNode *n in valued)
+      if (a11y_elements[@(n.nid)]) NSAccessibilityPostNotification(a11y_elements[@(n.nid)], NSAccessibilityValueChangedNotification);
+  }
+  if (a11y_asked && shape) NSAccessibilityPostNotification(the_view, NSAccessibilityLayoutChangedNotification);
+  if (a11y_asked && focus != a11y_focus && focus && a11y_element(focus))
+    NSAccessibilityPostNotification(a11y_element(focus), NSAccessibilityFocusedUIElementChangedNotification);
   a11y_focus = focus;
   if (getenv("MBUI_A11Y_SELFCHECK") && !a11y_selfcheck_done) dispatch_async(dispatch_get_main_queue(), ^{
       a11y_selfcheck();

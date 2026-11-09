@@ -741,6 +741,12 @@ pub fn yield_thumbs(@view.View, @view.View) -> Unit
 // Errors
 
 // Types and methods
+type A11yMirror
+
+type A11yNode derive(Eq, Show)
+
+type A11yTold
+
 pub(all) enum Align {
   AStart
   ACenter
@@ -1053,7 +1059,7 @@ pub struct Ctx {
   mut sem_hide : Int32
   asked_actions : Array[(Int32, @view.Action)]
   actions : Array[(Int32, @view.Action)]
-  mut a11y_sent : String
+  a11y : A11yTold
   mut focus_visible : Bool
   mut focus_roved : Bool
   mut focus_before : Int32
@@ -2451,6 +2457,7 @@ pub struct Tester {
   before : (() -> Unit)?
 }
 pub fn Tester::a11y_said(Self) -> String
+pub fn Tester::a11y_update(Self) -> String
 pub fn Tester::act(Self, @view.Role, @view.Action, label? : String) -> Unit raise
 pub fn Tester::act_on(Self, SemNode, @view.Action) -> Unit raise
 pub fn Tester::adaptive_glyphs(Self) -> Int32
