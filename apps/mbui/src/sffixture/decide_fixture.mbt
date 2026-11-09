@@ -465,7 +465,7 @@ pub fn decide_fixture_topic(f : Fixture, name : String, params : Map[String, Jso
           }),
         )
       } else {
-        None
+        Some(Some({ "groups": [], "lit": false, "ids": [] }))
       }
     _ => None
   }

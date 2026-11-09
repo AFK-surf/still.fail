@@ -1025,7 +1025,12 @@ fn page_ready(src : Source, w : Workspace, p : Page) -> Bool {
   match p {
     Chat(r) => chat_answered(src, r)
     History(r, key, _) => chat_answered(src, r) && answered(src.topic("history", history_params(r, key)).get().snapshot())
-    Home => list_ready(src, w) && answered(src.topic("changelog", Map::new()).get().snapshot())
+    // (and what is left up long under the list, as Home's own read has it: not waited for, it slid in under a list
+    // already shown)
+    Home =>
+      list_ready(src, w) &&
+      answered(src.topic("changelog", Map::new()).get().snapshot()) &&
+      !@sfbase.held_unanswered("longJobs", { "scope": Json::string(w.id) })
     _ => true
   }
 }

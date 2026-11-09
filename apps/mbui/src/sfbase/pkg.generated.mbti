@@ -713,6 +713,8 @@ pub let held_pictures_waiting : @ref.Ref[Bool]
 
 pub fn held_seed(String, @hostapi.Picked) -> String
 
+pub fn held_unanswered(String, Map[String, @json.Json]) -> Bool
+
 pub let highlight_limit : Int32
 
 pub fn history_act(() -> Unit) -> Unit
@@ -862,6 +864,8 @@ pub let lone_page : @ref.Ref[Page?]
 pub fn long_jobs(Source, Workspace) -> Int32
 
 pub fn long_jobs_lit(Source, Workspace) -> Bool
+
+pub fn long_jobs_read(@view.View, Source, () -> Workspace?) -> Unit
 
 pub fn long_jobs_seen(Source, Workspace) -> Unit
 
