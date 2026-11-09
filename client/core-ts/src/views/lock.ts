@@ -68,32 +68,40 @@ const RECENT_SECS = 7 * 86400;
 /// Once one station answered a read of the locks, how much longer the others are waited for.
 export const OTHERS_MS = 2_000;
 
-/// Each of `asks` (one a station) at once, and what they answered once all have; or once one gave `enough` and the
-/// rest had OTHERS_MS more (`grace`); or by TAKEN_MS whatever came. A station gone silent (its machine asleep, its
-/// network gone: no answer, no close, until its link gives up) is not waited on; nor is the person, who would wait
-/// with it to be let in, to approve a device, to see one taken off. What it says later it tells as it comes back.
-export function answersOf<A, E>(inner: Inner, asks: Effect.Effect<A, E>[], enough: (r: Result.Result<A, E>) => boolean, grace = OTHERS_MS): Effect.Effect<Result.Result<A, E>[]> {
+/// Each of `asks` (one a station) at once, and what they answered once all have; or once one answered and the rest
+/// had what `after` says of that answer more (null: as if none came); or by TAKEN_MS whatever came. A station gone
+/// silent (its machine asleep, its network gone: no answer, no close, until its link gives up) is not waited on; nor
+/// is the person, who would wait with it to be let in, to approve a device, to see one taken off. A refusal is an
+/// answer too: a device the others refuse waits no longer on the silent one. What it says later it tells as it comes
+/// back.
+export function answersOf<A, E>(inner: Inner, asks: Effect.Effect<A, E>[], after: (r: Result.Result<A, E>) => number | null): Effect.Effect<Result.Result<A, E>[]> {
   return Effect.gen(function* () {
     if (asks.length === 0) return [];
     const got: (Result.Result<A, E> | undefined)[] = asks.map(() => undefined);
     const all = Deferred.makeUnsafe<void>();
-    const one = Deferred.makeUnsafe<void>();
+    const enough = Deferred.makeUnsafe<void>();
     let left = asks.length;
     asks.forEach((ask, i) =>
-      inner.runner.fork(Effect.flatMap(Effect.result(ask), (r) => Effect.sync(() => {
+      inner.runner.fork(Effect.flatMap(Effect.result(ask), (r) => Effect.gen(function* () {
         got[i] = r;
-        if (enough(r)) Deferred.doneUnsafe(one, Effect.void);
         if (--left === 0) Deferred.doneUnsafe(all, Effect.void);
+        const more = after(r);
+        if (more === null) return;
+        if (more > 0) yield* Effect.sleep(more); // timer: a deadline
+        Deferred.doneUnsafe(enough, Effect.void);
       }))),
     );
     yield* Effect.raceAllFirst([
       Deferred.await(all),
-      Effect.andThen(Deferred.await(one), Effect.sleep(grace)), // timer: a deadline
+      Deferred.await(enough),
       Effect.sleep(TAKEN_MS), // timer: a deadline
     ]);
     return got.filter((r): r is Result.Result<A, E> => r !== undefined);
   });
 }
+
+/// Of a station's answer to what is brought: done once one took it, the others waited for OTHERS_MS once one refused.
+export const tookOrRefused = (r: Result.Result<unknown, unknown>): number => (r._tag === "Success" ? 0 : OTHERS_MS);
 
 /// What the cloud keeps of a workspace's lock, as held here (the `lock` record of the workspace). `seen`: the devices
 /// that asked the cloud for credentials in the last 31 days, as far as the viewer may see them (owners and admins all,
@@ -455,7 +463,7 @@ function readLockOf(inner: Inner, ws: string, stations: string[], said?: { refus
           return { head, entries, seen: devices._tag === "Success" ? arr(get(devices.success, "devices")) : [] };
         }),
       ),
-      (r) => r._tag === "Success" && r.success !== null,
+      () => OTHERS_MS,
     );
     const served = answers.flatMap((r) => (r._tag === "Success" && r.success !== null ? [r.success] : []));
     if (served.length === 0) return false;
@@ -816,7 +824,7 @@ export function personalStations(inner: Inner): NonNullable<PersonalEnv["station
   return {
     read: (sub, only) =>
       Effect.map(
-        answersOf(inner, personStations(inner, sub).filter((at) => only === undefined || at.toString() === only).map((at) => inner.stations.requests.call(at, "GET", "/lock/person", null, { quiet: true })), (r) => r._tag === "Success"),
+        answersOf(inner, personStations(inner, sub).filter((at) => only === undefined || at.toString() === only).map((at) => inner.stations.requests.call(at, "GET", "/lock/person", null, { quiet: true })), () => OTHERS_MS),
         (answers) => {
           const ok = answers.filter((r) => r._tag === "Success");
           // Refused by them all (this device not let in yet): what their refusals told of it, not the cloud's.
@@ -828,7 +836,7 @@ export function personalStations(inner: Inner): NonNullable<PersonalEnv["station
     bring: (sub, chain) =>
       Effect.flatMap(
         // (done once one took it: the others are brought it all the same, and keep each other level)
-        answersOf(inner, personStations(inner, sub).map((at) => inner.stations.requests.call(at, "POST", "/lock/person", { chain }, { quiet: true })), (r) => r._tag === "Success", 0),
+        answersOf(inner, personStations(inner, sub).map((at) => inner.stations.requests.call(at, "POST", "/lock/person", { chain }, { quiet: true })), tookOrRefused),
         (answers) => {
           const took = answers.filter((r) => r._tag === "Success").length;
           if (took > 0) return Effect.succeed(took);

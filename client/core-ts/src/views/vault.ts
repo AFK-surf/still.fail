@@ -57,7 +57,7 @@ import type { Owner } from "../core/routing.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { type Entry, Signer } from "../lock.ts";
-import { OTHERS_MS, answersOf, askPerson, deviceText, fold, held as lockHeld, lockSeen, nameOf as workspaceName, signerOf } from "./lock.ts";
+import { OTHERS_MS, answersOf, askPerson, tookOrRefused, deviceText, fold, held as lockHeld, lockSeen, nameOf as workspaceName, signerOf } from "./lock.ts";
 import { workspaceIds } from "./marks.ts";
 import type { Topic } from "../protocol.ts";
 import { StationAddr } from "../station/addr.ts";
@@ -1342,7 +1342,7 @@ class Vaults {
     return Effect.gen(function* () {
       const inner = self.#inner;
       // (done once one took it: a station gone silent is not waited on, the others still told it; lock.ts answersOf)
-      const published = yield* answersOf(inner, stationsOf(inner, self.ws).map((s) => Effect.as(self.#station(s.id, "PUT", "/vault/boxes", cert), s.id)), (r) => r._tag === "Success", 0);
+      const published = yield* answersOf(inner, stationsOf(inner, self.ws).map((s) => Effect.as(self.#station(s.id, "PUT", "/vault/boxes", cert), s.id)), tookOrRefused);
       const took = published.flatMap((r) => (r._tag === "Success" ? [r.success] : []));
       if (took.length === 0) return yield* fail("vault_no_station", t("core-misc.vault.noStation"));
       change(inner, self.ws, (h) => void (h.boxes[cert.device] = cert));
@@ -1445,7 +1445,7 @@ class Vaults {
       if (!scope) return yield* Effect.fail(CoreError.invalid("lasts: once, hour or chat"));
       if (id === PLAIN) {
         const at = nowS(inner);
-        const told = yield* answersOf(inner, held(inner, self.ws).plainOn.map((s) => self.#station(s, "PUT", "/vault/plain/lasts", { lasts: scope, at })), (r) => r._tag === "Success", 0);
+        const told = yield* answersOf(inner, held(inner, self.ws).plainOn.map((s) => self.#station(s, "PUT", "/vault/plain/lasts", { lasts: scope, at })), tookOrRefused);
         if (!told.some((r) => r._tag === "Success")) return yield* fail("vault_no_station", t("core-misc.vault.noStation"));
         change(inner, self.ws, (h) => void (h.plainLasts = { lasts: scope, at }));
         return { lasts: scope };
@@ -1609,7 +1609,7 @@ class Vaults {
     return Effect.gen(function* () {
       const inner = self.#inner;
       if (!held(inner, self.ws).requests[id]) {
-        yield* answersOf(inner, stationsOf(inner, self.ws).map((s) => readStation(inner, `${self.ws}/${s.id}`)), () => held(inner, self.ws).requests[id] !== undefined, OTHERS_MS);
+        yield* answersOf(inner, stationsOf(inner, self.ws).map((s) => readStation(inner, `${self.ws}/${s.id}`)), () => (held(inner, self.ws).requests[id] !== undefined ? 0 : OTHERS_MS));
       }
       const h = held(inner, self.ws);
       const r = h.requests[id];
