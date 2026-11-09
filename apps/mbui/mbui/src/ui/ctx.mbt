@@ -1083,7 +1083,7 @@ fn Ctx::let_go(self : Ctx) -> Unit {
   self.tells.shrink_to_fit()
   self.told.clear()
   self.told.shrink_to_fit()
-  self.shots.clear()
+  self.shots_let_go()
   self.dismissals.clear()
   self.layer_return.clear()
   self.segs_cut(0)

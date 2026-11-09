@@ -495,12 +495,12 @@ pub fn Tester::new(
   // (each frame painted alone or of its looks alone built whole after it and the two compared: tester_looks.mbt)
   frame_look.val = Some(looks_looked)
   // (each shot taken kept, what it says, how big a picture it makes and what it drew: Tester::shot_drawn)
-  shot_watch.val = Some(fn(c, node, s) {
-    let n = c.nodes[node]
-    f.shots.push(c.shot_words(node))
-    let sc = if s.scale > 0.0 { s.scale } else { c.scale }
-    f.shot_sizes.push(((n.fw * sc).round().to_int(), (n.fh * sc).round().to_int()))
-    f.shot_drawn.push(shot_drawn_of(s.inst, s.ninst, n.x, n.y))
+  shot_watch.val = Some(fn(words, s) {
+    let (x, y, w, h) = s.rect
+    f.shots.push(words)
+    let sc = if s.scale > 0.0 { s.scale } else { g().scale }
+    f.shot_sizes.push(((w * sc).round().to_int(), (h * sc).round().to_int()))
+    f.shot_drawn.push(shot_drawn_of(s.inst, s.ninst, x, y))
   })
   corners_hold.val = corners_held
   // (each frame of the looks by the clock alone drawn whole after it as well, and the two compared: frame_watch.mbt)
