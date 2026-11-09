@@ -251,3 +251,124 @@ test "wide: the layout's controls pressed where they are drawn: the size, a pape
   t.key(@ui.key_escape)
   assert_false(app.nav.top() is DriveRead(_))
 }
+
+///|
+test "wide: the layout of a chat's Markdown answers its controls, is under a later dialog, and closes" {
+  let t = desk_tester("chat-preview-md")
+  t.run_for(@sf.reader_place_ms)
+  let (x, y) = layout_middle(t, Button, "排版")
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  let was = layout_style()
+  let (x, y) = layout_middle(t, Button, "增大字号")
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(layout_style().size, was.size + 1)
+  assert_true(t.find("\{was.size + 1}") is Some(_))
+  let (x, y) = layout_middle(t, Button, "文 护眼")
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(layout_style().paper, "green")
+  let ((sx, sy, sw, sh), _) = layout_control(t, Slider, "行距")
+  t.tap(sx + 11.0 + (sw - 22.0) * 0.25, sy + sh / 2.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true((layout_style().line - 1.5).abs() < 1.0e-9)
+  let ((sx, sy, sw, sh), _) = layout_control(t, Slider, "边距")
+  let (least, most) = @sf.reader_margins
+  let from = sx + 11.0 + (sw - 22.0) * (was.margin - least).to_double() / (most - least).to_double()
+  // The whole gesture between frames: it is still captured by this slider when let go beyond its end.
+  t.touch(0, from, sy + sh / 2.0)
+  t.touch(1, sx + sw + 20.0, sy + sh / 2.0)
+  t.touch(2, sx + sw + 20.0, sy + sh / 2.0)
+  t.draw()
+  assert_eq(layout_style().margin, most)
+  let (x, y) = layout_middle(t, Radio, "宋体")
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(layout_style().face, "serif")
+  let (x, y) = layout_middle(t, Radio, "顶格")
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  assert_false(layout_style().indent)
+  // A dialog opened afterwards owns the input until it is dismissed.
+  @sf.confirm("确认", "继续吗？", "继续", fn() {  })
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.all(Button, label="增大字号").length(), 0)
+  let (x, y) = layout_middle(t, Button, "取消")
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  t.key(@ui.key_escape)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("背景") is None)
+  assert_true(viewer.get() is Some(_))
+  let (x, y) = layout_middle(t, Button, "排版")
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  let (x, y) = layout_middle(t, Button, "关闭")
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("背景") is None)
+}
+
+///|
+test "小屏: the layout of a chat's Markdown answers its controls and closes" {
+  let t = preview_tester("md", platform=2)
+  t.run_for(@sf.reader_place_ms)
+  let (x, y, w, h) = t.get(Button, has="发布前要做的").rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.run_for(@ui.move_most_ms)
+  let (x, y) = layout_middle(t, Button, "排版")
+  t.tap(x, y)
+  t.run_for(sheet_way_ms(t))
+  let (x, y) = layout_middle(t, Button, "增大字号")
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(layout_style().size, 19)
+  assert_true(t.find("19") is Some(_))
+  t.key(@ui.key_escape)
+  t.run_for(sheet_way_ms(t))
+  assert_true(t.find("背景") is None)
+  assert_true(viewer.get() is Some(_))
+}
+
+///|
+test "wide: layout changes show while the core is still keeping them" {
+  new_run()
+  let base = fixture("reader")
+  let pending : Array[Json] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      if name == "prefs.set" && field(Some(params), "reader") is Some(_) {
+        pending.push(params)
+      } else {
+        (base.call)(name, params, done)
+      }
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.draw()
+  app.nav.replace(Home)
+  open_drive_fixture("reader")
+  t.run_for(@ui.move_most_ms)
+  t.run_for(@sf.reader_place_ms)
+  let (x, y) = layout_middle(t, Button, "排版")
+  t.tap(x, y)
+  t.run_for(@ui.move_most_ms)
+  let (x, y) = layout_middle(t, Button, "增大字号")
+  t.tap(x, y)
+  t.draw()
+  assert_eq(layout_style().size, 19)
+  assert_eq(pending.length(), 1)
+  assert_true(t.find("19") is Some(_), msg="the chosen size shows before the core replies")
+  let (x, y) = layout_middle(t, Radio, "宋体")
+  t.tap(x, y)
+  t.draw()
+  assert_eq(layout_style().face, "serif")
+  assert_eq(t.get(Radio, label="宋体").check, Some(On))
+  let ((sx, sy, sw, sh), _) = layout_control(t, Slider, "行距")
+  t.tap(sx + 11.0 + (sw - 22.0) * 0.25, sy + sh / 2.0)
+  t.draw()
+  assert_true(t.find("150%") is Some(_))
+  assert_eq(pending.length(), 3)
+}

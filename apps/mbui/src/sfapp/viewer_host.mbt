@@ -91,8 +91,9 @@ fn read_book(src : Source, decoded : String, markdown : Bool, done : (Result[@sf
 }
 
 ///|
-/// The reader's layout as the prefs keep it, as changed here until they say.
-let reader_set : Map[String, Json] = Map([])
+/// The reader's layout as the prefs keep it, as changed here until they say. The panel's nodes follow these changes
+/// even before the core's prefs topic answers.
+let reader_set : @sf.LiveMap[String, Json] = @sf.LiveMap::new()
 
 ///|
 /// How the reader lays text out (the core fills in what is not kept): size 12–32, the lines' height 1.2–2.4 of it,
