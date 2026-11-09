@@ -6947,10 +6947,18 @@ fn View::comes(self : View, v : View, from : Double, to : Double) -> Bool {
           if !m.live || m.gen != gen {
             return
           }
-          m.flex.style.come_now = match t {
-            Some(t) => t
+          // (never back: the clock set to a change's moment ahead and back again as it is measured then
+          // (Tree::measured_now) leaves its way where that moment had it, not laid out again at the frame's and again
+          // at the moment's, each laying out what reads it again: one way, the same however often it is measured)
+          let was = m.flex.style.come_now
+          let now = match t {
+            Some(t) => if was == was && was > t { was } else { t }
             None => 0.0 / 0.0
           }
+          if now == was || (now != now && was != was) {
+            return
+          }
+          m.flex.style.come_now = now
           m.look.clips = m.clips_said || m.coming
           tree.layout_marked_at(vat)
           tree.look_marked_at(vat)
@@ -7113,7 +7121,8 @@ fn View::arrives(self : View, v : View) -> Unit {
 
 ///|
 /// Whether node `at` is laid out in its turn down a column, as tall as it comes to: not over what holds it nor grown,
-/// what lays it out (past the slots holding it) a column, and in no page's list's rows (which come and go as the list moves them: Scroll::list).
+/// what lays it out (past the slots holding it) a column: in a page's list's block too (what the block holds makes its
+/// way as anywhere; the blocks themselves come and go as the list scrolls, at once: View::scrolls_window).
 fn Tree::in_column(self : Tree, at : Int) -> Bool {
   let n = self.nodes[at]
   // (over what holds it, or as tall as the column leaves it (grown): no way of its own to make)
@@ -7124,14 +7133,7 @@ fn Tree::in_column(self : Tree, at : Int) -> Bool {
   while p >= 0 && self.nodes[p].slot {
     p = self.nodes[p].parent
   }
-  guard p >= 0 && self.nodes[p].flex.style.direction == @flex.FlexDirection::Column else { return false }
-  while p >= 0 {
-    if self.nodes[p].list_rows {
-      return false
-    }
-    p = self.nodes[p].parent
-  }
-  true
+  p >= 0 && self.nodes[p].flex.style.direction == @flex.FlexDirection::Column
 }
 
 ///|
