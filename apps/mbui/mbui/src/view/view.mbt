@@ -583,6 +583,11 @@ struct Node {
   /// where in the source it was made and its properties said, where the tree keeps that (Tree::new's `sources`;
   /// None: it does not)
   mut source : Source?
+  /// the id it is one thing by with another, and how it flies from that one (View::shared: shared.mbt); none, not
+  mut share : String?
+  mut share_flight : Flight?
+  /// on a flight's way, drawn over the rest of its layer where the flight has it (shared.mbt); none, where it is
+  mut lift : Lift?
 }
 
 ///|
@@ -915,6 +920,16 @@ pub struct Tree {
   /// let go, leaving, said to take no press): what it holds of its own, an old view's press, to ask whether that may
   /// still take input (Tree::takes_presses)
   mut on_modals : () -> Unit
+  /// how many living nodes have each id (View::shared), all of them; what was let go of and made with one in the change
+  /// being committed, paired as it is committed whole (Tree::pairs_now: asked, `pairs_asked`); the flights under way;
+  /// whether what flies is being put in the order over the rest of its layer (Tree::ordered_lifted): shared.mbt
+  priv shared_live : Map[String, Int]
+  priv mut shared_n : Int
+  priv departures : Array[Departure]
+  priv arrivals : Array[NodeId]
+  priv mut pairs_asked : Bool
+  priv flights : Array[Flying]
+  priv mut lifting : Bool
 }
 
 ///|
@@ -1106,6 +1121,13 @@ pub fn Tree::new(
     rows_grid_said: @signals.signal(0.0),
     on_due: fn() {  },
     on_modals: fn() {  },
+    shared_live: {},
+    shared_n: 0,
+    departures: [],
+    arrivals: [],
+    pairs_asked: false,
+    flights: [],
+    lifting: false,
     boxes_held: 0,
     boxes_held_at: [],
     work: {
@@ -1321,6 +1343,9 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
       n.over_scrim = false
       n.stack = -1
       n.source = None
+      n.share = None
+      n.share_flight = None
+      n.lift = None
       i
     }
     None => {
@@ -1454,6 +1479,9 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
         over_scrim: false,
         stack: -1,
         source: None,
+        share: None,
+        share_flight: None,
+        lift: None,
       })
       self.nodes.length() - 1
     }
@@ -2076,7 +2104,12 @@ fn Tree::order_again(self : Tree) -> Unit {
     self.order_was.push(-1)
     self.order_changed.push(-1)
   }
-  let from = if self.order_whole || self.order.is_empty() { None } else { self.order_holders() }
+  // (all of it while anything flies: what does drawn over the rest of its layer, out of what holds it, shared.mbt)
+  let from = if self.order_whole || self.order.is_empty() || self.flights.length() > 0 {
+    None
+  } else {
+    self.order_holders()
+  }
   // (what holds each change, up to the root: what is not one of them, moved or not, holds what it held, its run of the
   // order kept as it was, Tree::order_from)
   if from is Some(_) {
@@ -2373,6 +2406,9 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit, at_
   @signals.end_batch()
   self.committing -= 1
   self.modals_settled()
+  if self.committing == 0 && self.cause_at < 0.0 {
+    self.pairs_after(self.logic)
+  }
   stop
 }
 
@@ -2415,6 +2451,10 @@ fn Tree::at_cause(self : Tree, f : () -> Bool) -> Unit {
   self.committing -= 1
   self.modals_settled()
   self.cause_at = was
+  // (paired once all of the change it is of is committed: shared.mbt)
+  if was < 0.0 {
+    self.pairs_after(at)
+  }
   if changed {
     self.marked()
   }
@@ -3159,13 +3199,17 @@ pub fn Tree::drawn_clear_of(self : Tree, id : NodeId, by : NodeId) -> Bool {
 pub fn Tree::input_bounds(self : Tree, id : NodeId) -> (Double, Double, Double, Double) {
   let mut b = (-1.0e9, -1.0e9, 1.0e9, 1.0e9)
   guard self.alive_id(id) else { return b }
-  let mut i = self.nodes[id.at].parent
+  // (on a flight's way, it or what holds it: bound by nothing that holds that, shared.mbt)
+  let mut i = if self.nodes[id.at].lift is Some(_) { -1 } else { self.nodes[id.at].parent }
   while i >= 0 {
     let n = self.nodes[i]
     if n.bounds_input {
       let (x, y, sc) = self.placed(i)
       let (x1, y1) = (x + n.flex.width * sc, y + n.flex.height * sc)
       b = (dmax(b.0, x), dmax(b.1, y), dmin(b.2, x1), dmin(b.3, y1))
+    }
+    if n.lift is Some(_) {
+      break
     }
     i = n.parent
   }
@@ -5925,6 +5969,8 @@ pub fn View::owned_count(self : View) -> Int {
 /// cleanups run), what goes with it run, its callback and measure dropped, its index free.
 fn View::let_go(self : View) -> Unit {
   guard self.live() is Some(n) else { return }
+  // (on a flight's way, or one of an id: that flight over, its id counted no more, shared.mbt)
+  self.tree.share_let_go(self.at)
   // (what the pointer is over let go of, it or one it holds: pointed at no more, what holds it told so while it is
   // still held by them, View::pointed_in; what it is over then the host's to find again, as what takes it changed)
   if self.tree.pointed_within_at(self.at) {
@@ -6188,6 +6234,10 @@ fn Tree::boxes_flushed(self : Tree) -> Unit {
 ///|
 /// Node `v` let go and taken out of what it holds.
 fn View::drop(self : View, v : View) -> Unit {
+  // (one of an id in it, in a change: kept till the change is committed whole, flying from there or let go of then)
+  if self.tree.departs(self, v) {
+    return
+  }
   v.let_go()
   guard self.live() is Some(n) else { return }
   match n.kids.search(v.at) {
@@ -6653,6 +6703,8 @@ fn View::leave(self : View, v : View, ms : Double) -> Unit {
   self.tree.back_lost_in(v.at)
   self.tree.modals_told(within=v.at)
   self.tree.due_leaving(v.id())
+  // (one of an id in it: what may fly from it as the change is committed whole, shared.mbt)
+  self.tree.departs_leaving(v)
   self.tree.marked()
 }
 
@@ -6943,6 +6995,10 @@ pub fn Tree::event_said(self : Tree, at : Double, said : () -> Unit, f : () -> U
     @signals.end_batch()
     self.committing -= 1
     self.modals_settled()
+  }
+  // (what was let go of and made in it with one id paired, as it is committed whole: shared.mbt)
+  if was < 0.0 {
+    self.pairs_now()
   }
   self.cause_at = was
   // (where things stand once it is told whole, for the next change: Tree::settle_after_change)
@@ -7237,6 +7293,9 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
     }
     self.committing -= 1
     self.modals_settled()
+    if was < 0.0 {
+      self.pairs_now()
+    }
     self.cause_at = was
     // (where things stand once it is told whole, as of its moment, for the next change: Tree::settle_after_change)
     if was < 0.0 {
@@ -8012,6 +8071,11 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
     bone_as: self.bone_as_at(at),
     draws_any: look_draws_any(n.look, n.hosted),
   })
+  // (on a flight's way: as big as it is drawn there, as it looks there, shared.mbt)
+  match (n.lift, n.content) {
+    (Some(l), Some(c)) => n.content = Some(self.lifted_content(n, l, c))
+    _ => ()
+  }
   self.changed.push(id)
   self.pending.push(id)
 }
@@ -8021,6 +8085,15 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
 /// `holder` in it.
 fn Tree::ordered(self : Tree, at : Int, holder : Int, top : Int) -> Unit {
   let n = self.nodes[at]
+  // (on a flight's way: drawn over the rest of its layer, put there as that ends, Tree::ordered_lifted)
+  match n.lift {
+    Some(l) if !self.lifting && l.top != at => {
+      self.tops[at] = top
+      return
+    }
+    _ => ()
+  }
+  self.lifting = false
   if n.slot {
     self.tops[at] = top
     for k in n.kids {
@@ -8040,6 +8113,9 @@ fn Tree::ordered(self : Tree, at : Int, holder : Int, top : Int) -> Unit {
   // (what the root holds, each by its place in the window's stack of layers: Tree::kids_in_order)
   for k in self.kids_in_order(at) {
     self.ordered(k, me, top)
+  }
+  if top == at && self.flights.length() > 0 {
+    self.ordered_lifted(at, me)
   }
   self.order_end[me] = self.order.length()
 }
@@ -8527,6 +8603,19 @@ fn Tree::each_drawn_in_order(
       lx = ux.unsafe_get(h) + lx
       ly = uy.unsafe_get(h) + ly
     }
+    // (on a flight's way: where the flight has it in the window, nothing that holds it counted, shared.mbt)
+    match n.lift {
+      Some(l) => {
+        let (fx, fy, fa, fs) = self.lifted_place(n, l)
+        x = fx
+        y = fy
+        a = fa
+        s = fs
+        lx = fx
+        ly = fy
+      }
+      None => ()
+    }
     wx.unsafe_set(i, x)
     wy.unsafe_set(i, y)
     wa.unsafe_set(i, a)
@@ -8612,6 +8701,18 @@ pub fn Tree::drawn_one(
     s = ns
     ux = lx
     uy = ly
+    match n.lift {
+      Some(l) => {
+        let (fx, fy, fa, fs) = self.lifted_place(n, l)
+        x = fx
+        y = fy
+        a = fa
+        s = fs
+        ux = fx
+        uy = fy
+      }
+      None => ()
+    }
   }
   Some((c, x, y, a, s, ux, uy, i))
 }
@@ -8899,6 +9000,17 @@ fn Tree::projected(self : Tree, at : Int) -> (Double, Double, Double, Double) {
     y = y + s * (m.ly + sy + (1.0 - m.ls) * m.lpy)
     a = a * m.la
     s = s * m.ls
+    // (on a flight's way: where the flight has it, shared.mbt)
+    match m.lift {
+      Some(l) => {
+        let (fx, fy, fa, fs) = self.lifted_place(m, l)
+        x = fx
+        y = fy
+        a = fa
+        s = fs
+      }
+      None => ()
+    }
   }
   (x, y, a, s)
 }
