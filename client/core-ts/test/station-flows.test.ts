@@ -3211,6 +3211,33 @@ test("a_stream_silent_past_its_keepalive_is_read_again", async () => {
   core.close();
 });
 
+test("a_stream_silent_past_its_keepalive_takes_its_way_for_gone_and_one_never_answered_is_given_up", async () => {
+  const { host, core, streams } = await started();
+  const ui = core.connect();
+  subscribe(core, ui, 1, liveK);
+  await host.settle();
+  await host.settle();
+  const path = "/admin/api/events?running=1&views=1&rows=1&shared=1&live=k1&from=0&last=200&brief=1";
+  const resets: string[] = [];
+  const wire = core.inner.stations.requests.wire;
+  const reset = wire.reset?.bind(wire);
+  wire.reset = (station) => (resets.push(station.toString()), reset?.(station));
+  // Its station killed and started anew while the connection here stays open: nothing comes, and the next open is
+  // never answered on it.
+  stationLater(host, (req) => (req.url.includes("/admin/api/events") ? new Promise(() => {}) : undefined));
+  await host.time.pass(STREAM_IDLE_MS + RECONNECT_MS + 5_000, 500);
+  assert.equal(gets(host, path), 2, "asked again");
+  assert.deepEqual(resets, [ST], "on a way dialled anew");
+  // That open never answered either: given up as long after, the way dialled anew again, and tried again.
+  stationLater(host, () => undefined);
+  await host.time.pass(STREAM_IDLE_MS - 10_000, 1_000);
+  assert.deepEqual(resets, [ST], "waited on as long as a stream may be silent");
+  await host.time.pass(10_000 + RECONNECT_MAX_MS, 1_000);
+  assert.deepEqual(resets.slice(0, 2), [ST, ST]);
+  assert.ok(gets(host, path) >= 3, "tried again");
+  core.close();
+});
+
 test("a_stream_replaced_after_it_went_quiet_reads_again_what_it_may_have_missed", async () => {
   const answers: J = {
     ...base(),

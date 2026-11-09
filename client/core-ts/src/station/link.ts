@@ -577,7 +577,20 @@ export class Links {
               }),
               () => Effect.succeed({ dropped: true } as const),
             );
-            const opened = yield* Effect.raceFirst(Effect.result(self.#requests.stream(link.addr, path, span.context)), dropped);
+            // Not answered at all within as long as a stream may stay silent: the way it went is taken for gone (a
+            // station killed and started anew, its connection left open here: every open waited on it for good).
+            const slow = Effect.sleep(STREAM_IDLE_MS).pipe(Effect.as({ slow: true } as const)); // timer: a timeout
+            const opened = yield* Effect.raceAllFirst([Effect.result(self.#requests.stream(link.addr, path, span.context)), dropped, slow]);
+            if ("slow" in opened) {
+              self.#requests.wire.reset?.(link.addr);
+              span.fail();
+              span.end();
+              misses++;
+              const state = reached && misses < MISSES ? "reconnecting" : "offline";
+              const message = t("station.core.streamIdle");
+              self.setLink(address, state === "offline" ? { state, message, cause: self.#cause(address) } : { state, message });
+              return { failed: `open failed: ${t("station.core.streamIdle")}` } as const;
+            }
             if ("dropped" in opened) {
               self.#requests.wire.reset?.(link.addr);
               span.fail();
@@ -668,6 +681,8 @@ export class Links {
                 break;
               }
               if ("idle" in next) {
+                // Silent past its keepalive: the way to it is taken for gone too, not asked again on the same.
+                self.#requests.wire.reset?.(link.addr);
                 why = t("station.core.streamIdle");
                 break;
               }
