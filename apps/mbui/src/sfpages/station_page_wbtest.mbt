@@ -218,13 +218,14 @@ test "a station's page in three parts: 概览 what runs on it, 设置 what it is
   assert_true(t.find("设备信息") is None)
   // 设置: what macOS lets it do; its agents' variables
   @settings.station_parts["ws1/st1"] = "settings"
-  t.draw()
+  // (its blocks in and out of its list on their ways: looked at once they have made them)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("权限") is Some(_), msg="its grants")
   assert_true(t.find("Agent 环境变量") is Some(_), msg="its variables")
   assert_true(t.find("更多") is None, msg="the overview gone")
   // 软件与设备: its software, then what the machine is
   @settings.station_parts["ws1/st1"] = "machine"
-  t.draw()
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("软件与更新") is Some(_))
   assert_true(t.find("设备信息") is Some(_), msg="the machine's rows")
 }
