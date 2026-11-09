@@ -1408,6 +1408,8 @@ pub fn panel_row_reach() -> @ui.Style
 
 pub fn panel_row_node(@view.View, () -> String, () -> Unit, icon? : () -> String, note? : () -> String, end? : String, danger? : Bool) -> Unit
 
+pub fn panel_row_opens_node(@view.View, () -> String, (Anchor) -> Unit, icon? : () -> String, note? : () -> String) -> Unit
+
 pub fn panel_rule_over() -> Double
 
 pub fn panel_switch_row_node(@view.View, () -> String, () -> Bool, (Bool) -> Unit) -> Unit
@@ -2425,12 +2427,13 @@ pub(all) struct AccentTone {
   dark_grounds : Grounds?
 }
 
-#derive(Eq)
 pub(all) enum Anchor {
   Of(Int32)
+  Node(@view.View)
   At(Double, Double, Double, Double)
   Unanchored
 }
+pub impl Eq for Anchor
 
 pub(all) struct AppAvatar {
   id : String

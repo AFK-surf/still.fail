@@ -5981,6 +5981,7 @@ pub fn Tree::wake_waited(self : Tree) -> Double? {
     let at = match d {
       Steps(s, _) => if s.live.val && s.k < s.count { stepped_at(s, s.count - 1) } else { -1.0 }
       Once(o, _) if o.later => -1.0
+      Holds(h, _) if h.later => -1.0
       _ => self.due_at(d)
     }
     if at >= 0.0 {
@@ -6143,6 +6144,20 @@ enum Due {
   Leaves(NodeId, Int)
   Steps(Stepper, Int)
   Once(Once, Int)
+  Holds(Hold, Int)
+}
+
+///|
+/// What holds from each event till `ms` after it (View::holds_for): whether it holds now (`on`, told as it starts and
+/// as it ends), the moment it ends (`until`, set again in place by each event: its one due on the timeline, there exactly
+/// while it is not -1); `live` while its node is.
+struct Hold {
+  ms : Double
+  on : @signals.Signal[Bool]
+  mut until : Double
+  live : Ref[Bool]
+  /// not waited for (View::holds_for's `later`)
+  later : Bool
 }
 
 ///|
@@ -6188,6 +6203,7 @@ fn Tree::due_at(self : Tree, d : Due) -> Double {
         -1.0
       }
     Once(o, _) => if o.live.val { o.at } else { -1.0 }
+    Holds(h, _) => if h.live.val && h.until >= 0.0 { h.until } else { -1.0 }
   }
 }
 
@@ -6199,6 +6215,7 @@ fn Tree::unschedule(self : Tree, live : Ref[Bool]) -> Unit {
     match d {
       Steps(s, _) => !physical_equal(s.live, live)
       Once(o, _) => !physical_equal(o.live, live)
+      Holds(h, _) => !physical_equal(h.live, live)
       Leaves(_, _) => true
     }
   })
@@ -6278,6 +6295,7 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
         Leaves(_, s) => s
         Steps(_, s) => s
         Once(_, s) => s
+        Holds(_, s) => s
       }
       if at <= upto && (next < 0 || at < next_at || (at == next_at && seq < next_seq)) {
         next = i
@@ -6313,6 +6331,13 @@ fn Tree::advance_loop(self : Tree, upto : Double) -> Unit {
         o.live.val = false
         @signals.start_batch()
         @signals.untracked(fn() { (o.f)() })
+        @signals.end_batch()
+      }
+      Holds(h, _) => {
+        self.timeline.remove(next) |> ignore
+        h.until = -1.0
+        @signals.start_batch()
+        h.on.set(false)
         @signals.end_batch()
       }
       Steps(s, _) => {
@@ -8409,6 +8434,40 @@ pub fn View::at_moment(self : View, when : Double, f : () -> Unit, later? : Bool
   tree.told = tree.told + 1
   tree.marked()
   stop
+}
+
+///|
+/// What holds for `ms` from each event (a word said a moment once pressed: 已复制 for a while after each copy), owned by
+/// the node: told (the first of what this returns) as an event is handled, it holds from that event's moment (its
+/// cause's, View::cause_at) till that moment and `ms`; told again meanwhile, its end is set again from the new moment, the
+/// one before taken off the timeline (its one due there, set again in place, as a leaving's end is: no count of events,
+/// no handle kept by its caller). Whether it holds now is the second (what reads it followed: told as it starts and as it
+/// ends, not as the clock goes). Its end is waited for (Tree::wake_waited: a test's run goes on to it) unless `later` (a
+/// time what is shown does not wait for, as View::at_moment's). Let go with the node: its end taken off the timeline,
+/// told no more.
+pub fn View::holds_for(self : View, ms : Double, later? : Bool = false) -> (() -> Unit, () -> Bool) {
+  let h : Hold = { ms, on: @signals.signal(false, same=fn(a, b) { a == b }), until: -1.0, live: Ref(true), later }
+  let tree = self.tree
+  guard self.live() is Some(_) else { return (fn() {  }, fn() { h.on.get() }) }
+  let unkeep = self.owns_while(fn() {
+    if h.live.val {
+      h.live.val = false
+      h.until = -1.0
+      tree.unschedule(h.live)
+    }
+  })
+  ignore(unkeep)
+  let event = fn() {
+    guard h.live.val else { return }
+    if h.until < 0.0 {
+      tree.timeline.push(Holds(h, tree.told))
+      tree.told = tree.told + 1
+    }
+    h.until = tree.cause_now() + h.ms
+    h.on.set(true)
+    tree.marked()
+  }
+  (event, fn() { h.on.get() })
 }
 
 ///|

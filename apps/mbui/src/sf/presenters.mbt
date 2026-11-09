@@ -11,13 +11,27 @@
 // ); stacking is for what is asked and returned from.
 
 ///|
-/// What opened a presenter: the box pressed (its id, `c.id(key)`), a rectangle of the window (x, y, w, h: a point
-/// is one 0 by 0, where a right click was), or nothing (what is asked by no press of the person's).
+/// What opened a presenter: the box pressed (its id, `c.id(key)`; a node of the window's tree, `Node`: a row of a
+/// panel whose body is nodes), a rectangle of the window (x, y, w, h: a point is one 0 by 0, where a right click was),
+/// or nothing (what is asked by no press of the person's).
 pub(all) enum Anchor {
   Of(Int)
+  Node(@view.View)
   At(Double, Double, Double, Double)
   Unanchored
-} derive(Eq)
+}
+
+///|
+/// The same opener: the same box, the same node, the same rectangle, or both nothing.
+pub impl Eq for Anchor with equal(self, other) {
+  match (self, other) {
+    (Of(a), Of(b)) => a == b
+    (Node(a), Node(b)) => a.id() == b.id()
+    (At(x, y, w, h), At(x2, y2, w2, h2)) => x == x2 && y == y2 && w == w2 && h == h2
+    (Unanchored, Unanchored) => true
+    _ => false
+  }
+}
 
 ///|
 /// What opened a menu or a pick, which stand beside it on Medium and Large (rule 3: the steps one
@@ -1546,6 +1560,8 @@ fn closed_by(p : Presented) -> Unit {
 fn anchor_of(c : @ui.Ctx, from : Anchor) -> (Int, (Double, Double, Double, Double)?) {
   match from {
     Of(id) => (id, None)
+    // (a node of the window's tree: where it was placed last, as an old box's is read where it was drawn)
+    Node(v) => (0, Some(v.placed_window_now()))
     At(x, y, w, h) => (0, Some((x, y, w, h)))
     Unanchored => {
       let (ww, wh) = c.window_size()

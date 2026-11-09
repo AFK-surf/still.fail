@@ -308,6 +308,11 @@ fn menu_anchor_now(from : Anchor) -> ((@view.View) -> @view.View, Bool, Double, 
       let by_key = c.focus_shown(id)
       (fn(layer) { @ui.old_anchor(layer, id, (0.0, 0.0, 0.0, 0.0)) }, by_key, panel_offset, keep && !by_key)
     }
+    // (a node of the window's tree: beside it where it is drawn)
+    Node(v) => {
+      let by_key = v.focus_shown()
+      (fn(_) { v }, by_key, panel_offset, keep && !by_key)
+    }
     At(x, y, w, h) =>
       (
         fn(layer) { fixed_anchor(layer, (x, y, w, h)) },

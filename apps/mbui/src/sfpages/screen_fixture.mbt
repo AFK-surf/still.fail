@@ -90,7 +90,7 @@ pub fn open_screen_fixture(mode : String) -> Unit {
     "screen-simulator-logs" => u.asked_panel = "logs"
     "screen-simulator-apps" => u.asked_panel = "apps"
     "screen-simulator-device" => {
-      u.logs.tab = 1
+      u.logs.tab.set(1)
       u.asked_panel = "logs"
     }
     _ => ()

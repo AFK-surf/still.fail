@@ -461,7 +461,8 @@ test "an iPhone Duo's poses are by its picture, each a press; another device has
   r.t.draw()
   assert_true(r.ui().logs.half_open)
   // (the moment the choice's mark has moved to it)
-  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  // (a choice's thumb gone to the one chosen: a cover's slide, @ui.cover_slide_ms)
+  r.t.run_for(@ui.cover_slide_ms)
   screen_done(r.t)
 }
 
@@ -496,7 +497,8 @@ test "a pose pressed shows as chosen at once, before the picture has come" {
   r.t.stream_shows(r.sess().stream.unwrap().id(), 3.0, 1426, 1004)
   r.t.draw()
   assert_eq(r.ui().logs.pose_asked, -1)
-  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  // (a choice's thumb gone to the one chosen: a cover's slide, @ui.cover_slide_ms)
+  r.t.run_for(@ui.cover_slide_ms)
   screen_done(r.t)
 }
 
@@ -546,7 +548,7 @@ test "日志 asks for what came since while it shows; a member who may not debug
   assert_true(r.labelled(tr("web-pages.screen.debug.relaunch")) is None)
   simulator_live(r)
   assert_true(r.labelled(tr("web-pages.screen.debug.relaunch")) is Some(_))
-  r.ui().logs.tab = debug_tab_logs
+  r.ui().logs.tab.set(debug_tab_logs)
   r.tap_label(tr("web-pages.screen.debug.logs"))
   r.t.run_for(@sf.later_ms)
   to_sheet_rest(r.t)
@@ -569,7 +571,8 @@ test "App and 设备: what Device Hub does there, each told with what it is give
     assert_true(r.t.find(tr("web-pages.screen.debug." + word)) is Some(_))
   }
   r.tap_label(tr("web-pages.screen.debug.device"))
-  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  // (a choice's thumb gone to the one chosen: a cover's slide, @ui.cover_slide_ms)
+  r.t.run_for(@ui.cover_slide_ms)
   r.t.draw()
   for word in ["locationSet", "locationClear", "statusTidy"] {
     assert_true(r.t.find(tr("web-pages.screen.debug." + word)) is Some(_))
@@ -591,7 +594,8 @@ test "安装 App: offered where the state says; a file gone up asked to be insta
   r.tap_label(tr("web-pages.screen.debug.logs"))
   r.t.run_for(@sf.later_ms)
   to_sheet_rest(r.t)
-  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  // (a choice's thumb gone to the one chosen: a cover's slide, @ui.cover_slide_ms)
+  r.t.run_for(@ui.cover_slide_ms)
   r.t.draw()
   assert_true(r.t.find(tr("web-pages.screen.debug.install")) is Some(_))
   let s = r.sess()
@@ -636,7 +640,7 @@ test "a device wider than tall: what it has itself in a row under it, App first;
   assert_true(r.t.rect_of(tr("web-pages.screen.debug.relaunch")) is None)
   assert_true(r.ui().shown().w >= wide)
   r.t.resize(390.0, 844.0)
-  r.ui().logs.tab = 0
+  r.ui().logs.tab.set(0)
   r.t.run_for(@sf.toast_ms)
   screen_done(r.t)
 }
@@ -653,7 +657,7 @@ test "旋转 by the device: told to the device, whose picture says what it did" 
   assert_eq(text(Some(ins[ins.length() - 1]), "t"), "device")
   assert_eq(text(Some(ins[ins.length() - 1]), "name"), "rotate")
   r.t.resize(390.0, 844.0)
-  r.ui().logs.tab = 0
+  r.ui().logs.tab.set(0)
   r.t.run_for(@sf.toast_ms)
   screen_done(r.t)
 }
@@ -708,16 +712,17 @@ test "录屏: started, with the panel in use, and ended" {
   r.tap_label(tr("web-pages.screen.debug.logs"))
   r.t.run_for(@sf.later_ms)
   to_sheet_rest(r.t)
-  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  // (a choice's thumb gone to the one chosen: a cover's slide, @ui.cover_slide_ms)
+  r.t.run_for(@ui.cover_slide_ms)
   r.t.draw()
   assert_true(r.t.find(tr("web-pages.screen.debug.recordStart")) is Some(_))
   let (sess, d) = (r.sess(), r.ui().logs)
   debug_record_pressed(sess, d, false)
   assert_eq(text(Some(r.told("screen.recordStart")[0]), "panel"), "inner")
-  assert_true(d.recording)
+  assert_true(d.recording.get())
   debug_record_pressed(sess, d, true)
   assert_eq(r.told("screen.recordStop").length(), 1)
-  assert_true(!d.recording)
+  assert_true(!d.recording.get())
   screen_done(r.t)
 }
 
@@ -731,7 +736,8 @@ test "设备: the rest of Device Hub's are there" {
   r.t.draw()
   assert_true(r.t.find(tr("web-pages.screen.debug.uninstall")) is Some(_))
   r.tap_label(tr("web-pages.screen.debug.device"))
-  r.t.run_for(r.t.rest_of("spring") - r.t.time())
+  // (a choice's thumb gone to the one chosen: a cover's slide, @ui.cover_slide_ms)
+  r.t.run_for(@ui.cover_slide_ms)
   r.t.draw()
   for word in ["notEnrolled", "volumeUp", "volumeDown", "memoryWarning"] {
     assert_true(r.t.find(tr("web-pages.screen.debug." + word)) is Some(_))
@@ -744,7 +750,7 @@ test "重启 App: the list the first time, and the app chosen at one press after
   let r = screen_rig()
   simulator_live(r)
   r.sess().src |> ignore
-  r.ui().logs.last_app = Some(("fail.still.demo", "Demo"))
+  r.ui().logs.last_app.set(Some(("fail.still.demo", "Demo")))
   r.tap_label(tr("web-pages.screen.debug.relaunch"))
   r.t.draw()
   assert_eq(text(Some(r.told("screen.relaunch")[0]), "app"), "fail.still.demo")

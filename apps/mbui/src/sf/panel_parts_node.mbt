@@ -81,6 +81,33 @@ pub fn panel_row_node(
   end? : String = "",
   danger? : Bool = false,
 ) -> Unit {
+  panel_row_by(parent, label, fn(_) { press() }, icon, note, end, danger)
+}
+
+///|
+/// A panel's row (panel_row_node's) that opens a panel beside itself: `open` given the row, as it is pressed, what that
+/// panel goes beside (Anchor's Node); a chevron at its end.
+pub fn panel_row_opens_node(
+  parent : @view.View,
+  label : () -> String,
+  open : (Anchor) -> Unit,
+  icon? : () -> String = fn() { "" },
+  note? : () -> String = fn() { "" },
+) -> Unit {
+  panel_row_by(parent, label, fn(r) { open(Node(r)) }, icon, note, "chevron-right", false)
+}
+
+///|
+/// panel_row_node's row, `press` given the row itself as it is pressed.
+fn panel_row_by(
+  parent : @view.View,
+  label : () -> String,
+  press : (@view.View) -> Unit,
+  icon : () -> String,
+  note : () -> String,
+  end : String,
+  danger : Bool,
+) -> Unit {
   let at = panel_in_of(parent)
   parent.box(fn(r) {
     let t = fn() { theme() }
@@ -104,7 +131,7 @@ pub fn panel_row_node(
       Some(@view.said(Button, label=if n == "" { label() } else { label() + " " + n }))
     }))
     |> ignore
-    presses_node(r, press)
+    presses_node(r, fn() { press(r) })
     r.show(fn() { icon() != "" }, fn(col) {
       style_node(col, fn() { panel_row_icon }, in_row=true)
       icon_node(col, "", panel_icon, By(fn() { t().p.muted }), name_now=icon) |> ignore
