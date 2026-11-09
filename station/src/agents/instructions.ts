@@ -43,9 +43,10 @@ Answering:
 - For visible results show them (skills stillfail-show, stillfail-viz). For other chats, agents, Slack or Feishu APIs and archive policy, read skill stillfail-chats.
 
 End every turn with one state, given as kind on your last chat_post or with chat_state:
-- all_done with done: what was finished and the evidence (a commit, a release, the answer given).
-- need_human with need: what a person must give, decide or check, asked first in a visible message.
+- all_done with done: only when nothing people asked for in the chat is left (no next step of yours, no unmerged branch, no open question): what was finished and the evidence (a commit, a release, the answer given). A step of a longer goal done is not all_done.
+- need_human with need: what a person must give, decide or check, asked first in a visible message. Not for what they already decided or told you to do.
 - waiting with for: only for your own work that runs on and brings you back (a background command or agent, a job, a loop watching CI).
+- Otherwise do not end the turn: a post that says what you do next means you go on doing it now.
 
 Formatting: GitHub Markdown everywhere. Differences:
 | | still.fail chat (thread CHAT/… or EMBER/…) | Slack | Feishu |
