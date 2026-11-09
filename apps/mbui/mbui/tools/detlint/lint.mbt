@@ -247,6 +247,22 @@ fn lint_mbt(
       }
     }
   }
+  // a key read by a build (`c.key_pressed(code)`, `c.keys_came()`, `@settings.action_pressed(…)`: a Bool the frame
+  // after it) outside mbui's ui and kit, which take keys, and outside the tests: what a key does is an action's
+  // (View::on_action) or a node's own (View::on_key)
+  if !f.rel.has_prefix("src/ui/") && !f.rel.has_prefix("src/kit/") {
+    for k, tk in toks {
+      if tk.kind == "ident" &&
+        (tk.text == "key_pressed" || tk.text == "keys_came" || tk.text == "action_pressed") &&
+        k > 0 &&
+        toks[k - 1].text == "." &&
+        k + 1 < toks.length() &&
+        toks[k + 1].text == "(" &&
+        !f.in_test(k) {
+        add("key-read", k, f.line_text(k))
+      }
+    }
+  }
   // a page reading the shell's own state by its fields (`wide.tape`): the shell's files alone do (not in a page's tests)
   if under(f.rel, cfg.pages) && !under(f.rel, cfg.shell) && cfg.shell_state.length() > 0 {
     for k, tk in toks {

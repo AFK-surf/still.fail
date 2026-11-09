@@ -3,8 +3,8 @@
 // them old views (islands) in it:
 //
 //   - under all of it, what the frame does in every tier before its pages (signed_in_frame: what is told as the frame
-//     ends, the icon's number, the keys, whether the first page waits: narrow_under), and the back of the stack's root
-//     a node said as what it reads changes (narrow_takes_back);
+//     ends, the icon's number, whether the first page waits: narrow_under; the keys are the shell node's actions:
+//     sfdesk's keys.mbt), and the back of the stack's root a node said as what it reads changes (narrow_takes_back);
 //   - the pages: the stack (app.nav) a node, each page on it a node of its own made as it is put on and let go as it
 //     leaves (what it made forgotten), the page in it built while it shows (an island), where it is drawn bound to its
 //     slide, which sets out at its cause's moment, once the core has given what the page shows (mbui's nav_view.mbt);
@@ -215,7 +215,7 @@ fn narrow_page_held(c : @ui.Ctx, src : Source, w : Workspace, page : Page, barre
 
 ///|
 /// What the frame does with the app signed in and workspace `w` in view, in every tier, before its frame: what is
-/// told as the frame ends, the icon's number, links, updates, what was shared in, the keys, whether the first page waits.
+/// told as the frame ends, the icon's number, links, updates, what was shared in, whether the first page waits.
 fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // The folder and its player both need the same entries. Keep them while moving between the two and when
   // replacing one film with the next, until the new page has its own reader.
@@ -258,8 +258,6 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   share_in_frame(c)
   // files being kept on the device, said once kept (keep.mbt)
   keeps_frame(c)
-  // the app's keys, in every tier (sfdesk's keys.mbt): what is the wide frame's alone does nothing laid out Small
-  @sfdesk.keys(c, src, w)
   // the first page built as it opens, asking for all it shows, and shown once it has it (first_page_ms at most), as a
   // page opening is: under the splash till then (view_in), not its loading look and its list a frame or two later
   first_waiting.val = !first_page_shown(c, src, w)

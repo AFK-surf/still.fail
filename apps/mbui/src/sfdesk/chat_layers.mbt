@@ -82,17 +82,18 @@ fn composer_focus(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
 }
 
 ///|
-/// Esc in the open chat, after the frame's (`escape`: pressed, not taken by what the frame opened): to ⌘F's bar, then
-/// what is picked, then the side panel's tabs all closed (keymap.ts panel.close). Whether it took it.
-fn chat_escape(c : @ui.Ctx, src : Source, escape : Bool) -> Bool {
-  guard escape && app.nav.top() is Chat(r) else { return false }
+/// Esc in the open chat, after the frame's (not taken by what the frame opened), at its moment: to ⌘F's bar (the
+/// keyboard let go: `blur`), then what is picked, then the side panel's tabs all closed (keymap.ts panel.close).
+/// Whether it took it.
+fn chat_escape(src : Source, blur : () -> Unit) -> Bool {
+  guard app.nav.top() is Chat(r) else { return false }
   if find_chat() != "" {
     find_forget()
-    c.blur()
+    blur()
   } else if @sfbase.pk.ts != "" {
     @sfbase.pick_clear()
   } else if side_now(src, r).0.length() > 0 {
-    c.tell("chat/panel-close", fn() { side_change(src, r, "clear", None) })
+    side_change(src, r, "clear", None)
   } else {
     return false
   }

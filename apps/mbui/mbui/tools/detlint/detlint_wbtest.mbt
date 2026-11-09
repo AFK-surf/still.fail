@@ -2237,6 +2237,22 @@ test "click-read" {
 }
 
 ///|
+test "key-read" {
+  // a key read by a build outside mbui's ui and kit: counted (a call each); in ui, in a test, its own `fn`, not
+  found(
+    [
+      ("src/sfdesk/x.mbt", "fn d(c : Ctx) -> Unit {\n  if c.key_pressed(1) && c.keys_came() {\n    go()\n  }\n  let a = @settings.action_pressed(c, p, \"chat.new\")\n}\n"),
+      ("src/ui/desktop.mbt", "pub fn Ctx::key_pressed(self : Ctx, code : Int) -> Bool {\n  self.keys_came()\n}\n"),
+      ("src/sfapp/settings/keymap.mbt", "pub fn action_pressed(c : Ctx) -> Bool {\n  false\n}\n"),
+      ("src/sfapp/y_wbtest.mbt", "test \"t\" {\n  ignore(c.key_pressed(1))\n}\n"),
+    ],
+    "key-read",
+    3,
+  )
+  |> ignore
+}
+
+///|
 test "build-clock: what a frame's paint reads is not counted" {
   // read in what a paint taker is given, in a function only that calls, in one only paint's root calls: not counted;
   // in a function also called as it is built: counted

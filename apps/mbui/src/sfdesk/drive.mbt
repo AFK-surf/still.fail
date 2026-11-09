@@ -429,10 +429,12 @@ fn folder_view(c : @ui.Ctx, src : Source, f : FolderOf, head~ : (String?) -> Uni
     if write && c.shortcut('n', shift=true) {
       b.new_folder(c, src, at.path)
     }
-    // (the keymap's files.preview: ⌘⇧P, as Finder's preview pane, or as changed)
-    if @settings.action_pressed(c, src.topic("prefs", {}).get().value, "files.preview") {
+    // (the keymap's files.preview: ⌘⇧P, as Finder's preview pane, or as changed; at its key's moment)
+    c.key_context("Files")
+    c.on_action("files.preview", fn() {
       set_preview_shown(src, "page", !previewing)
-    }
+      true
+    })
   }
   let ups_here = ups.uploads.filter(fn(u) { u.station == at.station && u.root == root && u.dir == at.path })
   let empty = fn() {

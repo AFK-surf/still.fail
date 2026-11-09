@@ -95,8 +95,8 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   panel `@sf.panel_nodes` (drawn on 小屏 as a sheet from the foot), a long list `View::each` in what scrolls
   (`View::scrolls_window`); the library's parts are its `*_node.mbt` ones. A press does its work in its handler (`on_press`, `on_pick`, `on_change`).
 - What is left of the old is counted by detlint and only falls: `old-island` (`@ui.old` hosting a Ctx in a node),
-  `old-list` (`Ctx::list`), `old-panel`, `click-read`, `build-motion`, `layout-read-back`, `ui-current`. A change
-  never adds one; one it touches it moves over. A node-made part is never wrapped back into a Ctx.
+  `old-list` (`Ctx::list`), `old-panel`, `click-read`, `key-read`, `build-motion`, `layout-read-back`, `ui-current`.
+  A change never adds one; one it touches it moves over. A node-made part is never wrapped back into a Ctx.
 
 ## Motion
 
@@ -157,7 +157,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   build's time (`scripts/appbench.sh`) is what a frame takes there.
 - A push starts CI. Push when the work is meant to merge (the change done, its files' tests and the bench passed),
   not after each small change: Studio's runs take the worktree by `station_task`'s `dir`, no push needed.
-- A PR that has not met what it must to merge is not waited on: no watching its CI, go on with the next step.
+- A PR pushed has its CI watched by the stillfail-github-ci skill's `ci-wait.sh` run in the background, whose end
+  brings you back; meanwhile go on with the next step, not watching it yourself (the user, 2026-11-09). A failed check
+  is read from its log, fixed and pushed again; the work is done once all of it passed.
 - A brief that sends an agent to work here says the same; it never asks for a full run before the PR.
 
 ## Before a PR

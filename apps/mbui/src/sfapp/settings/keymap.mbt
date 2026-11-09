@@ -5,14 +5,13 @@
 
 ///|
 /// The action whose new keys the next key press is ("" none): the page's, told as it changes (its keys' button says it
-/// records; what else a key does stands aside meanwhile: pressed, window_zoom's).
+/// records; what else a key does stands aside meanwhile: the keymap's, keymap_of, and window_zoom's).
 // kept across runs: put back as a run begins (keymap_reset)
 pub let keys_recording : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
 
 ///|
 fn keymap_reset() -> Unit {
   keys_recording.set("")
-  action_asked.set("")
 }
 
 ///|
@@ -150,41 +149,58 @@ pub fn binding_of(code : Int, mods : Int) -> String? {
 }
 
 ///|
-/// Whether one of `action`'s keys came since the last frame (with `in_field`, one a focused field took too); none while
-/// the 快捷键 page records new ones.
-pub fn action_pressed(c : @ui.Ctx, prefs : Json?, action : String, in_field? : Bool = false) -> Bool {
-  // chosen from the Mac's menu bar since the last frame: as if one of its keys was
-  if action_asked.get() == action {
-    return true
+/// The window's keymap (mbui's view keymap.mbt) as the core's prefs say it: each action's keys here, where it works by
+/// its group (anywhere; `Chat` in a chat; `Files` in a folder of the files) and with the cursor in a field by its
+/// `typing` (always; never: `!Field`; with the field empty: `!Field || FieldEmpty`); then the app's own, never changed
+/// (Escape the frame's `frame.escape`, a mouse's forward button `nav.forward`, ⌃1 … ⌃9 on a Mac and Alt elsewhere
+/// `workspace.1` … `workspace.9`). None while the 快捷键 page records new keys: the next key is its.
+pub fn keymap_of(prefs : Json?) -> @view.Keymap {
+  if keys_recording.get() != "" {
+    return @view.Keymap::new([])
   }
-  // (no key came: none of its keys did, its bindings not looked up and read)
-  if @signals.untracked(fn() { keys_recording.get() }) != "" || !c.keys_came() {
-    return false
+  let bindings : Array[@view.Binding] = []
+  let stroke = fn(code, mods) -> @view.Stroke { { code, mods } }
+  bindings.push({ keys: [stroke(@ui.key_escape, 0)], action: "frame.escape", when: Always })
+  bindings.push({ keys: [stroke(@ui.key_forward, 0)], action: "nav.forward", when: Always })
+  let held = if @ui.keys_system() == 0 { @ui.mod_ctrl } else { @ui.mod_alt }
+  for k in 0..<9 {
+    bindings.push({
+      keys: [stroke(@ui.key_of_char((49 + k).unsafe_to_char()), held)],
+      action: "workspace.\{k + 1}",
+      when: Always,
+    })
   }
-  keys_of(prefs, action).iter().any(fn(b) {
-    match binding_key(b) {
-      Some((code, mods)) => c.key_pressed(code, mods~, in_field~)
-      None => false
+  for a in key_actions(prefs) {
+    let action = text(Some(a), "action")
+    let group : @view.KeyWhen = match text(Some(a), "group") {
+      "chat" => In("Chat")
+      "files" => In("Files")
+      _ => Always
     }
-  })
+    let typing : @view.KeyWhen = match text(Some(a), "typing") {
+      "no" => Not(In("Field"))
+      "empty" => Any([Not(In("Field")), In("FieldEmpty")])
+      _ => Always
+    }
+    let when : @view.KeyWhen = match (group, typing) {
+      (Always, w) | (w, Always) => w
+      (g, w) => All([g, w])
+    }
+    for b in keys_of(prefs, action) {
+      match binding_key(b) {
+        Some((code, mods)) => bindings.push({ keys: [stroke(code, mods)], action, when })
+        None => ()
+      }
+    }
+  }
+  @view.Keymap::new(bindings)
 }
 
 ///|
-/// The action chosen from the Mac's menu bar since the last frame ("" none: the app's menu_bar.mbt), read by
-/// `action_pressed` as one of its keys: a signal, so that what reads it is built again as one is chosen, a part kept
-/// whatever else the frame builds anew too (a key pressed is the hand's, which builds those anew; a menu's item is not).
-let action_asked : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
-
-///|
-/// One of the menu bar's items chosen: `action` done by the frame after, as if one of its keys was pressed.
+/// One of the menu bar's items chosen: `action` done now by the node of the window's tree that does it (its keymap's
+/// actions: View::on_action, an old view's Ctx::on_action), as if one of its keys was pressed.
 pub fn ask_action(action : String) -> Unit {
-  action_asked.set(action)
-}
-
-///|
-/// The frame that read it built: asked no more.
-pub fn action_asked_done() -> Unit {
-  action_asked.set("")
+  @ui.view_action(action) |> ignore
 }
 
 ///|

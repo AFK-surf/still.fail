@@ -78,13 +78,15 @@ pub fn new_chat_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 }
 
 ///|
-/// The new chat's own key, as a chat's (chat_keys): Space with no field focused, its composer (composer.focus), as its
-/// hint 按空格输入 says.
+/// The new chat's own key, as a chat's (chat_keys: the keymap's Chat), an action as it is built: Space with no field
+/// focused, its composer (composer.focus), as its hint 按空格输入 says.
 fn new_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let prefs = src.topic("prefs", {}).get().value
-  if !c.field_focused() && @settings.action_pressed(c, prefs, "composer.focus") && !switcher_open() {
+  c.key_context("Chat")
+  c.on_action("composer.focus", fn() {
+    guard !switcher_open() else { return false }
     c.focus_field(writing(src, "new:" + w.id).field)
-  }
+    true
+  })
 }
 
 ///|
@@ -190,11 +192,11 @@ fn new_files_panel(c : @ui.Ctx, src : Source, w : Workspace, address : String) -
     c.box(style=side_pane, fn() { files_tab(c, src, w.id, "new:" + w.id, address) }) |> ignore
   })
   |> ignore
-  // (panel.close: the panel closed)
-  let prefs = src.topic("prefs", {}).get().value
-  if @settings.action_pressed(c, prefs, "panel.close") {
+  // (panel.close: the panel closed, at its key's moment)
+  c.on_action("panel.close", fn() {
     new_files_set(src, w.id, false)
-  }
+    true
+  })
 }
 
 ///|
