@@ -380,11 +380,28 @@ void mb_render_init_offscreen(double w, double h, double scale) {
 }
 
 void mb_render_draw_timed(const double *inst, int32_t count, double r, double g, double b, double *out) {
+  // the GPU's time where the driver measures it (GL_EXT_disjoint_timer_query's GL_TIME_ELAPSED_EXT)
+  static int timer = -1;
+  static GLuint q;
+  if (timer < 0) {
+    const char *ext = (const char *)glGetString(GL_EXTENSIONS);
+    timer = ext && strstr(ext, "GL_EXT_disjoint_timer_query") != NULL;
+    if (timer) glGenQueries(1, &q);
+  }
   double t0 = mb_host_now();
+  if (timer) glBeginQuery(0x88BF, q);
   mb_host_present((double *)inst, count, r, g, b);
+  if (timer) glEndQuery(0x88BF);
   glFinish();
   out[0] = mb_host_now() - t0;
   out[1] = -1;
+  if (timer) {
+    GLuint ns = 0;
+    glGetQueryObjectuiv(q, GL_QUERY_RESULT, &ns);
+    GLint disjoint = 0;
+    glGetIntegerv(0x8FBB, &disjoint);
+    if (!disjoint) out[1] = ns / 1e6;
+  }
 }
 
 // the images decoded meanwhile uploaded here (Images.pump), then a while for more

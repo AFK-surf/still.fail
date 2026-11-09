@@ -1,7 +1,7 @@
 // The OpenGL ES 3 renderer of the hosts that draw with it, Android's (android_host.c) and Linux's (linux_render.c):
-// the same instances and shader as Metal and WebGL2, glass's passes, the frame presented last kept to be drawn again,
-// its pixels read back. Included once, by the file that has GLES 3's functions declared (Android's <GLES3/gl3.h>,
-// Linux's epoxy) and, before it:
+// the same instances and shader as Metal and WebGL2 (a program of it for each kind it draws most: use_prog), glass's
+// passes, the frame presented last kept to be drawn again, its pixels read back. Included once, by the file that has
+// GLES 3's functions declared (Android's <GLES3/gl3.h>, Linux's epoxy) and, before it:
 //   LOG(...)                          a line of the host's log, printf's way
 //   static GLuint image_tex(int id);  the texture an instance's image (slot 20) is drawn from; 0: none (yet)
 //   static void view_parts_in(int tid, int32_t start, int32_t end);  a native view's picture's run (draw_kept below)
@@ -72,6 +72,7 @@ static const char *VS =
     "    a_fadex.w > 0.0 ? (a_fadex.z - cq.x) / a_fadex.w : 2.0, a_fade.w > 0.0 ? (a_fade.z - cq.y) / a_fade.w : 2.0);\n"
     "}\n";
 
+// (after its version, ONE_KIND: the kind of what the program draws, fixed (use_prog); -1 any, as the instance says)
 static const char *FS =
     "#version 300 es\n"
     "precision highp float;\n"
@@ -136,7 +137,7 @@ static const char *FS =
     "}\n"
     "// what it shows at p, as if uncut\n"
     "void shade(vec2 p) {\n"
-    "  int kind = int(v_p.y + 0.5);\n"
+    "  int kind = ONE_KIND >= 0 ? ONE_KIND : int(v_p.y + 0.5);\n"
     "  // where a native view shows: its picture (NativeViews.Picture), the part of it c2 says, cut to its corners\n"
     "  if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(mb_corner_of(p - v_rect.xy - hh, v_rr), min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; float a = clamp(0.5 - (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr) * u_scale, 0.0, 1.0); if (a <= 0.0) discard; vec2 uv = v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw; if (uv.y < 0.0 || uv.y > 1.0) discard; o = texture(u_img, uv) * a; return; }\n"
     "  vec4 col = v_color;\n"
@@ -373,16 +374,32 @@ static const char *PFS =
     "  o = s / wsum;\n"
     "}\n";
 
-static GLuint prog, vao, vbo, atlas, catlas, post;
+static GLuint vao, vbo, atlas, catlas, post;
 // a ground's flat middle (bands.h mb_pieces), and where its window's size goes
 static GLuint prog_flat;
 static GLint uf_vp;
-static GLint u_vp, u_scale, u_atlas, u_catlas, u_img, u_bd, u_map, u_uvc, u_gb, u_shape, u_rad, u_n, pu_src, pu_a, pu_b, pu_c;
+static GLint pu_src, pu_a, pu_b, pu_c;
+
+// The kinds drawn by a program of their own: the shader with its kind fixed (ONE_KIND), so each is compiled to its
+// kind's branch alone and a pixel of it is shaded with the registers that branch needs, not the most any kind's does
+// (as Metal's: apple_render.m kind_pipe says what it saved there), what it draws the same to the byte. Rounded rects,
+// glyphs, shadows, colour glyphs, images, lines, shapes' bands; what else there is (glass, a native view's picture)
+// the program for any kind (progs[MB_KINDS]) draws. Each program's uniforms set as it is first used after they
+// change (prog_gen); prog_now the one in use.
+#define MB_KINDS 12
+static int has_own_prog(int kind) { return (kind >= 0 && kind <= 4) || kind == 10 || kind == 11; }
+typedef struct {
+  GLuint p;
+  GLint vp, scale, map, uvc, gb, shape, rad, n;
+  unsigned gen;
+} kprog;
+static kprog progs[MB_KINDS + 1];
+static unsigned prog_gen;
+static GLuint prog_now;
 static float *fbuf;
 // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the shader
 // to read (u_segs): a float texture of SEGS_ROW fours a row (136 instances' 15), as many rows as they take
 #define SEGS_ROW 2040
-static GLint u_segs;
 static GLuint segs_tex;
 static int segs_rows;
 // the pieces segs_tex holds (as they were uploaded): a frame whose pieces are the same (a part drawn again, a mark's
@@ -412,31 +429,56 @@ static GLuint compile(GLenum type, const char *src) {
   return s;
 }
 
+// The program that draws only instances of `kind` (-1 any) with the vertex shader `vs`, its textures' units set.
+static kprog make_prog(GLuint vs, int kind) {
+  char head[48];
+  snprintf(head, sizeof head, "#version 300 es\n#define ONE_KIND %d\n", kind);
+  const char *srcs[2] = {head, FS + strlen("#version 300 es\n")};
+  GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
+  glShaderSource(fs, 2, srcs, NULL);
+  glCompileShader(fs);
+  GLint ok = 0;
+  glGetShaderiv(fs, GL_COMPILE_STATUS, &ok);
+  if (!ok) {
+    char log[2048];
+    glGetShaderInfoLog(fs, sizeof log, NULL, log);
+    LOG("shader (kind %d): %s", kind, log);
+  }
+  kprog k = {glCreateProgram()};
+  glAttachShader(k.p, vs);
+  glAttachShader(k.p, fs);
+  glLinkProgram(k.p);
+  glDeleteShader(fs);
+  k.vp = glGetUniformLocation(k.p, "u_vp");
+  k.scale = glGetUniformLocation(k.p, "u_scale");
+  k.map = glGetUniformLocation(k.p, "u_map");
+  k.uvc = glGetUniformLocation(k.p, "u_uvc");
+  k.gb = glGetUniformLocation(k.p, "u_gb");
+  k.shape = glGetUniformLocation(k.p, "u_shape");
+  k.rad = glGetUniformLocation(k.p, "u_rad");
+  k.n = glGetUniformLocation(k.p, "u_n");
+  glUseProgram(k.p);
+  glUniform1i(glGetUniformLocation(k.p, "u_atlas"), 0);
+  glUniform1i(glGetUniformLocation(k.p, "u_img"), 1);
+  glUniform1i(glGetUniformLocation(k.p, "u_bd"), 2);
+  glUniform1i(glGetUniformLocation(k.p, "u_segs"), 3);
+  glUniform1i(glGetUniformLocation(k.p, "u_catlas"), 4);
+  return k;
+}
+
 // The programs, the instances' buffer and the glyphs' atlases made in the context now current (a new one has none of
 // the old: the host makes again what else it had in it).
 static void gl_setup(void) {
-  prog = glCreateProgram();
-  glAttachShader(prog, compile(GL_VERTEX_SHADER, VS));
-  glAttachShader(prog, compile(GL_FRAGMENT_SHADER, FS));
-  glLinkProgram(prog);
-  u_vp = glGetUniformLocation(prog, "u_vp");
-  u_scale = glGetUniformLocation(prog, "u_scale");
-  u_atlas = glGetUniformLocation(prog, "u_atlas");
-  u_catlas = glGetUniformLocation(prog, "u_catlas");
-  u_img = glGetUniformLocation(prog, "u_img");
-  u_bd = glGetUniformLocation(prog, "u_bd");
-  u_map = glGetUniformLocation(prog, "u_map");
-  u_uvc = glGetUniformLocation(prog, "u_uvc");
-  u_gb = glGetUniformLocation(prog, "u_gb");
-  u_shape = glGetUniformLocation(prog, "u_shape");
-  u_rad = glGetUniformLocation(prog, "u_rad");
-  u_n = glGetUniformLocation(prog, "u_n");
-  u_segs = glGetUniformLocation(prog, "u_segs");
+  GLuint vs = compile(GL_VERTEX_SHADER, VS);
+  for (int k = 0; k <= MB_KINDS; k++)
+    progs[k] = k == MB_KINDS || has_own_prog(k) ? make_prog(vs, k == MB_KINDS ? -1 : k) : (kprog){0};
+  prog_gen++;
   prog_flat = glCreateProgram();
-  glAttachShader(prog_flat, compile(GL_VERTEX_SHADER, VS));
+  glAttachShader(prog_flat, vs);
   glAttachShader(prog_flat, compile(GL_FRAGMENT_SHADER, FS_FLAT));
   glLinkProgram(prog_flat);
   uf_vp = glGetUniformLocation(prog_flat, "u_vp");
+  glDeleteShader(vs);
   segs_tex = 0;
   segs_rows = 0;
   segs_had_n = 0;
@@ -752,7 +794,24 @@ static int capture(const float *f, int32_t start, int32_t end, int32_t count) {
   return 1;
 }
 
-// the main program's state (after the passes)
+// The program that draws instances of `kind` (-1 any) used, its uniforms set if they changed since it was last.
+static void use_prog(int kind) {
+  kprog *k = &progs[kind >= 0 && has_own_prog(kind) ? kind : MB_KINDS];
+  prog_now = k->p;
+  glUseProgram(k->p);
+  if (k->gen == prog_gen) return;
+  k->gen = prog_gen;
+  glUniform2f(k->vp, (float)cur_w, (float)cur_h);
+  glUniform1f(k->scale, (float)cur_scale);
+  glUniform4fv(k->map, 1, gmap);
+  glUniform4fv(k->uvc, 1, guvc);
+  glUniform4fv(k->gb, 1, ggb);
+  glUniform4fv(k->shape, 8, gshape);
+  glUniform4fv(k->rad, 2, grad);
+  glUniform1i(k->n, gn);
+}
+
+// the main programs' state (after the passes)
 static void main_state(void) {
   glBindFramebuffer(GL_FRAMEBUFFER, target_fb);
   glViewport(0, vy0, fb_w, vhp);
@@ -763,32 +822,21 @@ static void main_state(void) {
     glDisable(GL_SCISSOR_TEST);
   }
   glEnable(GL_BLEND);
-  glUseProgram(prog);
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  glUniform2f(u_vp, (float)cur_w, (float)cur_h);
-  glUniform1f(u_scale, (float)cur_scale);
   glActiveTexture(GL_TEXTURE4);
   glBindTexture(GL_TEXTURE_2D, catlas);
-  glUniform1i(u_catlas, 4);
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, atlas);
-  glUniform1i(u_atlas, 0);
-  glUniform1i(u_img, 1);
   // (the shapes' pieces before the backdrop: the unit left active as it was, 2, which a stream's SurfaceTexture is
   // latched on as its picture is asked for: Streams.show)
   glActiveTexture(GL_TEXTURE3);
   glBindTexture(GL_TEXTURE_2D, segs_tex ? segs_tex : atlas);
-  glUniform1i(u_segs, 3);
   glActiveTexture(GL_TEXTURE2);
   glBindTexture(GL_TEXTURE_2D, bd_tex ? bd_tex : atlas);
-  glUniform1i(u_bd, 2);
-  glUniform4fv(u_map, 1, gmap);
-  glUniform4fv(u_uvc, 1, guvc);
-  glUniform4fv(u_gb, 1, ggb);
-  glUniform4fv(u_shape, 8, gshape);
-  glUniform4fv(u_rad, 2, grad);
-  glUniform1i(u_n, gn);
+  // (the programs' uniforms as they are now: each set again as it is next used)
+  prog_gen++;
+  use_prog(-1);
 }
 
 // What the app does not paint left clear, what is under the surface showing (Android's over another app: OverActivity,
@@ -1013,13 +1061,13 @@ static void draw_banded(int32_t start, int32_t end, int32_t count) {
     glEnable(GL_SCISSOR_TEST);
     for (int k = 0; k < n; k++) {
       if (k == 0 || st[k].flat != st[k - 1].flat) {
-        glUseProgram(st[k].flat ? prog_flat : prog);
+        glUseProgram(st[k].flat ? prog_flat : prog_now);
         if (st[k].flat) glUniform2f(uf_vp, (float)cur_w, (float)cur_h);
       }
       glScissor(st[k].x0, top - st[k].y1, st[k].x1 - st[k].x0, st[k].y1 - st[k].y0);
       draw_run(i, 1);
     }
-    if (n > 0 && st[n - 1].flat) glUseProgram(prog);
+    if (n > 0 && st[n - 1].flat) glUseProgram(prog_now);
     if (cut_on) glScissor(cut[0], cut[1], cut[2], cut[3]);
     else glDisable(GL_SCISSOR_TEST);
     s = i + 1;
@@ -1071,7 +1119,6 @@ static void draw_into(GLuint fb, int part) {
   memset(guvc, 0, sizeof guvc);
   memset(ggb, 0, sizeof ggb);
   gn = 0;
-  glUseProgram(prog);
   glBindVertexArray(vao);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glBufferData(GL_ARRAY_BUFFER, (n + MB_INST) * sizeof(float), fbuf, GL_STREAM_DRAW);
@@ -1084,14 +1131,22 @@ static void draw_into(GLuint fb, int part) {
     glEnable(GL_BLEND);
   }
   // one draw per run of instances showing the same image (slot 20; 0: none, the atlas stands in; a native view's
-  // picture where it shows, kind 9: nothing until it has one), or sharing one capture of glass (negative); GLES has no
-  // base instance, so the attributes start at the run instead
+  // picture where it shows, kind 9: nothing until it has one) of one kind (its program: use_prog), or sharing one
+  // capture of glass (negative); GLES has no base instance, so the attributes start at the run instead
   int32_t start = 0;
   int bound = 0, shows = 0;
   while (start < count) {
     int tid = (int)fbuf[start * MB_INST + 20];
+    int kind = (int)(fbuf[start * MB_INST + 5] + 0.5f);
+    // (kinds without their own program one run, as before)
+    int own = tid >= 0 && has_own_prog(kind);
     int32_t end = start + 1;
-    while (end < count && (int)fbuf[end * MB_INST + 20] == tid) end++;
+    while (end < count && (int)fbuf[end * MB_INST + 20] == tid) {
+      int k = (int)(fbuf[end * MB_INST + 5] + 0.5f);
+      if (own ? k != kind : tid >= 0 && has_own_prog(k)) break;
+      end++;
+    }
+    use_prog(own ? kind : -1);
     if (tid < 0) {
       if (tid != bound) {
         shows = capture(fbuf, start, end, count);

@@ -1,4 +1,5 @@
-// Metal renderer: one pipeline, one instanced quad per scene instance (some drawn in strips: bands.h).
+// Metal renderer: one instanced quad per scene instance (some drawn in strips: bands.h), by one shader made a pipeline
+// for each kind it draws most (kind_pipe).
 #import "apple.h"
 #include "corner_sl.h"
 #include "contained.h"
@@ -42,6 +43,8 @@ static double last_gpu = -1;
 static NSString *shader_src = @
 "#include <metal_stdlib>\n"
 "using namespace metal;\n"
+"// the kind of what this pipeline draws, fixed (kind_pipe); -1 any, as the instance says\n"
+"constant int one_kind [[function_constant(0)]];\n"
 "// scene.mbt's 60 numbers: clip, rc and rs the rounded rect it is cut to (its rect x0 y0 x1 y1, its corners' radii,\n"
 "// how smooth they are); rot how it is turned (radians, about rot.yz; its clip where it is drawn when rot.w is 1); rr\n"
 "// a box's corners' radii (top left, top right, bottom right, bottom left); oclip, orc, ors the rounded clip outside\n"
@@ -138,7 +141,7 @@ MB_CORNER_SL
 "  if (I.fadex.y > 0.0) cover *= clamp((cp.x - I.fadex.x) / I.fadex.y, 0.0, 1.0);\n"
 "  if (I.fadex.w > 0.0) cover *= clamp((I.fadex.z - cp.x) / I.fadex.w, 0.0, 1.0);\n"
 "  if (cover <= 0.0) discard_fragment();\n"
-"  int kind = int(I.p.y + 0.5);\n"
+"  int kind = one_kind >= 0 ? one_kind : int(I.p.y + 0.5);\n"
 "  float4 col = I.color;\n"
 "  if (kind == 1 || kind == 3 || kind == 7) {\n"
 "    constexpr sampler s(filter::linear, coord::pixel);\n"
@@ -339,10 +342,16 @@ MB_CORNER_SL
 "  return o / wsum;\n"
 "}\n";
 
-static id<MTLRenderPipelineState> make_pipe(id<MTLLibrary> lib, MTLPixelFormat fmt, BOOL blend, NSString *frag) {
+// What draws by `frag` only instances of one kind (`kind`; -1 any).
+static id<MTLRenderPipelineState> make_pipe(id<MTLLibrary> lib, MTLPixelFormat fmt, BOOL blend, NSString *frag,
+                                            int kind) {
   MTLRenderPipelineDescriptor *d = [MTLRenderPipelineDescriptor new];
   d.vertexFunction = [lib newFunctionWithName:@"vmain"];
-  d.fragmentFunction = [lib newFunctionWithName:frag];
+  MTLFunctionConstantValues *cv = [MTLFunctionConstantValues new];
+  [cv setConstantValue:&kind type:MTLDataTypeInt atIndex:0];
+  NSError *ferr = nil;
+  d.fragmentFunction = [lib newFunctionWithName:frag constantValues:cv error:&ferr];
+  if (!d.fragmentFunction) NSLog(@"%@ %d: %@", frag, kind, ferr);
   d.colorAttachments[0].pixelFormat = fmt;
   d.colorAttachments[0].blendingEnabled = blend;
   d.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
@@ -353,6 +362,28 @@ static id<MTLRenderPipelineState> make_pipe(id<MTLLibrary> lib, MTLPixelFormat f
   id<MTLRenderPipelineState> p = [dev newRenderPipelineStateWithDescriptor:d error:&err];
   if (!p) NSLog(@"pipeline: %@", err);
   return p;
+}
+
+// The kinds drawn by a pipeline of their own: the shader with its kind fixed (one_kind), so each is compiled to its
+// kind's branch alone and a pixel of it is shaded with the registers that branch needs, not the most any kind's does.
+// So a frame's GPU time on an M2 Max fell (2026-11-09, mbui-render's bench, after bands.h and what is covered left
+// out: Home on Small 0.56 ms to 0.50, a chat on Large 0.43 to 0.37, a chat on Small 0.435 to 0.424), what it draws the
+// same to the byte; the draws one for each run of a kind instead of each run of an image, which cost next to nothing
+// (a hundred more, 0.01 ms). Rounded rects, glyphs,
+// shadows, colour glyphs, images, lines, shapes' bands: what else there is (glass, a native view's hole) the pipeline
+// for any kind draws. Made after the rest, on their own (kinds_made): until they are, that one draws every kind, the
+// same pixels.
+#define MB_KINDS 12
+static int has_own_pipe(int kind) { return (kind >= 0 && kind <= 4) || kind == 10 || kind == 11; }
+static id<MTLRenderPipelineState> kpipe[MB_KINDS];
+static dispatch_group_t kinds_made;
+static int kinds_ready;
+
+// The pipeline that draws a run of instances of `kind` where `p` would draw them all.
+static id<MTLRenderPipelineState> kind_pipe(id<MTLRenderPipelineState> p, int kind) {
+  if (p != mpipe || !has_own_pipe(kind)) return p;
+  if (!kinds_ready) kinds_ready = dispatch_group_wait(kinds_made, DISPATCH_TIME_NOW) == 0;
+  return kinds_ready && kpipe[kind] ? kpipe[kind] : p;
 }
 
 // An atlas `side` texels square: the words' a byte a texel, colour glyphs' four.
@@ -378,9 +409,9 @@ static void prepare_gpu(void) {
   NSError *err = nil;
   id<MTLLibrary> lib = [dev newLibraryWithSource:shader_src options:nil error:&err];
   if (!lib) NSLog(@"shader: %@", err);
-  mpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm, YES, @"fmain");
-  hpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm, NO, @"fmain");
-  fpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm, YES, @"fflat");
+  mpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm, YES, @"fmain", -1);
+  hpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm, NO, @"fmain", -1);
+  fpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm, YES, @"fflat", -1);
   rpipe_off = mpipe;
   MTLRenderPipelineDescriptor *pd = [MTLRenderPipelineDescriptor new];
   pd.vertexFunction = [lib newFunctionWithName:@"vpost"];
@@ -394,10 +425,15 @@ static void prepare_gpu(void) {
   atlas = atlas_texture(0, MB_ATLAS_SIDE);
   catlas = atlas_texture(1, MB_ATLAS_COLOR_SIDE);
   inflight = dispatch_semaphore_create(3);
+  dispatch_group_async(kinds_made, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    for (int k = 0; k < MB_KINDS; k++)
+      if (has_own_pipe(k)) kpipe[k] = make_pipe(lib, MTLPixelFormatBGRA8Unorm, YES, @"fmain", k);
+  });
 }
 
 __attribute__((constructor)) static void prepare(void) {
   prepared = dispatch_group_create();
+  kinds_made = dispatch_group_create();
   dispatch_group_async(prepared, dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{ prepare_gpu(); });
 }
 
@@ -849,16 +885,22 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
     [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:1 baseInstance:count];
   }
   // one draw per run of instances showing the same image (slot 20; 0:
-  // none, the atlas stands in), or sharing one capture of glass (negative),
+  // none, the atlas stands in) of one kind (its pipeline: kind_pipe), or sharing one capture of glass (negative),
   // and holes for native views (kind 9) apart, unblended. Glass over a hole
   // sees the hole (the canvas only, not the view under it).
   int32_t start = 0;
   int bound = 0, shows = 0;
   while (start < count) {
     int tid = (int)f[start * MB_INST + 20];
-    int hole = (int)(f[start * MB_INST + 5] + 0.5f) == 9;
+    int kind = (int)(f[start * MB_INST + 5] + 0.5f), hole = kind == 9;
+    // (kinds without their own pipeline one run, as before)
+    int own = tid >= 0 && has_own_pipe(kind);
     int32_t end = start + 1;
-    while (end < count && (int)f[end * MB_INST + 20] == tid && ((int)(f[end * MB_INST + 5] + 0.5f) == 9) == hole) end++;
+    while (end < count && (int)f[end * MB_INST + 20] == tid) {
+      int k = (int)(f[end * MB_INST + 5] + 0.5f);
+      if ((k == 9) != hole || (own ? k != kind : tid >= 0 && has_own_pipe(k))) break;
+      end++;
+    }
     if (tid < 0) {
       if (tid != bound) {
         Grab m;
@@ -891,7 +933,8 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
       start = end;
       continue;
     }
-    [enc setRenderPipelineState:(hole ? hpipe : p)];
+    id<MTLRenderPipelineState> kp = own ? kind_pipe(p, kind) : p;
+    [enc setRenderPipelineState:(hole ? hpipe : kp)];
     // (a hole's image is its view's, src/hostapi/host.mbt view_tex_base + its id: the view is under the canvas here)
     id<MTLTexture> t = hole ? nil : tid > MB_STREAM_TEX ? mb_stream_texture(tid - MB_STREAM_TEX) : tid ? mb_image_texture(tid) : nil;
     // (a stream with no frame of its own yet, or lost: nothing, not the atlas)
@@ -903,7 +946,7 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
     [enc setFragmentTexture:(t ?: atlas) atIndex:1];
     if (hole) [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6
                       instanceCount:end - start baseInstance:start];
-    else draw_banded(enc, p, f, start, end, count, (int)target.width, (int)target.height);
+    else draw_banded(enc, kp, f, start, end, count, (int)target.width, (int)target.height);
     start = end;
   }
   [enc endEncoding];
@@ -1408,6 +1451,8 @@ static int off_ok;
 
 void mb_render_init_offscreen(double w, double h, double scale) {
   mb_render_init(nil);
+  // (with every kind's pipeline: what is drawn here is what a window draws once they are made)
+  dispatch_group_wait(kinds_made, DISPATCH_TIME_FOREVER);
   mb_render_set_size(w, h, scale);
   mb_text_set_scale(scale);
   MTLTextureDescriptor *td = [MTLTextureDescriptor
