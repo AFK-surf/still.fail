@@ -2502,6 +2502,7 @@ web-pages.slackApp.allOn
 web-pages.slackApp.apply
 web-pages.slackApp.approve
 web-pages.slackApp.approveNote
+web-pages.slackApp.color
 web-pages.slackApp.descriptionPlaceholder
 web-pages.slackApp.drawFailed
 web-pages.slackApp.foldNote

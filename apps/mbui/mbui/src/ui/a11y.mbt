@@ -938,6 +938,7 @@ fn Tester::hold_a11y_whole(self : Tester) -> Unit {
     return
   }
   self.fake.a11y_held = g().a11y.passes
+  self.hold_named(g().semantics_tree())
   let has = self.fake.a11y_told.lines()
   let whole = g().a11y_lines()
   if has == whole {
@@ -1004,4 +1005,92 @@ fn a11y_real(s : String) -> Double {
   } else {
     v
   }
+}
+
+///|
+/// Whether `s` is one a screen reader cannot name: read out, of the window's tree (an old view's not held to it: the
+/// user, 2026-11-09), something to do with it (pressed, a step, words put in it) and no name, its own nor its words.
+fn sem_unnamed(s : SemNode) -> Bool {
+  !s.hidden &&
+  tree_said_ids.contains(s.id) &&
+  s.label.iter().all(fn(c) { c == ' ' }) &&
+  s.actions.iter().any(fn(a) { a is (Activate | SetText(_) | Increment | Decrement) })
+}
+
+///|
+/// The rule that what can be done is named (a button, a field, a slider: a screen reader says what it is), held on the
+/// tree as a test reads it (Tester::semantics: every query by role and name) and as a host that reads it is told
+/// (Tester::hold_a11y_whole): one of the window's tree's that breaks it fails the test at once, with where it is.
+fn Tester::hold_named(self : Tester, tree : Array[SemNode]) -> Unit {
+  let bad = tree.filter(sem_unnamed)
+  if bad.is_empty() {
+    return
+  }
+  let said = "what can be done is named (mbui's src/ui/a11y.mbt, sem_unnamed), on a frame drawn at \{self.fake.time}:\n" +
+    bad.map(fn(s) { "  \{s.describe()} at \{s.rect}, actions \{s.actions}" }).join("\n")
+  println(said)
+  abort(said)
+}
+
+///|
+/// What the host's accessibility has of the widgets as a screen reader finds them, a node a line indented by how deep it
+/// is, as Ctx::semantics_dump writes the tree (its role, its name quoted, its value and state; those of no use of their
+/// own, flags v, left out): what a test asserts a screen reader is told.
+pub fn Tester::a11y_dump(self : Tester) -> String {
+  self.fake.a11y_told.dump()
+}
+
+///|
+/// What a host has, as Tester::a11y_dump says it.
+fn A11yMirror::dump(self : A11yMirror) -> String {
+  let sb = StringBuilder()
+  fn put(k : Int, depth : Int) -> Unit {
+    guard self.nodes.get(k) is Some(n) else { return }
+    let own = k != 0 && !n.flags.contains("v")
+    if own {
+      for _ in 0..<depth {
+        sb.write_string("  ")
+      }
+      sb.write_string(n.role)
+      if n.label != "" {
+        sb.write_string(" \{n.label.escape()}")
+      }
+      if n.value != "" {
+        sb.write_string(" value=\{n.value.escape()}")
+      }
+      let f = n.flags
+      if f.contains("c") {
+        sb.write_string(if f.contains("C") { " checked" } else if f.contains("M") { " mixed" } else { " unchecked" })
+      }
+      if f.contains("p") {
+        sb.write_string(if f.contains("P") { " pressed" } else { " not-pressed" })
+      }
+      if f.contains("e") {
+        sb.write_string(if f.contains("E") { " expanded" } else { " collapsed" })
+      }
+      if f.contains("s") {
+        sb.write_string(" selected")
+      }
+      match n.range {
+        Some((lo, v, hi)) => sb.write_string(" range=\{lo}..\{hi}@\{v}")
+        None => ()
+      }
+      if f.contains("d") {
+        sb.write_string(" disabled")
+      }
+      if f.contains("m") {
+        sb.write_string(" modal")
+      }
+      if self.focus == k {
+        sb.write_string(" focused")
+      }
+      sb.write_char('\n')
+    }
+    for c in n.kids {
+      put(c, if own { depth + 1 } else { depth })
+    }
+  }
+
+  put(0, 0)
+  sb.to_string()
 }

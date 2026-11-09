@@ -844,6 +844,7 @@
   "web-pages.slackApp.apply": "Apply to Slack",
   "web-pages.slackApp.approve": "Approve in Slack",
   "web-pages.slackApp.approveNote": "Permissions changed. Approve them in Slack to take effect.",
+  "web-pages.slackApp.color": "Background color",
   "web-pages.slackApp.descriptionPlaceholder": "Description for the app's profile",
   "web-pages.slackApp.drawFailed": "Couldn't render avatar",
   "web-pages.slackApp.foldNote": "Name, avatar, permissions",

@@ -758,6 +758,7 @@ fn rename_node(n : @view.View, src : Source, item : () -> ChatItem, at : @sf.Lis
       b,
       rows.rename_field,
       font_size=rename_size,
+      label=@sf.t("web-main.chat.rename"),
       line=rename_line,
       max_lines=1,
       enter_sends=true,

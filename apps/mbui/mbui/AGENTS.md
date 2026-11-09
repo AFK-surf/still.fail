@@ -36,6 +36,9 @@ yet and you can add one, add it.
   where it changed (`Tree::said_marked`, `Tree::said_pass`), never the whole tree compared each frame. A change to
   what a node is, where it is or whether it is read out marks it; a Tester whose host reads (`set_a11y`) holds what the
   host was told to the whole tree after every frame that told it.
+- What can be done (pressed, stepped, written in) is named, for a screen reader to say what it is: a node of the
+  window's tree that is not fails its test (`Tester::hold_named`; an old view's widget is not held to it, the user,
+  2026-11-09). A test finds what it acts on as a screen reader would, by role and name (`Tester::get` and `Find`).
 
 ## Time in a test is declared, never waited for
 

@@ -79,7 +79,8 @@ fn view_words_found(d : @view.Drawn) -> String {
 /// paste of `paste_limit` characters or more, not put in, once, at that paste's; `edited`: its words as the person's
 /// edit changes them (a key, the input method's words, a paste, an undo: Ctx::editor's `on_change`), once, at that
 /// edit's moment, never as the app puts words in it (Field::set, Field::follow). `placeholder_by`: its placeholder as
-/// it is now, followed (in place of `placeholder`). The node made.
+/// it is now, followed (in place of `placeholder`). `label`: what a screen reader calls it (none: its
+/// placeholder). The node made.
 pub fn field(
   parent : @view.View,
   field : Field,
@@ -107,6 +108,7 @@ pub fn field(
   size_by? : () -> Double,
   colors_by? : () -> (Int64, Int64, Int64),
   placeholder_by? : () -> String,
+  label? : String = "",
 ) -> @view.View {
   // (its size and its colours as said once, or followed as they change (`size_by`; `colors_by`: its words', its
   // placeholder's, its caret's): words written over a picture, as big as the picture is drawn, in the colour picked)
@@ -215,7 +217,7 @@ pub fn field(
     // (its words read out, a secret's none: as an old view's editor says them)
     .says(By(fn() {
       let value = field.composed_said()
-      Some(@view.said(TextField, label=hint(), value=if secret { "" } else { value }, actions=[SetText("")]))
+      Some(@view.said(TextField, label=if label != "" { label } else { hint() }, value=if secret { "" } else { value }, actions=[SetText("")]))
     }))
     // (a press on it: taken as it goes down where the field takes it so, else a tap's as it is let go: tree_field_down)
     .on_press(fn() { tree_field_tapped(id) })
