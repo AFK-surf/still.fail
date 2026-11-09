@@ -158,8 +158,11 @@ for t in $targets; do
     # Run the screen sweeps beside page tests, so their durations do not add. Corners includes squeeze's screens (and,
     # in its Chinese run, a press's room and the light theme's contrast: each screen opened once for all its rules);
     # the long-text, contrast, and kept-row sweeps have their own processes.
+    # (preview_tree's 121 tests in two: one process of it at 120 frames a second was 104-175 s, the longest of its
+    # part's job by 110 s and more, the job 156-263 s of its 5 minutes, main d2791a7a 42719997459,
+    # core/bound-devices-sign 42720203578, 2026-11-10)
     sweeps=(src/sfapp/screens_wbtest.mbt:1 src/sfapp/corners_wbtest.mbt:3 src/sfapp/squeeze_said_wbtest.mbt:1
-      src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:4)
+      src/sfapp/contrast_wbtest.mbt:1 src/sfapp/kept_rows_kinds_wbtest.mbt:4 src/sfapp/preview_tree_wbtest.mbt:2)
     pages=()
     for f in "${files[@]}"; do [[ " ${sweeps[*]} " = *" $f:"* ]] || pages+=("$f"); done
     for w in "${sweeps[@]}"; do
@@ -266,6 +269,9 @@ for t in $targets; do
       "src/sfapp/squeeze_said_wbtest.mbt  ") echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt --index 8-"*) echo 2 ;;
       "src/sfapp/kept_rows_kinds_wbtest.mbt "*) echo 3 ;;
+      # (preview_tree's two on the fourth, the one with the most programs: at 120 a second APP_PART gives each of its
+      # two halves one)
+      "src/sfapp/preview_tree_wbtest.mbt "*) echo 4 ;;
       "src/sfapp/contrast_wbtest.mbt  ") echo contrast ;;
       "@pages "*) [ "$2" = 0 ] && echo 1 || echo "$2" ;;
       *) [ $# -gt 2 ] && echo 4 || echo 1 ;;
