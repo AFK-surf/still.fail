@@ -155,6 +155,24 @@ pub struct Damage {
   priv mut unit_at : FixedArray[Int]
   priv mut hidden : FixedArray[Bool]
   priv mut shown : FixedArray[Double]
+  /// and as it last found them, for a frame that moves only headers of it (Damage::occlude_moved): whether it may be
+  /// asked so, of how many instances and what window; how many units, where the pieces of shapes start, the last unit
+  /// that may be hidden, how many are; each cover put as it went (the unit it looked at, where it put it (-1: all let
+  /// go), its four numbers), and the covers as they were before one unit, worked out again from those; where each unit
+  /// shown is in `shown`, and how many instances that is
+  priv mut occ_ok : Bool
+  priv mut occ_count : Int
+  priv mut occ_w : Double
+  priv mut occ_h : Double
+  priv mut occ_units : Int
+  priv mut occ_pieces : Int
+  priv mut occ_last : Int
+  priv mut occ_hid : Int
+  priv mut cover_unit : Int
+  priv cover_log : Array[Double]
+  priv replay : FixedArray[Double]
+  priv mut shown_at : FixedArray[Int]
+  priv mut occ_shown : Int
   /// a frame with headers, each instance once and each header once, its group's room after it left out (Damage::next)
   priv mut units : FixedArray[Double]
   // each instance's hash (inst_hash) as it was worked out, the kept frame's and this one's, by the frame it was worked
@@ -174,6 +192,10 @@ pub struct Damage {
   priv mut kept_read : Bool
   priv mut kept_streams : Bool
   priv mut kept_glass : Array[Rect]
+  /// where the pieces of shapes start in the kept frame (pieces_from), where it was found as it was given (-1: not),
+  /// and in the frame being given
+  priv mut kept_seg : Int
+  priv mut seg_now : Int
 }
 
 ///|
@@ -198,6 +220,19 @@ pub fn Damage::new() -> Damage {
     unit_at: FixedArray::make(0, 0),
     hidden: FixedArray::make(0, false),
     shown: FixedArray::make(0, 0.0),
+    occ_ok: false,
+    occ_count: 0,
+    occ_w: 0.0,
+    occ_h: 0.0,
+    occ_units: 0,
+    occ_pieces: 0,
+    occ_last: -1,
+    occ_hid: 0,
+    cover_unit: -1,
+    cover_log: [],
+    replay: FixedArray::make(cover_most * 4, 0.0),
+    shown_at: FixedArray::make(0, -1),
+    occ_shown: 0,
     units: FixedArray::make(0, 0.0),
     prev_hash: FixedArray::make(0, 0L),
     prev_at: FixedArray::make(0, -1),
@@ -210,6 +245,8 @@ pub fn Damage::new() -> Damage {
     kept_read: false,
     kept_streams: false,
     kept_glass: [],
+    kept_seg: -1,
+    seg_now: -1,
   }
 }
 
@@ -257,6 +294,8 @@ pub fn Damage::next(
   } else {
     0
   }
+  // (where the pieces of shapes start in it, where it is compared: kept with it, the next frame compared there)
+  self.seg_now = -1
   let out = if same_frame {
     self.changed(inst, count, w, h, known)
   } else {
@@ -288,6 +327,8 @@ pub fn Damage::group_set(self : Damage, id : Int, inst : FixedArray[Double], n :
   }
   self.groups[id] = r
   self.group_reads[id] = (glass, heads)
+  // (what a header of it hides or reads under it otherwise: the next frame's occluded whole)
+  self.occ_ok = false
 }
 
 ///|
@@ -295,6 +336,7 @@ pub fn Damage::group_set(self : Damage, id : Int, inst : FixedArray[Double], n :
 pub fn Damage::group_drop(self : Damage, id : Int) -> Unit {
   self.groups.remove(id)
   self.group_reads.remove(id)
+  self.occ_ok = false
 }
 
 ///|
@@ -381,7 +423,10 @@ pub fn Damage::moved(
         break
       }
     }
-    self.kept_glass = glass_groups(prev, pieces_from(prev, self.n))
+    if self.kept_seg < 0 {
+      self.kept_seg = pieces_from(prev, self.n)
+    }
+    self.kept_glass = glass_groups(prev, self.kept_seg)
     self.kept_read = true
   }
   if self.kept_streams {
@@ -535,6 +580,7 @@ fn Damage::keep(
   self.cur_at = was_at
   self.prev_stamp = self.stamp
   self.kept_read = false
+  self.kept_seg = self.seg_now
   self.n = count
   self.w = w
   self.h = h
@@ -900,7 +946,8 @@ fn Damage::changed(
     }
   }
   let seg = pieces_from(inst, count)
-  let seg_old = pieces_from(prev, n_old)
+  self.seg_now = seg
+  let seg_old = if self.kept_seg >= 0 { self.kept_seg } else { pieces_from(prev, n_old) }
   let mut whole = false
   // instance `k_old` of the last frame against `k` of this one: the same, a band's pieces too, a stream's picture
   // not (it changes under the same numbers)

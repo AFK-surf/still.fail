@@ -164,3 +164,52 @@ test "an opaque fill less than an eighth of the window covers nothing" {
   a[60 + 2] = 160.0
   assert_eq(kept(d, a).length(), 1)
 }
+
+///|
+test "a frame that moves only its headers is left out of as all of it asked again would be" {
+  // (a row's header over a list's ground, a sheet over the foot of it, the header moved under the sheet and out again,
+  // a header before the sheet and one after it)
+  let groups = fn(d : @damage.Damage) {
+    d.group_set(7, frame([(0.0, 0.0, 400.0, 40.0, 0), (16.0, 10.0, 100.0, 10.0, 1)]), 2)
+    d.group_set(8, frame([(0.0, 0.0, 400.0, 20.0, 0)]), 1)
+  }
+  let at = fn(y : Double, z : Double) -> FixedArray[Double] {
+    let a = frame([
+      (0.0, 0.0, 400.0, 300.0, 0),
+      (0.0, y, 0.0, 0.0, 13),
+      (0.0, 0.0, 0.0, 0.0, 0),
+      (0.0, 0.0, 0.0, 0.0, 0),
+      (0.0, 100.0, 400.0, 200.0, 0),
+      (0.0, z, 0.0, 0.0, 13),
+      (0.0, 0.0, 0.0, 0.0, 0),
+    ])
+    a[60 + 12] = 7.0
+    a[60 + 14] = 3.0
+    a[5 * 60 + 12] = 8.0
+    a[5 * 60 + 14] = 2.0
+    for o in [60, 5 * 60] {
+      a[o + 16] = 0.0
+      a[o + 17] = 0.0
+      a[o + 18] = 0.0
+      a[o + 19] = 0.0
+    }
+    a
+  }
+  let d = @damage.Damage::new()
+  groups(d)
+  let shown = fn(s : FixedArray[Double], n : Int) {
+    Array::makei(n, fn(k) { (s[k * 60 + 1], s[k * 60 + 5].to_int()) })
+  }
+  ignore(d.occlude(at(20.0, 120.0), 7, 400.0, 300.0))
+  for p in [(150.0, 120.0), (160.0, 130.0), (60.0, 150.0), (40.0, 40.0), (200.0, 10.0)] {
+    let a = at(p.0, p.1)
+    let fresh = @damage.Damage::new()
+    groups(fresh)
+    let (s0, n0) = fresh.occlude(a, 7, 400.0, 300.0)
+    let moved = d.occlude_moved(a, 7, 400.0, 300.0, [1, 5]).map(fn(o) { shown(o.0, o.1) })
+    assert_eq(moved, Some(shown(s0, n0)), msg="\{p}")
+  }
+  // (a group set again: asked whole)
+  groups(d)
+  assert_true(d.occlude_moved(at(20.0, 120.0), 7, 400.0, 300.0, [1, 5]) is None)
+}
