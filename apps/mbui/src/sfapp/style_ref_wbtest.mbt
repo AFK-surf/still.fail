@@ -54,38 +54,39 @@ test "styles: the lock's waiting page, every state, drawn as before" {
   }
   inspect(out.to_string(), content=(
     #|waiting narrow 28208:9506c151
-    #|waiting wide 58225:bdb2c071
+    #|waiting wide 58561:95cb81f6
     #|waiting-dark narrow 28126:8d2e104d
-    #|waiting-dark wide 58052:5c571917
+    #|waiting-dark wide 58388:a2810814
     #|finding narrow 34240:be2ffdf1
-    #|finding wide 64919:7d9721af
+    #|finding wide 65295:e7bc693c
     #|finding-dark narrow 34337:52a2c840
-    #|finding-dark wide 64925:ed3a50ea
+    #|finding-dark wide 65301:832f7fed
     #|code narrow 26964:88a7f87b
-    #|code wide 57110:56244bda
+    #|code wide 57446:5c092151
     #|code-dark narrow 26856:ce8b5d5e
-    #|code-dark wide 56911:acb54c8d
+    #|code-dark wide 57247:303946da
     #|wrong narrow 28173:7d27636f
-    #|wrong wide 58339:676fb52d
+    #|wrong wide 58675:b9440a2a
     #|wrong-dark narrow 28275:4b23cc12
-    #|wrong-dark wide 58350:da1a726c
+    #|wrong-dark wide 58686:1155f0c7
     #|checking narrow 35247:a55b4d68
-    #|checking wide 66046:1e4ab9ff
+    #|checking wide 66422:4a6b188c
     #|checking-dark narrow 35339:cf8b4c9d
-    #|checking-dark wide 66047:288125e8
+    #|checking-dark wide 66423:3eb6872b
     #|none narrow 27676:a0ff063c
-    #|none wide 57701:a6d3fcf
+    #|none wide 58037:1ff41a7c
     #|none-dark narrow 27598:34020870
-    #|none-dark wide 57532:b06e1bb
+    #|none-dark wide 57868:c472bf60
     #|failed narrow 23435:473d3873
-    #|failed wide 53453:1b4b7d7b
+    #|failed wide 53789:444ff120
     #|failed-dark narrow 23437:6453ad5f
-    #|failed-dark wide 53364:94e5c7af
+    #|failed-dark wide 53700:83d0c2ac
     #|nocode narrow 28208:9506c151
-    #|nocode wide 58225:bdb2c071
+    #|nocode wide 58561:95cb81f6
     #|nocode-dark narrow 28126:8d2e104d
-    #|nocode-dark wide 58052:5c571917
+    #|nocode-dark wide 58388:a2810814
     #|
+
 
 
 
@@ -146,19 +147,20 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
     }
   }
   inspect(out.to_string(), content=(
-    #|settings narrow 76418:6d7b9b7
-    #|station narrow 94878:7660be12
+    #|settings narrow 77022:ba68b727
+    #|station narrow 95281:75936fb1
     #|me-reading narrow 23860:9496c484
-    #|settings wide 172657:8e369faa
-    #|station wide 239385:51ace4f8
-    #|me-reading wide 167370:6aef6d66
-    #|settings-dark narrow 76686:fbcc498
-    #|station-dark narrow 94746:f9d68295
+    #|settings wide 172993:24ac3018
+    #|station wide 240131:fb326c7c
+    #|me-reading wide 167639:a390393c
+    #|settings-dark narrow 77290:42efbe58
+    #|station-dark narrow 95149:7bceef30
     #|me-reading-dark narrow 23998:61f49844
-    #|settings-dark wide 172577:20f7e7bf
-    #|station-dark wide 239051:2a9ce064
-    #|me-reading-dark wide 167366:8048abfc
+    #|settings-dark wide 172913:55a02a3d
+    #|station-dark wide 239797:5a9c18f0
+    #|me-reading-dark wide 167635:20849138
     #|
+
 
 
 

@@ -274,16 +274,16 @@ fn shape_band_of(
 }
 
 ///|
-/// Pieces of shapes put among the frame's as one run, the same each frame (a row drawn again as kept, an old view's
-/// block): its instances of kind 12 as packed where its first piece is the `p`th of an instance, at `p` (made as
-/// first needed: what comes before it changes, rows come and go), only those it fills whole.
+/// Pieces of shapes put among the frame's as one run, the same each frame (a row drawn again as kept, a node's block):
+/// its instances of kind 12 as packed, its first piece the first of an instance wherever it comes (Ctx::segs_whole),
+/// made as first needed, only those it fills whole.
 priv struct SegPack {
-  by_phase : FixedArray[FixedArray[Double]?]
+  mut packed : FixedArray[Double]?
 }
 
 ///|
 fn SegPack::new() -> SegPack {
-  { by_phase: FixedArray::make(6, None) }
+  { packed: None }
 }
 
 ///|
@@ -296,10 +296,39 @@ let seg_runs : Array[(Int, Array[Double], SegPack)] = []
 /// Pieces `segs`, the same as the last time `pack` went with them, put after the frame's: packed as they were, each
 /// frame only copied (Ctx::emit_segs).
 fn Ctx::segs_put(self : Ctx, segs : Array[Double], pack : SegPack) -> Unit {
+  self.segs_whole()
   let at = self.segs.length() / 4
   self.segs.append(segs)
   if segs.length() >= 4 * 6 {
     seg_runs.push((at, segs, pack))
+  }
+}
+
+///|
+/// The frame's pieces made up to whole instances (six to one, kind 12) with pieces of nothing, which no band reaches:
+/// so what the window's tree puts among them (Ctx::segs_put, an old view hosted, a row being kept) begins an instance
+/// wherever it comes, packed as kept the one way (SegPack::at, its first piece the first of an instance) and so as
+/// drawing it anew puts it.
+fn Ctx::segs_whole(self : Ctx) -> Unit {
+  while self.segs.length() % (4 * 6) != 0 {
+    self.segs.push(0.0)
+  }
+}
+
+///|
+/// Where the next pieces the window's tree puts among the frame's begin (Ctx::segs_whole), none made up yet: so what
+/// is begun to be kept and puts none adds none.
+fn Ctx::segs_whole_at(self : Ctx) -> Int {
+  (self.segs.length() / 4 + 5) / 6 * 6
+}
+
+///|
+/// The frame's pieces from the `at`th on (none where it put none from there: Ctx::segs_whole_at).
+fn Ctx::segs_from(self : Ctx, at : Int) -> Array[Double] {
+  if at * 4 >= self.segs.length() {
+    []
+  } else {
+    self.segs[at * 4:].to_array()
   }
 }
 
@@ -335,29 +364,27 @@ fn seg_inst_put(a : FixedArray[Double], b : Int, segs : Array[Double], j : Int, 
 }
 
 ///|
-/// The instances pieces `segs` begun as the `phase`th of an instance fill whole, as packed (made the first time).
-fn SegPack::at(self : SegPack, segs : Array[Double], phase : Int) -> FixedArray[Double] {
-  match self.by_phase[phase] {
+/// The instances pieces `segs` fill whole, as packed (made the first time).
+fn SegPack::at(self : SegPack, segs : Array[Double]) -> FixedArray[Double] {
+  match self.packed {
     Some(a) => return a
     None => ()
   }
-  let n = segs.length() / 4
-  let t0 = if phase == 0 { 0 } else { 1 }
-  let t1 = (phase + n) / 6
-  let a = FixedArray::make((t1 - t0) * inst_size, 0.0)
-  for t in t0..<t1 {
-    let b = (t - t0) * inst_size
+  let t1 = segs.length() / 4 / 6
+  let a = FixedArray::make(t1 * inst_size, 0.0)
+  for t in 0..<t1 {
+    let b = t * inst_size
     seg_inst.blit_to(a, len=inst_size, dst_offset=b)
     for s in 0..<6 {
       let o = b + seg_slots[s] * 4
-      let p = 4 * (t * 6 + s - phase)
+      let p = 4 * (t * 6 + s)
       a[o] = segs[p]
       a[o + 1] = segs[p + 1]
       a[o + 2] = segs[p + 2]
       a[o + 3] = segs[p + 3]
     }
   }
-  self.by_phase[phase] = Some(a)
+  self.packed = Some(a)
   a
 }
 
@@ -382,14 +409,14 @@ fn Ctx::emit_segs(self : Ctx) -> Unit {
   while j < k {
     if r < seg_runs.length() {
       let (at, run, pack) = seg_runs[r]
-      let f0 = (at + 5) / 6
+      let f0 = at / 6
       let f1 = (at + run.length() / 4) / 6
       if f1 <= f0 || j >= f1 {
         r = r + 1
         continue
       }
       if j == f0 {
-        pack.at(run, at % 6).blit_to(a, len=(f1 - f0) * inst_size, dst_offset=(base + j) * inst_size)
+        pack.at(run).blit_to(a, len=(f1 - f0) * inst_size, dst_offset=(base + j) * inst_size)
         j = f1
         r = r + 1
         continue
