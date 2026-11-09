@@ -301,8 +301,9 @@ pub fn Damage::group_drop(self : Damage, id : Int) -> Unit {
 /// The frame `inst` (`count` instances, headers among them) as its units: each instance, each header, its group's room
 /// after it left out.
 fn Damage::units_of(self : Damage, inst : FixedArray[Double], count : Int) -> (FixedArray[Double], Int) {
+  // (twice as many as asked where it grows, as `prev` does: not made again, all of it zeroed, for each one more)
   if self.units.length() < count * inst_size {
-    self.units = FixedArray::make(count * inst_size, 0.0)
+    self.units = FixedArray::make(count * inst_size * 2, 0.0)
   }
   let u = self.units
   let mut k = 0

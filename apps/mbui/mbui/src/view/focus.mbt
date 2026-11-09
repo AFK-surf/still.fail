@@ -335,6 +335,24 @@ pub fn View::takes_input(self : View) -> Bool {
 /// Each node whose taking input is read told it as it is now (View::takes_input): as what decides it changes (a modal
 /// layer, a node leaving, said to take no press), once the change is committed whole. Those let go dropped.
 fn Tree::inputs_told(self : Tree) -> Unit {
+  // (where only what changed and what it holds may take input otherwise (Tree::modals_told's `within`): those alone)
+  if !self.inputs_whole {
+    let todo = self.inputs_in.copy()
+    self.inputs_in.clear()
+    while todo.pop() is Some(at) {
+      guard at >= 0 && at < self.nodes.length() else { continue }
+      let n = self.nodes[at]
+      guard n.live else { continue }
+      match n.input_cell {
+        Some(s) => s.set(!self.pressless_at(at))
+        None => ()
+      }
+      todo.push_iter(n.kids.iter())
+    }
+    return
+  }
+  self.inputs_whole = false
+  self.inputs_in.clear()
   let live = self.inputs_at.filter(fn(at) { self.nodes[at].live && self.nodes[at].input_cell is Some(_) })
   self.inputs_at.clear()
   self.inputs_at.append(live)
