@@ -56,3 +56,24 @@ test "a 文件 tab's row carried and let go on the tab itself: no hint over the 
   t.run_for(@ui.move_most_ms)
   assert_eq(named(calls, "composer.add").length(), 0)
 }
+
+///|
+test "a file from this machine's file manager dropped on the chat goes into its draft named by its path on this machine's station" {
+  let calls : Array[Made] = []
+  // (the chat alone, nothing beside it; its draft the made-up core's)
+  let t = keyed_chat(calls)
+  @sfbase.machine_here.val = Some("ws1/st1")
+  // (on one of its messages)
+  let (x, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
+  t.drop_files(x + 20.0, y + 6.0, [("报告.pdf", b"%PDF")], paths=["/Users/lin/报告.pdf"])
+  t.frame()
+  t.frame()
+  let files = @sfbase.writings.get("ws1/st1:s-c1").map(fn(d) { d.files.get() }).unwrap_or([])
+  assert_eq(files.length(), 1, msg="\{calls.map(fn(m) { m.name })}")
+  let one = files[0]
+  assert_eq(text(Some(one), "name"), "报告.pdf")
+  assert_eq(text(field(Some(one), "ref"), "mode"), "path")
+  assert_eq(text(field(Some(one), "ref"), "path"), "/Users/lin/报告.pdf")
+  assert_eq(text(field(Some(one), "ref"), "station"), "ws1/st1")
+  @sfbase.machine_here.val = None
+}

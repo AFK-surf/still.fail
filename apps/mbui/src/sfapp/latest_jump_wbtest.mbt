@@ -55,3 +55,24 @@ test "at the end of a window short of the chat's end, the page after is asked fo
   t.run_for(@ui.move_most_ms)
   assert_eq(named(calls, "chat.newer").length(), 2)
 }
+
+///|
+test "the page before asked for as the reader nears the chat's top (chat.older), once; its answer failed, asked again" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls)
+  t.run_for(@ui.move_most_ms)
+  t.move(195.0, 400.0)
+  for _ in 0..<6 {
+    t.wheel(195.0, 400.0, -900.0)
+    t.run_for(@ui.move_most_ms)
+  }
+  let asked = named(calls, "chat.older")
+  assert_eq(asked.length(), 1)
+  assert_eq(number(Some(asked[0].params), "thread"), 7.0)
+  (asked[0].done)(Err({ "message": "连不上" }))
+  t.wheel(195.0, 400.0, 300.0)
+  t.run_for(@ui.move_most_ms)
+  t.wheel(195.0, 400.0, -900.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(named(calls, "chat.older").length(), 2)
+}
