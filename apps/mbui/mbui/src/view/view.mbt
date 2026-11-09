@@ -646,6 +646,8 @@ pub struct Tree {
   /// what each walk of the scene keeps as it goes, kept for the next (Tree::each_drawn_in_order), and how many walk now
   priv mut walks : Array[Walk]
   priv mut walking : Int
+  /// the way up from a node to the root's, in the order, kept for the next (Tree::drawn_one: worked out top down)
+  priv drawn_path : Array[Int]
   /// the node hosting the old view, if any (View::hosted)
   mut hosting : Int
   /// where in the window's stack of layers the topmost modal layer of what hosts it is (an old frame's: Tree::hold_under;
@@ -907,6 +909,7 @@ pub fn Tree::new(
     tops: [],
     walks: [],
     walking: 0,
+    drawn_path: [],
     hosting: -1,
     held_under: -2,
     held_under_of: None,
@@ -7488,7 +7491,8 @@ pub fn Tree::drawn_one(
   let i = self.order_of[id.at]
   guard i >= 0 && i < self.order.length() else { return None }
   guard self.nodes[id.at].content is Some(c) else { return None }
-  let path = []
+  let path = self.drawn_path
+  path.clear()
   let mut j = i
   while j >= 0 {
     path.push(j)
