@@ -553,7 +553,6 @@
     },
     "click-read": {},
     "key-read": {
-      "src/sf/reader.mbt": 6,
       "src/sfbase/viewer.mbt": 1,
       "src/sfdesk/drive.mbt": 1,
       "src/sfdesk/files.mbt": 4,

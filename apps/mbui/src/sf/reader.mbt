@@ -960,22 +960,31 @@ fn desk_reader_chrome(
     Some(b) => b.chapters.length() >= 2
     None => false
   }
-  // the keys: ⌘F finds, ← → a chapter on, Esc closes what is open over the text (else goes back)
-  let typing = c.field_focused()
-  if c.key_pressed(@ui.key_of_char('f'), mods=desk_mod(), in_field=true) {
-    reader_open_panel(c, r, Find)
+  // the keys: ⌘F finds, ← → a chapter on, Esc closes what is open over the text (else goes back): the keymap's
+  // reader.* (reader_bindings), done at their key's moment
+  c.key_context("Reader")
+  let on = fn(action : String, f : () -> Unit) {
+    c.on_action("reader." + action, fn() {
+      f()
+      true
+    })
   }
+  on("find", fn() { reader_open_panel(c, r, Find) })
   match book {
-    Some(b) if !typing && has_chapters && (c.key_pressed(@ui.key_code_left) || c.key_pressed(@ui.key_code_right)) => {
-      let to = chapter + (if c.key_pressed(@ui.key_code_left) { -1 } else { 1 })
-      match b.chapters.get(if to < 0 { 0 } else { to }) {
-        Some((_, k, o)) => reader_jump(r, k, o)
-        None => ()
+    Some(b) if has_chapters => {
+      let go = fn(by : Int) {
+        let to = chapter + by
+        match b.chapters.get(if to < 0 { 0 } else { to }) {
+          Some((_, k, o)) => reader_jump(r, k, o)
+          None => ()
+        }
       }
+      on("chapter_back", fn() { go(-1) })
+      on("chapter_on", fn() { go(1) })
     }
     _ => ()
   }
-  if c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true) {
+  on("escape", fn() {
     if r.panel != NoPanel {
       reader_close_panel(c, r)
     } else if r.hit >= 0 {
@@ -983,7 +992,7 @@ fn desk_reader_chrome(
     } else {
       on_back()
     }
-  }
+  })
   // the bar: gone as the text is read on down, back as it is read back up, near its top, at the window's top
   r.bar.heard(c, reader_list_key(r))
   let share = match book {
@@ -2271,3 +2280,18 @@ let desk_slider_value_box : @ui.Style = @ui.css("w=S12 align=AEnd")
 ///|
 // kept across runs: a value (no field of it changes)
 let desk_slider_value : @ui.TextStyle = @ui.text_style(size=Meta, weight=Semibold, wrap=false, narrow=@ui.text_patch(size=Sm))
+
+///|
+/// The reader's keys (desk_reader_chrome's), the keymap's own, never changed: where a text is read (`Reader`). ⌘F (Ctrl
+/// elsewhere) finds and Escape closes what is open over the text, or it, with the cursor in a field too; ← → a chapter
+/// back or on, not in a field.
+pub fn reader_bindings() -> Array[@view.Binding] {
+  let reading : @view.KeyWhen = In("Reader")
+  let not_typing : @view.KeyWhen = All([In("Reader"), Not(In("Field"))])
+  [
+    { keys: [{ code: @ui.key_of_char('f'), mods: desk_mod() }], action: "reader.find", when: reading },
+    { keys: [{ code: @ui.key_code_left, mods: 0 }], action: "reader.chapter_back", when: not_typing },
+    { keys: [{ code: @ui.key_code_right, mods: 0 }], action: "reader.chapter_on", when: not_typing },
+    { keys: [{ code: @ui.key_escape, mods: 0 }], action: "reader.escape", when: reading },
+  ]
+}
