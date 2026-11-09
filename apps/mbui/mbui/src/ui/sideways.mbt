@@ -49,6 +49,9 @@ priv struct Sideways {
   mut bar_room : Bool
   /// how far in from either side its bar runs (Ctx::sideways's `bar_in`)
   mut bar_in : Double
+  /// told as it is scrolled, flung or stopped (Sideways::told): what is drawn where it is as it is painted (Ctx::sideways'
+  /// box, its fades and its bar) painted again, nothing built for it
+  said : @signals.Signal[Int]
 }
 
 ///|
@@ -100,12 +103,19 @@ pub fn Ctx::sideways(
     self.sideways_depth += 1
     // (filling: as wide as the box where what it holds needs no more, never narrower than that: Ctx::box keep)
     let inner_w = if fill { Some(Fill(1.0)) } else { None }
-    inner = self.box(w?=inner_w, keep=fill, tx=-st.x, pl=px, pr=px, pt=py, pb=foot, body)
+    inner = self.box(w?=inner_w, keep=fill, pl=px, pr=px, pt=py, pb=foot, body)
     self.sideways_depth -= 1
   })
+  // (drawn off by how far it is scrolled as it is painted, not as it is built: a finger dragging it or a fling paints
+  // the frame again, what it is in (a message's row) neither built nor laid out again for it: 2026-11-10, a table
+  // dragged across built its message's rows again each frame, twice a frame's work of the list dragged up and down)
+  self.moved_by(inner, fn(_, _) { (-self.sideways_drawn(st), 0.0) })
   // where more of it goes on past an edge, what it holds fades out towards that edge (as far as it goes on, a line's
-  // worth at most), not cut off there (the user, 2026-10-30: 「现在有很多粗暴裁剪的」)
-  self.fade_to(inner, b, start=cut_soft(st.x, st.x), end=cut_soft(st.max - st.x, st.max - st.x))
+  // worth at most), not cut off there (the user, 2026-10-30: 「现在有很多粗暴裁剪的」); as it is painted
+  self.fade_to_by(inner, b, fn() {
+    let x = self.sideways_drawn(st)
+    (cut_soft(x, x), 0.0, cut_soft(st.max - x, st.max - x), 0.0)
+  })
   self.nodes[b].sideways = true
   // a scroll target (the pointer's), not a tap's
   self.nodes[b].hit = false
@@ -194,31 +204,71 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
         for_field: 0,
         bar_room: false,
         bar_in: 0.0,
+        said: @signals.signal(0),
       }
       sideways[id] = s
       s
     }
   }
-  if !st.held && st.rest >= 0.0 {
-    if st.t0 == @double.infinity {
-      // its first step: it sets out now, its way solved once (where it stops, when)
-      st.fling_from(self.clock)
-    }
-    if self.clock >= st.rest {
-      st.x = st.x_end
-      // (its bar fades from the fling's end)
-      st.last_scroll = dmax(st.last_scroll, st.rest)
-      st.rest = -1.0
-      st.vel = 0.0
-    } else {
-      st.x = fling_at(st.x0, st.v0, self.now() - st.t0)
-    }
+  // (sideways, where it is is read as it is painted alone (Ctx::sideways_drawn): stepped here untracked, nothing built
+  // round it again as it moves)
+  if !vertical {
+    st.step(self.clock, self.clock)
+    return st
   }
-  st.x = dclamp(st.x, 0.0, dmax(st.max, 0.0))
+  st.step(self.clock, self.sideways_clock(st))
   // (where its fling and its bar have it, read by what is built round it, a part or a row kept: built again as it is
   // told anew, wherever and whenever, and each frame while it moves: Ctx::shows_motion)
   self.shows_motion(st.mover, dmax(st.fling_rest(), st.bar.rest(self.clock, st.bar_until())) > self.clock)
   st
+}
+
+///|
+/// Stepped to the frame at `clock` (`now`, the same, read followed where what reads it is to follow it): flung on,
+/// slowing until it stops or reaches an end, set out at its first step; no further than it can go.
+fn Sideways::step(self : Sideways, clock : Double, now : Double) -> Unit {
+  if !self.held && self.rest >= 0.0 {
+    if self.t0 == @double.infinity {
+      // its first step: it sets out now, its way solved once (where it stops, when)
+      self.fling_from(clock)
+    }
+    if clock >= self.rest {
+      self.x = self.x_end
+      // (its bar fades from the fling's end)
+      self.last_scroll = dmax(self.last_scroll, self.rest)
+      self.rest = -1.0
+      self.vel = 0.0
+    } else {
+      self.x = fling_at(self.x0, self.v0, now - self.t0)
+    }
+  }
+  self.x = dclamp(self.x, 0.0, dmax(self.max, 0.0))
+}
+
+///|
+/// What reads where it is as it is painted (Ctx::sideways' box, its fades, its bar) told: painted again.
+fn Sideways::told(self : Sideways) -> Unit {
+  self.said.set(@signals.untracked(fn() { self.said.get() }) + 1)
+}
+
+///|
+/// How far sideways box `st` is scrolled as the frame is painted (or laid out), stepped to it: followed by the paint
+/// (Sideways::told, and the clock while it is flung), so that a frame where only it moved is painted again alone.
+fn Ctx::sideways_drawn(self : Ctx, st : Sideways) -> Double {
+  st.said.get() |> ignore
+  st.step(self.clock, self.sideways_clock(st))
+  st.x
+}
+
+///|
+/// The frames' clock where box `st` is flung (followed by what reads it: built or painted again each frame till it is
+/// at rest), else as it stands: where its fling is stepped to (Sideways::step).
+fn Ctx::sideways_clock(self : Ctx, st : Sideways) -> Double {
+  if !st.held && st.rest >= 0.0 && self.clock < st.rest {
+    self.now_of(st.mover)
+  } else {
+    self.clock
+  }
 }
 
 ///|
@@ -293,6 +343,7 @@ impl Moving for Sideways with rest_at(self, now, frame) {
 /// Box `st` scrolled now (a finger, the wheel, its thumb, sent to its end or to a part where it showed): its bar shows
 /// (and then fades) from now, said as what moves.
 fn Ctx::sideways_scrolled(self : Ctx, st : Sideways) -> Unit {
+  st.told()
   st.bar.wake(self.clock, st.bar_until())
   st.last_scroll = self.clock
   self.moving(st.mover, st as &Moving, what="a box scrolled inside a list and its scroll bar")
@@ -406,6 +457,7 @@ fn Ctx::sideways_after_layout(self : Ctx) -> Unit {
       st.to_end = false
       if st.x != st.max {
         st.x = st.max
+        st.told()
         if self.bar_drawn(id) is Some(_) {
           self.sideways_scrolled(st)
         }
@@ -415,6 +467,7 @@ fn Ctx::sideways_after_layout(self : Ctx) -> Unit {
     }
     if st.x > st.max {
       st.x = st.max
+      st.told()
     }
   })
   for id in gone {
@@ -503,6 +556,7 @@ fn Ctx::shows_after_layout(self : Ctx) -> Unit {
             st.x = to
             st.rest = -1.0
             st.vel = 0.0
+            st.told()
             if self.bar_drawn(sid) is Some(_) {
               self.sideways_scrolled(st)
             }
@@ -561,8 +615,10 @@ fn outer_scroll_in(ids : Array[Int], rects : Array[Double], x : Double, y : Doub
 fn sideways_down(c : Ctx, id : Int, x : Double, y : Double) -> Unit {
   match sideways.get(id) {
     Some(st) => {
+      // (where it was last drawn: a fling stepped as it was painted alone, Ctx::sideways_drawn)
       st.vel = 0.0
       st.rest = -1.0
+      st.told()
     }
     None => ()
   }
@@ -616,6 +672,15 @@ fn Ctx::scroll_lets_go(self : Ctx, scroller : Int) -> Unit {
 }
 
 ///|
+/// Whether scrolling box `id` is one across (Ctx::sideways), where it is read as it is painted.
+fn sideways_across(id : Int) -> Bool {
+  match sideways.get(id) {
+    Some(st) => !st.vertical
+    None => false
+  }
+}
+
+///|
 /// Let go of scrolling box `id` after dragging it: flung on at the finger's speed (`vx`, `vy`, px per ms).
 fn sideways_up(c : Ctx, id : Int, vx : Double, vy : Double) -> Unit {
   match sideways.get(id) {
@@ -626,6 +691,7 @@ fn sideways_up(c : Ctx, id : Int, vx : Double, vy : Double) -> Unit {
       if st.vel.abs() > sideways_stop_v {
         st.rest = 0.0
         st.t0 = @double.infinity
+        st.told()
         c.moving(st.mover, st as &Moving, what="a fling of a box scrolled inside a list")
       }
       // in the motion log (MBUI_MOTION_LOG=1) as let go: where it is, how far it can go
