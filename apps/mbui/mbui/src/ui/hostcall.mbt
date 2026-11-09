@@ -471,6 +471,7 @@ let feel_over : Ref[Int] = { val: -1 }
 
 ///|
 fn h_request_frame() -> Unit {
+  journal_wants()
   // (asked from outside a frame: what asked changed what the view is built from, frame_watch.mbt)
   if !in_frame.val && !frame_running.val {
     outside_counted()
@@ -481,6 +482,7 @@ fn h_request_frame() -> Unit {
 ///|
 /// The host's next frame asked for what the frames' watch saw change (frame_watch.mbt): nothing come from outside.
 fn h_frame_owed() -> Unit {
+  journal_wants()
   @hostapi.request_frame()
 }
 
@@ -488,6 +490,7 @@ fn h_frame_owed() -> Unit {
 /// The host's next frame asked for what moves on by the clock (a motion going on, a cycle shown:
 /// @hostapi.request_frame_on).
 fn h_request_frame_on() -> Unit {
+  journal_wants()
   @hostapi.request_frame_on()
 }
 

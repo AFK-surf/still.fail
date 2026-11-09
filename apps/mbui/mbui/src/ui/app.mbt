@@ -77,7 +77,7 @@ pub fn run(title : String, view : (Ctx) -> Unit, tree? : (@view.View) -> Unit) -
   @hostapi.set_back(fn(k, x, p, e) { on_back(k, x, p, e) })
   @hostapi.set_window_key(fn(code, mods) {
     let taken = Ref(false)
-    view_event(fn() { taken.val = window_key_taken(code, mods) })
+    view_event(fn() { taken.val = window_key_taken(code, mods) }, what="key")
     if taken.val { 1 } else { 0 }
   })
   @hostapi.set_app_state(fn(s) { on_app_state(s) })
@@ -178,6 +178,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   if bench.mode > 0 {
     bench_step(c, t3 - t0, t4 - t3)
   }
+  // (the frame into the window thread's journal, the interval it closes looked over: journal.mbt)
+  journal_frame(c, tw, t0, t3, t4)
   slow_probe(c, t, t3 - t0, t4 - t3, tree=t0 - tw)
   perf_log(c, t, t3 - t0, t4 - t3)
   drive_frame(c)
@@ -220,6 +222,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
     @hostapi.frame_awaiting(rt.awaiting(), what)
   }
   frame_afters_run()
+  journal_frame_ended(t4)
   frame_running.val = false
   frame_moment.val = -1.0
   frame_built.val = false
@@ -1727,7 +1730,7 @@ fn Ctx::edge_move(self : Ctx, x : Double, y : Double, t : Double) -> Bool {
 /// (Nav's `finger`), as a pointer moved is (inputrec.mbt).
 fn on_back(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
   // (one event, at its own moment: view_host.mbt)
-  view_event(fn() { on_back_now(kind, x, progress, edge) })
+  view_event(fn() { on_back_now(kind, x, progress, edge) }, what="back")
 }
 
 ///|
@@ -1793,7 +1796,7 @@ fn on_back_now(kind : Int, x : Double, progress : Double, edge : Int) -> Unit {
 fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Unit {
   // (one event, at its own moment: view_host.mbt)
   zoom_wheel_kept.val = false
-  view_event(fn() { on_wheel_now(x, y, dx, dy, phase) })
+  view_event(fn() { on_wheel_now(x, y, dx, dy, phase) }, what="wheel")
   h_wheel_kept(zoom_wheel_kept.val)
 }
 
@@ -1992,7 +1995,7 @@ fn on_key(code : Int, mods : Int) -> Unit {
     }
     // (what a field of the window's tree gave up of its words by it, told at its moment: tree_field.mbt)
     tree_field_said()
-  })
+  }, what="key")
 }
 
 ///|
@@ -2119,7 +2122,7 @@ fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
     on_text_now(kind, s, a, b)
     // (what a field of the window's tree gave up of its words by it, told at its moment: tree_field.mbt)
     tree_field_said()
-  })
+  }, what="text")
 }
 
 ///|
@@ -2288,7 +2291,7 @@ let app_change : Ref[((Bool, Bool) -> Unit)?] = Ref::new(None)
 ///|
 fn on_app_state(s : Int) -> Unit {
   // (one event, at its own moment: view_host.mbt)
-  view_event(fn() { on_app_state_now(s) })
+  view_event(fn() { on_app_state_now(s) }, what="app-state")
 }
 
 ///|
@@ -2321,6 +2324,10 @@ fn app_state_taken(s : Int) -> Unit {
     return
   }
   app_state.val = s
+  // (not shown: the window thread's interval closed as the event that said so ends, journal.mbt)
+  if (s & 1) == 0 {
+    journal_hidden.val = true
+  }
   // (no longer in front: the fingers down called off, all of it (touches.mbt); a finger held on the window's tree let
   // go of now)
   if (s & 2) == 0 {

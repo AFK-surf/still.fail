@@ -79,6 +79,7 @@ pub fn Tester::end_run(self : Tester, restore : &@hostapi.Host) -> Unit {
 /// forgotten here fails the next Tester at once rather than a test somewhere else.
 fn reset_globals() -> Unit {
   window_zoom_reset()
+  journal_reset()
   run_let_go()
   // A run can end with a frame's resource handover still queued. Finish it before resetting the next run.
   frame_afters_run()
