@@ -156,6 +156,23 @@ export class CloudSync {
     });
   }
 
+  /// The account's list changed (`workspaces`): its `/v1/me` again, and the workspaces new to it. One already held is
+  /// told on its own (a `workspace` event comes with each change to it), and its sign-ins and an operator's lists are
+  /// not what the list tells: read with the rest as the socket opens. (A member added had each device of the person's
+  /// ask the cloud six things, its workspace three times: seven devices used up the account's 120 a minute, and the
+  /// next member taken out was refused, the locks' end to end, 2026-11-10.)
+  #listed(sub: string): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.#me(sub);
+      const me = this.#core.data.record("me", sub);
+      const ids = (isObject(me) && Array.isArray(me.workspaces) ? me.workspaces : []).flatMap((w) => (isObject(w) && typeof w.id === "string" ? [w.id] : []));
+      for (const id of ids) {
+        if (this.#core.workspaces.owner(id) !== sub || isObject(this.#core.data.shared({ topic: "workspace", workspace: id }))) continue;
+        this.#core.scheduler.enqueue("cloud", `workspace/${id}`, Priority.background, this.#workspace(id));
+      }
+    });
+  }
+
   /// Every account read again, waited on (after a write to still.fail cloud: the call answers once it is; a write by
   /// one account may change what another sees, an invitation to it).
   refreshAll(): Effect.Effect<void> {
@@ -597,7 +614,7 @@ export class CloudSync {
     const core = this.#core;
     const event = parseJson(text);
     if (!isObject(event)) return;
-    if (event.type === "workspaces") core.scheduler.enqueue("cloud", `me/${sub}`, Priority.shown, this.#account(sub));
+    if (event.type === "workspaces") core.scheduler.enqueue("cloud", `me/${sub}`, Priority.shown, this.#listed(sub));
     else if (event.type === "release") this.onRelease();
     else if (event.type === "relays") this.onRelayLoad(sub);
     else if (event.type === "workspace" && typeof event.id === "string") {

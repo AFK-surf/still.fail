@@ -177,6 +177,39 @@ test("a_beta_app_says_so_and_an_account_not_let_in_is_blocked", async () => {
   core.close();
 });
 
+test("the_list_changed_reads_the_account_and_the_workspaces_new_to_it_alone", async () => {
+  // A member added: the cloud tells the list changed and the workspace changed. Each of the person's devices read
+  // /v1/me, its sign-ins, an operator's lists and the workspace twice more besides: seven of them used up the
+  // account's 120 requests a minute, and the owner's next call was refused (the locks' end to end, 2026-11-10).
+  const host = new FakeHost();
+  host.store(STORAGE_KEY, [account("s1", "a@x.com", "阿一", "a", "r", nowS(host) + 3600)]);
+  let listed = [{ id: "ws", name: "W" }];
+  host.onFetch((req) => {
+    const path = req.url.replace("https://stillfail.test", "");
+    if (path === "/v1/me") return jsonResponse(200, { user: { sub: "s1" }, workspaces: listed, invitations: [], relay_url: "https://relay.test" });
+    if (path.startsWith("/v1/workspaces/")) return jsonResponse(200, { id: path.split("/")[3], name: "W", role: "owner", members: [], stations: [], invitations: [] });
+    if (path === "/v1/auth/sessions") return jsonResponse(200, { sessions: [] });
+    return jsonResponse(404, { error: "not_found" });
+  });
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "workspaces" });
+  await host.settle();
+  const asked = () => host.requests.splice(0).map((r) => `${r.method} ${r.url.replace("https://stillfail.test", "")}`).filter((r) => r.includes("/v1/") && !r.includes("/v1/telemetry") && !r.includes("/v1/events")).sort();
+  assert.ok(asked().includes("GET /v1/workspaces/ws"), "read as it was first shown");
+  // A member added to ws: the list and the workspace told.
+  host.socketSend("/v1/events", '{"type":"workspaces"}');
+  host.socketSend("/v1/events", '{"type":"workspace","id":"ws"}');
+  await host.settle();
+  assert.deepEqual(asked(), ["GET /v1/me", "GET /v1/workspaces/ws"]);
+  // A workspace made: the one new to the list read too.
+  listed = [...listed, { id: "ws2", name: "W2" }];
+  host.socketSend("/v1/events", '{"type":"workspaces"}');
+  await host.settle();
+  assert.deepEqual(asked(), ["GET /v1/me", "GET /v1/workspaces/ws2"]);
+  core.close();
+});
+
 test("a_release_missed_while_the_events_socket_was_closed_is_read_again_and_the_app_told", async () => {
   // A Mac asleep through a release: the feed's newest was kept from before, so the app got that build ready, put it in
   // as it quit, and updated again once the new one read the feed (2026-11-09, pengxiao).
