@@ -625,10 +625,20 @@ fn agent_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, close : () -
       c.box(style=@sf.untitled_clear().then(title_row_whole), fn() { agent_title_row(c, src, r, key) }) |> ignore
     }
     // (its words on the card's 24, its figures blocks at its foot 8 in, a row's corner)
+    // (each part of it opening its room as what it says comes (the card read after it rose): the sheet's top not
+    // stepping up as its height does, 2026-11-09 the user: 「好像还存在高度突变的元素」)
     c.box(style=info_list_style.then(@sf.panel_card_out()), radius=info_list_radius, fn() {
-    agent_lines(c, card)
-    agent_notes(c, card, 10.0)
-    agent_tiles(c, card, 14.0, entry~)
+      let parts : Array[(String, () -> Unit)] = []
+      if items(card, "latest").length() > 0 {
+        parts.push(("lines", fn() { agent_lines(c, card) }))
+      }
+      if items(card, "attention").length() > 0 {
+        parts.push(("notes", fn() { agent_notes(c, card, 10.0) }))
+      }
+      if agent_tiles_known(card) {
+        parts.push(("tiles", fn() { agent_tiles(c, card, 14.0, entry~) }))
+      }
+      @sf.group_rows(c, "agent-card/" + r.station + "/" + key, parts)
     })
     |> ignore
     c.box(style=info_card_under, fn() {  }) |> ignore
@@ -929,6 +939,13 @@ fn agent_lines(c : @ui.Ctx, card : Json?) -> Unit {
 }
 
 ///|
+/// Whether any of the figures that say most is known (agent_tiles): none (a station from before tells none of an agent
+/// at rest), no figures, its context's entry a row instead.
+fn agent_tiles_known(card : Json?) -> Bool {
+  text(card, "cost") != "" || field(card, "cache") is Some(Object(_)) || field(card, "context") is Some(Object(_))
+}
+
+///|
 /// The figures that say most (AgentTiles): what it cost, the cache's hit rate, how full its context is, each large over
 /// its name, side by side; a context worth a look in its level's colour.
 fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = None) -> Unit {
@@ -936,8 +953,7 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
   let context = field(card, "context")
   let cost = text(card, "cost")
   let cache = field(card, "cache")
-  // none known (a station from before tells none of an agent at rest): no figures, its context's entry a row instead
-  if cost == "" && !(cache is Some(Object(_))) && !(context is Some(Object(_))) {
+  if !agent_tiles_known(card) {
     return
   }
   let tile = fn(figure : String, name : String, color : Int64, open : ContextTile?) {
