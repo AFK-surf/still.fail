@@ -37,7 +37,7 @@ let sizes_steady : SizesSteady = {
 
 ///|
 /// Every fault said, none failing: what the tests show counted (to take the known down to it).
-let sizes_steady_counting : Bool = true
+let sizes_steady_counting : Bool = false
 
 ///|
 /// Each file's bar: how many faults a Tester made there may show.

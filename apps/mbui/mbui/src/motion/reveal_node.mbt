@@ -24,10 +24,11 @@ pub fn reveal_node(
     // (as tall as it is laid out, whatever room it has: what is past its room cut)
     let held = room.box(fn(h) {
       h.shrink(Is(0.0)) |> ignore
-      if lazy {
-        h.show(fn() { made.get() }, make)
-      } else {
+      // (open as it is made: made with it, laid out in the same pass as what is round it)
+      if @signals.untracked(fn() { made.get() }) {
         make(h)
+      } else {
+        h.show(fn() { made.get() }, make)
       }
     })
     let shown = fn() { way.shown(room) }

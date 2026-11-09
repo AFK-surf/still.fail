@@ -1,0 +1,50 @@
+// What draws and still steps or jolts in these tests (mbui's sizes_steady.mbt: a height or a place in one frame, a
+// speed off the frames round it, a dead stop, a turn back again soon), a file at a time: how many a Tester made in
+// it may show. Each only falls: a jolt mended takes its file's number down, and a file at 0 leaves the list.
+
+///|
+fn init {
+  @ui.sizes_steady_known([
+    ("src/sfapp/tape.mbt", 1),
+    ("src/sfreplay/flows/agent_reply_test.mbt", 1),
+    ("src/sfreplay/flows/answer_option_test.mbt", 2),
+    ("src/sfreplay/flows/appearance_kept_test.mbt", 4),
+    ("src/sfreplay/flows/archive_restore_test.mbt", 2),
+    ("src/sfreplay/flows/card_motion_test.mbt", 1),
+    ("src/sfreplay/flows/chinese_enter_test.mbt", 2),
+    ("src/sfreplay/flows/close_option_test.mbt", 2),
+    ("src/sfreplay/flows/dismiss_test.mbt", 1),
+    ("src/sfreplay/flows/drive_delete_test.mbt", 1),
+    ("src/sfreplay/flows/drive_lend_test.mbt", 1),
+    ("src/sfreplay/flows/drive_play_test.mbt", 3),
+    ("src/sfreplay/flows/drive_rename_test.mbt", 5),
+    ("src/sfreplay/flows/drive_upload_test.mbt", 4),
+    ("src/sfreplay/flows/glass_test.mbt", 6),
+    ("src/sfreplay/flows/history_test.mbt", 4),
+    ("src/sfreplay/flows/lock_wait_test.mbt", 30),
+    ("src/sfreplay/flows/new_chat_test.mbt", 3),
+    ("src/sfreplay/flows/notify_off_test.mbt", 7),
+    ("src/sfreplay/flows/paste_long_test.mbt", 1),
+    ("src/sfreplay/flows/pick_words_test.mbt", 3),
+    ("src/sfreplay/flows/reader_test.mbt", 1),
+    ("src/sfreplay/flows/service_page_test.mbt", 3),
+    ("src/sfreplay/flows/settings_add_station_test.mbt", 16),
+    ("src/sfreplay/flows/settings_appearance_test.mbt", 4),
+    ("src/sfreplay/flows/settings_connect_test.mbt", 26),
+    ("src/sfreplay/flows/settings_device_pages_test.mbt", 6),
+    ("src/sfreplay/flows/settings_profile_test.mbt", 1),
+    ("src/sfreplay/flows/settings_run_settings_test.mbt", 5),
+    ("src/sfreplay/flows/settings_sheet_sinking_test.mbt", 2),
+    ("src/sfreplay/flows/settings_station_mark_test.mbt", 3),
+    ("src/sfreplay/flows/settings_station_settings_test.mbt", 2),
+    ("src/sfreplay/flows/settings_vault_item_test.mbt", 24),
+    ("src/sfreplay/flows/settings_workspace_people_test.mbt", 10),
+    ("src/sfreplay/flows/share_files_test.mbt", 10),
+    ("src/sfreplay/flows/share_new_chat_test.mbt", 6),
+    ("src/sfreplay/flows/sheet_drag_test.mbt", 1),
+    ("src/sfreplay/flows/station_rename_test.mbt", 2),
+    ("src/sfreplay/flows/viewer_test.mbt", 2),
+    ("src/sfreplay/flows/wide_send_test.mbt", 2),
+    ("src/sfreplay/flows/wide_switcher_test.mbt", 2),
+  ])
+}
