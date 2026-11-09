@@ -21,15 +21,18 @@ const STATION = "ws/st";
 /// A cloud that keeps one chain, as cloud/src/personal-lock.ts does.
 function cloud() {
   const kept = { entries: [] as Entry[] };
+  // (`limited`: how many writes it answers "too many requests" first)
+  const say = { limited: 0 };
   return {
     kept,
+    say,
     call: (_sub: string, method: string, _path: string, body: unknown) =>
-      Effect.sync(() => {
+      Effect.suspend(() => method === "POST" && say.limited-- > 0 ? Effect.fail(new CoreError("rate_limited", "too many", 429)) : Effect.sync(() => {
         if (method === "GET") return { entries: kept.entries };
         const adding = (body as { entries: Entry[] }).entries;
         kept.entries = adding[0]!.seq === 0 ? adding : [...kept.entries.slice(0, adding[0]!.seq), ...adding];
         return { entries: kept.entries };
-      }) as Effect.Effect<unknown, CoreError>,
+      })) as Effect.Effect<unknown, CoreError>,
   };
 }
 
@@ -76,6 +79,24 @@ test("the first signature begins the lock; it asks the person and signs what hol
     // Refused at the prompt: nothing is signed.
     a.asks.refuse = true;
     await assert.rejects(a.runner.run(a.lock.signGrant(SUB, body(), "why")));
+  } finally {
+    a.runner.shutdown();
+  }
+});
+
+test("an entry the person signs waits out the cloud's too many requests, and is taken once it answers", async () => {
+  const c = cloud();
+  const a = device(c, "a");
+  try {
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    // The account's budget used up: the next two writes answered 429, then taken.
+    c.say.limited = 2;
+    const out: unknown[] = [];
+    a.runner.fork(Effect.map(Effect.result(a.lock.removeDevice(SUB, "ed25519:" + "22".repeat(32), "why")), (r) => out.push(r)));
+    for (let i = 0; i < 40 && out.length === 0; i++) await a.host.time.pass(1000, 100);
+    assert.equal((out[0] as { _tag: string })?._tag, "Success", JSON.stringify(out));
+    assert.equal(c.say.limited, -1, "tried again until the cloud took it");
+    assert.equal(c.kept.entries.at(-1)?.kind, "device.remove");
   } finally {
     a.runner.shutdown();
   }

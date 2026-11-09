@@ -1546,7 +1546,13 @@ class Vaults {
     const self = this;
     return Effect.gen(function* () {
       const { lock, self: who } = yield* self.#ready();
-      const { v, item } = yield* self.#find(lock, id);
+      let { v, item } = yield* self.#find(lock, id);
+      // Written before its vault was keyed anew (`rekeyGone`), as held here: its station read again for the one
+      // written since under the new key.
+      if (item.epoch < v.epoch) {
+        yield* Effect.ignore(readItems(self.#inner, `${self.ws}/${held(self.#inner, self.ws).at[v.id] ?? ""}`, v.id), { log: "Unhandled", message: "vault items read" });
+        ({ v, item } = yield* self.#find(lock, id));
+      }
       const name = item.listing?.name ?? v.name;
       const key = yield* self.#key(v, who, false, t("core-misc.vault.reason.open", { name }));
       const bytes = yield* self.#plain(lock, v, item, key);
