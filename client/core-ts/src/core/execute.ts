@@ -35,9 +35,24 @@ export const hooks: {
   /// (views/lock.ts).
   lockRefused?: (inner: Inner, workspace: string, station: string, theirs: unknown, told?: { person?: unknown; entries?: unknown }) => CoreError | null;
   lockWaiting?: (inner: Inner, workspace: string, station: string) => CoreError | null;
+  /// A member about to be taken out of a workspace or given another role, or a station taken out: so in its lock
+  /// first, by this device's signature where it signs there (views/lock.ts).
+  roster?: (inner: Inner, sub: string, workspace: string, what: Roster) => Effect.Effect<unknown, CoreError>;
   /// A new device's connection, met face to face (views/pair.ts).
   lockPair?: (inner: Inner, connection: import("../iroh.ts").IrohConnection) => void;
 } = {};
+
+/// What a write to still.fail cloud changes of a workspace's roster, as its lock has one: a member out, a member's
+/// role, a station out.
+export type Roster = { member: string; gone: true } | { member: string; role: string } | { station: string };
+function rosterOf(method: string, path: string, body: unknown): { ws: string; what: Roster } | null {
+  const m = /^\/v1\/workspaces\/([^/]+)\/(members|stations)\/([^/]+)$/.exec(path);
+  if (m === null) return null;
+  const [ws, kind, id] = [m[1]!, m[2]!, m[3]!].map((x) => decodeURIComponent(x)) as [string, string, string];
+  if (method === "DELETE") return { ws, what: kind === "members" ? { member: id, gone: true } : { station: id } };
+  const role = isObject(body) ? body.role : undefined;
+  return method === "PATCH" && kind === "members" && typeof role === "string" ? { ws, what: { member: id, role } } : null;
+}
 
 /// Runs a call; `at` is the client and id it came with, `ctx` its trace.
 export function execute(inner: Inner, call: Call, progress: Progress, at: [ClientId, RequestId], ctx: SpanContext): Effect.Effect<unknown, CoreError> {
@@ -99,6 +114,11 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
           const sub = call.op.target.cloud;
           return Effect.gen(function* () {
             const made = op.method === "POST" && op.path === "/v1/workspaces";
+            // Taken out of a locked workspace, or a member's role changed: so in its lock too, or it would be the cloud's
+            // word alone (it could hold back a credential's end, let one back in, and the lock would still take them as
+            // it says, an admin made a member signing as an admin there still).
+            const roster = rosterOf(op.method, op.path, op.body);
+            if (roster && hooks.roster) yield* hooks.roster(inner, sub, roster.ws, roster.what);
             let result = yield* inner.provider.request(sub, op.method, op.path, op.body, ctx);
             // A locked workspace's station joins with the lock's hash, to pin it (views/lock.ts).
             const enrolling = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/enrollments$/.exec(op.path) : null;
