@@ -415,16 +415,18 @@ pub fn Damage::moved(
   // (what is drawn anew under the same numbers: compared whole, Damage::next)
   let prev = self.prev
   if !self.kept_read {
+    // (of what is drawn alone: the pieces of shapes after it show no picture, nor are glass; where they start found
+    // as it was compared, Damage::next)
+    if self.kept_seg < 0 {
+      self.kept_seg = pieces_from(prev, self.n)
+    }
     self.kept_streams = false
-    for k in 0..<self.n {
+    for k in 0..<self.kept_seg {
       let t = prev[k * inst_size + 20]
       if t >= stream_tex_base && t < view_tex_base {
         self.kept_streams = true
         break
       }
-    }
-    if self.kept_seg < 0 {
-      self.kept_seg = pieces_from(prev, self.n)
     }
     self.kept_glass = glass_groups(prev, self.kept_seg)
     self.kept_read = true
