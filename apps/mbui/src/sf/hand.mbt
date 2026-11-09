@@ -40,8 +40,17 @@ pub fn soft_keyboard() -> Bool {
 ///|
 /// Whether Enter in a box of lines sends what is in it (⇧Enter a new line), as where the keyboard is at hand (the web's
 /// `hover: hover`), or is a new line, as on the screen's keyboard (its send is the page's button): the native input's.
-pub fn enter_sends() -> Bool {
-  !soft_keyboard()
+/// `command`: the person chose ⌘Enter (Ctrl+Enter elsewhere) to send, Enter a new line (command_sends).
+pub fn enter_sends(command? : Bool = false) -> Bool {
+  !soft_keyboard() && !command
+}
+
+///|
+/// Whether ⌘Enter (Ctrl+Enter elsewhere) sends where Enter is a new line: as the person chose (`command`, the keymap's
+/// `send`), where the keyboard is at hand; the screen's keyboard has no ⌘ and its send is the page's button, so not
+/// there.
+pub fn command_sends(command : Bool) -> Bool {
+  !soft_keyboard() && command
 }
 
 ///|

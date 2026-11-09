@@ -237,6 +237,8 @@ struct EditorState {
   mut limit : Int
   /// Enter sends (the words go to `submitted`, none too, and stay in it); else it is a new line
   mut enter_sends : Bool
+  /// where Enter is a new line, ⌘Enter (Ctrl+Enter elsewhere) sends
+  mut command_sends : Bool
   /// the keys it leaves to the app, pressed with nothing held (a menu the field offers, chosen in by ↑ / ↓, picked
   /// from by Enter: the web's preventDefault on them)
   mut leaves : Array[Int]

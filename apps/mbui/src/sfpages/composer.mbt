@@ -671,6 +671,8 @@ fn composer_text(
   let p = @sf.theme().p
   let prefs = src.topic("prefs", {}).get().value
   let hint = space_hint(c, prefs, spec.locked)
+  // (⌘Enter sends, Enter a new line: as chosen in 快捷键)
+  let by_command = @settings.sends_by_command(prefs)
   let away = @sfbase.flight_hint_away(c, w.key)
   let no_files = spec.locked || spec.offline
   // what it says while empty changed (the cursor gone from it: the key that brings it back; back in it: what to write)
@@ -711,7 +713,8 @@ fn composer_text(
         color=p.text,
         placeholder_color=@sf.alpha(p.subtle, hint_in.get() * said_look.alpha),
         caret_color=if away { @sf.alpha(p.accent, 0.0) } else { p.accent },
-        enter_sends=@sf.enter_sends(),
+        enter_sends=@sf.enter_sends(command=by_command),
+        command_sends=@sf.command_sends(by_command),
         // (the `@` menu open: ↑ / ↓ choose in it, Enter and Tab pick, as each comes: it takes them, Ctx::on_key; what it
         // does not take is the field's)
         files=!no_files,

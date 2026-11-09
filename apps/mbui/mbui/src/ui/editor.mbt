@@ -667,11 +667,17 @@ fn EditorState::key_edit(self : EditorState, code : Int, mods : Int, now : Doubl
           }
         }
       } else if code == key_enter {
-        if shift || !self.enter_sends {
+        // (⌘Enter, Ctrl+Enter elsewhere, where Enter is a new line and that sends: `command_sends`)
+        let command = (mods & (if h_keys() == 0 { mod_cmd } else { mod_ctrl })) != 0
+        if shift || !(self.enter_sends || (self.command_sends && command)) {
           if self.marked.length() > 0 {
             self.put_text(2, "", 0, 0, now)
           }
           self.insert("\n")
+        } else if self.marked.length() > 0 {
+          // (a composition under way: what it chose put in, nothing sent; a host's input method keeps its Enter, this is
+          // where one gave it on)
+          self.put_text(2, "", 0, 0, now)
         } else {
           // (the words stay: what is done with them, a message sent and its field emptied, is the app's; empty too,
           // whether there is anything to send is the app's: a picture waiting with no words, the web's form submitted)
@@ -814,7 +820,8 @@ pub fn enter_sends_by(max_lines : Int, ime_action : Int) -> Bool {
 /// A field of words. `enter_sends`: whether Enter gives the words up (`submitted`) rather than starting a new line;
 /// unsaid, the way the words come in decides (enter_sends_by): a keyboard's Enter gives them up (Shift+Enter a new
 /// line); a finger's keyboard's Enter is a new line where the field holds more than one and the keyboard has no key of
-/// its own for it (`ime_action`), else that key, giving them up. `placeholder`: what it shows while nothing is typed in
+/// its own for it (`ime_action`), else that key, giving them up. `command_sends`: where Enter is a new line, ⌘Enter
+/// (Ctrl+Enter elsewhere) gives them up. `placeholder`: what it shows while nothing is typed in
 /// it, without soft wrapping; `min_lines`, the least lines it holds even while empty, up to `max_lines`; `shorter`, other ways to
 /// say the placeholder where the field has less room, each shorter than the one before
 /// (搜索全部内容, then 搜索): the longest of them all that fits is shown whole, the shortest cut with an ellipsis only
@@ -839,6 +846,7 @@ pub fn Ctx::editor(
   placeholder_color? : Int64 = 0x8E8E93FFL,
   caret_color? : Int64 = 0x0A84FFFFL,
   enter_sends? : Bool,
+  command_sends? : Bool = false,
   leaves? : Array[Int] = [],
   ime_action? : Int = 0,
   paste_limit? : Int = 0,
@@ -905,6 +913,7 @@ pub fn Ctx::editor(
   st.written.get() |> ignore
   st.limit = paste_limit
   st.enter_sends = enter_sends.unwrap_or(enter_sends_by(max_lines, ime_action))
+  st.command_sends = command_sends
   st.on_submit = on_submit
   st.on_change = on_change
   st.on_edit = on_edit
@@ -1842,6 +1851,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     retell: false,
     limit: 0,
     enter_sends: true,
+    command_sends: false,
     leaves: [],
     ime_action: 0,
     color: 0L,

@@ -228,3 +228,26 @@ pub fn workspace_keys(prefs : Json?) -> (String, String) {
 pub fn keys_changeable(prefs : Json?) -> Bool {
   flag(field(prefs, "keymap"), "changeable")
 }
+
+///|
+/// The composer's keys as the core says them (the keymap's `send`): none from a core before it.
+fn send_keys(prefs : Json?) -> Json? {
+  field(field(prefs, "keymap"), "send")
+}
+
+///|
+/// Whether ⌘Enter (Ctrl+Enter elsewhere) sends from the composer, Enter a new line (快捷键's choice, `sendKey`).
+pub fn sends_by_command(prefs : Json?) -> Bool {
+  text(send_keys(prefs), "by") == "mod"
+}
+
+///|
+/// The keys that send and make a new line from the composer, as shown (↩ and ⇧↩ from a core before the choice).
+pub fn send_lines(prefs : Json?) -> (String, String) {
+  let s = send_keys(prefs)
+  if s is None {
+    ("↩", "⇧↩")
+  } else {
+    (text(s, "send"), text(s, "newline"))
+  }
+}
