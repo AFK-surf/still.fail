@@ -2074,13 +2074,19 @@ export class StationsSync {
     );
   }
 
+  /// A chat opened with no summary held (made since the threads were read, elsewhere or while away; opened from a
+  /// link): its summary read at once, as its entries are (topics.ts `start`).
+  summaryOf(address: string, id: number): void {
+    if (this.#links.has(address)) this.#enqueue(address, `thread/${id}`, Priority.shown, this.#threadSummary(address, id));
+  }
+
   #threadSummary(address: string, id: number): Effect.Effect<void, CoreError> {
     return this.#asked((read) => Effect.gen({ self: this }, function* () {
       const link = this.#links.get(address);
       if (!link) return;
       const view = yield* Effect.result(this.requests.call(link.addr, "GET", `/threads/${id}`, null, { quiet: true }));
       if (view._tag === "Success") this.putThread(address, view.success);
-      else if (view.failure.status === 404) this.#core.data.unlistThread(address, id);
+      else if (view.failure.status === 404) this.#threadGone(address, id);
       this.#retell(address, read);
     }));
   }

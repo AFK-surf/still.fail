@@ -144,10 +144,13 @@ export class StationTopics implements Owner {
       // old notification's link): the sync brings it.
       const evicted = this.#core.data.opened("entry", station, String(id), true);
       const entries = entriesOf(station, id);
-      if (evicted || this.summary(station, id) === null) this.#sync.channels.bring(entries, Priority.shown);
+      const known = this.summary(station, id) !== null;
+      if (evicted || !known) this.#sync.channels.bring(entries, Priority.shown);
       // Its latest not on the device yet: that page alone, at once. What is before it comes with the station's history,
       // in batches behind (sync.ts #history), or as it is scrolled back to.
       else if (this.#sync.channels.latestMissing(entries)) this.#sync.channels.bring(entries, Priority.shown, "latest");
+      // No summary held: the chat waits on it (views.ts `#chat`), read with its entries.
+      if (!known) this.#sync.summaryOf(station, id);
       this.#moveOldPlace(station, id);
       // Used now: its agents' histories are brought whole, behind the rest (channel-kinds.ts `whole`).
       for (const key of membersOf(this.summary(station, id))) this.#wholeHistory(station, key);

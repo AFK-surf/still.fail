@@ -2082,7 +2082,13 @@ test("chat_is_a_thread_its_messages_and_its_agents", async () => {
   await t.read(u, 1);
   agents = u.value.agents;
   assert.deepEqual(agents.map((a: J) => a.session.key), ["k", "n"]);
+  // Not in the threads read again: still the chat held (one made since the list was asked is not in it either); gone
+  // only as its station says.
   t.set(threads("ws/a"), [thread(3, ["k"], now)]);
+  await t.read(u, 1);
+  assert.equal(u.error?.status, undefined, "not said to be gone");
+  assert.deepEqual(u.value.agents.map((a: J) => a.session.key), ["k", "n"]);
+  t.fail(pageOf("ws/a", 7), new CoreError("http_404", "对话不存在", 404));
   await t.read(u, 1);
   assert.equal(u.error.status, 404);
 });

@@ -1244,6 +1244,42 @@ test("thread_events_append_entries_and_refresh_summaries", async () => {
   core.close();
 });
 
+test("a_chat_not_in_the_threads_held_waits_for_its_station_and_only_one_it_says_is_gone_is_not_there", async () => {
+  // A chat made since its station's threads were read (elsewhere, while away; its row on the list already): 对话不存在
+  // at once from the list held, while the chat was there to read (2026-11-09).
+  const of8 = (n: number, text: string) => ({ ...entry(n, text), thread: 8 });
+  const answers: J = {
+    ...base(),
+    "GET /chats": [...(base()["GET /chats"] as J[]), { id: "8", thread: 8, session: "k1", title: "新的", agents: [], lastActiveAt: 2 }],
+    "GET /threads/8/entries?limit=50": { last: 2, entries: [of8(1, "a"), of8(2, "b")] },
+    "GET /threads/8": threadView(8, 2),
+    "GET /threads/9/entries?limit=50": status(404, { error: "unknown thread 9" }),
+    "GET /threads/9": status(404, { error: "unknown thread 9" }),
+  };
+  const { host, core, ui: id, values, read } = await ui(answers);
+  const errors = new Map<number, J>();
+  const take = host.takeEmitted.bind(host);
+  host.takeEmitted = () => {
+    const out = take();
+    for (const [, m] of out as [number, J][]) if ("error" in m) errors.set(m.id, m.error);
+    return out;
+  };
+  await read();
+  assert.deepEqual(threadsOf(core).map((t) => t.id), [7], "the threads held: read, without 8");
+  subscribe(core, id, 1, { topic: "chat", station: ST, thread: 8 });
+  subscribe(core, id, 2, { topic: "chat", station: ST, thread: 9 });
+  await read();
+  await coalesce(host);
+  await read();
+  assert.equal(errors.get(1), undefined, "a chat not in the threads held is not said to be gone");
+  assert.equal(v(values, 1).thread.id, 8);
+  assert.deepEqual((v(values, 1).messages as J[]).map((m) => m.text), ["a", "b"]);
+  // One its station says is gone: so.
+  assert.equal(errors.get(2)?.code, "http_404");
+  assert.equal(v(values, 2), undefined);
+  core.close();
+});
+
 test("a_thread_its_station_tells_the_summary_of_is_not_read_again", async () => {
   const { host, core, push, read } = await ui({ ...base(), "GET /threads": [threadView(7, 3)], "GET /threads/7/entries?limit=50": { last: 3, entries: entries(1, 3) } });
   await read();
