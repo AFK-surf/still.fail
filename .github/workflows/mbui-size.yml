@@ -47,8 +47,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      # (the scripts as main has them now, not the measured commit's: one from before them had none, run 42573827310)
       - uses: actions/checkout@v5
-        with: { ref: "${{ needs.find.outputs.sha }}", sparse-checkout: apps/mbui/scripts }
+        with: { sparse-checkout: apps/mbui/scripts }
       - run: command -v brotli || (sudo apt-get update -q && sudo apt-get install -yq brotli)
       - if: needs.find.outputs.web == 'true'
         uses: actions/download-artifact@v4
@@ -77,7 +78,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ needs.find.outputs.sha }}
           sparse-checkout: |
             apps/mbui/scripts
             apps/mbui/mbui/scripts
