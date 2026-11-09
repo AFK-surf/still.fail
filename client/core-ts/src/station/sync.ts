@@ -1949,14 +1949,14 @@ export class StationsSync {
       // Of the chat list the station makes for everyone, once it is read: till then the rows held stand.
       if (link.sharedRows === null) return;
       const lang = current();
-      const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly") };
+      const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly"), admin: tr(lang, "station.author.admin") };
       return data.set({ topic: "chatRows", station: address }, rowsShared(link.sharedRows.values(), link.marks, me, words));
     }
     const sessions = data.shared({ topic: "sessions", station: address });
     const threads = data.shared({ topic: "threads", station: address });
     if (!Array.isArray(sessions) || !Array.isArray(threads)) return;
     const lang = current();
-    const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly") };
+    const words = { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly"), admin: tr(lang, "station.author.admin") };
     data.set({ topic: "chatRows", station: address }, rowsMade(sessions, threads, link.marks, me, words));
   }
 

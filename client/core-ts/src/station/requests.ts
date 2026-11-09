@@ -49,7 +49,9 @@ const within = <A, E, R>(work: Effect.Effect<A, E, R>, ms: number) => ms > 0
 export function httpError(status: number, data: unknown): CoreError {
   const e = get(data, "error");
   const code = get(data, "code");
-  return new CoreError(typeof code === "string" && /^[a-z][a-z0-9_]*$/.test(code) ? code : `http_${status}`, typeof e === "string" ? e : t("station.core.requestFailed", { status }), status);
+  // A refusal said by the key of its words (`station.files.notFound`…: station/src/read/sessions.ts) in this device's.
+  const said = typeof e === "string" ? (/^station\.[a-zA-Z]+\.[a-zA-Z.]+$/.test(e) ? t(e) : e) : t("station.core.requestFailed", { status });
+  return new CoreError(typeof code === "string" && /^[a-z][a-z0-9_]*$/.test(code) ? code : `http_${status}`, said, status);
 }
 
 export const failed = failedIn;

@@ -495,7 +495,6 @@
   "core-views.usage.prices.model_unpriced": "{model} (unpriced)",
   "core-views.usage.prices.offline": "Station offline; prices unavailable",
   "core-views.usage.prices.output": "Output",
-  "core-views.usage.prices.unit": "USD / 1M tokens",
   "core-views.usage.tile.same": "Flat",
   "core-views.usage.tile.versus": "vs previous {n} days",
   "core-views.usage.period": "Last {n} days",
