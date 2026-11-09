@@ -174,6 +174,8 @@ pub(all) struct Reading {
   answered : Map[String, String]
   /// each agent's last turn as last ticked (Agent.last_turn)
   last_turns : Map[String, String]
+  /// each agent at work, the last message here as it was first seen at work: what of its own comes past it is its answer
+  turn_from : Map[String, Double]
   /// a message gone to (a notification's) and how lit it is (flash_of)
   mut flash : String
   flash_lit : @motion.Anim
@@ -288,6 +290,7 @@ pub fn reading_of(key : String) -> Reading {
         running: {},
         answered: {},
         last_turns: {},
+        turn_from: {},
         flash: "",
         flash_lit: @motion.Anim::new(0.0),
         flash_n: 0,
@@ -627,6 +630,10 @@ pub(all) struct Lingering {
   /// there taking no room and unseen, its activity read as a seen one's is (its answer, if any, out of where its avatar
   /// would be): never coming in and going a moment after (the list down and up again)
   unseen : Bool
+  /// the answer its turn is about, told over before that answer came (by its seq; -1 none): it stays till the answer
+  /// comes and leaves its avatar, the two changing places on the list's one way, not its room closed alone and the
+  /// answer's opened a moment after (the list down and up again: 2026-11-09 the user, 「现在发个消息都抖了」「偶现」)
+  mut awaits : Double
 }
 
 ///|
@@ -734,10 +741,23 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
   // its room alone and took the list back the other way from where what its turn said had just moved it (2026-11-09
   // the user, of an answer at once to a card picked: 「点一个决策后上下摇晃」; 「处理中」不再单独收一次).
   let keeps = emit_keeps(em)
+  // (the last message here, by seq: an answer past it is on its way)
+  let here = v.messages.iter().fold(init=-1.0, fn(m, x) { if x.seq > m { x.seq } else { m } })
+  let on_its_way = fn(a : Agent) {
+    match a.about {
+      Some(seq) if seq > here && !v.newer => seq
+      _ => -1.0
+    }
+  }
   for k, a in rd.running {
-    if !running.contains(k) && !rd.linger.contains(k) && keeps.contains(k) {
-      rd.linger[k] = { agent: a, once: false, unseen: false }
-      linger_told(rd)
+    if !running.contains(k) && !rd.linger.contains(k) {
+      // (as it was told over: its own about, the summary read now)
+      let now = v.agents.iter().find_first(fn(b) { b.key == k }).unwrap_or(a)
+      let awaits = on_its_way(now)
+      if keeps.contains(k) || awaits >= 0.0 {
+        rd.linger[k] = { agent: a, once: false, unseen: false, awaits }
+        linger_told(rd)
+      }
     }
   }
   // a turn begun and over between two ticks, its agent never seen running, as if it had been, for that tick (and on
@@ -751,7 +771,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
           !running.contains(a.key) &&
           !rd.running.contains(a.key) &&
           !rd.linger.contains(a.key) => {
-          rd.linger[a.key] = { agent: a, once: true, unseen: true }
+          rd.linger[a.key] = { agent: a, once: true, unseen: true, awaits: -1.0 }
           linger_told(rd)
         }
         _ => ()
@@ -771,6 +791,29 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
       linger_told(rd)
     }
     _ => ()
+  }
+  // its answer come in with no avatar to come out of (the list not followed at its end as it came, say, a moment after
+  // the words sent: emit_take): its line goes as that answer's room opens, the same, not closed alone as its turn ends
+  // (2026-11-09 the user, 「现在发个消息都抖了」)
+  for k, a in running {
+    if !rd.turn_from.contains(k) {
+      rd.turn_from[k] = here
+    }
+    if rd.answered.contains(k) || keeps.contains(k) {
+      continue
+    }
+    let from = rd.turn_from[k]
+    let came = v.messages.iter().any(fn(m) {
+      m.seq > from && m.author_kind == "agent" && m.by.agent == k && !m.mine && !m.system && !emit_goes(em, m.seq)
+    })
+    if came {
+      rd.answered[k] = a.last_turn
+      linger_told(rd)
+    }
+  }
+  let gone_by = rd.turn_from.keys().filter(fn(k) { !running.contains(k) }).collect()
+  for k in gone_by {
+    rd.turn_from.remove(k)
   }
   // (its turn over, or over and another begun between two ticks: its line back for the next)
   let done = rd.answered
@@ -799,7 +842,11 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
       l.once = false
       continue
     }
-    if running.contains(k) || !keeps.contains(k) {
+    // (its answer come since: from here on it goes as that answer leaves its avatar, as any)
+    if l.awaits >= 0.0 && l.awaits <= here {
+      l.awaits = -1.0
+    }
+    if running.contains(k) || (!keeps.contains(k) && l.awaits < 0.0) {
       over.push(k)
     }
   }

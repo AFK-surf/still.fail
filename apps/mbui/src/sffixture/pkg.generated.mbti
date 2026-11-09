@@ -195,6 +195,7 @@ pub let fix_outside : Array[(String, String, Bool)]
 
 pub fn fix_own(Array[Json]) -> Array[Json]
 
+pub let fix_pace : @ref.Ref[(Double, Double, Double)]
 pub let fix_phone : @ref.Ref[String]
 
 pub let fix_phone_link : @ref.Ref[String]
@@ -606,6 +607,8 @@ pub(all) struct FixChat {
   outbox : Array[Json]
   mut working : Double
   line : @ref.Ref[Int32]
+  mut turns : Int32
+  mut about : Int32
 }
 
 pub(all) struct FixDownload {

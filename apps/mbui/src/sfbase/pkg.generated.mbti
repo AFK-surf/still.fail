@@ -1952,6 +1952,7 @@ pub(all) struct Agent {
   wait : (Double, Double?, String)?
   started : Bool
   last_turn : String
+  about : Double?
 }
 
 pub(all) struct App {
@@ -2526,6 +2527,7 @@ pub(all) struct Lingering {
   agent : Agent
   mut once : Bool
   unseen : Bool
+  mut awaits : Double
 }
 
 pub(all) struct LinkMark {
@@ -3023,6 +3025,7 @@ pub(all) struct Reading {
   running : Map[String, Agent]
   answered : Map[String, String]
   last_turns : Map[String, String]
+  turn_from : Map[String, Double]
   mut flash : String
   flash_lit : @motion.Anim
   mut flash_n : Int32

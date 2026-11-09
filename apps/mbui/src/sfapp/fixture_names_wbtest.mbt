@@ -22,6 +22,7 @@ using @sffixture {
   fix_history,
   fix_later,
   fix_letters,
+  fix_pace,
   fix_places,
   fix_preview,
   fix_preview_viz,
