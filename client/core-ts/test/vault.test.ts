@@ -1140,6 +1140,47 @@ test("a device taken out of the lock and put back in as the vault is keyed anew 
   r.core.close();
 });
 
+test("a version keyed for this device told before the lock that lets it in again: taken as that lock comes", async () => {
+  // A device taken out of the lock and let in again: the owner's device gave it the key in a version the station told
+  // it before this device had read the lock with itself in it, and that version, not taken by the lock then, was let
+  // go; nothing told it again, and the device went without the key until it was started anew (the locks' end to end,
+  // round 3, 2026-11-10).
+  const r = await rig();
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  const mine = r.st.boxes.get("ab".repeat(32))!;
+  const otherBox = fill(9);
+  const otherCert = sign({ v: 1 as const, ws: "ws", device: r.other.hex, box: boxPublic(otherBox), at: 2000 }, TAG.box, r.other);
+  r.st.boxes.set(r.other.hex, otherCert);
+  r.push("vault-box", otherCert);
+  // s2's vault, this person in it, keyed for s2's device alone so far.
+  const id = "v_01M4871X3MTC0903ZX5CPB8JH8";
+  const key = fill(11);
+  const seal = (c: typeof mine, n: number) => ({ cert: c, wrapped: sealWith(c.box, key, keyContext("ws", id, 0), fill(n)) });
+  const v0 = sign({ v: 1 as const, ws: "ws", id, seq: 0, owner: "s2", name: "Team", members: ["s2", "s1"], epoch: 0, keys: [seal(otherCert, 12)], at: 2000 }, TAG.vault, r.other);
+  r.st.vaults.set(id, v0);
+  r.push("vault", v0);
+  await r.host.time.pass(200);
+  const team = () => vaults().vaults.find((v: any) => v.id === id);
+  assert.equal(team()?.keyed, false);
+  // This device taken out of the lock (by the phone, the person's other device), as it is here.
+  stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock") ? r.lock : r.st.reply(req)));
+  grow(r, "device.remove", { id: "ab".repeat(32) }, r.phone);
+  await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+  await r.host.time.pass(200);
+  // Let in again: the version keyed for it told first, then the lock with it in it.
+  const v1 = sign({ v: 1 as const, ws: "ws", id, seq: 1, owner: "s2", name: "Team", members: ["s2", "s1"], epoch: 0, keys: [seal(otherCert, 12), seal(mine, 13)], at: 2001 }, TAG.vault, r.other);
+  r.st.vaults.set(id, v1);
+  r.push("vault", v1);
+  await r.host.time.pass(200);
+  grow(r, "device", { id: "ab".repeat(32), sub: "s1", kind: "app", label: "this", sign_key: r.me.signer!.id }, r.phone);
+  await r.core.inner.runner.run(readLock(r.core.inner, "ws"));
+  await r.host.time.pass(500, 10);
+  assert.equal(team()?.keyed, true, `keyed for this device: ${JSON.stringify(team())}`);
+  r.core.close();
+});
+
 test("certificates coming one upon another while a key is being given: given in turn, the key sealed to the last one's box key in the end", async () => {
   // A certificate heard while the vault's next version was being written for the one before was dropped, and only
   // the next event brought it (review of #3624): now each giving waits for the one under way, and reads anew.
