@@ -37,9 +37,12 @@ test "history reminder keeps its label on one line beside a long note and opens 
       assert_true(line_x >= title_x + title_w, msg=at)
       assert_true(t.rect_of(note) is None, msg=at)
       t.tap_text(title)
+      // (its room opened on its way: reveal_node)
+      t.run_for(@ui.move_most_ms)
       assert_true(t.rect_of(note) is Some(_), msg="\{at}: whole reminder did not open")
       assert_true(t.rect_of(title).unwrap().3 <= 20.0, msg=at)
       t.tap_text(title)
+      t.run_for(@ui.move_most_ms)
       assert_true(t.rect_of(note) is None, msg="\{at}: reminder did not close")
     }
   }

@@ -181,15 +181,18 @@ test "the desk's history beside a chat: a group opens to its steps, a step to it
   let t = decide_core(calls, "chat-history-side", wide=true)
   assert_true(t.find("moon test -p ui -f list_test.mbt") is None)
   t.tap_text("读了 src/ui/list.mbt 等 2 个文件，跑了测试")
+  // (the group's room opened on its steps)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("跑一遍列表的测试")
-  // what the core made of the call and what came back (history.tool, answered as it was asked after that frame): the
-  // next frame shows the command, its timeout, its output
-  t.frame()
+  // what the core made of the call and what came back (history.tool, answered as it was asked after that frame), its
+  // room opened on its way (reveal_node): the command, its timeout, its output
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("moon test -p ui -f list_test.mbt") is Some(_))
   assert_true(t.find("120000") is Some(_))
   assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is Some(_))
-  // a step closed again
+  // a step closed again, its room closed on its way
   t.tap_text("跑一遍列表的测试")
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is None)
 }
 
