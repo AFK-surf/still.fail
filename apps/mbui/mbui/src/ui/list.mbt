@@ -454,6 +454,7 @@ pub fn Ctx::list(
         built: -1,
         stepped: -1,
         fresh: true,
+        on_pixels_by: 0.0,
         rows_read: false,
         island: 0,
         glide_shows: false,
@@ -1009,7 +1010,7 @@ fn Ctx::place_list(
     }
   }
   // set on the device's pixels (where the list stands said above, as they are laid)
-  self.rows_on_pixels(order)
+  self.rows_on_pixels(st, order)
   self.stick_in(li, order, iy)
   self.list_finds_field(st, order, iy)
   if was_position != (st.anchor, st.anchor_off, st.over_offset()) {
@@ -1143,16 +1144,49 @@ fn Ctx::row_slot(self : Ctx, r : Int, h : Double) -> Double {
 /// the list stands at its end and what is under its rows grows (words sent flying in, an agent's line coming), the
 /// keyboard comes, an end stops it, it is said from another row. On the pixels, all of a row moves as one, by whole
 /// pixels, and a row kept is moved as its laying out there would move it (kept_nodes.mbt).
-fn Ctx::rows_on_pixels(self : Ctx, order : Array[Int]) -> Unit {
+fn Ctx::rows_on_pixels(self : Ctx, st : ListState, order : Array[Int]) -> Unit {
+  st.on_pixels_by = 0.0
   if !self.rows_on_grid() || order.length() == 0 {
     return
   }
   let y = self.nodes[order[0]].y
   let by = on_pixels(y, self.scale) - y
+  st.on_pixels_by = by
   if by != 0.0 {
     for r in order {
       self.shift(r, by)
     }
+  }
+}
+
+///|
+/// Each list in node `i` (it and what it holds) with its rows set on the device's pixels again, as laying it out where
+/// it is now would set them (Ctx::rows_on_pixels): `i` carried a share of a pixel to where it is drawn as the frame is
+/// painted (Ctx::moved_place, an old view's box: Ctx::moved_carries), its rows moved with it from where they were set.
+fn Ctx::rows_carried(self : Ctx, i : Int) -> Unit {
+  let n = self.nodes[i]
+  if n.kind == kind_list && n.first >= 0 {
+    match self.lists.get(n.id) {
+      Some(st) => {
+        let y = self.nodes[n.first].y - st.on_pixels_by
+        let by = on_pixels(y, self.scale) - y
+        let d = by - st.on_pixels_by
+        st.on_pixels_by = by
+        if d != 0.0 {
+          let mut r = n.first
+          while r >= 0 {
+            self.shift(r, d)
+            r = self.nodes[r].next
+          }
+        }
+      }
+      None => ()
+    }
+  }
+  let mut c = n.first
+  while c >= 0 {
+    self.rows_carried(c)
+    c = self.nodes[c].next
   }
 }
 

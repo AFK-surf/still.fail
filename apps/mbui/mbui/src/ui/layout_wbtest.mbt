@@ -810,6 +810,7 @@ test "a list's running sums are its rows' heights added up" {
     built: -1,
     stepped: -1,
     fresh: true,
+    on_pixels_by: 0.0,
     rows_read: false,
     island: 0,
     glide_shows: false,

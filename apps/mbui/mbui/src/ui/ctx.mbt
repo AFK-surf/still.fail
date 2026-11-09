@@ -74,6 +74,10 @@ struct ListState {
   /// whether what built it last may have built its rows otherwise (the frame built anew, or the part it is in built
   /// for what it read: kept_nodes.mbt): its rows built again, none kept
   mut fresh : Bool
+  /// how far its rows were moved onto the device's pixels as they were last set there (Ctx::rows_on_pixels): where
+  /// they would be off them is where they are less that, set there again as what holds the list carries it
+  /// (Ctx::rows_carried)
+  mut on_pixels_by : Double
   /// whether its rows show only what they read (Ctx::list's `rows_read`): kept as what builds it is built again,
   /// built again only where what they read changed
   mut rows_read : Bool
