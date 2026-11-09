@@ -290,6 +290,9 @@ jobs:
         fps: ["120", "60", "24", "7"]
     env:
       MBUI_TEST_FPS: ${{ matrix.fps }}
+      FPS: ${{ matrix.fps }}
+      MBUI_TEST_MOTION: ${{ (matrix.fps == '120' || matrix.fps == '60') && 'count' || '' }}
+      MOTION_OUT: ${{ github.workspace }}/motion.txt
     steps:
       - uses: actions/checkout@v5
         with: { ref: "${{ github.event.workflow_run.head_sha || github.sha }}" }
@@ -302,6 +305,16 @@ jobs:
           TESTEXE="$RUNNER_TEMP/replay-test/testexe" \
           REPLAY_EXE="$RUNNER_TEMP/replay-test/flows.blackbox_test.exe" REPLAY_INFO="$RUNNER_TEMP/replay-test/__blackbox_test_info.json" \
             TIMES=1 TARGETS=native PARTS=replay LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+      # (what the run counted of how what moves goes, MBUI_TEST_MOTION=count: in the summary, and whole as an artifact)
+      - name: How what moves goes
+        if: always() && env.MBUI_TEST_MOTION == 'count'
+        run: |
+          bash apps/mbui/mbui/scripts/motion_said.sh "$MOTION_OUT" "how what moves goes at $FPS fps" >> "$GITHUB_STEP_SUMMARY"
+          echo "MOTION_NAME=motion-replay-$FPS" >> "$GITHUB_ENV"
+          touch "$MOTION_OUT"
+      - if: always() && env.MBUI_TEST_MOTION == 'count'
+        uses: actions/upload-artifact@v4
+        with: { name: "${{ env.MOTION_NAME }}", path: "${{ env.MOTION_OUT }}", retention-days: 7 }
       - name: What failed
         if: failure()
         run: |
@@ -330,7 +343,10 @@ jobs:
           # its time spread over many files' frames at 120, no one test's to take out)
           - { group: 2/4, fps: "120", part: 1/2 }
           - { group: 2/4, fps: "120", part: 2/2 }
-          - { group: 3/4, fps: "120" }
+          # (the third's pages at 120 in two halves, how what moves goes counted on every frame too: stopped at its five
+          # minutes in one, 2026-11-10, 42649531176)
+          - { group: 3/4, fps: "120", part: 1/2 }
+          - { group: 3/4, fps: "120", part: 2/2 }
           # (the fourth's pages at 120 in two halves: 315 s and stopped at its five minutes in one, 2026-11-09)
           - { group: 4/4, fps: "120", part: 1/2 }
           - { group: 4/4, fps: "120", part: 2/2 }
