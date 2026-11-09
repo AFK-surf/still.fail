@@ -20,7 +20,9 @@ fn reader_layout_nodes(root : @view.View) -> Unit {
   root.show(fn() { open() && !small() }, fn(o) {
     let r = reading()
     let paper = fn() { reader_paper((viewer_host().reader_style)().paper) }
-    o.over(Is(true)) |> ignore
+    // The reader can itself be inside the viewer's modal layer. Its panel must take input above that layer, while
+    // presenters (whose serials start at 1) still open above the panel.
+    o.over(Is(true)).stacked(Is(0)) |> ignore
     o.box(fn(top) { top.height(By(fn() { Some(viewer_bar_under()) })) |> ignore }) |> ignore
     o.box(fn(row) {
       style_node(row, fn() { desk_panel_row })
@@ -100,7 +102,11 @@ fn reader_layout_nodes(root : @view.View) -> Unit {
       None => ()
     }
   }
-  sheet_node(root, fn() { open() && small() }, x, x.nodes.unwrap(), shut, shut, Unanchored)
+  root.box(fn(layer) {
+    layer.over(Is(true)).stacked(Is(0)) |> ignore
+    sheet_node(layer, fn() { open() && small() }, x, x.nodes.unwrap(), shut, shut, Unanchored)
+  })
+  |> ignore
 }
 
 ///|
