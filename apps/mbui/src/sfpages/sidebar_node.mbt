@@ -395,11 +395,15 @@ fn chats_pane_node(
     })
     |> ignore
   },
-    // (a chat's row, as it no more shows, taken by the next to come to show: its key that one's, not made and let go
-    // as the list is scrolled; one gone, as it was, not)
+    // (a chat's row, and a day's heading, as it no more shows, taken by the next of its kind to come to show: its key
+    // that one's, not made and let go as the list is scrolled; one gone, as it was, not)
     reused=fn(k) {
-      if k.has_prefix("r/") && !k.contains(moved_mark) && motion.gone_item(k) is None {
+      if k.contains(moved_mark) {
+        None
+      } else if k.has_prefix("r/") && motion.gone_item(k) is None {
         Some(0)
+      } else if k.has_prefix("h/") {
+        Some(1)
       } else {
         None
       }
@@ -407,7 +411,12 @@ fn chats_pane_node(
     make_reused=fn(b, key) {
       b.box(fn(line) {
         @sf.style_node(line, fn() { @sf.list_line(frame.at) })
-        row_line(line, key)
+        if @signals.untracked(key).has_prefix("h/") {
+          motion.line_node(line, key)
+          @sf.list_heading_node(line, fn() { key().view(start_offset=2).to_owned() }, frame.at)
+        } else {
+          row_line(line, key)
+        }
       })
       |> ignore
     },
