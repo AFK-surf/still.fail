@@ -87,6 +87,14 @@ jobs:
     # mbui/hostapi), so it builds anywhere
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    name: native${{ matrix.fps && format(' at {0} fps', matrix.fps) || '' }}
+    # (and the same tests again with frames drawn on run_for's way while the app asks for them (scripts/fps_check.sh),
+    # at 120, at 60, and at 24 then 7, a runner each beside it: what a test asserts at a moment the same however many
+    # frames came before it)
+    strategy:
+      fail-fast: false
+      matrix:
+        fps: ["", "120", "60", "24 7"]
     # (what it builds kept between runs, as mbui-check's native job keeps the app's: moon's own build (moonc's C) and the
     # units each test's C is split into, by content (MBC_STORE: main's newest and a branch's own together). Without,
     # every run compiled all of mbui's C again: a change to ui 154 units of ui's blackbox tests and 230 of its whitebox
@@ -146,11 +154,7 @@ jobs:
         shell: bash scripts/offline.sh {0}
         run: |
           touch "$RUNNER_TEMP/start"
-          scripts/test_native.sh
-      # (scripts/fps_check.sh, the same tests at other frame rates, is not run here till the old view's lists (Ctx::list)
-      # are the window's tree's (View::each): theirs add each frame's scroll on, a fling's rest a rounding apart at
-      # another rate (let_go_test), the user, 2026-11-09. Read the rate from the process at last, it held nothing before:
-      # every rate went straight to its ends)
+          if [ -z "${{ matrix.fps }}" ]; then scripts/test_native.sh; else FPS="${{ matrix.fps }}" bash scripts/fps_check.sh; fi
       # (the units this run used, older ones gone (only after a run that went through: one stopped early used few), kept
       # under a key by what they are: main's, and a branch's for its next push)
       - name: The units kept

@@ -112,6 +112,9 @@ struct ListState {
   mut fling_dist : Double
   mut fling_dur : Double
   mut fling_done : Double
+  /// where the fling set out from (anchor, its offset, what was still to scroll), as its laid rows had it: each frame
+  /// placed from there as far on as it has come, not each frame's step added on (Ctx::step_scroll)
+  mut fling_from : (Int, Double, Double)?
   // what a finger scrolled since the last layout, and whether one drags it
   mut drag_pending : Double
   mut held : Bool

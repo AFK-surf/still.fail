@@ -828,6 +828,7 @@ test "a list's running sums are its rows' heights added up" {
     fling_dist: 0.0,
     fling_dur: 0.0,
     fling_done: 0.0,
+    fling_from: None,
     drag_pending: 0.0,
     held: false,
     over: 0.0,
