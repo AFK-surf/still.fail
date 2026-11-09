@@ -96,7 +96,7 @@ pub fn open_cards_fixture(mode : String) -> Unit {
 pub fn open_fixture(mode : String) -> Unit {
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   match mode {
-    "history" | "history-reading" | "history-details" => {
+    "history" | "history-reading" | "history-failed" | "history-older" | "history-older-failed" | "history-details" => {
       app.nav.push(Chat(r))
       app.nav.push(History(r, "s-c1", None))
       if mode == "history-details" {

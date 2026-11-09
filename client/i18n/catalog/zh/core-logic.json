@@ -294,6 +294,7 @@
   "core-logic.history.did.thread": "读取 thread {n} 次",
   "core-logic.history.did.web": "访问 {n} 个网页",
   "core-logic.history.edge.earlier": "正在读取更早的执行历史",
+  "core-logic.history.edge.earlier_failed": "读取更早的执行历史失败：{why}，稍后重试",
   "core-logic.history.edge.loading": "正在读取执行历史",
   "core-logic.history.edge.missing": "找不到运行时记录，可能已归档",
   "core-logic.history.edge.not_started": "运行时尚未开始此会话",

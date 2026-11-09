@@ -1185,6 +1185,9 @@ export const SHAPES: Record<string, Shape> = {
     ["rate", opt("i64"), { client: opt("I54") }],
     ["activity", opt("Activity")],
     ["offline", opt("bool"), { doc: "Its station is offline: this is what was kept." }],
+    ["failed", opt("String"), { doc: "Not loaded and its read failed: why (it is read again while shown)." }],
+    ["older", opt("String"), { doc: "The page before what it shows: reading | failed." }],
+    ["olderFailed", opt("String"), { doc: "Why the page before was not read." }],
   ], { doc: "A session as it runs: its transcript (its latest entries once `loaded`, from entry `first`; `history.older` loads\nthose before), the model's use, the steps in flight, where the turn stands, how fast it writes, and its activity." }),
   Me: struct([
     ["id", opt("String")],
@@ -3857,6 +3860,8 @@ export const SHAPES: Record<string, Shape> = {
     ["empty", "bool"],
     ["loaded", "bool"],
     ["more", opt("bool"), { doc: "Older entries exist: `history.older` loads the page before them." }],
+    ["failed", opt("String"), { doc: "Nothing shown yet and its read failed: why (it is read again meanwhile)." }],
+    ["older", opt("String"), { doc: "The page before: reading | failed (asked for again a while after, `edge` saying why). Absent:\nnone asked for now, `history.older` asks." }],
   ], { doc: "An agent's execution history, read for people (history.ts)." }),
   FootprintView: struct([
     ["measured", "bool", { doc: "Measured at least once: before, the page says it is being measured." }],

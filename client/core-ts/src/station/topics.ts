@@ -17,7 +17,7 @@ import { equal, get, isObject, parseJson } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { StationAddr } from "./addr.ts";
 import { PAGE, TRANSCRIPT_PAGE, entriesOf, lettersOf, transcriptOf } from "./channel-kinds.ts";
-import { type StationsSync, stepShown } from "./sync.ts";
+import { type StationsSync, retryAfter, stepShown } from "./sync.ts";
 import type { LinkNet } from "./wire.ts";
 import { screenCard, screensChanged, screensView } from "../screens.ts";
 import { down, downWords, isLetter, members } from "../views/views.ts";
@@ -66,6 +66,9 @@ export class StationTopics implements Owner {
   readonly #windows = new Map<string, Window>();
   /// Each live topic's first item shown (history.older moves it back).
   readonly #firsts = new Map<string, number>();
+  /// Each live topic's page before what it shows, while it is read or after its read failed (why, and how many times in a
+  /// row): asked for once at a time, and not again till a while after a failure, the history saying which.
+  readonly #olders = new Map<string, { reading: boolean; failed: string | null; misses: number }>();
   /// Each open `letters` topic: how far its chat went when all of it was last asked for.
   readonly #wholes = new Map<string, number>();
   /// Where chats were left (`chat.place`), as told this run or read from the database.
@@ -207,6 +210,7 @@ export class StationTopics implements Owner {
     this.#core.scheduler.prioritize(key, null);
     this.#windows.delete(key);
     this.#firsts.delete(key);
+    this.#olders.delete(key);
     const sampler = this.#samplers.get(key);
     if (sampler) {
       this.#core.runner.interrupt(sampler as Fiber.Fiber<unknown, unknown>);
@@ -407,6 +411,11 @@ export class StationTopics implements Owner {
       steps: (view?.steps ?? []).filter((step) => stepShown(step, end)),
       phase: view?.phase ?? null,
     };
+    // Not read: why, while nothing shows (it is read again meanwhile); the page before, being read or why it was not.
+    if (view?.failed !== undefined && !view.loaded) value.failed = view.failed;
+    const older = this.#olders.get(tk);
+    if (older?.reading) value.older = "reading";
+    else if (older?.failed) Object.assign(value, { older: "failed", olderFailed: older.failed });
     if (view?.rate !== null && view?.rate !== undefined) value.rate = view.rate;
     if (view?.tasks) value.tasks = view.tasks;
     if (view?.plan) value.plan = view.plan;
@@ -421,25 +430,55 @@ export class StationTopics implements Owner {
     return { ok: value };
   }
 
-  /// The page of a transcript before what a `live` topic shows, into it: from what is held, else read now.
+  /// The page of a transcript before what a `live` topic shows, into it: from what is held, else read now. One at a time
+  /// (asked again while it is read: nothing more); one that fails is said on the topic (`older`), and not asked for
+  /// again till a while after (less often each time it fails in a row), when the UI asks again if it is still near
+  /// the top. Whether there are pages before it still.
   historyOlder(station: string, key: string): Effect.Effect<boolean, CoreError> {
-    return Effect.gen({ self: this }, function* () {
-      const topic: Topic = { topic: "live", station, key };
-      const tk = topicKey(topic);
+    const topic: Topic = { topic: "live", station, key };
+    const tk = topicKey(topic);
+    return Effect.suspend(() => this.#older(station, key, topic, tk));
+  }
+
+  #older(station: string, key: string, topic: Topic, tk: string): Effect.Effect<boolean, CoreError> {
+    const state = this.#olders.get(tk) ?? { reading: false, failed: null, misses: 0 };
+    if (state.reading || state.failed !== null) return Effect.succeed(true);
+    const said = (next: typeof state | null) => {
+      if (next === null) this.#olders.delete(tk);
+      else this.#olders.set(tk, next);
+      this.#core.store.invalidate(topic);
+    };
+    const work = Effect.gen({ self: this }, function* () {
       const before = this.#firsts.get(tk);
       if (before === undefined || before === 0) return false;
       const data = this.#core.data;
       const from = Math.max(0, before - TRANSCRIPT_PAGE);
-      // Read now unless held, while its station is reached (else what is held is all there is).
-      if (this.#sync.link(station) && this.#sync.reachable(station)) yield* this.#sync.channels.older(transcriptOf(station, key), before, { quiet: false });
-      const items = data.logRange("transcript", station, key, from, before - 1);
-      if (!items.has(before - 1)) return false;
+      const held = () => data.logRange("transcript", station, key, from, before - 1);
+      // Read now unless held; its station not reached and it not held: not had now.
+      if (!held().has(before - 1)) {
+        if (!this.#sync.link(station) || !this.#sync.reachable(station)) return yield* Effect.fail(new CoreError("offline", downWords(this.#sync.link(station)?.state ?? { state: "offline" }, this.#core.views.stationName(station))));
+        yield* this.#sync.channels.older(transcriptOf(station, key), before, { quiet: false });
+      }
+      const items = held();
       let first = before;
       while (first > from && items.has(first - 1)) first--;
       this.#firsts.set(tk, first);
-      this.#core.store.invalidate(topic);
       return first > 0;
     });
+    said({ ...state, reading: true });
+    return work.pipe(
+      Effect.tap(() => Effect.sync(() => said(null))),
+      Effect.tapError((e) => Effect.sync(() => {
+        if (!this.#core.store.inUse(topic)) return void this.#olders.delete(tk);
+        said({ reading: false, failed: e.message, misses: state.misses + 1 });
+        // timer: retry after a failure, with a backoff
+        this.#core.runner.fork(Effect.sleep(retryAfter(state.misses)).pipe(Effect.andThen(Effect.sync(() => {
+          const now = this.#olders.get(tk);
+          if (now?.failed) said({ ...now, failed: null });
+        }))));
+      })),
+      Effect.onInterrupt(() => Effect.sync(() => said(null))),
+    );
   }
 
   /// A history's entries `from` to `to` whole (`history.detail`), for what it shows of them in brief: read behind what is
