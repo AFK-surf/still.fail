@@ -214,9 +214,9 @@ fn bench_frame_ends() -> Unit {
 /// script's step `log measure` on (what comes before it, the app opening, not measured), whether one was drawn there.
 /// `around` told as each measured frame drawn begins (false) and as the app has drawn it (true: the Tester's own
 /// checks of it after, which a device runs not), with the display's frame it is at: what counts a frame's work from
-/// outside (mbui/film's mark, a profiled run's). Its frames keep not who drew each thing, as a device's (the
-/// Tester's words-over check, words_over.mbt, finds nothing in them). Until the script ends or `max` of the display's
-/// frames went by. What the Tester logged.
+/// outside (mbui/film's mark, a profiled run's). Its frames keep not who drew each thing nor the lines of words drawn,
+/// as a device's (the Tester's words-over check, words_over.mbt, finds nothing in them; Tester::text_runs none). Until
+/// the script ends or `max` of the display's frames went by. What the Tester logged.
 pub fn Tester::bench(
   self : Tester,
   script : String,
@@ -232,6 +232,11 @@ pub fn Tester::bench(
   let tracked = inst_owners.track
   inst_owners.track = false
   inst_owners_clear()
+  // (nor the lines of words drawn, as a device keeps them not: Tester::text_runs's, each line of words noted as it is
+  // drawn and copied as a list's rows are kept again)
+  let runs = text_runs.on
+  text_runs.on = false
+  text_runs.runs.clear()
   drive_start(script, "")
   let step = 1000.0 / fps
   let mut tick = self.fake.time
@@ -263,6 +268,7 @@ pub fn Tester::bench(
   }
   bench_measuring.val = false
   inst_owners.track = tracked
+  text_runs.on = runs
   self.fake.logs.copy()
 }
 
