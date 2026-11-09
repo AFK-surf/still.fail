@@ -165,7 +165,8 @@ priv struct NodesRun {
   /// Tester::rows_read_built)
   mut built_read : Int
   kept_at : Array[(Int, Int)]
-  /// the rows and parts this frame built, as kept_at (not those a build keeping none built: Tester::rows_built)
+  /// the rows and parts the frames built since a test last took them, as kept_at (not those a build keeping none built:
+  /// Tester::rows_built)
   built_at : Array[(Int, Int)]
   mut on : Bool
 }
@@ -482,7 +483,6 @@ fn rows_frame_start() -> Unit {
   nodes_run.kept = 0
   nodes_run.built = 0
   nodes_run.kept_at.clear()
-  nodes_run.built_at.clear()
 }
 
 ///|
@@ -1325,11 +1325,13 @@ fn Ctx::held_by(self : Ctx, outer : RowNodes?, rn : RowNodes) -> Unit {
 }
 
 ///|
-/// The rows (their list and item) and the parts (their id, -1) the last frame built, not kept (a test's): none of
-/// those a build keeping none built to compare with.
+/// The rows (their list and item) and the parts (their id, -1) the frames built, not kept, since this was last asked
+/// (a test's), each time one was: none of those a build keeping none built to compare with.
 pub fn Tester::rows_built(self : Tester) -> Array[(Int, Int)] {
   ignore(self)
-  nodes_run.built_at.copy()
+  let out = nodes_run.built_at.copy()
+  nodes_run.built_at.clear()
+  out
 }
 
 ///|
