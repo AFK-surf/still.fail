@@ -140,6 +140,11 @@ export type DeliveryCardState = {
   ended: Pick<MessageRow, "author" | "ts">; card: Json; current: Pick<MessageRow, "ts"> | null;
 };
 
+/// What a person chose on a card with an option that closes it, which sent no message (store.ts closeCard): the card's
+/// post (`thread`, `n`, its `ts`; `where`: the thread's channel and thread ts, `question`: its words, each while still
+/// there), who chose (`by`), the option's label and when.
+export type CardChoice = { thread: number; n: number; ts: string | null; where: [string, string] | null; question: string | null; by: string; option: string; at: number };
+
 /// A card someone answered (`answersSince`).
 export type CardAnswer = { question: MessageRow; card: Json; by: string; at: number; answer: MessageRow | null };
 

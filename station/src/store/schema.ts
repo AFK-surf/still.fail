@@ -300,6 +300,21 @@ CREATE TABLE IF NOT EXISTS closed_cards (
   at INTEGER NOT NULL,
   PRIMARY KEY (thread, n)
 );
+-- What a person chose on a card with an option that closes it (closeCard): no message is sent and its agent is not
+-- woken, so the agent (session, the card's author) is told with what it is next handed (told_at). Kept after, for
+-- chat_history. ts: the card's post.
+CREATE TABLE IF NOT EXISTS card_choices (
+  thread INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  session TEXT NOT NULL,
+  ts TEXT,
+  viewer TEXT NOT NULL,
+  option TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  told_at INTEGER,
+  PRIMARY KEY (thread, n)
+);
+CREATE INDEX IF NOT EXISTS card_choices_untold ON card_choices (session, at) WHERE told_at IS NULL;
 -- What the agents spent (store/usage.rs): one row per model call their runtimes recorded, read from the transcripts,
 -- with whom and what it was for as it was then. Kept when its session goes: it was spent all the same. The one record
 -- of it: a chat's usage and the usage page are both added up from here (usage/module.ts, read/usage.ts). calls: how

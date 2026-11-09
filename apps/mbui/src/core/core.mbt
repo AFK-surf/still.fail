@@ -360,21 +360,26 @@ pub fn perf_said(span : Double) -> String {
 /// (@ui.on_message_said, "core"). Whether it was; else it is left for `receive`, as the frame is built.
 pub fn receive_said(text : String, bytes : Bytes?) -> Bool {
   let t0 = if perf_counts() { ffi_now() } else { -1.0 }
-  let msg = @json.parse(text) catch { _ => return false }
-  match msg {
-    Object(m) if !m.contains("mbui_auth") &&
-      !m.contains("clocked") &&
-      (client.topic_said(m) || client.call_said(m)) => {
-      let what = client.perf_name(msg)
-      // (how long it took, by what it was, for a hang it is in: @hostapi.work_part)
-      @hostapi.work_part(fn() { "core " + what }, fn() { take(msg, bytes) })
-      if t0 >= 0.0 {
-        perf_in(what, text, bytes, ffi_now() - t0)
+  // (how long it took, parsed and taken, by what it was, for a hang it is in: @hostapi.work_part; one left for
+  // `receive` is said parsed, as its parse is done again there)
+  let name = Ref("parsed")
+  @hostapi.work_part(fn() { "core " + name.val }, fn() {
+    let msg = @json.parse(text) catch { _ => return false }
+    match msg {
+      Object(m) if !m.contains("mbui_auth") &&
+        !m.contains("clocked") &&
+        (client.topic_said(m) || client.call_said(m)) => {
+        let what = client.perf_name(msg)
+        name.val = what
+        take(msg, bytes)
+        if t0 >= 0.0 {
+          perf_in(what, text, bytes, ffi_now() - t0)
+        }
+        true
       }
-      true
+      _ => false
     }
-    _ => false
-  }
+  })
 }
 
 ///|

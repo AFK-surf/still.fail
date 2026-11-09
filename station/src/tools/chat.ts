@@ -71,7 +71,7 @@ export const CHAT_POST = {
       },
       "card": {
         "type": "object",
-        "description": "What people answer this message with, shown in the chat and in their 待处理 until they look at it. {\"type\": \"options\", \"options\": [...]} offers 1 to 6 choices (recommend one if you can); the recommended one is shown last. Keep any choices listed in the message in the same order. {\"type\": \"text\", \"placeholder\": \"…\"} asks for a value or name. {\"type\": \"login\", \"login\": \"<id>\"} is for a login started by the login tool. An option with action=close ends the wait silently; other card answers reach you as a message quoting the question. Any later message from a person also closes the card, but can be a clarification rather than a decision: the station tells you which card ended. If the decision is still needed, ask it again with a new card. A newer card replaces the previous one. The card does not end your turn: record need_human (with need) when a person must decide.",
+        "description": "What people answer this message with, shown in the chat and in their 待处理 until they look at it. {\"type\": \"options\", \"options\": [...]} offers 1 to 6 choices (recommend one if you can); the recommended one is shown last. Keep any choices listed in the message in the same order. {\"type\": \"text\", \"placeholder\": \"…\"} asks for a value or name. {\"type\": \"login\", \"login\": \"<id>\"} is for a login started by the login tool. An option with action=close ends the wait silently (the choice is told to you with what you are next handed, as an earlier one); other card answers reach you as a message quoting the question. Any later message from a person also closes the card, but can be a clarification rather than a decision: the station tells you which card ended. If the decision is still needed, ask it again with a new card. A newer card replaces the previous one. The card does not end your turn: record need_human (with need) when a person must decide.",
         "properties": {
           "type": {
             "type": "string",
@@ -113,7 +113,7 @@ export const CHAT_POST = {
                     "reply",
                     "close"
                   ],
-                  "description": "Default reply sends the selected label to you. close ends this need_human without a message or waking you; use only when choosing it needs no further work (e.g. 不需要部署)."
+                  "description": "Default reply sends the selected label to you. close ends this need_human without a message or waking you: you are told the choice later, with what you are next handed, so use it only when choosing it needs no further work (e.g. 不需要部署)."
                 }
               },
               "required": [
@@ -160,7 +160,7 @@ export const CHAT_POST = {
                 "reply",
                 "close"
               ],
-              "description": "Default reply sends the selected label to you. close ends this need_human without a message or waking you; use only when choosing it needs no further work (e.g. 不需要部署)."
+              "description": "Default reply sends the selected label to you. close ends this need_human without a message or waking you: you are told the choice later, with what you are next handed, so use it only when choosing it needs no further work (e.g. 不需要部署)."
             }
           },
           "required": [
