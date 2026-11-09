@@ -31,8 +31,11 @@ yet and you can add one, add it.
   change (detlint `built-by-hand`).
 - Layout goes one way (the user, 2026-11-05): what is laid out is never told back as a change to make things by. What
   is made by the width a node is given, or by how tall something in it comes to, is made in `View::by_room`
-  (`src/view/room.mbt`) as that layout comes to it; what it would change outside its room is a fault. The read-backs
-  left (`View::laid_size_told`, `went_told`, `pointer_here_told`) are going and get no new reader.
+  (`src/view/room.mbt`) as that layout comes to it; what it would change outside its room is a fault. Nothing outside
+  the tree reads back what the layout came to (detlint `layout-told`, none left): how big a node was laid out is the
+  tree's own (`View::moved_by`, `Scroll::tucks`); an old view's build is given its node's room and side by its host
+  (`@ui.old_given`, `@ui.old_went`); which piece of a node the pointer is over is worked out by the tree as it places
+  things (`View::pointer_piece`).
 - `Ctx` is going: no new code is built on it. What is left is counted by detlint (`old-island`, `old-list`,
   `click-read`, `key-read`, `build-motion`, `layout-read-back`, `ui-current`, `build-clock`) and those counts only
   fall; an API goes from mbui once its count is none.

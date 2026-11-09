@@ -374,8 +374,9 @@ struct Node {
   mut pointed_in_cell : @signals.Signal[Bool]?
   /// whether the pointer is within it as it was last placed, made as first read (View::pointer_within)
   mut within_cell : @signals.Signal[Bool]?
-  /// where the pointer is in its own terms as it was last placed, made as first read (View::pointer_here_told)
-  mut here_cell : @signals.Signal[(Double, Double)?]?
+  /// which piece of it the pointer is over, by what says it from where the pointer is in its own terms, made as first read
+  /// (View::pointer_piece)
+  mut piece_cell : (@signals.Signal[Int], (Double, Double) -> Int)?
   /// how many times how its words are set was said (their words, pieces, look: View::words_said), made as first read
   mut said_cell : @signals.Signal[Int]?
   /// a row of a list made by its key (View::each): the same while its key is there, whatever is made in it anew
@@ -406,9 +407,6 @@ struct Node {
   /// how big it was laid out, told once all of the layout is done (View::laid_size_told: none till then); made as
   /// first read
   mut size_cell : @signals.Signal[(Double, Double)?]?
-  /// the side it went on beside its anchor, told once all of the layout is done (View::went_told: none till then); made
-  /// as first read
-  mut went_cell : @signals.Signal[Side?]?
   /// what it holds is found by a finger or the pointer within it alone (View::bounds_input)
   mut bounds_input : Bool
   /// what it and what it holds are drawn clear of the fading and stretching of (View::drawn_clear_of)
@@ -1299,7 +1297,7 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
       n.on_pointer_moved = None
       n.pointed_in_cell = None
       n.within_cell = None
-      n.here_cell = None
+      n.piece_cell = None
       n.said_cell = None
       n.each_row = false
       n.focusable = false
@@ -1313,7 +1311,6 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
       n.beside_point = None
       n.focused_cell = None
       n.size_cell = None
-      n.went_cell = None
       n.bounds_input = false
       n.drawn_clear = None
       n.bar_near = 0.0
@@ -1407,7 +1404,7 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
         on_pointer_moved: None,
         pointed_in_cell: None,
         within_cell: None,
-        here_cell: None,
+        piece_cell: None,
         said_cell: None,
         each_row: false,
         boxes_due: false,
@@ -1423,7 +1420,6 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
         tab_by_stop: false,
         focused_cell: None,
         size_cell: None,
-        went_cell: None,
         bounds_input: false,
         drawn_clear: None,
         bar_near: 0.0,
@@ -6109,7 +6105,6 @@ fn View::let_go(self : View) -> Unit {
   n.focused_cell = None
   n.focus_shown_cell = None
   n.size_cell = None
-  n.went_cell = None
   n.shows = None
   n.shows_across = false
   n.claims = None
@@ -7656,7 +7651,7 @@ fn Tree::sizes_told(self : Tree) -> Bool {
   @signals.start_batch()
   for at in self.sized {
     let n = self.nodes[at]
-    guard n.live && (n.size_cell is Some(_) || n.went_cell is Some(_)) else { continue }
+    guard n.live && n.size_cell is Some(_) else { continue }
     if !keep.contains(at) {
       keep.push(at)
       // (laid out nowhere, it or what holds it (View::laid_nowhere, left out of its row): no size of its own to tell
@@ -7673,15 +7668,6 @@ fn Tree::sizes_told(self : Tree) -> Bool {
             cell.set(size)
           }
         }
-        None => ()
-      }
-      // (and the side it went on beside its anchor, where that is followed: View::went_told)
-      match n.went_cell {
-        Some(cell) =>
-          if @signals.untracked(fn() { cell.get() }) != n.went {
-            told.val = true
-            cell.set(n.went)
-          }
         None => ()
       }
     }
@@ -7754,10 +7740,11 @@ fn Tree::shown_now(self : Tree) -> Unit {
 
 ///|
 /// How big it was laid out (its own terms: View::laid_size's), followed: told once all of the layout is done, as one
-/// change of all those followed (what holds a column that scrolls in it, how far it can go: View::scrolls); none till
-/// the first layout after it is first asked has been done (not measured yet: no size of nothing). Never a motion's
-/// target.
-pub fn View::laid_size_told(self : View) -> (Double, Double)? {
+/// change of all those followed; none till the first layout after it is first asked has been done (not measured yet:
+/// no size of nothing). The tree's own alone (what moves it by its size, View::moved_by; what is tucked over a column's
+/// top, Scroll::tucks): what is made is never made by what the layout came to, told back (what is made by its room is
+/// made in it, View::by_room). Never a motion's target.
+fn View::laid_size_told(self : View) -> (Double, Double)? {
   guard self.live() is Some(n) else { return None }
   let cell = match n.size_cell {
     Some(c) => c
@@ -9076,6 +9063,24 @@ fn Tree::projected(self : Tree, at : Int) -> (Double, Double, Double, Double) {
 }
 
 ///|
+/// The side the nearest that holds node `id` (it too) and goes beside another (View::beside) went on as it was placed
+/// now (the side it was said to go on, or the other where it had not the room): for what hosts an old view in the tree
+/// (@ui.old), which builds by where it is placed; none where nothing holding it goes beside another, or none was placed
+/// yet.
+pub fn Tree::went_over(self : Tree, id : NodeId) -> Side? {
+  guard self.alive_id(id) else { return None }
+  let mut i = id.at
+  while i >= 0 {
+    let n = self.nodes[i]
+    if n.beside is Some(_) {
+      return n.went
+    }
+    i = n.parent
+  }
+  None
+}
+
+///|
 /// Where node `id` is laid out in the window by its layout alone, as each_drawn_scaled goes down to it (a slot adds
 /// nothing of its own): each holder's place in what holds it as laid out, with no offset (View::offset, a page slid
 /// by its width), no scale, and none of what places one beside another (View::beside) — so what moves or fades it, or
@@ -9963,8 +9968,8 @@ pub fn View::pointer_within(self : View) -> Bool {
     None => {
       let s = @signals.signal(self.tree.within(self.at), same=fn(a, b) { a == b })
       n.within_cell = Some(s)
-      // (once for both it and where the pointer is in it: View::pointer_here_told)
-      if n.here_cell is None {
+      // (once for it and which piece of it the pointer is over: View::pointer_piece)
+      if n.piece_cell is None {
         self.tree.withins_at.push((self.at, n.gen))
       }
       s
@@ -10007,9 +10012,9 @@ fn Tree::withins_told(self : Tree) -> Bool {
       }
       None => ()
     }
-    match n.here_cell {
-      Some(cell) => {
-        let now = self.pointer_in(at)
+    match n.piece_cell {
+      Some((cell, piece)) => {
+        let now = self.piece_in(at, piece)
         if @signals.untracked(fn() { cell.get() }) != now {
           changed = true
           cell.set(now)
@@ -10017,7 +10022,7 @@ fn Tree::withins_told(self : Tree) -> Bool {
       }
       None => ()
     }
-    if n.within_cell is Some(_) || n.here_cell is Some(_) {
+    if n.within_cell is Some(_) || n.piece_cell is Some(_) {
       keep.push(w)
     }
   }

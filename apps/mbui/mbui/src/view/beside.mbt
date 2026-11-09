@@ -169,10 +169,7 @@ fn Tree::besides_placed(self : Tree) -> Unit {
   let state : Map[Int, Int] = {}
   fn refused(at : Int) -> Unit {
     state[at] = 3
-    // (on no side of anything: View::went_told says none)
-    if self.nodes[at].went is Some(_) {
-      self.sizes_due = true
-    }
+    // (on no side of anything)
     self.nodes[at].went = None
     // (where it is laid out, as if it went beside nothing: never where it went last)
     let n = self.nodes[at]
@@ -562,25 +559,4 @@ pub fn[T : Eq] View::keeps_width(
     })
   })
   self
-}
-
-///|
-/// The side of what it goes beside (View::beside) it went on (the side it was said to go on, or the other where it had
-/// not the room: place_beside's flip), followed: told once all of the layout is done, as the sizes followed are
-/// (View::laid_size_told), what reads it told again only as it goes to the other side; none till the first layout after
-/// it is first asked, or where it goes beside nothing.
-pub fn View::went_told(self : View) -> Side? {
-  guard self.live() is Some(n) else { return None }
-  let cell = match n.went_cell {
-    Some(c) => c
-    None => {
-      let c : @signals.Signal[Side?] = @signals.signal(None, same=fn(a, b) { a == b })
-      n.went_cell = Some(c)
-      self.tree.sized.push(self.at)
-      self.tree.sizes_due = true
-      self.tree.marked()
-      c
-    }
-  }
-  cell.get()
 }

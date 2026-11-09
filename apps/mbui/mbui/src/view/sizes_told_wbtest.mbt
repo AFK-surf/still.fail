@@ -5,7 +5,7 @@
 test "laid_size_told: a node made as another's size is told, its own size asked as it is made: told once it is laid out" {
   let wide = @signals.signal(100.0, same=fn(a, b) { a == b })
   let told : Ref[(Double, Double)?] = Ref(None)
-  let tree = @view.Tree::new(
+  let tree = Tree::new(
     fn(root) {
       root.box(fn(o) {
         o.width(Is(Some(300.0))).height(Is(Some(300.0))) |> ignore

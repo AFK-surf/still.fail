@@ -26,45 +26,58 @@ fn marks_foot_node(h : @view.View, foot : () -> Double) -> Unit {
   let tips = @sf.TipLayer::new(fn() { tips_at.val })
   h.box(fn(col) {
     col.over(Is(true)).padding(By(fn() { (0.0, 0.0, 0.0, foot()) })) |> ignore
-    // (the room over them the picture's: nothing of the foot's)
-    let room = col.box(fn(g) { g.grow(Is(1.0)) |> ignore })
-    col.reacts(
-      fn() {
-        marks_said()
-        match (col.laid_size_told(), room.laid_size_told()) {
-          (Some(all), Some(over)) if marking.note < 0 => Some(all.1 - over.1)
-          _ => None
-        }
-      },
-      fn(taken) {
-        if taken is Some(t) {
-          marks_foot_taken.set(t)
-        }
-      },
-    )
-    // (the notes' cards, while no note is written: note_cards_node)
-    col.show(
-      fn() {
-        marks_said()
-        marking.note < 0 && mark_notes().length() > 0
-      },
-      fn(r) { note_cards_node(r) },
-    )
-    // (the note being written, over the tools' room: note_box_node)
-    col.show(
-      fn() {
-        marks_said()
-        marks_note_shown() is Some(_)
-      },
-      fn(n) { note_box_node(n) },
-    )
-    col.show(
-      fn() {
-        marks_said()
-        marking.note < 0
-      },
-      fn(t) { marks_tools_node(t, tips) },
-    )
+    // (made by the room it is laid out in: how tall what is at its foot comes to there, told the picture as it is laid
+    // out, in that layout (Room::tall); nothing read back after it)
+    col
+    .by_room(fn(held, room) {
+      held.grow(Is(1.0)) |> ignore
+      // (the room over them the picture's: nothing of the foot's)
+      held.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+      let parts = held.box(fn(parts) {
+        // (the notes' cards, while no note is written: note_cards_node)
+        parts.show(
+          fn() {
+            marks_said()
+            marking.note < 0 && mark_notes().length() > 0
+          },
+          fn(r) { note_cards_node(r) },
+        )
+        // (the note being written, over the tools' room: note_box_node)
+        parts.show(
+          fn() {
+            marks_said()
+            marks_note_shown() is Some(_)
+          },
+          fn(n) { note_box_node(n) },
+        )
+        parts.show(
+          fn() {
+            marks_said()
+            marking.note < 0
+          },
+          fn(t) { marks_tools_node(t, tips) },
+        )
+      })
+      // (what they take of the window's foot, the system's bar under them with it; kept as it was while a note is
+      // written in their place)
+      held.reacts(
+        fn() {
+          marks_said()
+          if marking.note < 0 {
+            Some(room.tall(parts) + foot())
+          } else {
+            None
+          }
+        },
+        fn(taken) {
+          if taken is Some(t) {
+            marks_foot_taken.set(t)
+          }
+        },
+      )
+    })
+    .grow(Is(1.0))
+    |> ignore
   })
   |> ignore
   tips_at.val = Some(h.box(fn(l) { l.over(Is(true)) |> ignore }))
