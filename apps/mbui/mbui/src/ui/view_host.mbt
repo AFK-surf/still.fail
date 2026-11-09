@@ -2445,8 +2445,11 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
   // (the tree as of the event's moment, taken once as it began: what had ended by then settled, what is where then)
   let at = view_moment()
   tree.bring_to(at)
-  // (what the old views take presses at, where the tree has them as of then)
-  old_hits_place(g(), Some(tree))
+  // (what the old views take presses at, where the tree has them as of then; not for a move of a finger a node of the
+  // tree's holds (View::on_drag): it is that node's, nothing of an old view's asked)
+  if !(kind == 1 && view_held.val is Some(Dragging(_))) {
+    old_hits_place(g(), Some(tree))
+  }
   // (a press anywhere, told before it goes to what takes it: what closes at the next press follows it)
   if kind == 0 {
     tree.went_down(at, x~, y~)
@@ -4197,8 +4200,10 @@ fn view_pointed() -> Unit {
 /// point gone. What it was worked out against kept (view_point_seen), for a still pointer.
 fn view_point_tell(tree : @view.Tree, over? : Bool) -> Unit {
   // (what the old views take a pointer at, where the tree has them now, before anything is found under it: whether one
-  // takes it there (old_takes_own) and what of it is under it, as a press there is, old_hits_place)
-  old_hits_place(g(), Some(tree))
+  // takes it there (old_takes_own) and what of it is under it, as a press there is, old_hits_place; no pointer, none)
+  if view_point.val is Some(_) {
+    old_hits_place(g(), Some(tree))
+  }
   // (what the old frame put over all of it there: as said, else by its hit targets as last drawn: old_layer_over)
   let over = match (over, view_point.val) {
     (Some(o), _) => o
