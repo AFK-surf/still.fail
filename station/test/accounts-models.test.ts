@@ -16,12 +16,13 @@ test("the vision table lists models by key", () => {
 
 test("a model is outdated however it is spelled, and what replaced it is the newest of its line", () => {
   for (const m of ["claude-opus-4-5-20251101", "anthropic/claude-sonnet-4-5", "claude-opus-4-6[1m]", "openai/gpt-5.6-sol", "gpt-6-sol"]) assert.ok(outdated(m), m);
-  for (const m of ["claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-1", "gpt-6.1-sol", "gpt-6-astra", "deepseek-v4-pro"]) assert.ok(!outdated(m), m);
+  for (const m of ["claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-2", "gpt-6.1-sol", "gpt-6-astra", "deepseek-v4-pro"]) assert.ok(!outdated(m), m);
   assert.equal(replacement("claude-opus-4-5-20251101"), "claude-opus-5-5");
   assert.equal(replacement("claude-opus-4-6[1m]"), "claude-opus-5-5[1m]");
   assert.equal(replacement("claude-haiku-4-5-20251001"), "claude-haiku-5-5");
   assert.equal(replacement("openai/gpt-5.6-sol"), "gpt-6.1-sol");
   assert.equal(replacement("gpt-5.6-terra"), null, "GPT-6 has no Terra");
+  assert.equal(replacement("claude-fable-5"), "claude-fable-5-2");
   assert.equal(replacement("claude-opus-5-5"), null);
 });
 

@@ -39,6 +39,7 @@ const PRICES: [string, Price][] = [
   ["gpt-6-sol", { input: 2.0, output: 10.0, cacheRead: 0.2 }],
   ["gpt-6-luna", { input: 0.1, output: 0.5, cacheRead: 0.01 }],
   ["gpt-5.6-sol", { input: 4.0, output: 20.0, cacheRead: 0.4 }],
+  ["claude-fable-5-2", { input: 8.0, output: 40.0, cacheRead: 0.2 }],
   ["claude-fable-5-1", { input: 10.0, output: 50.0, cacheRead: 0.25 }],
   ["claude-mythos-5-1", { input: 10.0, output: 50.0, cacheRead: 0.25 }],
   ["claude-fable-5", { input: 10.0, output: 50.0, cacheRead: 1.0 }],
