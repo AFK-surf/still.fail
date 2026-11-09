@@ -259,7 +259,7 @@ test("the lock moved on while the cloud answers too many requests: read again a 
   const approval = sign(next("ws", { seq: 0, hash: entryHash(g), genesis: entryHash(g) }, r.host.nowMs() / 1000, "device", { id: ME, sub: "s1", kind: "app", label: "this" }));
   r.cloud.chains.set("ws", [g, approval]);
   let limited = 1;
-  stationReplies(r.host, (req) => (req.url.includes("/lock?") && limited-- > 0 ? status(429, { error: "rate_limited" }) : r.cloud.reply(req)));
+  stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock?") && limited-- > 0 ? status(429, { error: "rate_limited" }) : r.cloud.reply(req)));
   r.core.inner.data.update({ topic: "workspace", workspace: "ws" }, (w) => ({ ...(w as object), lock: r.cloud.head("ws") }));
   await r.host.time.pass(1_000);
   assert.equal(limited, 0, "turned away once");

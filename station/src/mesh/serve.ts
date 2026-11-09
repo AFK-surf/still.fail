@@ -14,9 +14,11 @@ import { nowSecs } from "../ops/files.ts";
 import type { Accepted } from "../cloud/provider.ts";
 import { type Admitted, readOnly, revoked, verifyMemberOf } from "./credential.ts";
 import { PersonChains } from "./person-chains.ts";
+import { SeenDevices } from "./seen-devices.ts";
+import { checkChain } from "./person-sync.ts";
 import { join } from "node:path";
 import { meshDir } from "../cloud/state.ts";
-import { type Entry, LockRefusal, admit, admitPerson, asEntry, fold, lowerRole, personFold } from "../cloud/lock.ts";
+import { type Entry, LockRefusal, admit, admitPerson, asEntry, endpointProof, fold, lowerRole, personFold } from "../cloud/lock.ts";
 import type { Connection, Stream } from "./native.ts";
 import { answerScreen } from "./screens.ts";
 import type { ScreenHub } from "../screens/hub.ts";
@@ -138,6 +140,14 @@ export function personChainsOf(cloud: Cloud): PersonChains {
   return c;
 }
 
+/// The members' devices that came to this station, by workspace (seen-devices.ts).
+const seens = new WeakMap<Cloud, SeenDevices>();
+export function seenDevicesOf(cloud: Cloud): SeenDevices {
+  let s = seens.get(cloud);
+  if (s === undefined) seens.set(cloud, (s = new SeenDevices(join(meshDir(cloud.data), "seen-devices.json"))));
+  return s;
+}
+
 /// `ws` when it is a workspace the station joined, null for its home one (whose lock is the home's).
 const joinedOf = (cloud: Cloud, ws: string) => (ws && ws !== cloud.home() ? ws : null);
 
@@ -202,7 +212,9 @@ export function lockRoute(cloud: Cloud, method: string, query: [string, string][
     const after = Number(query.find(([k]) => k === "after")?.[1] ?? -1);
     // (`takes`: the entry kinds this station knows beyond the first ones, for a device to ask before it writes one: an
     // entry it did not know, it would refuse, and every entry after)
-    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(Number.isSafeInteger(after) ? after : -1, ws), takes: ["person"] }];
+    // (`serves`: what a device has of this station rather than of the cloud: the person's own lock (/lock/person), the
+    // devices that came (/lock/devices), and the locks' changes told on its event stream (lock-events.ts))
+    return [200, { head: lockHead(cloud, ws), entries: cloud.lockAfter(Number.isSafeInteger(after) ? after : -1, ws), takes: ["person"], serves: ["person", "devices", "told"] }];
   }
   if (method !== "POST") return [405, { error: "GET or POST" }];
   let entries: (Entry | null)[];
@@ -239,11 +251,42 @@ function personTold(cloud: Cloud, ws: string | null, viewer: Admitted["viewer"],
   try {
     if (personFold(chain, viewer.sub).genesis !== pin) return [409, { error: "not the lock bound here" }];
     const chains = personChainsOf(cloud);
-    chains.keep(pin, chains.newest(pin, viewer.sub, chain));
+    chains.keep(pin, chains.newest(pin, viewer.sub, chain), viewer.workspace);
     return [200, {}];
   } catch (e) {
     return [409, { error: (e as Error).message }];
   }
+}
+
+/// GET /lock/person: the chains of the asker's own lock this station has (each begun anew, by its genesis), for the
+/// device to go on from the one it pinned. POST /lock/person {chain}: the chain as it stands now on the device (a
+/// device added or taken off), kept as it goes on from the one kept, and so told to the person's other devices and
+/// stations (person-sync.ts). GET /lock/devices: the members' devices that came to this station in the asker's
+/// workspace (everyone's for its owners and admins, else their own), as the cloud's GET /devices said them.
+export function lockPartRoute(cloud: Cloud, part: string, method: string, body: Buffer, viewer: Admitted["viewer"]): [number, unknown] {
+  if (part === "person") {
+    const chains = personChainsOf(cloud);
+    if (method === "GET") return [200, { chains: chains.of(viewer.sub).map(([genesis, entries]) => ({ genesis, entries })) }];
+    if (method !== "POST") return [405, { error: "GET or POST" }];
+    let said: any;
+    try {
+      said = JSON.parse(body.toString("utf8") || "{}");
+    } catch {
+      return [400, { error: "invalid JSON" }];
+    }
+    try {
+      const { genesis, chain } = checkChain(chains, said?.chain, viewer.sub);
+      chains.keep(genesis, chain, viewer.workspace);
+      return [200, { genesis, length: chain.length }];
+    } catch (e) {
+      return [409, { error: (e as Error).message }];
+    }
+  }
+  if (part === "devices" && method === "GET") {
+    const manages = viewer.role === "owner" || viewer.role === "admin";
+    return [200, { devices: seenDevicesOf(cloud).of(viewer.workspace, nowSecs(), viewer.sub, manages) }];
+  }
+  return [404, { error: "no such route" }];
 }
 
 /// With a lock pinned: the member admitted only on a device the lock names, with the lower of the lock's role and the
@@ -317,7 +360,7 @@ function onPersonalLock(cloud: Cloud, admitted: Admitted, named: string, endpoin
   const newest = raw === undefined ? chains.kept(pin) : chains.newest(pin, v.sub, raw);
   if (newest === null) return null;
   const { role } = admitPerson(state, who, newest);
-  chains.keep(pin, newest);
+  chains.keep(pin, newest, v.workspace);
   return { ...admitted, viewer: { ...v, role: lowerRole(role, named) } };
 }
 
@@ -364,6 +407,11 @@ export async function serve(m: Members, conn: Connection) {
     const admitted = verifyMemberOf(typeof line?.credential === "string" ? line.credential : "", (ws: string) => m.cloud.grantKeys(ws === m.cloud.home() ? null : ws), m.cloud.memberships(), device, m.accepted?.());
     named = admitted.viewer.role;
     if (proof) admitted.viewer.lockDevice = proof;
+    // Which devices came, for a lock's owner to name (seen-devices.ts): what it says of itself with its lock proof
+    // (`lock.kind`, `lock.label`), its base key.
+    // Its base key only as its proof for this endpoint holds (as the cloud checked it).
+    const base = proof && endpointProof(admitted.viewer.workspace, proof.base, device, proof.proof) ? proof.base : null;
+    seenDevicesOf(m.cloud).saw(nowSecs(), admitted.viewer, device, base, line?.lock ?? null);
     return inLockBringing(m.cloud, admitted, named, device, line);
   };
   let current: Admitted;
@@ -576,6 +624,11 @@ async function answerRequest(m: Members, stream: Stream, reader: Reader, head: a
   // The workspace lock (cloud/lock.ts): the station's, here where the device that brings it is known.
   if ((at < 0 ? rest : rest.slice(0, at)) === "/lock") {
     const [status, said] = lockRoute(m.cloud, method, at < 0 ? [] : queryPairs(rest.slice(at + 1)), body, viewer);
+    return answer(status, said);
+  }
+  const lockPart = /^\/lock\/(person|devices)$/.exec(at < 0 ? rest : rest.slice(0, at));
+  if (lockPart) {
+    const [status, said] = lockPartRoute(m.cloud, lockPart[1]!, method, body, viewer);
     return answer(status, said);
   }
   // A device that stops reading or loses its connection no longer needs its pending reads. Do not cancel writes: their

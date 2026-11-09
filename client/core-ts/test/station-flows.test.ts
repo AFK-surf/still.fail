@@ -1963,7 +1963,8 @@ test("a_chat_open_is_asked_what_was_said_since_though_its_stream_came_back_told_
   // Its screens are the exception: held in memory only and changing as people come and go, they are asked again
   // whenever the stream was away (a small list; screens.ts).
   const asked = host.requests.slice(from).flatMap(readsOf).filter((url) => url.includes("/admin/api/") && !url.includes("/events") && !url.endsWith("/screens")).map((url) => url.replace("https://stillfail.test/admin/api", ""));
-  assert.deepEqual(asked, ["/threads/7/entries?after=3&limit=50"]);
+  // (and the person's own lock, read of the station as it is reached again: of the cloud before, unseen here)
+  assert.deepEqual(asked.filter((url) => url !== "/lock/person"), ["/threads/7/entries?after=3&limit=50"]);
   // A stream that takes over from one still heard (an agent started: the stream follows it) was not away: nothing asked.
   const again = host.requests.length;
   push("chat", { id: "7", thread: 7, session: "k1", title: "部署", lastActiveAt: 1, agents: [{ key: "k1", process: "running" }] });

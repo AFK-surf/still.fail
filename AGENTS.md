@@ -92,9 +92,14 @@ and any tunnel's name in the station or the cloud.
 Only the account system depends on still.fail cloud (the user, 2026-11-09): accounts and sign-in, workspaces, their
 members, roles and invitations, the list of a workspace's stations, and the member credentials it signs. Nothing else
 does. What devices and stations keep, decide or tell each other goes between them over the mesh, and keeps working
-with the cloud down, slow, rate-limited or holding something back.
+with the cloud down, slow, rate-limited or holding something back. The relays are not the cloud (they only carry the
+mesh's packets, end to end encrypted), and push notifications are the one exception (the user, 2026-11-09): a station
+gives the cloud its notices to push through APNs, FCM and Web Push (`cloud/src/push.ts`).
 
 Signatures the cloud cannot forge are not enough: what the cloud only carries, it can still hold back, delay or lose.
-A new feature puts nothing else in the cloud. What is still there, the workspace lock and the personal lock (kept and
-carried by the cloud) and the devices a lock's owner approves (listed by it), is being moved to the stations; while
-older stations still read it there, a core sends it to the cloud too, but never waits on the cloud for it.
+A new feature puts nothing else in the cloud. The locks are the stations' now: a device reads the workspace lock, its
+person's own lock and the devices that came of the stations (`GET /lock`, `/lock/person`, `/lock/devices`), is told
+they changed on their event streams (`station/src/mesh/lock-events.ts`) and brings what it signs to them, which keep
+each other level (`station/src/mesh/lock-sync.ts`, `station/src/mesh/person-sync.ts`). The cloud is asked only where
+no station answers (one from before, all offline), and is sent what is signed for the stations and devices from
+before, never waited on; that goes 7 days after these stations ship.
