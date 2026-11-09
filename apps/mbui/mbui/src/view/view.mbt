@@ -2358,59 +2358,84 @@ fn Prop::ord(self : Prop) -> Int {
 }
 
 ///|
-/// Properties bound together on one node (View::binds_together): each read as its binding would be, all of them in one
-/// watch, and each set again only where it came out otherwise; one bound again alone (By or Is) is theirs no more, and
-/// the watch goes with the last of them.
-priv struct BoundTogether {
+/// Properties set together on one node (View::sets_together): each set as what sets them says it now (Is), all of them
+/// set again in one binding as what that read changes; one bound again by another (By or Is) is theirs no more, and the
+/// binding goes with the last of them. Which are theirs: a bit each, by its Prop::ord (two words: up to 128).
+priv struct SetsTogether {
   at : Int
   gen : Int
-  parts : Array[BoundPart]
+  /// whether it is setting them the first time (each it sets taken as its), else again (only those still its)
+  mut first : Bool
+  mut owned_lo : Int64
+  mut owned_hi : Int64
   mut left : Int
   mut stop : () -> Unit
 }
 
 ///|
-priv struct BoundPart {
-  mut live : Bool
-  read : () -> Unit
-  apply : () -> Unit
+fn SetsTogether::owns(self : SetsTogether, k : Int) -> Bool {
+  if k < 64 {
+    (self.owned_lo & (1L << k)) != 0L
+  } else {
+    (self.owned_hi & (1L << (k - 64))) != 0L
+  }
 }
 
 ///|
-// kept across runs: set only while View::binds_together runs what it binds, put back as it ends
-let binding_together : Ref[BoundTogether?] = Ref(None)
+/// Property `k` its (first set by it), or no more its (bound by another, or the node let go): the binding stopped with
+/// the last of them.
+fn SetsTogether::own(self : SetsTogether, k : Int, on : Bool) -> Unit {
+  if on == self.owns(k) {
+    return
+  }
+  if k < 64 {
+    self.owned_lo = self.owned_lo ^ (1L << k)
+  } else {
+    self.owned_hi = self.owned_hi ^ (1L << (k - 64))
+  }
+  self.left = self.left + (if on { 1 } else { -1 })
+  if !on && self.left == 0 {
+    (self.stop)()
+  }
+}
 
 ///|
-/// What `f` binds By on this node (its properties, View::width and the like) bound together: as each would be alone
-/// (Tree::queued: run now, and in the frame after what any of them read changed, each set again only where it came out
-/// otherwise), but read in one watch, not one each: for a part that binds many of them from one look (a style). One
-/// bound again afterwards, alone, is that binding's and no more theirs. What `f` binds on another node is bound alone.
-pub fn View::binds_together(self : View, f : () -> Unit) -> View {
+// kept across runs: set only while View::sets_together sets what it sets, put back as it ends
+let setting_together : Ref[SetsTogether?] = Ref(None)
+
+///|
+/// What `set` sets on this node (its properties, each said Is: View::width and the like) out of what `read` says, set
+/// together: now, and again, all of them, in the frame after what `read` read changed, where it came out otherwise
+/// (Tree::queued): one binding for all, where each bound By is a binding of its own (a style: what it says changes with
+/// the theme alone). One bound again afterwards, by another, is that one's and set by this no more; what `set` sets on
+/// another node is set alone, once.
+pub fn[T : Eq] View::sets_together(self : View, read : () -> T, set : (T) -> Unit) -> View {
   guard self.live() is Some(_) else { return self }
-  let g : BoundTogether = { at: self.at, gen: self.gen, parts: [], left: 0, stop: fn() {  } }
-  let was = binding_together.val
-  binding_together.val = Some(g)
-  f()
-  binding_together.val = was
-  if g.left == 0 {
-    return self
+  let g : SetsTogether = {
+    at: self.at,
+    gen: self.gen,
+    first: true,
+    owned_lo: 0L,
+    owned_hi: 0L,
+    left: 0,
+    stop: fn() {  },
   }
-  let stop = self.tree.queued(
-    fn() {
-      for p in g.parts {
-        if p.live {
-          (p.read)()
-        }
-      }
-    },
-    fn(_) {
-      for p in g.parts {
-        if p.live {
-          (p.apply)()
-        }
-      }
-    },
-  )
+  let last : Ref[T?] = Ref(None)
+  let stop = self.tree.queued(read, fn(v) {
+    if last.val == Some(v) {
+      return
+    }
+    last.val = Some(v)
+    let n = self.tree.nodes[g.at]
+    if !n.live || n.gen != g.gen {
+      return
+    }
+    let was = setting_together.val
+    setting_together.val = Some(g)
+    set(v)
+    setting_together.val = was
+    g.first = false
+  })
   if g.left == 0 {
     stop()
   } else {
@@ -2427,6 +2452,21 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
   guard self.live() is Some(n) else { return }
   let tree = self.tree
   let at = self.at
+  // (set among others set together on this node, View::sets_together: again, only while it is theirs)
+  let together = match (live, setting_together.val) {
+    (Is(_), Some(g)) if g.at == at && g.gen == self.gen => Some(g)
+    _ => None
+  }
+  match (together, live) {
+    (Some(g), Is(v)) if !g.first => {
+      if g.owns(prop.ord()) {
+        apply(v)
+        tree.bound_marked(at, phase)
+      }
+      return
+    }
+    _ => ()
+  }
   match n.props.get(prop.ord()) {
     Some(stop) => {
       n.props.remove(prop.ord())
@@ -2438,49 +2478,18 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
     Is(v) => {
       apply(v)
       tree.bound_marked(at, phase)
+      match together {
+        Some(g) => {
+          let k = prop.ord()
+          g.own(k, true)
+          n.props[k] = fn() { g.own(k, false) }
+        }
+        None => ()
+      }
     }
     By(f) => {
       let last : Ref[T?] = Ref(None)
       let gen = self.gen
-      // (said among others bound together on this node, View::binds_together: read in their one watch, set as it is)
-      match binding_together.val {
-        Some(g) if g.at == at && g.gen == gen => {
-          let now : Ref[T?] = Ref(None)
-          let part : BoundPart = {
-            live: true,
-            read: fn() { now.val = Some(f()) },
-            apply: fn() {
-              let n = tree.nodes[at]
-              if !n.live || n.gen != gen {
-                return
-              }
-              guard now.val is Some(v) else { return }
-              let work = tree.work
-              work.bound = work.bound + 1
-              if last.val == Some(v) {
-                work.same = work.same + 1
-                return
-              }
-              last.val = Some(v)
-              apply(v)
-              tree.bound_marked(at, phase)
-            },
-          }
-          g.parts.push(part)
-          g.left = g.left + 1
-          n.props[prop.ord()] = fn() {
-            if part.live {
-              part.live = false
-              g.left = g.left - 1
-              if g.left == 0 {
-                (g.stop)()
-              }
-            }
-          }
-          return
-        }
-        _ => ()
-      }
     let stop = tree.queued(
       f,
       fn(v) {
