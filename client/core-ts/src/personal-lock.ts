@@ -6,7 +6,7 @@
 // The key is sealed so that each use asks the person (`user: true`: biometrics or the screen lock). Web pages have none:
 // their code is the cloud's.
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { Effect } from "effect";
+import { Effect, Schedule } from "effect";
 // @ts-ignore: the MoonBit build's JS, untyped
 import * as rules from "../../../rules/js/rules.js";
 import { CoreError, asCoreError } from "./error.ts";
@@ -25,6 +25,10 @@ export const personOf = (sub: string) => `person:${sub}`;
 export const isPerson = (where: string) => where.startsWith("person:");
 
 const KEY = "personal-signer";
+/// What a person does here (an entry they sign) waits out the cloud's "too many requests": the account's devices share
+/// one budget a minute, which their reads as a lock moves can use up (as views/lock.ts `Lock` waits, by hand).
+const LIMITED_TRIES = 6;
+const LIMITED_WAIT = "10 seconds";
 /// The key's public half, read without asking anyone.
 const KEY_ID = "personal-signer-id";
 const keptAs = (sub: string) => `personal-lock-${hex(utf8(sub))}`;
@@ -222,7 +226,7 @@ export class PersonalLock {
   #append(sub: string, seed: Uint8Array, kind: string, body: unknown): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const e = this.#entry(sub, seed, this.#myKey!, kind, body);
-      yield* this.#env.cloud(sub, "POST", PATH, { entries: [e] });
+      yield* Effect.retry(this.#env.cloud(sub, "POST", PATH, { entries: [e] }), { times: LIMITED_TRIES, schedule: Schedule.spaced(LIMITED_WAIT), while: (e) => e.code === "rate_limited" }); // timer: a retry after a failure (429)
       yield* this.#pin(sub, [...(this.#pinned.get(sub) ?? []), e]);
       this.#seen.delete(sub);
       this.#env.changed();
