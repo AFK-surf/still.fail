@@ -626,6 +626,10 @@ pub(all) struct ChatView {
   /// the first and last entries loaded (letters and edits are not messages): the cursors for loading pages
   first_entry : Double?
   last_entry : Double?
+  /// the page before, being read ("reading") or not read ("failed", why in `older_failed`, asked again a while after):
+  /// "" neither, when it may be asked for
+  older : String
+  older_failed : String
   /// how many letters its agents and other chats' wrote each other (not in `messages`: their own sheet)
   letters : Int
   at : Double?
@@ -740,6 +744,8 @@ fn chat_view_of(v : Json, messages : Array[Message]) -> ChatView {
     newer: flag(s, "newer"),
     first_entry: opt_number(s, "firstEntry"),
     last_entry: opt_number(s, "lastEntry"),
+    older: text(s, "older"),
+    older_failed: text(s, "olderFailed"),
     letters: number(s, "letters").to_int(),
     at: opt_number(s, "at"),
     at_offset: opt_number(s, "atOffset"),
