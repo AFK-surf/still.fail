@@ -27,7 +27,7 @@ for (const [name, remote] of [
     const stats = new CommaStats(":memory:", empty, quiet);
     try {
       stats.apply([{ station: "away", usage, chats: [chat] }], [], from);
-      const read = workspaceRead({ home: () => "home", here: async (op) => local(op), others: async () => ["away"],
+      const read = workspaceRead({ of: () => ({ workspace: "home", home: true }), here: async (op) => local(op), others: async () => ["away"],
         there: async (_station, op) => JSON.stringify(remote(op)) });
       const got = await read(from, to);
       const changed = stats.apply(got.stations, got.unread, from);
@@ -40,7 +40,7 @@ for (const [name, remote] of [
 
 test("a repeating peer cursor is refused before requesting it again", async () => {
   let pages = 0;
-  const read = workspaceRead({ home: () => "home", here: async (op) => local(op), others: async () => ["away"],
+  const read = workspaceRead({ of: () => ({ workspace: "home", home: true }), here: async (op) => local(op), others: async () => ["away"],
     there: async (_station, op) => {
       if (op === "outflowUsage") return JSON.stringify(usage);
       pages++;
@@ -54,13 +54,13 @@ test("a repeating peer cursor is refused before requesting it again", async () =
 });
 
 test("an incomplete local answer fails the build instead of reading it as empty", async () => {
-  const read = workspaceRead({ home: () => "home", here: async (op) => op === "outflowUsage" ? JSON.stringify(usage) : JSON.stringify({ chats: null }),
+  const read = workspaceRead({ of: () => ({ workspace: "home", home: true }), here: async (op) => op === "outflowUsage" ? JSON.stringify(usage) : JSON.stringify({ chats: null }),
     others: async () => [], there: async () => { throw new Error("unused"); } });
   await assert.rejects(() => read(from, to));
 });
 
 test("an older unpaged answer without more and next remains readable", async () => {
-  const read = workspaceRead({ home: () => "home", here: async (op) => local(op), others: async () => ["away"],
+  const read = workspaceRead({ of: () => ({ workspace: "home", home: true }), here: async (op) => local(op), others: async () => ["away"],
     there: async (_station, op) => JSON.stringify(op === "outflowUsage" ? usage : { chats: [chat] }) });
   const got = await read(from, to);
   assert.deepEqual(got.unread, []);
@@ -69,7 +69,7 @@ test("an older unpaged answer without more and next remains readable", async () 
 
 test("a usage row can have null person, account and model", async () => {
   const row = { ...usage.rows[0], person: null, account: null, model: null };
-  const read = workspaceRead({ home: () => "home", here: async (op) => local(op), others: async () => ["away"],
+  const read = workspaceRead({ of: () => ({ workspace: "home", home: true }), here: async (op) => local(op), others: async () => ["away"],
     there: async (_station, op) => JSON.stringify(op === "outflowUsage" ? { rows: [row] } : { chats: [] }) });
   const got = await read(from, to);
   assert.deepEqual(got.unread, []);
@@ -81,7 +81,7 @@ test("a later complete answer can remove a peer's rows after its partial answer 
   const stats = new CommaStats(":memory:", empty, quiet);
   try {
     stats.apply([{ station: "away", usage, chats: [chat] }], [], from);
-    const read = workspaceRead({ home: () => "home", here: async (op) => local(op), others: async () => ["away"],
+    const read = workspaceRead({ of: () => ({ workspace: "home", home: true }), here: async (op) => local(op), others: async () => ["away"],
       there: async (_station, op) => JSON.stringify(op === "outflowUsage" ? { rows: [], people: {} }
         : complete ? { chats: [], more: false } : { chats: [], more: true, next: null }) });
     const partial = await read(from, to);

@@ -97,6 +97,7 @@ test("the line Comma shows reads as its server and token; anything else does not
   assert.equal(commaLine("comma ftp://x salix_conn_abcdef123"), null);
   assert.equal(commaLine("comma https://api.comma.surf short"), null);
   assert.equal(connectUrl("https://api.comma.surf", "mac").replace(/&os=.*/, ""), "wss://api.comma.surf/v1/connect?name=mac");
+  assert.equal(new URL(connectUrl("https://api.comma.surf", "mac", "ws_1")).searchParams.get("stillfail_workspace"), "ws_1");
 });
 
 test("an options card is Comma's question card, the recommended one marked; a text card or one option is words alone", () => {
