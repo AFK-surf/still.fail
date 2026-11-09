@@ -12,7 +12,7 @@ test "a list hosted in a moved view scrolls without layout and keeps its targets
         c.list("rows", items.length(), 40.0, fn(k) {
           let item = items[k]
           let id = c.id("row/\{item}")
-          if c.clicked(id) { pressed.push(item) }
+          c.on_press(id, fn() { pressed.push(item) })
           c.box(id~, h=Px(40.0), bg=0x224466FFL, fn() {
             c.text("row \{item}", wrap=false) |> ignore
           }) |> ignore

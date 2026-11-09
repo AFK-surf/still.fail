@@ -798,9 +798,9 @@ test "a look moves what is drawn, never where it is tapped" {
     c.box(w=Px(200.0), h=Px(100.0), clip=true, fn() {
       c.box(h=Px(40.0), min_h=40.0, fn() {  }) |> ignore
       let id = c.id("button")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         taps.val = taps.val + 1
-      }
+      })
       let b = c.box(w=Px(200.0), h=Px(30.0), min_h=30.0, bg=0x336699FFL, id~, fn() {  })
       c.look(b, @ui.look(dy=20.0))
     })
@@ -824,9 +824,9 @@ test "what is faded to nothing is tapped where it is laid out" {
   let taps = Ref::new(0)
   let t = @ui.Tester::new(fn(c) {
     let id = c.id("faded")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       taps.val = taps.val + 1
-    }
+    })
     let b = c.box(w=Px(100.0), h=Px(40.0), bg=0x123456FFL, id~, fn() {  })
     c.look(b, @ui.look(alpha=0.0, scale=0.9))
   })
@@ -847,13 +847,13 @@ test "what leaves is drawn, and a tap meanwhile goes to what is under it" {
   let sheet_ms = 300.0
   let t = @ui.Tester::new(fn(c) {
     let u = c.id("under")
-    if c.clicked(u) {
+    c.on_press(u, fn() {
       under.val = under.val + 1
-    }
+    })
     let o = c.id("over")
-    if c.clicked(o) {
+    c.on_press(o, fn() {
       over.val = over.val + 1
-    }
+    })
     c.box(w=Px(200.0), h=Px(100.0), bg=0x112233FFL, id=u, fn() {  }) |> ignore
     match @motion.presence(c, "sheet", shown.val, enter=@motion.trans(fade=0.0, spec=@motion.tween(sheet_ms, ease=Out))) {
       Some(look) => {
@@ -891,9 +891,9 @@ test "what is drawn cut while it opens is tapped whole, where it is laid out" {
   let taps = Ref::new(0)
   let t = @ui.Tester::new(fn(c) {
     let id = c.id("line")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       taps.val = taps.val + 1
-    }
+    })
     let b = c.box(w=Px(200.0), fn() {
       c.box(w=Px(200.0), h=Px(40.0), min_h=40.0, bg=0x0A0B0CFFL, id~, fn() {  }) |> ignore
       c.box(w=Px(200.0), h=Px(60.0), min_h=60.0, bg=0x0D0E0FFFL, fn() {  }) |> ignore
@@ -918,9 +918,9 @@ test "what is moved into a box that cuts it from outside it is drawn there" {
     c.box(w=Px(200.0), h=Px(100.0), clip=true, fn() {
       c.box(h=Px(110.0), min_h=110.0, fn() {  }) |> ignore
       let id = c.id("button")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         taps.val = taps.val + 1
-      }
+      })
       c.box(dir=Row, h=Px(30.0), min_h=30.0, fn() {
         let b = c.box(w=Px(200.0), h=Px(30.0), min_h=30.0, bg=0x336699FFL, id~, fn() {  })
         c.look(b, @ui.look(dy=-40.0))

@@ -826,9 +826,11 @@ pub fn Ctx::rich(
   }
   let text = sb.to_string()
   let base = self.id(if key == "" { "\u{1}rich\u{1}" + text } else { key })
+  // a link pressed: told as it is let go (Ctx::on_press)
   for k, r in runs {
-    if link_starts(runs, k) && self.clicked(link_id(base, runs, k)) {
-      on_link(r.link)
+    if link_starts(runs, k) {
+      let link = r.link
+      self.on_press(link_id(base, runs, k), fn() { on_link(link) })
     }
   }
   // a link right clicked (a pointer's secondary button: a desktop's long press) told as held, at once; its menu the

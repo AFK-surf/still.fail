@@ -26,9 +26,9 @@ fn culled_tester(
             c.text("far words", wrap=false) |> ignore
           }
           let id = c.id("go")
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             clicks.val = clicks.val + 1
-          }
+          })
           c.box(w=Px(80.0), h=Px(40.0), id~, fn() {  }) |> ignore
         })
         |> ignore

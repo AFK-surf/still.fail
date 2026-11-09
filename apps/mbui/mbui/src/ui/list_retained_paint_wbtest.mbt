@@ -54,9 +54,9 @@ test "scrolling moves a keyed row's drawing and target without painting the row 
     c.list("rows", items.length(), 40.0, fn(k) {
       let item = items[k]
       let id = c.id("button/\{item}")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         pressed.push(item)
-      }
+      })
       let n = c.box(id~, h=Px(40.0), bg=0x224466FFL, fn() {  })
       if item == 2 {
         c.bg_by(n, fn() {
@@ -280,9 +280,9 @@ test "rows cut by the list's edges, drawn from what they kept, draw what a paint
     c.list("rows", items.length(), 60.0, fn(k) {
       let item = items[k]
       let id = c.id("row/\{item}")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         pressed.push(item)
-      }
+      })
       c.box(id~, h=Px(60.0), bg=0x224466FFL, fn() {
         c.text("first line \{item} second line third line", wrap=true) |> ignore
         c.box(w=Px(20.0), h=Px(10.0), bg=0xCC6633FFL, fn() {  }) |> ignore
@@ -526,9 +526,9 @@ test "a scrolled row's targets are said again from what it kept, and pressed whe
     c.list("rows", items.length(), 60.0, fn(k) {
       let item = items[k]
       let id = c.id("row/\{item}")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         pressed.push(item)
-      }
+      })
       c.box(id~, h=Px(60.0), bg=0x224466FFL, fn() { c.text("row \{item}", wrap=false) |> ignore }) |> ignore
     }, rows_read=true, sized=rows.sized()) |> ignore
   }, w=300.0, h=160.0)
@@ -581,9 +581,9 @@ fn passing_rows(
   let rows : ListRows[Int] = ListRows::new()
   Tester::new(fn(c) {
     let base = c.id("under")
-    if c.clicked(base) {
+    c.on_press(base, fn() {
       under.val += 1
-    }
+    })
     c.box(id=base, w=Px(300.0), h=Px(160.0), fn() {  }) |> ignore
     let o = c.overlay("rows-over", fn() {
       c.box(w=Px(300.0), h=Px(160.0), fn() {
@@ -595,9 +595,9 @@ fn passing_rows(
           if item == 0 {
             first.val = id
           }
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             pressed.push(item)
-          }
+          })
           let b = c.box(id~, h=Px(40.0), bg=0x224466FFL, fn() { c.text("row \{item}", wrap=false) |> ignore })
           if row_passes && item == 0 {
             c.passes(b)
@@ -690,9 +690,9 @@ test "a kept row's node marked to pass a finger on from another row's build pass
   let pressed : Array[Int] = []
   let t = Tester::new(fn(c) {
     let back = c.id("under")
-    if c.clicked(back) {
+    c.on_press(back, fn() {
       under.val += 1
-    }
+    })
     c.box(id=back, w=Px(300.0), h=Px(160.0), fn() {  }) |> ignore
     c.overlay("rows-over", fn() {
       c.box(w=Px(300.0), h=Px(160.0), fn() {
@@ -701,9 +701,9 @@ test "a kept row's node marked to pass a finger on from another row's build pass
         c.list("rows", items.length(), 40.0, fn(k) {
           let item = items[k]
           let id = c.id("row/\{item}")
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             pressed.push(item)
-          }
+          })
           if item == 0 {
             first_index.val = c.box(id~, h=Px(40.0), bg=0x224466FFL, fn() { c.text("row 0", wrap=false) |> ignore })
             first_id.val = id

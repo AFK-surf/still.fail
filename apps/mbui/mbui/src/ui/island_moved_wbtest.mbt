@@ -24,9 +24,9 @@ fn island_moved_tester(
       old(b, fn(c) {
         c.box(w=Px(300.0), h=Px(150.0), fn() {
           let id = c.id("go")
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             clicks.val = clicks.val + 1
-          }
+          })
           c.box(w=Px(80.0), h=Px(40.0), id~, fn() { c.text("go words", wrap=false) |> ignore }) |> ignore
         })
         |> ignore
@@ -138,7 +138,7 @@ fn island_rooms(at : (Double, Double)) -> Array[String] {
           c.box(dir=Row, fn() {
             for k in 0..<2 {
               let id = c.id("key \{k}")
-              c.clicked(id) |> ignore
+              c.takes_presses(id)
               c.box(w=Px(20.0), h=Px(20.0), id~, fn() {  }) |> ignore
             }
           })
@@ -181,7 +181,7 @@ fn island_read(at : @signals.Signal[(Double, Double)], field : Field) -> Tester 
       old(b, fn(c) {
         c.box(w=Px(300.0), h=Px(150.0), align=AStart, fn() {
           let id = c.id("go")
-          c.clicked(id) |> ignore
+          c.takes_presses(id)
           let k = c.box(w=Px(80.0), h=Px(40.0), id~, fn() {  })
           c.semantics(k, Button, id~, label="go")
           c.editor("field", field~, font_size=10.0) |> ignore

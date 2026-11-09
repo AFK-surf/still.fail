@@ -88,7 +88,7 @@ pub fn presses_held_node(
 }
 
 ///|
-/// `v` pressed as an old view's box with an id is (Ctx::clicked: a tap, a mouse's click, Enter or Space with the focus,
+/// `v` pressed as an old view's box with an id is (Ctx::on_press: a tap, a mouse's click, Enter or Space with the focus,
 /// a screen reader's press): `press` done then; its ripple and sink as `corner` rounds it (press_look); read out as
 /// `role` named `label`.
 fn pressed_node(

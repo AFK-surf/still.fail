@@ -21,9 +21,9 @@ fn modal_window(a : @signals.Signal[Bool], b : @signals.Signal[Bool], pressed : 
   set_view_app(fn(root) {
     old(root, fn(c) {
       let id = c.id("page button")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         under.taps.val = under.taps.val + 1
-      }
+      })
       let bt = c.box(w=Px(100.0), h=Px(60.0), id~, fn() {  })
       c.semantics(bt, Button, id~, label="page button")
       c.focusable(id)
@@ -514,9 +514,9 @@ fn shown_over(on : @signals.Signal[Bool]) -> (Tester, Array[Int]) {
   let page = fn(k : Int) {
     fn(c : Ctx) {
       let id = c.id("button \{k}")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         taps[k] = taps[k] + 1
-      }
+      })
       c.box(w=Px(100.0), h=Px(60.0), id~, fn() {  }) |> ignore
     }
   }
@@ -630,9 +630,9 @@ test "held on a page's button through an empty page over it, the layer of the on
   set_view_app(fn(root) {
     old(root, fn(c) {
       let id = c.id("page button")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         taps.val = taps.val + 1
-      }
+      })
       c.box(w=Px(100.0), h=Px(60.0), id~, fn() {  }) |> ignore
     })
     .over(Is(true))

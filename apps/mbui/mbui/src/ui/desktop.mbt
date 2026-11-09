@@ -553,7 +553,7 @@ pub fn Ctx::cursor(self : Ctx, id : Int, cursor : Cursor) -> Unit {
 
 ///|
 /// `id` takes presses, said as it is built: the pointer's hand over it (Ctx::show_cursor). What reads its click
-/// (Ctx::clicked, a part's Response) says so by that; what takes its press without its click (a slider set where it
+/// (Ctx::on_press, a part's Response) says so by that; what takes its press without its click (a slider set where it
 /// is pressed, Ctx::pressed alone) says it here.
 pub fn Ctx::takes_presses(self : Ctx, id : Int) -> Unit {
   self.mark_id(id, mark_takes)

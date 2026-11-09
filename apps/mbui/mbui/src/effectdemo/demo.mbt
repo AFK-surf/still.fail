@@ -111,9 +111,7 @@ pub fn backend(rt : @effect.Runtime, net : @effect.Net) -> Unit {
 pub fn view(chat : Chat) -> (@ui.Ctx) -> Unit {
   fn(c) {
     c.column(w=Fill(1.0), pad=20.0, gap=12.0, fn() {
-      if c.button("Send") {
-        chat.send("message \{chat.sent + 1}")
-      }
+      c.button("Send", on_press=fn() { chat.send("message \{chat.sent + 1}") })
       c.text("reply: \{chat.shown}") |> ignore
       c.text("waiting: \{chat.pending}") |> ignore
     })

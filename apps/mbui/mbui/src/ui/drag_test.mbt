@@ -432,9 +432,9 @@ fn panel_over_area(downs : Ref[Int], taps : Ref[Int], clicks : Ref[Int]) -> @ui.
         }
         None => ()
       }
-      if c.clicked(button) {
+      c.on_press(button, fn() {
         clicks.val += 1
-      }
+      })
       c.drag_area(area, axis=Free, w=Fill(1.0), h=Fill(1.0), fn() {
         c.layer(fn() {
           let panel = c.box(id=c.id("panel"), w=Px(100.0), h=Px(100.0), fn() {

@@ -682,9 +682,9 @@ fn stays_seen(hand : (Tester) -> Unit) -> Array[(Array[String], Array[String], I
             item.val = id
             c.focusable(id)
             c.box(id~, w=Px(100.0), h=Px(100.0), fn() {  }) |> ignore
-            if c.clicked(id) {
+            c.on_press(id, fn() {
               pressed.val = pressed.val + 1
-            }
+            })
           })
           |> ignore
         })
@@ -751,9 +751,9 @@ test "a layer anchored to a box with presses of its own in it: a press on one of
         c.box(w=Px(60.0), h=Px(200.0), fn() {  }) |> ignore
         let inner = c.id("inner")
         c.box(id=inner, w=Px(60.0), h=Px(40.0), fn() {  }) |> ignore
-        if c.clicked(inner) {
+        c.on_press(inner, fn() {
           pressed.val = pressed.val + 1
-        }
+        })
       })
       |> ignore
       c.with_dismissed(fn(why) { told.push("\{why}") }, fn() {
@@ -870,9 +870,9 @@ test "the same layer opened from one button, ended by what it is for (Ctx::layer
               let item = c.id("item")
               item_id.val = item
               c.focusable(item)
-              if c.clicked(item) {
+              c.on_press(item, fn() {
                 pressed.val += 1
-              }
+              })
               c.box(id=item, w=Px(100.0), h=Px(40.0), fn() {  }) |> ignore
             })
             |> ignore

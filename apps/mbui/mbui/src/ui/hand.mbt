@@ -15,7 +15,7 @@ priv struct Hand {
   /// what is pressed (Ctx::pressed), and what the press went down on and what holds it (Ctx::press_within)
   pressed : @signals.Keyed[Int]
   press_on : @signals.Keyed[Int]
-  /// what was clicked, and clicked twice, since the frame before (Ctx::clicked, double_clicked); what a press held long
+  /// what was clicked, and clicked twice, since the frame before (Ctx::on_press, on_double_press, a part's Response); what a press held long
   /// was on (Ctx::long_press)
   clicked : @signals.Keyed[Int]
   double : @signals.Keyed[Int]
@@ -106,7 +106,7 @@ fn hand_events_read() -> Unit {
 
 ///|
 /// A press of the pointer went down or up (or was called off, or a second finger came): what reads how a press goes
-/// built again (hand_presses_read), what reads the clicks by its own (Ctx::clicked: hand's `clicked`) as it is one.
+/// built again (hand_presses_read), what reads the clicks by its own (a part's Response: hand's `clicked`) as it is one.
 fn hand_pressed() -> Unit {
   hand.presses.set(@signals.untracked(fn() { hand.presses.get() }) + 1)
 }

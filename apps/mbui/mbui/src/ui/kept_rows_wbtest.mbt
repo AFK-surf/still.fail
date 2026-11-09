@@ -29,9 +29,9 @@ fn TestRows::view(self : TestRows) -> (Ctx) -> Unit {
           self.builds[i] = self.builds[i] + 1
           let row = c.id("row")
           let go = c.id("go")
-          if c.clicked(go) {
+          c.on_press(go, fn() {
             self.clicks.push(i)
-          }
+          })
           let h = if i == 9 { 900.0 } else { 50.0 + (i % 3).to_double() * 10.0 }
           let n = if i == 3 { self.mark.get() } else { 0 }
           c.box(
@@ -566,9 +566,9 @@ fn telling_rows(seen : Array[Int], taps : Ref[Int]) -> (Ctx) -> Unit {
   fn(c) {
     c.list("telling", 30, 50.0, fn(i) {
       let go = c.id("go")
-      if c.clicked(go) {
+      c.on_press(go, fn() {
         c.tell("tapped", fn() { taps.val = taps.val + 1 })
-      }
+      })
       c.after_build("shown", fn() { seen[i] = seen[i] + 1 })
       c.box(h=Px(50.0), dir=Row, padx=10.0, align=ACenter, fn() {
         c.box(w=Fill(1.0), fn() { c.text("row \{i}", size=12.0) |> ignore }) |> ignore

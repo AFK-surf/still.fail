@@ -554,9 +554,9 @@ test "a click seen in a list's row is drawn by the next frame" {
       }
       c.list("rows", 3, 40.0, fn(i) {
         let id = c.id("row/\{i}")
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           on.val = !on.val
-        }
+        })
         c.box(id~, h=Px(40.0), fn() { c.text("第 \{i} 行") |> ignore }) |> ignore
       })
       |> ignore

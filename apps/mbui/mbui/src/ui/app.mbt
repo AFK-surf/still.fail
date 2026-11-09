@@ -324,6 +324,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
   c.wake_waited = -1.0
   c.frame_by = None
   c.wake_by = None
+  // what was said to be done at a moment by now, done before anything is built (Ctx::at_moment)
+  c.dues_frame_start()
   c.page_in_hand = false
   c.cycling = false
   c.cycles.clear()
@@ -457,7 +459,6 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double, tell?
     // actions since the last frame)
     c.clicked.clear()
     c.double_clicked.clear()
-    c.click_at = None
     c.tapped = None
     desk.keys.clear()
     desk.menus.clear()
@@ -1392,8 +1393,7 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
     let target = hit_in(c.hit_ids, c.hit_rects, x, y)
     if c.active != 0 && target == c.active && !c.dragging {
       c.clicked.push(c.active)
-      c.click_at = Some((x, y))
-      // the second of two (Ctx::double_clicked): on the same, soon enough and near enough; then none is first
+      // the second of two (Ctx::on_double_press): on the same, soon enough and near enough; then none is first
       let (was, at, ax, ay) = c.last_click
       let second = was == c.active &&
         t - at <= double_click_ms &&

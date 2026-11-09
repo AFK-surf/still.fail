@@ -60,9 +60,9 @@ fn island_menu_tester() -> IslandMenu {
         if m.menu.get() {
           c.with_dismissed(fn(_) { m.menu.set(false) }, fn() {
             c.overlay("层/菜单", fn() {
-              if c.button("选这个") {
+              c.button("选这个", on_press=fn() {
                 m.picked.val = m.picked.val + 1
-              }
+              })
             })
             |> ignore
           })

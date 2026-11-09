@@ -39,9 +39,9 @@ fn points_host() -> PointsHost {
       b.over(Is(true)).width(Is(Some(150.0))).height(Is(Some(200.0))) |> ignore
       old(b, fn(c) {
         let id = c.id("old-button")
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           clicks.val = clicks.val + 1
-        }
+        })
         c.box(w=Px(80.0), h=Px(40.0), id~, bg=if c.hovered(id) { ph_old_lit } else { ph_off }, fn() {  }) |> ignore
       }).grow(Is(1.0))
       |> ignore

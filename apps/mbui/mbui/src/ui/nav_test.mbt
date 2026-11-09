@@ -11,9 +11,9 @@ fn nav_view(nav : @ui.Nav[Int]) -> (@ui.Ctx) -> Unit {
       fn(i) {
         c.column(w=Fill(1.0), h=Fill(1.0), fn() {
           c.text("title \{i}", wrap=false) |> ignore
-          if c.button("open \{i + 1}") {
+          c.button("open \{i + 1}", on_press=fn() {
             nav.push(i + 1)
-          }
+          })
           c.list("rows", 200, 30.0, fn(r) {
             c.text("row \{r} of \{i}", wrap=false) |> ignore
           })
@@ -462,9 +462,9 @@ test "a page covered by one sliding in takes no press: one where its button stil
       fn(i) {
         c.column(w=Fill(1.0), h=Fill(1.0), fn() {
           c.text("title \{i}", wrap=false) |> ignore
-          if c.button("press \{i}") {
+          c.button("press \{i}", on_press=fn() {
             pressed.push(i)
-          }
+          })
         })
         |> ignore
       },

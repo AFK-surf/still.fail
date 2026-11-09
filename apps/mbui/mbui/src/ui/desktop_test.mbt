@@ -12,9 +12,8 @@ test "desktop: a right click is the row's and the button's under it, and presses
       if c.right_clicked(button) is Some((x, _)) {
         menus.push("button at \{x.to_int()}")
       }
-      if c.clicked(row) || c.clicked(button) {
-        clicks.push("click")
-      }
+      c.on_press(row, fn() { clicks.push("click") })
+      c.on_press(button, fn() { clicks.push("click") })
       c.box(id=row, w=Px(300.0), h=Px(40.0), dir=Row, fn() {
         c.spacer()
         c.box(id=button, w=Px(40.0), h=Px(40.0), fn() {  }) |> ignore
@@ -39,7 +38,7 @@ test "desktop: the pointer's shape follows what is under it, and the arrow once 
   let t = @ui.Tester::new(
     fn(c) {
       let link = c.id("link")
-      c.clicked(link) |> ignore
+      c.takes_presses(link)
       c.column(w=Fill(1.0), fn() {
         c.box(id=link, w=Px(100.0), h=Px(30.0), fn() {  }) |> ignore
         c.editor("field", placeholder="words") |> ignore
@@ -68,12 +67,12 @@ test "desktop: what takes presses is a hand by itself; not what is off, a ground
       let tipped = c.id("tipped")
       let ground = c.id("ground")
       let look = c.id("look")
-      c.clicked(button) |> ignore
+      c.takes_presses(button)
       c.takes_presses(slider)
       c.pressed(slider) |> ignore
       c.interact(off, disabled=true) |> ignore
       c.watch_press(tipped) |> ignore
-      c.clicked(ground) |> ignore
+      c.takes_presses(ground)
       c.cursor(ground, Arrow)
       c.pressed(look) |> ignore
       c.column(w=Fill(1.0), fn() {
@@ -122,7 +121,7 @@ test "desktop: a ground that takes presses keeps the I-beam over its words picke
     fn(c) {
       c.mouse_drags_lists(false)
       let ground = c.id("ground")
-      c.clicked(ground) |> ignore
+      c.takes_presses(ground)
       c.cursor(ground, Arrow)
       c.box(id=ground, w=Fill(1.0), pad=40.0, fn() {
         c.selectable(fn() { c.rich([@ui.plain("words on a ground")], size=15.0) |> ignore })
@@ -145,7 +144,7 @@ test "desktop: what moves under a resting pointer is what it hovers" {
   let t = @ui.Tester::new(
     fn(c) {
       let a = c.id("a")
-      c.clicked(a) |> ignore
+      c.takes_presses(a)
       c.box(pt=shift.val, fn() { c.box(id=a, w=Px(50.0), h=Px(20.0), fn() {  }) |> ignore })
       |> ignore
     },
@@ -198,9 +197,9 @@ test "desktop: a press on the app's own title row drags the window and presses n
     fn(c) {
       let top = c.id("top")
       c.window_drag(top)
-      if c.clicked(top) {
+      c.on_press(top, fn() {
         clicks.val = clicks.val + 1
-      }
+      })
       c.box(id=top, w=Fill(1.0), h=Px(44.0), fn() {  }) |> ignore
     },
     w=400.0,
@@ -273,7 +272,7 @@ test "desktop: a script hovers, right clicks, presses keys and resizes the windo
   let t = @ui.Tester::new(
     fn(c) {
       let row = c.id("row")
-      c.clicked(row) |> ignore
+      c.takes_presses(row)
       if c.right_clicked(row) is Some(_) {
         seen.push("menu")
       }
@@ -590,9 +589,9 @@ test "desktop: a press on what keeps the words picked (a quote of them) leaves t
         c.selectable(fn() {
           c.rich([@ui.plain("hello wide world")], size=15.0) |> ignore
           let id = c.id("quote")
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             pressed.val += 1
-          }
+          })
           c.keeps_selection(id)
           c.box(w=Px(60.0), h=Px(30.0), id~, fn() { c.text("quote", wrap=false) |> ignore }) |> ignore
         })
@@ -771,9 +770,9 @@ test "desktop: a finger hovers over nothing, and lifted it is nowhere; a mouse h
     let b = c.id("b")
     let (px, _, _) = c.pointer()
     // (the frame that sees the tap still reads where it was: what the tap opens there)
-    if c.clicked(b) {
+    c.on_press(b, fn() {
       tapped_at.push(px.to_int())
-    }
+    })
     seen.val = "\{c.hovered(b)} \{px >= 0.0}"
     c.box(id=b, w=Px(100.0), h=Px(40.0), fn() {  }) |> ignore
   }
@@ -801,9 +800,9 @@ test "desktop: a menu is asked for by a mouse's right click, by a finger held st
     if c.menu_asked(row) is Some((x, _)) {
       asked.push("menu at \{x.to_int()}")
     }
-    if c.clicked(row) {
+    c.on_press(row, fn() {
       clicks.push("click")
-    }
+    })
     c.box(id=row, w=Px(300.0), h=Px(40.0), fn() {  }) |> ignore
   }
   let t = @ui.Tester::new(view, platform=2)
@@ -891,9 +890,9 @@ test "desktop: a finger or a pointer reaches a target smaller than its room from
     let b = c.id("b")
     lit.clear()
     for p in [("row", row), ("a", a), ("b", b)] {
-      if c.clicked(p.1) {
+      c.on_press(p.1, fn() {
         clicks.push(p.0)
-      }
+      })
       if c.hovered(p.1) {
         lit.push(p.0)
       }
@@ -933,9 +932,9 @@ test "desktop: a target smaller than its room at the window's edge has its room 
   let clicks : Array[String] = []
   let view = fn(c : @ui.Ctx) {
     let a = c.id("a")
-    if c.clicked(a) {
+    c.on_press(a, fn() {
       clicks.push("a")
-    }
+    })
     c.box(w=Px(200.0), h=Px(100.0), fn() { c.box(id=a, w=Px(20.0), h=Px(20.0), fn() {  }) |> ignore })
     |> ignore
   }

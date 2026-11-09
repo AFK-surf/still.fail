@@ -88,9 +88,9 @@ test "while it spreads, what is outside the circle yet is pressed as it is laid 
         c.box(id=b, w=Px(60.0), h=Px(40.0), tx=300.0, ty=240.0, bg=0x336699FFL, fn() {  }) |> ignore
       })
       |> ignore
-      if c.clicked(b) {
+      c.on_press(b, fn() {
         presses.val += 1
-      }
+      })
     })
   }, w=400.0, h=300.0)
   t.frame()

@@ -142,9 +142,9 @@ fn rows_view(n : Int) -> (Ctx) -> Unit {
       let id = c.id("row")
       c.box(h=Px(50.0), bg=0xEEEEEEFFL, id~, fn() { c.text("row \{i}") |> ignore })
       |> ignore
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         clicks.push(i)
-      }
+      })
     })
     |> ignore
   }
