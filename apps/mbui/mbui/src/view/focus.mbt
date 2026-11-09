@@ -31,17 +31,17 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
   // changes, as the change saying it is committed, the focus on it let go of then; said anew, what was said before let
   // go of)
   guard self.live() is Some(n) else { return self }
-  match n.props.get(Focusable) {
+  match n.props.get(Prop::Focusable.ord()) {
     Some(stop) => {
-      n.props.remove(Focusable)
+      n.props.remove(Prop::Focusable.ord())
       stop()
     }
     None => ()
   }
   // (its `tab` the last said of Tab's stop on it: View::tab_stop said before let go of)
-  match n.props.get(TabStop) {
+  match n.props.get(Prop::TabStop.ord()) {
     Some(stop) => {
-      n.props.remove(TabStop)
+      n.props.remove(Prop::TabStop.ord())
       stop()
     }
     None => ()
@@ -78,7 +78,7 @@ pub fn View::focusable(self : View, on : Live[Bool], keys? : Int = focus_enter |
           self.owning(fn() { set(v, first.val) })
           first.val = false
         })
-        n.props[Focusable] = stop
+        n.props[Prop::Focusable.ord()] = stop
       })
   }
   self
@@ -468,9 +468,9 @@ fn Tree::layers_focus_told(self : Tree) -> Unit {
 /// whether that takes the focus changing leaves this alone).
 pub fn View::tab_stop(self : View, on : Live[Bool]) -> View {
   guard self.live() is Some(n) else { return self }
-  match n.props.get(TabStop) {
+  match n.props.get(Prop::TabStop.ord()) {
     Some(stop) => {
-      n.props.remove(TabStop)
+      n.props.remove(Prop::TabStop.ord())
       stop()
     }
     None => ()
@@ -493,7 +493,7 @@ pub fn View::tab_stop(self : View, on : Live[Bool]) -> View {
           self.owning(fn() { set(v, first.val) })
           first.val = false
         })
-        n.props[TabStop] = stop
+        n.props[Prop::TabStop.ord()] = stop
       })
   }
   self
