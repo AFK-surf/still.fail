@@ -2456,6 +2456,17 @@ pub fn View::clips(self : View, on : Live[Bool]) -> View {
 }
 
 ///|
+/// What it holds laid out as tall as it comes to along its main axis, whatever room it has itself (its most, what holds
+/// it), as a column that scrolls has it (CSS's overflow scroll), it scrolling nothing. Layout's. (Bound, it is laid out
+/// in that room, its words cut to it: one cut by its own most from what it holds then laid out that short is laid out
+/// whole again and cut again, each pass, for ever.)
+pub fn View::holds_whole(self : View) -> View {
+  self.tree.nodes[self.at].flex.style.overflow = @flex.Overflow::Scroll
+  self.tree.layout_marked_at(self.at)
+  self
+}
+
+///|
 /// Whether what it holds is found by a finger or the pointer within it alone, as it changes (a column that scrolls in
 /// it: what is scrolled out of it takes nothing there, as an old view's clip; an old view hosted in what it holds found
 /// so too, what it takes asked only there: Tree::input_bounds). Where they are found only: how it is drawn is View::clips'.

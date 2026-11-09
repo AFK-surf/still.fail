@@ -635,18 +635,29 @@ fn one_line_node(
 /// more lines there are; pressed, all of them, 收起 under them.
 fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@view.View) -> Unit) -> Unit {
   let most = lines.to_double() * line + 2.0
-  // (how tall what it holds is laid out, all of it)
-  let tall : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
+  // (how tall what it holds is laid out, all of it: as it was last, where its row is made again as it comes to show)
+  let tall : @signals.Signal[Double] = @signals.signal(steps_own.fold_tall.get(key).unwrap_or(0.0), same=fn(a, b) {
+    a == b
+  })
   let long = fn() { tall.get() > most + 4.0 }
   let open = fn() { steps_own.opened.contains(key) }
   steps_box_node(v, h_fold, fn(f) {
     steps_box_node(f, h_fold_room, fn(room) {
-      room.max_height(By(fn() { if long() && !open() { Some(most) } else { None } })) |> ignore
+      // (cut from the first, as tall as it was last: one laid out whole and cut after is a row made another height
+      // than it shows, which its list let go and made again for ever, 0.1.7935. Measured whole however short it is
+      // cut: View::holds_whole)
+      room
+      .holds_whole()
+      .max_height(By(fn() { if open() { None } else if long() { Some(most) } else { Some(most + 4.0) } }))
+      |> ignore
       steps_box_node(room, h_fold_inner, fn(inner) {
         inner.shrink(Is(0.0)) |> ignore
         inner.reacts(fn() { inner.laid_size_told() }, fn(z) {
           match z {
-            Some((_, h)) => tall.set(h)
+            Some((_, h)) => {
+              steps_own.fold_tall[key] = h
+              tall.set(h)
+            }
             None => ()
           }
         })
@@ -1353,6 +1364,8 @@ priv struct StepsOwn {
   tops : Map[String, String]
   /// 只看收发, for every history (as the web keeps it): a signal, what each history's rows are worked out by
   only_io : @signals.Signal[Bool]
+  /// how tall each fold's words were last laid out whole, by its key (fold_node)
+  fold_tall : Map[String, Double]
 }
 
 ///|
@@ -1366,6 +1379,7 @@ let steps_own : StepsOwn = {
   went: {},
   tops: {},
   only_io: @signals.signal(false, same=fn(a, b) { a == b }),
+  fold_tall: {},
 }
 
 ///|
@@ -1379,6 +1393,7 @@ fn steps_reset() -> Unit {
   steps_own.went.clear()
   steps_own.tops.clear()
   steps_own.only_io.set(false)
+  steps_own.fold_tall.clear()
 }
 
 ///|
