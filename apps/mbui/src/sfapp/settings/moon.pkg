@@ -9,4 +9,5 @@ import {
   "stillfail/sf",
   "moonbitlang/core/json",
   "mbui/signals",
+  "mbui/view",
 }

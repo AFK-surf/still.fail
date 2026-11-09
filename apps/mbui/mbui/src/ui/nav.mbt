@@ -1241,6 +1241,12 @@ fn Ctx::forget(self : Ctx, serial : Int) -> Unit {
 }
 
 ///|
+/// Back done now, as Ctx::back does it, from a handler (an action of the window's tree's: ⌘[), no build's Ctx at hand.
+pub fn go_back() -> Bool {
+  g().back()
+}
+
+///|
 /// Back, as a back button asks: the stack drawn last (the innermost that
 /// can) goes back a page. False when nothing could.
 pub fn Ctx::back(self : Ctx) -> Bool {

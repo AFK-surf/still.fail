@@ -558,6 +558,8 @@ pub struct Tree {
   /// has read the step it is on (each reading it is worked out again as it passes a step); its steps woken for only
   /// while one such is drawn
   resident_readers : Map[Int, (Int, Double)]
+  /// its keymap, the contexts and actions its nodes say, and a sequence of keys under way (keymap.mbt)
+  keyed : KeyBook
   /// told each time what the root holds is put at another place in the window's stack of layers (View::stacked,
   /// View::over_all): what orders things by those places as it is built (an old frame's layers opened in its nodes:
   /// Tree::places_read) built again
@@ -869,6 +871,7 @@ pub fn Tree::new(
     beat: @signals.signal(start, same=fn(a, b) { a == b }),
     resident: @signals.signal(resident_of(start), same=fn(a, b) { a == b }),
     resident_readers: {},
+    keyed: KeyBook::new(),
     places: @signals.signal(0),
     room: @signals.signal((0.0, 0.0), same=fn(a, b) { a == b }),
     pressed_anywhere: @signals.signal((0, -1.0, -1.0), same=fn(a, b) { a == b }),

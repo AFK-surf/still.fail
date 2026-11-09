@@ -9,7 +9,8 @@
 /// The search's page as it stands (what it finds is sfpages' finder: switcher.mbt): open (its field off the list: `from`,
 /// its top in the window when tapped, and `wide`, its width there), going back (`leaving`); the field to take the
 /// focus as it opens. Opened by the keys (⌘K laid out Small: `summoned`), what can be done here among what it finds
-/// (`offered`), and whether over another page than the lists (`over`: the shell's, search_over).
+/// (`offered`, worked out where what it finds is built), and whether over another page than the lists (`over`: the
+/// shell's, search_over).
 priv struct Search {
   mut open : Bool
   mut leaving : Bool
@@ -18,7 +19,7 @@ priv struct Search {
   mut focus : Bool
   mut summoned : Bool
   mut over : Bool
-  mut offered : Array[Offered]
+  mut offered : (@ui.Ctx) -> Array[Offered]
   /// how its page is to come up as it is next built, opened where that page is not (a list made once: search_open_from,
   /// search_start_now): 1 from its field, 2 up at once; 0 as it is
   mut fly : Int
@@ -36,7 +37,7 @@ let search : Search = {
   focus: false,
   summoned: false,
   over: false,
-  offered: [],
+  offered: fn(_) { [] },
   fly: 0,
   said: @signals.signal(0),
 }
@@ -79,7 +80,7 @@ fn search_reset() -> Unit {
   search.focus = false
   search.summoned = false
   search.over = false
-  search.offered = []
+  search.offered = fn(_) { [] }
   search.fly = 0
   search_told()
 }
@@ -156,12 +157,13 @@ pub fn search_away_node(v : @view.View) -> () -> Double {
 }
 
 ///|
-/// ⌘K laid out Small (the shell's: sfdesk's keys.mbt): the search open, its field at the top with the keys in it, what
-/// can be done here (`offered`) among what it finds; `over` another page than the lists (a chat), drawn over it by the
-/// shell (search_over). Open already, closed.
-pub fn search_summon(c : @ui.Ctx, offered : Array[Offered], over : Bool) -> Unit {
+/// ⌘K laid out Small (the shell's keys: sfdesk's keys.mbt), at the key's moment: the search open, its field at the top
+/// with the keys in it, up at once as its page is built, what can be done here (`offered`, as what it finds is built)
+/// among what it finds; `over` another page than the lists (a chat), drawn over it by the shell (search_over). Open
+/// already, closed.
+pub fn search_summon(offered : (@ui.Ctx) -> Array[Offered], over : Bool) -> Unit {
   if search.open {
-    search_close(c)
+    search_close_now()
     return
   }
   finder_cleared()
@@ -173,10 +175,9 @@ pub fn search_summon(c : @ui.Ctx, offered : Array[Offered], over : Bool) -> Unit
   search.summoned = true
   search.over = over
   search.offered = offered
-  // (up at once, what goes away under it gone at once too: search_away_node)
+  // (up at once, what goes away under it gone at once too: search_away_node, search_page)
   search.fly = 2
   search_told()
-  search_up(c).snap(1.0)
 }
 
 ///|
@@ -211,7 +212,7 @@ fn search_gone() -> Unit {
   search.leaving = false
   search.summoned = false
   search.over = false
-  search.offered = []
+  search.offered = fn(_) { [] }
   finder_cleared()
   search_told()
 }
@@ -480,7 +481,7 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
       let lb = c.box(style=search_list_box.then(@sf.list_line(at)), fn() {
         // (its lines as wide as the line they stand on: what they go by)
         c.sized(c.width - 2.0 * @sf.list_line_in(at), c.height, fn() {
-          finder_list(c, src, w, search.offered, close, idle_chats=search.summoned, at~)
+          finder_list(c, src, w, (search.offered)(c), close, idle_chats=search.summoned, at~)
         })
       })
       c.look(lb, { ..@ui.still_look, alpha: u })
@@ -631,7 +632,7 @@ pub fn search_page_node(
         Some(w) =>
           c.box(style=search_list_box.then(@sf.list_line(at)), fn() {
             c.sized(c.width - 2.0 * @sf.list_line_in(at), c.height, fn() {
-              finder_list(c, src, w, search.offered, close, idle_chats=search.summoned, at~)
+              finder_list(c, src, w, (search.offered)(c), close, idle_chats=search.summoned, at~)
             })
           })
           |> ignore

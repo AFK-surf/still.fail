@@ -704,7 +704,7 @@ fn rail_native_taps(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     } else if id == "workspace-switch" {
       @sfpages.open_workspaces(src, Of(native_workspace_anchor.val), compact=true)
     } else if id == "sidebar/search" {
-      switcher_toggle(c)
+      switcher_toggle(fn() { c.blur() })
     } else if id.has_prefix("sidebar/filter/") {
       match id.substring(start=15) {
         "all" => rail_go(c, src, w, "chats")

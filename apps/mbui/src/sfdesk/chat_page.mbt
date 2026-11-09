@@ -74,14 +74,17 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   if find_chat() != "" && find_chat() != key {
     (list.forget)()
   }
-  let prefs = src.topic("prefs", {}).get().value
   match view {
     Some(v) => {
       // coming to need the viewer while open, felt (feel.mbt)
       @sfbase.feel_needed(c, r, v)
-      if @settings.action_pressed(c, prefs, "chat.find") && v.thread is Some(_) {
+      // the chat's keys (keymap.ts's chat group): its actions, the keymap's Chat
+      c.key_context("Chat")
+      c.on_action("chat.find", fn() {
+        guard v.thread is Some(_) else { return false }
         chat_find_open(c, r)
-      }
+        true
+      })
       chat_keys(c, src, w, r, v, chat)
     }
     None => ()
@@ -114,33 +117,44 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
 let chat_ground : @ui.Style = @ui.css("w=Full h=Full bg=Bg")
 
 ///|
-/// The chat's own keys (keymap.ts): ⌘⇧E into the archive while nothing is left in it, ⌘⇧H
-/// its first agent's history beside it (one in front: the panel closed), ⌘. its agents at work stopped, its services
-/// and jobs (chat.jobs), its station's own display (chat.screen); ⌘U the system's file picker for its draft
-/// (composer.file); Space with no field focused, the composer (composer.focus).
+/// The chat's own keys (keymap.ts), its actions as it is built, each done at its key's moment: ⌘⇧E into the archive
+/// while nothing is left in it, ⌘⇧H its first agent's history beside it (one in front: the panel closed), ⌘. its agents
+/// at work stopped, its services and jobs (chat.jobs), its station's own display (chat.screen); ⌘U the system's file
+/// picker for its draft (composer.file); Space with no field focused (the keymap's `!Field`), the composer
+/// (composer.focus). What it cannot do now passes the key on.
 fn chat_keys(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView, chat : Json?) -> Unit {
-  let prefs = src.topic("prefs", {}).get().value
-  if @settings.action_pressed(c, prefs, "chat.jobs") {
+  c.on_action("chat.jobs", fn() {
     toggle_jobs_pop()
-  }
-  if @settings.action_pressed(c, prefs, "chat.screen", in_field=true) {
+    true
+  })
+  c.on_action("chat.screen", fn() {
     chat_screen_first(r, v.screens)
-  }
-  if !c.field_focused() && @settings.action_pressed(c, prefs, "composer.focus") && !switcher_open() {
+    true
+  })
+  c.on_action("composer.focus", fn() {
+    guard !switcher_open() else { return false }
     composer_focus(c, src, r)
-  }
-  if @settings.action_pressed(c, prefs, "chat.archive", in_field=true) && !v.archived && !v.offline {
-    c.tell("chat/archive", fn() { archive_asked(src, w, r, v, chat) })
-  }
-  if @settings.action_pressed(c, prefs, "chat.history", in_field=true) && v.agents.length() > 0 {
+    true
+  })
+  c.on_action("chat.archive", fn() {
+    guard !v.archived && !v.offline else { return false }
+    archive_asked(src, w, r, v, chat)
+    true
+  })
+  c.on_action("chat.history", fn() {
+    guard v.agents.length() > 0 else { return false }
     history_toggle(src, r, v)
-  }
-  if @settings.action_pressed(c, prefs, "chat.stop", in_field=true) {
+    true
+  })
+  c.on_action("chat.stop", fn() {
     stop_agents(src, r, v)
-  }
-  if @settings.action_pressed(c, prefs, "composer.file", in_field=true) && !v.offline {
+    true
+  })
+  c.on_action("composer.file", fn() {
+    guard !v.offline else { return false }
     @sfpages.pick_files(writing(src, r.station + ":" + r.session))
-  }
+    true
+  })
 }
 
 ///|

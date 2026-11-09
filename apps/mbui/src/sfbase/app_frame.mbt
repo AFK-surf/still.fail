@@ -199,7 +199,7 @@ fn system_said(json : String) -> Unit {
       }
       // 检查更新 from the menu bar (menu_bar.mbt)
       Menu("update.check") => update_from_menu(src)
-      // one of the pages' actions from the menu bar: as its keys pressed (keymap.mbt action_pressed)
+      // one of the pages' actions from the menu bar: done as its keys are (keymap.mbt ask_action)
       Menu(action) => @settings.ask_action(action)
       // a package handed to the system's installer could not be installed
       InstallAllow(..) => toast_later(@sf.t("android-chat.file.allowInstall", args=[("app", "still.fail")]))

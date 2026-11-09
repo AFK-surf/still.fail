@@ -324,10 +324,9 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   @sfbase.held_build()
   c.after_build("held/end", fn() { @sfbase.held_end() })
   shell.val = pages_shell(src)
-  // the Mac's menu bar, in the app's words (menu_bar.mbt); an item of the pages' chosen is read as its keys by the
-  // frame after the menu said it (@settings.ask_action), and asked no more once that frame is built
+  // the Mac's menu bar, in the app's words (menu_bar.mbt); an item of the pages' chosen is done as its action is, at
+  // that moment (@settings.ask_action)
   menu_bar(c, src)
-  c.after_build("menu-asked", fn() { @settings.action_asked_done() })
   @sfdesk.window_zoom_keys(c, src)
   appearance(c, src, page_dark(src))
   faces(src, @sfdesk.is_wide(c))
@@ -457,6 +456,10 @@ pub fn app_tree(src : Source) -> (@view.View) -> Unit {
     @sf.set_words(fill)
     // Keep the prefs reader with the tree from its first read, including before the first frame is built.
     root.reacts(fn() { src.topic("prefs", {}).get().value }, @sfbase.language_from_prefs)
+    // (the window's keys as the core's prefs keep them on this device, changed as they are: settings' keymap.mbt)
+    root.keymap(By(fn() { @settings.keymap_of(src.topic("prefs", {}).get().value) })) |> ignore
+    // (the window's size from the menu bar, in every state: sfdesk's window_zoom.mbt)
+    @sfdesk.zoom_actions(root, src)
     // (pictures by their address as the core gives them, said before any page of nodes is made: what one shows on its
     // first frame asks the core, not the library's stand-in; the old frame says it each build, the same)
     @sf.picture_of.val = fn(url, frame) { (src.picture)(url, frame) }
@@ -520,6 +523,11 @@ fn app_state_tree(root : @view.View, src : Source) -> Unit {
         // (tape_shell.mbt); the ways in, the splash, a window of its own; nothing before the window has a width
         v.pick(fn() { shell_is(src, v.window().0) }, fn(s, shell) {
           s.grow(Is(1.0)) |> ignore
+          // the app's keys, in every tier with a workspace in view (sfdesk's keys.mbt): what is the wide frame's alone
+          // passes the key on laid out Small
+          if shell is (Stacked | Taped | Paned) {
+            @sfdesk.frame_actions(s, src)
+          }
           match shell {
             Stacked => narrow_shell(s, src)
             Taped => taped_shell(s, src)

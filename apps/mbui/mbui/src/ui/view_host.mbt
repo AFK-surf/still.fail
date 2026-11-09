@@ -2926,6 +2926,11 @@ pub fn old(
     let held_build = fn(c : Ctx) {
       let was = island_building.val
       island_building.val = Some(id)
+      // (what it says of the keyboard said anew as it is built: Ctx::on_action)
+      match view_app.val {
+        Some(t) => t.keys_said(id, anew=true)
+        None => ()
+      }
       match faulted.get() {
         Some(said) => (old_fault_shown.val)(c, said)
         None => build(c)
@@ -3919,9 +3924,7 @@ fn view_key(code : Int, mods : Int) -> Bool {
   // (its undo and redo, paste, the app's shortcuts: key_in) the old frame's, as ever; what it takes not (Escape) the
   // layers', of the tree's what holds it alone, by the stack as any focus's)
   let field = c.editors.contains(focus)
-  if field && (field_key(code) || (mods & (mod_cmd | mod_ctrl)) != 0) {
-    return false
-  }
+  let field_own = field && (field_key(code) || (mods & (mod_cmd | mod_ctrl)) != 0)
   // (the old frame's layers take the keys; where the focus is on what of the tree is over all of them (View::over_all),
   // it first, and what of the tree is over all else alone: what none of that takes, the old frame's)
   // (the old frame's layers that take the keys: where the one taking them is in the window's stack of layers; the focus
@@ -3949,9 +3952,17 @@ fn view_key(code : Int, mods : Int) -> Bool {
   if old_keys > -3 && !over && !(under_modal && modal > old_keys) {
     return false
   }
-  // (a field's in none of the tree: the old frame's)
-  if field && held is None {
-    return false
+  // (what the keymap binds the key to, from where the focus is: the focus in a field a fact of the key, `Field`, and
+  // `FieldEmpty` where nothing is written in it; a field's own keys and those with ⌘ or Ctrl held its where no action
+  // takes them, as a field's in none of the tree: the old frame's)
+  let facts = match c.editors.get(focus) {
+    Some(e) if e.text == "" => ["Field", "FieldEmpty"]
+    Some(_) => ["Field"]
+    None => []
+  }
+  let actions = fn() { tree.stroke(code, mods, view_moment(), from=held, facts~) }
+  if field_own || (field && held is None) {
+    return actions()
   }
   // (Enter or Space on a node of its own with the focus, of the keys that press it: its press, at the key's moment)
   if mods == 0 && (code == key_enter || code == key_space) {
@@ -3965,7 +3976,57 @@ fn view_key(code : Int, mods : Int) -> Bool {
       _ => ()
     }
   }
-  tree.key_at(code, mods, view_moment(), above=old_keys, within=if field { held } else { None })
+  // (a node's own keys first (View::on_key: a panel's Escape), then the keymap's actions)
+  tree.key_at(code, mods, view_moment(), above=old_keys, within=if field { held } else { None }) || actions()
+}
+
+///|
+/// What the old view being built does for `action` (as its keys are pressed, the window's keymap's, or its menu's item
+/// chosen: View::on_action's, of the node it is hosted in), said as it is built and so till it is built again: `f` run
+/// at that moment, true where it took it (false: passed on). Said by none hosted in a node of the window's tree,
+/// nothing.
+pub fn Ctx::on_action(self : Ctx, action : String, f : () -> Bool) -> Unit {
+  ignore(self)
+  match (view_app.val, island_building.val) {
+    (Some(t), Some(id)) => t.keys_said(id, action=(action, fn(_) { f() }))
+    _ => ()
+  }
+}
+
+///|
+/// The old view being built is context `name` for the keymap's bindings (View::key_context's, of the node it is hosted
+/// in), as it is built and till it is built again.
+pub fn Ctx::key_context(self : Ctx, name : String) -> Unit {
+  ignore(self)
+  match (view_app.val, island_building.val) {
+    (Some(t), Some(id)) => t.keys_said(id, context=name)
+    _ => ()
+  }
+}
+
+///|
+/// Action `action` asked by name (the menu bar's item chosen) of the window's tree, from where the focus is, at this
+/// moment (Tree::ask_action): true where a node of it took it; else what the old views read of it is theirs.
+pub fn view_action(action : String) -> Bool {
+  match view_app.val {
+    Some(tree) => {
+      let took = tree.ask_action(action, view_moment(), from=focus_node_of(g().focus))
+      if took {
+        h_frame_owed()
+      }
+      took
+    }
+    None => false
+  }
+}
+
+///|
+/// The keys that do `action` where the focus is now, by the window's tree's keymap (Tree::keys_for).
+pub fn view_keys_for(action : String) -> Array[Array[@view.Stroke]] {
+  match view_app.val {
+    Some(tree) => tree.keys_for(action, from=focus_node_of(g().focus))
+    None => []
+  }
 }
 
 ///|

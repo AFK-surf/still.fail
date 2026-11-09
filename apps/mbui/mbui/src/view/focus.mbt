@@ -238,6 +238,10 @@ fn Tree::focus_set(self : Tree, id : NodeId?, visible : Bool) -> Unit {
   let shown_was = self.focus_visible
   self.focused = id
   self.focus_visible = visible
+  // (a sequence of keys under way ends as the focus moves: keymap.mbt)
+  if was != id {
+    self.keys_end(FocusMoved)
+  }
   // (told as one change: what reads both never sees one half of it)
   @signals.start_batch()
   if was != id {

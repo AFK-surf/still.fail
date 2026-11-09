@@ -262,7 +262,8 @@
     },
     "old-island": {},
     "old-panel": {},
-    "click-read": {}
+    "click-read": {},
+    "key-read": {}
   },
   "excused": {
     "frame-request": {},
@@ -325,7 +326,8 @@
     "old-list": {},
     "old-island": {},
     "old-panel": {},
-    "click-read": {}
+    "click-read": {},
+    "key-read": {}
   },
   "tester": {
     "names": [

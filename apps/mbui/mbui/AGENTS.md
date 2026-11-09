@@ -23,13 +23,15 @@ yet and you can add one, add it.
 
 - What is new is made in `src/view` (`Tree`, `View`): a node's property is `Live` (`Is(v)` once, `By(fn)` bound); what
   comes and goes is a structure (`View::show`, `pick`, `each`), which owns and lets go what it made; acting is a
-  handler (`on_press`, `on_key`, `on_drag`), run outside tracking, writing state; time is read where it is drawn
-  (`moved_by`, a look's closure), never as a frame is built. `src/view/view.mbt`'s head says the model whole.
+  handler (`on_press`, `on_key`, `on_drag`), run outside tracking, writing state; a shortcut is an action
+  (`on_action`), its keys the tree's keymap's (`View::keymap`: `src/view/keymap.mbt`), never a key read as a build
+  runs (detlint `key-read`); time is read where it is drawn (`moved_by`, a look's closure), never as a frame is built.
+  `src/view/view.mbt`'s head says the model whole.
 - State that what is made reads is a signal: a mutable value read by a binding that is not one is never seen to
   change (detlint `built-by-hand`).
 - `Ctx` is going: no new code is built on it. What is left is counted by detlint (`old-island`, `old-list`,
-  `click-read`, `build-motion`, `layout-read-back`, `ui-current`, `build-clock`) and those counts only fall; an API
-  goes from mbui once its count is none.
+  `click-read`, `key-read`, `build-motion`, `layout-read-back`, `ui-current`, `build-clock`) and those counts only
+  fall; an API goes from mbui once its count is none.
 
 ## Time in a test is declared, never waited for
 
