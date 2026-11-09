@@ -20,10 +20,11 @@ const S = "bb".repeat(32);
 function station(first: Entry) {
   const chain: Entry[] = [first];
   const came: Record<string, unknown>[] = [];
-  const say = { old: false, asked: [] as string[] };
+  const say = { old: false, refuse: false, asked: [] as string[] };
   const head = (): Head => ({ seq: chain.length - 1, hash: entryHash(chain.at(-1)!), genesis: entryHash(chain[0]!) });
   const answer = (method: string, path: string, body: unknown): Effect.Effect<unknown, CoreError> => {
     say.asked.push(`${method} ${path}`);
+    if (say.refuse) return Effect.fail(new CoreError("lock_unconfirmed", "this device is not on the lock its person bound in this workspace"));
     if (say.old) return path.startsWith("/lock?") || path === "/lock" ? Effect.succeed({ head: head(), entries: [], takes: ["person"] }) : Effect.fail(new CoreError("http_404", "no route", 404));
     const serves = { takes: ["person"], serves: ["person", "devices", "told"] };
     if (method === "GET" && (path === "/lock" || path.startsWith("/lock?after="))) {
@@ -127,6 +128,12 @@ test("a station refusing this device tells its lock's last entries: one taken ou
   for (let i = 0; i < 50 && held(inner, "ws")?.head?.seq !== 1; i++) await r.host.time.pass(10);
   assert.equal(held(inner, "ws")?.head?.seq, 1);
   assert.equal(fold(held(inner, "ws")!.entries).devices.has(ME), false);
+  // Read again while refused (the workspace said the lock moved): the stations asked, the cloud not.
+  st.say.refuse = true;
+  cloud.asked.length = 0;
+  await run(read(inner, "ws"));
+  assert.equal(cloud.asked.length, 0, cloud.asked.join());
+  st.say.refuse = false;
   // Entries that do not go on from the lock held are not taken.
   const other = signer().sign(next("ws", { seq: 1, hash: "ff".repeat(32), genesis: st.head().genesis }, 1002, "member", { sub: "s9", email: "x@x.com", role: "member" }));
   hooks.lockRefused!(inner, "ws", A, st.head(), { entries: [other] });

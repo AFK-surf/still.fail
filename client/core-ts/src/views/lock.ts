@@ -373,7 +373,17 @@ function readSaid(inner: Inner, ws: string, says: string): void {
 export function read(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
   // What changed while it read is read again: an ask made meanwhile under the same key was folded into this one.
   return Effect.gen(function* () {
-    if (inner.provider.kind === "stillfail" && (yield* readLockOf(inner, ws, lockStations(inner, ws)))) return;
+    if (inner.provider.kind === "stillfail") {
+      const said = { refused: false };
+      if (yield* readLockOf(inner, ws, lockStations(inner, ws), said)) return;
+      // Refused by the stations it reached, a lock held: each refusal tells the lock's last entries (refusedFor), so
+      // it is not read of the cloud (each of a person's refused devices did, as each entry was signed, and used up the
+      // account's budget: enrolling a station was turned away). They are asked again instead, which tells it again.
+      if (said.refused && held(inner, ws)?.head) {
+        refusedAgain(inner, ws);
+        return;
+      }
+    }
     for (let round = 0; round < 3; round++) {
       const before = cloudSays(view(inner, ws));
       yield* readOnce(inner, ws);
@@ -411,8 +421,8 @@ function lockStations(inner: Inner, ws: string): string[] {
 
 /// The lock read of `stations` (each one's GET /lock, and the devices that came to it): held when one of them answered,
 /// as the longest chain that goes on from the one held (one that keeps another lock or none says so, and is not taken);
-/// false when none did (nothing held then).
-function readLockOf(inner: Inner, ws: string, stations: string[]): Effect.Effect<boolean, CoreError> {
+/// false when none did (nothing held then; `said.refused`: one refused this device for the lock).
+function readLockOf(inner: Inner, ws: string, stations: string[], said?: { refused: boolean }): Effect.Effect<boolean, CoreError> {
   return Effect.gen(function* () {
     const sub = inner.workspaces.owner(ws);
     if (sub === null || stations.length === 0) return false;
@@ -425,6 +435,7 @@ function readLockOf(inner: Inner, ws: string, stations: string[]): Effect.Effect
       stations.map((id) =>
         Effect.gen(function* () {
           const r = yield* ask(id, `/lock?after=${was?.head && !off ? was.head.seq : -1}`);
+          if (r._tag === "Failure" && r.failure.code === "lock_unconfirmed" && said) said.refused = true;
           // One from before this was read of serves none of it (its devices read the cloud).
           if (r._tag === "Success" && arr(get(r.success, "serves")).includes("told")) p.serving.add(id);
           else p.serving.delete(id);
