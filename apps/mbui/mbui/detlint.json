@@ -265,9 +265,7 @@
     "click-read": {},
     "key-read": {},
     "part-place": {},
-    "layout-told": {
-      "src/ui/tree_links.mbt": 2
-    }
+    "layout-told": {}
   },
   "excused": {
     "frame-request": {},

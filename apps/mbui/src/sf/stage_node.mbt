@@ -74,16 +74,11 @@ fn stage_node(
       |> ignore
       // (what it holds: as tall as it is laid out at the stage's width, giving way to what the column leaves it)
       // (the room the column gives it, as the tree laid it out: what it is drawn smaller to)
-      let body_at : Ref[@view.View?] = Ref(None)
-      let body = @ui.old(d, natural=true, gives=true, key=fn() { key + "/body" }, fn(c) {
+      @ui.old(d, natural=true, gives=true, key=fn() { key + "/body" }, fn(c) {
           let (sw, sh) = room()
-          let given = match body_at.val {
-            Some(b) =>
-              match b.laid_size_told() {
-                Some((_, g)) if g > 0.0 => g
-                _ => sh
-              }
-            None => sh
+          let given = match @ui.old_given() {
+            Some((_, g)) if g > 0.0 => g
+            _ => sh
           }
           let was = (stage_room.val, stage_gives.val)
           stage_room.val = Some((sw, sh))
@@ -110,7 +105,7 @@ fn stage_node(
       .margin(By(fn() { in_middle(laid_w) }))
       .shrink(Is(1.0))
       .min_height(Is(Some(0.0)))
-      body_at.val = Some(body)
+      |> ignore
       // (under it: what is chosen of it over 关闭 and its foot's buttons, on the night)
       @ui.old(d, natural=true, fits=(stage_fits_most, under_w), key=fn() { key + "/foot" }, fn(c) {
           let night = on_night.val

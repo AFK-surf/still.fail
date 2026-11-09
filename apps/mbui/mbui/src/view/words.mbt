@@ -156,7 +156,7 @@ pub fn View::runs_picked_now(self : View) -> (Int, Int) {
 
 ///|
 /// Where the pointer is in its own terms (where it is drawn now, as big as it is drawn), as the tree last had it; None
-/// where the tree has it nowhere (gone from the window) or it is let go. Read once, not followed (pointer_here_told).
+/// where the tree has it nowhere (gone from the window) or it is let go. Read once, not followed (what is under it worked out as things are placed: View::pointer_piece).
 pub fn View::pointer_here(self : View) -> (Double, Double)? {
   guard self.alive() else { return None }
   self.tree.pointer_in(self.at)
@@ -176,17 +176,18 @@ fn Tree::pointer_in(self : Tree, at : Int) -> (Double, Double)? {
 }
 
 ///|
-/// Where the pointer is in its own terms (pointer_here's), followed: told as the pointer moves and as what changed is
-/// placed (it, or what holds it, moved or grown under a pointer that stays where it is), at the change's end, no frame
-/// waited for (as View::pointer_within is: Tree::withins_told). Never what a move of the pointer's own is told by
-/// (View::on_pointer_moved).
-pub fn View::pointer_here_told(self : View) -> (Double, Double)? {
-  guard self.live() is Some(n) else { return None }
-  let cell = match n.here_cell {
-    Some(c) => c
+/// Which piece of it the pointer is over (a link of its words'), as `piece` says from where the pointer is in its own
+/// terms (-1: none of them; -1 too where the pointer is nowhere), followed: worked out by the tree as the pointer moves
+/// and as anything is placed or laid out (it or what holds it moved, grown, its words set again under a pointer that
+/// stays where it is), as what the pointer is within is (Tree::withins_told), and told only as that comes out
+/// otherwise. `piece` the first one asked, for as long as it lives.
+pub fn View::pointer_piece(self : View, piece : (Double, Double) -> Int) -> Int {
+  guard self.live() is Some(n) else { return -1 }
+  let cell = match n.piece_cell {
+    Some((c, _)) => c
     None => {
-      let c = @signals.signal(self.tree.pointer_in(self.at), same=fn(a, b) { a == b })
-      n.here_cell = Some(c)
+      let c = @signals.signal(@signals.untracked(fn() { self.tree.piece_in(self.at, piece) }), same=fn(a, b) { a == b })
+      n.piece_cell = Some((c, piece))
       if n.within_cell is None {
         self.tree.withins_at.push((self.at, n.gen))
       }
@@ -194,6 +195,15 @@ pub fn View::pointer_here_told(self : View) -> (Double, Double)? {
     }
   }
   cell.get()
+}
+
+///|
+/// Which piece of node `at` the pointer is over, by `piece` (View::pointer_piece): -1 where the pointer is nowhere.
+fn Tree::piece_in(self : Tree, at : Int, piece : (Double, Double) -> Int) -> Int {
+  match self.pointer_in(at) {
+    Some((x, y)) => @signals.untracked(fn() { piece(x, y) })
+    None => -1
+  }
 }
 
 ///|

@@ -566,11 +566,7 @@
       "src/sfpages/switcher.mbt": 2
     },
     "part-place": {},
-    "layout-told": {
-      "src/sf/panel_node.mbt": 1,
-      "src/sf/stage_node.mbt": 1,
-      "src/sfbase/viewer_marks_node.mbt": 2
-    }
+    "layout-told": {}
   },
   "excused": {
     "frame-request": {},

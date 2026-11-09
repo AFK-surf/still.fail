@@ -45,8 +45,12 @@ priv struct OldIsland {
   /// as tall as what it holds at its width (old's `natural`): that height as the old frame last laid it out (None
   /// before it first is), what its node is as tall as; the box it is laid out in, as tall as it (-1: none this frame)
   natural : @signals.Signal[Double?]?
-  /// laid out in the height its node is given, as tall as what it holds asks all the same (old's `gives`)
+  /// laid out in the height its node is given, as tall as what it holds asks all the same (old's `gives`); that height
+  /// (how big its node is placed), as the old frame places it, followed by its build (old_given)
   gives : Bool
+  given : @signals.Signal[(Double, Double)?]
+  /// the side what holds its node went on beside what it goes beside, as the tree placed it (old_went)
+  went : @signals.Signal[@view.Side?]
   /// as wide as what it holds, `most` at most and never narrower than it is (old's `fits`): the least that is, as the
   /// old frame last laid it out, told the signal (None before it first is)
   fits : (Double, @signals.Signal[Double?])?
@@ -774,6 +778,16 @@ fn old_place(tree : @view.Tree) -> Unit {
     let (c, x, y, a, s, ux, uy, _) = d
     let (ox, oy) = tree.laid_origin(c.id).unwrap_or((x, y))
     old_placed.push((c.id, x, y, c.w, c.h, a, ox, oy, s))
+    // (the side what holds it went beside what it goes beside, for its build (old_went): told as it changes)
+    match old_islands.iter().find_first(fn(o) { o.id == c.id }) {
+      Some(o) => {
+        let went = tree.went_over(c.id)
+        if @signals.untracked(fn() { o.went.get() }) != went {
+          o.went.set(went)
+        }
+      }
+      None => ()
+    }
     // (where it would be drawn were nothing grown, shrunk or drawn off, as the tree's own words are set on the pixels
     // there: off where its layout alone puts it by what places it beside another or offsets it)
     old_placed_off[c.id] = (ux - ox, uy - oy)
@@ -942,6 +956,10 @@ fn old_frame(c : Ctx) -> Unit {
               None => w
             }
             o.room.val = (room_w, room_h)
+            // (how big its node is placed, for its build to give way to (old_given): told as it changes, built again)
+            if o.gives && @signals.untracked(fn() { o.given.get() }) != Some((w, h)) {
+              o.given.set(Some((w, h)))
+            }
             let put = fn() { owned_by(o.owner, fn() { o.watch.read(fn() { c.made(o.key, fn() { o.made }) }) }) }
             c.sized(room_w, room_h, fn() {
               match o.natural {
@@ -2359,6 +2377,36 @@ fn Ctx::view_blit(
 let island_building : Ref[@view.NodeId?] = Ref(None)
 
 ///|
+/// How big the node of the old view being built is placed (old's `gives`: the room it gives way to), as the old frame
+/// places it, followed: its build done again as it changes. None outside such a build, or before its node is placed.
+pub fn old_given() -> (Double, Double)? {
+  match island_building.val {
+    Some(id) =>
+      match old_islands.iter().find_first(fn(o) { o.id == id }) {
+        Some(o) if o.gives => o.given.get()
+        _ => None
+      }
+    None => None
+  }
+}
+
+///|
+/// The side what holds the node of the old view being built went on beside what it goes beside (View::beside: the side
+/// it was said to go on, or the other where it had not the room), as the tree placed it, followed: its build done again
+/// as it goes to the other side. None outside an old view's build, where nothing holding it goes beside another, or
+/// before it is first placed.
+pub fn old_went() -> @view.Side? {
+  match island_building.val {
+    Some(id) =>
+      match old_islands.iter().find_first(fn(o) { o.id == id }) {
+        Some(o) => o.went.get()
+        None => None
+      }
+    None => None
+  }
+}
+
+///|
 /// What an old view's build asked that cannot be done as asked (@view.Tree::fault): told to the boundary round the old
 /// view being built (each old view is one: `old`), its build going on as what asked it says.
 fn old_fault(said : String) -> Unit {
@@ -3051,6 +3099,8 @@ pub fn old(
       room,
       natural: natural_h,
       gives: natural && gives,
+      given: @signals.signal(None, same=fn(a, b) { a == b }),
+      went: @signals.signal(None, same=fn(a, b) { a == b }),
       fits: if natural { fits } else { None },
       held_box: -1,
     })
