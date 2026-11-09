@@ -1204,6 +1204,11 @@ fn Ctx::moved_place(self : Ctx) -> Unit {
           self.moved_shift(i, mx - n.moved_x, my - n.moved_y)
           n.moved_x = mx
           n.moved_y = my
+          // (carried a share of a pixel: a list in it has its rows set on the pixels where it is now, as laying it out
+          // there sets them)
+          if n.moved_carries && self.rows_on_grid() {
+            self.rows_carried(i)
+          }
         }
       }
       None => ()

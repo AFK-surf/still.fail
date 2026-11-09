@@ -1668,9 +1668,11 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
   // what goes is read in the phase that draws it. The notch opening or closing, each place lighting up or going dim
   // and the bar going down or coming back change only how it is painted: read as each frame is painted, where they
   // are drawn (BarModel::k_painted, Glide::painted), this built once for them, as where they go is told, and again as
-  // they end (what shows of it then: a disc gone with the notch closed). The panel, the ball (its size and its stretch
-  // are its shape), its lens, a bar chosen landing and the notch's icon swapping are read here: built each frame
-  // they go.
+  // they end (what shows of it then: a disc gone with the notch closed). So too the ball fading and growing in or out
+  // (as the bar comes back over the chats, or a place is left): its look as it is painted, laid out at its whole size
+  // (2026-11-09: built each frame of the bar's coming back, the frame and the page sliding under it built whole with
+  // it). The panel, the ball's place and stretch (its shape), its lens, a bar chosen landing and the notch's icon
+  // swapping are read here: built each frame they go.
   c.shows_motion(
     bar_clock.mover,
     dmax(
@@ -1679,14 +1681,14 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
         dmax(m.held.end(), m.up.end()),
         dmax(
           dmax(m.ball_x.end(), m.ball_y.end()),
-          dmax(dmax(m.ball_alpha.end(), m.ball_scale.end()), m.icon_swap.end()),
+          m.icon_swap.end(),
         ),
       ),
     ) >
     now,
   )
   // (each as it ends, whichever ends first: what shows of each then is built at its own end)
-  let ends = [m.k.end(), m.o.end(), m.up.end(), m.vis.end()]
+  let ends = [m.k.end(), m.o.end(), m.up.end(), m.vis.end(), m.ball_alpha.end(), m.ball_scale.end()]
   for _, g in m.tints {
     ends.push(g.end())
   }
@@ -1815,7 +1817,9 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
         disc_look(c, disc, action_moves, k_now, m.up.x)
       }
       // the ball, under the places, stretched by its speed toward where it goes; its glass frosts what the bar's does
-      let scale = (1.0 + 0.06 * m.held.x) * m.ball_scale.value
+      // (as it fades and grows in or out, its look as each frame is painted: laid out at its whole size)
+      let ball_going = m.ball_alpha.end() > now || m.ball_scale.end() > now
+      let scale = 1.0 + 0.06 * m.held.x
       let v = if (m.ball_x.to - m.ball_x.x).abs() < 0.5 { 0.0 } else { m.ball_x.v / 60.0 }
       let (stretch, lower) = @kit.speed_stretch(v)
       let bw = ball_size + stretch
@@ -1824,7 +1828,7 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
       let bcx = left + bw / 2.0
       let sw = bw * scale
       let sh = bh * scale
-      if m.ball_alpha.value > 0.0 {
+      if m.ball_alpha.value > 0.0 || (ball_going && m.ball_alpha.target > 0.0) {
         let ball = at(c, bcx - sw / 2.0, m.ball_y.x - sh / 2.0, sw, sh, body=fn() {
           c.box(
             w=Fill(1.0),
@@ -1840,9 +1844,14 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
         })
         // (held, the lens over the places takes its place: it fades as the lens comes)
         let lensed = if c.glass_solid() { 0.0 } else { dmin(1.0, m.held.x) }
-        let ball_shows = m.ball_alpha.value * (1.0 - lensed)
-        if ball_shows < 1.0 {
-          c.look(ball, @ui.look(alpha=ball_shows))
+        if ball_going {
+          let (ba, bs) = (m.ball_alpha, m.ball_scale)
+          c.look_by(ball, fn() { @ui.look(alpha=ba.painted(c) * (1.0 - lensed), scale=bs.painted(c)) })
+        } else {
+          let ball_shows = m.ball_alpha.value * (1.0 - lensed)
+          if ball_shows < 1.0 || m.ball_scale.value != 1.0 {
+            c.look(ball, @ui.look(alpha=ball_shows, scale=m.ball_scale.value))
+          }
         }
       }
       match swap {
@@ -1893,7 +1902,12 @@ fn bar_drawn(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown 
         let lens = at(c, bcx - lw / 2.0, m.ball_y.x - lh / 2.0, lw, lh, body=fn() {
           c.box(style=lens_box, glass=@sf.glass_lens(), fn() {  }) |> ignore
         })
-        c.look(lens, @ui.look(alpha=dmin(1.0, m.held.x) * m.ball_alpha.value))
+        if ball_going {
+          let (ba, bs, held) = (m.ball_alpha, m.ball_scale, dmin(1.0, m.held.x))
+          c.look_by(lens, fn() { @ui.look(alpha=held * ba.painted(c), scale=bs.painted(c)) })
+        } else {
+          c.look(lens, @ui.look(alpha=dmin(1.0, m.held.x) * m.ball_alpha.value, scale=m.ball_scale.value))
+        }
       }
       match swap {
         None => ()

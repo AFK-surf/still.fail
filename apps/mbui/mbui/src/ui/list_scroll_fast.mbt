@@ -246,6 +246,7 @@ fn Ctx::list_hand_move(self : Ctx, at : Double) -> String {
   st.pending = 0.0
   st.pinned_by = 0.0
   st.drag_pending = 0.0
+  st.on_pixels_by = y - want
   st.left = (st.anchor, st.anchor_off, st.pending, st.at_end, st.glide)
   // (its rows kept as they are, moved: what the frame kept, Tester::rows_kept)
   let parts = nodes_run.kept_at.filter(fn(k) { k.1 < 0 })
