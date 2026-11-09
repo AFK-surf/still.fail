@@ -224,7 +224,7 @@ export function optionsSaid(options: Json): string {
     const label = `${i + 1}. ${typeof o?.label === "string" ? o.label : ""}`;
     return o?.recommended !== undefined ? `${label} (recommended)` : label;
   });
-  return ` People can pick, numbered as the card shows them: ${labels.join("; ")}; a reply option reaches you as their message quoting this one with the option's label (action=close ends the wait silently). A message in the chat also closes the card, but may be a clarification rather than an answer.`;
+  return ` People can pick, numbered as the card shows them: ${labels.join("; ")}; a reply option reaches you as their message quoting this one with the option's label (action=close ends the wait silently: you are told the choice with what you are next handed). A message in the chat also closes the card, but may be a clarification rather than an answer.`;
 }
 
 /// What chat_post says of the card it posted.

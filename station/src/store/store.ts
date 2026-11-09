@@ -22,7 +22,7 @@ import {
   type Attachment, type AutoTitle, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
   type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Handed, type Letter, type AuthorKind, type ProcessRow, type ProfileStatus,
   type SessionBusy, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
-  type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, type InWorkspace, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STATION_AUTHOR, STILLFAIL_SURFACE, attachment,
+  type CardChoice, type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, type InWorkspace, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STATION_AUTHOR, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, entryColumns, jsonList, letterEntry, letterMessage, mergeEntries, optionsCard, parsed, stored, takeChars, toEntry, toJob, toMembership,
   LAST_MESSAGE, LEGACY_LAST_MESSAGE, LEGACY_MESSAGES_BEFORE, LETTER_SQL, MESSAGES_BEFORE, MESSAGE_PAGE_ENTRIES, isLetter, liveShare, shareLive, toChatShare, toMessage, toOpened, toSession, toSessionThread, toThread, toTurnSummary, JOBS_RUNNING, JOBS_UP, JOB_AT_PORT, SESSION_JOBS, CARD_BEFORE, OPTIONS_BEFORE, SESSION_OF_RUNTIME, PEOPLE_AT,
 } from "./rows.ts";
@@ -1455,6 +1455,7 @@ export class Store {
           this.#deleteMarks(READ_MARKS, thread);
           this.#deleteMarks(DISMISSED_MARKS, thread);
           this.#run("DELETE FROM closed_cards WHERE thread = ?", thread);
+          this.#run("DELETE FROM card_choices WHERE thread = ?", thread);
           this.#deleteMarks(KEPT_MARKS, thread);
           this.#deleteMarks(HIDDEN_MARKS, thread);
           this.#deleteMarks(MUTED_MARKS, thread);
@@ -2963,7 +2964,8 @@ export class Store {
     });
   }
 
-  /// Close this exact pending card for everyone. This writes no message or delivery: the agent stays asleep. A stale
+  /// Close this exact pending card for everyone. This writes no message or delivery: the agent stays asleep, and is
+  /// told the choice with what it is next handed (card_choices). A stale
   /// click cannot close a newer question or overwrite a newer turn's state. Its agent may still be in the turn that
   /// asked (it goes on after posting, or a notice woke it): the card closes all the same, the choice is kept on that
   /// turn as its need, and the turn ends final when it ends (endTurn). `lang` is lang.rs `spoken()`: the request's.
@@ -2972,7 +2974,7 @@ export class Store {
       // Told only when it got as far as closing it (one already closed says true and tells nothing, as the Rust).
       let closed: { agent: string; changed: boolean } | null = null;
       const done = this.#tx(() => {
-        const offered = this.#one("SELECT author, at, card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, n);
+        const offered = this.#one("SELECT author, ts, at, card, options FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", thread, n);
         if (offered === undefined) return false;
         const card = cardOf(offered.card, offered.options);
         if (card === undefined) return false;
@@ -2984,6 +2986,8 @@ export class Store {
         // reuse the same indexed checks as closedCard instead of walking the intervening ordinary messages.
         if (this.#cardEndedAfter(thread, n)) return false;
         this.#run("INSERT INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", thread, n, viewer, this.now());
+        // Its agent hears nothing now: it is told the choice with what it is next handed (untoldCardChoices).
+        this.#run("INSERT OR REPLACE INTO card_choices (thread, n, session, ts, viewer, option, at) VALUES (?, ?, ?, ?, ?, ?, ?)", thread, n, offered.author, offered.ts ?? null, viewer, option, this.now());
         const chosen = tr(lang, "station.card.chosen", { option });
         const changed = this.#run(
           `UPDATE turns SET declared = 'final', need = ?5, wait_seconds = NULL
@@ -3009,6 +3013,36 @@ export class Store {
       }
       return done;
     });
+  }
+
+  /// What people chose on the session's cards with an option that closes them, which it has not been told: the oldest
+  /// first, at most `limit` (the rest with what it is handed after).
+  untoldCardChoices(session: string, limit = 20): CardChoice[] {
+    return this.#all("SELECT thread, n, ts, viewer, option, at FROM card_choices INDEXED BY card_choices_untold WHERE session = ? AND told_at IS NULL ORDER BY at LIMIT ?", session, limit)
+      .map((r) => this.#cardChoice(r));
+  }
+
+  /// The agent was told these choices.
+  markCardChoicesTold(session: string, told: readonly Pick<CardChoice, "thread" | "n">[]): void {
+    const now = this.now();
+    for (const { thread, n } of told) this.#run("UPDATE card_choices SET told_at = ? WHERE thread = ? AND n = ? AND session = ? AND told_at IS NULL", now, thread, n, session);
+  }
+
+  /// The choices that closed these posts' cards of a thread (chat_history), by post.
+  cardChoices(thread: number, ns: readonly number[]): Map<number, CardChoice> {
+    const out = new Map<number, CardChoice>();
+    for (const n of ns) {
+      const r = this.#one("SELECT thread, n, ts, viewer, option, at FROM card_choices WHERE thread = ? AND n = ?", thread, n);
+      if (r !== undefined) out.set(n, this.#cardChoice(r));
+    }
+    return out;
+  }
+
+  /// The post's words as first written: an edit of them is not looked for.
+  #cardChoice(r: Json): CardChoice {
+    const t = this.#one("SELECT channel, thread_ts FROM threads WHERE id = ?", r.thread);
+    const post = this.#one("SELECT text FROM entries WHERE thread = ? AND n = ? AND kind = 'message'", r.thread, r.n);
+    return { thread: r.thread, n: r.n, ts: r.ts ?? null, where: t ? [t.channel, t.thread_ts] : null, question: post?.text ?? null, by: r.viewer, option: r.option, at: r.at };
   }
 
   // ── identities ──
