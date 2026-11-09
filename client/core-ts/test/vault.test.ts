@@ -10,6 +10,7 @@ import { Effect } from "effect";
 import { Core } from "../src/core.ts";
 import { apply as applyOps } from "../src/delta.ts";
 import { HostError } from "../src/error.ts";
+import { jsonResponse } from "../src/testing.ts";
 import { t } from "../src/i18n.ts";
 import type { HttpRequest } from "../src/host.ts";
 import type { StationAddr } from "../src/station/addr.ts";
@@ -1096,6 +1097,46 @@ test("a device taken out of the lock that held a vault's key: the owner's device
   assert.equal(JSON.parse(new TextDecoder().decode(decrypt(fresh, item.ct, itemContext("ws", id, item.id, 1, 1)))).fields.value, "ghp_x", "written again under the new key");
   assert.equal(vaults().vaults.length, 1, "shown still");
   assert.equal((await r.ask("vault.open", { item: put.id })).plain.fields.value, "ghp_x");
+  r.core.close();
+});
+
+test("a device taken out of the lock and put back in as the vault is keyed anew without it: given the new key", async () => {
+  const r = await rig();
+  r.putLock();
+  const { made: id } = await r.ask("vault.setup", {});
+  const phoneBox = fill(7);
+  const phoneCert = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(phoneBox), at: 2000 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, phoneCert);
+  r.push("vault-box", phoneCert);
+  await r.host.time.pass(500);
+  r.take();
+  stationReplies(r.host, (req) => (req.url.includes("/v1/workspaces/ws/lock") ? r.lock : r.st.reply(req)));
+  // The version keyed anew taken by the station only once let go: the phone back in the lock meanwhile, its
+  // certificate published anew (as a device let in again does: vault.ask).
+  const gate: { letGo: (() => void) | null } = { letGo: null };
+  stationLater(r.host, (req) => {
+    if (gate.letGo !== null || req.method !== "PUT" || !req.url.includes("/vault/vaults")) return undefined;
+    const body = JSON.parse(new TextDecoder().decode(req.body ?? new Uint8Array()));
+    if (body.epoch !== 1) return undefined;
+    return new Promise((resolve) => (gate.letGo = () => resolve(jsonResponse(200, r.st.reply(req)))));
+  });
+  grow(r, "device.remove", { id: r.phone.hex });
+  r.core.inner.runner.fork(readLock(r.core.inner, "ws"));
+  await r.host.time.pass(200, 10);
+  assert.ok(gate.letGo !== null, "keyed anew without the phone");
+  grow(r, "device", { id: r.phone.hex, sub: "s1", kind: "app", label: "phone", sign_key: r.phone.id });
+  r.core.inner.runner.fork(readLock(r.core.inner, "ws"));
+  const again = sign({ v: 1 as const, ws: "ws", device: r.phone.hex, box: boxPublic(phoneBox), at: 5000 }, TAG.box, r.phone);
+  r.st.boxes.set(r.phone.hex, again);
+  r.push("vault-box", again);
+  await r.host.time.pass(200, 10);
+  gate.letGo!();
+  stationLater(r.host, () => undefined);
+  await r.host.time.pass(2000, 10);
+  r.take();
+  const v = r.st.vaults.get(id)!;
+  assert.equal(v.epoch, 1, "keyed anew");
+  assert.ok(v.keys.some((k) => k.cert.device === r.phone.hex), `the phone given the new key: ${JSON.stringify(v.keys.map((k) => k.cert.device.slice(0, 4)))} seq ${v.seq}`);
   r.core.close();
 });
 
