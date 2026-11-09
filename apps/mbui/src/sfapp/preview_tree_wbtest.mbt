@@ -261,7 +261,7 @@ fn tapped_beside(left : Int) -> (Double, Double, Double) {
   }
   let before = share()
   t.tap(left.to_double() + lx, ly)
-  t.advance(double_tap_ms / 2.0)
+  t.advance(@ui.double_tap_ms / 2.0)
   t.tap(left.to_double() + lx, ly)
   t.run_for(@ui.move_most_ms)
   (z.bw, before, share())
@@ -355,7 +355,7 @@ fn opened_closed(t : @ui.Tester, x : Double, y : Double, before : (Int, Int, Int
   assert_true(!@ui.view_tree().unwrap().clock_read(), msg="\{tree_held()}")
   // zoomed in, then closed: back into its thumbnail
   t.tap(195.0, 422.0)
-  t.advance(double_tap_ms / 2.0)
+  t.advance(@ui.double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
   t.run_for(@ui.move_most_ms)
   t.back()
@@ -947,7 +947,7 @@ fn wheeled_after_glide(at : Double, frames : Int) -> (Double, Double) {
   let t = preview_tester("image", platform=0)
   let z = viewer.get().unwrap().zoom
   t.tap(195.0, 422.0)
-  t.advance(double_tap_ms / 2.0)
+  t.advance(@ui.double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
   let g0 = t.time()
   match frames {
@@ -1906,7 +1906,7 @@ test "viewer on the tree, a wide window, a mouse, motion reduced: a click on the
   let out = wide_bar_out(t)
   let ticking_out = @ui.view_tree().unwrap().clock_read()
   // (the next click no second of a double one)
-  t.advance(double_tap_ms * 2.0)
+  t.advance(@ui.double_tap_ms * 2.0)
   click()
   let back = wide_bar_top(t)
   let ticking_back = @ui.view_tree().unwrap().clock_read()

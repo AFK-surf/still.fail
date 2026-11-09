@@ -2114,11 +2114,12 @@ let no_text_patch : TextPatch = text_patch()
 // Interaction
 
 ///|
-/// How soon after the first the second of two clicks is (macOS's default: 500 ms), and how near it (4).
-pub let double_click_ms : Double = 500.0
+/// How soon after the first the second of two clicks is (macOS's default: 500 ms), and how near it (4): the window's
+/// tree's (@view.double_press_ms).
+pub let double_click_ms : Double = @view.double_press_ms
 
 ///|
-pub let double_click_slop : Double = 4.0
+pub let double_click_slop : Double = @view.double_press_slop
 
 ///|
 /// Whether `id` was clicked since the last frame, asked by nothing that takes the click.

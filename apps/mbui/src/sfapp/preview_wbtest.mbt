@@ -61,15 +61,15 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   // 600 × 400 in 390 × 844 with 12 round it: (390 - 24) / 600
   assert_true((shown_scale(t, v.zoom) - 366.0 / 600.0).abs() < 0.001)
   t.tap(195.0, 422.0)
-  t.advance(double_tap_ms / 2.0)
+  t.advance(@ui.double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
   // (its glide: @ui.move_most_ms from the tap)
   t.run_for(@ui.move_most_ms)
   assert_true((shown_scale(t, v.zoom) - 1.525).abs() < 0.01)
   // (the next two taps a double tap of their own)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_tap_ms)
   t.tap(195.0, 422.0)
-  t.advance(double_tap_ms / 2.0)
+  t.advance(@ui.double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
   // (its glide: @ui.move_most_ms from the tap)
   t.run_for(@ui.move_most_ms)
@@ -788,7 +788,7 @@ test "a swipe carries the picture under the finger from where it went down; a se
 test "a step keeps the bars as they were: hidden by a tap, the next comes without them" {
   let t = preview_tester("step")
   t.tap(195.0, 422.0)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_tap_ms)
   assert_true(!viewer.get().unwrap().awake)
   t.drag(300.0, 422.0, 100.0, 422.0)
   assert_eq(viewer.get().unwrap().file.name, "第二版.png")
@@ -880,10 +880,10 @@ test "the frame a swipe is let go in shows both pictures where the finger left t
 /// to go either way across), the next taps a double tap of their own.
 fn zoom_in_middle(t : @ui.Tester) -> @kit.Zoom raise {
   t.tap(195.0, 422.0)
-  t.advance(double_tap_ms / 2.0)
+  t.advance(@ui.double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
   t.run_for(@ui.move_most_ms)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_tap_ms)
   let z = viewer.get().unwrap().zoom
   assert_true(z.zoomed_at(t.time()))
   z

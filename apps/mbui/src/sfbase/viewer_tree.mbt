@@ -814,7 +814,7 @@ fn Viewer::finger_on(self : Viewer, canvas : @view.View, src : Source, d : @view
         v.held = false
         return
       }
-      v.image_let_go(c, src, d, pinched, has_before, has_after)
+      v.image_let_go(c, canvas, src, d, pinched, has_before, has_after)
     }
   }
 }
@@ -956,6 +956,7 @@ fn Viewer::pinch_now(self : Viewer) -> (Double, Double, Double) {
 fn Viewer::image_let_go(
   self : Viewer,
   c : @ui.Ctx,
+  canvas : @view.View,
   src : Source,
   d : @view.Drag,
   pinched : Bool,
@@ -966,7 +967,6 @@ fn Viewer::image_let_go(
   let z = v.zoom
   let strip = pv_strip.way
   let at = d.at
-  let (x, y) = (d.wx, d.wy)
   let zoomed = z.zoomed_at(at)
   let (vx, vy) = v.speed.get_at(at)
   let s = strip.value_at(at)
@@ -998,22 +998,19 @@ fn Viewer::image_let_go(
   if pinched && z.scale_at(at) < z.fit() {
     z.reset(at~)
   }
-  // a tap (and a second: zoomed in, or back)
+  // a tap (and a second of two, View::twice: zoomed in, or back)
   if held && v.moved <= tap_slop && !pinched && !v.caught {
     let on_picture = match z.rect_at(at) {
       Some((rx, ry, rw, rh)) => d.x >= rx && d.x < rx + rw && d.y >= ry && d.y < ry + rh
       None => false
     }
     if (@sf.pointer_rests() || (!zoomed && @sf.native_able())) && !on_picture && !marking.on {
+      canvas.twice_forgot()
       v.shut(c)
-    } else if at - v.tap_at < double_tap_ms && (x - v.tap_x).abs() < 40.0 && (y - v.tap_y).abs() < 40.0 {
-      v.tap_at = -1.0e9
+    } else if canvas.twice(d) {
       v.toggle()
       z.double_tap(d.x, d.y, at~)
     } else {
-      v.tap_at = at
-      v.tap_x = x
-      v.tap_y = y
       v.toggle()
     }
   }

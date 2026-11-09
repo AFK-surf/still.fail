@@ -52,7 +52,6 @@ pub using @sfbase {
   dark_glass,
   dark_muted,
   dark_text,
-  double_tap_ms,
   downloading,
   first_frame,
   keep_read,

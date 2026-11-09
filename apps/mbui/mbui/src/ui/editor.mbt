@@ -2164,6 +2164,11 @@ pub fn Ctx::blur(self : Ctx) -> Unit {
 pub let double_tap_ms : Double = 300.0
 
 ///|
+/// How far from the first, in points, a finger's second tap may be let go and still be the second of two (the window's
+/// tree's: Tree::twice_within; a picture's viewer had it so).
+pub let double_tap_slop : Double = 40.0
+
+///|
 /// The word at (`x`, `y`) in the field picked (a long press's, a double tap's): its two handles, the floating menu
 /// over it. False when there is none there (nothing under the finger but spaces, or no words at all: the caret put
 /// there instead, the menu over it all the same, to paste: Android's EditText offers 粘贴 in an empty field too).
