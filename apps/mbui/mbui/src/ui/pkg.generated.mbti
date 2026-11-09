@@ -2497,6 +2497,7 @@ pub fn Tester::bold_wider(Self, Double) -> Unit
 pub fn Tester::boxes(Self) -> Array[Laid]
 pub fn Tester::boxes_held(Self) -> Array[Laid]
 pub fn Tester::built_why(Self) -> String
+pub fn Tester::by_hand(Self, () -> Unit) -> Unit
 pub fn Tester::census(Self) -> Census
 pub fn Tester::check_looks(Self, Bool) -> Unit
 pub fn Tester::check_rows(Self, Double, Double) -> Unit raise

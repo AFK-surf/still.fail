@@ -367,6 +367,8 @@ pub fn dv_file(String, String, String, DvEntry) -> DriveFile
 
 pub fn dv_in_order(Array[String]?, Array[DvEntry]) -> Array[DvEntry]?
 
+pub fn dv_in_order_held(String, Array[String]?, Array[DvEntry]) -> Array[DvEntry]?
+
 pub fn dv_join(String, String) -> String
 
 pub fn dv_keep_both(Source, DvUpload) -> Unit
@@ -402,6 +404,8 @@ pub fn dv_trim_root(String) -> String
 pub fn dv_trouble(String) -> (String, String)?
 
 pub fn dv_up_done(Source, DvUpload) -> Unit
+
+pub fn dv_up_listed(Source, DvUpload) -> Bool
 
 pub fn dv_up_part(Source, DvUpload, Int32, Int32) -> Unit
 
