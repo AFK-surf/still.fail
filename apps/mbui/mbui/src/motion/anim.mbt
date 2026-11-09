@@ -22,7 +22,7 @@ pub struct Anim {
   /// when it started (ms, the moment it was told, or the one it was told to start at); -1: never told to go
   mut start : Double
   mut dur : Double
-  /// whether it goes, read outside this package only so (Anim::moving)
+  /// whether it goes (outside this package, whether it is on its way is its declared end's: Anim::over)
   priv mut running : Bool
   /// the moment it was last stepped to (where it is then is a function of its way and that moment, however many frames
   /// there are at it: stepped again there, it is where it was; -inf: not since it was told)
@@ -249,15 +249,6 @@ pub fn Anim::get(self : Anim) -> Double {
   self.step(c)
   c.shows_motion(self.id, self.running)
   self.value
-}
-
-///|
-/// Whether it is on its way.
-pub fn Anim::moving(self : Anim) -> Bool {
-  let c = @ui.current()
-  self.step(c)
-  c.shows_motion(self.id, self.running)
-  self.running
 }
 
 ///|

@@ -222,21 +222,18 @@
     "motion-length": {},
     "tester-branch": {},
     "frame-number": {
-      "src/motion/fx.mbt": 1,
       "src/motion/layer.mbt": 2
     },
     "ui-current": {
       "src/kit/toast_node.mbt": 1,
       "src/kit/zoom.mbt": 4,
-      "src/motion/anim.mbt": 7,
-      "src/motion/fx.mbt": 3,
+      "src/motion/anim.mbt": 6,
       "src/motion/way.mbt": 2
     },
     "build-clock": {
       "src/kit/progress.mbt": 1,
       "src/kit/zoom.mbt": 1,
-      "src/motion/anim.mbt": 4,
-      "src/motion/fx.mbt": 1,
+      "src/motion/anim.mbt": 3,
       "src/motion/layer.mbt": 2,
       "src/motion/way.mbt": 1,
       "src/ui/cover.mbt": 2,
@@ -257,7 +254,6 @@
       "src/kit/sheet.mbt": 1,
       "src/kit/switch.mbt": 1,
       "src/kit/toggle.mbt": 1,
-      "src/motion/fx.mbt": 9,
       "src/motion/layer.mbt": 21
     },
     "old-list": {
