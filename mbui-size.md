@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [40fcca753](https://github.com/AFK-surf/still.fail/commit/40fcca7536d67efc4c4d0f44d8f4874d0e64f83e) mbui: a word typed into a chat's composer builds i | 1.74 | 2.32 | 9.64 | 28.17 | 33.66 | 25.17 | 46.1 | 93.08 | 183.09 |
 | [a66778214](https://github.com/AFK-surf/still.fail/commit/a66778214fe7d25f16b6c7e2dfbe2163792c0394) mbui: a node says what of it moves (View::said_mov | 1.74 | 2.31 | 9.64 | 28.17 | 33.66 | 25.17 | 46.1 | 92.96 | 135.44 |
 | [9c17d8cb7](https://github.com/AFK-surf/still.fail/commit/9c17d8cb78abdf4d656cc465346c3cc9773dd2c7) mbui: a zoom is read by the old view's Ctx and tol | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.17 | 46.1 | 93.23 | 148.8 |
 | [181c034b0](https://github.com/AFK-surf/still.fail/commit/181c034b00968d3d452dea3090801c75f0825841) mbui: Anim and Way read the old view's Ctx they ar | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.17 | 46.1 | 93.36 | 140.6 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [829615271](https://github.com/AFK-surf/still.fail/commit/82961527108a4d028fc8d8c709d659302878482b) mbui: a chat's row looks its chat up once as its k | 1.72 | 2.29 | 9.54 | 28.06 | 33.26 | 25.06 | 45.77 | 93.8 | 168.9 |
 | [735603acd](https://github.com/AFK-surf/still.fail/commit/735603acd9aa8dd799a94470d14b88bd2ffcb803) mbui: what a frame of headers alone asks of the ke | 1.72 | 2.29 | 9.54 | 28.06 | 33.26 | 25.06 | 45.77 | 93.59 | 170.59 |
 | [febf598ae](https://github.com/AFK-surf/still.fail/commit/febf598aed4f00abe4454788bc734e2b45976e40) mbui: how fast a held finger goes worked out only  | 1.72 | 2.29 | 9.54 | 28.06 | 33.25 | 25.06 | 45.75 | 93.52 | 124.57 |
-| [87876e5e9](https://github.com/AFK-surf/still.fail/commit/87876e5e968298405ae7202753539dec8618af46) mbui: a shape's bands kept for the same outlines i | 1.72 | 2.29 | 9.54 | 28.06 | 33.25 | 25.05 | 45.75 | 93.06 | 156.81 |
