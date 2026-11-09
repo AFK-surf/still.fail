@@ -126,6 +126,24 @@ fn Ctx::sizes_steady_said(self : Ctx, i : Int) -> String {
 }
 
 ///|
+/// Where node `i` of the frame (with the window's tree's among it) was made, said after a fault (", made at …"): its
+/// own place where it is the tree's, else that of the tree's node it is drawn in, or the old view's; "" none kept.
+fn Ctx::sizes_steady_made(self : Ctx, i : Int) -> String {
+  let mut b = i
+  while b >= 0 && b < self.count {
+    match tree_frame_ids.get(b) {
+      Some(id) => {
+        let s = source_said(id)
+        return if s == "" { "" } else { " (" + s + ")" }
+      }
+      None => b = self.nodes[b].parent
+    }
+  }
+  let s = self.old_source_said(i)
+  if s == "" { "" } else { " (" + s + ")" }
+}
+
+///|
 /// A measure's last frames (rows_steady_fault's samples, the display's frames `period` apart; it last turned back at
 /// `turned`): the frame before the last a step or a spike (off both frames round it the same way), or a dead stop (at
 /// speed, then at rest at once); or a turn back again soon (rows_steady_fault's). A way setting out at its speed (from
@@ -356,7 +374,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
     }
     for k, f in faults {
       if !carried.contains(k) && !holds.contains(f.0) {
-        out.push(self.sizes_steady_said(f.0) + ": " + f.1)
+        out.push(self.sizes_steady_said(f.0) + ": " + f.1 + self.sizes_steady_made(f.0))
       }
     }
   })

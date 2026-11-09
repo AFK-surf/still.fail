@@ -238,6 +238,7 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     i
   }
   tree_pictures.clear()
+  tree_frame_ids.clear()
   // (laid out, for what the old views hold worked out against what holds them: only what holds an old view, and what
   // lies laid out where that does, as big (a ground laid beside it as a layer, Ctx::layer_grounds); what else of the
   // tree there is no container of any of theirs, and what it works out of the tree's own nodes is let go with them)
@@ -297,6 +298,7 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
       n.id = -(k + 1)
     }
     let i = add(n)
+    tree_frame_ids[i] = d.id
     at[k] = i
     link(parent, i)
     // (said to be a picture, as an old view's box is by its semantics: Ctx::pictures)
@@ -1060,6 +1062,12 @@ fn Ctx::scroll_still(self : Ctx, q : Int, st : Sideways) -> Bool {
 /// frame's (Ctx::with_tree_nodes).
 // kept across runs: emptied before and after each time the tree's nodes are taken in
 let tree_pictures : Set[Int] = Set::new()
+
+///|
+/// Which of the window's tree's nodes each of them is, by its node here, while they are among the frame's
+/// (Ctx::with_tree_nodes): for a fault to say where it was made (sizes_steady.mbt).
+// kept across runs: emptied each time the tree's nodes are taken in
+let tree_frame_ids : Map[Int, @view.NodeId] = {}
 
 ///|
 /// The nodes said to be pictures (Role Image) this frame, the old views' and the tree's (in_picture).
