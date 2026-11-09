@@ -272,6 +272,7 @@ test "wide: a row's menu has 接力到频道… for a chat with an agent" {
   let (x, y) = t.find("整理发布清单").unwrap()
   t.right_click(x, y)
   t.frame()
+  open_share(t)
   assert_true(t.find("接力到频道…") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
 }
 

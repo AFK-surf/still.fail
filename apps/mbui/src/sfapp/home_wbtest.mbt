@@ -172,7 +172,8 @@ test "hiding a running chat leaves it in the hidden list, where it can be restor
   t.release(x, y)
   t.frame()
   t.tap_text("关闭提醒")
-  t.run_for(@ui.move_most_ms)
+  // (its notice gone: over the foot of the menu held open next, where 隐藏 is)
+  t.run_for(@sf.toast_ms + @kit.presence_out_ms)
   let (x, y) = t.find("整理发布清单").unwrap()
   t.press_at(x, y)
   t.run_for(@ui.tap_indication_ms + @sfpages.hold_ms)
@@ -180,7 +181,8 @@ test "hiding a running chat leaves it in the hidden list, where it can be restor
   t.frame()
   assert_true(t.find("开启提醒") is Some(_))
   t.tap_text("隐藏")
-  t.run_for(@ui.move_most_ms)
+  // (its notice, with its 撤销, gone: over the foot of the menu held open next, where 取消隐藏 is)
+  t.run_for(@sf.toast_action_ms + @kit.presence_out_ms)
   assert_true(t.find("整理发布清单") is None)
   tap_home_filter(t)
   t.tap_text("已隐藏")
@@ -404,7 +406,7 @@ fn hold_row(t : @ui.Tester, title : String) -> Unit {
 }
 
 ///|
-test "a row held long: its menu (固定, 重命名, 复制会话链接, 归档), the chat not opened; 重命名 its sheet" {
+test "a row held long: its menu (固定, 重命名, 归档, 分享…), the chat not opened; 重命名 its sheet" {
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
   hold_row(t, "夜里的构建又失败了")
@@ -412,7 +414,7 @@ test "a row held long: its menu (固定, 重命名, 复制会话链接, 归档),
   // felt as it opened, once
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   assert_true(t.find("重命名") is Some(_))
-  assert_true(t.find("复制会话链接") is Some(_))
+  assert_true(t.find("分享…") is Some(_))
   // just below the row
   let (_, row_y) = t.find("夜里的构建又失败了").unwrap()
   let (_, menu_y) = t.find("重命名").unwrap()
@@ -456,6 +458,7 @@ test "a row's menu: 复制会话链接 copies its link, 固定 pins it (chat.pin
   let calls : Array[Made] = []
   let t = wide_tester(calls, w=390.0, h=844.0, platform=2)
   hold_row(t, "夜里的构建又失败了")
+  open_share(t)
   t.tap_text("复制会话链接")
   assert_true(t.clipboard().has_prefix("[夜里的构建又失败了]("))
   hold_row(t, "夜里的构建又失败了")

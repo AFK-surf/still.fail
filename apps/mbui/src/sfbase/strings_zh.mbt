@@ -863,6 +863,8 @@ let zh : Map[String, String] = {
   "web-main.chat.regenerateTitle.verb": "重新生成标题",
   "web-main.chat.resendFailed": "无法重新发送：{error}",
   "web-main.chat.sending": "正在发送",
+  "web-main.chat.share": "分享…",
+  "web-main.chat.share.title": "分享",
   "web-main.chat.toLatest": "跳到最新",
   "web-main.chat.transcriptCopied": "已复制 session 文件路径",
   "web-main.chat.unkeep": "取消保留",

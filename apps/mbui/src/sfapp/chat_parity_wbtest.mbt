@@ -393,6 +393,7 @@ test "the chat's menu: one from Slack or Feishu opens there" {
         v
       }
     })
+    open_share(t)
     t.tap_text(words)
     assert_true(t.opened().contains(url), msg=words)
   }

@@ -142,7 +142,7 @@ pub fn chat_row_node(
       if from_row {
         @ui.haptic(LongPress)
       }
-      @sf.menu(chat_menu_items(src, i), from~)
+      @sf.menu(chat_menu_items(src, i, share_from=fn() { from }), from~)
       rows.menu_for = @sfbase.row_name(i)
       rows.menu_serial = @sf.last_presented()
     }

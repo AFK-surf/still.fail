@@ -90,6 +90,8 @@
   "web-main.chat.regenerateTitle.start": "Generating title…",
   "web-main.chat.resendFailed": "Couldn't resend: {error}",
   "web-main.chat.sending": "Sending",
+  "web-main.chat.share": "Share…",
+  "web-main.chat.share.title": "Share",
   "web-main.chat.toLatest": "Jump to latest",
   "web-main.chat.unpin": "Unpin",
   "web-main.chat.unpinFailed": "Couldn't unpin: {error}",

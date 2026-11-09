@@ -875,6 +875,8 @@ let en : Map[String, String] = {
   "web-main.chat.regenerateTitle.verb": "regenerate the title",
   "web-main.chat.resendFailed": "Couldn't resend: {error}",
   "web-main.chat.sending": "Sending",
+  "web-main.chat.share": "Share…",
+  "web-main.chat.share.title": "Share",
   "web-main.chat.toLatest": "Jump to latest",
   "web-main.chat.transcriptCopied": "Session file path copied",
   "web-main.chat.unkeep": "Stop keeping",
