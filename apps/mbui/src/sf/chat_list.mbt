@@ -59,6 +59,11 @@ pub(all) struct ChatList {
   /// 12, 17, 38, 15)
   band_in : Double
   band_pad : Double
+  /// its words from its ground where the list stands on its own, not beside a page's whole: the tape's side column
+  /// and a phone's whole screen, its search fields (band_pad_in): with a finger 12, as before #3806 (5b8b71713d) made
+  /// it the ladder's inset, 8 (the user, 2026-11-09: 「把左边距恢复过来」, the 中屏's sidebar's words where they stood;
+  /// 「手机搜索也要改」); keyboard and mouse's its band_pad
+  own_band_pad : Double
   band_icon : Double
   band_h : Double
   band_words : @ui.TextStyle
@@ -141,6 +146,7 @@ pub let mouse_chat_list : ChatList = {
   side_foot_in: pane_corner,
   band_in: mouse_band_in,
   band_pad: mouse_band_pad,
+  own_band_pad: mouse_band_pad,
   band_icon: 16.0,
   band_h: 32.0,
   band_words: @ui.text_style(size=Ui, color=Fg, leading=L6, wrap=false, w=Full),
@@ -196,6 +202,7 @@ pub let touch_chat_list : ChatList = {
   side_foot_in: pane_corner,
   band_in: touch_band_in,
   band_pad: touch_band_pad,
+  own_band_pad: 12.0,
   band_icon: 17.0,
   band_h: 38.0,
   band_words: @ui.text_style(size=Ui, color=Fg, wrap=false, w=Full),
@@ -230,12 +237,50 @@ let touch_band_in : Double = 16.0
 let touch_band_pad : Double = corner_inset
 
 ///|
-/// Where a list stands: in a side column beside a page (the wide frame's sidebar, on the tape or keyboard and mouse's) or a
-/// panel over it (⌘K's), or across the whole screen (a phone's home, its search). How far in its rows are and whether their grounds are rounded follow it,
+/// How far in from its ground the words of what stands over a list are, and a row's words in a side column, where the
+/// list stands (`at`): in a side column beside a page's whole the theme's band_pad; in the tape's side column and
+/// across the whole screen (a phone's search fields) its own_band_pad.
+pub fn band_pad_in(at : ListAt) -> Double {
+  let l = theme().chat_list
+  match at {
+    Side => l.band_pad
+    Tape | Whole => l.own_band_pad
+  }
+}
+
+///|
+/// A sidebar's other lists' row of one line and what stands while there is none (side_row, side_hint), their words as far
+/// in as where the list stands has them (band_pad_in).
+pub fn side_row_at(at : ListAt) -> @ui.Style {
+  theme().chat_list.side_row.then(@ui.style(px=room(band_pad_in(at))))
+}
+
+///|
+pub fn side_hint_at(at : ListAt) -> @ui.Style {
+  theme().chat_list.side_hint.then(@ui.style(px=room(band_pad_in(at))))
+}
+
+///|
+/// How far in a list's heading is from the line its rows stand on, in a side column (heading_in) or the tape's (as
+/// far further in as its rows' words are there: band_pad_in).
+pub fn heading_in_at(at : ListAt) -> Double {
+  let l = theme().chat_list
+  match at {
+    Tape => l.heading_in + l.own_band_pad - l.band_pad
+    Side | Whole => l.heading_in
+  }
+}
+
+///|
+/// Where a list stands: in a side column beside a page (the wide frame's sidebar, keyboard and mouse's or a finger's) or a
+/// panel over it (⌘K's), in the tape's side column, or across the whole screen (a phone's home, its search). How far in its rows are and whether their grounds are rounded follow it,
 /// not the native input (asked, 2026-10-25: touch's square rows, lit, in a tape's sidebar beside 新建对话's
 /// round ground).
 pub(all) enum ListAt {
   Side
+  /// the tape's side column (its sidebar's panel, laid out Medium: tape_view): a side column whose words stand as
+  /// before #3806 (band_pad_in)
+  Tape
   Whole
 } derive(Eq)
 
@@ -245,7 +290,7 @@ pub(all) enum ListAt {
 /// ground its whole width.
 pub fn list_line(at : ListAt) -> @ui.Style {
   match at {
-    Side => @ui.style(w=Full, px=room(list_line_in(at)))
+    Side | Tape => @ui.style(w=Full, px=room(list_line_in(at)))
     Whole => full_width
   }
 }
@@ -254,7 +299,7 @@ pub fn list_line(at : ListAt) -> @ui.Style {
 /// How far in from each side of its box a list's lines stand (list_line).
 pub fn list_line_in(at : ListAt) -> Double {
   match at {
-    Side => theme().chat_list.band_in
+    Side | Tape => theme().chat_list.band_in
     Whole => 0.0
   }
 }
@@ -266,7 +311,7 @@ pub fn list_line_in(at : ListAt) -> Double {
 pub fn list_foot_in(at : ListAt) -> Double {
   let l = theme().chat_list
   match at {
-    Side => l.side_foot_in
+    Side | Tape => l.side_foot_in
     Whole => l.foot_in
   }
 }
@@ -277,9 +322,8 @@ pub fn list_foot_in(at : ListAt) -> Double {
 /// placed there by itself: list_row `corner`), rounded as a sidebar's row; across the whole screen as the phone's
 /// (mChatRow: 22 at the left, 16 at the right), square.
 pub fn list_row_in(at : ListAt) -> @ui.Style {
-  let l = theme().chat_list
   match at {
-    Side => @ui.style(px=room(l.band_pad), radius=side_row_radius)
+    Side | Tape => @ui.style(px=room(band_pad_in(at)), radius=side_row_radius)
     Whole => whole_row_in
   }
 }
@@ -293,7 +337,7 @@ let whole_row_in : @ui.Style = @ui.style(pl=phone_row_in, pr=S4)
 /// row's ground's corners where its list stands (list_row_in): rounded in a side column, square across the whole screen.
 pub fn list_row_slot(at : ListAt) -> @ui.Style {
   match at {
-    Side => side_row_slot
+    Side | Tape => side_row_slot
     Whole => whole_row_slot
   }
 }
@@ -311,7 +355,7 @@ let whole_row_slot : @ui.Style = @ui.css("w=Full clip")
 /// screen the phone's section header's (20).
 pub fn list_heading_in(at : ListAt) -> @ui.Style {
   match at {
-    Side => @ui.style(px=room(theme().chat_list.heading_in))
+    Side | Tape => @ui.style(px=room(heading_in_at(at)))
     Whole => whole_heading_in
   }
 }
@@ -326,7 +370,7 @@ let whole_heading_in : @ui.Style = @ui.css("px=S5")
 /// (mFound: 22 at the left, 16 at the right), square.
 pub fn found_row_in(at : ListAt) -> @ui.Style {
   match at {
-    Side => found_side_row
+    Side | Tape => found_side_row
     Whole => found_whole_row
   }
 }
@@ -344,7 +388,7 @@ let found_whole_row : @ui.Style = @ui.style(pl=found_start, pr=S4)
 /// lines' words, in a side column or a panel 12, across the whole screen the phone's 22.
 pub fn found_line_in(at : ListAt) -> @ui.Style {
   match at {
-    Side => found_side_in
+    Side | Tape => found_side_in
     Whole => found_whole_in
   }
 }
@@ -362,7 +406,7 @@ let found_whole_in : @ui.Style = @ui.style(px=found_start)
 /// screen the phone's section header's (20).
 pub fn found_head_in(at : ListAt) -> @ui.Style {
   match at {
-    Side => found_side_in
+    Side | Tape => found_side_in
     Whole => whole_heading_in
   }
 }

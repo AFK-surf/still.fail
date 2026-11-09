@@ -309,7 +309,7 @@ pub fn chat_row(
     }
     // (in a side column who is in it stands in the row's foot's end corner, placed there by the corner rule; across
     // the whole screen at its second line's end; the row pointed at says when instead)
-    let cornered = at == Side && !shows_time && row_aside_shows(item, lead)
+    let cornered = at != Whole && !shows_time && row_aside_shows(item, lead)
     let place = if apart { @sf.list_more(at) } else { row_last }
     let row_box = c.box(
       style=if lifted_ink > 0.0 { place.then(row_lifted(lifted_ink)) } else { place },
@@ -343,7 +343,7 @@ pub fn chat_row(
               c.box(style=mark_slot, fn() { row_mark(c, key, tone) }) |> ignore
             }
             if renaming {
-              row_rename(c, src, item)
+              row_rename(c, src, item, at)
             } else {
               let title = if item.unread { look.title_unread } else { look.title }
               let named = if item.hidden == Some(true) { item.title + " · " + @sf.t("web-main.filter.hidden") } else { item.title }
@@ -881,8 +881,8 @@ fn rename(src : Source, item : ChatItem, title : String) -> Unit {
 
 ///|
 /// A row's title as a field (from a mouse's 重命名): Enter saves it (`chat.rename`), Esc or
-/// leaving it lets it be.
-fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
+/// leaving it lets it be; as far in as where its list stands (`at`) has it (rename_box).
+fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem, at : @sf.ListAt) -> Unit {
   let key = "row/rename"
   let whose = @sfbase.row_name(item)
   let press = c.press()
@@ -908,7 +908,7 @@ fn row_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
     stop_rename()
     return
   }
-  c.box(style=rename_box().then(@ui.style(border_color=Data(@sf.theme().p.line_strong))), fn() {
+  c.box(style=rename_box(at).then(@ui.style(border_color=Data(@sf.theme().p.line_strong))), fn() {
     let res = c.editor(
       key,
       font_size=rename_size,
@@ -949,10 +949,16 @@ fn stop_rename() -> Unit {
 /// height's) standing where it is concentric with both (@sf.capsule_in: the row's 18 its distance and its half, 6), as
 /// far from the row's top as from its sides; all four corners alike, not the row's followed in two and its own 6 in the
 /// others (the user, 2026-10-26). Its words its half in from its end, as a capsule field's are (@sf.input's), not 6 in
-/// where the title's were (the user, 2026-10-26: 离首字太近).
-fn rename_box() -> @ui.Style {
+/// where the title's were (the user, 2026-10-26: 离首字太近). Its sides where its list stands (`at`): in a side column a
+/// row's words' (band_pad_in); across the whole screen the ladder's inset, 8, as #3806 (5b8b71713d) made it (the user,
+/// 2026-11-09, asked a phone's search fields back to 12, not this).
+fn rename_box(at : @sf.ListAt) -> @ui.Style {
   let d = @ui.capsule_in(@sf.row_corner, rename_h)
-  let side = @sf.theme().chat_list.band_pad - d
+  let words_in = match at {
+    Side | Tape => @sf.band_pad_in(at)
+    Whole => @sf.corner_inset
+  }
+  let side = words_in - d
   let over = @sf.row_top_in_y - d
   rename_look.then(
     @ui.style(

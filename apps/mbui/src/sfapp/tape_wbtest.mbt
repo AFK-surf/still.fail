@@ -1108,10 +1108,10 @@ test "on the tape the sidebar's rows stand in a side column's line, their words 
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
   // the sidebar's panel 6 from the window's edge, its list from 8 into the rail, the rail as much wider as its places
   // stand further in than its 8 (concentric with the panel's corner): a row's ground as far in as 新建对话's (band_in),
-  // its words without a mark before them as far from it (band_pad)
+  // its words without a mark before them as far from it (band_pad_in: the tape's, as before #3806)
   let l = @sf.theme().chat_list
   let (x, _, _, _) = t.rect_of("Slack 里问的报销流程").unwrap()
-  assert_eq(x, @sfdesk.closed_bar_in + @sfdesk.rail_w - 8.0 + (@sf.rail_in_tape() - 8.0) + l.band_in + l.band_pad)
+  assert_eq(x, @sfdesk.closed_bar_in + @sfdesk.rail_w - 8.0 + (@sf.rail_in_tape() - 8.0) + l.band_in + @sf.band_pad_in(Tape))
   let p = tape_chat(2, 390.0, 844.0, width="compact", height="medium")
   p.run_for(@ui.move_most_ms)
   p.back()

@@ -61,7 +61,7 @@ pub fn list_row(
   // A capsule on the last line can reach the row's foot corner. Its centre is at the middle of that line; keep its
   // foot as far in as a capsule of its height is from the corner, with the line's own space around it counted.
   let item = match (at, foot_capsule) {
-    (Side, Some(h)) => {
+    (Side | Tape, Some(h)) => {
       let bottom = @ui.capsule_in(row_corner, h) - (l.meta_h - h) / 2.0
       l.item.then(@ui.style(pb=room(bottom)))
     }
@@ -77,9 +77,9 @@ pub fn list_row(
       // what stands in its foot's end corner (a chat's people and agents, concentric with the row's corner: aside_end),
       // their middles on one line down the list, the first line reaching into the row's room for it where it must)
       let reach = match at {
-        Side if end_slot > 0.0 => {
+        Side | Tape if end_slot > 0.0 => {
           let last = if corner_end > 0.0 { corner_end } else { l.face_d }
-          l.band_pad + end_slot / 2.0 - (l.aside_end + last / 2.0)
+          band_pad_in(at) + end_slot / 2.0 - (l.aside_end + last / 2.0)
         }
         _ => 0.0
       }
@@ -89,7 +89,7 @@ pub fn list_row(
       c.box(style=if end_in > 0.0 { head_style.then(@ui.style(pr=room(end_in))) } else { head_style }, head) |> ignore
       match (corner, at) {
         // (the room what stands in the corner keeps at the end of the lines under the first)
-        (Some(_), Side) =>
+        (Some(_), Side | Tape) =>
           c.box(style=list_row_under_line, fn() {
             c.box(style=list_row_under, under) |> ignore
             // (as wide as what stands in the corner: list_row `corner_w`)
@@ -114,7 +114,7 @@ pub fn list_row(
         |> ignore
     }
     match (corner, at) {
-      (Some(k), Side) => c.box(right=l.aside_end, bottom=l.aside_end, k) |> ignore
+      (Some(k), Side | Tape) => c.box(right=l.aside_end, bottom=l.aside_end, k) |> ignore
       _ => ()
     }
     after()
@@ -204,7 +204,7 @@ let list_row_mark : @ui.Style = @ui.css("w=S4 align=ACenter justify=JCenter")
 /// flush with a finger).
 pub fn list_more(at : ListAt) -> @ui.Style {
   match at {
-    Side => side_more
+    Side | Tape => side_more
     Whole => theme().chat_list.more
   }
 }

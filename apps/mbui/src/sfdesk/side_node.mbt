@@ -47,6 +47,8 @@ fn side_made(place : String) -> Bool {
 /// foot and 已归档's list their old views, hosted.
 fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () -> SideAt) -> Unit {
   let workspace = fn() { @sfbase.workspace_in_view(src).0 }
+  // (the tape's side column or one beside the page: the block's, each its own sidebar made once)
+  let list_at = side_list_at(@signals.untracked(at))
   let mode = fn() {
     match workspace() {
       Some(w) => list_mode(src, w)
@@ -88,7 +90,7 @@ fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () ->
       },
     ],
     shown: mode,
-    at: Side,
+    at: list_at,
     watched: fn() { true },
   }
   // (while the app's first page waits for what it shows: drawn at none, the splash in its place, as the old views are)
@@ -143,7 +145,7 @@ fn lists_side_node(s : @view.View, src : Source, tips : @sf.TipLayer, at : () ->
   })
   |> ignore
   s.show(@sfpages.search_on_lists, fn(k) {
-    @sfpages.search_page_node(k, src, workspace, side_top_h, Side)
+    @sfpages.search_page_node(k, src, workspace, side_top_h, list_at)
   })
 }
 
@@ -158,6 +160,7 @@ fn lists_band_node(
   workspace : () -> Workspace?,
   at : () -> SideAt,
 ) -> Unit {
+  let list_at = side_list_at(@signals.untracked(at))
   let band_at = fn() {
     let a = at()
     ({ brand: a.brand, band: a.band, tape: a.tape, in_bar: a.bar, roots: @ui.tree_corner_roots_now() } : BandAt)
@@ -182,7 +185,7 @@ fn lists_band_node(
       })
       line.box(fn(full) {
         full.row(Is(true)).grow(Is(1.0)) |> ignore
-        @sf.band_row_node(full, fn() { app.nav.top() is NewChat }, fn() { @sf.t("web-main.sidebar.newChat") }, new_chat, fn(r) {
+        @sf.band_row_node(full, fn() { app.nav.top() is NewChat }, fn() { @sf.t("web-main.sidebar.newChat") }, new_chat, list_at, fn(r) {
           @sf.icon_node(r, "compose", @sf.theme().chat_list.band_icon, By(fn() { @sf.theme().p.muted })) |> ignore
           @sf.nav_words_node(r, fn() { @sf.t("web-main.sidebar.newChat") })
         })
@@ -289,7 +292,7 @@ fn lists_band_node(
         let n = fn() { workspace().map(fn(w) { todo_all(src, w) }).unwrap_or(0) }
         @sf.band_row_node(t, fn() { wide.attention_open.get() }, fn() { @sf.t("web-main.attention.entry") }, fn() {
           attention_set(!@signals.untracked(fn() { wide.attention_open.get() }))
-        }, fn(r) {
+        }, list_at, fn(r) {
           @sf.icon_node(r, "bell", @sf.theme().chat_list.band_icon, By(fn() { @sf.theme().p.muted })) |> ignore
           @sf.nav_words_node(r, fn() { @sf.t("web-main.attention.entry") })
           r.box(fn(slot) {

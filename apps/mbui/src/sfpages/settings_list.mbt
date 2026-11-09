@@ -303,15 +303,17 @@ pub fn settings_search_reset() -> Unit {
 ///|
 /// The same field over the list in either frame, as the chats' search over their list is (search.mbt
 /// search_field_ground): a round ground of its own with the search mark, as tall as the theme's band, no outline.
-/// While it holds words, clearing them is a press at its end, inside it.
-pub fn settings_search(c : @ui.Ctx) -> Unit {
+/// While it holds words, clearing them is a press at its end, inside it. Its words as far in as where its list stands
+/// (`at`) has them (band_pad_in).
+pub fn settings_search(c : @ui.Ctx, at : @sf.ListAt) -> Unit {
   let t = @sf.theme()
   let l = t.chat_list
+  let pad = @sf.band_pad_in(at)
   let (size, line) = c.text_size(Ui)
   // (its end's room the clear press's while it holds words: round in the round ground's end, concentric)
   let held = settings_search_field.text() != ""
-  let end = if held { @sf.room_of(0.0) } else { @sf.room_of(l.band_pad) }
-  c.box(style=settings_search_ground.then(@ui.style(h=Fixed(l.band_h), pl=@sf.room_of(l.band_pad), pr=end)), fn() {
+  let end = if held { @sf.room_of(0.0) } else { @sf.room_of(pad) }
+  c.box(style=settings_search_ground.then(@ui.style(h=Fixed(l.band_h), pl=@sf.room_of(pad), pr=end)), fn() {
     @sf.icon(c, "search", size=l.band_icon, color=t.p.muted) |> ignore
     c.box(style=settings_search_grow, fn() {
       c.editor(
@@ -384,9 +386,11 @@ fn settings_search_node(parent : @view.View) -> Unit {
     page.box(fn(g) {
       // (its end's room the clear key's while it holds words: round in the round ground's end, concentric)
       @sf.style_node(g, fn() {
+        // (a page across the whole screen, a phone's: its words as far in as there, band_pad_in)
         let l = @sf.theme().chat_list
-        let end = if held() { @sf.room_of(0.0) } else { @sf.room_of(l.band_pad) }
-        settings_search_ground.then(@ui.style(h=Fixed(l.band_h), pl=@sf.room_of(l.band_pad), pr=end))
+        let pad = @sf.band_pad_in(Whole)
+        let end = if held() { @sf.room_of(0.0) } else { @sf.room_of(pad) }
+        settings_search_ground.then(@ui.style(h=Fixed(l.band_h), pl=@sf.room_of(pad), pr=end))
       })
       @sf.icon_node(g, "search", @sf.theme().chat_list.band_icon, By(fn() { @sf.theme().p.muted })) |> ignore
       @ui.field(
@@ -548,13 +552,14 @@ fn settings_found(parts : Array[SettingsPart], core : Core, query : String) -> A
 ///|
 /// The list as a sidebar's (beside the settings' pages on a medium or large screen): the same rows in the same groups,
 /// a sidebar's rows (the theme's side_row, as its other rows of one line), the room of a heading between two groups
-/// with none. `lit`: the row of the page beside it.
+/// with none. `lit`: the row of the page beside it. `at`: where the list stands (a side column, the tape's).
 pub fn settings_side_rows(
   c : @ui.Ctx,
   core : Core,
   here : @settings.Here,
   lit : @settings.Route?,
   open : (@settings.Route) -> Unit,
+  at : @sf.ListAt,
 ) -> Unit {
   let t = @sf.theme()
   let query = settings_search_field.text().trim(chars=" \t\n\r").to_owned().to_lower()
@@ -564,7 +569,7 @@ pub fn settings_side_rows(
   }
   for k, part in parts {
     if part.heading != "" {
-      @sf.list_heading(c, part.heading, Side)
+      @sf.list_heading(c, part.heading, at)
     } else if k > 0 {
       @sf.list_apart(c)
     }
@@ -576,7 +581,7 @@ pub fn settings_side_rows(
       // (a sidebar's row of one line, as its others are: its mark, its words, how things stand at its end, left out
       // where the row has not the room: its words whole till then, cut only where they alone have not)
       let draw = fn() {
-        let look = t.chat_list.side_row.then(settings_side_across).then(@sf.row_least_h())
+        let look = @sf.side_row_at(at).then(settings_side_across).then(@sf.row_least_h())
         let n = c.box(style=look, id~, fn() {
           settings_lead(c, core, here, row, true)
           c.box(style=settings_side_words, keep=true, fn() {
@@ -600,7 +605,7 @@ pub fn settings_side_rows(
       }
       let b = if i + 1 < part.rows.length() {
         let mut b = 0
-        c.box(style=@sf.list_more(Side), fn() { b = draw() }) |> ignore
+        c.box(style=@sf.list_more(at), fn() { b = draw() }) |> ignore
         b
       } else {
         draw()

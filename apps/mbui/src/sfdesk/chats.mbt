@@ -27,7 +27,7 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           band_row(c, "side/new", is_new, fn() {
             band_mark(c, "compose", t.p.muted)
             band_words(c, @sf.t("web-main.sidebar.newChat"))
-          }, on_press=new_chat)
+          }, at=side_at(), on_press=new_chat)
         }
       })
       |> ignore
@@ -156,7 +156,7 @@ fn band_new_tape(at? : BandAt = band_at_old()) -> @ui.Style {
     // The glass's outside edge follows the day heading's words, including the
     // list row's inner padding, not just the card's outer content margin.
     let list = @sf.theme().chat_list
-    let inset = @sf.room_of(list.band_in + list.heading_in)
+    let inset = @sf.room_of(list.band_in + @sf.heading_in_at(Tape))
     return nav_new().then(@ui.style(pl=inset, pr=inset, pt=S1))
   }
   let corner = @sf.tape_side_corners()[1].radius(at.roots)

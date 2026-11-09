@@ -196,7 +196,7 @@ pub fn chat_row_node(
     }
     // (in a side column who is in it stands in the row's foot's end corner, placed there by the corner rule; across the
     // whole screen at its second line's end; the row pointed at says when instead)
-    let cornered = fn() { at == Side && !shows_time() && row_aside_shows(item(), lead) }
+    let cornered = fn() { at != Whole && !shows_time() && row_aside_shows(item(), lead) }
     let face_ground = fn() { @sf.over(list_ground(), if lifted() > 0.0 { t().p.raised } else { ground() }) }
     @sf.list_row_node(
       row,
@@ -205,7 +205,7 @@ pub fn chat_row_node(
       high=true,
       // (归档 over its first line's end: Sidebar.css.ts rowArchive, 24)
       end_room=fn() { if archive_key() { @sf.row_keys_room(1) } else { 0.0 } },
-      corner?=if at == Side {
+      corner?=if at != Whole {
         Some(fn(k : @view.View) { row_aside_node(k, src, tips, item, lead, face_ground, stint) })
       } else {
         None
@@ -228,7 +228,7 @@ pub fn chat_row_node(
           // (what is left of the line, from none: its title cut short in it, what stands at its end kept whole)
           n.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
           if on {
-            rename_node(n, src, item)
+            rename_node(n, src, item, at)
             return
           }
           n.box(fn(w) {
@@ -694,12 +694,13 @@ fn row_aside_w_node(v : @view.View, item : ChatItem, lead : String) -> Double {
 
 ///|
 /// A row's title as a field in its place (row_rename's, from a mouse's 重命名) in `n`: its words
-/// the title's, the focus in it as it comes; Enter saves it (`chat.rename`), Esc or leaving it lets it be.
-fn rename_node(n : @view.View, src : Source, item : () -> ChatItem) -> Unit {
+/// the title's, the focus in it as it comes; Enter saves it (`chat.rename`), Esc or leaving it lets it be; as far in as where its list stands
+/// (`at`) has it (rename_box).
+fn rename_node(n : @view.View, src : Source, item : () -> ChatItem, at : @sf.ListAt) -> Unit {
   rows.rename_field.set(@signals.untracked(item).title)
   let done = fn() { stop_rename() }
   n.box(fn(b) {
-    @sf.style_node(b, fn() { rename_box() }, in_row=true)
+    @sf.style_node(b, fn() { rename_box(at) }, in_row=true)
     b.row(Is(true)).lines_up(Is(Some(Middle))).edge(By(fn() { (1.0, @sf.theme().p.line_strong) })) |> ignore
     let f = @ui.field(
       b,

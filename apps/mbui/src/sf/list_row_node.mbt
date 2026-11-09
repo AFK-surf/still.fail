@@ -59,9 +59,9 @@ pub fn list_row_node(
       style_node(h, fn() { theme().chat_list.head })
       let reach = fn() {
         let l = theme().chat_list
-        if at == Side && end_slot > 0.0 {
+        if at != Whole && end_slot > 0.0 {
           let last = if corner_end() > 0.0 { corner_end() } else { l.face_d }
-          l.band_pad + end_slot / 2.0 - (l.aside_end + last / 2.0)
+          band_pad_in(at) + end_slot / 2.0 - (l.aside_end + last / 2.0)
         } else {
           0.0
         }
@@ -76,7 +76,7 @@ pub fn list_row_node(
     |> ignore
     match (corner, at) {
       // (the room what stands in the corner keeps at the end of the lines under the first)
-      (Some(_), Side) =>
+      (Some(_), Side | Tape) =>
         text.box(fn(line) {
           line.row(Is(true)) |> ignore
           line.box(fn(u) {
@@ -93,7 +93,7 @@ pub fn list_row_node(
   |> ignore
   // (in its foot's end corner, aside_end in from both)
   match (corner, at) {
-    (Some(k), Side) =>
+    (Some(k), Side | Tape) =>
       row.show(corner_shown, fn(o) {
         o
         .over(Is(true))
