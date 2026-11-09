@@ -186,6 +186,7 @@ export class PersonalLock {
 
   #heard(sub: string, entries: Entry[], stations = false): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      const was = this.#stands(sub);
       const pinned = this.#pinned.get(sub) ?? [];
       const holds = checkChain(entries, sub) !== null;
       const grows = pinned.length > 0 && holds && entries.length >= pinned.length && pinned.every((e, i) => entryHash(e) === entryHash(entries[i]!));
@@ -198,8 +199,16 @@ export class PersonalLock {
         else yield* this.#env.cloud(sub, "POST", PATH, { entries: pinned });
       } else if (holds && entries.length > 0) this.#seen.set(sub, entries);
       else this.#seen.delete(sub);
-      this.#env.changed();
+      // Told only when it changed: what is told retries the stations that refused this device, and each refusal brings
+      // this same chain again (views/lock.ts heardRefused), so telling it unchanged would ask them again at once, endlessly.
+      if (this.#stands(sub) !== was) this.#env.changed();
     });
+  }
+
+  /// What is held of `sub`'s lock: the chain pinned and one seen that does not go on from it, by their last entries.
+  #stands(sub: string): string {
+    const last = (c: Entry[] | undefined) => (c === undefined || c.length === 0 ? "" : `${c.length}:${entryHash(c[c.length - 1]!)}`);
+    return `${last(this.#pinned.get(sub))}|${last(this.#seen.get(sub))}`;
   }
 
   #pin(sub: string, entries: Entry[]): Effect.Effect<void, CoreError> {
