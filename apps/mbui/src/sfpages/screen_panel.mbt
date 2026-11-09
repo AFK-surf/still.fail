@@ -369,7 +369,7 @@ fn center_open(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, id : Int, close : () -
   u.asked_panel = ""
   let from : @sf.Anchor = Of(id)
   if asked == "logs" {
-    debug_logs_open(s, u, from)
+    debug_logs_open(c, s, u, from)
     return
   }
   if asked == "apps" {
