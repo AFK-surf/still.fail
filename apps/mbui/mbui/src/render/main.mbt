@@ -14,8 +14,8 @@
 // instance of it, none left out (<out>.whole.png): the two the same to the byte.
 //
 // With MBUI_DL_BENCH too, the two lists drawn one after the other n times each, whole and then only where they differ,
-// and the GPU's time of a frame said (the median: where the host measures it, Metal's), nothing written; and again
-// with every instance drawn, none left out.
+// and the GPU's time of a frame said (the median: where the host measures it, Metal's, and GLES's on Android where the
+// driver has GL_EXT_disjoint_timer_query), nothing written; and again with every instance drawn, none left out.
 //
 // Each glyph is made again by what the list says it is (its words shaped in its font, the cluster it is), each image
 // decoded again from its source (or, handed over as bytes, from <list.dl>.img<N> beside it), and their instances given
