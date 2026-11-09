@@ -238,6 +238,7 @@ const f = new Device("F");
 const g = new Device("G");
 const h = new Device("H", "bob");
 const i = new Device("I", "bob");
+const j = new Device("J");
 let dKey = "";
 let dBase = "";
 /// The test station frozen (as if its network went) or started anew (scripts/e2e-local.sh freeze, thaw).
@@ -697,6 +698,13 @@ try {
       await opens(x);
     }
   });
+  // C, D, F and G were taken off and have no more part: closed, as such a device mostly is. Each device of alice's reads
+  // her account again on every change to her workspaces (a member, a station, a workspace), and still.fail cloud gives
+  // an account 120 requests a minute (account.ts): nine of them running through rounds 8 and 9 use it up.
+  await within(Promise.all([c, d, f, g].map((x) => x.close())), 5000);
+  // (round 9's devices' ids, as the workspace's lock has them: a device's id is its own, the same in each workspace)
+  const bId = await baseOf(b);
+  const eId = await baseOf(e);
   // ── round 8: a second person, bob, a member: his first device let into the workspace's lock by the owner face to
   // face, a vault of his own; his own lock opened and bound, his second device joining it; then the owner takes him
   // out of the workspace: the cloud's to say (members are the account system's), his devices refused ──
@@ -795,9 +803,69 @@ try {
       await opens(x);
     }
   });
+  // ── round 9: a second workspace of alice's, safe mode on there too, its own station: alice's own lock bound in both;
+  // a new device joining it once is let in by both, taken off it once is refused by both ──
+  let two = "";
+  let third = "";
+  await must("A installed anew makes a second workspace and enrolls a station of its own in it", async () => {
+    two = (await e.call("workspace.create", { account: sub, name: "Two" })).id;
+    const made = await e.call("workspace.enroll", { account: sub, workspace: two, name: "third" });
+    const at = `${dir}/enroll-two.log`;
+    writeFileSync(at, `ANSWER workspace.enroll ok ${JSON.stringify(made)}\n`);
+    stationDo("second-station", at, "third");
+    third = (await e.until({ topic: "workspace", workspace: two }, (v) => (v?.stations ?? [])[0], 60_000)).id;
+    await e.stationState(two, (s) => s.state === "online", 120_000);
+  });
+  await must("A installed anew turns safe mode on in it, with B and itself, the two on alice's own lock", async () => {
+    const draft = await e.until({ topic: "lockDraft", workspace: two }, (v) => (v?.ready ? v : undefined), 120_000);
+    log(`  the draft's devices: ${(draft.devices ?? []).map((d: J) => `${d.id.slice(0, 8)}${d.on === false ? " (off)" : ""}`).join(", ")}`);
+    for (const d of draft.devices ?? []) if (d.id !== bId && d.id !== eId && d.on !== false) await e.call("lock.toggle", { workspace: two, id: d.id });
+    await e.call("lock.open", { workspace: two });
+    await e.lock(two, (l) => l.locked && l.signs);
+    await e.stationState(two, (s) => s.state === "online");
+  });
+  await check("alice's own lock bound in the second workspace too; B let in there, signing", async () => {
+    await b.stationState(two, (s) => s.state === "online", 90_000);
+    await b.lock(two, (l) => l.signs && l.me?.confirmed, 90_000);
+    const at = `${process.env.E2E_STATION}-third/data`;
+    const persons = () => { try { return readFileSync(`${at}/mesh/person-chains.json`, "utf8"); } catch { return ""; } };
+    await whenChanged([at], () => persons().includes(`person:${sub}`), 60_000, () => `the third station keeps no lock of alice's: ${persons().slice(0, 200)}`);
+  });
+  await j.signIn();
+  await check("a new device J, not on alice's own lock, refused in both workspaces", async () => {
+    for (const ws of [workspace, two]) log(`  J in ${ws === two ? "Two" : "Dev"}: ${short(await j.stationState(ws, (s) => s.state !== "online" && s.state !== "connecting", 90_000))}`);
+  });
+  let jKey = "";
+  await must("J joins alice's own lock once, face to face with B", async () => {
+    jKey = await joinVia(b, j);
+  });
+  await check("J let in by both workspaces' stations, in both workspaces' locks signing", async () => {
+    for (const ws of [workspace, two]) {
+      const t1 = Date.now();
+      await j.stationState(ws, (s) => s.state === "online", 90_000);
+      await j.lock(ws, (l) => l.signs && l.me?.confirmed, 90_000);
+      log(`  J in ${ws === two ? "Two" : "Dev"} after ${Date.now() - t1} ms`);
+    }
+  });
+  await must("B takes J off alice's own lock", async () => {
+    await b.call("adb.personalRemove", { sub, key: jKey });
+    await b.personal((p) => !p.devices.some((x: J) => x.key === jKey), 60_000);
+  });
+  await check("J refused by both workspaces' stations, out of both workspaces' locks", async () => {
+    for (const ws of [workspace, two]) {
+      log(`  J in ${ws === two ? "Two" : "Dev"}: ${short(await j.stationState(ws, (s) => s.state !== "online" && s.state !== "connecting", 90_000))}`);
+      await j.lock(ws, (l) => !l.signs, 60_000);
+    }
+  });
+  await check("B and A installed anew still let in by both, alice's item opened", async () => {
+    for (const x of [b, e]) {
+      for (const ws of [workspace, two]) await x.stationState(ws, (s) => s.state === "online", 60_000);
+      await opens(x);
+    }
+  });
 } catch (e) {
   fail("the run", e);
 }
 log(failed === 0 ? "ALL PASSED" : `${failed} FAILED`);
-await within(Promise.all([a, b, c, d, e, f, g, h, i].map((x) => x.close())), 5000);
+await within(Promise.all([a, b, c, d, e, f, g, h, i, j].map((x) => x.close())), 5000);
 process.exit(failed === 0 ? 0 : 1);
