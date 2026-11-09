@@ -110,8 +110,8 @@ pub fn play_mark(c : @ui.Ctx, side : Double, shade : @ui.Color) -> Int {
 /// A video's capsule over its picture, in its foot's start corner concentric with its `corner` (a message's file's: the
 /// chat's media tiles' and a message's video's; a quote's picture's): a small play mark and how long it is (`duration`, none where that is
 /// not known) on the video's shade. `coming`: how far the core has brought it here, a ring of that share and the share
-/// in words in their place, the one going out before the other comes in (words never over words) as the capsule
-/// changes its width with them over dur_ms. `key` names
+/// in words in their place, the one going out before the other comes in (words never over words), each over half of
+/// dur_ms, as the capsule changes its width between them on a Move as long as that is far. `key` names
 /// its motion. Nothing else over the picture: what it shows is the picture (the user, 2026-11-01: a band with its name
 /// and a play mark in its middle left little of a wide one to see).
 pub fn video_capsule(
@@ -128,7 +128,6 @@ pub fn video_capsule(
     }
     None => video_capsule_last.get(key).unwrap_or(0.0)
   }
-  let k = @motion.animate(c, key, if coming is Some(_) { 1.0 } else { 0.0 }, spec=@motion.tween(dur_ms, ease=Out))
   let length = if duration > 0.0 { clock(duration) } else { "" }
   let share = "\{(dmin(1.0, dmax(0.0, part)) * 100.0).floor().to_int()}%"
   let gap = @ui.Space::px(S1)
@@ -138,10 +137,21 @@ pub fn video_capsule(
     if length != "" { [video_capsule_mark, gap, end, end] } else { [video_capsule_mark, end, end] },
   )
   let share_w = c.fitting_width(c.words_across(share, video_capsule_words), [video_capsule_ring, gap, end, end])
-  // The wider label needs all of its room until it has faded out, and before it fades in. The capsule can change
-  // width during the other half, while the shorter label is showing, without cutting either label on the way.
-  let width_way = if length_w >= share_w { dmax(0.0, 2.0 * k - 1.0) } else { dmin(1.0, 2.0 * k) }
-  let across = length_w + (share_w - length_w) * @ui.Ease::Move.at(width_way)
+  // The wider label needs all of its room until it has faded out, and before it fades in. The capsule changes width
+  // while the shorter label is showing, without cutting either label on the way: laid out as wide as it ends at once,
+  // its ground reshaped there from the width it was drawn (@motion.reshape), on a Move as long as its way is far. Going
+  // to the wider, the ground goes at once and the wider label comes in once it is there; going to the narrower, the
+  // wider label goes first and the ground after it. Each label laid out as wide as it needs, whatever the capsule's
+  // width, faded over half of dur_ms (told as it is built, read as it is drawn), built while it shows or till its
+  // fade's declared end: never both seen.
+  let shown = coming is Some(_)
+  let to_wider = shown == (share_w > length_w)
+  let half = dur_ms / 2.0
+  let comes_at = if to_wider { dmax(half, @ui.move_ms((share_w - length_w).abs())) } else { half }
+  let fade = fn(on : Bool) { @motion.tween(half, ease=Out, delay=if on { comes_at } else { 0.0 }) }
+  let length_k = @motion.told(c, key + "/length", if shown { 0.0 } else { 1.0 }, spec=fade(!shown))
+  let share_k = @motion.told(c, key + "/share", if shown { 1.0 } else { 0.0 }, spec=fade(shown))
+  let reshape = if to_wider { @motion.move() } else { @motion.move(delay=half) }
   c.layer(fn() {
     let foot = if corner == message_file_corner {
       video_capsule_foot
@@ -149,31 +159,37 @@ pub fn video_capsule(
       video_capsule_foot.then(@ui.style(p=room_of(capsule_fit(corner, video_capsule_h, video_capsule_alone_in))))
     }
     c.box(style=foot, fn() {
-      c.box(style=video_capsule_box.then(@ui.style(w=Fixed(across))), fn() {
-        if k < 0.5 {
-          let l = c.box(style=video_capsule_row, fn() {
-            icon(c, "play", size=video_capsule_mark, color=white) |> ignore
-            if length != "" {
-              c.text(length, style=video_capsule_words) |> ignore
-            }
-          })
-          c.look(l, @ui.look(alpha=1.0 - 2.0 * k))
-        }
-        if k > 0.5 {
+      let b = c.box(style=video_capsule_box.then(@ui.style(w=Fixed(if shown { share_w } else { length_w }))), fn() {
+        if !shown || !length_k.over() {
           c.layer(fn() {
-            c.box(style=video_capsule_over, fn() {
+            c.box(style=video_capsule_over.then(@ui.style(w=Fixed(length_w))), fn() {
+              let l = c.box(style=video_capsule_row, fn() {
+                icon(c, "play", size=video_capsule_mark, color=white) |> ignore
+                if length != "" {
+                  c.text(length, style=video_capsule_words) |> ignore
+                }
+              })
+              c.look_by(l, fn() { @ui.look(alpha=length_k.get()) })
+            })
+            |> ignore
+          })
+          |> ignore
+        }
+        if shown || !share_k.over() {
+          c.layer(fn() {
+            c.box(style=video_capsule_over.then(@ui.style(w=Fixed(share_w))), fn() {
               let r = c.box(style=video_capsule_row, fn() {
                 progress_ring(c, video_capsule_ring, part, white) |> ignore
                 c.text(share, style=video_capsule_words) |> ignore
               })
-              c.look(r, @ui.look(alpha=2.0 * k - 1.0))
+              c.look_by(r, fn() { @ui.look(alpha=share_k.get()) })
             })
             |> ignore
           })
           |> ignore
         }
       })
-      |> ignore
+      @motion.reshape(c, b, "video-capsule/" + key, by=key + (if shown { "/share" } else { "/length" }), spec=reshape)
     })
     |> ignore
   })
