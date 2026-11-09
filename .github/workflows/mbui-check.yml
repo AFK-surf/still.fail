@@ -80,7 +80,8 @@ jobs:
         # (arch/next's commit, on main's ref: workflow_run, above)
         with: { ref: "${{ github.event.workflow_run.head_sha || github.sha }}" }
       - name: The core takes input and due timers in order
-        if: env.PART == 'replay'
+        # (once a push, on the replay runner at the default rate: a frame rate is nothing to it)
+        if: env.PART == 'replay' && env.FPS == ''
         run: |
           clang++ -std=c++20 -O2 apps/mbui/engine/tests/ready_queue.cpp -o "$RUNNER_TEMP/core-ready-queue-test"
           "$RUNNER_TEMP/core-ready-queue-test"
@@ -175,7 +176,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "mbui-app-test-${{ github.run_id }}-${{ github.run_attempt }}", path: "${{ runner.temp }}/app-test", retention-days: 1, compression-level: 1 }
       - name: The mbui app's check (detlint, then native type-checked)
-        if: env.PART == 'replay'
+        # (on the default rate's replay runner alone: the same check on each rate's was 17-21 s of each of their 200-300
+        # in the same push, 2026-11-09)
+        if: env.PART == 'replay' && env.FPS == ''
         # (after the tests: its type-check over the tests' build, not the build after it, 2026-10-23. On the replay
         # part's runner: the app part was 184-187 s with it, the replay part 77-100 s, 2026-10-24)
         run: moon version && bash apps/mbui/scripts/check.sh
