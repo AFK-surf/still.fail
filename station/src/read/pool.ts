@@ -107,6 +107,9 @@ function filling(op: string, args: unknown): boolean {
 /// of every Claude and Codex project there, 14 s on a station, 2026-11-03), each of the files on the disk rather than the
 /// database.
 const PAGES = new Set(["timeline", "machineSessions"]);
+/// The reads the MoonBit reader answers itself (station/mb src/readops), on readers of their own (`moved`) where its
+/// program is there; every other read is a worker's.
+const MOVED = new Set(["job", "jobLog"]);
 
 export class Readers {
   /// What devices ask, and what the station tells (`told`), each answered by readers of its own.
@@ -118,6 +121,8 @@ export class Readers {
   private told: Line;
   /// The store's log written into the database (CHECKPOINT), by a reader of its own.
   private log: Line;
+  /// The reads the MoonBit reader answers (MOVED), for devices and streams alike.
+  private moved: Line;
   /// The reader each session's history was last read in (`timeline`).
   private homes = new Map<string, Slot>();
   private next = 0;
@@ -169,6 +174,7 @@ export class Readers {
     this.pages = { told: false, size: 2, room: false, slots: [], waiting: [] };
     this.told = { told: true, size: tellers, room: false, slots: [], waiting: [] };
     this.log = { told: true, size: 1, room: false, slots: [], waiting: [] };
+    this.moved = { told: false, size, room: true, slots: [], waiting: [] };
   }
 
   /// Check statistical coverage without occupying a device reader or writing old history.
@@ -182,7 +188,7 @@ export class Readers {
     // From source: worker.ts beside this; bundled (this inside dist/main.js): dist/read/worker.js.
     const file = this.workerFile ?? new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./read/worker.js", import.meta.url);
     // A reader's heap stays small: what it builds is answered and dropped.
-    const worker: ReaderLike = line === this.log && this.mbReader !== null ? new MbReader(this.mbReader, this.data)
+    const worker: ReaderLike = (line === this.log || line === this.moved) && this.mbReader !== null ? new MbReader(this.mbReader, this.data)
       : new Worker(file, { workerData: { data: this.data }, resourceLimits: { maxOldGenerationSizeMb: 128, maxYoungGenerationSizeMb: 8 } });
     const slot: Slot = { worker, held: null };
     const begun = wall.now();
@@ -191,7 +197,7 @@ export class Readers {
       // a station short of memory, 2026-11-03, a reader started for it).
       if ("ready" in answer) {
         const ms = wall.now() - begun;
-        if (ms >= 1_000) log.warn("readers", "a reader started slowly", { ms, line: line === this.asked ? "asked" : line === this.pages ? "pages" : line === this.log ? "log" : "told", ...answer.ready });
+        if (ms >= 1_000) log.warn("readers", "a reader started slowly", { ms, line: line === this.asked ? "asked" : line === this.pages ? "pages" : line === this.log ? "log" : line === this.moved ? "moved" : "told", ...answer.ready });
         return;
       }
       // An abandoned read may finish while its worker is being stopped. Do not give that worker another read until it exits.
@@ -581,7 +587,7 @@ export class Readers {
   private enqueue(op: string, args: unknown, lang: Ask["lang"], told: boolean, first = false, background = false, signal?: AbortSignal): Promise<string> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
     if (signal?.aborted) return Promise.reject(cancelled());
-    const line = op === CHECKPOINT ? this.log : told ? this.told : PAGES.has(op) ? this.pages : this.asked;
+    const line = op === CHECKPOINT ? this.log : this.mbReader !== null && MOVED.has(op) ? this.moved : told ? this.told : PAGES.has(op) ? this.pages : this.asked;
     // A session's history read where it was read before: that reader keeps where its reading stands in memory, another
     // reads it from disk (read/transcripts.ts).
     const session = (op === "timeline" || op === "transcriptState") && typeof (args as { key?: unknown })?.key === "string" ? (args as { key: string }).key : null;
@@ -688,7 +694,7 @@ export class Readers {
 
   /// Each running reader's JS heap in use, in bytes (for the memory log).
   heaps(): Promise<number[]> {
-    return Promise.all([...this.asked.slots, ...this.told.slots, ...this.log.slots, ...this.pages.slots].map((s) => s.worker.getHeapStatistics().then((h) => h.used_heap_size, () => 0)));
+    return Promise.all([...this.asked.slots, ...this.told.slots, ...this.log.slots, ...this.pages.slots, ...this.moved.slots].map((s) => s.worker.getHeapStatistics().then((h) => h.used_heap_size, () => 0)));
   }
 
   close() {
@@ -711,7 +717,7 @@ export class Readers {
     if (this.closedCards !== null) void this.closedCards.close();
     if (this.peopleSince !== null) void this.peopleSince.close();
     if (this.ccIndex !== null) void this.ccIndex.close();
-    for (const line of [this.asked, this.told, this.log, this.pages]) {
+    for (const line of [this.asked, this.told, this.log, this.pages, this.moved]) {
       for (const asked of line.waiting.splice(0)) asked.reject(new HttpError(502, "station stopping"));
       for (const { worker } of line.slots) void worker.terminate();
     }
