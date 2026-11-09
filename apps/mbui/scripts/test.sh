@@ -12,7 +12,9 @@
 # APP_EXE (with APP_INFO, its tests' list, __whitebox_test_info.json): sfapp's test program built elsewhere (check-mbui's
 # app-build job's), its runs asked of it directly (scripts/testexe; TESTEXE: that tool built elsewhere too, beside it),
 # nothing built here. APP_BUILD_OUT: sfapp's test program built only, it, its tests' list and the tool put in that
-# directory for them.
+# directory for them. REPLAY_EXE (with REPLAY_INFO, __blackbox_test_info.json) and REPLAY_BUILD_OUT: the same for the
+# flows' program (src/sfreplay/flows), check-mbui's replay-build job's, run at the other frame rates (replay-fps); the
+# core's tests are the default rate's run's alone.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 # (the whole suite is CI's, a PR's: on Studio or a laptop it is half an hour of wasm-gc in a row where CI's native runs
@@ -37,7 +39,7 @@ for t in $targets; do
   # MBC_LTO says (its link is 30-40 s a test; main's run has it on: mbui-check.yml).)
   mode="--target $t"
   # (mbui's scripts/env.sh native_tests: the C split by mbui's scripts/mbc, units kept by content in MBC_STORE)
-  if [ $t = native ] && [ -z "${APP_EXE:-}" ]; then native_tests "$A"; mode=$NATIVE; fi
+  if [ $t = native ] && [ -z "${APP_EXE:-}" ] && [ -z "${REPLAY_EXE:-}" ]; then native_tests "$A"; mode=$NATIVE; fi
   # (wasm-gc: --release, as native's; wasm-gc rather than classic Wasm, whose memory is freed by counting alone: what
   # holds itself is never freed, 3.7 MB a screen opened in a Tester, and the corner and contrast sweeps outgrew its
   # 4 GiB (2026-11-03))
@@ -70,6 +72,8 @@ for t in $targets; do
     # (not sfreplay: no test of its own is left there, and its package was two empty programs of the whole app, 29 s
     # of the replay part's compile, 2026-10-24)
     pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay/flows"
+    # (on a program built elsewhere, REPLAY_EXE: the flows alone, the core's tests the default rate's run's)
+    [ -z "${REPLAY_EXE:-}" ] || pkgs="${pkgs/ -p stillfail\/core/}"
     fi
     # (a test under a directory of its own there is in no package this runs: a branch from before brought one back)
     for g in src/sfreplay/flows/*/; do
@@ -104,13 +108,13 @@ for t in $targets; do
   # Built first on its own (TIMES=1, as CI's: each said with how long it took; its errors shown by the run), then run.
   s=$(date +%s)
   # (a build that fails fails the run: the programs a build before it left in _build are not run in their place)
-  if [ -z "${APP_EXE:-}" ] && ! moon test $mode $pkgs --build-only > "$out.build" 2>&1; then
+  if [ -z "${APP_EXE:-}" ] && [ -z "${REPLAY_EXE:-}" ] && ! moon test $mode $pkgs --build-only > "$out.build" 2>&1; then
     grep -v "$F" "$out.build" | tail -40
     rm -f "$out.build"
     exit 1
   fi
   rm -f "$out.build"
-  [ -z "${TIMES:-}" ] || [ -n "${APP_EXE:-}" ] || echo "test.sh: built in $(( $(date +%s) - s )) s"
+  [ -z "${TIMES:-}" ] || [ -n "${APP_EXE:-}${REPLAY_EXE:-}" ] || echo "test.sh: built in $(( $(date +%s) - s )) s"
   # (wasm-gc: the whole app's programs (sfapp's, the flows') run as a native one built elsewhere is (APP_EXE, exe_run),
   # their files side by side, each part a moonrun of the program (scripts/wasmtest.mjs): moon test runs a program's
   # tests one after another. UPDATE's are moon test's own, to write the snapshots)
@@ -133,6 +137,15 @@ for t in $targets; do
     mkdir -p "$APP_BUILD_OUT" && cp $b/sfapp.whitebox_test.exe $b/__whitebox_test_info.json "$APP_BUILD_OUT/" &&
       cp "$(bash "$D/testexe" path)" "$APP_BUILD_OUT/testexe" || exit 1
     echo "test.sh: sfapp's test program put in $APP_BUILD_OUT ($(du -h $b/sfapp.whitebox_test.exe | cut -f1))"
+    exit 0
+  fi
+  # (the flows' test program and its tests' list put where REPLAY_BUILD_OUT says, the same way)
+  if [ -n "${REPLAY_BUILD_OUT:-}" ]; then
+    b=_build/native/release/test/stillfail/sfreplay/flows
+    [ -f $b/flows.blackbox_test.exe ] || { moon test $mode $pkgs --build-only 2>&1 | grep -v "$F" | tail -40; exit 1; }
+    mkdir -p "$REPLAY_BUILD_OUT" && cp $b/flows.blackbox_test.exe $b/__blackbox_test_info.json "$REPLAY_BUILD_OUT/" &&
+      cp "$(bash "$D/testexe" path)" "$REPLAY_BUILD_OUT/testexe" || exit 1
+    echo "test.sh: the flows' test program put in $REPLAY_BUILD_OUT ($(du -h $b/flows.blackbox_test.exe | cut -f1))"
     exit 0
   fi
   s=$(date +%s)
@@ -203,7 +216,7 @@ for t in $targets; do
     rest=()
     for r in "${runs[@]}"; do rest+=("$(echo " $r " | sed 's| -p stillfail/sfreplay/flows | |')"); done
     runs=("${rest[@]}")
-    fx=_build/native/release/test/stillfail/sfreplay/flows/flows.blackbox_test.exe
+    fx=${REPLAY_EXE:-_build/native/release/test/stillfail/sfreplay/flows/flows.blackbox_test.exe}
     [ $t = wasm-gc ] && fx=$(wasm_exe sfreplay/flows blackbox)
     if [ $t != js ] && [ -z "${UPDATE:-}" ] && [ -n "$fx" ] && [ -f "$fx" ]; then
       # (native: their files in one run of the program built above, whose n programs each take the next file
@@ -321,7 +334,7 @@ for t in $targets; do
     # (each run's time with TIMES: the part's run is the longest of them, and which one it is is said)
     { if [ "${runs[i]%% *}" = @flows ]; then
         f=_build/$t/release/test/stillfail/sfreplay/flows
-        exe_run "$fx" $f/__blackbox_test_info.json ${REPLAY_SHARDS:-3} stillfail/sfreplay/flows \
+        exe_run "$fx" "${REPLAY_INFO:-$f/__blackbox_test_info.json}" ${REPLAY_SHARDS:-3} stillfail/sfreplay/flows \
           ${runs[i]#@flows } > "$out.$i" 2>&1
       # (the packages' run is moon test's even then: only sfapp's program is APP_EXE)
       elif [ "${runs[i]%% *}" = @pages ]; then
