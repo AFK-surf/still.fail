@@ -1377,7 +1377,8 @@ fn software_list_node(
 
 ///|
 /// One piece of software (software_row's): its mark; its name and what is newer with updating it on its first line;
-/// its version (what more there is of it beside it, under the hand), why it cannot be updated and the station's own
+/// its version (what more there is of it beside it, under the hand), what an update under way or done says, why it
+/// cannot be updated and the station's own
 /// switches (its channel, updating by itself, for its managers) under them, as wide as its words.
 fn software_row_node(
   row : @view.View,
@@ -1433,6 +1434,11 @@ fn software_row_node(
         }
       })
       |> ignore
+      // what it says of an update under way or done: a sentence, on a line of its own under its version, never beside
+      // its name, which it would squeeze there on a narrow page
+      u.show(fn() { software_said(v()) != "" }, fn(w) {
+        @sf.words_node(w, fn() { software_said(v()) }, fn() { sw_note }) |> ignore
+      })
       u.show(fn() { text(v(), "note") != "" }, fn(w) { @sf.words_node(w, fn() { text(v(), "note") }, fn() { sw_note }) |> ignore })
       u.show(fn() { text(v(), "state") == "failed" && text(v(), "message") != "" }, fn(w) {
         @sf.words_node(w, fn() { text(v(), "message") }, fn() { sw_note }) |> ignore
@@ -1476,8 +1482,8 @@ fn software_row_node(
 
 ///|
 /// What a piece of software has at its first line's end, by how it stands (software_row's): updating (how far, what it
-/// says), failed (why, trying again), to repair, to install, newer (updating to it), a way back to the stable release,
-/// done; nothing.
+/// says under its version), failed (why, trying again), to repair, to install, newer (updating to it), a way back to the
+/// stable release; nothing.
 fn software_end(v : Json?) -> String {
   let state = text(v, "state")
   if state == "updating" {
@@ -1492,10 +1498,19 @@ fn software_end(v : Json?) -> String {
     "newer"
   } else if flag(v, "downgrade") && text(v, "latest") != "" {
     "downgrade"
-  } else if text(v, "done") != "" {
-    "done"
   } else {
     ""
+  }
+}
+
+///|
+/// What a piece of software says of its update under its version (software_row's): how one under way goes, or, with
+/// nothing else at its first line's end, that one is done.
+fn software_said(v : Json?) -> String {
+  match software_end(v) {
+    "updating" => text(v, "updatingText")
+    "" => text(v, "done")
+    _ => ""
   }
 }
 
@@ -1536,7 +1551,6 @@ fn software_end_node(
         })
         |> ignore
       })
-      words(fn() { text(v(), "updatingText") }, sw_newer)
     }
     "failed" => {
       words(fn() { text(v(), "failedText") }, sw_failed)
@@ -1556,7 +1570,6 @@ fn software_end_node(
       words(fn() { text(v(), "latest") }, sw_newer)
       button(fn() { @sf.t("web-main.versions.backToStable") }, false)
     }
-    "done" => words(fn() { text(v(), "done") }, sw_newer)
     _ => ()
   }
 }
