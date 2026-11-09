@@ -127,8 +127,6 @@ priv struct PanelOf {
   stage : Bool
   /// on a stage, what is chosen of the picture between it and its buttons (panel's `above`)
   above : ((@ui.Ctx) -> Unit)?
-  /// beside what opened it, what stands at its head's end, beside its title (panel's `head_end`)
-  head_end : ((@ui.Ctx) -> Unit)?
   /// in the middle of the window, what its title's row holds in its title's place, its close button at its end (panel's
   /// `title_row`)
   title_row : ((@ui.Ctx) -> Unit)?
@@ -438,9 +436,7 @@ pub fn pick(
 /// a press beside it, Escape and the back close it too; `above`, over those buttons, what is chosen of the picture (the
 /// card to share's looks). `side`, `along`, `offset`: where it stands beside what opened it (under it by default, its
 /// start at the start of it); what opens from a bar down the window's side (the rail) stands beside the bar, out of
-/// it, as everything opened from there does. `head_end`: beside what opened it, what stands at the end of its head's
-/// line, beside its title (the model panel's search: a sheet, its head the sheet's own, leaves it to what it holds).
-/// `title_row`: in the middle of the window, its title's row drawn by it in the title's place (a chat's name with its ✎
+/// it, as everything opened from there does. `title_row`: in the middle of the window, its title's row drawn by it in the title's place (a chat's name with its ✎
 /// after it, an agent's mark, name and where it stands), its close button at that row's end as a title's is; `title`
 /// still what it is called. What it holds asks Ctx-free `title_row_given` whether to draw that row itself (elsewhere:
 /// a sheet, a panel beside what opened it).
@@ -469,7 +465,6 @@ pub fn panel(
   field? : String = "",
   stage? : Bool = false,
   above? : (@ui.Ctx) -> Unit,
-  head_end? : (@ui.Ctx) -> Unit,
   title_row? : (@ui.Ctx) -> Unit,
   heads_itself? : Bool = false,
   side? : @ui.Side = Bottom,
@@ -498,7 +493,6 @@ pub fn panel(
       field,
       stage,
       above,
-      head_end,
       title_row,
       heads_itself,
       side,
@@ -560,7 +554,6 @@ pub fn panel_nodes(
       field: "",
       stage: false,
       above: None,
-      head_end: None,
       title_row: None,
       heads_itself: false,
       side,
@@ -1648,7 +1641,7 @@ fn panel_popover(c : @ui.Ctx, key : String, p : Presented, x : PanelOf) -> (Bool
         None => x.title
       }
       if title != "" && !x.heads_itself {
-        panel_head(c, title, end?=x.head_end)
+        panel_head(c, title)
       }
       // (small_panel's pad round it: what reaches its sides on purpose goes out past that, panel_bleed; its rows stand
       // at it)

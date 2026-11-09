@@ -155,7 +155,7 @@ fn panel_node(
         // (a live one headed only while it has a title, what stands at its head's end with it, as small_panel heads it;
         // what it is presented with headed by a head's end alone too)
         let headed_now : @signals.Computed[Bool] = @signals.computed(
-          fn(_) { !x.heads_itself && (title() != "" || (x.live is None && x.head_end is Some(_))) },
+          fn(_) { !x.heads_itself && title() != "" },
           same=fn(a, b) { a == b },
         )
         let headed = fn() { headed_now.get() }
@@ -167,13 +167,25 @@ fn panel_node(
         let under = if !footed || ruled_foot { panel_pad } else { 0.0 }
         // (out to the panel's edge under it where nothing is under it; over a ruled foot, the room its own, in it)
         let out_under = if footed { 0.0 } else { panel_pad }
-        // (its title, panel_head's: out to the panel's edges over it, on `v`'s node)
+        // (its title, panel_head's: out to the panel's edges over it, on `v`'s node; where what it holds is nodes
+        // (panel_nodes), nodes too, its words as faint as the panel's look says: nothing of the old frame in it)
         let head = fn(v : @view.View) {
-          @ui.old(v, natural=true, fits?=fits(0), key=fn() { key + "/head" }, fn(c) {
-            let was = opened()
-            let held = c.box(style=panel_part_in(panel_pad, 0.0), fn() { panel_head(c, title(), end?=x.head_end) })
-            beside_given.val = was
-            words_look(c, held)
+          if x.nodes is None {
+            return @ui.old(v, natural=true, fits?=fits(0), key=fn() { key + "/head" }, fn(c) {
+              let was = opened()
+              let held = c.box(style=panel_part_in(panel_pad, 0.0), fn() { panel_head(c, title()) })
+              beside_given.val = was
+              words_look(c, held)
+            })
+          }
+          v.box(fn(h) {
+            style_node(h, fn() { panel_part_in(panel_pad, 0.0) })
+            h.alpha(By(fn() { look().words })) |> ignore
+            h.box(fn(b) {
+              style_node(b, fn() { panel_head_box })
+              words_node(b, title, fn() { panel_title }) |> ignore
+            })
+            |> ignore
           })
         }
         match x.live {

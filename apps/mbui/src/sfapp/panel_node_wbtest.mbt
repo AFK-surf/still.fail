@@ -673,9 +673,9 @@ fn panel_reach_said(t : @ui.Tester, label : String, pressed : Ref[Int], top? : B
 }
 
 ///|
-test "panel, 大屏 keyboard and mouse: tall 0.5 and not, a foot's button in its foot corner, a head's at its end in its top corner: drawn whole where they reach into the panel's padding, pressed there: as main has it" {
+test "panel, 大屏 keyboard and mouse: tall 0.5 and not, a foot's button in its foot corner: drawn whole where they reach into the panel's padding, pressed there: as main has it" {
   let out = []
-  for kind in ["tall foot", "foot", "head end"] {
+  for kind in ["tall foot", "foot"] {
     let t = menu_tester(1280.0, 800.0, 0)
     let pressed = Ref(0)
     let foot = fn(c : @ui.Ctx, _close : () -> Unit) {
@@ -686,23 +686,16 @@ test "panel, 大屏 keyboard and mouse: tall 0.5 and not, a foot's button in its
     match kind {
       "tall foot" =>
         @sf.panel("面板", panel_column_body(@signals.signal(40), []), from=At(600.0, 100.0, 0.0, 0.0), tall=0.5, foot~)
-      "foot" => @sf.panel("面板", fits_words_body(@signals.signal("面板里的话")), from=At(600.0, 100.0, 0.0, 0.0), foot~)
-      _ =>
-        @sf.panel("面板", fits_words_body(@signals.signal("面板里的话")), from=At(600.0, 100.0, 0.0, 0.0), head_end=fn(c) {
-          @sf.button(c, "尾", key="end34", tone=Primary, on_press=fn() {
-            pressed.val = pressed.val + 1
-          }) |> ignore
-        })
+      _ => @sf.panel("面板", fits_words_body(@signals.signal("面板里的话")), from=At(600.0, 100.0, 0.0, 0.0), foot~)
     }
     t.run_for(@ui.move_most_ms)
-    out.push("\{kind}: \{panel_reach_said(t, if kind == "head end" { "尾" } else { "好的" }, pressed, top=kind == "head end")}")
+    out.push("\{kind}: \{panel_reach_said(t, "好的", pressed)}")
   }
   // (as main has it, a4c845604: each wholly within the panel's clip there, (601, 107) to (879, 505), (879, 209.8),
   // (879, 175.8))
   assert_eq(out, [
     "tall foot: (832, 464, 58, 36) shows [(832, 464, 890, 500)] pressed [1, 1]",
     "foot: (832, 172, 58, 36) shows [(832, 172, 890, 208)] pressed [1, 1]",
-    "head end: (654, 112, 236, 36) shows [(654, 112, 890, 148)] pressed [1, 1]",
   ])
 }
 

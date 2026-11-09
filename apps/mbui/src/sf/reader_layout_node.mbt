@@ -69,7 +69,6 @@ fn reader_layout_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
     field: "",
     stage: false,
     above: None,
-    head_end: None,
     title_row: None,
     heads_itself: true,
     side: Bottom,
