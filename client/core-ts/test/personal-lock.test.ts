@@ -40,13 +40,13 @@ function cloud() {
 /// longer taken where it goes on from the one kept, one at odds refused. `up`: whether any of them is reached.
 function stations() {
   const kept = new Map<string, Entry[]>();
-  const say = { up: true, read: 0, brought: 0 };
+  const say = { up: true, read: 0, brought: 0, at: [] as (string | undefined)[] };
   const root = (c: Entry[]) => JSON.stringify(c[0]);
   return {
     kept,
     say,
     env: {
-      read: (_sub: string) => Effect.sync(() => (say.read++, say.up ? [...kept.values()] : null)),
+      read: (_sub: string, at?: string) => Effect.sync(() => (say.read++, say.at.push(at), say.up ? [...kept.values()] : null)),
       bring: (_sub: string, chain: Entry[]) =>
         Effect.suspend(() => {
           say.brought++;
@@ -141,6 +141,9 @@ test("a person's devices read and bring their lock at their stations, the cloud 
     await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
     assert.equal(a.lock.standing(SUB), "member");
     assert.deepEqual([...st.kept.values()].map((ch) => ch.length), [1]);
+    // A grant is signed on what its own station keeps: the person's other stations are not read first (one offline held
+    // a read of them all, and the fingerprint asked after it, until it timed out).
+    assert.deepEqual(st.say.at, [STATION]);
     // A device let in, the cloud still down: brought to the stations, and b reads it there.
     const bKey = await b.runner.run(b.lock.makeKey());
     const whole = await a.runner.run(a.lock.addDevice(SUB, { key: bKey, id: b.id, label: "b" }, "why"));
