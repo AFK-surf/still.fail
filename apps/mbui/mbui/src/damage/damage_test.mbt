@@ -356,6 +356,31 @@ test "a frame with only its headers moved: those compared alone, the same parts 
     let by_whole = gw.next(a, 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true)
     assert_eq(ga.moved(a, 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, [1]), Some(by_whole), msg="under glass, moved to \{dy}")
   }
+  // (as a host presents it (ui's h_present: next, then occlude), the kept frame's glass and pictures found of what is
+  // drawn alone, its pieces of shapes passed over: the same parts)
+  let go = @damage.Damage::new()
+  go.group_set(7, frame([(100.0, 50.0, 20.0, 10.0, 0), (100.0, 70.0, 20.0, 10.0, 0)]), 2)
+  ignore(go.next(glassed(0.0), 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true))
+  ignore(go.occlude(glassed(0.0), 4, 400.0, 300.0))
+  let gw2 = @damage.Damage::new()
+  gw2.group_set(7, frame([(100.0, 50.0, 20.0, 10.0, 0), (100.0, 70.0, 20.0, 10.0, 0)]), 2)
+  ignore(gw2.next(glassed(0.0), 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true))
+  for dy in [40.0, 41.0] {
+    let a = glassed(dy)
+    let by_whole = gw2.next(a, 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true)
+    assert_eq(go.moved(a, 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, [1]), Some(by_whole), msg="occluded, moved to \{dy}")
+  }
+  // (a stream's picture in it, found so: compared whole)
+  let streamed = glassed(0.0)
+  streamed[3 * 60 + 5] = 4.0
+  streamed[3 * 60 + 20] = @damage.stream_tex_base
+  let gs = @damage.Damage::new()
+  gs.group_set(7, frame([(100.0, 50.0, 20.0, 10.0, 0), (100.0, 70.0, 20.0, 10.0, 0)]), 2)
+  ignore(gs.next(streamed, 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true))
+  ignore(gs.occlude(streamed, 4, 400.0, 300.0))
+  let moved_streamed = copy(streamed)
+  moved_streamed[60 + 1] = 40.0
+  assert_eq(gs.moved(moved_streamed, 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, [1]), None)
   // (another number of instances, another window, or what was no header: not so)
   assert_eq(alone.moved(headed(7, 3, 0.0, 3.0), 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, [1]), None)
   assert_eq(alone.moved(headed(7, 2, 0.0, 3.0), 3, 500.0, 300.0, 2.0, 1.0, 1.0, 1.0, [1]), None)
