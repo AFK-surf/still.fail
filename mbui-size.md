@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [541192be2](https://github.com/AFK-surf/still.fail/commit/541192be278e41b968f11c1cd699fab0219bc61c) mbui: the reader's keys are the keymap's actions,  | 1.73 | 2.31 | 9.62 | 28.14 | 33.49 | 25.12 | 45.93 | 93.14 | 133.53 |
 | [c1c5a1b0f](https://github.com/AFK-surf/still.fail/commit/c1c5a1b0f0bd25823209dab601ffdf216353c636) mbui: 60/120 帧下逐帧判平滑度（MBUI_TEST_MOTION），先在 CI 计数 ( | 1.73 | 2.31 | 9.61 | 28.13 | 33.49 | 25.12 | 45.93 | 93.55 | 147.47 |
 | [9da9d3e4a](https://github.com/AFK-surf/still.fail/commit/9da9d3e4a64943cb9c3c0bec47a2bb86426207d1) mbui: where the old views are placed worked out ag | 1.73 | 2.31 | 9.61 | 28.13 | 33.49 | 25.12 | 45.93 | 93.28 | 181.3 |
 | [16974fbc6](https://github.com/AFK-surf/still.fail/commit/16974fbc68586fa0c47785d89e80a6679c01ec4c) mbui: the player's keys are the keymap's actions,  | 1.73 | 2.31 | 9.61 | 28.13 | 33.48 | 25.12 | 45.93 | 93.55 | 146.41 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [bbd8dfb56](https://github.com/AFK-surf/still.fail/commit/bbd8dfb56ccf3cec8327cb3f0f12542896a1f896) mbui: a film's flight under the chat's bar on 小屏,  | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
 | [f4874d328](https://github.com/AFK-surf/still.fail/commit/f4874d32855e3ca64bc80e4dfbc61f3a6409f83f) mbui: an agent's line gives its place to its answe | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
 | [70d70273b](https://github.com/AFK-surf/still.fail/commit/70d70273b99aa83c5d937c10b1b416ad3fb495da) app: 快捷键 lets a person choose how the composer sen | 1.72 | 2.29 | 9.53 | 28.02 | 33.2 | 25.03 | 45.72 | 93.06 | 156.81 |
-| [7582e5326](https://github.com/AFK-surf/still.fail/commit/7582e53263e9803ebba40596785683332afe72f6) feat(ios): configure monoid TestFlight and APNs id | 1.71 | 2.28 | 9.52 | 28.01 | 33.18 | 25.02 | 45.7 | 93.06 | 156.81 |
