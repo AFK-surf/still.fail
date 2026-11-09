@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [d23367cfa](https://github.com/AFK-surf/still.fail/commit/d23367cfae07dd21c5805c27728d02873132630f) core: the account's list changed reads /v1/me and  | 1.74 | 2.32 | 9.63 | 28.16 | 33.61 | 25.15 | 46.08 | 93.05 | 179.11 |
 | [ca2d39363](https://github.com/AFK-surf/still.fail/commit/ca2d39363c12612addb0481ba8b0b9c8a49edde5) core: a vault's version told before the lock that  | 1.74 | 2.32 | 9.63 | 28.16 | 33.61 | 25.15 | 46.06 | 93.05 | 179.11 |
 | [18b961167](https://github.com/AFK-surf/still.fail/commit/18b9611671c1e66191592f06ba0aa57168989345) app: a software's update said under its version, n | 1.74 | 2.32 | 9.63 | 28.16 | 33.61 | 25.15 | 46.06 | 93.13 | 173.67 |
 | [c5c819d5e](https://github.com/AFK-surf/still.fail/commit/c5c819d5e2dcc6a340954fc4b1e84e05642f3543) mbui: Signal::untracked and Computed::untracked re | 1.74 | 2.32 | 9.63 | 28.16 | 33.61 | 25.15 | 46.06 | 93.16 | 182.35 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [c751a3031](https://github.com/AFK-surf/still.fail/commit/c751a3031afcb76ec2d38c195e4dd77dad01db56) mbui: ⌘F in a chat tested: its bar, looked for aft | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.55 | 146.44 |
 | [744b542c4](https://github.com/AFK-surf/still.fail/commit/744b542c4659695d615707041921bf884b03c0df) mbui: the Tester's tests at other frame rates in C | 1.72 | 2.3 | 9.55 | 28.06 | 33.29 | 25.06 | 45.78 | 93.59 | 170.49 |
 | [daab295ed](https://github.com/AFK-surf/still.fail/commit/daab295edb63c379ed421d4eb603d3681e912c26) mbui: a node's bones asked of a tree with none in  | 1.72 | 2.3 | 9.55 | 28.06 | 33.29 | 25.06 | 45.78 | 93.29 | 173.87 |
-| [d7e667d5c](https://github.com/AFK-surf/still.fail/commit/d7e667d5ca44930cb92519df54004e1dfca47b8e) A station gone silent does not hold the vault up:  | 1.72 | 2.3 | 9.55 | 28.06 | 33.29 | 25.06 | 45.78 | 93.55 | 180.72 |
