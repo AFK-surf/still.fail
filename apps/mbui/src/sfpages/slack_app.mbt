@@ -688,7 +688,7 @@ fn app_fields_node(
         |> ignore
         c.box(fn(h) {
           @sf.style_node(h, fn() { sa_hex }, in_row=true)
-          @sf.input_node(h, d.hex_field) |> ignore
+          @sf.input_node(h, d.hex_field, label=@sf.t("web-pages.slackApp.color")) |> ignore
         })
         |> ignore
         // what was picked's own colour, after one set by hand

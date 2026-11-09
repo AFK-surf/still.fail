@@ -163,7 +163,7 @@ pub let fake_passkey_asks : Array[(String, String, String, String)]
 
 pub fn feel_as(Int32) -> Unit
 
-pub fn field(@view.View, Field, placeholder? : String, font_size? : Double, line? : Double, min_lines? : Int32, max_lines? : Int32, color? : Int64, placeholder_color? : Int64, caret_color? : Int64, enter_sends? : Bool, shorter? : Array[String], trim? : Bool, leaves? : Array[Int32], ime_action? : Int32, paste_limit? : Int32, secret? : Bool, words? : Bool, look? : (String) -> (String, Array[(Int32, Int32, Int64)]), submitted? : (String) -> Unit, pasted? : (String) -> Unit, edited? : (String) -> Unit, files? : (Array[(String, Bytes)]) -> Unit, size_by? : () -> Double, colors_by? : () -> (Int64, Int64, Int64), placeholder_by? : () -> String) -> @view.View
+pub fn field(@view.View, Field, placeholder? : String, font_size? : Double, line? : Double, min_lines? : Int32, max_lines? : Int32, color? : Int64, placeholder_color? : Int64, caret_color? : Int64, enter_sends? : Bool, shorter? : Array[String], trim? : Bool, leaves? : Array[Int32], ime_action? : Int32, paste_limit? : Int32, secret? : Bool, words? : Bool, look? : (String) -> (String, Array[(Int32, Int32, Int64)]), submitted? : (String) -> Unit, pasted? : (String) -> Unit, edited? : (String) -> Unit, files? : (Array[(String, Bytes)]) -> Unit, size_by? : () -> Double, colors_by? : () -> (Int64, Int64, Int64), placeholder_by? : () -> String, label? : String) -> @view.View
 
 
 pub fn finger_target() -> Double
@@ -1584,6 +1584,17 @@ pub(all) struct FilmRun {
   failure : FilmFailure?
 }
 
+pub(all) struct Find {
+  role : @view.Role
+  label : String
+  has : String
+  checked : @view.Check?
+  selected : Bool?
+  expanded : Bool?
+  disabled : Bool?
+  within : SemNode?
+}
+
 pub(all) enum Fit {
   FitCover
   FitCoverAt(Double)
@@ -2456,15 +2467,16 @@ pub struct Tester {
   mut each : (() -> Unit)?
   before : (() -> Unit)?
 }
+pub fn Tester::a11y_dump(Self) -> String
 pub fn Tester::a11y_said(Self) -> String
 pub fn Tester::a11y_update(Self) -> String
-pub fn Tester::act(Self, @view.Role, @view.Action, label? : String) -> Unit raise
+pub fn Tester::act(Self, @view.Role, @view.Action, label? : String, has? : String, within? : SemNode) -> Unit raise
 pub fn Tester::act_on(Self, SemNode, @view.Action) -> Unit raise
 pub fn Tester::adaptive_glyphs(Self) -> Int32
 pub fn Tester::add_image(Self, String, Int32, Int32) -> Unit
 pub fn Tester::add_pixels(Self, String, Int32, Int32, FixedArray[Byte]) -> Unit
 pub fn Tester::advance(Self, Double) -> Unit
-pub fn Tester::all(Self, @view.Role, label? : String) -> Array[SemNode]
+pub fn Tester::all(Self, @view.Role, label? : String, has? : String, checked? : @view.Check, selected? : Bool, expanded? : Bool, disabled? : Bool, within? : SemNode) -> Array[SemNode]
 pub fn Tester::answer_native(Self, Int32, Json) -> Unit
 pub fn Tester::app_state(Self, Bool, Bool, awake? : Bool) -> Unit
 pub fn Tester::assert_idle(Self) -> Unit
@@ -2489,7 +2501,7 @@ pub fn Tester::census(Self) -> Census
 pub fn Tester::check_looks(Self, Bool) -> Unit
 pub fn Tester::check_rows(Self, Double, Double) -> Unit raise
 pub fn Tester::clear(Self) -> Unit
-pub fn Tester::click(Self, @view.Role, label? : String) -> Unit raise
+pub fn Tester::click(Self, @view.Role, label? : String, has? : String, checked? : @view.Check, selected? : Bool, expanded? : Bool, disabled? : Bool, within? : SemNode) -> Unit raise
 pub fn Tester::clipboard(Self) -> String
 pub fn Tester::clipboard_gives(Self, String) -> Unit
 pub fn Tester::clipboard_gives_clip(Self, Clipboard) -> Unit
@@ -2572,7 +2584,7 @@ pub fn Tester::frames_on(Self) -> Int32
 pub fn Tester::frames_owed(Self) -> Unit
 pub fn Tester::gallery(Self, Array[@hostapi.GalleryPhoto]) -> Unit
 pub fn Tester::gap_faults(Self) -> Array[String]
-pub fn Tester::get(Self, @view.Role, label? : String) -> SemNode raise
+pub fn Tester::get(Self, @view.Role, label? : String, has? : String, checked? : @view.Check, selected? : Bool, expanded? : Bool, disabled? : Bool, within? : SemNode) -> SemNode raise
 pub fn Tester::glyph_box(Self, Double, Double) -> Unit
 pub fn Tester::glyph_clips(Self) -> Array[((Double, Double, Double, Double), (Double, Double, Double, Double))]
 pub fn Tester::glyphs_moved_on(Self) -> Unit
@@ -2662,7 +2674,7 @@ pub fn Tester::presented(Self) -> (FixedArray[Double], Int32, (Double, Double, D
 pub fn Tester::press(Self, String) -> Unit
 pub fn Tester::press_at(Self, Double, Double) -> Unit
 pub fn Tester::probe_at(Self, Double, Double) -> String
-pub fn Tester::query(Self, @view.Role, label? : String) -> SemNode?
+pub fn Tester::query(Self, @view.Role, label? : String, has? : String, checked? : @view.Check, selected? : Bool, expanded? : Bool, disabled? : Bool, within? : SemNode) -> SemNode?
 pub fn Tester::reachable(Self, String) -> Array[(Double, Double)]
 pub fn Tester::record_host(Self) -> Unit
 pub fn Tester::rect_of(Self, String) -> (Double, Double, Double, Double)?

@@ -799,6 +799,7 @@
   "web-pages.slackApp.apply": "应用到 Slack",
   "web-pages.slackApp.approve": "前往 Slack 同意",
   "web-pages.slackApp.approveNote": "权限已变更，需要在 Slack 中同意一次后才会生效",
+  "web-pages.slackApp.color": "背景色",
   "web-pages.slackApp.descriptionPlaceholder": "简介，显示在 app 资料卡上",
   "web-pages.slackApp.drawFailed": "无法生成头像",
   "web-pages.slackApp.foldNote": "名字、头像和权限",

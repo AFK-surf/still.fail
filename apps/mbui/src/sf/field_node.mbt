@@ -11,12 +11,14 @@
 /// dots where `secret`; Enter gives its words to `submitted`, once, at that key's moment; `leaves`: the keys it leaves
 /// to what it offers as it is typed in; `edited`: its words as the person's edit changes them (ui's field's), never
 /// as the app puts words in it; `placeholder_by`: its placeholder as it is now, followed (in place of
-/// `placeholder`). While `disabled()`, faded, taking no press nor the focus (losing it then). The field's node (what
+/// `placeholder`); `label`: what a screen reader calls it, where no placeholder does (it shows none). While
+/// `disabled()`, faded, taking no press nor the focus (losing it then). The field's node (what
 /// the focus is given to).
 pub fn input_node(
   parent : @view.View,
   field : @ui.Field,
   placeholder? : String = "",
+  label? : String = "",
   shorter? : Array[String] = [],
   secret? : Bool = false,
   placeholder_by? : () -> String,
@@ -46,6 +48,7 @@ pub fn input_node(
       line~,
       max_lines=1,
       enter_sends=true,
+      label~,
       secret~,
       leaves~,
       submitted~,
@@ -66,7 +69,8 @@ pub fn input_node(
 /// Lines to type in in `parent` (textarea's look: a one-line field grown taller, round as its ends are, or `corner`
 /// round where said; 16 in and 8 under its top, the strong grey's line, on the surface; its words 14 on lines 1.6 of
 /// them), editing `field`: at least `rows` lines high, growing to `most`, its words scrolling in it past them;
-/// `placeholder` while empty (`placeholder_by`: as it is now, followed); Enter a new line; `edited`: as input_node's.
+/// `placeholder` while empty (`placeholder_by`: as it is now, followed; `label`: as input_node's); Enter a new line;
+/// `edited`: as input_node's.
 /// While `disabled()`, as input_node's. The field's node.
 pub fn textarea_node(
   parent : @view.View,
@@ -74,6 +78,7 @@ pub fn textarea_node(
   rows? : Int = 3,
   most? : Int = 16,
   placeholder? : String = "",
+  label? : String = "",
   corner? : Double,
   placeholder_by? : () -> String,
   disabled? : () -> Bool = fn() { false },
@@ -95,6 +100,7 @@ pub fn textarea_node(
       placeholder_by?,
       font_size=input_size,
       line=textarea_line,
+      label~,
       min_lines=rows,
       max_lines=most,
       enter_sends=false,

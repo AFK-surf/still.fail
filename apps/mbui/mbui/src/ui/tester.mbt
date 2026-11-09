@@ -2779,8 +2779,9 @@ pub fn Tester::tab(self : Tester, back? : Bool = false) -> Unit {
 /// The semantics tree as it is read now (Ctx::semantics_tree): the old views' as the last frame built them, the window's
 /// tree's nodes as they say they are now.
 pub fn Tester::semantics(self : Tester) -> Array[SemNode] {
-  ignore(self)
-  g().semantics_tree()
+  let tree = g().semantics_tree()
+  self.hold_named(tree)
+  tree
 }
 
 ///|
@@ -2791,30 +2792,159 @@ pub fn Tester::semantics_dump(self : Tester) -> String {
 }
 
 ///|
-/// The nodes of `role` not hidden (under a modal, in a hidden part), labelled `label` exactly unless it is "".
-pub fn Tester::all(self : Tester, role : Role, label? : String = "") -> Array[SemNode] {
-  self.semantics().filter(fn(s) { s.role == role && !s.hidden && (label == "" || s.label == label) })
+/// What a test finds a node of the semantics tree by (Testing Library's queries by role and name, their options):
+/// its role; its name exactly (`label`, "" any) or holding `has`; its state where one is given; in what `within` holds
+/// (one of the tree's, Tester::all's: what it holds, not it).
+pub(all) struct Find {
+  role : Role
+  label : String
+  has : String
+  checked : Check?
+  selected : Bool?
+  expanded : Bool?
+  disabled : Bool?
+  within : SemNode?
 }
 
 ///|
-/// The node of `role` labelled `label` (Testing Library's getByRole with its name, Compose's onNode): the one not
-/// hidden; the test fails when there is none, or more than one.
-pub fn Tester::get(self : Tester, role : Role, label? : String = "") -> SemNode raise {
-  let found = self.all(role, label~)
+/// Whether `s` is what `f` finds (its role, name and state; not where it is).
+fn Find::takes(self : Find, s : SemNode) -> Bool {
+  s.role == self.role &&
+  !s.hidden &&
+  (self.label == "" || s.label == self.label) &&
+  (self.has == "" || s.label.contains(self.has)) &&
+  (self.checked is None || s.check == self.checked) &&
+  (self.selected is None || s.selected.unwrap_or(false) == self.selected.unwrap_or(false)) &&
+  (self.expanded is None || s.expanded == self.expanded) &&
+  (self.disabled is None || Some(s.disabled) == self.disabled)
+}
+
+///|
+/// What `f` finds, said in a line (for what a test fails with).
+fn Find::said(self : Find) -> String {
+  let sb = StringBuilder()
+  sb.write_string(self.role.to_string())
+  if self.label != "" {
+    sb.write_string(" \{self.label.escape()}")
+  }
+  if self.has != "" {
+    sb.write_string(" holding \{self.has.escape()}")
+  }
+  match self.checked {
+    Some(c) => sb.write_string(" checked=\{c}")
+    None => ()
+  }
+  match self.selected {
+    Some(v) => sb.write_string(" selected=\{v}")
+    None => ()
+  }
+  match self.expanded {
+    Some(v) => sb.write_string(" expanded=\{v}")
+    None => ()
+  }
+  match self.disabled {
+    Some(v) => sb.write_string(" disabled=\{v}")
+    None => ()
+  }
+  match self.within {
+    Some(w) => sb.write_string(" within \{w.describe()}")
+    None => ()
+  }
+  sb.to_string()
+}
+
+///|
+/// The nodes not hidden (under a modal, in a hidden part) that `f` finds, in the tree's order.
+fn Tester::found(self : Tester, f : Find) -> Array[SemNode] {
+  let tree = self.semantics()
+  // (in what `within` holds: the nodes after it deeper than it, up to the next as deep or shallower)
+  let (from, until) = match f.within {
+    Some(w) => {
+      let mut at = -1
+      for k, s in tree {
+        if s.id == w.id && s.role == w.role && s.label == w.label && s.rect == w.rect && s.depth == w.depth {
+          at = k
+          break
+        }
+      }
+      if at < 0 {
+        (0, 0)
+      } else {
+        let mut end = at + 1
+        while end < tree.length() && tree[end].depth > tree[at].depth {
+          end = end + 1
+        }
+        (at + 1, end)
+      }
+    }
+    None => (0, tree.length())
+  }
+  let out = []
+  for k in from..<until {
+    if f.takes(tree[k]) {
+      out.push(tree[k])
+    }
+  }
+  out
+}
+
+///|
+/// The nodes of `role` not hidden (under a modal, in a hidden part), named `label` exactly unless it is "", holding
+/// `has` in their names, in the state each of `checked`, `selected`, `expanded`, `disabled` says where it is given, in
+/// what `within` holds where it is (Find).
+pub fn Tester::all(
+  self : Tester,
+  role : Role,
+  label? : String = "",
+  has? : String = "",
+  checked? : Check,
+  selected? : Bool,
+  expanded? : Bool,
+  disabled? : Bool,
+  within? : SemNode,
+) -> Array[SemNode] {
+  self.found({ role, label, has, checked, selected, expanded, disabled, within })
+}
+
+///|
+/// The node of `role` named `label` (Testing Library's getByRole with its name, Compose's onNode; the rest of what
+/// Tester::all takes too): the one not hidden; the test fails when there is none, or more than one.
+pub fn Tester::get(
+  self : Tester,
+  role : Role,
+  label? : String = "",
+  has? : String = "",
+  checked? : Check,
+  selected? : Bool,
+  expanded? : Bool,
+  disabled? : Bool,
+  within? : SemNode,
+) -> SemNode raise {
+  let f : Find = { role, label, has, checked, selected, expanded, disabled, within }
+  let found = self.found(f)
   if found.length() == 1 {
     return found[0]
   }
-  let what = if label == "" { "\{role}" } else { "\{role} \{label.escape()}" }
   if found.is_empty() {
-    fail("no \{what} in the semantics tree:\n\{self.semantics_dump()}")
+    fail("no \{f.said()} in the semantics tree:\n\{self.semantics_dump()}")
   }
-  fail("\{found.length()} of \{what} in the semantics tree:\n\{self.semantics_dump()}")
+  fail("\{found.length()} of \{f.said()} in the semantics tree:\n\{self.semantics_dump()}")
 }
 
 ///|
-/// The node of `role` labelled `label`, if there is one not hidden (the first).
-pub fn Tester::query(self : Tester, role : Role, label? : String = "") -> SemNode? {
-  let found = self.all(role, label~)
+/// The node of `role` named `label` (and the rest of what Tester::all takes), if there is one not hidden (the first).
+pub fn Tester::query(
+  self : Tester,
+  role : Role,
+  label? : String = "",
+  has? : String = "",
+  checked? : Check,
+  selected? : Bool,
+  expanded? : Bool,
+  disabled? : Bool,
+  within? : SemNode,
+) -> SemNode? {
+  let found = self.found({ role, label, has, checked, selected, expanded, disabled, within })
   if found.is_empty() {
     None
   } else {
@@ -2823,17 +2953,34 @@ pub fn Tester::query(self : Tester, role : Role, label? : String = "") -> SemNod
 }
 
 ///|
-/// A tap on the middle of the node of `role` labelled `label` (Tester::get), settled.
-pub fn Tester::click(self : Tester, role : Role, label? : String = "") -> Unit raise {
-  let s = self.get(role, label~)
+/// A tap on the middle of the node of `role` named `label` (Tester::get, what it takes), settled.
+pub fn Tester::click(
+  self : Tester,
+  role : Role,
+  label? : String = "",
+  has? : String = "",
+  checked? : Check,
+  selected? : Bool,
+  expanded? : Bool,
+  disabled? : Bool,
+  within? : SemNode,
+) -> Unit raise {
+  let s = self.get(role, label~, has~, checked?, selected?, expanded?, disabled?, within?)
   let (x, y, w, h) = s.rect
   self.tap(x + w / 2.0, y + h / 2.0)
 }
 
 ///|
-/// `action` asked of the node of `role` labelled `label` (as a screen reader asks it), settled.
-pub fn Tester::act(self : Tester, role : Role, action : Action, label? : String = "") -> Unit raise {
-  let s = self.get(role, label~)
+/// `action` asked of the node of `role` named `label` (Tester::get, what it takes) as a screen reader asks it, settled.
+pub fn Tester::act(
+  self : Tester,
+  role : Role,
+  action : Action,
+  label? : String = "",
+  has? : String = "",
+  within? : SemNode,
+) -> Unit raise {
+  let s = self.get(role, label~, has~, within?)
   if s.id == 0 {
     fail("\{s.describe()} takes no action")
   }

@@ -695,7 +695,7 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
       wide=true,
       fn(v, _) {
         let f = words_of("policy", text(@signals.untracked(draft), "policy"))
-        let area = @sf.textarea_node(v, f, rows=8)
+        let area = @sf.textarea_node(v, f, rows=8, label=@sf.t("web-pages.archivePolicy.title"))
         on_typed(area, f, fn(words) {
           if @signals.untracked(draft) is Some(Object(_)) {
             edit([("policy", str(words))])
@@ -725,14 +725,14 @@ fn policy_dialog(core : Core, station : String, form : String, policy : Json?, i
       v.show(has, fn(p) {
         @sf.field_node(p, fn() { @sf.t("web-pages.archivePolicy.name") }, fn(b) {
           let f = words_of("name", text(@signals.untracked(o), "name"))
-          let line = @sf.input_node(b, f)
+          let line = @sf.input_node(b, f, label=@sf.t("web-pages.archivePolicy.name"))
           on_typed(line, f, fn(n) { edit([("option", str(okey())), ("name", str(n))]) })
         })
       })
       v.show(has, fn(p) {
         @sf.field_node(p, fn() { @sf.t("web-pages.archivePolicy.rubric") }, fn(b) {
           let f = words_of("rubric", text(@signals.untracked(o), "rubric"))
-          let area = @sf.textarea_node(b, f, rows=3)
+          let area = @sf.textarea_node(b, f, rows=3, label=@sf.t("web-pages.archivePolicy.rubric"))
           on_typed(area, f, fn(r) { edit([("option", str(okey())), ("rubric", str(r))]) })
         })
       })
