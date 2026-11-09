@@ -102,11 +102,33 @@ fn panel_centred_node(
       // first, as dialog built its layer before what it holds (read out first, drawn under what comes after it); one
       // whose title is as it is now (`live`) built after what it holds and its foot, as the old frame builds it now (read
       // out last, drawn over them))
+      // (its close button as nodes, where what it holds is nodes (panel_nodes): its field let go of first, as the old
+      // frame has it: field_let_go)
+      let close_node = fn(v : @view.View) {
+        icon_button_node(v, "close", fn() { t("common.close") }, fn() {
+          field_let_go(keyed)
+          cancel()
+        }, size=dialog_close)
+        |> ignore
+      }
       let corner = fn() {
         // (one titled by a row of its own (title_row): its close button in its corner as an untitled one's, not on that
         // row's line: the user, 2026-11-04, x 不要跟着 title 走)
         d.show(fn() { steps is None && (untitled() || x.title_row is Some(_)) }, fn(o) {
           o.over(Is(true)).width(By(fn() { Some(w()) })) |> ignore
+          if x.nodes is Some(_) {
+            o.box(fn(row) {
+              style_node(row, fn() { dialog_close_row })
+              row.alpha(By(fn() { look().words })) |> ignore
+              row.box(fn(at) {
+                style_node(at, fn() { dialog_close_corner() })
+                close_node(at)
+              })
+              |> ignore
+            })
+            |> ignore
+            return
+          }
           @ui.old(o, natural=true, key=fn() { key + "/close" }, fn(c) {
             let held = c.box(style=dialog_close_row, fn() {
               c.box(style=dialog_close_corner(), fn() {
@@ -130,6 +152,41 @@ fn panel_centred_node(
       // under them where it says something: dialog's, as they are now)
       d.show(fn() { steps is None && (!untitled() || now().2 != "") }, fn(h) {
         h.margin(Is((-dialog_pad, -dialog_pad, -dialog_pad, 0.0))) |> ignore
+        // (where what it holds is nodes (panel_nodes, which takes no title_row): its head nodes too, as the old frame's
+        // is laid out, its words as faint as its look says)
+        if x.nodes is Some(_) {
+          // (as wide as the dialog, out to its sides: the old frame's head's room)
+          h.width(By(fn() { Some(w()) })) |> ignore
+          h.box(fn(part) {
+            style_node(part, fn() { centred_part_in(dialog_pad, 0.0) })
+            part.alpha(By(fn() { look().words })) |> ignore
+            // (its title's line, there while it has a title: its title, its step beside it, its close button at its end)
+            part.box(fn(line) {
+              style_node(line, fn() { dialog_head.then(@ui.style(pl=room(words_in))) })
+              line.laid_nowhere(By(untitled)) |> ignore
+              line.box(fn(l) {
+                style_node(l, fn() { dialog_title_line }, in_row=true)
+                l.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+                words_node(l, fn() { now().0 }, fn() { if now().1 != "" { dialog_title_one } else { dialog_title } })
+                |> ignore
+                words_node(l, fn() { now().1 }, fn() { dialog_step }) |> ignore
+              })
+              |> ignore
+              line.box(fn(at) {
+                style_node(at, fn() { dialog_close_at() }, in_row=true)
+                close_node(at)
+              })
+              |> ignore
+            })
+            |> ignore
+            part.show(fn() { now().2 != "" }, fn(lead) {
+              style_node(lead, fn() { dialog_lead_at.then(@ui.style(pl=room(words_in))) })
+              words_node(lead, fn() { now().2 }, fn() { dialog_lead }) |> ignore
+            })
+          })
+          |> ignore
+          return
+        }
         @ui.old(h, natural=true, key=fn() { key + "/head" }, fn(c) {
           let (title, step, description) = now()
           let held = c.box(style=centred_part_in(dialog_pad, 0.0), fn() {
