@@ -670,7 +670,8 @@ pub struct Tree {
   /// what is to be brought into sight once laid out (Tree::show_in_sight): a node, and where in it (its own terms, asked
   /// then; none: all of it)
   shows_due : Array[(NodeId, () -> (Double, Double)?)]
-  /// the nodes left out in this layout, what they held, their focus and their back to be let go of as it is done
+  /// the nodes left out in this layout or back in, as it is done: what those left out held, their focus and their back
+  /// let go of; whether what each holds takes input told anew
   outs_gone : Array[Int]
   /// the nodes drawn, in the order they are drawn (no slot), and where in it what holds each is (-1: the window)
   order : Array[Int]
@@ -691,6 +692,10 @@ pub struct Tree {
   priv order_was : Array[Int]
   priv order_changed : Array[Int]
   priv mut order_stamp : Int
+  /// a run of the order made again aside before it is put in its place (Tree::order_from), kept for the next
+  priv order_new : Array[Int]
+  priv order_new_holder : Array[Int]
+  priv order_new_end : Array[Int]
   /// what each walk of the scene keeps as it goes, kept for the next (Tree::each_drawn_in_order), and how many walk now
   priv mut walks : Array[Walk]
   priv mut walking : Int
@@ -987,6 +992,9 @@ pub fn Tree::new(
     order_was: [],
     order_changed: [],
     order_stamp: 0,
+    order_new: [],
+    order_new_holder: [],
+    order_new_end: [],
     walks: [],
     walking: 0,
     draws_rev: 0,
@@ -2074,44 +2082,72 @@ fn Tree::order_from(self : Tree, h : Int) -> Unit {
   let p = self.order_of[h]
   let e = self.order_end[p]
   let holder = self.order_holder[p]
-  // (its run as it was: what of it holds no change since is put back from here whole, Tree::ordered_keeping)
-  let was = self.order[p:e].to_array()
-  let was_holder = self.order_holder[p:e].to_array()
-  let was_end = self.order_end[p:e].to_array()
   for j in p..<e {
-    let at = self.order[j]
+    let at = self.order.unsafe_get(j)
     // (one let go of here whose index is another's now, put in the order already where that holds it: left where it is)
     if self.order_of[at] == j {
       self.order_of[at] = -1
     }
     self.order_was[at] = j
   }
-  let after = self.order[e:].to_array()
-  let after_holder = self.order_holder[e:].to_array()
-  let after_end = self.order_end[e:].to_array()
-  self.order.truncate(p)
-  self.order_holder.truncate(p)
-  self.order_end.truncate(p)
-  self.ordered_keeping(h, holder, self.tops[h], was, was_holder, was_end, p)
-  let d = self.order.length() - e
-  // (as long as it was, a row moved among what it holds: what comes after it where it was, put back as it was)
-  if d == 0 {
-    self.order.append(after)
-    self.order_holder.append(after_holder)
-    self.order_end.append(after_end)
-    return
+  // (its run made again aside (`order_new`, from `p`), what of it holds no change since copied from where it is now,
+  // the order left as it is till then: no copy made of the run, nor of what comes after it, Tree::ordered_keeping)
+  self.order_new.clear()
+  self.order_new_holder.clear()
+  self.order_new_end.clear()
+  self.ordered_keeping(h, holder, self.tops[h], p, e)
+  let len = self.order.length()
+  let made = self.order_new.length()
+  let d = p + made - e
+  // (what comes after it moved by as many as its run is longer or shorter, in place, from the end it moves towards;
+  // what holds it ending that much later)
+  if d > 0 {
+    for _ in 0..<d {
+      self.order.push(-1)
+      self.order_holder.push(-1)
+      self.order_end.push(-1)
+    }
+    self.order_moved(len - 1, e - 1, -1, d, e)
+  } else if d < 0 {
+    self.order_moved(e, len, 1, d, e)
+    self.order.truncate(len + d)
+    self.order_holder.truncate(len + d)
+    self.order_end.truncate(len + d)
   }
-  for j, at in after {
-    let hd = after_holder[j]
-    self.order_of[at] = self.order.length()
-    self.order.push(at)
-    self.order_holder.push(if hd >= e { hd + d } else { hd })
-    self.order_end.push(after_end[j] + d)
+  // (its run put in its place)
+  for k in 0..<made {
+    self.order.unsafe_set(p + k, self.order_new.unsafe_get(k))
+    self.order_holder.unsafe_set(p + k, self.order_new_holder.unsafe_get(k))
+    self.order_end.unsafe_set(p + k, self.order_new_end.unsafe_get(k))
   }
-  let mut j = holder
-  while j >= 0 {
-    self.order_end[j] = self.order_end[j] + d
-    j = self.order_holder[j]
+  if d != 0 {
+    let mut j = holder
+    while j >= 0 {
+      self.order_end[j] = self.order_end[j] + d
+      j = self.order_holder[j]
+    }
+  }
+}
+
+///|
+/// The order from `from` until `until`, one at a time `step` (from its end where it moves on), past the run made again
+/// (it ended at `e`), moved `d` on (Tree::order_from): what holds each there too where that is past the run, where what
+/// it holds ends with it. (Each read and written unchecked: within the order, as long as it is moved to, its three
+/// arrays as long as one another, each node it names one of the tree's.)
+fn Tree::order_moved(self : Tree, from : Int, until : Int, step : Int, d : Int, e : Int) -> Unit {
+  let order = self.order
+  let holders = self.order_holder
+  let ends = self.order_end
+  let of = self.order_of
+  let mut j = from
+  while j != until {
+    let at = order.unsafe_get(j)
+    let hd = holders.unsafe_get(j)
+    of.unsafe_set(at, j + d)
+    order.unsafe_set(j + d, at)
+    holders.unsafe_set(j + d, if hd >= e { hd + d } else { hd })
+    ends.unsafe_set(j + d, ends.unsafe_get(j) + d)
+    j = j + step
   }
 }
 
@@ -4215,14 +4251,27 @@ pub fn View::modal(self : View, on : Live[Bool]) -> View {
 /// from leaving): a finger held on what the topmost no longer lets take input called off, and what hosts the tree told
 /// (Tree::on_modals), once the change doing it is committed whole, at that change's moment (Tree::modals_settled).
 fn Tree::modals_told(self : Tree, within? : Int = -1) -> Unit {
-  // (what takes input in it alone where the change is node `within` and what it holds (one made, moved, leaving, said
-  // to take no press): whether each else takes input reads only what holds it and modal layers, none of which it
-  // changed while no modal layer is said, nor the old frame's moved; else all of it)
+  self.inputs_marked(within)
+  self.modals_marked()
+}
+
+///|
+/// What takes input to be told anew where the change is node `within` and what it holds (one made, moved, leaving, said
+/// to take no press, left out of its row or back in it) alone: whether each else takes input reads only what holds it
+/// and modal layers, none of which it changed while no modal layer is said, nor the old frame's moved; else (-1) all of
+/// it (Tree::inputs_told).
+fn Tree::inputs_marked(self : Tree, within : Int) -> Unit {
   if within < 0 || !self.modals.is_empty() || self.held_under_now() != self.held_under {
     self.inputs_whole = true
   } else if !self.inputs_whole && !self.inputs_in.contains(within) {
     self.inputs_in.push(within)
   }
+}
+
+///|
+/// What a modal layer says, and what takes input where it was marked (Tree::inputs_marked), told: at once, or once the
+/// change being committed is committed whole (Tree::modals_told).
+fn Tree::modals_marked(self : Tree) -> Unit {
   // (what takes input changed: which column's bar the pointer is along told anew too, at this change's end)
   if !self.bar_cols.is_empty() {
     self.bars_due = true
@@ -7531,7 +7580,14 @@ fn Tree::outs_told(self : Tree) -> Unit {
     }
     _ => ()
   }
-  self.modals_told()
+  // (what takes input told anew in what was left out or came back alone, not all of it: whether each takes input reads
+  // what holds it, and only these changed of that)
+  for at in gone {
+    if self.nodes[at].live {
+      self.inputs_marked(at)
+    }
+  }
+  self.modals_marked()
   self.outs_said.set(@signals.untracked(fn() { self.outs_said.get() }) + 1)
   @signals.end_batch()
 }
@@ -7756,10 +7812,9 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
     n.out = out
     self.outs_changed = true
     self.sizes_due = true
-    // (what of it is let go of told once all of the layout is done: Tree::outs_told)
-    if out {
-      self.outs_gone.push(at)
-    }
+    // (what of it is let go of, and whether what it holds takes input, told once all of the layout is done:
+    // Tree::outs_told)
+    self.outs_gone.push(at)
   }
   // (what a node that scrolls holds, moved from where it was placed: scrolled, Tree::take_scrolled; not one it moves
   // by its offset alone, which is drawn as it was wherever it is scrolled to: Node's scroll_off)
@@ -7875,75 +7930,58 @@ fn Tree::ordered(self : Tree, at : Int, holder : Int, top : Int) -> Unit {
 }
 
 ///|
-/// The order from node `at` down made again (Tree::order_from) as Tree::ordered makes it, where what holds no change
-/// since (Tree::order_again's `order_changed`) and was in the run made again (`was`, from `p` in the order, with its
-/// holders and ends) put back as it was there, whole, moved: a row brought to another slot, those round it, as they were.
-fn Tree::ordered_keeping(
-  self : Tree,
-  at : Int,
-  holder : Int,
-  top : Int,
-  was : Array[Int],
-  was_holder : Array[Int],
-  was_end : Array[Int],
-  p : Int,
-) -> Unit {
+/// The order from node `at` down made again (Tree::order_from) as Tree::ordered makes it, aside (`order_new`, its first
+/// at `p` in the order), where what holds no change since (Tree::order_again's `order_changed`) and was in the run made
+/// again (the order from `p` till `e`, as it is till the run is put in its place) put back as it was there, whole,
+/// moved: a row brought to another slot, those round it, as they were.
+fn Tree::ordered_keeping(self : Tree, at : Int, holder : Int, top : Int, p : Int, e : Int) -> Unit {
   let n = self.nodes[at]
   if n.slot {
     self.tops[at] = top
     for k in n.kids {
-      self.order_kept_or_made(k, holder, top, was, was_holder, was_end, p)
+      self.order_kept_or_made(k, holder, top, p, e)
     }
     return
   }
-  self.order.push(at)
-  self.order_holder.push(holder)
-  self.order_end.push(-1)
-  let me = self.order.length() - 1
+  let me = p + self.order_new.length()
+  self.order_new.push(at)
+  self.order_new_holder.push(holder)
+  self.order_new_end.push(-1)
   self.order_of[at] = me
   self.order_gen[at] = n.gen
   let top = if top < 0 { at } else { top }
   self.tops[at] = top
   for k in n.kids {
-    self.order_kept_or_made(k, me, top, was, was_holder, was_end, p)
+    self.order_kept_or_made(k, me, top, p, e)
   }
-  self.order_end[me] = self.order.length()
+  self.order_new_end[me - p] = p + self.order_new.length()
 }
 
 ///|
 /// Node `k` put in the order next, what holds it at `holder` there (Tree::ordered_keeping): its run as it was where
 /// nothing it holds changed since and it is the node that was there, else made again.
-fn Tree::order_kept_or_made(
-  self : Tree,
-  k : Int,
-  holder : Int,
-  top : Int,
-  was : Array[Int],
-  was_holder : Array[Int],
-  was_end : Array[Int],
-  p : Int,
-) -> Unit {
+fn Tree::order_kept_or_made(self : Tree, k : Int, holder : Int, top : Int, p : Int, e : Int) -> Unit {
   let n = self.nodes[k]
-  let j = self.order_was[k] - p
+  let w = self.order_was[k]
   if !n.slot &&
     self.order_changed[k] != self.order_stamp &&
-    j >= 0 &&
-    j < was.length() &&
-    was[j] == k &&
+    w >= p &&
+    w < e &&
+    self.order.unsafe_get(w) == k &&
     self.order_gen[k] == n.gen &&
     self.tops[k] == (if top < 0 { k } else { top }) {
-    let base = self.order.length()
-    let d = base - (j + p)
-    let end = was_end[j] - p
-    for i in j..<end {
-      let at = was[i]
-      self.order_of[at] = base + i - j
-      self.order.push(at)
-      self.order_holder.push(if i == j { holder } else { was_holder[i] + d })
-      self.order_end.push(was_end[i] + d)
+    let base = p + self.order_new.length()
+    let d = base - w
+    let end = self.order_end.unsafe_get(w)
+    for i in w..<end {
+      let at = self.order.unsafe_get(i)
+      self.order_of[at] = i + d
+      self.order_new.push(at)
+      self.order_new_holder.push(if i == w { holder } else { self.order_holder.unsafe_get(i) + d })
+      self.order_new_end.push(self.order_end.unsafe_get(i) + d)
     }
   } else {
-    self.ordered_keeping(k, holder, top, was, was_holder, was_end, p)
+    self.ordered_keeping(k, holder, top, p, e)
   }
 }
 
