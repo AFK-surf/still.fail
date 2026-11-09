@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [5b0de1fd8](https://github.com/AFK-surf/still.fail/commit/5b0de1fd86222b34f16e25c584c515eb6fca5899) mbui: a row held for its menu lifted whole and cle | 1.71 | 2.28 | 9.51 | 28.01 | 33.17 | 25.02 | 45.7 | 93.06 | 156.81 |
 | [c3fd8fdc2](https://github.com/AFK-surf/still.fail/commit/c3fd8fdc2948850a6b3f210299dc4ad6181f2252) app: the reader's layout takes its caller's place, | 1.71 | 2.28 | 9.51 | 28.01 | 33.16 | 25.01 | 45.7 | 93.06 | 156.81 |
 | [6c009b70b](https://github.com/AFK-surf/still.fail/commit/6c009b70bf6933ed92ef6746b64aea4865c45c05) app: a chat's rows beside a sliding side panel lai | 1.71 | 2.28 | 9.51 | 28.01 | 33.16 | 24.88 | 44.81 | 93.06 | 156.81 |
 | [62394cde3](https://github.com/AFK-surf/still.fail/commit/62394cde3d5707a1c6c8a97f12d83fa709f0c690) core: the person's own lock waits out the cloud's  | 1.66 | 2.21 | 9.12 | 27.86 | 32.28 | 24.88 | 44.81 | 93.06 | 156.81 |
