@@ -196,6 +196,8 @@ fn scoped_topic(src : Source, name : String, params : Map[String, Json], indepen
 priv struct FollowedTopic {
   source : Source
   key : String
+  name : String
+  params : Map[String, Json]
   independent : Bool
   holder : @signals.Computed[TopicState]
   token : Ref[Bool]
@@ -211,6 +213,21 @@ let followed_topics : Ref[Array[FollowedTopic]] = Ref([])
 fn topic_held(name : String, params : Map[String, Json]) -> Bool {
   let key = name + "\u{1}" + Json::object(params).stringify()
   followed_topics.val.iter().any(fn(t) { t.key == key && t.holder.watched() })
+}
+
+///|
+/// The topics a reader holds now (topic_held's), each once, by the source that follows it: what a page that opens
+/// another in its place hands over (open_handing_held).
+fn topics_held() -> Array[(Source, String, Map[String, Json])] {
+  let seen : Map[String, Bool] = {}
+  let out : Array[(Source, String, Map[String, Json])] = []
+  for t in followed_topics.val {
+    if !seen.contains(t.key) && t.holder.watched() {
+      seen[t.key] = true
+      out.push((t.source, t.name, t.params))
+    }
+  }
+  out
 }
 
 ///|
@@ -250,7 +267,7 @@ fn followed_topic(src : Source, name : String, params : Map[String, Json], indep
           None => read_topic_state(src, name, params)
         }
       })
-      followed_topics.val.push({ source: src, key, independent, holder, token })
+      followed_topics.val.push({ source: src, key, name, params: params.copy(), independent, holder, token })
       holder
     }
   }

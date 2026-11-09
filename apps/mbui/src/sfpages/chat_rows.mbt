@@ -255,17 +255,17 @@ fn outbox_unsent(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) ->
     }, repeats=true)
     if o.final {
       // refused as it is (a file this station does not have): its words back in the composer, to be sent anew
-      if unsent_button(c, "unsent/edit/" + o.id, "edit", @sf.t("common.edit"), !locked && !busy, false, None) {
-        let draft = here.station + ":" + here.session
-        let words = o.text
-        let id = o.id
-        c.tell("unsent/edit/" + o.id, fn() {
-          let w = writing(src, draft)
-          writing_text(src, w, words)
-          outbox_call(src, here, "chat.discard", id)
-        })
-      }
-    } else if unsent_button(
+      let draft = here.station + ":" + here.session
+      let words = o.text
+      let id = o.id
+      unsent_button(c, "unsent/edit/" + o.id, "edit", @sf.t("common.edit"), !locked && !busy, false, None, on_press=fn() {
+        let w = writing(src, draft)
+        writing_text(src, w, words)
+        outbox_call(src, here, "chat.discard", id)
+      })
+    } else {
+      let id = o.id
+      unsent_button(
         c,
         "unsent/retry/" + o.id,
         "retry",
@@ -273,22 +273,20 @@ fn outbox_unsent(c : @ui.Ctx, src : Source, here : MessageHere, o : Outgoing) ->
         !locked && !busy,
         retrying,
         core_failed(src, ["chat.retry"], on),
-      ) {
-      let id = o.id
-      c.tell("unsent/retry/" + o.id, fn() { outbox_call(src, here, "chat.retry", id) })
+        on_press=fn() { outbox_call(src, here, "chat.retry", id) },
+      )
     }
-    if unsent_button(
-        c,
-        "unsent/drop/" + o.id,
-        "trash",
-        @sf.t("common.delete"),
-        !busy,
-        dropping,
-        core_failed(src, ["chat.discard"], on),
-      ) {
-      let id = o.id
-      c.tell("unsent/drop/" + o.id, fn() { outbox_call(src, here, "chat.discard", id) })
-    }
+    let id = o.id
+    unsent_button(
+      c,
+      "unsent/drop/" + o.id,
+      "trash",
+      @sf.t("common.delete"),
+      !busy,
+      dropping,
+      core_failed(src, ["chat.discard"], on),
+      on_press=fn() { outbox_call(src, here, "chat.discard", id) },
+    )
   })
   |> ignore
 }
@@ -314,7 +312,7 @@ fn outbox_call(src : Source, here : MessageHere, call : String, id : String) -> 
 ///|
 /// One of the buttons under what did not go (msgUnsentBtn): its icon (a spinner while it is done; a red mark a few
 /// seconds once that failed) and its word, the hover ground and the text's ink under the pointer; at 55% while it may
-/// not be pressed. Whether it was pressed.
+/// not be pressed; `on_press`, what a press on it does while it may be.
 fn unsent_button(
   c : @ui.Ctx,
   key : String,
@@ -323,9 +321,13 @@ fn unsent_button(
   enabled : Bool,
   busy : Bool,
   failed : String?,
-) -> Bool {
+  on_press~ : () -> Unit,
+) -> Unit {
   let p = @sf.theme().p
   let id = c.id(key)
+  if enabled {
+    c.on_press(id, on_press)
+  }
   let hot = enabled && c.hovered(id)
   let b = c.box(style=if !enabled { unsent_button_off } else if hot { unsent_button_hot } else { unsent_button_box }, id~, fn() {
     if busy {
@@ -342,7 +344,6 @@ fn unsent_button(
     None => ()
   }
   c.semantics(b, Button, id~, label~, disabled=!enabled)
-  enabled && c.clicked(id)
 }
 
 ///|
@@ -395,9 +396,9 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
       }
   }
   let id = c.id("activity/" + a.key)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     open_detail(src, here_ref(here), a.key)
-  }
+  })
   let row = c.id("activity-row/" + a.key)
   let row_key = rk + "\u{1}" + a.key
   let show_stop = here.view.agents.length() > 1 && (c.hovered(row) || c.hovered(id))
@@ -464,7 +465,7 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
         @sf.icon(c, "stop", size=stop_icon, color=if c.hovered(stop) { p.text } else { p.muted }) |> ignore
       })
       c.semantics(b, Button, id=stop, label~)
-      if c.clicked(stop) {
+      c.on_press(stop, fn() {
         let key = a.key
         let station = here.station
         c.tell("activity-stop/" + a.key, fn() {
@@ -473,7 +474,7 @@ fn activity_row(c : @ui.Ctx, src : Source, here : MessageHere, a : Agent, em : E
             "key": Json::string(key),
           }, done=@sf.t("web-pages.chat.stopAsked"))
         })
-      }
+      })
     }
   })
   @motion.measure(c, area, "activity-area/" + row_key)

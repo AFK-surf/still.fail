@@ -206,9 +206,10 @@ pub fn chat_row(
         Some(f) => f(r)
         None => {
           // pressed on its state line while the core says which message that is about, nothing in it unread: its
-          // chat goes there as it opens
+          // chat goes there as it opens (Enter on the row, or a reader's Activate, presses the row itself: opened
+          // as it is)
           match item.state_about {
-            Some(seq) if c.clicked_on(id, line) && !item.unread && item.thread is Some(_) =>
+            Some(seq) if c.press_within(line) && !item.unread && item.thread is Some(_) =>
               @sfbase.go_to(r, seq)
             _ => ()
           }
@@ -218,7 +219,8 @@ pub fn chat_row(
       match reader { Some(reader) => @sfbase.handoff_chat_open(r, reader); None => () }
     }
   })
-  if !down && row_held.val.0 == id && !menu_on && !c.clicked(id) {
+  // (let go held, no press of it taken: a press taken let it go as it ran, above)
+  if !down && row_held.val.0 == id && !menu_on {
     row_held.val = (0, false)
     if finger {
       let reader = row_primed.val
@@ -463,9 +465,9 @@ pub fn chat_row(
       // 归档, at the row's top right while a mouse points at it (concentric with the row's corner: @sf.row_corner_keys)
       if archive_key {
         @sf.row_corner_keys(c, fn() {
-          if c.clicked(archive) {
+          c.on_press(archive, fn() {
             archive_row(src, item)
-          }
+          })
           let b = c.box(style=@sf.row_key_box, id=archive, fn() {
             @sf.icon(c, "archive", size=row_icon, color=if c.lit(archive) { t.p.text } else { t.p.muted }) |> ignore
           })

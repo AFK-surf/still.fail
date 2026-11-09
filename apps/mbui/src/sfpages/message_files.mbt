@@ -733,7 +733,8 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ 
   let place = @sfbase.thumb_occurrence(here.station, here.session, at)
   let key = "msg-card/" + place + "/" + @sfbase.file_key(a)
   file_menu(c, c.id(key), "", quote=quote_of(here, a, owner, by), more=[download_option(src, here, a, owner)])
-  let done = @sf.file_card(
+  let id = text(dl, "id")
+  @sf.file_card(
     c,
     key,
     a.name,
@@ -745,15 +746,15 @@ fn card_item(c : @ui.Ctx, src : Source, here : MessageHere, a : Attachment, by~ 
     open=true,
     remove_label=if kept is Some(_) { @sf.t("web-pages.files.stopKeeping") } else { @sf.t("web-main.file.cancelDownload") },
     retry_label=@sf.t("web-main.file.retryDownload"),
+    on_press=fn(on) {
+      match on {
+        Remove => if kept is Some(_) { keeping_stop(src, id) } else { download_cancel(src, id) }
+        Retry => download_retry(src, id)
+        Open => open_file(here, a, at~)
+        Restore => ()
+      }
+    },
   )
-  let id = text(dl, "id")
-  if done.removed {
-    c.tell(key + "/cancel", fn() { if kept is Some(_) { keeping_stop(src, id) } else { download_cancel(src, id) } })
-  } else if done.retried {
-    c.tell(key + "/retry", fn() { download_retry(src, id) })
-  } else if done.opened {
-    open_file(here, a, at~)
-  }
 }
 
 ///|

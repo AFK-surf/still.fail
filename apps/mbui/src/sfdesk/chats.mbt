@@ -23,11 +23,11 @@ fn lists_band(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         if @sf.native_on() {
           // (as high as 新建对话's row, the filter beside it on the tape's line: band_new_tape_over)
           workspace_heading(c, src, w)
-        } else if band_row(c, "side/new", is_new, fn() {
+        } else {
+          band_row(c, "side/new", is_new, fn() {
             band_mark(c, "compose", t.p.muted)
             band_words(c, @sf.t("web-main.sidebar.newChat"))
-          }) {
-          new_chat()
+          }, on_press=new_chat)
         }
       })
       |> ignore

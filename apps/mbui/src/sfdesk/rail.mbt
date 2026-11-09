@@ -483,8 +483,7 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   }
   // (beside the place it was asked on, where that was as it was asked: rail_node's)
   let (ax, ay, aw, ah) = from.unwrap_or((0.0, rail_menu_clear, rail_w - side_into_rail, 0.0))
-  // a place's ＋: put in, the rail changed from there (once the menu has gone)
-  let added : Ref[String] = Ref("")
+  // a place's ＋: put in, the rail changed from there, the menu gone
   // (dismissed by the hand, Escape or a press outside it: closed at that moment)
   let menu : Ref[@kit.Menu?] = Ref(None)
   c.with_dismissed(fn(_) { wide.rail_menu.set(None) }, fn() {
@@ -503,24 +502,21 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         row_end=fn(c, s) {
           if s.entry.value.has_prefix("go:") {
             let i = s.entry.value.view(start_offset=3).to_string()
-            if rail_menu_add(c, i, rail_label(src, i), s.hot) {
-              added.val = i
+            rail_menu_add(c, i, rail_label(src, i), s.hot, on_press=fn() {
               let next = kept.copy()
               next.push(i)
               rail_keep(src, w.id, next)
               wide.editing.set(true)
-            }
+              wide.rail_menu.set(None)
+            })
           }
         },
       )
     )
   })
   let m = menu.val.unwrap()
-  if !m.open || added.val != "" {
+  if !m.open {
     wide.rail_menu.set(None)
-  }
-  if added.val != "" {
-    return
   }
   match m.chosen {
     Some("remove") => rail_keep(src, w.id, kept.filter(fn(i) { i != place }))
@@ -533,10 +529,11 @@ fn rail_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 
 ///|
 /// A place's ＋ at the end of its row in the rail's menu: 24 round, shown on the row pointed at,
-/// in the pointer's ground pointed at itself; true on the frame after it was pressed.
-fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool) -> Bool {
+/// in the pointer's ground pointed at itself; `on_press`, what a press on it does.
+fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool, on_press~ : () -> Unit) -> Unit {
   let t = @sf.theme()
   let id = c.id("rail-menu/add/" + place)
+  c.on_press(id, on_press)
   let over = c.lit(id)
   // in on its row pointed at; always to a finger, which hovers over
   // nothing
@@ -550,7 +547,6 @@ fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool) -> Boo
     }
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.rail.add", args=[("name", label)]))
-  c.clicked(id)
 }
 
 ///|

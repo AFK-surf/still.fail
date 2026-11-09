@@ -45,6 +45,22 @@ pub fn chat_list(
     src.images.again(r.station)
   }
   src.images.seen(r.station, !v.offline)
+  // the way the composer's ground under the rows last set out on, as it declared it (opened, a line more, let go by
+  // words sent, each from the moment it came: composer's reshape), the room the list keeps under them with it as
+  // drawn: that way the Foot row's change and the list's while it has not ended, as the list is told, so that what else
+  // changes the rows' heights then (a row closing over it) goes with it, one way (list_size.mbt; rows_steady.mbt holds
+  // it); not a room the page gave otherwise (a new chat's, the least a phone's foot keeps)
+  let foot_way = if (room - composer_room(c, draft)).abs() < 0.01 {
+    @motion.reshape_way(c, "composer/box")
+  } else {
+    None
+  }
+  // (on that way at this moment, till its declared end; not while words sent hold its room, which is theirs then, as
+  // tall as it was till they let go of it and down on their flight's clock: composer_hold, sfbase's shown_rows)
+  let on_foot_way = match foot_way {
+    Some((at, ms)) => c.moment() < at + ms && !composer_held(c, draft)
+    None => false
+  }
   let lf = list_frame(
     c,
     r,
@@ -58,6 +74,7 @@ pub fn chat_list(
     // (narrow or not, and on a way the width it is kept at: each row another version as that changes, from then)
     laid=(if narrow { "|narrow" } else { "" }) + (if held { "|" + lay_w.to_string() } else { "" }),
     laid_at~,
+    foot_way?,
   )
   let (rd, rk, em, turns, list, keys, flight) = (lf.rd, lf.rk, lf.em, lf.turns, lf.list, lf.keys, lf.flight)
   let n = list.length()
@@ -72,7 +89,8 @@ pub fn chat_list(
   // `askClear`), which shows whenever the end does, no bell over it
   let ask_clear = if @sfbase.ask_clears(v) { float_lift + float_side } else { 0.0 }
   // (the composer's room as it comes to stand once words sent let go of it: the list takes it there on its way)
-  let foot_room = composer_foot_room(c, draft, room, let_go=@sfbase.sent_let_go(rd, flight))
+  let let_go = @sfbase.sent_let_go(rd, flight)
+  let foot_room = composer_foot_room(c, draft, room, let_go~)
   let side = row_side(lay_w)
   // the sides are only the page's margin either way: wide, the pictures out in it stand by their heads' line, not by
   // the words under it, so a table scrolls out over it to the pane's edges as it does narrow
@@ -124,7 +142,16 @@ pub fn chat_list(
         let mk = key + "\u{1}" + keys[i]
         match e {
           Top => c.box(style=@ui.style(h=Fixed(list_top)), fn() {  }) |> ignore
-          Foot => c.box(style=@ui.style(h=Fixed(foot_room + foot + ask_clear)), fn() {  }) |> ignore
+          Foot => {
+            // going with the composer's ground on its declared way: as drawn, its own on the rows' way, the list
+            // closing only what was off as its cause came (Ctx::row_way); else where it comes to stand, on the list's
+            // way
+            if on_foot_way {
+              ignore(c.row_way())
+            }
+            let h = if on_foot_way { room } else { foot_room }
+            c.box(style=@ui.style(h=Fixed(h + foot + ask_clear)), fn() {  }) |> ignore
+          }
           Working(a) => {
             // coming in, it comes where it is as its room opens, and leaves where it is, as any row
             // (ListRows::enter, leave); its turn over, it stays a moment (Activity) first
@@ -426,12 +453,16 @@ fn to_latest(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, shown : Bool,
   let coming = core_doing(src, ["chat.latest"], on)
   let count = if v.newer && v.unread > 0.0 { Some(v.unread.to_int()) } else { None }
   let id = c.id("chat-jump")
-  if shown && !coming && c.clicked(id) {
-    if !v.newer {
-      c.list_to_end(list_key(r))
-    } else {
-      @sfbase.chat_latest(c, src, r, v, @sf.t("web-main.chat.toLatest"))
-    }
+  if shown && !coming {
+    // (the list by its id here: the press is outside the scope it is built in)
+    let list = c.list_reader(list_key(r))
+    c.on_press(id, fn() {
+      if !v.newer {
+        list.to_end()
+      } else {
+        @sfbase.chat_latest(c, src, r, v, @sf.t("web-main.chat.toLatest"))
+      }
+    })
   }
   @sf.tip(c, "chat-jump", id, @sf.t("web-main.chat.toLatest"), shortcut="chat.latest")
   c.layer(fn() {
@@ -483,11 +514,13 @@ fn to_ask(
     None => return shown
   }
   let id = c.id("chat-ask")
-  if shown && c.clicked(id) {
-    let k = chat_key(r)
-    let turn = ask_turns.get(k).unwrap_or(0)
-    @sfbase.go_to(r, asks[turn % asks.length()])
-    ask_turns[k] = turn + 1
+  if shown {
+    c.on_press(id, fn() {
+      let k = chat_key(r)
+      let turn = ask_turns.get(k).unwrap_or(0)
+      @sfbase.go_to(r, asks[turn % asks.length()])
+      ask_turns[k] = turn + 1
+    })
   }
   @sf.tip(c, "chat-ask", id, @sf.t("web-main.chat.asks.go"))
   c.layer(fn() {

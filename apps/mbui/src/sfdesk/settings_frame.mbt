@@ -158,16 +158,16 @@ fn settings_back(c : @ui.Ctx, band : Bool) -> Unit {
     @sf.icon(c, "arrow-left", size=settings_nav_icon, color=t.p.muted) |> ignore
     nav_words(c, @sf.t("web-pages.settings.nav.backToChats"))
   }
-  let pressed = if band {
-    band_row(c, "settings-nav/back", false, body)
-  } else {
-    nav_row(c, "settings-nav/back", false, body)
-  }
-  if pressed {
+  let back = fn() {
     @sfpages.settings_search_reset()
     @sfbase.history_push()
     @sfbase.nav_over_home([])
     wide.landed.set("")
+  }
+  if band {
+    band_row(c, "settings-nav/back", false, body, on_press=back)
+  } else {
+    nav_row(c, "settings-nav/back", false, body, on_press=back)
   }
 }
 

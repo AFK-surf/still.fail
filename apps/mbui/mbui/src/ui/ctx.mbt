@@ -2277,7 +2277,8 @@ fn Ctx::point_at(self : Ctx, x : Double, y : Double) -> Unit {
 
 ///|
 /// Whether the press (Ctx::press) went down on `id` or on what is in it, as the last frame drew them: what lies over it
-/// (a layer over the page, a viewer over the chat) took a press there, not it, though it is under the place.
+/// (a layer over the page, a viewer over the chat) took a press there, not it, though it is under the place. A key's
+/// press or a screen reader's Activate is on what it presses and what holds that, on no part of it (press_on_key).
 pub fn Ctx::press_within(self : Ctx, id : Int) -> Bool {
   if id == 0 {
     return false
@@ -2285,6 +2286,23 @@ pub fn Ctx::press_within(self : Ctx, id : Int) -> Bool {
   // (read so: what reads it is built again as a press goes down on it or is let go, hand.mbt)
   hand.press_on.has(id) |> ignore
   self.press_on.contains(id)
+}
+
+///|
+/// A press made by a key or asked by a screen reader (Enter or Space on what has the focus, Activate) on `target`:
+/// the press now, on it and what holds it as the last frame drew them, on no part of it (Ctx::press_within), whatever
+/// a pointer's press went down on before it.
+fn Ctx::press_on_key(self : Ctx, target : Int) -> Unit {
+  self.press_on.clear()
+  if target == 0 {
+    return
+  }
+  let mut k = self.hit_ids.length() - 1
+  while k >= 0 && self.hit_ids[k] != target {
+    k = k - 1
+  }
+  self.holders(k, self.press_on)
+  self.press_on.push(target)
 }
 
 ///|
@@ -2297,6 +2315,14 @@ fn Ctx::press_on_at(self : Ctx, target : Int, x : Double, y : Double) -> Unit {
   let k = self.hit_of(target, x, y)
   self.holders(k, self.press_on)
   self.press_on.push(target)
+  // a part of it only pointed at (Ctx::box's `points`: a row's state line) that it went down on, within it: in it too
+  let part = hit_at(self.hit_ids, self.hit_rects, self.hit_clips, x, y)
+  if k >= 0 && part > k && k < self.hit_ends.length() && self.hit_ends[k] > part {
+    self.holders(part, self.press_on)
+    if !self.press_on.contains(self.hit_ids[part]) {
+      self.press_on.push(self.hit_ids[part])
+    }
+  }
   // a cover a finger is held through (Ctx::holds_through): what lies under it, and what holds that, too
   if k >= 0 && (hit_marks(target) & mark_holds) != 0 {
     let mut j = k - 1

@@ -281,11 +281,12 @@ pub fn composer(
   // sent once what it refers to can be read in this workspace (sfbase's outside.mbt): at once when
   // it refers to nothing of another workspace, else once the viewer has said so (outside.mbt's dialog)
   @sfbase.sharing_go(w.key)
+  let quote_had = quote_has_focus(c, w)
   let submit = fn() {
     if ready {
       // (the line of a quote it takes had the focus: the words' field has it from here, as Enter in that line gives
       // it, not lost with the line as its card sets out)
-      quote_focus_to_words(c, w)
+      quote_focus_to_words(c, w, quote_had)
       @sfbase.send_sharing(src, w.key, spec.station, w.text.get().trim(chars=" \n\t").to_string(), fn() { send(w) })
       // (sent in this build, after its field was built: their field's hint and caret gone with them from now, not
       // shown once over them as they set out)
@@ -302,8 +303,9 @@ pub fn composer(
   if !spec.locked {
     c.cursor(cap, IBeam)
   }
-  if !spec.locked && c.clicked(cap) {
-    c.focus_field(w.field)
+  if !spec.locked {
+    // (its words' field given the focus: the field itself, as a press finds no editor built then)
+    c.on_press(cap, fn() { c.focus_field(w.field) })
   }
   // words dragged in from another app and let go on it beside its field (its ＋, send, its edge: on the field they go
   // where they were let go): into its field at its caret, as a paste's
@@ -457,7 +459,19 @@ pub fn composer(
   // (at a page's foot down the system's column, not roomy in a new chat's middle: opened from its foot, a keyboard
   // coming in the same frame taken at once, the user 2026-10-30 「以底部为 origin」; there the keyboard lifts it from its
   // first point on, ios_app.m ime_over)
-  @motion.reshape(c, box, "composer/box", by=holds, spec=shape, carry=moved, foot=!spec.roomy && @sf.native_side())
+  // (let go by words sent from it: the moment they let go of it, as composer_hold declared it, handed to the change
+  // that makes, its ground down from then on their clock, the list's foot with it, not from the frame that lays it out
+  // after; said only while they let go of it, so no other change carries it)
+  @motion.reshape(
+    c,
+    box,
+    "composer/box",
+    by=holds,
+    spec=shape,
+    carry=moved,
+    foot=!spec.roomy && @sf.native_side(),
+    at?=if composer_let_go(c, spec.draft) { Some(composer_released_at(c, spec.draft)) } else { None },
+  )
   composing.shaped = Some((holds, shape))
   // (its ＋ and send drawn whole on their way, its field going up past them as it opens: composer_hint_wbtest, the user
   // 2026-10-30 「输入框盖住了加号和发送」)
@@ -813,13 +827,13 @@ fn attach(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, no_files 
   if !no_files {
     @sf.tip(c, "composer/plus", id, @sf.t("web-main.composer.attach"), shortcut="composer.file")
     // on a touch system the phone's sheet of what can go in (attach.mbt), with keyboard and mouse the system's picker at once
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       if @sf.attach_from_sheet() {
         attach_open(id, src, w.key)
       } else {
         pick_files(w)
       }
-    }
+    })
   }
   ignore(spec)
   // (a finger reaches it from round it, the system's least target: @ui's press_reach)
@@ -855,9 +869,9 @@ fn send_button(c : @ui.Ctx, ready : Bool, starting : Bool, submit : () -> Unit) 
   let id = c.id("composer/send")
   let hot = ready && c.lit(id)
   if ready {
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       submit()
-    }
+    })
   }
   @sf.tip(c, "composer/send", id, @sf.t("web-main.composer.send"))
   let able = @sf.ease_to(c, "composer/send/able", ready)
@@ -893,10 +907,17 @@ fn quote_comment_field(c : @ui.Ctx, key : String, f : @ui.Field, hint? : Bool = 
 }
 
 ///|
-/// A quote's comment line having the focus: the words' field has it instead (its quote sent or taken out, the line
-/// goes, and with it the focus and the screen's keyboard).
-fn quote_focus_to_words(c : @ui.Ctx, w : Writing) -> Unit {
-  if w.quotes.get().iter().any(fn(q) { c.editor_focused("composer/quote/" + text(Some(q), "id")) }) {
+/// Whether a quote's comment line has the focus, as the composer is built (and as a press then finds it: Ctx::on_press
+/// runs before the next build): its quote sent or taken out, the line goes, and with it the focus and the screen's
+/// keyboard, so the words' field is given it instead (quote_focus_to_words).
+fn quote_has_focus(c : @ui.Ctx, w : Writing) -> Bool {
+  w.quotes.get().iter().any(fn(q) { c.editor_focused("composer/quote/" + text(Some(q), "id")) })
+}
+
+///|
+/// The words' field given the focus a quote's comment line had (`had`: quote_has_focus as it was built).
+fn quote_focus_to_words(c : @ui.Ctx, w : Writing, had : Bool) -> Unit {
+  if had {
     c.focus_field(w.field)
   }
 }
@@ -925,6 +946,7 @@ fn composer_extras(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, 
 ///|
 fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, holds : String, shape : @motion.Spec, quote_pictures : Array[(MediaPicture, Json?)?], file_pictures : Array[String?], room : Ref[Int]) -> Unit {
   if !w.quotes.get().is_empty() {
+    let quote_had = quote_has_focus(c, w)
     c.box(style=quotes_column, fn() {
       for i, q in w.quotes.get() {
         let v = Some(q)
@@ -944,14 +966,17 @@ fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writ
           writing_focused(src, w)
         }
         let item = c.box(style=@ui.css("w=Full"), fn() {
-          let done = @sf.quote_card(
+          let card = @sf.quote_card(
             c,
             key,
             text(v, "author"),
             text(v, "text"),
             role=text(v, "role"),
             composer=true,
-            remove=true,
+            on_remove=fn() {
+              quote_focus_to_words(c, w, quote_had)
+              writing_unquote(src, w, id)
+            },
             words_key=quote_words_key(id),
             // its own picture (an image of a message quoted, a mark's screenshot) in its card as a picture waiting is,
             // where it flies from to its place in the message (flying_quotes)
@@ -974,12 +999,8 @@ fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writ
             },
           )
           // (where it is and its colour: what flies from it as it is sent, flying_quotes)
-          @motion.measure_drawn(c, done.card, quote_card_key(id))
-          composing.grounds[id] = c.node_bg(done.card)
-          if done.removed {
-            quote_focus_to_words(c, w)
-            writing_unquote(src, w, id)
-          }
+          @motion.measure_drawn(c, card, quote_card_key(id))
+          composing.grounds[id] = c.node_bg(card)
         })
         @motion.layout(c, item, key + "/in", spec=shape, by=holds)
         held_coming(c, item, key, room)
@@ -1041,18 +1062,14 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
     None => {
       // as wide as a card is (236), however little the row has: a card hugging its words in a row that wraps had none
       // left for them (its words squeezed to …); its ✕ hung on its corner, as a picture's (@sf.with_corner_remove)
-      let removed = @sf.with_corner_remove(c, key, remove_label(v, name), @sf.composer_inner(), w=dmin(@sf.file_card_w, c.width), fn() {
-        let said = waiting_card(c, key, v, restore=restorable(w, v))
-        match waiting_as(v) {
-          // a link: tapped, it opens
-          Link =>
-            if said.opened {
-              let url = text(field(v, "link"), "url")
-              c.tell("composer/link/" + id, fn() { open_link(url) })
-            }
-          // pasted words: put back as words; failed, made again from them
-          Pasted => {
-            if said.restored {
+      @sf.with_corner_remove(c, key, remove_label(v, name), @sf.composer_inner(), w=dmin(@sf.file_card_w, c.width), fn() {
+        let card = c.id(key)
+        waiting_card(c, key, v, restore=restorable(w, v), on_press=fn(on) {
+          match (waiting_as(v), on) {
+            // a link: tapped, it opens
+            (Link, Open) => open_link(text(field(v, "link"), "url"))
+            // pasted words: put back as words (its words' field given the focus); failed, made again from them
+            (Pasted, Restore) => {
               let back = text(field(v, "pasted"), "text")
               let words = if w.text.get() == "" { back } else { w.text.get() + "\n" + back }
               @sfbase.refs_put(w.key, w.field, words)
@@ -1060,24 +1077,17 @@ fn composer_file(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writing, f 
               writing_remove(src, w, id)
               c.focus_field(w.field)
             }
-            if said.retried {
-              @sfbase.writing_paste_again(src, w, id)
-            }
+            (Pasted, Retry) => @sfbase.writing_paste_again(src, w, id)
+            // a station's file (by its path or as the file): pressed, how it goes (composer_ref.mbt)
+            (ByPath | AnyFile, Open) =>
+              if field(v, "ref") is Some(Object(_)) {
+                ref_panel(src, w, spec.station, id, name, card)
+              }
+            (ByPath | AnyFile, Retry) => writing_retry(src, w, id)
+            _ => ()
           }
-          // a station's file (by its path or as the file): pressed, how it goes (composer_ref.mbt)
-          ByPath | AnyFile => {
-            if said.opened && field(v, "ref") is Some(Object(_)) {
-              c.tell(key + "/ref", fn() { ref_panel(src, w, spec.station, id, name, c.id(key)) })
-            }
-            if said.retried {
-              writing_retry(src, w, id)
-            }
-          }
-        }
-      })
-      if removed {
-        writing_remove(src, w, id)
-      }
+        })
+      }, on_remove=fn() { writing_remove(src, w, id) })
     }
   }
 }
@@ -1137,7 +1147,7 @@ fn restorable(w : Writing, v : Json?) -> Bool {
 ///|
 /// A file waiting that is no picture, as its card (`key`), its ✕ aside: what the composer draws (composer_file) and
 /// what flies from there as it is sent drawn as it was until it sets off (flying_files).
-fn waiting_card(c : @ui.Ctx, key : String, v : Json?, restore~ : Bool) -> @sf.FileCardDone {
+fn waiting_card(c : @ui.Ctx, key : String, v : Json?, restore~ : Bool, on_press? : (@sf.FileCardPress) -> Unit) -> Unit {
   let name = text(v, "name")
   let error = text(v, "error")
   let pending = going_now(v)
@@ -1156,6 +1166,7 @@ fn waiting_card(c : @ui.Ctx, key : String, v : Json?, restore~ : Bool) -> @sf.Fi
         meta=text(ref_, "stationName") + " · " + @sf.t("web-main.file.modePath"),
         open=true,
         composer=true,
+        on_press?,
       )
     // a link shared in (share-in.ts): its title and its site, drawn as a file is; sent as
     // words, nothing going up
@@ -1176,6 +1187,7 @@ fn waiting_card(c : @ui.Ctx, key : String, v : Json?, restore~ : Bool) -> @sf.Fi
         },
         meta=text(l, "site"),
         composer=true,
+        on_press?,
       )
     }
     // pasted words (PendingFile's pasted card): what they begin with, how many, put back as words while not too long
@@ -1197,6 +1209,7 @@ fn waiting_card(c : @ui.Ctx, key : String, v : Json?, restore~ : Bool) -> @sf.Fi
         retry=error != "",
         restore~,
         composer=true,
+        on_press?,
       )
     }
     // (a station's folder going as the file: the zip it goes as, RefCard's `${name}.zip`)
@@ -1217,6 +1230,7 @@ fn waiting_card(c : @ui.Ctx, key : String, v : Json?, restore~ : Bool) -> @sf.Fi
         open=ref_ is Some(Object(_)),
         retry=error != "" && field(v, "pasted") is None,
         composer=true,
+        on_press?,
       )
     }
   }
@@ -1304,16 +1318,13 @@ fn composer_picture(
   @sf.tip(c, key + "/tip", thumb, if error != "" { error } else { name })
   // (its picture's box, its ✕ hung on its corner as every waiting file's)
   let tile = Ref(-1)
-  let removed = @sf.with_corner_remove(c, key, @sf.t("web-main.file.remove", args=[("name", name)]), @sf.composer_inner(), w=thumb_side, fn() {
+  @sf.with_corner_remove(c, key, @sf.t("web-main.file.remove", args=[("name", name)]), @sf.composer_inner(), w=thumb_side, fn() {
     tile.val = picture_tile(c, local_media(picture, file_kind(name)), pending, part, error, id=thumb, again~)
-  })
-  if removed {
-    writing_remove(src, w, id)
-  }
+  }, on_remove=fn() { writing_remove(src, w, id) })
   if error != "" {
-    if c.clicked(again) {
+    c.on_press(again, fn() {
       writing_retry(src, w, id)
-    }
+    })
   }
   // tapped, it opens in the viewer, growing out of its tile, from the bytes picked (`draft:<id>`, no session's: nothing
   // to mark it into, it is in the draft already); one whose bytes are not here (a draft kept) opens nothing
@@ -1334,10 +1345,10 @@ fn composer_picture(
       }
       // the viewer's id of it (its station, no session, its path), its tile kept for it to fly from
       let seen = station + "//" + a.path
-      if c.clicked(thumb) {
+      c.on_press(thumb, fn() {
         @sfbase.keep_read(seen, bytes)
         @sfbase.open_preview(station, "", a)
-      }
+      })
       @sfbase.note_thumb(c, seen, tile.val, @sf.composer_inner(), picture~)
       // (not drawn while the viewer is its picture: one picture on the screen, never two)
       c.look(tile.val, @ui.look(alpha=@sfbase.thumb_shows(seen)))
@@ -1734,7 +1745,7 @@ fn flying_files(c : @ui.Ctx, src : Source, w : Writing) -> Array[FlyingFile] {
             match picture {
               Some(p) => picture_tile(c, local_media(p, file_kind(text(v, "name"))), going_now(v), gone_up(v), text(v, "error")) |> ignore
               None => {
-                c.box(style=@ui.style(w=Fixed(wide)), fn() { waiting_card(c, "flying/" + id, v, restore~) |> ignore })
+                c.box(style=@ui.style(w=Fixed(wide)), fn() { waiting_card(c, "flying/" + id, v, restore~) })
                 |> ignore
               }
             }
@@ -2113,6 +2124,20 @@ fn composer_let_go(c : @ui.Ctx, draft : String) -> Bool {
 }
 
 ///|
+/// When words sent from draft `draft`'s composer let go of its box, the end declared for it (composer_hold; +inf: none
+/// told).
+fn composer_released_at(c : @ui.Ctx, draft : String) -> Double {
+  @motion.anim(c, "composer/held-box/" + draft, 0.0, global=true).ends()
+}
+
+///|
+/// Whether words sent from draft `draft`'s composer hold its room (composer_hold: from as they are sent till it is
+/// down, its declared end): its room theirs, not its ground's as that reshapes.
+fn composer_held(c : @ui.Ctx, draft : String) -> Bool {
+  !@motion.anim(c, "composer/hold/" + draft, 0.0, global=true).over()
+}
+
+///|
 /// How tall draft `draft`'s composer box is held for words sent from it, while they are in it (composer_hold); 0 when
 /// it is not.
 fn composer_held_box(c : @ui.Ctx, draft : String) -> Double {
@@ -2351,29 +2376,31 @@ fn chat_notices(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, width : Do
     let restore = c.id("composer/restore")
     let busy = composing.restoring.contains(key)
     if !busy && !v.offline {
-      if !src.read_only && c.clicked(restore) {
-        composing.restoring[key] = true
-        composing.restore_errors.remove(key)
-        let p : Map[String, Json] = {
-          "station": Json::string(r.station),
-          "session": Json::string(r.session),
-          "archived": Json::boolean(false),
-        }
-        match v.thread {
-          Some(th) => p["thread"] = Json::number(th)
-          None => ()
-        }
-        c.tell("composer/restore", fn() {
-          (src.call)("chat.archive", Json::object(p), fn(res) {
-            composing.restoring.remove(key)
-            // felt as something done, or refused
-            match res {
-              Err(e) => {
-                composing.restore_errors[key] = error_words(e)
-                @ui.haptic(Reject)
+      if !src.read_only {
+        c.on_press(restore, fn() {
+          composing.restoring[key] = true
+          composing.restore_errors.remove(key)
+          let p : Map[String, Json] = {
+            "station": Json::string(r.station),
+            "session": Json::string(r.session),
+            "archived": Json::boolean(false),
+          }
+          match v.thread {
+            Some(th) => p["thread"] = Json::number(th)
+            None => ()
+          }
+          c.tell("composer/restore", fn() {
+            (src.call)("chat.archive", Json::object(p), fn(res) {
+              composing.restoring.remove(key)
+              // felt as something done, or refused
+              match res {
+                Err(e) => {
+                  composing.restore_errors[key] = error_words(e)
+                  @ui.haptic(Reject)
+                }
+                Ok(_) => @ui.haptic(Confirm)
               }
-              Ok(_) => @ui.haptic(Confirm)
-            }
+            })
           })
         })
       }

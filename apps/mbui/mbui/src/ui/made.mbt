@@ -422,7 +422,8 @@ fn Ctx::made_put_back(self : Ctx, n : Node, slot : Int) -> Unit {
 /// A press on target `id` (a tap, a click, Enter or Space where it takes the focus, the Activate a screen reader asks),
 /// let go on it, does `f`: then, as it is let go, outside any build, not read as the next frame is built (the model's
 /// 5: acting is a callback); its moment the event's (Ctx::moment). Said as `id`'s box is built (what it does is what the last build said), it takes presses (the pointer's
-/// hand over it). What a frame read of the press (Ctx::clicked) it reads as before.
+/// hand over it). What a frame read of the press (Ctx::clicked) it reads as before. It runs in the scope it was said in
+/// (Ctx::id, Ctx::scope): a key it names is the target or the field it named where it was said (in_said_scope).
 pub fn Ctx::on_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
   if id == 0 {
     return
@@ -432,7 +433,20 @@ pub fn Ctx::on_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
   // draws what the press changed of what it holds)
   hand.clicked.has(id) |> ignore
   hand.asked.has(id) |> ignore
-  made_presses[id] = f
+  made_presses[id] = self.in_said_scope(f)
+}
+
+///|
+/// `f` as it runs outside any build, in the scope (Ctx::scope's) the build that said it was in then: the ids its keys
+/// name (Ctx::id) those of what was built where it was said, not the window's root's.
+fn Ctx::in_said_scope(self : Ctx, f : () -> Unit) -> () -> Unit {
+  let seed = self.id_seed
+  fn() {
+    let was = self.id_seed
+    self.id_seed = seed
+    f()
+    self.id_seed = was
+  }
 }
 
 ///|
@@ -446,7 +460,7 @@ pub fn Ctx::on_double_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
   self.takes_presses(id)
   // (read so: what said it is built again as it is pressed twice, hand.mbt)
   hand.double.has(id) |> ignore
-  made_double_presses[id] = f
+  made_double_presses[id] = self.in_said_scope(f)
 }
 
 ///|

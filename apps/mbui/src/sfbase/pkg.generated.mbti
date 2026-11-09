@@ -839,7 +839,7 @@ pub fn links_reset() -> Unit
 
 pub fn list_after(@ui.Ctx, Source, ChatRef, ChatView, ListFrame, top~ : Double, lead~ : Double, bar~ : Double, room~ : Double, finding~ : Bool, on_found~ : (Reading) -> Unit, find_around~ : @ref.Ref[Double]) -> ListAfter
 
-pub fn list_frame(@ui.Ctx, ChatRef, ChatView, Array[Entry], key~ : String, draft~ : String, rise_ms~ : Double, top~ : Double, in_front~ : Bool, laid? : String, laid_at? : Double) -> ListFrame
+pub fn list_frame(@ui.Ctx, ChatRef, ChatView, Array[Entry], key~ : String, draft~ : String, rise_ms~ : Double, top~ : Double, in_front~ : Bool, laid? : String, laid_at? : Double, foot_way? : (Double, Double)) -> ListFrame
 
 pub fn list_made(@ui.ListInfo?, Int32, Array[Int32]) -> ListMade
 
@@ -1383,7 +1383,7 @@ pub fn row_agent_groups(ChatItem) -> Array[RowAgent]
 
 pub fn row_is(ChatItem, ChatRef) -> Bool
 
-pub fn row_keys(@ui.Ctx, Reading, String, ChatView, Array[Entry], String, Turns, Emits, SendFlight?, rise_ms~ : Double, laid? : String, laid_at? : Double) -> (Array[Entry], Array[String])
+pub fn row_keys(@ui.Ctx, Reading, String, ChatView, Array[Entry], String, Turns, Emits, SendFlight?, rise_ms~ : Double, laid? : String, laid_at? : Double, foot_way? : (Double, Double)) -> (Array[Entry], Array[String])
 
 pub fn row_lead(ChatItem) -> String
 

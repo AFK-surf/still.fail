@@ -1,13 +1,13 @@
 ///|
 test "a file's card (FileCard): its name and size, how far it has gone up while it goes, why it failed; its ✕ and ↻ pressed" {
-  let done : Ref[FileCardDone] = Ref({ removed: false, retried: false, restored: false, opened: false })
+  let done : Array[FileCardPress] = []
   let pending = Ref(true)
   let failed = Ref("")
   let t = @ui.Tester::new(
     fn(c) {
       let _ = begin(c)
       c.box(style=@ui.css("w=Full h=Full p=S4"), fn() {
-        let d = file_card(
+        file_card(
           c,
           "card",
           "build.log",
@@ -17,14 +17,8 @@ test "a file's card (FileCard): its name and size, how far it has gone up while 
           error=failed.val,
           remove=true,
           retry=failed.val != "",
+          on_press=fn(on) { done.push(on) },
         )
-        // (kept once pressed: the frames after it say no more)
-        done.val = {
-          removed: done.val.removed || d.removed,
-          retried: done.val.retried || d.retried,
-          restored: done.val.restored || d.restored,
-          opened: done.val.opened || d.opened,
-        }
       })
       |> ignore
     },
@@ -42,10 +36,10 @@ test "a file's card (FileCard): its name and size, how far it has gone up while 
   assert_true(t.find("上传失败") is Some(_))
   let (x, y, w, h) = t.query(Button, label="web-main.composer.retryUpload").unwrap().rect
   t.tap(x + w / 2.0, y + h / 2.0)
-  assert_true(done.val.retried)
+  assert_eq(done, [Retry])
   let (x, y, w, h) = t.query(Button, label="web-main.file.remove").unwrap().rect
   t.tap(x + w / 2.0, y + h / 2.0)
-  assert_true(done.val.removed)
+  assert_eq(done, [Retry, Remove])
 }
 
 ///|
@@ -55,7 +49,7 @@ test "pasted words' card (PendingFile's pasted card): what they begin with and h
     fn(c) {
       let _ = begin(c)
       c.box(style=@ui.css("w=Full h=Full p=S4"), fn() {
-        let d = file_card(
+        file_card(
           c,
           "paste",
           "pasted-text-1.txt",
@@ -65,10 +59,8 @@ test "pasted words' card (PendingFile's pasted card): what they begin with and h
           remove=true,
           restore=true,
           remove_label="删除粘贴片段",
+          on_press=fn(on) { if on == Restore { restored.val = true } },
         )
-        if d.restored {
-          restored.val = true
-        }
       })
       |> ignore
     },
@@ -87,13 +79,16 @@ test "pasted words' card (PendingFile's pasted card): what they begin with and h
 
 ///|
 test "a quote's card (QuoteCard): whose and the passage, what is said under it; its source pressed to jump, its ✕ to let it go" {
-  let done : Ref[QuoteCardDone] = Ref({ jumped: false, removed: false, card: -1 })
+  let jumped = Ref(false)
+  let removed = Ref(false)
   let t = @ui.Tester::new(
     fn(c) {
       let _ = begin(c)
       c.box(style=@ui.css("w=Full h=Full p=S4"), fn() {
-        let d = quote_card(c, "q1", "Claude", "其余的行按估计的高度占位", comment="量过再记", jump=true, remove=true)
-        done.val = { jumped: done.val.jumped || d.jumped, removed: done.val.removed || d.removed, card: d.card }
+        quote_card(c, "q1", "Claude", "其余的行按估计的高度占位", comment="量过再记", on_jump=fn() { jumped.val = true }, on_remove=fn() {
+          removed.val = true
+        })
+        |> ignore
       })
       |> ignore
     },
@@ -104,10 +99,11 @@ test "a quote's card (QuoteCard): whose and the passage, what is said under it; 
   assert_true(t.find("量过再记") is Some(_))
   let (x, y) = t.find("其余的行按估计的高度占位").unwrap()
   t.tap(x, y)
-  assert_true(done.val.jumped)
+  assert_true(jumped.val)
+  assert_false(removed.val)
   let (x, y, w, h) = t.query(Button, label="web-main.quote.remove").unwrap().rect
   t.tap(x + w / 2.0, y + h / 2.0)
-  assert_true(done.val.removed)
+  assert_true(removed.val)
 }
 
 ///|
@@ -120,7 +116,7 @@ test "a quote's picture with nothing said under it: as far over its card's foot 
       c.box(style=@ui.css("w=Full h=Full p=S4"), fn() {
         card.val = quote_card(c, "q1", "Opus", "ref4.png", picture=fn() {
           picture.val = c.box(style=@ui.style(w=Fixed(120.0), h=Fixed(80.0)), fn() {  })
-        }).card
+        })
       })
       |> ignore
     },
@@ -141,8 +137,7 @@ test "a quote waiting in the composer has its ✕ hung on its corner, as everyth
     fn(c) {
       let _ = begin(c)
       c.box(style=@ui.css("w=Full h=Full p=S4"), fn() {
-        let d = quote_card(c, "q1", "Claude", "其余的行按估计的高度占位", composer=true, remove=true)
-        removed.val = removed.val || d.removed
+        quote_card(c, "q1", "Claude", "其余的行按估计的高度占位", composer=true, on_remove=fn() { removed.val = true }) |> ignore
       })
       |> ignore
     },

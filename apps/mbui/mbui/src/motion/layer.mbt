@@ -141,6 +141,8 @@ priv struct Moving {
   mut carry : Bool
   /// reshape: it changes shape from its foot (reshape's `foot`)
   mut foot : Bool
+  /// reshape: the moment its cause came, where that was before this frame (reshape's `at`; -inf: none said)
+  mut at : Double
   /// how it is drawn, worked out once this frame is laid out (placed)
   mut placed : (() -> @ui.Look)?
 }
@@ -495,6 +497,7 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     reshape: false,
     carry: false,
     foot: false,
+    at: @double.neg_infinity,
     placed: None,
   }
   mo.at[i] = mo.entries.length()
@@ -635,7 +638,9 @@ pub fn entering(
 /// sets off, what moved its foot in that same frame for nothing it changes for (a keyboard coming as it opens) is
 /// where it is laid out at once, its ground and what moves with it (`layout` with the same `by`) setting off from
 /// their shape and places carried there, only their growing up from the foot on its way (a composer opened at its
-/// foot: the user, 2026-10-30 「以底部为 origin」).
+/// foot: the user, 2026-10-30 「以底部为 origin」). `at`: the moment of the cause `by` changed for, said only on the
+/// change that cause makes (words sent letting go of it at their declared moment): it and what moves with it set out
+/// from then, as far on as the time since says, not from the frame that lays it out; one not come yet is not.
 pub fn reshape(
   c : @ui.Ctx,
   i : Int,
@@ -644,9 +649,14 @@ pub fn reshape(
   spec~ : Spec,
   carry? : Bool = false,
   foot? : Bool = false,
+  at? : Double,
 ) -> Unit {
   let e = moving_of(c, i)
   e.name = key
+  match at {
+    Some(t) => e.at = t
+    None => ()
+  }
   e.key = motion_key(key)
   // (seen where a part or a row drawn again that it is in shows it: built again, it reshapes from there)
   e.reshape = true
@@ -774,6 +784,22 @@ pub fn reshaped_over(c : @ui.Ctx, key : String) -> Double {
       }
     }
     _ => 0.0
+  }
+}
+
+///|
+/// The way the ground of the node reshaping as `key` (reshape) last set out on: when and how long (the frames' clock),
+/// as declared as it was told, so that what goes with that ground as drawn (reshaped_over) goes on that way while it
+/// has not ended (built again at its end). None before it ever set out, or carried to another place.
+pub fn reshape_way(c : @ui.Ctx, key : String) -> (Double, Double)? {
+  ignore(c)
+  match mo.recs.get(motion_key(key)) {
+    Some(r) if r.alive && !r.g_carry && r.gp.start >= 0.0 => {
+      // (what reads it built again at its declared end: Anim::over)
+      ignore(r.gp.over())
+      Some((r.gp.start, r.gp.dur))
+    }
+    _ => None
   }
 }
 
@@ -1374,6 +1400,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
     }
   }
   together.clear()
+  cause_at.clear()
   // (what reads where each goes told once all of it is worked out, and only where it came out otherwise: a build of
   // the frame again lays it out from where the frame began, as the first did)
   measures_told_once(c, fn() {
@@ -1413,7 +1440,13 @@ fn after_layout(c : @ui.Ctx) -> Unit {
 /// (where to, by what), set out again as long as that one, so what moves together for one cause (a composer's ground,
 /// its words, its ＋ and its send) is on one clock (sf/motion.mbt: as long as its way is far).
 // kept across runs: cleared as each frame's layout begins, taken as it ends (after_layout)
-let together : Map[String, (Double, Array[(Anim, Double, Spec)])] = {}
+let together : Map[String, (Double, Array[(Anim, Double, Spec, Double?)])] = {}
+
+///|
+/// For each cause (`by`) a shape set off for at a moment said (reshape's `at`): that moment, from which what moves for
+/// it this frame sets out.
+// kept across runs: cleared as each frame's layout begins
+let cause_at : Map[String, Double] = {}
 
 ///|
 /// For each cause (`by`) a shape set off for from its foot (reshape's `foot`): the frame it did, and how far its foot
@@ -1434,17 +1467,22 @@ fn foot_moved_in(by : String, frame : Int) -> Double {
 
 ///|
 /// `a` off to `to` by `spec` (said to go `far`), for cause `by` ("" none: on its own).
-fn moves_with(by : String, far : Double, a : Anim, to : Double, spec : Spec) -> Unit {
-  a.animate(to, spec)
+fn moves_with(by : String, far : Double, a : Anim, to : Double, spec : Spec, start_at? : Double) -> Unit {
+  // (from the moment its cause came, where one was said: cause_at)
+  let start_at = match start_at {
+    Some(t) => Some(t)
+    None => if by != "" { cause_at.get(by) } else { None }
+  }
+  a.animate(to, spec, start_at?)
   guard by != "" && spec is Moved(_, _, _) else { return }
   match together.get(by) {
     Some((most, all)) => {
-      all.push((a, to, spec))
+      all.push((a, to, spec, start_at))
       if far > most {
         together[by] = (far, all)
       }
     }
-    None => together[by] = (far, [(a, to, spec)])
+    None => together[by] = (far, [(a, to, spec, start_at)])
   }
 }
 
@@ -1457,11 +1495,11 @@ fn moved_together() -> Unit {
       return
     }
     for m in all {
-      let (a, to, spec) = m
+      let (a, to, spec, start_at) = m
       // (all said `far` by this layout: told again as long as the furthest)
       let s = spec.over(most)
       if s != spec {
-        a.animate(to, s)
+        a.animate(to, s, start_at?)
       }
     }
   })
@@ -1975,7 +2013,12 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           }
           r.gr = corners_mix(r.was_gr, wr, p0)
           r.gp.snap(0.0)
-          moves_with(group, far, r.gp, 1.0, spec)
+          // (its cause's moment said by what changes it, come by now: from then, it and what moves with it)
+          let said_at = e.at > @double.neg_infinity && e.at <= c.moment()
+          if said_at && group != "" {
+            cause_at[group] = e.at
+          }
+          moves_with(group, far, r.gp, 1.0, spec, start_at?=if said_at { Some(e.at) } else { None })
           r.g_now = true
           r.g_carry = e.carry
         } else {

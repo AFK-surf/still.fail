@@ -1148,6 +1148,7 @@ pub fn row_keys(
   rise_ms~ : Double,
   laid? : String = "",
   laid_at? : Double,
+  foot_way? : (Double, Double),
 ) -> (Array[Entry], Array[String]) {
   let info = c.list_info_as(key, follows)
   let following = match info {
@@ -1176,7 +1177,7 @@ pub fn row_keys(
       m.rise_ms == rise_ms &&
       m.known == rd.known.length() &&
       sending.is_empty() &&
-      turns.waiting.is_empty() => return shown_rows(c, rd, m.list, m.keys, !v.newer, flight, laid~, laid_at~)
+      turns.waiting.is_empty() => return shown_rows(c, rd, m.list, m.keys, !v.newer, flight, laid~, laid_at~, foot_way~)
     _ => ()
   }
   let made_whole = sending.is_empty() && turns.waiting.is_empty()
@@ -1408,7 +1409,7 @@ pub fn row_keys(
   // (what changes comes, goes and changes on the list's way whether the list follows its end or is read up it: the
   // row read from stays where it shows, what is over and under it moving away from it, mbui's ui/list_size.mbt; nothing
   // at once in view, 2026-10-31 the user: 「有一些是凭空出现的，有一些是凭空消失的」)
-  shown_rows(c, rd, list, keys, !v.newer, flight, laid~, laid_at~)
+  shown_rows(c, rd, list, keys, !v.newer, flight, laid~, laid_at~, foot_way~)
 }
 
 ///|
@@ -1427,6 +1428,7 @@ fn shown_rows(
   flight : SendFlight?,
   laid~ : String,
   laid_at~ : Double?,
+  foot_way~ : (Double, Double)?,
 ) -> (Array[Entry], Array[String]) {
   // words sent let go of the composer as they leave it, a share of their way on (flight_placed): their row opens
   // from then, the composer's room closes from then (composer_hold), as long, so that what is over them goes one way;
@@ -1448,18 +1450,21 @@ fn shown_rows(
   }
   let told_laid = laid != rd.rows_laid
   rd.rows_laid = laid
+  // (the composer's ground on that way now: the Foot row's change goes on it, from when it set out, as long)
+  let (way_at, way_ms) = foot_way.unwrap_or((-1.0, 0.0))
+  let on_way = way_at >= 0.0 && way_at + way_ms > now
   rd.rows.rows(
     c,
     // (given anew as the Foot row's version changes with them, or every row's as the list is laid out otherwise: the
     // same arrays as the frame before are not looked over)
-    if told_foot || told_laid { keys.copy() } else { keys },
+    if told_foot || told_laid || on_way { keys.copy() } else { keys },
     list,
     // (laid out at another width as a page's way sets off or is there, each row's words wrapped otherwise, as far from
     // the one before (20 or 28 narrow or not) and its picture inline or out in the margin: each its room going there on
     // the list's way, not stepped at once in one frame, rows_steady.mbt)
     fn(e) {
       match e {
-        Foot => "foot" + rd.foot_sign + rd.sent_foot
+        Foot => "foot" + rd.foot_sign + "@\{way_at}" + rd.sent_foot
         Top => shown_sign(e)
         _ => shown_sign(e) + laid
       }
@@ -1468,6 +1473,7 @@ fn shown_rows(
     ms=fn(k) {
       match (leaving, flight) {
         (Some((key, _, ms)), _) if key == k || k == "foot" => Some(ms)
+        _ if k == "foot" && on_way => Some(way_ms)
         (_, Some(f)) if f.key == k => Some(flight_ms_of(f))
         _ => None
       }
@@ -1475,6 +1481,7 @@ fn shown_rows(
     from=fn(k) {
       match (leaving, laid_at) {
         (Some((_, at, _)), _) if at > now => Some(at)
+        (None, _) if k == "foot" && on_way => Some(way_at)
         (_, Some(at)) if told_laid && at < now => Some(at)
         _ => None
       }
@@ -1762,6 +1769,7 @@ pub fn list_frame(
   in_front~ : Bool,
   laid? : String = "",
   laid_at? : Double,
+  foot_way? : (Double, Double),
 ) -> ListFrame {
   let rd = reading_of(r.station + "\u{1}" + r.session)
   // an agent's messages said while its activity shows come out of its avatar, one at a time; until their turn they
@@ -1798,6 +1806,7 @@ pub fn list_frame(
     rise_ms~,
     laid~,
     laid_at?,
+    foot_way?,
   )
   follow_newest(c, rd, list, keys, key, top~)
   flight_frame(c, draft)
