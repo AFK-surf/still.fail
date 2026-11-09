@@ -364,7 +364,8 @@ test "用量: the overview follows the page's theme, including after a day is pi
     check("$118")
   }
   t.tap_text("10/3")
-  t.draw()
+  // (the day's chip makes its way in: looked at once there)
+  t.run_for(@ui.move_most_ms)
   for dark in [false, true, false] {
     @sf.set_dark(Some(dark))
     t.draw()

@@ -814,9 +814,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
           |> ignore
         }
         _ =>
-          slot.show(shows, fn(v) { block(v, fn() { k }, fn(v) { make(v, k) }) })
+          // (a block made or let go as it comes to show or leaves it as the list scrolls: there at once, no way of its
+          // own; what it holds makes its way in it as anywhere)
+          slot.show(shows, fn(v) { block(v, fn() { k }, fn(v) { make(v, k) }) }, at_once=true)
       }
-    })
+    }, at_once=true)
   })
   // (those put by let go with the list: held by nothing, let go by nothing else)
   self.owns(spare_let_go) |> ignore

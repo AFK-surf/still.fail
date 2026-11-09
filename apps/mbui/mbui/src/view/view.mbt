@@ -605,6 +605,9 @@ pub struct Tree {
   /// the moment what is drawn is drawn at (a frame's, to be shown then), a signal a look follows (Tree::drawn_at); the
   /// logic follows no clock (its moment `logic`, what is due on its timeline said once: Tree::advance)
   clock : @signals.Signal[Double]
+  /// the moment the last frame is drawn at (Tree::at), where the clock stands but while it is set to a change's
+  /// moment and back (Tree::measured_now, a settling): what makes its way follows this one alone (View::comes)
+  mut frame_ms : Double
   /// the same moment, for what draws a wait by it (a cycle: View::cycle): what never ends, read apart from what moves
   beat : @signals.Signal[Double]
   /// the same moment on the resident clock's steps (resident_step_ms): for an endless decoration drawn by it
@@ -1014,6 +1017,7 @@ pub fn Tree::new(
   }
   let t : Tree = {
     clock: @signals.signal(start, same=fn(a, b) { a == b }),
+    frame_ms: start,
     beat: @signals.signal(start, same=fn(a, b) { a == b }),
     resident: @signals.signal(resident_of(start), same=fn(a, b) { a == b }),
     resident_readers: {},
@@ -1810,6 +1814,7 @@ pub fn Tree::cycle_read(self : Tree) -> Bool {
 ///|
 /// The clock set to `ms` (a frame's time).
 pub fn Tree::at(self : Tree, ms : Double) -> Unit {
+  self.frame_ms = ms
   self.clock_to(ms)
   self.beat_set(ms)
 }
@@ -6947,10 +6952,22 @@ fn View::comes(self : View, v : View, from : Double, to : Double) -> Bool {
           if !m.live || m.gen != gen {
             return
           }
-          m.flex.style.come_now = match t {
+          // (the clock set to a change's moment and back again as things are measured or settled then
+          // (Tree::measured_now) moves no way: laid out where the frame has it, not again at that moment's and again
+          // at the frame's, each laying out what reads it anew)
+          match t {
+            Some(t) if t != tree.frame_ms && m.flex.style.come_now == m.flex.style.come_now => return
+            _ => ()
+          }
+          let was = m.flex.style.come_now
+          let now = match t {
             Some(t) => t
             None => 0.0 / 0.0
           }
+          if now == was || (now != now && was != was) {
+            return
+          }
+          m.flex.style.come_now = now
           m.look.clips = m.clips_said || m.coming
           tree.layout_marked_at(vat)
           tree.look_marked_at(vat)
@@ -7113,7 +7130,8 @@ fn View::arrives(self : View, v : View) -> Unit {
 
 ///|
 /// Whether node `at` is laid out in its turn down a column, as tall as it comes to: not over what holds it nor grown,
-/// what lays it out (past the slots holding it) a column, and in no page's list's rows (which come and go as the list moves them: Scroll::list).
+/// what lays it out (past the slots holding it) a column: in a page's list's block too (what the block holds makes its
+/// way as anywhere; the blocks themselves come and go as the list scrolls, at once: View::scrolls_window).
 fn Tree::in_column(self : Tree, at : Int) -> Bool {
   let n = self.nodes[at]
   // (over what holds it, or as tall as the column leaves it (grown): no way of its own to make)
@@ -7124,14 +7142,7 @@ fn Tree::in_column(self : Tree, at : Int) -> Bool {
   while p >= 0 && self.nodes[p].slot {
     p = self.nodes[p].parent
   }
-  guard p >= 0 && self.nodes[p].flex.style.direction == @flex.FlexDirection::Column else { return false }
-  while p >= 0 {
-    if self.nodes[p].list_rows {
-      return false
-    }
-    p = self.nodes[p].parent
-  }
-  true
+  p >= 0 && self.nodes[p].flex.style.direction == @flex.FlexDirection::Column
 }
 
 ///|
@@ -7313,6 +7324,30 @@ pub fn Tree::wake(self : Tree) -> Double? {
     }
   }
   soonest
+}
+
+///|
+/// Which timer the soonest due is (Tree::wake_waited): where it was said, for a timer said once (View::at_moment's
+/// caller); "" for the rest. What tells one that keeps saying itself again from others that each come once.
+pub fn Tree::wake_waited_by(self : Tree) -> String {
+  let mut soonest = -1.0
+  let mut by = ""
+  for d in self.timeline {
+    let at = match d {
+      Steps(s, _) => if s.live.val && s.k < s.count { stepped_at(s, s.count - 1) } else { -1.0 }
+      Once(o, _) if o.later => -1.0
+      Holds(h, _) if h.later => -1.0
+      _ => self.due_at(d)
+    }
+    if at >= 0.0 && (soonest < 0.0 || at < soonest) {
+      soonest = at
+      by = match d {
+        Once(o, _) => o.by
+        _ => ""
+      }
+    }
+  }
+  by
 }
 
 ///|
@@ -7517,6 +7552,8 @@ struct Once {
   live : Ref[Bool]
   /// not waited for (View::at_moment's `later`)
   later : Bool
+  /// where it was said (View::at_moment's caller): which timer it is (Tree::wake_waited_by)
+  by : String
 }
 
 ///|
@@ -10124,7 +10161,14 @@ pub fn[T : Eq] View::reacts(self : View, read : () -> T, f : (T) -> Unit, at_sta
 /// the clock. The node's: not done once it is let go, or once what it returns is called. What is to be done is waited
 /// for, as what has yet to happen (Tree::wake_waited: a test's run goes on to it, and is not idle before it); `later`,
 /// not: a time what is shown does not wait for (a toast's time on screen), as an old view's wake said `later` is.
-pub fn View::at_moment(self : View, when : Double, f : () -> Unit, later? : Bool = false) -> () -> Unit {
+#callsite(autofill(loc))
+pub fn View::at_moment(
+  self : View,
+  when : Double,
+  f : () -> Unit,
+  later? : Bool = false,
+  loc~ : SourceLoc,
+) -> () -> Unit {
   guard self.live() is Some(_) else { return fn() {  } }
   let live = Ref(true)
   let tree = self.tree
@@ -10143,7 +10187,7 @@ pub fn View::at_moment(self : View, when : Double, f : () -> Unit, later? : Bool
     (unkeep.val)()
     f()
   }
-  tree.timeline.push(Once({ at: when, f: done, live, later }, tree.told))
+  tree.timeline.push(Once({ at: when, f: done, live, later, by: loc.to_string() }, tree.told))
   tree.told = tree.told + 1
   tree.marked()
   stop

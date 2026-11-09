@@ -78,7 +78,8 @@ test "关于's version rows, at each width and with either hand: this build alon
     let at = "\{w} platform \{platform}"
     assert_true(t.query(Link, label="检查更新") is Some(_), msg=at)
     @sfbase.update.available.set(Some({ "versionCode": 2, "versionName": "0.1.1", "file": "android/stillfail-2.apk", "size": 23515867 }))
-    t.draw()
+    // (its row makes its way in under 检查更新: looked at once there)
+    t.run_for(@ui.move_most_ms)
     // known, not handed to the host yet: offered, a row of its own under 检查更新 (still there); waiting for Wi‑Fi,
     // said with its size
     assert_true(t.query(Link, label="有新版本 0.1.1") is Some(_), msg=at)
@@ -127,7 +128,8 @@ test "关于's update row stays usable with the pointer over it as a download be
   @sfbase.update.available.set(Some({ "versionCode": 2, "versionName": "0.1.1", "file": "android/stillfail-2.apk", "size": 23515867 }))
   t.draw()
   t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
-  t.draw()
+  // (its row made its way in: the pointer put over it where it rests)
+  t.run_for(@ui.move_most_ms)
   let (x, y, w, h) = t.query(Link, label="正在下载 0.1.1").unwrap().rect
   t.move(x + w / 2.0, y + h / 2.0)
   let now = t.time()

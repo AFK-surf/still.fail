@@ -698,9 +698,27 @@ fn size_uncached(
     s.come_now = undef
     let fw = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, false)
     s.come_now = now
-    let tall = come_height(s, out_h.val)
+    let natural = out_h.val
+    let tall = come_height(s, natural)
     if known(tall) {
-      return size_uncached(node, if known(kw) { kw } else { fw }, tall, aw, ah, cb_w, cb_h, perform)
+      // (what it holds laid out whole, in as much room as it comes to, not in the part of it its way has got: what
+      // is measured in it by the room it is given comes out the same all the way; it, as tall as its way has got)
+      let w = size_uncached(node, if known(kw) { kw } else { fw }, natural, aw, ah, cb_w, cb_h, perform)
+      out_h.val = tall
+      return w
+    }
+  } else if known(s.come_now) && perform && s.come_k < 1.0 {
+    // (given the height its way has got by what lays it out (a column's item at its basis): what it holds laid out
+    // whole all the same, in as much room as it comes to, as above)
+    let now = s.come_now
+    s.come_now = undef
+    let fw = size_uncached(node, kw, undef, aw, ah, cb_w, cb_h, false)
+    s.come_now = now
+    let natural = out_h.val
+    if natural > kh {
+      let w = size_uncached(node, if known(kw) { kw } else { fw }, natural, aw, ah, cb_w, cb_h, perform)
+      out_h.val = kh
+      return w
     }
   } else if !known(s.come_now) {
     s.come_k = 1.0
