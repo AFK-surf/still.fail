@@ -91,7 +91,7 @@ pub fn tip_node(
     rest.val = None
   }
   let set_open = fn(on : Bool) {
-    if on == @signals.untracked(fn() { open.get() }) {
+    if on == open.untracked() {
       return
     }
     let at = anchor.cause_at()
@@ -128,7 +128,7 @@ pub fn tip_node(
     let (over, pressed, focused, takes, says, held) = s
     let (was_over, was_focused, was_held) = before.val
     before.val = (over, focused, held)
-    if made.val && @signals.untracked(fn() { open.get() }) && takes && says &&
+    if made.val && open.untracked() && takes && says &&
       (held != Free || (!pressed && !shut.val)) &&
       ((over && !was_over) || (focused && !was_focused) || (held != Free && was_held == Free)) {
       @kit.tip_claim(owner)
@@ -155,7 +155,7 @@ pub fn tip_node(
     }
     if !says || !takes || shut.val || (!over && !focused) {
       set_open(false)
-    } else if focused || @signals.untracked(fn() { open.get() }) {
+    } else if focused || open.untracked() {
       set_open(true)
     } else if skip && at - tips.went_at <= @kit.tooltip_skip_ms {
       // (another of the layer's went a moment ago: at once)
@@ -180,7 +180,7 @@ pub fn tip_node(
   }
   // (let go by a finger that held it open: shown on a while, gone at the next press wherever it lands, or then)
   anchor.reacts(fn() { anchor.window_downs() }, fn(_) {
-    if @signals.untracked(fn() { hand.get() }) == Lifted {
+    if hand.untracked() == Lifted {
       (lifted_end.val)()
       hand.set(Free)
     }
@@ -190,7 +190,7 @@ pub fn tip_node(
   // after its control took it, so the one after that); a press held, dragged or called off shuts it not)
   let opened_at = Ref(0)
   anchor.reacts(fn() { anchor.window_taps() }, fn(n) {
-    if @signals.untracked(fn() { hand.get() }) == Opened && n > opened_at.val + 1 {
+    if hand.untracked() == Opened && n > opened_at.val + 1 {
       hand.set(Free)
     }
   })
@@ -218,9 +218,9 @@ pub fn tip_node(
       opened_at.val = if tapped { now } else { now - 1 }
       hand.set(Opened)
     },
-    opened: fn() { @signals.untracked(fn() { hand.get() }) == Opened },
+    opened: fn() { hand.untracked() == Opened },
     lift: fn() {
-      if @signals.untracked(fn() { hand.get() }) == Held {
+      if hand.untracked() == Held {
         hand.set(Lifted)
         lifted_end.val = anchor.at_moment(anchor.cause_at() + @kit.tooltip_lifted_ms, fn() { hand.set(Free) })
       }

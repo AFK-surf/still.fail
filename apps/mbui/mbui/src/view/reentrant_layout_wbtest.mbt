@@ -38,7 +38,7 @@ test "a host's change notification while layout changes the drawn clock does not
       host_calls.val += 1
       // Stop the broken feedback loop at 20 so the assertion fails without overflowing the test process's stack.
       if host_calls.val < 20 {
-        due.set(@signals.untracked(fn() { due.get() }) + 1)
+        due.set(due.untracked() + 1)
       }
     })
     // A frame is to be shown at 100, while the event was at 50, on opposite sides of the look's change at 75.

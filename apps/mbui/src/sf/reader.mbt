@@ -244,7 +244,7 @@ let layout_open : @signals.Signal[String?] = @signals.signal(None)
 /// reader at a panel (sffix's reader-layout) does.
 pub fn reader_panel_set(r : Reading, panel : ReaderPanel) -> Unit {
   r.panel = panel
-  let open = @signals.untracked(fn() { layout_open.get() })
+  let open = layout_open.untracked()
   if panel == Layout {
     if open != Some(r.key) {
       layout_open.set(Some(r.key))

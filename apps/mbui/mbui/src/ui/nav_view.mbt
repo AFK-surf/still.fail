@@ -25,7 +25,7 @@ priv struct NavHosted {
 ///|
 /// What shows of the stack changed (which pages, how they move): what reads it told.
 fn[P] Nav::shown_told(self : Nav[P]) -> Unit {
-  self.shown.set(@signals.untracked(fn() { self.shown.get() }) + 1)
+  self.shown.set(self.shown.untracked() + 1)
 }
 
 ///|
@@ -199,7 +199,7 @@ pub fn[P] nav_view(
       },
       fn(k) { k },
       fn(pv, serial) {
-        let k = @signals.untracked(fn() { serial.get() })
+        let k = serial.untracked()
         let entry = nav.entry(k)
         pv
           .over(Is(true))

@@ -611,7 +611,7 @@ let tree_fields_drawn : @signals.Signal[Int] = @signals.signal(0)
 ///|
 /// A field of the tree's changed by what is its own: painted again from the next frame (tree_fields_drawn).
 fn tree_field_redraw() -> Unit {
-  tree_fields_drawn.set(@signals.untracked(fn() { tree_fields_drawn.get() }) + 1)
+  tree_fields_drawn.set(tree_fields_drawn.untracked() + 1)
   h_frame_owed()
 }
 

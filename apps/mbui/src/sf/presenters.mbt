@@ -1419,7 +1419,7 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
       let over = presented_now[i + 1:].iter().filter(fn(q) { q.open && how_of(q.shows, q.from, true) == AsSheet }).last()
       match over {
         Some(q) =>
-          p.pushed.set(push_of(@signals.untracked(fn() { q.sheet_h.get() })))
+          p.pushed.set(push_of(q.sheet_h.untracked()))
         None => ()
       }
     }
@@ -1432,7 +1432,7 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
       p.receded = covered
       let to = if covered { 1.0 } else { 0.0 }
       if sheet {
-        let way = dmax(@signals.untracked(fn() { p.pushed.get() }), 1.0)
+        let way = dmax(p.pushed.untracked(), 1.0)
         p.recede.animate(c, to, @motion.move(points=way))
       } else {
         // (dimmed as a dialog's ground comes and goes)

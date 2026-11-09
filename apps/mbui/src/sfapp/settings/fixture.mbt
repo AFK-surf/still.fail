@@ -324,7 +324,7 @@ let fixture_changes : @signals.Signal[Int] = @signals.signal(0)
 /// The made-up core changed (the app's fixture, its settings, its browsing): what read its topics in a computed is
 /// worked out again.
 pub fn fixture_changed() -> Unit {
-  fixture_changes.set(@signals.untracked(fn() { fixture_changes.get() }) + 1)
+  fixture_changes.set(fixture_changes.untracked() + 1)
 }
 
 ///|
@@ -342,7 +342,7 @@ let fixture_draft_changes : @signals.Signal[Int] = @signals.signal(0)
 ///|
 /// A draft's words changed in the made-up core (fixture_draft_changes).
 pub fn fixture_draft_changed() -> Unit {
-  fixture_draft_changes.set(@signals.untracked(fn() { fixture_draft_changes.get() }) + 1)
+  fixture_draft_changes.set(fixture_draft_changes.untracked() + 1)
 }
 
 ///|

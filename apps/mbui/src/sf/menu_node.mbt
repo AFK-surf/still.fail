@@ -251,7 +251,7 @@ pub fn menu_node(
             // anew there; a row's words, icon, check and whether it can be chosen read again as they change, the row the
             // same, its focus kept)
             b.each(fn() { content().mapi(fn(i, x) { (i, menu_kind(x)) }) }, fn(k) { k }, fn(cell, k) {
-              let (i, kind) = @signals.untracked(fn() { k.get() })
+              let (i, kind) = k.untracked()
               let item = fn() {
                 match content().get(i) {
                   Some(Some(item)) => item
@@ -388,7 +388,7 @@ fn menu_row_node(
           }
         }
         col.each(fn() { if mark() == "" { [] } else { [mark()] } }, fn(m) { m }, fn(slot, m) {
-          let name = @signals.untracked(fn() { m.get() })
+          let name = m.untracked()
           if name == "\u{1}check" {
             icon_node(slot, "check", 14.0, By(fn() { library_theme().p.text })) |> ignore
           } else {

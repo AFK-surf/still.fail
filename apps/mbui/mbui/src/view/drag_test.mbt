@@ -414,7 +414,7 @@ fn read_in_event(ask : Bool) -> Array[Int] {
   let id = gesture_id(t)
   t.event(50.0, fn() {
     s.set(1)
-    node.val.unwrap().at_moment(50.0, fn() { read.push(@signals.untracked(fn() { s.get() })) }) |> ignore
+    node.val.unwrap().at_moment(50.0, fn() { read.push(s.untracked()) }) |> ignore
     if ask {
       t.drag_at(id, Down, 10.0, 10.0, 50.0) |> ignore
     }

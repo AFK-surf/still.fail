@@ -245,7 +245,7 @@ fn connects_list_node(
         out
       }
       b.each(addresses, fn(a) { a }, fn(sb, a) {
-        let address = @signals.untracked(fn() { a.get() })
+        let address = a.untracked()
         let here_list = fn() { shown().filter(fn(x) { text(Some(x), "station") == address }) }
         let name = fn() {
           match here_list().get(0) {
@@ -681,7 +681,7 @@ fn mine_filter_node(parent : @view.View, key : String, of : String, mine : () ->
     }))
     |> ignore
     @sf.presses_node(b, fn() {
-      if @signals.untracked(fn() { open.get() }) {
+      if open.untracked() {
         return
       }
       let now = @signals.untracked(mine)

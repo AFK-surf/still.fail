@@ -76,7 +76,7 @@ fn viewer_host_default() -> ViewerHost {
     sheet: None,
     on_link: fn(_) {  },
     reader_style: fn() { style_here.get() },
-    set_reader_style: fn(change) { style_here.set(@signals.untracked(fn() { style_here.get() }).changed(change)) },
+    set_reader_style: fn(change) { style_here.set(style_here.untracked().changed(change)) },
     // (no core: the text as it is, nothing found in it)
     read_book: fn(text, _, done) { done(Ok({ id: 0, text, wrapped: 0, chapters: [], heads: [], md: [] })) },
     search_book: fn(_, _, done) { done([]) },

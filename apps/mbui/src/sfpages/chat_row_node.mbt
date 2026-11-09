@@ -647,7 +647,7 @@ fn swipe_node(
         let at = dclamp(from.val + (d.wx - from_x.val), -w, 0.0)
         off.put(at)
         let now = at < -w * archive_at_share
-        if now && !@signals.untracked(fn() { past.get() }) {
+        if now && !past.untracked() {
           @ui.haptic(TextHandleMove)
         }
         past.set(now)

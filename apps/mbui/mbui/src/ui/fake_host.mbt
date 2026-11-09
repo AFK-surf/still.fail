@@ -55,7 +55,7 @@ impl @hostapi.Host for FakeHost with update_apply(_, _) {
 ///|
 /// How an update goes: as the test told it (Tester::tells_update).
 impl @hostapi.Host for FakeHost with update_state(_) {
-  @signals.untracked(fn() { update_told.get() })
+  update_told.untracked()
 }
 
 // The system's pickers and the files kept on the device (@hostapi pick.mbt, keep.mbt) as a test has them: its pickers

@@ -100,15 +100,15 @@ test "faces: words laid out while a face given is on its way are laid out again 
   t.draw()
   assert_true(face_given(@hostapi.face_ui))
   assert_eq(t.rect_of("lin@example.com").unwrap().2, w0)
-  let shaped = @signals.untracked(fn() { words_shaped_in.get() })
+  let shaped = words_shaped_in.untracked()
   // in before the next frame: a tenth of 14 wider a letter
   t.ui_face_wider(0.1)
   t.glyphs_moved_on()
   t.draw()
   assert_true((t.rect_of("lin@example.com").unwrap().2 - (w0 + 15.0 * 1.4)).abs() < 0.001)
   // (a paragraph's kept layout too: its runs said with the faces as they are now)
-  assert_eq(@signals.untracked(fn() { words_shaped_in.get() }), shaped + 1)
+  assert_eq(words_shaped_in.untracked(), shaped + 1)
   // nothing moved on since: kept as laid out
   t.draw()
-  assert_eq(@signals.untracked(fn() { words_shaped_in.get() }), shaped + 1)
+  assert_eq(words_shaped_in.untracked(), shaped + 1)
 }

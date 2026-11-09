@@ -63,7 +63,7 @@ fn md_answered_now(text : String, value : Json?) -> Unit {
     md_held[text] = blocks
   }
   match md_answered.get(text) {
-    Some(c) => c.set(@signals.untracked(fn() { c.get() }) + 1)
+    Some(c) => c.set(c.untracked() + 1)
     None => ()
   }
 }
@@ -293,7 +293,7 @@ fn table_frame_node(
       }
     }
     frame.each(rows, fn(r) { r }, fn(line, r) {
-      let r = @signals.untracked(fn() { r.get() })
+      let r = r.untracked()
       let head = r == 0
       line.box(fn(cells) {
         // (its head's row: where its copy key's middle is, as the frame measured it)
@@ -303,7 +303,7 @@ fn table_frame_node(
         cells.row(Is(true)).lines_up(Is(None)) |> ignore
         let cols = fn() { Array::makei(widths().0.length(), fn(k) { k }) }
         cells.each(cols, fn(k) { k }, fn(cell, k) {
-          let k = @signals.untracked(fn() { k.get() })
+          let k = k.untracked()
           let words = fn() {
             match table() {
               Some(t) => (if head { t.head } else { t.rows.get(r - 1).unwrap_or([]) }).get(k).unwrap_or([])

@@ -240,7 +240,7 @@ pub fn tip_node_owner() -> TipOwner {
 /// Give the window's tooltip slot to `owner` as it is newly shown. The views and nodes that read it follow the signal.
 pub fn tip_claim(owner : TipOwner) -> Unit {
   install()
-  if @signals.untracked(fn() { kit.val.tip_owner.get() }) != Some(owner) {
+  if kit.val.tip_owner.untracked() != Some(owner) {
     kit.val.tip_owner.set(Some(owner))
   }
 }

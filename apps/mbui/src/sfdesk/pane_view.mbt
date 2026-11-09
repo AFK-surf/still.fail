@@ -347,7 +347,7 @@ fn fold_goes_reset() -> Unit {
 ///|
 /// What is committed of the block's move told.
 fn fold_said() -> Unit {
-  fold_goes.said.set(@signals.untracked(fn() { fold_goes.said.get() }) + 1)
+  fold_goes.said.set(fold_goes.said.untracked() + 1)
 }
 
 ///|

@@ -558,7 +558,7 @@ fn debug_line_of(v : Json) -> DebugLine {
 fn DebugLogs::took(self : DebugLogs, answer : Json) -> Unit {
   let lines = items(Some(answer), "lines").map(debug_line_of)
   // (a new array told: what reads the lines reads them again)
-  let all = @signals.untracked(fn() { self.lines.get() }).copy()
+  let all = self.lines.untracked().copy()
   all.append(lines)
   if all.length() > debug_logs_kept {
     self.dropped += all.length() - debug_logs_kept

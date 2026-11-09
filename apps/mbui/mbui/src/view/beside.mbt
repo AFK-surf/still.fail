@@ -400,7 +400,7 @@ pub fn View::drawn_scale(self : View) -> Double {
 /// what takes it): one change at that moment, told to what follows the window's presses (View::window_downs).
 pub fn Tree::went_down(self : Tree, at : Double, x? : Double = -1.0, y? : Double = -1.0) -> Unit {
   self.event(at, fn() {
-    let (count, _, _) = @signals.untracked(fn() { self.pressed_anywhere.get() })
+    let (count, _, _) = self.pressed_anywhere.untracked()
     self.pressed_anywhere.set((count + 1, x, y))
     self.held_anywhere.set(true)
   })
@@ -439,7 +439,7 @@ pub fn View::window_down_point(self : View) -> (Double, Double) {
 /// press let go without dragging, not taken by what it went down on), told after what it landed on took it: one change
 /// at that moment, told to what follows the window's taps (View::window_taps).
 pub fn Tree::tapped(self : Tree, at : Double) -> Unit {
-  self.event(at, fn() { self.tapped_anywhere.set(@signals.untracked(fn() { self.tapped_anywhere.get() }) + 1) })
+  self.event(at, fn() { self.tapped_anywhere.set(self.tapped_anywhere.untracked() + 1) })
 }
 
 ///|
@@ -481,7 +481,7 @@ pub fn Tree::words_again(self : Tree) -> Unit {
       self.look_marked_at(at)
     }
   }
-  self.words_redone.set(@signals.untracked(fn() { self.words_redone.get() }) + 1)
+  self.words_redone.set(self.words_redone.untracked() + 1)
 }
 
 ///|
@@ -556,7 +556,7 @@ pub fn[T : Eq] View::keeps_width(
       guard self.live() is Some(n) else { return }
       self.tree.measured_now()
       let w = n.flex.width
-      if w > @signals.untracked(fn() { widest.get() }) {
+      if w > widest.untracked() {
         widest.set(w)
       }
     })

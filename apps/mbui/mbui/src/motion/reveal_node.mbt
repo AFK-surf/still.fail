@@ -25,7 +25,7 @@ pub fn reveal_node(
     let held = room.box(fn(h) {
       h.shrink(Is(0.0)) |> ignore
       // (open as it is made: made with it, laid out in the same pass as what is round it)
-      if @signals.untracked(fn() { made.get() }) {
+      if made.untracked() {
         make(h)
       } else {
         // (its way this room's: at once)
@@ -36,7 +36,7 @@ pub fn reveal_node(
     room.reacts(open, fn(o) {
       // (how far it goes: what it holds is laid out tall at this moment, the way's length said once, not followed)
       let go = fn() { way.go(room, if o { 1.0 } else { 0.0 }, move().per_unit(held.laid_size().1)) }
-      if o && !@signals.untracked(fn() { made.get() }) {
+      if o && !made.untracked() {
         // (made as it first opens: its way set off at this moment once what this change makes is made, laid out tall
         // as it is then)
         made.set(true)
@@ -113,7 +113,7 @@ fn NodeWay::go(self : NodeWay, n : @view.View, to : Double, spec : Spec) -> Unit
   (self.due)()
   self.way.go(to, spec, at=n.cause_at())
   self.due = if self.way.ends_at() >= 0.0 {
-    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
     fn() {  }
   }
@@ -128,7 +128,7 @@ fn NodeWay::put_at(self : NodeWay, n : @view.View, from : Double, to : Double, s
   self.way.put(from)
   self.way.go(to, spec, at~, velocity=v)
   self.due = if self.way.ends_at() >= 0.0 {
-    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
     fn() {  }
   }
@@ -142,7 +142,7 @@ fn NodeWay::go_from(self : NodeWay, n : @view.View, from : Double, to : Double, 
   self.way.put(from)
   self.way.go(to, spec, at~)
   self.due = if self.way.ends_at() >= 0.0 {
-    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
     fn() {  }
   }

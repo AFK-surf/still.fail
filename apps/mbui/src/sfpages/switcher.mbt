@@ -203,7 +203,7 @@ pub fn finder_back() -> Bool {
 /// Enter: the line chosen opened where it is shown chosen (`close` first, where the frame closes the search as one
 /// opens).
 pub fn finder_enter(close : () -> Unit) -> Unit {
-  match finder.picks.get().get(@signals.untracked(fn() { finder.chosen.get() })) {
+  match finder.picks.get().get(finder.chosen.untracked()) {
     Some(k) if finder.chosen_shown => finder_go(finder.lines.get()[k], close)
     _ => ()
   }
@@ -491,7 +491,7 @@ pub fn finder_list(
   // (chosen by the keys where the screen has them: shown so, Enter opens it)
   finder.chosen_shown = f.keys
   // (read by the rows it shows in, not by what builds them: the rows alone built again as it changes)
-  let mut chosen = @signals.untracked(fn() { finder.chosen.get() })
+  let mut chosen = finder.chosen.untracked()
   if chosen >= picks.length() {
     chosen = if picks.length() > 0 { picks.length() - 1 } else { 0 }
   }

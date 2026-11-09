@@ -296,7 +296,7 @@ fn panel_centred_node(
           })
           // (a list in it said how tall it would be, or none did: told as that changes, what read it built again)
           let said = lists_of.get(keyed.serial).unwrap_or([]).length() > 0
-          if @signals.untracked(fn() { says.get() }) != said {
+          if says.untracked() != said {
             says.set(said)
           }
           words_look(c, held)

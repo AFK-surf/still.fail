@@ -129,7 +129,7 @@ pub fn pick_node(
         l.max_height(Is(Some(pick_list_most))).alpha(By(words_in)) |> ignore
         l.scrolls(list, slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(b) {
           b.each(fn() { found().map(fn(x) { x.key }) }, fn(k) { k }, fn(cell, k) {
-            let k = @signals.untracked(fn() { k.get() })
+            let k = k.untracked()
             match choices.iter().find_first(fn(x) { x.key == k }) {
               Some(x) => {
                 // (the last found reaching into the panel's padding at its foot, as menu_item's at_foot)

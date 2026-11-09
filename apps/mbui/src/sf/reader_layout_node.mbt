@@ -15,7 +15,7 @@ fn reader_layout_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
   let small = fn() { layout(root.window().0) is Small }
   let open = fn() { layout_open.get() is Some(_) }
   // (the reading whose panel it is, as it opens)
-  let reading = fn() { reading_for(@signals.untracked(fn() { layout_open.get() }).unwrap_or("")) }
+  let reading = fn() { reading_for(layout_open.untracked().unwrap_or("")) }
   let close = fn(r : Reading) { fn() { reader_panel_set(r, NoPanel) } }
   // docked at the window's right, under the bar (desk_panel's place)
   root.show(fn() { open() && !small() }, fn(o) {
@@ -97,7 +97,7 @@ fn reader_layout_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
     }),
   }
   let shut = fn() {
-    match @signals.untracked(fn() { layout_open.get() }) {
+    match layout_open.untracked() {
       Some(k) => reader_panel_set(reading_for(k), NoPanel)
       None => ()
     }

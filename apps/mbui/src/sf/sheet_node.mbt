@@ -71,7 +71,7 @@ fn sheet_node(
           Some(h) => pushed.set(push_of(h))
           None => ()
         }
-        let way = dmax(@signals.untracked(fn() { pushed.get() }), 1.0)
+        let way = dmax(pushed.untracked(), 1.0)
         recede.go_by(layer, if h is Some(_) { 1.0 } else { 0.0 }, @motion.move(points=way))
       })
       |> ignore
@@ -408,7 +408,7 @@ fn SheetRise::go(self : SheetRise, n : @view.View, to : Double) -> Unit {
     _ => ()
   }
   self.ways.push((at, to))
-  self.said.set(@signals.untracked(fn() { self.said.get() }) + 1)
+  self.said.set(self.said.untracked() + 1)
 }
 
 ///|

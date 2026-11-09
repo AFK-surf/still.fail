@@ -57,7 +57,7 @@ fn rs_figures_node(r : @view.View, core : Core, address : String, v : () -> Json
     @sf.style_node(ts, fn() { rs_tiles })
     ts.wraps(Is(Some(rs_flow_lines))) |> ignore
     ts.each(fn() { Array::makei((tiles().length() + 1) / 2, fn(k) { k }) }, fn(k) { k }, fn(pair, k) {
-      let k = @signals.untracked(fn() { k.get() })
+      let k = k.untracked()
       @sf.style_node(pair, fn() { rs_tile_pair }, in_row=true)
       // (never narrower than its tiles at their least, so a pair without the room on its line goes under the other)
       pair
@@ -242,7 +242,7 @@ fn rs_table_node(
     let lay = fn() { lay.get() }
     rs_heads_node(table, address, flat, columns, lay)
     table.each(rows, fn(r) { r }, fn(row, r) {
-      let r = @signals.untracked(fn() { r.get() })
+      let r = r.untracked()
       match r {
         RsGroup(key) => {
           let g = fn() { group_of(key) }
@@ -419,7 +419,7 @@ fn rs_heads_node(
       }
     })
     h.each(fn() { columns().mapi(fn(k, col) { (k, col.0) }) }, fn(c) { c.1 }, fn(cell, c) {
-      let col = @signals.untracked(fn() { c.get() }).1
+      let col = c.untracked().1
       let k = fn() { c.get().0 }
       let on = fn() { rs_shown_of(address).by == col }
       let name = fn() { @sf.t("web-main.resources.column." + col) }
@@ -453,7 +453,7 @@ fn rs_figures_node_of(
   plain : Bool,
 ) -> Unit {
   f.each(fn() { columns().mapi(fn(k, col) { (k, col) }) }, fn(c) { c.1.0 }, fn(cell, c) {
-    let key = @signals.untracked(fn() { c.get() }).1.0
+    let key = c.untracked().1.0
     let strong = fn() { !plain && key == by() }
     let shared = fn() { strong() && lay().share }
     @sf.style_node(cell, fn() { rs_column(lay(), c.get().0, under=lay().stacked, shared=shared()) }, in_row=true)
@@ -559,7 +559,7 @@ fn rs_foot_node(r : @view.View, v : () -> Json?, basis : Bool) -> Unit {
       })
     }
     f.each(fn() { notes().mapi(fn(i, _) { i }) }, fn(i) { i }, fn(x, i) {
-      let i = @signals.untracked(fn() { i.get() })
+      let i = i.untracked()
       @sf.words_node(x, fn() { notes().get(i).unwrap_or("") }, fn() { rs_foot_words }) |> ignore
     })
     if basis {

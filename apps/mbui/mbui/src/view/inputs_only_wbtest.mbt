@@ -66,7 +66,7 @@ test "what takes a finger found passing over what holds nothing that takes one i
     fn(root) {
       root.box(fn(list) {
         list.each(at_once=true, fn() { keys.get() }, fn(k) { k }, fn(row, k) {
-          let key = @signals.untracked(fn() { k.get() })
+          let key = k.untracked()
           row.height(Is(Some(40.0))) |> ignore
           // (a row held where its key is even, a button pressed in it where it is a multiple of three, words alone
           // in the rest)

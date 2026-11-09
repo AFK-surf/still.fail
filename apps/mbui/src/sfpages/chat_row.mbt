@@ -1233,7 +1233,7 @@ pub fn renaming() -> Bool {
 ///|
 /// Esc to a row's title being written in place: let be, the keyboard let go (`blur`). Whether there was one.
 pub fn rename_escape(blur : () -> Unit) -> Bool {
-  if @signals.untracked(fn() { row_renaming.get() }) == "" {
+  if row_renaming.untracked() == "" {
     return false
   }
   stop_rename()

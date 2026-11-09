@@ -46,7 +46,7 @@ pub fn web_peek_node(
   }
   let holder : Ref[@view.View?] = Ref(None)
   let set_open = fn(on : Bool) {
-    if on == @signals.untracked(fn() { open.get() }) {
+    if on == open.untracked() {
       return
     }
     if on && holder.val is None {
@@ -72,7 +72,7 @@ pub fn web_peek_node(
     if over && web {
       @sfbase.hold(src, scope, "linkPreview", link_params(station, href())) |> ignore
     }
-    let shows = @signals.untracked(fn() { open.get() })
+    let shows = open.untracked()
     if !web || !takes || shut.val {
       set_open(false)
     } else if shows {
@@ -136,7 +136,7 @@ fn peek_holder(
   let layer = peek_layer(row)
   let h = layer.box(fn(h) { h.over(Is(true)).over_all(Is(true)) |> ignore }).lives_with(row)
   h.on_key(fn(k) {
-    if k.code == @ui.key_escape && @signals.untracked(fn() { open.get() }) {
+    if k.code == @ui.key_escape && open.untracked() {
       escaped()
       open.set(false)
       true
@@ -482,7 +482,7 @@ fn change_card_node(parent : @view.View, v : () -> Json?, pr : Bool, copy : (@vi
         // are in a line)
         facts.wraps(Is(Some(@ui.Space::S2.px()))).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
         facts.each(fn() { peek_facts_of(v(), pr).mapi(fn(i, f) { (i, f) }) }, fn(f) { f }, fn(cell, item) {
-          peek_fact_node(cell, @signals.untracked(fn() { item.get() }).1)
+          peek_fact_node(cell, item.untracked().1)
         })
       })
       |> ignore

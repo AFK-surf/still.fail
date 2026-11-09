@@ -203,7 +203,7 @@ pub fn[P] nav_flat_view(
       fn(moving) { if moving { nav.settle() } },
     )
     s.each(at_once=true, fn() { seen.get().keys }, fn(k) { k }, fn(pv, serial) {
-      let k = @signals.untracked(fn() { serial.get() })
+      let k = serial.untracked()
       held[k] = true
       let entry = match nav.entry(k) {
         Some(e) => Some(e)

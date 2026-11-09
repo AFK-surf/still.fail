@@ -475,7 +475,7 @@ fn sa_form_node(
           let input = match input0 {
             Object(m) => {
               let m2 = Map::from_iter(m.iter())
-              let icon = @signals.untracked(fn() { d.icon.get() })
+              let icon = d.icon.untracked()
               if icon != "" {
                 m2["icon"] = str(icon)
               }
@@ -550,7 +550,7 @@ fn app_fields_node(
   let pick = fn(a : @sf.AppAvatar) {
     d.picked.set(a.id)
     d.upload.set("")
-    let bg = if @signals.untracked(fn() { d.colour_set.get() }) { @signals.untracked(fn() { d.color.get() }) } else { a.bg }
+    let bg = if d.colour_set.untracked() { d.color.untracked() } else { a.bg }
     colour(bg)
     draw(a, bg)
   }
@@ -569,18 +569,18 @@ fn app_fields_node(
     r.reacts(state, fn(s) {
       match (s, @signals.untracked(read)) {
         (1, Some(PixelsRead(w, h, pixels))) => {
-          let own = @signals.untracked(fn() { d.upload.get() }) != ""
+          let own = d.upload.untracked() != ""
           d.reading.set(("", 0, ""))
           if own {
             let icon = @sf.app_own_icon(w, h, pixels)
             let edge = @pixels.edge_colour(@sf.app_icon_px, @sf.app_icon_px, icon.pixels())
             d.upload_bg.set(edge)
             sa_icon_made(d, icon)
-            if !@signals.untracked(fn() { d.colour_set.get() }) {
+            if !d.colour_set.untracked() {
               colour(edge)
             }
           } else {
-            match find(@signals.untracked(fn() { d.picked.get() })) {
+            match find(d.picked.untracked()) {
               Some(a) =>
                 match @sf.app_avatar_icon(a, bg, w, h, pixels) {
                   Some(icon) => sa_icon_made(d, icon)
@@ -591,7 +591,7 @@ fn app_fields_node(
           }
         }
         (2, _) => {
-          let own = @signals.untracked(fn() { d.upload.get() }) != ""
+          let own = d.upload.untracked() != ""
           sa_icon_failed(d, @sf.t(if own { "web-pages.slackApp.readImageFailed" } else { "web-pages.slackApp.drawFailed" }))
         }
         _ => ()
@@ -624,11 +624,11 @@ fn app_fields_node(
   }
   // (typed in its colour's field: set by hand, what was picked drawn on it)
   k.reacts(fn() { d.hex_field.text().trim(chars=" ").to_owned() }, fn(typed) {
-    if typed != @signals.untracked(fn() { d.color.get() }) {
+    if typed != d.color.untracked() {
       d.color.set(typed)
       d.colour_set.set(true)
       if @sf.hex_color(typed) is Some(_) {
-        match find(@signals.untracked(fn() { d.picked.get() })) {
+        match find(d.picked.untracked()) {
           Some(a) => draw(a, typed)
           None => ()
         }
@@ -707,7 +707,7 @@ fn app_fields_node(
             let bg = @signals.untracked(recommended)
             d.colour_set.set(false)
             colour(bg)
-            match find(@signals.untracked(fn() { d.picked.get() })) {
+            match find(d.picked.untracked()) {
               Some(a) => draw(a, bg)
               None => ()
             }
@@ -742,7 +742,7 @@ fn sa_avatar_picker_node(
       @sf.style_node(r, fn() { sa_picker_row })
       r.wraps(Is(Some(sa_tile_gap))) |> ignore
       r.each(fn() { all().map(fn(a) { a.id }) }, fn(id) { id }, fn(t, id) {
-        let id = @signals.untracked(fn() { id.get() })
+        let id = id.untracked()
         guard @signals.untracked(all).iter().find_first(fn(a) { a.id == id }) is Some(a) else { return }
         let label = if a.label.has_prefix("android-") { @sf.t(a.label) } else { a.label }
         let tile = t.box(fn(b) {
@@ -814,7 +814,7 @@ fn sa_permissions_node(k : @view.View, d : SaDraft, sections : () -> Array[Json]
         let said = fn() { @sf.t("web-pages.slackApp.permissions", args=[("on", on().to_string()), ("all", every().length().to_string())]) }
         l.box(fn(s) {
           @sf.style_node(s, fn() { sa_perms_summary }, in_row=true)
-          @sf.presses_node(s, fn() { d.perms.set(!@signals.untracked(fn() { d.perms.get() })) })
+          @sf.presses_node(s, fn() { d.perms.set(!d.perms.untracked()) })
           s.says(By(fn() { Some(@view.said(Button, label=said(), expanded=d.perms.get())) })) |> ignore
           @sf.icon_node(s, "chevron-right", cd_icon, By(fn() { @sf.theme().p.muted }), name_now=fn() {
             if d.perms.get() {

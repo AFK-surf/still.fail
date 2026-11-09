@@ -317,7 +317,7 @@ fn tape_made(
             }
             p.owns(fn() {
               let tb = tape_bar_of(k)
-              if @signals.untracked(fn() { tb.page_actions.get() }) is Some((_, _, g)) && g == gen {
+              if tb.page_actions.untracked() is Some((_, _, g)) && g == gen {
                 tb.page_actions.set(None)
               }
             })

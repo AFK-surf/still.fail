@@ -77,7 +77,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // then, not every key hashed each time one is told)
   let heights_changed : Array[K] = []
   let told : @signals.Signal[Int] = @signals.signal(0)
-  let tell = fn() { told.set(@signals.untracked(fn() { told.get() }) + 1) }
+  let tell = fn() { told.set(told.untracked() + 1) }
   // (the same, each block's own, by its key, while it is made: what its height reads, not all of them read again as
   // one is told, n for each told)
   let tall : Map[K, @signals.Signal[Double?]] = Map([])
@@ -300,8 +300,8 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     Some(p) => {
       p.laid_again = laid_again
       p.glide = fn(ask) {
-        let all = @signals.untracked(fn() { laid.get() })
-        let vh = match @signals.untracked(fn() { s.seen.get() }) {
+        let all = laid.untracked()
+        let vh = match s.seen.untracked() {
           Some((_, vh)) => vh
           None => 0.0
         }
@@ -404,7 +404,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   }, fn(now) {
     let (out, _) = now
     // (as the column is laid out: its fill shows what shows, by what it measures; never laid out yet, nothing shows)
-    guard self.tree.rooming != self.at && @signals.untracked(fn() { s.seen.get() }) is Some((_, vh)) else { return }
+    guard self.tree.rooming != self.at && s.seen.untracked() is Some((_, vh)) else { return }
     // (put at its foot: where that is the column's layout says, its fill making what shows there)
     if s.at_foot() {
       if out {
@@ -413,7 +413,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       return
     }
     let x = @signals.untracked(at)
-    let all = @signals.untracked(fn() { laid.get() })
+    let all = laid.untracked()
     let now = []
     let mut i = first_past(all, x)
     while i < all.length() && all[i].top < x + vh {
@@ -464,7 +464,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     // (blocks made and measured as it is laid out, at the width it is laid out at: not for a room it is only measured
     // in first, which would count them at another)
-    guard performing && @signals.untracked(fn() { room_w.get() }) is Some(w) else {
+    guard performing && room_w.untracked() is Some(w) else {
       self.tree.room_bindings_run()
       return
     }
@@ -472,7 +472,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let mut follows_foot = @signals.untracked(follows) && s.at_foot()
     // (the anchor as the scroll moved it since; none yet, where the scroll is)
     let start = {
-      let all = @signals.untracked(fn() { laid.get() })
+      let all = laid.untracked()
       let fresh = fn() {
         let i = first_past(all, x)
         if i < all.length() {
@@ -496,7 +496,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // before what comes to show is measured; not moved, the one it had, whatever came or went over it)
     match anchor_x.val {
       Some(was) if (x - was).abs() > 0.000001 => {
-        let all = @signals.untracked(fn() { laid.get() })
+        let all = laid.untracked()
         if all.length() > 0 {
           let i = ai.min(all.length() - 1).max(0)
           let at_now = all[i].top + aoff
@@ -570,7 +570,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let measured : Map[K, Bool] = Map([])
     while again {
       again = false
-      let all = @signals.untracked(fn() { laid.get() })
+      let all = laid.untracked()
       vh = shows().unwrap_or(0.0)
       if all.length() == 0 {
         show_only([])
@@ -636,7 +636,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let live = blocks.filter(fn(b) { b.0.alive() })
     blocks.clear()
     blocks.append(live)
-    let all = @signals.untracked(fn() { laid.get() })
+    let all = laid.untracked()
     // (the anchor from now: the first that holds what shows, how far down its top the top of what shows is; what is
     // measured anew over it from now on moving none of what shows)
     anchor.val = if all.length() > 0 {
@@ -677,7 +677,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let out = self.scrolls(s, slop?=slop, bar?=bar, bar_clear~, fn(held) {
     held.padding(By(fn() { (0.0, 0.0, 0.0, foot_room() + s.tuck_room.get()) })) |> ignore
     held.each(keys, fn(k) { k }, fn(slot, item) {
-      let k = @signals.untracked(fn() { item.get() })
+      let k = item.untracked()
       let cell = @signals.signal(shown_now.contains(k), same=fn(a, b) { a == b })
       shown[k] = cell
       slot.owns(fn() { if shown.get(k) is Some(c) && physical_equal(c, cell) { shown.remove(k) } }) |> ignore
@@ -703,7 +703,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         guard showing.contains(k) else { return false }
         match blocks.iter().find_first(fn(b) { b.0.alive() && @signals.untracked(b.1) == k }) {
           Some((v, _)) =>
-            match @signals.untracked(fn() { room_w.get() }) {
+            match room_w.untracked() {
               // (measured as the column's fill measures it, against how tall it is counted: as it was measured, else
               // `est`; the same, its slot as it is, nothing laid out again)
               Some(w) => {
@@ -741,7 +741,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                 // was; else the last put by)
                 let taken = match spare.get(kind) {
                   Some(all) if all.length() > 0 =>
-                    match all.search_by(fn(b) { @signals.untracked(fn() { b.1.get() }) == k }) {
+                    match all.search_by(fn(b) { b.1.untracked() == k }) {
                       Some(i) => Some(all.remove(i))
                       None => all.pop()
                     }

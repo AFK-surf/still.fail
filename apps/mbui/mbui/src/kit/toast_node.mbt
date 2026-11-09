@@ -82,13 +82,13 @@ fn hold_while(n : @view.View, held : @signals.Signal[Int], on : () -> Bool) -> U
     if h != had.val {
       had.val = h
       let d = if h { 1 } else { -1 }
-      held.set(@signals.untracked(fn() { held.get() }) + d)
+      held.set(held.untracked() + d)
     }
   })
   n.owns(fn() {
     if had.val {
       had.val = false
-      held.set(@signals.untracked(fn() { held.get() }) - 1)
+      held.set(held.untracked() - 1)
     }
   })
   |> ignore
@@ -241,7 +241,7 @@ fn toast_lives(
   }
   // (going out from this moment: its time let go; told once, its own)
   let leave = fn(f : (String) -> Unit) {
-    if @signals.untracked(fn() { live.get() }) {
+    if live.untracked() {
       live.set(false)
       stop(row.cause_at())
       f(id)
@@ -403,7 +403,7 @@ fn ToastWay::go(self : ToastWay, n : @view.View, to : Double, spec : @motion.Spe
   (self.due)()
   self.way.go(to, spec, at=n.cause_at())
   self.due = if self.way.ends_at() >= 0.0 {
-    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
     fn() {  }
   }

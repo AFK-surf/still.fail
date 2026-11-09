@@ -129,7 +129,7 @@ pub let recovery_words_turned : @signals.Signal[Int] = @signals.signal(0)
 
 ///|
 pub fn recovery_words_changed() -> Unit {
-  recovery_words_turned.set(@signals.untracked(fn() { recovery_words_turned.get() }) + 1)
+  recovery_words_turned.set(recovery_words_turned.untracked() + 1)
 }
 
 ///|

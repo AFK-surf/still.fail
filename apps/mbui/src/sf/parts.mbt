@@ -1451,7 +1451,7 @@ fn menu_is(key : String) -> Bool {
 ///|
 /// The menu open now ("" none), as it is, read by nothing.
 fn menu_open_peek() -> String {
-  @signals.untracked(fn() { menu_open.get() })
+  menu_open.untracked()
 }
 
 ///|

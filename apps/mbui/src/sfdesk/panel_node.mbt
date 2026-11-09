@@ -57,7 +57,7 @@ fn side_slides(n : @view.View, src : Source, key : String, open : Bool) -> Unit 
   let target = if open { @signals.untracked(fn() { side_whole(src, n) }) } else { 0.0 }
   let was = @signals.untracked(fn() { panel_own.was.get(key) })
   match was {
-    Some(was) if was != open && @signals.untracked(fn() { panel_own.asked.get() }) == key => {
+    Some(was) if was != open && panel_own.asked.untracked() == key => {
       panel_own.asked.set("")
       way.go(target, @motion.move(), at=n.cause_at())
       if !open {

@@ -130,7 +130,7 @@ fn Ctx::list_hand_move(self : Ctx, at : Double) -> String {
   }
   if st.pending == 0.0 || st.at_end || st.glide || st.fling != 0 || st.vel != 0.0 ||
     st.easing() || st.over_state != 0 || st.edge_v != 0.0 || st.sizes_rest() > at ||
-    @signals.untracked(fn() { st.moving_said.get() }) != (st.held || st.moving() || st.glide) {
+    st.moving_said.untracked() != (st.held || st.moving() || st.glide) {
     return "moving"
   }
   let mut li = -1

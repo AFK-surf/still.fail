@@ -176,7 +176,7 @@ fn system_said(json : String) -> Unit {
       NavTapped(id) => {
         let at = @hostapi.nav_tapped_at
         nav_tapped_place.set((at[0], at[1], at[2], at[3]))
-        let taps = @signals.untracked(fn() { nav_tapped.get() }).copy()
+        let taps = nav_tapped.untracked().copy()
         taps.push(id)
         nav_tapped.set(taps)
       }

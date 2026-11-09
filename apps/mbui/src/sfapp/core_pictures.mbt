@@ -48,7 +48,7 @@ pub fn core_pictures(ask : (String, (Bytes?) -> Unit) -> Unit) -> (String, Int) 
         let asking = Ref(true)
         let told = fn() {
           let s = answered(url)
-          s.set(@signals.untracked(fn() { s.get() }) + 1)
+          s.set(s.untracked() + 1)
         }
         ask(url, fn(bytes) {
           match bytes {

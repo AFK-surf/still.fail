@@ -229,8 +229,8 @@ pub fn Scroll::past(self : Scroll, tree : Tree) -> Double {
 /// What shows past an end at `t` held where it shows (a finger come down on it catches it there; what its fling undid,
 /// what its way back brought it to), its way back called off; held already, left as it is.
 fn Scroll::past_held(self : Scroll, t : Double) -> Unit {
-  let flung = @signals.untracked(fn() { self.fling.get() })
-  let was = @signals.untracked(fn() { self.past.get() })
+  let flung = self.fling.untracked()
+  let was = self.past.untracked()
   if flung is None && was is (None | Some({ back: None, .. })) {
     return
   }
@@ -260,7 +260,7 @@ fn Scroll::dragged(self : Scroll, v : View, t : Double, d : Double) -> Unit {
   let (feel, density) = (v.tree.list_feel)()
   let h = dmax((self.tall)(), 1.0)
   let mut d = d
-  match @signals.untracked(fn() { self.past.get() }) {
+  match self.past.untracked() {
     Some(p) if (p.edge > 0 && d > 0.0) || (p.edge < 0 && d < 0.0) => {
       let used = if p.feel == Android { dmin(d.abs(), p.over * h) } else { dmin(d.abs(), p.over) }
       let left = if p.feel == Android { dmax(0.0, p.over - d.abs() / h) } else { p.over - used }
@@ -277,12 +277,12 @@ fn Scroll::dragged(self : Scroll, v : View, t : Double, d : Double) -> Unit {
   }
   let want = x + d
   self.moved(t, d) |> ignore
-  let to = @signals.untracked(fn() { self.x.get() })
+  let to = self.x.untracked()
   let by = (want - to).abs()
   // (Compose leaves out less than half a pixel)
   if feel != Desktop && want != to && by * density > 0.5 {
     let edge = if want < to { 1 } else { -1 }
-    let over = match @signals.untracked(fn() { self.past.get() }) {
+    let over = match self.past.untracked() {
       Some(p) if p.edge == edge => p.over
       _ => 0.0
     }
@@ -300,7 +300,7 @@ fn Scroll::let_go(self : Scroll, v : View, t : Double) -> Unit {
   let speed = self.hand_v
   let (feel, density) = (v.tree.list_feel)()
   let h = dmax((self.tall)(), 1.0)
-  let past = @signals.untracked(fn() { self.past.get() })
+  let past = self.past.untracked()
   let way : ListWay = { feel, dist: 0.0, dur: 0.0, eats: 0.0, over: 0.0, edge: 0, h, px: h * density, hit: None, same: 0.0 }
   match feel {
     Android => {
@@ -463,7 +463,7 @@ fn Scroll::past_back(self : Scroll, v : View, p : Past, v0 : Double, t : Double)
 /// of a stretch it had not undone yet going back from there, as nothing holds it), as an old view's list's (ui's
 /// ListState::stop); what shows past an end going back left to go on.
 fn Scroll::wheel_stops(self : Scroll, v : View, t : Double) -> Unit {
-  guard @signals.untracked(fn() { self.fling.get() }) is Some(f) else { return }
+  guard self.fling.untracked() is Some(f) else { return }
   match f.way {
     // (met its end by now: at rest there, what it brought going on back, at rest as it said)
     Some({ hit: Some(p), .. }) if t >= f.end_t => {
@@ -489,7 +489,7 @@ fn Scroll::wheel_stops(self : Scroll, v : View, t : Double) -> Unit {
 /// before carrying on into it from where it is and as fast as it moves then, as an old view's list's (ui's
 /// Ctx::ease_list); whether it moves it (under way already, or not at its end that way: ListState::wheel_moves).
 fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
-  let (x0, total, v0) = match @signals.untracked(fn() { self.notch.get() }) {
+  let (x0, total, v0) = match self.notch.untracked() {
     Some(n) => {
       let (came, speed) = ease_state(n.total, n.v0, t - n.t0)
       (dclamp(n.x0 + came, 0.0, self.most()), n.total - came + d, speed)
@@ -539,8 +539,8 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
   ignore(t)
   self.settle_off = v.at_moment(rest, fn() {
     self.settle_off = fn() {  }
-    let flung = @signals.untracked(fn() { self.fling.get() })
-    let notch = @signals.untracked(fn() { self.notch.get() })
+    let flung = self.fling.untracked()
+    let notch = self.notch.untracked()
     if flung is Some(_) || notch is Some(_) {
       self.scrolled_at(rest)
     }
@@ -561,7 +561,7 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
 /// at this very moment), meets it where it is now, worked out again from where it set out (rows below measured anew,
 /// come or gone; what grew above, Scroll::grew_above), at rest then.
 fn Scroll::foot_moved(self : Scroll, v : View, t : Double, most : Double, laid? : Bool = false) -> Unit {
-  guard @signals.untracked(fn() { self.fling.get() }) is Some({ way: Some(w), .. } as f) &&
+  guard self.fling.untracked() is Some({ way: Some(w), .. } as f) &&
     f.v0 > 0.0 &&
     t <= f.end_t &&
     (laid || f.till != most) else {

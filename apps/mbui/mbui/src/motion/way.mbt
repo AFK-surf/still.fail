@@ -123,7 +123,7 @@ pub fn Way::go(
   self.mover.changed()
   // (who it is for the performance record: who sent it, not where to)
   self.mover.told_as("a Way", loc)
-  self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
+  self.told.set(self.told.untracked() + 1)
 }
 
 ///|
@@ -140,7 +140,7 @@ pub fn Way::put(self : Way, v : Double) -> Unit {
   self.spec = Snap(0.0)
   self.start = 0.0
   self.dur = 0.0
-  self.told.set(@signals.untracked(fn() { self.told.get() }) + 1)
+  self.told.set(self.told.untracked() + 1)
 }
 
 ///|

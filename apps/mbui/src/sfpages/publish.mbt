@@ -155,7 +155,7 @@ pub fn publish_close() -> Unit {
 ///|
 /// Whether its page is open (not closed, whether or not it has gone yet).
 pub fn publish_open() -> Bool {
-  @signals.untracked(fn() { publishing.of.get() }) is Some(_)
+  publishing.of.untracked() is Some(_)
 }
 
 ///|
@@ -408,7 +408,7 @@ fn publish_page(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double, look : 
   // its all the same then)
   let list_key = "publish/page/" + r.station + "/" + thread.to_string()
   c.with_dismissed(fn(_) { publish_close() }, fn() {
-    let busy = fn() { @signals.untracked(fn() { publishing.busy.get() }) }
+    let busy = fn() { publishing.busy.untracked() }
     c.overlay("publish", modal=true, stays=busy, scrim=@sf.alpha(@sf.theme().p.bg, look.alpha), inert=leaving, fn() {
       let list_node = Ref(-1)
       let page = c.box(style=publish_fill, fn() {
@@ -525,7 +525,7 @@ fn publish_native(c : @ui.Ctx, p : Json?) -> Unit {
   }
   let busy = publishing.busy.get()
   @sf.native_over_act("close", @sf.t("common.close"), "close", fn() {
-    if !@signals.untracked(fn() { publishing.busy.get() }) {
+    if !publishing.busy.untracked() {
       publish_close()
     }
   }, lead=true)

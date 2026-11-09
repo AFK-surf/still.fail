@@ -398,7 +398,7 @@ pub fn Media::is_sideways(self : Media) -> Bool {
 ///|
 /// Upright again (back while sideways).
 pub fn Media::upright(self : Media) -> Unit {
-  if @signals.untracked(fn() { self.sideways.get() }) {
+  if self.sideways.untracked() {
     self.sideways.set(false)
     @hostapi.set_sideways(false)
   }
@@ -618,7 +618,7 @@ pub fn Media::toggle_fill(self : Media) -> Unit {
 ///|
 /// Turned sideways, or upright again.
 pub fn Media::toggle_sideways(self : Media) -> Unit {
-  let on = !@signals.untracked(fn() { self.sideways.get() })
+  let on = !self.sideways.untracked()
   self.sideways.set(on)
   @hostapi.set_sideways(on)
 }

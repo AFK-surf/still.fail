@@ -320,7 +320,7 @@ pub fn Tree::keys_ended(self : Tree) -> KeysEnd {
 /// The sequence under way ended, `why`; nothing where none is.
 fn Tree::keys_end(self : Tree, why : KeysEnd) -> Unit {
   let book = self.keyed
-  if @signals.untracked(fn() { book.pending.get() }).is_empty() {
+  if book.pending.untracked().is_empty() {
     return
   }
   (book.pending_off)()
@@ -443,7 +443,7 @@ pub fn Tree::stroke(
     let book = self.keyed
     let s : Stroke = { code, mods }
     // (begun from another focus than this key's: ended as it moved, the old view's focus too)
-    let under = @signals.untracked(fn() { book.pending.get() })
+    let under = book.pending.untracked()
     if !under.is_empty() && book.pending_from != from {
       self.keys_end(FocusMoved)
     }
@@ -456,7 +456,7 @@ pub fn Tree::stroke(
 /// Tree::stroke's, in its event.
 fn Tree::stroke_now(self : Tree, s : Stroke, t : Double, from : NodeId?, facts : Array[String]) -> Bool {
   let book = self.keyed
-  let under = @signals.untracked(fn() { book.pending.get() })
+  let under = book.pending.untracked()
   let keys = [..under, s]
   let nodes = self.action_nodes(from)
   let bindings = book.map.bindings

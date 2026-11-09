@@ -764,7 +764,7 @@ fn login_active_node(card : @view.View, core : Core, station : String, l : () ->
     let shows = @signals.computed(fn(_) { login_shows(core, station, l(), relay()) })
     let shows = fn() { shows.get() }
     x.each(fn() { shows().said.mapi(fn(i, _) { i }) }, fn(i) { i }, fn(r, i) {
-      let i = @signals.untracked(fn() { i.get() })
+      let i = i.untracked()
       login_said_node(r, fn() { shows().said.get(i).unwrap_or(said_line("")) })
     })
     x.show(fn() { shows().code != "" }, fn(r) { login_code_node(r, core, fn() { shows().code }) })

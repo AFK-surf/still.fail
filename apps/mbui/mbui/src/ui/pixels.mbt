@@ -74,12 +74,12 @@ pub fn tree_image_pixels(v : @view.View, src : String, px : Int) -> () -> ImageP
     }
   }
   let got : @signals.Signal[ImagePixels?] = @signals.signal(asked())
-  if @signals.untracked(fn() { got.get() }) is None {
+  if got.untracked() is None {
     let bytes = image_said(src).bytes
     let state = decode_state(src, bucket(px.to_double()))
     // (asked again as what it waits on comes to hold: its bytes here, its decode to this size done or failed)
     v.reacts(fn() { (bytes.get(), state.get()) }, fn(_) {
-      if @signals.untracked(fn() { got.get() }) is None {
+      if got.untracked() is None {
         match asked() {
           None => ()
           p => got.set(p)

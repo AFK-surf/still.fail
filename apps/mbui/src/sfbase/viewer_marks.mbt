@@ -312,7 +312,7 @@ let marks_told : @signals.Signal[Int] = @signals.signal(0)
 ///|
 /// Marking changed (marks_told).
 pub fn marks_changed() -> Unit {
-  marks_told.set(@signals.untracked(fn() { marks_told.get() }) + 1)
+  marks_told.set(marks_told.untracked() + 1)
 }
 
 ///|

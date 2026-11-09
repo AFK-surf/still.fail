@@ -69,7 +69,7 @@ fn scroll_case() -> ScrollCase {
             |> ignore
             held.each(at_once=true, fn() { Array::makei(rows.get(), fn(i) { i }) }, fn(i) { i }, fn(r, i) {
               r.width(Is(Some(300.0))).height(Is(Some(40.0))) |> ignore
-              if @signals.untracked(fn() { i.get() }) == 8 {
+              if i.untracked() == 8 {
                 r.focusable(Is(true)) |> ignore
                 focus.val = Some(r.id())
               }

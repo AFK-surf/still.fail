@@ -976,7 +976,7 @@ let answers_waiting : Map[Int64, Bool] = Map::new()
 /// An answer of `kind` came (the host's event; under a Tester, a frame: its fake host's answers come by the frame).
 fn answer_told(kind : Int) -> Unit {
   let s = answers_told[kind]
-  s.set(@signals.untracked(fn() { s.get() }) + 1)
+  s.set(s.untracked() + 1)
 }
 
 ///|

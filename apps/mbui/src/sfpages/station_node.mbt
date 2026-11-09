@@ -712,7 +712,7 @@ fn station_logins_node(b : @view.View, core : Core, station : String, online : (
         k.box(fn(cards) {
           @sf.style_node(cards, fn() { lg_cards })
           cards.each(fn() { active().map(fn(l) { text(Some(l), "id") }) }, fn(id) { id }, fn(c, id) {
-            login_card_node(c, core, station, @signals.untracked(fn() { id.get() }), place="station")
+            login_card_node(c, core, station, id.untracked(), place="station")
           })
         })
         |> ignore
@@ -735,7 +735,7 @@ fn station_logins_node(b : @view.View, core : Core, station : String, online : (
           }
           let tool_of = fn(name : String) { tools().iter().find_first(fn(t) { text(Some(t), "name") == name }) }
           g.each(rows, fn(r) { r }, fn(row, r) {
-            let (name, at) = @signals.untracked(fn() { r.get() })
+            let (name, at) = r.untracked()
             if at < 0 {
               login_tool_row_node(row, station, name, fn() { tool_of(name) })
             } else {
@@ -958,7 +958,7 @@ fn station_env_editor_node(k : @view.View, core : Core, address : String, field_
       Some(words) => {
         draft.source = now
         known.set(now)
-        if @signals.untracked(fn() { draft.pending.get() }) == Some(words) {
+        if draft.pending.untracked() == Some(words) {
           draft.pending.set(None)
           draft.sent = None
         }
@@ -1050,7 +1050,7 @@ fn station_env_editor_node(k : @view.View, core : Core, address : String, field_
           @signals.start_batch()
           draft.pending.set(None)
           draft.sent = None
-          draft.reset.set(@signals.untracked(fn() { draft.reset.get() }) + 1)
+          draft.reset.set(draft.reset.untracked() + 1)
           @signals.end_batch()
           @settings.act(
             core,
@@ -1238,7 +1238,7 @@ fn station_network_node(b : @view.View, core : Core, address : String, network :
   let open = @signals.signal(@settings.station_network_open.get(address).unwrap_or(false))
   @sf.group_node(b, fn(g) {
     @sf.link_row_node(g, fn() { @sf.t("web-pages.stations.network.advanced") }, fn() {
-      let now = !@signals.untracked(fn() { open.get() })
+      let now = !open.untracked()
       @settings.station_network_open[address] = now
       open.set(now)
     }, folds=fn() { open.get() })
@@ -1326,7 +1326,7 @@ fn software_list_node(
 ) -> Unit {
   let batch = fn() { is_doing(core, ["software.updateAll"], [("station", station)]) }
   g.each(updates, fn(u) { text(Some(u), "id") }, fn(row, u) {
-    let id = text(Some(@signals.untracked(fn() { u.get() })), "id")
+    let id = text(Some(u.untracked()), "id")
     software_row_node(row, core, station, fn() { Some(u.get()) }, manager, fn() {
       batch() || is_doing(core, ["software.update"], [("station", station), ("id", id)])
     }, beta, tips)

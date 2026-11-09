@@ -1211,7 +1211,7 @@ fn screen_layout(width : Double) -> Layout {
 /// too), keyboard and mouse's on a computer, its window narrow or not; its colours one palette on every screen, light
 /// or dark as set: call at the top of a view.
 pub fn begin(_c : @ui.Ctx) -> Theme {
-  let dark = @signals.untracked(fn() { dark_set.get() }).unwrap_or(false)
+  let dark = dark_set.untracked().unwrap_or(false)
   current.val = theme_of(dark)
   current.val
 }
@@ -1460,7 +1460,7 @@ pub fn set_accent(key : String) -> Unit {
 ///|
 /// The colour theme drawn now (accent_set's).
 fn accent_now() -> AccentTone {
-  tone_of(@signals.untracked(fn() { accent_set.get() })).unwrap_or(accents[0])
+  tone_of(accent_set.untracked()).unwrap_or(accents[0])
 }
 
 ///|
@@ -1504,7 +1504,7 @@ fn accented(p : Palette, dark : Bool, key : String) -> Palette {
 /// is asked, not only as a frame begins.
 fn theme_of(dark : Bool) -> Theme {
   let touch = native_input() is Finger
-  let accent = @signals.untracked(fn() { accent_set.get() })
+  let accent = accent_set.untracked()
   // (one of each: the same whenever it is asked, what is made of it kept as long as it is)
   match themes_made.get((dark, touch, accent)) {
     Some(t) => return t

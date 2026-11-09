@@ -123,7 +123,7 @@ fn steps_list_node(
     let loaded = items(@signals.untracked(fn() { src.topic("history", params).get().value }), "items")
     match loaded.search_by(fn(i) { entries_of(Some(i)).map(fn(x) { x.0 <= e && e <= x.1 }).unwrap_or(false) }) {
       Some(at) => {
-        if @signals.untracked(fn() { steps_own.only_io.get() }) && flag(loaded.get(at), "work") {
+        if steps_own.only_io.untracked() && flag(loaded.get(at), "work") {
           steps_own.only_io.set(false)
         }
         let ik = text(loaded.get(at), "key")
@@ -322,7 +322,7 @@ fn steps_seconds(v : @view.View, src : Source, since : Double, till? : Double) -
     }
     let into = if gone > 0.0 { gone - (gone / second_ms).floor() * second_ms } else { gone }
     v.at_moment(v.logic_at() + second_ms - into, later=true, fn() {
-      tick.set(@signals.untracked(fn() { tick.get() }) + 1)
+      tick.set(tick.untracked() + 1)
       plan()
     })
     |> ignore
@@ -1603,7 +1603,7 @@ pub fn history_open(keys : Array[String]) -> Unit {
 ///|
 /// The item last gone to (a link's entry), its history's list and its key.
 pub fn history_marked() -> (String, String) {
-  @signals.untracked(fn() { steps_own.marked.get() })
+  steps_own.marked.untracked()
 }
 
 ///|

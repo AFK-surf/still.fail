@@ -227,7 +227,7 @@ pub fn View::words_said(self : View) -> Int {
 /// How its words are set said again (words_said), told what follows it.
 fn View::words_told(self : View) -> Unit {
   match self.live() {
-    Some({ said_cell: Some(c), .. }) => c.set(@signals.untracked(fn() { c.get() }) + 1)
+    Some({ said_cell: Some(c), .. }) => c.set(c.untracked() + 1)
     _ => ()
   }
 }

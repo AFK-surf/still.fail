@@ -1021,7 +1021,7 @@ fn desk_player(
   let full = fn() {
     // (beside the system's bars, an iPhone Duo's: the window filled, the bars put away: native_full)
     if native_on() {
-      native_full.set(!@signals.untracked(fn() { native_full.get() }))
+      native_full.set(!native_full.untracked())
       p.wake()
       return
     }

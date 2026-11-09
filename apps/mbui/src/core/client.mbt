@@ -745,7 +745,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
           r => r.stringify()
         },
       )
-      self.fatal_said.set(@signals.untracked(fn() { self.fatal_said.get() }) + 1)
+      self.fatal_said.set(self.fatal_said.untracked() + 1)
       // What was asked of this core is not answered by the next one.
       let calls = self.calls.to_array()
       self.calls.clear()
@@ -931,7 +931,7 @@ pub fn Client::restarted(self : Client) -> Unit {
   @signals.start_batch()
   self.generation += 1
   self.fatal = None
-  self.fatal_said.set(@signals.untracked(fn() { self.fatal_said.get() }) + 1)
+  self.fatal_said.set(self.fatal_said.untracked() + 1)
   let err : Json = { "code": "core_restarted", "message": Json::string(restarted_text.val) }
   for c in calls {
     self.end_call_wait(c.0)

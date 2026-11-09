@@ -164,7 +164,7 @@ fn text_arrive() -> Unit {
       // (and the words laid out in what it measured before, a text's or a paragraph's layout kept on its node, laid out
       // again: a page's face is loaded after it is given (words_forgotten then), its words laid out till it is in the
       // place's face, else kept with those widths and drawn in the face, 「s till.fa il」)
-      words_shaped_in.set(@signals.untracked(fn() { words_shaped_in.get() }) + 1)
+      words_shaped_in.set(words_shaped_in.untracked() + 1)
       view_words_rescaled()
     }
   }
