@@ -2536,6 +2536,26 @@ test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_nothing_under
   assert.deepEqual(v.messages.map((m: J) => [m.archive, m.archiveCheck]), [[undefined, undefined], [undefined, undefined], [undefined, undefined]]);
 });
 
+test("a_done_chats_page_not_read_yet_says_where_it_stands_from_its_first_value_not_once_its_read_is_told", async () => {
+  // Opening a chat only raises what is brought first (the user, 2026-11-09): its page is what it will be once read, at
+  // once, not its end line and archive a moment after, as the read the opening told comes back.
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: [entry(1, "看看"), { ...entry(2, "好了"), authorKind: "agent", author: "k", declared: "final", ending: "all_done" }], thread: null });
+  const unread = { ...row("k", now), thread: 7, unread: true };
+  unread.agents[0].lastTurn = { kind: "message", declared: "final", ending: "all_done", outcome: "completed", startedAt: 1, endedAt: 1 };
+  t.set(rows("ws/a"), [unread]);
+  await t.read(u, 1);
+  const v = u.value;
+  assert.deepEqual([v.stateText, v.stateLead, v.archivable], ["已完成", "done", true]);
+  // (the list's row is as it was: not read, nothing said for it yet)
+  assert.equal(unread.unread, true);
+});
+
 test("a_chats_page_says_at_the_end_of_its_messages_what_its_agent_needs_as_its_row_does", async () => {
   const t = setup();
   const u = ui();
