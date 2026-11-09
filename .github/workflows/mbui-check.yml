@@ -328,7 +328,10 @@ jobs:
           - { group: 1/4, fps: "24 7" }
           - { group: 2/4, fps: "24 7" }
           - { group: 3/4, fps: "24 7" }
-          - { group: 4/4, fps: "24 7" }
+          # (the fourth's at 24 and at 7 a runner each: one after the other 275 s of its runs, 289 s of its five minutes on
+          # a branch, 42649543160, 2026-11-10; its time many files' frames, no one test's)
+          - { group: 4/4, fps: "24" }
+          - { group: 4/4, fps: "7" }
     env:
       FPS: ${{ matrix.fps }}
       APP_PART: ${{ matrix.part }}
