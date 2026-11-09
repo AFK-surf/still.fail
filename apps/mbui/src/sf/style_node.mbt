@@ -7,14 +7,15 @@
 /// across it; `h=Full` the other way), its least and most, its padding and margin, the room between what it holds and
 /// how that lines up across it and lies along it, its corner, its ground and whether it cuts what it holds. What it
 /// says nothing of is left as the node has it.
-pub fn style_node(v : @view.View, look : () -> @ui.Style, in_row? : Bool = false) -> Unit {
+#callsite(autofill(loc))
+pub fn style_node(v : @view.View, look : () -> @ui.Style, in_row? : Bool = false, loc~ : SourceLoc) -> Unit {
   // (all of it set together, in one binding, set again where it comes out otherwise as what it reads changes (the
   // theme, mostly): a binding each would be made and let go with every node for what changes with the theme alone.
   // What it says as the node is made decides what it sets)
   let was : Ref[StyleSet?] = Ref(None)
   v
   .sets_together(fn() { style_of(look().base, in_row) }, fn(s) {
-    style_set(v, was.val, s)
+    style_set(v, was.val, s, loc)
     was.val = Some(match was.val {
       Some(w) => { ..s, says: w.says }
       None => s
@@ -124,8 +125,9 @@ fn style_of(q : @ui.Patch, in_row : Bool) -> StyleSet {
 
 ///|
 /// Style `s` set on node `v`, each property said Is (View::sets_together): what it says (as it said it the first time,
-/// `was`'s) where it differs from what it was (`was`; all of it the first time).
-fn style_set(v : @view.View, was : StyleSet?, s : StyleSet) -> Unit {
+/// `was`'s) where it differs from what it was (`was`; all of it the first time), said at `loc`
+/// (style_node's caller's: what a test finds said there, view's source.mbt).
+fn style_set(v : @view.View, was : StyleSet?, s : StyleSet, loc : SourceLoc) -> Unit {
   let says = match was {
     Some(w) => w.says
     None => s.says
@@ -133,52 +135,52 @@ fn style_set(v : @view.View, was : StyleSet?, s : StyleSet) -> Unit {
   let new = was is None
   let w = was.unwrap_or(s)
   if new || w.row != s.row {
-    v.row(Is(s.row)) |> ignore
+    v.row(loc~, Is(s.row)) |> ignore
   }
   if says.w && (new || w.w != s.w) {
-    v.width(Is(s.w)) |> ignore
+    v.width(loc~, Is(s.w)) |> ignore
   }
   if says.h && (new || w.h != s.h) {
-    v.height(Is(s.h)) |> ignore
+    v.height(loc~, Is(s.h)) |> ignore
   }
   if says.grow && (new || w.grow != s.grow) {
-    v.grow(Is(s.grow)) |> ignore
+    v.grow(loc~, Is(s.grow)) |> ignore
     if new {
-      v.basis(Is(Some(0.0))) |> ignore
+      v.basis(loc~, Is(Some(0.0))) |> ignore
     }
   }
   if says.min_w && (new || w.min_w != s.min_w) {
-    v.min_width(Is(s.min_w)) |> ignore
+    v.min_width(loc~, Is(s.min_w)) |> ignore
   }
   if says.max_w && (new || w.max_w != s.max_w) {
-    v.max_width(Is(s.max_w)) |> ignore
+    v.max_width(loc~, Is(s.max_w)) |> ignore
   }
   if says.min_h && (new || w.min_h != s.min_h) {
-    v.min_height(Is(s.min_h)) |> ignore
+    v.min_height(loc~, Is(s.min_h)) |> ignore
   }
   if new || w.padding != s.padding {
-    v.padding(Is(s.padding)) |> ignore
+    v.padding(loc~, Is(s.padding)) |> ignore
   }
   if new || w.gap != s.gap {
-    v.gap(Is(s.gap)) |> ignore
+    v.gap(loc~, Is(s.gap)) |> ignore
   }
   if new || w.lines_up != s.lines_up {
-    v.lines_up(Is(s.lines_up)) |> ignore
+    v.lines_up(loc~, Is(s.lines_up)) |> ignore
   }
   if new || w.lies_along != s.lies_along {
-    v.lies_along(Is(s.lies_along)) |> ignore
+    v.lies_along(loc~, Is(s.lies_along)) |> ignore
   }
   if says.margin && (new || w.margin != s.margin) {
-    v.margin(Is(s.margin)) |> ignore
+    v.margin(loc~, Is(s.margin)) |> ignore
   }
   if says.corner && (new || w.corner != s.corner) {
-    v.radius(Is(s.corner)) |> ignore
+    v.radius(loc~, Is(s.corner)) |> ignore
   }
   if says.ground && (new || w.ground != s.ground) {
-    v.ground(Is(s.ground)) |> ignore
+    v.ground(loc~, Is(s.ground)) |> ignore
   }
   if says.clip && (new || w.clip != s.clip) {
-    v.clips(Is(s.clip)) |> ignore
+    v.clips(loc~, Is(s.clip)) |> ignore
   }
 }
 

@@ -8,6 +8,7 @@
 /// A progress bar in `parent`, as wide as it is given, `h` high: how far `part` says (0 to 1; None: not known), on
 /// `track` in `fill` (each as it changes). Read out as a progress bar, how far as a share and as a number of 100 (none
 /// while it is not known), as the old one is (@kit.progress). The node.
+#callsite(autofill(loc))
 pub fn progress_node(
   parent : @view.View,
   part : () -> Double?,
@@ -15,6 +16,7 @@ pub fn progress_node(
   fill : () -> Int64,
   h? : Double = 3.0,
   period? : Double = @kit.progress_sweep_ms,
+  loc~ : SourceLoc,
 ) -> @view.View {
   // (how far, drawn to it as told; whether it is known, drawn into it as it becomes so: each from where it is, there
   // at once as it is made)
@@ -22,7 +24,7 @@ pub fn progress_node(
   let first = @signals.untracked(part)
   let at = EdgeWay::new(first.unwrap_or(0.0))
   let known = EdgeWay::new(if first is Some(_) { 1.0 } else { 0.0 })
-  parent.box(fn(bar) {
+  parent.box(made_for=loc, fn(bar) {
     bar
     .row(Is(true))
     .height(Is(Some(h)))

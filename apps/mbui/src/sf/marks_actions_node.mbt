@@ -50,6 +50,7 @@ let marks_put_faint : Double = 0.4
 /// 添加到对话 (its send icon and words in white on its ground, 32 high, 12 in either side, 5 between, round as
 /// `corner`, faint and taking no press but where it is `ready`; its words what it says while made while `busy`). Each
 /// pressed (its press let go on it): `cancel`, `download`, `put`, at that moment. The row's node.
+#callsite(autofill(loc))
 pub fn marks_actions_node(
   parent : @view.View,
   said : () -> MarksActionsSaid,
@@ -59,6 +60,7 @@ pub fn marks_actions_node(
   download : () -> Unit,
   put : () -> Unit,
   tip? : TipLayer,
+  loc~ : SourceLoc,
 ) -> @view.View {
   // (its words in the meta's size, a line as marks_actions's are: a size alone said, its line the theme's text_line
   // times it, Ctx::text's; not the meta's own line)
@@ -67,7 +69,7 @@ pub fn marks_actions_node(
     let (size, _) = th.text_size(Meta)
     { size, weight, line: th.text_line * size, wrap: false, tracking: @view.letters_own, balance: false }
   }
-  parent.box(fn(row) {
+  parent.box(made_for=loc, fn(row) {
     row.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(marks_actions_apart)) |> ignore
     // why it failed, where it did
     row.show(fn() { said().error != "" }, fn(e) {

@@ -249,15 +249,17 @@ fn glyph_drawn(
 /// `tint` (failing ones' dots in `red`): its eyes blinking on the resident clock's steps while a station works, a link
 /// on its way breathing over it (View::cycle_resident: drawn anew only at each step, nothing built again); still with
 /// motion reduced. Its node.
+#callsite(autofill(loc))
 pub fn station_glyph_node(
   parent : @view.View,
   g : () -> GlyphCounts,
   size : Double,
   tint : () -> Int64,
   red : () -> Int64,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let made : Ref[@view.View?] = Ref(None)
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     made.val = Some(v)
     let eye = fn() {
       let counts = g()

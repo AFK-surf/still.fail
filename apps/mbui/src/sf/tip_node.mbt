@@ -322,6 +322,7 @@ fn TipFade::shown(self : TipFade, t : @view.View) -> Double {
 ///|
 /// A tip's node `t` as tip_look draws it (tip_box, tip_words), beside `anchor` on `side`, saying `label`: its look and
 /// its words set as the window's theme says, as that changes; in and out as `fade` says.
+#callsite(autofill(loc))
 fn tip_look_node(
   t : @view.View,
   anchor : @view.NodeId,
@@ -331,6 +332,7 @@ fn tip_look_node(
   gap : Double,
   at_pointer : Bool,
   owner : @kit.TipOwner,
+  loc~ : SourceLoc,
 ) -> Unit {
   let theme = fn() { @ui.tree_theme() }
   let px = @ui.Space::px(S2_5)
@@ -371,7 +373,7 @@ fn tip_look_node(
   .says(By(fn() { Some(@view.said(Tooltip, label=label())) }))
   .hides(By(fn() { !@kit.tip_owns(owner) }))
   |> ignore
-  t.box(fn(w) {
+  t.box(made_for=loc, fn(w) {
     w
     .words(By(fn() { label() }))
     .words_look(By(fn() {

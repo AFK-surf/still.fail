@@ -66,6 +66,20 @@ yet and you can add one, add it.
   comes from outside the app (`answered`, `decoded`, `shown`, an outside wait done) or a fact of state (a row by its id
   appears).
 
+## What is seen, traced to its line
+
+- For the agent changing what it sees (the user, 2026-11-09: no tool for a person to point with; what an agent reads by
+  itself): a node of the window's tree keeps where it was made and each property said, under a Tester only
+  (`src/view/source.mbt`; a device's host keeps none, its calls only passing their places on). `Tester::sources_at(x,
+  y)` and `sources_of(words)` say the chain out to the root, the innermost's look with where each of it was said;
+  `Tester::audit()` every rule at once, each fault naming where what it names was made. A place reads
+  `module/path:line`: `mbui/…` is this directory, `stillfail/…` the app's (`apps/mbui`).
+- A part made in the node it is given (its first parameter a `View` it makes a box in) takes its caller's place,
+  `#callsite(autofill(loc))` and `loc~ : SourceLoc`, and makes its outside `box(made_for=loc, …)` or hands `loc~` to
+  the part it is made of, so what is found in it is traced to the line that asked for it (detlint's `part-place`, in
+  the app's library). A setter of a property takes `loc~` the same way, a function setting them for its caller
+  (`@sf.style_node`) hands it on.
+
 ## Pictures come from the Tester's draw list
 
 - A screen is compared as the Tester's draw list at a declared moment; its pixels as each host's offscreen render of

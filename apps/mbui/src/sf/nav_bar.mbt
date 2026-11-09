@@ -154,6 +154,7 @@ fn nav_bar_in(
 /// The bar (nav_bar's) as nodes in `parent`: back to where `back` says (nav_back_node), `on_back` as it is pressed;
 /// `title` in the middle, 84 clear of either side, cut short where it has less; what `trailing` makes at its end, on
 /// back's 32 line; on the page's ground, from `top` above it down (the status bar's height as it is).
+#callsite(autofill(loc))
 pub fn nav_bar_node(
   parent : @view.View,
   back : () -> String,
@@ -161,8 +162,9 @@ pub fn nav_bar_node(
   on_back : () -> Unit,
   top? : () -> Double = fn() { 0.0 },
   trailing? : (@view.View) -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(fn(b) {
+  parent.box(made_for=loc, fn(b) {
     b
     .padding(Is((nav_bar_x, nav_bar_top, nav_bar_x, nav_bar_foot)))
     .ground(By(fn() { theme().p.bg }))

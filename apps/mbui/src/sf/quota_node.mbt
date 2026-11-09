@@ -6,6 +6,7 @@
 /// says now, grey while `level` is ok, faintly the level's colour once it is not; `mark` and `words` in the text's
 /// colour; `small` a lower one. `said` (what is left and when it fills again) over it while it is pointed at, in `tips`.
 /// In a page's bones, one piece.
+#callsite(autofill(loc))
 pub fn fill_chip_node(
   parent : @view.View,
   fill : () -> Int,
@@ -15,6 +16,7 @@ pub fn fill_chip_node(
   small? : Bool = false,
   said? : () -> String,
   tips? : TipLayer,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let part = fn() {
     let f = fill()
@@ -26,7 +28,7 @@ pub fn fill_chip_node(
       f
     }
   }
-  let chip = parent.box(fn(b) {
+  let chip = parent.box(made_for=loc, fn(b) {
     style_node(b, fn() { if small { chip_box_small } else { chip_box } })
     b.bone_whole(Is(true)).shrink(Is(0.0)) |> ignore
     // (its fill a plain rectangle cut along the chip's corners, its end square where it stops)
@@ -129,11 +131,13 @@ pub fn quota_chips_node(
 /// between). Narrow: sharing the line's width, 16 apart, their cells narrower; `columns` > 0, that many a line (the last
 /// line's room kept where it has fewer); else all in a line, in their full words where the line has the room for all of
 /// them so, else all in their short ones (one way for all).
+#callsite(autofill(loc))
 pub fn dials_node(
   parent : @view.View,
   dials : () -> Array[Dial],
   details? : () -> Array[String] = fn() { [] },
   columns? : Int = 0,
+  loc~ : SourceLoc,
 ) -> Unit {
   let narrow = part_of(parent).look == Narrow
   let dial = fn(d : @view.View, i : Int, short : Bool) {
@@ -148,7 +152,7 @@ pub fn dials_node(
       dial(d, @signals.untracked(fn() { i.get() }), short)
     })
   }
-  parent.box(fn(b) {
+  parent.box(made_for=loc, fn(b) {
     if narrow && columns > 0 {
       style_node(b, fn() { dl_rows })
       // (a line a `columns` of them, the last one's room kept where it has fewer)
@@ -191,6 +195,7 @@ pub fn dials_node(
 /// A dial (dials' draw): what is left large, its unit after it quieter on its line; its ten cells, as many lit as `fill`
 /// says in its level's colour; its label and its note under (`short`: their short words where they have them), its
 /// `detail` under that where there is one (`detailed`: the note in the detail's look, as wide as it is).
+#callsite(autofill(loc))
 fn dial_node(
   d : @view.View,
   dial : () -> Dial?,
@@ -199,6 +204,7 @@ fn dial_node(
   short : Bool,
   narrow : Bool,
   columns : Int,
+  loc~ : SourceLoc,
 ) -> Unit {
   let blank : Dial = { number: "", unit: "", fill: 0, level: "", label: "", note: "", label_short: "", note_short: "" }
   let now = fn() { dial().unwrap_or(blank) }
@@ -224,7 +230,7 @@ fn dial_node(
   style_node(d, fn() { if narrow { dl_dial_narrow } else if columns > 0 { dl_dial_wide_fixed } else { dl_dial_wide } }, in_row=true)
   // (the figure and its unit one line's runs: the unit on the figure's baseline)
   let number = fn() { if low() { dl_number.then(@ui.text_style(color=Data(ink()))) } else { dl_number } }
-  d.box(fn(w) {
+  d.box(made_for=loc, fn(w) {
     w
     .words_runs(By(fn() {
       let t = theme()

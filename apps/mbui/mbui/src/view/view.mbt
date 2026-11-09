@@ -550,6 +550,9 @@ struct Node {
   mut over_scrim : Bool
   /// where it is in the window's stack of layers, the old frame's among them (View::stacked); -1 none
   mut stack : Int
+  /// where in the source it was made and its properties said, where the tree keeps that (Tree::new's `sources`;
+  /// None: it does not)
+  mut source : Source?
 }
 
 ///|
@@ -584,6 +587,8 @@ pub struct Tree {
   /// how wide words too wide for a width on one line are drawn where they say shorter ways (View::shorter): the first of
   /// those that fits, else the last cut with an ellipsis, as the host lays them out
   measure_shorter : (String, Array[String], WordsLook, Double) -> Double
+  /// whether each node keeps where in the source it was made and its properties said (source.mbt): a Tester's tree
+  sources : Bool
   nodes : Array[Node]
   free : Array[Int]
   /// what a frame is to do: the nodes whose look changed, those whose place changed; whether any is to be laid out,
@@ -870,13 +875,15 @@ pub struct View {
 
 ///|
 /// A tree whose root `make` makes (as the root's own: its bindings, its nodes), its words measured by `measure` (in
-/// pieces set their own way: `measure_runs`; said a shorter way where too wide: `measure_shorter`).
+/// pieces set their own way: `measure_runs`; said a shorter way where too wide: `measure_shorter`), keeping where in
+/// the source each node was made where `sources` (source.mbt).
 pub fn Tree::new(
   make : (View) -> Unit,
   measure? : (String, WordsLook, Double) -> (Double, Double) = words_measure,
   measure_runs? : (Array[@text.Run], WordsLook, RunsLook, Double) -> (Double, Double) = runs_measure,
   measure_shorter? : (String, Array[String], WordsLook, Double) -> Double,
   time? : () -> Double,
+  sources? : Bool = false,
 ) -> Tree {
   // (the moment it is made, taken once: its logic and what it draws start there, and what it is made with is of then)
   let start = match time {
@@ -909,6 +916,7 @@ pub fn Tree::new(
       Some(f) => f
       None => fn(words, shorter, look, room) { shorter_w_by(measure, words, shorter, look, room) }
     },
+    sources,
     nodes: [],
     free: [],
     looks_due: [],
@@ -1056,8 +1064,9 @@ pub fn words_measure(words : String, _look : WordsLook, width : Double) -> (Doub
 }
 
 ///|
-/// A node made in `parent` (-1: the root), its scope its own (made with nothing reading: owned by nothing else).
-fn Tree::made(self : Tree, parent : Int) -> View {
+/// A node made in `parent` (-1: the root), its scope its own (made with nothing reading: owned by nothing else),
+/// made at `loc` in the source (kept where the tree keeps that: source.mbt).
+fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
   self.work.made = self.work.made + 1
   self.hits = self.hits + 1
   let at = match self.free.pop() {
@@ -1220,6 +1229,7 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.over_all = false
       n.over_scrim = false
       n.stack = -1
+      n.source = None
       i
     }
     None => {
@@ -1348,11 +1358,16 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         over_all: false,
         over_scrim: false,
         stack: -1,
+        source: None,
       })
       self.nodes.length() - 1
     }
   }
   let n = self.nodes[at]
+  n.source = match loc {
+    Some(l) if self.sources => Some({ made: l, made_for: None, said: {} })
+    _ => None
+  }
   let was = @signals.set_active_sub(None)
   let was_owner = @signals.set_owner(None)
   n.stop = Some(@signals.effect_scope(fn() { n.owner = @signals.active_sub() }))
@@ -1700,9 +1715,16 @@ pub fn Tree::dispose(self : Tree) -> Unit {
 
 ///|
 /// A node made in `self`, after what it holds already, made by `make` as its own (in its scope).
-pub fn View::box(self : View, make : (View) -> Unit) -> View {
+/// Made at `loc`, the place that asked for it; the outside of the part asked for at `made_for` where a library's part
+/// makes it so (View::made_for, source.mbt).
+#callsite(autofill(loc))
+pub fn View::box(self : View, make : (View) -> Unit, made_for? : SourceLoc, loc~ : SourceLoc) -> View {
   guard self.live() is Some(n) else { return self.tree.none() }
-  let v = self.tree.made(self.at)
+  let v = self.tree.made(self.at, loc~)
+  match made_for {
+    Some(l) => v.made_for(l) |> ignore
+    None => ()
+  }
   n.kids.push(v.at)
   if self.at == 0 {
     self.tree.top_last()
@@ -2301,7 +2323,7 @@ priv enum Prop {
   Corners
   Bones
   BoneWhole
-} derive(Eq)
+} derive(Eq, Show)
 
 ///|
 /// Its place among the properties: what the node's table of them keeps it by, an Int (its derived hash a Hasher made for
@@ -2482,9 +2504,20 @@ pub fn[T : Eq] View::sets_together(self : View, read : () -> T, set : (T) -> Uni
 ///|
 /// Property `prop` of the node (its one binding: one bound before is let go), set by `apply`: once, or as what it
 /// reads changes (Tree::queued: as the frame takes it), set again only if it came out otherwise than it last did,
-/// marking what its phase does again.
-fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, apply : (T) -> Unit) -> Unit {
+/// marking what its phase does again. Said at `loc` (kept where the tree keeps that: source.mbt).
+fn[T : Eq] View::bind(
+  self : View,
+  prop : Prop,
+  live : Live[T],
+  phase : Phase,
+  apply : (T) -> Unit,
+  loc~ : SourceLoc,
+) -> Unit {
   guard self.live() is Some(n) else { return }
+  match n.source {
+    Some(s) => s.said[prop.ord()] = (prop, loc)
+    None => ()
+  }
   let tree = self.tree
   let at = self.at
   // (set among others set together on this node, View::sets_together: again, only while it is theirs)
@@ -2569,8 +2602,9 @@ fn Tree::bound_marked(self : Tree, at : Int, phase : Phase) -> Unit {
 
 ///|
 /// Its width (points; None: as its content and its holder make it).
-pub fn View::width(self : View, w : Live[Double?]) -> View {
-  self.bind(Width, w, Layout, fn(w) {
+#callsite(autofill(loc))
+pub fn View::width(self : View, w : Live[Double?], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Width, w, Layout, fn(w) {
     self.tree.nodes[self.at].flex.style.set_width(match w {
       Some(w) => Pt(w)
       None => Auto
@@ -2583,8 +2617,9 @@ pub fn View::width(self : View, w : Live[Double?]) -> View {
 
 ///|
 /// Its height (points; None: as its content and its holder make it).
-pub fn View::height(self : View, h : Live[Double?]) -> View {
-  self.bind(Height, h, Layout, fn(h) {
+#callsite(autofill(loc))
+pub fn View::height(self : View, h : Live[Double?], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Height, h, Layout, fn(h) {
     self.tree.nodes[self.at].flex.style.set_height(match h {
       Some(h) => Pt(h)
       None => Auto
@@ -2596,8 +2631,9 @@ pub fn View::height(self : View, h : Live[Double?]) -> View {
 ///|
 /// Room inside it, at its left, top, right and bottom: one property (pad and sides say it too, the last said its one
 /// binding).
-pub fn View::padding(self : View, p : Live[(Double, Double, Double, Double)]) -> View {
-  self.bind(Padding, p, Layout, fn(p) {
+#callsite(autofill(loc))
+pub fn View::padding(self : View, p : Live[(Double, Double, Double, Double)], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Padding, p, Layout, fn(p) {
     let s = self.tree.nodes[self.at].flex.style
     s.set_padding_left(Pt(p.0))
     s.set_padding_top(Pt(p.1))
@@ -2611,8 +2647,9 @@ pub fn View::padding(self : View, p : Live[(Double, Double, Double, Double)]) ->
 /// Room outside it (left, top, right, bottom), as CSS's margin: negative, it reaches past where it would stand into
 /// what is round it (a small panel's last row into the panel's padding at its foot), what holds it laid out as though it
 /// were that much smaller (or bigger).
-pub fn View::margin(self : View, m : Live[(Double, Double, Double, Double)]) -> View {
-  self.bind(Margin, m, Layout, fn(m) {
+#callsite(autofill(loc))
+pub fn View::margin(self : View, m : Live[(Double, Double, Double, Double)], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Margin, m, Layout, fn(m) {
     let s = self.tree.nodes[self.at].flex.style
     s.set_margin_left(Pt(m.0))
     s.set_margin_top(Pt(m.1))
@@ -2624,8 +2661,9 @@ pub fn View::margin(self : View, m : Live[(Double, Double, Double, Double)]) -> 
 
 ///|
 /// Room inside it, the same on every side (its padding).
-pub fn View::pad(self : View, p : Live[Double]) -> View {
-  self.padding(
+#callsite(autofill(loc))
+pub fn View::pad(self : View, p : Live[Double], loc~ : SourceLoc) -> View {
+  self.padding(loc~,
     match p {
       Is(v) => Is((v, v, v, v))
       By(f) =>
@@ -2640,8 +2678,9 @@ pub fn View::pad(self : View, p : Live[Double]) -> View {
 ///|
 /// Room inside it at its left and its right, none at its top and bottom (its padding: what it holds laid out between,
 /// the window's sides beside the system's bars).
-pub fn View::sides(self : View, lr : Live[(Double, Double)]) -> View {
-  self.padding(
+#callsite(autofill(loc))
+pub fn View::sides(self : View, lr : Live[(Double, Double)], loc~ : SourceLoc) -> View {
+  self.padding(loc~,
     match lr {
       Is(v) => Is((v.0, 0.0, v.1, 0.0))
       By(f) =>
@@ -2655,8 +2694,9 @@ pub fn View::sides(self : View, lr : Live[(Double, Double)]) -> View {
 
 ///|
 /// What it holds laid out across (true) or down.
-pub fn View::row(self : View, across : Live[Bool]) -> View {
-  self.bind(Row, across, Layout, fn(a) {
+#callsite(autofill(loc))
+pub fn View::row(self : View, across : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Row, across, Layout, fn(a) {
     self.tree.nodes[self.at].flex.style.direction = if a { Row } else { Column }
     // (what it holds cut short gives way along it only where it is a row: View::cuts)
     self.tree.cuts_under(self.at)
@@ -2666,8 +2706,9 @@ pub fn View::row(self : View, across : Live[Bool]) -> View {
 
 ///|
 /// How much of the room left it takes.
-pub fn View::grow(self : View, g : Live[Double]) -> View {
-  self.bind(Grow, g, Layout, fn(g) { self.tree.nodes[self.at].flex.style.grow = g })
+#callsite(autofill(loc))
+pub fn View::grow(self : View, g : Live[Double], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Grow, g, Layout, fn(g) { self.tree.nodes[self.at].flex.style.grow = g })
   self
 }
 
@@ -2675,8 +2716,9 @@ pub fn View::grow(self : View, g : Live[Double]) -> View {
 /// Whether it is never narrower, in a row, than what it holds needs (the old views' `keep`: a bar's tools kept whole),
 /// whatever its basis and least width say, as it changes: what is beside it gives way first; what it holds changing
 /// (its words, their face, its parts, their gaps) lays it out so again. Layout's.
-pub fn View::keeps_held(self : View, on : Live[Bool]) -> View {
-  self.bind(KeepsHeld, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.min_held = on })
+#callsite(autofill(loc))
+pub fn View::keeps_held(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, KeepsHeld, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.min_held = on })
   self
 }
 
@@ -2685,8 +2727,9 @@ pub fn View::keeps_held(self : View, on : Live[Bool]) -> View {
 /// what it holds is; Some(0.0) none, so that those that grow alike are alike however much each holds (the old views'
 /// Fill). It says nothing of how narrow it may come to: that is its least width's (View::min_width) or, never narrower
 /// than what it holds, View::keeps_held's. Layout's.
-pub fn View::basis(self : View, b : Live[Double?]) -> View {
-  self.bind(Basis, b, Layout, fn(b) {
+#callsite(autofill(loc))
+pub fn View::basis(self : View, b : Live[Double?], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Basis, b, Layout, fn(b) {
     self.tree.nodes[self.at].flex.style.set_basis(
       match b {
         Some(v) => Pt(v)
@@ -2719,8 +2762,9 @@ pub fn View::window(self : View) -> (Double, Double) {
 ///|
 /// Laid out over what holds it (true), filling all of its room whatever else it holds, or in its turn among them: what
 /// lies one over another (a stack's pages, what floats over them) said so, drawn in the order they are held.
-pub fn View::over(self : View, on : Live[Bool]) -> View {
-  self.bind(Over, on, Layout, fn(on) {
+#callsite(autofill(loc))
+pub fn View::over(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Over, on, Layout, fn(on) {
     let s = self.tree.nodes[self.at].flex.style
     let inset : @flex.Dim = if on { Pt(0.0) } else { Auto }
     s.position = if on { Absolute } else { Relative }
@@ -2736,8 +2780,9 @@ pub fn View::over(self : View, on : Live[Bool]) -> View {
 /// Whether what it holds is cut to it, its corners round as its own (View::radius), as an old view's box that clips is
 /// (a progress bar's track cutting its part at its round ends), as it changes: paint's. How it is drawn only: where a
 /// finger or the pointer is taken is as it was (what is past it still takes them), unlike an old view's clip.
-pub fn View::clips(self : View, on : Live[Bool]) -> View {
-  self.bind(Clips, on, Paint, fn(on) { self.tree.nodes[self.at].look.clips = on })
+#callsite(autofill(loc))
+pub fn View::clips(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Clips, on, Paint, fn(on) { self.tree.nodes[self.at].look.clips = on })
   self
 }
 
@@ -2756,8 +2801,9 @@ pub fn View::holds_whole(self : View) -> View {
 /// Whether what it holds is found by a finger or the pointer within it alone, as it changes (a column that scrolls in
 /// it: what is scrolled out of it takes nothing there, as an old view's clip; an old view hosted in what it holds found
 /// so too, what it takes asked only there: Tree::input_bounds). Where they are found only: how it is drawn is View::clips'.
-pub fn View::bounds_input(self : View, on : Live[Bool]) -> View {
-  self.bind(BoundsInput, on, Paint, fn(on) {
+#callsite(autofill(loc))
+pub fn View::bounds_input(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, BoundsInput, on, Paint, fn(on) {
     let n = self.tree.nodes[self.at]
     if n.bounds_input != on {
       n.bounds_input = on
@@ -2771,8 +2817,9 @@ pub fn View::bounds_input(self : View, on : Live[Bool]) -> View {
 /// Drawn, with what it holds, over the scrim of the modal layer the old frame has up while `on` says so (a row held for
 /// its menu, lifted toward the finger: an old view's Stratum OverScrim), under what that layer holds; where no scrim is
 /// up, in its place. Cut as where it is; found by a press as ever (the scrim's layer takes what lands on it). Paint's.
-pub fn View::over_scrim(self : View, on : Live[Bool]) -> View {
-  self.bind(OverScrim, on, Paint, fn(on) { self.tree.nodes[self.at].over_scrim = on })
+#callsite(autofill(loc))
+pub fn View::over_scrim(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, OverScrim, on, Paint, fn(on) { self.tree.nodes[self.at].over_scrim = on })
   self
 }
 
@@ -2943,8 +2990,9 @@ pub fn Tree::input_bounds(self : Tree, id : NodeId) -> (Double, Double, Double, 
 /// Whether its words' lines each stand in the middle of its width (as wide as it is as it is drawn: a line wrapped,
 /// each part of it), as an old view's centred words do (Ctx::text's `center`): how they are drawn only, measured and
 /// wrapped as ever, a change of it drawn again, nothing laid out again.
-pub fn View::words_centered(self : View, on : Live[Bool]) -> View {
-  self.bind(WordsCentered, on, Paint, fn(on) {
+#callsite(autofill(loc))
+pub fn View::words_centered(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, WordsCentered, on, Paint, fn(on) {
     self.tree.nodes[self.at].look.words_center = on
     self.words_told()
   })
@@ -2957,8 +3005,9 @@ pub fn View::words_centered(self : View, on : Live[Bool]) -> View {
 /// glyph of them past it, the room beside it kept). What holds it that clips cuts it either way. How they are drawn
 /// only, their words and runs alike: measured, laid out, found by a press and read out as ever, a change of it drawn
 /// again, nothing laid out again; not View::clips.
-pub fn View::ellipsis_past(self : View, on : Live[Bool]) -> View {
-  self.bind(EllipsisPast, on, Paint, fn(on) { self.tree.nodes[self.at].look.ellipsis_past = on })
+#callsite(autofill(loc))
+pub fn View::ellipsis_past(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, EllipsisPast, on, Paint, fn(on) { self.tree.nodes[self.at].look.ellipsis_past = on })
   self
 }
 
@@ -2968,15 +3017,17 @@ pub fn View::ellipsis_past(self : View, on : Live[Bool]) -> View {
 /// drawn at (its screen's, at the zoom it is drawn at), cut again as those or its width change, kept while they do not.
 /// In its tint where it has one (View::tint), each of its paths keeping its own opacity; a tint changed draws it again
 /// in it, its curves not cut again. Paint's.
-pub fn View::picture(self : View, picture : Live[@pixels.Vector?]) -> View {
-  self.bind(Picture, picture, Paint, fn(p) { self.tree.nodes[self.at].look.picture = p })
+#callsite(autofill(loc))
+pub fn View::picture(self : View, picture : Live[@pixels.Vector?], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Picture, picture, Paint, fn(p) { self.tree.nodes[self.at].look.picture = p })
   self
 }
 
 ///|
 /// Its ground (0: none): paint's.
-pub fn View::ground(self : View, ink : Live[Int64]) -> View {
-  self.bind(Ground, ink, Paint, fn(k) { self.tree.nodes[self.at].look.ground = k })
+#callsite(autofill(loc))
+pub fn View::ground(self : View, ink : Live[Int64], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Ground, ink, Paint, fn(k) { self.tree.nodes[self.at].look.ground = k })
   self
 }
 
@@ -2984,32 +3035,36 @@ pub fn View::ground(self : View, ink : Live[Int64]) -> View {
 /// The shapes it draws over its ground, in its own terms from its top left (@paint.Shape: outlines filled and stroked):
 /// paint's. What they come to as they are drawn is worked out once for the shapes said (their outlines), whatever colour
 /// they are drawn in (View::tint).
-pub fn View::shapes(self : View, shapes : Live[Array[@paint.Shape]]) -> View {
-  self.bind(Shapes, shapes, Paint, fn(s) { self.tree.nodes[self.at].look.shapes = s })
+#callsite(autofill(loc))
+pub fn View::shapes(self : View, shapes : Live[Array[@paint.Shape]], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Shapes, shapes, Paint, fn(s) { self.tree.nodes[self.at].look.shapes = s })
   self
 }
 
 ///|
 /// The one colour its shapes are drawn in (0: each its own): paint's; a change of it draws them again in it, nothing of
 /// their outlines worked out again.
-pub fn View::tint(self : View, ink : Live[Int64]) -> View {
-  self.bind(Tint, ink, Paint, fn(k) { self.tree.nodes[self.at].look.tint = k })
+#callsite(autofill(loc))
+pub fn View::tint(self : View, ink : Live[Int64], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Tint, ink, Paint, fn(k) { self.tree.nodes[self.at].look.tint = k })
   self
 }
 
 
 ///|
 /// How round its corners are (its ground's and its glass's; a linked corner's as worked out where it is said): paint's.
-pub fn View::radius(self : View, r : Live[Double]) -> View {
-  self.bind(Radius, r, Paint, fn(r) { self.tree.nodes[self.at].look.radius = r })
+#callsite(autofill(loc))
+pub fn View::radius(self : View, r : Live[Double], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Radius, r, Paint, fn(r) { self.tree.nodes[self.at].look.radius = r })
   self
 }
 
 ///|
 /// Its corners each (top left, then round it; None: all as its radius, View::radius), as an old view's box's radius
 /// may be four (@ui.Radius::Corners): its ground's, its glass's, its edge's and its cut's (View::clips): paint's.
-pub fn View::corners(self : View, corners : Live[(Double, Double, Double, Double)?]) -> View {
-  self.bind(Corners, corners, Paint, fn(k) { self.tree.nodes[self.at].look.corners = k })
+#callsite(autofill(loc))
+pub fn View::corners(self : View, corners : Live[(Double, Double, Double, Double)?], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Corners, corners, Paint, fn(k) { self.tree.nodes[self.at].look.corners = k })
   self
 }
 
@@ -3041,8 +3096,9 @@ pub fn View::corners_drawn(self : View) -> (Double, Double, Double, Double) {
 ///|
 /// The edge drawn round its ground, inside it (how wide, its colour; 0 wide: none), as an old view's box's border is
 /// drawn with its ground (one rect, filled and edged), its corners its ground's: paint's.
-pub fn View::edge(self : View, e : Live[(Double, Int64)]) -> View {
-  self.bind(Edge, e, Paint, fn(e) { self.tree.nodes[self.at].look.edge = e })
+#callsite(autofill(loc))
+pub fn View::edge(self : View, e : Live[(Double, Int64)], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Edge, e, Paint, fn(e) { self.tree.nodes[self.at].look.edge = e })
   self
 }
 
@@ -3052,16 +3108,18 @@ pub fn View::edge(self : View, e : Live[(Double, Int64)]) -> View {
 /// its corners its ground's: drawn by what hosts the tree as the frame composes it where it is drawn and as big, each
 /// frame, its decode the one for that size, asked for and followed as an old view's is (ui's draw_image: a decode said
 /// done draws the frame again), which of the two decided then: paint's.
-pub fn View::image(self : View, image : Live[(String, String, Int)?]) -> View {
-  self.bind(Image, image, Paint, fn(i) { self.tree.nodes[self.at].look.image = i })
+#callsite(autofill(loc))
+pub fn View::image(self : View, image : Live[(String, String, Int)?], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Image, image, Paint, fn(i) { self.tree.nodes[self.at].look.image = i })
   self
 }
 
 ///|
 /// Its picture (View::image) covering it as it changes, its middle shown and what is past it cut where it is not as wide
 /// for as tall (an old view's FitCover: a face, a mark put up); else, as said none, filling it; paint's.
-pub fn View::image_covers(self : View, on : Live[Bool]) -> View {
-  self.bind(ImageCover, on, Paint, fn(on) { self.tree.nodes[self.at].look.image_cover = on })
+#callsite(autofill(loc))
+pub fn View::image_covers(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, ImageCover, on, Paint, fn(on) { self.tree.nodes[self.at].look.image_cover = on })
   self
 }
 
@@ -3069,16 +3127,18 @@ pub fn View::image_covers(self : View, on : Live[Bool]) -> View {
 /// Its picture (View::image) contained in it as it changes: all of it shown, as wide for as tall as it is, in its
 /// middle, what it does not fill left bare (an old view's FitContain: a site's icon in its square); else, as said none,
 /// filling it; covering it said too, covering it. Paint's.
-pub fn View::image_contains(self : View, on : Live[Bool]) -> View {
-  self.bind(ImageContain, on, Paint, fn(on) { self.tree.nodes[self.at].look.image_contain = on })
+#callsite(autofill(loc))
+pub fn View::image_contains(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, ImageContain, on, Paint, fn(on) { self.tree.nodes[self.at].look.image_contain = on })
   self
 }
 
 ///|
 /// Its picture (View::image) fading in over image_fade_ms as it is decoded (an old view's picture's way by default:
 /// Ctx::image's `fade`), as it changes; else, as said none, there at once once it is; paint's.
-pub fn View::image_fades(self : View, on : Live[Bool]) -> View {
-  self.bind(ImageFade, on, Paint, fn(on) { self.tree.nodes[self.at].look.image_fade = on })
+#callsite(autofill(loc))
+pub fn View::image_fades(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, ImageFade, on, Paint, fn(on) { self.tree.nodes[self.at].look.image_fade = on })
   self
 }
 
@@ -3086,8 +3146,9 @@ pub fn View::image_fades(self : View, on : Live[Bool]) -> View {
 /// The room its picture is judged ready for (View::image): its whole picture shown, not what stands in for it, once it is
 /// decoded for that room ((0, 0): for where it is drawn), as a picture on its way somewhere (a flight) is judged by
 /// where it goes, its decode for that room asked for as it sets out; paint's.
-pub fn View::image_for(self : View, room : Live[(Double, Double)]) -> View {
-  self.bind(ImageFor, room, Paint, fn(r) { self.tree.nodes[self.at].look.image_for = r })
+#callsite(autofill(loc))
+pub fn View::image_for(self : View, room : Live[(Double, Double)], loc~ : SourceLoc) -> View {
+  self.bind(loc~, ImageFor, room, Paint, fn(r) { self.tree.nodes[self.at].look.image_for = r })
   self
 }
 
@@ -3096,31 +3157,35 @@ pub fn View::image_for(self : View, room : Live[(Double, Double)]) -> View {
 /// changes: its picture and that matte drawn as one instance (its edge cut once, its corners its own), the matte alone
 /// over its box till the picture is decoded, as an old view's picture at a rect of its own in a matte (Ctx::picture's
 /// `matte`); None, the picture filling it. Paint's.
-pub fn View::image_in(self : View, at : Live[((Double, Double, Double, Double), Int64)?]) -> View {
-  self.bind(ImageIn, at, Paint, fn(i) { self.tree.nodes[self.at].look.image_in = i })
+#callsite(autofill(loc))
+pub fn View::image_in(self : View, at : Live[((Double, Double, Double, Double), Int64)?], loc~ : SourceLoc) -> View {
+  self.bind(loc~, ImageIn, at, Paint, fn(i) { self.tree.nodes[self.at].look.image_in = i })
   self
 }
 
 ///|
 /// The glass it is drawn as, under its ground and what it draws (@paint.Glass: frosted or liquid; None: none): paint's.
 /// What it frosts is what the frame drew under it, wherever it is composed (its capture told as the frame is).
-pub fn View::glass(self : View, g : Live[@paint.Glass?]) -> View {
-  self.bind(Glass, g, Paint, fn(g) { self.tree.nodes[self.at].look.glass = g })
+#callsite(autofill(loc))
+pub fn View::glass(self : View, g : Live[@paint.Glass?], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Glass, g, Paint, fn(g) { self.tree.nodes[self.at].look.glass = g })
   self
 }
 
 ///|
 /// How opaque it is drawn, what it holds with it: its place's.
-pub fn View::alpha(self : View, a : Live[Double]) -> View {
-  self.bind(Alpha, a, Place, fn(a) { self.tree.nodes[self.at].look.alpha = a })
+#callsite(autofill(loc))
+pub fn View::alpha(self : View, a : Live[Double], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Alpha, a, Place, fn(a) { self.tree.nodes[self.at].look.alpha = a })
   self
 }
 
 ///|
 /// How far it is drawn off where it is laid out, what it holds with it: its place's (a move on the compositor: never
 /// laid out again).
-pub fn View::offset(self : View, d : Live[(Double, Double)]) -> View {
-  self.bind(Offset, d, Place, fn(d) {
+#callsite(autofill(loc))
+pub fn View::offset(self : View, d : Live[(Double, Double)], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Offset, d, Place, fn(d) {
     let n = self.tree.nodes[self.at]
     n.look.dx = d.0
     n.look.dy = d.1
@@ -3141,11 +3206,13 @@ pub fn View::offset(self : View, d : Live[(Double, Double)]) -> View {
 /// it is out of sight, however tall it is). `f` reads no clock
 /// itself; it gives the same for the same state, time and size, however often asked. Ctx::moved_by's, a node's: what
 /// that becomes once old views go.
+#callsite(autofill(loc))
 pub fn View::moved_by(
   self : View,
   f : (Double, Double, Double) -> (Double, Double),
   ends : (Double, Double) -> Double,
   holds_leaving? : Bool = false,
+  loc~ : SourceLoc,
 ) -> View {
   guard self.live() is Some(n) else { return self }
   n.moved_by = Some(f)
@@ -3156,7 +3223,7 @@ pub fn View::moved_by(
   }
   let tree = self.tree
   let at = self.at
-  self.bind(
+  self.bind(loc~,
     MovedBy,
     // (followed at the size it is laid out, told as all of it is laid out and worked out again in that same pass
     // (Tree::sizes_told): what `f` and `ends` read at that size followed from the frame it comes to it; none laid out
@@ -3206,8 +3273,9 @@ fn Tree::off_now(self : Tree, n : Node) -> (Double, Double) {
 ///|
 /// How far it is drawn off where it is laid out in its own widths and heights, what it holds with it: its place's, as
 /// big as it is laid out in the frame drawing it (a page slid off by its width moves with its room as that changes).
-pub fn View::shift(self : View, d : Live[(Double, Double)]) -> View {
-  self.bind(Shift, d, Place, fn(d) {
+#callsite(autofill(loc))
+pub fn View::shift(self : View, d : Live[(Double, Double)], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Shift, d, Place, fn(d) {
     let n = self.tree.nodes[self.at]
     n.look.sx = d.0
     n.look.sy = d.1
@@ -3218,8 +3286,9 @@ pub fn View::shift(self : View, d : Live[(Double, Double)]) -> View {
 ///|
 /// The lines it draws over its shapes (@paint.Line: round-capped strokes through points from its top left, each in its
 /// own colour, as far along as it says), as an old view's box draws them (Ctx::lines): paint's.
-pub fn View::lines(self : View, lines : Live[Array[@paint.Line]]) -> View {
-  self.bind(Lines, lines, Paint, fn(l) { self.tree.nodes[self.at].look.lines = l })
+#callsite(autofill(loc))
+pub fn View::lines(self : View, lines : Live[Array[@paint.Line]], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Lines, lines, Paint, fn(l) { self.tree.nodes[self.at].look.lines = l })
   self
 }
 
@@ -3229,8 +3298,9 @@ pub fn View::lines(self : View, lines : Live[Array[@paint.Line]]) -> View {
 /// line pieces turned as an old view's cycle turns it, Ctx::cycle_look). Where it is drawn, not what it is (nothing of
 /// it made again), nor where it takes a press, nor what it holds (a spinner's ring turning by the clock, View::cycle).
 /// Place's.
-pub fn View::turn(self : View, r : Live[Double], drawn? : Bool = false) -> View {
-  self.bind(Turn, r, Place, fn(r) {
+#callsite(autofill(loc))
+pub fn View::turn(self : View, r : Live[Double], drawn? : Bool = false, loc~ : SourceLoc) -> View {
+  self.bind(loc~, Turn, r, Place, fn(r) {
     let n = self.tree.nodes[self.at]
     n.look.turn = r
     n.look.turn_drawn = drawn
@@ -3243,8 +3313,9 @@ pub fn View::turn(self : View, r : Live[Double], drawn? : Bool = false) -> View 
 /// foot; 0: up to it whole), as it changes: not its own drawing, what it holds where it goes on past what shows of it
 /// (a room opening on what comes, cut softly at both ends: as an old view's Ctx::fade_to). Where it is drawn, nothing
 /// of it made again. Place's.
-pub fn View::fades(self : View, f : Live[(Double, Double, Double, Double)]) -> View {
-  self.bind(Fades, f, Place, fn(f) { self.tree.nodes[self.at].look.fades = f })
+#callsite(autofill(loc))
+pub fn View::fades(self : View, f : Live[(Double, Double, Double, Double)], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Fades, f, Place, fn(f) { self.tree.nodes[self.at].look.fades = f })
   self
 }
 
@@ -3253,8 +3324,9 @@ pub fn View::fades(self : View, f : Live[(Double, Double, Double, Double)]) -> V
 /// top positive, from its foot negative; 0 none: HWUI's StretchEffect, each point of it where @view.stretch_map puts
 /// it, its clips and fades inside it with it), as what draws it says; placement's (a scrolling page's list's:
 /// Scroll::list).
-pub fn View::stretches(self : View, ov : Live[Double]) -> View {
-  self.bind(Stretch, ov, Place, fn(ov) { self.tree.nodes[self.at].look.stretch = ov })
+#callsite(autofill(loc))
+pub fn View::stretches(self : View, ov : Live[Double], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Stretch, ov, Place, fn(ov) { self.tree.nodes[self.at].look.stretch = ov })
   self
 }
 
@@ -3354,8 +3426,9 @@ fn Tree::drawn_box_of(self : Tree, at : Int) -> (Double, Double, Double, Double)
 /// (past it at both ends as it is not all open), its height and what it holds's of the same layout, whatever that
 /// comes to as it opens (its words or its width changed meanwhile); `from_foot`: what it holds laid out at its foot instead,
 /// past its top (what stands on its foot stays as it opens and closes). Layout's.
-pub fn View::opens(self : View, share : Live[Double?], from_foot? : Bool = false) -> View {
-  self.bind(Opens, share, Layout, fn(k) {
+#callsite(autofill(loc))
+pub fn View::opens(self : View, share : Live[Double?], from_foot? : Bool = false, loc~ : SourceLoc) -> View {
+  self.bind(loc~, Opens, share, Layout, fn(k) {
     let st = self.tree.nodes[self.at].flex.style
     match k {
       Some(k) => {
@@ -3375,8 +3448,9 @@ pub fn View::opens(self : View, share : Live[Double?], from_foot? : Bool = false
 /// Whether what it holds past its edges fades out towards them, each pixel by where it is (View::fades), as far before
 /// each as it reaches past it and no further than half of what shows (an old view's cut_soft), worked out where it is
 /// laid out as it is composed: a room opening on what it holds cut softly at both ends. Place's.
-pub fn View::cuts_softly(self : View, on : Live[Bool]) -> View {
-  self.bind(CutsSoftly, on, Place, fn(on) { self.tree.nodes[self.at].look.cut_soft = on })
+#callsite(autofill(loc))
+pub fn View::cuts_softly(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, CutsSoftly, on, Place, fn(on) { self.tree.nodes[self.at].look.cut_soft = on })
   self
 }
 
@@ -3415,8 +3489,9 @@ pub fn Tree::cut_soft_of(self : Tree, id : NodeId) -> (Double, Double, Double)? 
 /// How far it, and what it holds with it, is drawn off where it is laid out (points), as it changes: where it is drawn
 /// only, pressed and found where it is laid out (a thing on its way from where its cause found it to where it is laid
 /// out now: @motion's Moves::moves_with). Place's: nothing of it laid out or made again.
-pub fn View::drawn_off(self : View, d : Live[(Double, Double)]) -> View {
-  self.bind(DrawnOff, d, Place, fn(d) { self.tree.nodes[self.at].look.drawn_off = d })
+#callsite(autofill(loc))
+pub fn View::drawn_off(self : View, d : Live[(Double, Double)], loc~ : SourceLoc) -> View {
+  self.bind(loc~, DrawnOff, d, Place, fn(d) { self.tree.nodes[self.at].look.drawn_off = d })
   self
 }
 
@@ -3447,8 +3522,9 @@ pub fn GroundShape::reshaped(self : GroundShape) -> Bool {
 /// left), as it changes: all of its ground (its shadow, its glass, its fill, its edge), as a shape going on its own; not
 /// what it holds, which is where its layout puts it (each said to go itself); pressed where it is laid out (a thing
 /// changing shape for its cause: @motion's Moves::reshapes). Place's: nothing of it made again.
-pub fn View::ground_drawn(self : View, d : Live[GroundShape]) -> View {
-  self.bind(GroundDrawn, d, Place, fn(d) { self.tree.nodes[self.at].look.ground_drawn = d })
+#callsite(autofill(loc))
+pub fn View::ground_drawn(self : View, d : Live[GroundShape], loc~ : SourceLoc) -> View {
+  self.bind(loc~, GroundDrawn, d, Place, fn(d) { self.tree.nodes[self.at].look.ground_drawn = d })
   self
 }
 
@@ -3750,8 +3826,9 @@ pub fn Tree::turns_about_drawn(self : Tree, id : NodeId) -> Bool {
 /// projection of it and its holders (Tree::projected); laid out as before. Where what it holds cuts them, cut as far
 /// in; its words, its shapes and its corners drawn as big. An old view it holds (View::hosted) laid out as big as its
 /// node, drawn, pressed, typed into and read out as big where it is drawn, by what hosts the tree (ui's island_proj).
-pub fn View::scale(self : View, s : Live[Double], about? : Pivot = At(0.5, 0.5)) -> View {
-  self.bind(Scale, s, Place, fn(s) {
+#callsite(autofill(loc))
+pub fn View::scale(self : View, s : Live[Double], about? : Pivot = At(0.5, 0.5), loc~ : SourceLoc) -> View {
+  self.bind(loc~, Scale, s, Place, fn(s) {
     let n = self.tree.nodes[self.at]
     n.look.scale = s
     // (grown about another point: what it draws worked out afresh for the middle of it, where it says so)
@@ -3882,8 +3959,9 @@ fn Tree::top_of(self : Tree, at : Int) -> Int {
 /// (Ctx::stacked), one over another by their places, under what is over all else (View::over_all); so drawn, found by a
 /// press and the pointer, read out, gone to by Tab and given the keys; the topmost modal one, the tree's or the old
 /// frame's, holding all under it. -1: in none.
-pub fn View::stacked(self : View, stack : Live[Int]) -> View {
-  self.bind(Stacked, stack, Layout, fn(k) {
+#callsite(autofill(loc))
+pub fn View::stacked(self : View, stack : Live[Int], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Stacked, stack, Layout, fn(k) {
     self.tree.nodes[self.at].stack = k
     self.tree.top_last()
     // (read out among the root's at its place, over what a modal layer holds or not: Tree::said_pass)
@@ -4309,11 +4387,13 @@ pub fn Tree::takes_presses(self : Tree, id : NodeId) -> Bool {
 
 ///|
 /// The words it shows: layout's (their size) and paint's, in `ink` (View::ink as it changes), set as `look` says.
+#callsite(autofill(loc))
 pub fn View::words(
   self : View,
   words : Live[String],
   ink? : Int64 = 0x000000FFL,
   look? : WordsLook = words_plain,
+  loc~ : SourceLoc,
 ) -> View {
   guard self.live() is Some(n) else { return self }
   n.look.ink = ink
@@ -4350,7 +4430,7 @@ pub fn View::words(
       _ => (mw, mh)
     }
   })
-  self.bind(Words, words, Both, fn(s) {
+  self.bind(loc~, Words, words, Both, fn(s) {
     tree.nodes[at].look.words = s
     tree.nodes[at].look.runs = []
     // (on one line in a column: no wider than it, Tree::capped_applied)
@@ -4372,14 +4452,15 @@ pub fn View::words(
 /// as its words look now, where how it gives way and how narrow it may be are not said of it (View::shrink,
 /// View::cuts, View::min_width: theirs where said, whichever is said first); saying none, as ever. As it changes:
 /// layout's.
-pub fn View::shorter(self : View, alts : Live[Array[String]]) -> View {
+#callsite(autofill(loc))
+pub fn View::shorter(self : View, alts : Live[Array[String]], loc~ : SourceLoc) -> View {
   let at = self.at
   let tree = self.tree
   // (how narrow it may be follows how its words look as the system's size of words changes: worked out again then)
   if self.live() is Some(n) && n.props.get(Prop::Shorter.ord()) is None {
     self.reacts(fn() { self.words_redone() }, fn(_) { tree.give_way_applied(at) })
   }
-  self.bind(Shorter, alts, Layout, fn(a) {
+  self.bind(loc~, Shorter, alts, Layout, fn(a) {
     tree.nodes[at].shorter = a
     tree.give_way_applied(at)
   })
@@ -4390,15 +4471,17 @@ pub fn View::shorter(self : View, alts : Live[Array[String]]) -> View {
 /// first of the same k; -1: there only while something of its row is left out, its ⋯; 0: always there), as it
 /// changes: laid out nowhere while it is, none of it drawn, pressed or read out; back where it was as the room comes.
 /// Its row says it lets them go so (View::fits). Layout's.
-pub fn View::drops(self : View, k : Live[Int]) -> View {
-  self.bind(Drop, k, Layout, fn(k) { self.tree.nodes[self.at].flex.style.drop = k })
+#callsite(autofill(loc))
+pub fn View::drops(self : View, k : Live[Int], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Drop, k, Layout, fn(k) { self.tree.nodes[self.at].flex.style.drop = k })
   self
 }
 
 ///|
 /// A row that leaves out of what it holds what has not the room (View::drops), as it changes. Layout's.
-pub fn View::fits(self : View, on : Live[Bool]) -> View {
-  self.bind(Fits, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.fits = on })
+#callsite(autofill(loc))
+pub fn View::fits(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, Fits, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.fits = on })
   self
 }
 
@@ -4407,8 +4490,9 @@ pub fn View::fits(self : View, on : Live[Bool]) -> View {
 /// first; once nothing more may, it gives way as it otherwise would (its words cut short: View::cuts), as it changes.
 /// The old views' `keep` on words cut short: a bar's title cut only after what is beside it has gone. Cut last, not
 /// never: View::keeps_held is never narrower than what it holds, whatever the room, so its words are never cut. Layout's.
-pub fn View::fit_whole(self : View, on : Live[Bool]) -> View {
-  self.bind(FitWhole, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.fit_whole = on })
+#callsite(autofill(loc))
+pub fn View::fit_whole(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, FitWhole, on, Layout, fn(on) { self.tree.nodes[self.at].flex.style.fit_whole = on })
   self
 }
 
@@ -4429,7 +4513,13 @@ pub fn View::left_out(self : View) -> Bool {
 /// answering how wide and tall; offered exactly a width, as wide as that. `size` reads nothing that changes but what
 /// `content` gives it (run with nothing followed): measured again only as `content` comes out otherwise, as the room
 /// offered changes, or as all words are measured anew (Tree::words_again). Laid out by what holds it as words are.
-pub fn[K : Eq] View::measured(self : View, content : Live[K], size : (K, Double?) -> (Double, Double)) -> View {
+#callsite(autofill(loc))
+pub fn[K : Eq] View::measured(
+  self : View,
+  content : Live[K],
+  size : (K, Double?) -> (Double, Double),
+  loc~ : SourceLoc,
+) -> View {
   guard self.live() is Some(n) else { return self }
   let tree = self.tree
   let k : Ref[K?] = Ref(None)
@@ -4451,23 +4541,25 @@ pub fn[K : Eq] View::measured(self : View, content : Live[K], size : (K, Double?
       None => (0.0, 0.0)
     }
   })
-  self.bind(Measured, content, Layout, fn(v) { k.val = Some(v) })
+  self.bind(loc~, Measured, content, Layout, fn(v) { k.val = Some(v) })
   self
 }
 
 ///|
 /// The words it shows in pieces, each set its own way (a weight, an ink: @text.Run), one paragraph laid out as one
 /// (View::words otherwise: read out, found and measured as the pieces' words one after another), as they change.
+#callsite(autofill(loc))
 pub fn View::words_runs(
   self : View,
   runs : Live[Array[@text.Run]],
   ink? : Int64 = 0x000000FFL,
   look? : WordsLook = words_plain,
+  loc~ : SourceLoc,
 ) -> View {
   let tree = self.tree
   let at = self.at
-  self.words(Is(""), ink~, look~) |> ignore
-  self.bind(Words, runs, Both, fn(rs) {
+  self.words(loc~, Is(""), ink~, look~) |> ignore
+  self.bind(loc~, Words, runs, Both, fn(rs) {
     let words = StringBuilder()
     for r in rs {
       words.write_string(r.text)
@@ -4484,7 +4576,7 @@ pub fn View::words_runs(
   })
   // (what of them is picked with the pointer, where what holds it says so: View::runs_picker's)
   match self.lent(runs_picker) {
-    Some(f) => self.runs_picked(f(self)) |> ignore
+    Some(f) => self.runs_picked(loc~, f(self)) |> ignore
     None => ()
   }
   self
@@ -5702,10 +5794,11 @@ pub fn View::lays_out_alone(self : View) -> View {
 }
 
 ///|
-/// A node holding what comes and goes (show, pick, each), with no box of its own.
-fn View::slot(self : View) -> View {
+/// A node holding what comes and goes (show, pick, each), with no box of its own, made at `loc` (where the
+/// structure was asked for).
+fn View::slot(self : View, loc : SourceLoc) -> View {
   guard self.live() is Some(n) else { return self.tree.none() }
-  let v = self.tree.made(self.at)
+  let v = self.tree.made(self.at, loc~)
   self.tree.nodes[v.at].slot = true
   n.kids.push(v.at)
   if self.at == 0 {
@@ -5924,9 +6017,16 @@ fn View::take_in(self : View, v : View) -> Unit {
 /// `then`'s node while `when` holds, made as it comes to and let go as it stops (what it made with it too: its scope).
 /// `leave`: it leaves over that long first (View::leave), and no shorter than a move it holds that holds its leaving
 /// is (View::moved_by's `holds_leaving`): its end what that move says it is, at the size it is laid out.
-pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? : Double = 0.0) -> Unit {
+#callsite(autofill(loc))
+pub fn View::show(
+  self : View,
+  when : () -> Bool,
+  then : (View) -> Unit,
+  leave? : Double = 0.0,
+  loc~ : SourceLoc,
+) -> Unit {
   guard self.alive() else { return }
-  let slot = self.slot()
+  let slot = self.slot(loc)
   let had : Ref[View?] = Ref(None)
   // (the one leaving, shown again as it leaves: the same node, come back)
   let gone : Ref[View?] = Ref(None)
@@ -5940,7 +6040,7 @@ pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? 
             slot.come_back(g)
             had.val = Some(g)
           }
-          _ => had.val = Some(slot.box(then))
+          _ => had.val = Some(slot.box(then, loc~))
         }
         gone.val = None
       }
@@ -5958,9 +6058,10 @@ pub fn View::show(self : View, when : () -> Bool, then : (View) -> Unit, leave? 
 
 ///|
 /// A node made by `make` for what `which` is, made anew (the one before let go) as that changes, kept as it does not.
-pub fn[K : Eq] View::pick(self : View, which : () -> K, make : (View, K) -> Unit) -> Unit {
+#callsite(autofill(loc))
+pub fn[K : Eq] View::pick(self : View, which : () -> K, make : (View, K) -> Unit, loc~ : SourceLoc) -> Unit {
   guard self.alive() else { return }
-  let slot = self.slot()
+  let slot = self.slot(loc)
   let had : Ref[(K, View)?] = Ref(None)
   let stop = slot.tree.structured(which, fn(k) {
     guard slot.alive() else { return }
@@ -5972,7 +6073,7 @@ pub fn[K : Eq] View::pick(self : View, which : () -> K, make : (View, K) -> Unit
           Some((_, v)) => slot.drop(v)
           None => ()
         }
-        let v = slot.box(fn(v) { make(v, k) })
+        let v = slot.box(fn(v) { make(v, k) }, loc~)
         had.val = Some((k, v))
       }
     }
@@ -5984,20 +6085,22 @@ pub fn[K : Eq] View::pick(self : View, which : () -> K, make : (View, K) -> Unit
 /// A node for each of `items` by its key, made as its key comes, kept while it stays, moved as the order changes, let
 /// go as it goes. Each is given its item as a signal of its own, set again only as the item comes out otherwise (by
 /// its data, not by which object it is): a row whose item is the same runs nothing.
+#callsite(autofill(loc))
 pub fn[T : Eq, K : Hash + Eq] View::each(
   self : View,
   items : () -> Array[T],
   key : (T) -> K,
   row : (View, @signals.Signal[T]) -> Unit,
   leave? : Double = 0.0,
+  loc~ : SourceLoc,
 ) -> Unit {
   guard self.alive() else { return }
-  let slot = self.slot()
+  let slot = self.slot(loc)
   let rows : Map[K, (View, @signals.Signal[T])] = Map([])
   // (the rows leaving, by key: one whose key comes back as it leaves is the same row, come back)
   let gone_rows : Map[K, (View, @signals.Signal[T])] = Map([])
   let stop = slot.tree.structured(items, fn(all) {
-    slot.tree.holding_boxes(fn() { each_change(slot, all, rows, gone_rows, key, row, leave) })
+    slot.tree.holding_boxes(fn() { each_change(slot, all, rows, gone_rows, key, row, leave, loc) })
   })
   slot.owns(stop) |> ignore
 }
@@ -6013,6 +6116,7 @@ fn[T : Eq, K : Hash + Eq] each_change(
   key : (T) -> K,
   row : (View, @signals.Signal[T]) -> Unit,
   leave : Double,
+  loc : SourceLoc,
 ) -> Unit {
   guard slot.live() is Some(sn) else { return }
   slot.tree.work.structure = slot.tree.work.structure + 1
@@ -6043,7 +6147,7 @@ fn[T : Eq, K : Hash + Eq] each_change(
               // (a row by its key: what is made in it known by it, View::row_place)
               v.tree.nodes[v.at].each_row = true
               row(v, item)
-            })
+            }, loc~)
             rows[k] = (v, item)
             order.push(v.at)
           }
@@ -6105,14 +6209,21 @@ fn each_place(slot : View, sn : Node, order : Array[Int]) -> Unit {
 /// as it comes, kept while that object stays in the list, moved as the order changes, let go as it goes (over `leave`,
 /// coming back where the same object comes back as it leaves). For a list whose items are the rows themselves (what is
 /// being written, each its own fields), which own nothing to be keyed by: each's by a key, this by which object.
-pub fn[T] View::each_of(self : View, items : () -> Array[T], row : (View, T) -> Unit, leave? : Double = 0.0) -> Unit {
+#callsite(autofill(loc))
+pub fn[T] View::each_of(
+  self : View,
+  items : () -> Array[T],
+  row : (View, T) -> Unit,
+  leave? : Double = 0.0,
+  loc~ : SourceLoc,
+) -> Unit {
   guard self.alive() else { return }
-  let slot = self.slot()
+  let slot = self.slot(loc)
   let rows : Array[(T, View)] = []
   // (the rows leaving: one whose object comes back as it leaves is the same row, come back)
   let gone_rows : Array[(T, View)] = []
   let stop = slot.tree.structured(fn() { TheseItems(items()) }, fn(all) {
-    slot.tree.holding_boxes(fn() { each_of_change(slot, all.0, rows, gone_rows, row, leave) })
+    slot.tree.holding_boxes(fn() { each_of_change(slot, all.0, rows, gone_rows, row, leave, loc) })
   })
   slot.owns(stop) |> ignore
 }
@@ -6143,6 +6254,7 @@ fn[T] each_of_change(
   gone_rows : Array[(T, View)],
   row : (View, T) -> Unit,
   leave : Double,
+  loc : SourceLoc,
 ) -> Unit {
   guard slot.live() is Some(sn) else { return }
   slot.tree.work.structure = slot.tree.work.structure + 1
@@ -6172,7 +6284,7 @@ fn[T] each_of_change(
               // (a row by its object: what is made in it known by it, View::row_place)
               v.tree.nodes[v.at].each_row = true
               row(v, it)
-            })
+            }, loc~)
             now.push((it, v))
             order.push(v.at)
           }

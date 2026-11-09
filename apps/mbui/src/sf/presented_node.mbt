@@ -377,6 +377,7 @@ let foot_fills_lent : @view.Lent[Bool] = @view.Lent::new()
 ///|
 /// What stands between a foot's buttons at its start and those at its end (Ctx::spacer's, as a node) in `parent`: the
 /// room left between them; at a sheet's foot, a share of it as each button's (foot_fills: the old spacer's Fill there).
-pub fn foot_spacer_node(parent : @view.View) -> Unit {
-  parent.box(fn(s) { s.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore }) |> ignore
+#callsite(autofill(loc))
+pub fn foot_spacer_node(parent : @view.View, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(s) { s.grow(Is(1.0)).basis(Is(Some(0.0))) |> ignore }) |> ignore
 }

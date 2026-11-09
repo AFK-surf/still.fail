@@ -160,6 +160,7 @@ fn dialog_layer_node(
 ///|
 /// The confirm's panel in `parent` (confirm_node's), as confirm_dialog's look: looking as `look()` says, its words as
 /// far in as it says. Its cancel button.
+#callsite(autofill(loc))
 fn confirm_panel(
   parent : @view.View,
   layer : @view.View,
@@ -172,10 +173,11 @@ fn confirm_panel(
   danger : Bool,
   cancel : () -> Unit,
   confirm : () -> Unit,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let theme = fn() { @ui.tree_theme() }
   let cancel_at : Ref[@view.View?] = Ref(None)
-  parent.box(fn(d) {
+  parent.box(made_for=loc, fn(d) {
     d
     .width(By(fn() { Some(dmin(confirm_w, layer.window().0 - dialog_margin)) }))
     // (confirm_box: 24 in at its sides, 28 over its title, 8 between its title, its words and its foot)

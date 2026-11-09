@@ -15,6 +15,7 @@
 /// changes); `files`, the files it names by their names, drawn where it names them (a paragraph of only a link to one,
 /// or its images); `screens`, its links to screens: a paragraph of only one its card, one bare in a sentence its title.
 /// The node.
+#callsite(autofill(loc))
 pub fn markdown_node(
   parent : @view.View,
   text : () -> String,
@@ -33,8 +34,9 @@ pub fn markdown_node(
   code? : (String) -> ((@view.View, () -> String) -> Unit)? = fn(_) { None },
   files? : (String) -> PlacedNode? = fn(_) { None },
   screens? : ScreensNode,
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(col) {
+  parent.box(made_for=loc, fn(col) {
     // (its words asked of the core as it is made and as they change, none where it is told their reading; read by it
     // till they change or it is let go: md_read_by, as table_node's)
     let reading = Ref("")
@@ -294,7 +296,15 @@ fn md_node_margins(md : MdNode, b : MdBlock, tight : Bool) -> (Double, Double) {
 
 ///|
 /// A block of kind `kind` (md_block_kind) in `p`, as `block` says it now (Md::piece's).
-fn md_block_node(p : @view.View, md : MdNode, kind : Int, block : () -> MdBlock?, tight : Bool) -> Unit {
+#callsite(autofill(loc))
+fn md_block_node(
+  p : @view.View,
+  md : MdNode,
+  kind : Int,
+  block : () -> MdBlock?,
+  tight : Bool,
+  loc~ : SourceLoc,
+) -> Unit {
   let s = md.size
   match kind {
     0 =>
@@ -325,7 +335,7 @@ fn md_block_node(p : @view.View, md : MdNode, kind : Int, block : () -> MdBlock?
     2 => {
       // beside a 2 bar of line_strong, in the web's muted, its tables in its column
       p.row(Is(true)) |> ignore
-      p.box(fn(bar) {
+      p.box(made_for=loc, fn(bar) {
         bar.width(Is(Some(md_quote_bar))).ground(By(fn() { theme().p.line_strong })) |> ignore
       })
       |> ignore
@@ -522,6 +532,7 @@ fn md_block_node(p : @view.View, md : MdNode, kind : Int, block : () -> MdBlock?
 /// A block's words (`xs`, as they change) as one paragraph of pieces (Md::words'): `size` and `weight` (0: 400), on
 /// Markdown's lines, in the block's ink; links in blue pressed where they lead, code in its ink at 0.9; a bare link to
 /// a chat its title; words found in bold.
+#callsite(autofill(loc))
 fn md_words_node(
   p : @view.View,
   md : MdNode,
@@ -529,6 +540,7 @@ fn md_words_node(
   size : () -> Double,
   weight : Int,
   wrap? : Bool = true,
+  loc~ : SourceLoc,
 ) -> Unit {
   let runs = fn() {
     let now = xs()
@@ -560,7 +572,7 @@ fn md_words_node(
     let size = size()
     { size, weight: if weight > 0 { weight } else { 400 }, line: md_line(md, size), wrap, tracking: @view.letters_own, balance: false }
   }
-  p.box(fn(w) {
+  p.box(made_for=loc, fn(w) {
     w.words_runs(By(runs)).words_look(By(look)).runs_look(By(table_runs_look)).ink(By(md.ink)) |> ignore
     @ui.runs_links(w, runs, md.on_link, hold?=md.on_link_hold) |> ignore
   })
@@ -693,7 +705,15 @@ fn md_list_node(p : @view.View, md : MdNode, list : () -> MdList?, depth : Int) 
 ///|
 /// A bulleted item's marker (bullet's): a third of the words' size across, its middle 5 into the indent, on the first
 /// line's middle (`line`); a disc, then a circle, then a square.
-fn md_bullet_node(m : @view.View, depth : Int, size : () -> Double, line : () -> Double, ink : () -> Int64) -> Unit {
+#callsite(autofill(loc))
+fn md_bullet_node(
+  m : @view.View,
+  depth : Int,
+  size : () -> Double,
+  line : () -> Double,
+  ink : () -> Int64,
+  loc~ : SourceLoc,
+) -> Unit {
   let side = fn() { (size() / 3.0 * 2.0).round() / 2.0 }
   m
   .width(Is(Some(md_marker_w)))
@@ -701,7 +721,7 @@ fn md_bullet_node(m : @view.View, depth : Int, size : () -> Double, line : () ->
   .lies_along(Is(Middle))
   .lines_up(Is(Some(Start)))
   |> ignore
-  m.box(fn(b) {
+  m.box(made_for=loc, fn(b) {
     b
     .width(By(fn() { Some(side()) }))
     .height(By(fn() { Some(side()) }))
@@ -718,7 +738,8 @@ fn md_bullet_node(m : @view.View, depth : Int, size : () -> Double, line : () ->
 ///|
 /// A task's box (task_box's): 13 across in its room (task_room at the system's size, 4 before and 8 after), on the
 /// first line's middle; faint grey, filled and ticked when `done`. Read out a checkbox that takes nothing.
-fn md_task_node(t : @view.View, done : () -> Bool, line : () -> Double) -> Unit {
+#callsite(autofill(loc))
+fn md_task_node(t : @view.View, done : () -> Bool, line : () -> Double, loc~ : SourceLoc) -> Unit {
   let faint = fn() { if theme().dark { 0xA0A0A066L } else { 0x7676764DL } }
   t
   .row(Is(true))
@@ -731,7 +752,7 @@ fn md_task_node(t : @view.View, done : () -> Bool, line : () -> Double) -> Unit 
   .lies_along(Is(Middle))
   .lines_up(Is(Some(Middle)))
   |> ignore
-  t.box(fn(b) {
+  t.box(made_for=loc, fn(b) {
     b
     .row(Is(true))
     .width(Is(Some(md_task_side)))
@@ -758,7 +779,14 @@ fn md_task_node(t : @view.View, done : () -> Bool, line : () -> Double) -> Unit 
 /// the code in the code face, in the colours the core said (`colours`), 12 on 18 (on a
 /// desktop's width 12 on 1.6), scrolled across rather than wrapped. Pressed, the key copies the code and says so
 /// copied_ms.
-pub fn code_block_node(p : @view.View, code : () -> String, lang : () -> String, colours : () -> String?) -> Unit {
+#callsite(autofill(loc))
+pub fn code_block_node(
+  p : @view.View,
+  code : () -> String,
+  lang : () -> String,
+  colours : () -> String?,
+  loc~ : SourceLoc,
+) -> Unit {
   let over = native_input() is Mouse
   let key_inset = @ui.capsule_in(row_corner, code_key_h)
   let copied = @signals.signal(false)
@@ -814,7 +842,7 @@ pub fn code_block_node(p : @view.View, code : () -> String, lang : () -> String,
     })
     |> ignore
   }
-  p.box(bar) |> ignore
+  p.box(made_for=loc, bar) |> ignore
   // (its code in a box of its own that scrolls across: what is over it stays)
   p.box(fn(sc) {
     sc.scrolls(@view.Scroll::across(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(held) {

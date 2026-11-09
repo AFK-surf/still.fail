@@ -8,6 +8,7 @@
 /// Space, a screen reader's press), its options through the presenters (@sf.pick) beside it, the chosen checked;
 /// `choose` given the one chosen. `whole`: never narrower than what is chosen in it says (what is beside it gives way);
 /// else `select_w` at most. While `disabled()`, at 55% and taking no press. Read out a button, `label` and its choice.
+#callsite(autofill(loc))
 pub fn select_node(
   parent : @view.View,
   value : () -> String,
@@ -16,6 +17,7 @@ pub fn select_node(
   label? : () -> String = fn() { "" },
   disabled? : () -> Bool = fn() { false },
   whole? : Bool = false,
+  loc~ : SourceLoc,
 ) -> Unit {
   let words = fn() {
     match options().iter().find_first(fn(o) { o.0 == value() }) {
@@ -24,7 +26,7 @@ pub fn select_node(
     }
   }
   let live = fn() { !disabled() }
-  parent.box(fn(b) {
+  parent.box(made_for=loc, fn(b) {
     let press = fn() {
       let (x, y, w, h) = b.placed_window_now()
       let now = @signals.untracked(value)

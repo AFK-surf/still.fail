@@ -17,6 +17,7 @@
 /// reduced), as far in as `shown` says of the node as it is drawn (the viewer's fade). A press on it where nothing of it
 /// takes one is its own, moving the window while it has none of the system's title bar (the app's own top row). Its
 /// tips in `tips`. The bar's node.
+#callsite(autofill(loc))
 pub fn viewer_bar_node(
   parent : @view.View,
   back : () -> String,
@@ -31,11 +32,12 @@ pub fn viewer_bar_node(
   tools : (@view.View, @view.Live[Double]) -> Unit,
   went : () -> Unit,
   tips : TipLayer,
+  loc~ : SourceLoc,
 ) -> @view.View {
   // (hidden as it is made: gone whole, not gone up; its way a motion's, there at once with motion reduced)
   let gone = EdgeWay::new(if @signals.untracked(hidden) { 1.0 } else { 0.0 })
   let mut bar : @view.View? = None
-  parent.box(fn(room) {
+  parent.box(made_for=loc, fn(room) {
     room.over(Is(true)) |> ignore
     room.reacts(hidden, fn(off) { gone.go(room, if off { 1.0 } else { 0.0 }, viewer_bar_ms) })
     let b = room.box(fn(b) {
@@ -198,8 +200,15 @@ fn bar_words(size : @ui.TextSize, line : @ui.Leading, weight : Int) -> @view.Wor
 /// at the window's corner following it (bar_back_corner); the chevron and `words` in the ink's own, its hover ground
 /// where the hand is on it (or the keyboard's focus shows); `went` as it is pressed, at the press's moment. Read out a
 /// button, by its words.
-fn back_node(parent : @view.View, words : () -> String, ink : () -> ViewerInk, went : () -> Unit) -> @view.View {
-  parent.box(fn(v) {
+#callsite(autofill(loc))
+fn back_node(
+  parent : @view.View,
+  words : () -> String,
+  ink : () -> ViewerInk,
+  went : () -> Unit,
+  loc~ : SourceLoc,
+) -> @view.View {
+  parent.box(made_for=loc, fn(v) {
     let lit = fn() {
       v.focus_shown() ||
       (match @ui.pointing() {
@@ -260,11 +269,13 @@ fn back_shapes() -> Array[@ui.Shape] {
 /// size so far in bold in its own, then a progress bar 120 wide (progress_node); before the core has said how much and
 /// with no size it was sent with, 正在打开 over a bar that sweeps. `got`: what has come and its whole size; `size`: the
 /// size it was sent with. Each as it changes. The row's node.
+#callsite(autofill(loc))
 pub fn viewer_coming_node(
   parent : @view.View,
   got : () -> (Double, Double?)?,
   size : () -> Double,
   ink : () -> ViewerInk,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let total = fn() -> Double? {
     match got() {
@@ -272,7 +283,7 @@ pub fn viewer_coming_node(
       _ => if size() > 0.0 { Some(size()) } else { None }
     }
   }
-  parent.box(fn(row) {
+  parent.box(made_for=loc, fn(row) {
     row
     .row(Is(true))
     .lines_up(Is(Some(Middle)))

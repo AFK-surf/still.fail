@@ -200,9 +200,10 @@ pub fn video_capsule(
 /// A video's capsule (video_capsule's, as a node, at rest: nothing coming) laid over `parent`, in its foot's start corner
 /// concentric with a message's file's: a small play mark and how long it is (`duration`, none where that is not known)
 /// on the video's shade.
-pub fn video_capsule_node(parent : @view.View, duration : Double) -> Unit {
+#callsite(autofill(loc))
+pub fn video_capsule_node(parent : @view.View, duration : Double, loc~ : SourceLoc) -> Unit {
   let length = if duration > 0.0 { clock(duration) } else { "" }
-  parent.box(fn(foot) {
+  parent.box(made_for=loc, fn(foot) {
     foot.over(Is(true)) |> ignore
     style_node(foot, fn() { video_capsule_foot })
     foot.box(fn(b) {

@@ -119,14 +119,16 @@ pub fn textarea_node(
 /// (a mouse's pointer on it or its field, nothing over it there; a finger pressing its field: Ctx::lit's); faded to
 /// O55 (input_box's `disabled`) over dur_ms while `disabled()`, its field then taking no press nor the focus. The
 /// field's node.
+#callsite(autofill(loc))
 fn field_frame(
   parent : @view.View,
   disabled : () -> Bool,
   row~ : Bool,
   body : (@view.View) -> @view.View,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let made : Ref[@view.View?] = Ref(None)
-  parent.box(fn(f) {
+  parent.box(made_for=loc, fn(f) {
     let live = fn() { !disabled() }
     let seen = EdgeWay::new(if @signals.untracked(disabled) { field_disabled_alpha } else { 1.0 })
     f.reacts(disabled, fn(off) { seen.go(f, if off { field_disabled_alpha } else { 1.0 }, dur_ms) })
@@ -165,8 +167,9 @@ let field_disabled_alpha : Double = 0.55
 ///|
 /// A field (field's, as nodes) in `parent`: its `label` (13, 500) over what `body` makes in it (the input), 6 apart; on
 /// a wide page not in a panel as wide as what is typed in it needs (field_box_wide), else as wide as where it is.
-pub fn field_node(parent : @view.View, label : () -> String, body : (@view.View) -> Unit) -> Unit {
-  parent.box(fn(f) {
+#callsite(autofill(loc))
+pub fn field_node(parent : @view.View, label : () -> String, body : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(f) {
     // (in a panel's body: lent where it is, panel_in_lent)
     let wide_page = look_node(f) is Wide && f.lent(panel_in_lent) is None
     style_node(f, fn() { if wide_page { field_box_wide } else { field_box } })

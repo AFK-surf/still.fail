@@ -13,6 +13,7 @@
 /// row's end and foot, its room kept at the end of the lines under the first); `end_slot`: how wide what stands at its
 /// first line's end is, in one column with the last of what stands in its corner (`corner_end` wide: a face's where it
 /// says none). The caller has the row before these bindings run, so they can read its state directly.
+#callsite(autofill(loc))
 pub fn list_row_node(
   row : @view.View,
   at : ListAt,
@@ -29,6 +30,7 @@ pub fn list_row_node(
   slotted? : Bool = false,
   end_slot? : Double = 0.0,
   corner_end? : () -> Double = fn() { 0.0 },
+  loc~ : SourceLoc,
 ) -> Unit {
   style_node(row, fn() {
     let l = theme().chat_list
@@ -42,7 +44,7 @@ pub fn list_row_node(
   row.ground(By(ground)) |> ignore
   match mark {
     Some(m) =>
-      row.box(fn(k) {
+      row.box(made_for=loc, fn(k) {
         style_node(k, fn() { list_row_mark }, in_row=true)
         k.height(By(fn() { Some(theme().chat_list.head_h) })) |> ignore
         m(k)
@@ -124,8 +126,9 @@ pub fn list_row_node(
 ///|
 /// A line under a row's first line (list_row_line's) in `parent`: as high as a chat's second line, its parts beside each
 /// other, made by `body`.
-pub fn list_row_line_node(parent : @view.View, body : (@view.View) -> Unit) -> Unit {
-  parent.box(fn(l) {
+#callsite(autofill(loc))
+pub fn list_row_line_node(parent : @view.View, body : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(l) {
     style_node(l, fn() { theme().chat_list.meta })
     body(l)
   })
@@ -135,8 +138,9 @@ pub fn list_row_line_node(parent : @view.View, body : (@view.View) -> Unit) -> U
 ///|
 /// A heading over a part of a list (list_heading's) in `parent`, its words `label` as it says them now, in from the
 /// list's left as its rows are where the list stands (`at`).
-pub fn list_heading_node(parent : @view.View, label : () -> String, at : ListAt) -> Unit {
-  parent.box(fn(h) {
+#callsite(autofill(loc))
+pub fn list_heading_node(parent : @view.View, label : () -> String, at : ListAt, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(h) {
     style_node(h, fn() { theme().chat_list.heading.then(list_heading_in(at)) })
     words_node(h, label, fn() { theme().chat_list.heading_words.then(in_lines) }) |> ignore
   })

@@ -12,6 +12,7 @@
 /// words changing go to their place for that cause. `card_words`: in a card's foot corner, its words where the card's
 /// begin (card_foot_words's: its padding as far in as that corner leaves them; one with an icon keeps its ends).
 /// The node.
+#callsite(autofill(loc))
 pub fn button_node(
   parent : @view.View,
   label : () -> String,
@@ -22,25 +23,29 @@ pub fn button_node(
   across? : Bool = false,
   icon? : String = "",
   card_words? : Bool = false,
+  loc~ : SourceLoc,
 ) -> @view.View {
-  button_by(parent, label, fn(_) { press() }, tone, busy, disabled, across, icon, card_words)
+  button_by(loc~, parent, label, fn(_) { press() }, tone, busy, disabled, across, icon, card_words)
 }
 
 ///|
 /// button_node's button that opens what goes beside it (a menu under it): `open` given the button itself as it is
 /// pressed, where it is placed then.
+#callsite(autofill(loc))
 pub fn button_opens_node(
   parent : @view.View,
   label : () -> String,
   open : (@view.View) -> Unit,
   tone? : Tone = Plain,
   icon? : String = "",
+  loc~ : SourceLoc,
 ) -> @view.View {
-  button_by(parent, label, open, tone, fn() { false }, fn() { false }, false, icon, false)
+  button_by(loc~, parent, label, open, tone, fn() { false }, fn() { false }, false, icon, false)
 }
 
 ///|
 /// button_node's button, `press` given the button itself as it is pressed.
+#callsite(autofill(loc))
 fn button_by(
   parent : @view.View,
   label : () -> String,
@@ -51,11 +56,12 @@ fn button_by(
   across : Bool,
   icon : String,
   card_words : Bool,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let live = fn() { !disabled() && !busy() }
   let solid = tone == Primary || tone == DangerSolid
   let height = button_height()
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     // (the hand on it, or pressing it: how far its ground has gone towards its lit one; at work, how far its spinner is
     // in and how far its room is open; how faded it is)
     let lit = fn() {

@@ -110,14 +110,16 @@ pub fn EdgeWay::shown(self : EdgeWay, n : @view.View) -> Double {
 /// edge grey while `active()` (pressed, dragged), else the strong line's grey; its line while on it (unless `line()` says
 /// no, as that changes: a sidebar folded) or active. Its bar's height and showing move over edge_bar_ms, its grey over edge_ink_ms, its line over
 /// edge_line_ms, each eased out, from the moment its state changed. Taking nothing. The node.
+#callsite(autofill(loc))
 pub fn edge_look_node(
   parent : @view.View,
   over : () -> Bool,
   on : () -> Bool,
   active : () -> Bool,
   line? : () -> Bool = fn() { true },
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     let theme = fn() { @ui.tree_theme() }
     let state = fn() { edge_state(over(), on(), active(), line()) }
     let now = @signals.untracked(state)

@@ -2323,3 +2323,30 @@ test "build-motion: each way a closure goes on to a paint taker, one at a time" 
     found([("src/kit/p.mbt", head + rest)], "build-motion", 0) |> ignore
   }
 }
+
+///|
+test "part-place" {
+  // a library's part made in the node it is given: counted where it takes no place of its caller's; one that takes it,
+  // one that makes nothing in it (it only sets what it looks like), a page's, and a test's not
+  let cfg = Config::new(
+    @rjson.parse(
+      #|{"mbt": {"roots": ["src"]}, "library": {"roots": ["src/sf"]}}
+      ,
+    ) catch {
+      _ => panic()
+    },
+  )
+  let fs = lint_of(
+    [
+      (
+        "src/sf/parts.mbt",
+        "pub fn a_node(parent : @view.View, label : () -> String) -> Unit {\n  parent.box(fn(b) { b.words(By(label)) |> ignore }) |> ignore\n}\n\n#callsite(autofill(loc))\npub fn b_node(parent : @view.View, loc~ : SourceLoc) -> Unit {\n  parent.box(made_for=loc, fn(_) {  }) |> ignore\n}\n\nfn c_look(v : @view.View) -> Unit {\n  v.ground(Is(0L)) |> ignore\n}\n\nfn d_node(p : @view.View) -> @view.View {\n  p.box(fn(_) {  })\n}\n",
+      ),
+      ("src/sfpages/page.mbt", "fn p(parent : @view.View) -> Unit {\n  parent.box(fn(_) {  }) |> ignore\n}\n"),
+      ("src/sf/x_wbtest.mbt", "fn t(parent : @view.View) -> Unit {\n  parent.box(fn(_) {  }) |> ignore\n}\n"),
+    ],
+    rule="part-place",
+    cfg~,
+  )
+  assert_eq(fs.map(fn(f) { f.line }), [1, 14])
+}

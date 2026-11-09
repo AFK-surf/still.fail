@@ -78,6 +78,7 @@ pub(open) trait Host {
   answers_by_frame(Self, Int) -> Bool = _
   script_step(Self, String, String) -> String = _
   rows_on_pixels(Self) -> Bool = _
+  keeps_sources(Self) -> Bool = _
   lines_on_pixels(Self) -> Bool = _
   frame_awaiting(Self, Int, String) -> Unit = _
   own_clock(Self) -> Bool = _
@@ -577,6 +578,11 @@ impl Host with answers_by_frame(_, _) {
 
 ///|
 impl Host with rows_on_pixels(_) {
+  false
+}
+
+///|
+impl Host with keeps_sources(_) {
   false
 }
 
@@ -1959,6 +1965,14 @@ pub fn answers_by_frame(kind : Int) -> Bool {
 /// rows_on_grid): every platform's does.
 pub fn rows_on_pixels() -> Bool {
   current.val.rows_on_pixels()
+}
+
+///|
+/// Whether the window's tree keeps where in the source each node was made and its properties said (view's source.mbt):
+/// a Tester's fake host does, for what it finds to say where to change it; a device's does not, its calls only passing
+/// their places on.
+pub fn keeps_sources() -> Bool {
+  current.val.keeps_sources()
 }
 
 ///|

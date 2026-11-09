@@ -316,6 +316,7 @@ let menu_none : MenuItem = {
 /// A row of a menu (menu_row's look) in `b`: what `item()` is now, the `i`th; lit while it has the focus (its ground
 /// the pointer's or the keyboard's where that is shown or the pointer is on it); the pointer moving onto it gives it the
 /// focus, unseen; pressed, `go`. Its words, icon, check and whether it can be chosen as the item has them now. The row.
+#callsite(autofill(loc))
 fn menu_row_node(
   b : @view.View,
   item : () -> MenuItem,
@@ -327,10 +328,11 @@ fn menu_row_node(
   current : @signals.Signal[Int],
   stop : () -> Int,
   extra : MenuExtra,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let t = theme()
   let off = fn() { item().disabled }
-  b.box(fn(r) {
+  b.box(made_for=loc, fn(r) {
     r
     .row(Is(true))
     .lines_up(Is(Some(Middle)))
@@ -483,13 +485,15 @@ let menu_no_extra : MenuExtra = { note: "", value: "", mark: None }
 /// A heading among a menu's items: its words (`label()`) as far in as its rows' words
 /// (`past()`: past the columns before them where there are: a check's or an icon's, a mark's), small and muted, 6 over and
 /// 4 under it.
+#callsite(autofill(loc))
 fn menu_heading_node(
   b : @view.View,
   label : () -> String,
   past : () -> Double,
   reach : Double,
+  loc~ : SourceLoc,
 ) -> Unit {
-  b.box(fn(h) {
+  b.box(made_for=loc, fn(h) {
     h.padding(By(fn() { (text_in + past() + reach, 6.0, 10.0 + reach, 4.0) })) |> ignore
     h.box(fn(w) {
       w
@@ -505,8 +509,9 @@ fn menu_heading_node(
 ///|
 /// A line between parts of a menu (menu_rule): the words' ink faintly, 1 high, 6 over and under it, as wide as its rows'
 /// grounds.
-fn menu_rule_node(b : @view.View, reach : Double) -> Unit {
-  b.box(fn(r) {
+#callsite(autofill(loc))
+fn menu_rule_node(b : @view.View, reach : Double, loc~ : SourceLoc) -> Unit {
+  b.box(made_for=loc, fn(r) {
     r.padding(Is((reach, 6.0, reach, 6.0))) |> ignore
     r.box(fn(l) { l.height(Is(Some(1.0))).ground(By(fn() { @ui.alpha(@ui.tree_theme().fg, 0.12) })) |> ignore }) |> ignore
   })
@@ -574,8 +579,9 @@ fn view_along(a : @ui.Along) -> @view.Along {
 
 ///|
 /// What a menu goes beside at a place in the window (x, y, w, h: a point where w and h are 0), made in `layer`.
-pub fn fixed_anchor(layer : @view.View, at : (Double, Double, Double, Double)) -> @view.View {
-  layer.box(fn(a) {
+#callsite(autofill(loc))
+pub fn fixed_anchor(layer : @view.View, at : (Double, Double, Double, Double), loc~ : SourceLoc) -> @view.View {
+  layer.box(made_for=loc, fn(a) {
     let (x, y, w, h) = at
     a.width(Is(Some(w))).height(Is(Some(h))).offset(Is((x, y))) |> ignore
   })

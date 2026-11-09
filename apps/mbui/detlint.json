@@ -564,7 +564,8 @@
       "src/sfpages/outside.mbt": 1,
       "src/sfpages/search.mbt": 2,
       "src/sfpages/switcher.mbt": 2
-    }
+    },
+    "part-place": {}
   },
   "excused": {
     "frame-request": {},
@@ -643,6 +644,7 @@
     "old-island": {},
     "old-panel": {},
     "click-read": {},
-    "key-read": {}
+    "key-read": {},
+    "part-place": {}
   }
 }

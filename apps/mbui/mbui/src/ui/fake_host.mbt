@@ -2197,6 +2197,13 @@ impl @hostapi.Host for FakeHost with rows_on_pixels(self) {
 }
 
 ///|
+/// The window's tree keeps where in the source each node was made, for what a test finds to say where to change it
+/// (view's source.mbt), unless the test runs it as a device does (Tester::new's `keeps_sources`).
+impl @hostapi.Host for FakeHost with keeps_sources(self) {
+  self.keeps_sources
+}
+
+///|
 /// Over a host's kept text, as that host said of its fonts (any of them), asked of nothing new; else not.
 impl @hostapi.Host for FakeHost with lines_on_pixels(_) {
   match text_table.val {
