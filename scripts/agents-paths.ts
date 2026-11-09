@@ -22,7 +22,8 @@ for (const file of tracked.filter((f) => f === "AGENTS.md" || f.endsWith("/AGENT
   const dir = dirname(file);
   const lines = readFileSync(join(root, file), "utf8").split("\n");
   lines.forEach((line, i) => {
-    for (const [, word] of line.matchAll(/`([^`\n]+)`/g)) {
+    for (const match of line.matchAll(/`([^`\n]+)`/g)) {
+      const word = match[1] ?? "";
       if (!word.includes("/") || !PATH.test(word) || word.startsWith("@")) continue;
       const path = word.replace(/\/$/, "");
       const from = [normalize(join(dir, path)), normalize(path)];
