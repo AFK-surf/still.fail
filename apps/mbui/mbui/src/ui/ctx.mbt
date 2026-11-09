@@ -164,6 +164,8 @@ struct ListState {
   mut put_at : Double
   /// how tall each row was last laid out, by its key (list_size.mbt)
   shown_h : Map[String, Double]
+  /// the room over what each row holds (its lead: ListRows::enter) as it was last laid out, by its key
+  shown_lead : Map[String, Double]
   sizes_mover : Mover
 }
 

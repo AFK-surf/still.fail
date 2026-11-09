@@ -72,7 +72,7 @@ pub fn chat_list(
     top=list_top,
     in_front=app_in_front(),
     // (narrow or not, and on a way the width it is kept at: each row another version as that changes, from then)
-    laid=(if narrow { "|narrow" } else { "" }) + (if held { "|" + lay_w.to_string() } else { "" }),
+    laid=(if narrow { "|narrow" } else { "" }) + laid_at_w(key, held, lay_w),
     laid_at~,
     foot_way?,
   )
@@ -129,7 +129,7 @@ pub fn chat_list(
     rows_said(key, v, read).to_string()
   let list_style = if held { chat_list_box.then(@ui.style(w=Fixed(list_w))) } else { chat_list_box }
   let list_box_id = c.id("search-pane/" + key)
-  let list_box = c.box(style=list_style, id=list_box_id, tx=(frame_w - list_w) / 2.0, fn() {
+  let list_box = c.box(style=list_style, id=list_box_id, tx=list_shift(key, frame_w, list_w), fn() {
     c.sized(list_w, c.height, fn() {
     let rows = fn() {
     c.list(
@@ -634,6 +634,7 @@ pub fn find_forget() -> Unit {
 /// What the list keeps of its own, let go (the package's reset).
 fn list_reset() -> Unit {
   lists_set_off.clear()
+  lists_held_w.clear()
   flashing_now.val = ("", 0.0)
   ask_turns.clear()
   find_around.val = -1.0
@@ -652,10 +653,13 @@ fn native_row_inset() -> Double {
 /// whichever frame that is); else now. On the page's way to another width (@sfbase.page_way: a side panel sliding beside it, the sidebar opening or
 /// folding) across one at which its rows are laid out otherwise (chat_narrow_w: 20 between messages, not 28, each
 /// picture inline; or the composer under it reaching across the pane, its room under the last row 8 less:
-/// composer_foot_in), as the narrower of where it set off and where it goes, from the frame it sets off till the one it
-/// is there: so they are laid out anew only as the way sets off and as it is there, whichever frames are drawn on the
-/// way, each row another version then (sfbase's shown_rows), its room going on the list's way from that frame, not as
-/// a frame drawn first finds the pane past that width. On a way across none of them, as wide as where it goes once
+/// composer_foot_in), as where it goes, from the frame it sets off till the one it is there: so they are laid out anew
+/// only as the way sets off, whichever frames are drawn on the way, each row another version then (sfbase's
+/// shown_rows), its room going on the list's way from that frame, not as a frame drawn first finds the pane past that
+/// width; standing where they stood as it set off and going from there to where they come to stand as the pane goes
+/// (list_shift). Laid out at the narrower end the whole way and in the pane's middle, they were narrow at once and
+/// slid across the pane as a panel came in, and went on narrow to be wide at once as it was gone (the user,
+/// 2026-11-09: 「打开关闭右侧面板，中间的变化不对」). On a way across none of them, as wide as where it goes once
 /// both are wide enough for its column (the rows as wide either way), else as wide as it is. Not beside the system's
 /// bars (native_on): each frame as it is.
 fn laid_w(c : @ui.Ctx, key : String) -> (Double, Bool, Double) {
@@ -682,12 +686,52 @@ fn laid_w(c : @ui.Ctx, key : String) -> (Double, Bool, Double) {
   lists_set_off[key] = (way.id, from, way.ends, now)
   let to = way.to
   if (from <= chat_narrow_w) != (to <= chat_narrow_w) || composer_across(from) != composer_across(to) {
-    return (dmin(dmin(from, to), c.width), true, now)
+    return (to, true, now)
   }
   if to > chat_narrow_w && dmin(c.width, to) >= chat_column_w + 2.0 * row_side_least {
     return (to, true, now)
   }
   (c.width, false, now)
+}
+
+///|
+/// The width chat list `key`'s rows are another version for (shown_rows' `laid`): held at one on a page's way
+/// (laid_w), that one still once the way is there and the pane as wide, so that its rows are not another version again
+/// as nothing of them changed (all of them on the list's way for nothing then, a way set off over it while that goes
+/// on from there: a side panel closed again as soon as it is open); "" once the pane is another width.
+fn laid_at_w(key : String, held : Bool, w : Double) -> String {
+  if held {
+    lists_held_w[key] = w
+    return "|" + w.to_string()
+  }
+  match lists_held_w.get(key) {
+    Some(at) if (at - w).abs() < 0.5 => "|" + at.to_string()
+    Some(_) => {
+      lists_held_w.remove(key) |> ignore
+      ""
+    }
+    None => ""
+  }
+}
+
+///|
+/// The width each chat list's rows were last held at on a page's way (laid_at_w).
+let lists_held_w : Map[String, Double] = {}
+
+///|
+/// How far from the left of a pane `frame_w` wide chat list `key`, laid out `list_w` wide, stands: in its middle; on a
+/// page's way across the width it is laid out otherwise at (laid_w: as where it goes), its rows' words where they stood
+/// in the pane as it set off, going as far as the pane has gone to where they stand once it is there (its left edge),
+/// not sliding across it in its middle nor stepping as it sets off.
+fn list_shift(key : String, frame_w : Double, list_w : Double) -> Double {
+  let way = @sfbase.page_way
+  match lists_set_off.get(key) {
+    Some((id, from, _, _)) if id != "" && id == way.id && list_w == way.to && from != way.to => {
+      let gone = dmax(0.0, dmin(1.0, (from - frame_w) / (from - way.to)))
+      (row_side(from) - row_side(way.to)) * (1.0 - gone)
+    }
+    _ => (frame_w - list_w) / 2.0
+  }
 }
 
 ///|

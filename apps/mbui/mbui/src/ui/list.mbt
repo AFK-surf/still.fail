@@ -503,6 +503,7 @@ pub fn Ctx::list(
         from_end: false,
         put_at: -1.0,
         shown_h: {},
+        shown_lead: {},
         sizes_mover: Mover::new(),
       }
       self.lists[id] = s
@@ -733,7 +734,8 @@ fn Ctx::place_list(
     if middle {
       dr.rows_soft.push((r, row_soft(shown, h)))
     }
-    let by = if middle { st.row_middle(k, shown, h) } else { 0.0 }
+    let lead_off = if middle { 0.0 } else { st.row_lead_off(k, self.clock) }
+    let by = if middle { st.row_middle(k, shown, h) } else { lead_off }
     // (what comes and goes in it, where something in it is so: not what it is drawn on, Node's `room_held`)
     for ch in (if st.causes is Some(_) { self.room_held_in(r) } else { [] }) {
       let n = self.nodes[ch]
@@ -751,7 +753,7 @@ fn Ctx::place_list(
       h
     }
     st.set_height(k, h)
-    st.row_shown(k, h)
+    st.row_shown(k, h, lead_off~)
     (r, h)
   }
   let bottom_edge = iy + ih
