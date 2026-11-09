@@ -185,6 +185,13 @@ fn read_topic_state(src : Source, name : String, params : Map[String, Json]) -> 
 }
 
 ///|
+/// Whether two reads of a topic give the same: its value and error the same objects, its version and whether it waits
+/// the same.
+fn topic_state_same(a : TopicState, b : TopicState) -> Bool {
+  physical_equal(a.value, b.value) && physical_equal(a.error, b.error) && a.version == b.version && a.waiting == b.waiting
+}
+
+///|
 /// A page scope already has a graph reader and must not also acquire an untracked frame hold.
 fn scoped_topic(src : Source, name : String, params : Map[String, Json], independent? : Bool = false) -> @signals.Computed[TopicState] {
   let key = params.copy()
@@ -277,13 +284,18 @@ fn followed_topic(src : Source, name : String, params : Map[String, Json], indep
           })
         })
       })
-      let holder = @signals.computed(fn(_) {
-        lifetime.get() |> ignore
-        match src.topic_scope {
-          Some(scope) => scope(if independent { Lease } else { Graph }, fn() { read_topic_state(src, name, params) })
-          None => read_topic_state(src, name, params)
-        }
-      })
+      // (read again as what it follows changes, the same as it was where the topic it gives is: the same value, error
+      // and version, nothing told to what reads it)
+      let holder = @signals.computed(
+        fn(_) {
+          lifetime.get() |> ignore
+          match src.topic_scope {
+            Some(scope) => scope(if independent { Lease } else { Graph }, fn() { read_topic_state(src, name, params) })
+            None => read_topic_state(src, name, params)
+          }
+        },
+        same=topic_state_same,
+      )
       followed_topics.val.push({ source: src, key, name, params: params.copy(), independent, holder, token })
       holder
     }

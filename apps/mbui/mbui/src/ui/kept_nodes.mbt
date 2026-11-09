@@ -159,6 +159,8 @@ priv struct NodesRun {
   /// Tester::rows_read_built)
   mut built_read : Int
   kept_at : Array[(Int, Int)]
+  /// the rows and parts this frame built, as kept_at (not those a build keeping none built: Tester::rows_built)
+  built_at : Array[(Int, Int)]
   mut on : Bool
 }
 
@@ -180,6 +182,7 @@ let nodes_run : NodesRun = {
   built: 0,
   built_read: 0,
   kept_at: [],
+  built_at: [],
   on: true,
 }
 
@@ -247,9 +250,11 @@ fn Ctx::rows_detach(self : Ctx) -> Unit {
     // it in the frame: left where they were, a node more or less built before them (a bar's in a motion) put another
     // node in each of their places, all of them laid out anew; a part's left there, for it to make again in its place.
     // But a row that shows only what it read, unless none is kept at all)
-    if nodes_run.whole || (nodes_run.fresh && !rn.reads_all && self.goes_with_frame(rn)) {
+    if self.built_with_frame(rn) {
       if rn.item >= 0 {
         self.row_nodes_out(rn)
+      } else {
+        self.inner_staying_out(rn)
       }
       rn.in_pool = false
       rn.n = 0
@@ -258,6 +263,29 @@ fn Ctx::rows_detach(self : Ctx) -> Unit {
     }
     self.row_nodes_out(rn)
     rn.in_pool = false
+  }
+}
+
+///|
+/// Whether this pass builds row or part `rn` anew, none of it kept (rows_detach).
+fn Ctx::built_with_frame(self : Ctx, rn : RowNodes) -> Bool {
+  nodes_run.whole || (nodes_run.fresh && !rn.reads_all && self.goes_with_frame(rn))
+}
+
+///|
+/// The parts kept among part `rn`'s nodes that go on as it is built anew (an own part or one whose rows stay, in an old
+/// view's built for what came to it alone: rows_detach), out of the frame's into their own, spares in their places: `rn`
+/// left in the frame's for its build to make again there, what it builds over where they were is not theirs, and they
+/// are put back from their own. Those built anew with it are left with it, theirs in turn looked through.
+fn Ctx::inner_staying_out(self : Ctx, rn : RowNodes) -> Unit {
+  for p in rn.inner {
+    let (i, _) = p
+    if self.built_with_frame(i) {
+      self.inner_staying_out(i)
+    } else {
+      self.row_nodes_out(i)
+      i.in_pool = false
+    }
   }
 }
 
@@ -421,6 +449,7 @@ fn nodes_forget() -> Unit {
   nodes_run.built = 0
   nodes_run.built_read = 0
   nodes_run.kept_at.clear()
+  nodes_run.built_at.clear()
   nodes_run.on = true
 }
 
@@ -432,6 +461,7 @@ fn rows_frame_start() -> Unit {
   nodes_run.kept = 0
   nodes_run.built = 0
   nodes_run.kept_at.clear()
+  nodes_run.built_at.clear()
 }
 
 ///|
@@ -828,6 +858,9 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
 /// nodes all its own and none of a kind built each frame; a part may hold lists, laid out each frame).
 fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bool) -> Unit {
   nodes_run.built = nodes_run.built + 1
+  if !nodes_run.whole {
+    nodes_run.built_at.push((rn.list, rn.item))
+  }
   if !part && rn.reads_all {
     nodes_run.built_read = nodes_run.built_read + 1
   }
@@ -1247,6 +1280,14 @@ fn Ctx::held_by(self : Ctx, outer : RowNodes?, rn : RowNodes) -> Unit {
     }
     None => ()
   }
+}
+
+///|
+/// The rows (their list and item) and the parts (their id, -1) the last frame built, not kept (a test's): none of
+/// those a build keeping none built to compare with.
+pub fn Tester::rows_built(self : Tester) -> Array[(Int, Int)] {
+  ignore(self)
+  nodes_run.built_at.copy()
 }
 
 ///|

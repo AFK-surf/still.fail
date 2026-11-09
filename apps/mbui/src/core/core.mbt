@@ -178,6 +178,13 @@ pub fn unread(name : String) -> Unit {
 }
 
 ///|
+/// The answer of call `name` changes only signals: taken as it comes, what read them is built again, nothing else
+/// (Client::said). Said once, as the app starts.
+pub fn said(name : String) -> Unit {
+  client.said(name)
+}
+
+///|
 /// Calls `name` and hears how it goes, for an answer with bytes beside it (see Client::stream_bytes); the call's id,
 /// for `cancel`.
 pub fn stream_bytes(

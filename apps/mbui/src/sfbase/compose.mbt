@@ -340,6 +340,22 @@ fn writing_act(
 }
 
 ///|
+/// The core's calls whose answers change only signals (@core.said, as the app starts; a made-up core's the same): the
+/// words of a draft told (`composer.text`: what writing_act does with its answer, `pending` and the version it is at,
+/// read by what follows the draft's topic), where a ref is asked at the caret (`ref.at`: refs_ask_at's, what it found
+/// set with the signals the menu reads). Taken as they come, what read those is built again, nothing else: not a page
+/// whose field had a word typed in it built whole for each.
+pub fn calls_said() -> Array[String] {
+  ["composer.text", "ref.at"]
+}
+
+///|
+/// Whether call `name`'s answer changes only signals (calls_said).
+pub fn call_said(name : String) -> Bool {
+  calls_said().contains(name)
+}
+
+///|
 /// What is typed, told to the core as it is typed (`composer.text`).
 pub fn writing_text(src : Source, w : Writing, words : String) -> Unit {
   if words == w.text.get() {

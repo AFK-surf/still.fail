@@ -269,11 +269,7 @@ pub fn chat_list(
     )
     |> ignore
     }
-    if held {
-      c.kept_part(c.id(key + "/rows"), rows_key, rows, read_out=true, rows_stay=true)
-    } else {
-      rows()
-    }
+    c.kept_part(c.id(key + "/rows"), rows_key, rows, read_out=true, rows_stay=true)
     let found_now = Ref(false)
     let la = list_after(
       c,

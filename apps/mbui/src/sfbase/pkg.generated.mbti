@@ -119,6 +119,10 @@ pub fn by_of(@json.Json?) -> By
 
 pub fn bytes_first_frame(@ui.Ctx, String, String, Bytes) -> String
 
+pub fn call_said(String) -> Bool
+
+pub fn calls_said() -> Array[String]
+
 pub fn chat_inputs_left(ChatRef) -> Unit
 
 pub fn chat_inputs_left_from(Source, ChatRef) -> Unit

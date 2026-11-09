@@ -41,6 +41,9 @@ priv struct Composing {
   mut picking : (String, @ui.Pick)?
   let_go : @signals.Signal[Bool]
   warmed : Map[String, Int]
+  /// words typed into its field since it was last built (told the core as they were typed: composer_text's
+  /// `on_change`), for its build to warm the agent's runtime
+  mut typed : Bool
   comments : Map[String, @ui.Field]
   mut roomy : Bool?
   mut draft : String
@@ -111,6 +114,7 @@ let composing : Composing = {
   picking: None,
   let_go: @signals.signal(false, same=fn(a, b) { a == b }),
   warmed: {},
+  typed: false,
   comments: {},
   roomy: None,
   draft: "",
@@ -147,6 +151,7 @@ fn composing_reset() -> Unit {
   composing.picking = None
   composing.let_go.set(false)
   composing.warmed.clear()
+  composing.typed = false
   composing.comments.clear()
   composing.grounds.clear()
   composing.pictures.clear()
@@ -729,6 +734,14 @@ fn composer_text(
         // (each edit of it by the person, as the core reads it, at its moment: a mark taken whole, a chat's link
         // pasted, the `@` words at its caret)
         on_edit=fn(e) { @sfbase.refs_edited(src, w.key, w.field, spec.station, spec.locked, e) },
+        // (what is typed told to the core as it is typed, outside the build: the composer built once for it, not again
+        // for what telling it set as it was built)
+        on_change=fn(words) {
+          if words != w.text.get() && !w.starting.get() {
+            writing_text(src, w, words)
+            composing.typed = true
+          }
+        },
       )
       match res.pasted {
         Some(words) => @sfbase.writing_paste(src, w, spec.station, words)
@@ -747,6 +760,9 @@ fn composer_text(
         None =>
           if res.text != w.text.get() && !w.starting.get() {
             writing_text(src, w, res.text)
+            warm(c, src, spec)
+          } else if composing.typed {
+            composing.typed = false
             warm(c, src, spec)
           }
       }
