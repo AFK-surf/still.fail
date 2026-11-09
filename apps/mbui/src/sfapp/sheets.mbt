@@ -1716,11 +1716,16 @@ fn open_jobs_node(v : @view.View, src : Source, w : Workspace) -> Unit {
     gb.each(shown, fn(j) { text(Some(j), "station") + "/" + text(Some(j), "id") }, fn(row, j) {
       open_job_row_node(row, src, fn() { Some(j.get()) })
     })
-    gb.show(fn() { shown().length() < list().length() }, fn(m) {
-      @sf.style_node(m, fn() { open_jobs_more })
-      let more = fn() { fill("android-misc.openJobs.more", [("n", (list().length() - shown().length()).to_string())]) }
-      @sf.rippled_node(m, fn() { dui.opened[@signals.untracked(gkey)] = true }, open_jobs_more_corner, more)
-      @sf.words_node(m, more, fn() { open_jobs_more_words }) |> ignore
+    // (on a line of its own, as wide as its words)
+    gb.show(fn() { shown().length() < list().length() }, fn(line) {
+      @sf.style_node(line, fn() { open_job_line })
+      line.box(fn(m) {
+        @sf.style_node(m, fn() { open_jobs_more })
+        let more = fn() { fill("android-misc.openJobs.more", [("n", (list().length() - shown().length()).to_string())]) }
+        @sf.rippled_node(m, fn() { dui.opened[@signals.untracked(gkey)] = true }, open_jobs_more_corner, more)
+        @sf.words_node(m, more, fn() { open_jobs_more_words }) |> ignore
+      })
+      |> ignore
     })
   })
 }
@@ -1757,8 +1762,17 @@ fn open_job_row_node(row : @view.View, src : Source, job : () -> Json?) -> Unit 
   |> ignore
   row.box(fn(words) {
     @sf.style_node(words, fn() { open_job_words }, in_row=true)
-    @sf.words_node(words, fn() { text(job(), "name") }, fn() { open_job_name }) |> ignore
-    @sf.words_node(words, fn() { text(job(), "whereText") + " · " + text(job(), "age") }, fn() { open_job_meta }) |> ignore
+    // (each on a line of its own across it, cut short where it has less room)
+    words.box(fn(line) {
+      @sf.style_node(line, fn() { open_job_line })
+      @sf.words_node(line, fn() { text(job(), "name") }, fn() { open_job_name }) |> ignore
+    })
+    |> ignore
+    words.box(fn(line) {
+      @sf.style_node(line, fn() { open_job_line })
+      @sf.words_node(line, fn() { text(job(), "whereText") + " · " + text(job(), "age") }, fn() { open_job_meta }) |> ignore
+    })
+    |> ignore
   })
   |> ignore
   row.box(fn(s) {
@@ -1798,7 +1812,7 @@ let open_jobs_at : @ui.Style = @ui.css("w=Full pl=S2_5 pr=S2_5 pt=S1 pb=S2_5 gap
 
 ///|
 // kept across runs: a value (no field of it changes)
-let open_jobs_group : @ui.Style = @ui.css("w=Full gap=S0_5 align=AStart")
+let open_jobs_group : @ui.Style = @ui.css("w=Full gap=S0_5")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -1834,6 +1848,10 @@ let open_job_dot : @ui.Style = @ui.css("w=S4 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let open_job_words : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_job_line : @ui.Style = @ui.css("row w=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
