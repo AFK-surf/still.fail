@@ -1,4 +1,4 @@
-// The workspace lock across a whole world, tested by its properties: the control plane, three
+// The workspace lock across a whole world, tested by its properties (run by lock-world-<n>.test.ts, a part each): the control plane, three
 // stations (their own code: cloud.json and lock.json on disk, the presence socket's frames, the mesh's lock sync, a
 // device's hello) and the members' devices, each step drawn from a seed: an entry signed on a device and brought to the
 // plane and the stations, a device connecting, a line cut or back, a station stopped or started, the plane holding
@@ -697,52 +697,59 @@ async function shrink(steps: Step[], held: boolean[], seed: number): Promise<Ste
   return now;
 }
 
-test("a station the plane holds back from is brought level by the others once the line between them is back, nothing else changing", async () => {
-  const w = new World(1);
-  try {
-    // s1 cut off from the plane, from the devices and from the other stations; alice approves a device meanwhile.
-    for (const line of ["p1", "d1", "m0-1", "m1-2"]) await w.setLine(line, false);
-    w.sign(0, 0, 0);
-    await w.drain();
-    const [plane, s0, s1, s2] = w.chains().map((c) => c.chain.length);
-    assert.deepEqual([s0, s1, s2], [plane, 1, plane], "s0 and s2 took it, s1 could not");
-    // The lines between the stations back, and nothing else: s1 is brought level all the same.
-    for (const line of ["m0-1", "m1-2"]) await w.setLine(line, true);
-    await w.drain();
-    assert.deepEqual(w.chains().map((c) => c.chain.length), [plane, plane, plane, plane]);
-    w.invariants();
-  } finally {
-    w.close();
-  }
-});
+/// The two worlds told step by step, in the first part (lock-world-1.test.ts).
+export function namedWorlds(): void {
+  test("a station the plane holds back from is brought level by the others once the line between them is back, nothing else changing", async () => {
+    const w = new World(1);
+    try {
+      // s1 cut off from the plane, from the devices and from the other stations; alice approves a device meanwhile.
+      for (const line of ["p1", "d1", "m0-1", "m1-2"]) await w.setLine(line, false);
+      w.sign(0, 0, 0);
+      await w.drain();
+      const [plane, s0, s1, s2] = w.chains().map((c) => c.chain.length);
+      assert.deepEqual([s0, s1, s2], [plane, 1, plane], "s0 and s2 took it, s1 could not");
+      // The lines between the stations back, and nothing else: s1 is brought level all the same.
+      for (const line of ["m0-1", "m1-2"]) await w.setLine(line, true);
+      await w.drain();
+      assert.deepEqual(w.chains().map((c) => c.chain.length), [plane, plane, plane, plane]);
+      w.invariants();
+    } finally {
+      w.close();
+    }
+  });
 
-test("a station away while the lock was turned off and on again lets the old one go once it is back, by the rest of it the plane kept", async () => {
-  const w = new World(2);
-  try {
-    w.stop(w.stations[2]!);
-    // alice turns it off, and on again with the two stations there.
-    w.sign(0, 2, 0);
-    await w.drain();
-    w.sign(0, 0, 0);
-    await w.drain();
-    assert.equal(w.sp[0]!.epochs.length, 2, "turned on again");
-    assert.deepEqual([0, 1].map((i) => w.stations[i]!.cloud!.locked()?.state?.genesis), [0, 1].map(() => entryHash(w.sp[0]!.plane[0]!)));
-    // s2 back: it held the first lock, which is off.
-    w.start(w.stations[2]!);
-    await w.drain();
-    assert.equal(w.stations[2]!.cloud!.locked(), null, "the old lock let go");
-    w.invariants();
-  } finally {
-    w.close();
-  }
-});
+  test("a station away while the lock was turned off and on again lets the old one go once it is back, by the rest of it the plane kept", async () => {
+    const w = new World(2);
+    try {
+      w.stop(w.stations[2]!);
+      // alice turns it off, and on again with the two stations there.
+      w.sign(0, 2, 0);
+      await w.drain();
+      w.sign(0, 0, 0);
+      await w.drain();
+      assert.equal(w.sp[0]!.epochs.length, 2, "turned on again");
+      assert.deepEqual([0, 1].map((i) => w.stations[i]!.cloud!.locked()?.state?.genesis), [0, 1].map(() => entryHash(w.sp[0]!.plane[0]!)));
+      // s2 back: it held the first lock, which is off.
+      w.start(w.stations[2]!);
+      await w.drain();
+      assert.equal(w.stations[2]!.cloud!.locked(), null, "the old lock let go");
+      w.invariants();
+    } finally {
+      w.close();
+    }
+  });
+}
 
 const STEPS = 160;
 const RUNS = Number(process.env.LOCK_WORLD_RUNS ?? 30);
 const seeds = process.env.LOCK_WORLD_SEED ? [Number(process.env.LOCK_WORLD_SEED)] : Array.from({ length: RUNS }, (_, i) => i + 1);
 
-test("the workspace lock across a world of stations, a plane and devices: never wrong, and level once the lines are back", async () => {
-  for (const seed of seeds) {
+/// The worlds drawn from the seeds of part `part` of `parts` (every `parts`-th from `part + 1`): the parts are files of
+/// their own (lock-world-<n>.test.ts), run beside each other, so the slowest file of the station's tests is a third of
+/// what it was.
+export function drawnWorlds(part: number, parts: number): void {
+test(`the workspace lock across a world of stations, a plane and devices: never wrong, and level once the lines are back (part ${part + 1} of ${parts})`, async () => {
+  for (const seed of seeds.filter((s, i) => process.env.LOCK_WORLD_SEED !== undefined ? part === 0 : i % parts === part)) {
     const { steps, held } = draw(seed, STEPS);
     const began = performance.now();
     const failed = await fails(steps, held, seed);
@@ -753,3 +760,4 @@ test("the workspace lock across a world of stations, a plane and devices: never 
     assert.fail(`LOCK_WORLD_SEED=${seed}: ${again.error.message}\n${fewest.length} of ${STEPS} steps still fail:\n${again.log.join("\n")}`);
   }
 });
+}
