@@ -208,10 +208,12 @@ fn adb_next(view : Json?, phone : Json?, there : Bool) -> AdbStep? {
   if !flag(phone, "developer") {
     return adb_step(tr("android-misc.adb.step.developer"), sub=tr("android-misc.adb.developer.how"))
   }
-  if !flag(phone, "wifi") {
+  // held off Wi-Fi on adbd's plain port (AdbPorts.TCP): neither Wi-Fi nor Wireless debugging is wanted for it
+  let held = there && adb == "connected"
+  if !held && !flag(phone, "wifi") {
     return adb_step(tr("android-misc.adb.step.wifi"))
   }
-  if !flag(phone, "wireless") || (there && adb == "off") {
+  if !held && (!flag(phone, "wireless") || (there && adb == "off")) {
     let can_switch = flag(phone, "canSwitch")
     return adb_step(
       tr("android-misc.adb.step.wireless"),
@@ -534,10 +536,11 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
       if !flag(phone, "developer") {
         lacks.push((tr("android-misc.adb.developer"), tr("android-misc.adb.offValue")))
       }
-      if !flag(phone, "wifi") {
+      let held = there && text(view, "adb") == "connected"
+      if !held && !flag(phone, "wifi") {
         lacks.push((tr("android-misc.adb.wifi"), tr("android-misc.adb.wifi.off")))
       }
-      if !flag(phone, "wireless") {
+      if !held && !flag(phone, "wireless") {
         lacks.push((tr("android-misc.adb.wireless"), tr("android-misc.adb.offValue")))
       }
       if there {

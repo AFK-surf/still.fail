@@ -189,17 +189,28 @@ final class AdbPorts {
         });
     }
 
+    /** adbd's plain port, which the station turns on (`adb tcpip`, station/src/adb/link.ts keepTcp) and which, unlike
+     * Wireless debugging, stays on off Wi-Fi until the phone starts again. */
+    static final int TCP = 5555;
+
     /** Of adb's ports announced (the latest first), the one adbd listens on: the first that takes a connection here,
-     * else the latest (adbd still starting). Off the main thread. */
+     * else the latest (adbd still starting); with none announced (Wireless debugging off, as Android turns it off
+     * off Wi-Fi), adbd's plain port if it takes one. Off the main thread. */
     static Integer live(List<Integer> connects) {
         for (Integer port : connects) {
-            try (Socket s = new Socket()) {
-                s.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 500);
-                return port;
-            } catch (Exception ignored) {
-            }
+            if (takes(port)) return port;
         }
-        return connects.isEmpty() ? null : connects.get(0);
+        if (connects.isEmpty()) return takes(TCP) ? TCP : null;
+        return connects.get(0);
+    }
+
+    private static boolean takes(int port) {
+        try (Socket s = new Socket()) {
+            s.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 500);
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     /** Whether an announced host is this phone. */

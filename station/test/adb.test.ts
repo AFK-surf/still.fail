@@ -11,7 +11,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { Clock, Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
-import { GRACE, PORTS, RETRY, SETTLE, SILENT_MS, Shares, answerAdb, bind, isPackage, text } from "../src/adb/link.ts";
+import { GRACE, PORTS, RETRY, SETTLE, SILENT_MS, Shares, answerAdb, bind, isPackage, keepTcp, text } from "../src/adb/link.ts";
 import type { Viewer } from "../src/mesh/credential.ts";
 import type { Connection, Stream } from "../src/mesh/native.ts";
 import { Reader, writeLine } from "../src/mesh/serve.ts";
@@ -580,6 +580,8 @@ test("a phone offered over the mesh: adb connects through its tunnel, asks reach
     // phone starts again), and Android's idling leaves its connection be; no one asked
     await until(() => adb.calls().some((c) => c.join(" ") === `-s ${serial} shell STILLFAIL_ADB_KEEP=1 cmd deviceidle whitelist +fail.still.android`));
     assert.ok(adb.calls().some((c) => c.join(" ") === `-s ${serial} shell STILLFAIL_ADB_KEEP=1 pm grant fail.still.android android.permission.WRITE_SECURE_SETTINGS`));
+    // and adbd's plain port is turned on, once a boot, for the phone to be held on off Wi-Fi
+    await until(() => adb.calls().some((c) => c.join(" ") === `-s ${serial} tcpip 5555`));
     const wrong = await mesh.answer({ op: "pair", code: "12345", phone: PHONE }, { "stillfail-lang": "en" });
     assert.deepEqual(wrong, { head: { status: 422, headers: { "content-type": "application/json" } }, body: { message: "The pairing code is 6 digits" } });
     const granted = await mesh.answer({ op: "grant", phone: PHONE });
@@ -747,3 +749,32 @@ test("a phone paired while the previous connection is pending is tried again", a
     await time.close();
   }
 });
+
+test("adbd's plain port is asked for once a boot, and not where the phone is held on it already", async () => {
+  const adb = fakeAdb({ "tcp-kept": "no" });
+  const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED });
+  const share = { info: { connect: 40001 }, serial: () => "127.0.0.1:7000", conn: {} } as any;
+  const tcpips = () => adb.calls().filter((c) => c[2] === "tcpip").length;
+  try {
+    await keepTcp(shares, share, adb.path, []);
+    assert.deepEqual(adb.calls().at(-1), ["-s", "127.0.0.1:7000", "tcpip", "5555"]);
+    // A phone that does not keep it is not restarted again in the same boot.
+    await keepTcp(shares, share, adb.path, []);
+    assert.equal(tcpips(), 1);
+    // Started again, it is asked again; one that kept it is not.
+    adb.say("boot", "boot-2");
+    adb.say("tcp-kept", "yes");
+    await keepTcp(shares, share, adb.path, []);
+    assert.equal(tcpips(), 2);
+    adb.say("boot", "boot-3");
+    await keepTcp(shares, share, adb.path, []);
+    assert.equal(tcpips(), 2);
+    // Held on it (off Wi-Fi), nothing is asked of it.
+    const calls = adb.calls().length;
+    await keepTcp(shares, { ...share, info: { connect: 5555 } }, adb.path, []);
+    assert.equal(adb.calls().length, calls);
+  } finally {
+    await shares.close();
+  }
+});
+
