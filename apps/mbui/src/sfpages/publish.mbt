@@ -767,13 +767,21 @@ fn publish_ticked(c : @ui.Ctx, k : String, w~ : Double?, draw : () -> Unit) -> U
   // (taken out: fading as its ✕ turns into a ＋, as long as a control's change takes, each as it is drawn)
   let out = publish_out(c, k, on)
   let id = c.id("publish/file/" + k)
-  let hung = @sf.with_corner_remove(
+  let flip = fn() {
+    if on {
+      publishing.off[k] = true
+    } else {
+      publishing.off.remove(k)
+    }
+  }
+  @sf.with_corner_remove(
     c,
     "publish/file/" + k,
     @sf.t(if on { "web-pages.chat.publish.leaveOut" } else { "web-pages.chat.publish.putBack" }),
     @sf.message_file_corner,
     w?=w,
     turn=fn() { out.get() * publish_plus_turn },
+    on_remove=flip,
     fn() {
       // (pressed anywhere, as its mark is: what the chat would open it by does not here)
       let card = c.box(style=publish_file_box, fn() {
@@ -783,17 +791,7 @@ fn publish_ticked(c : @ui.Ctx, k : String, w~ : Double?, draw : () -> Unit) -> U
       c.look_by(card, fn() { @ui.look(alpha=publish_faded(out.get())) })
     },
   )
-  let flip = fn() {
-    if on {
-      publishing.off[k] = true
-    } else {
-      publishing.off.remove(k)
-    }
-  }
   c.on_press(id, flip)
-  if hung {
-    flip()
-  }
 }
 
 ///|

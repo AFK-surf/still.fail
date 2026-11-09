@@ -141,7 +141,7 @@ fn stations_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 /// kept while it is away, every station's row as high.
 fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, more : Bool, pick : () -> Unit) -> Unit {
   let t = @sf.theme()
-  if nav_item(
+  nav_item(
       c,
       "stations/" + text(s, "station"),
       on,
@@ -151,9 +151,8 @@ fn station_side_row(c : @ui.Ctx, src : Source, s : Json?, on : Bool, more : Bool
       lines=fn() { @sfpages.station_figures(c, src, s) },
       keep_lines=2,
       more~,
-    ) {
-    pick()
-  }
+      on_press=pick,
+    )
 }
 
 // ── Profile ─────────────────────────────────────────────────────────────
@@ -203,7 +202,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let ok = text(quota, "state") == "ok"
         let windows = ok && items(quota, "windows").length() > 0
         let credits = ok && !windows && text(quota, "creditsText") != ""
-        if nav_item(
+        nav_item(
             c,
             "profiles/" + text(e, "key"),
             picked == Some(route),
@@ -246,10 +245,11 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
               None
             },
             foot_capsule?=if windows { Some(@sf.fill_chip_small_h) } else { None },
-          ) {
-          place_pick[place_key(w.id, "profiles")] = route
-          @sfbase.show_chosen()
-        }
+            on_press=fn() {
+              place_pick[place_key(w.id, "profiles")] = route
+              @sfbase.show_chosen()
+            },
+          )
       }
       // each station's own logins, not profiles yet
       for s in stations_listed(src, w) {
@@ -267,7 +267,7 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         @sf.list_heading(c, @sf.t("web-pages.profiles.machineSignedIn", args=[("station", text(s, "name"))]), Side)
         for j, l in offers {
           let l = Some(l)
-          if nav_item(
+          nav_item(
               c,
               "profiles/machine/" + station + "/" + text(l, "runtime"),
               false,
@@ -280,11 +280,12 @@ fn profiles_side(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
                 })
               },
               more=j + 1 < offers.length(),
-            ) {
-            @sfbase.history_push()
-            app.nav.push(Setting(Route::NewProfile(station)))
-            @sfbase.show_chosen()
-          }
+              on_press=fn() {
+                @sfbase.history_push()
+                app.nav.push(Setting(Route::NewProfile(station)))
+                @sfbase.show_chosen()
+              },
+            )
         }
       }
       ignore(t)
@@ -357,8 +358,12 @@ fn stations_first(c : @ui.Ctx, core : Core, here : Here, src : Source, w : Works
           // (its managers': the others wait for one)
           match @settings.place_action(core, here, "stations") {
             Some(add) =>
-              if @sf.button(c, @sf.t("web-pages.settings.stations.add"), key="stations-first/add", tone=Primary, icon="plus") {
-                add(Of(c.id("stations-first/add")))
+              {
+                let id = c.id("stations-first/add")
+                @sf.button(c, @sf.t("web-pages.settings.stations.add"), key="stations-first/add", tone=Primary, icon="plus", on_press=fn() {
+                  add(Of(id))
+                })
+                |> ignore
               }
             None => c.text(@sf.t("web-pages.settings.stations.noneYet"), style=desk_muted_line) |> ignore
           }
@@ -391,15 +396,15 @@ fn profiles_first(c : @ui.Ctx, core : Core, here : Here, stations : Array[Json])
                   @sf.status_dot(c, if online { "online" } else { "offline" })
                   c.text(text(sv, "name"), style=pl_first_name) |> ignore
                   if online {
-                    if @sf.button(
-                        c,
-                        @sf.t("web-pages.settings.profiles.add"),
-                        key="profiles-first/add/" + address,
-                        tone=if stations.length() == 1 { Primary } else { Plain },
-                        icon="plus",
-                      ) {
-                      (core.push)(NewProfile(address))
-                    }
+                    @sf.button(
+                      c,
+                      @sf.t("web-pages.settings.profiles.add"),
+                      key="profiles-first/add/" + address,
+                      tone=if stations.length() == 1 { Primary } else { Plain },
+                      icon="plus",
+                      on_press=fn() { (core.push)(NewProfile(address)) },
+                    )
+                    |> ignore
                   } else {
                     c.text(@sf.t("web-pages.settings.profiles.offlineAdd"), style=desk_muted_line) |> ignore
                   }

@@ -1246,7 +1246,11 @@ pub fn Ctx::list_scroll_to(
 /// Back to list `key`'s end: gliding there (what is left of the way e^(-t/list_glide_ms) of it, as still.fail's lists
 /// follow their newest; far from it, more than list_glide_rows rows, at once), or at once.
 pub fn Ctx::list_to_end(self : Ctx, key : String, glide? : Bool = true) -> Unit {
-  let id = self.id(key)
+  self.list_to_end_of(self.id(key), glide)
+}
+
+///|
+fn Ctx::list_to_end_of(self : Ctx, id : Int, glide : Bool) -> Unit {
   match self.lists.get(id) {
     Some(st) => {
       st.follow_item = -1
@@ -1413,7 +1417,8 @@ pub fn[T : Eq] Ctx::list_info_as(self : Ctx, key : String, made : (ListInfo?) ->
 ///|
 /// A list, to read later as it then stands and never read back: for what a frame works out of where it is once its
 /// builds are over and tells outside (Ctx::after_build: a reader's place, what they have seen whole), never for what it
-/// draws (that reads Ctx::list_info, list_place and list_row_height as it builds).
+/// draws (that reads Ctx::list_info, list_place and list_row_height as it builds); sent to its end by what a press
+/// does (Ctx::on_press: outside the scope the list is built in).
 pub struct ListReader {
   priv ctx : Ctx
   priv id : Int
@@ -1435,6 +1440,12 @@ pub fn ListReader::info(self : ListReader) -> ListInfo? {
 /// Where the list is now (Ctx::list_place's).
 pub fn ListReader::place(self : ListReader) -> (Int, Double, Double)? {
   self.ctx.list_place_of(self.id)
+}
+
+///|
+/// The list sent to its end, following it again (Ctx::list_to_end's).
+pub fn ListReader::to_end(self : ListReader, glide? : Bool = true) -> Unit {
+  self.ctx.list_to_end_of(self.id, glide)
 }
 
 ///|

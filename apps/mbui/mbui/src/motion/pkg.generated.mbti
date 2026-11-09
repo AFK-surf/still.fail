@@ -196,7 +196,9 @@ pub fn pressing(@ui.Ctx, Int32) -> Double
 
 pub fn progress(Double, Double, Double) -> Double
 
-pub fn reshape(@ui.Ctx, Int32, String, by~ : String, spec~ : Spec, carry? : Bool, foot? : Bool) -> Unit
+pub fn reshape(@ui.Ctx, Int32, String, by~ : String, spec~ : Spec, carry? : Bool, foot? : Bool, at? : Double) -> Unit
+
+pub fn reshape_way(@ui.Ctx, String) -> (Double, Double)?
 
 pub fn reshaped_over(@ui.Ctx, String) -> Double
 

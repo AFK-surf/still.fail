@@ -53,9 +53,10 @@ pub fn files_nav(c : @ui.Ctx, src : Source, ws : String) -> Unit {
     let stations = favorite_stations(src, ws)
     let pin = if stations.length() > 0 { Some(fn(_) { add_favorite_folder(src, ws, stations) }) } else { None }
     nav_action(c, "files/pin", @sf.t("web-pages.files.addFavorite"), pin, trailing?=update_trailing(c, src), band=update_band())
-    // (a folder chosen there in the page, on the tape brought over to show it)
+    // (a folder chosen there in the page, on the tape brought over to show it; what the page left read handed to the
+    // one opened, as a press opens it outside any build: open_handing_held)
     files_places(c, src, ws, top=nav_top, foot=@sf.list_foot_in(Side), go=fn(at) {
-      files_go(at)
+      @sfbase.open_handing_held(fn() { files_go(at) })
       @sfbase.show_chosen()
     })
   })
@@ -276,8 +277,9 @@ fn favorite_row(
         }
         None => ()
       }
-      let removed = c.clicked(rid)
-      let opened = nav_row(
+      // (its ✕ takes it out, a press elsewhere on it goes there)
+      c.on_press(rid, fn() { favorite_remove(src, ws, f.station, f.root, f.path) })
+      nav_row(
           c,
           key,
           place_lit(f.station, into.root.unwrap_or(""), into.path),
@@ -296,12 +298,8 @@ fn favorite_row(
             }
           },
           more~,
+          on_press=fn() { go(into) },
         )
-      if removed {
-        favorite_remove(src, ws, f.station, f.root, f.path)
-      } else if opened {
-        go(into)
-      }
     })
   })
 }
@@ -320,20 +318,20 @@ fn station_row(
 ) -> Unit {
   let t = @sf.theme()
   let did = c.id("files/station-open/" + s.station)
-  if c.clicked(did) {
+  c.on_press(did, fn() {
     if nav.open.contains(s.station) {
       nav.open.remove(s.station)
     } else {
       nav.open[s.station] = true
     }
-  }
+  })
   let open = nav.open.contains(s.station)
   let start = drive_start(s)
   // (its places' rows under it while opened)
   let under = open &&
     (if s.anywhere { nav.places.get(s.station).unwrap_or([]).length() > 0 } else { s.roots.length() > 0 })
   let row = fn() {
-    if nav_row(
+    nav_row(
         c,
         "files/station/" + s.station,
         match start {
@@ -364,13 +362,14 @@ fn station_row(
           }
         },
         more=under,
-      ) &&
-      !c.clicked(did) {
-      match start {
-        Some(r) => go({ station: s.station, root: Some(r), path: "" })
-        None => ()
-      }
-    }
+        // (its disclosure's press its own)
+        on_press=fn() {
+          match start {
+            Some(r) => go({ station: s.station, root: Some(r), path: "" })
+            None => ()
+          }
+        },
+      )
   }
   nav_apart(c, more, fn() {
     c.box(style=station_item, fn() {
@@ -443,7 +442,7 @@ fn station_places(
       let (name, path, disk) = p
       let into : DriveAt = { station: s.station, root: Some(path), path: "" }
       fdrag_side_row(c, src, "place/" + s.station + "/" + path, into, name, write, s.transfers, fn() {
-        if nav_row(
+        nav_row(
             c,
             "files/place/" + s.station + "/" + path,
             place_lit(s.station, path, ""),
@@ -452,9 +451,8 @@ fn station_places(
               nav_words(c, name, color?=if s.online { None } else { Some(t.p.muted) })
             },
             more=k + 1 < places.length(),
-          ) {
-          go(into)
-        }
+            on_press=fn() { go(into) },
+          )
       })
     }
   })

@@ -41,7 +41,7 @@ pub let nav_fade : @motion.Spec = @motion.tween(dur_ms, ease=Out)
 ///|
 /// A row of one line of a sidebar's list (Sidebar.css.ts navRow; touch's SidebarList.css.ts phone: the theme's
 /// chats' list's `side_row`): the pointer's ground on hover, the selected one's ground when it is the page in view;
-/// `more`, another row under it (nav_apart). True on the frame after a press.
+/// `more`, another row under it (nav_apart); `on_press`, what a press on it does.
 pub fn nav_row(
   c : @ui.Ctx,
   key : String,
@@ -49,16 +49,17 @@ pub fn nav_row(
   body : () -> Unit,
   align? : @ui.Align = ACenter,
   more? : Bool = false,
-) -> Bool {
+  on_press~ : () -> Unit,
+) -> Unit {
   let l = theme().chat_list
   let id = c.id(key)
+  c.on_press(id, on_press)
   let look = l.side_row.then(@ui.style(align~))
   let hover = c.lit(id) || c.pressed(id)
   nav_apart(c, more, fn() {
     let i = c.box(style=look.then(row_least_h()), id~, body)
     nav_ground_on(c, i, key, hover, on)
   })
-  c.clicked(id)
 }
 
 ///|
@@ -78,15 +79,15 @@ pub fn nav_apart(c : @ui.Ctx, more : Bool, row : () -> Unit) -> Unit {
 /// An action in a sidebar's band over its list (新建对话, Pin 文件夹, 待处理: Sidebar.css.ts navNew's row): not one of the
 /// list's rows but the band's, on one line with what else stands over the list (the search's field): its height, its
 /// words' room and its words the theme's chats' list's band's; its corner a sidebar row's; the pointer's ground on
-/// hover, the selected one's when it is the page in view. True on the frame after a press.
-pub fn band_row(c : @ui.Ctx, key : String, on : Bool, body : () -> Unit) -> Bool {
+/// hover, the selected one's when it is the page in view; `on_press`, what a press on it does.
+pub fn band_row(c : @ui.Ctx, key : String, on : Bool, body : () -> Unit, on_press~ : () -> Unit) -> Unit {
   let l = theme().chat_list
   let id = c.id(key)
+  c.on_press(id, on_press)
   let hover = c.lit(id) || c.pressed(id)
   let look = band_row_look.then(@ui.style(min_h=Fixed(l.band_h), px=room_of(l.band_pad)))
   let i = c.box(style=look, id~, body)
   nav_ground_on(c, i, key, hover, on)
-  c.clicked(id)
 }
 
 ///|
@@ -137,11 +138,12 @@ pub fn nav_action(c : @ui.Ctx, key : String, label : String, run : ((Beside) -> 
     c.box(style=nav_action_main, fn() {
       match run {
         Some(go) =>
-          if band_row(c, key, false, fn() {
+          {
+            let id = c.id(key)
+            band_row(c, key, false, fn() {
               band_mark(c, "plus", t.p.muted)
               band_words(c, label)
-            }) {
-            go(Of(c.id(key)))
+            }, on_press=fn() { go(Of(id)) })
           }
         None => ()
       }
@@ -218,8 +220,8 @@ pub let nav_mark_side : Double = 16.0
 /// row, laid out as a chat's (list_row): its `mark` beside its first line, its `title` (nav_title) with what is at
 /// that line's `end` (muted, never cut: the title gives way), then the `lines` under them (list_row_line each; `keep_lines` of
 /// them always, empty where it says none: list_row `lines`); the pointer's
-/// ground on hover, the selected one's when it is the page in view; `more`, another row under it (nav_apart). True
-/// when pressed. `foot` is a last line across the row; `foot_capsule` places a capsule on it at its foot corner's
+/// ground on hover, the selected one's when it is the page in view; `more`, another row under it (nav_apart);
+/// `on_press`, what a press on it does. `foot` is a last line across the row; `foot_capsule` places a capsule on it at its foot corner's
 /// inset (list_row's).
 pub fn nav_item(
   c : @ui.Ctx,
@@ -233,8 +235,10 @@ pub fn nav_item(
   more? : Bool = false,
   foot? : () -> Unit,
   foot_capsule? : Double,
-) -> Bool {
+  on_press~ : () -> Unit,
+) -> Unit {
   let id = c.id(key)
+  c.on_press(id, on_press)
   let ground = nav_ground_by(c, key, c.lit(id) || c.pressed(id), on)
   nav_apart(c, more, fn() {
     list_row(
@@ -263,7 +267,6 @@ pub fn nav_item(
     )
     |> ignore
   })
-  c.clicked(id)
 }
 
 ///|

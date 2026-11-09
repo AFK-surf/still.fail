@@ -637,9 +637,9 @@ fn wide_page(
 fn desk_back(c : @ui.Ctx, back : String, on_back : () -> Unit) -> Unit {
   let th = theme()
   let id = c.id("settings-back")
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     on_back()
-  }
+  })
   let lit = c.lit(id)
   let b = c.box(style=desk_back_line, id~, fn() {
     icon(c, "chevron-left", size=desk_back_icon, color=if lit { th.p.text } else { th.p.muted }) |> ignore
@@ -2405,9 +2405,9 @@ pub fn own_head(
                 let id = c.id("own-head-name")
                 let b = c.box(style=head_name_press, id~, words)
                 c.semantics(b, Button, id~, label=if rename_label == "" { name } else { rename_label })
-                if c.clicked(id) {
+                c.on_press(id, fn() {
                   f()
-                }
+                })
               }
               None => words()
             }

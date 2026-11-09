@@ -207,6 +207,11 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
     r.frame = frame
     r.was = (r.cause, r.a, r.to, r.start, r.end, r.k, r.before)
   }
+  // (its content going on the way itself: where it goes is where it is laid out now, so that a cause after this one,
+  // its content no longer on the way, goes on from where it was laid out, not from where it was as it set out)
+  if own {
+    r.to = to
+  }
   // (the way's speed as it set out, once every row on it has said what was off of it: the frame after)
   if r.start == c.start && r.end == c.end {
     match c.way_k(frame) {
@@ -623,6 +628,7 @@ pub fn[T] ListRows::rows(
         None =>
           if comes(items[i]) {
             self.causes.by[k] = (Comes(from(k).unwrap_or(now)), ms(k).unwrap_or(row_size_ms))
+            self.causes.own.remove(k)
             began = true
           }
         // (changed as it comes: still coming, on to what it is now)
@@ -631,6 +637,9 @@ pub fn[T] ListRows::rows(
             Some((Comes(_), _)) => ()
             _ => {
               self.causes.by[k] = (Changed(from(k).unwrap_or(now)), ms(k).unwrap_or(row_size_ms))
+              // (its content going on the way itself for the cause before, not said for this one till it says so again:
+              // Ctx::row_way)
+              self.causes.own.remove(k)
               began = true
             }
           }
@@ -960,10 +969,11 @@ let rows_laid_by : Ref[(RowCauses, Int)?] = Ref(None)
 /// The way the rows of the list a row is built in go to their heights (its start, how long), while it is under way:
 /// what in the row changes its height itself as its version changes (a card's options closing as it is answered) goes
 /// on it, from its start and as long, so that it moves as one with the rows round it (None: built in no such list, or
-/// none on its way).
+/// none on its way, or its row not: what changes in a row whose version did not change is not the way's, which set out
+/// for others before it).
 pub fn Ctx::row_way(self : Ctx) -> (Double, Double)? {
   match rows_laid_by.val {
-    Some((c, k)) if c.end > self.clock && c.start >= 0.0 && k < c.keys.length() => {
+    Some((c, k)) if c.end > self.clock && c.start >= 0.0 && k < c.keys.length() && c.by.contains(c.keys[k]) => {
       // (what it does to its row's height its own from now: ListState::row_sized)
       c.own.add(c.keys[k])
       Some((c.start, c.end - c.start))

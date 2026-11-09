@@ -170,7 +170,10 @@ fn Ctx::asked(self : Ctx, id : Int, action : Action) -> Unit {
   // (Activate is a press let go on it: what was said a press on it does, done now, at the moment it is asked, as a
   // tap's is: Ctx::on_press)
   match action {
-    Activate => made_pressed(id)
+    Activate => {
+      self.press_on_key(id)
+      made_pressed(id)
+    }
     // (a step: as the key that steps it, Ctx::on_key)
     Increment => made_stepped(id, true) |> ignore
     Decrement => made_stepped(id, false) |> ignore

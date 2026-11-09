@@ -535,7 +535,7 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     return
   }
   c.box(style=todo_box, fn() {
-    if band_row(c, "side/attention", wide.attention_open.get(), fn() {
+    band_row(c, "side/attention", wide.attention_open.get(), fn() {
         band_mark(c, "bell", t.p.muted)
         band_words(c, @sf.t("web-main.attention.entry"))
         c.box(style=todo_slot, fn() {
@@ -544,9 +544,7 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           }
         })
         |> ignore
-      }) {
-      attention_set(!wide.attention_open.get())
-    }
+      }, on_press=fn() { attention_set(!wide.attention_open.get()) })
   })
   |> ignore
 }

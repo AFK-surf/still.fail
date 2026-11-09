@@ -555,20 +555,11 @@
       "src/sfpages/xshare.mbt": 1
     },
     "click-read": {
-      "src/sf/files.mbt": 7,
-      "src/sf/page.mbt": 5,
+      "src/sf/page.mbt": 3,
       "src/sf/parts.mbt": 6,
-      "src/sf/side_rows.mbt": 3,
       "src/sfapp/settings/core.mbt": 1,
       "src/sfapp/settings/login_steps.mbt": 3,
       "src/sfapp/settings/station_mark.mbt": 2,
-      "src/sfdesk/chat_page.mbt": 5,
-      "src/sfdesk/files_nav.mbt": 3,
-      "src/sfdesk/rail.mbt": 1,
-      "src/sfpages/chat_list.mbt": 2,
-      "src/sfpages/chat_row.mbt": 3,
-      "src/sfpages/chat_rows.mbt": 3,
-      "src/sfpages/composer.mbt": 6,
       "src/sfpages/settings_list.mbt": 1
     }
   },

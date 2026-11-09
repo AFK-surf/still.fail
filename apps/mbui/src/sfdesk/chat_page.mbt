@@ -388,17 +388,15 @@ fn chat_bar(
               |> ignore
               // (pressed: opened or closed as it is let go, as it is then)
               c.on_press(c.id("chat-info"), info)
-              if @sf.icon_button(c, "more", key="chat-more", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("common.more")) {
-                more()
-              }
+              @sf.icon_button(c, "more", key="chat-more", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("common.more"), on_press=more)
+              |> ignore
             }
             // the side panel's switch while it is closed: the first agent's history in it (none where the chat's actions
             // are in the system's bars: its history's switch there)
             if !in_bars && side_of(view).0.length() == 0 && view.agents.length() > 0 {
               let panel = fn() { side_change(src, r, "open", Some(view.agents[0].key)) }
-              if @sf.icon_button(c, "panel-open", key="chat-panel", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.openPanel"), shortcut="chat.history") {
-                panel()
-              }
+              @sf.icon_button(c, "panel-open", key="chat-panel", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.openPanel"), shortcut="chat.history", on_press=panel)
+              |> ignore
             }
           })
           |> ignore
@@ -509,8 +507,8 @@ fn station_card_on(c : @ui.Ctx, key : String, station : String, trigger : Int) -
   if @sf.pointer_rests() {
     // (as wide as it holds: the machine's three chips whole on their line, none cut short)
     hover(c, key + "/card", trigger, tile=true, padded=false, fn() { @settings.station_peek_card(c, station) }) |> ignore
-  } else if c.clicked(trigger) {
-    @settings.open_station_peek(station, from=Of(trigger))
+  } else {
+    c.on_press(trigger, fn() { @settings.open_station_peek(station, from=Of(trigger)) })
   }
 }
 
@@ -569,9 +567,7 @@ fn people_stack(c : @ui.Ctx, src : Source, key : String, people : Array[Person],
 /// on (its mark, or its name kept short), how the station is reached a dot on the tile's corner.
 fn agent_tile(c : @ui.Ctx, src : Source, r : ChatRef, a : Agent, marked : Bool, station : Station?) -> Unit {
   let id = c.id("bar-agent/" + a.key)
-  if c.clicked(id) {
-    side_toggle(src, r, a.key)
-  }
+  c.on_press(id, fn() { side_toggle(src, r, a.key) })
   let chat = src.topic("chat", chat_params(r)).get().value
   let aj = agent_json(chat, a.key)
   let said = @sf.t("web-pages.chat.historyOf", args=[("agent", a.who)])
@@ -703,9 +699,11 @@ fn screen_trigger(c : @ui.Ctx, r : ChatRef, v : ChatView) -> Unit {
   }
   // (the button and its dot in a box of their own: the dot's layer over the button, not the row)
   c.box(fn() {
-    if @sf.icon_button(c, "monitor", key="chat-screen", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.screen"), shortcut="chat.screen") {
-      chat_screens_open(r, v.screens, from=Of(c.id("chat-screen")))
-    }
+    let screen = c.id("chat-screen")
+    @sf.icon_button(c, "monitor", key="chat-screen", round=true, linked?=@sf.bar_keys_link(), label=@sf.t("web-pages.chat.screen"), shortcut="chat.screen", on_press=fn() {
+      chat_screens_open(r, v.screens, from=Of(screen))
+    })
+    |> ignore
     if chat_screens_driven(v.screens) {
       c.layer(fn() {
         c.box(style=jobs_alarm_room, fn() { c.box(style=screen_driven_dot, fn() {  }) |> ignore }) |> ignore
@@ -838,10 +836,10 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
       match v.opener {
         Some(o) => {
           let id = c.id("info-opener")
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             chat_own.info_open.set(false)
             open_page(Chat(o.chat))
-          }
+          })
           let p = @sf.theme().p
           let b = c.box(style=info_inline, id~, fn() {
             @sf.icon(c, "spawned", size=14.0, color=if c.lit(id) { p.text } else { p.muted }) |> ignore
@@ -979,38 +977,44 @@ fn chat_info(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView
           break
         }
         let pv = Some(p)
-        if info_pull_row(c, src, r, "info-pop/pull/" + text(pv, "key"), pv) {
+        info_pull_row(c, src, r, "info-pop/pull/" + text(pv, "key"), pv, on_press=fn() {
           chat_own.info_open.set(false)
-          let url = text(pv, "url")
-          c.tell("info-pop/pull", fn() { @sfbase.open_link_in(src, url) })
-        }
+          @sfbase.open_link_in(src, text(pv, "url"))
+        })
       }
-      if pulls.length() > named &&
-        info_row(c, "info-pop/pulls", "list", @sf.t("web-main.things.pullsAll", args=[("n", pulls.length().to_string())]), "") {
-        chat_own.info_open.set(false)
-        @sfpages.things_choose(r, "pulls")
-        side_change(src, r, "open", Some("things"))
+      if pulls.length() > named {
+        info_row(c, "info-pop/pulls", "list", @sf.t("web-main.things.pullsAll", args=[("n", pulls.length().to_string())]), "", on_press=fn() {
+          chat_own.info_open.set(false)
+          @sfpages.things_choose(r, "pulls")
+          side_change(src, r, "open", Some("things"))
+        })
       }
       // (sfpages things.mbt)
-      if said > 0 && info_row(c, "info-pop/things", "photo", @sf.t("web-main.things.title"), said.to_string()) {
-        chat_own.info_open.set(false)
-        side_change(src, r, "open", Some("things"))
+      if said > 0 {
+        info_row(c, "info-pop/things", "photo", @sf.t("web-main.things.title"), said.to_string(), on_press=fn() {
+          chat_own.info_open.set(false)
+          side_change(src, r, "open", Some("things"))
+        })
       }
-      if files && info_row(c, "info-pop/files", "folder", @sf.t("web-pages.chat.files"), "") {
-        chat_own.info_open.set(false)
-        side_toggle(src, r, "files")
+      if files {
+        info_row(c, "info-pop/files", "folder", @sf.t("web-pages.chat.files"), "", on_press=fn() {
+          chat_own.info_open.set(false)
+          side_toggle(src, r, "files")
+        })
       }
-      if v.letters > 0 &&
+      if v.letters > 0 {
         info_row(
           c,
           "info-pop/letters",
           "chats",
           @sf.t("web-main.letters.title"),
           @sf.t("web-main.letters.count", args=[("n", v.letters.to_string())]),
-        ) {
-        chat_own.info_open.set(false)
-        letters_to_list(r)
-        side_toggle(src, r, "letters")
+          on_press=fn() {
+            chat_own.info_open.set(false)
+            letters_to_list(r)
+            side_toggle(src, r, "letters")
+          },
+        )
       }
     })
     |> ignore
@@ -1029,9 +1033,10 @@ fn info_time(c : @ui.Ctx, key : String, stamp : Json?) -> Unit {
 ///|
 /// A row of the info (ui.tsx PanelRow): its icon (14, muted) at the panel's words' inset, as the facts' words and the
 /// agents' marks over it, and words 10 apart, what is at its end muted; round with the panel, the pointer's ground on
-/// it. True on the frame after a press.
-fn info_row(c : @ui.Ctx, key : String, icon : String, label : String, end : String) -> Bool {
+/// it; `on_press`: what a press on it does.
+fn info_row(c : @ui.Ctx, key : String, icon : String, label : String, end : String, on_press~ : () -> Unit) -> Unit {
   let id = c.id(key)
+  c.on_press(id, on_press)
   let b = c.box(style=info_tool(), id~, fn() {
     c.box(style=info_tool_icon, fn() { @sf.icon(c, icon, size=14.0, color=@sf.theme().p.muted) |> ignore }) |> ignore
     // (what it says of it at the line's end, under its words where the line has not the room: its words whole)
@@ -1044,15 +1049,15 @@ fn info_row(c : @ui.Ctx, key : String, icon : String, label : String, end : Stri
     |> ignore
   })
   c.semantics(b, Button, id~, label~)
-  c.clicked(id)
 }
 
 ///|
 /// A pull request in the info (as info_row): its mark where a row's icon is, its title cut to the line, its number at
 /// the line's end, muted; pointed at, its card (as a message's link to it); held or right clicked, its menu (在对话中查看,
-/// its link copied). True on the frame after a press.
-fn info_pull_row(c : @ui.Ctx, src : Source, r : ChatRef, key : String, pull : Json?) -> Bool {
+/// its link copied); `on_press`: what a press on it does.
+fn info_pull_row(c : @ui.Ctx, src : Source, r : ChatRef, key : String, pull : Json?, on_press~ : () -> Unit) -> Unit {
   let id = c.id(key)
+  c.on_press(id, on_press)
   let title = @sfpages.pull_title(pull)
   let b = c.box(style=info_tool(), id~, fn() {
     c.box(style=info_tool_icon, fn() { @sfpages.pull_mark(c, pull, 14.0) }) |> ignore
@@ -1067,7 +1072,6 @@ fn info_pull_row(c : @ui.Ctx, src : Source, r : ChatRef, key : String, pull : Js
     chat_own.info_open.set(false)
     @sfbase.go_to(r, seq)
   })
-  c.clicked(id)
 }
 
 ///|
