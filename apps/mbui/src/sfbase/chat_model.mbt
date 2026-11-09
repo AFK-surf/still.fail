@@ -582,6 +582,9 @@ pub(all) struct Agent {
   started : Bool
   /// its last turn's id (its session's lastTurn), "" before it has had one
   last_turn : String
+  /// the message its last turn's state is about (lastTurn.about), by its seq: its answer, which a station may tell its
+  /// turn over before
+  about : Double?
 }
 
 ///|
@@ -602,6 +605,7 @@ pub fn agent_of(a : Json) -> Agent {
     },
     started: flag(s, "started"),
     last_turn: text(field(session, "lastTurn"), "id"),
+    about: opt_number(field(field(session, "lastTurn"), "about"), "seq"),
   }
 }
 

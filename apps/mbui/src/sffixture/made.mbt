@@ -47,6 +47,7 @@ pub fn fixture_reset() -> Unit {
   fix_decided.clear()
   fix_replied.clear()
   fix_card_replies.clear()
+  fix_pace.val = (fix_deliver_ms, fix_answer_ms, fix_turn_end_ms)
   fix_vault.val = ""
   fix_phone.val = ""
   fix_phone_link.val = ""
