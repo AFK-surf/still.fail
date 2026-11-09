@@ -113,7 +113,7 @@ fn steps_list_node(
   })
   let scroll = @view.Scroll::list()
   // (the item gone to: brought to the middle, its ground the accent's faint one till steps_marked_ms on)
-  let goto : @signals.Signal[String?] = @signals.signal(None)
+  let place : @view.ListPlace[String] = @view.ListPlace::new()
   let lit : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
   let unlit = Ref(fn() {  })
   // opened at an entry: the item that draws it brought to the middle, marked a moment; one before what is loaded, the
@@ -133,7 +133,7 @@ fn steps_list_node(
         lit.set(ik)
         (unlit.val)()
         unlit.val = v.at_moment(v.cause_at() + steps_marked_ms, fn() { lit.set("") })
-        goto.set(Some("i/" + ik))
+        place.centre("i/" + ik)
       }
       None =>
         match loaded.get(0) {
@@ -186,7 +186,7 @@ fn steps_list_node(
         holds=fn(k) { k != "edge" },
         // (followed at its newest; not once gone to an entry)
         follows=fn() { !steps_own.went.contains(lkey) },
-        centres=fn() { goto.get() },
+        place~,
         first_told=fn(k) {
           first_shown.set((k, @signals.untracked(fn() { steps_head_of(src, params, lkey).first })))
         },

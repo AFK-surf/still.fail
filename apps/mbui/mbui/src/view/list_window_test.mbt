@@ -15,7 +15,7 @@ priv struct WindowCase {
 fn window_case(
   holds? : (Int) -> Bool = fn(_) { true },
   follows? : () -> Bool = fn() { false },
-  centres? : () -> Int? = fn() { None },
+  place? : @view.ListPlace[Int],
   near_foot? : (Double, () -> Bool, () -> Unit),
   tucks? : Int,
 ) -> WindowCase {
@@ -37,7 +37,7 @@ fn window_case(
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
       o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
-      o.scrolls_window(scroll, fn() { keys.get() }, est=80.0, holds~, follows~, centres~, near_foot?, fn(b, k) {
+      o.scrolls_window(scroll, fn() { keys.get() }, est=80.0, holds~, follows~, place?, near_foot?, fn(b, k) {
         made.push(k)
         if tucks == Some(k) {
           scroll.tucks(b, fn() { 0.0 })
@@ -150,10 +150,10 @@ test "scrolls_window: a block come under a head that does not hold what shows: w
 }
 
 ///|
-test "scrolls_window: a block brought to its middle as it is named, held there as what is over it is laid out" {
-  let to : @signals.Signal[Int?] = @signals.signal(None)
-  let k = window_case(centres=fn() { to.get() })
-  to.set(Some(7))
+test "scrolls_window: a block brought to its middle as it is asked, held there as what is over it is laid out" {
+  let place = @view.ListPlace::new()
+  let k = window_case(place~)
+  place.centre(7)
   k.tree.frame(390.0, 844.0) |> ignore
   // (7 measured as it is brought there, 40 tall, its middle at 50 of the 100 that shows: 30 down; what is over it
   // measured as it shows (6, 40) and counted (3 to 5, 80 each), 7 at 400 and the column at 370)
@@ -237,4 +237,121 @@ test "Scroll::tucks: put as the block is first laid out so its foot is at the to
   // (two of 40 in 100: the second's foot 80 down, room kept under them to go there)
   assert_eq(c.scroll.at(c.tree), 80.0)
   assert_eq(c.scroll.most(), 80.0)
+}
+
+///|
+test "ListPlace::bring: a block brought to the top of where it shows (an offset over it), what is over it counted as it is" {
+  let place = @view.ListPlace::new()
+  let k = window_case(place~)
+  place.bring(7)
+  k.tree.frame(390.0, 844.0) |> ignore
+  // (0 to 2 laid out 40 each, 3 to 6 counted 80: 7's top at 440)
+  let (_, y7, _, _) = k.live[7].rect()
+  assert_eq((k.scroll.at(k.tree), k.shown(), y7), (440.0, [7, 8, 9], 0.0))
+  // (10 over it: its top 10 over the list's)
+  place.bring(7, offset=10.0)
+  k.tree.frame(390.0, 844.0) |> ignore
+  let (_, y7, _, _) = k.live[7].rect()
+  assert_eq((k.scroll.at(k.tree), y7), (450.0, -10.0))
+}
+
+///|
+test "ListPlace::bring: asked before the block is among its keys, brought there as it comes" {
+  let place = @view.ListPlace::new()
+  let k = window_case(place~)
+  place.bring(10)
+  k.tree.frame(390.0, 844.0) |> ignore
+  assert_eq(k.scroll.at(k.tree), 0.0)
+  k.keys.set(Array::makei(15, fn(i) { i }))
+  k.tree.frame(390.0, 844.0) |> ignore
+  let (_, y10, _, _) = k.live[10].rect()
+  assert_eq(y10, 0.0)
+}
+
+///|
+test "ListPlace::to_end: at once at its foot; one that follows it kept there from then as blocks come" {
+  let place = @view.ListPlace::new()
+  let k = window_case(place~, follows=fn() { true })
+  k.tree.wheel_at(150.0, 50.0, 0.0, -1000.0, 0, 10.0) |> ignore
+  k.tree.frame(390.0, 844.0) |> ignore
+  let up = k.scroll.at(k.tree)
+  place.to_end(glide=false)
+  k.tree.frame(390.0, 844.0) |> ignore
+  let back = k.scroll.at(k.tree) == k.scroll.most()
+  k.keys.set(Array::makei(12, fn(i) { i }))
+  k.tree.frame(390.0, 844.0) |> ignore
+  assert_eq((up, back, k.scroll.at(k.tree) == k.scroll.most(), k.shown().contains(11)), (0.0, true, true, true))
+}
+
+///|
+test "ListPlace::to_end: near it, glides there from the moment it is asked, the same whatever frames come; far, at once" {
+  let now = Ref(0.0)
+  let place = @view.ListPlace::new()
+  let scroll = @view.Scroll::list()
+  let tree = @view.Tree::new(
+    fn(root) {
+      root.box(fn(o) {
+        o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
+        o.scrolls_window(scroll, fn() { Array::makei(10, fn(i) { i }) }, est=40.0, place~, fn(b, _) {
+          b.height(Is(Some(40.0))) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { now.val },
+  )
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  // (400 tall, 100 shown: its foot 300 down; 150 from it, less than twice what shows)
+  scroll.put(150.0)
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  now.val = 100.0
+  place.to_end()
+  now.val = 116.0
+  tree.frame(390.0, 844.0, now=116.0) |> ignore
+  let midway = scroll.at(tree)
+  now.val = 2000.0
+  tree.frame(390.0, 844.0, now=2000.0) |> ignore
+  assert_true(midway > 150.0 && midway < 300.0)
+  assert_eq(scroll.at(tree), 300.0)
+  // (back at its top, 300 from its foot: there at once)
+  scroll.put(0.0)
+  tree.frame(390.0, 844.0, now=2000.0) |> ignore
+  place.to_end()
+  tree.frame(390.0, 844.0, now=2000.0) |> ignore
+  assert_eq(scroll.at(tree), 300.0)
+}
+
+///|
+test "ListPlace::follow_from: its foot followed no further than the block's top; held there, then followed no more" {
+  let place = @view.ListPlace::new()
+  let scroll = @view.Scroll::list()
+  let keys = @signals.signal(Array::makei(10, fn(i) { i }), same=fn(a, b) { a == b })
+  let live : Map[Int, @view.View] = Map([])
+  let tree = @view.Tree::new(fn(root) {
+    root.box(fn(o) {
+      o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
+      o.scrolls_window(scroll, fn() { keys.get() }, est=40.0, follows=fn() { true }, place~, fn(b, k) {
+        live[k] = b
+        b.owns(fn() { live.remove(k) }) |> ignore
+        b.height(Is(Some(40.0))) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  tree.frame(390.0, 844.0) |> ignore
+  place.follow_from(Some(10))
+  // (two come at its end: its foot at 380, 10's top at 400 under it: followed)
+  keys.set(Array::makei(12, fn(i) { i }))
+  tree.frame(390.0, 844.0) |> ignore
+  let followed = scroll.at(tree) == scroll.most()
+  // (five more: its foot at 580, past 10's top; held with 10 at the top of what shows)
+  keys.set(Array::makei(17, fn(i) { i }))
+  tree.frame(390.0, 844.0) |> ignore
+  let (_, y10, _, _) = live[10].rect()
+  let held = scroll.at(tree)
+  keys.set(Array::makei(18, fn(i) { i }))
+  tree.frame(390.0, 844.0) |> ignore
+  assert_eq((followed, y10, held, scroll.at(tree)), (true, 0.0, 400.0, 400.0))
 }
