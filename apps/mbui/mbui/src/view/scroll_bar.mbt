@@ -188,6 +188,13 @@ fn View::scroll_bar(
   // right, nothing over it kept clear; across, along its foot from `bar_in` to as far from its end)
   // (across, as an old view's foot_bar along the view it is for: `bar_in` in from either side, no more than leaves it
   // its least twice, what scrolls and what it holds as wide less that)
+  // (what it runs along as its thumb was last placed and sized by it, as what those read changed: how far it is
+  // scrolled at each moment it is drawn (its scroll_off) read along that, not worked out again each time)
+  let along = Ref((0.0, 0.0, 0.0, 0.0, 0.0))
+  let track_along = fn(x : Double) {
+    let (vh, ends, content, start, end) = along.val
+    bar_track_of(ends, vh - 2.0 * ends, vh - 2.0 * ends, content - 2.0 * ends, x, start, end, b.least, b.inset)
+  }
   let track = fn(x : Double) {
     let (vh, ends) = match self.laid_size_told() {
       Some((w, h)) => if across { (w, dclamp(bar_in, 0.0, dmax(0.0, w / 2.0 - b.least))) } else { (h, 0.0) }
@@ -196,7 +203,8 @@ fn View::scroll_bar(
     let content = vh + s.most_now()
     // (down a column, what lies over its top and its foot kept clear: `bar_clear`, as ui's bar_track's start and end)
     let (start, end) = if across { (0.0, 0.0) } else { bar_clear() }
-    bar_track_of(ends, vh - 2.0 * ends, vh - 2.0 * ends, content - 2.0 * ends, x, start, end, b.least, b.inset)
+    along.val = (vh, ends, content, start, end)
+    track_along(x)
   }
   // (whether it has a bar at all: what it holds more than a point past what shows, as ui's bar_drawn has it; drawn,
   // come out along its edge and pressed by that alone)
@@ -250,7 +258,7 @@ fn View::scroll_bar(
       let tn = self.tree.nodes[me.at]
       tn.scroll_by = self.at
       tn.scroll_off = Some(fn(t) {
-        let by = track(s.where_at(if s.goes_on() { t } else { 0.0 })).0 - track(0.0).0
+        let by = track_along(s.where_at(if s.goes_on() { t } else { 0.0 })).0 - track_along(0.0).0
         if across {
           (by, 0.0)
         } else {
