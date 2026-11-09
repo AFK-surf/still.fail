@@ -23,6 +23,7 @@ import { LEGACY_FIRST_PERSON_SINCE, LEGACY_HAS_PEOPLE_SINCE, LEGACY_PEOPLE_AFTER
 import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION_LIST_SCOPE_CONNECT, sessionListReady } from "../store/session-list-index.ts";
 import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
+import { WORKSPACE_UP_JOBS, workspaceUpJobsReady } from "../store/workspace-up-jobs.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
 import { archiveLastKey } from "../store/archive-last.ts";
 import { PAGE_LETTER_KEYS, PAGE_LETTER_KEYS_AFTER, pageLetterReady } from "../store/page-letter-index.ts";
@@ -94,6 +95,8 @@ export type Store = {
   clientKeys: Map<string, string>;
   /// An old session whose up-job lookup should be prepared after this read returns.
   prepareUpJobs: string | null;
+  /// An old workspace up-job lookup should be prepared after this read returns.
+  prepareWorkspaceUpJobs: boolean;
   /// This connection uses the already-published lookup on an older database.
   legacySaid: boolean;
   /// This connection uses the time lookup prepared for an older database.
@@ -102,7 +105,7 @@ export type Store = {
 
 /// The store over an open database, with the data directory its archive is in.
 export function makeStore(db: DatabaseSync, dataDir: string): Store {
-  return { db, dataDir, names: new Map(), processes: new Map(), clientKeys: new Map(), prepareUpJobs: null,
+  return { db, dataDir, names: new Map(), processes: new Map(), clientKeys: new Map(), prepareUpJobs: null, prepareWorkspaceUpJobs: false,
     legacySaid: hasLegacySaid(db), legacyAgent: hasLegacyAgent(db) };
 }
 
@@ -1740,6 +1743,13 @@ export function upJobs(s: Store, visibleTo: InWorkspace | null = null): JobRow[]
   if (visibleTo === null) return all(s, rows.JOBS_UP).map(toJob);
   // Binding an unusual viewer can normalize it before SQLite compares it. Preserve the old JavaScript path for it.
   if (!/^[\x20-\x7e]*$/.test(visibleTo.workspace)) return all(s, rows.JOBS_UP).map(toJob);
+  try {
+    if (workspaceUpJobsReady(s.db)) return all(s, WORKSPACE_UP_JOBS, visibleTo.workspace, visibleTo.home !== false ? 1 : 0).map(toJob);
+    s.prepareWorkspaceUpJobs = true;
+  } catch (error) {
+    // A reader can be opened on a database from before the index was installed.
+    if (!(error instanceof Error) || !error.message.includes("no such table: workspace_up_meta")) throw error;
+  }
   try {
     return all(s, JOBS_UP_IN_WORKSPACE, visibleTo.workspace, visibleTo.home !== false ? 1 : 0).map(toJob);
   } catch (error) {

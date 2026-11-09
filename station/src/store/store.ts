@@ -55,6 +55,7 @@ import { installSessionListIndex } from "./session-list-index.ts";
 import { installSessionBindingsIndex, SESSION_BINDINGS_DELETE, SESSION_BINDINGS_EXISTS, sessionBindingsReady } from "./session-bindings-index.ts";
 import { ARCHIVE_KEEP_EXISTS, ARCHIVE_PIN_EXISTS, archiveMarksReady, installArchiveMarkIndex } from "./archive-mark-index.ts";
 import { installSessionUpJobs, SESSION_UP_JOB, SESSION_UP_JOBS, sessionUpJobsReady } from "./session-up-jobs.ts";
+import { installWorkspaceUpJobs } from "./workspace-up-jobs.ts";
 import { installSessionCounts, sessionCountsReady, SESSION_COUNT_TOTAL, SESSION_COUNT_CONNECT,
   SESSION_COUNTS, SESSION_COUNTS_VISIBLE, SESSION_COUNTS_HOME } from "./session-counts.ts";
 import { installPostBlocks, PostBlocksUnavailable, POST_BLOCK_SIZE, type PostPosition } from "./post-blocks.ts";
@@ -634,6 +635,7 @@ export class Store {
       installSessionBindingsIndex(db);
       installArchiveMarkIndex(db);
       installSessionUpJobs(db);
+      installWorkspaceUpJobs(db);
       addCardOutcomes(db);
       installUsageChatStats(db);
       installEmptyUsageHistory(db);

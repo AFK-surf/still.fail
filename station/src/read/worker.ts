@@ -10,7 +10,7 @@ import { HttpError, setSpoken } from "./views.ts";
 import { cardEditPage, cardMessagePage } from "../store/card-outbox.ts";
 
 export type Ask = { id: number; op: string; args: any; lang: Lang; names: [string, string][]; processes: [string, string][]; clientKeys: [string, string][] };
-export type Answer = { id: number; text?: string; status?: number; error?: string; prepareUpJobs?: string };
+export type Answer = { id: number; text?: string; status?: number; error?: string; prepareUpJobs?: string; prepareWorkspaceUpJobs?: boolean };
 /// Said once, as a reader is ready: how long it took from its first line (its code read in) to its store opened.
 export type Ready = { ready: { loadedMs: number; openedMs: number } };
 
@@ -45,6 +45,7 @@ parentPort!.on("message", async (ask: Ask) => {
     store.processes = new Map(ask.processes);
     store.clientKeys = new Map(ask.clientKeys);
     store.prepareUpJobs = null;
+    store.prepareWorkspaceUpJobs = false;
     // Internal queue work is deliberately not in `ops`: the changed-list API must not expose an unscoped card read.
     if (ask.op === "internalCardEditPage" || ask.op === "internalCardMessagePage") {
       store.db.exec("BEGIN");
@@ -73,6 +74,7 @@ parentPort!.on("message", async (ask: Ask) => {
           a.summaryStrict === true ? a.summaryPrepared === true : undefined) : null;
       answer = { id: ask.id, text: JSON.stringify(op(store, { ...a, ...(batched === null ? {} : { batchedSummary: batched }) })) };
       if (store.prepareUpJobs !== null) answer.prepareUpJobs = store.prepareUpJobs;
+      if (store.prepareWorkspaceUpJobs) answer.prepareWorkspaceUpJobs = true;
     } finally {
       store.db.exec("COMMIT");
     }
