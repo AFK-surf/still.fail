@@ -262,6 +262,8 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     let parent = if holder >= 0 { at[holder] } else { -1 }
     let n = Node::new()
     n.kind = kind_box
+    // (who it is among the frames: its tree node, sizes_steady.mbt)
+    n.ident = -(d.id.at * 65599 + d.id.gen) - 1
     n.x = d.x
     n.y = d.y
     n.fw = d.w

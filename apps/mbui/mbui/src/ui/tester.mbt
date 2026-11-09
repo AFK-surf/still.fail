@@ -490,6 +490,7 @@ pub fn Tester::new(
   looks_made_at.val = loc.to_string()
   words_over_begin(loc.to_string(), words_over_held)
   rows_steady_begin(loc.to_string(), words_over_held)
+  sizes_steady_begin(loc.to_string(), words_over_held)
   seen_whole.val = ""
   said_log.on = false
   frame_said.val = None
@@ -845,6 +846,7 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
   g().check_press_owners()
   self.hold_words_over()
   self.hold_rows_steady()
+  self.hold_sizes_steady()
   self.hold_seen_whole_now()
   self.hold_corners()
   match self.each {

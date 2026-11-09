@@ -3015,14 +3015,15 @@ fn Tree::drawn_box_of(self : Tree, at : Int) -> (Double, Double, Double, Double)
 /// A room opening on what it holds (`share` of it open, 0 … 1; None: as tall as what it holds, or as said), as it
 /// changes: as tall as that share of what it holds comes to at its width, what it holds laid out whole in its middle
 /// (past it at both ends as it is not all open), its height and what it holds's of the same layout, whatever that
-/// comes to as it opens (its words or its width changed meanwhile). Layout's.
-pub fn View::opens(self : View, share : Live[Double?]) -> View {
+/// comes to as it opens (its words or its width changed meanwhile); `from_foot`: what it holds laid out at its foot instead,
+/// past its top (what stands on its foot stays as it opens and closes). Layout's.
+pub fn View::opens(self : View, share : Live[Double?], from_foot? : Bool = false) -> View {
   self.bind(Opens, share, Layout, fn(k) {
     let st = self.tree.nodes[self.at].flex.style
     match k {
       Some(k) => {
         st.content_share = k
-        st.justify = Center
+        st.justify = if from_foot { FlexEnd } else { Center }
       }
       None => {
         st.content_share = 0.0 / 0.0

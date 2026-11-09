@@ -10,19 +10,38 @@
 /// come to meanwhile), what it holds in its middle (row_held_look: as big as it is open about the middle of what it
 /// draws, coming in from half open), cut at its top and foot softly (View::cuts_softly); as tall as what it holds once
 /// it is open; nothing tall once it is shut. Taking no press and read out as nothing from the moment it closes. The
-/// room's node.
-pub fn reveal_node(parent : @view.View, open : () -> Bool, make : (@view.View) -> Unit) -> @view.View {
+/// room's node. `lazy`: what `make` makes is made only as it first opens (what it holds asks for what it shows as it
+/// is made: none of it asked while it is shut), kept from then.
+pub fn reveal_node(
+  parent : @view.View,
+  open : () -> Bool,
+  make : (@view.View) -> Unit,
+  lazy? : Bool = false,
+) -> @view.View {
   let way = NodeWay::new(if @signals.untracked(open) { 1.0 } else { 0.0 })
+  let made = @signals.signal(!lazy || @signals.untracked(open), same=fn(a, b) { a == b })
   parent.box(fn(room) {
     // (as tall as it is laid out, whatever room it has: what is past its room cut)
     let held = room.box(fn(h) {
       h.shrink(Is(0.0)) |> ignore
-      make(h)
+      if lazy {
+        h.show(fn() { made.get() }, make)
+      } else {
+        make(h)
+      }
     })
     let shown = fn() { way.shown(room) }
     room.reacts(open, fn(o) {
       // (how far it goes: what it holds is laid out tall at this moment, the way's length said once, not followed)
-      way.go(room, if o { 1.0 } else { 0.0 }, move().per_unit(held.laid_size().1))
+      let go = fn() { way.go(room, if o { 1.0 } else { 0.0 }, move().per_unit(held.laid_size().1)) }
+      if o && !@signals.untracked(fn() { made.get() }) {
+        // (made as it first opens: its way set off at this moment once what this change makes is made, laid out tall
+        // as it is then)
+        made.set(true)
+        @signals.after_flush(go)
+      } else {
+        go()
+      }
     })
     room
     .opens(By(fn() {

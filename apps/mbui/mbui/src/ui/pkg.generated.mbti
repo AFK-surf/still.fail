@@ -557,6 +557,8 @@ pub let site_backlog_max : Int32
 
 pub let site_head_wait_ms : Double
 
+pub fn sizes_steady_known(Array[(String, Int32)]) -> Unit
+
 pub let smooth_exponent : Double
 
 pub fn smooth_middle(Double) -> Double
