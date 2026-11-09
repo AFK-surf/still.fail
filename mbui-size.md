@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [829615271](https://github.com/AFK-surf/still.fail/commit/82961527108a4d028fc8d8c709d659302878482b) mbui: a chat's row looks its chat up once as its k | 1.72 | 2.29 | 9.54 | 28.06 | 33.26 | 25.06 | 45.77 | 93.8 | 168.9 |
 | [735603acd](https://github.com/AFK-surf/still.fail/commit/735603acd9aa8dd799a94470d14b88bd2ffcb803) mbui: what a frame of headers alone asks of the ke | 1.72 | 2.29 | 9.54 | 28.06 | 33.26 | 25.06 | 45.77 | 93.59 | 170.59 |
 | [febf598ae](https://github.com/AFK-surf/still.fail/commit/febf598aed4f00abe4454788bc734e2b45976e40) mbui: how fast a held finger goes worked out only  | 1.72 | 2.29 | 9.54 | 28.06 | 33.25 | 25.06 | 45.75 | 93.52 | 124.57 |
 | [87876e5e9](https://github.com/AFK-surf/still.fail/commit/87876e5e968298405ae7202753539dec8618af46) mbui: a shape's bands kept for the same outlines i | 1.72 | 2.29 | 9.54 | 28.06 | 33.25 | 25.05 | 45.75 | 93.06 | 156.81 |
