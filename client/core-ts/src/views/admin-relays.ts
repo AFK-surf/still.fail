@@ -1,7 +1,7 @@
 // The console's 中继 page (`adminRelays`): how loaded still.fail's relays are, from what still.fail cloud worked out of
 // their counters (GET /v1/admin/relays, cloud/src/relay-load-view.ts): the numbers now, and a chart over a day or a week.
 // And a card of the same shape for still.fail cloud's Directory, of what it counts of itself (cloud/src/directory.ts
-// adminLoad): its calls an hour by what they serve, the sockets still on it, its storage.
+// adminLoad): its calls an hour, all of them and by what they serve, the sockets still on it, its storage.
 import * as format from "../format.ts";
 import { t } from "../i18n.ts";
 import { arr as arrU, get as getU } from "../util.ts";
@@ -115,10 +115,16 @@ function directory(d: J, range: Range, now: number, offsetMin: number) {
   const hours = range === "day" ? 24 : 7 * 24;
   const families = get(calls, "families");
   const total = Math.max(0, ...FAMILIES.map((id) => values(families, id).length));
-  const series = FAMILIES.map((id) => ({ id, values: values(families, id) }))
-    .filter((f) => f.values.some((n) => n !== null && n > 0))
-    .map((f) => ({ id: f.id, label: t(`core-views.admin.directory.family.${f.id}`), values: f.values.slice(-hours) }));
-  const lastHour = series.reduce((sum, f) => sum + (f.values.at(-1) ?? 0), 0);
+  const sum = (v: (number | null)[]) => v.reduce<number>((n, x) => n + (x ?? 0), 0);
+  // Those with calls in what is shown, the most first: a chart each, as ten lines in one cannot be told apart.
+  const series = FAMILIES.map((id) => ({ id, label: t(`core-views.admin.directory.family.${id}`), values: values(families, id).slice(-hours) }))
+    .filter((f) => sum(f.values) > 0)
+    .sort((a, b) => sum(b.values) - sum(a.values));
+  const shown = Math.min(hours, total);
+  /** All of its calls in each hour: what the object carries. */
+  const all = Array.from({ length: shown }, (_, i) => sum(series.map((f) => f.values[i] ?? null)));
+  const lastHour = all.at(-1) ?? 0;
+  const chart = (id: string, label: string, v: (number | null)[]) => ({ id, label, peak: t("core-views.admin.relay.peak", { value: String(peak([v])) }), series: [{ id, label, values: v }] });
   const start = (num(calls, "start") ?? now) + Math.max(0, total - hours) * step;
   const devices = num(get(d, "held"), "devices") ?? 0, stations = num(get(d, "held"), "stations") ?? 0;
   const at = num(d, "at");
@@ -135,8 +141,8 @@ function directory(d: J, range: Range, now: number, offsetMin: number) {
       { label: t("core-views.admin.directory.waiting"), value: String(num(d, "waiting") ?? 0), ...((num(d, "waiting") ?? 0) > 0 ? { tone: "amber" as const } : {}) },
       { label: t("core-views.admin.directory.storage"), value: format.bytes(num(d, "bytes") ?? 0) },
     ],
-    charts: [{ id: "calls", label: t("core-views.admin.directory.chart"), peak: t("core-views.admin.relay.peak", { value: String(peak(series.map((f) => f.values))) }), series: series.map(({ id, label, values }) => ({ id, label, values })) }],
-    ticks: ticks(start, step, Math.min(hours, total), range, offsetMin),
+    charts: [chart("calls", t("core-views.admin.directory.chart"), all), ...series.map((f) => chart(f.id, f.label, f.values))],
+    ticks: ticks(start, step, shown, range, offsetMin),
   };
 }
 
