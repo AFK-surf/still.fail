@@ -113,6 +113,7 @@ test("the workers in a station release start and process a batch", { skip: !proc
       ["read/session-list-worker.js", { scope: "all" }],
       ["read/session-bindings-worker.js", { scope: "all" }],
       ["read/session-up-jobs-worker.js", { session: "old-count" }],
+      ["read/session-up-jobs-worker.js", { session: "old-count", first: thread }],
       ["read/workspace-up-jobs-worker.js", { scope: "all" }],
       ["read/widget-sources-worker.js", { thread }],
       ["read/cc-index-worker.js", { session: "old-cc" }],

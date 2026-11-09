@@ -24,6 +24,7 @@ import { SESSION_LIST_CONNECT, SESSION_LIST_PENDING, SESSION_LIST_SCOPE, SESSION
 import { SESSION_BINDINGS_PENDING, SESSION_BINDINGS_SELECTED, sessionBindingsReady } from "../store/session-bindings-index.ts";
 import { sessionUpJobsReady } from "../store/session-up-jobs.ts";
 import { WORKSPACE_UP_JOBS, workspaceUpJobsReady } from "../store/workspace-up-jobs.ts";
+import { JOB_NAME_FIRST_LARGE, JOB_NAME_FIRST_PENDING, JOB_NAME_FIRST_ROW, checkJobNameFirst } from "../store/job-name-first.ts";
 import { SAID_BATCH_SIZE, SAID_LATEST, SAID_SCAN, SAID_STATE, saidBoundary } from "../store/said-state.ts";
 import { archiveLastKey } from "../store/archive-last.ts";
 import { PAGE_LETTER_KEYS, PAGE_LETTER_KEYS_AFTER, pageLetterReady } from "../store/page-letter-index.ts";
@@ -448,6 +449,31 @@ export function ccThreads(s: Store, thread: number): { thread: ThreadRow; connec
 
 export function threadSessions(s: Store, thread: number): Membership[] {
   return all(s, "SELECT * FROM thread_sessions WHERE thread = ? ORDER BY joined_at, rowid", thread).map(toMembership);
+}
+
+/// For a named, shown own chat of the only job session, its first member is enough when that member is the live job
+/// session. Short chats use the original reader; only a large requested chat needs the on-demand first-member lookup.
+export function jobNameFirstMembers(s: Store, owner: string, thread: number): Membership[] | null {
+  if (s.db.prepare(JOB_NAME_FIRST_LARGE).get(thread) === undefined) return null;
+  try {
+    checkJobNameFirst(s.db);
+    const scope = s.db.prepare("SELECT thread,ready,restart FROM job_name_first WHERE owner=?").get(owner) as
+      { thread: number; ready: number; restart: number } | undefined;
+    if (scope) {
+      if (scope.thread !== thread) return null;
+      if (scope.ready !== 1 || scope.restart !== 0) throw new Refused(503, JOB_NAME_FIRST_PENDING + JSON.stringify([owner, thread]));
+      const first = s.db.prepare(JOB_NAME_FIRST_ROW).get(owner, thread) as Json | undefined;
+      return first?.session === owner ? [toMembership(first)] : null;
+    }
+    // One owner and one chat can each hold at most one lookup. Do not wait for a lookup owned by another job.
+    if (s.db.prepare("SELECT 1 FROM job_name_first WHERE thread=?").get(thread) !== undefined ||
+        s.db.prepare("SELECT 1 FROM session_up_job_rows WHERE session=? LIMIT 1").get(owner) === undefined) return null;
+    throw new Refused(503, JOB_NAME_FIRST_PENDING + JSON.stringify([owner, thread]));
+  } catch (error) {
+    // An older store (or one opened without the job index) keeps its existing reader.
+    if (error instanceof Error && /^no such table: (?:main\.)?(?:job_name_first_meta|job_name_first|session_up_job_rows)$/.test(error.message)) return null;
+    throw error;
+  }
 }
 
 /// The threads sessions take part in (each once).
