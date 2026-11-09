@@ -46,6 +46,8 @@ priv struct RowsSteady {
   lists : Map[Int, Double]
   /// the window's size as the last frame measured was drawn (its rows measured anew from a frame drawn another size)
   mut window : (Double, Double)
+  /// how much bigger the system's setting made words as that frame was drawn (font_scale): its rows laid out anew too
+  mut words : Double
   /// when each row (by its list's id and its key) last turned back (rows_turn_ms)
   turned : Map[String, Double]
   /// each row's last way (rows_return_ms): which way (1 down, -1 up), how far, when it last moved so, how far it has
@@ -65,6 +67,7 @@ let rows_steady : RowsSteady = {
   found: Set::new(),
   lists: {},
   window: (-1.0, -1.0),
+  words: -1.0,
   turned: {},
   went: {},
   hand: -1.0e9,
@@ -95,6 +98,7 @@ fn rows_steady_begin(loc : String, held : Bool) -> Unit {
   rows_steady.went.clear()
   rows_steady.hand = -1.0e9
   rows_steady.window = (-1.0, -1.0)
+  rows_steady.words = -1.0
   rows_steady.file = match loc.find(":") {
     Some(i) => loc.unsafe_substring(start=0, end=i)
     None => loc
@@ -107,10 +111,12 @@ fn rows_steady_begin(loc : String, held : Bool) -> Unit {
 fn Ctx::rows_steady_faults(self : Ctx, now : Double, period : Double) -> Array[String] {
   let out : Array[String] = []
   let here : Set[String] = Set::new()
-  // (the window made another size since the last frame: what each list's rows are laid out at for it is there at once,
-  // none of it a row's move; from this frame on anew, what was found kept)
-  let resized = rows_steady.window != (self.width, self.height)
+  // (the window made another size, or words by the system's setting, since the last frame: what each list's rows are
+  // laid out at for it is there at once, none of it a row's move; from this frame on anew, what was found kept)
+  let words = @signals.untracked(font_scale)
+  let resized = rows_steady.window != (self.width, self.height) || rows_steady.words != words
   rows_steady.window = (self.width, self.height)
+  rows_steady.words = words
   for i in 0..<self.count {
     let ln = self.nodes[i]
     if ln.kind != kind_list {

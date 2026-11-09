@@ -8,7 +8,7 @@
 // hidden, not made another size), words by their place only (how tall they are is how many lines they take); by who it is
 // in the frame (its ident, a tree node's id) and what it is (its kind, its ground): one made in another's place is
 // another. Only while some of it shows. Not across a gap of more than a few frames,
-// the window made another size, a frame with the pointer down (what the hand moves goes as it goes), nor while it does
+// the window made another size (or words by the system's setting), a frame with the pointer down (what the hand moves goes as it goes), nor while it does
 // not show. Held on every frame a Tester draws, as rows_steady.mbt's rule; its known faults a file at a time
 // (`sizes_steady_known`), each bar only falling.
 
@@ -22,6 +22,9 @@ priv struct SizesSteady {
   turned : Map[(Int, Int, Int64, Bool), Double]
   found : Set[String]
   mut window : (Double, Double)
+  /// how much bigger the system's setting made words as the last frame was drawn (font_scale): all laid out anew for it
+  /// at once, as for the window made another size
+  mut words : Double
 }
 
 ///|
@@ -33,6 +36,7 @@ let sizes_steady : SizesSteady = {
   turned: {},
   found: Set::new(),
   window: (-1.0, -1.0),
+  words: -1.0,
 }
 
 ///|
@@ -56,6 +60,7 @@ fn sizes_steady_begin(loc : String, held : Bool) -> Unit {
   sizes_steady.turned.clear()
   sizes_steady.found.clear()
   sizes_steady.window = (-1.0, -1.0)
+  sizes_steady.words = -1.0
   sizes_steady.file = match loc.find(":") {
     Some(i) => loc.unsafe_substring(start=0, end=i)
     None => loc
@@ -196,8 +201,10 @@ fn sizes_steady_fault(
 /// The faults the frame just drawn (at `now`, the display's frames `period` apart) shows, each said once: of whom, how.
 fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[String] {
   let out : Array[String] = []
-  let resized = sizes_steady.window != (self.width, self.height)
+  let words = @signals.untracked(font_scale)
+  let resized = sizes_steady.window != (self.width, self.height) || sizes_steady.words != words
   sizes_steady.window = (self.width, self.height)
+  sizes_steady.words = words
   let here : Set[(Int, Int, Int64, Bool)] = Set::new()
   self.with_tree_nodes(fn() {
     // (one ident twice in the frame: who either is, unsaid)
