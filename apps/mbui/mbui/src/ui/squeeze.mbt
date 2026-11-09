@@ -437,11 +437,11 @@ fn Ctx::squeeze_scaled(self : Ctx, i : Int) -> Bool {
 }
 
 ///|
-/// Whether a node lies apart from its parent's flow, over what is beside it on purpose: a layer, a pager's page, one put
-/// where it is said, what is over the whole window, one drawn moved off its place (`tx`, `ty`: a face over the one
+/// Whether a node lies apart from its parent's flow, over what is beside it on purpose: a layer, one put where it
+/// is said, what is over the whole window, one drawn moved off its place (`tx`, `ty`: a face over the one
 /// before it, something on its way).
 fn Node::squeeze_aside(self : Node) -> Bool {
-  self.layer || self.portal || self.pager != 0 || self.placed_at() || self.moved_off()
+  self.layer || self.portal || self.placed_at() || self.moved_off()
 }
 
 ///|

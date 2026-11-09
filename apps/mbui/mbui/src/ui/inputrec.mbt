@@ -24,7 +24,7 @@ let inputs_since : Ref[Bool] = Ref::new(false)
 ///|
 /// An input came between two frames that what is built takes (a press, a key, words typed, a drag, a wheel): the
 /// frame after the next is built, for what it changed late in it that is no signal yet (what the build itself keeps of
-/// a press: a pager turned, a menu shut). Not a pointer moved with nothing down: what changes of where it is, what
+/// a press: a menu shut). Not a pointer moved with nothing down: what changes of where it is, what
 /// reads it reads (hand.mbt).
 let inputs_taken : Ref[Bool] = Ref::new(false)
 

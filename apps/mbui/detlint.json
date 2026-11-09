@@ -226,7 +226,6 @@
     "globals": {},
     "style-literal": {
       "src/coredemo/main.mbt": 39,
-      "src/gallery/view.mbt": 62,
       "src/sf/glass.mbt": 1,
       "src/sf/markdown.mbt": 34,
       "src/sf/parts.mbt": 56,
@@ -264,7 +263,6 @@
     },
     "box-loose": {
       "src/coredemo/main.mbt": 20,
-      "src/gallery/view.mbt": 32,
       "src/sf/avatar.mbt": 1,
       "src/sf/glass.mbt": 1,
       "src/sf/markdown.mbt": 26,
@@ -369,9 +367,7 @@
       "src/sfdesk/shortcuts.mbt": 1
     },
     "fixture-import": {},
-    "motion-spring": {
-      "src/gallery/view.mbt": 1
-    },
+    "motion-spring": {},
     "built-by-hand": {
       "src/sf/parts.mbt": 2,
       "src/sfbase/viewer.mbt": 1,
@@ -465,7 +461,6 @@
       "src/sfpages/search.mbt": 1
     },
     "old-list": {
-      "src/gallery/view.mbt": 1,
       "src/sf/page.mbt": 3,
       "src/sf/player.mbt": 2,
       "src/sf/presenters.mbt": 1,

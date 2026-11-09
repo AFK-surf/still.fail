@@ -423,7 +423,7 @@ pub struct Ctx {
   mut press_chain : Array[Int]
   mut claimed : Bool
   mut dragging : Bool
-  /// the press drags a list or a pager by the finger, a second finger the newest leading it (old_pointer_now)
+  /// the press drags a list by the finger, a second finger the newest leading it (old_pointer_now)
   mut following : Bool
   mut press_x : Double
   /// when the press under way went down (ms), and the press a link's hold was last told of
@@ -1237,7 +1237,7 @@ fn Ctx::alloc_part(self : Ctx, kind : Int, look : Bool, words : Bool, key? : Int
 }
 
 ///|
-/// The key of what holds a list's item `k` (a row, a pager's page), who it is by its item (Ctx::node_known).
+/// The key of what holds a list's item `k` (a row), who it is by its item (Ctx::node_known).
 fn item_key(k : Int) -> Int {
   mix(0x6974656d, k + 1)
 }

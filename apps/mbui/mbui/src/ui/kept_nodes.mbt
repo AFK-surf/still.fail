@@ -989,7 +989,7 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
 
 ///|
 /// Why the `n` nodes from `r` (a row or a part just built) may not be kept: one held elsewhere, or of a kind built each
-/// frame (a list of a row's own: a part lays its lists out each frame; a native view, a pager's page, a layer, a
+/// frame (a list of a row's own: a part lays its lists out each frame; a native view, a reader's page, a layer, a
 /// shot); "" none. (What is placed by the clock (Ctx::moved_by: a page sliding) is kept with what moves it, its node's
 /// own, placed again as each frame is laid out and painted. A field is kept as the rest: what changes what it holds is
 /// an event, which builds the frame anew, and one with the focus is built each frame: Ctx::editor.)
@@ -1008,8 +1008,8 @@ fn Ctx::row_nodes_why(self : Ctx, r : Int, n : Int, part~ : Bool) -> String {
     if nd.kind == kind_native {
       return "a native view"
     }
-    if nd.pager != 0 || nd.kind == kind_page {
-      return "a pager's page"
+    if nd.kind == kind_page {
+      return "a reader's page"
     }
     if nd.portal || nd.shot {
       return "a layer"

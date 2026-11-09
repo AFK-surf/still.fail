@@ -305,8 +305,8 @@ test "pointer_at: each event by its own time, down, moved, up, not by the frames
 }
 
 ///|
-/// A list of rows that scrolls up and down, a pager over it across, and a thin drag area across to be held first (a
-/// column's edge) on the list's first row; what the area was moved by, its taps and the pager's page kept.
+/// A list of rows that scrolls up and down, and a thin drag area across to be held first (a column's edge) on the
+/// list's first row; what the area was moved by and its taps kept.
 fn held_edge_view(
   moved : Ref[Double],
   taps : Ref[Int],

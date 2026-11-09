@@ -1015,14 +1015,10 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
   // a second finger (4 down, 5 moved, 6 up: hosts with touch screens; 8 the first let go, the second the first from
   // here), for a pinch (native.mbt `second_pointer`)
   if (kind >= 4 && kind <= 6) || kind == 8 {
-    // a list or a pager being dragged follows the newest finger, as Android's RecyclerView (the first's moves meanwhile
-    // move nothing)
+    // a list being dragged follows the newest finger, as Android's RecyclerView (the first's moves meanwhile move
+    // nothing)
     if kind == 5 && second_ptr[2] > 0.0 && c.down && c.dragging && c.following {
-      if pagers.contains(c.drag_scroll) {
-        c.pager_drag(c.drag_scroll, x - second_ptr[0]) |> ignore
-      } else {
-        c.list_drag(c.drag_scroll, -(y - second_ptr[1]))
-      }
+      c.list_drag(c.drag_scroll, -(y - second_ptr[1]))
       h_frame_owed()
     }
     // the first let go: the second's moves come as the first's from where the second is, the press's slop measured as
@@ -1357,26 +1353,19 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
           c.active = 0
         }
       } else if c.drag_scroll != 0 && !captures.contains(c.drag_scroll) {
-        // a pager follows the finger sideways, a list up and down
-        let pager = pagers.contains(c.drag_scroll)
+        // a list follows the finger up and down
         if !c.dragging {
-          let moved = if pager { x - c.press_x } else { y - c.press_y }
+          let moved = y - c.press_y
           let slop = touch_slop()
           if moved.abs() > slop {
             c.dragging = true
             c.following = true
             c.active = 0
-            if !pager {
-              c.scroll_lets_go(c.drag_scroll)
-            }
+            c.scroll_lets_go(c.drag_scroll)
             // from where the slop ends, as Compose starts a drag: nothing
             // jumps, and what moved past the slop is not lost
             let past = if moved > 0.0 { moved - slop } else { moved + slop }
-            if pager {
-              c.pager_drag(c.drag_scroll, past) |> ignore
-            } else {
-              c.list_drag(c.drag_scroll, -past)
-            }
+            c.list_drag(c.drag_scroll, -past)
           } else {
             // (within the slop: nothing moves)
             quiet = true
@@ -1384,8 +1373,6 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
         } else if second_ptr[2] > 0.0 && c.following {
           // (a second finger down: the list follows it, above)
           quiet = true
-        } else if pager {
-          c.pager_drag(c.drag_scroll, x - c.last_x) |> ignore
         } else {
           // (the list follows the finger: where it stands is its signal's, ListState::hand_moved)
           c.list_drag(c.drag_scroll, -(y - c.last_y))
@@ -1466,9 +1453,6 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
         None => ()
       }
       sideways_up(c, c.drag_scroll, lift_x, lift_y)
-      if pagers.contains(c.drag_scroll) {
-        c.pager_release(c.drag_scroll, lift_x)
-      }
     }
     // a tap on a field (Android's): the focus and the caret where it was tapped, its handle under the caret
     if c.editor_tap != 0 &&
@@ -1598,9 +1582,6 @@ fn Ctx::press_called_off(self : Ctx, x : Double, y : Double, t : Double) -> Unit
       None => ()
     }
     sideways_up(c, c.drag_scroll, 0.0, 0.0)
-    if pagers.contains(c.drag_scroll) {
-      c.pager_release(c.drag_scroll, 0.0)
-    }
   }
   // (words being picked by it: picked as far as they are, no more, nothing scrolled on at an edge for it)
   picked.dragging = false
@@ -2132,7 +2113,7 @@ fn key_in(code : Int, mods : Int) -> Unit {
       if target != 0 &&
         island_allows(c.island_of_id(target)) &&
         !c.focus_takes(code) &&
-        (c.list_key(target, code) || c.pager_key(target, code)) {
+        c.list_key(target, code) {
         h_request_frame()
       }
     }

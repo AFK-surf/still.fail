@@ -242,8 +242,6 @@ struct Node {
   // a page of a book, and which
   mut pages : Pages?
   mut page_no : Int
-  // a pager's page: the pager's id
-  mut pager : Int
   // laid over its parent rather than beside its siblings
   mut layer : Bool
   // a ground its style gives it in a state it is not in now (pointed at, pressed, chosen, focused): the corner rule's
@@ -508,7 +506,6 @@ fn Node::new() -> Node {
     still: false,
     pages: None,
     page_no: -1,
-    pager: 0,
     layer: false,
     state_ground: false,
     mar_l: 0.0,
@@ -643,7 +640,6 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.still = false
   self.pages = None
   self.page_no = -1
-  self.pager = 0
   self.layer = false
   self.mar_l = 0.0
   self.mar_t = 0.0

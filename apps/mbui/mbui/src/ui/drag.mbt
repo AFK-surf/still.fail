@@ -1,4 +1,4 @@
-// What a finger drags that is not a list or a pager: a sheet by its top, the bottom bar's ball and panel. A box
+// What a finger drags that is not a list: a sheet by its top, the bottom bar's ball and panel. A box
 // given a drag (Ctx::drag_area) takes the presses and drags that land on it as a list would (nothing under it, a
 // list behind a sheet, scrolls), and says each frame where the finger has it: pressed, moved past the slop along its
 // axis (then it is the drag's, not a tap), let go and how fast. What the drag does is the view's. Lying in a list, or

@@ -274,12 +274,12 @@ fn editor_scrolls(n : Node) -> Bool {
 }
 
 ///|
-/// Whether `n` scrolls or is dragged its own way: a list, a pager, a drag, a capture, what scrolls sideways.
+/// Whether `n` scrolls or is dragged its own way: a list, a drag, a capture, what scrolls sideways.
 fn scrolls(n : Node) -> Bool {
   n.kind == kind_list ||
   (
     n.id != 0 &&
-    (pagers.contains(n.id) || drags.contains(n.id) || captures.contains(n.id) || sideways.contains(n.id))
+    (drags.contains(n.id) || captures.contains(n.id) || sideways.contains(n.id))
   )
 }
 
