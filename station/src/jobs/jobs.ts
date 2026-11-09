@@ -13,7 +13,6 @@ import {
   type FSWatcher, appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync,
   statSync, watch, writeFileSync,
 } from "node:fs";
-import { availableParallelism } from "node:os";
 import { join, sep } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { startEnv } from "../ops/agent-env.ts";
@@ -26,10 +25,9 @@ import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "../ops/group.ts";
 import {
-  Busy, type Claim, HELD_LONG_MS, LOOK_MS, PERSON_IDLE_MS, type Pressure, type Started, type Waiting, type Why, claimsOf, cpusFor, overstaying,
-  pick, place, served,
+  type Claim, HELD_LONG_MS, LOOK_MS, PERSON_IDLE_MS, type Pressure, type Started, type Waiting, type Why, claimsOf, overstaying, pick, place,
+  served,
 } from "./admit.ts";
-import type { Ticks } from "../read/host.ts";
 
 export { outputAt, tail };
 
@@ -141,13 +139,11 @@ export type Notify = (session: string, text: string) => void;
 /// service), when the station is in a workspace.
 export type Link = (session: string, job: string) => string | null;
 
-/// What the queue (jobs/admit.ts) measures of the machine: its CPUs, their ticks, what the system says of its memory,
-/// and how long its input has been idle (ms; none where it is not read: no person is seen at it).
-export type Machine = { cpus(): number; ticks(): Ticks | null; pressure(): Promise<Pressure | null>; inputIdle?(): Promise<number | null> };
+/// What the queue (jobs/admit.ts) measures of the machine: what the system says of its memory, and how long its input
+/// has been idle (ms; none where it is not read: no person is seen at it).
+export type Machine = { pressure(): Promise<Pressure | null>; inputIdle?(): Promise<number | null> };
 
 export const liveMachine: Machine = {
-  cpus: () => availableParallelism(),
-  ticks: () => platform.host.cpuTicks(),
   pressure: () => platform.memoryPressure(),
   inputIdle: () => platform.inputIdleMs(),
 };
@@ -286,10 +282,9 @@ export class Jobs {
   /// What waits for an exit file to appear, by job id; the watch on jobs/exit that tells them.
   private exitHeard = new Map<string, () => void>();
   private exitWatch: FSWatcher | null = null;
-  /// The queue (jobs/admit.ts): what it measures, the CPUs as it saw them (for the CPUs a task is told are free), what
-  /// the system last said of its memory, when each session's task last started, and why the first waiting waits.
+  /// The queue (jobs/admit.ts): what it measures, what the system last said of its memory, when each session's task
+  /// last started, and why the first waiting waits.
   private machine: Machine;
-  private busy = new Busy();
   private pressure: Pressure | null = null;
   private lastOf = new Map<string, number>();
   private why: Why | null = null;
@@ -470,23 +465,19 @@ export class Jobs {
     return chosen;
   }
 
-  /// A task of the queue starts: noted as its session's last, and what it is told of the CPUs free (where the queue
-  /// looked at them over the last seconds, a task having waited: else nothing, rather than one CPU for want of a look).
+  /// A task of the queue starts: noted as its session's last. A small one is told to use one CPU; any other is told
+  /// nothing of the CPUs (jobs/admit.ts), however many run beside it.
   private admitted(job: JobRow): Record<string, string> {
-    const alone = this.line().running.length === 0;
     this.lastOf.set(job.sessionKey, this.queueNow());
-    if (job.small) return { STILLFAIL_CPUS: "1", MAKEFLAGS: "-j1", CARGO_BUILD_JOBS: "1", CMAKE_BUILD_PARALLEL_LEVEL: "1" };
-    const busy = this.busy.share();
-    return busy === null ? {} : cpusFor(startEnv(), this.machine.cpus(), busy, alone);
+    return job.small ? { STILLFAIL_CPUS: "1", MAKEFLAGS: "-j1", CARGO_BUILD_JOBS: "1", CMAKE_BUILD_PARALLEL_LEVEL: "1" } : {};
   }
 
-  /// While a task waits: every LOOK_MS the CPUs noted, the memory asked for, the next started if there is room.
+  /// While a task waits: every LOOK_MS the memory asked for, the next started if there is room.
   private watchQueue(): void {
     if (this.looking || this.closing) return;
     this.looking = true;
     const waiting = () => !this.closing && this.line().waiting.length > 0;
     const look = Effect.promise(async () => {
-      this.busy.note(this.queueNow(), this.machine.ticks());
       try {
         this.pressure = await this.machine.pressure();
       } catch {
@@ -496,8 +487,7 @@ export class Jobs {
       this.startNext();
     });
     void this.run(
-      Effect.sync(() => this.busy.note(this.queueNow(), this.machine.ticks())).pipe(
-        Effect.andThen(Effect.sleep(LOOK_MS)),
+      Effect.sleep(LOOK_MS).pipe(
         Effect.andThen(Effect.andThen(look, Effect.sync(waiting)).pipe(Effect.repeat({ schedule: Schedule.spaced(LOOK_MS), until: (more) => !more }))),
         Effect.ensuring(Effect.sync(() => {
           this.looking = false;

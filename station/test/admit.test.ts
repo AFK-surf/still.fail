@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { after, describe, test } from "node:test";
 import { type Clock, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
-import { BUSY_SPAN_MS, Busy, type Claim, HELD_LONG_MS, LOOK_MS, type Pressure, claimsOf, cpusFor, overstaying, pick, place, served } from "../src/jobs/admit.ts";
+import { type Claim, HELD_LONG_MS, LOOK_MS, type Pressure, claimsOf, overstaying, pick, place, served } from "../src/jobs/admit.ts";
 import { Jobs, type Machine, STOP_LOOK_MS } from "../src/jobs/jobs.ts";
 import { signalGroup } from "../src/ops/group.ts";
 import { Store } from "../src/store/store.ts";
@@ -93,38 +93,6 @@ test("a command that has held the screen long while another waits is told; none 
   assert.deepEqual(overstaying([c("old", 3, true), c("pic", 2, false)], HELD_LONG_MS), [c("old", 3, true)], "an earlier station's: since it asked");
 });
 
-test("how busy the CPUs were is over the last seconds only, and unknown until they span enough of them", () => {
-  const busy = new Busy();
-  busy.note(0, [0, 0]);
-  busy.note(LOOK_MS, [5, 10]);
-  assert.equal(busy.share(), null, "less than half the span");
-  busy.note(BUSY_SPAN_MS / 2, [10, 20]);
-  assert.equal(busy.share(), 0.5);
-  assert.deepEqual(busy.sample(), { share: 0.5, seconds: 10, checkedAt: BUSY_SPAN_MS / 2 });
-  // A long while later: what was noted then is not compared with.
-  busy.note(10 * BUSY_SPAN_MS, [20, 40]);
-  assert.equal(busy.share(), null);
-  busy.note(10 * BUSY_SPAN_MS + BUSY_SPAN_MS, [29, 50]);
-  assert.equal(busy.share(), 0.9);
-});
-
-test("since a task started, how busy the CPUs were is over the ticks noted from then on", () => {
-  const busy = new Busy();
-  busy.note(0, [0, 0]);
-  busy.note(LOOK_MS, [10, 10]);
-  busy.note(2 * LOOK_MS, [11, 20]);
-  busy.note(3 * LOOK_MS, [12, 30]);
-  assert.equal(busy.share(), 0.4);
-  assert.equal(busy.share(LOOK_MS), 0.1, "the busy first look before the start left out");
-  assert.equal(busy.share(2 * LOOK_MS), null, "less than two looks since");
-});
-
-test("a task started beside others is told how many CPUs are free, unless its environment says already", () => {
-  assert.deepEqual(cpusFor({}, 12, 0.5, true), {}, "alone: the machine is its");
-  assert.deepEqual(cpusFor({}, 12, 0.5, false), { STILLFAIL_CPUS: "6", MAKEFLAGS: "-j6", CARGO_BUILD_JOBS: "6", CMAKE_BUILD_PARALLEL_LEVEL: "6" });
-  assert.deepEqual(cpusFor({ MAKEFLAGS: "-j2", CARGO_BUILD_JOBS: "3" }, 12, 0.99, false), { STILLFAIL_CPUS: "1", CMAKE_BUILD_PARALLEL_LEVEL: "1" });
-});
-
 // ── the queue in Jobs ──
 
 const dirs: string[] = [];
@@ -152,20 +120,10 @@ async function until(_what: string, check: () => boolean) {
   while (!check()) await sleep(5);
 }
 
-/// A machine whose CPUs and memory the test says: `busy` the share since the last look (none: idle).
-type State = { busy?: number; pressure: Pressure; idle?: number };
+/// A machine whose memory and input the test says. (Its CPUs are nothing to the queue: none of these says them.)
+type State = { pressure: Pressure; idle?: number };
 function machine(state: State): Machine {
-  let [b, t] = [0, 0];
-  return {
-    cpus: () => 8,
-    ticks: () => {
-      t += 1000;
-      b += 1000 * (state.busy ?? 0);
-      return [b, t];
-    },
-    pressure: async () => state.pressure,
-    inputIdle: async () => state.idle ?? null,
-  };
+  return { pressure: async () => state.pressure, inputIdle: async () => state.idle ?? null };
 }
 
 function rig(state: State, store?: Store, data?: string) {
@@ -207,7 +165,7 @@ const FOREVER = "tail -f /dev/null";
 
 describe("the queue", { skip: WINDOWS && "jobs' groups and sh" }, () => {
   test("one small picture starts beside a busy build; the next waits for its own slot", async () => {
-    const r = rig({ busy: 1, pressure: "normal" });
+    const r = rig({ pressure: "normal" });
     const build = r.start("build", "a", FOREVER);
     const first = r.start("picture-1", "b", FOREVER, false, true);
     assert.notEqual(build.queued, true);
@@ -223,8 +181,8 @@ describe("the queue", { skip: WINDOWS && "jobs' groups and sh" }, () => {
     assert.equal(r.store.getJob(build.id)!.state, "running");
   });
 
-  test("a task that comes while others run starts at once, however busy the CPUs", async () => {
-    const r = rig({ busy: 1, pressure: "normal" });
+  test("a task that comes while others run starts at once, told nothing of the CPUs", async () => {
+    const r = rig({ pressure: "normal" });
     const first = r.start("one", "a", FOREVER);
     const second = r.start("two", "b", FOREVER);
     const third = r.start("three", "c", 'printf "%s" "${STILLFAIL_CPUS-unset}" > cpus');
@@ -232,11 +190,11 @@ describe("the queue", { skip: WINDOWS && "jobs' groups and sh" }, () => {
     assert.equal(r.jobs.queueOf(third.id), null);
     await until("the third ends", () => r.store.getJob(third.id)!.state === "exited");
     // (as the test's own environment has it, if it runs in a task told one)
-    assert.equal(readFileSync(join(r.dir, "work", "cpus"), "utf8"), process.env.STILLFAIL_CPUS ?? "unset", "the CPUs not looked at: no count told, rather than one");
+    assert.equal(readFileSync(join(r.dir, "work", "cpus"), "utf8"), process.env.STILLFAIL_CPUS ?? "unset", "no count told: the system shares the cores");
   });
 
   test("each waiting task says its own blocker when another task uses the screen; one that does not use it starts", async () => {
-    const r = rig({ busy: 1, pressure: "normal" });
+    const r = rig({ pressure: "normal" });
     r.start("shots", "a", FOREVER, true);
     const screen = r.start("next-shots", "b", FOREVER, true);
     const plain = r.start("tests", "c", FOREVER);
@@ -247,20 +205,21 @@ describe("the queue", { skip: WINDOWS && "jobs' groups and sh" }, () => {
     assert.notEqual(plain.queued, true);
   });
 
-  test("a task that waited is told how many CPUs are free, as the queue saw them while it waited", async () => {
-    const r = rig({ busy: 0.25, pressure: "normal" });
+  test("a task that waited beside others is told nothing of the CPUs either, however long the queue looked", async () => {
+    const r = rig({ pressure: "normal" });
     r.start("build", "a", FOREVER);
     const shots = r.start("shots", "b", FOREVER, true);
-    const pics = r.start("pics", "c", 'printf "%s" "$STILLFAIL_CPUS" > cpus', true);
+    const pics = r.start("pics", "c", 'printf "%s|%s|%s|%s" "${STILLFAIL_CPUS-unset}" "${MAKEFLAGS-unset}" "${CARGO_BUILD_JOBS-unset}" "${CMAKE_BUILD_PARALLEL_LEVEL-unset}" > cpus', true);
     assert.equal(pics.queued, true);
-    // (looks enough for half of BUSY_SPAN_MS)
     for (let i = 0; i < 3; i++) {
       await r.clock.move(LOOK_MS);
       await sleep(5);
     }
     await stop(r, shots.id);
     await until("it starts and ends", () => r.store.getJob(pics.id)!.state === "exited");
-    assert.equal(readFileSync(join(r.dir, "work", "cpus"), "utf8"), "6");
+    // (as the test's own environment has them, if it runs in a task told some)
+    const own = (name: string) => process.env[name] ?? "unset";
+    assert.equal(readFileSync(join(r.dir, "work", "cpus"), "utf8"), ["STILLFAIL_CPUS", "MAKEFLAGS", "CARGO_BUILD_JOBS", "CMAKE_BUILD_PARALLEL_LEVEL"].map(own).join("|"));
   });
 
   test("while the memory is under pressure nothing starts; once it eases the waiting one does", async () => {
