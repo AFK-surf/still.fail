@@ -115,7 +115,14 @@ fn station_tab_pane(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, tab :
       @settings.wide_deep.val = false
       @settings.page(c, core, here, AdbShare(station))
     }
-    _ => setting_route(c, src, w, Station(station), frame) |> ignore
+    // (a station's page: its old view, the panel being one: station_page; every frame's own stack makes it once)
+    _ => {
+      let core = settings_core(src, w)
+      let here = @settings.here_of(core, w.id, w.name)
+      @settings.frame(core, here)
+      settings_fixture(src, core)
+      @sfpages.station_page(c, core, here, frame, station)
+    }
   }
   true
 }

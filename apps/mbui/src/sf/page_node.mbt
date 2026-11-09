@@ -1209,11 +1209,21 @@ let led_title_gap : Double = 6.0
 
 ///|
 /// What a group holds that is not a row (block's: a section's button under its group): narrow, as far in as a card's
-/// rows' words, 12 over and under; wide, on the page as it is; what `make` makes in it 12 apart.
+/// rows' words, 12 over and under; wide, on a list's card (part_of) as a row of it is (wide_in_list's: as far in as its
+/// rows' words, 10 over and under, as high as one at least), else on the page as it is; what `make` makes in it 12 apart.
 pub fn block_node(parent : @view.View, make : (@view.View) -> Unit) -> Unit {
-  let room = if look_node(parent) is Narrow { text_in } else { 0.0 }
+  let narrow = look_node(parent) is Narrow
+  let listed = !narrow && part_of(parent).list
+  let room = if narrow { (text_in, text_in, text_in, text_in) } else if listed {
+    (text_in, wide_row_over, if in_pane_node(parent) { text_in } else { list_control_end }, wide_row_over)
+  } else {
+    (0.0, 0.0, 0.0, 0.0)
+  }
   parent.box(fn(b) {
-    b.gap(Is(block_gap)).padding(Is((room, room, room, room))) |> ignore
+    b.gap(Is(block_gap)).padding(Is(room)) |> ignore
+    if listed {
+      b.lies_along(Is(Middle)).min_height(By(fn() { Some(theme().items.least) })) |> ignore
+    }
     make(b)
   })
   |> ignore

@@ -719,6 +719,8 @@ pub let group_row_end_radius : @ui.Radius
 
 pub fn group_rows(@ui.Ctx, String, Array[(String, () -> Unit)]) -> Unit
 
+pub fn group_rows_node(@view.View, (@view.View) -> Unit) -> Unit
+
 pub fn[T : Eq, K : Hash + Eq] keyed_rows_node(@view.View, () -> Array[T], (T) -> K, (@view.View, @signals.Signal[T]) -> Unit) -> Unit
 
 pub fn group_rows_reset() -> Unit
@@ -835,6 +837,8 @@ pub fn item_row(@ui.Ctx, () -> Unit) -> Unit
 pub let job_action_h : @ui.Len
 
 pub let jobs_row_h : @ui.Len
+
+pub fn item_row_node(@view.View, (@view.View) -> Unit) -> Unit
 
 pub fn join_meta(Array[String]) -> String
 
@@ -1790,6 +1794,8 @@ pub let row_mark : Double
 
 pub let row_radius : @ui.Radius
 
+pub fn row_lines_node(@view.View, (@view.View) -> Unit, (@view.View) -> Unit, spaced? : Bool) -> Unit
+
 pub fn row_ripple(@ui.Ctx, Int32) -> Unit
 
 pub fn row_tag_node(@view.View, () -> String) -> Unit
@@ -1853,6 +1859,8 @@ pub fn select(@ui.Ctx, String, String, Array[(String, String)], (String) -> Unit
 pub let select_chevron : Double
 
 pub let select_w : Double
+
+pub fn select_node(@view.View, () -> String, () -> Array[(String, String)], (String) -> Unit, label? : () -> String, disabled? : () -> Bool, whole? : Bool) -> Unit
 
 pub fn set_accent(String) -> Unit
 
@@ -2205,6 +2213,8 @@ pub fn tone_of(String) -> AccentTone?
 pub fn tool_button(@ui.Ctx, String, String, String, on_press~ : () -> Unit, drop? : Int32, lit? : Int64, disabled? : Bool, shortcut? : String) -> Tool
 
 pub fn tool_mark(@ui.Ctx, String, Double) -> Unit
+
+pub fn tool_mark_node(@view.View, String, Double) -> Unit
 
 pub fn tool_node(@view.View, () -> ToolSaid, () -> ViewerInk, @view.Live[Double], () -> Unit, tip? : TipLayer, lights? : Bool, ripples? : Bool) -> @view.View
 

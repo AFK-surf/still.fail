@@ -306,6 +306,11 @@ fn pane_made(
       made("local-station", fn(a, core, _here, _stint, frame, width) {
         @sfpages.local_station_node(a, core, on_back=core.pop, frame~, width~)
       })
+    // (by its station: another station's another page, not this one become it)
+    Setting(Station(address)) =>
+      made("station/" + address, fn(a, core, here, stint, frame, width) {
+        @sfpages.station_node(a, core, here, address, on_back=core.pop, frame~, width~, stint~)
+      })
     Setting(Permissions) =>
       made("permissions", fn(a, core, _here, _stint, frame, width) {
         @sfpages.permissions_node(a, core, on_back=core.pop, frame~, width~)

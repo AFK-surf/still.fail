@@ -619,6 +619,11 @@ fn narrow_made_as(
       made("connect/" + station + "/" + id, fn(p, core, here, frame, stint, _acts) {
         @sfpages.connect_node(p, src, core, here, station, id, on_back=core.pop, frame~, stint~)
       })
+    // (by its station: another station's another page, not this one become it)
+    Setting(Station(address)) =>
+      made("station/" + address, fn(p, core, here, frame, stint, _acts) {
+        @sfpages.station_node(p, core, here, address, on_back=core.pop, frame~, stint~)
+      })
     Setting(UsagePrices(days)) =>
       made("usage-prices/" + days.to_string(), fn(p, core, here, frame, _stint, _acts) {
         @sfpages.usage_prices_node(p, core, here, days, on_back=core.pop, frame~)

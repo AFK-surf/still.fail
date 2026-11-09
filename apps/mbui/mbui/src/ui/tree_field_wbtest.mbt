@@ -150,6 +150,16 @@ test "a field of the tree's: no old view in the window, its node read out as a f
 }
 
 ///|
+test "a field of the tree's as an old view's: a step finds it by the words in it (field:), not by others" {
+  for tree in [true, false] {
+    let s = @signals.signal(1.0, same=fn(a, b) { a == b })
+    let t = one_field(tree, s, Field::new(text="KEY=value"), [])
+    assert_eq(t.locate("field:KEY=val").length(), 1, msg="by its words (tree: \{tree})")
+    assert_eq(t.locate("field:other").length(), 0, msg="not by others (tree: \{tree})")
+  }
+}
+
+///|
 test "a field of the tree's as an old view's: the keyboard put away, the field let go of, the host told so" {
   for tree in [false, true] {
     let s = @signals.signal(1.0, same=fn(a, b) { a == b })

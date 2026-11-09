@@ -134,6 +134,10 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
       let (name, w, h) = size
       let home = screen_drawlist("settings" + dark, w, h, page="home")
       out.write_string("settings" + dark + " " + name + " " + fnv(home) + "\n")
+      // (a station's page made once: what lies in the window drawn as the old list drew it, each of the four drawn to a
+      // picture the same to the byte as main's at 16203ebae7, every glyph shown in the same box and every word seen at
+      // the same place; the tree also hands the draw list the rows wholly under the window's foot, cut out by the page's
+      // clip, and the shapes they draw, which the old list never drew)
       let station = screen_drawlist("settings" + dark, w, h, page="station:ws1/st1")
       out.write_string("station" + dark + " " + name + " " + fnv(station) + "\n")
       // a settings page's wait line, in its list's rows (built as the list is laid out: still.fail#791)
@@ -143,16 +147,16 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
   }
   inspect(out.to_string(), content=(
     #|settings narrow 76418:6d7b9b7
-    #|station narrow 86425:11f0a459
+    #|station narrow 94878:7660be12
     #|me-reading narrow 23860:9496c484
     #|settings wide 172657:8e369faa
-    #|station wide 230976:4161dff
+    #|station wide 239385:51ace4f8
     #|me-reading wide 167370:6aef6d66
     #|settings-dark narrow 76686:fbcc498
-    #|station-dark narrow 86258:47aff2b5
+    #|station-dark narrow 94746:f9d68295
     #|me-reading-dark narrow 23998:61f49844
     #|settings-dark wide 172577:20f7e7bf
-    #|station-dark wide 230607:569c305a
+    #|station-dark wide 239051:2a9ce064
     #|me-reading-dark wide 167366:8048abfc
     #|
 

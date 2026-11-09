@@ -1123,13 +1123,12 @@ test "a station's permissions: each grant's mark across the middle of its title'
         }
         None => fail("no \{g.1} at \{w}")
       }
-      // (its mark: the one just before its title, not the settings' side's of the same name)
-      let marks = t
-        .shape_boxes()
-        .filter(fn(b) { b.0.has_prefix("sf/icon/" + g.0 + "/") && b.1 < title.0 && b.1 > title.0 - 48.0 })
+      // (its mark: the one just before its title, not the settings' side's of the same name; by what it is drawn as,
+      // its middle, as the page's nodes draw it)
+      let marks = t.locate("icon:" + g.0).filter(fn(p) { p.0 < title.0 && p.0 > title.0 - 48.0 })
       assert_true(marks.length() == 1, msg="\{g.1}'s mark at \{w}")
       let mark = marks[0]
-      let off = (mark.2 + mark.4 / 2.0 - (title.1 + title.3 / 2.0)).abs()
+      let off = (mark.1 - (title.1 + title.3 / 2.0)).abs()
       assert_true(off < 1.0, msg="\{g.1}'s mark \{off} off its title's middle at \{w}")
     }
   }

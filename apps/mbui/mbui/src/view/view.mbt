@@ -2066,8 +2066,8 @@ pub fn Tree::bindings_held(self : Tree) -> Int {
 /// where it came out otherwise, `then` done then (the structure's change committed with the change that caused it, at
 /// that change's moment: what it makes reads the state as it is then, what leaves starts leaving then), what had left
 /// by that moment let go first. Layout, words and paint of what it makes wait for the frame. Run now with the target
-/// it starts at. What stops it.
-fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
+/// it starts at, unless not `at_start` (as of its changes alone). What stops it.
+fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit, at_start? : Bool = true) -> () -> Unit {
   let live = Ref(true)
   let last : Ref[T?] = Ref(None)
   // (the watch reads anew as it is told; let go as it stops)
@@ -2094,6 +2094,14 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
   watch.val = Some(w)
   let v = w.read(read)
   last.val = Some(v)
+  let stop = fn() {
+    live.val = false
+    watch.val = None
+    w.stop()
+  }
+  if !at_start {
+    return stop
+  }
   // (one change, as each after it is: Tree::at_cause)
   self.committing += 1
   @signals.start_batch()
@@ -2101,11 +2109,7 @@ fn[T : Eq] Tree::structured(self : Tree, read : () -> T, then : (T) -> Unit) -> 
   @signals.end_batch()
   self.committing -= 1
   self.modals_settled()
-  fn() {
-    live.val = false
-    watch.val = None
-    w.stop()
-  }
+  stop
 }
 
 ///|
@@ -8629,12 +8633,13 @@ pub fn Tree::run_press_at(self : Tree, id : NodeId, at : Double) -> Bool {
 ///|
 /// `f` done with what `read` gives (as it is now, then as of each change of it: at its cause's moment, committed as a
 /// structure's change is), whatever frames are drawn: what is to be done as a state comes to hold, said so, never found
-/// by watching it frame by frame. The node's: done no more once it is let go.
-pub fn[T : Eq] View::reacts(self : View, read : () -> T, f : (T) -> Unit) -> Unit {
+/// by watching it frame by frame. Not `at_start`: as of its changes alone, not as it is when said (a state's turning,
+/// not its holding). The node's: done no more once it is let go.
+pub fn[T : Eq] View::reacts(self : View, read : () -> T, f : (T) -> Unit, at_start? : Bool = true) -> Unit {
   // (made, and done each time, owned by the node's scope: what it makes let go with the node, its watch none of what
   // was running as it was said, whose running again would let it go)
   self.owning(fn() {
-    let stop = self.tree.structured(read, fn(v) { self.owning(fn() { f(v) }) })
+    let stop = self.tree.structured(read, fn(v) { self.owning(fn() { f(v) }) }, at_start~)
     self.owns(stop) |> ignore
   })
 }

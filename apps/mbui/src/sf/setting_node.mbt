@@ -5,21 +5,41 @@
 ///|
 /// One setting (setting's): `title`, what it is for (`note`), what `control` makes (a choice, a button, the colour
 /// themes' dots): wide, a row with the control at its end (wide_control_row_node: on a list's card, a row of it);
-/// narrow, a section of its own, its title over the control, what it is for under it.
+/// narrow, a section of its own, its title over the control, what it is for under it; `in_card` (a group's, narrow), a
+/// row of it: its title over the control, what it is for under it, as far in as its rows' words (setting's in a card:
+/// a section of the page there stood at the card's edge, 2026-10-29 高级网络设置).
 pub fn setting_node(
   parent : @view.View,
   title : () -> String,
   control : (@view.View) -> Unit,
   note? : () -> String = fn() { "" },
+  in_card? : Bool = false,
 ) -> Unit {
   match look_node(parent) {
     Wide =>
       wide_control_row_node(parent, title, note, None, control, looks=(fn() { setting_title() }, fn() {
         theme().rows.note
       }))
+    Narrow if in_card =>
+      parent.box(fn(r) {
+        r.padding(Is((text_in, text_in, text_in, text_in))).min_height(By(fn() { Some(theme().items.least) })) |> ignore
+        words_node(r, title, fn() { pg_switch_title }) |> ignore
+        // (between its title and its note, 8 from each: setting_in_card_control)
+        r.box(fn(k) {
+          k.padding(Is((0.0, setting_in_card_y, 0.0, setting_in_card_y))) |> ignore
+          control(k)
+        })
+        |> ignore
+        r.show(fn() { note() != "" }, fn(n) { words_node(n, note, fn() { meta.then(full_words) }) |> ignore })
+      })
+      |> ignore
     Narrow => section_node(parent, title, control, about=note)
   }
 }
+
+///|
+/// A narrow card's setting's control's room over and under it (setting_in_card_control's py=S2).
+let setting_in_card_y : Double = 8.0
 
 ///|
 /// A setting of a few choices (setting's with page_choice's in it): wide, its row with the options at its end, as wide
