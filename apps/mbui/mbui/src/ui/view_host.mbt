@@ -2112,6 +2112,12 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
   if bones == 0L && shapes.length() > 0 {
     let bands = match view_shape_bands.get(c.id) {
       Some(b) if physical_equal(b.of, shapes) => b
+      // (the same outlines in other colours, an icon's parts breathing: the bands they come to as they were)
+      Some(b) if b.fits(shapes) => {
+        let b = { ..b, of: shapes }
+        view_shape_bands[c.id] = b
+        b
+      }
       _ => {
         view_bands_made.val = view_bands_made.val + 1
         let b = shape_bands(shapes)
@@ -2163,8 +2169,7 @@ fn Ctx::view_made(self : Ctx, c : @view.Content, edge_after? : Bool = false) -> 
   inst_owners.painting = was
   inst_owners.tree_painting = was_tree
   let len = (self.ninst - start) * inst_size
-  let inst = FixedArray::make(len, 0.0)
-  self.inst.blit_to(inst, len~, src_offset=start * inst_size)
+  let inst = inst_copy(self.inst, start * inst_size, len)
   let cells : Array[(Double, Double)] = []
   if inst_owners_kept() {
     for k in start..<self.ninst {
