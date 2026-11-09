@@ -160,7 +160,7 @@ fn Ctx::words_over_leaving_layer(self : Ctx, under : InstBy, over : InstBy) -> B
 
 ///|
 /// The pairs of nodes' words the frame just drawn shows one over the other, each once: their words, where they meet.
-fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double, Bool)] {
+fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double, Bool, String, String)] {
   self.flat_from(0)
   let a = self.inst
   let ks : Array[Int] = []
@@ -263,7 +263,17 @@ fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double,
           pairs.add(os[p] * 65536 + os[q])
           let under = who.get(os[p]).unwrap_or(Nobody)
           let over = who.get(os[q]).unwrap_or(Nobody)
-          out.push((self.by_said(under), self.by_said(over), px, py, self.words_over_leaving_layer(under, over)))
+          out.push(
+            (
+              self.by_said(under),
+              self.by_said(over),
+              px,
+              py,
+              self.words_over_leaving_layer(under, over),
+              self.words_over_made(under),
+              self.words_over_made(over),
+            ),
+          )
         }
         here.push(q)
       }
@@ -287,7 +297,7 @@ fn Tester::hold_words_over(self : Tester) -> Unit {
   // Tester::words_over_frames)
   if !words_over.held {
     for f in c.words_over_details() {
-      let (under, over, x, y, leaving) = f
+      let (under, over, x, y, leaving, _, _) = f
       words_over.frames.push({ at: self.fake.time, under, over, x, y, leaving })
     }
     return
@@ -296,7 +306,7 @@ fn Tester::hold_words_over(self : Tester) -> Unit {
     return
   }
   for f in c.words_over_details() {
-    let (under, over, x, y, leaving) = f
+    let (under, over, x, y, leaving, under_made, over_made) = f
     if words_over_expected_closing(words_over.file, under, over, leaving) {
       continue
     }
@@ -306,7 +316,9 @@ fn Tester::hold_words_over(self : Tester) -> Unit {
     }
     words_over.pairs.add(pair)
     if self.motion == Count {
-      println("MOTION words_over \{words_over.file}: \{pair} at (\{x.round()}, \{y.round()}) at \{self.fake.time} (the Tester made at \{looks_made_at.val})")
+      println(
+        "MOTION words_over \{words_over.file}: \{pair} at (\{x.round()}, \{y.round()}) at \{self.fake.time} (under: \{under_made}; over: \{over_made}) (the Tester made at \{looks_made_at.val})",
+      )
       continue
     }
     let bar = words_over_bars.get(words_over.file).unwrap_or(0)
@@ -327,4 +339,22 @@ fn Tester::hold_words_over(self : Tester) -> Unit {
 pub fn Tester::words_over_frames(self : Tester) -> Array[WordsOverAt] {
   ignore(self)
   words_over.frames.copy()
+}
+
+///|
+/// Where what drew words was made, for a fault that names it: a node of the window's tree's, its place (or the app's
+/// that holds it, past the framework's own boxes); an old view's, "old view", and the node hosting it where one does.
+fn Ctx::words_over_made(self : Ctx, by : InstBy) -> String {
+  match by {
+    Node(id) => {
+      let s = source_said(id)
+      if s == "" { "a node" } else { s }
+    }
+    Old(i) => {
+      let m = self.sizes_steady_made(i)
+      // (" (…)" said bare)
+      if m.length() > 3 { m.unsafe_substring(start=2, end=m.length() - 1) } else { "old view" }
+    }
+    Nobody => ""
+  }
 }
