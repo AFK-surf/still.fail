@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [d2791a7a8](https://github.com/AFK-surf/still.fail/commit/d2791a7a8217f3ab4a37cefb14d9cbc53b685771) app: what a message names in other workspaces is a | 1.74 | 2.32 | 9.65 | 28.19 | 33.68 | 25.18 | 46.13 | 93.19 | 178.92 |
 | [2b4e43342](https://github.com/AFK-surf/still.fail/commit/2b4e43342ea46682646295d6d263d70d0bcc0f22) mbui: a motion fault says what drew it: a node's p | 1.74 | 2.32 | 9.64 | 28.19 | 33.65 | 25.17 | 46.11 | 93.01 | 182.11 |
 | [e5d0782dd](https://github.com/AFK-surf/still.fail/commit/e5d0782dd97234ad36ee335f7064fc47527e297b) app: four files mended to no motion fault at 60 an | 1.74 | 2.32 | 9.64 | 28.18 | 33.63 | 25.16 | 46.1 | 93 | 145.19 |
 | [3800c90ad](https://github.com/AFK-surf/still.fail/commit/3800c90ad7d720ab03e1fe41e069648af348a571) station: the queue no longer holds tasks back for  | 1.74 | 2.32 | 9.64 | 28.17 | 33.63 | 25.16 | 46.1 | 93.19 | 181.3 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [47e090362](https://github.com/AFK-surf/still.fail/commit/47e090362e411e4fda8af08bc196f938b0f8bf72) mbui: an icon's parts in an ink made once, not cut | 1.72 | 2.3 | 9.56 | 28.08 | 33.32 | 25.07 | 45.8 | 93.52 | 165.14 |
 | [f8f8ffc06](https://github.com/AFK-surf/still.fail/commit/f8f8ffc068c7974b6fecfbfbc23ab09f38b6f60b) core: a link let go for its pings unanswered is di | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.34 | 136.23 |
 | [33f5b60b7](https://github.com/AFK-surf/still.fail/commit/33f5b60b7149e60d9f197f99255390a65794e09a) app: the bar's ball fading and growing in read as  | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.73 | 162.72 |
-| [6d5e5a4af](https://github.com/AFK-surf/still.fail/commit/6d5e5a4af588f37a999f3895144eec1f994604d8) mbui: send_steady runs at the default rate alone,  | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.19 | 138.67 |
