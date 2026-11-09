@@ -183,7 +183,9 @@ for t in $targets; do
       # (dealt to the four runners by the cores each has free: all of them on the fourth, its job's tests were
       # 218-276 s, cut at its 5 minutes, while the first ran two processes for 143 s, the second four for 150 (one
       # long, three short), the third three for 90, 2026-11-05: of each fifteen, seven to the fourth with four
-      # programs, three to the first and four to the second with two each, one to the third with one)
+      # programs, three to the first and four to the second with two each, one to the third with one) (the first's
+      # with four since: on a runner of its own, nothing beside them, two of its cores stood idle while preview_tree,
+      # taken late by name, ran 162 s of its 265 at 120 fps, mbui-motion-layer3 42659257481, 2026-11-10)
       if [ -n "${APP_GROUP:-}" ] && [ "${APP_GROUP#*/}" = 4 ]; then
         g1=() g2=() g3=() g4=()
         for i in "${!pages[@]}"; do
@@ -194,7 +196,7 @@ for t in $targets; do
             *) g3+=("${pages[i]}") ;;
           esac
         done
-        runs+=("@pages 1 2 ${g1[*]}" "@pages 2 2 ${g2[*]}" "@pages 3 1 ${g3[*]}" "@pages 4 $n ${g4[*]}")
+        runs+=("@pages 1 $n ${g1[*]}" "@pages 2 2 ${g2[*]}" "@pages 3 1 ${g3[*]}" "@pages 4 $n ${g4[*]}")
       else
         runs+=("@pages 0 $n ${pages[*]}")
       fi
