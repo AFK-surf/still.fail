@@ -79,8 +79,10 @@ function device(c: ReturnType<typeof cloud>, name: string, at?: ReturnType<typeo
   };
   host.secureAsk = () => Effect.sync(() => void asks.n++);
   const runner = new Runner(host.time.clock);
-  const lock = new PersonalLock({ host, runner, cloud: c.call, device: () => Effect.succeed(id), label: () => name, changed: () => {}, ...(at ? { stations: at.env } : {}) });
-  return { host, runner, lock, asks, id };
+  // (how often it tells its lock changed: each time, the stations that refused it are asked again)
+  const told = { n: 0 };
+  const lock = new PersonalLock({ host, runner, cloud: c.call, device: () => Effect.succeed(id), label: () => name, changed: () => void told.n++, ...(at ? { stations: at.env } : {}) });
+  return { host, runner, lock, asks, id, told };
 }
 
 const body = (over: Record<string, unknown> = {}) => ({ station: STATION, request: "p1", session: "sess", chat: "chat", scope: "hour" as const, exp: 2_000_000_000, ...over });
@@ -182,6 +184,16 @@ test("a new device refused by every station finds who may let it in of what thei
     await n.runner.run(n.lock.heardFrom(SUB, [...st.kept.values()]));
     assert.deepEqual(n.lock.approvers(SUB).map((d) => d.label), ["a"]);
     assert.equal(n.lock.standing(SUB), "outside");
+    // Each refusal tells the same again: not told as a change, or the stations would be asked again at once, endlessly.
+    const told = n.told.n;
+    await n.runner.run(n.lock.heardFrom(SUB, [...st.kept.values()]));
+    await n.runner.run(n.lock.heardFrom(SUB, [...st.kept.values()]));
+    assert.equal(n.told.n, told);
+    // What grew is.
+    st.say.up = true;
+    await a.runner.run(a.lock.addDevice(SUB, { key: `ed25519:${"22".repeat(32)}`, id: "22".repeat(32), label: "22" }, "why"));
+    await n.runner.run(n.lock.heardFrom(SUB, [...st.kept.values()]));
+    assert.equal(n.told.n, told + 1);
   } finally {
     a.runner.shutdown();
     n.runner.shutdown();
