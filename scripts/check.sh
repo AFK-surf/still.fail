@@ -250,6 +250,9 @@ if part ts; then
     step "UI fault categories" node client/core-ts/scripts/ui-faults.ts --check
   fi
 
+  # The agents' rules name only what is there (AGENTS.md: These files are kept true): any change may move what one names.
+  step "AGENTS.md paths" node scripts/agents-paths.ts
+
   if touches '^design/(station-)?icons/|^apps/mbui/(tools/icons/|scripts/icons$)|^web/ui/src/icons\.tsx$'; then
     step icons bash apps/mbui/scripts/icons . --check
   fi

@@ -212,6 +212,9 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     const [rules] = settings.hooks.PostToolUse;
     assert.match(rules.matcher, /^Bash\|Read\|/);
     assert.ok(rules.hooks[0].command.includes(REPO_RULES_HOOK), rules.hooks[0].command);
+    const [compacted] = settings.hooks.SessionStart;
+    assert.equal(compacted.matcher, "compact");
+    assert.ok(compacted.hooks[0].command.includes(REPO_RULES_HOOK), compacted.hooks[0].command);
     const env = started.env;
     assert.equal(env.CLAUDE_CONFIG_DIR, o.profile.home);
     assert.equal(env.STILLFAIL_MCP_TOKEN, "tok");

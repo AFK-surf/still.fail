@@ -4,6 +4,32 @@ These are the owner's rules. They are not reviewed PR by PR: you are expected to
 checked is checked by CI (`scripts/detlint`; the Tester's own checks). Where a rule has no check
 yet and you can add one, add it.
 
+## Its parts
+
+- `src/view`: the window's tree, made once (below). `src/ui`: the old immediate-mode view (`Ctx`, built again each
+  frame) and what both still share: the window's runtime, styles (`style.mbt`, `@ui.css`), the theme, text fields,
+  the Tester and its fake host. `src/signals`: alien-signals, ported line for line. `src/motion`: motion as data.
+  `src/kit`: the components (Radix's set, drawn by mbui). `src/flex` (Yoga's layout), `src/text` (shaping,
+  segmentation), `src/shape`, `src/paint`, `src/skia`, `src/svg`, `src/pixels`: drawing. `src/hostapi` and
+  `src/host`: what is asked of a platform and each platform's answer. `src/effect`: Effect-TS's model on the frames'
+  clock.
+- `tools/`: the build's and checks' programs (`detlint`, `mbc` the C step, `wasmhost`, `chk`), in MoonBit.
+
+## Two views: the old one and the one made once
+
+> A view is made once (2026-10-30): each node is made when it first shows and stays until it goes; what changes is
+> bound to what it is worked out of, and that alone is done again.
+
+- What is new is made in `src/view` (`Tree`, `View`): a node's property is `Live` (`Is(v)` once, `By(fn)` bound); what
+  comes and goes is a structure (`View::show`, `pick`, `each`), which owns and lets go what it made; acting is a
+  handler (`on_press`, `on_key`, `on_drag`), run outside tracking, writing state; time is read where it is drawn
+  (`moved_by`, a look's closure), never as a frame is built. `src/view/view.mbt`'s head says the model whole.
+- State that what is made reads is a signal: a mutable value read by a binding that is not one is never seen to
+  change (detlint `built-by-hand`).
+- `Ctx` is going: no new code is built on it. What is left is counted by detlint (`old-island`, `old-list`,
+  `click-read`, `build-motion`, `layout-read-back`, `ui-current`, `build-clock`) and those counts only fall; an API
+  goes from mbui once its count is none.
+
 ## Time in a test is declared, never waited for
 
 > 一个测试里动画是多少帧，跑多久现实时间，对测试不会有任何影响。如果测试断言了动画第 3 秒应该是什么样，测试就能正确得到
@@ -40,8 +66,8 @@ yet and you can add one, add it.
 
 ## A test links no host
 
-- Everything mbui and an app ask of their host goes through `mbui/hostapi` (`@hostapi.…`, its `Host` trait). Only an
-  app's main imports `mbui/host`, which sets the platform's host as the program starts; a Tester sets its fake
+- Everything mbui and an app ask of their host goes through `src/hostapi` (`@hostapi.…`, its `Host` trait). Only an
+  app's main imports `src/host` (`@host`), which sets the platform's host as the program starts; a Tester sets its fake
   (`src/ui/fake_host.mbt`). So a test's program links no host's code (Objective-C, C++, JNI) and builds and runs on
   native on any system: CI runs the native tests on Linux. detlint's `host-import` holds it.
 - A new host call: a method of `Host` in `src/hostapi/host.mbt` (its default is what a host with nothing for it

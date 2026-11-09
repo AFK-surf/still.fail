@@ -184,6 +184,8 @@ const SETTINGS = {
   // (failing quietly where the station's files are not, in a sandbox elsewhere)
   hooks: {
     PostToolUse: [{ matcher: "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob", hooks: [{ type: "command", command: `${quoted(process.execPath)} ${quoted(REPO_RULES_HOOK)} 2>/dev/null || true` }] }],
+    // (after a compaction: told again as tools touch them)
+    SessionStart: [{ matcher: "compact", hooks: [{ type: "command", command: `${quoted(process.execPath)} ${quoted(REPO_RULES_HOOK)} 2>/dev/null || true` }] }],
   },
   skillOverrides: {
     ...Object.fromEntries(["loop", "schedule", "keybindings-help", "fewer-permission-prompts", "plugin-authoring", "update-config"].map((name) => [name, "off"])),
