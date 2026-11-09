@@ -5,7 +5,6 @@
 ///|
 fn init {
   @ui.motion_counted([
-    "src/sfapp/about_wbtest.mbt",
     "src/sfapp/activity_wbtest.mbt",
     "src/sfapp/cards_wbtest.mbt",
     "src/sfapp/chat_keys_wbtest.mbt",
@@ -34,7 +33,6 @@ fn init {
     "src/sfapp/motion_wbtest.mbt",
     "src/sfapp/newchat_crowded_wbtest.mbt",
     "src/sfapp/newchat_send_wbtest.mbt",
-    "src/sfapp/notices_wbtest.mbt",
     "src/sfapp/place_first_wbtest.mbt",
     "src/sfapp/presets_wbtest.mbt",
     "src/sfapp/preview_tree_wbtest.mbt",
