@@ -648,6 +648,7 @@ pub fn Presence::leaving(Self) -> Bool
 pub(all) struct ProgressState {
   t : Double?
   known : Double
+  key : String
 }
 
 pub(all) struct RadioState {

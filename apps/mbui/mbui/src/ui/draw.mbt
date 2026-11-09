@@ -729,11 +729,19 @@ pub fn Ctx::cut_to_bottom(self : Ctx, i : Int, h : Double, soft? : Double = 0.0)
 
 ///|
 /// Node `i` drawn only as its top `h` (what is below cut off, as something unrolling from its top shows it), and tapped
-/// whole, where it is laid out. `soft`: as cut_to_bottom's.
+/// whole, where it is laid out. `soft`: as cut_to_bottom's. One laid out as nothing (a room shut, what it holds drawn
+/// past it as it goes) has what it holds drawn only as far as `h` below its top.
 pub fn Ctx::cut_to_top(self : Ctx, i : Int, h : Double, soft? : Double = 0.0) -> Unit {
   let e = self.drawn_of(i)
   e.top = dmax(h, 0.0)
   e.cut_soft = soft
+}
+
+///|
+/// Whether a cut `top` down from a node's top (Ctx::cut_to_top; < 0 none) cuts what a node `fh` tall draws: above its
+/// foot, or anywhere where it is laid out as nothing (what it holds drawn past it).
+fn cuts_foot(top : Double, fh : Double) -> Bool {
+  top >= 0.0 && (top < fh || fh <= 0.5)
 }
 
 ///|
@@ -987,7 +995,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   }
   let cutting = cut_empty ||
     (e.bottom >= 0.0 && e.bottom < self.nodes[i].fh) ||
-    (e.top >= 0.0 && e.top < self.nodes[i].fh) ||
+    cuts_foot(e.top, self.nodes[i].fh) ||
     (cut_right >= 0.0 && cut_right < self.nodes[i].fw) ||
     (cut_left >= 0.0 && cut_left < self.nodes[i].fw)
   if look.is_still() && e.z < z_flying && !keep && !e.only && !cutting && e.fade_of < 0 {
@@ -1150,7 +1158,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     self.flat_from(i0)
     let a = self.inst
     let top = e.bottom >= 0.0 && e.bottom < n.fh
-    let foot = e.top >= 0.0 && e.top < n.fh
+    let foot = cuts_foot(e.top, n.fh)
     let start = cut_right >= 0.0 && cut_right < n.fw
     let end = cut_left >= 0.0 && cut_left < n.fw
     for k in i0..<self.ninst {

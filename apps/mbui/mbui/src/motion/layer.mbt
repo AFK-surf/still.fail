@@ -105,8 +105,8 @@ priv struct Moving {
   /// layout animation: by `spec`, when its cause changed (`by`: what it moves for, as said this build; "" none) or, in
   /// a list told its rows, as they change; `drive` ≥ 0: the move goes by that progress the app gives (0 → 1)
   mut flip : Bool
-  /// grown for its cause: what it holds cut to as tall as it shows (its words a line more); false where what comes
-  /// into it grows with it of itself, drawn whole (`grown_shown`)
+  /// grown or shut for its cause: what it holds cut to as tall as it shows (its words a line more; a collapsible's
+  /// content going in as it closes); false where what comes into it grows with it of itself, drawn whole (`grown_shown`)
   mut cut : Bool
   /// drawn whole while what moves with it goes over it (makes_room cuts it nowhere): a button on its way beside words
   /// moving past it, the ＋ and send of a composer as its field goes up over them
@@ -552,7 +552,7 @@ fn entry_of(c : @ui.Ctx, i : Int) -> Moving? {
 /// moves for (a window resized, a keyboard, a pane made narrower), it is put in its new place at once, a move of its
 /// own going on as it was: no difference found between frames moves anything (sf/motion.mbt of the app). `enter` is how a row new to its list comes in, `exit` how one gone leaves (a copy of it where it was).
 /// `drive` (0 → 1, from the frame it moved): the move goes by that progress instead of `spec`. `screen`: in a list, by
-/// where it shows in the list's view. `cut`: grown for its cause, what it holds is cut to as tall as it shows; false
+/// where it shows in the list's view. `cut`: grown or shut for its cause, what it holds is cut to as tall as it shows (shut: what it holds past its room going in under its foot); false
 /// where what is new in it grows with its room of itself (`grown_shown`): drawn whole, never cut through. `whole`: not
 /// cut back for another of its list moving over it (makes_room), drawn whole on its way (a composer's ＋ and send, its
 /// field going up past them as it opens: what is over them there is the field's own room, not words).
@@ -1923,11 +1923,15 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       // what it holds is laid out as tall as it ends at once, but shows only as tall as it showed, going to as tall as
       // it is laid out with its move, so that what it has more comes out as it gets there, not drawn over what stands
       // by it that it moves away from or towards (the composer's field over its send, 2026-10-29: 「输入框变高的时候
-      // 会盖住发送按钮」). Shrunk, or resized by nothing it moves for, it shows whole (a growth on its way going on, as far
-      // off its new height as it was off its old). What comes out fades to the cut, each pixel by where it is (half a
-      // line out shows its half, fading: 2026-10-30 「带渐隐，但不是整行渐隐」), over no more than it has gone (none as it
-      // sets off: what showed is not faded then, the line that was last neither dimmed nor lit again, 「换行的时候最后两行
-      // 会闪烁」) and no more than it has to go (none as it ends: nothing lit at once).
+      // 会盖住发送按钮」). Shut for its cause (laid out as nothing), cut so too (`cut`): it shows as tall as it showed,
+      // going to nothing with its move, so that what it holds past its room (what goes, built till its declared end: a
+      // collapsible's content as it closes) goes in under its foot as what is under it comes up, not drawn whole over
+      // it. Shrunk to less with what it holds laid in it (its words a line less), shrunk with what it holds drawn whole
+      // (not `cut`), or resized by nothing it moves for, it shows whole (a growth on its way going on, as far off its new height as it
+      // was off its old). What comes out (or goes in) fades to the cut, each pixel by where it is (half a line out
+      // shows its half, fading: 2026-10-30 「带渐隐，但不是整行渐隐」), over no more than it has gone (none as it sets off:
+      // what showed is not faded then, the line that was last neither dimmed nor lit again, 「换行的时候最后两行会闪烁」)
+      // and no more than it has to go (none as it ends: nothing lit or put out at once).
       r.shown_h = nh
       if e.flip && li < 0 {
         let shown = r.was_hh + (r.was_h - r.was_hh) * r.was_hp
@@ -1936,8 +1940,9 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           r.hp.snap(1.0)
         } else if caused && (nh - r.was_h).abs() > 0.5 {
           r.hh = shown
-          r.hp.snap(if nh > shown + 0.5 { 0.0 } else { 1.0 })
-          if nh > shown + 0.5 {
+          let goes = nh > shown + 0.5 || (e.cut && nh <= 0.5 && shown > 0.5)
+          r.hp.snap(if goes { 0.0 } else { 1.0 })
+          if goes {
             moves_with(group, far, r.hp, 1.0, spec)
           }
         } else if (nh - r.was_h).abs() > 0.5 {
@@ -1948,7 +1953,10 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           let h = r.hh + (nh - r.hh) * p
           r.shown_h = dmax(h, 0.0)
           if e.cut {
-            c.cut_to_top(e.node, dmax(h, 0.0), soft=@ui.cut_soft(h - r.hh, nh - h))
+            // (what has come out and what is still to: growing, from as tall as it showed; shrinking, from as tall
+            // as it is laid out)
+            let soft = if nh >= r.hh { @ui.cut_soft(h - r.hh, nh - h) } else { @ui.cut_soft(r.hh - h, h - nh) }
+            c.cut_to_top(e.node, dmax(h, 0.0), soft~)
           }
         }
       }

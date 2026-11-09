@@ -439,7 +439,6 @@
     },
     "build-motion": {
       "src/sf/group_rows.mbt": 1,
-      "src/sf/icons.mbt": 1,
       "src/sf/lift.mbt": 1,
       "src/sf/marked.mbt": 1,
       "src/sf/parts.mbt": 4,

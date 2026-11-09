@@ -1,5 +1,5 @@
 // A progress bar as nodes of the window's tree (progress's, @kit.progress with @kit.progress_look_of): how far, drawn
-// to a value told anew over progress_ms on the ease-out, from where it is at that moment; while how far is not known, a
+// to a value told anew over progress_ms on the ease-out, from where it is at that moment (from not known, there at once); while how far is not known, a
 // piece 40% of it sweeping across, eased there and back once a period (a wait, View::cycle); becoming known, that
 // piece's ends drawn into the part come over progress_known_ms (and back), each set out at its cause, sampled as each
 // frame is drawn while it goes.
@@ -40,7 +40,13 @@ pub fn progress_node(
     bar.reacts(part, fn(p) {
       match p {
         Some(k) => {
-          at.go(bar, k, @kit.progress_ms, ease=Out)
+          // (known, told anew: from where it is drawn; coming from not known, there at once, what ran along it drawn
+          // into it, as the old one's part come is laid out as told and reshaped only while known)
+          if @signals.untracked(fn() { known.target() }) >= 1.0 {
+            at.go(bar, k, @kit.progress_ms, ease=Out)
+          } else {
+            at.put(k)
+          }
           known.go(bar, 1.0, @kit.progress_known_ms, ease=InOut)
         }
         None => known.go(bar, 0.0, @kit.progress_known_ms, ease=InOut)

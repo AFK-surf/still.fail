@@ -213,7 +213,6 @@
       "src/kit/pick.mbt": 3
     },
     "layout-read-back": {
-      "src/kit/disclosure.mbt": 1,
       "src/kit/media.mbt": 2,
       "src/kit/menu.mbt": 2,
       "src/kit/pick.mbt": 1,
@@ -252,10 +251,9 @@
       "src/ui/sideways.mbt": 2
     },
     "build-motion": {
-      "src/kit/disclosure.mbt": 1,
       "src/kit/loupe.mbt": 2,
       "src/kit/media.mbt": 1,
-      "src/kit/progress.mbt": 2,
+      "src/kit/progress.mbt": 1,
       "src/kit/sheet.mbt": 1,
       "src/kit/switch.mbt": 1,
       "src/kit/toggle.mbt": 1,
