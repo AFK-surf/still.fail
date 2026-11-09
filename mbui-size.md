@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [60ce27ae5](https://github.com/AFK-surf/still.fail/commit/60ce27ae52714997b6e02c543a73feb52d3aafc3) mbui: iOS and Linux told the app's widgets for the | 1.66 | 2.21 | 9.12 | 27.86 | 32.28 | 24.87 | 44.81 | 93.06 | 156.81 |
 | [b879f8ff2](https://github.com/AFK-surf/still.fail/commit/b879f8ff2e4cfad46c57b65549661d3f010cdf35) mbui: the Tester finds by role and name, and holds | 1.66 | 2.21 | 9.12 | 27.86 | 32.28 | 24.87 | 44.81 | 93.06 | 156.81 |
 | [044441224](https://github.com/AFK-surf/still.fail/commit/0444412244e3595f87169ed66b0e048e386e3444) sfpages: a day's heading in the chats list of a ki | 1.66 | 2.21 | 9.11 | 27.86 | 32.28 | 24.87 | 44.81 | 93.06 | 156.81 |
 | [241a3b0b4](https://github.com/AFK-surf/still.fail/commit/241a3b0b450ae976b3c03e84a0e743fa7a2bc2b2) mbui: a list's block put by left in its slot out o | 1.66 | 2.21 | 9.11 | 27.86 | 32.28 | 24.87 | 44.81 | 93.08 | 161.8 |
