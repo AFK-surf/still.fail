@@ -338,6 +338,8 @@ struct Node {
   /// its properties' bindings, by property (Prop::ord): what stops each
   props : Map[Int, () -> Unit]
   mut on_press : (() -> Unit)?
+  /// what the second of two presses of it does in place of its press (View::on_double_press)
+  mut on_double_press : (() -> Unit)?
   /// what a step up (1) or down (-1) asked of it does (View::on_step: a slider's, as a screen reader moves it)
   mut on_step : ((Int) -> Unit)?
   /// whether it is a top row of the app's own (View::moves_window: a press on it its own), and whether a press on it
@@ -772,6 +774,11 @@ pub struct Tree {
   mut offset_moved : (NodeId) -> Unit
   /// how a page's list moves where it is drawn, and how many pixels a point is there (Tree::lists_feel)
   mut list_feel : () -> (ListFeel, Double)
+  /// how soon (ms) and how near (points) a press let go after one of the same node's is its second, by the hand as it
+  /// is now (Tree::twice_within); and the last press let go that may be a first: its node, moment and place in the
+  /// window's terms (twice.mbt)
+  mut twice_feel : () -> (Double, Double)
+  mut last_press : (NodeId, Double, Double, Double)?
   /// what its host tells its nodes of where they are drawn (env.mbt: Tree::drawn_by)
   env : Env
   /// what waits on all of it laid out as it is next, whatever came out otherwise (Tree::once_laid_out)
@@ -1058,6 +1065,8 @@ pub fn Tree::new(
     glides_gone: fn(_) {  },
     offset_moved: fn(_) {  },
     list_feel: fn() { (Desktop, 1.0) },
+    twice_feel: fn() { (double_press_ms, double_press_slop) },
+    last_press: None,
     env: Env::new(),
     laid_waits: [],
     pressing: None,
@@ -1259,6 +1268,7 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
       n.fault_to = None
       n.hosted = false
       n.on_press = None
+      n.on_double_press = None
       n.on_step = None
       n.top_row = false
       n.moves_window = false
@@ -1363,6 +1373,7 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
         drop_next: 0,
         props: {},
         on_press: None,
+        on_double_press: None,
         on_step: None,
         top_row: false,
         moves_window: false,
@@ -6012,6 +6023,7 @@ fn View::let_go(self : View) -> Unit {
     f()
   }
   n.on_press = None
+  n.on_double_press = None
   n.on_step = None
   n.top_row = false
   n.moves_window = false
@@ -9045,7 +9057,7 @@ pub fn Tree::press(self : Tree, x : Double, y : Double) -> Bool {
   let at = self.time_now()
   self.bring_to(at)
   match self.target_at(x, y) {
-    Pressed(id) => self.run_press_at(id, at)
+    Pressed(id) => self.run_press_at(id, at, place=(x, y))
     _ => false
   }
 }
@@ -9592,8 +9604,15 @@ pub fn Tree::presses_do(self : Tree, id : NodeId) -> Bool {
 
 ///|
 /// Node `id` pressed at `at`: as one event of that moment (Tree::event), what had ended by then settled first, and only
-/// then is it looked for (one let go by then presses nothing) and its callback run.
-pub fn Tree::run_press_at(self : Tree, id : NodeId, at : Double) -> Bool {
+/// then is it looked for (one let go by then presses nothing) and its callback run. Let go at `place` in the window (a
+/// finger's or the pointer's), it may be the second of two (View::on_double_press: what that says done in its place);
+/// pressed otherwise (a screen reader's), a press alone.
+pub fn Tree::run_press_at(
+  self : Tree,
+  id : NodeId,
+  at : Double,
+  place? : (Double, Double),
+) -> Bool {
   let pressed = Ref(false)
   self.event(at, fn() {
     if id.at < 0 || id.at >= self.nodes.length() {
@@ -9605,12 +9624,17 @@ pub fn Tree::run_press_at(self : Tree, id : NodeId, at : Double) -> Bool {
     if !n.live || n.gen != id.gen || self.leaving_at(id.at) || !self.takes_presses(id) || !self.allows(id) {
       return
     }
-    match n.on_press {
-      Some(f) => {
+    // (the second of two, where it says what that does: that in its place, and none the first of the next)
+    let second = match place {
+      Some((wx, wy)) => self.pressed_twice(id, at, wx, wy)
+      None => false
+    }
+    match (second, n.on_double_press, n.on_press) {
+      (true, Some(f), _) | (false, _, Some(f)) | (true, None, Some(f)) => {
         pressed.val = true
         f()
       }
-      None => ()
+      _ => ()
     }
   })
   pressed.val

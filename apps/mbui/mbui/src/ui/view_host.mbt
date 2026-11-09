@@ -350,6 +350,14 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
     }
     (feel, g().scale)
   })
+  // (two presses in a row by the hand that presses: a mouse's as a double click (Ctx::on_double_press's), a finger's
+  // as a double tap)
+  t.twice_within(fn() {
+    match pointing() {
+      Finger => (double_tap_ms, double_tap_slop)
+      Mouse => (double_click_ms, double_click_slop)
+    }
+  })
   // (the focus on one of its nodes let go of at a cause: none's from then, on either side)
   t.on_focus_lost(view_focus_lost)
   // (a column of it moving what it scrolls by its offset alone: moved by its header as the next frame comes, nothing
@@ -2789,7 +2797,7 @@ fn view_pointer(kind : Int, x : Double, y : Double, button : Int) -> Bool {
     (2, Some(Node(id))) => {
       view_held.val = None
       if tree.press_held(id) && tree.target_at(x, y) == Pressed(id) {
-        tapped.val = tree.run_press_at(id, at)
+        tapped.val = tree.run_press_at(id, at, place=(x, y))
       }
       tree_field_let_go(id, x, y, true)
       h_frame_owed()

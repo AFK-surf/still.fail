@@ -213,14 +213,11 @@ pub(all) struct Viewer {
   mut started : Bool
   mut closing : Bool
   fade : @motion.Way
-  // a finger on the stage: where it was last frame, how far it has gone, the last tap (time, where)
+  // a finger on the stage: where it was last frame, how far it has gone
   mut held : Bool
   mut last_x : Double
   mut last_y : Double
   mut moved : Double
-  mut tap_at : Double
-  mut tap_x : Double
-  mut tap_y : Double
   // two fingers: how far apart and where between them last frame (0: none), whether this press pinched
   mut pinch_d : Double
   mut pinch_x : Double
@@ -790,10 +787,6 @@ fn bars_share(p : Double) -> Double {
   dmax(0.0, (p - bars_from) / (1.0 - bars_from))
 }
 
-///|
-/// Two taps within this long are a double tap.
-pub let double_tap_ms : Double = 300.0
-
 
 ///|
 /// What an image opened in the viewer steps through: the images of the chat it is opened from,
@@ -915,9 +908,6 @@ pub fn new_viewer(
     last_x: 0.0,
     last_y: 0.0,
     moved: 0.0,
-    tap_at: -1.0e9,
-    tap_x: 0.0,
-    tap_y: 0.0,
     pinch_d: 0.0,
     pinch_x: 0.0,
     pinch_y: 0.0,
