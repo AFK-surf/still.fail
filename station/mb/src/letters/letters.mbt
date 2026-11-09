@@ -290,3 +290,21 @@ pub fn Letters::gc_step(self : Letters, limit? : Int = 64) -> Bool raise {
   db.exec("COMMIT")
   !remaining
 }
+
+///|
+/// page-letter-index.ts `pageLetterReady`: the chat's prepared letter keys' token, none while they are not (or the
+/// index's triggers are not as this version makes them: a reader never repairs them).
+pub fn ready_token(db : @sql.Db, thread : Json) -> String? raise {
+  if !current(db) {
+    return None
+  }
+  guard scope_of(db, thread) is Some(s) else { return None }
+  let epoch = first_row(db, "SELECT epoch FROM page_letter_meta WHERE id=1", []).map(m => value(m, "epoch")).unwrap_or(Json::null())
+  guard value(s, "epoch") == epoch && value(s, "complete") is Number(1.0, ..) && value(s, "token") is String(token) else {
+    return None
+  }
+  if dirty_overflow(db, thread, value(s, "token")) {
+    return None
+  }
+  Some(token)
+}
