@@ -55,10 +55,6 @@ priv struct RowsSteady {
   mut hand : Double
 }
 
-///|
-/// Every jolt said, none failing: what the tests show counted (to take the known down to it).
-let rows_steady_counting : Bool = false
-
 
 ///|
 // kept across runs: begun anew by each Tester (rows_steady_begin)
@@ -380,7 +376,7 @@ fn rows_steady_fault(
 /// at once, with what and where.
 fn Tester::hold_rows_steady(self : Tester) -> Unit {
   let c = g()
-  let faults = c.rows_steady_faults(self.fake.time, self.period)
+  let faults = c.rows_steady_faults(self.fake.time, self.motion_period())
   if !rows_steady.held {
     return
   }
@@ -399,8 +395,8 @@ fn Tester::hold_rows_steady(self : Tester) -> Unit {
     }
     rows_steady.found.add(row)
     let bar = rows_steady_bars.get(rows_steady.file).unwrap_or(0)
-    if rows_steady_counting {
-      println("ROWS-STEADY \{rows_steady.file}: \{f} (the Tester made at \{looks_made_at.val})")
+    if self.motion == Count {
+      println("MOTION rows_steady \{rows_steady.file}: \{f} (the Tester made at \{looks_made_at.val})")
       continue
     }
     if rows_steady.found.length() > bar {

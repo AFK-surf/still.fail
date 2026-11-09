@@ -305,6 +305,10 @@ fn Tester::hold_words_over(self : Tester) -> Unit {
       continue
     }
     words_over.pairs.add(pair)
+    if self.motion == Count {
+      println("MOTION words_over \{words_over.file}: \{pair} at (\{x.round()}, \{y.round()}) at \{self.fake.time} (the Tester made at \{looks_made_at.val})")
+      continue
+    }
     let bar = words_over_bars.get(words_over.file).unwrap_or(0)
     if words_over.pairs.length() > bar {
       let said = "words over words while it moves (words_over.mbt), on a frame drawn \{self.w}×\{self.h} at \{self.fake.time}, the Tester made at \{looks_made_at.val}: " +

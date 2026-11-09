@@ -36,10 +36,6 @@ let sizes_steady : SizesSteady = {
 }
 
 ///|
-/// Every fault said, none failing: what the tests show counted (to take the known down to it).
-let sizes_steady_counting : Bool = false
-
-///|
 /// Each file's bar: how many faults a Tester made there may show.
 // kept across runs: said once as a test program starts (its packages' `init`)
 let sizes_steady_bars : Map[String, Int] = {}
@@ -329,7 +325,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
 /// The rule held on the frame just drawn: a fault not found before by this Tester, past its file's bar, fails the test
 /// at once, with what and where.
 fn Tester::hold_sizes_steady(self : Tester) -> Unit {
-  let faults = g().sizes_steady_faults(self.fake.time, self.period)
+  let faults = g().sizes_steady_faults(self.fake.time, self.motion_period())
   if !sizes_steady.held {
     return
   }
@@ -343,8 +339,8 @@ fn Tester::hold_sizes_steady(self : Tester) -> Unit {
       continue
     }
     sizes_steady.found.add(who)
-    if sizes_steady_counting {
-      println("SIZES-STEADY \{sizes_steady.file}: \{f} (the Tester made at \{looks_made_at.val})")
+    if self.motion == Count {
+      println("MOTION sizes_steady \{sizes_steady.file}: \{f} (the Tester made at \{looks_made_at.val})")
       continue
     }
     let bar = sizes_steady_bars.get(sizes_steady.file).unwrap_or(0)
