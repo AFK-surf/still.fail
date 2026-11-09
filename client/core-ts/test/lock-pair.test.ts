@@ -13,6 +13,7 @@ import { randomBytes } from "node:crypto";
 import { test } from "node:test";
 import { Deferred, Effect } from "effect";
 import { CoreError, HostError } from "../src/error.ts";
+import { hooks } from "../src/core/execute.ts";
 import { PAIR_ALPN, PAIR_TRIES, pairCode, pairSession, pakeKeys, pakeStart, sameMac, typedCode } from "../src/pair.ts";
 import { utf8 } from "../src/util.ts";
 import { loadAddon, nodeIroh } from "../src/hosts/node-iroh.ts";
@@ -848,8 +849,9 @@ test("a device on its person's own lock binds it in the workspace's once every s
   assert.equal(held(inner, "ws")!.entries.length, length);
 });
 
-test("bound, the person's app devices in the workspace's lock are kept to those on their own lock: one put on it is put in, one taken off or from before and never on it taken out", async () => {
+test("an app device of theirs off the person's own lock keeps it from being bound; bound, their app devices in the workspace's lock are kept to those on it, and one taken off it is told to join it", async () => {
   const OLD = "77".repeat(32), NEW = "88".repeat(32), WEB = "99".repeat(32);
+  const OLD_KEY = "ed25519:" + "55".repeat(32), NEW_KEY = "ed25519:" + "44".repeat(32);
   const m = await met(undefined, [
     { id: OLD, sub: "s1", kind: "app", label: "old", sign_key: "ed25519:" + "22".repeat(32) },
     { id: WEB, sub: "s1", kind: "web", label: "web", exp: 2_000_000_000 },
@@ -871,26 +873,43 @@ test("bound, the person's app devices in the workspace's lock are kept to those 
   inner.adb.personal = () => personal;
   await m.run(personal.signGrant("s1", { station: "ws/st", request: "p", session: "s", chat: "c", scope: "hour", exp: 2_000_000_000 }, "why"));
   const devices = () => [...fold(held(inner, "ws")!.entries).devices.keys()].sort();
+  const bound = () => fold(held(inner, "ws")!.entries).persons.has("s1");
   await m.run(read(inner, "ws"));
-  // Not bound yet: nothing taken out.
-  await m.run(keepToPerson(inner, "ws"));
-  assert.deepEqual(devices(), [ME, OLD, WEB].sort());
+  // The old one, an app device of theirs here, is off their own lock: not bound (the stations would shut it out), and
+  // nothing taken out.
   await m.run(bindPerson(inner, "ws"));
   await m.run(read(inner, "ws"));
-  // Bound: the old one, never on the person's lock, out; this one and the web page kept.
+  assert.equal(bound(), false);
   await m.run(keepToPerson(inner, "ws"));
-  assert.deepEqual(devices(), [ME, WEB].sort());
+  assert.deepEqual(devices(), [ME, OLD, WEB].sort());
+  // Put on it face to face as well (a web page holds no key of it): bound, and none taken out.
+  await m.run(personal.addDevice("s1", { key: OLD_KEY, id: OLD, label: "old" }, "why"));
+  await m.run(bindPerson(inner, "ws"));
+  await m.run(read(inner, "ws"));
+  assert.equal(bound(), true);
+  await m.run(keepToPerson(inner, "ws"));
+  assert.deepEqual(devices(), [ME, OLD, WEB].sort());
   // One put on the person's lock face to face is put in, with the key it signs with, and kept.
   const newKey = "ed25519:" + "33".repeat(32);
-  await m.run(personal.addDevice("s1", { key: "ed25519:" + "44".repeat(32), id: NEW, label: "new" }, "why"));
+  await m.run(personal.addDevice("s1", { key: NEW_KEY, id: NEW, label: "new" }, "why"));
   await m.run(putOnBound(inner, "s1", { id: NEW, label: "new", signKey: newKey }));
   assert.equal(fold(held(inner, "ws")!.entries).devices.get(NEW)?.sign_key, newKey);
   await m.run(keepToPerson(inner, "ws"));
-  assert.deepEqual(devices(), [ME, NEW, WEB].sort());
+  assert.deepEqual(devices(), [ME, NEW, OLD, WEB].sort());
   // Taken off the person's lock: out of the workspace's.
-  await m.run(personal.removeDevice("s1", "ed25519:" + "44".repeat(32), "why"));
+  await m.run(personal.removeDevice("s1", NEW_KEY, "why"));
+  await m.run(personal.removeDevice("s1", OLD_KEY, "why"));
   await m.run(keepToPerson(inner, "ws"));
   assert.deepEqual(devices(), [ME, WEB].sort());
+  // This device taken off it: a station's refusal says to join their own lock, not to be approved in the workspace's,
+  // which lets it in no more.
+  const mine = [...personal.chain("s1")!.devices.values()].find((d) => d.id === ME)!;
+  await m.run(personal.addDevice("s1", { key: "ed25519:" + "66".repeat(32), id: OLD, label: "old" }, "why"));
+  await m.run(personal.removeDevice("s1", mine.key, "why"));
+  assert.equal(personal.standing("s1"), "outside");
+  const said = hooks.lockRefused!(inner, "ws", "st", null);
+  assert.equal(said?.code, "lock_unconfirmed");
+  assert.equal(said!.message, t("core-misc.lock.offOwnLock", { name: "W" }));
 });
 
 test("a station of the lock that does not say it knows the entry, or does not answer, keeps the person's lock from being bound", async () => {

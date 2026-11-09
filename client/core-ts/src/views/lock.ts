@@ -375,7 +375,7 @@ function refused(inner: Inner, ws: string, station: string, theirs: unknown): Co
   // In the lock as this device holds it: the station has not heard of it yet (from the cloud, or the device that
   // signed it), and is tried again shortly rather than once the lock moves on, which it may not again for long.
   // A few times, each a little later (each try asks the station anew); after that, as any station not reached.
-  if (base !== null && h?.head != null && !f.disabled && live(f.devices.get(base), now(inner)) !== undefined) {
+  if (base !== null && h?.head != null && !f.disabled && live(f.devices.get(base), now(inner)) !== undefined && !offOwnLock(inner, ws)) {
     const tries = p.behind.get(station) ?? 0;
     if (tries < BEHIND_TRIES) {
       p.behind.set(station, tries + 1);
@@ -404,6 +404,9 @@ function waiting(inner: Inner, ws: string, station: string): CoreError | null {
 function unconfirmed(inner: Inner, ws: string): CoreError {
   const base = part(inner, ws).base ?? bases.get(inner) ?? null;
   const name = nameOf(inner, ws);
+  // Its person bound a lock of their own here, which this device is not on: the stations let their app devices in on
+  // that alone, so no approval in this one helps; it is put on their own lock, face to face.
+  if (offOwnLock(inner, ws)) return new CoreError("lock_unconfirmed", t("core-misc.lock.offOwnLock", { name }));
   return new CoreError("lock_unconfirmed", base ? t("core-misc.lock.unconfirmed", { name, code: shortCode(base) }) : t("core-misc.lock.unconfirmedNoCode", { name }));
 }
 
@@ -441,6 +444,14 @@ export function onBoundPerson(inner: Inner, ws: string): boolean {
   return personal.standing(sub) === "member" && personal.root(sub) === fold(h.entries).persons.get(sub);
 }
 
+/// Whether this app device's person bound a lock of their own in the workspace's, and this device is not on it.
+function offOwnLock(inner: Inner, ws: string): boolean {
+  const sub = inner.workspaces.owner(ws);
+  const h = held(inner, ws);
+  if (sub === null || !h?.head || !inner.host.appKeys) return false;
+  return fold(h.entries).persons.has(sub) && !onBoundPerson(inner, ws);
+}
+
 /// What a hello brings of the person's own lock: its chain, wherever its member bound it here, this device in the
 /// workspace's lock as well or not: a station that goes by the person's own lock alone for them lets it in on that.
 function carriedPerson(inner: Inner, ws: string): Entry[] | null {
@@ -468,6 +479,10 @@ export function bindPerson(inner: Inner, ws: string): Effect.Effect<void> {
     const base = part(inner, ws).base ?? bases.get(inner) ?? null;
     const me = base === null ? undefined : live(f.devices.get(base), now(inner));
     if (me === undefined || me.sub !== sub || me.sign_key !== signer) return;
+    // Not while an app device of theirs here is off their own lock: bound, the stations would let it in no more (the
+    // user, 2026-11-09: a Mac left off a lock opened for debugging a phone was shut out of every station).
+    const on = new Set([...(personal.chain(sub)?.devices.values() ?? [])].map((d) => d.id));
+    for (const d of f.devices.values()) if (d.sub === sub && d.kind === "app" && !on.has(d.id) && live(d, now(inner)) !== undefined) return;
     // Once at a time.
     let tried = binding.get(inner);
     if (tried === undefined) binding.set(inner, (tried = new Set()));
