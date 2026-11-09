@@ -110,8 +110,7 @@ jobs:
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
         with: { ref: "${{ github.event.workflow_run.head_sha }}", fetch-depth: 0, filter: "blob:none" }
-      - uses: actions/setup-node@v5
-        with: { node-version-file: .node-version, package-manager-cache: false }
+      - uses: ./.github/actions/node
       - uses: ./.github/actions/msvc
       - uses: ./.github/actions/mbui-moonbit
       - name: Tools (MSVC's link.exe for cargo, which Git Bash's /usr/bin/link shadows)
