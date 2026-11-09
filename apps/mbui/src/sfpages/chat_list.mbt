@@ -186,7 +186,9 @@ pub fn chat_list(
               Some(f) if flies => flight_placed(c, f)
               _ => ()
             }
-            let here = here_of(r, v, rk, turns, em, if flies { flight } else { None }, core, inline=narrow, gutter~)
+            // (or the row words sent before those went to, still on their way as those were sent: they go on)
+            let flying = if flies { flight } else { @sfbase.flight_to(draft, keys[i]) }
+            let here = here_of(r, v, rk, turns, em, flying, core, inline=narrow, gutter~)
             // what it moves for where it shows: what was sent from here not in the chat yet, the newest that came in
             // over it; any other row, the newest that came in over the rows at the end as the list followed it
             let cause = match e {
@@ -239,7 +241,9 @@ pub fn chat_list(
               _ => false
             }
             rd.fresh.remove(keys[i]) |> ignore
-            if !flies && !emitted {
+            // (nor one words sent before the last still fly to: come in the middle of its room from then, what it
+            // holds stepped there in that frame)
+            if flying is None && !emitted {
               // (an agent's words come in a glyph at a time when there is no avatar to come out of: emit_words_only)
               let grown = match e {
                 Said(m) => !emit_words_only(em, m.seq)

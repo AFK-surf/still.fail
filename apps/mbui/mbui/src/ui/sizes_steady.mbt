@@ -135,19 +135,33 @@ fn Ctx::sizes_steady_said(self : Ctx, i : Int) -> String {
 /// own place where it is the tree's, else that of the tree's node it is drawn in (the app's, past the framework's own
 /// boxes), or the old view's; "" none kept.
 fn Ctx::sizes_steady_made(self : Ctx, i : Int) -> String {
+  // (what an old view drew says so, and the tree's node it is drawn in, where it is in one: which old view it is)
+  let old = i >= 0 && i < self.count && tree_frame_ids.get(i) is None
   let mut b = i
   while b >= 0 && b < self.count {
     match tree_frame_ids.get(b) {
       // (not the framework's own boxes (an old view's host, a scroller's): the app's that holds them)
       Some(id) if !source_said(id).has_prefix("made at mbui/src/view/") => {
         let s = source_said(id)
-        return if s == "" { "" } else { " (" + s + ")" }
+        return if s == "" {
+          if old { " (old view)" } else { "" }
+        } else if old {
+          " (old view, in what was " + s + ")"
+        } else {
+          " (" + s + ")"
+        }
       }
       _ => b = self.nodes[b].parent
     }
   }
   let s = self.old_source_said(i)
-  if s == "" { "" } else { " (" + s + ")" }
+  if s != "" {
+    " (" + s + ")"
+  } else if old {
+    " (old view)"
+  } else {
+    ""
+  }
 }
 
 ///|

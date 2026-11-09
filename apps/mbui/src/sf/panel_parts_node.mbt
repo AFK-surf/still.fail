@@ -37,6 +37,24 @@ fn panel_in_lend(
 }
 
 ///|
+/// Which of what a dialog in the middle of the window holds takes the keyboard's focus as the dialog opens, where what
+/// it holds says one (panel_opens_on_node): lent by panel_centred_node to its dialog, read as all it holds is made.
+// kept across runs: what each dialog lends, let go with it
+let panel_opens_lent : @view.Lent[Ref[@view.View?]] = @view.Lent::new()
+
+///|
+/// `v`, a part of what a panel's body or foot is made of, takes the keyboard's focus as its panel opens in the middle
+/// of the window, in place of the first of what it holds that takes it: what Enter does there at once (a question's
+/// yes). Said as the panel's body or foot is made. Nothing where the panel gives the focus to none of what it holds (a
+/// sheet, a panel beside what opened it).
+pub fn panel_opens_on_node(v : @view.View) -> Unit {
+  match v.lent(panel_opens_lent) {
+    Some(r) => r.val = Some(v)
+    None => ()
+  }
+}
+
+///|
 /// Where node `v` of a panel's body is laid out (none outside a panel).
 fn panel_in_of(v : @view.View) -> PanelIn {
   v.lent(panel_in_lent).unwrap_or({ words: 0.0, rows_out: 0.0, small: false, clear: 0.0 })

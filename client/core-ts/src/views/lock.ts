@@ -729,7 +729,9 @@ export function putOnBound(inner: Inner, sub: string, device: { id: string; labe
     if (device.signKey === null) return;
     for (const [ws, owner] of inner.workspaces.owned()) {
       const at = owner === sub ? signsBound(inner, ws) : null;
-      if (at === null || live(fold(at.h.entries).devices.get(device.id), now(inner)) !== undefined) continue;
+      // (one there already that signs with this key: nothing; one there that does not, put in as the lock was turned
+      // on, before it signed: put in again with it)
+      if (at === null || live(fold(at.h.entries).devices.get(device.id), now(inner))?.sign_key === device.signKey) continue;
       yield* Effect.ignore(new Lock(inner, ws, sub, null).append("device", { id: device.id, sub, kind: "app", label: device.label, sign_key: device.signKey }), { log: "Unhandled", message: "put on a bound lock" });
       yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "bound lock read" });
     }
@@ -738,9 +740,10 @@ export function putOnBound(inner: Inner, sub: string, device: { id: string; labe
 
 /// The person's app devices in the workspace's lock kept to the ones on their own lock, where they bound it: one taken
 /// off their lock, or there from before the binding and never put on it, is taken out of the workspace's lock, so it
-/// neither signs there nor has its vault's box taken as theirs (a web page holds no key of their lock: kept). Their
-/// lock is read from the cloud first, so a device just put on it is not taken for gone. Done by a device on it that
-/// signs for them; tried as bindPerson is, no timer of its own.
+/// neither signs there nor has its vault's box taken as theirs (a web page holds no key of their lock: kept); one on
+/// their lock that this one lacks, or holds as not signing, is put in with the key it signs with in another workspace
+/// of theirs bound to it (`signKeysElsewhere`), so it signs here too. Their lock is read first, so a device just put on
+/// it is not taken for gone. Done by a device on it that signs for them; tried as bindPerson is, no timer of its own.
 const keeping = new WeakMap<Inner, Set<string>>();
 export function keepToPerson(inner: Inner, ws: string): Effect.Effect<void> {
   return Effect.gen(function* () {
@@ -771,11 +774,43 @@ export function keepToPerson(inner: Inner, ws: string): Effect.Effect<void> {
           return ever.has(d.id) || lastAt((e) => e.kind === "device" && get(e.body, "id") === d.id) < bound;
         });
         for (const d of gone) yield* new Lock(inner, ws, at.sub, null).append("device.remove", { id: d.id });
-        if (gone.length > 0) yield* read(inner, ws);
+        // (a second workspace bound to the lock: its devices there as the lock was turned on signed nothing, nor did a
+        // device one of those approved since; the locks' end to end, round 9, 2026-11-10)
+        const inLock = fold(entries).devices;
+        let put = 0;
+        for (const [id, d] of signKeysElsewhere(inner, ws, at.sub)) {
+          if (!on.has(id) || live(inLock.get(id), now(inner))?.sign_key === d.sign_key) continue;
+          yield* new Lock(inner, ws, at.sub, null).append("device", { id, sub: at.sub, kind: "app", label: d.label, sign_key: d.sign_key });
+          put++;
+        }
+        if (gone.length + put > 0) yield* read(inner, ws);
       }),
       () => Effect.sync(() => tried.delete(key)),
     );
   }).pipe(Effect.ignore);
+}
+
+/// The keys the person's app devices sign with in the locks of their other workspaces bound to their own lock, as those
+/// locks (checked here) took them, by device: theirs and signing for themselves, put in face to face or by one of theirs.
+function signKeysElsewhere(inner: Inner, ws: string, sub: string): Map<string, { sign_key: string; label: string }> {
+  const keys = new Map<string, { sign_key: string; label: string }>();
+  const at = now(inner);
+  for (const [other, owner] of inner.workspaces.owned()) {
+    const h = held(inner, other);
+    if (other === ws || owner !== sub || !h?.head || !fold(h.entries).persons.has(sub)) continue;
+    let lock: Checked;
+    try {
+      lock = checkLock(h.entries, at);
+    } catch {
+      continue;
+    }
+    const labels = fold(h.entries).devices;
+    for (const d of lock.devices.values()) {
+      if (d.sub !== sub || d.kind !== "app" || !d.own || typeof d.sign_key !== "string" || live(d, at) === undefined) continue;
+      keys.set(d.id, { sign_key: d.sign_key, label: str(get(labels.get(d.id), "label")) ?? "" });
+    }
+  }
+  return keys;
 }
 
 /// A person's own lock moved on (a device taken off): each station where it is bound told as it stands.

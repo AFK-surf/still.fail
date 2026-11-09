@@ -287,8 +287,13 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
   let shown = r.at(t, base(r), r.k).0
   // (one coming or going where it is, how far open: what it holds is drawn by it as it is painted, ListRows::enter,
   // leave)
-  if !(cause is Changed(_)) && c.by_room.contains(key) {
+  // (not one laid out coming on this way already as what brought it had it, said to come by its room only since
+  // (words sent before the last, their flight over or let go as more were sent): it goes on as it went. Put in the
+  // middle of its room from then, what it holds stepped there in one frame, 14 points with a row 500 ms on its way)
+  if !(cause is Changed(_)) && c.by_room.contains(key) && !c.not_by_room.contains(key) {
     c.opened[key] = (shown, natural)
+  } else if cause is Comes(_) {
+    c.not_by_room.add(key)
   }
   shown
 }
@@ -475,6 +480,9 @@ pub struct RowCauses {
   /// the rows that come and go where they are (ListRows::enter, leave), by their keys, and of those coming or going,
   /// how tall each is laid out now and how tall it is (by its layout, read as it is painted)
   priv by_room : Set[String]
+  /// the rows coming that were laid out on the way not so (brought some other way: words flying to their row): none
+  /// of them turns so on its way (ListState::row_sized)
+  priv not_by_room : Set[String]
   priv opened : Map[String, (Double, Double)]
   /// of those, the room over what each holds, at its top (its gap to the row before: ListRows::enter's `lead`)
   priv leads : Map[String, Double]
@@ -579,7 +587,7 @@ pub struct ListRows[T] {
 
 ///|
 pub fn[T] ListRows::new() -> ListRows[T] {
-  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), opened: {}, leads: {}, laid: -10, way_at: -1.0, way_frame: -1, way_offs: {}, way_speed: None }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
+  { was: {}, order: [], going: {}, causes: { by: {}, keys: [], said: @signals.signal(0), n: 0, start: -1.0, end: -1.0, own: Set::new(), by_room: Set::new(), not_by_room: Set::new(), opened: {}, leads: {}, laid: -10, way_at: -1.0, way_frame: -1, way_offs: {}, way_speed: None }, given: false, last_keys: [], last_items: [], going_said: @signals.keyed() }
 }
 
 ///|
@@ -649,6 +657,7 @@ pub fn[T] ListRows::rows(
     self.causes.end = -1.0
     self.causes.own.clear()
     self.causes.by_room.clear()
+    self.causes.not_by_room.clear()
     self.causes.opened.clear()
     self.causes.leads.clear()
   }
@@ -779,6 +788,7 @@ pub fn[T] ListRows::rows(
     self.causes.start = -1.0
     self.causes.own.clear()
     self.causes.by_room.clear()
+    self.causes.not_by_room.clear()
     self.causes.opened.clear()
     self.causes.leads.clear()
   }

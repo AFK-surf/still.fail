@@ -5,7 +5,9 @@
 // - How busy the CPUs are holds no task back: busy CPUs make the tasks slower, not the machine unable to run them.
 //   (They did, and wasted the machine: their busy share is 100% as soon as each core has something, however little
 //   waits; the load average lags a minute, high while the cores sit idle after tasks end; a ramp after each start held
-//   tasks of an idle machine back. 2026-10-24, 2026-11-09.)
+//   tasks of an idle machine back. 2026-10-24, 2026-11-09.) Nor is a task told how many CPUs to take: the same share
+//   made that one (`MAKEFLAGS=-j1`) on a machine whose cores each had something, a build beside others on one core
+//   of twelve; the system shares the cores among what runs (the user, 2026-11-10).
 // - None starts while the system says its memory is under pressure (high or critical), but a small task while it is only
 //   high: there is always a way to look at a machine short of running out (a small diagnostic waited with the rest
 //   over 40 minutes, nothing else able to reach it, #4355).
@@ -29,16 +31,12 @@
 //
 // One explicitly small offscreen task may run beside busy builds. Its own slot is bounded to one task, it is told to
 // use one CPU, and it waits only when memory is critical. This is for brief work such as drawing with a prebuilt renderer.
-// Other tasks started with others running are told how many CPUs are free (STILLFAIL_CPUS and build tools' variables).
-import type { Ticks } from "../read/host.ts";
 
 /// What the system says of its memory: under pressure (high), or about to run out (critical); null where it cannot be
 /// read.
 export type Pressure = "normal" | "high" | "critical";
 
-/// Over how long the CPUs are looked at (for how many a task started beside others is told are free), and how often
-/// the queue looks at the machine while a task waits.
-export const BUSY_SPAN_MS = 20_000;
+/// How often the queue looks at the machine (its memory, a person at it) while a task waits.
 export const LOOK_MS = 5000;
 
 export type Waiting = { id: string; session: string; screen: boolean; queuedAt: number; small?: boolean };
@@ -54,33 +52,6 @@ export const PERSON_IDLE_MS = 60_000;
 /// A command that has held the screen this long while another waits for it: its agent is told (once), the screen
 /// being for work done in minutes, a window left up for a person `stillfail-job show`'s.
 export const HELD_LONG_MS = 10 * 60_000;
-
-/// The CPUs' ticks noted at each look, for how busy they have been over the last BUSY_SPAN_MS.
-export class Busy {
-  private seen: { at: number; ticks: Ticks }[] = [];
-
-  /// The ticks now; those older than BUSY_SPAN_MS go (after a while unwatched, none are left to compare with).
-  note(at: number, ticks: Ticks | null): void {
-    this.seen = this.seen.filter((s) => at - s.at <= BUSY_SPAN_MS);
-    if (ticks !== null) this.seen.push({ at, ticks });
-  }
-
-  /// The measured share (0–1), its span and its last look; null before they span half of BUSY_SPAN_MS.
-  sample(since: number | null = null): { share: number; seconds: number; checkedAt: number } | null {
-    const first = since === null ? this.seen[0] : this.seen.find((s) => s.at >= since);
-    const last = this.seen.at(-1);
-    if (first === undefined || last === undefined || last.at - first.at < BUSY_SPAN_MS / 2) return null;
-    const [b0, t0] = first.ticks;
-    const [b1, t1] = last.ticks;
-    if (t1 <= t0) return null;
-    return { share: Math.min(Math.max((b1 - b0) / (t1 - t0), 0), 1), seconds: (last.at - first.at) / 1000, checkedAt: last.at };
-  }
-
-  /// The share since the oldest ticks kept, or the oldest noted at `since` or after.
-  share(since: number | null = null): number | null {
-    return this.sample(since)?.share ?? null;
-  }
-}
 
 export type Room = { pressure: Pressure | null; person?: boolean };
 
@@ -149,16 +120,4 @@ export function place(waiting: readonly Waiting[], id: string, lastOf: (session:
   const last = (w: Waiting) => lastOf(w.session) ?? -Infinity;
   const i = [...waiting].sort((a, b) => last(a) - last(b) || a.queuedAt - b.queuedAt).findIndex((w) => w.id === id);
   return i < 0 ? null : i + 1;
-}
-
-/// The variables a task started beside others is given: how many CPUs it may take, for itself (STILLFAIL_CPUS) and as
-/// make, cargo and cmake read it, where its environment does not say already. None for one started alone.
-export function cpusFor(env: NodeJS.ProcessEnv, cpus: number, busy: number | null, alone: boolean): Record<string, string> {
-  if (alone || cpus <= 0) return {};
-  const free = Math.max(1, Math.round((1 - (busy ?? 1)) * cpus));
-  const out: Record<string, string> = { STILLFAIL_CPUS: String(free) };
-  if (env.MAKEFLAGS === undefined) out.MAKEFLAGS = `-j${free}`;
-  if (env.CARGO_BUILD_JOBS === undefined) out.CARGO_BUILD_JOBS = String(free);
-  if (env.CMAKE_BUILD_PARALLEL_LEVEL === undefined) out.CMAKE_BUILD_PARALLEL_LEVEL = String(free);
-  return out;
 }

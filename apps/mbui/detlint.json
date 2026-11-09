@@ -502,7 +502,7 @@
       "src/sfdesk/frame.mbt": 1,
       "src/sfdesk/page_pane.mbt": 1,
       "src/sfdesk/pane_view.mbt": 1,
-      "src/sfdesk/side_node.mbt": 4,
+      "src/sfdesk/side_node.mbt": 3,
       "src/sfdesk/tape_view.mbt": 1,
       "src/sfpages/landing_node.mbt": 1,
       "src/sfpages/search.mbt": 1,
@@ -533,7 +533,6 @@
       "src/sfpages/decision.mbt": 1,
       "src/sfpages/model_triple.mbt": 2,
       "src/sfpages/new_chat.mbt": 1,
-      "src/sfpages/outside.mbt": 1,
       "src/sfpages/relay.mbt": 1,
       "src/sfpages/screen_debug.mbt": 1,
       "src/sfpages/screen_panel.mbt": 1,
@@ -547,9 +546,7 @@
       "src/sfpages/xshare.mbt": 1
     },
     "click-read": {},
-    "key-read": {
-      "src/sfpages/outside.mbt": 1
-    },
+    "key-read": {},
     "part-place": {},
     "layout-told": {}
   },

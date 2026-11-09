@@ -28,13 +28,15 @@ fn test_window_corner(platform : Int) -> Double {
 ///|
 /// `mode` in window `win` (its name, size, platform and the size class its host says, "" none) in `lang`, a moment
 /// after it opens (what it opens with over), drawn: the corner and squeeze tests' (corners_wbtest.mbt); with `said`, what
-/// people, agents and stations wrote in it at its longest (squeeze_said_wbtest.mbt).
+/// people, agents and stations wrote in it at its longest (squeeze_said_wbtest.mbt); with `font_scale`, the system's
+/// size of words (words_large_wbtest.mbt).
 fn screen_in(
   mode : String,
   win : (String, Double, Double, Int, String),
   lang : String,
   said? : Bool = false,
   dark? : Bool = false,
+  font_scale? : Double = 1.0,
 ) -> @ui.Tester {
   let (_, w, h, platform, width) = win
   let src : Ref[Source?] = Ref(None)
@@ -66,6 +68,9 @@ fn screen_in(
     // (`dark`: the app's dark theme, the fixture's prefs saying so: the contrast test's, contrast_wbtest.mbt)
     env=[("MBUI_LOCALE", lang), ("MBUI_REDUCE_MOTION", "1")] + (if dark { [("MBUI_DARK", "1")] } else { [] }),
   )
+  if font_scale != 1.0 {
+    t.set_font_scale(font_scale)
+  }
   if width != "" {
     t.drive("system {\"size_class\":{\"width\":\"\{width}\",\"height\":\"medium\"}}\n") |> ignore
   }
