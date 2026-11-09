@@ -232,6 +232,8 @@ fn sheet_node(
             b.box(fn(col) {
               style_node(col, fn() { sheet_capped_room })
               col.min_height(Is(Some(0.0))) |> ignore
+              // (laid out as the host's sheet lays out a capped panel's body: narrow, its words a sheet's own in, sheet_step's)
+              panel_in_lend(col, Narrow, sheet_panel_sides)
               (n.body)(col, close)
             })
             |> ignore
@@ -258,6 +260,15 @@ fn sheet_node(
             }
             s.box(fn(col) {
               style_node(col, fn() { room })
+              // (laid out as the host's sheet lays out a panel's body, sheet_step's: narrow; its words what a sheet's rows
+              // leave of its words' in one a press opened, its rows out to its words' in one opened by nothing)
+              let pressed = from != Unanchored
+              panel_in_lend(
+                col,
+                Narrow,
+                if pressed { sheet_panel_sides - sheet_row_sides } else { 0.0 },
+                rows_out=dmax(0.0, (if pressed { sheet_row_sides } else { sheet_panel_sides }) - panel_card_in),
+              )
               (n.body)(col, close)
             })
             |> ignore

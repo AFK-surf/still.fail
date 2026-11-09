@@ -43,7 +43,7 @@ test "with keyboard and mouse: the viewer's bar across the top, the picture unde
   // the picture under the bar, the window's width
   let u = r.ui()
   assert_true(u.stage_y >= @sf.viewer_bar_h)
-  assert_eq(u.box_w, 1280.0)
+  assert_eq(u.box_w.get(), 1280.0)
   assert_eq(r.t.squeeze_faults(), [])
   r.tap_label(tr("common.back"))
   nav_rested(r.t)

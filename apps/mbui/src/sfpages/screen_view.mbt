@@ -34,14 +34,16 @@ priv struct ScreenUi {
   tools_moved : Afloat
   /// how far the mouse's buttons were dragged from theirs
   mouse_moved : Afloat
-  /// 鼠标左右键 as last chosen in 控制中心, before the prefs say so (none: as they say)
-  mut mouse_set : Bool?
+  /// 鼠标左右键 as last chosen in 控制中心, before the prefs say so (none: as they say; told as it changes: 控制中心's
+  /// switch reads it)
+  mouse_set : @signals.Signal[Bool?]
   mut saying : Bool
   /// how many times the rail's line was asked for: its 3 s start again from each
   mut sayings : Int
-  /// the stage's size when last built, and the frame's size it was fitted for
-  mut box_w : Double
-  mut box_h : Double
+  /// the stage's size when last built (told as it changes: 控制中心's 分辨率 reads it), and the frame's size it was fitted
+  /// for
+  box_w : @signals.Signal[Double]
+  box_h : @signals.Signal[Double]
   /// where the stage was drawn last (its top left in the window)
   mut stage_x : Double
   mut stage_y : Double
@@ -73,6 +75,8 @@ priv struct ScreenUi {
   /// the frames and bytes come by then; the frames and bits a second over the last second, once one was counted
   mut first_tick : Int
   mut rate_tick : Int
+  /// how many of those seconds it has been seen (told as each is counted: 控制中心's row reads it)
+  seen : @signals.Signal[Int]
   mut rate_frames : Int
   mut rate_bytes : Int
   mut fps : Double?
@@ -106,11 +110,11 @@ fn screen_ui(key : String) -> ScreenUi {
         tools_open: false,
         tools_moved: afloat_new(),
         mouse_moved: afloat_new(),
-        mouse_set: None,
+        mouse_set: @signals.signal(None, same=fn(a, b) { a == b }),
         saying: false,
         sayings: 0,
-        box_w: 0.0,
-        box_h: 0.0,
+        box_w: @signals.signal(0.0, same=fn(a, b) { a == b }),
+        box_h: @signals.signal(0.0, same=fn(a, b) { a == b }),
         stage_x: 0.0,
         stage_y: 0.0,
         fit_for: None,
@@ -130,6 +134,7 @@ fn screen_ui(key : String) -> ScreenUi {
         keys_turned: [],
         first_tick: -1,
         rate_tick: -1,
+        seen: @signals.signal(0, same=fn(a, b) { a == b }),
         rate_frames: 0,
         rate_bytes: 0,
         fps: None,
@@ -196,12 +201,12 @@ pub fn screen_page(
     s.own_stream()
     // on a phone or a tablet, a page of the station's browser is laid out for the stage it is shown on, as this
     // device's own browser would lay it out (the station takes no notice of it for other screens)
-    if @sf.soft_keyboard() && u.box_w > 0.0 && u.box_h > 0.0 && s.fit is None {
-      s.fit = Some((u.box_w, u.box_h, c.scale))
+    if @sf.soft_keyboard() && u.box_w.get() > 0.0 && u.box_h.get() > 0.0 && s.fit is None {
+      s.fit = Some((u.box_w.get(), u.box_h.get(), c.scale))
     }
     // 自动 asks for a picture as large as the stage is in this device's pixels
-    if u.box_w > 0.0 && u.box_h > 0.0 {
-      s.stage_is((u.box_w * c.scale).round().to_int(), (u.box_h * c.scale).round().to_int())
+    if u.box_w.get() > 0.0 && u.box_h.get() > 0.0 {
+      s.stage_is((u.box_w.get() * c.scale).round().to_int(), (u.box_h.get() * c.scale).round().to_int())
     }
     if shown {
       // 画质 chosen otherwise: opened again with it; open again where it was let go, not where it is over (重新打开
@@ -413,9 +418,10 @@ fn screen_native(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catch
   if s.pastes() {
     @sf.native_over_act("screen-paste", @sf.t("android-misc.screen.paste"), "paste", fn() { paste_asked(c, s, u) })
   }
-  if s.audio_ready {
-    @sf.native_over_act("screen-audio", @sf.t(if s.audio_muted { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }),
-      if s.audio_muted { "volume-x" } else { "volume" }, fn() {
+  if s.audio_ready.get() {
+    let muted = s.audio_muted.get()
+    @sf.native_over_act("screen-audio", @sf.t(if muted { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }),
+      if muted { "volume-x" } else { "volume" }, fn() {
         s.toggle_audio()
       })
   }
@@ -423,7 +429,7 @@ fn screen_native(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catch
     @sf.native_over_act("screen-center", @sf.t("web-pages.screen.panel"), "sliders", fn() {
       let from = screen_native_anchor(c)
       screen_native_panel(u, "center", fn() {
-        @sf.panel(@sf.t("web-pages.screen.panel"), fn(c, done) { center_panel(c, s, u, from, close, done) }, from~, side=screen_panel_side(), focus=false)
+        @sf.panel_nodes(@sf.t("web-pages.screen.panel"), fn(v, done) { center_node(c, v, s, u, from, close, done) }, from~, side=screen_panel_side(), focus=false)
       })
     }, active=screen_native_panel_on(u, "center"))
     @sf.native_over_act("screen-stats", @sf.t("web-pages.screen.stats"), "chart", fn() {
@@ -1147,7 +1153,7 @@ fn button_felt(c : @ui.Ctx, id : Int, button : Int) -> Unit {
 fn mouse_shown(s : ScreenSess, u : ScreenUi) -> Bool {
   s.driving() &&
   !s.simulator() &&
-  (match u.mouse_set {
+  (match u.mouse_set.get() {
     Some(on) => on
     None => text(s.src.topic("prefs", {}).get().value, "screenMouse") != "off"
   })

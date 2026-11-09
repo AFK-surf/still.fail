@@ -74,8 +74,9 @@ priv struct ScreenSess {
   /// the call answered: the view ended (the last state says why)
   finished : @signals.Signal[Bool]
   /// the frames' codec and size, from the latest config
-  mut audio_ready : Bool
-  mut audio_muted : Bool
+  /// the view's sound coming as this device plays it, and muted here (told as they change: 控制中心's row reads them)
+  audio_ready : @signals.Signal[Bool]
+  audio_muted : @signals.Signal[Bool]
   mut codec : String?
   mut size : (Int, Int)?
   /// something was shown since it opened: a frame kept on screen through a reconnect or an end
@@ -182,8 +183,8 @@ fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
         pointer_layer: None,
         failure: @signals.signal(None),
         finished: @signals.signal(false),
-        audio_ready: false,
-        audio_muted: false,
+        audio_ready: @signals.signal(false, same=fn(a, b) { a == b }),
+        audio_muted: @signals.signal(false, same=fn(a, b) { a == b }),
         codec: None,
         size: None,
         shown_any: false,
@@ -763,7 +764,7 @@ fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
     fn(value, bytes) { me.take(value, bytes) },
     fn(r) {
       me.call = 0
-      me.audio_ready = false
+      me.audio_ready.set(false)
       match me.stream { Some(st) => st.audio(Bytes::new(0)); None => () }
       match r {
         Ok(_) => me.finished.set(true)
@@ -799,7 +800,7 @@ fn ScreenSess::asked_again(self : ScreenSess, src : Source) -> Unit {
 ///|
 /// Stops viewing (the app went out of sight); the last frame stays, `open` goes on from it.
 fn ScreenSess::pause(self : ScreenSess, src : Source) -> Unit {
-  self.audio_ready = false
+  self.audio_ready.set(false)
   match self.stream { Some(st) => st.audio(Bytes::new(0)); None => () }
   if self.call != 0 {
     (src.cancel)(self.call)
@@ -995,10 +996,13 @@ fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
     _ => ()
   }
   match o.get("audioConfig") {
-    Some(config) => self.audio_ready = text(Some(config), "codec") == "pcm_s16le" && number(Some(config), "sampleRate") == 48000.0 && number(Some(config), "channels") == 2.0
+    Some(config) =>
+      self.audio_ready.set(
+        text(Some(config), "codec") == "pcm_s16le" && number(Some(config), "sampleRate") == 48000.0 && number(Some(config), "channels") == 2.0,
+      )
     None => ()
   }
-  if o.contains("audio") && self.audio_ready && !self.audio_muted {
+  if o.contains("audio") && @signals.untracked(fn() { self.audio_ready.get() && !self.audio_muted.get() }) {
     match (self.stream, bytes) { (Some(st), Some(data)) => st.audio(data); _ => () }
   }
   // (the engine's own read of the view numbers what it says: those after it the host may take, ScreenSess::route)
@@ -1122,7 +1126,7 @@ fn ScreenSess::route(self : ScreenSess, after : Double) -> Unit {
     shown is Some(_) &&
     self.parts.last().map(fn(p) { p.1 }) == shown
   let to_whole = !self.parting && shown is None
-  let audio = self.audio_ready && !self.audio_muted
+  let audio = @signals.untracked(fn() { self.audio_ready.get() && !self.audio_muted.get() })
   match self.stream {
     Some(st) => st.route(self.call, after, video=to_whole, audio~)
     None => ()
@@ -1158,6 +1162,7 @@ let clip_png_max : Int = 8 * 1024 * 1024
 
 ///|
 fn ScreenSess::toggle_audio(self : ScreenSess) -> Unit {
-  self.audio_muted = !self.audio_muted
-  if self.audio_muted { match self.stream { Some(st) => st.audio(Bytes::new(0)); None => () } }
+  let muted = !@signals.untracked(fn() { self.audio_muted.get() })
+  self.audio_muted.set(muted)
+  if muted { match self.stream { Some(st) => st.audio(Bytes::new(0)); None => () } }
 }

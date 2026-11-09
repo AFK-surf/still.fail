@@ -88,8 +88,8 @@ test "a late system column refits the whole picture and its control panel opens 
   let u = r.ui()
   let shown = u.shown()
   assert_true(shown.x >= -0.1 && shown.y >= -0.1)
-  assert_true(shown.x + shown.w <= u.box_w + 0.1)
-  assert_true(shown.y + shown.h <= u.box_h + 0.1)
+  assert_true(shown.x + shown.w <= u.box_w.get() + 0.1)
+  assert_true(shown.y + shown.h <= u.box_h.get() + 0.1)
   @hostapi.nav_tapped_at[0] = 879.0
   @hostapi.nav_tapped_at[1] = 480.0
   @hostapi.nav_tapped_at[2] = 48.0
@@ -151,7 +151,7 @@ test "screen system audio negotiates only on a capable host, mutes immediately a
   r.say({ "audio": { "ts": 3 } }, bytes=packet)
   assert_eq(r.t.stream_fed(st.id()).last().unwrap(), "audio bytes=3840")
   s.pause(s.src)
-  assert_false(s.audio_ready)
+  assert_false(s.audio_ready.get())
   assert_eq(r.t.stream_fed(st.id()).last().unwrap(), "audio bytes=0")
 }
 

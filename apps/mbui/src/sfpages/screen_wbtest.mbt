@@ -506,7 +506,7 @@ test "zoomed in, the part in sight is asked for, as sharp as it is shown; its fr
   let u = r.ui()
   // not zoomed: nothing told
   assert_eq(r.told("screen.look").length(), 0)
-  u.zoom.zoom_to(u.zoom.fit() * 4.0, u.box_w / 2.0, u.box_h / 2.0, false)
+  u.zoom.zoom_to(u.zoom.fit() * 4.0, u.box_w.get() / 2.0, u.box_h.get() / 2.0, false)
   r.t.draw()
   r.t.draw()
   let looks = r.told("screen.look")
@@ -517,7 +517,7 @@ test "zoomed in, the part in sight is asked for, as sharp as it is shown; its fr
   assert_true(close_to(number(region, "x"), 0.375))
   assert_true(close_to(number(region, "w"), 0.25))
   let rh = number(region, "h")
-  assert_true(close_to(rh, u.box_h / shown.h))
+  assert_true(close_to(rh, u.box_h.get() / shown.h))
   assert_true(close_to(number(Some(looks[0]), "width") / number(Some(looks[0]), "height"), 0.25 * shown.w / (rh * shown.h)))
   // the part's frames (the station's config saying the part): a decoder of their own, drawn over the whole there
   let part : Json = { "x": 0.375, "y": number(region, "y"), "w": 0.25, "h": rh }
@@ -730,7 +730,7 @@ test "全屏 (控制中心's upright): the screen alone, sideways, its tools fol
   let u = r.ui()
   assert_true(u.full.get())
   // edge to edge: the stage is the whole window
-  assert_eq((u.box_w, u.box_h), (844.0, 390.0))
+  assert_eq((u.box_w.get(), u.box_h.get()), (844.0, 390.0))
   assert_true(r.labelled("工具") is Some(_))
   assert_true(r.labelled("关闭") is None)
   r.tap_label("工具")
@@ -960,9 +960,9 @@ test "on a phone a page of the station's browser is laid out for the stage it is
   let r = screen_rig(until_gone=true)
   let u = r.ui()
   let fit = field(Some(r.told("screen.view")[0]), "fit")
-  assert_true(u.box_w > 0.0 && u.box_h > 0.0)
-  assert_eq(number(fit, "width"), u.box_w.round())
-  assert_eq(number(fit, "height"), u.box_h.round())
+  assert_true(u.box_w.get() > 0.0 && u.box_h.get() > 0.0)
+  assert_eq(number(fit, "width"), u.box_w.get().round())
+  assert_eq(number(fit, "height"), u.box_h.get().round())
   assert_true(number(fit, "scale") > 0.0)
   r.live()
   assert_true(!r.sess().pad(r.sess().src), msg="driven directly, as the phone's own browser")

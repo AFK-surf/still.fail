@@ -199,6 +199,8 @@ fn panel_node(
                 b.box(fn(col) {
                   style_node(col, fn() { panel_grows.then(panel_part_in(over(), under)) })
                   col.grow(Is(1.0)).alpha(By(fn() { look().words })) |> ignore
+                  // (laid out as a small panel's old body is: wide, its words a row's padding in)
+                  panel_in_lend(col, Wide, text_in, small=true)
                   (n.body)(col, close)
                 })
                 |> ignore
@@ -245,6 +247,8 @@ fn panel_node(
                   s.box(fn(col) {
                     style_node(col, fn() { held_in().then(@ui.style(pt=room(over()), pb=room(under))) })
                     col.margin(By(fn() { (0.0, -over(), 0.0, -out_under) })).alpha(By(fn() { look().words })) |> ignore
+                    // (laid out as a small panel's old body is: wide, its words a row's padding in)
+                    panel_in_lend(col, Wide, text_in, small=true)
                     (n.body)(col, close)
                   })
                   |> ignore

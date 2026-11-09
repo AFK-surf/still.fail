@@ -678,6 +678,11 @@ let tile_box : @ui.Style = @ui.style(w=@sf.grow).then(
 )
 
 ///|
+/// A tile's ground while pressed (tile_box's and key_tile_box's `pressed`, on a tile made as a node).
+// kept across runs: a value (no field of it changes)
+let tile_pressed : @ui.Style = @ui.css("bg=Hover")
+
+///|
 // kept across runs: a value (no field of it changes)
 let tile_gap : @ui.Style = @ui.style(w=@sf.grow).then(@ui.css("h=S16"))
 
