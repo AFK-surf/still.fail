@@ -13,6 +13,10 @@
 #   scripts/e2e-local.sh android    the same on an emulator of our own (AVD, EMU_PORT), with a screen recording
 #   scripts/e2e-local.sh ios        the same on an iOS simulator of our own (MBUI_IOS_DEVICE), recorded
 #   scripts/e2e-local.sh down       stops what `up` started
+#   scripts/e2e-local.sh locks      the locks end to end against what `up` started (e2e/locks.ts: alice's and
+#                                   bob's devices, each still.fail's core in Node; it freezes and starts anew the
+#                                   station and the cloud, and enrolls a second station), pass/fail per step
+#   scripts/e2e-local.sh locks-all  up, locks, down (the side run's, scripts/side.sh locks)
 #   scripts/e2e-local.sh snapshot NAME [CORE]   a starting point: the cloud's, the station's, the peer's and the app's
 #                                   core data (CORE) as they are now ($E2E_WORK/snapshots/NAME)
 #   scripts/e2e-local.sh restore NAME          back to it (the station and the cloud stopped, put back, started)
@@ -25,7 +29,7 @@
 #   scripts/e2e-local.sh android-unlock PIN   the system's prompt for the screen lock answered with PIN, once its field is up
 #   scripts/e2e-local.sh intruder-refused CMD…  e2e/peer.ts as a device the cloud signed in as alice and the lock never
 #                                   took in, asked CMD: INTRUDER REFUSED once the station refused it
-#   scripts/e2e-local.sh lock-state the security mode as the test station keeps it: LOCK, DEVICE lines, STATIONS
+#   scripts/e2e-local.sh lock-state the security mode as the test station keeps it: LOCK, DEVICE lines, STATIONS, PERSONS
 #   scripts/e2e-local.sh sql SQL    the test station's database, read only
 #   scripts/e2e-local.sh android-ime off|on   the emulator's own keyboard off (the run composes) or back
 #   scripts/e2e-local.sh android-installer    until the system's installer is the emulator's top activity, then back
@@ -33,6 +37,8 @@
 #   scripts/e2e-local.sh pins       whether alice keeps the test chat pinned (PINS 1 or 0)
 #   scripts/e2e-local.sh wait-chat WORDS   until the test station has a chat whose first words begin with WORDS
 #   scripts/e2e-local.sh freeze|thaw  the test station stopped where it is (SIGSTOP: as if its network went) or started anew
+#   scripts/e2e-local.sh cloud-freeze|cloud-thaw  the cloud stopped where it is (it answers nothing: down, or holding
+#                                   everything back) or let go on
 #   scripts/e2e-local.sh drive-seed TAG   the drive flows' folder in the test station's home (e2e-TAG)
 #   scripts/e2e-local.sh drive-media TAG  the player's flows' folder in it (e2e-TAG/影音: two episodes, a subtitle, a song)
 #   scripts/e2e-local.sh drive-big TAG    the downloads' folder in it (e2e-TAG/大文件: 48 MB and a small file)
@@ -142,7 +148,7 @@ start_cloud() {
   mkfifo "$RUN/cloud.ready"
   exec 9<> "$RUN/cloud.ready"
   (cd $E/cloud && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT PERSIST=$RUN/cloud-state \
-    AUTH_KEY=$(cat $RUN/auth-key) RESUME=${1:+1} detach node "$D/waitfor.mjs" --tee $RUN/cloud.log \
+    AUTH_KEY=$(cat $RUN/auth-key) RESUME=${1:+1} LOG_REQUESTS=1 detach node "$D/waitfor.mjs" --tee $RUN/cloud.log \
     --line 'READY still.fail cloud' --mark $RUN/cloud.ready -- pnpm exec tsx test/dev.ts 9>&- & echo $! > $RUN/cloud.pid)
   if ! IFS= read -r -t 120 ready <&9; then
     exec 9>&-
@@ -288,8 +294,9 @@ stop() {
     local pid=$(cat $RUN/$1.pid)
     # its process group: it and what it started (pnpm → tsx → node → workerd; the launcher → node → runner)
     kill -TERM -- -$pid 2>/dev/null || true
-    # (its end as the system tells it, mbui's scripts/chk logwait --pid: kqueue's; 5 s at most, then killed)
-    "$MBUI_DIR/scripts/chk" logwait --pid $pid --deadline 5 > /dev/null 2>&1
+    # (its end as the system tells it, mbui's scripts/chk logwait --pid: kqueue's; 5 s at most, then killed: its
+    # deadline passed is no failure, under set -e it ended `down` there and left the relay running, a run's each)
+    "$MBUI_DIR/scripts/chk" logwait --pid $pid --deadline 5 > /dev/null 2>&1 || true
     kill -9 -- -$pid 2>/dev/null || true
   fi
   rm -f $RUN/$1.pid
@@ -333,6 +340,14 @@ down() {
 peer() {
   (. $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/peer-home; mkdir -p $HOME
    E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/peer E2E_FILES=$WORK/files node $ROOT/e2e/peer.ts "$@")
+}
+
+# e2e/locks.ts beside this run, from this directory (it says scripts/e2e-local.sh's words itself: freeze, thaw,
+# cloud-freeze, second-station), its devices' data under $WORK/locks
+locks() {
+  (export E2E_HOME=$HOME; . $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/locks-home; mkdir -p $HOME
+   E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/locks E2E_WORK=$WORK E2E_STATION=$STATION E2E_PORT=$PORT \
+     E2E_RELAY=$RELAY_PORT node $ROOT/e2e/locks.ts </dev/null)
 }
 
 # a device the cloud signed in as alice on its own (what a cloud that is not to be trusted can do: mint her a credential)
@@ -386,6 +401,7 @@ const s = fold(j.entries ?? j, null);
 console.log(s.disabled ? 'LOCK off' : 'LOCK on ' + s.seq);
 for (const [id, d] of s.devices) console.log('DEVICE ' + id.slice(0, 12) + ' ' + d.sub + ' ' + d.kind + ' own=' + d.own + ' ' + (d.label ?? ''));
 console.log('STATIONS ' + s.stations.size);
+console.log('PERSONS ' + s.persons.size);
 " "$f")
 }
 
@@ -574,7 +590,10 @@ release_seed() {
 # `ANSWER workspace.enroll` in the flow's log, FILE), its own data and HOME beside the first's ($STATION-b), started;
 # `second-down` stops it and takes its directory away
 second_station() {
-  local token=$(grep 'ANSWER workspace.enroll ok' "${1:?the log of the flow}" | tail -1 | sed 's/.*"command":"\([^"]*\)".*/\1/' | awk '{print $NF}')
+  local cmd=$(grep 'ANSWER workspace.enroll ok' "${1:?the log of the flow}" | tail -1 | sed 's/.*"command":"\([^"]*\)".*/\1/')
+  # (a locked workspace's: the lock's hash after --lock, which it pins)
+  local lock=$(echo "$cmd" | sed -n 's/.*--lock \([0-9a-f]*\).*/\1/p')
+  local token=$(echo "$cmd" | sed 's/ --lock [0-9a-f]*//' | awk '{print $NF}')
   [ -n "$token" ] || die "no command made in $1"
   local B=$STATION-b
   second_down >/dev/null 2>&1
@@ -583,12 +602,25 @@ second_station() {
   ln -s "$(command -v node)" $B/app/node/bin/node
   echo '{"autoUpdate":false}' > $B/data/config.json
   (. $RUN/station-env.sh && export HOME=$B/home STILLFAIL_DATA=$B/data && \
-    node $E/station/dist/main.js enroll $ORIGIN $token --data $B/data >$RUN/second-enroll.log 2>&1) \
+    node $E/station/dist/main.js enroll $ORIGIN $token ${lock:+--lock $lock} --data $B/data >$RUN/second-enroll.log 2>&1) \
     || { cat $RUN/second-enroll.log; die "enrolling the second station failed"; }
-  (. $RUN/station-env.sh && export HOME=$B/home STILLFAIL_DATA=$B/data && \
-    detach "$(native launcher)" run --app $B/app --data $B/data >$RUN/second.log 2>&1 & echo $! > $RUN/second.pid)
-  wait_for "[ -f $B/data/stillfail.db ]" 60 || { tail -20 $RUN/second.log; die "the second station did not start"; }
-  say "second station up ($(cat $RUN/second.pid)), enrolled"
+  # (started as start_station starts the first: up once its launcher says a Node has taken over)
+  local launcher=$(native launcher)
+  rm -f "$RUN/second.ready"
+  mkfifo "$RUN/second.ready"
+  exec 9<> "$RUN/second.ready"
+  (. $RUN/station-env.sh && export HOME=$B/home STILLFAIL_DATA=$B/data && detach node "$D/waitfor.mjs" --tee "$RUN/second.log" \
+    --line 'Node [0-9]+ has taken over' --mark "$RUN/second.ready" -- \
+    "$launcher" run --app $B/app --data $B/data 9>&- >/dev/null 2>&1 & echo $! > $RUN/second.pid)
+  if ! IFS= read -r -t 60 ready <&9; then
+    exec 9>&-
+    rm -f "$RUN/second.ready"
+    tail -20 "$RUN/second.log"
+    die "the second station did not start"
+  fi
+  exec 9>&-
+  rm -f "$RUN/second.ready"
+  say "second station up ($(cat $RUN/second.pid)), enrolled: $(tr '\n' ' ' < $RUN/second-enroll.log)"
 }
 second_down() {
   stop second
@@ -658,6 +690,9 @@ freeze() {
   kill -STOP $(station_tree $p)
   say "station frozen ($(station_tree $p | tr '\n' ' '))"
 }
+# the cloud frozen (it answers nothing, as one down or holding everything back), and let go on again
+cloud_freeze() { local p=$(cat $RUN/cloud.pid); kill -STOP $(station_tree $p); say "cloud frozen ($(station_tree $p | tr '\n' ' '))"; }
+cloud_thaw() { local p=$(cat $RUN/cloud.pid); kill -CONT $(station_tree $p); say "cloud thawed"; }
 # the station up again: the Node the launcher starts anew says so in its log once it is (main.ts's "station up": its
 # mesh and its parts made, the launcher told it is ready), what was written after FROM (a byte offset of the log)
 station_up_after() {
@@ -706,6 +741,8 @@ case "${1:-all}" in
   android-ime) shift; android_ime "$@" ;;
   android-installer) android_installer ;;
   freeze) freeze ;;
+  cloud-freeze) cloud_freeze ;;
+  cloud-thaw) cloud_thaw ;;
   thaw) thaw ;;
   drive-seed) shift; drive_seed "$@" ;;
   drive-media) shift; drive_media "$@" ;;
@@ -720,6 +757,11 @@ case "${1:-all}" in
   mac) shift; "$ROOT/e2e/run.sh" mac "$@" ;;
   android) shift; "$ROOT/e2e/run.sh" android "$@" ;;
   ios) shift; "$ROOT/e2e/run.sh" ios "$@" ;;
+  locks) locks ;;
+  locks-all)
+    trap down EXIT
+    up
+    locks ;;
   all)
     trap down EXIT
     up
