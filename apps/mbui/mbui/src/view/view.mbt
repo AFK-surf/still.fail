@@ -7327,6 +7327,30 @@ pub fn Tree::wake(self : Tree) -> Double? {
 }
 
 ///|
+/// Which timer the soonest due is (Tree::wake_waited): where it was said, for a timer said once (View::at_moment's
+/// caller); "" for the rest. What tells one that keeps saying itself again from others that each come once.
+pub fn Tree::wake_waited_by(self : Tree) -> String {
+  let mut soonest = -1.0
+  let mut by = ""
+  for d in self.timeline {
+    let at = match d {
+      Steps(s, _) => if s.live.val && s.k < s.count { stepped_at(s, s.count - 1) } else { -1.0 }
+      Once(o, _) if o.later => -1.0
+      Holds(h, _) if h.later => -1.0
+      _ => self.due_at(d)
+    }
+    if at >= 0.0 && (soonest < 0.0 || at < soonest) {
+      soonest = at
+      by = match d {
+        Once(o, _) => o.by
+        _ => ""
+      }
+    }
+  }
+  by
+}
+
+///|
 /// The soonest moment what is yet to be done is done with, if anything is: a leaving or coming back ending, a moment's
 /// `f` not said `later` (View::at_moment), what goes by steps at its last step (View::steps: a stretch, its steps all
 /// done by then; Tree::wake still each step's). What a test's run goes on to and is not idle before (an old view's wake,
@@ -7528,6 +7552,8 @@ struct Once {
   live : Ref[Bool]
   /// not waited for (View::at_moment's `later`)
   later : Bool
+  /// where it was said (View::at_moment's caller): which timer it is (Tree::wake_waited_by)
+  by : String
 }
 
 ///|
@@ -10135,7 +10161,14 @@ pub fn[T : Eq] View::reacts(self : View, read : () -> T, f : (T) -> Unit, at_sta
 /// the clock. The node's: not done once it is let go, or once what it returns is called. What is to be done is waited
 /// for, as what has yet to happen (Tree::wake_waited: a test's run goes on to it, and is not idle before it); `later`,
 /// not: a time what is shown does not wait for (a toast's time on screen), as an old view's wake said `later` is.
-pub fn View::at_moment(self : View, when : Double, f : () -> Unit, later? : Bool = false) -> () -> Unit {
+#callsite(autofill(loc))
+pub fn View::at_moment(
+  self : View,
+  when : Double,
+  f : () -> Unit,
+  later? : Bool = false,
+  loc~ : SourceLoc,
+) -> () -> Unit {
   guard self.live() is Some(_) else { return fn() {  } }
   let live = Ref(true)
   let tree = self.tree
@@ -10154,7 +10187,7 @@ pub fn View::at_moment(self : View, when : Double, f : () -> Unit, later? : Bool
     (unkeep.val)()
     f()
   }
-  tree.timeline.push(Once({ at: when, f: done, live, later }, tree.told))
+  tree.timeline.push(Once({ at: when, f: done, live, later, by: loc.to_string() }, tree.told))
   tree.told = tree.told + 1
   tree.marked()
   stop
