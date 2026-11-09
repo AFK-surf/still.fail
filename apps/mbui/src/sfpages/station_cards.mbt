@@ -41,17 +41,14 @@ fn station_resource_dials(c : @ui.Ctx, meters : Array[Json], gpus : Array[Json])
 }
 
 ///|
-/// An allowance's windows on its profile's page (QuotaBars, not compact): each what is left large over its cells, as
-/// far as is left, its name and when it refills.
-pub fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
-  @sf.dials(
-    c,
-    windows.map(fn(w) {
-      let wv = Some(w)
-      let left = count(wv, "left")
-      { number: left.to_string(), unit: "%", fill: left, level: text(wv, "level"), label: text(wv, "label"), note: text(wv, "refills"), label_short: "", note_short: "" }
-    }),
-  )
+/// An allowance's windows on its profile's page as dials (QuotaBars, not compact; dials_node's): what is left of each,
+/// large over its cells, as far as is left, its name and when it refills.
+fn quota_dials_of(windows : Array[Json]) -> Array[@sf.Dial] {
+  windows.map(fn(w) {
+    let wv = Some(w)
+    let left = count(wv, "left")
+    { number: left.to_string(), unit: "%", fill: left, level: text(wv, "level"), label: text(wv, "label"), note: text(wv, "refills"), label_short: "", note_short: "" }
+  })
 }
 
 ///|

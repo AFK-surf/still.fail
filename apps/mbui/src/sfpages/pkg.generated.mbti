@@ -21,6 +21,8 @@ pub let acc_delete_words : @ui.TextStyle
 
 pub let acc_narrow_foot : @ui.Style
 
+pub let add_profile_start : Map[String, Array[(String, @json.Json)]]
+
 pub fn agent_avatar(@ui.Ctx, @sfbase.Source, MessageHere, String, String, String, String, String) -> Unit
 
 pub fn agent_badge(@ui.Ctx, String, Double, Int64) -> Unit
@@ -353,6 +355,8 @@ pub fn new_chat_page(@ui.Ctx, @sfbase.Source, @sfbase.Workspace, NewChatFrame) -
 
 pub fn new_connect_dialog(@sfbase.Source, @settings.Core, @settings.Here, String, resume? : String) -> Unit
 
+pub fn new_profile_node(@view.View, @settings.Core, () -> @settings.Here, String, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer) -> Unit
+
 pub fn news_of(@sfbase.Source) -> @json.Json?
 
 pub fn no_workspace_node(@view.View, @sfbase.Source, () -> @json.Json?, () -> Unit) -> @view.View
@@ -437,7 +441,9 @@ pub fn policy_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, Strin
 
 pub fn profile_field(String) -> @ui.Field
 
-pub fn profile_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String, String) -> Unit
+pub fn profile_node(@view.View, @settings.Core, () -> @settings.Here, String, String, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer, stint? : () -> Int32) -> Unit
+
+pub fn profiles_first_node(@view.View, @settings.Core, () -> @settings.Here, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer) -> Unit
 
 pub fn publish_close() -> Unit
 
@@ -460,8 +466,6 @@ pub let publish_viz_settle_ms : Double
 pub fn pull_mark(@ui.Ctx, @json.Json?, Double) -> Unit
 
 pub fn pull_title(@json.Json?) -> String
-
-pub fn quota_dials(@ui.Ctx, Array[@json.Json]) -> Unit
 
 pub fn quotes(@ui.Ctx, @sfbase.Source, MessageHere, Array[@sfbase.Quote], Array[@sfbase.Attachment], mine? : Bool, at? : String) -> Unit
 

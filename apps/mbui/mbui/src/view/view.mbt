@@ -5813,6 +5813,13 @@ fn[T : Eq, K : Hash + Eq] each_change(
   for k in ended {
     gone_rows.remove(k)
   }
+  each_place(slot, sn, order)
+}
+
+///|
+/// What View::each and View::each_of do last as their rows change: the rows in `order` (their nodes), what is leaving
+/// kept where it was, after what was before it; the slot's nodes put in that order where it differs.
+fn each_place(slot : View, sn : Node, order : Array[Int]) -> Unit {
   // (what is leaving kept where it was, after what was before it)
   let tree = slot.tree
   for j, at in sn.kids {
@@ -5835,6 +5842,106 @@ fn[T : Eq, K : Hash + Eq] each_change(
     }
     slot.boxes_again()
   }
+}
+
+///|
+/// A node for each of `items`, by the item itself: one object, one row (two alike in what they hold are two rows), made
+/// as it comes, kept while that object stays in the list, moved as the order changes, let go as it goes (over `leave`,
+/// coming back where the same object comes back as it leaves). For a list whose items are the rows themselves (what is
+/// being written, each its own fields), which own nothing to be keyed by: each's by a key, this by which object.
+pub fn[T] View::each_of(self : View, items : () -> Array[T], row : (View, T) -> Unit, leave? : Double = 0.0) -> Unit {
+  guard self.alive() else { return }
+  let slot = self.slot()
+  let rows : Array[(T, View)] = []
+  // (the rows leaving: one whose object comes back as it leaves is the same row, come back)
+  let gone_rows : Array[(T, View)] = []
+  let stop = slot.tree.structured(fn() { TheseItems(items()) }, fn(all) {
+    slot.tree.holding_boxes(fn() { each_of_change(slot, all.0, rows, gone_rows, row, leave) })
+  })
+  slot.owns(stop) |> ignore
+}
+
+///|
+/// The items View::each_of lists, the same as others where they are the same objects in the same order (never by what
+/// they hold: theirs need no Eq).
+priv struct TheseItems[T](Array[T])
+
+///|
+impl[T] Eq for TheseItems[T] with equal(a, b) {
+  guard a.0.length() == b.0.length() else { return false }
+  for i in 0..<a.0.length() {
+    if !physical_equal(a.0[i], b.0[i]) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// What View::each_of does as its items are `all`: rows made for objects come, kept for those staying, let go for those
+/// gone, put in their order; an object found among `rows` by being it (physical_equal).
+fn[T] each_of_change(
+  slot : View,
+  all : Array[T],
+  rows : Array[(T, View)],
+  gone_rows : Array[(T, View)],
+  row : (View, T) -> Unit,
+  leave : Double,
+) -> Unit {
+  guard slot.live() is Some(sn) else { return }
+  slot.tree.work.structure = slot.tree.work.structure + 1
+  let now : Array[(T, View)] = []
+  let order : Array[Int] = []
+  @signals.start_batch()
+  for it in all {
+    match rows.search_by(fn(r) { physical_equal(r.0, it) }) {
+      Some(i) => {
+        now.push(rows[i])
+        order.push(rows[i].1.at)
+        rows.remove(i) |> ignore
+      }
+      None =>
+        match gone_rows.search_by(fn(r) { physical_equal(r.0, it) }) {
+          Some(i) if gone_rows[i].1.alive() && slot.tree.nodes[gone_rows[i].1.at].left_at >= 0.0 => {
+            let (_, v) = gone_rows.remove(i)
+            slot.come_back(v)
+            now.push((it, v))
+            order.push(v.at)
+          }
+          found => {
+            if found is Some(i) {
+              gone_rows.remove(i) |> ignore
+            }
+            let v = slot.box(fn(v) {
+              // (a row by its object: what is made in it known by it, View::row_place)
+              v.tree.nodes[v.at].each_row = true
+              row(v, it)
+            })
+            now.push((it, v))
+            order.push(v.at)
+          }
+        }
+    }
+  }
+  @signals.end_batch()
+  // (what is left of the rows before: gone)
+  for r in rows {
+    slot.leave(r.1, leave)
+    if leave > 0.0 {
+      gone_rows.push(r)
+    }
+  }
+  rows.clear()
+  for r in now {
+    rows.push(r)
+  }
+  // (those whose leaving ended, let go: forgotten)
+  let ended = gone_rows.filter(fn(r) { r.1.alive() })
+  gone_rows.clear()
+  for r in ended {
+    gone_rows.push(r)
+  }
+  each_place(slot, sn, order)
 }
 
 ///|

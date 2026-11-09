@@ -357,6 +357,13 @@ fn tape_made(
         context_node(p)
         @sfpages.changelog_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
       })
+    // (the profiles' place: the profile picked in its list, made once as its page is, none to pick yet the first to add;
+    // made in every case, as it has no old view)
+    Place("profiles") =>
+      made("place/profiles", fn(p, core, here, stint, told, _acts) {
+        context_node(p)
+        profiles_place_node(p, src, core, here, stint, fn() { tape_made_frame }, width, said=told, tips~)
+      })
     // (a place of the rail's whose page is one of those: that page as the settings open it, at the stack's root, made
     // under its own kind)
     Place(name) =>
@@ -398,6 +405,17 @@ fn tape_made(
     Setting(Appearance) if pane_makes.val =>
       made("appearance", fn(p, core, _here, _stint, told, _acts) {
         @sfpages.appearance_node(p, core, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~)
+      })
+    // (by its station and id: another's another page; made in every case, as it has no old view)
+    Setting(Profile(address, id)) =>
+      made("profile/" + address + "/" + id, fn(p, core, here, stint, told, _acts) {
+        context_node(p)
+        @sfpages.profile_node(p, core, here, address, id, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~, stint~)
+      })
+    Setting(NewProfile(address)) =>
+      made("new-profile/" + address, fn(p, core, here, _stint, told, _acts) {
+        context_node(p)
+        @sfpages.new_profile_node(p, core, here, address, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
       })
     Setting(LocalStation) if pane_makes.val =>
       made("local-station", fn(p, core, _here, _stint, told, _acts) {

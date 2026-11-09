@@ -635,6 +635,14 @@ fn narrow_made_as(
       made_at("history/" + r.station + "/" + key, place, fn(p, _core, _here, frame, _stint, _acts, serial) {
         history_node(p, src, r, key, entry, frame, serial)
       })
+    Setting(Profile(address, id)) =>
+      made("profile/" + address + "/" + id, fn(p, core, here, frame, stint, _acts) {
+        @sfpages.profile_node(p, core, here, address, id, on_back=core.pop, frame~, stint~)
+      })
+    Setting(NewProfile(address)) =>
+      made("new-profile/" + address, fn(p, core, here, frame, _stint, _acts) {
+        @sfpages.new_profile_node(p, core, here, address, on_back=core.pop, frame~)
+      })
     _ => None
   }
 }

@@ -148,8 +148,6 @@ pub fn here_of(Core, String, String) -> Here
 
 pub fn hit(@ui.Ctx, Int32) -> Bool
 
-pub fn install_step(@ui.Ctx, Core, String, @json.Json?) -> Unit
-
 pub fn is_doing(Core, Array[String], Array[(String, String)]) -> Bool
 
 pub fn item_opening(String) -> Bool
@@ -220,7 +218,7 @@ pub fn mono(@ui.Ctx, String, style? : @ui.TextStyle, size? : Double, weight? : I
 
 pub let nav_foot : @ref.Ref[Double]
 
-pub fn new_profile_of(String) -> NewProfile
+pub fn new_profile_opened(Core, String, Array[(String, @json.Json)]?) -> NewProfile
 
 pub let notify_switched : @signals.Signal[Bool?]
 
@@ -500,14 +498,10 @@ pub(all) struct MemoryRead {
 
 pub(all) struct NewProfile {
   form : String
-  mut opened : Bool
   mut dropped : Bool
   login : @signals.Signal[String]
   mut asked : Bool
   error : @signals.Signal[String]
-  mut key : String
-  mut endpoint : String
-  mut filled : Bool
 }
 
 pub(all) struct Read {

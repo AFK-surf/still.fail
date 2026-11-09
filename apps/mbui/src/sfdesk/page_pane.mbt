@@ -239,6 +239,11 @@ fn pane_made(
       made("changelog", fn(a, core, _here, _stint, frame, width) {
         @sfpages.changelog_node(a, core, on_back=core.pop, frame~, width~)
       })
+    // (the profiles' place: the profile picked in its list, made once as its page is; none to pick yet, the first to add)
+    Place("profiles") =>
+      made("place/profiles", fn(a, core, here, stint, frame, width) {
+        profiles_place_node(a, src, core, here, stint, frame, width, tips~)
+      })
     // (a place of the rail's whose page is one of those: that page, at the stack's root (no back over it, place_page's),
     // made under its own kind)
     Place(name) =>
@@ -288,6 +293,15 @@ fn pane_made(
       })
     Setting(Appearance) =>
       made("appearance", fn(a, core, _here, _stint, frame, width) { @sfpages.appearance_node(a, core, on_back=core.pop, frame~, width~) })
+    // (by its station and id: another's another page)
+    Setting(Profile(address, id)) =>
+      made("profile/" + address + "/" + id, fn(a, core, here, stint, frame, width) {
+        @sfpages.profile_node(a, core, here, address, id, on_back=core.pop, frame~, width~, tips~, stint~)
+      })
+    Setting(NewProfile(address)) =>
+      made("new-profile/" + address, fn(a, core, here, _stint, frame, width) {
+        @sfpages.new_profile_node(a, core, here, address, on_back=core.pop, frame~, width~, tips~)
+      })
     Setting(LocalStation) =>
       made("local-station", fn(a, core, _here, _stint, frame, width) {
         @sfpages.local_station_node(a, core, on_back=core.pop, frame~, width~)
