@@ -6,5 +6,7 @@ import {
   "station/legacy",
   "station/letters",
   "station/jsjson",
+  "station/locate",
+  "station/nodepath",
   "moonbitlang/core/json",
 }
