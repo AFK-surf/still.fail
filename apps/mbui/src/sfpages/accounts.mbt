@@ -913,12 +913,6 @@ fn profile_trouble_node(
 // ── its allowance and what it spent ─────────────────────────────────────
 
 ///|
-/// A row that says how something stands, going nowhere (said_row's: its title, a note under it), in node `g`.
-fn said_row_node(g : @view.View, title : () -> String, note? : () -> String = fn() { "" }) -> Unit {
-  @sf.link_row_node(g, title, fn() {  }, note~, goes=false)
-}
-
-///|
 /// What is left of its allowance (QuotaSection) in node `b`: each window as a dial, when it was read under them, reading
 /// it again at its title's end; its credits and its resets (resetting one asked first), a row each.
 fn profile_quota_node(b : @view.View, core : Core, address : String, id : String, p : () -> Json?, tips : @sf.TipLayer?) -> Unit {
