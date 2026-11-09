@@ -1,8 +1,8 @@
-// Properties bound together (View::binds_together): one watch for all of them, each set as it would be alone; one
-// bound again alone is that binding's, the others still theirs; all let go with the node.
+// Properties set together (View::sets_together): one binding for all of them, each set as said; one bound again by
+// another is that one's, the others still theirs; the binding let go with the last of them, or with the node.
 
 ///|
-test "binds_together: one watch for them all, each set again as what it read changes, one bound again alone its own" {
+test "sets_together: one binding for them all, set again as what it read changes, one bound again by another its own" {
   let w = @signals.signal(40.0, same=fn(a, b) { a == b })
   let h = @signals.signal(30.0, same=fn(a, b) { a == b })
   let own = @signals.signal(10.0, same=fn(a, b) { a == b })
@@ -12,8 +12,8 @@ test "binds_together: one watch for them all, each set again as what it read cha
     root.show(fn() { on.get() }, fn(v) {
       v.box(fn(b) {
         node.val = Some(b)
-        b.binds_together(fn() {
-          b.width(By(fn() { Some(w.get()) })).height(By(fn() { Some(h.get()) })) |> ignore
+        b.sets_together(fn() { (w.get(), h.get()) }, fn(s) {
+          b.width(Is(Some(s.0))).height(Is(Some(s.1))) |> ignore
         })
         |> ignore
       })
@@ -27,7 +27,7 @@ test "binds_together: one watch for them all, each set again as what it read cha
   w.set(50.0)
   tree.frame(390.0, 844.0) |> ignore
   assert_eq(b.laid_size(), (50.0, 30.0))
-  // (its height bound again alone: followed by that, not by what the two read together)
+  // (its height bound again by another: followed by that, not set again by what sets the two)
   b.height(By(fn() { Some(own.get()) })) |> ignore
   tree.frame(390.0, 844.0) |> ignore
   assert_eq(b.laid_size(), (50.0, 10.0))
@@ -35,7 +35,7 @@ test "binds_together: one watch for them all, each set again as what it read cha
   w.set(70.0)
   tree.frame(390.0, 844.0) |> ignore
   assert_eq(b.laid_size(), (70.0, 10.0))
-  // (its width bound alone too: the two's watch let go, nothing read for them)
+  // (its width set by another too: the two's binding let go, nothing read for them)
   b.width(Is(Some(20.0))) |> ignore
   tree.frame(390.0, 844.0) |> ignore
   assert_eq(b.laid_size(), (20.0, 10.0))
@@ -46,4 +46,23 @@ test "binds_together: one watch for them all, each set again as what it read cha
   on.set(false)
   tree.frame(390.0, 844.0) |> ignore
   assert_false(own.watched())
+}
+
+///|
+test "sets_together: its binding let go with the node" {
+  let w = @signals.signal(40.0, same=fn(a, b) { a == b })
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let tree = @view.Tree::new(fn(root) {
+    root.show(fn() { on.get() }, fn(v) {
+      v.box(fn(b) { b.sets_together(fn() { w.get() }, fn(x) { b.width(Is(Some(x))) |> ignore }) |> ignore })
+      |> ignore
+    })
+  })
+  tree.frame(390.0, 844.0) |> ignore
+  assert_true(w.watched())
+  let before = tree.bindings_held()
+  on.set(false)
+  tree.frame(390.0, 844.0) |> ignore
+  assert_false(w.watched())
+  assert_eq(tree.bindings_held(), before - 1)
 }
