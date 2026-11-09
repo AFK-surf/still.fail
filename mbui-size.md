@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [b5da41117](https://github.com/AFK-surf/still.fail/commit/b5da41117f50a3dc5d05d673b532fbde6279b399) mbui: a picture made as nodes (take_picture), the  | 1.74 | 2.32 | 9.64 | 28.18 | 33.67 | 25.17 | 46.11 | 93.23 | 178.2 |
 | [7945c7051](https://github.com/AFK-surf/still.fail/commit/7945c70518842eaf9b8f3ab8e1c92081580b30d5) mbui: CI's 60 and 120 runs judge every file but th | 1.74 | 2.32 | 9.64 | 28.17 | 33.66 | 25.17 | 46.1 | 93.18 | 174.5 |
 | [40fcca753](https://github.com/AFK-surf/still.fail/commit/40fcca7536d67efc4c4d0f44d8f4874d0e64f83e) mbui: a word typed into a chat's composer builds i | 1.74 | 2.32 | 9.64 | 28.17 | 33.66 | 25.17 | 46.1 | 93.08 | 183.09 |
 | [a66778214](https://github.com/AFK-surf/still.fail/commit/a66778214fe7d25f16b6c7e2dfbe2163792c0394) mbui: a node says what of it moves (View::said_mov | 1.74 | 2.31 | 9.64 | 28.17 | 33.66 | 25.17 | 46.1 | 92.96 | 135.44 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [d2e401bf4](https://github.com/AFK-surf/still.fail/commit/d2e401bf4c1346d44c0064e9b2a08d1077ffea46) mbui: the chat's untested ways tested, and its lis | 1.72 | 2.29 | 9.55 | 28.06 | 33.27 | 25.06 | 45.77 | 93.46 | 173.41 |
 | [c0c46191c](https://github.com/AFK-surf/still.fail/commit/c0c46191cd5346687858f65c836751d438e42609) mbui: a row back the other way soon after it stood | 1.72 | 2.29 | 9.55 | 28.06 | 33.27 | 25.06 | 45.77 | 93.32 | 160.2 |
 | [829615271](https://github.com/AFK-surf/still.fail/commit/82961527108a4d028fc8d8c709d659302878482b) mbui: a chat's row looks its chat up once as its k | 1.72 | 2.29 | 9.54 | 28.06 | 33.26 | 25.06 | 45.77 | 93.8 | 168.9 |
-| [735603acd](https://github.com/AFK-surf/still.fail/commit/735603acd9aa8dd799a94470d14b88bd2ffcb803) mbui: what a frame of headers alone asks of the ke | 1.72 | 2.29 | 9.54 | 28.06 | 33.26 | 25.06 | 45.77 | 93.59 | 170.59 |
