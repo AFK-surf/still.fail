@@ -331,7 +331,17 @@ fn pane_made(
       Some(
         (
           "chat",
-          fn(v, _page, _under, _stint, k) { @sfbase.chat_page_made(v, src, k, pane_page_one, key=tape_island_key) },
+          fn(v, _page, _under, _stint, k) {
+            // (beside it its side panel, the tree's, reading by the page's source, let go with it: side_panel_node)
+            v.row(Is(true)).grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+            let page_src : Ref[Source] = Ref(src)
+            v.box(fn(p) {
+              p.grow(Is(1.0)).shrink(Is(1.0)).basis(Is(Some(0.0))) |> ignore
+              page_src.val = @sfbase.chat_page_made(p, src, k, pane_page_one, key=tape_island_key)
+            })
+            |> ignore
+            side_panel_node(v, page_src.val, k, tips)
+          },
         ),
       )
     _ => None
@@ -356,15 +366,7 @@ fn pane_made_host(p : @view.View, src : Source, k : Int) -> Unit {
   p
   .grow(Is(1.0))
   .min_height(Is(Some(0.0)))
-  .offset(By(fn() {
-    match @sfbase.workspace_in_view(src).0 {
-      Some(w) => {
-        let (_, now) = fold_target(src, w, p.window().0)
-        (fold_along(fold_drawn_at(p), now).aside, 0.0)
-      }
-      None => (0.0, 0.0)
-    }
-  }))
+  .offset(By(fn() { (pane_aside_at(src, p), 0.0) }))
   |> ignore
   context_node(p)
   fold_goes.made[k] = p
@@ -383,4 +385,31 @@ fn pane_made_host(p : @view.View, src : Source, k : Int) -> Unit {
     .moves_window(Is(true))
     |> ignore
   })
+}
+
+///|
+/// How far the page in the pane off the tape is moved aside as node `n` is drawn (the folded block shown a while over
+/// it), where the block's move has it then.
+fn pane_aside_at(src : Source, n : @view.View) -> Double {
+  match @sfbase.workspace_in_view(src).0 {
+    Some(w) => {
+      let (_, now) = fold_target(src, w, n.window().0)
+      fold_along(fold_drawn_at(n), now).aside
+    }
+    None => 0.0
+  }
+}
+
+///|
+/// How wide the pane off the tape is as node `n` is drawn: the window's less the block's column, where the block's move
+/// has it then.
+fn pane_w_at(src : Source, n : @view.View) -> Double {
+  let ww = n.window().0
+  match @sfbase.workspace_in_view(src).0 {
+    Some(w) => {
+      let (_, now) = fold_target(src, w, ww)
+      ww - fold_along(fold_drawn_at(n), now).col
+    }
+    None => ww
+  }
 }

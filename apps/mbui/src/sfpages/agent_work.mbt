@@ -249,3 +249,27 @@ let work_line_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wra
 ///|
 // kept across runs: a value (no field of it changes)
 let work_line_hot : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false, w=Cut)
+
+///|
+/// A list of things to do, each `{text, status}`: done ✓ struck and muted, under way › in 600,
+/// the rest ·. A plan call's in the history, and an agent's checklist in its card and its history's details
+/// (agent_work).
+pub fn plan_list(c : @ui.Ctx, list : Array[Json]) -> Unit {
+  c.box(style=tool_plan, fn() {
+    for it in list {
+      let iv = Some(it)
+      let status = text(iv, "status")
+      let (mark, mark_ink, words) = match status {
+        "completed" => ("✓", @sf.theme().p.green, tool_plan_done)
+        "in_progress" => ("›", @sf.theme().p.accent, tool_plan_now)
+        _ => ("·", @sf.theme().p.subtle, tool_plan_words)
+      }
+      c.box(style=tool_plan_row, fn() {
+        c.box(style=tool_plan_mark, fn() { c.rich([@ui.span(mark, color=mark_ink)], style=tool_plan_words) |> ignore }) |> ignore
+        c.rich([@ui.span(text(iv, "text"), strike=status == "completed")], style=words) |> ignore
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}

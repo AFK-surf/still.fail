@@ -87,7 +87,7 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
     None => ()
   }
   c.box(style=chat_ground, fn() {
-    with_side(c, src, w, r, view, fn() {
+    with_side(c, src, w, r, fn() {
       let pane = c.id("chat/pane")
       c.box(style=side_panel_style, id=pane, fn() {
         chat_talk(c, src, w, r, pane, fn() {

@@ -15,24 +15,30 @@ test "history reminder keeps its label on one line beside a long note and opens 
       @sf.set_language(Some(lang))
       let src = @sffixture.fixture("history")
       let title = @sf.t("web-main.history.reminder", args=[("name", "still.fail")])
-      let t = @ui.Tester::new(fn(c) {
-        @sf.begin(c) |> ignore
-        c.with_theme(@sf.ui_theme(), fn() {
-          item_view(c, src, "ws1/st1", "s-c1", "reminder", Some(item), false)
-        })
-      }, w~, h=240.0, platform~)
+      let t = @ui.Tester::new(
+        fn(c) {
+          @sf.begin(c) |> ignore
+          c.with_theme(@sf.ui_theme(), fn() { @ui.old_views_here(c) })
+        },
+        tree=fn(root) {
+          @ui.set_tree_theme(@sf.ui_theme_now)
+          let tips = @sf.TipLayer::new(fn() { Some(root) })
+          root.box(fn(v) { item_node(v, src, "ws1/st1", "s-c1", "reminder", Some(item), false, tips) }) |> ignore
+        },
+        w~,
+        h=240.0,
+        platform~,
+      )
       t.draw()
       let at = "\{lang}, width \{w}, platform \{platform}"
-      let title_runs = t.text_runs().filter(fn(r) { r.text == title })
-      assert_eq(title_runs.length(), 1, msg="\{at}: \{t.text_runs()}")
-      let (_, _, _, title_h) = t.rect_of(title).unwrap()
+      let (title_x, _, title_w, title_h) = t.rect_of(title).unwrap()
       let (line_x, _, _, line_h) = t.rect_of(first).unwrap()
       assert_true(title_h <= 20.0 && line_h <= 20.0, msg="\{at}: title \{title_h}, preview \{line_h}")
-      assert_true(line_x >= title_runs[0].x1, msg=at)
+      assert_true(line_x >= title_x + title_w, msg=at)
       assert_true(t.rect_of(note) is None, msg=at)
       t.tap_text(title)
       assert_true(t.rect_of(note) is Some(_), msg="\{at}: whole reminder did not open")
-      assert_eq(t.text_runs().filter(fn(r) { r.text == title }).length(), 1, msg=at)
+      assert_true(t.rect_of(title).unwrap().3 <= 20.0, msg=at)
       t.tap_text(title)
       assert_true(t.rect_of(note) is None, msg="\{at}: reminder did not close")
     }
