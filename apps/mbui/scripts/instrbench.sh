@@ -11,7 +11,10 @@
 #   scripts/instrbench.sh compare A B     two runs' OUTs side by side, A before and B after (each from its checkout),
 #                                         both compiled by the same MoonBit (MBUI_TOOLS): another one's code is
 #                                         another's (moon of 2026-10-16 and of 11-04: Home's frame 2.9% apart)
-#   TOP=20: how many functions are said. MBUI_PROFILE_EACH=1: each function's counts in each frame too (F lines)
+#   TOP=20: how many functions are said. MBUI_PROFILE_EACH=1: each function's counts in each frame too (F lines).
+#   MBUI_PROFILE_FOCUS=NAME (a function's name in the program, one `*` in it for any part): each function's "all
+#   inside its calls" is what it ran where NAME called it itself (wasmgas profile's focus=); MBUI_PROFILE_CALLERS=NAME,
+#   what NAME ran where each called it itself (callers=)
 set -eu
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
@@ -45,7 +48,8 @@ cp "$A/$(pkg_build sfbench wasm release)/sfbench.wasm" "$O/program.wasm"
 # outside the app; its input, given to the app as a host gives it, counted
 gas profile "$O/program.wasm" "$O/profiled.wasm" _M0IP24mbui2ui8FakeHostP24mbui7hostapi4Host \
   _M0FP24mbui2ui10on__screen _M0FP24mbui2ui17on__screen__nodes _M0FP24mbui2ui16tree__on__screen \
-  _M0FP24mbui2ui9reachable _M0FP24mbui2ui14not__reachable _M0FP24mbui2ui12field__words _M0FP24mbui2ui12fields__hold
+  _M0FP24mbui2ui9reachable _M0FP24mbui2ui14not__reachable _M0FP24mbui2ui12field__words _M0FP24mbui2ui12fields__hold \
+  ${MBUI_PROFILE_FOCUS:+"focus=$MBUI_PROFILE_FOCUS"} ${MBUI_PROFILE_CALLERS:+"callers=$MBUI_PROFILE_CALLERS"}
 git rev-parse --short HEAD > "$O/commit" 2>/dev/null || true
 moon version 2>/dev/null | head -1 > "$O/moon"
 while read -r scene drive fixture win; do
