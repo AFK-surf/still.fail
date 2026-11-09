@@ -195,7 +195,6 @@ fn peek_holder(
       // as wide as the window at most, as an old overlay's is), what it holds scrolling in it where it is taller with
       // the panel's own room over and under it (@kit.in_room's: as tall as the room then, by what it holds as it is
       // laid out whole))
-      let whole_h : @signals.Signal[Double?] = @signals.signal(None, same=fn(a, b) { a == b })
       let most = fn() {
         let m = w.window().1 - 2.0 * peek_room_in
         if m > 0.0 {
@@ -205,12 +204,6 @@ fn peek_holder(
         }
       }
       w
-      .height(By(fn() {
-        match whole_h.get() {
-          Some(held) if held + 2.0 * @sf.panel_pad > most() + peek_room_slop => Some(most())
-          _ => None
-        }
-      }))
       .max_width(By(fn() {
         let across = w.window().0
         match (tile, @sf.hover_tile_most) {
@@ -219,26 +212,39 @@ fn peek_holder(
         }
       }))
       |> ignore
-      w.box(fn(p) {
-        @sf.small_panel_node(p).shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
-        p.box(fn(reach) {
-          @sf.style_node(reach, fn() { @sf.held_reach() })
-          reach
-          .shrink(Is(1.0))
-          .min_height(Is(Some(0.0)))
-          .scrolls(@view.Scroll::new(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(held) {
-            held.box(fn(whole) {
-              @sf.style_node(whole, fn() { @sf.held_in() })
-              whole.reacts(fn() { whole.laid_size_told() }, fn(z) { whole_h.set(z.map(fn(z) { z.1 })) })
-              whole.box(fn(inner) {
-                @sf.style_node(inner, fn() { hover_inner })
-                inner.alpha(By(fn() { look().words })) |> ignore
-                link_card_node(inner, read, href, words, peek, fn(at) { link_copy_node(at, href) })
+      // (as tall as what it holds comes to whole in the room it is given, measured as it is laid out)
+      w.by_room(fn(g, given) {
+        g.box(fn(p) {
+          @sf.small_panel_node(p).shrink(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+          let whole_at : Ref[@view.View?] = Ref(None)
+          p.box(fn(reach) {
+            @sf.style_node(reach, fn() { @sf.held_reach() })
+            reach
+            .shrink(Is(1.0))
+            .min_height(Is(Some(0.0)))
+            .scrolls(@view.Scroll::new(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), fn(held) {
+              held.box(fn(whole) {
+                @sf.style_node(whole, fn() { @sf.held_in() })
+                whole_at.val = Some(whole)
+                whole.box(fn(inner) {
+                  @sf.style_node(inner, fn() { hover_inner })
+                  inner.alpha(By(fn() { look().words })) |> ignore
+                  link_card_node(inner, read, href, words, peek, fn(at) { link_copy_node(at, href) })
+                })
+                |> ignore
               })
               |> ignore
             })
             |> ignore
           })
+          |> ignore
+          p
+          .height(By(fn() {
+            match whole_at.val {
+              Some(whole) if given.tall(whole) + 2.0 * @sf.panel_pad > most() + peek_room_slop => Some(most())
+              _ => None
+            }
+          }))
           |> ignore
         })
         |> ignore

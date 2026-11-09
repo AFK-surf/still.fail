@@ -165,8 +165,8 @@ fn table_runs_look() -> @view.RunsLook {
 ///|
 /// The table `text` says (the core's reading of it: table_of; `tree`, its reading as told where that says one: a
 /// made-up one's, nothing asked of the core), in `parent`: as Md::table draws it narrow, `bleed` past its room either
-/// side where it scrolls across. Its columns' widths from the room it is laid out in (told as it is), at the system's
-/// size of words.
+/// side where it scrolls across. Its columns' widths from the room it is given as it is laid out (View::by_room), at
+/// the system's size of words.
 #callsite(autofill(loc))
 pub fn table_node(
   parent : @view.View,
@@ -201,7 +201,7 @@ pub fn table_node(
 
 ///|
 /// A table (`table`, as it changes) as nodes in `outer` (table_node's, whatever reads its Markdown: a table alone, or
-/// one of a message's blocks, markdown_node's): its columns' widths from the room `outer` is laid out in, `bleed` past
+/// one of a message's blocks, markdown_node's): its columns' widths from the room `outer` is given (View::by_room), `bleed` past
 /// it either side where it scrolls across; its copy key where `copy`; its links taken by `on_link` (`on_link_hold`).
 fn md_table_body_node(
   outer : @view.View,
@@ -212,127 +212,128 @@ fn md_table_body_node(
   on_link_hold : ((String, (Double, Double, Double, Double)) -> Unit)?,
 ) -> Unit {
     outer.margin(Is((-bleed, 0.0, -bleed, 0.0))) |> ignore
-    let room = fn() {
-      outer.words_redone() |> ignore
-      match outer.laid_size_told() {
-        Some((w, _)) => w - 2.0 * bleed
-        None => 0.0
+    // (its columns by the room it is given, laid out in that same layout)
+    outer.by_room(fn(outer, given) {
+      let room = fn() {
+        outer.words_redone() |> ignore
+        given.width() - 2.0 * bleed
       }
-    }
-    // (each cell's extent and the columns' widths, as Md::table works them out: table_widths)
-    let widths_for = fn(t : MdTable) {
-      let rows = [t.head]
-      rows.append(t.rows)
-      let extents = rows.mapi(fn(r, row) {
-        row.map(fn(cell) {
-          let (lo, hi) = table_words_extent(cell, r == 0, fn(x) { node_sp(outer, x) })
-          (lo, hi, false)
+      // (each cell's extent and the columns' widths, as Md::table works them out: table_widths)
+      let widths_for = fn(t : MdTable) {
+        let rows = [t.head]
+        rows.append(t.rows)
+        let extents = rows.mapi(fn(r, row) {
+          row.map(fn(cell) {
+            let (lo, hi) = table_words_extent(cell, r == 0, fn(x) { node_sp(outer, x) })
+            (lo, hi, false)
+          })
         })
-      })
-      table_widths(extents, room(), false, fn(x) { node_sp(outer, x) })
-    }
-    let widths = fn() {
-      match table() {
-        Some(t) => widths_for(t)
-        None => ([], 0.0)
+        table_widths(extents, room(), false, fn(x) { node_sp(outer, x) })
       }
-    }
-    // (its head's row's height, as laid out: where its copy key's middle is)
-    let head_h : Ref[@view.View?] = Ref(None)
-    // (its own key, whatever its words: two tables of the same each their own menu, copy and picture)
-    table_nodes_made.val += 1
-    let key = "sf-table/\{table_nodes_made.val}"
-    outer.scrolls(@view.Scroll::across(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), bar_in=bleed, fn(held) {
-      held.padding(Is((bleed, 0.0, bleed, 0.0))) |> ignore
-      // (it, then its copy key past it, from their tops: table_beside's; the key hung out in `bleed` where that has its
-      // whole room, as Md::table has it)
-      held.box(fn(beside) {
-        beside
-        .row(Is(true))
-        .lines_up(Is(Some(Start)))
-        // (pointed at as a whole, its key with it: what shows its key; taking no press nor hold for it)
-        .points(Is(copy))
-        .margin(Is((0.0, 0.0, if copy && bleed >= table_key_room { -table_key_room } else { 0.0 }, 0.0)))
-        |> ignore
-      beside.box(fn(frame) {
-        frame.width(By(fn() { Some(widths().1) })) |> ignore
-        let rows = fn() {
-          match table() {
-            Some(t) => Array::makei(t.rows.length() + 1, fn(i) { i })
-            None => []
-          }
+      let widths = fn() {
+        match table() {
+          Some(t) => widths_for(t)
+          None => ([], 0.0)
         }
-        frame.each(rows, fn(r) { r }, fn(line, r) {
-          let r = @signals.untracked(fn() { r.get() })
-          let head = r == 0
-          line.box(fn(cells) {
-            // (its head's row: where its copy key's middle is, as the frame measured it)
-            if head {
-              head_h.val = Some(cells)
+      }
+      // (its head's row's height, as it comes to in its room: where its copy key's middle is)
+      let head_h : Ref[@view.View?] = Ref(None)
+      // (its own key, whatever its words: two tables of the same each their own menu, copy and picture)
+      table_nodes_made.val += 1
+      let key = "sf-table/\{table_nodes_made.val}"
+      outer.scrolls(@view.Scroll::across(), slop=@ui.touch_slop(), bar=@ui.tree_scroll_bar(), bar_in=bleed, fn(held) {
+        held.padding(Is((bleed, 0.0, bleed, 0.0))) |> ignore
+        // (it, then its copy key past it, from their tops: table_beside's; the key hung out in `bleed` where that has its
+        // whole room, as Md::table has it)
+        held.box(fn(beside) {
+          beside
+          .row(Is(true))
+          .lines_up(Is(Some(Start)))
+          // (pointed at as a whole, its key with it: what shows its key; taking no press nor hold for it)
+          .points(Is(copy))
+          .margin(Is((0.0, 0.0, if copy && bleed >= table_key_room { -table_key_room } else { 0.0 }, 0.0)))
+          |> ignore
+        beside.box(fn(frame) {
+          frame.width(By(fn() { Some(widths().1) })) |> ignore
+          let rows = fn() {
+            match table() {
+              Some(t) => Array::makei(t.rows.length() + 1, fn(i) { i })
+              None => []
             }
-            cells.row(Is(true)).lines_up(Is(None)) |> ignore
-            let cols = fn() { Array::makei(widths().0.length(), fn(k) { k }) }
-            cells.each(cols, fn(k) { k }, fn(cell, k) {
-              let k = @signals.untracked(fn() { k.get() })
-              let words = fn() {
-                match table() {
-                  Some(t) => (if head { t.head } else { t.rows.get(r - 1).unwrap_or([]) }).get(k).unwrap_or([])
-                  None => []
-                }
+          }
+          frame.each(rows, fn(r) { r }, fn(line, r) {
+            let r = @signals.untracked(fn() { r.get() })
+            let head = r == 0
+            line.box(fn(cells) {
+              // (its head's row: where its copy key's middle is, as the frame measured it)
+              if head {
+                head_h.val = Some(cells)
               }
-              let pad = fn() { table_cell_pad(k, widths().0.length()) }
-              cell
-              .width(By(fn() { widths().0.get(k) }))
-              .padding(By(fn() {
-                let (pl, pr) = pad()
-                (pl, table_cell_y, pr, table_cell_y)
-              }))
-              .lies_along(Is(Middle))
-              |> ignore
-              // (its words as a message's, in pieces, a press on a link where it leads: runs_links)
-              cell.box(fn(w) {
-                let look = fn() -> @view.WordsLook {
-                  let size = if head { 12.0 } else { 13.0 }
-                  {
-                    size,
-                    weight: if head { 500 } else { 400 },
-                    line: (Float::from_double(size) * (1.65 : Float)).to_double(),
-                    wrap: true,
-                    tracking: @view.letters_own,
-                    balance: false,
+              cells.row(Is(true)).lines_up(Is(None)) |> ignore
+              let cols = fn() { Array::makei(widths().0.length(), fn(k) { k }) }
+              cells.each(cols, fn(k) { k }, fn(cell, k) {
+                let k = @signals.untracked(fn() { k.get() })
+                let words = fn() {
+                  match table() {
+                    Some(t) => (if head { t.head } else { t.rows.get(r - 1).unwrap_or([]) }).get(k).unwrap_or([])
+                    None => []
                   }
                 }
-                let runs = fn() { table_cell_runs(words()) }
-                w
-                .words_runs(By(runs), look=look())
-                .runs_look(By(table_runs_look))
-                .ink(By(fn() { if head { web().muted } else { theme().p.text } }))
+                let pad = fn() { table_cell_pad(k, widths().0.length()) }
+                cell
+                .width(By(fn() { widths().0.get(k) }))
+                .padding(By(fn() {
+                  let (pl, pr) = pad()
+                  (pl, table_cell_y, pr, table_cell_y)
+                }))
+                .lies_along(Is(Middle))
                 |> ignore
-                @ui.runs_links(w, runs, on_link, hold?=on_link_hold) |> ignore
+                // (its words as a message's, in pieces, a press on a link where it leads: runs_links)
+                cell.box(fn(w) {
+                  let look = fn() -> @view.WordsLook {
+                    let size = if head { 12.0 } else { 13.0 }
+                    {
+                      size,
+                      weight: if head { 500 } else { 400 },
+                      line: (Float::from_double(size) * (1.65 : Float)).to_double(),
+                      wrap: true,
+                      tracking: @view.letters_own,
+                      balance: false,
+                    }
+                  }
+                  let runs = fn() { table_cell_runs(words()) }
+                  w
+                  .words_runs(By(runs), look=look())
+                  .runs_look(By(table_runs_look))
+                  .ink(By(fn() { if head { web().muted } else { theme().p.text } }))
+                  |> ignore
+                  @ui.runs_links(w, runs, on_link, hold?=on_link_hold) |> ignore
+                })
+                |> ignore
               })
+            })
+            |> ignore
+            // (a rule under each but the last, as faint as is seen)
+            line.show(fn() { r < rows().length() - 1 }, fn(rule) {
+              rule
+              .width(By(fn() { Some(widths().1) }))
+              .height(Is(Some(1.0)))
+              .ground(By(fn() { theme().p.line }))
               |> ignore
             })
           })
-          |> ignore
-          // (a rule under each but the last, as faint as is seen)
-          line.show(fn() { r < rows().length() - 1 }, fn(rule) {
-            rule
-            .width(By(fn() { Some(widths().1) }))
-            .height(Is(Some(1.0)))
-            .ground(By(fn() { theme().p.line }))
-            |> ignore
-          })
         })
-      })
-      |> ignore
-      if copy {
-        table_key_node(beside, key, fn() { table() }, fn() {
-          match head_h.val {
-            Some(h) => h.laid_size_told().map(fn(z) { z.1 }).unwrap_or(0.0)
-            None => 0.0
-          }
-        }, widths_for)
-      }
+        |> ignore
+        if copy {
+          table_key_node(beside, key, fn() { table() }, fn() {
+            match head_h.val {
+              Some(h) => given.tall(h)
+              None => 0.0
+            }
+          }, widths_for)
+        }
+        })
+        |> ignore
       })
       |> ignore
     })

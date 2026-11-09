@@ -264,7 +264,10 @@
     "old-panel": {},
     "click-read": {},
     "key-read": {},
-    "part-place": {}
+    "part-place": {},
+    "layout-told": {
+      "src/ui/tree_links.mbt": 2
+    }
   },
   "excused": {
     "frame-request": {},
@@ -329,7 +332,8 @@
     "old-panel": {},
     "click-read": {},
     "key-read": {},
-    "part-place": {}
+    "part-place": {},
+    "layout-told": {}
   },
   "tester": {
     "names": [

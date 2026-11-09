@@ -445,6 +445,10 @@ struct Node {
   /// how wide it may be at most as said of it (View::max_width; None: not said, as what it is makes it:
   /// Tree::capped_applied)
   mut max_w_said : Double??
+  /// whether what is said of how narrow and how wide it may be is no more than the width what holds it gives it
+  /// (View::min_width's and View::max_width's `within`)
+  mut min_w_within : Bool
+  mut max_w_within : Bool
   /// what it takes over holds for is scrolling what it holds (View::claims' `scrolls`)
   mut claims_scroll : Bool
   /// where it scrolls what it holds up and down (View::scrolls): the node holding that, whose height less its own is how
@@ -865,6 +869,10 @@ pub struct Tree {
   alone_due : Array[Int]
   /// those laid out so and not yet placed by, each with its compute's number
   alone_laid : Array[(Int, Int)]
+  /// the node whose room is being told as it is laid out (View::by_room: -1, none), and how many of what it holds were
+  /// marked laid out again meanwhile (Tree::room_marked_at)
+  mut rooming : Int
+  mut room_marks : Int
   /// how many device pixels a point what hosts it draws at (0: none said): what is drawn off where it is laid out drawn
   /// off by whole pixels (View::drawn_off), as an old view's look is
   mut pixel_grid : Double
@@ -1065,6 +1073,8 @@ pub fn Tree::new(
     walk_from: -1,
     alone_due: [],
     alone_laid: [],
+    rooming: -1,
+    room_marks: 0,
     pixel_grid: 0.0,
     rows_grid: 0.0,
     rows_lists: [],
@@ -1135,6 +1145,8 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
       n.shrink_said = None
       n.min_w_said = None
       n.max_w_said = None
+      n.min_w_within = false
+      n.max_w_within = false
       if n.look.runs.length() > 0 {
         n.look.runs = []
       }
@@ -1346,6 +1358,8 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
         shrink_said: None,
         min_w_said: None,
         max_w_said: None,
+        min_w_within: false,
+        max_w_within: false,
         shorter: [],
         claims_scroll: false,
         scroll_held: -1,
@@ -1875,6 +1889,11 @@ fn Tree::marked(self : Tree) -> Unit {
 /// holder's layout reused, is no sign the rest are). `within`: what it holds changed, not itself (its boxes put again),
 /// so where it lays out alone it is laid out again from itself.
 fn Tree::layout_marked_at(self : Tree, at : Int, within? : Bool = false) -> Unit {
+  // (as a room is told, in its layout: in it alone, laid out there)
+  if self.rooming >= 0 {
+    self.room_marked_at(at)
+    return
+  }
   self.layout_due = true
   // (what was laid out to be read no more where it stands)
   self.measured_gen = -1
@@ -5876,6 +5895,7 @@ fn View::let_go(self : View) -> Unit {
     _ => ()
   }
   n.flex.measure = None
+  n.flex.room = false
   n.flex.children.clear()
   let parent = n.parent
   if parent >= 0 {
@@ -7591,7 +7611,7 @@ fn Tree::capped_applied(self : Tree, at : Int) -> Unit {
     Some(Some(w)) => Some(w)
     _ => None
   }
-  let max : @flex.Dim = if one_line && in_column && st.width_kind() == @flex.LEN_AUTO {
+  let max : @flex.Dim = if (one_line && in_column && st.width_kind() == @flex.LEN_AUTO) || n.max_w_within {
     match said {
       Some(w) => Within(w)
       None => Pct(100.0)
@@ -7635,7 +7655,7 @@ fn Tree::give_way_applied(self : Tree, at : Int) -> Unit {
     }
   }
   let min : @flex.Dim = match n.min_w_said {
-    Some(Some(w)) => Pt(w)
+    Some(Some(w)) => if n.min_w_within { Within(w) } else { Pt(w) }
     Some(None) => Auto
     // (along a row alone, as an old view's least of one-line words is: in a column, cut to the column's width)
     None =>

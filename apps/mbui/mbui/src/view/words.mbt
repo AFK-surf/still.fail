@@ -273,9 +273,13 @@ pub fn View::shadow(self : View, cast : Live[(Double, Double, Int64)], loc~ : So
 }
 
 ///|
-/// How wide it may grow at most (points; None: as wide as its holder lets it), as it changes: layout's.
+/// How wide it may grow at most (points; None: as wide as its holder lets it), as it changes; `within`: no wider than
+/// the width what holds it gives it where that is less (CSS's `max-width: min(100%, w)`). Layout's.
 #callsite(autofill(loc))
-pub fn View::max_width(self : View, w : Live[Double?], loc~ : SourceLoc) -> View {
+pub fn View::max_width(self : View, w : Live[Double?], within? : Bool = false, loc~ : SourceLoc) -> View {
+  if self.live() is Some(n) {
+    n.max_w_within = within
+  }
   self.bind(loc~, MaxWidth, w, Layout, fn(w) {
     // (said: as said, or, one line of words in a column, within the column's width: Tree::capped_applied)
     self.tree.nodes[self.at].max_w_said = Some(w)
@@ -497,9 +501,13 @@ pub fn View::wraps(self : View, lines : Live[Double?], loc~ : SourceLoc) -> View
 }
 
 ///|
-/// How wide it is at least (points; None: as what it holds makes it), as it changes: layout's.
+/// How wide it is at least (points; None: as what it holds makes it), as it changes; `within`: no wider for it than the
+/// width what holds it gives it where that is less (CSS's `min-width: min(100%, w)`). Layout's.
 #callsite(autofill(loc))
-pub fn View::min_width(self : View, w : Live[Double?], loc~ : SourceLoc) -> View {
+pub fn View::min_width(self : View, w : Live[Double?], within? : Bool = false, loc~ : SourceLoc) -> View {
+  if self.live() is Some(n) {
+    n.min_w_within = within
+  }
   self.bind(loc~, MinWidth, w, Layout, fn(w) {
     self.tree.nodes[self.at].min_w_said = Some(w)
     self.tree.give_way_applied(self.at)

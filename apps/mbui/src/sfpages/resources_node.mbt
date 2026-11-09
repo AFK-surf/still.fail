@@ -128,11 +128,12 @@ fn rs_tile_node(t : @view.View, tv : () -> Json?) -> Unit {
     @sf.words_node(b, fn() { text(tv(), "value") }, fn() { rs_tile_value }) |> ignore
     b.box(fn(s) {
       @sf.style_node(s, fn() { rs_spark })
-      s.box(fn(line) {
+      // (drawn across the room it is given)
+      s.by_room(fn(line, room) {
         line
         .height(Is(Some(rs_spark_h)))
         .shapes(By(fn() {
-          let w = line.laid_size_told().map(fn(z) { z.0 }).unwrap_or(0.0)
+          let w = room.width()
           if w > 0.0 {
             rs_spark_shapes(number_list(tv(), "points"), w, rs_spark_ink(text(tv(), "key")))
           } else {
@@ -159,7 +160,7 @@ priv enum RsRow {
 
 ///|
 /// The table (rs_grouped's, `flat` rs_flat's): its heads, then its rows, the most of the column sorted by first; laid
-/// out by how wide it is (rs_layout_of: as wide as it is laid out, followed).
+/// out by how wide it is given to be (rs_layout_of, by its room: View::by_room).
 fn rs_table_node(
   t : @view.View,
   core : Core,
@@ -213,7 +214,8 @@ fn rs_table_node(
     }
     out
   }
-  t.box(fn(table) {
+  // (its heads and rows by how wide it is given to be, laid out in that same layout)
+  t.by_room(fn(table, room) {
     @sf.style_node(table, fn() { rs_table })
     // (every figure it says, a group's processes' too, open or not: none moves as a group opens)
     let lay = @signals.computed(fn(_) {
@@ -227,12 +229,8 @@ fn rs_table_node(
           figures.push((field(Some(p), "use"), flat))
         }
       }
-      let room = match table.laid_size_told() {
-        Some((w, _)) => w
-        None => table.window().0
-      }
       rs_layout_of(
-        room,
+        room.width(),
         @sf.node_sp(table, th.text_size(Xs).0),
         @sf.node_sp(table, th.text_size(Sm).0),
         figures,

@@ -29,6 +29,10 @@ yet and you can add one, add it.
   `src/view/view.mbt`'s head says the model whole.
 - State that what is made reads is a signal: a mutable value read by a binding that is not one is never seen to
   change (detlint `built-by-hand`).
+- Layout goes one way (the user, 2026-11-05): what is laid out is never told back as a change to make things by. What
+  is made by the width a node is given, or by how tall something in it comes to, is made in `View::by_room`
+  (`src/view/room.mbt`) as that layout comes to it; what it would change outside its room is a fault. The read-backs
+  left (`View::laid_size_told`, `went_told`, `pointer_here_told`) are going and get no new reader.
 - `Ctx` is going: no new code is built on it. What is left is counted by detlint (`old-island`, `old-list`,
   `click-read`, `key-read`, `build-motion`, `layout-read-back`, `ui-current`, `build-clock`) and those counts only
   fall; an API goes from mbui once its count is none.
