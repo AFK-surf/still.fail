@@ -301,14 +301,16 @@ fn shape_band_of(
 ///|
 /// Pieces of shapes put among the frame's as one run, the same each frame (a row drawn again as kept, a node's block):
 /// its instances of kind 12 as packed, its first piece the first of an instance wherever it comes (Ctx::segs_whole),
-/// made as first needed, only those it fills whole.
+/// only those it fills whole: taken as they were put among the frame's the second time they go there (`seen` the
+/// first), one put once (drawn anew, a list kept again as a row comes in) packed for nothing never.
 priv struct SegPack {
   mut packed : FixedArray[Double]?
+  mut seen : Bool
 }
 
 ///|
 fn SegPack::new() -> SegPack {
-  { packed: None }
+  { packed: None, seen: false }
 }
 
 ///|
@@ -332,7 +334,7 @@ fn Ctx::segs_put(self : Ctx, segs : Array[Double], pack : SegPack) -> Unit {
 ///|
 /// The frame's pieces made up to whole instances (six to one, kind 12) with pieces of nothing, which no band reaches:
 /// so what the window's tree puts among them (Ctx::segs_put, an old view hosted, a row being kept) begins an instance
-/// wherever it comes, packed as kept the one way (SegPack::at, its first piece the first of an instance) and so as
+/// wherever it comes, packed as kept the one way (SegPack, its first piece the first of an instance) and so as
 /// drawing it anew puts it.
 fn Ctx::segs_whole(self : Ctx) -> Unit {
   while self.segs.length() % (4 * 6) != 0 {
@@ -389,31 +391,6 @@ fn seg_inst_put(a : FixedArray[Double], b : Int, segs : Array[Double], j : Int, 
 }
 
 ///|
-/// The instances pieces `segs` fill whole, as packed (made the first time).
-fn SegPack::at(self : SegPack, segs : Array[Double]) -> FixedArray[Double] {
-  match self.packed {
-    Some(a) => return a
-    None => ()
-  }
-  let t1 = segs.length() / 4 / 6
-  let a = FixedArray::make(t1 * inst_size, 0.0)
-  for t in 0..<t1 {
-    let b = t * inst_size
-    seg_inst.blit_to(a, len=inst_size, dst_offset=b)
-    for s in 0..<6 {
-      let o = b + seg_slots[s] * 4
-      let p = 4 * (t * 6 + s)
-      a[o] = segs[p]
-      a[o + 1] = segs[p + 1]
-      a[o + 2] = segs[p + 2]
-      a[o + 3] = segs[p + 3]
-    }
-  }
-  self.packed = Some(a)
-  a
-}
-
-///|
 /// The frame's pieces of shapes, after every instance it draws (app.mbt, once all is painted): six to an instance of
 /// kind 12, which the renderers draw nothing of. Those of a run put as before (Ctx::segs_put) that fill instances
 /// whole are copied as packed then.
@@ -441,7 +418,19 @@ fn Ctx::emit_segs(self : Ctx) -> Unit {
         continue
       }
       if j == f0 {
-        pack.at(run).blit_to(a, len=(f1 - f0) * inst_size, dst_offset=(base + j) * inst_size)
+        match pack.packed {
+          Some(p) => p.blit_to(a, len=(f1 - f0) * inst_size, dst_offset=(base + j) * inst_size)
+          None => {
+            for t in f0..<f1 {
+              seg_inst_put(a, (base + t) * inst_size, segs, t, n)
+            }
+            if pack.seen {
+              pack.packed = Some(inst_copy(a, (base + f0) * inst_size, (f1 - f0) * inst_size))
+            } else {
+              pack.seen = true
+            }
+          }
+        }
         j = f1
         r = r + 1
         continue

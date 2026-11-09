@@ -242,16 +242,15 @@ fn chats_pane_node(
     motion.line_node(line, key)
     let name = fn() { key().view(start_offset=2).to_owned() }
     guard @signals.untracked(fn() { item_of(name()) }) is Some(first) else { return }
-    let last : Ref[ChatItem] = Ref(first)
-    let item = fn() {
+    // (looked up once as its key or the days change, not by each of what of the row reads it: the last it was where it
+    // is gone)
+    let now = @signals.computed(fn(was : ChatItem?) {
       match item_of(name()) {
-        Some(i) => {
-          last.val = i
-          i
-        }
-        None => last.val
+        Some(i) => i
+        None => was.unwrap_or(first)
       }
-    }
+    })
+    let item = fn() { now.get() }
     let on = fn() {
       match open_chat() {
         Some(r) => @sfbase.row_is(item(), r)
