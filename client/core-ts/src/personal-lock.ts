@@ -304,7 +304,9 @@ export class PersonalLock {
   /// A chat's grant signed: the lock begun first where there is none, refused on a device outside it.
   signGrant(sub: string, body: Omit<GrantBody, "v" | "sub">, reason: string): Effect.Effect<SignedGrant, CoreError> {
     return Effect.gen({ self: this }, function* () {
-      const read = yield* Effect.result(this.refresh(sub));
+      // (read of the grant's own station alone: every station of the person's asked, one offline held the person's
+      // fingerprint back until it timed out, 2026-11-09)
+      const read = yield* Effect.result(this.refresh(sub, body.station));
       const standing = this.standing(sub);
       // Not heard from the cloud, no lock known here is not no lock: one begun now would take its place.
       if (read._tag === "Failure" && standing === "none") return yield* Effect.fail(read.failure);
