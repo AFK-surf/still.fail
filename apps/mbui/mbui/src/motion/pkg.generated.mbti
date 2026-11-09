@@ -165,7 +165,7 @@ pub fn reveal(@ui.Ctx, String, Double, from_top? : Bool, clip? : Bool, middle? :
 
 pub fn reveal_height(@ui.Ctx, String) -> Double
 
-pub fn reveal_node(@view.View, () -> Bool, (@view.View) -> Unit) -> @view.View
+pub fn reveal_node(@view.View, () -> Bool, (@view.View) -> Unit, lazy? : Bool) -> @view.View
 
 pub fn reverse_easing((Double) -> Double) -> (Double) -> Double
 

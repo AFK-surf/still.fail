@@ -145,6 +145,8 @@ test "the history: a group opens to its steps, a step to its call and what came 
   assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is Some(_))
   // a step closed again
   t.tap_text("跑一遍列表的测试")
+  // (its room closed on its way)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("moon test -p ui -f list_test.mbt") is None)
   t.tap_text("详情")
   assert_true(t.find("Claude Code 2.1.3") is Some(_))

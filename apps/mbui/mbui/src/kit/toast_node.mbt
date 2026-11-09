@@ -183,7 +183,6 @@ pub fn toaster_node(
       room.box(fn(region) {
         region
         .width(By(fn() { Some(width()) }))
-        .gap(Is(8.0))
         .lines_up(Is(Some(Middle)))
         .says(Is(Some(@view.said(Region, label~))))
         |> ignore
@@ -313,46 +312,65 @@ fn toast_lives(
   })
   |> ignore
   let s : ToastNode = { item, node: row, shown, dx, away_w: width, live, focus_in, acted: fn() { leave(acted) } }
-  row.box(fn(b) {
-    b
-    .presses(Is(true))
-    .says(By(fn() {
-      let to = item.get()
-      Some(@view.said(Status, label=to.title, description=to.description))
-    }))
-    |> ignore
-    // (held: the pointer on it (on its action too, nothing over it there) or the focus on its action, one of the toasts holding them all)
-    hold_while(b, held, fn() { b.pointed_in() || focus_in.get() })
-    // swiped: followed while held, put away past a third of it (as wide as it is) or quick, else back
-    let x0 = Ref(0.0)
-    let last = Ref((0.0, 0.0))
-    let quick = Ref(0.0)
-    b.on_drag(fn(d) {
-      match d.kind {
-        Down => {
-          x0.val = d.x
-          last.val = (d.x, d.at)
-          quick.val = 0.0
-        }
-        Moved => {
-          dx.set(if d.x - x0.val > 0.0 { d.x - x0.val } else { 0.0 })
-          let (lx, lt) = last.val
-          if d.at > lt {
-            quick.val = (d.x - lx) / (d.at - lt)
-          }
-          last.val = (d.x, d.at)
-        }
-        Up =>
-          if d.x - x0.val > d.w / 3.0 || quick.val > 0.5 {
-            leave(gone)
-          } else {
-            dx.set(0.0)
-          }
-        Off => dx.set(0.0)
+  // (its room, and the 8 over it, opening as it comes in and closing as it goes, it on its foot: those over it moved up
+  // and down with it, not at once, sizes_steady.mbt)
+  row
+  .opens(
+    By(fn() {
+      let k = shown.shown(row)
+      if k >= 1.0 {
+        None
+      } else {
+        Some(dmax(0.0, k))
       }
+    }),
+    from_foot=true,
+  )
+  |> ignore
+  row.box(fn(gap) {
+    gap.padding(Is((0.0, 8.0, 0.0, 0.0))) |> ignore
+    gap.box(fn(b) {
+      b
+      .presses(Is(true))
+      .says(By(fn() {
+        let to = item.get()
+        Some(@view.said(Status, label=to.title, description=to.description))
+      }))
+      |> ignore
+      // (held: the pointer on it (on its action too, nothing over it there) or the focus on its action, one of the toasts holding them all)
+      hold_while(b, held, fn() { b.pointed_in() || focus_in.get() })
+      // swiped: followed while held, put away past a third of it (as wide as it is) or quick, else back
+      let x0 = Ref(0.0)
+      let last = Ref((0.0, 0.0))
+      let quick = Ref(0.0)
+      b.on_drag(fn(d) {
+        match d.kind {
+          Down => {
+            x0.val = d.x
+            last.val = (d.x, d.at)
+            quick.val = 0.0
+          }
+          Moved => {
+            dx.set(if d.x - x0.val > 0.0 { d.x - x0.val } else { 0.0 })
+            let (lx, lt) = last.val
+            if d.at > lt {
+              quick.val = (d.x - lx) / (d.at - lt)
+            }
+            last.val = (d.x, d.at)
+          }
+          Up =>
+            if d.x - x0.val > d.w / 3.0 || quick.val > 0.5 {
+              leave(gone)
+            } else {
+              dx.set(0.0)
+            }
+          Off => dx.set(0.0)
+        }
+      })
+      |> ignore
+      look(b, s)
     })
     |> ignore
-    look(b, s)
   })
   |> ignore
 }

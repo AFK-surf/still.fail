@@ -626,7 +626,8 @@ fn one_line_node(
     })
   })
   |> ignore
-  v.show(open, fn(b) { steps_box_node(b, h_one_body, whole) })
+  // (opening and closing with its room, sizes_steady.mbt)
+  @motion.reveal_node(v, open, fn(b) { steps_box_node(b, h_one_body, whole) }, lazy=true) |> ignore
 }
 
 ///|
@@ -974,7 +975,7 @@ fn group_node(
       }
     })
     |> ignore
-    gv.show(open, fn(s) {
+    @motion.reveal_node(gv, open, lazy=true, fn(s) {
       steps_box_node(s, h_steps, fn(list) {
         for i, row in rows {
           let rv = Some(row)
@@ -997,6 +998,7 @@ fn group_node(
         }
       })
     })
+    |> ignore
   })
 }
 
@@ -1038,7 +1040,7 @@ fn opened_node(
       summary(line)
     })
     |> ignore
-    s.show(open, fn(o) { whole_node(o, src, station, key, rk, content, body) })
+    @motion.reveal_node(s, open, fn(o) { whole_node(o, src, station, key, rk, content, body) }, lazy=true) |> ignore
   })
 }
 
