@@ -1,4 +1,4 @@
-// tiny-skia's pixmaps and masks (src/pixmap.rs, src/mask.rs): premultiplied RGBA bytes, rows from the top; a mask
+// tiny-skia's pixmaps and masks: premultiplied RGBA bytes, rows from the top; a mask
 // is a byte a pixel.
 
 ///|

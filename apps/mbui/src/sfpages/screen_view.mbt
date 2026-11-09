@@ -1,5 +1,5 @@
-// A station's screen, full screen (ember apps/android app/remote/ScreenViewer.kt, ScreenActivity.kt;
-// docs/remote-screens.md): the frame fitted whole (letterboxed), zoomed in place with two fingers; while driving it, a
+// A station's screen, full screen (still.fail apps/android app/remote/ScreenViewer.kt, ScreenActivity.kt;
+//): the frame fitted whole (letterboxed), zoomed in place with two fingers; while driving it, a
 // tap clicks, a long press right-clicks, a drag drags, two fingers moving together scroll, and the keyboard types into
 // it. Upright, the bar is above the frame (close, the title, how the view goes and who is on it, 只看/控制, pasting,
 // 控制中心: screen_panel.mbt); sideways, a rail beside it; 全屏, the screen alone, sideways, its tools folded into one
@@ -9,7 +9,7 @@
 // the frame as it was last shown; over (ended, gone…), said in the screen's place, gone dark. While it is in sight the
 // device stays awake; out of sight the view is let go of, and opened again from the frame it showed.
 //
-// That is touch's. With keyboard and mouse (web/src/screen/ScreenViewer.tsx's, not a phone's) there is nothing to make
+// That is touch's. With keyboard and mouse (not a phone's) there is nothing to make
 // up for a phone's hand: the viewer's bar across the window's top (the way back, the screen's name and the core's line,
 // how the view goes, 控制中心, 只看/控制), the picture under it; the mouse is the screen's pointer where it is (its moves,
 // its buttons, its wheel: screen_mouse), the keyboard types into it once it is pressed, ⌘V pastes this device's
@@ -22,32 +22,35 @@ priv struct ScreenUi {
   zoom : @kit.Zoom
   pad : PadPointer
   held : HeldKeys
-  mut full : Bool
+  full : @signals.Signal[Bool]
   /// the window made to fill the screen by its 全屏 (keyboard and mouse's), put back as it closes
   mut fulled : Bool
   /// shown as a tab beside its chat, whose tab closes it: no close of its own (the same thing twice)
   mut in_tab : Bool
+  /// the only tab of a panel of its own: the panel's bar, its style, in place of a row of the panel's over it
+  mut own_bar : @ui.Style?
   mut tools_open : Bool
   /// how far the folded tools were dragged from their corner (so they cover another part of the screen)
   tools_moved : Afloat
   /// how far the mouse's buttons were dragged from theirs
   mouse_moved : Afloat
-  /// 鼠标左右键 as last chosen in 控制中心, before the prefs say so (none: as they say)
-  mut mouse_set : Bool?
-  /// the display's scale last asked for (0 none): asked once, not again each frame its pick still shows it
-  mut scale_asked : Int
-  /// the display's resolution last asked for (0 wide none): asked once, as the scale is
-  mut size_asked : (Int, Int)
+  /// 鼠标左右键 as last chosen in 控制中心, before the prefs say so (none: as they say; told as it changes: 控制中心's
+  /// switch reads it)
+  mouse_set : @signals.Signal[Bool?]
   mut saying : Bool
   /// how many times the rail's line was asked for: its 3 s start again from each
   mut sayings : Int
-  /// the stage's size when last built, and the frame's size it was fitted for
-  mut box_w : Double
-  mut box_h : Double
+  /// the stage's size when last built (told as it changes: 控制中心's 分辨率 reads it), and the frame's size it was fitted
+  /// for
+  box_w : @signals.Signal[Double]
+  box_h : @signals.Signal[Double]
   /// where the stage was drawn last (its top left in the window)
   mut stage_x : Double
   mut stage_y : Double
   mut fit_for : (Int, Int)?
+  /// how much a device's case is round its picture each way, as shares of the picture (device_case); none: 0
+  mut case_x : Double
+  mut case_y : Double
   mut over_seen : Bool
   gesture : Gesture
   /// a mouse on the stage (screen_mouse)
@@ -59,8 +62,6 @@ priv struct ScreenUi {
   mut reading : @ui.ClipboardRead?
   /// the modifiers held from the keys row as each key went down (by its code), for it to go up with them too
   down_with : Map[String, Int]
-  /// the press (by the frame it went down in) a mouse button last buzzed for, so it buzzes once as it goes down
-  mut buzzed : Int
   /// the copies made on the screen put on the device's clipboard
   mut copies : Int
   /// the device kept awake, the window sideways, a phone let turn as held: as last told to the host
@@ -74,13 +75,17 @@ priv struct ScreenUi {
   /// the frames and bytes come by then; the frames and bits a second over the last second, once one was counted
   mut first_tick : Int
   mut rate_tick : Int
+  /// how many of those seconds it has been seen (told as each is counted: 控制中心's row reads it)
+  seen : @signals.Signal[Int]
   mut rate_frames : Int
   mut rate_bytes : Int
   mut fps : Double?
   mut bps : Double?
   /// how many times 复制诊断 was pressed (已复制 said a moment after each)
   mut diag_copies : Int
-  /// 控制中心 ("center") or the view's figures ("net") to open from the bar as it is next built (a fixture's: as if
+  /// a simulator's log as far as it was read (screen_debug.mbt)
+  logs : DebugLogs
+  /// 控制中心 ("center"), the view's figures ("net") or a simulator's 日志 ("logs") or 重启 App ("apps") to open from the bar as it is next built (a fixture's: as if
   /// pressed); "" none
   mut asked_panel : String
   mut native_panel : (String, Int)?
@@ -98,22 +103,23 @@ fn screen_ui(key : String) -> ScreenUi {
         zoom: screen_zoom(),
         pad: { x: 0.5, y: 0.5, moves: 0 },
         held: { mods: 0 },
-        full: false,
+        full: @signals.signal(false),
         fulled: false,
         in_tab: false,
+        own_bar: None,
         tools_open: false,
         tools_moved: afloat_new(),
         mouse_moved: afloat_new(),
-        mouse_set: None,
-        scale_asked: 0,
-        size_asked: (0, 0),
+        mouse_set: @signals.signal(None, same=fn(a, b) { a == b }),
         saying: false,
         sayings: 0,
-        box_w: 0.0,
-        box_h: 0.0,
+        box_w: @signals.signal(0.0, same=fn(a, b) { a == b }),
+        box_h: @signals.signal(0.0, same=fn(a, b) { a == b }),
         stage_x: 0.0,
         stage_y: 0.0,
         fit_for: None,
+        case_x: 0.0,
+        case_y: 0.0,
         over_seen: false,
         gesture: gesture_new(),
         mouse: mouse_drive_new(),
@@ -121,7 +127,6 @@ fn screen_ui(key : String) -> ScreenUi {
         drop_to: None,
         reading: None,
         down_with: {},
-        buzzed: -1,
         copies: 0,
         awake: false,
         sideways_told: false,
@@ -129,11 +134,13 @@ fn screen_ui(key : String) -> ScreenUi {
         keys_turned: [],
         first_tick: -1,
         rate_tick: -1,
+        seen: @signals.signal(0, same=fn(a, b) { a == b }),
         rate_frames: 0,
         rate_bytes: 0,
         fps: None,
         bps: None,
         diag_copies: 0,
+        logs: debug_logs_new(),
         asked_panel: "",
         native_panel: None,
       }
@@ -151,7 +158,7 @@ fn phase_over(p : String) -> Bool {
 }
 
 ///|
-/// How long the rail's line stays said once asked for (ScreenViewer.kt Rail: 3000).
+/// How long the rail's line stays said once asked for.
 let rail_say_ms : Double = 3000.0
 
 ///|
@@ -165,6 +172,7 @@ pub fn screen_page(
   frame : PageFrame,
   on_close? : () -> Unit,
   in_tab? : Bool = false,
+  own_bar? : @ui.Style? = None,
 ) -> Unit {
   let station = at.station
   let screen = at.screen
@@ -175,6 +183,7 @@ pub fn screen_page(
   s.said.get() |> ignore
   let u = screen_ui(key)
   u.in_tab = in_tab
+  u.own_bar = own_bar
   // its 关闭: closed through the shell, the page it is; the window back as it was where its 全屏 filled the screen
   let close = fn() {
     if u.fulled && @ui.full_screen() {
@@ -192,12 +201,12 @@ pub fn screen_page(
     s.own_stream()
     // on a phone or a tablet, a page of the station's browser is laid out for the stage it is shown on, as this
     // device's own browser would lay it out (the station takes no notice of it for other screens)
-    if @sf.soft_keyboard() && u.box_w > 0.0 && u.box_h > 0.0 && s.fit is None {
-      s.fit = Some((u.box_w, u.box_h, c.scale))
+    if @sf.soft_keyboard() && u.box_w.get() > 0.0 && u.box_h.get() > 0.0 && s.fit is None {
+      s.fit = Some((u.box_w.get(), u.box_h.get(), c.scale))
     }
     // 自动 asks for a picture as large as the stage is in this device's pixels
-    if u.box_w > 0.0 && u.box_h > 0.0 {
-      s.stage_is((u.box_w * c.scale).round().to_int(), (u.box_h * c.scale).round().to_int())
+    if u.box_w.get() > 0.0 && u.box_h.get() > 0.0 {
+      s.stage_is((u.box_w.get() * c.scale).round().to_int(), (u.box_h.get() * c.scale).round().to_int())
     }
     if shown {
       // 画质 chosen otherwise: opened again with it; open again where it was let go, not where it is over (重新打开
@@ -216,7 +225,7 @@ pub fn screen_page(
       // (into the device's performance record while it is kept: what warms a phone is mostly a screen looked at)
       @hostapi.perf_line("app: screen " + (if shown { "shown " } else { "hidden " }) + key)
     }
-    // while it is looked at, a phone turns as it is held (ScreenViewer.kt: the activity's orientation unspecified),
+    // while it is looked at, a phone turns as it is held,
     // the rotation lock honoured: with it on, the system offers its turn button
     if u.turnable != shown {
       u.turnable = shown
@@ -229,19 +238,19 @@ pub fn screen_page(
   }
   // over (ended, gone…): out of 全屏, the bar's × and what happened in sight
   let over = !s.open_now()
-  if over && u.full {
-    u.full = false
+  if over && u.full.get() {
+    u.full.set(false)
   }
-  if u.full != u.sideways_told {
-    let on = u.full
+  if u.full.get() != u.sideways_told {
+    let on = u.full.get()
     c.after_build("screen-sideways/" + key, fn() {
       u.sideways_told = on
       @hostapi.set_sideways(on)
     })
   }
   // back in 全屏 leaves it first
-  if u.full {
-    c.on_back(fn() { u.full = false })
+  if u.full.get() {
+    c.on_back(fn() { u.full.set(false) })
   }
   screen_count(c, s, u)
   screen_copies(c, s, u)
@@ -263,25 +272,25 @@ pub fn screen_page(
   // (while it is the page shown, or the window it has of its own: its part kept or built again)
   let lone = on_close is Some(_) && !in_tab
   let native = !in_tab &&
-    @sf.native_over_up(if u.full { "" } else { title }, alive=fn() { lone || @sfbase.app.nav.top() == Screen(at) }) &&
-    !u.full
+    @sf.native_over_up(if u.full.get() { "" } else { title }, alive=fn() { lone || @sfbase.app.nav.top() == Screen(at) }) &&
+    !u.full.get()
   if native {
     screen_native(c, s, u, typing, catcher, close)
   }
   // inside the bars unless full (ScreenViewer.kt: windowInsetsPadding(safeDrawing); full, edge to edge)
   // (full, edge to edge: no room kept for what its frame keeps it from)
   let room = fn(h : Double) {
-    if h > 0.0 && (!u.full || native) {
+    if h > 0.0 && (!u.full.get() || native) {
       c.box(style=@ui.style(w=Full, h=Fixed(h)), fn() {  }) |> ignore
     }
   }
-  c.box(style=if u.full { screen_whole } else { screen_page_box }, fn() {
+  c.box(style=if u.full.get() { screen_whole } else { screen_page_box }, fn() {
   room(frame.top)
   let within = if native { screen_within.then(@ui.style(pr=@sf.room_of(@sf.native_clear()))) } else { screen_within }
-  c.box(style=within, fn() { c.box(style=if u.full { screen_page_full } else { screen_page_box }, fn() {
+  c.box(style=within, fn() { c.box(style=if u.full.get() { screen_page_full } else { screen_page_box }, fn() {
     if native {
       c.box(style=screen_fill, fn() {
-        screen_stage(c, s, u, key)
+        screen_content(c, s, u, key)
         if s.can_take_over() {
           c.layer(fn() { c.box(style=screen_top_center, fn() { take_over(c, s) }) |> ignore }) |> ignore
         }
@@ -289,7 +298,7 @@ pub fn screen_page(
           c.layer(fn() { c.box(style=screen_foot_center, fn() { keys_capsule(c, s, u) }) |> ignore }) |> ignore
         }
       }) |> ignore
-    } else if u.full {
+    } else if u.full.get() {
       c.box(style=screen_fill, fn() {
         screen_stage(c, s, u, key)
         if s.can_take_over() {
@@ -312,12 +321,12 @@ pub fn screen_page(
       // keyboard and mouse: the viewer's bar across the window's top, always there, the picture under it (what is at
       // the top of the screen, its windows' title bars, never under the bar); the keyboard and the mouse its own
       screen_viewer_bar(c, s, u, title, close)
-      screen_stage(c, s, u, key)
+      screen_content(c, s, u, key)
     } else if sideways {
       c.box(style=screen_row, fn() {
         screen_rail(c, s, u, typing, catcher, close)
         c.box(style=screen_fill, fn() {
-          screen_stage(c, s, u, key)
+          screen_content(c, s, u, key)
           // sideways the frame takes the height: who drives it floats over its top, while it does
           if s.can_take_over() {
             c.layer(fn() { c.box(style=screen_top_center, fn() { take_over(c, s) }) |> ignore })
@@ -351,9 +360,10 @@ pub fn screen_page(
       if s.can_take_over() {
         c.box(style=take_over_place, fn() { take_over(c, s) }) |> ignore
       }
-      screen_stage(c, s, u, key)
-      // upright, under the frame: trackpad or direct, the keys a phone's keyboard has not, the keyboard
-      if s.driving() {
+      screen_content(c, s, u, key)
+      // upright, under the frame: trackpad or direct, the keys a phone's keyboard has not, the keyboard (a simulator's
+      // only while typing: it has a keyboard of its own, and buttons of its own under the frame)
+      if s.driving() && (!s.simulator() || typing) {
         foot(c, s, u, typing, catcher)
       }
     }
@@ -400,15 +410,18 @@ fn screen_native(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catch
       if on { "eye" } else { "cursor" }, fn() { control_chosen(c, s, !s.controlling()) })
   }
   if s.driving() {
-    @sf.native_over_act("screen-pad", @sf.t("android-misc.screen.trackpad"), "trackpad", fn() { pad_chosen(c, s, !s.pad(s.src)) })
+    if !s.simulator() {
+      @sf.native_over_act("screen-pad", @sf.t("android-misc.screen.trackpad"), "trackpad", fn() { pad_chosen(c, s, !s.pad(s.src)) })
+    }
     @sf.native_over_act("screen-keyboard", @sf.t("android-misc.screen.keyboard"), "keyboard", fn() { keyboard_toggled(c, catcher, typing) })
   }
   if s.pastes() {
     @sf.native_over_act("screen-paste", @sf.t("android-misc.screen.paste"), "paste", fn() { paste_asked(c, s, u) })
   }
-  if s.audio_ready {
-    @sf.native_over_act("screen-audio", @sf.t(if s.audio_muted { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }),
-      if s.audio_muted { "volume-x" } else { "volume" }, fn() {
+  if s.audio_ready.get() {
+    let muted = s.audio_muted.get()
+    @sf.native_over_act("screen-audio", @sf.t(if muted { "web-pages.drive.player.unmute" } else { "web-pages.drive.player.mute" }),
+      if muted { "volume-x" } else { "volume" }, fn() {
         s.toggle_audio()
       })
   }
@@ -416,13 +429,13 @@ fn screen_native(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, typing : Bool, catch
     @sf.native_over_act("screen-center", @sf.t("web-pages.screen.panel"), "sliders", fn() {
       let from = screen_native_anchor(c)
       screen_native_panel(u, "center", fn() {
-        @sf.panel(@sf.t("web-pages.screen.panel"), fn(c, done) { center_panel(c, s, u, from, close, done) }, from~, side=screen_panel_side(), focus=false)
+        @sf.panel_nodes(@sf.t("web-pages.screen.panel"), fn(v, done) { center_node(c, v, s, u, from, close, done) }, from~, side=screen_panel_side(), focus=false)
       })
     }, active=screen_native_panel_on(u, "center"))
     @sf.native_over_act("screen-stats", @sf.t("web-pages.screen.stats"), "chart", fn() {
       net_panel_open(s, u, screen_native_anchor(c))
     }, active=screen_native_panel_on(u, "stats"))
-    @sf.native_over_act("screen-full", @sf.t("android-misc.screen.full"), "landscape", fn() { u.full = true })
+    @sf.native_over_act("screen-full", @sf.t("android-misc.screen.full"), "landscape", fn() { u.full.set(true) })
     let line = text(s.state, "line")
     if line != "" {
       @sf.native_over_act("screen-people", line, "users", fn() {
@@ -446,7 +459,7 @@ pub fn screen_left(src : Source, station : String, screen : String) -> Unit {
   }
   match screen_uis.get(key) {
     Some(u) => {
-      if u.fulled && @ui.full_screen() { @ui.current().set_full_screen(false) }
+      if u.fulled && @ui.full_screen() { @hostapi.set_full_screen(false) }
       if u.sideways_told {
         @hostapi.set_sideways(false)
       }
@@ -521,7 +534,7 @@ fn screen_copies(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 
 ///|
 /// The device's clipboard, pasted into the screen where its focus is: its picture as PNG where the screen carries
-/// pictures, else its text (ScreenViewer.kt paste; ScreenClips.kt pasteKind). Asked of the system as the button is
+/// pictures, else its text. Asked of the system as the button is
 /// tapped (paste_asked), taken here once it answers.
 fn screen_pasted(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   guard u.reading is Some(r) else { return }
@@ -610,6 +623,20 @@ fn send_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 }
 
 ///|
+/// 安装 App tapped: the system's picker, what it gives going up to be installed on the device.
+fn install_asked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
+  let folder = text(s.state, "install")
+  guard folder != "" else { return }
+  match @ui.pick(Files) {
+    Some(p) => {
+      u.picking = Some(p)
+      u.drop_to = Some({ folder, reveal: false, install: true })
+    }
+    None => say(c, @sf.t("android-chat.composer.noFiles"))
+  }
+}
+
+///|
 /// The files picked, once the system has answered: each going onto the machine, one after another.
 fn screen_picked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   guard u.picking is Some(p) else { return }
@@ -642,7 +669,7 @@ fn control_chosen(c : @ui.Ctx, s : ScreenSess, on : Bool) -> Unit {
 
 ///|
 /// What the keyboard sends (the key catcher's: committed words, named keys and shortcuts as taps), as the screen takes
-/// it (Input.kt KeyCatcher), with the modifiers held on the keys row: words typed with one held go as keys with it, a
+/// it, with the modifiers held on the keys row: words typed with one held go as keys with it, a
 /// key goes down with them and up with what it went down with.
 fn screen_keys_in(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, keys : Array[@ui.KeyIn]) -> Unit {
   if keys.is_empty() {
@@ -652,7 +679,13 @@ fn screen_keys_in(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, keys : Array[@ui.Ke
   let send = fn(j : Json) { sent.push(j) }
   for k in keys {
     match k {
-      Text(words) => type_words(send, u.held, words)
+      Text(words) => {
+        type_words(send, u.held, words)
+        // (no paste on Xcode 27's yet, the keys; said when it is what was just typed)
+        if s.simulator() && text(s.state, "title").contains("iOS 27") && words.iter().any(fn(ch) { ch.to_int() > 0x7e }) {
+          u.logs.relaunch_said = @sf.t("web-pages.screen.debug.keysNote")
+        }
+      }
       // ⌘V (Ctrl+V): this device's clipboard onto the screen's and pasted there, where it carries one, as a paste is
       // on the web's page (its keys are not sent)
       Key(down~, code="KeyV", mods~, ..) if (mods & (mod_meta | mod_ctrl)) != 0 &&
@@ -672,8 +705,7 @@ fn screen_keys_in(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, keys : Array[@ui.Ke
       }
     }
   }
-  let n = c.frame_number()
-  c.tell("screen-keys/" + s.view + "/\{n}", fn() {
+  c.tell("screen-keys/" + s.view, fn() {
     for j in sent {
       s.input(s.src, j)
     }
@@ -689,15 +721,16 @@ fn keyboard_toggled(c : @ui.Ctx, catcher : String, typing : Bool) -> Unit {
 // ── the bar, the rail, the folded tools ──────────────────────────────────
 
 ///|
-/// A round button with an icon (40, its icon 20), its name for those who cannot see it; `on`: pressed (the keyboard
-/// up, 控制). True when tapped.
-fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : Bool = false) -> Bool {
+/// A round button with an icon (40, its icon 20), its name for those who cannot see it and as its tip; `on`: pressed
+/// (the keyboard up, 控制); tapped, `on_press` (as it is let go: Ctx::on_press).
+fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : Bool = false, on_press~ : () -> Unit) -> Unit {
   let id = c.id(key)
   let i = c.box(style=round_button_box, selected=on, id~, fn() {
     @sf.icon(c, icon, size=round_icon, color=c.color(Fg)) |> ignore
   })
   c.semantics(i, Button, id~, label~, pressed=on, actions=[Activate])
-  c.clicked(id)
+  @sf.tip(c, key, id, label)
+  c.on_press(id, on_press)
 }
 
 ///|
@@ -705,9 +738,11 @@ fn round_button(c : @ui.Ctx, key : String, icon : String, label : String, on? : 
 /// figures) and the core's line (只看 or 控制, who else is on it), 只看/控制, pasting, 控制中心 (sending files and 全屏
 /// there).
 fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, close : () -> Unit) -> Unit {
-  c.box(style=screen_bar, fn() {
-    if !u.in_tab && round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
-      close()
+  c.box(style=match u.own_bar { Some(own) => own; None => if u.in_tab { screen_bar_in_tabs } else { screen_bar } }, fn() {
+    if !u.in_tab {
+      round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close"), on_press=fn() {
+        close()
+      })
     }
     let live = s.phase() == "live"
     let words = c.id("screen-net")
@@ -716,7 +751,10 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
         Some(t) if t != "" => t
         _ => if title != "" { title } else { @sf.t("android-misc.screen.title") }
       }
-      c.text(said, style=screen_title_words) |> ignore
+      // (among a panel's tabs, the tab in front names it)
+      if !u.in_tab || u.own_bar is Some(_) {
+        c.text(said, style=screen_title_words) |> ignore
+      }
       // while another drives it, who does is said below (with 接管), not twice
       let line = text(s.state, "line")
       let said_line = line != "" && s.open_now() && !s.can_take_over()
@@ -736,21 +774,30 @@ fn screen_top_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, clo
     })
     if live {
       c.semantics(w, Button, id=words, label=@sf.t("web-pages.screen.stats"), actions=[Activate])
-      if c.clicked(words) || u.asked_panel == "net" {
+      let go = fn() {
         u.asked_panel = ""
         net_panel_open(s, u, Of(words))
       }
+      c.on_press(words, go)
+      // (asked from elsewhere: done as it is seen)
+      if u.asked_panel == "net" {
+        go()
+      }
     }
     if s.choosable() {
-      let now = control_seg(c, "screen-mode/" + s.view, s.controlling())
-      if now != s.controlling() {
-        control_chosen(c, s, now)
-      }
+      control_seg(c, "screen-mode/" + s.view, s.controlling(), fn(now) { control_chosen(c, s, now) })
     }
     paste_button(c, s, u)
     // (全屏 in 控制中心: the title keeps its room)
     if s.open_now() {
       center_button(c, s, u, close)
+    }
+    // (a panel's bar of its own: the panel's close at its end, beside what it closes, where the system has bars too:
+    // among the chat's actions in them it read as another thing's; the user, 2026-11-06)
+    if u.own_bar is Some(_) {
+      round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close"), on_press=fn() {
+        close()
+      })
     }
   })
   |> ignore
@@ -768,7 +815,7 @@ fn screen_viewer_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, 
   }
   let line = if s.open_now() && !s.can_take_over() { text(s.state, "line") } else { "" }
   let ink = @sf.page_viewer_ink()
-  let back = @sf.viewer_bar(c, "screen-bar", @sf.t("common.back"), said, line, false, ink, fn() {
+  @sf.viewer_bar(c, "screen-bar", @sf.t("common.back"), said, line, false, ink, fn() {
     if s.can_take_over() {
       take_over(c, s, in_bar=true)
       return
@@ -780,49 +827,45 @@ fn screen_viewer_bar(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, title : String, 
       center_chip(c, s, u, close)
     }
     if s.choosable() {
-      let now = control_seg(c, "screen-mode/" + s.view, s.controlling())
-      if now != s.controlling() {
-        control_chosen(c, s, now)
-      }
+      control_seg(c, "screen-mode/" + s.view, s.controlling(), fn(now) { control_chosen(c, s, now) })
     }
-  }, capsule_end=true)
-  if back {
-    close()
-  }
+  }, capsule_end=true, on_back=close)
 }
 
 ///|
-/// 只看 / 控制: a segmented choice among the bar's buttons, as tapped.
-fn control_seg(c : @ui.Ctx, key : String, controlling : Bool) -> Bool {
+/// 只看 / 控制: a segmented choice among the bar's buttons; `chosen` (whether it is 控制) as another is tapped.
+fn control_seg(c : @ui.Ctx, key : String, controlling : Bool, chosen : (Bool) -> Unit) -> Unit {
   let labels = [@sf.t("android-misc.screen.look"), @sf.t("android-misc.screen.drive")]
-  @sf.segmented(c, key, labels, if controlling { 1 } else { 0 }, bar=true) == 1
+  @sf.segmented(c, key, labels, if controlling { 1 } else { 0 }, bar=true, on_pick=fn(i) { chosen(i == 1) }) |> ignore
 }
 
 ///|
 /// Pasting the device's clipboard (where the station carries text or pictures), while driving it.
 fn paste_button(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
-  if s.pastes() &&
-    round_button(c, "screen-paste", "paste", @sf.t("android-misc.screen.paste"), on=s.pasting) {
-    paste_asked(c, s, u)
+  if s.pastes() {
+    round_button(c, "screen-paste", "paste", @sf.t("android-misc.screen.paste"), on=s.pasting, on_press=fn() { paste_asked(c, s, u) })
   }
 }
 
 ///|
 /// 全屏 (on) or not.
 fn full_button(c : @ui.Ctx, u : ScreenUi) -> Unit {
-  let label = @sf.t(if u.full { "android-misc.screen.unfull" } else { "android-misc.screen.full" })
-  if round_button(c, "screen-full", "landscape", label, on=u.full) {
-    u.full = !u.full
-  }
+  let label = @sf.t(if u.full.get() { "android-misc.screen.unfull" } else { "android-misc.screen.full" })
+  round_button(c, "screen-full", "landscape", label, on=u.full.get(), on_press=fn() {
+    u.full.set(!u.full.get())
+  })
 }
 
 ///|
 /// Trackpad (on) or direct, as a round button that is on while it is a trackpad.
 fn pad_button(c : @ui.Ctx, s : ScreenSess) -> Unit {
-  let on = s.pad(s.src)
-  if round_button(c, "screen-pad", "trackpad", @sf.t("android-misc.screen.trackpad"), on~) {
-    pad_chosen(c, s, !on)
+  if s.simulator() {
+    return
   }
+  let on = s.pad(s.src)
+  round_button(c, "screen-pad", "trackpad", @sf.t("android-misc.screen.trackpad"), on~, on_press=fn() {
+    pad_chosen(c, s, !on)
+  })
 }
 
 ///|
@@ -834,16 +877,16 @@ fn mode_button(c : @ui.Ctx, s : ScreenSess) -> Unit {
   } else {
     ("eye", @sf.t("android-misc.screen.look"))
   }
-  if round_button(c, "screen-mode-btn", icon, label, on~) {
+  round_button(c, "screen-mode-btn", icon, label, on~, on_press=fn() {
     control_chosen(c, s, !on)
-  }
+  })
 }
 
 ///|
 fn keyboard_button(c : @ui.Ctx, catcher : String, typing : Bool) -> Unit {
-  if round_button(c, "screen-keyboard", "keyboard", @sf.t("android-misc.screen.keyboard"), on=typing) {
+  round_button(c, "screen-keyboard", "keyboard", @sf.t("android-misc.screen.keyboard"), on=typing, on_press=fn() {
     keyboard_toggled(c, catcher, typing)
-  }
+  })
 }
 
 ///|
@@ -870,9 +913,9 @@ fn full_tools(
     }
     let id = c.id("screen-tools")
     afloat_dragged(c, u.tools_moved, id)
-    if round_button(c, "screen-tools", icon, label, on=u.tools_open) {
+    round_button(c, "screen-tools", icon, label, on=u.tools_open, on_press=fn() {
       u.tools_open = !u.tools_open
-    }
+    })
     if u.tools_open {
       if s.choosable() {
         mode_button(c, s)
@@ -909,17 +952,19 @@ fn screen_rail(
   let line = text(s.state, "line")
   c.box(fn() {
     c.box(style=rail_box, fn() {
-      if !u.in_tab && round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close")) {
-        close()
+      if !u.in_tab {
+        round_button(c, "screen-close", "close", @sf.t("android-misc.screen.close"), on_press=fn() {
+          close()
+        })
       }
       c.spacer()
       if s.state is Some(_) && line != "" && s.open_now() {
         let others = items(s.state, "others").length()
         c.box(style=rail_people, fn() {
-          if round_button(c, "screen-people", "users", line, on=u.saying) {
+          round_button(c, "screen-people", "users", line, on=u.saying, on_press=fn() {
             u.saying = !u.saying
             u.sayings += 1
-          }
+          })
           if others > 0 {
             c.layer(fn() {
               c.box(style=rail_badge_place, fn() {
@@ -1028,11 +1073,11 @@ fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
   let slot = fn(k : RowKey) { c.id("screen-key-slot/" + s.view + "/" + k.name) }
   let more = c.id("screen-keys-more/" + s.view)
   let on_face = fn(k : RowKey) { u.keys_turned.is_empty() || u.keys_turned.contains(k.name) }
-  if c.clicked(more) {
+  c.on_press(more, fn() {
     // (turned to those this face left out as last laid out, read back, the frame built again where that changes: from
     // the first face its others, and from them, where they too have not the room, the rest; none left out, back)
     u.keys_turned = keys.filter(fn(k) { on_face(k) && leaves(k) > 0 && c.left_out(slot(k)) }).map(fn(k) { k.name })
-  }
+  })
   let turned = !u.keys_turned.is_empty()
   let key = fn(k : RowKey) {
     let on = held(k)
@@ -1046,19 +1091,18 @@ fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
     })
     c.semantics(i, Button, id~, label=k.name, pressed=on, actions=[Activate])
     if k.button != 0 {
-      button_felt(c, u, id, k.button, c.clicked(id))
+      button_felt(c, id, k.button)
     }
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       if k.mod_ != 0 {
         u.held.toggle(k.mod_)
       } else if k.button != 0 {
-        button_clicked(c, s, u, k.button)
+        button_clicked(s, u, k.button)
       } else {
         let mods = u.held.take()
-        let n = c.frame_number()
-        c.tell("screen-row-key/" + s.view + "/\{n}", fn() { stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, mods) })
+        stroke(fn(j) { s.input(s.src, j) }, k.key, k.code, mods)
       }
-    }
+    })
   }
   let more_key = fn() {
     let i = c.box(style=row_key_box, selected=turned, id=more, fn() {
@@ -1085,27 +1129,22 @@ fn keys_row(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
 ///|
 /// Mouse button `button` clicked where the pointer is (the trackpad's, else the screen's own), the modifiers the keys
 /// row holds round it.
-fn button_clicked(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, button : Int) -> Unit {
+fn button_clicked(s : ScreenSess, u : ScreenUi, button : Int) -> Unit {
   let mods = u.held.take()
   let at = pointer_now(s, u).unwrap_or(u.pad.at())
-  let n = c.frame_number()
-  c.tell("screen-click/" + s.view + "/\{button}/\{n}", fn() { click(fn(j) { s.input(s.src, j) }, at, button, mods) })
+  click(fn(j) { s.input(s.src, j) }, at, button, mods)
 }
 
 ///|
-/// A mouse button `id` felt as it goes down (the click itself goes as it is let go; a tap down and up between two
-/// frames, felt as it is clicked): once a press, the right button as a context click, the left as a key.
-fn button_felt(c : @ui.Ctx, u : ScreenUi, id : Int, button : Int, clicked : Bool) -> Unit {
-  let p = c.press()
-  if !clicked && !(p.down && c.press_within(id)) {
-    return
-  }
-  let at = p.frame
-  if u.buzzed != at {
-    u.buzzed = at
-    let kind : @ui.Haptic = if button == btn_secondary { ContextClick } else { KeyboardTap }
-    c.after_build("screen-felt/\{at}", fn() { @ui.haptic(kind) })
-  }
+/// A mouse button `id` felt as a press goes down on it (the click itself goes as it is let go): the right button as a
+/// context click, the left as a key.
+fn button_felt(c : @ui.Ctx, id : Int, button : Int) -> Unit {
+  let kind : @ui.Haptic = if button == btn_secondary { ContextClick } else { KeyboardTap }
+  c.follow_press(id, fn(step) {
+    if step is Down(_, _, _) {
+      @ui.haptic(kind)
+    }
+  })
 }
 
 ///|
@@ -1113,9 +1152,10 @@ fn button_felt(c : @ui.Ctx, u : ScreenUi, id : Int, button : Int, clicked : Bool
 /// their floating pair in 全屏 and sideways.
 fn mouse_shown(s : ScreenSess, u : ScreenUi) -> Bool {
   s.driving() &&
-  (match u.mouse_set {
+  !s.simulator() &&
+  (match u.mouse_set.get() {
     Some(on) => on
-    None => text((s.src.topic)("prefs", {}).value, "screenMouse") != "off"
+    None => text(s.src.topic("prefs", {}).get().value, "screenMouse") != "off"
   })
 }
 
@@ -1139,11 +1179,8 @@ fn mouse_float(c : @ui.Ctx, s : ScreenSess, u : ScreenUi) -> Unit {
           @sf.icon(c, b.1, size=round_icon, color=c.color(Fg)) |> ignore
         })
         c.semantics(i, Button, id~, label~, actions=[Activate])
-        let clicked = c.clicked(id)
-        button_felt(c, u, id, b.3, clicked)
-        if clicked {
-          button_clicked(c, s, u, b.3)
-        }
+        button_felt(c, id, b.3)
+        c.on_press(id, fn() { button_clicked(s, u, b.3) })
       }
     })
     |> ignore
@@ -1213,6 +1250,10 @@ fn afloat_kept(c : @ui.Ctx, f : Afloat, capsule : Int, laid_dx : Double, laid_dy
       let (ww, wh) = now
       let x0 = x - laid_dx
       let y0 = y - laid_dy
+      // (its panel still past the window's edge, on the tape: nothing to keep it inside of yet)
+      if x0 < 0.0 || x0 + w > ww {
+        return
+      }
       f.dx = dmax(-x0, dmin(ww - w - x0, f.dx))
       f.dy = dmax(-y0, dmin(wh - h - y0, f.dy))
     }
@@ -1261,9 +1302,9 @@ fn take_over(c : @ui.Ctx, s : ScreenSess, in_bar? : Bool = false) -> Unit {
     // what it does: their input waits while this person drives
     let names = if who.is_empty() { @sf.t("web-pages.screen.someone") } else { who.join(@sf.t("web-pages.screen.and")) }
     @sf.tip(c, "screen-take-over-tip", id, @sf.t("web-pages.screen.takeOverTip", args=[("names", names)]))
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       control_chosen(c, s, true)
-    }
+    })
   })
   |> ignore
 }

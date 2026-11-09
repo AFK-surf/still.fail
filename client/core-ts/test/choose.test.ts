@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { frequentCombos, recordCombo, resolve } from "../src/choose.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { machineMeta, models, quotaLine } from "../src/views/models.ts";
+import { choices, machineMeta, models, quotaLine } from "../src/views/models.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -74,7 +74,10 @@ test("frequent_combos_keep_speed_separate_and_restore_it_including_defaults", ()
     assert.equal(combos.find((c) => c.fast === true).speedText, "Fast");
     assert.equal(combos.find((c) => c.fast === null).speedText, undefined);
   }
-  const other = { ...base, runtime: "claude" };
+  // Claude Code's speed is kept apart as Codex's is (an Anthropic key's Fast); one without Fast has none to keep.
+  const claude = { ...base, runtime: "claude" };
+  assert.equal(recordCombo(recordCombo([], { ...claude, fast: true }, 1), { ...claude, fast: false }, 2).length, 2);
+  const other = { ...base, runtime: "dsh" };
   assert.equal(recordCombo(recordCombo([], { ...other, fast: true }, 1), { ...other, fast: false }, 2).length, 1);
 });
 
@@ -84,7 +87,7 @@ test("speed_choices_preserve_false_and_follow_the_runtime", () => {
     const r = resolve(options, { runtime: "codex", model: "gpt-6-astra", fast });
     assert.equal(r.fast, fast);
   }
-  assert.equal(resolve(options, { runtime: "claude", fast: true }).fast, null);
+  assert.equal(resolve(options, { runtime: "claude", fast: true }).fast, true);
   assert.deepEqual([resolve(options, { runtime: "dsh", fast: true }).runtime, resolve(options, { runtime: "dsh", fast: true }).fast], ["dsh", null]);
 });
 
@@ -106,6 +109,54 @@ test("the_runtimes_a_chat_starts_on_are_offered_claude_codex_then_deepseek_harne
   assert.deepEqual([kept.where, kept.folder, kept.day, kept.when, kept.own], ["~/Documents/GitHub/still.fail", "still.fail", "今天", "3 小时前", false]);
   const old = machineMeta({ runtime: "codex", cwd: "/Users/me/.stillfail/sessions/ember/c-1/workspace", updatedAt: 9 * day + 13 * 3_600_000 + 5 * 60_000 }, 10 * day + 3_600_000);
   assert.deepEqual([old.folder, old.day, old.when, old.own], ["workspace", "昨天", "13:05", true]);
+});
+
+test("a models maker and series are the catalogs the station says, else known by its name", () => {
+  const overview = {
+    profiles: [{ id: "p", runtimes: ["claude"], models: ["muse-spark-1.3", "step-5-preview", "anthropic/claude-opus-5-5", "kimi-k3", "gemini-4-pro", "my-model"] }],
+    modelMakers: {
+      "muse-spark-1.3": { maker: "meta", makerName: "Meta", family: "Muse" },
+      "step-5-preview": { maker: "stepfun", makerName: "StepFun" },
+      "anthropic/claude-opus-5-5": { maker: "anthropic", makerName: "Anthropic", family: "Claude Opus" },
+      // A lab models.dev names otherwise than the marks do: the marks'.
+      "kimi-k3": { maker: "moonshotai", makerName: "Moonshot AI", family: "Kimi K3" },
+      "gemini-4-pro": { maker: "google", makerName: "Google" },
+    },
+  };
+  const said = Object.fromEntries(models(overview, 0).map((m: J) => [m.model, [m.maker?.id ?? null, m.maker?.name ?? null, m.family]]));
+  assert.deepEqual(said, {
+    "muse-spark-1.3": ["meta", "Meta", "Muse"],
+    "step-5-preview": ["stepfun", "阶跃星辰", null],
+    // Its series as still.fail names it.
+    "anthropic/claude-opus-5-5": ["anthropic", "Anthropic", "Opus"],
+    "kimi-k3": ["kimi", "Kimi", "Kimi"],
+    "gemini-4-pro": ["gemini", "Google", "Gemini"],
+    // None in the catalog: by its name, none known.
+    "my-model": [null, null, null],
+  });
+  // A station older than the catalog's word: by the names alone.
+  const old = models({ profiles: overview.profiles }, 0);
+  assert.equal(old.find((m: J) => m.model === "muse-spark-1.3").maker, null);
+  assert.equal(old.find((m: J) => m.model === "kimi-k3").maker.id, "kimi");
+});
+
+test("model_options_read_each_accounts_model_list_once_even_when_it_offers_many_models", () => {
+  let reads = 0;
+  const names = Array.from({ length: 48 }, (_, i) => `gpt-6-sol-${i}`);
+  const first = { id: "one", runtimes: ["codex", "codex"], get models() { reads++; return [...names, `openai/${names[0]}`, names[0]]; } };
+  const second = { id: "two", runtimes: ["codex", "claude"], get models() { reads++; return [`openai/${names[0]}`, names[1]]; } };
+  const overview = { profiles: [first, second] };
+  const all = models(overview, 1_000);
+  assert.equal(reads, 2, "a station's model lists are not rescanned for each model and runtime");
+  assert.equal(all.length, names.length);
+  const one = all.find((m: J) => m.model === names[0]);
+  assert.deepEqual(one.ids, [names[0], `openai/${names[0]}`]);
+  assert.deepEqual(one.accounts.codex.map((p: J) => p.id), ["one", "two"]);
+  assert.deepEqual(one.accounts.claude.map((p: J) => p.id), ["two"]);
+  reads = 0;
+  const own = choices(overview, { runtime: "codex", profile: "one" }, 1_000);
+  assert.equal(reads, 2, "an agent's choices do not rescan every account's model list for each option");
+  assert.deepEqual(own.find((m: J) => m.model === names[0]).accounts.codex.map((p: J) => [p.id, p.current]), [["one", true], ["two", false]]);
 });
 
 test("grok_build_is_offered_after_deepseek_harness_with_its_own_efforts_and_no_fast_mode", () => {
@@ -166,6 +217,16 @@ test("devin_is_offered_after_cursor_each_model_at_its_own_thinking_levels", () =
   assert.equal(machineMeta({ runtime: "devin", cwd: "/tmp/x" }, 0).meta, "Devin · /tmp/x");
 });
 
+test("an_account_that_has_reported_no_levels_does_not_hold_back_those_that_have", () => {
+  const levels = ["low", "medium", "high", "xhigh", "max", "ultra"];
+  const said = { id: "said", runtimes: ["codex"], models: ["gpt-6.1-terra"], check: { modelEfforts: { codex: { "gpt-6.1-terra": levels } } } };
+  const unknown = { id: "unknown", runtimes: ["codex"], models: ["gpt-6.1-terra"], check: {} };
+  assert.deepEqual(models({ profiles: [said, unknown] }, 0)[0].efforts.codex, levels);
+  assert.deepEqual(models({ profiles: [unknown] }, 0)[0].efforts.codex, ["minimal", "low", "medium", "high", "xhigh"], "none has said: the runtime's usual ones");
+  const pinned = resolve(models({ profiles: [said, unknown] }, 0), { runtime: "codex", model: "gpt-6.1-terra", profile: "unknown", effort: "ultra" });
+  assert.equal(pinned.effort, null, "kept to one account, its own levels");
+});
+
 test("model_efforts_follow_the_account_and_survive_resolving_saved_choices", () => {
   const overview = {
     profiles: [
@@ -193,7 +254,7 @@ test("a_machines_session_is_a_line_its_home_as_tilde", () => {
   assert.equal(meta("/Users/bob/src/x", 3_000), "Claude Code · ~/src/x · 刚刚");
   assert.equal(meta("/home/bob", 12_000), "Claude Code · ~ · 12 秒前");
   assert.equal(meta("/srv/x", 4 * 60_000), "Claude Code · /srv/x · 4 分钟前");
-  assert.equal(meta("/Users/bob/x", 30 * 3_600_000), "Claude Code · ~/x · 昨天");
+  assert.equal(meta("/Users/bob/x", 30 * 3_600_000), "Claude Code · ~/x · 1 天前");
   assert.equal(meta("/Users/bob/x", 3 * 86_400_000), "Claude Code · ~/x · 3 天前");
 });
 
@@ -203,4 +264,28 @@ test("a_quota_in_a_line_names_only_the_window_running_low", () => {
   assert.deepEqual(q([{ label: "每周", usedPercent: 95 }, { label: "5 小时", usedPercent: 75 }]), { text: "每周剩余 5%", level: "red" });
   assert.deepEqual(quotaLine({ state: "unavailable", windows: [], detail: "读不到" }), { text: "读不到" });
   assert.equal(quotaLine(null), null);
+});
+
+test("a_model_can_be_kept_to_the_steps_under_its_window_on_a_runtime_that_takes_one", () => {
+  const overview = {
+    profiles: [
+      { id: "cc", runtimes: ["claude"], models: ["claude-opus-5-5", "claude-haiku-4-5"] },
+      { id: "ds", runtimes: ["dsh"], models: ["deepseek-v4"] },
+    ],
+    contextCaps: { runtimes: ["claude", "codex"], least: 100_000, windows: { "claude-opus-5-5": 1_000_000, "claude-haiku-4-5": 200_000, "deepseek-v4": 1_000_000 } },
+  };
+  const list = models(overview, 0);
+  const opus = list.find((m: J) => m.model === "claude-opus-5-5");
+  assert.deepEqual([opus.contexts.claude, opus.contextWindow], [[500_000, 300_000, 200_000], 1_000_000]);
+  // (a window no step is under; a runtime that cannot)
+  assert.deepEqual(list.find((m: J) => m.model === "claude-haiku-4-5").contexts.claude, []);
+  assert.deepEqual(list.find((m: J) => m.model === "deepseek-v4").contexts.dsh, []);
+  // a step kept, another not offered given way to its whole window; as a client says it, in digits too
+  assert.equal(resolve(list, { model: "claude-opus-5-5", runtime: "claude", context: 300_000 }).context, 300_000);
+  assert.equal(resolve(list, { model: "claude-opus-5-5", runtime: "claude", context: "500000" }).context, 500_000);
+  assert.equal(resolve(list, { model: "claude-opus-5-5", runtime: "claude", context: 400_000 }).context, null);
+  assert.equal(resolve(list, { model: "claude-haiku-4-5", runtime: "claude", context: 300_000 }).context, null);
+  // a station from before them offers none
+  const before = models({ profiles: overview.profiles }, 0).find((m: J) => m.model === "claude-opus-5-5");
+  assert.deepEqual([before.contexts.claude, before.contextWindow], [[], undefined]);
 });

@@ -1,21 +1,29 @@
 // What the app does each frame and between frames whichever frame draws it (the phone's, the desktop's): its light
-// or dark and language as the prefs say, where its attention is (told the core), the system's say (a link it was
+// or dark, accent and language as the prefs say, where its attention is (told the core), the system's say (a link it was
 // opened with, back on screen, the menu bar's items, the network), the number on its icon.
 
 ///|
-/// The words' language as the core says it (its prefs' `lang`: as chosen, else the device's), I18n.kt's follow: told
+/// The words' language as the core says it (its prefs' `lang`: as chosen, else the device's), I18n.kt's follow, and the
+/// product they name (its `product`): told
 /// each frame (appearance) and as the app's tree is made, before any page of nodes says a word.
 pub fn language_said(src : Source) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
-  @sf.set_language(if prefs is Some(_) { Some(text(prefs, "lang")) } else { None })
+  language_from_prefs(src.topic("prefs", {}).get().value)
 }
 
 ///|
-/// Light or dark, as this device is set (the prefs' `appearance`, Appearance.kt), or as the system is (@hostapi.system_dark)
+/// The language and product named by a prefs value already read.
+pub fn language_from_prefs(prefs : Json?) -> Unit {
+  @sf.set_language(if prefs is Some(_) { Some(text(prefs, "lang")) } else { None })
+  // and the product the words name, its cloud's (still.fail, monoid)
+  @sf.set_product(text(prefs, "product"))
+}
+
+///|
+/// Light or dark, as this device is set (the prefs' `appearance`), or as the system is (@hostapi.system_dark)
 /// when it follows it; the host told when it changes (its bars follow, or are as dark as the frame's page says:
 /// `page_dark`).
-pub fn appearance(src : Source, page_dark : Bool?) -> Unit {
-  let prefs = (src.topic)("prefs", {}).value
+pub fn appearance(c : @ui.Ctx, src : Source, page_dark : Bool?) -> Unit {
+  let prefs = src.topic("prefs", {}).get().value
   // the words' language too, the core's (its `lang`: as chosen, else the device's), I18n.kt's follow
   language_said(src)
   // motion as this device is set (the prefs' `motion`: reduce, full), else as the system's
@@ -28,6 +36,8 @@ pub fn appearance(src : Source, page_dark : Bool?) -> Unit {
   @ui.set_haptics(text(prefs, "haptics") != "off")
   let dark = @settings.dark(prefs, @ui.system_dark())
   @sf.set_dark(Some(dark))
+  // the accent as this device is set (the prefs' `accent`, as chosen here a moment ago), else still.fail's orange
+  @sf.set_accent(@settings.pref_from(prefs, "accent"))
   // (the host told once the prefs are read: not the system's first, then the one chosen)
   if prefs is Some(_) && told_dark.val != Some(dark) {
     told_dark.val = Some(dark)
@@ -42,7 +52,7 @@ pub fn appearance(src : Source, page_dark : Bool?) -> Unit {
   }
   // (told once the frame's builds are over, as the last saw the page)
   if prefs is Some(_) && told_bars.val != Some(bars) {
-    @ui.current().after_build("bars", fn() {
+    c.after_build("bars", fn() {
       if told_bars.val != Some(bars) {
         told_bars.val = Some(bars)
         @hostapi.set_dark(bars)
@@ -133,16 +143,20 @@ pub fn attend(src : Source, workspace : String, new_chat : Bool) -> Unit {
 }
 
 ///|
-/// What was chosen in the system's own bars (@hostapi.nav_bar) since the wide frame last took it, oldest first.
-pub let nav_tapped : Array[String] = []
+/// What was chosen in the system's own bars (@hostapi.nav_bar) since the wide frame last took it, oldest first:
+/// what takes them (sfdesk's rail_native.mbt, in the island under the frame) built again as one comes, not kept as it
+/// was till something else of its changes (an iPhone Duo's ⓘ, 2026-11-01: its popover only once a finger moved).
+// kept across runs: emptied as a run begins (sfbase's reset)
+pub let nav_tapped : @signals.Signal[Array[String]] = @signals.signal([], same=fn(a, b) { a == b })
 
 ///|
-/// How many items of the system's bars have been chosen (nav_tapped), followed: what takes them (sfdesk's
-/// rail_native.mbt, in the island under the frame) and what is put where one was chosen (its mark, over the frame) are
-/// built again as one comes, not kept as they were till something else of theirs changes (an iPhone Duo's ⓘ,
-/// 2026-11-01: its popover only once a finger moved).
-// kept across runs: it only counts on
-pub let nav_tapped_said : @signals.Signal[Int] = @signals.signal(0)
+/// Where the system said the item last chosen in its bars is (@hostapi.nav_tapped_at: x, y, width, height; no width:
+/// none said), followed by what is put where one was chosen (its mark, over the frame): moved there as it is said.
+// kept across runs: put back by what sets nav_tapped_at back (sfdesk's rail_native.mbt)
+pub let nav_tapped_place : @signals.Signal[(Double, Double, Double, Double)] = @signals.signal(
+  (0.0, 0.0, 0.0, 0.0),
+  same=fn(a, b) { a == b },
+)
 
 ///|
 /// What the system said between frames (@hostapi.system_channel; its handler set as the package starts, before the first
@@ -160,8 +174,11 @@ fn system_said(json : String) -> Unit {
       Over(over) => share_over.set(over)
       // a tab or an item of the system's own bars chosen (sfdesk's rail_native.mbt takes it as it draws)
       NavTapped(id) => {
-        nav_tapped.push(id)
-        nav_tapped_said.set(@signals.untracked(fn() { nav_tapped_said.get() }) + 1)
+        let at = @hostapi.nav_tapped_at
+        nav_tapped_place.set((at[0], at[1], at[2], at[3]))
+        let taps = nav_tapped.untracked().copy()
+        taps.push(id)
+        nav_tapped.set(taps)
       }
       // (how far the bars reach in over the view: mbui keeps it, @ui.system_bars, bars.mbt)
       _ => ()
@@ -182,9 +199,9 @@ fn system_said(json : String) -> Unit {
       }
       // 检查更新 from the menu bar (menu_bar.mbt)
       Menu("update.check") => update_from_menu(src)
-      // one of the pages' actions from the menu bar: as its keys pressed (keymap.mbt action_pressed)
+      // one of the pages' actions from the menu bar: done as its keys are (keymap.mbt ask_action)
       Menu(action) => @settings.ask_action(action)
-      // a package handed to the system's installer could not be installed (FilePreview.kt install's toast)
+      // a package handed to the system's installer could not be installed
       InstallAllow(..) => toast_later(@sf.t("android-chat.file.allowInstall", args=[("app", "still.fail")]))
       InstallFailed(error~, ..) => toast_later(@sf.t("android-chat.file.installFailed", args=[("error", error)]))
       Network =>
@@ -211,11 +228,11 @@ fn init {
 
 ///|
 /// A link the system opened the app with, as the core reads it (`link.parse`): one of still.fail's desktop app's own
-/// (stillfail://, ember://, stillfail-beta://: …//o/<workspace>/<station>/<chat>, as the web's /o/ page hands an item
+/// (stillfail://, stillfail-beta://: …//o/<workspace>/<station>/<chat>, as the web's /o/ page hands an item
 /// to that app, which this one takes as it is built in its place: scripts/mac-app.sh) as the same page's on the
 /// cloud; any other as it is.
 pub fn app_link(url : String) -> String {
-  for scheme in ["stillfail://", "ember://", "stillfail-beta://"] {
+  for scheme in ["stillfail://", "stillfail-beta://"] {
     if url.has_prefix(scheme) {
       return "\{cloud_origin()}/\{url.view(start_offset=scheme.length())}"
     }
@@ -232,8 +249,8 @@ pub let share_over : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b
 /// answered; None while none is known yet: the prefs, which say the one last open, not read yet among them), every
 /// workspace, whether every account has answered, whether invitations wait.
 pub fn workspace_in_view(src : Source) -> (Workspace?, Array[Workspace], Bool, Bool) {
-  let ws = (src.topic)("workspaces", {})
-  let prefs = (src.topic)("prefs", {})
+  let ws = src.topic("workspaces", {}).get().snapshot()
+  let prefs = src.topic("prefs", {}).get().snapshot()
   let (all, answered, invited) = workspaces_of(ws.value)
   // (the first before the prefs are read, the one last open once they are: a workspace shown, then another)
   if app.picked.get() == "" && prefs.value is None && prefs.error is None {
@@ -266,7 +283,7 @@ let badge_told : @signals.Signal[Int] = @signals.signal(-1, same=fn(a, b) { a ==
 /// Each frame signed in, `w` in view: the number on the app's icon (the desktop app's followBadge), the core's badge,
 /// else what is wrong and what waits in every workspace; told as it changes, once the frame's builds are over.
 pub fn badge_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) }).value
+  let marks = src.topic("workspaceMarks", { "workspace": Json::string(w.id) }).get().value
   let badge = match field(marks, "badge") {
     Some(Number(_, ..)) => count(marks, "badge")
     _ =>

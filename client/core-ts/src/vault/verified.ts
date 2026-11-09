@@ -8,6 +8,14 @@ import { p256 } from "@noble/curves/nist.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { hex, utf8 } from "../util.ts";
 
+/// The host's own check, where it has one (a native app's shell: libcrux, formally verified), set as the core starts;
+/// none, or one answering null: noble's here.
+export type Check = (alg: "Ed25519" | "ES256" | "ES256-der", key: Uint8Array, signature: Uint8Array, message: Uint8Array) => boolean | null;
+let hostCheck: Check | null = null;
+export function checkWith(c: Check | null): void {
+  hostCheck = c;
+}
+
 /// Where what was found is kept past this run (the device's storage), set as the core starts.
 export type Kept = { get(key: string): unknown; put(key: string, ok: boolean): void };
 let kept: Kept | null = null;
@@ -47,10 +55,11 @@ function once(alg: string, pub: Uint8Array, sig: Uint8Array, msg: Uint8Array, ch
 }
 
 export function ed25519Ok(sig: Uint8Array, msg: Uint8Array, pub: Uint8Array): boolean {
-  return once("Ed25519", pub, sig, msg, () => ed25519.verify(sig, msg, pub));
+  return once("Ed25519", pub, sig, msg, () => hostCheck?.("Ed25519", pub, sig, msg) ?? ed25519.verify(sig, msg, pub));
 }
 
 /// A P-256 signature (`der`: DER-encoded, as WebAuthn gives it; else raw r‖s) over `msg`, hashed as it is checked.
 export function p256Ok(sig: Uint8Array, msg: Uint8Array, pub: Uint8Array, der = false): boolean {
-  return once(der ? "ES256-der" : "ES256", pub, sig, msg, () => p256.verify(sig, msg, pub, der ? { prehash: true, lowS: false, format: "der" } : { prehash: true, lowS: false }));
+  return once(der ? "ES256-der" : "ES256", pub, sig, msg, () =>
+    hostCheck?.(der ? "ES256-der" : "ES256", pub, sig, msg) ?? p256.verify(sig, msg, pub, der ? { prehash: true, lowS: false, format: "der" } : { prehash: true, lowS: false }));
 }

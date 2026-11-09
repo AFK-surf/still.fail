@@ -27,19 +27,24 @@ fn progress_pair(part : @signals.Signal[Double?]) -> @ui.Tester {
 
 ///|
 /// The pieces of the bar drawn on either side (the old view's, the nodes'), each as (x from its bar's start, width), the
-/// track's first: what is drawn of each 3 high.
+/// track's first: what is seen of each 3 high, within its track (the 200 its bar is wide: the old one's band not known
+/// is drawn whole and cut by its track as it sweeps past its ends, the nodes' laid out to it).
 fn progress_drawn(t : @ui.Tester) -> (Array[(Int, Int)], Array[(Int, Int)]) {
   let old = []
   let new = []
   for r in t.drawn_rects() {
     let (x, _, w, h, _) = r
-    if h != 3.0 || w < 0.5 {
+    let base = if x < 250.0 { 0.0 } else { 300.0 }
+    let x0 = dmax(x, base)
+    let x1 = dmin(x + w, base + 200.0)
+    if h != 3.0 || x1 - x0 < 0.5 {
       continue
     }
-    if x < 250.0 {
-      old.push(((x * 10.0).round().to_int(), (w * 10.0).round().to_int()))
+    let piece = (((x0 - base) * 10.0).round().to_int(), ((x1 - x0) * 10.0).round().to_int())
+    if base == 0.0 {
+      old.push(piece)
     } else {
-      new.push((((x - 300.0) * 10.0).round().to_int(), (w * 10.0).round().to_int()))
+      new.push(piece)
     }
   }
   (old, new)

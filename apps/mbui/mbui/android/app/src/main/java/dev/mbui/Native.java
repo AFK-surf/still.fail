@@ -24,6 +24,8 @@ final class Native {
     static native void overOther(boolean on);
     /** A message for the app's next frame on `channel` (post.h's mb_post: any thread): its JSON's UTF-8. */
     static native void postBytes(String channel, byte[] json);
+    /** A browser session's end (WebAuth): the URL it came back to, or why not (one of the two null). */
+    static native void webAuthBack(String url, String error);
 
     /** `json` posted as UTF-8 (Java's own encoding of a String into JNI is modified UTF-8, which an emoji is not). */
     static void post(String channel, String json) {
@@ -55,4 +57,8 @@ final class Native {
     static native void ownClock();
     /** How many of the app's asks of the host are not answered yet, as its last frame said (mb_host_frame_awaiting). */
     static native int awaiting();
+    /** The frame the next swap presents (GL thread), its timestamps kept from now on; -1 where the system says none. */
+    static native long latencyFrame();
+    /** What the system says of frame `id` (Latency): its GPU done, latched, composited, shown (ns); false: nothing. */
+    static native int latencyTimes(long id, long[] out);
 }

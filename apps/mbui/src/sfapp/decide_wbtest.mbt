@@ -92,24 +92,34 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
     }
     t.wheel(195.0, 400.0, -300.0)
   }
+  let felt = t.haptics().length()
   t.tap_text("忽略")
   assert_eq(named(calls, "decision.dismiss").length(), 1)
+  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
   // let go at once (what it showed only drawn as it closes up)
   t.frame()
-  assert_eq(@sfpages.dismissed.length(), 1)
+  assert_eq(@sfpages.dismissed.count(), 1)
   // (not idle yet: its room closes on the rows' spring, close_gap, till mbui#25 declares its end)
 }
 
 ///|
-test "the chat's own sheet: its agents, pinning it, and on to the agent's card and its history" {
+test "the chat's \"…\": the menu a row has, pinning it from it" {
   let calls : Array[Made] = []
-  let t = decide_core(calls, "chat-info")
-  assert_true(t.find("复制会话链接") is Some(_))
-  assert_true(t.find("Claude · Opus 5.5") is Some(_))
-  t.tap_text("固定到列表顶部")
+  let t = decide_core(calls, "chat-actions")
+  assert_true(t.find("分享…") is Some(_))
+  assert_true(t.find("重命名") is Some(_))
+  t.tap_text("固定")
   let pinned = named(calls, "chat.pin")
   assert_eq(pinned.length(), 1)
   assert_true(flag(Some(pinned[0].params), "pinned"))
+}
+
+///|
+test "the chat's own sheet: its agents, and on to the agent's card and its history; what is done with it is not in it" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-info")
+  assert_true(t.find("复制会话链接") is None)
+  assert_true(t.find("Claude · Opus 5.5") is Some(_))
   t.tap_text("Claude · Opus 5.5")
   assert_true(t.find("费用估算") is Some(_))
   assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is Some(_))
@@ -135,10 +145,12 @@ test "the history: a group opens to its steps, a step to its call and what came 
   assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is Some(_))
   // a step closed again
   t.tap_text("跑一遍列表的测试")
+  // (its room closed on its way)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("moon test -p ui -f list_test.mbt") is None)
   t.tap_text("详情")
   assert_true(t.find("Claude Code 2.1.3") is Some(_))
-  assert_true(t.find("Mac Studio · macOS 26 · M2 Max") is Some(_))
+  assert_true(t.find("MacBook Pro · macOS 26 · M1 Pro") is Some(_))
   // the last tap's ripple shown whole, its way in and out
   t.run_for(@motion.ripple_tap_ms)
   t.assert_idle()
@@ -169,38 +181,51 @@ test "the desk's history beside a chat: a group opens to its steps, a step to it
   let t = decide_core(calls, "chat-history-side", wide=true)
   assert_true(t.find("moon test -p ui -f list_test.mbt") is None)
   t.tap_text("读了 src/ui/list.mbt 等 2 个文件，跑了测试")
+  // (the group's room opened on its steps)
+  t.run_for(@ui.move_most_ms)
   t.tap_text("跑一遍列表的测试")
-  // what the core made of the call and what came back (history.tool, answered as it was asked after that frame): the
-  // next frame shows the command, its timeout, its output
-  t.frame()
+  // what the core made of the call and what came back (history.tool, answered as it was asked after that frame), its
+  // room opened on its way (reveal_node): the command, its timeout, its output
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("moon test -p ui -f list_test.mbt") is Some(_))
   assert_true(t.find("120000") is Some(_))
   assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is Some(_))
-  // a step closed again
+  // a step closed again, its room closed on its way
   t.tap_text("跑一遍列表的测试")
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is None)
 }
 
 ///|
 test "a chat's link" {
-  assert_eq(chat_link("ws1/st1", "ember:c-1"), "https://app.still.fail/o/ws1/st1/ember%3Ac-1")
+  assert_eq(chat_link("ws1/st1", "chat:c-1"), "https://app.still.fail/o/ws1/st1/chat%3Ac-1")
 }
 
 ///|
 test "the chat's sheet and an agent's card as tall as what they show: their last row in it, no room under it to spare" {
   let calls : Array[Made] = []
-  // (the chat's last: its public links' last, Bob's)
+  // (its last row: the lowest words read out in it, over its foot)
   // (its foot the presenters' sheet's, under what it holds: sheet_panel's)
-  for case in [("chat-info", "Bob"), ("chat-agent", "后台")] {
-    let (mode, last) = case
+  for mode in ["chat-info", "chat-agent"] {
     let t = decide_core(calls, mode)
     sheet_rested(t, "sf-present")
-    let (_, sy, _, sh) = t.get(@ui.Role::Dialog).rect
-    let (_, ly, _, lh) = t.rect_of(last).unwrap()
+    let (sx, sy, sw, sh) = t.get(@ui.Role::Dialog).rect
+    let foot = @sf.sheet_panel_foot + nav_foot()
+    // (the words read out over its foot and bar: the composer under them is the page's, behind the sheet)
+    let inside = t
+      .words_said()
+      .filter(fn(w) { w.0 != "" && w.5 > 0.0 && w.1 >= sx && w.1 < sx + sw && w.2 >= sy && w.2 + w.4 <= sy + sh - foot })
+    assert_true(inside.length() > 0, msg="\{mode}: no words in the sheet")
+    let mut last = inside[0]
+    for w in inside {
+      if w.2 + w.4 > last.2 + last.4 {
+        last = w
+      }
+    }
+    let (_, _, ly, _, lh, _) = last
     // under its last row's words: the rest of its row (and its card's padding), the sheet's foot, the bar's
     let under = sy + sh - (ly + lh)
-    let foot = @sf.sheet_panel_foot + nav_foot()
-    assert_true(under >= foot && under < foot + 40.0, msg="\{mode}: \{under} under \{last} (sheet \{sy}+\{sh}, row \{ly}+\{lh})")
+    assert_true(under >= foot && under < foot + 40.0, msg="\{mode}: \{under} under \{last.0} (sheet \{sy}+\{sh}, row \{ly}+\{lh})")
     assert_true(sh < 844.0 * @sf.sheet_most, msg="\{mode}: \{sh}")
   }
 }
@@ -231,7 +256,7 @@ test "an options card: nothing drawn between two options (SettingParts.kt Decisi
 test "the history's post: where it went with its platform's mark, in the accent's ink, a chat here back to it" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "history-link")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   app.nav.push(Chat(r))
   app.nav.push(History(r, "s-c1", None))
   t.run_for(@ui.move_most_ms)
@@ -254,7 +279,7 @@ test "the history's post: where it went with its platform's mark, in the accent'
 test "接力到频道 on a phone: the pages' relay as a sheet, the places the bots are in, one picked, relayed there (chat.relay)" {
   new_run()
   let calls : Array[Made] = []
-  let base = fixture("chat-info")
+  let base = fixture("chat-actions")
   let places : Json = {
     "connects": [
       {
@@ -282,12 +307,13 @@ test "接力到频道 on a phone: the pages' relay as a sheet, the places the bo
       }
     },
   }
-  open_fixture_over("chat-info", src)
+  open_fixture_over("chat-actions", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
+  open_share(t)
   t.tap_text("接力到频道…")
   assert_eq(named(calls, "chat.relayPlaces").length(), 1)
-  // (the info sheet goes, the relay's sheet comes up, to where it rests: the presenters')
+  // (the chat's menu goes, the relay's sheet comes up, to where it rests: the presenters')
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   // (with touch nothing takes the keyboard's focus as it opens: the keyboard would come up over the places)
   assert_true(!t.ctx().field_focused(), msg="a field focused as the relay opened on a phone")

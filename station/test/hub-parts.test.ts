@@ -1,15 +1,15 @@
 // The hub's parts that compute (ported with their Rust tests): splitting for Slack, commands, image sizes, local file
 // links, the live view, the agent home, the account pool, the decision protocol, references to other chats.
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { brief, claudeProject, readTimeline, sessionPlaces, transcriptPaths } from "../src/read/transcript.ts";
+import { brief, claudeProject, readTimeline, rememberCodexRollout, sessionPlaces, transcriptPaths } from "../src/read/transcript.ts";
 import { linkTranscripts, sessionSkills, unlinkAgentHome, writeBuiltinSkills } from "../src/sessions/agent-home.ts";
-import { isSlackMethod, isStopCommand, slackWithFiles, threadCommand } from "../src/sessions/args.ts";
+import { isSlackMethod, slackWithFiles, threadCommand } from "../src/sessions/args.ts";
 import { splitForSlack } from "../src/sessions/chat.ts";
 import { hubConfig } from "../src/sessions/config.ts";
 import { completionQuestion, parse, request } from "../src/sessions/decision.ts";
@@ -33,8 +33,8 @@ test("long text splits on paragraph boundaries", () => {
 });
 
 test("commands: -stop after mentions, Slack methods by their shape", () => {
-  assert.ok(isStopCommand("<@UBOT>  -stop "));
-  assert.ok(!isStopCommand("please -stop now"));
+  assert.equal(threadCommand("<@UBOT>  -stop "), "stop");
+  assert.equal(threadCommand("please -stop now"), null);
   assert.equal(threadCommand("<@UBOT> -Compact"), "compact");
   assert.equal(threadCommand(" -clear "), "clear");
   assert.equal(threadCommand("-clear the cache"), null);
@@ -393,6 +393,83 @@ test("where the readers keep a session's history the live view reads none of its
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("a session watched again, or by the next station process, reads its transcript and checklist on from where they stood, not back", async () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  const todo = (id: string, items: [string, string][]) => `${JSON.stringify({ type: "assistant", timestamp: "2026-11-03T00:00:00Z", message: { id, content: [{ type: "tool_use", id, name: "TodoWrite", input: { todos: items.map(([content, status]) => ({ content, status, activeForm: content })) } }] } })}\n`;
+  writeFileSync(path, todo("t1", [["读日志", "in_progress"], ["修", "pending"]]) + line("two", "m2") + line("three", "m3"));
+  const time = testClock();
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  const asked: string[] = [];
+  hub.history = historyOf(path, asked);
+  const plan = (got: LiveMessage[]) => (got.filter((m): m is Extract<LiveMessage, { type: "work" }> => m.type === "work").at(-1)?.plan ?? []).map((i) => `${i.text} ${i.status}`);
+  const got: LiveMessage[] = [];
+  let id = hub.subscribe("s", 3, null, (m) => void got.push(m));
+  await settle();
+  assert.deepEqual(asked, ["state", "page 3 3 false"], "read back as it was first watched");
+  assert.deepEqual(plan(got), ["读日志 in_progress", "修 pending"]);
+  hub.unsubscribe("s", id);
+  // Written on while no one watched: watched again, only what came since is read for it.
+  appendFileSync(path, line("four", "m4") + todo("t2", [["读日志", "completed"], ["修", "in_progress"]]));
+  asked.length = 0;
+  got.length = 0;
+  id = hub.subscribe("s", 5, null, (m) => void got.push(m));
+  await settle();
+  // Its reading goes on from where it stood here, the readers not asked: what came since read here, the checklist with it.
+  await time.adjust(40);
+  await settle();
+  assert.deepEqual(asked, []);
+  assert.deepEqual(plan(got), ["读日志 completed", "修 in_progress"]);
+  // The next station process: carried over, nothing read for it where nothing came since.
+  const next = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  const nextAsked: string[] = [];
+  next.history = historyOf(path, nextAsked);
+  next.takePlans(JSON.parse(JSON.stringify(hub.carriedPlans())));
+  next.takeTails(JSON.parse(JSON.stringify(hub.carriedTails())));
+  const nextGot: LiveMessage[] = [];
+  next.subscribe("s", 5, null, (m) => void nextGot.push(m));
+  await settle();
+  assert.deepEqual(nextAsked, [], "where its reading stood carried over too");
+  assert.deepEqual(plan(nextGot), ["读日志 completed", "修 in_progress"]);
+  // Watched before the process before has handed over (the sessions at work, as the station starts): the readers are
+  // not asked, what it carries over says where the reading stands. Asked, a busy transcript they last marked long
+  // before was read on by a reader for 2.3 s, every device's reads waiting behind it, at each update (ccvm 2026-11-04).
+  let handedOver = () => {};
+  const late = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  const lateAsked: string[] = [];
+  late.history = historyOf(path, lateAsked);
+  late.handover = new Promise((resolve) => (handedOver = resolve));
+  const lateGot: LiveMessage[] = [];
+  late.subscribe("s", 5, null, (m) => void lateGot.push(m));
+  await settle();
+  assert.equal(lateGot.length, 0, "waiting on the process before");
+  late.takePlans(JSON.parse(JSON.stringify(hub.carriedPlans())));
+  late.takeTails(JSON.parse(JSON.stringify(hub.carriedTails())));
+  await settle();
+  assert.deepEqual(lateGot.map((m) => m.type).slice(0, 1), ["timeline"], "joined without the readers");
+  handedOver();
+  await settle();
+  assert.deepEqual(lateAsked, [], "the readers never asked");
+  // The process before gone without carrying it over (or none was there): the readers are asked then.
+  let gone = () => {};
+  const lone = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  const loneAsked: string[] = [];
+  lone.history = historyOf(path, loneAsked);
+  lone.handover = new Promise((resolve) => (gone = resolve));
+  const loneGot: LiveMessage[] = [];
+  lone.subscribe("s", 5, null, (m) => void loneGot.push(m));
+  await settle();
+  assert.deepEqual(loneAsked, []);
+  gone();
+  await settle();
+  assert.deepEqual([loneAsked[0], loneGot.map((m) => m.type).includes("timeline")], ["state", true], "asked once it is gone");
+  lone.close();
+  late.close();
+  hub.close();
+  next.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("what is said while a listener joins is told it after what it lacks", async () => {
   const dir = temp();
   const path = join(dir, "t.jsonl");
@@ -521,6 +598,11 @@ test("a Claude transcript is looked for in the project of its session's working 
     // No places said: every project's looked in, as before.
     assert.deepEqual(transcriptPaths("claude", dir, [], ["since"]).paths, [join(shared, there, "since.jsonl")]);
     assert.equal(listed.length, 2);
+    // Asked by the live view (the station's main thread): in its places alone, nothing listed (on a station each new chat's
+    // look through every project held every device 22 s and 45 s, 2026-11-02); one that ran elsewhere is not found so.
+    assert.deepEqual(transcriptPaths("claude", dir, [], ["fresh"], places, { anywhere: false }), { paths: [], current: false });
+    assert.deepEqual(transcriptPaths("claude", dir, [], ["gone-before"], places, { anywhere: false }).paths, []);
+    assert.equal(listed.length, 2, "nothing listed");
     // A new session's, not written yet: the projects listed once, not at each read; once written, where it works.
     assert.deepEqual(transcriptPaths("claude", dir, [], ["fresh"], places), { paths: [], current: false });
     assert.equal(listed.length, 3);
@@ -558,6 +640,87 @@ test("a Codex transcript is looked for through its days once, then where it was 
     syncBuiltinESMExports();
   }
   rmSync(dir, { recursive: true, force: true });
+});
+
+test("a reported Codex path follows the shared directory and finds a moved file", () => {
+  const dir = temp();
+  const shared = join(dir, "transcripts", "codex");
+  const home = join(dir, "home");
+  mkdirSync(join(shared, "2026", "11", "03"), { recursive: true });
+  mkdirSync(home, { recursive: true });
+  symlinkSync(shared, join(home, "sessions"), "dir");
+  const suffix = join("2026", "11", "03", "rollout-2026-11-03-said.jsonl");
+  const reported = join(home, "sessions", suffix);
+  const path = join(shared, suffix);
+  const moved = join(shared, "2026", "11", "03", "rollout-moved-said.jsonl");
+  try {
+    assert.equal(rememberCodexRollout(home, "said", join(dir, "elsewhere", "rollout-said.jsonl")), null);
+    assert.equal(rememberCodexRollout(home, "said", join(home, "sessions", "rollout-other.jsonl")), null);
+    assert.equal(rememberCodexRollout(home, "said", reported), reported);
+    assert.deepEqual(transcriptPaths("codex", dir, [home], ["said"]), { paths: [], current: false });
+    writeFileSync(path, "");
+    assert.deepEqual(transcriptPaths("codex", dir, [home], ["said"]), { paths: [path], current: true });
+    rmSync(path);
+    writeFileSync(moved, "");
+    assert.deepEqual(transcriptPaths("codex", dir, [home], ["said"]), { paths: [moved], current: true });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a reported Codex file moved before its first read can still be found in history", () => {
+  const dir = temp();
+  const home = join(dir, "home");
+  const original = join(home, "sessions", "2026", "11", "03", "rollout-original-later.jsonl");
+  const moved = join(home, "sessions", "2026", "11", "04", "rollout-moved-later.jsonl");
+  mkdirSync(dirname(moved), { recursive: true });
+  writeFileSync(moved, "");
+  try {
+    assert.equal(rememberCodexRollout(home, "later", original), original);
+    assert.deepEqual(transcriptPaths("codex", dir, [home], ["later"]), { paths: [moved], current: true });
+    assert.deepEqual(transcriptPaths("codex", dir, [home], ["later"], [], { anywhere: false }), { paths: [moved], current: true });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("finding a Codex transcript does not stat every other transcript", () => {
+  const dir = temp();
+  const day = join(dir, "transcripts", "codex", "2026", "10", "29");
+  mkdirSync(day, { recursive: true });
+  const others = Array.from({ length: 40 }, (_, i) => join(day, `rollout-other-${i}.jsonl`));
+  for (const path of others) writeFileSync(path, "");
+  const file = join(day, "rollout-wanted.jsonl.zst");
+  writeFileSync(file, "");
+  const checked: string[] = [];
+  const real = fs.statSync;
+  const mutable = fs as unknown as { statSync: typeof fs.statSync };
+  mutable.statSync = ((path: fs.PathLike, ...rest: unknown[]) => (checked.push(String(path)), (real as (...a: unknown[]) => unknown)(path, ...rest))) as typeof real;
+  syncBuiltinESMExports();
+  try {
+    assert.deepEqual(transcriptPaths("codex", dir, [], ["wanted"]).paths, [file.slice(0, -".zst".length)]);
+    assert.deepEqual(checked.filter((path) => others.includes(path)), [], "unrelated files need no metadata read");
+  } finally {
+    mutable.statSync = real;
+    syncBuiltinESMExports();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a Codex transcript can be in a linked directory", () => {
+  const dir = temp();
+  const root = join(dir, "transcripts", "codex");
+  const day = join(dir, "elsewhere");
+  mkdirSync(root, { recursive: true });
+  mkdirSync(day, { recursive: true });
+  const file = join(day, "rollout-linked.jsonl");
+  writeFileSync(file, "");
+  symlinkSync(day, join(root, "link"), "dir");
+  try {
+    assert.deepEqual(transcriptPaths("codex", dir, [], ["linked"]).paths, [join(root, "link", "rollout-linked.jsonl")]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("how fast the model writes is told once half a second of it has come", async (t) => {
@@ -733,15 +896,6 @@ test("the station's own skills are written and kept as the station has them; the
   mkdirSync(join(home, "skills", "team-skill"), { recursive: true });
   writeFileSync(join(home, "skills", "team-skill", "SKILL.md"), "ours");
   writeBuiltinSkills(home, false);
-  // The same skills as the station wrote them before the rename: replaced; one someone added to is left.
-  for (const name of ["ember-jobs", "ember-viz"]) {
-    mkdirSync(join(home, "skills", name), { recursive: true });
-    writeFileSync(join(home, "skills", name, "SKILL.md"), `---\nname: ${name}\n---\n`);
-  }
-  writeFileSync(join(home, "skills", "ember-viz", "notes.md"), "mine");
-  writeBuiltinSkills(home, false);
-  assert.ok(!existsSync(join(home, "skills", "ember-jobs")));
-  assert.ok(existsSync(join(home, "skills", "ember-viz", "notes.md")));
   const path = join(home, "skills", "stillfail-jobs", "SKILL.md");
   assert.ok(readFileSync(path, "utf8").startsWith("---\nname: stillfail-jobs\n"));
   assert.equal(readFileSync(path, "utf8"), readFileSync(new URL("../src/skills/stillfail-jobs.md", import.meta.url), "utf8"), "the station's text");
@@ -749,6 +903,12 @@ test("the station's own skills are written and kept as the station has them; the
   writeBuiltinSkills(home, false);
   assert.ok(readFileSync(path, "utf8").includes("job_start"), "the station's own, as it has it");
   assert.equal(readFileSync(join(home, "skills", "team-skill", "SKILL.md"), "utf8"), "ours", "the team's stay");
+  const script = join(home, "skills", "stillfail-github-ci", "ci-wait.sh");
+  assert.equal(readFileSync(script, "utf8"), readFileSync(new URL("../src/skills/stillfail-github-ci/ci-wait.sh", import.meta.url), "utf8"), "the scripts a skill brings, beside it");
+  assert.ok(statSync(script).mode & 0o100, "runnable");
+  writeFileSync(script, "edited by hand");
+  writeBuiltinSkills(home, false);
+  assert.ok(readFileSync(script, "utf8").includes("gh pr checks"), "the station's script, as it has it");
   const feedback = join(home, "skills", "stillfail-feedback", "SKILL.md");
   writeBuiltinSkills(home, true);
   assert.ok(readFileSync(feedback, "utf8").includes("feedback_send"));

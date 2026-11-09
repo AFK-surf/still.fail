@@ -5,13 +5,13 @@
 /// Every place a bar can hold (the core's BAR_PLACES).
 // kept across runs: a table, never written
 let bar_places : Array[String] = [
-  "chats", "files", "stations", "profiles", "connects", "usage", "archive",
+  "chats", "files", "stations", "profiles", "connects", "usage", "archive", "vault",
 ]
 
 ///|
 /// The bars before the core has said (BARS_DEFAULT).
 fn default_bars() -> (Array[Array[String]], Int) {
-  ([["chats", "files", "profiles", "stations"], ["usage", "connects", "archive"]], 0)
+  ([["chats", "files", "profiles", "stations"], ["archive", "usage", "connects", "vault"]], 0)
 }
 
 ///|
@@ -61,7 +61,7 @@ pub fn bars_in(src : Source, ws : String) -> (Array[Array[String]], Int) {
   match bars_picked.get() {
     Some(b) => b
     None => {
-      let prefs = (src.topic)("prefs", {}).value
+      let prefs = src.topic("prefs", {}).get().value
       match field(field(prefs, "barsBy"), ws) {
         Some(Object(_)) as b => bars_of(b)
         _ =>
@@ -88,7 +88,7 @@ pub fn set_bars(src : Source, ws : String, sets : Array[Array[String]], cur : In
 }
 
 ///|
-/// A place's icon (Places.kt placeIcon; Station's is the stations' glyph of their state once read, bar_glyph).
+/// A place's icon (Station's is the stations' glyph of their state once read, bar_glyph).
 pub fn place_icon(place : String) -> String {
   match place {
     "chats" => "chats"
@@ -97,6 +97,7 @@ pub fn place_icon(place : String) -> String {
     "connects" => "im"
     "usage" => "chart"
     "archive" => "archive"
+    "vault" => "key"
     _ => "server"
   }
 }

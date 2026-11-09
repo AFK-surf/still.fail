@@ -58,7 +58,7 @@ fn laid_islands(spec? : () -> Spec = fn() { tween(push_ms, ease=Linear) }, two? 
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
   }
   let t = @ui.Tester::new(fn(_c) {  }, w=300.0, h=400.0)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   @ui.set_view_app(fn(root) {
     root.row(Is(true)) |> ignore
@@ -202,7 +202,7 @@ test "a row new to A's list coming in, A built again in that frame for what B se
   let b_go = @signals.signal(0, same=fn(a, b) { a == b })
   let in_b : Ref[(() -> Unit)?] = Ref(None)
   let t = @ui.Tester::new(fn(_c) {  }, w=300.0, h=400.0)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   @ui.set_view_app(fn(root) {
     root.row(Is(true)) |> ignore
@@ -273,7 +273,7 @@ fn measured_islands() -> (@ui.Tester, @signals.Signal[Double], @signals.Signal[D
   let mtop = @signals.signal(0.0, same=fn(a, b) { a == b })
   let builds_a = Ref(0)
   let t = @ui.Tester::new(fn(_c) {  }, w=300.0, h=400.0)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   @ui.set_view_app(fn(root) {
     root.row(Is(true)) |> ignore
@@ -400,7 +400,7 @@ fn lapse_islands() -> Lapse {
   let c_go = @signals.signal(0, same=fn(a, b) { a == b })
   let builds_a = Ref(0)
   let t = @ui.Tester::new(fn(_c) {  }, w=300.0, h=400.0)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.check_looks(false)
   @ui.set_view_app(fn(root) {
     root.row(Is(true)) |> ignore
@@ -493,4 +493,48 @@ test "a box measured not laid out in a frame's first build and laid out again in
   l.t.each_frame(None)
   assert_true(l.t.drawn_of("lapse 40") is Some(_), msg="measured as it was")
   assert_eq(l.builds_a.val, builds, msg="A built again for a measure that never went")
+}
+
+///|
+test "a box measured, wider: what reads how tall it is not built again, nothing built twice; taller, built again in that frame" {
+  let wide = @signals.signal(60.0, same=fn(a, b) { a == b })
+  let tall = @signals.signal(40.0, same=fn(a, b) { a == b })
+  let builds = Ref(0)
+  let t = @ui.Tester::new(fn(_c) {  }, w=300.0, h=400.0)
+  t.set_rows_on_pixels(true)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    root.row(Is(true)) |> ignore
+    root.box(fn(v) {
+      v.width(Is(Some(150.0))) |> ignore
+      @ui.old(v, fn(c) {
+        builds.val = builds.val + 1
+        c.text("tall \{measured(c, "laid/tall").unwrap_or(-1.0)}") |> ignore
+      })
+      .grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+    root.box(fn(v) {
+      v.grow(Is(1.0)) |> ignore
+      @ui.old(v, fn(c) { measure(c, c.box(w=Px(wide.get()), h=Px(tall.get()), fn() {  }), "laid/tall") })
+      .grow(Is(1.0))
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  frame_by_clock(t)
+  assert_true(t.drawn_of("tall 40") is Some(_))
+  let was = builds.val
+  wide.set(90.0)
+  let passes = []
+  t.each_frame(Some(fn() { passes.push(t.frame_perf().passes) }))
+  frame_by_clock(t)
+  t.each_frame(None)
+  assert_eq(passes, [1])
+  assert_eq(builds.val, was)
+  tall.set(70.0)
+  frame_by_clock(t)
+  assert_true(t.drawn_of("tall 70") is Some(_))
 }

@@ -14,7 +14,7 @@ fn cc_tester(calls? : Array[Made] = []) -> @ui.Tester {
       (base.call)(name, params, done)
     },
   }
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   let t = @ui.Tester::new(
     fn(c) {
       @sf.set_words(fill)

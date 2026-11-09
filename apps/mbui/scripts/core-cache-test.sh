@@ -44,7 +44,7 @@ printf 'new core\n' > "$fixture/b/client/core-ts/src/store.ts"
 export PATH="$fixture/bin:$PATH" HERMESC="$fixture/bin/hermesc" HBC_CACHE= CARGO_TARGET_DIR="$fixture/target"
 export ENTRY="$work/core/hermes.ts"
 export FAKE_BUILD_LOG="$fixture/builds.log"
-build() { EMBER="$fixture/$1" bash "$work/scripts/core.sh" hermes; }
+build() { SF_SRC="$fixture/$1" bash "$work/scripts/core.sh" hermes; }
 
 if [ "${1:-all}" != keyed ]; then
   build a

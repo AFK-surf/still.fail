@@ -12,7 +12,7 @@ fn side_thumb(t : @ui.Tester) -> (Double, Double, Double, Double, Int64)? {
 /// the foot of 新建对话's words.
 fn side_bar_run(keep : Bool, again : Bool) -> (Double, Double) {
   let t = wide_tester([], h=360.0)
-  t.keep_parts(keep)
+  t.set_rows_on_pixels(keep)
   t.drawn_again(again)
   t.draw()
   t.run_for(@ui.scrollbar_fade_ms)

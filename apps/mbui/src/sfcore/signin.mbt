@@ -2,10 +2,11 @@
 // The core itself is linked into the app (its native stub includes apple_engine.m or android_engine.c from here);
 // this is what the app's MoonBit does with it.
 //
-// Signing in: where the host has a browser session (iOS's ASWebAuthenticationSession), through it (@core.sign_in);
-// elsewhere (Android, macOS, Windows) as a command-line tool does (@hostapi.browser_login, which knows nothing of
-// still.fail): auth.begin with a loopback address, the page in the browser (a Custom Tab; the default browser),
-// auth.complete with what comes back.
+// Signing in: where the host has a browser session (iOS's ASWebAuthenticationSession; Android's Custom Tab coming back
+// on the app's own scheme), through it (@core.sign_in); elsewhere (macOS, Windows) as a command-line tool does
+// (@hostapi.browser_login, which knows nothing of still.fail): auth.begin with a loopback address, the page in the
+// default browser, auth.complete with what comes back. (Android signed in on the loopback too until a vendor's freezer,
+// ColorOS's, was seen leaving the browser's way back to a backgrounded app unanswered.)
 //
 // The environment's say, read once at `start`:
 // - MBUI_CORE_SIGNIN=1 presses 登录 once the accounts are read (scripted runs; with MBUI_AUTH_DRY=1 the browser
@@ -20,7 +21,7 @@
 //   local cloud's mock login hands it out (/__dev/account?user=alice). Only with MBUI_CLOUD: never on the real cloud.
 // - MBUI_AUTH_LOGIN=1 (`scripts/mac.sh login`) signs in as a login command: the app listens on 127.0.0.1, hands the
 //   login page to $BROWSER (else `open`), and exits 0 once the browser has come back and the sign-in is done (1 when
-//   it failed). A station's remote login runs it as its login command (ember docs/remote-login.md).
+//   it failed). A station's remote login runs it as its login command.
 
 ///|
 /// How signing in stands: what to say of it, and whether one is under way.
@@ -37,6 +38,8 @@ pub(all) struct SignIn {
   mut failed : String
   /// MBUI_CORE_SIGNIN: press 登录 once the accounts are read
   mut auto : Bool
+  /// On the web, open the sign-in page once if the initial account list is empty.
+  mut web_auto : Bool
   /// MBUI_AUTH_LOGIN: sign in as a login command
   mut login : Bool
   /// by hand: "begin", or the URL the browser was sent back to
@@ -59,7 +62,7 @@ pub fn sign_in_now() -> SignIn {
 ///|
 /// `state` changed: told.
 fn told() -> Unit {
-  changed.set(@signals.untracked(fn() { changed.get() }) + 1)
+  changed.set(changed.untracked() + 1)
 }
 
 ///|
@@ -70,6 +73,7 @@ pub let state : SignIn = {
   waiting: false,
   failed: "",
   auto: false,
+  web_auto: false,
   login: false,
   by_hand: "",
   account: "",
@@ -111,6 +115,7 @@ pub fn begin() -> Unit {
   state.account = if @ui.env("MBUI_CLOUD") != "" { env_text("MBUI_CORE_ACCOUNT") } else { "" }
   tell_device()
   state.auto = @ui.env("MBUI_CORE_SIGNIN") == "1"
+  state.web_auto = @ui.platform() == 4
   state.login = @ui.env("MBUI_AUTH_LOGIN") == "1"
   state.by_hand = if @ui.env("MBUI_AUTH_BEGIN") == "1" {
     "begin"
@@ -120,13 +125,10 @@ pub fn begin() -> Unit {
 }
 
 ///|
-/// What the device is, to the core (`client.device`, as still.fail's apps tell it): the name the people who approve it
-/// in a workspace's safe mode see (and a sign-in's device) is still.fail mbui's, not still.fail's own app's: "still.fail
-/// mbui Android · <maker model>" (the model CoreHost.java puts in MBUI_DEVICE_MODEL), "still.fail mbui iOS · iPhone17,1"
-/// (apple_engine.m's), "still.fail mbui 桌面版 · macOS"; where its host says the machine's own name (MBUI_DEVICE_NAME:
-/// the Mac's, the computer's, the phone's as its settings say), that in place of the model or the system, which of the
-/// person's devices it is. Built as still.fail's Android app in its place (apk.json's stable and beta: MBUI_OWN=1), it
-/// is still.fail's own, named as that app named the device: "still.fail Android · …".
+/// What the device is, to the core (`client.device`, as still.fail's apps tell it). The per-commit build keeps its
+/// historical client identity for its channel and update feed; the core names its device still.fail. Where its host
+/// says the machine's own name (MBUI_DEVICE_NAME: the Mac's, the computer's, the phone's as its settings say), that
+/// takes the place of the model or system, so people can tell their devices apart.
 fn tell_device() -> Unit {
   let facts : Map[String, Json] = {}
   if @ui.env("MBUI_OWN") != "1" {
@@ -188,6 +190,10 @@ pub fn frame(accounts : @core.Sub) -> Unit {
     }
     if state.auto {
       state.auto = false
+      state.web_auto = false
+      sign_in()
+    }
+    if web_sign_in_needed(list) {
       sign_in()
     }
     if state.login {
@@ -201,6 +207,15 @@ pub fn frame(accounts : @core.Sub) -> Unit {
     }
   }
   login_back()
+}
+
+/// The first account answer decides the web's entry. Later sign-outs can use the normal retry page.
+fn web_sign_in_needed(list : Json) -> Bool {
+  if !state.web_auto {
+    return false
+  }
+  state.web_auto = false
+  list is Array([])
 }
 
 ///|
@@ -287,7 +302,6 @@ fn loopback_sign_in(done : (Result[String, String]) -> Unit) -> Unit {
   let params : Map[String, Json] = {
     "redirect_uri": Json::string(l.redirect),
     "return_to": Json::string("/"),
-    "device_name": Json::string("mbui"),
   }
   @core.call("auth.begin", params=Json::object(params), on_done=fn(r) {
     let url = match r {

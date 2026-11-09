@@ -1,4 +1,4 @@
-// What a UI asks the core to find out (asks.rs): where one of still.fail's links opens in the app, whether a newer
+// What a UI asks the core to find out: where one of still.fail's links opens in the app, whether a newer
 // app is out, a picture (fetched once and kept on the device), the buddies a Slack app can wear, a dev cloud's sign-in.
 import { Deferred, Effect, Semaphore } from "effect";
 import buddiesList from "../../../web/public/avatars/index.json" with { type: "json" };
@@ -20,7 +20,6 @@ type J = any;
 
 /// still.fail cloud under its names: the released app's, the test channel's (youdid.wtf), ember's from before the rename.
 const CLOUD_HOSTS = ["app.still.fail", "app.youdid.wtf", "ember.3720.org"];
-const UPDATE_EVERY_MS = 60 * 60 * 1000;
 const PICTURES = 256;
 /// A picture that could not be fetched is not asked for again for this long: a Google account's, where Google cannot be
 /// reached, waited 15 s each time it was drawn, about half of a phone's.
@@ -95,19 +94,28 @@ export class Asks {
     );
   }
 
+  /// still.fail cloud says a release is out: the newest of each feed is read again when next asked.
+  released(): void {
+    this.#releases.clear();
+  }
+
   #newest(platform: string, version: number, now: boolean, beta: boolean, keys: readonly string[]): Effect.Effect<J, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const feed = beta ? `${platform}/beta` : platform;
       const newer = (release: J) => (release !== null && release !== undefined && typeof release.versionCode === "number" && release.versionCode > version ? release : null);
       const time = this.#host.nowMs();
       const kept = this.#releases.get(feed);
-      if (kept && !now && time - kept[0] < UPDATE_EVERY_MS) return newer(kept[1]);
+      // What was read is kept until still.fail cloud says a release is out (`released`); the person's own check asks.
+      if (kept && !now) return newer(kept[1]);
       this.#releases.set(feed, [time, kept?.[1] ?? null]);
       const url = `${this.#host.cloudOrigin()}/releases/${feed}/latest.json`;
       const response = yield* Effect.result(this.#host.fetch({ method: "GET", url, headers: [["cache-control", "no-cache"]], body: null }));
       if (response._tag === "Failure") {
-        if (now) return yield* Effect.fail(new CoreError("app_update", t("core-misc.ask.update_failed", { error: response.failure.message })));
-        return newer(this.#releases.get(feed)![1]);
+        // Not read: asked again the next time it is asked for.
+        if (kept) this.#releases.set(feed, kept);
+        else this.#releases.delete(feed);
+        if (now) return yield* Effect.fail(CoreError.plainly("app_update", response.failure, t("core-misc.ask.update_failed", { error: CoreError.host(response.failure).message })));
+        return newer(kept?.[1] ?? null);
       }
       const raw = response.success.status === 200 ? parseJson(response.success.body) : undefined;
       const shaped = raw !== undefined ? conform("AppRelease", raw) : null;
@@ -143,7 +151,7 @@ export class Asks {
             kept !== null
               ? Effect.succeed(kept)
               : Effect.flatMap(
-                  Effect.mapError(this.#host.fetch({ method: "GET", url, headers: [], body: null }), (e) => new CoreError("picture", t("core-misc.ask.picture_failed", { error: e.message }))),
+                  Effect.mapError(this.#host.fetch({ method: "GET", url: this.#host.pictureVia?.(url) ?? url, headers: [], body: null }), (e) => CoreError.plainly("picture", e, t("core-misc.ask.picture_failed", { error: CoreError.host(e).message }))),
                   (r) => (r.status !== 200 ? Effect.fail(new CoreError("picture", t("core-misc.ask.picture_failed", { error: r.status }))) : Effect.as(this.#keep(url, header(r, "content-type") ?? "", r.body), [header(r, "content-type") ?? "", r.body] as [string, Uint8Array])),
                 ),
           ),
@@ -392,9 +400,11 @@ export function linkTarget(url: string, origin: string): J {
   if (s.length === 1 && s[0] === "invite" && u.fragment !== "") return { opens: "invite", token: u.fragment };
   if (s.length === 6 && s[0] === "w" && s[2] === "s" && s[4] === "chats") return { opens: "chat", workspace: s[1], station: s[3], chat: s[5], ...historyOf(u.query), ...messageOf(u.query) };
   if (s.length === 5 && s[0] === "w" && s[2] === "s" && s[4] === "adb") return { opens: "adbShare", workspace: s[1], station: s[3] };
-  // One of a station's screens (docs/remote-screens.md), as its agents' `screen` tool links it.
+  // A station's web service on a page of its own (its "open on its own"): the service over the app.
+  if (s.length === 6 && s[0] === "w" && s[2] === "s" && s[4] === "services" && s[5] !== "") return { opens: "service", workspace: s[1], station: s[3], service: s[5] };
+  // One of a station's screens, as its agents' `screen` tool links it.
   if (s.length === 6 && s[0] === "w" && s[2] === "s" && s[4] === "screen" && s[5] !== "") return { opens: "screen", workspace: s[1], station: s[3], screen: s[5] };
-  // A login an agent started on a station (docs/remote-login.md), as its `login` tool links it: its card on the
+  // A login an agent started on a station, as its `login` tool links it: its card on the
   // station's page.
   if (s.length === 6 && s[0] === "w" && s[2] === "s" && s[4] === "login" && s[5] !== "") return { opens: "login", workspace: s[1], station: s[3], login: s[5] };
   if (s.length === 4 && s[0] === "o") {

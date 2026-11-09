@@ -1,14 +1,14 @@
 #!/bin/bash
-# still.fail in mbui (APP=stillfail) end to end against a still.fail of its own on this machine: ember's local cloud
+# still.fail in mbui (APP=stillfail) end to end against a still.fail of its own on this machine: still.fail's local cloud
 # (cloud/test/dev.ts: its Workers in Miniflare, Google mocked, the test identities and the "Dev" workspace), an
-# iroh-relay of its own, a test station enrolled there from a checkout of ember, with ember's fake claude
-# (station/test/fake) as its agent, and a second client of alice's (e2e/peer.ts, ember's TS core in Node) that makes
+# iroh-relay of its own, a test station enrolled there from a checkout of still.fail, with still.fail's fake claude
+# (station/test/fake) as its agent, and a second client of alice's (e2e/peer.ts, still.fail's TS core in Node) that makes
 # the chat and says things in it. Nothing reaches app.still.fail, the machine's own station or ~/.stillfail: every part
-# has its own ports and directories under $E2E_WORK, the station its own HOME. See e2e/README.md.
+# has its own ports and directories under $E2E_WORK, the station its own HOME.
 #
-#   scripts/e2e-local.sh install    what `up` installs first, alone: ember's packages, the station built, the natives
+#   scripts/e2e-local.sh install    what `up` installs first, alone: still.fail's packages, the station built, the natives
 #                                   (fetched or built): ios-smoke.sh's, while the app builds
-#   scripts/e2e-local.sh up         the cloud, relay, station, the chat (prints what the app needs: e2e-env.sh)
+#  scripts/e2e-local.sh up the cloud, relay, station, the chat
 #   scripts/e2e-local.sh mac        the mac flows (e2e/flows/*.drive) against what `up` started, pass/fail per flow
 #   scripts/e2e-local.sh android    the same on an emulator of our own (AVD, EMU_PORT), with a screen recording
 #   scripts/e2e-local.sh ios        the same on an iOS simulator of our own (MBUI_IOS_DEVICE), recorded
@@ -18,6 +18,14 @@
 #   scripts/e2e-local.sh restore NAME          back to it (the station and the cloud stopped, put back, started)
 #   scripts/e2e-local.sh all        up, mac, down (what a later slice runs to check itself)
 #   scripts/e2e-local.sh peer ARGS  e2e/peer.ts as alice's other device (send TEXT, create, chats, …)
+#   scripts/e2e-local.sh peer-bg ARGS   the same left running beside the run (its output in run/peer-bg.out)
+#   scripts/e2e-local.sh peer-said WORD   until that output has a line beginning WORD: SAY its first field (a code)
+#   scripts/e2e-local.sh peer-wait  until that peer has ended (its output; fails as it failed)
+#   scripts/e2e-local.sh android-pin PIN   the emulator's screen lock set to PIN (a phone with a lock, as the vault needs)
+#   scripts/e2e-local.sh android-unlock PIN   the system's prompt for the screen lock answered with PIN, once its field is up
+#   scripts/e2e-local.sh intruder-refused CMD…  e2e/peer.ts as a device the cloud signed in as alice and the lock never
+#                                   took in, asked CMD: INTRUDER REFUSED once the station refused it
+#   scripts/e2e-local.sh lock-state the security mode as the test station keeps it: LOCK, DEVICE lines, STATIONS
 #   scripts/e2e-local.sh sql SQL    the test station's database, read only
 #   scripts/e2e-local.sh android-ime off|on   the emulator's own keyboard off (the run composes) or back
 #   scripts/e2e-local.sh android-installer    until the system's installer is the emulator's top activity, then back
@@ -29,7 +37,7 @@
 #   scripts/e2e-local.sh drive-media TAG  the player's flows' folder in it (e2e-TAG/影音: two episodes, a subtitle, a song)
 #   scripts/e2e-local.sh drive-big TAG    the downloads' folder in it (e2e-TAG/大文件: 48 MB and a small file)
 #   scripts/e2e-local.sh drive-gb TAG     a novel in GB18030 in it (e2e-TAG/旧小说-gb.txt)
-#   scripts/e2e-local.sh drive-photo TAG  the run's photo in it (e2e-TAG/e2e-photo.jpg), as 18's upload left it
+#   scripts/e2e-local.sh drive-photo TAG [renamed]  the run's photo, as 18's upload or 19's rename left it
 #   scripts/e2e-local.sh android-stage FILE…  files to attach put where the app's provider serves them (a share's intent)
 #   scripts/e2e-local.sh android-gallery FILE…  files put in the emulator's gallery, the app let read it
 #   scripts/e2e-local.sh release-seed     a newer build of the app (the APK as built) in the local cloud's releases
@@ -44,24 +52,25 @@
 #
 # E2E_WORK (default: e2e-local beside this checkout), E2E_STATION (the station's data and HOME, /tmp/mbui-e2e-<uid>),
 # E2E_PORT (18787: the cloud takes it to +5), E2E_RELAY (18740),
-# EMBER (the ember checkout to clone from; default ember-src beside this session's tools).
+# SF_SRC (the still.fail checkout to clone from; default this one, scripts/env.sh).
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 ROOT=$PWD
-WORK=${E2E_WORK:-$(cd .. && pwd)/e2e-local}
+. "$D/e2e-paths.sh"
+e2e_paths "$ROOT"
+WORK=$E2E_WORK
 # (absolute: some steps run from elsewhere)
 mkdir -p "$WORK" && WORK=$(cd "$WORK" && pwd)
 PORT=${E2E_PORT:-18787}
 RELAY_PORT=${E2E_RELAY:-18740}
 ORIGIN=http://127.0.0.1:$PORT
-EMBER=${EMBER:-$(cd "${TOOLS:-..}/.." 2>/dev/null && pwd)/ember-src}
-E=$WORK/ember
+E=$WORK/stillfail
 RUN=$WORK/run
 # the test station's own directory: short (its runners listen on sockets in it, whose paths may not be longer than
 # 104 bytes on macOS)
-STATION=${E2E_STATION:-/tmp/mbui-e2e-$(id -u)}
+STATION=$E2E_STATION
 mkdir -p $WORK $RUN
 
 say() { echo "e2e: $*"; }
@@ -100,24 +109,25 @@ claim() {
 # argument the most it is given, in s, before it fails
 waitfor() { local s=$1; shift; node "$D/waitfor.mjs" --deadline $s "$@" > /dev/null; }
 
-# ember, cloned (read only from $EMBER: never built or installed in), its packages installed, the station built
-ember() {
-  local want=$(git -C "$EMBER" rev-parse HEAD)
+# still.fail, cloned (read only from $SF_SRC: never built or installed in), its packages installed, the station built
+sources() {
+  local want
+  want=$(git -C "$SF_SRC" rev-parse --verify HEAD) || die "no source revision in $SF_SRC"
   if [ ! -d $E/.git ]; then
-    git clone -q "$EMBER" $E
+    git clone -q "$SF_SRC" $E
   fi
   if [ "$(git -C $E rev-parse HEAD)" != "$want" ]; then
     git -C $E fetch -q origin && git -C $E -c advice.detachedHead=false checkout -q --detach $want
-    rm -f $WORK/ember.ready
+    rm -f $WORK/stillfail.ready
   fi
-  if [ "$(cat $WORK/ember.ready 2>/dev/null)" != "$want" ]; then
-    say "installing ember $(git -C $E log --oneline -1 | cut -c1-60)"
+  if [ "$(cat $WORK/stillfail.ready 2>/dev/null)" != "$want" ]; then
+    say "installing still.fail $(git -C $E log --oneline -1 | cut -c1-60)"
     (cd $E && pnpm install --frozen-lockfile --ignore-scripts >$WORK/install.log 2>&1) || die "install failed ($WORK/install.log)"
     for p in cloud station client/core-ts; do
       (cd $E/$p && pnpm install --frozen-lockfile >>$WORK/install.log 2>&1) || die "install of $p failed"
     done
     (cd $E/station && pnpm run build >>$WORK/install.log 2>&1) || die "station build failed"
-    echo $want > $WORK/ember.ready
+    echo $want > $WORK/stillfail.ready
   fi
 }
 
@@ -126,21 +136,45 @@ native() { (cd $E && node scripts/native.ts file $1); }
 # the cloud (cloud/test/dev.ts) over what it holds in $RUN/cloud-state; RESUME=1 (a starting point put back): the same
 # cloud again, nothing made anew
 start_cloud() {
-  # (its output read from its pipe as it comes (waitfor.mjs --tee), into cloud.log, and its READY line made a file of its
-  # own, cloud.ready: a file made is told to the waiting side as it is made; a log another process writes to is not
-  # always (GitHub's macOS runner: the READY line in cloud.log, its write never told, 2026-10-21))
-  rm -f $RUN/cloud.ready
+  # The READY line travels directly through a FIFO. On macOS, watching a newly created marker missed its creation
+  # even though it had been written, and watching a log's writes has also missed events.
+  rm -f "$RUN/cloud.ready"
+  mkfifo "$RUN/cloud.ready"
+  exec 9<> "$RUN/cloud.ready"
   (cd $E/cloud && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT PERSIST=$RUN/cloud-state \
     AUTH_KEY=$(cat $RUN/auth-key) RESUME=${1:+1} detach node "$D/waitfor.mjs" --tee $RUN/cloud.log \
-    --line 'READY still.fail cloud' --mark $RUN/cloud.ready -- pnpm exec tsx test/dev.ts & echo $! > $RUN/cloud.pid)
-  waitfor 120 --what "the cloud's READY line" --exists $RUN/cloud.ready || { tail -20 $RUN/cloud.log; die "the cloud did not start"; }
+    --line 'READY still.fail cloud' --mark $RUN/cloud.ready -- pnpm exec tsx test/dev.ts 9>&- & echo $! > $RUN/cloud.pid)
+  if ! IFS= read -r -t 120 ready <&9; then
+    exec 9>&-
+    stop cloud
+    stop relay
+    rm -f "$RUN/cloud.ready"
+    tail -20 "$RUN/cloud.log"
+    die "the cloud did not start"
+  fi
+  exec 9>&-
+  rm -f "$RUN/cloud.ready"
 }
 
 # the test station (enrolled), its launcher over its own data
 start_station() {
   local launcher=$(native launcher)
-  (. $RUN/station-env.sh && detach "$launcher" run --app $STATION/app --data $STATION/data >$RUN/station.log 2>&1 & echo $! > $RUN/station.pid)
-  waitfor 60 --what "the station's database" --exists $STATION/data/stillfail.db || { tail -20 $RUN/station.log; die "the station did not start"; }
+  # The launcher's takeover means the station has initialized and is serving. Deliver that event directly: the
+  # database can be created empty and filesystem notifications of subsequent writes can be missed on macOS.
+  rm -f "$RUN/station.ready"
+  mkfifo "$RUN/station.ready"
+  exec 9<> "$RUN/station.ready"
+  (. $RUN/station-env.sh && detach node "$D/waitfor.mjs" --tee "$RUN/station.log" \
+    --line 'Node [0-9]+ has taken over' --mark "$RUN/station.ready" -- \
+    "$launcher" run --app "$STATION/app" --data "$STATION/data" 9>&- & echo $! > "$RUN/station.pid")
+  if ! IFS= read -r -t 60 ready <&9; then
+    exec 9>&-
+    rm -f "$RUN/station.ready"
+    tail -20 "$RUN/station.log"
+    die "the station did not start"
+  fi
+  exec 9>&-
+  rm -f "$RUN/station.ready"
 }
 
 # the station and the cloud stopped, their files at rest (the relay holds nothing: it stays)
@@ -191,8 +225,8 @@ up() {
   for p in $PORT $((PORT + 1)) $((PORT + 2)) $((PORT + 3)) $((PORT + 4)) $((PORT + 5)) $RELAY_PORT; do
     listening $p && die "port $p is taken (E2E_PORT, E2E_RELAY): run down, or pick others"
   done
-  ember
-  # the relay: iroh-relay in dev mode (plain HTTP) on loopback, as ember's side tests run it
+  sources
+  # the relay: iroh-relay in dev mode (plain HTTP) on loopback, as still.fail's side tests run it
   cat > $RUN/relay.toml <<EOF
 enable_relay = true
 http_bind_addr = "127.0.0.1:$RELAY_PORT"
@@ -215,7 +249,7 @@ EOF
   local token=$(grep -m1 '^ENROLL ' $RUN/cloud.log | awk '{print $NF}')
   [ -n "$token" ] || die "no enrollment in the cloud's log"
   # the station: its own data and HOME, the fake runtimes first on PATH (e2e/fake's claude, which posts cards and
-# tool steps, over ember's), no discovery on the LAN
+# tool steps, over still.fail's), no discovery on the LAN
   claim
   rm -rf $STATION $WORK/peer $WORK/peer-home && mkdir -p $STATION/data/homes/cc $STATION/home $STATION/app/node/bin
   ln -s $E/station/dist $STATION/app/station
@@ -225,10 +259,11 @@ EOF
   echo '{}' > $STATION/data/homes/cc/.credentials.json
   # (what this shell has of the machine's own station, a job's notify address and token, is not the test station's)
   cat > $RUN/station-env.sh <<EOF
-for v in \$(env | grep -Eo '^(EMBER|STILLFAIL|CLAUDE|CODEX)[A-Z0-9_]*=' | tr -d =); do unset \$v; done
+for v in \$(env | grep -Eo '^(STILLFAIL|CLAUDE|CODEX)[A-Z0-9_]*=' | tr -d =); do unset \$v; done
 export HOME=$STATION/home
 export PATH=$ROOT/e2e/fake:$E/station/test/fake:\$PATH
 export STILLFAIL_NO_DISCOVERY=1
+export STILLFAIL_TEST_HOST=1
 export STILLFAIL_DATA=$STATION/data
 export STILLFAIL_MESH_NATIVE=$(native mesh)
 export STILLFAIL_RUNNER=$(native runner)
@@ -274,9 +309,13 @@ down() {
   # a web service its agent started (flow 47's, on E2E_PORT + 7: e2e/run.sh's SVC; or on the port its test's words name,
   # 19107, as the env it was recorded on had it) outlives the station: ended when it runs in the station's own
   # directories (never another's)
-  local p
+  local p cwd station_real
+  station_real=$(cd "$STATION" 2>/dev/null && pwd -P) || station_real=$STATION
   for p in $( (lsof -tnP -iTCP:$((PORT + 7)) -sTCP:LISTEN; pgrep -f -- "-m http\.server ") 2>/dev/null | sort -u); do
-    lsof -a -p $p -d cwd -Fn 2>/dev/null | grep -qE "^n(/private)?$STATION/" && kill $p 2>/dev/null
+    cwd=$(lsof -a -p "$p" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')
+    case "$cwd" in
+      "$STATION/"*|"$station_real/"*|"/private$STATION/"*|"/private$station_real/"*) kill "$p" 2>/dev/null ;;
+    esac
   done
   rm -f "$HELD"
   stop cloud
@@ -293,7 +332,78 @@ down() {
 
 peer() {
   (. $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/peer-home; mkdir -p $HOME
-   E2E_EMBER=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/peer E2E_FILES=$WORK/files node $ROOT/e2e/peer.ts "$@")
+   E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/peer E2E_FILES=$WORK/files node $ROOT/e2e/peer.ts "$@")
+}
+
+# a device the cloud signed in as alice on its own (what a cloud that is not to be trusted can do: mint her a credential)
+# and the lock never took in: e2e/peer.ts with a data directory of its own, the test chat's address given it.
+# `intruder-refused CMD…`: that peer asked CMD, which the station must refuse: INTRUDER REFUSED, else it fails
+intruder() {
+  mkdir -p $WORK/intruder && cp $WORK/peer/chat.json $WORK/intruder/chat.json
+  (. $RUN/station-env.sh 2>/dev/null; export HOME=$WORK/intruder-home; mkdir -p $HOME
+   E2E_SF_SRC=$E E2E_ORIGIN=$ORIGIN E2E_PEER_DATA=$WORK/intruder E2E_FILES=$WORK/files node $ROOT/e2e/peer.ts "$@")
+}
+intruder_refused() {
+  local out rc
+  # (its failure kept, not set -e's end of the script)
+  out=$(intruder "$@" 2>&1) && rc=0 || rc=$?
+  echo "$out"
+  # (refused by the lock, as the station says it: not merely failed)
+  if [ $rc = 0 ] || ! echo "$out" | grep -q '"code":"lock_unconfirmed"'; then echo "INTRUDER NOT REFUSED BY THE LOCK"; return 1; fi
+  echo "INTRUDER REFUSED"
+}
+
+# e2e/peer.ts left running beside the run (a device online to be met face to face: `peer-bg lock-await 120`), its
+# output in $RUN/peer-bg.out; `peer-said WORD` waits for a line of it beginning WORD and says its first field
+# (`SAY <code>`: e2e/runner-do.sh tells the app, its drive's `typedone` types it); `peer-wait` until it has ended
+peer_bg() {
+  : > $RUN/peer-bg.out
+  (peer "$@" >> $RUN/peer-bg.out 2>&1; echo "PEER EXIT $?" >> $RUN/peer-bg.out) </dev/null &
+  echo $! > $RUN/peer-bg.pid
+}
+# (the line as the peer writes it, or its end: mbui's scripts/chk logwait, the file's write events)
+peer_said() {
+  local l
+  l=$("$MBUI_DIR/scripts/chk" logwait --log $RUN/peer-bg.out --line "^($1 |PEER EXIT)" --deadline 180) || { cat $RUN/peer-bg.out; return 1; }
+  case "$l" in "PEER EXIT"*) cat $RUN/peer-bg.out; return 1 ;; esac
+  echo "$l"; echo "SAY $(echo "$l" | cut -d' ' -f2 | cut -f1)"
+}
+peer_wait() {
+  "$MBUI_DIR/scripts/chk" logwait --log $RUN/peer-bg.out --line "^PEER EXIT" --deadline 300 >/dev/null || return 1
+  cat $RUN/peer-bg.out; grep -q "^PEER EXIT 0" $RUN/peer-bg.out
+}
+
+# the security mode as the test station keeps it (its lock.json, read by the station's own rules): LOCK on|off,
+# DEVICE <id> <person> <kind> own=<own> a line each, STATIONS n
+lock_state() {
+  local f=$(find $STATION/data -name lock.json 2>/dev/null | head -1)
+  [ -n "$f" ] || { echo "LOCK off"; return; }
+  (cd $E/station && node --input-type=module -e "
+import { readFileSync } from 'node:fs';
+const { fold } = await import('./src/cloud/lock.ts');
+const j = JSON.parse(readFileSync(process.argv[1], 'utf8'));
+const s = fold(j.entries ?? j, null);
+console.log(s.disabled ? 'LOCK off' : 'LOCK on ' + s.seq);
+for (const [id, d] of s.devices) console.log('DEVICE ' + id.slice(0, 12) + ' ' + d.sub + ' ' + d.kind + ' own=' + d.own + ' ' + (d.label ?? ''));
+console.log('STATIONS ' + s.stations.size);
+" "$f")
+}
+
+# the emulator's screen lock (EMU_PORT): a PIN set, as a person's phone has one (what the vault's box key asks for);
+# `android-unlock PIN`: the system's prompt for it (BiometricPrompt, the device's credential) answered with it
+# (the prompt's PIN field focused, as the system's own view tree says it: a fact of its state, read until so; the
+# prompt's window is secure, no picture of it)
+android_unlock() {
+  local adb="${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb -s emulator-${EMU_PORT:-5586}" i
+  for i in $(seq 1 60); do
+    $adb exec-out uiautomator dump /dev/tty 2>/dev/null | grep -q 'resource-id="com.android.systemui:id/lockPassword"[^>]*focused="true"' && {
+      $adb shell input text "$1" && $adb shell input keyevent 66; echo "UNLOCK typed"; return 0; }
+  done
+  echo "UNLOCK no prompt"; return 1
+}
+android_pin() {
+  local adb="${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb -s emulator-${EMU_PORT:-5586}"
+  $adb shell locksettings set-pin "$1" >/dev/null 2>&1 || $adb shell locksettings verify --old "$1" >/dev/null
 }
 
 sql() { sqlite3 -readonly $STATION/data/stillfail.db "$@"; }
@@ -408,9 +518,11 @@ drive_big() {
 # it (19-rename, 20-delete) when they are run apart from it
 drive_photo() {
   local d=$STATION/home/e2e-${1:?a tag}
-  mkdir -p $d
-  cp $WORK/files/e2e-photo.jpg $d/e2e-photo.jpg
-  say "drive photo $d/e2e-photo.jpg"
+  local name=e2e-photo.jpg
+  [ "${2:-}" != renamed ] || name="照片-$1.jpg"
+  mkdir -p "$d"
+  cp "$WORK/files/e2e-photo.jpg" "$d/$name"
+  say "drive photo $d/$name"
 }
 
 # a novel of made-up chapters in GB18030 (98-reader: not UTF-8, read as the Android app reads it), e2e-<tag>/旧小说-gb.txt
@@ -567,7 +679,7 @@ thaw() {
 }
 
 case "${1:-all}" in
-  install) ember; for n in iroh-relay mesh runner launcher; do native $n > /dev/null; done ;;
+  install) sources; for n in iroh-relay mesh runner launcher; do native $n > /dev/null; done ;;
   up) up ;;
   snapshot) shift; snapshot "$@" ;;
   restore) shift; restore "$@" ;;
@@ -575,6 +687,14 @@ case "${1:-all}" in
   status)
     for p in relay cloud station; do echo "$p: $(alive $p && echo "up ($(cat $RUN/$p.pid))" || echo down)"; done ;;
   peer) shift; peer "$@" ;;
+  peer-bg) shift; peer_bg "$@" ;;
+  peer-said) shift; peer_said "$@" ;;
+  peer-wait) peer_wait ;;
+  intruder-refused) shift; intruder_refused "$@" ;;
+  android-unlock) android_unlock "$2" ;;
+  lock-state) lock_state ;;
+  android-pin) shift; android_pin "$@" ;;
+  android-tap) shift; "${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb" -s emulator-${EMU_PORT:-5586} shell input tap "$@" ;;
   sql) shift; sql "$@" ;;
   connects) shift; connects "$@" ;;
   profiles) shift; profiles "$@" ;;

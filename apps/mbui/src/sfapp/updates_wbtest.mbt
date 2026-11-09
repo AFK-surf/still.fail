@@ -40,7 +40,7 @@ test "a newer build: handed to the host at once to be made ready, nothing over H
   assert_true(update.available.get() is Some(_))
   // (as asked at the start: it may wait for a network that is not metered)
   assert_eq(t.update_asked(), ["fetch stillfail-2.apk false"])
-  assert_eq(update_stands().label, "下载 0.1.1")
+  assert_eq(update_stands().label, "有新版本 0.1.1")
   t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
   t.run_for(@ui.move_most_ms)
   assert_true(update_button_at(t, "传输") is None, msg="the build coming shown over Home")
@@ -78,6 +78,49 @@ test "the leave to install apps wanted: a card over Home says so; pressed, the h
   t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\",\"away\":true}")
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("允许安装更新") is None)
+}
+
+///|
+test "a newer build found during a download is fetched when the host finishes the previous one" {
+  let t = updates_tester(release([]), [])
+  t.frame()
+  t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
+  let newer : Json = {
+    "versionCode": 3,
+    "versionName": "0.1.2",
+    "file": "android/stillfail-3.apk",
+    "sha256": "cd",
+    "size": 1000,
+    "news": [],
+  }
+  set_update_source(Some({ check: fn(_, _, done) { done(Ok(newer)) }, url: fn(file) { file } }))
+  update_check(fixture("home"), false)
+  // The host is still busy: the old download stays visible until the newer one can start.
+  assert_eq(update_stands().label, "正在下载 0.1.1")
+  assert_eq(t.update_asked(), ["fetch stillfail-2.apk false"])
+  t.tells_update("{\"phase\":\"ready\",\"percent\":-1,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.update_asked(), ["fetch stillfail-2.apk false", "fetch stillfail-3.apk false"])
+}
+
+///|
+test "several releases found during one download: fetch the newest even if an older check answers last" {
+  let t = updates_tester(release([]), [])
+  t.frame()
+  t.tells_update("{\"phase\":\"downloading\",\"percent\":40,\"error\":\"\",\"file\":\"stillfail-2.apk\"}")
+  let version3 : Json = { "versionCode": 3, "versionName": "0.1.2", "file": "android/stillfail-3.apk", "sha256": "cd", "size": 1000 }
+  let version4 : Json = { "versionCode": 4, "versionName": "0.1.3", "file": "android/stillfail-4.apk", "sha256": "ef", "size": 1000 }
+  let answer = Ref(version3)
+  set_update_source(Some({ check: fn(_, _, done) { done(Ok(answer.val)) }, url: fn(file) { file } }))
+  update_check(fixture("home"), false)
+  answer.val = version4
+  update_check(fixture("home"), false)
+  answer.val = version3
+  update_check(fixture("home"), false)
+  t.tells_update("{\"phase\":\"failed\",\"percent\":-1,\"error\":\"incomplete\",\"file\":\"stillfail-2.apk\"}")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.update_asked(), ["fetch stillfail-2.apk false", "fetch stillfail-4.apk false"])
+  assert_eq(update_stands().label, "有新版本 0.1.3")
 }
 
 ///|
@@ -178,4 +221,59 @@ test "the update key while the build goes in: its arrow going up as a station's 
   assert_true(!marks.iter().any(fn(m) { m.contains("icon/download") }), msg="\{marks}")
   assert_true(t.find("重启更新") is None)
   assert_true(t.query(Button, label="重启更新").unwrap().disabled, msg="takes no press while it goes in")
+}
+
+///|
+test "left open, a newer build asked for again each hour: a window never shown again does not stay on its build" {
+  let asked = []
+  let t = updates_tester(Json::null(), asked)
+  t.frame()
+  assert_eq(asked, ["1 false"])
+  // (each hour in one jump, a frame at its end: run_for drew Home's spokes at every 100 ms step on the way, 90 000
+  // frames and 100-146 s of CI for two and a half hours (2026-11-09); the ask is a function of the moment)
+  t.frame(ms=@sfbase.update_again_ms / 2.0)
+  assert_eq(asked, ["1 false"])
+  t.frame(ms=@sfbase.update_again_ms / 2.0 + 1000.0)
+  assert_eq(asked, ["1 false", "1 false"])
+  t.frame(ms=@sfbase.update_again_ms)
+  assert_eq(asked, ["1 false", "1 false", "1 false"])
+}
+
+///|
+test "told a release may be out: a newer build asked for again at once, not as the hour's check" {
+  let asked = []
+  new_run()
+  let told = @signals.signal(3)
+  let base = fixture("home")
+  let src : @sfbase.Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      if name == "releases" {
+        { value: Some({ "told": Json::number(told.get().to_double()) }), error: None, version: 1 }
+      } else {
+        (base.topic_read)(name, params)
+      }
+    },
+  }
+  update_version.val = 1
+  set_update_source(
+    Some({
+      check: fn(version, now, done) {
+        asked.push("\{version} \{now}")
+        done(Ok(Json::null()))
+      },
+      url: fn(file) { "https://example.test/releases/" + file },
+    }),
+  )
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.frame()
+  // (what the core had said before the app heard it: nothing more than the start's check)
+  assert_eq(asked, ["1 false"])
+  told.set(4)
+  t.frame()
+  assert_eq(asked, ["1 false", "1 false"])
+  told.set(5)
+  t.frame()
+  t.frame()
+  assert_eq(asked, ["1 false", "1 false", "1 false"])
 }

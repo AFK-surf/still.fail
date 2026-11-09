@@ -1,4 +1,4 @@
-// Agent processes kept by runners (native/runner, docs/station-ts-native.md §1): each claude or codex process is the
+// Agent processes kept by runners (native/runner §1): each claude or codex process is the
 // child of a `stillfail-runner` that outlives this station, restarting or crashing. Starting one gives a handle; a
 // station starting finds those of before (<data>/run/runners/*.json) and takes them up again where it stopped reading:
 // what it has handled is acknowledged line by line, so nothing is read twice and nothing is lost.
@@ -11,6 +11,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { createConnection, type Socket } from "node:net";
 import { join } from "node:path";
 import { niced } from "../ops/nice.ts";
+import { withShellCommand } from "../ops/shell-path.ts";
 import { platform } from "../platform/index.ts";
 import { runnerBinary } from "../platform/processes.ts";
 import { inSandbox, keyOfRunner, syncFor } from "./sandbox.ts";
@@ -24,6 +25,8 @@ export type RunnerInfo = {
   program: string;
   args: string[];
   socket: string;
+  /// It gives back stdout's disk only up to an ack's `keep` (one from before gives back up to the ack).
+  keeps?: boolean;
 };
 
 export type Exit = { code: number | null; signal: string | null };
@@ -48,12 +51,15 @@ export class CommandMissing extends Error {
 
 /// Starts `program` under a runner, its environment `env` (the agent's whole environment), in `cwd`.
 /// `local`: here even when the station runs things in sandboxes.
-export function startRunner(data: string, id: string, program: string, args: string[], env: NodeJS.ProcessEnv, cwd: string, local = false): Promise<RunnerInfo> {
+export async function startRunner(data: string, id: string, program: string, args: string[], env: NodeJS.ProcessEnv, cwd: string, local = false): Promise<RunnerInfo> {
   // In the session's sandbox when the station runs things there (agents/sandbox.ts): the runner here runs the bridge.
   const placed = local ? null : inSandbox(data, keyOfRunner(id), program, args, cwd, { agent: true, sync: syncFor(data, id.split("-")[0], env, cwd) });
   if (placed !== null) ({ program, args } = placed);
   // Looked for as the runner would (its PATH is `env`'s): one not there is told apart from a runner that failed.
-  else if (!/[\\/]/.test(program) && platform.findCommand(program, env) === null) return Promise.reject(new CommandMissing(program));
+  else {
+    env = await withShellCommand(program, env);
+    if (!/[\\/]/.test(program) && platform.findCommand(program, env) === null) return Promise.reject(new CommandMissing(program));
+  }
   return new Promise((resolve, reject) => {
     // Lower than the station (ops/nice.ts), the runtime it starts and what that starts too.
     const [command, given] = niced(runnerBinary(), ["--dir", runnersDir(data), "--id", id, "--cwd", cwd, "--", program, ...args]);
@@ -91,13 +97,15 @@ export function existingRunners(data: string): RunnerInfo[] {
 
 /// The runners alive now, as `existingRunners` finds them, read without holding the station's thread: what is looked at
 /// every few seconds (jobs/memory.ts, resources/watch.ts). Their files are some 10 kB each (a command's arguments), and
-/// on a machine short of memory the twenty of ccvm took up to 5 s to read on the thread (2026-10-25).
-export async function liveRunners(data: string): Promise<RunnerInfo[]> {
+/// on a machine short of memory twenty runners took up to 5 s to read on the thread (2026-10-25).
+export async function liveRunners(data: string, options: { strict?: boolean } = {}): Promise<RunnerInfo[]> {
   const dir = runnersDir(data);
   let names: string[];
   try {
     names = await readdir(dir);
-  } catch {
+  } catch (error) {
+    // Recovery must not mistake an unreadable directory for no runners and start a second owner for their threads.
+    if (options.strict && (error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     return [];
   }
   const read = await Promise.all(names.filter((f) => f.endsWith(".json")).map((f) => readFile(join(dir, f), "utf8").catch(() => null)));
@@ -144,6 +152,9 @@ export class RunnerConnection {
   /// Where each stream's next line starts, as the runner counts bytes.
   private at: Record<"out" | "err", number> = { out: -1, err: -1 };
   private acked: Record<"out" | "err", number> = { out: 0, err: 0 };
+  /// Up to where of stdout the runner may give the disk back (native/runner `punch`), told with each ack: what a station
+  /// reads again after a crash begins there (process.ts `readFrom`). Null: up to what was acknowledged.
+  keep: number | null = null;
   private queue: Promise<void> = Promise.resolve();
   private left = false;
   readonly exited: Promise<Exit>;
@@ -151,7 +162,7 @@ export class RunnerConnection {
 
   /// `line` is called for each whole line in order, one at a time (a promise is waited for); once it is done, the line
   /// is acknowledged.
-  constructor(info: RunnerInfo, line: (stream: "out" | "err", text: string) => void | Promise<void>) {
+  constructor(info: RunnerInfo, line: (stream: "out" | "err", text: string, from: number, to: number) => void | Promise<void>) {
     this.info = info;
     this.exited = new Promise((resolve) => (this.exit = resolve));
     this.socket = createConnection(info.socket);
@@ -168,18 +179,19 @@ export class RunnerConnection {
     });
   }
 
-  private data(stream: "out" | "err", at: number, bytes: Buffer, line: (s: "out" | "err", t: string) => void | Promise<void>) {
+  private data(stream: "out" | "err", at: number, bytes: Buffer, line: (s: "out" | "err", t: string, from: number, to: number) => void | Promise<void>) {
     if (this.at[stream] < 0) this.at[stream] = at;
     let buf = Buffer.concat([this.partial[stream], bytes]);
     for (let i = buf.indexOf(10); i >= 0; i = buf.indexOf(10)) {
       const text = buf.subarray(0, i).toString("utf8");
       buf = buf.subarray(i + 1);
+      const start = this.at[stream];
       this.at[stream] += i + 1;
       const end = this.at[stream];
       this.queue = this.queue.then(async () => {
-        await line(stream, text);
+        await line(stream, text, start, end);
         this.acked[stream] = end;
-        this.send({ op: "ack", out: this.acked.out, err: this.acked.err });
+        this.send({ op: "ack", out: this.acked.out, err: this.acked.err, ...(this.keep !== null ? { keep: this.keep } : {}) });
       });
     }
     this.partial[stream] = buf;

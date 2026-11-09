@@ -1,17 +1,7 @@
-// Other makers' marks, drawn as they publish them (filled, in the text's colour): not still.fail's icons (icons.tsx,
-// generated from its own drawings), which are lines.
 
-/** GitHub's mark (the Octocat in a circle), `size` px square. */
-export function GitHubMark({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
-    </svg>
-  );
-}
 
 /** The agent runtimes a mark is drawn for (still.fail's RuntimeKind). */
-export type RuntimeMarkKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin" | "hermes";
+type RuntimeMarkKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin" | "hermes" | "agy";
 /** A mark stands on its own: no baseline room under it, never squeezed in a row. */
 const BLOCK = { display: "block", flex: "none" } as const;
 
@@ -43,10 +33,13 @@ export function FeishuLogo({ size = 16 }: { size?: number; strokeWidth?: number 
 /**
  * The agent runtimes' marks: Claude's in its orange, OpenAI's (Codex), DeepSeek Harness's, xAI's (Grok Build), Cursor's and
  * Devin's in the text colour. Claude's, OpenAI's and Cursor's paths from simple-icons (CC0); DeepSeek Harness's from its
- * repository (MIT); xAI's the maker mark Grok's models have (public/models/xai.svg); Devin's from devin.ai's favicon.
+ * repository (MIT); xAI's the maker mark Grok's models have (public/models/xai.svg); Devin's from devin.ai's favicon; the Antigravity CLI's Gemini's mark (public/models/gemini.svg) in its blue.
  */
 export function RuntimeLogo({ runtime, size = 16, className }: { runtime: RuntimeMarkKind; size?: number; className?: string }) {
   if (runtime === "hermes") return <svg width={size} height={size} viewBox="0 0 24 24" role="img" aria-label="Hermes Agent"><path fill="none" stroke="currentColor" strokeWidth="2" d="M6 4v16M18 4v16M6 12h12" /></svg>;
+  if (runtime === "agy") return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-label="Antigravity CLI" role="img" style={BLOCK} className={className} data-depicts><path fill="#3186FF" d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z" /></svg>
+  );
   if (runtime === "devin") return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-label="Devin" role="img" style={BLOCK} className={className}><path fill="currentColor" d="M1.984 8.248V3.495C1.984 3.287 2.096 3.093 2.277 2.989L6.391 0.613C6.572 0.509 6.795 0.509 6.976 0.613L11.091 2.989C11.272 3.093 11.383 3.287 11.383 3.495V5.923C11.402 6.729 11.828 7.507 12.578 7.94C13.327 8.373 14.214 8.353 14.922 7.965L17.024 6.752C17.205 6.647 17.428 6.647 17.609 6.752L21.723 9.128C21.904 9.232 22.016 9.425 22.016 9.634V14.385C22.016 14.594 21.904 14.787 21.723 14.892L17.609 17.268C17.428 17.372 17.205 17.372 17.024 17.268L14.939 16.064C14.228 15.667 13.334 15.643 12.578 16.08C11.828 16.513 11.402 17.291 11.384 18.097V20.524C11.384 20.733 11.272 20.926 11.091 21.03L6.976 23.406C6.795 23.51 6.573 23.51 6.392 23.406L2.277 21.03C2.096 20.926 1.984 20.733 1.984 20.524V15.772C1.984 15.563 2.096 15.37 2.277 15.266L6.392 12.89C6.573 12.786 6.795 12.786 6.976 12.89L9.083 14.106C9.79 14.491 10.674 14.51 11.422 14.078C12.178 13.642 12.605 12.855 12.617 12.042C12.598 11.235 12.172 10.374 11.422 9.941C10.673 9.508 9.786 9.528 9.078 9.915L6.967 11.142C6.785 11.247 6.561 11.247 6.379 11.141L2.275 8.754C2.095 8.649 1.984 8.456 1.984 8.248Z" /></svg>
   );

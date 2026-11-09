@@ -11,9 +11,7 @@
 # `android` (the Android app: apps/mbui's in the Kotlin one's place, scripts/beta.sh build, MBUI_VARIANT=stable or
 # beta: its APK and latest.json, in android/). Their version is the
 # commits in the history, so a release is made from a new commit; the latest is put last, once its files are there.
-# And `modules`: the packages of the modules stations install themselves (scripts/module-bundle.ts: each one's archive
-# in modules/<id>/, and its feed, modules/<id>/<id>.json or with --beta <id>-beta.json; any machine builds them).
-#   release.sh [--beta] [PLATFORM…]   (default: the station's four; desktop, android and modules only when named)
+#   release.sh [--beta] [PLATFORM…]   (default: the station's four; desktop and android only when named)
 #   release.sh promote [station]
 # --beta: to the test channel instead (cloud/src/install.ts): the station's tarballs in beta/ and station-beta.json; the
 # beta apps, apps of their own beside the released ones (fail.still.desktop.beta: apps/mbui's MBUI_VARIANT=beta, its
@@ -73,16 +71,26 @@ if [ "${1:-}" = promote ]; then
   exit 0
 fi
 
+# --product monoid: monoid's apps (the same apps on monoid's cloud: apps/mbui's monoid and monoid-beta variants), for
+# monoid's bucket (in the company's Cloudflare account: CLOUDFLARE_API_TOKEN its), named monoid(-beta)-…; its stations
+# install still.fail's releases (cloud/src/install.ts sharedRelease), so only the apps.
+product=stillfail
+if [ "${1:-}" = --product ]; then product=$2; shift 2; fi
+case $product in stillfail | monoid) ;; *) echo "release.sh: --product is stillfail or monoid, not $product" >&2; exit 2 ;; esac
 beta=""
 if [ "${1:-}" = --beta ]; then beta=yes; shift; fi
 platforms=${*:-darwin-arm64 linux-x64 linux-arm64 win32-x64}
 for platform in $platforms; do
+  case "$product $platform" in
+    "monoid android" | "monoid desktop" | "monoid desktop-win") ;;
+    monoid\ *) echo "release.sh: monoid releases its apps alone (android, desktop, desktop-win), not $platform" >&2; exit 2 ;;
+  esac
   # (the Windows app is mbui's, built on Windows: below)
   if [ "$platform" = desktop-win ]; then
     case "$(uname -s)" in MINGW* | MSYS*) continue ;; esac
     echo "the Windows app's release requires Windows (Git Bash, MSVC's environment: apps/mbui/scripts/win.sh)" >&2; exit 1
   fi
-  if [ "$platform" != android ] && [ "$platform" != modules ] && [ "$(uname -s)-$(uname -m)" != Darwin-arm64 ]; then
+  if [ "$platform" != android ] && [ "$(uname -s)-$(uname -m)" != Darwin-arm64 ]; then
     echo "$platform releases require a Mac with Apple silicon" >&2; exit 1
   fi
 done
@@ -123,6 +131,8 @@ for platform in $platforms; do
       # Electron app over.
       variant=${beta:+beta}
       variant=${variant:-stable}
+      # (monoid's: build.monoid.desktop, .beta, its own name and links; no Electron app of its own to move over)
+      [ "$product" = stillfail ] || variant=$product${beta:+-beta}
       mbui_cache=${MBUI_MAC_CACHE:-$HOME/stillfail-ci/mbui-mac-$variant}
       tools=
       # A fresh CI checkout already has MoonBit on PATH; a persistent machine keeps its own toolchain in the cache.
@@ -136,6 +146,7 @@ for platform in $platforms; do
         bash "$root/apps/mbui/scripts/beta.sh" mac
       app_zip="$out/mbui/mac/app-$variant.zip"
       id=fail.still.desktop${beta:+.beta}
+      [ "$product" = stillfail ] || id=build.$product.desktop${beta:+.beta}
       # what is in it checked before anything is uploaded: the app it replaces (its id), signed by still.fail's team
       # (an installed app takes nothing else; UNSIGNED=1, as build.sh's: for trying it out, never put), its build
       rm -rf "$out/mac-check" && mkdir -p "$out/mac-check" && ditto -x -k "$app_zip" "$out/mac-check"
@@ -149,16 +160,17 @@ for platform in $platforms; do
       [ "$have_id" = "$id" ] && [ "$have_build" = "$build" ] || { echo "release.sh: $app is $have_id $have_build, not $id $build: not released" >&2; exit 1; }
       [ "$have_team" = D9AAN3VJK8 ] || [ -n "${UNSIGNED:-}" ] || { echo "release.sh: $app is signed by ${have_team:-no team}, not still.fail's (D9AAN3VJK8): not released" >&2; exit 1; }
       echo "$app: $have_id $have_build, signed by team $have_team"
-      zip="stillfail${beta:+-beta}-0.1.$build-arm64-mac.zip"
+      zip="$product${beta:+-beta}-0.1.$build-arm64-mac.zip"
       put "$app_zip" "desktop/$zip" application/zip
       if [ -z "${RELEASE_DIR:-}" ]; then
         work=${WORK:-"$mbui_cache/work"}
         if [ "${MBUI_FRESH:-}" = 1 ]; then work="$root/apps/mbui"; fi
-        sh "$root/scripts/release-put.sh" --clean-uploaded "desktop/$zip" "$work/out/mac/stillfail${beta:+-beta}-$build-arm64-mac.zip"
+        sh "$root/scripts/release-put.sh" --clean-uploaded "desktop/$zip" "$work/out/mac/$product${beta:+-beta}-$build-arm64-mac.zip"
       fi
       sh "$root/scripts/mac-feeds.sh" "$app_zip" "$zip" "$build" "$out/mac-latest.json" "$out/mac.yml"
       put "$out/mac-latest.json" "mac/${beta:+beta/}latest.json" application/json
-      put "$out/mac.yml" "desktop/stillfail${beta:+-beta}-mac.yml" "text/yaml; charset=utf-8"
+      # (electron-updater's, which moves an installed Electron app over: still.fail's alone had one)
+      [ "$product" != stillfail ] || put "$out/mac.yml" "desktop/stillfail${beta:+-beta}-mac.yml" "text/yaml; charset=utf-8"
       ;;
     desktop-win)
       # The Windows app (fail.still.desktop; with --beta the beta app, fail.still.desktop.beta) is mbui's (apps/mbui) in
@@ -175,7 +187,12 @@ for platform in $platforms; do
       id=fail.still.desktop${beta:+.beta}
       program=still.fail
       [ -z "$beta" ] || program=youdid.wtf
-      exe="stillfail${beta:+-beta}-0.1.$build-x64-win.exe"
+      # (monoid's: build.monoid.desktop, .beta, its program monoid or monoid.zone: apps/mbui/scripts/win.sh)
+      if [ "$product" = monoid ]; then
+        variant=monoid${beta:+-beta} id=build.monoid.desktop${beta:+.beta} program=monoid
+        [ -z "$beta" ] || program=monoid.zone
+      fi
+      exe="$product${beta:+-beta}-0.1.$build-x64-win.exe"
       MBUI_VARIANT=$variant MBUI_BUILD=$build bash "$root/apps/mbui/scripts/win.sh" build
       MBUI_VARIANT=$variant MBUI_BUILD=$build MBUI_SETUP_NAME=$exe bash "$root/apps/mbui/scripts/win.sh" setup
       setup_out=$root/apps/mbui/out/setup
@@ -188,7 +205,7 @@ for platform in $platforms; do
       [ ! -f "$setup_out/$exe.sig" ] || put "$setup_out/$exe.sig" "desktop/$exe.sig" application/json
       sh "$root/scripts/win-feeds.sh" "$setup_out/$exe" "desktop/$exe" "$build" "$setup_out/$exe.sig" "$out/win-latest.json" "$out/win.yml"
       put "$out/win-latest.json" "win/${beta:+beta/}latest.json" application/json
-      put "$out/win.yml" "desktop/stillfail${beta:+-beta}.yml" "text/yaml; charset=utf-8"
+      [ "$product" != stillfail ] || put "$out/win.yml" "desktop/stillfail${beta:+-beta}.yml" "text/yaml; charset=utf-8"
       ;;
     android)
       # fail.still.android on android/latest.json; with --beta fail.still.android.beta on android/beta/latest.json. The
@@ -199,58 +216,40 @@ for platform in $platforms; do
       # 0.1.4520): apk.json's `stable` variant, fail.still.android, the same key, updating the Kotlin app in place.
       variant=${beta:+beta}
       variant=${variant:-stable}
+      # (monoid's: build.monoid.android, .beta, the same key)
+      [ "$product" = stillfail ] || variant=$product${beta:+-beta}
       mbui_cache=${MBUI_CACHE:-$HOME/stillfail-ci/mbui-beta}
-      MBUI_CACHE=$mbui_cache bash "$root/apps/mbui/scripts/beta.sh" tools
-      node "$root/scripts/native.ts" fetch engine android-arm64 > /dev/null
-      node "$root/scripts/native.ts" fetch shell android-arm64 > /dev/null
-      MBUI_CACHE=$mbui_cache MBUI_TOOLS=$mbui_cache/tools MBUI_VARIANT=$variant RELEASE_DIR="$out/mbui" \
-        bash "$root/apps/mbui/scripts/beta.sh" build
+      # (one build in the cache at a time: still.fail's and monoid's Android apps are built on the same machine, often
+      # at once, and wrote each other's C over in its work/out (2026-11-04, "mbc: cannot write"); lockf's lock goes with
+      # the build that holds it, however it ends)
+      mkdir -p "$mbui_cache"
+      lockf -k "$mbui_cache/.build.lock" env MBUI_CACHE="$mbui_cache" MBUI_VARIANT="$variant" RELEASE_DIR="$out/mbui" \
+        root="$root" sh -c '
+          set -e
+          bash "$root/apps/mbui/scripts/beta.sh" tools
+          node "$root/scripts/native.ts" fetch engine android-arm64 > /dev/null
+          node "$root/scripts/native.ts" fetch shell android-arm64 > /dev/null
+          MBUI_TOOLS=$MBUI_CACHE/tools bash "$root/apps/mbui/scripts/beta.sh" build
+        '
       apk="$out/mbui/android/app-$variant.apk"
       # its signature verified before anything is uploaded: one that does not verify is not released (it was, printed
       # and passed over, until 2026-10-20)
       apksigner="${ANDROID_HOME:-$HOME/Library/Android/sdk}/build-tools/36.0.0/apksigner"
       "$apksigner" verify "$apk" || { echo "release.sh: $apk does not verify (apksigner): not released" >&2; exit 1; }
       # and signed with our key, not merely a key: an installed app updates only to an APK of the same certificate.
-      # The certificate of studio's ~/.android/debug.keystore (ANDROID_DEBUG_KEYSTORE_B64), as every release so far has
-      # it (apksigner verify --print-certs of stillfail-beta-3787.apk, 2026-10-20)
+      # The certificate expected for releases (ANDROID_DEBUG_KEYSTORE_B64), checked against an earlier release.
       want=a01a48b5e1a6d2abfbea3457b6c71d1257bc429793bd8b3ebef6be8ee155b56a
       have=$("$apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
-      [ "$have" = "$want" ] || { echo "release.sh: $apk is signed with ${have:-no certificate}, not $want (studio's key): not released" >&2; exit 1; }
-      echo "$apk: signed with $have (SHA-256), studio's key"
-      name="stillfail${beta:+-beta}-$build.apk"
+      [ "$have" = "$want" ] || { echo "release.sh: $apk is signed with ${have:-no certificate}, not $want: not released" >&2; exit 1; }
+      echo "$apk: signed with $have (SHA-256), release key"
+      name="$product${beta:+-beta}-$build.apk"
       put "$apk" "android/$name" application/vnd.android.package-archive
       printf '{"versionCode":%s,"versionName":"0.1.%s","file":"android/%s","sha256":"%s","size":%s}\n' \
         "$build" "$build" "$name" "$(shasum -a 256 "$apk" | cut -d' ' -f1)" "$(wc -c < "$apk" | tr -d ' ')" > "$out/latest.json"
       put "$out/latest.json" "android/${beta:+beta/}latest.json" application/json
       ;;
-    modules)
-      # Each module's package (scripts/module-bundle.ts, docs/station-modules.md): its archive, named by its version, and
-      # its feed on this channel, signed as the station's is. The archive is the same bytes whenever its version is packed
-      # (the other channel's, a later commit's): one already out is checked to be these, never put over (it is kept for
-      # good where it is served: cloud/src/releases.ts). A module with native parts (the media service's ffmpeg) has an
-      # archive per platform, each carrying the parts the release native-artifacts has (the natives job published them).
-      ids=$(node "$root/scripts/module-bundle.ts" list)
-      for id in $ids; do
-        node "$root/scripts/module-bundle.ts" pack "$id" "$out/module" ${beta:+--beta} ${RELEASE_DIR:+--unsigned-ok} > "$out/module.names"
-        names=$(cat "$out/module.names")
-        feed=${names##* }
-        for archive in ${names% *}; do
-          if released "$archive"; then
-            { { [ -n "${RELEASE_DIR:-}" ] && [ -f "$RELEASE_DIR/$archive" ] && cp "$RELEASE_DIR/$archive" "$out/module.was"; } || curl -fsS -o "$out/module.was" "$releases/$archive"; } &&
-              cmp -s "$out/module.was" "$out/module/$archive" ||
-              { echo "$archive is out already, with other bytes than packed here: not put over (a change to how modules are packed, or to a native part they carry, is a new version)" >&2; exit 1; }
-            echo "$archive is out already, the same"
-          else
-            put "$out/module/$archive" "$archive" application/gzip
-          fi
-        done
-        put "$out/module/$feed" "$feed" application/json
-      done
-      ;;
     *)
       sh "$root/scripts/station-bundle.sh" "$out/$platform" "$platform"
-      # Under the new name only: the old name (ember-station-*.tar.gz) keeps the last release from before the rename,
-      # for the cloud's installer from before it, which would not know this layout (cloud/src/install.ts).
       # Packed and put beside the next platform's bundling (each ~20 s, one after another before 2026-10-04).
       # Windows' a zip (install.ps1 opens it with Expand-Archive), its Node nodejs.org's own zip (node-dist.sh).
       if [ "$platform" = win32-x64 ]; then
@@ -279,7 +278,7 @@ done
 for pid in ${putting:-}; do wait "$pid" || { echo "a station release was not put" >&2; exit 1; }; done
 # What stations read to say a newer release is out (station/src/updates/updates.ts), once its files are there: its
 # version, and the words naming each archive and its Node, signed with $RELEASE_SIGNING_KEY (scripts/release-sign.ts,
-# docs/release-signing.md). Not signing is an error but into RELEASE_DIR outside CI (a dev cloud's), where it warns.
+# scripts/release-sign.ts). Not signing is an error but into RELEASE_DIR outside CI (a dev cloud's), where it warns.
 if [ -n "${station:-}" ]; then
   node "$root/scripts/release-sign.ts" station "$out/station.json" --build "$build" --commit "$(git -C "$root" rev-parse HEAD)" \
     --node "$(cat "$root/.node-version")" ${RELEASE_DIR:+--unsigned-ok} $signing

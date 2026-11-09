@@ -34,8 +34,8 @@ pub(all) struct ToggleState {
 }
 
 ///|
-/// A toggle labelled `label` (its id `key`'s, else its label's), `pressed` or not. What it became, and what happened
-/// to it.
+/// A toggle labelled `label` (its id `key`'s, else its label's), `pressed` or not; `on_change`: what turning it does,
+/// given what it became, as it is turned, outside any build. What it became, and what happened to it.
 pub fn toggle(
   c : @ui.Ctx,
   label : String,
@@ -43,8 +43,13 @@ pub fn toggle(
   key? : String = "",
   disabled? : Bool = false,
   look? : (@ui.Ctx, ToggleState) -> Unit = toggle_look,
+  on_change? : (Bool) -> Unit,
 ) -> @ui.Changed[Bool] {
   let id = c.id(if key == "" { "\u{2}toggle/" + label } else { key })
+  match on_change {
+    Some(f) if !disabled => c.on_press(id, fn() { f(!pressed) })
+    _ => ()
+  }
   let r = c.interact(id, disabled~)
   let on = if r.clicked { !pressed } else { pressed }
   let st = {
@@ -103,7 +108,9 @@ pub(all) struct GroupState {
 /// keeps that, the others sharing what is left, as CSS's flex: 1); `widths`: each item as wide as its first where the
 /// room is, giving way down to its second where there is less (CSS's width with its min-width: a row short of room
 /// takes alike from each, none past its least), its look as wide; `lens`: the glass the thumb is under a finger
-/// (`lens_grow` larger, a capsule). What is pressed now, and what happened to the group (`changed`; `clicked` when an item was).
+/// (`lens_grow` larger, a capsule); `on_change`: what pressing an item does, given what is pressed then, as it is
+/// pressed, outside any build. What is pressed now, and what happened to the group (`changed`; `clicked` when an item
+/// was).
 pub fn toggle_group(
   c : @ui.Ctx,
   key : String,
@@ -122,6 +129,7 @@ pub fn toggle_group(
   ground? : (@ui.Ctx, GroupState, () -> Unit) -> Unit = group_look,
   lens? : @ui.Glass,
   lens_grow? : Double = 1.12,
+  on_change? : (Array[String]) -> Unit,
 ) -> @ui.Changed[Array[String]] {
   let id = c.id(key)
   let slide = slide && !multiple
@@ -147,6 +155,13 @@ pub fn toggle_group(
           let off = disabled || it.disabled
           // (with a lens, a finger held on it is still its press: let go, chosen)
           let r = c.interact(iid, disabled=off, holds=slide && lens is Some(_))
+          match on_change {
+            Some(f) if !off => {
+              let v = it.value
+              c.on_press(iid, fn() { f(group_pressed(value, v, multiple)) })
+            }
+            _ => ()
+          }
           if r.pressed && @ui.pointing() is Finger {
             fingered = k
           }
@@ -156,15 +171,7 @@ pub fn toggle_group(
             if !now.contains(it.value) {
               felt_tick(c, key)
             }
-            if multiple {
-              now = if now.contains(it.value) {
-                now.filter(fn(v) { v != it.value })
-              } else {
-                now + [it.value]
-              }
-            } else {
-              now = if now.contains(it.value) { [] } else { [it.value] }
-            }
+            now = group_pressed(now, it.value, multiple)
             if now.contains(it.value) {
               c.roving_prefer(iid)
             }
@@ -208,9 +215,10 @@ pub fn toggle_group(
             Some(g) if !c.glass_solid() => Some(g)
             _ => None
           }
+          // (read as it is built: the lens's shadow grows with it from none, which no look draws)
           let held = match glass {
             Some(_) =>
-              animate(c, key + "/held", if fingered >= 0 { 1.0 } else { 0.0 }, transition=@motion.lift_spring)
+              @motion.animate(c, "\u{2}held/" + key, if fingered >= 0 { 1.0 } else { 0.0 }, spec=@motion.lift_spring)
             None => 0.0
           }
           let chosen = items.search_by(fn(it) { now.contains(it.value) })
@@ -249,6 +257,23 @@ pub fn toggle_group(
   c.semantics(gi, Group, label~, disabled~)
   let changed = now.length() != value.length() || now.iter().any(fn(v) { !value.contains(v) })
   { value: now, response: { ..any, id, changed: changed } }
+}
+
+///|
+/// What a group pressed `was` has pressed once item `v` is pressed: `v` let go if it was pressed, else pressed (alone,
+/// unless `multiple`).
+fn group_pressed(was : Array[String], v : String, multiple : Bool) -> Array[String] {
+  if multiple {
+    if was.contains(v) {
+      was.filter(fn(x) { x != v })
+    } else {
+      was + [v]
+    }
+  } else if was.contains(v) {
+    []
+  } else {
+    [v]
+  }
 }
 
 ///|

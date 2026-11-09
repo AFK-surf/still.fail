@@ -3,7 +3,6 @@
 import { Effect, Queue } from "effect";
 import { zstdCompressSync } from "node:zlib";
 import { Core } from "../src/core.ts";
-import type { CoreModule } from "../src/module.ts";
 import type { HttpRequest, HttpResponse, Pull } from "../src/host.ts";
 import { HostWire, type StationWire } from "../src/station/wire.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
@@ -38,7 +37,7 @@ export function stationReplies(host: FakeHost, reply: (req: HttpRequest) => unkn
   replies.set(host, reply);
 }
 
-/// Station answers that take a while (a real station behind it, docs/core-modules.md's end-to-end test): asked first;
+/// Station answers that take a while (a real station behind it): asked first;
 /// `undefined`, the others'.
 const later = new WeakMap<FakeHost, (req: HttpRequest) => Promise<HttpResponse> | undefined>();
 export function stationLater(host: FakeHost, reply: (req: HttpRequest) => Promise<HttpResponse> | undefined): void {
@@ -115,7 +114,16 @@ export function stationHost(answers: Answers) {
       if (!changes.on) return jsonResponse(404, { error: `no route POST ${path.replace("/admin/api", "").split("?")[0]}` });
       return changedOf(answer({ ...req, method: "GET", url: req.url.replace("/admin/api/changed/", "/admin/api/"), body: null }), list[1] === "sessions" ? "key" : "id", req);
     }
-    const key = `${req.method} ${path.replace("/admin/api", "")}`;
+    let key = `${req.method} ${path.replace("/admin/api", "")}`;
+    // A session's detail with its latest turns alone (`?turns=`): as a station from before, which lists them all, unless
+    // the test answers it as asked.
+    if (!(key in answers) && /^GET \/sessions\/[^/?]+\?turns=\d+(&jobs=now)?$/.test(key)) key = key.split("?")[0]!;
+    // The archive a page at a time (`&page=`): as a station from before, the whole list, unless the test answers pages.
+    if (!(key in answers) && /^GET \/chats\?archived=1&page=/.test(key)) key = "GET /chats?archived=1";
+    // The sidebar's marks (`marks=1`): as a station from before, the sidebar made, unless the test answers marks.
+    if (!(key in answers) && /^GET \/chats\?marks=1/.test(key)) key = "GET /chats";
+    // The open jobs without their chats (`chats=0`): as a station from before, the list as the test answers it.
+    if (!(key in answers) && key === "GET /jobs?chats=0") key = "GET /jobs";
     if (key in answers) return answers[key] instanceof Status ? jsonResponse((answers[key] as Status).code, (answers[key] as Status).body) : jsonResponse(200, answers[key]);
     if (path.startsWith("/admin/api/threads/") && path.includes("/entries")) return jsonResponse(200, { last: 0, entries: [] });
     return jsonResponse(404, { error: "no" });
@@ -137,7 +145,7 @@ export function stationHost(answers: Answers) {
     Effect.gen(function* () {
       const asked = req.url.replace("https://stillfail.test/admin/api", "");
       const feed = told.get(asked);
-      if (feed || `GET ${asked}` in answers) {
+      if (feed || `GET ${asked}` in answers || asked.startsWith("/usage?")) {
         if (!feed) {
           const whole = answer(req);
           let given = false;
@@ -149,7 +157,7 @@ export function stationHost(answers: Answers) {
         yield* Effect.addFinalizer(() => Effect.sync(() => feed.queues.delete(queue)));
         return { status: 200, headers: [["content-type", "text/event-stream"]] as [string, string][], body: { take: Queue.take(queue) } };
       }
-      if (gate.stream === "fail") return yield* Effect.fail(new HostError("连不上"));
+      if (gate.stream === "fail") return yield* Effect.fail(new HostError("connection refused"));
       if (gate.stream instanceof CoreError) return yield* Effect.fail(gate.stream);
       if (gate.stream === "hang") return yield* Effect.never;
       if (typeof gate.stream === "number") {
@@ -215,11 +223,10 @@ export function base(): Answers {
   };
 }
 
-export async function started(answers = base(), sample = 0, wire?: (host: FakeHost) => StationWire, before?: (s: ReturnType<typeof stationHost>) => void, modules?: readonly CoreModule[]) {
+export async function started(answers = base(), sample = 0, wire?: (host: FakeHost) => StationWire, before?: (s: ReturnType<typeof stationHost>) => void) {
   const s = stationHost(answers);
   before?.(s);
-  const core = await Core.create(s.host, { clock: s.host.time.clock, sample, wire: () => (wire ? wire(s.host) : new HostWire(s.host)), modules });
+  const core = await Core.create(s.host, { clock: s.host.time.clock, sample, wire: () => (wire ? wire(s.host) : new HostWire(s.host)) });
   await s.host.time.pass(500);
   return { ...s, core };
 }
-

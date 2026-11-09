@@ -1,5 +1,5 @@
 // The image viewer as nodes of the window's tree (every shell's: sfapp's narrow_shell.mbt, tape_shell.mbt;
-// docs/retained.md), made as it opens and let go as it has gone, over the pages:
+//), made as it opens and let go as it has gone, over the pages:
 //
 //   - its layer: the whole window, a modal layer while it is the one open (View::modal: what is under it, the pages
 //     and what the shell draws round them, takes no press, key, wheel or stop of Tab, and is read out none, as the old
@@ -32,23 +32,26 @@
 
 
 ///|
-/// The viewer the window's tree draws: the one open, else the one going, when what it shows is an image it shows (not
-/// one too big to show).
+/// The viewer the window's tree draws: the one open, else the one going (all of them: a film's and a song's too, its
+/// player hosted on its stage, viewer_player).
 fn tree_viewer() -> Viewer? {
-  let v = match viewer.get() {
+  match viewer.get() {
     Some(v) => Some(v)
     None => pv_leaving.get()
-  }
-  match v {
-    Some(v) if v.tree_draws() => Some(v)
-    _ => None
   }
 }
 
 ///|
-/// Whether the window's tree draws this viewer (an image it shows, not one too big to show), its node made or not yet:
-/// the old frame's viewer_layer none of it.
-pub fn Viewer::tree_draws(self : Viewer) -> Bool {
+/// Whether it is a film or a song, played in the player (@sf.player_view): as its name says it from the start.
+pub fn Viewer::played(self : Viewer) -> Bool {
+  self.kind == Some(KVideo) || self.kind == Some(KAudio)
+}
+
+///|
+/// Whether it shows a picture of its own on its stage, to zoom, step, fly and mark (an image not too big to show): the
+/// window's tree's nodes draw it and its bars; anything else it shows, and its bars, its old views hosted there
+/// (viewer_hosted).
+pub fn Viewer::markable(self : Viewer) -> Bool {
   self.shown_kind() == Some(KImage) && self.file.size <= big_file
 }
 
@@ -99,7 +102,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   .takes_back(fn() {
     if !vw.closing {
       if marking.on {
-        marks_back(@ui.current())
+        marks_back()
       } else {
         vw.shut(@ui.current())
       }
@@ -117,7 +120,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   vw.set_out(@ui.current(), src, n.cause_at())
   // (what marking stamps what it makes by: this source's clock, as the old view's said it each frame)
   src_now.val = src.now
-  image_ends(n, vw)
+  image_ends(n, vw, src)
   // what marking made, taken as the host says it is drawn (MarkedImage::ready, its answers' signal): kept, or into the
   // chat's draft, once (Viewer::marks_frame takes it), by this viewer while it is the one open and its layer here; a
   // drawing another by its id, whatever it drew
@@ -140,18 +143,19 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   // for before it was here saved as its whole comes; each once (Viewer::ask_save)
   n.reacts(fn() { (vw.asked_told.get(), vw.bytes.get() is Some(_)) }, fn(_) {
     download_told(src, vw)
-    if vw.save_after && @signals.untracked(fn() { vw.bytes.get() }) is Some(_) {
+    if vw.save_after && vw.bytes.untracked() is Some(_) {
       vw.save_after = false
       vw.ask_save(@ui.current())
     }
   })
   // what it reads asked of the core as what it needs comes (its kind sniffed, its bytes, a read failed)
-  n.reacts(fn() { (vw.sniffed.get(), vw.bytes.get() is Some(_), vw.error.get() is Some(_), vw.fetching.get()) }, fn(_) {
-    vw.fetch(@ui.current(), src)
+  // (and as it is asked for: 下载 on one told of, 安装, its whole read first: Viewer::ask_save, ask_install)
+  n.reacts(fn() { (vw.sniffed.get(), vw.bytes.get() is Some(_), vw.error.get() is Some(_), vw.fetching.get(), vw.asked_told.get()) }, fn(_) {
+    vw.fetch(src)
   })
-  // the images beside it read ahead as what is beside it is said (the core's imageNear, its folder), at that change:
-  // what draws it reads only what came of them
-  n.reacts(fn() { vw.near_ids(src) }, fn(_) {
+  // Read the neighbours ahead once the open picture has come (or failed). Revisit both when imageNear changes and
+  // when this picture finishes, even if no frame was drawn in between.
+  n.reacts(fn() { (vw.near_ids(src), vw.bytes.get() is Some(_), vw.error.get() is Some(_)) }, fn(_) {
     let (before, after) = vw.near(src)
     vw.read_near(src, before, after)
   })
@@ -179,18 +183,21 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       }
     },
   )
-  // the stage: the room it is laid out in (the keyboard over it, not the stage made shorter for it: FilePreview.kt),
+  // the stage: the room it is laid out in (the keyboard over it),
   // and the picture's size (as sent, else as decoded, else its stand-in's: followed by its own decodes), told the zoom
   // at the moment either changes
   n.reacts(
     fn() {
       let (w, h) = stage()
-      ((w, h + @ui.current().ime_inset()), vw.natural_size(src))
+      // (a film's or a song's picture sized by its player alone, Viewer::video_natural: nothing of a picture's asked
+      // for it here, its thumbnail none)
+      ((w, h + n.keyboard_inset()), if vw.played() { (0.0, 0.0) } else { vw.natural_size(src) }, vw.bar_over(w), marks_foot_over())
     },
     fn(told) {
-      let ((bw, bh), (nw, nh)) = told
+      let ((bw, bh), (nw, nh), bar, foot) = told
       let at = n.cause_at()
       vw.zoom.boxed(bw, bh, at~)
+      vw.zoom.under_bars(bar, foot, at~)
       vw.zoom.natural(nw, nh, at~)
     },
   )
@@ -203,7 +210,7 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       // moment, the one the lift sets out at)
       marks_said()
       vw.zoom.told()
-      let ime = @ui.current().ime_inset()
+      let ime = n.keyboard_inset()
       let below = match marks_writing_bottom_in(vw.zoom, vw.zoom.rect_at(n.cause_at())) {
         Some(b) => b + marks_keyboard_gap - stage().1
         None => 0.0
@@ -230,7 +237,10 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
       vw.fade.said()
       let now = g.logic_at()
       let t = if vw.fly.goes_at(now) || vw.fade.goes_at(now) { g.drawn_at() } else { @double.infinity }
-      @sf.alpha(vw.ground_ink(), vw.flight_share_at(t) * vw.fade.value_at(t))
+      // (a film's or a song's under its player's fade too, as the old frame's preview layer laid its ground in the box
+      // it faded: its fade twice where it does not fly)
+      let under = if vw.played() { vw.fade.value_at(t) } else { 1.0 }
+      @sf.alpha(vw.ground_ink(), vw.ground_share(vw.in_at(t)) * under)
     }))
     |> ignore
   })
@@ -238,276 +248,237 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
   // (the rest clear of the column of the system's bars down the window's trailing edge, an iPhone Duo's on its side
   // (@sf.native_clear), its ground on under it, as the old frame's preview layer laid it out)
   let room = n.box(fn(r) {
-    r.over(Is(true)).row(Is(true)).padding(By(fn() { (0.0, 0.0, @sf.native_clear(), 0.0) })) |> ignore
+    // (a film filling the window beside them: the bars put away, edge to edge: @sf.player_full_native)
+    r
+    .over(Is(true))
+    .row(Is(true))
+    .padding(By(fn() {
+      if vw.played() && @sf.player_fills_native(player_width(r.window().0)) {
+        (0.0, 0.0, 0.0, 0.0)
+      } else {
+        (0.0, 0.0, @sf.native_clear(), 0.0)
+      }
+    }))
+    |> ignore
   })
   let n = room.box(fn(m) { m.grow(Is(1.0)) |> ignore })
-  // the canvas: what a finger does on it, the picture drawn in it, as far in as its fade has come (as its ground is; a
-  // flight's fade is put in whole, its picture the flight's own), sampled as its ground is
-  n.box(fn(canvas) {
-    canvas
-    .over(Is(true))
-    .alpha(By(fn() {
-      vw.fade.said()
-      let now = canvas.logic_at()
-      vw.fade.value_at(if vw.fade.goes_at(now) { canvas.drawn_at() } else { @double.infinity })
-    }))
-    // (closed: what is on it the viewer's going alone, a finger on it called off then)
-    .presses(By(fn() {
-      match pv_leaving.get() {
-        Some(l) => !physical_equal(l, vw)
-        None => true
-      }
-    }))
-    .on_drag(fn(d) { vw.finger_on(canvas, src, d) }, fingers=2)
-    // (the pointer's secondary button on the picture: its menu, as a finger held still on it opens it)
-    .on_menu(fn(m) { vw.menu_on(m) })
-    // (a wheel over it, at its moment, where it is on the stage then)
-    .on_wheel(fn(w) { vw.wheeled(vw.zoom, w.x, w.y, w.dx, w.dy, w.mods, w.at) })
-    |> ignore
-    // (the moment what draws the picture reads the strip and the flight at, in `n`: as each frame draws it while either
-    // goes; where neither goes, the clock read no more)
-    let strip_at = fn(n : @view.View) {
-      vw.fly.said()
-      pv_strip.way.said()
-      let now = n.logic_at()
-      if pv_strip.way.goes_at(now) || vw.fly.goes_at(now) {
-        n.drawn_at()
-      } else {
-        now
-      }
-    }
-    // (the picture lying flat where its zoom has it, moved across with the strip, its node (but while it flies: its
-    // flight's nodes), under what is drawn over it)
-    canvas.box(fn(p) {
-      let flat = fn() {
-        strip_at(p) |> ignore
-        vw.bytes.get() |> ignore
-        vw.picture_flat()
-      }
-      p
+  // what it shows of anything but a picture of its own, its bars and what steps it, its old views hosted here
+  // (viewer_hosted)
+  if vw.played() {
+    viewer_player(n, src, vw)
+  } else if !vw.markable() {
+    viewer_hosted(n, src, vw)
+  } else {
+    // the canvas: what a finger does on it, the picture drawn in it, as far in as its fade has come (as its ground is; a
+    // flight's fade is put in whole, its picture the flight's own), sampled as its ground is
+    n.box(fn(canvas) {
+      canvas
       .over(Is(true))
-      .offset(By(fn() {
-        match vw.marks_rect_on(p) {
-          Some((x, y, _, _)) => (x + pv_strip.way.value_at(strip_at(p)), y)
-          None => (0.0, 0.0)
+      .alpha(By(fn() {
+        vw.fade.said()
+        let now = canvas.logic_at()
+        vw.fade.value_at(if vw.fade.goes_at(now) { canvas.drawn_at() } else { @double.infinity })
+      }))
+      // (closed: what is on it the viewer's going alone, a finger on it called off then)
+      .presses(By(fn() {
+        match pv_leaving.get() {
+          Some(l) => !physical_equal(l, vw)
+          None => true
         }
       }))
-      .width(By(fn() { vw.marks_rect_on(p).map(fn(r) { r.2 }) }))
-      .height(By(fn() { vw.marks_rect_on(p).map(fn(r) { r.3 }) }))
-      // (its picture as it is drawn: Viewer::picture_shown)
-      .image(By(fn() {
-        match (flat(), vw.marks_rect_on(p)) {
-          (true, Some(_)) => vw.picture_shown(src)
-          _ => None
-        }
-      }))
+      .on_drag(fn(d) { vw.finger_on(canvas, src, d) }, fingers=2)
+      // (the pointer's secondary button on the picture: its menu, as a finger held still on it opens it)
+      .on_menu(fn(m) { vw.menu_on(m) })
+      // (a wheel over it, at its moment, where it is on the stage then)
+      .on_wheel(fn(w) { vw.wheeled(vw.zoom, w.x, w.y, w.dx, w.dy, w.mods, w.at) })
       |> ignore
-    })
-    |> ignore
-    // (the picture flying in or back, its nodes: from the thumbnail as the chat lays it out in the frame drawn
-    // (Viewer::flight_from) to where its zoom has it, as far as its flight has come then (flight_box): what shows of it
-    // on the window, the box it is cut to, its corners round, the picture in it, as Viewer::picture_shown has it, its
-    // whole picture judged ready for where it lands (View::image_for: as what draws the picture judged it,
-    // Viewer::shown_picture), which of them decided as it is drawn)
-    let flight = fn(n : @view.View) -> (FlightBox, (Double, Double, Double, Double))? {
-      let t = strip_at(n)
-      vw.bytes.get() |> ignore
-      if !vw.flight_node() {
-        return None
-      }
-      let (w, h) = stage()
-      match (vw.flight_from(@ui.current()), vw.marks_rect_on(n)) {
-        (Some(from), Some(to)) => flight_box(from, vw.lifted_at(t), to, vw.flying_at(t), w, h).map(fn(f) { (f, to) })
-        _ => None
-      }
-    }
-    canvas.box(fn(cut) {
-      cut
-      .over(Is(true))
-      .clips(Is(true))
-      .offset(By(fn() {
-        match flight(cut) {
-          Some((f, _)) => (f.cut.0, f.cut.1)
-          None => (0.0, 0.0)
+      // (the moment what draws the picture reads the strip and the flight at, in `n`: as each frame draws it while either
+      // goes; where neither goes, the clock read no more)
+      let strip_at = fn(n : @view.View) {
+        vw.fly.said()
+        pv_strip.way.said()
+        let now = n.logic_at()
+        if pv_strip.way.goes_at(now) || vw.fly.goes_at(now) {
+          n.drawn_at()
+        } else {
+          now
         }
-      }))
-      .width(By(fn() { flight(cut).map(fn(f) { f.0.cut.2 }) }))
-      .height(By(fn() { flight(cut).map(fn(f) { f.0.cut.3 }) }))
-      |> ignore
-      cut.box(fn(b) {
-        b
+      }
+      // (the picture lying flat where its zoom has it, moved across with the strip, its node (but while it flies: its
+      // flight's nodes), under what is drawn over it)
+      canvas.box(fn(p) {
+        let flat = fn() {
+          strip_at(p) |> ignore
+          vw.bytes.get() |> ignore
+          vw.picture_flat()
+        }
+        p
         .over(Is(true))
-        .clips(Is(true))
-        .corners(By(fn() { flight(b).map(fn(f) { f.0.corners }) }))
         .offset(By(fn() {
-          match flight(b) {
-            Some((f, _)) => (f.box.0 - f.cut.0, f.box.1 - f.cut.1)
+          match vw.marks_rect_on(p) {
+            Some((x, y, _, _)) => (x + pv_strip.way.value_at(strip_at(p)), y)
             None => (0.0, 0.0)
           }
         }))
-        .width(By(fn() { flight(b).map(fn(f) { f.0.box.2 }) }))
-        .height(By(fn() { flight(b).map(fn(f) { f.0.box.3 }) }))
+        .width(By(fn() { vw.marks_rect_on(p).map(fn(r) { r.2 }) }))
+        .height(By(fn() { vw.marks_rect_on(p).map(fn(r) { r.3 }) }))
+        // (its picture as it is drawn: Viewer::picture_shown)
+        .image(By(fn() {
+          match (flat(), vw.marks_rect_on(p)) {
+            (true, Some(_)) => vw.picture_shown(src)
+            _ => None
+          }
+        }))
         |> ignore
-        b.box(fn(p) {
-          p
+      })
+      |> ignore
+      // (the picture flying in or back, its nodes: from the thumbnail as the chat lays it out in the frame drawn
+      // (Viewer::flight_from) to where its zoom has it, as far as its flight has come then (flight_box): what shows of it
+      // on the window, the box it is cut to, its corners round, the picture in it, as Viewer::picture_shown has it, its
+      // whole picture judged ready for where it lands (View::image_for: as what draws the picture judged it,
+      // Viewer::shown_picture), which of them decided as it is drawn)
+      image_flight(canvas, src, vw, stage, fn(t) { vw.flies_from_page() == 0 || vw.lifted_at(t) >= 1.0 })
+      // (the one going while the strip's way goes, drawn from where it was, the stage's width and the gap further out to
+      // the side it goes to: it has no place of its own any more (Strip's leaving, its picture as it showed then); none
+      // where this one could not be decoded, its words alone)
+      canvas.box(fn(l) {
+        let going = fn() {
+          let t = strip_at(l)
+          match pv_strip.leaving {
+            Some(g) if pv_strip.way.goes_at(t) && !vw.picture_failed() => Some((g, pv_strip.way.value_at(t)))
+            _ => None
+          }
+        }
+        l
+        .over(Is(true))
+        .offset(By(fn() {
+          match going() {
+            Some((g, sx)) => (g.x + sx - g.dir.to_double() * g.width, g.y)
+            None => (0.0, 0.0)
+          }
+        }))
+        .width(By(fn() { going().map(fn(g) { g.0.w }) }))
+        .height(By(fn() { going().map(fn(g) { g.0.h }) }))
+        .image(By(fn() { going().map(fn(g) { (g.0.picture, "", stage_px) }) }))
+        |> ignore
+      })
+      |> ignore
+      // (those beside it, out of sight until the strip brings them in (none while one is going, none where this one could
+      // not be decoded): each fitted to the stage, the stage's width and the gap to its side, its picture as the one
+      // shown's is)
+      for side in [-1.0, 1.0] {
+        canvas.box(fn(s) {
+          let beside = fn() {
+            let t = strip_at(s)
+            let sx = pv_strip.way.value_at(t)
+            let going = pv_strip.leaving is Some(_) && pv_strip.way.goes_at(t)
+            if sx == 0.0 || going || vw.picture_failed() {
+              return None
+            }
+            let (before, after) = vw.near(src)
+            match (if side < 0.0 { before } else { after }) {
+              Some(n) => {
+                let (w0, h0) = n.natural_size(src)
+                let (bw, bh) = stage()
+                match (fitted_rect(w0, h0, bw, bh, bar=vw.bar_over(bw)), n.picture_shown(src)) {
+                  (Some((x, y, w, h)), Some(shown)) => Some((x + sx + side * (bw + slide_gap), y, w, h, shown))
+                  _ => None
+                }
+              }
+              None => None
+            }
+          }
+          s
           .over(Is(true))
           .offset(By(fn() {
-            match flight(p) {
-              Some((f, _)) => (f.picture.0 - f.box.0, f.picture.1 - f.box.1)
+            match beside() {
+              Some((x, y, _, _, _)) => (x, y)
               None => (0.0, 0.0)
             }
           }))
-          .width(By(fn() { flight(p).map(fn(f) { f.0.picture.2 }) }))
-          .height(By(fn() { flight(p).map(fn(f) { f.0.picture.3 }) }))
-          .image(By(fn() {
-            match flight(p) {
-              Some(_) => vw.picture_shown(src)
-              None => None
-            }
-          }))
-          .image_for(By(fn() {
-            match (flight(p), vw.picture(src)) {
-              (Some((_, (_, _, w, h))), picture) if picture != "" && picture == vw.image => (w, h)
-              _ => (0.0, 0.0)
-            }
-          }))
+          .width(By(fn() { beside().map(fn(b) { b.2 }) }))
+          .height(By(fn() { beside().map(fn(b) { b.3 }) }))
+          .image(By(fn() { beside().map(fn(b) { b.4 }) }))
           |> ignore
         })
         |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-    // (the one going while the strip's way goes, drawn from where it was, the stage's width and the gap further out to
-    // the side it goes to: it has no place of its own any more (Strip's leaving, its picture as it showed then); none
-    // where this one could not be decoded, its words alone)
-    canvas.box(fn(l) {
-      let going = fn() {
-        let t = strip_at(l)
-        match pv_strip.leaving {
-          Some(g) if pv_strip.way.goes_at(t) && !vw.picture_failed() => Some((g, pv_strip.way.value_at(t)))
-          _ => None
-        }
       }
-      l
-      .over(Is(true))
-      .offset(By(fn() {
-        match going() {
-          Some((g, sx)) => (g.x + sx - g.dir.to_double() * g.width, g.y)
-          None => (0.0, 0.0)
-        }
-      }))
-      .width(By(fn() { going().map(fn(g) { g.0.w }) }))
-      .height(By(fn() { going().map(fn(g) { g.0.h }) }))
-      .image(By(fn() { going().map(fn(g) { (g.0.picture, "", stage_px) }) }))
-      |> ignore
-    })
-    |> ignore
-    // (those beside it, out of sight until the strip brings them in (none while one is going, none where this one could
-    // not be decoded): each fitted to the stage, the stage's width and the gap to its side, its picture as the one
-    // shown's is)
-    for side in [-1.0, 1.0] {
+      // (its size neither sent with it nor known yet: a small decode of what it shows asked for, out of sight, that says
+      // it; none drawn of it, Viewer::size_unknown)
       canvas.box(fn(s) {
-        let beside = fn() {
-          let t = strip_at(s)
-          let sx = pv_strip.way.value_at(t)
-          let going = pv_strip.leaving is Some(_) && pv_strip.way.goes_at(t)
-          if sx == 0.0 || going || vw.picture_failed() {
-            return None
-          }
-          let (before, after) = vw.near(src)
-          match (if side < 0.0 { before } else { after }) {
-            Some(n) => {
-              let (w0, h0) = n.natural_size(src)
-              let (bw, bh) = stage()
-              match (fitted_rect(w0, h0, bw, bh), n.picture_shown(src)) {
-                (Some((x, y, w, h)), Some(shown)) => Some((x + sx + side * (bw + slide_gap), y, w, h, shown))
-                _ => None
-              }
-            }
-            None => None
-          }
-        }
         s
         .over(Is(true))
-        .offset(By(fn() {
-          match beside() {
-            Some((x, y, _, _, _)) => (x, y)
-            None => (0.0, 0.0)
+        .width(Is(Some(1.0)))
+        .height(Is(Some(1.0)))
+        .alpha(Is(0.0))
+        .image(By(fn() {
+          vw.bytes.get() |> ignore
+          if !vw.picture_failed() && vw.size_unknown(src) {
+            Some((vw.picture(src), "", stage_px))
+          } else {
+            None
           }
         }))
-        .width(By(fn() { beside().map(fn(b) { b.2 }) }))
-        .height(By(fn() { beside().map(fn(b) { b.3 }) }))
-        .image(By(fn() { beside().map(fn(b) { b.4 }) }))
         |> ignore
       })
       |> ignore
-    }
-    // (its size neither sent with it nor known yet: a small decode of what it shows asked for, out of sight, that says
-    // it; none drawn of it, Viewer::size_unknown)
-    canvas.box(fn(s) {
-      s
-      .over(Is(true))
-      .width(Is(Some(1.0)))
-      .height(Is(Some(1.0)))
-      .alpha(Is(0.0))
-      .image(By(fn() {
-        vw.bytes.get() |> ignore
-        if !vw.picture_failed() && vw.size_unknown(src) {
-          Some((vw.picture(src), "", stage_px))
-        } else {
-          None
-        }
-      }))
-      |> ignore
+      // (its whole picture read and said not to decode: why, alone in the middle of the stage, 24 in from its sides, as
+      // Viewer::note has it; in the theme's muted ink, as the viewer's other words: a picture lies on the page's own
+      // canvas, Viewer::dark)
+      canvas.show(fn() { vw.picture_failed() }, fn(f) {
+        f.over(Is(true)).padding(Is((24.0, 24.0, 24.0, 24.0))).lines_up(Is(Some(Middle))) |> ignore
+        f.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+        f.box(fn(w) {
+          w
+          .words(By(fn() { pv("android-chat.file.image.failed") }))
+          .words_look(By(fn() {
+            // (a size alone said, its line the theme's text_line times it, as Ctx::text has it)
+            let size = @sf.theme().t.body
+            { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own, balance: false }
+          }))
+          .ink(By(fn() { @sf.theme().p.muted }))
+          |> ignore
+        })
+        |> ignore
+        f.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+      })
+      // (over the picture while it marks, once where it is is known: the marks drawn and the numbered marks' pins, its
+      // nodes; over them the words being written, a field of the tree's)
+      canvas.show(fn() { vw.marks_shown() }, fn(h) {
+        // (the marks drawn, over them their pins)
+        h.over(Is(true)) |> ignore
+        h.box(fn(s) { marks_shapes_node(s, vw) }) |> ignore
+        h.box(fn(p) { marks_pins_node(p, vw) }) |> ignore
+      })
+      // (over them the words being written, where they begin on the picture, a field of the tree's: marks_writing_node)
+      canvas.show(
+        fn() {
+          marks_said()
+          vw.marks_shown() && marking.writing is Some(_)
+        },
+        fn(h) { marks_writing_node(h, vw) },
+      )
     })
     |> ignore
-    // (its whole picture read and said not to decode: why, alone in the middle of the stage, 24 in from its sides, as
-    // Viewer::note has it; in the theme's muted ink, as the viewer's other words: a picture lies on the page's own
-    // canvas, Viewer::dark)
-    canvas.show(fn() { vw.picture_failed() }, fn(f) {
-      f.over(Is(true)).padding(Is((24.0, 24.0, 24.0, 24.0))).lines_up(Is(Some(Middle))) |> ignore
-      f.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
-      f.box(fn(w) {
-        w
-        .words(By(fn() { pv("android-chat.file.image.failed") }))
-        .words_look(By(fn() {
-          // (a size alone said, its line the theme's text_line times it, as Ctx::text has it)
-          let size = @sf.theme().t.body
-          { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true }
-        }))
-        .ink(By(fn() { @sf.theme().p.muted }))
-        |> ignore
-      })
-      |> ignore
-      f.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
-    })
-    // (over the picture while it marks, once where it is is known: the marks drawn and the numbered marks' pins, its
-    // nodes; over them the words being written, a field of the tree's)
-    canvas.show(fn() { vw.marks_shown() }, fn(h) {
-      // (the marks drawn, over them their pins)
-      h.over(Is(true)) |> ignore
-      h.box(fn(s) { marks_shapes_node(s, vw) }) |> ignore
-      h.box(fn(p) { marks_pins_node(p, vw) }) |> ignore
-    })
-    // (over them the words being written, where they begin on the picture, a field of the tree's: marks_writing_node)
-    canvas.show(
-      fn() {
-        marks_said()
-        vw.marks_shown() && marking.writing is Some(_)
-      },
-      fn(h) { marks_writing_node(h, vw) },
-    )
-  })
-  |> ignore
+  }
   // beside the system's bars (an iPhone Duo's): what is up over the window said to them, its name, its tabs put away
   // (and, not marking, its actions in their bars in place of its own bar: vf_native's), at the moment what it says
   // changes; kept as said while it is the one open (Viewer::up_still), handed over as each frame ends
   // (@sf.native_over_up)
-  n.reacts(fn() { native_said(vw, src) }, fn(said) {
+  n.reacts(fn() { native_said(vw, src, player_width(n.window().0)) }, fn(said) {
     match said {
+      // (a film's or a song's: its name and its actions there, close, 全屏 and download (vf_native_media), as wide as
+      // its player is laid out; filling the window, none: the bars put away, its name none either)
+      Some({ full, width, .. }) if vw.played() =>
+        if @sf.native_over_up(if full { "" } else { vw.file.name }, alive=fn() { vw.up_still() }, owner="viewer", over=2) &&
+          !full {
+          vf_native_media(vw, @ui.current(), src, width)
+        }
       Some(_) =>
-        if @sf.native_over_up(vw.file.name, alive=fn() { vw.up_still() }, owner="viewer", over=2) && !marking.on {
+        // (a picture's actions and a page's there; anything else its own bar still, its name and tabs theirs)
+        if @sf.native_over_up(vw.file.name, alive=fn() { vw.up_still() }, owner="viewer", over=2) &&
+          !marking.on &&
+          (vw.shown_kind() == Some(KImage) || vw.shown_kind() == Some(KHtml)) {
           vf_native(vw, @ui.current(), src)
         }
       None => ()
@@ -526,17 +497,16 @@ fn image_layer(n : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
     },
     fn(h) { marks_foot_node(h, fn() { (@sf.viewer_host().room)().1 }) },
   )
-  // (the ways to the pictures beside it, its nodes, while it is not marked)
+  // (the ways to the pictures beside it, its nodes, while it is not marked: a picture's, one too big to show too)
   n.show(
     fn() {
       marks_said()
-      !marking.on
+      !marking.on && vw.shown_kind() == Some(KImage)
     },
     fn(h) { image_steps(h, src, vw, stage) },
   )
   // (a mouse's pointer along the top where the bar across it is: the bar shown while it is there, whatever is over it
-  // then, the bar itself as it shows; as the pointer comes in or goes out (vf_bar's near, as the old frame read it of
-  // its pointer each frame))
+  // then, the bar itself as it shows; as the pointer comes in or goes out)
   n.box(fn(top) {
     top.over(Is(true)).height(Is(Some(@sf.viewer_bar_h))) |> ignore
     top.reacts(fn() { top.pointer_within() && @sf.pointer_rests() }, fn(near) {
@@ -564,7 +534,7 @@ fn Viewer::flight_share_at(self : Viewer, t : Double) -> Double {
 }
 
 ///|
-/// The canvas's colour under what it shows (viewer_layer's ground).
+/// The canvas's colour under what it shows (its ground's).
 fn Viewer::ground_ink(self : Viewer) -> Int64 {
   if self.dark() {
     0x000000FFL
@@ -578,13 +548,15 @@ fn Viewer::ground_ink(self : Viewer) -> Int64 {
 
 ///|
 /// What is done at the ends of `vw`'s ways, on node `n`'s timeline: landed from its thumbnail, the thumbnail shown
-/// again (one picture on the screen, never two); gone (back into its thumbnail, or faded out), let go of.
-fn image_ends(n : @view.View, vw : Viewer) -> Unit {
+/// again (one picture on the screen, never two); gone (back into its thumbnail, or faded out), let go of. A video
+/// closing into its thumbnail waits first for the frame it shows to be grabbed (leaving_grab: its player's picture
+/// where it was meanwhile), its way back said once that is answered: its end the one it goes then.
+fn image_ends(n : @view.View, vw : Viewer, src : Source) -> Unit {
   if vw.flies && !vw.fly_back {
     n.at_moment(vw.fly.end(), fn() {
       if vw.flies && !vw.fly_back {
         vw.flies = false
-        pv_hidden.val = ""
+        pv_hidden.set("")
       }
     })
     |> ignore
@@ -593,19 +565,23 @@ fn image_ends(n : @view.View, vw : Viewer) -> Unit {
   let ends : Ref[() -> Unit] = Ref(fn() {  })
   n.reacts(
     fn() {
+      // (its way as it is said: the grab answered, a flight back set out; followed so)
+      vw.grab_told.get() |> ignore
+      vw.fly.said()
+      vw.fade.said()
       match pv_leaving.get() {
-        Some(l) => physical_equal(l, vw)
-        None => false
+        Some(l) if physical_equal(l, vw) && !vw.leaving_grab => Some(if vw.flies { vw.fly.end() } else { vw.fade.end() })
+        _ => None
       }
     },
     fn(going) {
       (ends.val)()
-      if going {
-        let end = if vw.flies { vw.fly.end() } else { vw.fade.end() }
+      ends.val = fn() {  }
+      if going is Some(end) {
         ends.val = n.at_moment(end, fn() {
           match pv_leaving.get() {
             Some(l) if physical_equal(l, vw) => {
-              pv_hidden.val = ""
+              pv_hidden.set("")
               leaving_done()
             }
             _ => ()
@@ -614,13 +590,32 @@ fn image_ends(n : @view.View, vw : Viewer) -> Unit {
       }
     },
   )
+  // (a video closing into its thumbnail: the frame it shows taken as the host answers the grab, at that moment, once;
+  // none to be had, back with its still: Viewer::left_with_frame. Followed by the host's answers as they are told, not
+  // asked each frame)
+  n.reacts(
+    fn() {
+      vw.grab_told.get() |> ignore
+      if vw.leaving_grab {
+        Some(vw.view().map(fn(v) { v.grabs_told() }))
+      } else {
+        None
+      }
+    },
+    fn(waiting) {
+      if waiting is Some(_) && vw.leaving_grab {
+        vw.left_with_frame(src, n.cause_at(), n.window())
+      }
+    },
+  )
 }
 
 ///|
 /// What viewer `vw` says to the system's bars beside the window (an iPhone Duo's; None where there are none, or it is
-/// going): what of it decides what it says there (vf_bar's: marking, its bar shown or its picture coming, its zoom
-/// fitted or not, its whole picture here, its download, the words its actions are said in), as each is told.
-fn native_said(vw : Viewer, src : Source) -> NativeSaid? {
+/// going): what of it decides what it says there (marking, its bar shown or its picture coming, its zoom
+/// fitted or not, its whole picture here, its download, the words its actions are said in; a film's, filling the
+/// window `width` wide or not, turned sideways or not), as each is told.
+fn native_said(vw : Viewer, src : Source, width : Double) -> NativeSaid? {
   marks_said()
   vw.zoom.told()
   pv_leaving.get() |> ignore
@@ -635,12 +630,23 @@ fn native_said(vw : Viewer, src : Source) -> NativeSaid? {
     fitted: z.fitted,
     whole: z.fit() >= 1.0,
     here: vw.bytes.get() is Some(_),
-    told: vw.told_of() && !vw.asked,
+    told: vw.told_of() && !vw.asked_now(),
     downloading: downloading(vw.download(src)),
+    source: {
+      vw.source_told.get() |> ignore
+      vw.source
+    },
+    full: vw.played() && @sf.player_fills_native(width),
+    width,
+    sideways: match vw.media {
+      Some(m) => m.is_sideways()
+      None => false
+    },
     // (the words its actions are said in there, in the language as it is: said again as that changes)
     words: [
       "common.close", "web-main.preview.fitKey", "web-main.preview.actualKey", "web-main.annotate.image", "common.copy",
-      "web-main.stations.saveToPhotos", "android-chat.file.download",
+      "web-main.stations.saveToPhotos", "android-chat.file.download", "web-main.preview.rendered", "web-main.preview.source",
+      "android-misc.drive.player.full", "android-misc.drive.player.unfull",
     ].map(fn(k) { @sf.t(k) }),
   })
 }
@@ -656,6 +662,15 @@ struct NativeSaid {
   here : Bool
   told : Bool
   downloading : Bool
+  /// a page's 源码 shown (Viewer::set_source): its action there says the other
+  source : Bool
+  /// a film filling the window beside them (@sf.player_fills_native): its name and actions none there
+  full : Bool
+  /// how wide its player is laid out (player_width): its 全屏 there turns it sideways where that is laid out Small,
+  /// else fills the window (@sf.player_full_act)
+  width : Double
+  /// a film turned sideways (its 全屏 there says so)
+  sideways : Bool
   words : Array[String]
 } derive(Eq)
 
@@ -707,7 +722,7 @@ fn Viewer::finger_on(self : Viewer, canvas : @view.View, src : Source, d : @view
         v.at_right = rx + rw <= z.bw + 0.5
         if marking.on {
           match v.marks_rect(at) {
-            Some(r) => marks_finger(c, 0, d.x, d.y, r, z.nw)
+            Some(r) => marks_finger(0, d.x, d.y, r, z.nw)
             None => ()
           }
         } else if !@sf.pointer_rests() {
@@ -785,21 +800,21 @@ fn Viewer::finger_on(self : Viewer, canvas : @view.View, src : Source, d : @view
         return
       }
       // where it was let go, and when, the last of its way: as a move of its own first (however far from the last
-      // move, or with none: a down and an up alone; how fast it went as of then, a pause before it slowing it to none);
-      // the last of a pinch let go, nothing of its own
+      // move, or with none: a down and an up alone; how fast it went as of then, none where it paused longer than
+      // tracker_gap_ms first: Velocity::get_at); the last of a pinch let go, nothing of its own
       if v.held {
         v.one_finger_at(d, has_before, has_after)
       }
       v.pinched = false
       if marking.on && !pinched {
         match v.marks_rect(at) {
-          Some(r) => marks_finger(c, 2, d.x, d.y, r, z.nw)
+          Some(r) => marks_finger(2, d.x, d.y, r, z.nw)
           None => ()
         }
         v.held = false
         return
       }
-      v.image_let_go(c, src, d, pinched, has_before, has_after)
+      v.image_let_go(c, canvas, src, d, pinched, has_before, has_after)
     }
   }
 }
@@ -816,7 +831,7 @@ fn Viewer::one_finger_at(self : Viewer, d : @view.Drag, has_before : Bool, has_a
   let (x, y) = (d.wx, d.wy)
   if marking.on && !v.pinched {
     match v.marks_rect(at) {
-      Some(r) => marks_finger(@ui.current(), 1, d.x, d.y, r, z.nw)
+      Some(r) => marks_finger(1, d.x, d.y, r, z.nw)
       None => ()
     }
   } else if !v.held {
@@ -830,7 +845,12 @@ fn Viewer::one_finger_at(self : Viewer, d : @view.Drag, has_before : Bool, has_a
     let dx = x - v.last_x
     let dy = y - v.last_y
     v.moved = v.moved + dx.abs() + dy.abs()
-    v.speed.add(at, x, y)
+    // (let go: a sample only where it moved there, Velocity::up)
+    if d.kind is Up {
+      v.speed.up(at, x, y)
+    } else {
+      v.speed.add(at, x, y)
+    }
     if v.moved > tap_slop {
       (v.hold_off)()
     }
@@ -913,7 +933,7 @@ pub fn Viewer::picture_flat(self : Viewer) -> Bool {
 fn Viewer::marks_shown(self : Viewer) -> Bool {
   marks_said()
   self.zoom.told()
-  marking.on && !self.picture_failed() && self.zoom.rect() is Some(_)
+  marking.on && !self.picture_failed() && self.zoom.sized()
 }
 
 ///|
@@ -936,6 +956,7 @@ fn Viewer::pinch_now(self : Viewer) -> (Double, Double, Double) {
 fn Viewer::image_let_go(
   self : Viewer,
   c : @ui.Ctx,
+  canvas : @view.View,
   src : Source,
   d : @view.Drag,
   pinched : Bool,
@@ -946,9 +967,8 @@ fn Viewer::image_let_go(
   let z = v.zoom
   let strip = pv_strip.way
   let at = d.at
-  let (x, y) = (d.wx, d.wy)
   let zoomed = z.zoomed_at(at)
-  let (vx, vy) = v.speed.get()
+  let (vx, vy) = v.speed.get_at(at)
   let s = strip.value_at(at)
   if v.held && (v.swiping || s != 0.0) && (!zoomed || s != 0.0) {
     // on to the one beside it (this press's way far enough, or flung that way), else back
@@ -978,22 +998,19 @@ fn Viewer::image_let_go(
   if pinched && z.scale_at(at) < z.fit() {
     z.reset(at~)
   }
-  // a tap (and a second: zoomed in, or back)
+  // a tap (and a second of two, View::twice: zoomed in, or back)
   if held && v.moved <= tap_slop && !pinched && !v.caught {
     let on_picture = match z.rect_at(at) {
       Some((rx, ry, rw, rh)) => d.x >= rx && d.x < rx + rw && d.y >= ry && d.y < ry + rh
       None => false
     }
     if (@sf.pointer_rests() || (!zoomed && @sf.native_able())) && !on_picture && !marking.on {
+      canvas.twice_forgot()
       v.shut(c)
-    } else if at - v.tap_at < double_tap_ms && (x - v.tap_x).abs() < 40.0 && (y - v.tap_y).abs() < 40.0 {
-      v.tap_at = -1.0e9
+    } else if canvas.twice(d) {
       v.toggle()
       z.double_tap(d.x, d.y, at~)
     } else {
-      v.tap_at = at
-      v.tap_x = x
-      v.tap_y = y
       v.toggle()
     }
   }
@@ -1009,9 +1026,20 @@ fn Viewer::key_on(self : Viewer, src : Source, k : @view.Key) -> Bool {
     return false
   }
   let c = @ui.current()
+  // (read in the reader, hosted: its keys its own first, what is open in it (its find, its contents) closed by Esc
+  // before the viewer is, as the reader closes it after them (its on_back))
+  if vf_reads(v) {
+    return false
+  }
+  // (played: its keys the player's, hosted, Escape among them, its speeds and its list closed by it first (as the
+  // player's own Escape leaves them before it leaves); in flight, before the player reads keys, Escape the viewer's
+  // there too: Viewer::player_stage)
+  if v.played() {
+    return false
+  }
   if k.code == @ui.key_escape && k.mods == 0 {
     if marking.on {
-      marks_back(c)
+      marks_back()
     } else {
       v.shut(c)
     }
@@ -1028,28 +1056,44 @@ fn Viewer::key_on(self : Viewer, src : Source, k : @view.Key) -> Bool {
 }
 
 ///|
-/// Whether viewer `v`'s floating bar is its nodes (image_head), `w` wide, the old bars' (vf_bar's) not: a picture here
-/// coming or whole or marked (not read or played), on a small screen (a phone's; a fold half open wider than one, its
+/// Whether viewer `v`'s floating bar is its nodes (image_head), `w` wide: what it shows
+/// (not read in the reader), on a small screen (a phone's; a fold half open wider than one, its
 /// kind and size with it), its own bar (not the system's beside it: an iPhone Duo's; there too while it marks, its
-/// actions the bar's own, vf_bar's). As each is told.
+/// actions the bar's own). As each is told.
 pub fn head_as_nodes(v : Viewer, w : Double) -> Bool {
   marks_said()
-  v.in_tree &&
-  v.shown_kind() == Some(KImage) &&
-  @sf.viewer_bar_floats(w) &&
-  (!@sf.native_on() || marking.on)
+  v.in_tree && v.own_bar() && @sf.viewer_bar_floats(w)
 }
 
 ///|
-/// Whether viewer `vw`'s bar across the top is its nodes (image_bar), `w` wide, the old bar's (vf_bar's) not: a picture
-/// here, coming or whole or marked (not read or played), not on a small screen (whose bar floats: head_as_nodes), its own bar
+/// Whether viewer `vw`'s bar across the top is its nodes (image_bar), `w` wide: what it shows
+/// (not read in the reader), not on a small screen (whose bar floats: head_as_nodes), its own bar
 /// (not the system's beside it; there too while it marks, as head_as_nodes). As each is told.
 pub fn bar_as_nodes(v : Viewer, w : Double) -> Bool {
   marks_said()
-  v.in_tree &&
-  v.shown_kind() == Some(KImage) &&
-  !@sf.viewer_bar_floats(w) &&
-  (!@sf.native_on() || marking.on)
+  v.in_tree && v.own_bar() && !@sf.viewer_bar_floats(w)
+}
+
+///|
+/// How much of the window's top its own bar takes, `w` wide, its picture fitted clear of it (none where it has no bar of
+/// its own). As each is told.
+fn Viewer::bar_over(self : Viewer, w : Double) -> Double {
+  if head_as_nodes(self, w) || bar_as_nodes(self, w) {
+    @sf.viewer_bar_clear(w)
+  } else {
+    0.0
+  }
+}
+
+///|
+/// Whether it has a bar of its own (its nodes, image_head or image_bar): not read in the reader (the reader's bar), not
+/// a picture or a page beside the system's own bars (an iPhone Duo's: its actions theirs, vf_native) unless it marks.
+fn Viewer::own_bar(self : Viewer) -> Bool {
+  marks_said()
+  let theirs = @sf.native_on() &&
+    (self.shown_kind() == Some(KImage) || self.shown_kind() == Some(KHtml)) &&
+    !marking.on
+  !vf_reads(self) && !self.played() && !theirs
 }
 
 ///|
@@ -1069,7 +1113,7 @@ fn Viewer::shown_on(self : Viewer, node : @view.View) -> Double {
 }
 
 ///|
-/// Viewer `vw`'s floating bar as nodes in `h` (viewer_head_node, as vf_bar has it there): its file's name (its kind and
+/// Viewer `vw`'s floating bar as nodes in `h` (viewer_head_node): its file's name (its kind and
 /// size after it, wider than a phone), there while its bars are (Viewer::bars_shown), as far in as the viewer is
 /// (Viewer::shown_on); while its picture comes, how much of it has once the core has said (file_progress_node); its
 /// tools (image_tools), ×. Each press done at its moment. Their tips in a layer of its own over all of it.
@@ -1089,18 +1133,19 @@ fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, 
     fn() { vw.file.name },
     // (its kind and size after its name where the bar has room: wider than a phone, viewer_head_node)
     fn() { vf_meta(vw, src) },
-    fn() { vw.bars_shown() },
+    // (as it rests, a tap hides it, while it comes it stays)
+    fn() { vw.bars_shown() || vw.coming() },
     fn(node) { vw.shown_on(node) },
     fn() { (@sf.viewer_host().room)().0 },
     fn() { stage().0 },
     ink,
     fn() { @sf.viewer_page_glass() },
     fn(row) {
-      // while it comes, how much of it has, once the core has said (FilePreview.tsx: FileComing in the floating head)
+      // while it comes, how much of it has, once the core has said
       row.show(fn() { vw.coming() && vw.got.get() is Some(_) }, fn(r) {
         file_progress_node(r, fn() { vw.got.get().unwrap_or((0.0, None)) }, fn() { vw.file.size }) |> ignore
       })
-      // (its tools; marking, marking's actions in their place: vf_tools's)
+      // (its tools; marking, marking's actions in their place)
       row.show(fn() { !marked() }, fn(r) {
         r.row(Is(true)).lines_up(Is(Some(Middle))).gap(Is(@sf.keys_apart())) |> ignore
         image_tools(r, src, vw, ink, Is(@sf.tool_side / 2.0), tips)
@@ -1125,7 +1170,7 @@ fn image_head(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, 
 }
 
 ///|
-/// Viewer `vw`'s bar across the top as nodes in `h` (viewer_bar_node, as vf_bar has it there): back to where it was
+/// Viewer `vw`'s bar across the top as nodes in `h` (viewer_bar_node): back to where it was
 /// opened from by name, its file's name and the line about it (which of how many, its size, its kind, its size in
 /// pixels), where the file is its tip (none for a draft's, kept on this device alone); gone up while its bars are not
 /// shown (Viewer::bars_shown), as far in as the viewer is (Viewer::shown_on); while its picture comes, how much of it
@@ -1143,18 +1188,18 @@ fn image_bar(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, D
     fn() { vw.file.name },
     fn() { vf_meta(vw, src) },
     fn() { if vw.file.path.has_prefix("draft:") { "" } else { vw.file.path } },
-    // (marking, there: Viewer::bars_shown)
-    fn() { !vw.bars_shown() },
+    // (marking, there: Viewer::bars_shown; anything but a picture's stays)
+    fn() { vw.shown_kind() == Some(KImage) && !vw.bars_shown() },
     fn(node) { vw.shown_on(node) },
     fn() { (@sf.viewer_host().room)().0 },
     fn() { stage().0 },
     ink,
     fn(row, corner) {
-      // (while it comes, how much of it has: FilePreview.tsx FileComing in the bar, from the start)
+      // (while it comes, from the start)
       row.show(fn() { vw.coming() }, fn(r) {
         @sf.viewer_coming_node(r, fn() { vw.got.get() }, fn() { vw.file.size }, ink) |> ignore
       })
-      // (its tools; marking, marking's actions in their place: vf_tools's)
+      // (its tools; marking, marking's actions in their place)
       let marked = fn() {
         marks_said()
         marking.on
@@ -1177,7 +1222,7 @@ fn image_bar(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double, D
 }
 
 ///|
-/// The ways to the pictures before and after viewer `vw`'s as nodes in `h` (viewer_steps_node, as vf_steps has them):
+/// The ways to the pictures before and after viewer `vw`'s as nodes in `h` (viewer_steps_node):
 /// each while what is beside it says there is one (imageNear's, its folder's), there while its bars are
 /// (Viewer::bars_shown), as far in as the viewer is (Viewer::shown_on), a phone's sizes under 640; pressed, a step to
 /// that one at the press's moment (Viewer::go). Their tips in a layer of their own over all of it.
@@ -1204,7 +1249,7 @@ fn image_steps(h : @view.View, src : Source, vw : Viewer, stage : () -> (Double,
 }
 
 ///|
-/// A picture's tools in a bar's row `row` (vf_tools's, as nodes): mark and copy once its picture is all here (copied:
+/// A picture's tools in a bar's row `row` (then copy and download): mark and copy once its picture is all here (copied:
 /// a check for copied_ms, from the press's moment); download (unable while there is nothing to save; a ring while the
 /// core downloads it; none while it comes). Each `corner` round, in `ink`, its tip in `tips`; each press done at its
 /// moment, what a download asks for told once, as it is asked.
@@ -1221,8 +1266,29 @@ fn image_tools(
   // (copied: a check from the press, its end its own, another press another end)
   let copied : @signals.Signal[Bool] = @signals.signal(false, same=fn(a, b) { a == b })
   let copied_end : Ref[() -> Unit] = Ref(fn() {  })
-  // 标注图片: once its whole picture is here (annotate/ImageMarks.tsx)
-  row.show(whole, fn(r) {
+  // 预览 / 源码: a table's, a page's once read (Markdown read in the reader, its own bar): the library's
+  // segmented choice, its nodes (@sf.seg_node), what it chooses told (Viewer::set_source)
+  row.show(fn() { whole() && (vw.shown_kind() == Some(KCsv) || vw.shown_kind() == Some(KHtml)) }, fn(r) {
+    // (giving way as it does where the bar is short of room: its track fitted to what there is)
+    r.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+    @sf.seg_node(
+      r,
+      fn() { [@sf.t("web-main.preview.rendered"), @sf.t("web-main.preview.source")] },
+      fn() {
+        vw.source_told.get() |> ignore
+        if vw.source {
+          1
+        } else {
+          0
+        }
+      },
+      fn(k) { vw.set_source(k == 1) },
+      item_w=vf_tabs_item,
+    )
+    |> ignore
+  })
+  // 标注图片: once its whole picture is here, a picture it shows
+  row.show(fn() { whole() && vw.markable() }, fn(r) {
     @sf.tool_node(
       r,
       fn() { { icon: "edit", label: @sf.t("web-main.annotate.image"), on: false, disabled: false } },
@@ -1233,8 +1299,9 @@ fn image_tools(
     )
     |> ignore
   })
-  // 复制: the whole picture on the clipboard, a check a moment after (FilePreview.tsx CopyImage)
-  row.show(whole, fn(r) {
+  // 复制: the whole picture on the clipboard, a check a moment after; one too big to show
+  // too, once read
+  row.show(fn() { whole() && vw.shown_kind() == Some(KImage) }, fn(r) {
     let t = @sf.tool_node(
       r,
       fn() {
@@ -1247,7 +1314,7 @@ fn image_tools(
       ink,
       corner,
       fn() {
-        match @signals.untracked(fn() { vw.bytes.get() }) {
+        match vw.bytes.untracked() {
           Some(b) => {
             @ui.current().copy_image(b)
             vw.copied += 1
@@ -1268,7 +1335,7 @@ fn image_tools(
     @sf.tool_node(
       r,
       fn() {
-        let saving = vw.bytes.get() is Some(_) || (vw.told_of() && !vw.asked)
+        let saving = vw.bytes.get() is Some(_) || (vw.told_of() && !vw.asked_now())
         { icon: "download", label: @sf.t("web-main.preview.download"), on: false, disabled: !saving }
       },
       ink,
@@ -1286,21 +1353,25 @@ fn image_tools(
 
 ///|
 /// What viewer `vw` asked the core to download (Viewer::ask_save), told it once, at the moment it was asked
-/// (image_layer's).
+/// (image_layer's: as that change is done).
 fn download_told(src : Source, vw : Viewer) -> Unit {
   if vw.download_asked {
     vw.download_asked = false
-    let (station, key, name, size, from) = (vw.station, vw.key, vw.name, vw.file.size, vw.opened_from())
-    @ui.current().tell("download/" + name, fn() { download_start(src, station, key, name, size, from~) })
+    download_start(src, vw.station, vw.key, vw.name, vw.file.size, from=vw.opened_from())
   }
 }
 
 ///|
-/// How much of a file has come (file_progress's, FilePreview.kt FileProgress) as nodes in `parent`: "正在读取 **4 MB** /
+/// How much of a file has come (file_progress's) as nodes in `parent`: "正在读取 **4 MB** /
 /// 12 MB" (the size so far in bold, in the words' ink) over a bar, on the surface (surface2 dark), 14 round, 14 and 12
 /// in, 220 wide; its size not known (neither the station's, `got`'s, nor the one it was sent with, `sent`), 正在读取 over
 /// a bar that sweeps. Each as it changes: what has come, the words' language, the theme. The card's node.
-pub fn file_progress_node(parent : @view.View, got : () -> (Double, Double?), sent : () -> Double) -> @view.View {
+pub fn file_progress_node(
+  parent : @view.View,
+  got : () -> (Double, Double?),
+  sent : () -> Double,
+  said? : () -> String? = fn() { None },
+) -> @view.View {
   let total = fn() -> Double? {
     match got().1 {
       Some(n) => Some(n)
@@ -1313,7 +1384,8 @@ pub fn file_progress_node(parent : @view.View, got : () -> (Double, Double?), se
   }
   parent.box(fn(card) {
     card
-    .width(Is(Some(wide)))
+    // (as wide as its words, 220 at least: a size never broken off its unit)
+    .min_width(Is(Some(wide)))
     .padding(Is((@ui.Space::px(S3_5), @ui.Space::px(S3), @ui.Space::px(S3_5), @ui.Space::px(S3))))
     .gap(Is(@ui.Space::px(S2)))
     .lines_up(Is(Some(Middle)))
@@ -1330,8 +1402,10 @@ pub fn file_progress_node(parent : @view.View, got : () -> (Double, Double?), se
     card.box(fn(w) {
       w
       .words_runs(By(fn() {
-        match total() {
-          Some(n) => {
+        match (said(), total()) {
+          // (what is said of how far it has come in its place: a download's, the core's words)
+          (Some(words), _) => [@view.words_run(words)]
+          (None, Some(n)) => {
             // the size so far in bold, where the sentence has it
             let words = pv("android-chat.file.loading.size")
             let (before, after) = match words.find("{size}") {
@@ -1344,12 +1418,12 @@ pub fn file_progress_node(parent : @view.View, got : () -> (Double, Double?), se
               @view.words_run(" / " + @sf.file_size(n) + after),
             ]
           }
-          None => [@view.words_run(pv("common.reading"))]
+          (None, None) => [@view.words_run(pv("common.reading"))]
         }
       }))
       .words_look(By(fn() {
         let (size, line) = @ui.tree_theme().text_size(Body)
-        { size, weight: 400, line, wrap: true }
+        { size, weight: 400, line, wrap: true, tracking: @view.letters_own, balance: false }
       }))
       .ink(By(fn() { @ui.tree_theme().color(Muted) }))
       |> ignore
@@ -1390,9 +1464,9 @@ fn Viewer::flying_at(self : Viewer, t : Double) -> Double {
 }
 
 ///|
-/// How far its thumbnail has gone out from under the bar or the composer at `t` (Viewer::lifted's, at a moment of its
-/// own).
-fn Viewer::lifted_at(self : Viewer, t : Double) -> Double {
+/// How far its thumbnail has gone out from under the bar or the composer at `t` (0 where the chat lays it out, 1 clear
+/// of them): the first share of the flight's one Move, at a moment of its own; 1 when nothing hid it.
+pub fn Viewer::lifted_at(self : Viewer, t : Double) -> Double {
   if !self.flies || self.fly_lift <= 0.0 {
     1.0
   } else {
@@ -1412,3 +1486,673 @@ struct ThumbDrawn {
   top_crop : Bool
   picture : String
 } derive(Eq)
+
+///|
+/// What the stage of a viewer that shows no picture of its own shows (Viewer::content's, as it is told: its kind
+/// sniffed, its bytes, a read failed, what has come of it, 源码): told of (facts), coming, failed, or what the old views
+/// show of it (read in the reader, as it comes, a page, a table, code, a PDF).
+priv enum OuterStage {
+  Hosted
+  Coming
+  Facts
+  Failed
+} derive(Eq)
+
+///|
+fn Viewer::outer_stage(self : Viewer) -> OuterStage {
+  let v = self
+  v.flow_told.get() |> ignore
+  match v.flow {
+    Some(f) => f.parts.get() |> ignore
+    None => ()
+  }
+  if v.flowing() || vf_reads(v) {
+    Hosted
+  } else if v.told_of() {
+    Facts
+  } else if (v.kind is None && v.sniffed.get() is None) || (v.bytes.get() is None && v.error.get() is None) {
+    Coming
+  } else if v.error.get() is Some(_) {
+    Failed
+  } else {
+    Hosted
+  }
+}
+
+///|
+/// What viewer `vw` shows of anything but a picture of its own (a picture too big to show, told of; a page, a table,
+/// code, words read as they come or in the reader, a PDF, a file of no kind), in node `n`, as far in as its way has
+/// come (Viewer::words_share): told of, coming, failed, its nodes (in the middle of the stage, 24 in, 14 apart, as
+/// Viewer::note has a note); else what Viewer::content shows of it, its old views hosted there. What is round them is the window's tree's (image_layer: the modal layer, its keys and back, its
+/// ground, its bars, its way in and out, what it reads asked); its keys theirs only where they read them first (a
+/// reader's find, its contents, Viewer::key_on).
+fn viewer_hosted(n : @view.View, src : Source, vw : Viewer) -> Unit {
+  let stage = fn() { vw.outer_stage() }
+  n.box(fn(s) {
+    s
+    .over(Is(true))
+    .alpha(By(fn() {
+      vw.fly.said()
+      vw.fade.said()
+      let now = s.logic_at()
+      vw.words_share(vw.in_at(if vw.fly.goes_at(now) || vw.fade.goes_at(now) { s.drawn_at() } else { @double.infinity }))
+    }))
+    // (going, the page's: a press there its own, nothing of it here taking it)
+    .presses(By(fn() {
+      match pv_leaving.get() {
+        Some(l) => !physical_equal(l, vw)
+        None => true
+      }
+    }))
+    |> ignore
+    s.show(fn() { stage() == Hosted }, fn(h) {
+      h.over(Is(true)) |> ignore
+      @ui.old(h, fn(c) {
+        // (what marking and what reads stamp by: this source's clock, as the old frame's layer said it each frame)
+        src_now.val = src.now
+        let stage = c.id("preview/stage")
+        // (a ground: a click round what it shows closes it, the bars come and go on a tap)
+        c.cursor(stage, Arrow)
+        @ui.capture(c, stage, zooms=true)
+        // (its words picked with the pointer, a mouse's drag or a finger's hold, as a page's are)
+        c.selectable(color=@sf.alpha(@sf.theme().p.blue, 0.28), fn() {
+          c.box(style=stage_whole, id=stage, fn() { vw.content(c, src, stage) }) |> ignore
+        })
+      })
+      .over(Is(true))
+      |> ignore
+    })
+    s.show(fn() { stage() != Hosted }, fn(note) {
+      note.over(Is(true)).padding(Is((24.0, 24.0, 24.0, 24.0))).gap(Is(14.0)).lines_up(Is(Some(Middle))) |> ignore
+      // (coming or failed, a tap on its stage shows or hides its bars, as the old stage's did: tap_stage; told of,
+      // none)
+      note.presses(Is(true)).on_press(fn() {
+        let now = @signals.untracked(stage)
+        if now == Coming || now == Failed {
+          vw.toggle()
+        }
+      })
+      |> ignore
+      note.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+      note.show(fn() { stage() == Facts }, fn(f) { viewer_facts_node(f, src, vw) })
+      note.show(fn() { stage() == Coming }, fn(f) { viewer_coming_node(f, vw) })
+      note.show(fn() { stage() == Failed }, fn(f) {
+        f.box(fn(w) {
+          w
+          .words(By(fn() { pv_fill("android-chat.file.loadFailed", [("error", vw.error.get().unwrap_or(""))]) }))
+          .words_look(By(fn() {
+            let size = @sf.theme().t.body
+            { size, weight: 400, line: @ui.tree_theme().text_line * size, wrap: true, tracking: @view.letters_own, balance: false }
+          }))
+          .ink(By(fn() { @sf.theme().p.muted }))
+          |> ignore
+        })
+        |> ignore
+      })
+      note.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+    })
+  })
+  |> ignore
+  // 下载 asked on it (Viewer::ask_save): the core told at that change, on by itself whatever becomes of this viewer;
+  // 安装 asked before its bytes came, done as they come (Viewer::ask_install)
+  n.reacts(fn() { (vw.asked_told.get(), vw.bytes.get() is Some(_)) }, fn(_) {
+    if vw.install_after && vw.bytes.untracked() is Some(_) {
+      vw.install_after = false
+      vw.ask_install()
+    }
+  })
+}
+
+///|
+/// The moment what follows film `vw`'s flight and fade in `node` reads them at: as each frame draws it while either
+/// goes; else as it is, the clock read no more.
+fn film_at(vw : Viewer, node : @view.View) -> Double {
+  vw.fly.said()
+  vw.fade.said()
+  let now = node.logic_at()
+  if vw.fly.goes_at(now) || vw.fade.goes_at(now) {
+    node.drawn_at()
+  } else {
+    @double.infinity
+  }
+}
+
+///|
+/// Film `vw`'s flight (Viewer::player_flight), in `parent` laid out over all of the window: the box it is cut to, its
+/// box round, its still on the black, what its thumbnail draws over it; drawn at the moments `mine` says (its own
+/// layer's, or the slot of the page it flies from under that page's bar: viewer_flight_slot), as image_flight is.
+fn film_flight(parent : @view.View, src : Source, vw : Viewer, mine : (Double) -> Bool) -> Unit {
+  let at = fn(node) { film_at(vw, node) }
+  let mine_flight = fn(node : @view.View) -> (FlightBox, Double)? {
+    let t = at(node)
+    if mine(t) {
+      vw.player_flight(src, node, t)
+    } else {
+      None
+    }
+  }
+  // its flight: the box it is cut to, its box round (the thumbnail's corners as far as the flight leaves them), the
+  // still in it on the black where it is letterboxed or not decoded yet (one frame), what the thumbnail draws over it
+  let flight = fn(node : @view.View) -> FlightBox? { mine_flight(node).map(fn(f) { f.0 }) }
+  parent.box(fn(cut) {
+    cut
+    .over(Is(true))
+    // (a picture alone: no press taken anywhere in it, whatever is under it its own (it covers the window as it waits
+    // for the frame it goes back with))
+    .presses(Is(false))
+    .clips(Is(true))
+    .offset(By(fn() {
+      match flight(cut) {
+        Some(f) => (f.cut.0, f.cut.1)
+        None => (0.0, 0.0)
+      }
+    }))
+    .width(By(fn() { flight(cut).map(fn(f) { f.cut.2 }) }))
+    .height(By(fn() { flight(cut).map(fn(f) { f.cut.3 }) }))
+    |> ignore
+    cut.box(fn(b) {
+      let picture = fn() {
+        vw.grab_told.get() |> ignore
+        if vw.fly_pic != "" {
+          vw.fly_pic
+        } else if vw.shown_kind() == Some(KVideo) {
+          vw.still(src)
+        } else {
+          ""
+        }
+      }
+      b
+      .over(Is(true))
+      .clips(Is(true))
+      .corners(By(fn() { flight(b).map(fn(f) { f.corners }) }))
+      .offset(By(fn() {
+        match flight(b) {
+          Some(f) => (f.box.0 - f.cut.0, f.box.1 - f.cut.1)
+          None => (0.0, 0.0)
+        }
+      }))
+      .width(By(fn() { flight(b).map(fn(f) { f.box.2 }) }))
+      .height(By(fn() { flight(b).map(fn(f) { f.box.3 }) }))
+      // (no still: the black alone)
+      .ground(By(fn() {
+        if flight(b) is Some(_) && picture() == "" {
+          0x000000FFL
+        } else {
+          0L
+        }
+      }))
+      |> ignore
+      // (the still and the black round it one frame filling the box, cut once by its round corners, as the old
+      // flight's picture in its matte was)
+      b.box(fn(f) {
+        f
+        .over(Is(true))
+        .image(By(fn() {
+          match flight(f) {
+            Some(_) if picture() != "" => Some((picture(), "", stage_px))
+            _ => None
+          }
+        }))
+        .image_in(By(fn() {
+          match flight(f) {
+            Some(fb) if picture() != "" =>
+              Some(((fb.picture.0 - fb.box.0, fb.picture.1 - fb.box.1, fb.picture.2, fb.picture.3), 0x000000FFL))
+            _ => None
+          }
+        }))
+        |> ignore
+      })
+      |> ignore
+      // what the thumbnail draws over its picture (its capsule), whole, in its box: gone by halfway out, back from
+      // halfway in, as a row's content goes with its room; none seen where it flies not (its old view made as the
+      // viewer is, built by the time it sets out)
+      b.box(fn(o) {
+        o
+        .over(Is(true))
+        .alpha(By(fn() {
+          match mine_flight(o) {
+            Some((_, p)) => dmax(0.0, 1.0 - flight_over_gone * p)
+            None => 0.0
+          }
+        }))
+        |> ignore
+        // (what it draws over its picture alone, as its chat said it last (Viewer::thumb_over): where it is and how big
+        // the flight's, followed by the nodes round it; none of its place read here)
+        @ui.old(o, fn(_c) { (vw.thumb_over())(1.0) })
+        .over(Is(true))
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// What viewer `vw` shows of a film or a song, in node `n`: the player (@sf.player_view: its picture, its bars and
+/// controls, its keys, the full screen and turning sideways), an old view hosted on the stage (Viewer::player_stage), as
+/// far in as its fade has come and, while the picture flies, as far as its bars come with it (bars_share: none till
+/// its ground is whole); in flight its still the tree's (Viewer::player_flight): from the thumbnail to where the player
+/// draws its picture and back, the black and the still one frame cut once (View::image_in), what the thumbnail draws
+/// over it (its capsule) going as it leaves and back as it lands; going, the page's presses theirs. Back is the
+/// player's first (its 全屏 left, beside the system's bars), then the viewer's: the viewer's said before the player's,
+/// the last said taking it.
+fn viewer_player(n : @view.View, src : Source, vw : Viewer) -> Unit {
+  let at = fn(node) { film_at(vw, node) }
+  // its flight, in its own layer once it is out from under the bar of the page it flies from (that page's slot draws
+  // it till then, the bar over it: viewer_flight_slot)
+  film_flight(n, src, vw, fn(t) { vw.flies_from_page() == 0 || vw.lifted_at(t) >= 1.0 })
+  // (the player over its flight, its bars coming as its ground is whole)
+  n.box(fn(s) {
+    s
+    .over(Is(true))
+    .alpha(By(fn() {
+      let t = at(s)
+      let bars = match vw.player_flight(src, s, t) {
+        Some((_, p)) => bars_share(p)
+        None => 1.0
+      }
+      bars * vw.fade.value_at(t)
+    }))
+    .presses(By(fn() {
+      match pv_leaving.get() {
+        Some(l) => !physical_equal(l, vw)
+        None => true
+      }
+    }))
+    |> ignore
+    @ui.old(s, fn(c) {
+      // (back the viewer's, said first: what the player says takes it after (its 全屏 left beside the system's bars),
+      // the last said its; one going takes back no more: it is the page's)
+      if !vw.closing {
+        c.take_back(fn() { vw.shut(c) })
+      }
+      let stage = c.id("preview/stage")
+      c.cursor(stage, Arrow)
+      c.box(style=stage_whole, id=stage, fn() { vw.player_stage(c, src, stage) }) |> ignore
+    })
+    .over(Is(true))
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A film's flight as node `node` draws it at `t` (from the thumbnail where the chat lays it out, Viewer::flight_from, to
+/// where its player draws its picture, or back from where it was: Viewer::fly_to) and how far it has come: None where
+/// it flies not (or waits for the frame it shows to be grabbed as it closes: its player's picture where it was).
+fn Viewer::player_flight(self : Viewer, src : Source, node : @view.View, t : Double) -> (FlightBox, Double)? {
+  let vw = self
+  vw.fly.said()
+  vw.grab_told.get() |> ignore
+  if !vw.flies || (vw.closing && vw.leaving_grab) {
+    return None
+  }
+  let (w, h) = node.window()
+  let width = player_width(w)
+  let to = match vw.fly_to {
+    Some(r) if vw.fly_back => Some(r)
+    _ => vw.video_target(src, width, h, t)
+  }
+  match (vw.flight_from(@ui.current()), to) {
+    (Some(from), Some(to)) => {
+      let p = vw.flying_at(t)
+      flight_box(from, vw.lifted_at(t), to, p, width, h).map(fn(f) { (f, p) })
+    }
+    _ => None
+  }
+}
+
+///|
+/// How wide a film's player is laid out in a window `w` wide: all of it where it fills the window beside the system's
+/// bars (@sf.player_fills_native), else clear of their column (@sf.native_clear), as the old frame's preview layer laid
+/// it out.
+fn player_width(w : Double) -> Double {
+  if @sf.player_fills_native(w) {
+    w
+  } else {
+    dmax(0.0, w - @sf.native_clear())
+  }
+}
+
+///|
+/// What an old view hosted on the stage draws in: all of it.
+// kept across runs: a value (no field of it changes)
+let stage_whole : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
+/// What is told of a file shown no other way (FilePreview.tsx fpNote, toldOf: a card with its extension, its name, its
+/// size and kind, why it is told of; how far the core downloads it and its 取消, why that failed, why its read failed;
+/// an APK's 安装 first, then 下载, the one read for saying how far it has come), in `f`, each in the stage's middle.
+fn viewer_facts_node(f : @view.View, src : Source, vw : Viewer) -> Unit {
+  f.lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S5))) |> ignore
+  let p = fn() { @sf.theme().p }
+  let words = fn(parent : @view.View, said : () -> String, size : () -> Double, weight : Int, ink : () -> Int64) {
+    parent.box(fn(w) {
+      w
+      .max_width(Is(Some(@ui.Space::px(S96))))
+      .words(By(said))
+      .words_centered(Is(true))
+      .words_look(By(fn() {
+        let s = size()
+        { size: s, weight, line: @ui.tree_theme().text_line * s, wrap: true, tracking: @view.letters_own, balance: false }
+      }))
+      .ink(By(ink))
+      |> ignore
+    })
+    |> ignore
+  }
+  // (a card standing for the file, its extension in its middle in the accent's ink; a long one or none, the file's mark)
+  let ext = @sf.file_ext(vw.file.name)
+  let ext_shown = ext != "" && ext.length() <= 5
+  let (card_w, card_h, card_corner) = @sf.viewer_facts_card
+  f.box(fn(card) {
+    card
+    .width(Is(Some(card_w)))
+    .height(Is(Some(card_h)))
+    .lines_up(Is(Some(Middle)))
+    .radius(Is(card_corner))
+    .ground(By(fn() { p().raised }))
+    .edge(By(fn() { (1.0, p().line_strong) }))
+    |> ignore
+    // (its middle: what it holds as high as its words, the room above it half of what is left)
+    card.box(fn(gap) { gap.grow(Is(1.0)) |> ignore }) |> ignore
+    if ext_shown {
+      card.box(fn(w) {
+        w
+        .words(Is(ext))
+        .words_look(By(fn() {
+          let s = @sf.theme().t.ui
+          { size: s, weight: 700, line: s, wrap: false, tracking: @view.letters_own, balance: false }
+        }))
+        .ink(By(fn() { p().accent_text }))
+        |> ignore
+      })
+      |> ignore
+    } else {
+      @sf.icon_node(card, "file", @sf.viewer_facts_icon / 1.5, By(fn() { p().muted })) |> ignore
+    }
+    card.box(fn(gap) { gap.grow(Is(1.0)) |> ignore }) |> ignore
+  })
+  |> ignore
+  // (its name and its size, together)
+  f.box(fn(g) {
+    g.lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S1))) |> ignore
+    words(g, fn() { vw.file.name }, fn() { @sf.theme().t.title }, 600, fn() { p().text })
+    // (its kind once: on its card where that says it)
+    words(g, fn() { if ext_shown { @sf.file_size(vw.file.size) } else { @sf.facts_size(vw.file.name, vw.file.size) } }, fn() {
+      @sf.theme().t.meta
+    }, 400, fn() { p().muted })
+  })
+  |> ignore
+  words(
+    f,
+    fn() {
+      if vw.shown_kind() is None {
+        @sf.t("web-main.preview.unsupported")
+      } else {
+        pv("android-chat.file.tooBigToShow")
+      }
+    },
+    fn() { @sf.theme().t.meta },
+    400,
+    fn() { p().muted },
+  )
+  let dl = fn() { vw.download(src) }
+  // (asked for, read first: how much has come of it)
+  // (as it is asked for: 下载 on it, Viewer::ask_save's asked_told)
+  let reading = fn() { vw.asked_now() && vw.bytes.get() is None && vw.error.get() is None }
+  // downloaded by the core: how far it has come (on by itself as this closes; called off here)
+  f.show(fn() { !reading() && downloading(dl()) }, fn(r) {
+    r.lines_up(Is(Some(Middle))).gap(Is(14.0)) |> ignore
+    file_progress_node(r, fn() { (number(dl(), "loaded"), Some(number(dl(), "size"))) }, fn() { vw.file.size }, said=fn() {
+      Some(text(dl(), "statusText"))
+    })
+    |> ignore
+    @sf.button_node(r, fn() { @sf.t("web-main.file.cancelDownload") }, fn() {
+      vw.cancel_download(src, @signals.untracked(dl))
+    }, tone=Ghost)
+    |> ignore
+  })
+  f.show(fn() { !downloading(dl()) }, fn(r) {
+    r.lines_up(Is(Some(Middle))).gap(Is(@ui.Space::px(S2))).width(Is(Some(@sf.viewer_facts_actions))) |> ignore
+    // (why the core's download failed; why its read failed)
+    let failed = fn(said : () -> String?) {
+      r.show(fn() { said() is Some(_) }, fn(e) {
+        words(e, fn() { said().unwrap_or("") }, fn() { @sf.theme().t.ui }, 400, fn() { p().red })
+      })
+    }
+    failed(fn() { if text(dl(), "state") == "failed" { Some(text(dl(), "statusText")) } else { None } })
+    failed(fn() { vw.error.get().map(fn(e) { @sf.t("web-main.preview.loadFailed", args=[("error", e)]) }) })
+    // an APK: 安装 first, handed to the system's installer (strong); 下载 then the quieter. As it is read for one, that
+    // one at work, saying how much has come in its words; the other not pressed meanwhile
+    let apk = @sf.lower(vw.file.name).has_suffix(".apk")
+    let reading_for = fn(install : Bool) { reading() && vw.install_after == install }
+    let label = fn(install : Bool, rest : String) {
+      if !reading_for(install) {
+        return rest
+      }
+      let reading_words = @sf.t("web-main.preview.loadingLabel")
+      let total = match vw.got.get() {
+        Some((_, Some(n))) if n > 0.0 => Some(n)
+        _ => if vw.file.size > 0.0 { Some(vw.file.size) } else { None }
+      }
+      match (vw.got.get(), total) {
+        (Some((loaded, _)), Some(n)) => reading_words + " " + (dmin(1.0, loaded / n) * 100.0).floor().to_int().to_string() + "%"
+        _ => reading_words
+      }
+    }
+    if apk {
+      @sf.button_node(r, fn() { label(true, pv("android-chat.file.install")) }, fn() { vw.ask_install() }, tone=Primary, busy=fn() {
+        reading_for(true)
+      }, disabled=fn() { reading_for(false) }, across=true)
+      |> ignore
+    }
+    @sf.button_node(r, fn() { label(false, @sf.t("web-main.preview.download")) }, fn() { vw.ask_save(@ui.current()) }, tone=if apk {
+      Ghost
+    } else {
+      Primary
+    }, icon="download", busy=fn() { reading_for(false) }, disabled=fn() { reading_for(true) }, across=true)
+    |> ignore
+  })
+}
+
+///|
+/// What shows while it comes (WaitLine): how much has come out of its size once
+/// the core has said, else 正在打开 by a spinner, after a moment (wait_line's).
+fn viewer_coming_node(f : @view.View, vw : Viewer) -> Unit {
+  f.show(fn() { vw.got.get() is Some(_) }, fn(r) {
+    file_progress_node(r, fn() { vw.got.get().unwrap_or((0.0, None)) }, fn() { vw.file.size }) |> ignore
+  })
+  f.show(fn() { vw.got.get() is None }, fn(r) { @sf.wait_line_node(r, fn() { @sf.t("common.opening") }) |> ignore })
+}
+
+///|
+/// How far in it is at `t`: its flight's share (a picture too big to show from its thumbnail flies none of it, its
+/// ground coming as it would), times its fade.
+fn Viewer::in_at(self : Viewer, t : Double) -> Double {
+  self.flight_share_at(t) * self.fade.value_at(t)
+}
+
+///|
+/// Its way in and out, what draws it `p` in (Viewer::in_at): a picture of its own, its ground as far as it is in
+/// (its picture the flight's own); anything else, words of its own over the page under it, a panel's (@motion's
+/// `ground_first`): its ground whole by halfway, its words after it coming in and before it going out, so that no frame
+/// shows its words over the page's, both seen (words_over.mbt).
+fn Viewer::way_at(self : Viewer, p : Double) -> (Double, Double) {
+  if self.markable() || self.played() {
+    (p, p)
+  } else {
+    let look = @motion.trans(fade=0.0, ground_first=true).at(p, 1.0)
+    (look.alpha, look.alpha * look.words)
+  }
+}
+
+///|
+/// How far in its ground is, `p` in (Viewer::way_at).
+fn Viewer::ground_share(self : Viewer, p : Double) -> Double {
+  self.way_at(p).0
+}
+
+///|
+/// How far in what its stage shows is, `p` in (Viewer::way_at).
+fn Viewer::words_share(self : Viewer, p : Double) -> Double {
+  self.way_at(p).1
+}
+
+///|
+/// Whether it was asked for (Viewer::ask_save, ask_install: `asked`), as it is told (asked_told): what reads it follows
+/// it.
+fn Viewer::asked_now(self : Viewer) -> Bool {
+  self.asked_told.get() |> ignore
+  self.asked
+}
+
+///|
+/// The picture of viewer `vw` flying in or back, its nodes in `parent`: from the thumbnail as the chat lays it out in
+/// the frame drawn (Viewer::flight_from) to where its zoom has it (on `stage`), as far as its flight has come then
+/// (flight_box): what shows of it on the window (`parent` laid out over all of it), the box it is cut to, its
+/// corners round, the picture in it, as Viewer::picture_shown has it, its whole picture judged ready for where it lands
+/// (View::image_for: as what draws the picture judged it, Viewer::shown_picture), which of them decided as it is
+/// drawn; drawn at the moments `mine` says (its own layer's, or the slot of the page it flies from: viewer_flight_slot).
+fn image_flight(
+  parent : @view.View,
+  src : Source,
+  vw : Viewer,
+  stage : () -> (Double, Double),
+  mine : (Double) -> Bool,
+) -> Unit {
+  let flight = fn(n : @view.View) -> (FlightBox, (Double, Double, Double, Double))? {
+    let t = viewer_flight_at(vw, n)
+    vw.bytes.get() |> ignore
+    if !vw.flight_node() || !mine(t) {
+      return None
+    }
+    let (w, h) = stage()
+    match (vw.flight_from(@ui.current()), vw.marks_rect_on(n)) {
+      (Some(from), Some(to)) =>
+        flight_box(from, vw.lifted_at(t), to, vw.flying_at(t), w, h).map(fn(f) { (f, to) })
+      _ => None
+    }
+  }
+  parent.box(fn(cut) {
+    cut
+    .over(Is(true))
+    .clips(Is(true))
+    .offset(By(fn() {
+      match flight(cut) {
+        Some((f, _)) => (f.cut.0, f.cut.1)
+        None => (0.0, 0.0)
+      }
+    }))
+    .width(By(fn() { flight(cut).map(fn(f) { f.0.cut.2 }) }))
+    .height(By(fn() { flight(cut).map(fn(f) { f.0.cut.3 }) }))
+    |> ignore
+    cut.box(fn(b) {
+      b
+      .over(Is(true))
+      .clips(Is(true))
+      .corners(By(fn() { flight(b).map(fn(f) { f.0.corners }) }))
+      .offset(By(fn() {
+        match flight(b) {
+          Some((f, _)) => (f.box.0 - f.cut.0, f.box.1 - f.cut.1)
+          None => (0.0, 0.0)
+        }
+      }))
+      .width(By(fn() { flight(b).map(fn(f) { f.0.box.2 }) }))
+      .height(By(fn() { flight(b).map(fn(f) { f.0.box.3 }) }))
+      |> ignore
+      b.box(fn(p) {
+        p
+        .over(Is(true))
+        .offset(By(fn() {
+          match flight(p) {
+            Some((f, _)) => (f.picture.0 - f.box.0, f.picture.1 - f.box.1)
+            None => (0.0, 0.0)
+          }
+        }))
+        .width(By(fn() { flight(p).map(fn(f) { f.0.picture.2 }) }))
+        .height(By(fn() { flight(p).map(fn(f) { f.0.picture.3 }) }))
+        .image(By(fn() {
+          match flight(p) {
+            Some(_) => vw.picture_shown(src)
+            None => None
+          }
+        }))
+        .image_for(By(fn() {
+          match (flight(p), vw.picture(src)) {
+            (Some((_, (_, _, w, h))), picture) if picture != "" && picture == vw.image => (w, h)
+            _ => (0.0, 0.0)
+          }
+        }))
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The moment what draws viewer `vw`'s picture reads the strip and the flight at, in `n`: as each frame draws it while
+/// either goes; where neither goes, the clock read no more.
+fn viewer_flight_at(vw : Viewer, n : @view.View) -> Double {
+  vw.fly.said()
+  pv_strip.way.said()
+  let now = n.logic_at()
+  if pv_strip.way.goes_at(now) || vw.fly.goes_at(now) {
+    n.drawn_at()
+  } else {
+    now
+  }
+}
+
+///|
+/// The viewer whose picture flies from a page's list (viewer_flight_slot), one told from another by the thumbnail it
+/// flies from.
+priv struct FlyingFrom {
+  from : Viewer?
+}
+
+///|
+impl Eq for FlyingFrom with equal(a, b) {
+  a.from.map(fn(v) { v.thumb_id() }) == b.from.map(fn(v) { v.thumb_id() })
+}
+
+///|
+/// What of a picture flying from page `serial`'s chat list is drawn in that page, in its node `slot` (between what the
+/// page shows and its bar: chat_page_made's): the viewer's while it flies from there (Viewer::flies_from_page), its
+/// picture drawn here while it is not out from under the bar (Viewer::lifted_at short of 1), the bar over it as over
+/// the list; in its own layer from then, and once nothing flies from here. `stage` its room. Laid out over the whole
+/// window, as the viewer's layer is: a list's flight is slotted only where its bar is its page's nodes (note_list's
+/// `slot`), the narrow shell's pages, which lie over all of it (what moves them, drawn so, moves this with them).
+pub fn viewer_flight_slot(slot : @view.View, src : Source, serial : Int, stage : () -> (Double, Double)) -> Unit {
+  slot.over(Is(true)).presses(Is(false)) |> ignore
+  // (the viewer flying from here: the one open, or one going back into it)
+  let flying = fn() -> Viewer? {
+    for v in [viewer.get(), pv_leaving.get()] {
+      match v {
+        Some(vw) => {
+          vw.fly.said()
+          if vw.flies && vw.flies_from_page() == serial {
+            return Some(vw)
+          }
+        }
+        None => ()
+      }
+    }
+    None
+  }
+  // (made again as another flies from here, given the one that does)
+  slot.pick(fn() { { from: flying() } }, fn(f, which) {
+    guard which.from is Some(vw) else { return }
+    f.over(Is(true)).presses(Is(false)) |> ignore
+    if vw.played() {
+      film_flight(f, src, vw, fn(t) { vw.lifted_at(t) < 1.0 })
+    } else {
+      image_flight(f, src, vw, stage, fn(t) { vw.lifted_at(t) < 1.0 })
+    }
+  })
+}

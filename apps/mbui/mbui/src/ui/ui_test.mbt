@@ -78,14 +78,14 @@ test "Enter in an empty field hands it on too: whether there is anything to send
 }
 
 ///|
-fn chat_view(items : Array[String]) -> (@ui.Ctx) -> Unit {
+fn chat_view(items : @signals.Signal[Array[String]]) -> (@ui.Ctx) -> Unit {
   fn(c) {
     c.list(
       "msgs",
-      items.length(),
+      items.get().length(),
       40.0,
       fn(i) {
-        c.box(pad=6.0, fn() { c.text(items[i], size=14.0) |> ignore }) |> ignore
+        c.box(pad=6.0, fn() { c.text(items.get()[i], size=14.0) |> ignore }) |> ignore
       },
       stick_end=true,
     )
@@ -95,13 +95,13 @@ fn chat_view(items : Array[String]) -> (@ui.Ctx) -> Unit {
 
 ///|
 test "a list pinned to its end stays there as rows are measured and added" {
-  let items = Array::makei(500, fn(i) {
+  let items = @signals.signal(Array::makei(500, fn(i) {
     if i % 3 == 0 {
       "message \{i} that is quite a bit longer so that it wraps onto several lines in a narrow window"
     } else {
       "message \{i}"
     }
-  })
+  }))
   let t = @ui.Tester::new(chat_view(items), w=240.0, h=400.0)
   t.draw()
   let rows = t.rows()
@@ -109,7 +109,9 @@ test "a list pinned to its end stays there as rows are measured and added" {
   assert_eq(last, 499)
   assert_eq((y + h).round(), 400.0)
   // a new message while at the end: still at the end
-  items.push("new message")
+  let more = items.get().copy()
+  more.push("new message")
+  items.set(more)
   t.frame()
   t.draw()
   let rows2 = t.rows()
@@ -120,7 +122,7 @@ test "a list pinned to its end stays there as rows are measured and added" {
 
 ///|
 test "scrolling up keeps the row under the finger in place" {
-  let items = Array::makei(300, fn(i) { "row \{i}" })
+  let items = @signals.signal(Array::makei(300, fn(i) { "row \{i}" }))
   let t = @ui.Tester::new(chat_view(items), w=240.0, h=400.0)
   t.draw()
   t.wheel(100.0, 200.0, -300.0)
@@ -149,7 +151,7 @@ test "scrolling up keeps the row under the finger in place" {
 test "tabs move their indicator on a spring and come to rest" {
   let sel = [0]
   let t = @ui.Tester::new(fn(c) {
-    sel[0] = c.segmented("tabs", ["One", "Two", "Three"], sel[0])
+    c.segmented("tabs", ["One", "Two", "Three"], sel[0], on_pick=fn(i) { sel[0] = i })
   })
   t.tap_text("Three")
   assert_eq(sel[0], 2)
@@ -323,9 +325,9 @@ test "a scripted run (MBUI_DRIVE) taps words on screen, types through the input 
   let taps = Ref::new(0)
   let t = @ui.Tester::new(fn(c) {
     c.column(w=Fill(1.0), h=Fill(1.0), fn() {
-      if c.button("按一下") {
+      c.button("按一下", on_press=fn() {
         taps.val = taps.val + 1
-      }
+      })
       c.text("按了 \{taps.val} 次") |> ignore
       c.editor("field", placeholder="写点什么", enter_sends=false) |> ignore
     })
@@ -350,48 +352,53 @@ test "a scripted run (MBUI_DRIVE) taps words on screen, types through the input 
 }
 
 ///|
+/// How long a host takes to load a page (a test's slow host): its event that long after it was asked.
+let slow_page_ms : Int = 500
+
+///|
+/// A sheet's spring, slow: it opens for seconds, so a tap in a script comes while it moves.
+let slow_sheet_stiffness : Double = 10.0
+
+///|
 test "a scripted step waits for nothing settling: a tap goes as soon as its words hold still, what comes later by its name" {
-  let frames = Ref::new(0)
-  let moving_until = Ref::new(0)
-  let ticket = Ref::new(0)
-  let opened_at = Ref::new(0)
-  let tapped_at = Ref::new(0)
+  let open = Ref(false)
+  let page = Ref(false)
+  // as 按一下 was tapped: whether the sheet was still moving, whether the page had come
+  let tapped : Ref[(Bool, Bool)?] = Ref(None)
   let t = @ui.Tester::new(fn(c) {
-    frames.val = frames.val + 1
-    // something moving (a sheet opening) for 40 frames after 动起来
-    if frames.val < moving_until.val {
-      c.request_frame()
-    }
-    // a page the host loads for 30 frames after 打开 (what hostcall.mbt asks of a host: a ticket until its event)
-    if ticket.val > 0 && frames.val >= opened_at.val + 30 {
-      @ui.runtime().outside_end(ticket.val)
-      ticket.val = 0
-    }
+    // something moving (a sheet opening) after 动起来: a spring the tap sets out
+    let _ = c.spring("sheet", if open.val { 1.0 } else { 0.0 }, stiffness=slow_sheet_stiffness, damping=6.0)
+    let moving = c.spring_rest("sheet") > c.moment()
     c.column(fn() {
-      if c.button("动起来") {
-        moving_until.val = frames.val + 40
-      }
-      if c.button("打开") {
-        ticket.val = @ui.runtime().outside_start("page 1 (a slow host)")
-        opened_at.val = frames.val
-      }
-      if ticket.val == 0 && opened_at.val > 0 {
+      c.button("动起来", on_press=fn() {
+        open.val = true
+      })
+      c.button("打开", on_press=fn() {
+        // a page the host loads (what hostcall.mbt asks of a host: a ticket until its event, a while after)
+        let rt = @ui.runtime()
+        let ticket = rt.outside_start("page 1 (a slow host)")
+        rt.after(slow_page_ms, fn() {
+          page.val = true
+          rt.outside_end(ticket)
+        })
+      })
+      if page.val {
         c.text("页面来了") |> ignore
       }
-      if c.button("按一下") {
-        tapped_at.val = frames.val
-      }
+      c.button("按一下", on_press=fn() {
+        tapped.val = Some((moving, page.val))
+      })
     })
     |> ignore
   })
   // the tap goes while the other moves on: nothing waits for it to stop
   let log = t.drive("tap 动起来\ntap 按一下\nexit")
   assert_true(log.contains("DRIVE PASS"))
-  assert_true(tapped_at.val > 0 && tapped_at.val < moving_until.val)
+  assert_eq(tapped.val, Some((true, false)))
   // what the host's page brings is waited for by what it shows
   let log = t.drive("tap 打开\nuntil 页面来了\ntap 按一下\nexit")
   assert_true(log.contains("DRIVE PASS"))
-  assert_true(tapped_at.val >= opened_at.val + 30)
+  assert_true(tapped.val is Some((_, true)), msg="\{tapped.val}")
   t.draw()
 }
 
@@ -399,10 +406,10 @@ test "a scripted step waits for nothing settling: a tap goes as soon as its word
 test "a scripted step that never sees what it waits for fails within its timeout, saying what was on screen" {
   let t = @ui.Tester::new(fn(c) {
     c.column(fn() {
-      if c.button("打开") {
+      c.button("打开", on_press=fn() {
         // a ticket never ended: the host never answers
         @ui.runtime().outside_start("view 7 (a page that never loads)") |> ignore
-      }
+      })
       c.text("在这里") |> ignore
     })
     |> ignore

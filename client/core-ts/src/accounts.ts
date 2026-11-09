@@ -1,4 +1,4 @@
-// The accounts signed in on this device (accounts.rs). Each keeps its own still.fail cloud session: a short access
+// The accounts signed in on this device. Each keeps its own still.fail cloud session: a short access
 // token and a rotating refresh token. Tokens are refreshed at most once at a time per account (every caller waits on
 // the same refresh).
 //
@@ -8,6 +8,7 @@
 //
 // Storage (the Rust core's, so either core reads the other's): `accounts` is a JSON array of StoredAccount
 // (`access_expires` in epoch seconds), `login` the sign-in in progress.
+import { Marks } from "./reactive.ts";
 import { Clock, Deferred, Effect } from "effect";
 import { CoreError, HostError, asCoreError } from "./error.ts";
 import type { Host, HttpResponse } from "./host.ts";
@@ -74,6 +75,8 @@ export class Accounts {
   readonly #host: Host;
   #list: StoredAccount[];
   #listeners: (() => void)[] = [];
+  /// What reads the list (`list`) is made again as it changes.
+  readonly #seen = new Marks();
   /// The refresh under way per account: every caller waits on the one.
   readonly #refreshing = new Map<string, Deferred.Deferred<string, CoreError>>();
   #tracer: Tracer | null = null;
@@ -95,6 +98,7 @@ export class Accounts {
   }
 
   list(): AccountView[] {
+    this.#seen.read();
     return this.#list.map(view);
   }
 
@@ -387,6 +391,7 @@ export class Accounts {
   #save(): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const written = yield* Effect.result(this.#host.storageSet(STORAGE_KEY, toJsonBytes(this.#list)));
+      this.#seen.touch();
       for (const listener of [...this.#listeners]) listener();
       if (written._tag === "Failure") return yield* Effect.fail(asCoreError(written.failure));
     });

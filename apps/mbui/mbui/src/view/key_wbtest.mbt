@@ -4,7 +4,7 @@ test "keys and back: a node let go holds none of what it said it does as its ind
   let at = Ref(-1)
   let t = Tree::new(
     fn(root) {
-      root.show(fn() { there.get() }, fn(v) {
+      root.show(at_once=true, fn() { there.get() }, fn(v) {
         at.val = v.at
         v.on_key(fn(_k) { true }).takes_back(fn() {  }) |> ignore
       })
@@ -60,11 +60,11 @@ test "what a node said it is: let go with it; its index made another's that says
   let at = Ref(-1)
   let t = Tree::new(
     fn(root) {
-      root.show(fn() { a_on.get() }, fn(v) {
+      root.show(at_once=true, fn() { a_on.get() }, fn(v) {
         at.val = v.at
         v.says(Is(Some(said(Button, label="甲")))) |> ignore
       })
-      root.show(fn() { b_on.get() }, fn(v) { at.val = v.at })
+      root.show(at_once=true, fn() { b_on.get() }, fn(v) { at.val = v.at })
     },
     time=fn() { 0.0 },
   )

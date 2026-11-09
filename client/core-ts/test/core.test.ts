@@ -67,6 +67,8 @@ test("parses_the_client_messages_of_the_protocol", () => {
   assert.deepEqual(parseClientMessage({ id: 4, subscribe: { topic: "chats", scope: "ws" } }), { kind: "subscribe", id: 4, subscribe: { topic: "chats", scope: "ws", mine: false } });
   assert.deepEqual(parseClientMessage({ id: 5, subscribe: { topic: "chat", station: "w/s", thread: 7 } }), { kind: "subscribe", id: 5, subscribe: { topic: "chat", station: "w/s", thread: 7, session: null } });
   assert.deepEqual(parseClientMessage({ id: 6, subscribe: { topic: "chat", station: "w/s", session: "ds:C1:1.0" } }), { kind: "subscribe", id: 6, subscribe: { topic: "chat", station: "w/s", thread: null, session: "ds:C1:1.0" } });
+  assert.deepEqual(parseClientMessage({ id: 6, subscribe: { topic: "chat", station: "w/s", session: "ds:C1:1.0", compact: true } }), { kind: "subscribe", id: 6, subscribe: { topic: "chat", station: "w/s", thread: null, session: "ds:C1:1.0", compact: true } });
+  assert.deepEqual(parseClientMessage({ id: 7, subscribe: { topic: "chatJobs", station: "w/s", session: "k", compact: true, summary: true } }), { kind: "subscribe", id: 7, subscribe: { topic: "chatJobs", station: "w/s", thread: null, session: "k", compact: true, summary: true } });
   // The cards of links in a message (a screen's, a station's 共享调试) are asked for by the UIs as any topic is.
   assert.deepEqual(parseClientMessage({ id: 8, subscribe: { topic: "screenCard", station: "w/s", screen: "desktop" } }), { kind: "subscribe", id: 8, subscribe: { topic: "screenCard", station: "w/s", screen: "desktop" } });
   assert.deepEqual(parseClientMessage({ id: 9, subscribe: { topic: "adbCard", station: "w/s" } }), { kind: "subscribe", id: 9, subscribe: { topic: "adbCard", station: "w/s" } });
@@ -138,7 +140,7 @@ test("parses_each_call", () => {
   assert.deepEqual(parseCall("chat.older", { station: "w/s", thread: 7 }), { kind: "chatOlder", station: "w/s", thread: 7 });
   assert.deepEqual(parseCall("chat.around", { station: "w/s", thread: 7, seq: 3 }), { kind: "chatAround", station: "w/s", thread: 7, seq: 3 });
   assert.deepEqual(parseCall("chat.find", { station: "w/s", thread: 7, query: "a b" }), { kind: "chatFind", station: "w/s", thread: 7, query: "a b", bring: false });
-  assert.deepEqual(parseCall("history.older", { station: "w/s", key: "ember:c-1" }), { kind: "historyOlder", station: "w/s", key: "ember:c-1" });
+  assert.deepEqual(parseCall("history.older", { station: "w/s", key: "chat:c-1" }), { kind: "historyOlder", station: "w/s", key: "chat:c-1" });
   assert.deepEqual(parseCall("station.measure", { station: "w/s" }), { kind: "stationMeasure", station: "w/s" });
   assert.deepEqual(parseCall("chat.read", { station: "w/s", thread: 7, seq: 12 }), { kind: "chatRead", station: "w/s", thread: 7, seq: 12 });
   assert.equal(code(() => parseCall("chat.send", { station: "w/s", key: "k", text: "hi" })), "invalid_params");
@@ -239,6 +241,37 @@ test("an_accounts_devices_are_a_topic_read_again_after_a_write", async () => {
   await host.settle();
   assert.equal(count(host, "/v1/auth/sessions"), before + 1);
   core.close();
+});
+
+test("an_operators_lists_that_failed_to_come_are_asked_again_while_the_socket_stays_open", async () => {
+  for (const [said, comes] of [[502, true], [404, false]] as const) {
+    const host = new FakeHost();
+    signIn(host);
+    let probes = 0;
+    host.onFetch((req) => {
+      const path = req.url.replace("https://stillfail.test", "");
+      if (path === "/v1/me") return jsonResponse(200, { workspaces: [], invitations: [], relay_url: "https://relay.test" });
+      if (path === "/v1/admin/me") return ++probes <= 2 ? jsonResponse(said, { error: "x" }) : jsonResponse(200, { email: "a@x.com" });
+      if (path.startsWith("/v1/admin/")) return jsonResponse(200, {});
+      return jsonResponse(404, { error: "not_found" });
+    });
+    const core = await Core.create(host, { clock: host.time.clock });
+    const ui = core.connect();
+    const values = new Map();
+    subscribe(core, ui, 1, { topic: "adminOverview", account: "s1" });
+    await host.settle();
+    // The socket heard all along: it never opens again, so it reads nothing again.
+    for (let i = 0; i < 3; i++) {
+      await host.time.pass(SOCKET_RETRY_MS * 3, 50);
+      host.socketSend("/v1/events", "pong");
+      await host.settle();
+    }
+    assert.equal(host.sockets.length, 1);
+    apply(host, values);
+    assert.equal(v(values, 1) !== undefined, comes, `${said}`);
+    assert.equal(count(host, "/v1/admin/me"), comes ? 3 : 1, `${said}`);
+    core.close();
+  }
 });
 
 test("what_a_person_does_is_under_way_until_it_answers_and_reads_are_not", async () => {
@@ -368,6 +401,40 @@ test("back_on_screen_is_said_with_how_long_it_was_away", async () => {
   core.close();
 });
 
+test("UI fault spans never include an arbitrary fault message", async () => {
+  const { host, core } = await cloudCore();
+  const spans: { name: string; at: Record<string, unknown> }[] = [];
+  core.inner.tracer.setExport((body) => Effect.sync(() => {
+    for (const r of (JSON.parse(new TextDecoder().decode(body)) as { resourceSpans: { scopeSpans: { spans: { name: string; attributes: { key: string; value: Record<string, unknown> }[] }[] }[] }[] }).resourceSpans)
+      for (const sc of r.scopeSpans)
+        for (const sp of sc.spans) spans.push({ name: sp.name, at: Object.fromEntries(sp.attributes.map((a) => [a.key, Object.values(a.value)[0]])) });
+  }));
+  try {
+    const ui = core.connect();
+    call(core, ui, 1, "client.error", { source: "ui_fault", message: "Ctx::editor: /sentinel-private-folder/secret.txt" });
+    call(core, ui, 2, "client.error", { source: "ui_fault", message: "editor field reused" });
+    call(core, ui, 3, "client.error", { source: "android.decode", message: "a safe unrelated diagnostic" });
+    call(core, ui, 4, "client.error", { source: "ui_fault", message: "editor field reused /another-secret" });
+    call(core, ui, 5, "client.error", { source: "ui_fault", message: "editor field already in tree" });
+    call(core, ui, 6, "client.error", { source: "ui_fault", message: "tree field reused" });
+    call(core, ui, 7, "client.error", { source: "ui_fault", message: "scene layer conflict" });
+    call(core, ui, 8, "client.error", { source: "ui_fault", message: "panel cannot be presented" });
+    await host.time.pass(0);
+    core.inner.tracer.flush();
+    await host.time.pass(0);
+    assert.deepEqual(spans.filter((s) => s.name === "client.error").map((s) => [s.at["stillfail.source"], s.at["exception.message"]]), [
+      ["ui_fault", "UI fault"],
+      ["ui_fault", "editor field reused"],
+      ["android.decode", "a safe unrelated diagnostic"],
+      ["ui_fault", "editor field already in tree"],
+      ["ui_fault", "tree field reused"],
+      ["ui_fault", "scene layer conflict"],
+      ["ui_fault", "panel cannot be presented"],
+    ]);
+    assert.ok([...core.inner.reported.keys()].every((key) => !key.includes("sentinel-private-folder") && !key.includes("another-secret")));
+  } finally { core.close(); }
+});
+
 test("a_socket_that_answered_pings_and_went_silent_is_opened_again", async () => {
   const { host, core } = await cloudCore();
   const ui = core.connect();
@@ -422,6 +489,64 @@ async function stationCore() {
   const core = await Core.create(host, { clock: host.time.clock, sample: 0 });
   return { host, core };
 }
+
+test("removed legacy shortcuts are kept per workspace on the device", async () => {
+  const { host, core } = await stationCore();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "prefs" });
+  await host.settle();
+  const removed = JSON.stringify([{ station: "w1/s1", root: "/docs", path: "", name: "" }]);
+  call(core, ui, 2, "prefs.set", { driveFavoritesHidden: { w1: removed, w2: "[]" } });
+  call(core, ui, 3, "prefs.set", { driveFavoritesHidden: { w2: null } });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  assert.deepEqual(v(values, 1).driveFavoritesHidden, { w1: removed });
+  await run(core.inner.data.written);
+  core.close();
+  const reopened = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui2 = reopened.connect();
+  subscribe(reopened, ui2, 1, { topic: "prefs" });
+  await host.settle();
+  const after = new Map();
+  apply(host, after);
+  assert.deepEqual(v(after, 1).driveFavoritesHidden, { w1: removed });
+  reopened.close();
+});
+
+test("what_changes_while_no_page_shows_goes_out_as_one_difference_once_one_shows_again", async () => {
+  const { host, core } = await stationCore();
+  const ui = core.connect();
+  subscribe(core, ui, 1, { topic: "prefs" });
+  subscribe(core, ui, 2, { topic: "notify" });
+  call(core, ui, 3, "client.focus", { visible: true, focused: true });
+  await host.settle();
+  const values = new Map();
+  apply(host, values);
+  // The app behind (a phone's draws nothing then and keeps every message for its first frame back): what changes
+  // meanwhile waits, however often it changes.
+  call(core, ui, 4, "client.focus", { visible: false, focused: false });
+  await host.settle();
+  apply(host, values);
+  const sent = (id: number) => host.emitted.filter(([, m]) => (m as { id?: number }).id === id).length;
+  for (let n = 0; n < 30; n++) {
+    prefs.chatOpened(core.inner.data, `w${n}/st`, `k${n}`);
+    await host.settle();
+  }
+  assert.equal(sent(1), 0);
+  // What the app acts on while behind still goes (its notices).
+  call(core, ui, 5, "notify.set", { on: false });
+  await host.settle();
+  assert.equal(sent(2), 1);
+  // Shown again: one difference, to what the core holds now.
+  call(core, ui, 6, "client.focus", { visible: true, focused: true });
+  await host.settle();
+  assert.equal(sent(1), 1);
+  apply(host, values);
+  assert.equal(Object.keys(v(values, 1).openChat).length, 30);
+  assert.equal(v(values, 2).on, false);
+  core.close();
+});
 
 test("prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over", async () => {
   const { host, core } = await stationCore();
@@ -483,7 +608,26 @@ test("prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over", asyn
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 1).motion, undefined);
-  set(7, { invite: "ABCD-EFGH" });
+  // The accent: one of the app's colours, or (none) still.fail's orange.
+  set(33, { accent: "teal" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).accent, "teal");
+  set(34, { accent: "#ff0000" });
+  await host.settle();
+  assert.equal(host.takeEmitted().filter(([, m]) => "error" in m && m.id === 34).length, 1);
+  set(36, { accent: "custom:210" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).accent, "custom:210");
+  set(37, { accent: "custom:360" });
+  await host.settle();
+  assert.equal(host.takeEmitted().filter(([, m]) => "error" in m && m.id === 37).length, 1);
+  set(35, { accent: null });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).accent, undefined);
+  set(7,{ invite: "ABCD-EFGH" });
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 1).invite, "ABCD-EFGH");
@@ -649,6 +793,7 @@ test("the_language_is_as_chosen_else_as_the_device_is", async () => {
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 1).lang, "en");
+  assert.equal(v(values, 1).productName, "still.fail");
   assert.equal(prefs.deviceName(core.inner.data), "still.fail Web · Chrome · macOS");
   const set = (n: number, params: unknown) => call(core, ui, n, "prefs.set", params);
   set(3, { language: "zh" });
@@ -687,10 +832,17 @@ test("a_devices_name_comes_apart_as_its_app_and_its_machine_whichever_language_n
   };
   for (const locale of ["zh-CN", "en-US"]) {
     assert.deepEqual(await parts({ app: "desktop", userAgent: "Macintosh; Mac OS X", machine: "林的 MacBook Air", client: "still.fail mbui", locale }),
-      { group: "desktop still.fail mbui", app: "still.fail mbui 桌面版", machine: "林的 MacBook Air" }, locale);
+      { group: "desktop still.fail", app: "still.fail 桌面版", machine: "林的 MacBook Air" }, locale);
     assert.deepEqual(await parts({ app: "web", userAgent: phone, locale }), { group: "web still.fail", app: "still.fail 网页版", machine: "Chrome · Android" }, locale);
     assert.deepEqual(await parts({ app: "android", model: "", locale }), { group: "android still.fail", app: "still.fail Android", machine: "" }, locale);
   }
+  // Names already signed into the workspace keep their historical bytes, but group with newly named devices.
+  assert.deepEqual(prefs.deviceParts("still.fail mbui Android · OPPO Find N6"),
+    { group: "android still.fail", app: "still.fail Android", machine: "OPPO Find N6" });
+  assert.deepEqual(prefs.deviceParts("still.fail Android · OPPO Find N6"),
+    { group: "android still.fail", app: "still.fail Android", machine: "OPPO Find N6" });
+  assert.deepEqual(prefs.deviceParts("someone else's mbui Android · Phone"),
+    { group: "android someone else's mbui", app: "someone else's mbui Android", machine: "Phone" });
   assert.deepEqual(prefs.deviceParts("这台手机"), { group: null, app: null, machine: "这台手机" });
   core.close();
 });

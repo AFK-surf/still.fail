@@ -16,11 +16,14 @@
 #     Info.plists; both signed with that group, a device's by its packer, whose profile must have it)
 #   MBUI_IOS_ASSETS  its asset catalog (an .xcassets: AppIcon its icon, the colours its Info.plist names), compiled into
 #     the app (actool), what that adds to the Info.plist with it
-#   MBUI_IOS_DEVICE  the simulator's name (default ios-mbui-sf, Mini1's: Studio's simulators open no app): one of our
+#   MBUI_IOS_DEVICE  the simulator's name (default ios-mbui-sf): one of our
 #     own, made when missing (the newest iOS runtime, an iPhone Pro); never another's
 #   MBUI_IOS_SDK     iphonesimulator (the default: the simulator's app, ad hoc signed) or iphoneos: a device's app, in
 #     out/ios-device, its Info.plist saying iPhoneOS, left unsigned (a device's signature is the packer's: its identity,
 #     its profile, its entitlements); `build` only
+#   MBUI_WASM_THUNKS  builds an app's Wasm shell instead (still.fail's scripts/wasm-app.sh: no C of the app's, its
+#     program a .wasm of its own): the host, APP_EXTRA, src/host/wasm_shell.c, those thunks, MBUI_WASM_STUBS and
+#     wasmtime (Frameworks/libwasmtime.dylib, built from its source: wasmtime_lib)
 #   MBUI_IOS_HOOK    a script sourced here that adds to the build (still.fail's core: its apps/mbui/scripts/ios-core.sh):
 #     APP_EXTRA (more C or Objective-C for the app: --extra=FILE ...), APP_LINK (its link flags), APP_ENTITLEMENTS (a
 #     plist the app is signed with), and the functions app_libs (before the link: what APP_LINK names made),
@@ -49,6 +52,51 @@ CFLAGS="-I$MOON_HOME/include -I$ROOT/src/host -I$ROOT/ios/shim -fwrapv -fno-stri
 
 APP_EXTRA= APP_LINK= APP_ENTITLEMENTS=
 [ -z "${MBUI_IOS_HOOK:-}" ] || . "$MBUI_IOS_HOOK"
+
+# wasmtime's C API for the app's Wasm shell (Apache-2.0): no release of it is built for iOS, so its source release
+# (fetched once by its checksum) built here by cargo, for the simulator (Cranelift's code, run as it is made) or a
+# device (Pulley's: iOS lets no app run code it made, so wasmtime's interpreter), kept in out/ by version and target;
+# its headers the macOS release's (the same features). WT_LIB, WT_INCLUDE.
+# The toolchain is rustup's WT_RUST (wasmtime 50 asks for Rust 1.97 or later), installed beside the others when missing.
+WT_VERSION=50.0.1
+WT_SRC_SHA=04c3c71b2fa160236aa8bddf907896dad1e018756366b564fe611643913ed0a5
+WT_MAC_SHA=a49327ca596fae51cd92e230265132112bb7896c5a24e4d58cd05b56612e26bb
+WT_RUST=${WT_RUST:-1.99.1}
+wasmtime_lib() {
+  local target features w=$MOD/out/wasmtime-ios
+  # (the simulator's with Pulley too: MBUI_WASM_PULLEY=1 runs there what a device runs)
+  if [ $IOS_SDK = iphoneos ]; then target=aarch64-apple-ios; else target=aarch64-apple-ios-sim; fi
+  features=--features=pulley
+  WT_LIB=$w/v$WT_VERSION-$target-pulley/libwasmtime.dylib
+  WT_INCLUDE=$w/wasmtime-v$WT_VERSION-aarch64-macos-c-api/include
+  mkdir -p $w
+  if [ ! -d $WT_INCLUDE ]; then
+    curl -fsSL --retry 3 -o $w/mac.tar.xz \
+      "https://github.com/bytecodealliance/wasmtime/releases/download/v$WT_VERSION/wasmtime-v$WT_VERSION-aarch64-macos-c-api.tar.xz"
+    [ "$(shasum -a 256 $w/mac.tar.xz | awk '{print $1}')" = $WT_MAC_SHA ] || { echo "ios.sh: wasmtime: not the release asked for" >&2; exit 1; }
+    tar xf $w/mac.tar.xz -C $w
+    rm -f $w/mac.tar.xz
+  fi
+  [ -f $WT_LIB ] && return 0
+  if [ ! -d $w/wasmtime-v$WT_VERSION-src ]; then
+    curl -fsSL --retry 3 -o $w/src.tar.gz \
+      "https://github.com/bytecodealliance/wasmtime/releases/download/v$WT_VERSION/wasmtime-v$WT_VERSION-src.tar.gz"
+    [ "$(shasum -a 256 $w/src.tar.gz | awk '{print $1}')" = $WT_SRC_SHA ] || { echo "ios.sh: wasmtime's source: not the release asked for" >&2; exit 1; }
+    tar xzf $w/src.tar.gz -C $w
+    rm -f $w/src.tar.gz
+  fi
+  command -v rustup > /dev/null || export PATH=$HOME/.cargo/bin:$PATH
+  rustup run $WT_RUST rustc --version > /dev/null 2>&1 ||
+    rustup toolchain install $WT_RUST --profile minimal --target aarch64-apple-ios-sim,aarch64-apple-ios >&2
+  rustup target add --toolchain $WT_RUST $target >&2
+  (cd $w/wasmtime-v$WT_VERSION-src && CARGO_TARGET_DIR=$w/target \
+    cargo +$WT_RUST build --release -p wasmtime-c-api --target $target $features >&2) || exit 1
+  mkdir -p $(dirname $WT_LIB)
+  cp $w/target/$target/release/libwasmtime.dylib $WT_LIB
+  install_name_tool -id @rpath/libwasmtime.dylib $WT_LIB
+  # (its source and build, 3.5 GB, gone once the library is kept)
+  rm -rf $w/target $w/wasmtime-v$WT_VERSION-src
+}
 
 device() {
   local id
@@ -113,18 +161,30 @@ case "${1:-build}" in
       app_libs > $OUT/app-libs.log 2>&1 &
       LIBS=$!
     fi
-    GEN=$("$D/mbc" gen --target-dir $OUT/_build src/$PKG 2>$OUT/moon.log) \
-      || { "$D/chk" errs < $OUT/moon.log; grep '^mbc:' $OUT/moon.log; exit 1; }
-    "$D/chk" errs < $OUT/moon.log | grep -v '^errors: 0' || true
     R=$MOON_HOME/lib/runtime
     EXTRA=
     for f in apple_render apple_text apple_image apple_listen apple_browser_login apple_passwords apple_views apple_stream ios_app; do
       EXTRA="$EXTRA --extra=$ROOT/src/host/$f.m"
     done
-    "$D/mbc" compile "--cc=$CC" "--cflags=$CFLAGS" --objc-flags=-fobjc-arc --obj=$OUT/obj \
-      --link-flags=$OUT/link-flags.txt \
-      --optional=$R/runtime.c --optional=$R/env.c --optional=$R/utf.c --optional=$R/sync_io.c --optional=$R/backtrace.c \
-      $EXTRA $APP_EXTRA "$GEN" > $OUT/objs.txt
+    if [ -n "${MBUI_WASM_THUNKS:-}" ]; then
+      # The app's Wasm shell (MBUI_WASM_THUNKS: the shell's side of the app's calls, tools/wasmhost's): the host, the
+      # app's C and wasmtime (Frameworks/libwasmtime.dylib), with no C of moonc's; the app, a .wasm of its own, read
+      # where MBUI_WASM_APP says (the simulator's: a file of this Mac's, still.fail's scripts/wasm-app.sh) or as
+      # app.wasm beside the program
+      wasmtime_lib
+      : > $OUT/link-flags.txt
+      shell_objs $OUT/wobj "$CC" "$CFLAGS -I$WT_INCLUDE" -fobjc-arc ${EXTRA//--extra=/} ${APP_EXTRA//--extra=/} \
+        $ROOT/src/host/wasm_shell.c $MBUI_WASM_THUNKS ${MBUI_WASM_STUBS:-} $R/runtime.c > $OUT/objs.txt
+      APP_LINK="$APP_LINK $WT_LIB -Wl,-rpath,@executable_path/Frameworks"
+    else
+      GEN=$("$D/mbc" gen --target-dir $OUT/_build src/$PKG 2>$OUT/moon.log) \
+        || { "$D/chk" errs < $OUT/moon.log; grep '^mbc:' $OUT/moon.log; exit 1; }
+      "$D/chk" errs < $OUT/moon.log | grep -v '^errors: 0' || true
+      "$D/mbc" compile "--cc=$CC" "--cflags=$CFLAGS" --objc-flags=-fobjc-arc --obj=$OUT/obj \
+        --link-flags=$OUT/link-flags.txt \
+        --optional=$R/runtime.c --optional=$R/env.c --optional=$R/utf.c --optional=$R/sync_io.c --optional=$R/backtrace.c \
+        $EXTRA $APP_EXTRA "$GEN" > $OUT/objs.txt
+    fi
     if [ -n "$LIBS" ]; then wait $LIBS || { cat $OUT/app-libs.log; exit 1; }; cat $OUT/app-libs.log; fi
     # what the app is signed with: the app's own (APP_ENTITLEMENTS), with a share extension the app group the two
     # share; the simulator reads them from the binary itself (its __TEXT,__entitlements, as Xcode puts them there), a
@@ -177,6 +237,10 @@ case "${1:-build}" in
       bash "$D/ios-metadata.sh" "$APPDIR/Info.plist" ${EXT:+"$EXT/Info.plist"}
     fi
     if type app_bundle >/dev/null 2>&1; then app_bundle || exit 1; fi
+    if [ -n "${MBUI_WASM_THUNKS:-}" ]; then
+      mkdir -p $APPDIR/Frameworks
+      cp -p $WT_LIB $APPDIR/Frameworks/
+    fi
     # what the app carries signed first, then the app (ad hoc: the simulator asks no more; a device's: the packer's)
     if [ $IOS_SDK = iphonesimulator ]; then
       for f in $APPDIR/Frameworks/*; do [ -e "$f" ] && codesign -s - --force "$f" >/dev/null 2>&1; done

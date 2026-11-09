@@ -1,4 +1,4 @@
-// The first view from a large dataset (docs/core-db.md, Measurements): 20 stations × 2 000 chats, sessions and
+// The first view from a large dataset (Measurements): 20 stations × 2 000 chats, sessions and
 // threads, 100 000 entries, one account. The same script runs against this tree and against a checkout of the core
 // before the databases per account (it seeds the former records store, which that core reads and this one imports).
 //

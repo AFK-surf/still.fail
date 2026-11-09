@@ -316,6 +316,8 @@ static int mods_now(void) {
 #include "win_files.h"
 // the device beyond the window (device.mbt): a key catcher's keys, the clipboard, awake
 #include "win_device.h"
+// its log files: what it says on stderr, its performance record
+#include "win_logs.h"
 // the app's life: once for its person, put away to the notification area, links, in front or not, light or dark
 #include "win_life.h"
 // this machine's station: what it is, started, stopped, installed
@@ -323,26 +325,35 @@ static int mods_now(void) {
 // the app keeping itself current: a newer build's installer downloaded, checked, run
 #include "win_update.h"
 
+// A paste by key (`mods` the app's Ctrl with what else is held): files on it (Explorer's copied ones) or a picture (PNG,
+// or a bitmap): the app's Ctrl+V (1000 + v), which reads the clipboard for them (@hostapi.clip_read), as a page's paste
+// takes them as files; else its words
+static void paste_key(int mods) {
+  if (IsClipboardFormatAvailable(CF_HDROP) ||
+      IsClipboardFormatAvailable(RegisterClipboardFormatW(L"PNG")) || IsClipboardFormatAvailable(CF_DIB) ||
+      IsClipboardFormatAvailable(CF_DIBV5) || IsClipboardFormatAvailable(CF_BITMAP)) {
+    mb_cb.key(1000 + 'v', mods);
+  } else {
+    paste();
+  }
+}
+
 static void key_down(WPARAM vk) {
   // a key catcher's focus (win_device.h): its keys (a composition under way keeps them)
   if (key_catching && ime_active && marked_len == 0 && catch_vk(vk)) return;
   int mods = mods_now(), code = 0;
+  // Shift+Insert: the system's other key for a paste, what a clipboard manager may press for one (Raycast does): as
+  // Ctrl+V
+  if (vk == VK_INSERT && mods == 1) {
+    paste_key(2);
+    return;
+  }
   if (mods & 2) {
     switch (vk) {
       case 'A': code = 12; break;
       case 'C': code = 13; break;
       case 'X': code = 14; break;
-      case 'V':
-        // files on it (Explorer's copied ones) or a picture (PNG, or a bitmap): the app's Ctrl+V (1000 + v), which
-        // reads the clipboard for them (@hostapi.clip_read), as a page's paste takes them as files; else its words
-        if (IsClipboardFormatAvailable(CF_HDROP) ||
-            IsClipboardFormatAvailable(RegisterClipboardFormatW(L"PNG")) || IsClipboardFormatAvailable(CF_DIB) ||
-            IsClipboardFormatAvailable(CF_DIBV5) || IsClipboardFormatAvailable(CF_BITMAP)) {
-          mb_cb.key(1000 + 'v', mods);
-        } else {
-          paste();
-        }
-        return;
+      case 'V': paste_key(mods); return;
     }
     // any other Ctrl key with a character: the app's shortcut (1000 + the character, lower case)
     if (!code) {
@@ -977,15 +988,23 @@ void *mb_app_hwnd(void) { return hwnd; }
 
 double mb_app_scale(void) { return scale; }
 
+// A frame for what moves on by the clock that needs fewer (@hostapi.frames_paced): not paced here, the next drawn.
+void mb_host_frames_paced(double hz) {
+  (void)hz;
+  mb_host_request_frame();
+}
+
 void mb_host_wake_after(double ms) {
   double t = mb_now_ms() + ms;
   if (wake_at < 0 || t < wake_at) wake_at = t;
 }
 
+#include "groups.h"
+
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   // (a frame built while the window is not shown: nothing of it on the screen)
   if (!presenting) return;
-  mb_render_present(buf, count, r, g, b);
+  mb_render_present(mb_groups_draw_out(buf, count), count, r, g, b);
 }
 
 void mb_host_set_ime(int32_t active, double x, double y, double w, double h, moonbit_string_t text,
@@ -1112,6 +1131,7 @@ void mb_host_log(moonbit_string_t s) {
   fprintf(stdout, "%s\n", u);
   fflush(stdout);
   free(u);
+  logs_line_wide(LOGS_LOG, (const WCHAR *)s, n);
 }
 
 // The app over another app done (@hostapi.over_done): it never is here.
@@ -1265,13 +1285,24 @@ void mb_host_set_sideways(int32_t on) { (void)on; }
 // Let turn as held (@hostapi.set_turnable): a window does not turn, and is not held upright.
 int32_t mb_host_set_turnable(int32_t on) { (void)on; return 0; }
 
-// The performance record (@hostapi.perf_state): none kept here (iOS keeps one, ios_app.m).
-int32_t mb_host_perf_state(void) { return -1; }
-void mb_host_set_perf(int32_t on) { (void)on; }
-void mb_host_perf_line(moonbit_string_t line) { (void)line; }
-moonbit_string_t mb_host_perf_where(void) { return moonbit_make_string_raw(0); }
-double mb_host_perf_size(void) { return 0; }
+// The performance record (@hostapi.perf_state), kept as iOS's is (win_logs.h), in the app's log folder with its other
+// log files. No program with no id of its own (a demo) keeps one.
+int32_t mb_host_perf_state(void) { return logs_perf_state(); }
+void mb_host_set_perf(int32_t on) { logs_set_perf(on); }
+void mb_host_perf_line(moonbit_string_t line) {
+  if (logs_perf_on) logs_line_wide(LOGS_PERF, (const WCHAR *)line, Moonbit_array_length(line));
+}
+moonbit_string_t mb_host_perf_where(void) {
+  int running = logs_perf_state() >= 0, n = running ? (int)wcslen(logs_dir) : 0;
+  moonbit_string_t out = moonbit_make_string_raw(n);
+  if (n) memcpy(out, logs_dir, (size_t)n * sizeof(WCHAR));
+  return out;
+}
+double mb_host_perf_size(void) { return logs_perf_bytes; }
+// (nothing shares it here, no share sheet: its folder is opened instead, mb_host_perf_open)
 moonbit_bytes_t mb_host_perf_read(void) { return moonbit_make_bytes(0, 0); }
+// Whether the record's folder can be opened here (go 0), or opened (go 1) (@hostapi.perf_open).
+int32_t mb_host_perf_open(int32_t go) { return go ? logs_open() : logs_perf_state() >= 0; }
 
 // Notifications (notify.mbt): the system's toasts, win_notify.cpp.
 
@@ -1330,6 +1361,7 @@ int32_t mb_host_window_inset(void) { return setup_inset; }
 // A window filling the screen (@hostapi.full_screen): not one of this host's.
 int32_t mb_host_full_screen(void) { return 0; }
 void mb_host_set_full_screen(int32_t on) { (void)on; }
+void mb_host_window_buttons_down(double by, double ms) { (void)by; (void)ms; }
 
 // How round the system draws the window's corners (@hostapi.window_corner): Windows 11's 8 (its build 22000 on: the
 // rounding DWM gives every window that does not ask otherwise), none maximised; Windows 10's are square.

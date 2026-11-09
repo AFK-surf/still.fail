@@ -85,7 +85,7 @@ const key = (path: string) => platform.paths.key(path);
 const within = (path: string, dir: string) => platform.paths.within(key(path), key(dir));
 
 /// The roots config.json names (`drive.roots`): absolute paths, as written. Those of a workspace the station joined are
-/// `drive.workspaces[<id>]` (docs/multi-workspace.md); none named, its home workspace's.
+/// `drive.workspaces[<id>]`; none named, its home workspace's.
 export function rootsOf(raw: any, workspace: string | null = null): string[] {
   const roots = workspace === null ? raw?.drive?.roots : raw?.drive?.workspaces?.[workspace];
   return Array.isArray(roots) ? roots.filter((r: unknown): r is string => typeof r === "string" && platform.paths.rooted(r)).map((r) => platform.paths.clean(r)) : [];
@@ -121,7 +121,7 @@ function granted(files: Protected, top: string): boolean {
   return known?.state === "granted";
 }
 
-/// Where a file a person drops into one of the station's screens is put (docs/remote-screens.md `drop`): the machine's
+/// Where a file a person drops into one of the station's screens is put: the machine's
 /// Downloads, where files from elsewhere land (a browser's, AirDrop's) and where its file dialogs look first; the home
 /// where it has none. Only the folder's own entry is looked at, never what is in it: on macOS listing a protected
 /// folder can put a privacy prompt up and hold the caller until it is answered (a whole station, for a sync call). A
@@ -145,7 +145,7 @@ export function typeOf(name: string): string {
 
 const TYPES: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", heic: "image/heic", bmp: "image/bmp",
-  mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm", mkv: "video/x-matroska", avi: "video/x-msvideo", ts: "video/mp2t",
+  mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm", ogv: "video/ogg", "3gp": "video/3gpp", "3g2": "video/3gpp2", mkv: "video/x-matroska", avi: "video/x-msvideo", ts: "video/mp2t",
   mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", flac: "audio/flac", wav: "audio/wav", ogg: "audio/ogg", opus: "audio/opus",
   pdf: "application/pdf", zip: "application/zip",
   txt: "text/plain; charset=utf-8", md: "text/markdown; charset=utf-8", markdown: "text/markdown; charset=utf-8", log: "text/plain; charset=utf-8",
@@ -234,7 +234,7 @@ export type DriveDeps = {
   home?: string;
 };
 
-/// The station's drive, one for the admin API's routes and the modules' local API (modules/local.ts): config.json's
+/// The station's drive, one for the admin API's routes: config.json's
 /// roots, the station's own never reached (its data directory, config, and `more`: what its parts add, ops/own.ts), the
 /// folders macOS protects through still.fail Helper (`files`, where there is one).
 export const stationDrive = (config: ConfigFile, more: () => string[], files: Protected | null) =>
@@ -394,7 +394,7 @@ export class Drive {
     });
   }
 
-  /// A file for what opens it by its path itself (the image codecs, a video's poster; modules/media.ts): where it is as
+  /// A file for what opens it by its path itself (the image codecs, a video's poster): where it is as
   /// the file system has it (`found`, what it is known by), its name, size and time. `copy` is there when it is reached
   /// through still.fail Helper, which the station does not open itself: the file copied to `to` (a new file of the
   /// station's own) to be read there instead.

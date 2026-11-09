@@ -1,4 +1,4 @@
-// Marking a service's page for its chat's agent (ember apps/android chat/screens/Preview.kt: MarkMode, MarksOver, Note,
+// Marking a service's page for its chat's agent (still.fail apps/android chat/screens/Preview.kt: MarkMode, MarksOver, Note,
 // putIntoChat; web/src/annotate/Marks.tsx): the bar's edit key starts picking, page.js holds the page's taps and says
 // what was picked (`marked`: picked, focus, at); each mark a box on its element with a numbered pin on its corner and
 // what is said of it in a bubble beside it. Put into the chat, each mark goes into its draft as a screenshot of what
@@ -10,7 +10,7 @@
 // waits on a time.
 
 ///|
-/// A script for the page from marking (Preview.kt's js), sent once the frame's builds are over (service_body's
+/// A script for the page from marking, sent once the frame's builds are over (service_body's
 /// c.tell): one a build says is said once, whichever build of the frame says it.
 pub fn page_say(p : ServicePage, js : String) -> Unit {
   p.marks.out.push(js)
@@ -61,7 +61,7 @@ pub(all) enum ShotWait {
 }
 
 ///|
-/// A page's marks while it is in the stack (Preview.kt PageState): picking or not, the marks, where each is now in the
+/// A page's marks while it is in the stack: picking or not, the marks, where each is now in the
 /// page's viewport (as the page last said) and the viewport's size in CSS pixels, the one whose note is open, putting
 /// them into the chat, why that failed.
 pub(all) struct PageMarks {
@@ -87,7 +87,7 @@ pub fn page_marks_new() -> PageMarks {
 }
 
 ///|
-/// The accent marks are drawn in on the page's pictures (Preview.kt drawMark), and the pin's ground.
+/// The accent marks are drawn in on the page's pictures, and the pin's ground.
 pub let page_mark_color : Int64 = 0xEF6A3CFFL
 
 ///|
@@ -168,7 +168,7 @@ pub fn service_marked(p : ServicePage, said : Json) -> Unit {
 }
 
 ///|
-/// A new page: the marks of the one before are gone, picking goes on (Preview.kt PreviewClient's started, loaded).
+/// A new page: the marks of the one before are gone, picking goes on (loaded).
 pub fn page_marks_new_page(p : ServicePage, site : @ui.NativeView) -> Unit {
   let m = p.marks
   m.marks.clear()
@@ -180,7 +180,7 @@ pub fn page_marks_new_page(p : ServicePage, site : @ui.NativeView) -> Unit {
 }
 
 ///|
-/// Marking stopped: its marks gone (Preview.kt leave).
+/// Marking stopped: its marks gone.
 pub fn page_marks_leave(p : ServicePage, site : @ui.NativeView) -> Unit {
   let m = p.marks
   m.marks.clear()
@@ -226,7 +226,7 @@ pub fn shot_ask(k : Int, t : String, expr : String, drawn? : Bool = false) -> St
 }
 
 ///|
-/// The marks put into the chat's draft (Preview.kt putIntoChat): begun here, each step as the page answers.
+/// The marks put into the chat's draft: begun here, each step as the page answers.
 pub fn page_marks_put(p : ServicePage, site : @ui.NativeView, src : Source) -> Unit {
   let m = p.marks
   if m.marks.length() == 0 || m.shot is Some(_) {
@@ -251,7 +251,7 @@ pub fn page_marks_put(p : ServicePage, site : @ui.NativeView, src : Source) -> U
 }
 
 ///|
-/// Putting them failed: said in the bar, in red (Preview.kt state.error).
+/// Putting them failed: said in the bar, in red.
 pub fn shot_failed(p : ServicePage, words : String) -> Unit {
   p.marks.shot = None
   p.marks.error = svc("android-chat.preview.put.failed", args=[("error", words)])
@@ -386,7 +386,7 @@ pub fn page_marks_frame(p : ServicePage, site : @ui.NativeView) -> Unit {
 }
 
 ///|
-/// The mark drawn on the window's picture (Preview.kt drawMark): its outline, its number in a pin on its corner, in
+/// The mark drawn on the window's picture: its outline, its number in a pin on its corner, in
 /// the picture's pixels (`ratio` of them to the page's CSS pixel).
 pub fn shot_draw(p : ServicePage, s : Shooting, png : Bytes) -> Unit {
   let (pw, ph) = match png_size(png) {
@@ -436,14 +436,14 @@ pub fn shot_done(p : ServicePage, site : @ui.NativeView, s : Shooting) -> Unit {
     list.push((x.0, x.1, [x.2], "page"))
   }
   marked_into[key] = list
-  draft_given()
+  draft_given(key)
   p.marks.shot = None
   page_marks_leave(p, site)
   toast_later(svc("android-chat.preview.put.done"))
 }
 
 ///|
-/// Where a mark is, as the agent reads it with its screenshot `shot` (Preview.kt where): the first line is also what
+/// Where a mark is, as the agent reads it with its screenshot `shot`: the first line is also what
 /// the composer shows.
 pub fn mark_where(m : PageMark, shot : String) -> String {
   let lines = [

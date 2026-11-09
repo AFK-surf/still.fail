@@ -22,14 +22,21 @@ let history_back : Array[Spot] = []
 let history_forward : Array[Spot] = []
 
 ///|
-/// Told as the entries before the one now change (pushed, taken back, forgotten): what reads whether there is one
-/// (history_back_step) follows it, at that change.
-// kept across runs: only a count
-let history_said : @signals.Signal[Int] = @signals.signal(0)
+/// The entry before the one now (the last of history_back; None: none), told as the entries before it change (pushed,
+/// taken back, forgotten): what reads whether there is one and goes back to it (history_back_step) follows it, as it
+/// becomes another entry.
+// kept across runs: said again as the entries change (history_reset among them)
+let history_said : @signals.Signal[Spot?] = @signals.signal(None, same=fn(a, b) {
+  match (a, b) {
+    (Some(x), Some(y)) => physical_equal(x, y)
+    (None, None) => true
+    _ => false
+  }
+})
 
 ///|
 fn history_changed() -> Unit {
-  history_said.set(@signals.untracked(fn() { history_said.get() }) + 1)
+  history_said.set(history_back.last())
 }
 
 ///|
@@ -145,7 +152,7 @@ pub fn history_settled() -> Unit {
   }
   history_acting.val = false
   // (where it went is noted as the change it is in is committed: history_note, an entry there or none)
-  history_ended.set(@signals.untracked(fn() { history_ended.get() }) + 1)
+  history_ended.set(history_ended.untracked() + 1)
 }
 
 ///|
@@ -194,8 +201,7 @@ pub fn history_note(ws : String, passing : Bool) -> Unit {
 /// it gives is done (history_go; later, as a gesture goes through, the same entry, whatever was pushed meanwhile: those
 /// after it, and the one now, forward's, as traverseTo leaves them); the entry forgotten by then, nothing.
 pub fn history_back_step(src : Source) -> (() -> Unit)? {
-  history_said.get() |> ignore
-  guard history_back.last() is Some(spot) else { return None }
+  guard history_said.get() is Some(spot) else { return None }
   Some(fn() {
     let mut at = history_back.length() - 1
     while at >= 0 && !physical_equal(history_back[at], spot) {

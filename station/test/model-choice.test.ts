@@ -66,6 +66,18 @@ test("one close to the most used, or none used with several to choose from: aske
   assert.deepEqual(choose(candidates(studio, "codex"), []), { pick: { runtime: "codex", model: "gpt-6-astra" } });
 });
 
+test("none used: a profile's first model, not every model its check found", () => {
+  // One Claude account that runs all its check found: never used, its own first model, no question.
+  const one = hubConfig({ profiles: [{ id: "cc", runtime: "claude", home: "h", models: ["claude-opus-5-5"] }] }, "/nonexistent-model-choice", () => ["claude-haiku-5", "claude-sonnet-5"]).profiles;
+  assert.deepEqual(candidates(one, null).map((c) => c.model), ["claude-opus-5-5", "claude-haiku-5", "claude-sonnet-5"]);
+  assert.deepEqual(choose(candidates(one, null), [], candidates(one, null, true)), { pick: { runtime: "claude", model: "claude-opus-5-5" } });
+  // Used: any it runs counts.
+  assert.deepEqual(choose(candidates(one, null), [{ runtime: "claude", model: "claude-sonnet-5", n: 2 }], candidates(one, null, true)), { pick: { runtime: "claude", model: "claude-sonnet-5" } });
+  // Two accounts never used: asked about their first models alone.
+  const two = choose(candidates(studio, null), [], candidates(studio, null, true));
+  assert.ok("ask" in two && two.ask.length === 2);
+});
+
 test("a chat that ran its runtime's default counts for a profile that names no model", () => {
   const cands = candidates(profiles([{ id: "cc", runtime: "claude", home: "h" }, { id: "cx", runtime: "codex", home: "h2" }]), null);
   assert.deepEqual(choose(cands, [{ runtime: "codex", model: "whatever-it-ran", n: 2 }, { runtime: "claude", model: null, n: 1 }]), { pick: { runtime: "codex", model: null } });

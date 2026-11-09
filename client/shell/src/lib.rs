@@ -27,7 +27,20 @@ use tokio_tungstenite::tungstenite::{Error as WsError, Message};
 mod adb;
 
 const MDNS_SERVICE: &str = "stillfail";
-const FORMER_MDNS_SERVICE: &str = "ember";
+
+/// The nodes a DHT starts from: n0-mainline's defaults, with ours (cloud/dht-node, on the relays' machines) in place of relay.pkarr.org.
+fn dht() -> n0_mainline::DhtBuilder {
+    let mut dht = n0_mainline::DhtBuilder::default();
+    dht.bootstrap(&[
+        "router.bittorrent.com:6881",
+        "dht.transmissionbt.com:6881",
+        "dht.libtorrent.org:25401",
+        "39.105.157.122:6881",
+        "47.79.40.84:6881",
+        "120.24.233.158:6881",
+    ]);
+    dht
+}
 
 /// `complete(ctx, id, json, json_len, error, error_len, bytes, bytes_len, has_bytes)`: an operation's answer, its JSON
 /// (when it succeeded) or its error, and its bytes if it has any. Called on any thread.
@@ -81,6 +94,137 @@ static MEDIA_SEQ: AtomicU64 = AtomicU64::new(1);
 
 fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
+}
+
+/// A file being read a part at a time (`text.open`).
+struct TextReader {
+    source: Box<dyn std::io::Read + Send>,
+    /// Read and not given yet.
+    held: Vec<u8>,
+    lines: bool,
+    done: bool,
+}
+
+/// How much of a file a part holds at most, past a line's end (counter.ts CHUNK).
+const TEXT_PART: usize = 8 << 20;
+
+impl TextReader {
+    fn fill(&mut self, want: usize) {
+        while !self.done && self.held.len() < want {
+            let mut buf = vec![0u8; (want - self.held.len()).max(64 << 10)];
+            match self.source.read(&mut buf) {
+                Ok(0) | Err(_) => self.done = true,
+                Ok(n) => self.held.extend_from_slice(&buf[..n]),
+            }
+        }
+    }
+
+    fn next(&mut self) -> Option<String> {
+        self.fill(TEXT_PART);
+        if self.lines {
+            // (a part ends at the last line end in its window, else at the first after it, as counter.ts `partsOf`)
+            let window = self.held.len().min(TEXT_PART);
+            let cut = match self.held[..window].iter().rposition(|&b| b == b'\n') {
+                Some(i) => i,
+                None => loop {
+                    if let Some(i) = self.held.iter().position(|&b| b == b'\n') {
+                        break i;
+                    }
+                    if self.done {
+                        return None;
+                    }
+                    let more = self.held.len() + TEXT_PART;
+                    self.fill(more);
+                },
+            };
+            let part: Vec<u8> = self.held.drain(..=cut).collect();
+            return Some(String::from_utf8_lossy(&part).into_owned());
+        }
+        if self.held.is_empty() {
+            return None;
+        }
+        // (a piece ends where a character does, but at the end)
+        let mut end = self.held.len().min(TEXT_PART);
+        if end < self.held.len() || !self.done {
+            let mut back = 0;
+            while back < 3 && end > back && (self.held[end - 1 - back] & 0xc0) == 0x80 {
+                back += 1;
+            }
+            if end > back && self.held[end - 1 - back] >= 0xc0 {
+                let lead = self.held[end - 1 - back];
+                let len = if lead >= 0xf0 { 4 } else if lead >= 0xe0 { 3 } else { 2 };
+                if back + 1 < len {
+                    end -= back + 1;
+                }
+            }
+        }
+        if end == 0 {
+            end = self.held.len();
+        }
+        let piece: Vec<u8> = self.held.drain(..end).collect();
+        Some(String::from_utf8_lossy(&piece).into_owned())
+    }
+}
+
+/// `path` made absolute and its `.` and `..` taken out by their names alone, as Node's path.resolve does.
+fn lexical(path: &std::path::Path) -> PathBuf {
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for c in path.components() {
+        match c {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// A link's target without Windows' `\\?\` (as libuv's readlink gives it).
+fn plain(target: PathBuf) -> PathBuf {
+    let s = target.to_string_lossy().into_owned();
+    if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{rest}"))
+    } else if let Some(rest) = s.strip_prefix(r"\\?\") {
+        PathBuf::from(rest)
+    } else {
+        target
+    }
+}
+
+/// Node's realpathSync (lib/fs.js, its JavaScript one): the path resolved, then each part from the root looked at
+/// (lstat) and a link replaced by its target resolved against the parts before it, again from the root.
+fn node_realpath(path: &str) -> std::io::Result<String> {
+    use std::path::Component;
+    let mut path = lexical(&std::path::absolute(path)?);
+    let mut links = 0;
+    'again: loop {
+        let parts: Vec<Component> = path.components().collect();
+        let mut done = PathBuf::new();
+        for (i, part) in parts.iter().enumerate() {
+            if !matches!(part, Component::Normal(_)) {
+                done.push(part);
+                continue;
+            }
+            let next = done.join(part);
+            if std::fs::symlink_metadata(&next)?.file_type().is_symlink() {
+                links += 1;
+                if links > 256 {
+                    return Err(std::io::Error::other("too many links"));
+                }
+                let mut resolved = lexical(&done.join(plain(std::fs::read_link(&next)?)));
+                for rest in &parts[i + 1..] {
+                    resolved.push(rest);
+                }
+                path = resolved;
+                continue 'again;
+            }
+            done = next;
+        }
+        return Ok(done.to_string_lossy().into_owned());
+    }
 }
 
 /// The two halves of an iroh stream, and the reads waiting on it: a reset wakes them first (as the addon's).
@@ -345,6 +489,8 @@ struct Inner {
     next: AtomicU64,
     /// The accounts' databases open, by id, with their files.
     sqls: Mutex<HashMap<u64, (Option<PathBuf>, rusqlite::Connection)>>,
+    /// Files being read a part at a time (`text.open`), by id.
+    texts: Mutex<HashMap<u64, TextReader>>,
     /// How long an account's database is waited for as it is opened, while another process holds it (`open_wait`).
     open_wait: std::time::Duration,
     /// Where a message for the app goes straight from here (`sf_shell_set_say`): none, nothing is tapped.
@@ -1131,6 +1277,9 @@ impl Inner {
                     .congestion_controller_factory(Arc::new(cubic))
                     .default_path_keep_alive_interval(std::time::Duration::from_secs(1))
                     .default_path_max_idle_timeout(std::time::Duration::from_secs(3))
+                    // A link kept 10 minutes in silence, as the station's (its CONNECTION_IDLE_MS): the app frozen in the
+                    // background past iroh's 30 s came back to every link timed out.
+                    .max_idle_timeout(Some(iroh::endpoint::VarInt::from_u32(10 * 60_000).into()))
                     .build(),
             );
         if a.get("relayOnly").and_then(Value::as_bool).unwrap_or(false) {
@@ -1140,8 +1289,7 @@ impl Inner {
         if a.get("lookup").and_then(Value::as_bool).unwrap_or(false) && !relays.is_empty() {
             builder = builder
                 .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(MDNS_SERVICE).advertise(false))
-                .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE).advertise(false))
-                .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish());
+                .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().dht_builder(dht()).no_publish());
         }
         let endpoint = builder.bind().await.map_err(err)?;
         Ok(Answer::json(json!({ "id": self.keep(Handle::Endpoint(endpoint, Accepted::default())) })))
@@ -1171,6 +1319,20 @@ impl Inner {
                 conn.busy_timeout(DB_WAIT).map_err(err)?;
                 let id = self.next.fetch_add(1, Ordering::Relaxed);
                 sqls.insert(id, (path, conn));
+                Ok(json!({ "id": id }))
+            }
+            // A database another process keeps (the station's, by its path) and writes as well: never made here, never
+            // held for this process alone, waited for `wait` ms when it is busy.
+            "sql.attach" => {
+                let path = PathBuf::from(str_of(a, "path")?);
+                let wait = a.get("wait").and_then(Value::as_u64).unwrap_or(0);
+                let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX | rusqlite::OpenFlags::SQLITE_OPEN_URI;
+                let conn = rusqlite::Connection::open_with_flags(&path, flags).map_err(err)?;
+                conn.busy_timeout(std::time::Duration::from_millis(wait)).map_err(err)?;
+                conn.set_prepared_statement_cache_capacity(256);
+                conn.execute_batch("PRAGMA synchronous = NORMAL;").map_err(err)?;
+                let id = self.next.fetch_add(1, Ordering::Relaxed);
+                sqls.insert(id, (None, conn));
                 Ok(json!({ "id": id }))
             }
             "sql.delete" => {
@@ -1207,6 +1369,9 @@ impl Inner {
                     "sql.all" => {
                         let mut statement = conn.prepare_cached(sql).map_err(err)?;
                         let columns = statement.column_count();
+                        // `named`: the columns' names beside the rows ({columns, rows}), as the station's reads give them.
+                        let names: Option<Vec<String>> = a.get("named").and_then(Value::as_bool).unwrap_or(false)
+                            .then(|| statement.column_names().into_iter().map(String::from).collect());
                         let mut rows = statement.query(rusqlite::params_from_iter(sql_params(a))).map_err(err)?;
                         let mut out = Vec::new();
                         while let Some(row) = rows.next().map_err(err)? {
@@ -1222,7 +1387,10 @@ impl Inner {
                             }
                             out.push(Value::Array(values));
                         }
-                        Ok(Value::Array(out))
+                        Ok(match names {
+                            Some(columns) => json!({ "columns": columns, "rows": out }),
+                            None => Value::Array(out),
+                        })
                     }
                     _ => Err(format!("no operation {op}")),
                 }
@@ -1241,6 +1409,112 @@ impl Inner {
             let path = storage_path(&self.dir, str_of(a, "key")?);
             return Ok(if path.is_file() { json!(path.to_string_lossy()) } else { Value::Null });
         }
+        // A path's kind as stat (links followed) says it: "file", "dir" or "other"; null when it cannot be (none there,
+        // no right): what the station's programs ask of the filesystem (station/mb src/locate), as Node's statSync does.
+        if op == "fs.stat" {
+            return Ok(match std::fs::metadata(str_of(a, "path")?) {
+                Ok(m) if m.is_file() => json!("file"),
+                Ok(m) if m.is_dir() => json!("dir"),
+                Ok(_) => json!("other"),
+                Err(_) => Value::Null,
+            });
+        }
+        // A directory's names, with their kinds as the directory says them (`types`: [name, "file" | "dir" | "link" |
+        // "other"], links not followed), in Node's readdirSync's order (libuv sorts them by their bytes, but on Windows);
+        // null when it cannot be read.
+        if op == "fs.readdir" {
+            let Ok(entries) = std::fs::read_dir(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let mut out: Vec<(String, &str)> = Vec::new();
+            for entry in entries {
+                let Ok(entry) = entry else { return Ok(Value::Null) };
+                let kind = match entry.file_type() {
+                    Ok(t) if t.is_symlink() => "link",
+                    Ok(t) if t.is_dir() => "dir",
+                    Ok(t) if t.is_file() => "file",
+                    _ => "other",
+                };
+                out.push((entry.file_name().to_string_lossy().into_owned(), kind));
+            }
+            if !cfg!(windows) {
+                out.sort_by(|x, y| x.0.as_bytes().cmp(y.0.as_bytes()));
+            }
+            let types = a.get("types").and_then(Value::as_bool).unwrap_or(false);
+            return Ok(Value::Array(out.into_iter().map(|(name, kind)| if types { json!([name, kind]) } else { json!(name) }).collect()));
+        }
+        // A path with its links resolved as Node's realpathSync resolves them (each part looked at, a link's target put in
+        // its place; the parts' names as given, not as the disk spells them); null when a part is not there.
+        if op == "fs.realpath" {
+            return Ok(node_realpath(str_of(a, "path")?).map_or(Value::Null, |p| json!(p)));
+        }
+        // A file's text: `strict` as a TextDecoder with `fatal` reads it (a leading byte order mark dropped, none when it
+        // is not UTF-8), else as Node's readFileSync(path, "utf8") does (what is not UTF-8 replaced); null when it does
+        // not read.
+        // A transcript read a part at a time (station/src/usage/counter.ts `readFrom`, search/sources.ts `mentions`): the
+        // file as long as it was when opened, or its `.zst` (every frame, the seek table passed over) when the file is
+        // not there. Each `text.next` is the next part, decoded as Buffer.toString("utf8") does: `lines` whole lines of
+        // at most about 8 MB (a last line without its end left out, as readFrom leaves it), else every byte, in pieces
+        // cut where a character ends. Null at the end; `text.close` lets it go.
+        if op == "text.open" {
+            let path = PathBuf::from(str_of(a, "path")?);
+            let lines = a.get("lines").and_then(Value::as_bool).unwrap_or(false);
+            let packed = PathBuf::from(format!("{}.zst", path.display()));
+            let source: Box<dyn std::io::Read + Send> = match std::fs::File::open(&path) {
+                Ok(file) => {
+                    let size = file.metadata().map(|m| m.len()).unwrap_or(0);
+                    Box::new(std::io::Read::take(file, size))
+                }
+                Err(_) => match std::fs::File::open(&packed) {
+                    Ok(file) => match zstd::stream::read::Decoder::new(file) {
+                        Ok(d) => Box::new(d),
+                        Err(_) => return Ok(Value::Null),
+                    },
+                    Err(_) => return Ok(Value::Null),
+                },
+            };
+            let id = self.next.fetch_add(1, Ordering::Relaxed);
+            self.texts.lock().map_err(|_| "the readers are gone".to_string())?.insert(id, TextReader { source, held: Vec::new(), lines, done: false });
+            return Ok(json!({ "id": id }));
+        }
+        if op == "text.next" {
+            let id = id_of(a)?;
+            let mut texts = self.texts.lock().map_err(|_| "the readers are gone".to_string())?;
+            let reader = texts.get_mut(&id).ok_or_else(|| format!("no reader {id}"))?;
+            return Ok(reader.next().map_or(Value::Null, Value::String));
+        }
+        if op == "text.close" {
+            self.texts.lock().map_err(|_| "the readers are gone".to_string())?.remove(&id_of(a)?);
+            return Ok(Value::Null);
+        }
+        // A path's size and when it was last written (ms, none before 1970), links followed, as Node's statSync with
+        // `bigint` says them; null when it cannot be.
+        if op == "fs.meta" {
+            let Ok(meta) = std::fs::metadata(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let modified = meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64);
+            return Ok(json!({ "size": meta.len(), "mtimeMs": modified }));
+        }
+        // The end of a file, at most `bytes` of it (up to its size when opened), decoded as TextDecoder("utf-8") does
+        // (what is not UTF-8 replaced, a leading byte order mark dropped); null when it does not open.
+        if op == "fs.tail" {
+            use std::io::{Read, Seek, SeekFrom};
+            let Ok(mut file) = std::fs::File::open(str_of(a, "path")?) else { return Ok(Value::Null) };
+            let most = a.get("bytes").and_then(Value::as_u64).unwrap_or(64 * 1024);
+            let size = file.metadata().map(|m| m.len()).unwrap_or(most);
+            let from = size.saturating_sub(most);
+            let mut bytes = Vec::new();
+            if file.seek(SeekFrom::Start(from)).is_ok() {
+                let _ = file.take(size - from).read_to_end(&mut bytes);
+            }
+            let body = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes);
+            return Ok(json!(String::from_utf8_lossy(body)));
+        }
+        if op == "fs.read" {
+            let Ok(bytes) = std::fs::read(str_of(a, "path")?) else { return Ok(Value::Null) };
+            if a.get("strict").and_then(Value::as_bool).unwrap_or(false) {
+                let body = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes);
+                return Ok(std::str::from_utf8(body).map_or(Value::Null, |s| json!(s)));
+            }
+            return Ok(json!(String::from_utf8_lossy(&bytes)));
+        }
         // An Ed25519 key's public half and its signature of `message` (hex both ways): a lock claim's (client/core-ts
         // lock.ts), signed for each workspace and endpoint as the core connects. In Hermes (no JIT) the JS one took ~8 ms
         // each and longer the first time, on the core's thread before anything the UI had asked for.
@@ -1250,10 +1524,35 @@ impl Inner {
             let message = hex::decode(str_of(a, "message")?).map_err(err)?;
             return Ok(json!({ "publicKey": hex::encode(key.public().as_bytes()), "signature": hex::encode(key.sign(&message).to_bytes()) }));
         }
+        // Whether `signature` is `key`'s over `message` (hex all): Ed25519 (a 32-byte key, a 64-byte signature) or ECDSA
+        // P-256 over SHA-256 (`ES256`: an uncompressed point and r‖s; `ES256-der`: the signature DER, as WebAuthn gives
+        // it), by libcrux's formally verified implementations: what the core checks the lock's entries and the vault's
+        // records by (client/core-ts vault/verified.ts) where the shell has it, not @noble's in JS.
+        if op == "crypto.verify" {
+            let key = hex::decode(str_of(a, "key")?).map_err(err)?;
+            let signature = hex::decode(str_of(a, "signature")?).map_err(err)?;
+            let message = hex::decode(str_of(a, "message")?).map_err(err)?;
+            let ok = match str_of(a, "alg")? {
+                "Ed25519" => match (<[u8; 32]>::try_from(key.as_slice()), <[u8; 64]>::try_from(signature.as_slice())) {
+                    (Ok(k), Ok(s)) => libcrux_ed25519::verify(&message, &k, &s).is_ok(),
+                    _ => false,
+                },
+                alg @ ("ES256" | "ES256-der") => {
+                    use libcrux_ecdsa::p256::{PublicKey, Signature, verify};
+                    let s = if alg == "ES256" { <[u8; 64]>::try_from(signature.as_slice()).ok().map(Signature::from_bytes) } else { Signature::from_der(&signature).ok() };
+                    match (s, PublicKey::try_from(key.as_slice())) {
+                        (Some(s), Ok(k)) if key.len() == 65 => verify(libcrux_ecdsa::DigestAlgorithm::Sha256, &message, &s, &k).is_ok(),
+                        _ => false,
+                    }
+                }
+                other => return Err(format!("no {other} here")),
+            };
+            return Ok(json!(ok));
+        }
         // What the DHT lookup's socket and lookups went through since the last take, while the core records (`keep`;
-        // false: none kept from now on): the record's `dht:` lines (client/core-ts mesh.ts, vendor/n0-mainline's ember).
+        // false: none kept from now on): the record's `dht:` lines (client/core-ts mesh.ts, vendor/n0-mainline's `stillfail`).
         if op == "dht.said" {
-            let (lines, dropped) = n0_mainline::ember::said(a.get("keep").and_then(Value::as_bool).unwrap_or(false));
+            let (lines, dropped) = n0_mainline::stillfail::said(a.get("keep").and_then(Value::as_bool).unwrap_or(false));
             return Ok(json!({ "lines": lines.into_iter().map(|s| json!({ "at": s.at_ms, "text": s.text })).collect::<Vec<_>>(), "dropped": dropped }));
         }
         let handle = self.handle(id_of(a)?)?;
@@ -1331,7 +1630,7 @@ impl Shell {
         let http = Mutex::new(http_client(&tls));
         let db = Arc::new(Mutex::new(DbHandle { path: dir.join("core.db"), conn: None }));
         let adb = adb::Adb::new(dir.clone());
-        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, fetches: Mutex::default(), handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default(), open_wait, say: Mutex::default(), media: Mutex::default(), adb });
+        let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, fetches: Mutex::default(), handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default(), texts: Mutex::default(), open_wait, say: Mutex::default(), media: Mutex::default(), adb });
         STATS.lock().unwrap().shells.push(Arc::downgrade(&inner));
         Ok(Shell { runtime, inner })
     }
@@ -1813,6 +2112,29 @@ mod tests {
     }
 
     #[test]
+    fn attaches_a_database_another_process_keeps() {
+        let dir = TempDir::new();
+        let path = dir.path().join("station.db");
+        // the station's own connection, in WAL, holding it while the shell's is open beside it
+        let station = rusqlite::Connection::open(&path).unwrap();
+        station.execute_batch("PRAGMA journal_mode = WAL; CREATE TABLE t (k TEXT, n INTEGER); INSERT INTO t VALUES ('a', 1);").unwrap();
+        let shell = Shell::start(dir.path().join("shell"), complete, std::ptr::null_mut()).unwrap();
+        let sync = |op: &str, json: &str| -> Value { serde_json::from_slice(&shell.call_sync(op, json.as_bytes())).unwrap() };
+        let at = serde_json::to_string(&path.display().to_string()).unwrap();
+        let id = sync("sql.attach", &format!(r#"{{"path":{at},"wait":0}}"#))["value"]["id"].as_u64().unwrap();
+        let rows = sync("sql.all", &format!(r#"{{"id":{id},"sql":"SELECT k, n FROM t","named":true}}"#));
+        assert_eq!(rows["value"], json!({ "columns": ["k", "n"], "rows": [["a", 1]] }));
+        // both write: neither holds it for itself
+        station.execute("INSERT INTO t VALUES ('b', 2)", []).unwrap();
+        let checkpoint = sync("sql.all", &format!(r#"{{"id":{id},"sql":"PRAGMA wal_checkpoint(PASSIVE)","named":true}}"#));
+        assert_eq!(checkpoint["value"]["columns"], json!(["busy", "log", "checkpointed"]));
+        // a path with no database is not made one
+        let missing = serde_json::to_string(&dir.path().join("none.db").display().to_string()).unwrap();
+        assert!(sync("sql.attach", &format!(r#"{{"path":{missing}}}"#))["error"].is_string());
+        assert!(!dir.path().join("none.db").exists());
+    }
+
+    #[test]
     fn keeps_an_accounts_database() {
         let dir = TempDir::new();
         let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
@@ -1864,6 +2186,27 @@ mod tests {
             json!("92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00")
         );
         assert!(sync("ed25519.sign", r#"{"seed":"4ccd","message":"72"}"#)["error"].is_string());
+    }
+
+    #[test]
+    fn checks_ed25519_and_p256_signatures() {
+        let dir = TempDir::new();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let sync = |op: &str, json: &str| -> Value { serde_json::from_slice(&shell.call_sync(op, json.as_bytes())).unwrap() };
+        // RFC 8032's test 2; then the message changed
+        let ed = |message: &str| sync("crypto.verify", &format!(r#"{{"alg":"Ed25519","key":"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c","signature":"92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00","message":"{message}"}}"#));
+        assert_eq!(ed("72")["value"], json!(true));
+        assert_eq!(ed("73")["value"], json!(false));
+        // RFC 6979 A.2.5, P-256 with SHA-256, message "sample": r‖s, then DER
+        let key = "0460fed4ba255a9d31c961eb74c6356d68c049b8923b61fa6ce669622e60f29fb67903fe1008b8bc99a41ae9e95628bc64f2f1b20c2d7e9f5177a3c294d4462299";
+        let r = "efd48b2aacb6a8fd1140dd9cd45e81d69d2c877b56aaf991c34d0ea84eaf3716";
+        let s = "f7cb1c942d657c41d436c7a1b6e29f65f3e900dbb9aff4064dc4ab2f843acda8";
+        let p = |alg: &str, signature: &str, message: &str| sync("crypto.verify", &format!(r#"{{"alg":"{alg}","key":"{key}","signature":"{signature}","message":"{message}"}}"#));
+        assert_eq!(p("ES256", &format!("{r}{s}"), "73616d706c65")["value"], json!(true));
+        assert_eq!(p("ES256", &format!("{r}{s}"), "73616d706c66")["value"], json!(false));
+        assert_eq!(p("ES256-der", &format!("3046022100{r}022100{s}"), "73616d706c65")["value"], json!(true));
+        assert_eq!(p("ES256", "00", "73616d706c65")["value"], json!(false));
+        assert!(sync("crypto.verify", r#"{"alg":"RS256","key":"00","signature":"00","message":"00"}"#)["error"].is_string());
     }
 
     #[test]

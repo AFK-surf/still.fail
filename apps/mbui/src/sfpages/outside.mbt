@@ -1,4 +1,4 @@
-// The desktop's asking before a message that refers to chats of the viewer's other workspaces goes (ember web/src/
+// The desktop's asking before a message that refers to chats of the viewer's other workspaces goes (still.fail web/src/
 // OutsideShare.tsx useOutsideShare, OutsideList; ChatRef.css.ts outsideList, outsideItem, outsideCannot, refChip,
 // refChipStation): the presenters' panel, 分享对话 and what sharing does, then each chat as a reference shows (`@` and its title in
 // the accent) and whose it is, those the viewer may not share saying so; 取消, and 分享并发送 (仍然发送 with none to
@@ -95,13 +95,13 @@ fn outside_foot(c : @ui.Ctx, src : Source, key : String) -> Unit {
   if s.open.get() && c.key_pressed(@ui.key_code_enter) {
     @sfbase.outside_yes(src, s)
   }
-  if @sf.button(c, @sf.t("common.cancel"), key="outside/cancel", tone=Ghost) {
+  @sf.button(c, @sf.t("common.cancel"), key="outside/cancel", tone=Ghost, on_press=fn() {
     @sfbase.outside_no(s)
-  }
+  }) |> ignore
   let label = @sf.t(if @sfbase.outside_sharable(s) { "web-main.outside.share" } else { "web-main.outside.anyway" })
-  if @sf.button(c, label, key="outside/yes", tone=Primary, busy=s.busy.get()) {
+  @sf.button(c, label, key="outside/yes", tone=Primary, busy=s.busy.get(), on_press=fn() {
     @sfbase.outside_yes(src, s)
-  }
+  }) |> ignore
 }
 
 ///|
@@ -133,7 +133,7 @@ let outside_title : @ui.TextStyle = @ui.text_style(size=Ui, color=AccentText, wr
 let outside_whose : @ui.Style = @ui.css("row ml=S1 px=S1_5 py=SPx gap=S1 radius=Full bg=Hover align=ACenter")
 
 ///|
-/// Its workspace's mark, as a chip's station's (ChatRef.css.ts refChipStationIcon: 11).
+/// Its workspace's mark, as a chip's station's.
 let outside_whose_mark : Double = 11.0
 
 ///|

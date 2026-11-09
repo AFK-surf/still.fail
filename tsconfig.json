@@ -15,7 +15,6 @@
   },
   "include": [
     "test/**/*.ts",
-    "scripts/**/*.ts",
-    "spike/**/*.ts"
+    "scripts/**/*.ts"
   ]
 }

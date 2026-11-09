@@ -1,7 +1,7 @@
-// A job's output in a terminal's colours (the web's TermText.tsx, as the core says its runs): for both frames.
+// A job's output in a terminal's colours (as the core says its runs): for both frames.
 
 ///|
-/// A terminal's 16 colours, light and dark (TermInk.kt, as the web's TermText.tsx), RRGGBBAA.
+/// A terminal's 16 colours, light and dark, RRGGBBAA.
 // kept across runs: a table, never written
 let term_light : Array[Int64] = [
   0x000000FFL, 0xCD3131FFL, 0x00BC00FFL, 0x949800FFL, 0x0451A5FFL, 0xBC05BCFFL, 0x0598BCFFL, 0x555555FFL, 0x666666FFL,
@@ -16,7 +16,7 @@ let term_dark : Array[Int64] = [
 ]
 
 ///|
-/// A run's colour (TermInk.kt termColor): one of the palette's by number, or #rrggbb; 0 none.
+/// A run's colour: one of the palette's by number, or #rrggbb; 0 none.
 pub fn term_color(c : String, dark : Bool) -> Int64 {
   if c.has_prefix("#") && c.length() == 7 {
     let mut v = 0L
@@ -51,7 +51,7 @@ pub fn term_color(c : String, dark : Bool) -> Int64 {
 }
 
 ///|
-/// A job's output in its styles a line at a time (TermInk.kt termText): each run in its colours, bold, italic and
+/// A job's output in its styles a line at a time: each run in its colours, bold, italic and
 /// underlined as said; a dim one its colour (or the words') faded.
 pub fn term_lines(runs : Array[Json], ink : Int64, dark : Bool) -> Array[Array[@ui.Run]] {
   let out : Array[Array[@ui.Run]] = [[]]
@@ -103,12 +103,12 @@ pub fn job_output_lines(
     "job": Json::string(job),
     "lines": Json::number(lines),
   }
-  guard hold(src, jobs_scope(station), "jobLog", params).value is Some(Object(_)) else { return None }
+  guard hold(src, jobs_scope(station), "jobLog", params).get().value is Some(Object(_)) else { return None }
   job_ink.set(ink)
   job_dark.set(dark)
   Some(
-    job_outputs.read(Json::object(params).stringify(), fn(_) {
-      let v = (src.topic)("jobLog", params).value
+    job_outputs.read(src, Json::object(params).stringify(), fn(_) {
+      let v = src.topic("jobLog", params).get().value
       let words = text(v, "text")
       let runs = items(v, "runs")
       if words == "" {

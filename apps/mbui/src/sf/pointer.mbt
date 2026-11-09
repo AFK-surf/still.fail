@@ -1,5 +1,5 @@
 // A remote screen's pointer, as still.fail's Android viewer draws it over the frame (app/remote/ScreenViewer.kt
-// Pointer), in the shape the station says its pointer has (a CSS cursor's name: docs/remote-screens.md `cursor`), as
+// Pointer), in the shape the station says its pointer has (a CSS cursor's name), as
 // a Mac draws its own: the arrow white with a dark edge (1.2 wide) as it was; a hand white with a dark edge; the
 // others (a text cursor, a cross, the resizing arrows…) dark with a white edge round them. At its own size however the
 // frame is zoomed, `pointer_size` square; the point it points with (its hot spot: the arrow's tip, a hand's
@@ -19,7 +19,7 @@ pub let pointer_tip : Double = 1.0
 pub let pointer_size : Double = 20.0
 
 ///|
-/// The edge's colour (ScreenViewer.kt Pointer: 0xFF1B1C1F), and the dark of the dark shapes.
+/// The edge's colour, and the dark of the dark shapes.
 let pointer_edge : Int64 = 0x1B1C1FFFL
 
 ///|
@@ -76,28 +76,6 @@ fn pointer_shape_of(name : String) -> PointerShape {
     "wait" => Wait
     "progress" => Progress
     _ => Arrow
-  }
-}
-
-///|
-/// The shape's name in its image's key.
-fn pointer_name(shape : PointerShape) -> String {
-  match shape {
-    Arrow => "arrow"
-    Text => "text"
-    VerticalText => "vertical-text"
-    Hand => "hand"
-    ResizeEW => "ew"
-    ResizeNS => "ns"
-    ResizeNWSE => "nwse"
-    ResizeNESW => "nesw"
-    Move => "move"
-    Grab => "grab"
-    Grabbing => "grabbing"
-    Crosshair => "crosshair"
-    NotAllowed => "not-allowed"
-    Wait => "wait"
-    Progress => "progress"
   }
 }
 
@@ -442,3 +420,26 @@ pub fn pointer_png(c : @ui.Ctx, shape? : String = "default") -> (String, () -> B
 /// The pointers' PNGs made, by their keys (pointer_png).
 // kept across runs: each a function of its key alone
 let pointer_pngs : Map[String, Bytes] = {}
+
+///|
+/// The shape's name in its image's key.
+fn pointer_name(shape : PointerShape) -> String {
+  match shape {
+    Arrow => "arrow"
+    Text => "text"
+    VerticalText => "vertical-text"
+    Hand => "hand"
+    ResizeEW => "ew"
+    ResizeNS => "ns"
+    ResizeNWSE => "nwse"
+    ResizeNESW => "nesw"
+    Move => "move"
+    Grab => "grab"
+    Grabbing => "grabbing"
+    Crosshair => "crosshair"
+    NotAllowed => "not-allowed"
+    Wait => "wait"
+    Progress => "progress"
+  }
+}
+

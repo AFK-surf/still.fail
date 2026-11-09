@@ -75,7 +75,7 @@ pub fn Ctx::focusable(self : Ctx, id : Int, node? : Int = -1, keys? : Int = 3, o
   // used: island_allows)
   let island = if self.layer_cur == 0 { island_building.val } else { None }
   let f = { id, group: self.group_cur, layer: self.layer_cur, node, keys, on_press, island }
-  // (held by its node, docs/retained.md the way there's 1: by `node`, else by the id's, made or to be: Ctx::id_built)
+  // (held by its node the way there's 1: by `node`, else by the id's, made or to be: Ctx::id_built)
   let i = if node >= 0 {
     node
   } else {
@@ -458,6 +458,7 @@ fn Ctx::press_focused(self : Ctx, key : Int) -> Bool {
   for f in self.last_focusables {
     if f.id == self.focus && (f.keys & key) != 0 && !self.layer_inert(f.layer) && island_allows(f.island) {
       self.clicked.push(f.id)
+      self.press_on_key(f.id)
       made_pressed(f.id)
       self.focus_moved(self.focus, visible=true)
       return true
@@ -499,6 +500,11 @@ fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {
 ///|
 /// As the frame ends: what can take the focus now is what Tab goes among next frame.
 fn Ctx::focus_frame_end(self : Ctx) -> Unit {
+  // A one-time code is entered only while its boxes are shown. Its state can outlive those boxes on the same page,
+  // but it must not keep the keyboard once they are gone. Other editors keep their focus when a page covers them.
+  if code_fields.contains(self.focus) && !self.focusables.iter().any(fn(f) { f.id == self.focus }) {
+    self.focus_moved(0)
+  }
   // what has it now is what the next frame's keys and presses move it from (Ctx::focus_gained)
   self.focus_before = self.focus
   self.focus_roved = false

@@ -89,16 +89,17 @@ pub fn drawable(c : @ui.Ctx, name : String, w : Double, tint? : Int64) -> Int {
 }
 
 ///|
-/// Marks drawn in one colour, the page's ink (Parts.kt MONO); the others in
+/// Marks drawn in one colour, the page's ink; the others in
 /// their own.
 let mono_makers : Array[String] = [
   "anthropic", "openai", "kimi", "xai", "mistral", "xiaomi", "ant-ling", "openrouter",
   "vercel", "cloudflare", "azure", "groq", "together", "fireworks", "cerebras", "huggingface",
-  "nvidia", "baseten", "dsh", "cursor", "devin", "hermes",
+  "nvidia", "baseten", "dsh", "cursor", "devin", "hermes", "meta", "stepfun", "tencent",
+  "meituan",
 ]
 
 ///|
-/// The mark of the company that made a model (Parts.kt MakerIcon): the core's
+/// The mark of the company that made a model: the core's
 /// `maker` id when there is a mark for it, else its runtime's maker's
 /// (codex: OpenAI's, dsh its own, grok xAI's, Cursor's and Devin's their own, else Anthropic's).
 pub fn maker_mark(
@@ -107,27 +108,13 @@ pub fn maker_mark(
   runtime : String,
   size : Double,
 ) -> Int {
-  let known = maker != "" &&
-    drawables.contains("maker_" + maker.replace_all(old="-", new="_"))
-  let id = if known {
-    maker
-  } else {
-    match runtime {
-      "codex" => "openai"
-      "dsh" => "dsh"
-      "grok" => "xai"
-      "cursor" => "cursor"
-      "devin" => "devin"
-      "hermes" => "hermes"
-      _ => "anthropic"
-    }
-  }
+  let id = maker_of(maker, runtime)
   let tint = if mono_makers.contains(id) { Some(theme().p.text) } else { None }
   drawable(c, "maker_" + id.replace_all(old="-", new="_"), size, tint?=tint)
 }
 
 ///|
-/// A program a station logs in to (the core's `MachineLoginTool.mark`; the web's MachineLogins.tsx ToolMark): its
+/// A program a station logs in to (the core's `MachineLoginTool.mark`): its
 /// maker's mark in its colours, those whose colour is black in the page's ink; a terminal's where it has none.
 pub fn tool_mark(c : @ui.Ctx, mark : String, size : Double) -> Unit {
   let name = "tool_" + mark.replace_all(old="-", new="_")
@@ -147,6 +134,17 @@ let ink_tools : Array[String] = ["github", "cursor", "vercel", "openai", "devin"
 /// Slack's mark (a chat that came from Slack).
 pub fn slack_mark(c : @ui.Ctx, size : Double) -> Int {
   drawable(c, "slack", size)
+}
+
+///|
+/// The mark of where a chat came from, by the core's originKind: Feishu's, Comma's for a Comma
+/// connect's, else Slack's.
+pub fn origin_mark_name(kind : String) -> String {
+  match kind {
+    "feishu" => "feishu"
+    "comma" => "comma"
+    _ => "slack"
+  }
 }
 
 ///|
@@ -220,7 +218,7 @@ pub fn has_station_mark(emoji : String, icon : String) -> Bool {
 }
 
 ///|
-/// A station where it is named (Parts.kt StationMark): its `icon` first, a
+/// A station where it is named: its `icon` first, a
 /// glyph (glyph:<name>, glyph:<name>:<colour>, in that colour, else `tint`)
 /// or a picture put up (its address, or a data URL); else its emoji.
 pub fn station_mark(
@@ -315,7 +313,7 @@ pub fn station_mark(
     }
     return
   }
-  // none of its own: `none`'s icon, if given (Parts.kt StationMark's `none`)
+  // none of its own: `none`'s icon, if given
   match none {
     Some(n) => icon_named(c, n, size, tint) |> ignore
     None => ()
@@ -371,74 +369,7 @@ fn icon_named(c : @ui.Ctx, name : String, size : Double, color : Int64) -> Int {
 }
 
 ///|
-/// Line art on a `vw` × `vh` grid, its paths stroked `width` wide with round ends and joins, nothing filled (a link's
-/// card's mark, ScreenLinks.kt tile): drawn `w` wide (as tall as its grid is for that) in `tint`, kept by `key` for
-/// each size and tint.
-pub fn line_art(
-  c : @ui.Ctx,
-  key : String,
-  paths : Array[String],
-  vw : Double,
-  vh : Double,
-  width : Double,
-  w : Double,
-  tint : Int64,
-) -> Int {
-  let layers : Array[@pixels.VectorPath] = []
-  for d in paths {
-    layers.push({ d, fill: 0L, stroke: 0x000000FFL, width, even_odd: false, sx: 1.0, sy: 1.0, tx: 0.0, ty: 0.0 })
-  }
-  draw_drawable(c, "art/" + key, { w: vw, h: vh, layers }, w, Some(tint))
-}
-
-///|
-/// A popover's arrow, pointing up at what it is from (StationUpdate.kt: 14 across, 7 up, in the popover's colour; a
-/// pixel more under it, into the popover).
-// kept across runs: a value (no field of it changes)
-let popover_arrow_shape : @pixels.Vector = {
-  w: 14.0,
-  h: 8.0,
-  layers: [
-    {
-      d: "M 0 8 L 7 0 L 14 8 Z",
-      fill: 0x000000FFL,
-      stroke: 0x00000000L,
-      width: 0.0,
-      even_odd: false,
-      sx: 1.0,
-      sy: 1.0,
-      tx: 0.0,
-      ty: 0.0,
-    },
-  ],
-}
-
-///|
-/// The arrow of a popover (14 by 8) in `tint`.
-pub fn popover_arrow(c : @ui.Ctx, tint : Int64) -> Int {
-  draw_drawable(c, "popover-arrow", popover_arrow_shape, popover_arrow_shape.w, Some(tint))
-}
-
-///|
 fn imin(a : Int, b : Int) -> Int {
-  if a < b {
-    a
-  } else {
-    b
-  }
-}
-
-///|
-fn dmax(a : Double, b : Double) -> Double {
-  if a > b {
-    a
-  } else {
-    b
-  }
-}
-
-///|
-fn dmin(a : Double, b : Double) -> Double {
   if a < b {
     a
   } else {
@@ -481,7 +412,7 @@ fn glyph_paths(name : String) -> (Array[String], Array[String])? {
 let glyphs_read : Map[String, (Array[String], Array[String])] = {}
 
 ///|
-/// Whose service a profile runs on (ProviderLogo; Parts.kt ProviderMark): OpenCode's square, a listed provider's maker
+/// Whose service a profile runs on (ProviderLogo): OpenCode's square, a listed provider's maker
 /// (`mark`; the plug where there is none), else Anthropic, xAI, Cursor, Devin, Hermes or OpenAI by its runtime (`kind`
 /// the profile's access: an API provider's, OpenCode Go's, Anthropic's API).
 pub fn provider_logo(c : @ui.Ctx, runtime : String, kind : String, size : Double, mark : String) -> Unit {
@@ -510,6 +441,7 @@ pub fn provider_logo(c : @ui.Ctx, runtime : String, kind : String, size : Double
       "cursor" => "cursor"
       "devin" => "devin"
       "hermes" => "hermes"
+      "agy" => "gemini"
       _ => "openai"
     }
   }
@@ -641,59 +573,3 @@ let ring_hole : Double = 1.0
 /// How far apart rings are (rings): this much of one's width.
 let ring_apart : Double = 0.2
 
-
-///|
-/// A picture of the app's (`name`, drawable_data's) as an icon for the system's bars (@hostapi.NavItem `icon`:
-/// icon_data's groups on a 24 grid, in the one ink the system tints it with): each path's fill a shape of its pieces
-/// (`7`, by the even-odd rule where it is), each stroke its lines, each at its colour's alpha (`4 a 0`); "" for none.
-pub fn drawable_icon(name : String) -> String {
-  guard drawables.get(name) is Some(d) else { return "" }
-  let k = 24.0 / dmax(d.w, d.h)
-  let out = StringBuilder()
-  let num = fn(x : Double) { ((x * 1000.0).round() / 1000.0).to_string() }
-  for l in d.layers {
-    let colour = if l.fill != 0L { l.fill } else { l.stroke }
-    out.write_string("4 \{num((colour & 0xFFL).to_double() / 255.0)} 0 ")
-    for sub in l.outlines(k, 4.0) {
-      let (pts, closed) = sub
-      let kind = if l.fill != 0L {
-        7
-      } else if closed {
-        1
-      } else {
-        0
-      }
-      let width = if l.fill != 0L {
-        if l.even_odd { 1.0 } else { 0.0 }
-      } else {
-        l.width * k
-      }
-      out.write_string("\{kind} \{num(width)} \{pts.length() / 2}")
-      for v in pts {
-        out.write_string(" " + num(v))
-      }
-      out.write_string(" ")
-    }
-  }
-  out.to_string().trim_end(chars=" ").to_string()
-}
-
-///|
-/// An agent's maker's mark (maker_mark's) as an icon for the system's bars (drawable_icon).
-pub fn maker_icon(maker : String, runtime : String) -> String {
-  let known = maker != "" && drawables.contains("maker_" + maker.replace_all(old="-", new="_"))
-  let id = if known {
-    maker
-  } else {
-    match runtime {
-      "codex" => "openai"
-      "dsh" => "dsh"
-      "grok" => "xai"
-      "cursor" => "cursor"
-      "devin" => "devin"
-      "hermes" => "hermes"
-      _ => "anthropic"
-    }
-  }
-  drawable_icon("maker_" + id.replace_all(old="-", new="_"))
-}

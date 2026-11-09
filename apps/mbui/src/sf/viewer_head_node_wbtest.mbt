@@ -30,7 +30,7 @@ fn head_label(icon : String) -> String {
 
 ///|
 /// A window `w` wide with the head in it: the old one's (`old`: an old view's over all of it, its widest kept from
-/// frame to frame as vf_bar keeps it) or the node's, saying what `s` says.
+/// frame to frame) or the node's, saying what `s` says.
 fn head_tester(s : HeadState, old : Bool, w? : Double = 390.0) -> @ui.Tester {
   let t = @ui.Tester::new(fn(_c) {  }, w~, h=300.0, platform=0)
   t.check_looks(false)
@@ -39,16 +39,13 @@ fn head_tester(s : HeadState, old : Bool, w? : Double = 390.0) -> @ui.Tester {
   @ui.set_view_app(fn(root) {
     if old {
       @ui.old(root, fn(c) {
-        let (closed, wide) = viewer_head(c, "h", s.name.get(), "", s.awake.get(), widest.val, 1.0, ink, fn() {
+        let wide = viewer_head(c, "h", s.name.get(), "", s.awake.get(), widest.val, 1.0, ink, fn() {
           for icon in s.tools.get() {
             viewer_tool(c, "h/" + icon, icon, head_label(icon), ink) |> ignore
           }
-        })
+        }, on_close=fn() { s.closed.val += 1 })
         if wide > widest.val {
           widest.val = wide
-        }
-        if closed {
-          s.closed.val += 1
         }
       }).over(Is(true))
       |> ignore

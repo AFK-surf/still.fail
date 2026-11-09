@@ -42,7 +42,7 @@ fn bar_tabs(t : @ui.Tester) -> Bool {
 fn tape_chat(platform : Int, w : Double, h : Double, width? : String = "", height? : String = "") -> @ui.Tester {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
   if width != "" {
     say_room(t, width, height)
@@ -92,7 +92,7 @@ fn page_over(t : @ui.Tester, w : Double) -> Unit {
 }
 
 ///|
-/// Whether `a` is `b` as laid out (within a billionth: worked out through a capsule's place, smooth.mbt round_like).
+/// Whether `a` is `b` as laid out (within a billionth: worked out through a capsule's place, capsule_in).
 fn near_at(a : Double?, b : Double) -> Bool {
   match a {
     Some(x) => (x - b).abs() < 1.0e-9
@@ -116,8 +116,8 @@ fn covered(t : @ui.Tester, label : String) -> (Double, Double)? {
 
 ///|
 test "on the tape with the window's buttons in the app's top row (a Mac's) what shows at the window's left holds them, as much room past them as before them from the window's edge; the strip at the right as before" {
-  // (the host's buttons: 16 from the window's left, 54 across: mbui's mac_app.m)
-  let (buttons_in, buttons_w) = (16.0, 54.0)
+  // (the host's buttons: 16 from the window's left, 60 across on macOS 27: mbui's mac_app.m)
+  let (buttons_in, buttons_w) = (16.0, 60.0)
   for w in [600.0, 720.0, 839.0] {
     let at = "\{w}"
     let t = tape_chat(0, w, 840.0)
@@ -140,6 +140,60 @@ test "on the tape with the window's buttons in the app's top row (a Mac's) what 
     t.run_for(@ui.move_most_ms)
     assert_true(near_at(covered(t, "打开侧栏").map(fn(e) { e.0 }), w - @sfdesk.tape_shows), msg=at)
   }
+}
+
+///|
+test "on a Mac's tape the sidebar's first row stands under the window's buttons as far as they stand under its panel's top, the rail's first place beside it" {
+  let t = tape_chat(0, 720.0, 840.0)
+  t.set_window_inset(true)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+  // (the buttons 14 high, centred on the top row's 44 and as much lower as the panel stands under the window's top;
+  // the panel's content under its 6 and its line)
+  let down = @sfdesk.closed_bar_in
+  let top = (44.0 - 14.0) / 2.0 + down
+  let bottom = top + 14.0
+  let content_top = down + 1.0
+  // the bell's icon (20) its top as far under the buttons as they stand under the panel's top: its middle there
+  let mid = bottom + (top - content_top) + 10.0
+  guard words_middle(t, "新建对话") is Some(y) else { fail("no 新建对话") }
+  // (its words' box a point over the row's middle)
+  assert_true((y - mid).abs() <= 1.0, msg="新建对话's middle \{y}, \{mid} wanted")
+  // the rail's first place (the bell) on that line, under the buttons
+  let first = t.all(Button).filter(fn(n) { !n.hidden && n.rect.0 < 40.0 && n.rect.1 > 0.0 }).iter().fold(
+    init=None,
+    fn(acc : @ui.SemNode?, n) {
+      match acc {
+        Some(a) if a.rect.1 <= n.rect.1 => acc
+        _ => Some(n)
+      }
+    },
+  )
+  guard first is Some(bell) else { fail("no rail place") }
+  let bell_mid = bell.rect.1 + bell.rect.3 / 2.0
+  assert_true((bell_mid - y).abs() < 1.0, msg="the bell's middle \{bell_mid}, the row's \{y}")
+  assert_true(bell.rect.1 >= bottom, msg="the bell \{bell.rect} under the buttons' \{bottom}")
+}
+
+///|
+test "on the tape the window's buttons stand as far lower as its panels stand under the window's top, back off it" {
+  let t = tape_chat(0, 720.0, 840.0)
+  t.set_window_inset(true)
+  t.run_for(@ui.move_most_ms)
+  // (the strip at the window's left its panel's top 6 under the window's: the buttons 16 under it, as 16 in from the
+  // window's side)
+  // (moved there as a Move that far: none seen as the window opens, the host's)
+  let moved = (@sfdesk.closed_bar_in, @ui.move_ms(@sfdesk.closed_bar_in))
+  assert_eq(t.window_buttons_down(), moved)
+  // off the tape (Large), centred on the top row's first 44 again, moved back
+  t.resize(1280.0, 840.0)
+  t.run_for(@ui.move_most_ms)
+  assert_true(!@sfdesk.wide.tape)
+  assert_eq(t.window_buttons_down(), (0.0, moved.1))
+  // and on it again
+  t.resize(720.0, 840.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(t.window_buttons_down(), moved)
 }
 
 ///|
@@ -358,7 +412,7 @@ test "on the tape a chat brought over while its view is on its way: the page com
   new_run()
   let src = round_trip(fixture("chat"), tape_core_late_ms)
   let read = fn(session : String) { readings.contains("ws1/st1\u{1}" + session) }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
   // the workspace, its list and the chat, their topics one after another
@@ -369,7 +423,7 @@ test "on the tape a chat brought over while its view is on its way: the page com
   let (nx, _) = t.find("新建对话").unwrap()
   // opened and brought over (as 新建对话 is) while its view is on its way: the chat before stays on the page, the tape
   // where it is
-  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" })
   @sfdesk.bring_page()
   t.run_for(tape_core_late_ms / 2.0)
   assert_true(app.nav.top() is Chat({ session: "s-c2", .. }), msg="the stack has it")
@@ -414,7 +468,7 @@ fn drawn_from(t : @ui.Tester, left : Double) -> Array[String] {
 ///|
 test "on the tape the sidebar's list scrolled with a finger: the page beside drawn again as it was, none of it built" {
   let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   // (drawn as parts and rows are drawn when kept, built: what drawing them again is held to)
   t.draw()
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
@@ -447,11 +501,11 @@ fn tape_flung(keep : Bool) -> Array[String] {
   // (many weeks of chats in the sidebar: far to fling)
   new_run()
   let src = fixture("long")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h=840.0, platform=2)
   say_room(t, "medium", "medium")
   t.run_for(@ui.move_most_ms)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.drawn_again(keep)
   t.drag(150.0, 760.0, 150.0, 260.0, steps=6)
   t.tap(690.0 - @sfdesk.tape_shows / 2.0, 400.0)
@@ -586,7 +640,7 @@ test "on the tape a chat opened from the page in use goes over it, as on a phone
   let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
   page_over(t, 690.0)
   // a chat opened from the page in use (a link in a message, ⌘K there): over it, sliding in
-  let other : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" }
+  let other : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" }
   @sfbase.open_page(Chat(other))
   t.run_for(page_local_ms + @ui.move_most_ms)
   assert_eq(app.nav.depth(), 3)
@@ -629,8 +683,8 @@ test "on the tape a chat opened from the page in use goes over it, as on a phone
 }
 
 ///|
-test "on the tape a finger dragging across the one in use moves no tape: the tape stays where it is" {
-  let t = tape_chat(2, 690.0, 840.0, width="medium", height="medium")
+test "on the tape a pointer dragging across the one in use moves no tape: the tape stays where it is (a finger's swipe brings the one beside it: tape_moment_wbtest)" {
+  let t = tape_chat(0, 690.0, 840.0, width="medium", height="medium")
   page_over(t, 690.0)
   let (mx, my) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   t.drag(mx, my, mx + 300.0, my)
@@ -747,7 +801,7 @@ test "on the tape what shows of the page dragged a little and let go: the tape b
 /// Where the composer's field is drawn from the left and the bottom of the panel it is in (as drawn: a panel's move
 /// and any of the field's own); None when it is drawn out of every panel.
 fn composer_in_panel(t : @ui.Tester) -> (Double, Double)? {
-  let bs = t.boxes()
+  let bs = t.boxes_held()
   guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
   let ed = bs[e]
   for b in bs {
@@ -785,7 +839,7 @@ test "on the tape the composer is drawn with its page as the page moves, never a
 /// The composer's box as drawn (the glass round its field) and its send button (the last grounded round control in
 /// it, the theme's): their corners.
 fn composer_corners(t : @ui.Tester) -> (Double, Double, Double)? {
-  let bs = t.boxes()
+  let bs = t.boxes_held()
   guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
   let ed = bs[e]
   let mut box : @ui.Laid? = None
@@ -824,28 +878,27 @@ test "on the tape the page panel's corner is its own: the composer and its butto
   // panel's corner less its half (the user, 2026-10-26: a finger's, 52 high, stood where keyboard and mouse's 48 would)
   guard composer_and_panel(t) is Some((b, p)) else { fail("no composer in a panel") }
   let at = (b.x - p.x, p.x + p.w - (b.x + b.w), p.y + p.h - (b.y + b.h), 0.0)
-  let concentric = @sf.capsule_in(panel, h)
+  let concentric = @ui.capsule_in(panel, h)
   assert_true(near4(at, (concentric, concentric, concentric, 0.0)), msg="the capsule from the panel's edges: \{at}")
-  // (the tape's 28, as a circle reads it (@ui.round_like: 26.78): a capsule standing concentric 6 in, as the panel
-  // stands from the window's edge, is 41.56 high; a finger's 36 buttons 4 in its ends need 44: 44, 4.78 in)
-  let r = @ui.round_like(panel)
-  assert_true((h - (side + 2.0 * @sf.corner_fit.near)).abs() < 1.0e-9, msg="\{h}")
-  assert_true(2.0 * (r - @sf.window_in) < h && h < 2.0 * (r - @sf.corner_fit.near), msg="\{h}")
+  // (as high as its buttons 4 in its ends need, a finger's 44: 52; in the tape's 42, as a circle reads it
+  // (the radius as given), that stands concentric no nearer than the ranges let (4))
+  let r = panel
+  assert_true(h >= side + 2.0 * @sf.corner_fit.near - 1.0e-9, msg="\{h} for \{side}")
+  assert_true(h <= 2.0 * (r - @sf.corner_fit.near) + 1.0e-9, msg="\{h} in \{r}")
   assert_eq(t.corner_faults(), [])
   // lines more: the box concentric with the panel, the send button with the box, 12 in
   t.tap_text("发消息")
   t.type_text("第一行\n第二行\n第三行")
   t.run_for(@ui.move_most_ms)
   guard composer_corners(t) is Some((k, s, _)) else { fail("no composer") }
-  // (a card's corner would stand 2.5 in, nearer than corner_fit lets: as near as it does, 4, less round than a card's
-  // there, 24.8; its buttons round in its corners)
-  let d = @sf.foot_fit(panel, panel, 0.0, least=@sf.holds_least(side))
-  assert_eq(d, @sf.corner_fit.near)
+  // (as far in as a card of the panel's, its corner a card's, where foot_fit lets it there: 16 in the tape's 42, 26;
+  // its buttons round in its corners)
+  let d = @sf.foot_fit(panel, panel, panel - @sf.card_corner, least=@sf.holds_least(side))
   guard composer_and_panel(t) is Some((b, p)) else { fail("no composer in a panel") }
   let at = (b.x - p.x, p.x + p.w - (b.x + b.w), p.y + p.h - (b.y + b.h), 0.0)
   assert_true(near4(at, (d, d, d, 0.0)), msg="the box from the panel's edges: \{at}")
   assert_true((k - @ui.concentric(panel, d)).abs() < 0.01, msg="the box's corner: \{k}")
-  assert_true(k < @sf.card_corner)
+  assert_true(k <= @sf.card_corner + 0.01, msg="the box's corner: \{k}")
   assert_eq(s, side / 2.0)
   assert_eq(t.corner_faults(), [])
 }
@@ -854,7 +907,7 @@ test "on the tape the page panel's corner is its own: the composer and its butto
 /// The panel of the tape the composer's field is in (the smallest box round it as round as a pane), and the
 /// composer's box (the glass round the field): as laid out.
 fn composer_and_panel(t : @ui.Tester) -> (@ui.Laid, @ui.Laid)? {
-  let bs = t.boxes()
+  let bs = t.boxes_held()
   guard bs.search_by(fn(b) { b.kind == "editor" }) is Some(e) else { return None }
   let ed = bs[e]
   let round = fn(b : @ui.Laid) { b.x <= ed.x && ed.x + ed.w <= b.x + b.w && b.y <= ed.y && ed.y + ed.h <= b.y + b.h }
@@ -878,31 +931,31 @@ fn composer_and_panel(t : @ui.Tester) -> (@ui.Laid, @ui.Laid)? {
 test "on a Mac's tape each panel's corners follow the window's where it stands at its edge, the others the ladder's" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=690.0, h=840.0, platform=0, window_corner=16.0)
   t.run_for(@ui.move_most_ms)
   // the window's 16, 6 in: 11.2
   let edge = @ui.concentric(16.0, 6.0)
   assert_eq(@sf.tape_edge.radius(@ui.corner_roots()), edge)
   let pane = @sf.tape_corner
-  // the sidebar in use: its left corners at the window's, the page's right ones past its right edge as they will be
-  // there
+  // the sidebar in use: its left corners at the window's (its ground a node of the window's tree: dock_node), the
+  // page's right ones past its right edge as they will be there
   guard composer_and_panel(t) is Some((_, page)) else { fail("no composer in a panel") }
   assert_true(near4(page.radii, (pane, edge, edge, pane)), msg="the page's panel: \{page.radii}")
   assert_true(
-    t.boxes().iter().any(fn(b) { near4(b.radii, (edge, pane, pane, edge)) && b.x < 10.0 }),
+    t.boxes_held().iter().any(fn(b) { near4(b.radii, (edge, pane, pane, edge)) && b.x < 10.0 }),
     msg="no sidebar's panel with its left corners the window's",
   )
   assert_eq(t.corner_faults(), [])
   // the page brought over, its composer taking the cursor (keyboard and mouse's): a box, its foot's left corner
-  // following the panel's 28 (4 in, as near as corner_fit lets: 24.8, its ＋ in it concentric with it); its right not
+  // following the panel's 42 as a card of the panel's does (16 in, 26, its ＋ in it concentric with it); its right not
   // the window's 11.2, which its send could not follow in turn (the user, 2026-10-25: the corner followed, the send did
   // not), as round as its left there, the send in it as in its other corners
   t.tap(650.0, 400.0)
   t.run_for(@ui.move_most_ms * 2.0)
   guard composer_and_panel(t) is Some((k, p)) else { fail("no composer in a panel") }
-  let d = @sf.foot_fit(pane, edge, 0.0, least=@sf.holds_least(32.0))
-  assert_true((d - @sf.corner_fit.near).abs() < 0.01, msg="the box's place: \{d}")
+  let d = @sf.foot_fit(pane, edge, pane - @sf.card_corner, least=@sf.holds_least(32.0))
+  assert_true((d - @sf.panel_card_in).abs() < 0.01, msg="the box's place: \{d}")
   let at = (k.x - p.x, p.x + p.w - (k.x + k.w), p.y + p.h - (k.y + k.h))
   assert_true(near4((at.0, at.1, at.2, 0.0), (d, d, d, 0.0)), msg="the box from the panel's edges: \{at}")
   let round = @ui.concentric(pane, d)
@@ -914,7 +967,8 @@ test "on a Mac's tape each panel's corners follow the window's where it stands a
   // (let go of from the next frame on; its change of shape over by twice its length after that)
   t.run_for(@sfpages.let_go_ms + 2.0 * @ui.move_most_ms)
   guard composer_and_panel(t) is Some((k, p)) else { fail("no composer in a panel") }
-  let six = @sf.capsule_in(pane, k.h)
+  // (concentric with the panel's corner where the ranges let it stand that far in, else as far in as the box was)
+  let six = @sf.capsule_fit(pane, k.h, d)
   let at = (k.x - p.x, p.x + p.w - (k.x + k.w), p.y + p.h - (k.y + k.h))
   assert_true(near4((at.0, at.1, at.2, 0.0), (six, six, six, 0.0)), msg="the capsule from the panel's edges: \{at}")
   assert_eq(t.corner_faults(), [])
@@ -930,7 +984,7 @@ fn near4(a : (Double, Double, Double, Double), b : (Double, Double, Double, Doub
 /// The page's panel on the tape (the rightmost box as round as a pane, as wide as a page), and where the topmost words
 /// `words` in it stand from its left and top, and how big they are.
 fn words_in_page(t : @ui.Tester, words : String) -> (Double, Double, Double)? {
-  let bs = t.boxes()
+  let bs = t.boxes_held()
   // (a panel: rounded, large, from the window's top; a card as large on the page stands lower, in the page's panel)
   let mut page : @ui.Laid? = None
   for b in bs {
@@ -962,7 +1016,8 @@ fn words_middle(t : @ui.Tester, words : String) -> Double? {
       return Some(b.y + b.h / 2.0)
     }
   }
-  None
+  // (or a node of the window's tree's: the sidebar's band made once)
+  t.rect_of(words).map(fn(r) { r.1 + r.3 / 2.0 })
 }
 
 ///|
@@ -1036,7 +1091,7 @@ test "on the tape a finger's search at the lists' top: tucked under the band at 
 test "on the tape a passage held in the page beside the sidebar brings the page over, and its 引用 quotes it" {
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
   // (the page beside kept as it was drawn while nothing changes it, as on a device: held, built)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   t.draw()
@@ -1107,10 +1162,10 @@ test "on the tape the sidebar's rows stand in a side column's line, their words 
   let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
   // the sidebar's panel 6 from the window's edge, its list from 8 into the rail, the rail as much wider as its places
   // stand further in than its 8 (concentric with the panel's corner): a row's ground as far in as 新建对话's (band_in),
-  // its words without a mark before them as far from it (band_pad)
+  // its words without a mark before them as far from it (band_pad_in: the tape's, as before #3806)
   let l = @sf.theme().chat_list
   let (x, _, _, _) = t.rect_of("Slack 里问的报销流程").unwrap()
-  assert_eq(x, @sfdesk.closed_bar_in + @sfdesk.rail_w - 8.0 + (@sf.rail_in_tape() - 8.0) + l.band_in + l.band_pad)
+  assert_eq(x, @sfdesk.closed_bar_in + @sfdesk.rail_w - 8.0 + (@sf.rail_in_tape() - 8.0) + l.band_in + @sf.band_pad_in(Tape))
   let p = tape_chat(2, 390.0, 844.0, width="compact", height="medium")
   p.run_for(@ui.move_most_ms)
   p.back()
@@ -1258,7 +1313,7 @@ test "on the tape a settings page chosen in their list shows beside it, pressed 
   page_over(t, 600.0)
   assert_true(settings_page_whole(t, "全局记忆 · 项目记忆", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of("全局记忆 · 项目记忆")}")
   // a level further in from the page in use: a station's memory, then one of its pages
-  t.tap_text("Studio")
+  t.tap_text("Willow")
   t.run_for(@ui.move_most_ms)
   t.run_for(@ui.move_most_ms)
   assert_true(settings_page_whole(t, "发布流程", 600.0), msg="\{@sfdesk.wide.tape_at.get()} \{t.rect_of("发布流程")}")
@@ -1272,7 +1327,7 @@ test "on the tape a settings page chosen in their list shows beside it, pressed 
 test "on the tape, a chat's service opened from the chat in use: its side panel comes over with it, the chat beside" {
   new_run()
   let src = fixture("chat-jobs")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   assert_true(@sfdesk.wide.tape)
@@ -1287,4 +1342,31 @@ test "on the tape, a chat's service opened from the chat in use: its side panel 
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "", station_name: "" }
   assert_eq(@sfdesk.side_now(src, r).1, "service:j-web")
   assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Panel)
+}
+
+///|
+test "on the tape a passage picked anew after the sidebar was brought over brings the page over again; a press taken while it stays picked brings nothing" {
+  let t = tape_chat(2, 750.0, 830.0, width="medium", height="medium")
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
+  t.draw()
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
+  t.run_for(@ui.move_most_ms)
+  t.drag(30.0, 400.0, 500.0, 400.0)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+  assert_true(pk.ts != "")
+  // (a press something in the message took as it stays picked, a menu's: picks nothing, brings nothing)
+  pk.taken_at = pk.taken_at + 1
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+  // (let go of, as a tap elsewhere lets it go; then picked anew where the page shows beside: over again)
+  @sfbase.pick_clear()
+  t.draw()
+  let serial = @sfbase.picked.get().serial
+  hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
+  assert_true(@sfbase.picked.get().serial > serial, msg="picked anew")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Page)
 }

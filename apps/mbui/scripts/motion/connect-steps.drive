@@ -1,0 +1,10 @@
+# A new connect's wizard going a step on and back (sfpages new_connect.mbt nc_follow: the dialog's steps the core's).
+# MBUI_FIXTURE=settings-new-connect, a phone's window (MBUI_FILM_PLATFORM=2).
+timeout 20000
+until 下一步
+wait 800
+tap 下一步
+wait 900
+back
+wait 900
+exit

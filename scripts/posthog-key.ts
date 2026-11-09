@@ -1,7 +1,7 @@
-// The station's error reports (the Rust station's telemetry.rs) use the web app's PostHog key (docs/telemetry.md): this
+// The station's error reports use the web app's PostHog key: this
 // writes it to dist/admin/posthog.json, where a release keeps it (scripts/station-bundle.sh) and the station reads it
 // at start. dist/admin held the station's own page once; now it holds only this. The key is read as web/vite.config.ts
-// reads it: from the file $STILLFAIL_POSTHOG ($EMBER_POSTHOG before the rename) names ({host, key}), with this
+// reads it: from the file $STILLFAIL_POSTHOG names ({host, key}), with this
 // checkout's commit as the release. Without one, dist/admin is made empty: the station then reports nothing.
 //   node scripts/posthog-key.ts
 import { execFileSync } from "node:child_process";
@@ -14,7 +14,7 @@ const out = `${root}dist/admin`;
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
-const path = process.env.STILLFAIL_POSTHOG ?? process.env.EMBER_POSTHOG;
+const path = process.env.STILLFAIL_POSTHOG;
 if (path) {
   const { host, key } = JSON.parse(readFileSync(path, "utf8")) as { host: string; key: string };
   let release = "unknown";

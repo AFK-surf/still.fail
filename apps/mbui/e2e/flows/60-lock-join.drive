@@ -1,0 +1,21 @@
+#before peer lock-on
+# Security mode turned on by alice's other device (the owner's first, e2e/peer.ts): this phone, left out, waits to be
+# approved. It sends the request; the other device, online, shows a code for it; the code typed here, as a person reads
+# it off the other device and types it, approves it: Home comes back, and the test station's lock has this phone as
+# one of alice's own app devices.
+#only android
+timeout 120000
+until 等待批准此设备
+shot 1-waiting
+log do: peer-bg lock-await 120
+log do: peer-said AWAITING
+done 2-peer-said
+tap 发送批准请求
+until 输入你的受信任设备上显示的安全码
+shot 2-code
+log do: peer-said PAIRING
+typedone 3-peer-said
+until 端到端测试
+shot 3-home
+log do: peer-wait
+done 4-peer-wait

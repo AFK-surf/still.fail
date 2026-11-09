@@ -85,9 +85,9 @@ test "words partly under what lies over them: tapped at the point of them in sig
   let t = @ui.Tester::new(
     fn(c) {
       let row = c.id("row")
-      if c.clicked(row) {
+      c.on_press(row, fn() {
         tapped.val += 1
-      }
+      })
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
         c.box(h=Px(80.0), fn() {  }) |> ignore
         c.box(id=row, h=Px(20.0), fn() { c.text("忽略这一行", wrap=false) |> ignore }) |> ignore
@@ -134,6 +134,23 @@ test "the next wake the app waits on: when, and who said it; none once it has co
   }
   t.draw()
   assert_eq(t.next_wake(), None)
+}
+
+///|
+test "a fractional wake is due at its requested moment" {
+  let armed = Ref::new(false)
+  let requested_wake_ms = 0.125
+  let t = @ui.Tester::new(fn(c) {
+      if !armed.val {
+        armed.val = true
+        c.wake_in(requested_wake_ms)
+      }
+      c.text("waiting", wrap=false) |> ignore
+    }, w=100.0, h=100.0)
+  match t.next_wake() {
+    Some((at, _)) => assert_eq(at - t.time(), requested_wake_ms)
+    None => fail("a wake waited on")
+  }
 }
 
 ///|

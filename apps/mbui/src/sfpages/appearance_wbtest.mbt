@@ -38,20 +38,104 @@ test "外观, at each width on either screen: 主题, 字体, 动画, 语言; �
 }
 
 ///|
-test "外观: a setting opening another page has the same title weight as a setting changed here" {
+test "外观's 震动 switch is at the end of its row and turns haptics off and on at each width" {
+  for (w, platform) in page_cases + [(390.0, 1)] {
+    let calls : Array[(String, Json)] = []
+    let t = setting_tester(Appearance, w, platform~, h=2400.0, over=fn(s) {
+      { ..s, call: fn(name, params, done) {
+          calls.push((name, params))
+          (s.call)(name, params, done)
+        } }
+    })
+    let at = "\{w} platform \{platform}"
+    let titles = t.boxes_held().filter(fn(b) { b.text == "震动" })
+    assert_eq(titles.length(), 1, msg="\{at}: \{titles.map(fn(b) { (b.x, b.y, b.w, b.h, b.weight) })}")
+    let (x, y, _, sh) = t.get(Switch, label="震动").rect
+    // (the title's words as they are drawn: where they end, their line's middle)
+    guard t.rect_of("震动") is Some((tx, ty, tw, th)) else { fail("\{at}: no 震动 drawn") }
+    assert_true(x >= tx + tw, msg="\{at}: switch follows its title: title ends \{tx + tw}, switch \{x}")
+    if !laid_wide(w) {
+      let title_mid = ty + th / 2.0
+      assert_true((y + sh / 2.0 - title_mid).abs() < 2.0, msg="\{at}: switch is on the title's line: title \{(ty, th)}, switch \{(y, sh)}")
+    }
+    assert_eq(t.get(Switch, label="震动").check, Some(On), msg=at)
+    t.tap_text("震动")
+    t.draw()
+    assert_true(calls.filter(fn(call) { call.0 == "prefs.set" }).is_empty(), msg="\{at}: only the switch answers")
+    // A press just outside the small switch still reaches it.
+    t.tap(x - 4.0, y + sh / 2.0)
+    t.frame()
+    t.frame()
+    let off = calls.filter(fn(call) { call.0 == "prefs.set" })
+    assert_eq(text(Some(off[off.length() - 1].1), "haptics"), "off", msg=at)
+    t.click(Switch, label="震动")
+    t.frame()
+    t.frame()
+    let on = calls.filter(fn(call) { call.0 == "prefs.set" })
+    assert_true(field(Some(on[on.length() - 1].1), "haptics") is Some(Null), msg=at)
+  }
+}
+
+///|
+test "外观: wide setting titles have the same weight as the rows in 自动决策" {
   for platform in [0, 2] {
+    let decision = @ui.Tester::new(fn(c) {
+      @sf.begin(c) |> ignore
+      @sf.link_row(c, "decision", "结束时") |> ignore
+    }, w=900.0, platform~)
+    decision.draw()
+    let weight = decision.census().weight
+    assert_eq(weight, ["500"])
     let plain = @ui.Tester::new(fn(c) {
       @sf.begin(c) |> ignore
       @sf.setting(c, "主题", fn() {  })
     }, w=900.0, platform~)
     plain.draw()
-    let weight = plain.census().weight
-    let link = @ui.Tester::new(fn(c) {
+    assert_eq(plain.census().weight, weight)
+    // 外观's settings laid out wide (主题's choice, 字体's row going to its page): their titles as strong
+    let page = setting_tester(Appearance, 1280.0, platform~)
+    for title in ["主题", "字体", "震动"] {
+      let found = page.boxes_held().filter(fn(b) { b.text == title })
+      assert_eq(found.map(fn(b) { b.weight }), [500], msg="\{platform}: \{title} \{found.map(fn(b) { (b.x, b.y, b.w, b.h) })}")
+    }
+    // a switch's row in a group (分享给其他 station over 可用的 station): its title no lighter than the rows by it
+    let switch = @ui.Tester::new(fn(c) {
       @sf.begin(c) |> ignore
-      @sf.setting_link(c, "fonts", "字体", "") |> ignore
+      @sf.group(c, fn() { @sf.switch_row(c, "share", "分享给其他 station", true) |> ignore })
     }, w=900.0, platform~)
-    link.draw()
-    assert_eq(link.census().weight, weight)
+    switch.draw()
+    assert_eq(switch.census().weight, weight)
+  }
+}
+
+///|
+test "setting rows keep their title prominent at every width and with either input" {
+  for (w, platform) in page_cases {
+    let t = @ui.Tester::new(fn(c) {
+      @sf.begin(c) |> ignore
+      @sf.group(c, fn() {
+        @sf.link_row(c, "plain", "Plain title") |> ignore
+        @sf.link_row(c, "value", "Title with value", value="Current") |> ignore
+        @sf.link_row(c, "note", "Title with note", note="More detail") |> ignore
+        @sf.link_row(c, "summary", "Summary title", value="Selected", note="Explanation") |> ignore
+        @sf.link_row(c, "custom", "Custom title", title_style=@sf.desk_list_title.then(@ui.text_style(weight=Normal))) |> ignore
+        @sf.switch_row(c, "switch", "Switch title", false) |> ignore
+        @sf.link_row(c, "strong", "Strong title", strong=true) |> ignore
+        @sf.setting(c, "Setting title", fn() {  })
+      })
+      @sf.switch_row(c, "outside", "Standalone switch", false) |> ignore
+    }, w~, platform~)
+    t.draw()
+    let boxes = t.boxes()
+    let at = "\{w} platform \{platform}"
+    for title in ["Plain title", "Title with value", "Title with note", "Summary title", "Custom title", "Switch title", "Setting title", "Standalone switch"] {
+      let found = boxes.filter(fn(b) { b.text == title })
+      assert_eq(found.length(), 1, msg="\{at}: \{title}")
+      assert_eq(found[0].weight, 500, msg="\{at}: \{title}")
+      assert_eq(found[0].color, boxes.filter(fn(b) { b.text == "Strong title" })[0].color, msg="\{at}: \{title} ink")
+    }
+    assert_eq(boxes.filter(fn(b) { b.text == "Strong title" })[0].weight, 700, msg=at)
+    assert_eq(boxes.filter(fn(b) { b.text == "Explanation" })[0].weight, 400, msg=at)
   }
 }
 

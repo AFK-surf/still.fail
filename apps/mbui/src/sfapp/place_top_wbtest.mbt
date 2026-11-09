@@ -1,4 +1,4 @@
-// A place's top page with the bar under it (PlacePage.kt): its top bar frosted over what it shows, which starts under
+// A place's top page with the bar under it: its top bar frosted over what it shows, which starts under
 // the bar and scrolls on under it to the page's top, not cut short at the bar's foot; its actions in the bar.
 
 ///|
@@ -22,22 +22,22 @@ test "a place's page: from under its frosted top bar, scrolled on under it, not 
   if !glass.iter().any(fn(g) { g.0 == 0.0 && g.1 == 0.0 && g.3 == 24.0 + 50.0 }) {
     fail("no frosted bar at the top: \{glass}")
   }
-  // its first station as it opens: under the bar, 8 down (PlacePage.kt `bar + 8.dp`) in its card
-  let y0 = match t.rect_of("Studio") {
+  // its first station as it opens: under the bar, 8 down in its card
+  let y0 = match t.rect_of("Willow") {
     Some((_, y, _, _)) => y
-    None => fail("no Studio")
+    None => fail("no Willow")
   }
   assert_true(y0 > 24.0 + 50.0)
   // scrolled 60: the cards go on under the bar; pressed there (beside the title, on none of the bar's buttons), it is
-  // the first card's (Studio's), which opens its station, as it shows through the glass
+  // the first card's (Willow's), which opens its station, as it shows through the glass
   t.move(195.0, 300.0)
   t.wheel(195.0, 300.0, 60.0)
-  let y1 = match t.rect_of("Studio") {
+  let y1 = match t.rect_of("Willow") {
     Some((_, y, _, _)) => y
-    None => fail("no Studio scrolled")
+    None => fail("no Willow scrolled")
   }
   if (y0 - y1 - 60.0).abs() >= 0.5 {
-    fail("Studio at \{y0}, scrolled at \{y1}")
+    fail("Willow at \{y0}, scrolled at \{y1}")
   }
   assert_eq(app.nav.depth(), 1)
   t.tap(300.0, 60.0)
@@ -102,9 +102,16 @@ test "a page's name kept whole: 用量's share and days as wide as they are afte
 ///|
 test "a place's page: its actions in its top bar, at the end of the title's line (用量's days)" {
   let t = place_tester("usage")
-  // the middle of the bar's line under the status bar: 24 + 8 + 34 / 2
-  match t.find("7 天") {
-    Some((x, y)) => if (y - 49.0).abs() >= 0.5 || x <= 195.0 { fail("7 天 at (\{x}, \{y})") }
+  // the middle of the bar's line under the status bar: 24 + 8 + 34 / 2 (its choice's words, not the page's that say
+  // the days: 比前 7 天)
+  match t.words().search_by(fn(w) { w.0 == "7 天" && w.5 > 0.5 }) {
+    Some(i) => {
+      let (_, x, y, w, h, _) = t.words()[i]
+      let (x, y) = (x + w / 2.0, y + h / 2.0)
+      if (y - 49.0).abs() >= 0.5 || x <= 195.0 {
+        fail("7 天 at (\{x}, \{y})")
+      }
+    }
     None => fail("no 7 天")
   }
 }

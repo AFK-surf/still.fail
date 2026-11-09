@@ -4,16 +4,20 @@
 ///|
 /// A live node's values as set (Tree::styled): its words' size, line and the weight and ink of each of them (a piece's
 /// own where it is in pieces, View::words_runs; none where it says none); its padding (left, top, right, bottom) and the
-/// gap between what it holds, in points (none where it has none); its corner; its ground (0: none).
+/// gap between what it holds, in points (none where it has none); its corner; its ground (0: none); the colour of the
+/// edge drawn round it (0: none, nor where it is drawn none wide).
 pub(all) struct Styled {
   words : Bool
   size : Double
   line : Double
+  /// how far apart its letters are set besides their own (WordsLook's)
+  tracking : Spacing
   weights : Array[Int]
   inks : Array[Int64]
   spaces : Array[Double]
   radius : Double
   ground : Int64
+  edge : Int64
 } derive(Debug)
 
 ///|
@@ -36,7 +40,7 @@ pub fn Tree::styled(self : Tree) -> Array[Styled] {
     let weights : Array[Int] = []
     let inks : Array[Int64] = []
     if words {
-      // (each piece that says something in its own weight and ink, the node's where it says none: WordsRun's; the
+      // (each piece that says something in its own weight and ink, the node's where it says none: @text.Run's; the
       // whole of it as the node sets it where it is in no pieces)
       let pieces = if l.runs.is_empty() { [words_run(l.words)] } else { l.runs }
       for r in pieces {
@@ -47,7 +51,7 @@ pub fn Tree::styled(self : Tree) -> Array[Styled] {
         if !weights.contains(w) {
           weights.push(w)
         }
-        let k = if r.ink == 0L { l.ink } else { r.ink }
+        let k = if r.color == 0L { l.ink } else { r.color }
         if !inks.contains(k) {
           inks.push(k)
         }
@@ -58,6 +62,7 @@ pub fn Tree::styled(self : Tree) -> Array[Styled] {
       words,
       size: if words { l.words_look.size } else { 0.0 },
       line: if words { l.words_look.line } else { 0.0 },
+      tracking: l.words_look.tracking,
       weights,
       inks,
       spaces: if n.slot {
@@ -73,6 +78,7 @@ pub fn Tree::styled(self : Tree) -> Array[Styled] {
       },
       radius: l.radius,
       ground: l.ground,
+      edge: if l.edge.0 > 0.0 { l.edge.1 } else { 0L },
     })
     for kid in n.kids {
       walk(kid)

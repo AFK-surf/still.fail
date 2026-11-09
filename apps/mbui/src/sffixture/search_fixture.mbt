@@ -51,7 +51,7 @@ pub fn found_item(kind : String, key : String, title : String, text : String, wo
     "kind": Json::string(kind),
     "key": Json::string(key),
     "station": "ws1/st1",
-    "stationName": "Studio",
+    "stationName": "Willow",
     "title": Json::string(title),
     "text": Json::string(text),
     "marks": found_marks(text, word),
@@ -151,8 +151,8 @@ pub fn fixture_search(f : Fixture, params : Map[String, Json]) -> Json? {
       "groups": [],
       "wait": {
         "reading": true,
-        "text": "正在搜索 Studio",
-        "failing": [{ "station": "ws1/st2", "text": "MBA 无法搜索：它的版本太旧" }],
+        "text": "正在搜索 Willow",
+        "failing": [{ "station": "ws1/st2", "text": "Maple 无法搜索：它的版本太旧" }],
         "empty": false,
       },
       "note": "还有 1 台 station 离线，没有搜它上面的内容",
@@ -179,10 +179,10 @@ pub fn fixture_search(f : Fixture, params : Map[String, Json]) -> Json? {
 }
 
 ///|
-/// A chat of SearchResultsTest's: on studio or on mac, active `minutes` ago.
-pub fn login_chat(id : String, title : String, minutes : Int, station? : String = "ws1/st1", name? : String = "studio") -> Json {
+/// A chat of SearchResultsTest's: on willow or on mac, active `minutes` ago.
+pub fn login_chat(id : String, title : String, minutes : Int, station? : String = "ws1/st1", name? : String = "willow") -> Json {
   row(id, title, station, "\{minutes} 分钟前", {
-    "session": Json::string("ember:" + id),
+    "session": Json::string("chat:" + id),
     "stationName": Json::string(name),
     "stationIcon": "",
     "agents": [agent("anthropic", "claude")],

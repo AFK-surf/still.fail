@@ -1,4 +1,4 @@
-// The chats' sidebar as the web's lists (ember web/src/Sidebar.tsx ChatList, Sidebar.css.ts navSlider, navTrack;
+// The chats' sidebar as the web's lists (still.fail web/src/Sidebar.tsx ChatList, Sidebar.css.ts navSlider, navTrack;
 // pages/Archive.tsx ArchiveRows, ArchivePage; Archive.css.ts): under the band (新建对话 and the filter), one track of
 // the lists side by side, 全部, 我参与的, 监控中 and 已归档, slid from one to another as the list shown changes
 // (240 ms, ease out); only those in view are drawn. 已归档 is a list of the sidebar's like the others: a field to look
@@ -15,43 +15,9 @@ fn sidebar(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
     "settings" => settings_side(c, src, w)
     "stations" => stations_side(c, src, w)
     "profiles" => profiles_side(c, src, w)
-    _ => lists_side(c, src, w, width)
+    // (the chats' lists: made once over the block, side_node.mbt)
+    _ => ignore(width)
   }
-}
-
-///|
-/// The chats' sidebar `width` wide: the band over the lists (sfpages' chats_lists: 全部, 我参与的, 监控中, then
-/// 已归档 on its track).
-fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit {
-  ignore(width)
-  let mode = list_mode(src, w)
-  if mode != 3 {
-    archive_side.landed = false
-  }
-  // (read now: the rows are made as the list is laid out, after the closed bar's drawing is over)
-  let band = band_h(src, w)
-  let t = @sf.theme()
-  let frame : @sfpages.ListsFrame = {
-    ..@sfpages.bare_lists(band, 0.0, side_top_h(), if side_folded() || wide.tape { apart_ground() } else { t.p.sidebar }, mode, Side),
-    others: [fn() { archive_pane(c, src, w) }],
-  }
-  // under a finger's search (sfpages' search.mbt): the band and the foot away with the lists, the search over them
-  let away = @sfpages.search_away(c)
-  c.box(style=lists_fill, fn() {
-    @sfpages.chats_lists(c, src, w, frame)
-    let b = c.layer(fn() { lists_band(c, src, w) })
-    // with no bell in the rail: the stations' trouble and the services up long, at the foot (the rail's bell has them
-    // where it is: cloud/workspace.tsx WorkspaceSidebarFooter)
-    let f = if !rail_items(src, w.id).contains("attention") { c.layer(fn() { lists_foot(c, src, w) }) } else { 0 }
-    if away > 0.0 {
-      c.look(b, { ..@ui.still_look, alpha: 1.0 - away })
-      if f != 0 {
-        c.look(f, { ..@ui.still_look, alpha: 1.0 - away })
-      }
-    }
-    @sfpages.chats_search(c, src, w, side_top_h(), Side)
-  })
-  |> ignore
 }
 
 ///|
@@ -61,11 +27,11 @@ fn lists_side(c : @ui.Ctx, src : Source, w : Workspace, width : Double) -> Unit 
 /// its panel).
 fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   let t = @sf.theme()
-  // with the bell in the rail, they are in its panel (workspace.tsx WorkspaceSidebarFooter)
+  // with the bell in the rail, they are in its panel
   if rail_items(src, w.id).contains("attention") {
     return
   }
-  let chats = (src.topic)("chats", { "scope": Json::string(w.id), "mine": Json::boolean(false) }).value
+  let chats = @sfbase.chats_topic(src, w.id).value
   let trouble = field(chats, "trouble")
   let jobs = long_jobs(src, w)
   if trouble is None && jobs == 0 {
@@ -77,9 +43,9 @@ fn lists_foot(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       match trouble {
         Some(Object(_)) => {
           let go = c.id("side/station-trouble")
-          if c.clicked(go) {
+          c.on_press(go, fn() {
             @sfbase.go_place("stations") |> ignore
-          }
+          })
           c.box(style=foot_trouble, id=go, fn() {
             @sf.station_glyph(c, stations_at_glance(src, w.id).0, foot_glyph, t.p.text, t.p.red) |> ignore
             c.text(
@@ -185,7 +151,7 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   if archive_side.q != "" {
     params["q"] = Json::string(archive_side.q)
   }
-  let topic = (src.topic)("archive", params)
+  let topic = src.topic("archive", params).get().snapshot()
   match topic.value {
     Some(_) => archive_side.last = topic.value
     None => ()
@@ -249,7 +215,7 @@ fn archive_pane(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         Failing(words) => side_said(c, words, true)
         Waiting => @sf.waiting(c, fn() { archive_sample(c) })
         Said(words) => side_said(c, words, false)
-        Day(label) => @sf.list_heading(c, label, Side)
+        Day(label) => @sf.list_heading(c, label, side_at())
         Row(it) => archive_side_row(c, src, it, i + 1 < lines.length() && lines[i + 1] is Row(_))
         Foot => side_space(c, @sf.list_foot_in(Side))
       }
@@ -278,14 +244,14 @@ fn archive_open(it : Json) -> Unit {
 }
 
 ///|
-/// Looking for one (Archive.css.ts search): a field at the list's top on the pointer's ground, as what stands over a
+/// Looking for one: a field at the list's top on the pointer's ground, as what stands over a
 /// sidebar's list is (the theme's band's: its height, its words' room, its mark, its words).
 fn archive_search_side(c : @ui.Ctx, gap : Bool) -> Unit {
   let t = @sf.theme()
   let l = t.chat_list
   let (size, line) = c.text_size(Ui)
   c.box(style=if gap { arch_field_box } else { arch_field_alone }, fn() {
-    c.box(style=arch_field.then(@ui.style(h=Fixed(l.band_h), px=@sf.room_of(l.band_pad))), fn() {
+    c.box(style=arch_field.then(@ui.style(h=Fixed(l.band_h), px=@sf.room_of(@sf.band_pad_in(side_at())))), fn() {
       @sf.icon(c, "search", size=l.band_icon, color=t.p.muted) |> ignore
       let r = c.editor(
         "side/archive-q",
@@ -323,10 +289,10 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
   let id = c.id("side/archived/" + key)
   let back = c.id("side/archived-back/" + key)
   let drop = c.id("side/archived-drop/" + key)
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     archive_open(it)
     @sfbase.show_chosen()
-  }
+  })
   let on = match app.nav.top() {
     Chat(r) => r.station == station && r.session == session
     _ => false
@@ -346,15 +312,16 @@ fn archive_side_row(c : @ui.Ctx, src : Source, it : Json, more : Bool) -> Unit {
     @sf.list_row(
       c,
       id,
-      Side,
-      nav_ground(c, "side/archived/" + key, c.lit(id) || c.pressed(id), on),
+      side_at(),
+      0L,
+      ground_by=nav_ground_by(c, "side/archived/" + key, c.lit(id) || c.pressed(id), on),
       high=true,
       // (恢复 and 删除 over its first line's end)
       end_room=if over { @sf.row_keys_room(if flag(v, "deletable") { 2 } else { 1 }) } else { 0.0 },
       fn() {
         @sf.name_words(c, title, l.title) |> ignore
         if @sf.has_station_mark(text(v, "stationEmoji"), text(v, "stationIcon")) {
-          // (where it was, on hover: Archive.tsx's tip)
+          // (where it was)
           let kind = c.id("side/archived-kind/" + key)
           c.box(style=@sfpages.kind_slot, id=kind, taps=false, points=true, fn() {
             @sf.station_mark(c, text(v, "stationEmoji"), text(v, "stationIcon"), @sfpages.kind_mark_of(text(v, "stationIcon")), t.p.muted)
@@ -404,7 +371,7 @@ fn archive_sample(c : @ui.Ctx) -> Unit {
 }
 
 ///|
-/// An archived chat's 恢复 and 删除 (Archive.css.ts actions: 2 apart, @sf.row_key_box); one under way: turning.
+/// An archived chat's 恢复 and 删除 (@sf.row_key_box); one under way: turning.
 fn archive_actions(c : @ui.Ctx, src : Source, it : Json, back : Int, drop : Int, busy : Bool) -> Unit {
   let t = @sf.theme()
   let v = Some(it)
@@ -412,9 +379,11 @@ fn archive_actions(c : @ui.Ctx, src : Source, it : Json, back : Int, drop : Int,
   let session = text(v, "session")
   let title = text(v, "title")
   let key = station + "/" + session
-  if !busy && c.clicked(back) {
-    archive_restore(src, it)
-  }
+  c.on_press(back, fn() {
+    if !busy {
+      archive_restore(src, it)
+    }
+  })
   let b = c.box(style=@sf.row_key_box, id=back, fn() {
     if busy {
       @sf.spinner(c, size=arch_spin) |> ignore
@@ -425,9 +394,11 @@ fn archive_actions(c : @ui.Ctx, src : Source, it : Json, back : Int, drop : Int,
   c.semantics(b, Button, id=back, label=@sf.t("web-pages.archive.restoreNamed", args=[("title", title)]))
   @sf.tip(c, "side/archived-back-tip/" + key, back, @sf.t("web-pages.archive.restore"))
   if flag(v, "deletable") {
-    if !busy && c.clicked(drop) {
-      archive_delete(src, it)
-    }
+    c.on_press(drop, fn() {
+      if !busy {
+        archive_delete(src, it)
+      }
+    })
     let d = c.box(style=@sf.row_key_box, id=drop, fn() {
       @sf.icon(c, "trash", size=arch_icon, color=if c.lit(drop) { t.p.red } else { t.p.muted }) |> ignore
     })
@@ -491,7 +462,7 @@ fn archive_restore(src : Source, it : Json) -> Unit {
 ///|
 /// Whether an archived chat's putting back or deleting is under way (the core's `doing`).
 fn archive_doing(src : Source, station : String, session : String) -> Bool {
-  for d in items((src.topic)("doing", {}).value, "doing") {
+  for d in items(src.topic("doing", {}).get().value, "doing") {
     let call = text(Some(d), "call")
     let p = field(Some(d), "params")
     if text(Some(d), "stage") == "failed" || text(p, "station") != station {
@@ -517,10 +488,6 @@ fn archive_main(c : @ui.Ctx) -> Unit {
   })
   |> ignore
 }
-
-///|
-// kept across runs: a value (no field of it changes)
-let lists_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -558,7 +525,7 @@ let arch_empty_title : @ui.TextStyle = @ui.text_style(size=Ui, weight=Semibold, 
 let arch_empty_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, leading=L6)
 
 ///|
-/// 待处理 under 新建对话 where the rail has no bell (Attention.tsx AttentionEntry, not the rail's): the bell, its
+/// 待处理 under 新建对话 where the rail has no bell (not the rail's): the bell, its
 /// words, how many there are (a small red count, none read since they came); pressed, the panel of them under it.
 /// Nothing while there is nothing.
 fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
@@ -568,7 +535,7 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     return
   }
   c.box(style=todo_box, fn() {
-    if band_row(c, "side/attention", wide.attention_open.get(), fn() {
+    band_row(c, "side/attention", wide.attention_open.get(), fn() {
         band_mark(c, "bell", t.p.muted)
         band_words(c, @sf.t("web-main.attention.entry"))
         c.box(style=todo_slot, fn() {
@@ -577,9 +544,7 @@ fn side_todo(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           }
         })
         |> ignore
-      }) {
-      attention_set(!wide.attention_open.get())
-    }
+      }, at=side_at(), on_press=fn() { attention_set(!wide.attention_open.get()) })
   })
   |> ignore
 }
@@ -621,11 +586,12 @@ fn todo_shown(src : Source, w : Workspace) -> Bool {
 /// when there (2 + a row + 8); a row as high as the theme's band (32; touch's the search field's 38).
 fn band_h(src : Source, w : Workspace) -> Double {
   side_top_h() +
-  band_new_top +
   band_row_h() +
-  side_new_under +
-  (if wide.tape && !wide.in_bar { band_new_tape_over() } else { 0.0 }) +
-  (if wide.in_bar { bar_band_in - side_new_under } else { 0.0 }) +
+  (if wide.tape {
+    band_new_top + side_new_under + band_new_tape_over()
+  } else {
+    band_pane_top() + band_pane_under()
+  }) +
   (if todo_shown(src, w) { side_todo_around + band_row_h() } else { 0.0 })
 }
 

@@ -1,4 +1,4 @@
-// Something under way: a small turning ring, in one of two sizes (docs/ui-panels.md「等待」): `spinner` (14) where it
+// Something under way: a small turning ring, in one of two sizes (sf/waiting.mbt): `spinner` (14) where it
 // stands for a button's icon, with `inline` (12) in a line of small text (a row's end, a pill). Where it sits says its
 // colour and place, never its size.
 import { globalStyle, style } from "@vanilla-extract/css";

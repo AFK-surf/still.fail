@@ -12,6 +12,10 @@ pub fn alignment_corner_faults_ok(Array[String]) -> Bool
 
 pub fn alignment_figure(@ui.Ctx) -> Unit
 
+pub fn draw_graphic_scene(@ui.Ctx, GraphicScene) -> Unit
+
+pub fn graphic_scene(String) -> GraphicScene?
+
 pub fn sign_in_example(@ui.Ctx, Double, Bool, String) -> Unit
 
 pub fn wrap_card_figure(@ui.Ctx, Bool) -> Unit
@@ -21,6 +25,20 @@ pub fn wrap_figure(@ui.Ctx) -> Unit
 // Errors
 
 // Types and methods
+pub(all) enum GraphicNode {
+  Center(Array[GraphicNode])
+  Panel(Double, Double, Double, Double, Int64, Double, Array[GraphicNode])
+  Words(Double, Double, String, Double, Int64, Int32, Double, Double)
+  SignIn(Double, Bool, String)
+}
+
+pub(all) struct GraphicScene {
+  width : Double
+  height : Double
+  scale : Double
+  background : Int64
+  children : Array[GraphicNode]
+}
 
 // Type aliases
 

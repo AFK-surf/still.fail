@@ -1,4 +1,4 @@
-// The workspace lock end to end (docs/workspace-lock.md), on a dev cloud (cloud/test/dev.ts) and real stations: what a
+// The workspace lock end to end, on a dev cloud (cloud/test/dev.ts) and real stations: what a
 // compromised cloud does — mint a credential for a device of its own, put a station of its own in the roster, swap the
 // grant key, move a station to another workspace — refused by the stations that pinned the lock, and still done to
 // one that did not. The owner's device is a real core (desktop's Node host); the new device's and station's paths too,

@@ -1,6 +1,6 @@
 //! The data directory and what the launcher keeps in it, as the Rust station did (mesh/app/src/former.rs,
 //! mesh/station/src/main.rs): where it is, its lock, run/station.json, and what config.json says the launcher needs (the
-//! MCP endpoint's host and port, the station's language).
+//! MCP endpoint's port, the station's language).
 
 use std::fs::{File, OpenOptions};
 #[cfg(unix)]
@@ -13,13 +13,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
 
-/// The data directory under the home, and what it was before the rename.
+/// The data directory under the home.
 const DATA_DIR: &str = ".stillfail";
-const FORMER_DATA_DIR: &str = ".ember";
 
-/// `name` (without its prefix, as "DATA") from the environment: STILLFAIL_<name>, else EMBER_<name>. Empty is unset.
+/// `name` (without its prefix, as "DATA") from the environment: STILLFAIL_<name>. Empty is unset.
 pub fn var(name: &str) -> Option<String> {
-    ["STILLFAIL_", "EMBER_"].iter().find_map(|p| std::env::var(format!("{p}{name}")).ok().filter(|v| !v.is_empty()))
+    std::env::var(format!("STILLFAIL_{name}")).ok().filter(|v| !v.is_empty())
 }
 
 pub fn home() -> PathBuf {
@@ -30,73 +29,21 @@ pub fn home() -> PathBuf {
     home.map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
 }
 
-/// The data directory: `given` (--data, or the variable), else ~/.stillfail. ~/.ember, given or found there, is taken
-/// for the default and moved there once (with a link left at the old place); a directory given elsewhere is used as it is.
+/// The data directory: `given` (--data, or the variable), else ~/.stillfail.
 pub fn data_dir(home: &Path, given: Option<PathBuf>) -> PathBuf {
-    let (new, old) = (home.join(DATA_DIR), home.join(FORMER_DATA_DIR));
-    match given {
-        Some(dir) if !same(&dir, &new) && !same(&dir, &old) => dir,
-        _ => move_data(&old, &new),
-    }
+    given.unwrap_or_else(|| home.join(DATA_DIR))
 }
 
-fn same(a: &Path, b: &Path) -> bool {
-    a.components().eq(b.components())
-}
-
-/// Whether `data` is the machine's own data directory (~/.stillfail, or ~/.ember not moved yet). Only its station
+/// Whether `data` is the machine's own data directory (~/.stillfail). Only its station
 /// takes the usual ports: one on another directory (a test's, a development station's) takes free ones, so it never
 /// keeps the machine's station off them.
 pub fn is_default(home: &Path, data: &Path) -> bool {
     // Windows' paths are the same whatever their case (a drive letter given as c: or C:).
     #[cfg(windows)]
     let same = |a: &Path, b: &Path| a.to_string_lossy().trim_end_matches(['\\', '/']).eq_ignore_ascii_case(b.to_string_lossy().trim_end_matches(['\\', '/']));
-    [home.join(DATA_DIR), home.join(FORMER_DATA_DIR)].iter().any(|d| same(d, data))
-}
-
-fn exists(path: &Path) -> bool {
-    std::fs::symlink_metadata(path).is_ok()
-}
-
-/// Moves `old` to `new` and links `old` to it, once: with `new` there (not empty) or no `old`, nothing moves. Not while
-/// a station runs `old` (it holds run/station.lock): `old` is then answered, and the lock is found held.
-fn move_data(old: &Path, new: &Path) -> PathBuf {
-    let empty = |p: &Path| std::fs::symlink_metadata(p).is_ok_and(|m| m.is_dir()) && std::fs::read_dir(p).is_ok_and(|mut e| e.next().is_none());
-    let linked = std::fs::read_link(old).is_ok_and(|to| same(&to, new));
-    if !exists(old) || linked || (exists(new) && !empty(new)) {
-        return new.to_path_buf();
-    }
-    if held(&old.join("run").join("station.lock")) {
-        crate::log::warn(&format!("a station runs the old data directory ({}); not moving it now", old.display()));
-        return old.to_path_buf();
-    }
-    if exists(new) {
-        let _ = std::fs::remove_dir(new);
-    }
-    if let Err(error) = std::fs::rename(old, new) {
-        crate::log::warn(&format!("the data directory could not be moved from {} to {}: {error}; staying where it is", old.display(), new.display()));
-        return old.to_path_buf();
-    }
-    #[cfg(unix)]
-    let linked = std::os::unix::fs::symlink(new, old);
-    // A link to a directory needs no privilege as a junction would, but this is what most like Unix's.
-    #[cfg(windows)]
-    let linked = std::os::windows::fs::symlink_dir(new, old);
-    match linked {
-        Ok(()) => crate::log::info(&format!("data directory moved from {} to {} (a link stays at the old place)", old.display(), new.display())),
-        Err(error) => crate::log::warn(&format!("data directory moved to {}, but no link left at the old place: {error}", new.display())),
-    }
-    new.to_path_buf()
-}
-
-/// Whether another process holds `lock`.
-fn held(lock: &Path) -> bool {
-    let Ok(file) = OpenOptions::new().write(true).open(lock) else { return false };
-    #[cfg(unix)]
-    // SAFETY: flock on a descriptor this function owns; dropping the file lets it go.
-    return unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) != 0 };
-    #[cfg(windows)]
-    return file.try_lock().is_err();
+    #[cfg(not(windows))]
+    let same = |a: &Path, b: &Path| a.components().eq(b.components());
+    same(&home.join(DATA_DIR), data)
 }
 
 /// Holds `path` locked for as long as the file lives; None when another process holds it. The descriptor is
@@ -150,8 +97,9 @@ pub fn now_ms() -> u64 {
 /// What the launcher reads of config.json ($STILLFAIL_CONFIG, else <data>/config.json).
 #[derive(Debug, PartialEq)]
 pub struct Config {
-    /// The MCP endpoint's host and port; `named` when the config sets the port (then taken is an error).
-    pub host: String,
+    /// The MCP endpoint's port; `named` when the config sets the port (then taken is an error). It is on 127.0.0.1
+    /// whatever the config says (an `http.host` of before is not read): a station has no way in from outside but the
+    /// mesh (AGENTS.md).
     pub port: u16,
     pub named: bool,
     pub english: bool,
@@ -175,13 +123,9 @@ impl Config {
             Value::Null => None,
             v => Some(v.as_u64().and_then(|p| u16::try_from(p).ok()).ok_or_else(|| format!("http.port: not a port: {v}"))?),
         };
-        let host = match &http["host"] {
-            Value::Null => "127.0.0.1".to_string(),
-            v => v.as_str().ok_or_else(|| format!("http.host: not a string: {v}"))?.to_string(),
-        };
         // As client/i18n's Lang::from_locale: none, empty or zh… is Chinese, anything else English.
         let english = raw["language"].as_str().map(|l| l.trim().to_ascii_lowercase()).is_some_and(|l| !l.is_empty() && !l.starts_with("zh"));
-        Ok(Config { host, port: port.unwrap_or(4750), named: port.is_some(), english })
+        Ok(Config { port: port.unwrap_or(4750), named: port.is_some(), english })
     }
 }
 
@@ -197,16 +141,9 @@ mod tests {
     }
 
     #[test]
-    fn the_data_directory_is_the_one_given_else_stillfail_and_ember_is_moved_there_once() {
+    fn the_data_directory_is_the_one_given_else_stillfail() {
         let home = temp("home");
         assert_eq!(data_dir(&home, Some("/elsewhere".into())), PathBuf::from("/elsewhere"));
-        assert_eq!(data_dir(&home, None), home.join(".stillfail"));
-        std::fs::create_dir_all(home.join(".ember/run")).unwrap();
-        std::fs::write(home.join(".ember/config.json"), "{}").unwrap();
-        // Given as ~/.ember, it is the default too: moved, a link left.
-        assert_eq!(data_dir(&home, Some(home.join(".ember"))), home.join(".stillfail"));
-        assert!(home.join(".stillfail/config.json").exists());
-        assert_eq!(std::fs::read_link(home.join(".ember")).unwrap(), home.join(".stillfail"));
         assert_eq!(data_dir(&home, None), home.join(".stillfail"));
         std::fs::remove_dir_all(&home).unwrap();
     }
@@ -215,26 +152,15 @@ mod tests {
     fn only_the_home_data_directory_is_the_default() {
         let home = PathBuf::from("/home/u");
         assert!(is_default(&home, &home.join(".stillfail")));
-        assert!(is_default(&home, &home.join(".ember")));
         assert!(!is_default(&home, &PathBuf::from("/tmp/scratchpad/inst")));
         assert!(!is_default(&home, &home.join(".stillfail-dev")));
     }
 
     #[test]
-    fn the_old_data_directory_held_by_a_station_is_not_moved() {
-        let home = temp("held");
-        std::fs::create_dir_all(home.join(".ember/run")).unwrap();
-        let _held = lock(&home.join(".ember/run/station.lock")).unwrap().unwrap();
-        assert_eq!(data_dir(&home, None), home.join(".ember"));
-        assert!(lock(&home.join(".ember/run/station.lock")).unwrap().is_none());
-        std::fs::remove_dir_all(&home).unwrap();
-    }
-
-    #[test]
     fn the_config_names_the_mcp_port_or_leaves_the_usual_one() {
         let of = |s: &str| Config::of(&serde_json::from_str(s).unwrap());
-        assert_eq!(of("null").unwrap(), Config { host: "127.0.0.1".into(), port: 4750, named: false, english: false });
-        assert_eq!(of(r#"{"http":{"host":"0.0.0.0","port":5000},"language":"en-US"}"#).unwrap(), Config { host: "0.0.0.0".into(), port: 5000, named: true, english: true });
+        assert_eq!(of("null").unwrap(), Config { port: 4750, named: false, english: false });
+        assert_eq!(of(r#"{"http":{"host":"0.0.0.0","port":5000},"language":"en-US"}"#).unwrap(), Config { port: 5000, named: true, english: true });
         assert!(!of(r#"{"language":"zh-CN"}"#).unwrap().english);
         assert!(of(r#"{"http":{"port":70000}}"#).is_err());
     }

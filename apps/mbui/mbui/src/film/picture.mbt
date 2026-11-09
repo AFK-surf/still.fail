@@ -104,6 +104,16 @@ pub fn picture(
   if at > 0.0 {
     t.run_for_exact(at)
   }
+  // (MBUI_RULES=1: every corner and spacing fault of the frame said, whatever the picture accepts)
+  if arg("MBUI_RULES") == "1" {
+    for fault in t.corner_faults() {
+      say("rules: corner: \{fault}")
+    }
+    for fault in t.gap_faults() {
+      say("rules: gap: \{fault}")
+    }
+    say("rules: checked")
+  }
   // Check the captured frame explicitly so a bad corner reports why and returns false instead of aborting the process.
   if corners_held {
     let faults = t.corner_faults()
@@ -200,6 +210,16 @@ fn run_picture(view : (@ui.Ctx) -> Unit, tree? : (@view.View) -> Unit) -> Unit {
     fps~,
     max=number(arg("MBUI_FILM_FRAMES")).unwrap_or(3000.0).to_int(),
     transparent=arg("MBUI_PICTURE_TRANSPARENT") == "1",
+    corner_faults_ok?=if arg("MBUI_FILM_ALLOW_CORNER_FAULTS") == "1" {
+      Some(fn(faults) {
+        for fault in faults {
+          say("picture: \{fault}")
+        }
+        true
+      })
+    } else {
+      None
+    },
     words_over_held=false,
   )
   exit(if ok { 0 } else { 1 })

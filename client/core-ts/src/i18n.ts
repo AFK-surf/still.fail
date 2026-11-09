@@ -27,6 +27,8 @@ import en_station from "../../i18n/catalog/en/station.json" with { type: "json" 
 import en_web_main from "../../i18n/catalog/en/web-main.json" with { type: "json" };
 import en_web_mobile from "../../i18n/catalog/en/web-mobile.json" with { type: "json" };
 import en_web_pages from "../../i18n/catalog/en/web-pages.json" with { type: "json" };
+import { branded } from "../../i18n/brand.ts";
+import * as brand from "./brand.ts";
 
 export type Lang = "zh" | "en";
 type Words = Record<string, string | { one?: string; other?: string }>;
@@ -89,7 +91,8 @@ export function tr(lang: Lang, key: string, args?: Args): string {
     const one = args !== undefined && "n" in args && shown(args.n).trim() === "1";
     text = (one ? found.one : found.other) ?? found.other ?? key;
   } else text = key;
-  return fill(text, args);
+  // (another product's cloud: its name for still.fail's, client/i18n/brand.ts)
+  return fill(branded(text, brand.current()), args);
 }
 
 /// `t!("key", name = value)`: the words in the current language.

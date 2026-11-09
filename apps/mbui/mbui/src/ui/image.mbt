@@ -46,6 +46,36 @@ impl Moving for ImageEntry with rest_at(self, now, frame) {
 let image_cache : Map[String, Array[ImageEntry]] = {}
 
 ///|
+// kept across runs: each decode in image_cache by its host's number, and its source (a host numbers each anew, never one
+// let go of again), gone with it (image_dropped, Tester's reset)
+let image_by_id : Map[Int, (String, ImageEntry)] = {}
+
+///|
+// kept across runs: the bytes of the ready decodes in image_cache (each w·h·4 as it is ready, image_dropped's taken off):
+// what Ctx::trim_images holds to its budget, told as they change, not added up each frame (Tester's reset)
+let image_bytes : Ref[Double] = Ref(0.0)
+
+///|
+/// Decode `e` of `src` put in image_cache: known by its number, its bytes counted where it is ready already (else as
+/// it comes to be, ImageEntry::poll).
+fn image_added(src : String, e : ImageEntry) -> Unit {
+  image_by_id[e.id] = (src, e)
+  if e.state == 1 {
+    image_bytes.val = image_bytes.val + e.w * e.h * 4.0
+  }
+}
+
+///|
+/// Decode `e` let go of from image_cache (its host's freed by what lets it go): its number and its bytes with it.
+fn image_dropped(e : ImageEntry) -> Unit {
+  match image_by_id.get(e.id) {
+    Some((_, x)) if physical_equal(x, e) => image_by_id.remove(e.id)
+    _ => ()
+  }
+  image_bytes.val = image_bytes.val - e.w * e.h * 4.0
+}
+
+///|
 /// Whether a named picture's current decodes are ready, still coming, or failed. An exact source wins over a suffix
 /// or prefix; an incomplete name matching more than one picture is an error, not whichever the map happens to visit.
 /// Old decodes with px=0 only stand in while a replacement is drawn and do not make the replacement ready.
@@ -109,6 +139,7 @@ pub fn Ctx::image_bytes(self : Ctx, key : String, data : Bytes) -> Unit {
   if !add_gif(key, data) {
     image_data[key] = data
   }
+  image_bytes_here(key)
 }
 
 ///|
@@ -120,6 +151,7 @@ pub fn add_image(key : String, data : Bytes) -> Unit {
   if !add_gif(key, data) {
     image_data[key] = data
   }
+  image_bytes_here(key)
 }
 
 ///|
@@ -132,6 +164,7 @@ pub fn add_vector_image(
 ) -> Unit {
   image_data[key] = data
   image_vector_drawers[key] = draw
+  image_bytes_here(key)
 }
 
 ///|
@@ -180,6 +213,7 @@ pub fn redraw_vector_pictures() -> Unit {
     for e in list {
       if e.state == -1 {
         h_image_free(e.id)
+        image_dropped(e)
       }
     }
     list.retain(fn(e) { e.state != -1 })
@@ -187,7 +221,8 @@ pub fn redraw_vector_pictures() -> Unit {
       e.px = 0
     }
     let said = image_said(src)
-    said.decodes.set(@signals.untracked(fn() { said.decodes.get() }) + 1)
+    said.decodes.set(said.decodes.untracked() + 1)
+    sizes_told(src, said)
   }
   @signals.end_batch()
 }
@@ -230,6 +265,7 @@ fn ImageEntry::poll(self : ImageEntry, now : Double) -> Unit {
     if st == 1 {
       self.w = image_info_out[0]
       self.h = image_info_out[1]
+      image_bytes.val = image_bytes.val + self.w * self.h * 4.0
       self.ow = image_info_out[2]
       self.oh = image_info_out[3]
       self.ready_at = self.follows.unwrap_or(now)
@@ -239,10 +275,21 @@ fn ImageEntry::poll(self : ImageEntry, now : Double) -> Unit {
 }
 
 ///|
-/// The decode of `src` to show at `px` pixels on the long side: the
-/// smallest ready one at least that big, else the biggest ready one while
-/// a big enough one decodes (started here if none is).
+/// The decode of `src` to show at `px` pixels on the long side: the one
+/// of that bucket once ready, else, while it decodes (started here if
+/// none at least that big is coming), the smallest ready one bigger than
+/// it, or the biggest ready one smaller. (A much bigger decode is not kept to draw small: the
+/// GPU's bilinear sample of a texture without mipmaps, shrunk several
+/// times over, is jagged.)
 fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
+  image_entry_for(src, px, self.frame_no, self.clock)
+}
+
+///|
+/// Ctx::image_for's decode of `src` at `px`, by whoever asks: what asks it marked as using it as of frame `used`, a
+/// decode it starts done as of `at` where the host has it done at once (the moment it was asked: a build's clock, a
+/// node's moment).
+fn image_entry_for(src : String, px : Double, used : Int, at : Double) -> ImageEntry? {
   // (followed: which of its decodes is ready changes as the host says one is, or failed)
   image_decodes_read(src)
   // bytes still on their way: nothing to load yet
@@ -259,7 +306,8 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
     }
   }
   let mut good : ImageEntry? = None
-  let mut fallback : ImageEntry? = None
+  let mut bigger : ImageEntry? = None
+  let mut smaller : ImageEntry? = None
   let mut pending = false
   let mut failed = false
   // (a decode is ready, or failed, as the host's word that it is says, at that word's moment: image_decoded; never as a
@@ -269,18 +317,23 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
       failed = true
       continue
     }
-    if e.px >= want {
-      if e.state == 1 {
-        if good is None {
-          good = Some(e)
-        }
-      } else {
+    if e.state == 0 {
+      // (one coming at least as big: waited for, as it will be drawn from (once ready, it stands in while one of this
+      // size decodes))
+      if e.px >= want {
         pending = true
       }
-    } else if e.state == 1 {
-      fallback = Some(e)
+    } else if e.px == want {
+      good = Some(e)
+    } else if e.px > want {
+      if bigger is None {
+        bigger = Some(e)
+      }
+    } else {
+      smaller = Some(e)
     }
   }
+  let fallback = if bigger is Some(_) { bigger } else { smaller }
   if good is None && !pending && !failed {
     let id = match image_data.get(src) {
       Some(d) => h_image_load_bytes(host_bytes(src, d, want), want, src)
@@ -299,7 +352,7 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
       h: 0.0,
       ow: 0.0,
       oh: 0.0,
-      used: self.frame_no,
+      used,
       ready_at: 0.0,
       follows: fallback.map(fn(f) { f.ready_at }),
       mover: Mover::new(),
@@ -311,9 +364,10 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
       k = k + 1
     }
     list.insert(k, e)
+    image_added(src, e)
     // (done at once, as the host decoded it, or failed, while asked: so at the moment it was asked, this build's, said
     // as a word of the host's that it is done is, image_decoded)
-    image_done(src, e, self.clock)
+    image_done(src, e, at)
     if e.state == 1 {
       good = Some(e)
     }
@@ -321,7 +375,7 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
   let r = if good is Some(_) { good } else { fallback }
   match r {
     Some(e) => {
-      e.used = self.frame_no
+      e.used = used
       built_used(fn() { e.used = g().frame_no })
     }
     None => ()
@@ -342,7 +396,7 @@ fn image_awaited(src : String, px : Double) -> Bool {
     Some(list) => {
       let mut coming = false
       for e in list {
-        if e.state == 1 && e.px >= want {
+        if e.state == 1 && e.px == want {
           return false
         }
         if e.state == 0 && e.px >= want {
@@ -381,12 +435,7 @@ fn Ctx::image_px(self : Ctx, src : String, bw : Double, bh : Double, fit : Fit) 
 /// what is kept fits the budget.
 fn Ctx::trim_images(self : Ctx) -> Unit {
   images_said_trim()
-  let mut total = 0.0
-  for _, list in image_cache {
-    for e in list {
-      total = total + e.w * e.h * 4.0
-    }
-  }
+  let mut total = image_bytes.val
   if total <= image_budget {
     return
   }
@@ -406,6 +455,7 @@ fn Ctx::trim_images(self : Ctx) -> Unit {
     let (src, e) = item
     total = total - e.w * e.h * 4.0
     h_image_free(e.id)
+    image_dropped(e)
     match image_cache.get(src) {
       Some(list) => {
         list.retain(fn(x) { x.id != e.id })
@@ -556,9 +606,21 @@ fn Ctx::paint_image(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
 /// it is shown, so each is decoded before its turn; one not yet is stood in for by the last one before it that is
 /// (never a frame of nothing between them).
 fn Ctx::moving_src(self : Ctx, n : Node) -> String {
-  match moving_images.get(n.text) {
-    Some(m) if !n.still => {
-      let px = self.image_px(m.keys[0], n.fw, n.fh, n.fit)
+  if n.still {
+    return n.text
+  }
+  self.moving_key(n.text, n.fw, n.fh, n.fit)
+}
+
+///|
+/// What picture `src` shows now drawn `bw` by `bh` as `fit` fits it (Ctx::moving_src's, an old view's or a node's): a
+/// GIF that moves the frame of its loop at this frame's time, the frame woken for as its turn comes (Ctx::loop_at),
+/// each frame asked for at the size it is shown and one not decoded yet stood in for by the last before it that is;
+/// any other `src`.
+fn Ctx::moving_key(self : Ctx, src : String, bw : Double, bh : Double, fit : Fit) -> String {
+  match moving_images.get(src) {
+    Some(m) => {
+      let px = self.image_px(m.keys[0], bw, bh, fit)
       let px = if px <= 0.0 { 256.0 } else { px }
       let ready = m.keys.map(fn(k) { self.image_ready(k, px) })
       let length = m.ends[m.ends.length() - 1]
@@ -570,10 +632,10 @@ fn Ctx::moving_src(self : Ctx, n : Node) -> String {
       if ready[k] {
         m.keys[k]
       } else {
-        n.text
+        src
       }
     }
-    _ => n.text
+    None => src
   }
 }
 
@@ -609,28 +671,23 @@ fn Ctx::draw_image(
   let px = dmin(self.image_px(src, bw, bh, fit), max_px.to_double())
   let px = if px <= 0.0 { 256.0 } else { px }
   let found = self.image_for(src, px)
-  // A Tester records only the failed pictures this frame actually needed. A good decode at the requested size makes
+  // The failed pictures this frame actually needed (frame_failed_images). A good decode at the requested size makes
   // an older failed decode irrelevant; a smaller fallback does not stand in for the requested resolution.
   if !shooting.val {
-    match fake.val {
-      Some(f) => {
-        let needs_decode = match found {
-          Some(e) => e.px < bucket(px)
-          None => true
-        }
-        if needs_decode {
-          match image_cache.get(src) {
-            Some(list) =>
-              for e in list {
-                if e.state < 0 && !f.frame_failed_images.contains(e.id) {
-                  f.frame_failed_images.push(e.id)
-                }
-              }
-            None => ()
+    let needs_decode = match found {
+      Some(e) => e.px != bucket(px)
+      None => true
+    }
+    if needs_decode {
+      match image_cache.get(src) {
+        Some(list) =>
+          for e in list {
+            if e.state < 0 && !frame_failed_images.contains(e.id) {
+              frame_failed_images.push(e.id)
+            }
           }
-        }
+        None => ()
       }
-      None => ()
     }
   }
   let e = match found {
@@ -714,7 +771,20 @@ fn Ctx::draw_image(
 priv struct ImageSaid {
   size : @signals.Signal[(Double, Double)?]
   decodes : @signals.Signal[Int]
+  /// whether its bytes are here to decode (always, but for a `mem:` key before they are handed over: add_image)
+  bytes : @signals.Signal[Bool]
+  /// how its decode to each size followed stands, by bucket (decode_state)
+  sizes : Map[Int, @signals.Signal[DecodeState]]
 }
+
+///|
+/// How the decode of a picture to one size (bucket) stands: coming (or not yet started), done, or failed (it, or one
+/// at least as large: pixels_for's). Told as the host's word on one of its decodes comes (image_done).
+priv enum DecodeState {
+  DecodeComing
+  DecodeDone
+  DecodeFailed
+} derive(Eq)
 
 ///|
 // kept across runs: what is said of the pictures kept, gone with them (image_forget, Tester's reset)
@@ -725,7 +795,12 @@ fn image_said(src : String) -> ImageSaid {
   match images_said.get(src) {
     Some(s) => s
     None => {
-      let s = { size: @signals.signal(None, same=fn(a, b) { a == b }), decodes: @signals.signal(0) }
+      let s = {
+        size: @signals.signal(None, same=fn(a, b) { a == b }),
+        decodes: @signals.signal(0),
+        bytes: @signals.signal(!src.has_prefix("mem:") || image_data.contains(src), same=fn(a, b) { a == b }),
+        sizes: {},
+      }
       images_said[src] = s
       s
     }
@@ -735,7 +810,15 @@ fn image_said(src : String) -> ImageSaid {
 ///|
 /// Whether something follows what is said of a picture.
 fn ImageSaid::watched(self : ImageSaid) -> Bool {
-  self.size.watched() || self.decodes.watched()
+  if self.size.watched() || self.decodes.watched() || self.bytes.watched() {
+    return true
+  }
+  for _, s in self.sizes {
+    if s.watched() {
+      return true
+    }
+  }
+  false
 }
 
 ///|
@@ -744,6 +827,55 @@ fn image_decodes_read(src : String) -> Unit {
   image_said(src).decodes.get() |> ignore
 }
 
+
+///|
+/// The bytes of the picture `key` handed over (add_image): said to be here, where something follows whether they are
+/// (a node waiting on its pixels, whose decode could not start before them: tree_image_pixels).
+fn image_bytes_here(key : String) -> Unit {
+  match images_said.get(key) {
+    Some(s) => s.bytes.set(true)
+    None => ()
+  }
+}
+
+///|
+/// How the decode of `src` to the size `want` (a bucket) stands, as its cache has it now.
+fn decode_state_now(src : String, want : Int) -> DecodeState {
+  match image_cache.get(src) {
+    Some(list) =>
+      if list.iter().any(fn(e) { e.state == 1 && e.px == want }) {
+        DecodeDone
+      } else if list.iter().any(fn(e) { e.state == -1 && e.px >= want }) {
+        DecodeFailed
+      } else {
+        DecodeComing
+      }
+    None => DecodeComing
+  }
+}
+
+///|
+/// How the decode of `src` to the size `want` (a bucket) stands, followed: told as it changes (sizes_told).
+fn decode_state(src : String, want : Int) -> @signals.Signal[DecodeState] {
+  let said = image_said(src)
+  match said.sizes.get(want) {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(decode_state_now(src, want), same=fn(a, b) { a == b })
+      said.sizes[want] = s
+      s
+    }
+  }
+}
+
+///|
+/// The states of `src`'s decodes to the sizes followed, told as its cache now has them (one done or failed, as the host
+/// says; or let go to be drawn again).
+fn sizes_told(src : String, said : ImageSaid) -> Unit {
+  for want, s in said.sizes {
+    s.set(decode_state_now(src, want))
+  }
+}
 
 ///|
 /// What is said of the picture `src`, let go with its decodes: unless something follows it still (its signal, the one it
@@ -783,7 +915,8 @@ fn image_done(src : String, e : ImageEntry, at : Double) -> Unit {
   if e.state == 1 {
     said.size.set(Some((e.ow, e.oh)))
   }
-  said.decodes.set(@signals.untracked(fn() { said.decodes.get() }) + 1)
+  said.decodes.set(said.decodes.untracked() + 1)
+  sizes_told(src, said)
   @signals.end_batch()
 }
 
@@ -791,12 +924,14 @@ fn image_done(src : String, e : ImageEntry, at : Double) -> Unit {
 /// The host said decode `id` is done (or could not be), at `at` (its word's moment): it is ready then (its fade from
 /// then, or on from the one it follows), and its picture's size told, that picture's alone, where it is new.
 fn image_decoded(id : Int, at : Double) -> Unit {
-  for src, list in image_cache {
-    for e in list {
-      if e.id == id {
-        image_done(src, e, at)
-        return
-      }
-    }
+  match image_by_id.get(id) {
+    Some((src, e)) => image_done(src, e, at)
+    None => ()
   }
 }
+
+///|
+/// Failed decodes the frame painted last needed, by the host's image id (Ctx::image): not every failed decode still in
+/// the cache, those of pictures no longer in the frame not among them.
+// kept across runs: emptied as each frame is painted (frame_paint)
+let frame_failed_images : Array[Int] = []

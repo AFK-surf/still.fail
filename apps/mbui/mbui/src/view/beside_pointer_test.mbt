@@ -42,8 +42,8 @@ test "beside the pointer: by its point while it is on the anchor; told the same 
   assert_eq(at(), (126.0, 150.0), msg="by where it moved to")
   assert_eq((w2.computes, w2.measured), (w0.computes, w0.measured), msg="nothing laid out or measured again")
   assert_true(w2.besides > w1.besides, msg="placed again")
-  // (off the anchor: beside all of it)
+  // (off the anchor: by the point of it the pointer was last at, not all of it)
   point(300.0, 100.0)
   t.frame(400.0, 300.0) |> ignore
-  assert_eq(at(), (134.0, 120.0), msg="the pointer off it: beside all of it")
+  assert_eq(at(), (126.0, 150.0), msg="the pointer off it: where it was last on it")
 }

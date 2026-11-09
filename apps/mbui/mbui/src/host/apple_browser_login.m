@@ -5,7 +5,7 @@
 // system picks, let the app make its login page with http://127.0.0.1:<port><path> as where to come back, open it in
 // the browser, take the one GET that comes back to <path> under that host name, answer it, stop listening. Nothing here
 // knows whose sign-in it is: the app checks what came back (its state) and exchanges it. Opening is $BROWSER, else
-// `open` on macOS (a station's remote login sets the one and stands in for the other: ember docs/remote-login.md),
+// `open` on macOS (a station's remote login sets the one and stands in for the other),
 // the system on iOS. The app polls it each frame (a frame is asked for when the browser comes back).
 #import <Foundation/Foundation.h>
 #if TARGET_OS_IPHONE

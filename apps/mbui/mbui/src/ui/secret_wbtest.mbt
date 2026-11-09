@@ -30,3 +30,24 @@ test "a secret's field: its words drawn as dots, the app reading them whole, nev
   }
   assert_eq(got, "sk-made-up")
 }
+
+///|
+test "a secret's field tells the host it is one: the keyboard learns and suggests nothing of a token typed in it" {
+  let t = Tester::new(fn(c) {
+    c.column(w=Fill(1.0), h=Fill(1.0), fn() {
+      c.editor("name", placeholder="名称") |> ignore
+      c.editor("key", placeholder="xoxb-…", secret=true) |> ignore
+      c.spacer()
+    })
+    |> ignore
+  })
+  t.tap_text("名称")
+  t.frame()
+  assert_eq(t.ime_action(), @hostapi.ime_action_none)
+  t.tap_text("xoxb-…")
+  t.frame()
+  assert_eq(t.ime_action(), @hostapi.ime_action_secret)
+  t.tap_text("名称")
+  t.frame()
+  assert_eq(t.ime_action(), @hostapi.ime_action_none)
+}

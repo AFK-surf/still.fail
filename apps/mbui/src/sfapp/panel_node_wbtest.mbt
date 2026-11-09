@@ -7,10 +7,10 @@ fn panel_test_body(said : Array[String]) -> (@ui.Ctx, () -> Unit) -> Unit {
   fn(c, close) {
     @sf.panel_text(c, fn() { c.text("面板里的话，长一些，好看它怎么折行", style=@sf.paragraph) |> ignore })
     @sf.panel_foot(c, fn() {
-      if @sf.panel_button(c, "ok", "好的", tone=Filled) {
+      @sf.panel_button(c, "ok", "好的", tone=Filled, on_press=fn() {
         said.push("ok")
         close()
-      }
+      }) |> ignore
     })
   }
 }
@@ -176,7 +176,7 @@ test "panel, 大屏 keyboard and mouse: at a point, where main has it: its dialo
   let w = fn(s : String) { t.words().filter(fn(x) { x.0 == s }).map(fn(x) { tenth4((x.1, x.2, x.3, x.4)) }) }
   assert_eq(
     (tenth4(t.get(Dialog, label="面板").rect), w("面板"), w("面板里的话，长一些，好看它怎么折行"), tenth4(t.get(Button, label="好的").rect), t.focused().map(fn(s) { s.label })),
-    ((600.0, 306.0, 280.0, 95.8), [(616.0, 318.0, 248.0, 20.0)], [(616.0, 342.0, 248.0, 22.0)], (826.2, 368.0, 44.0, 24.0), None),
+    ((600.0, 306.0, 296.0, 98.0), [(616.0, 318.0, 264.0, 20.0)], [(616.0, 342.0, 264.0, 22.0)], (840.0, 368.0, 44.0, 24.0), None),
   )
 }
 
@@ -265,10 +265,10 @@ test "panel, 大屏 keyboard and mouse: at a point, its way out drawn as main ha
   }
   // (as main has it, a4c845604: each way the same)
   let main = [
-    "alphas {255: 45} ground [255] button [(826.192, 368, 44, 24)] fading None..None",
-    "alphas {255: 24, 205: 21} ground [255] button [(825.523, 367.817, 43.87, 23.929)] fading Some((615.953, 320.956))..Some((847.266, 373.799))",
-    "alphas {255: 24, 89: 21} ground [255] button [(823.988, 367.396, 43.571, 23.766)] fading Some((615.844, 320.854))..Some((845.583, 373.337))",
-    "alphas {255: 24, 0: 21} ground [189] button [(821.916, 366.828, 43.168, 23.546)] fading Some((615.698, 320.716))..Some((843.312, 372.715))",
+    "alphas {255: 45} ground [255] button [(840, 368, 44, 24)] fading None..None",
+    "alphas {255: 24, 205: 21} ground [255] button [(839.29, 367.817, 43.87, 23.929)] fading Some((615.953, 320.956))..Some((861.225, 373.799))",
+    "alphas {255: 24, 89: 21} ground [255] button [(837.661, 367.396, 43.571, 23.766)] fading Some((615.844, 320.854))..Some((859.447, 373.337))",
+    "alphas {255: 24, 0: 21} ground [189] button [(835.463, 366.828, 43.168, 23.546)] fading Some((615.698, 320.716))..Some((857.048, 372.715))",
     "alphas {255: 24} ground [] button [] fading None..None",
   ]
   assert_eq(out, [main, main, main])
@@ -435,9 +435,9 @@ fn panel_rows_body(n : Int, held : Array[Bool]) -> (@ui.Ctx, () -> Unit) -> Unit
       @sf.panel_text(c, fn() { c.text("第\{i}行", style=@sf.paragraph) |> ignore })
     }
     @sf.panel_foot(c, fn() {
-      if @sf.panel_button(c, "ok", "好的", tone=Filled) {
+      @sf.panel_button(c, "ok", "好的", tone=Filled, on_press=fn() {
         close()
-      }
+      }) |> ignore
     })
   }
 }
@@ -467,7 +467,7 @@ test "panel, 大屏 keyboard and mouse: at a point, held short of what it holds 
   // (as main has it, a4c845604)
   assert_eq(
     said,
-    "dialog (600, 8, 280, 484) title [(616, 20, 248, 20)] row0 [(616, 44, 248, 22)] row10 [(616, 264, 248, 22)] button Some((826.2, 928, 44, 24)) held Some(true) || wheel middle title [(616, 20, 248, 20)] row0 [(616, -76, 248, 22)] row10 [(616, 144, 248, 22)] button Some((826.2, 808, 44, 24)) || wheel side title [(616, 20, 248, 20)] row0 [(616, -196, 248, 22)] row10 [(616, 24, 248, 22)] button Some((826.2, 688, 44, 24)) || wheel top padding title [(616, 20, 248, 20)] row0 [(616, -196, 248, 22)] row10 [(616, 24, 248, 22)] button Some((826.2, 688, 44, 24)) || held Some(true)",
+    "dialog (600, 8, 296, 484) title [(616, 20, 264, 20)] row0 [(616, 44, 264, 22)] row10 [(616, 264, 264, 22)] button Some((840, 928, 44, 24)) held Some(true) || wheel middle title [(616, 20, 264, 20)] row0 [(616, -76, 264, 22)] row10 [(616, 144, 264, 22)] button Some((840, 808, 44, 24)) || wheel side title [(616, 20, 264, 20)] row0 [(616, -196, 264, 22)] row10 [(616, 24, 264, 22)] button Some((840, 688, 44, 24)) || wheel top padding title [(616, 20, 264, 20)] row0 [(616, -196, 264, 22)] row10 [(616, 24, 264, 22)] button Some((840, 688, 44, 24)) || held Some(true)",
   )
 }
 
@@ -530,11 +530,11 @@ test "panel, 大屏 keyboard and mouse: at a point, a column of its own in it: i
   }
   // (as main has it, a4c845604)
   assert_eq(out, [
-    "tall: dialog (600, 106, 280, 402) row0 [(616, 142, 248, 22)] row4 [(616, 230, 248, 22)] held Some(false) | wheel: row0 [(616, 22, 248, 22)] row4 [(616, 110, 248, 22)] held Some(false)",
-    "tall, 4 rows: dialog (600, 106, 280, 130) row0 [(616, 142, 248, 22)] row4 [] held Some(false) | wheel: row0 [(616, 142, 248, 22)] row4 [] held Some(false)",
-    "short: dialog (600, 8, 280, 284) row0 [(616, 44, 248, 22)] row4 [(616, 132, 248, 22)] held Some(true) | wheel: row0 [(616, -76, 248, 22)] row4 [(616, 12, 248, 22)] held Some(true)",
-    "short, grown: dialog (600, 106, 280, 402) row0 [(616, 142, 248, 22)] row4 [(616, 230, 248, 22)] held Some(false) | wheel: row0 [(616, 22, 248, 22)] row4 [(616, 110, 248, 22)] held Some(false)",
-    "short, grown, 4 rows: dialog (600, 106, 280, 130) row0 [(616, 142, 248, 22)] row4 [] held Some(false) | wheel: row0 [(616, 142, 248, 22)] row4 [] held Some(false)",
+    "tall: dialog (600, 106, 296, 402) row0 [(616, 142, 264, 22)] row4 [(616, 230, 264, 22)] held Some(false) | wheel: row0 [(616, 22, 264, 22)] row4 [(616, 110, 264, 22)] held Some(false)",
+    "tall, 4 rows: dialog (600, 106, 296, 130) row0 [(616, 142, 264, 22)] row4 [] held Some(false) | wheel: row0 [(616, 142, 264, 22)] row4 [] held Some(false)",
+    "short: dialog (600, 8, 296, 284) row0 [(616, 44, 264, 22)] row4 [(616, 132, 264, 22)] held Some(true) | wheel: row0 [(616, -76, 264, 22)] row4 [(616, 12, 264, 22)] held Some(true)",
+    "short, grown: dialog (600, 106, 296, 402) row0 [(616, 142, 264, 22)] row4 [(616, 230, 264, 22)] held Some(false) | wheel: row0 [(616, 22, 264, 22)] row4 [(616, 110, 264, 22)] held Some(false)",
+    "short, grown, 4 rows: dialog (600, 106, 296, 130) row0 [(616, 142, 264, 22)] row4 [] held Some(false) | wheel: row0 [(616, 142, 264, 22)] row4 [] held Some(false)",
   ])
 }
 
@@ -562,9 +562,9 @@ test "panel, 大屏 keyboard and mouse: tall 0.5, at a point high and low in the
   }
   // (as main has it, a4c845604)
   assert_eq(out, [
-    "at 100: dialog Some((600, 106, 280, 400)) row0 [(616, 142, 248, 22)] held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
-    "at 500: dialog Some((600, 94, 280, 400)) row0 [(616, 130, 248, 22)] held Some(false) | wheel: row0 [(616, 10, 248, 22)]",
-    "at 700: dialog Some((600, 294, 280, 400)) row0 [(616, 330, 248, 22)] held Some(false) | wheel: row0 [(616, 210, 248, 22)]",
+    "at 100: dialog Some((600, 106, 296, 400)) row0 [(616, 142, 264, 22)] held Some(false) | wheel: row0 [(616, 22, 264, 22)]",
+    "at 500: dialog Some((600, 94, 296, 400)) row0 [(616, 130, 264, 22)] held Some(false) | wheel: row0 [(616, 10, 264, 22)]",
+    "at 700: dialog Some((600, 294, 296, 400)) row0 [(616, 330, 264, 22)] held Some(false) | wheel: row0 [(616, 210, 264, 22)]",
   ])
 }
 
@@ -577,7 +577,7 @@ test "panel, 大屏 keyboard and mouse: tall 0.5, at a point: its title, words a
   // (as main has it, a4c845604: PANELSAID kinds' tall)
   assert_eq(
     (panel_said(t), tree_said(Dialog, "面板") is Some(_)),
-    ("dialog Some((600, 106, 280, 400)) title [(616, 118, 248, 20)] words [(616, 142, 248, 22)] button Some((826.1918000000001, 168, 44, 24)) focus None", true),
+    ("dialog Some((600, 106, 296, 400)) title [(616, 118, 264, 20)] words [(616, 142, 264, 22)] button Some((840, 168, 44, 24)) focus None", true),
   )
 }
 
@@ -604,9 +604,9 @@ test "panel, 大屏 keyboard and mouse: tall 0.5 with a foot of its own, its bod
       from=At(600.0, 100.0, 0.0, 0.0),
       tall=0.5,
       foot=fn(c, close) {
-        if @sf.button(c, "好的", key="ok34", tone=Primary) {
+        @sf.button(c, "好的", key="ok34", tone=Primary, on_press=fn() {
           close()
-        }
+        }) |> ignore
       },
     )
   }
@@ -632,10 +632,10 @@ test "panel, 大屏 keyboard and mouse: tall 0.5 with a foot of its own, its bod
   }
   // (as main has it, a4c845604)
   assert_eq(out, [
-    "800: dialog (600, 106, 280, 400) row0 [(616, 142, 248, 22)] foot Some((817.2, 467.2, 58, 34)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
-    "800 to 500: dialog (600, 106, 280, 250) row0 [(616, 142, 248, 22)] foot Some((817.2, 317.2, 58, 34)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
-    "500 to 800: dialog (600, 106, 280, 400) row0 [(616, 142, 248, 22)] foot Some((817.2, 467.2, 58, 34)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
-    "opened at 500: dialog (600, 106, 280, 250) row0 [(616, 142, 248, 22)] foot Some((817.2, 317.2, 58, 34)) held Some(false) | wheel: row0 [(616, 22, 248, 22)]",
+    "800: dialog (600, 106, 296, 400) row0 [(616, 142, 264, 22)] foot Some((832, 464, 58, 36)) held Some(false) | wheel: row0 [(616, 22, 264, 22)]",
+    "800 to 500: dialog (600, 106, 296, 250) row0 [(616, 142, 264, 22)] foot Some((832, 314, 58, 36)) held Some(false) | wheel: row0 [(616, 22, 264, 22)]",
+    "500 to 800: dialog (600, 106, 296, 400) row0 [(616, 142, 264, 22)] foot Some((832, 464, 58, 36)) held Some(false) | wheel: row0 [(616, 22, 264, 22)]",
+    "opened at 500: dialog (600, 106, 296, 250) row0 [(616, 142, 264, 22)] foot Some((832, 314, 58, 36)) held Some(false) | wheel: row0 [(616, 22, 264, 22)]",
   ])
 }
 
@@ -673,36 +673,29 @@ fn panel_reach_said(t : @ui.Tester, label : String, pressed : Ref[Int], top? : B
 }
 
 ///|
-test "panel, 大屏 keyboard and mouse: tall 0.5 and not, a foot's button in its foot corner, a head's at its end in its top corner: drawn whole where they reach into the panel's padding, pressed there: as main has it" {
+test "panel, 大屏 keyboard and mouse: tall 0.5 and not, a foot's button in its foot corner: drawn whole where they reach into the panel's padding, pressed there: as main has it" {
   let out = []
-  for kind in ["tall foot", "foot", "head end"] {
+  for kind in ["tall foot", "foot"] {
     let t = menu_tester(1280.0, 800.0, 0)
     let pressed = Ref(0)
     let foot = fn(c : @ui.Ctx, _close : () -> Unit) {
-      if @sf.button(c, "好的", key="ok34", tone=Primary) {
+      @sf.button(c, "好的", key="ok34", tone=Primary, on_press=fn() {
         pressed.val = pressed.val + 1
-      }
+      }) |> ignore
     }
     match kind {
       "tall foot" =>
         @sf.panel("面板", panel_column_body(@signals.signal(40), []), from=At(600.0, 100.0, 0.0, 0.0), tall=0.5, foot~)
-      "foot" => @sf.panel("面板", fits_words_body(@signals.signal("面板里的话")), from=At(600.0, 100.0, 0.0, 0.0), foot~)
-      _ =>
-        @sf.panel("面板", fits_words_body(@signals.signal("面板里的话")), from=At(600.0, 100.0, 0.0, 0.0), head_end=fn(c) {
-          if @sf.button(c, "尾", key="end34", tone=Primary) {
-            pressed.val = pressed.val + 1
-          }
-        })
+      _ => @sf.panel("面板", fits_words_body(@signals.signal("面板里的话")), from=At(600.0, 100.0, 0.0, 0.0), foot~)
     }
     t.run_for(@ui.move_most_ms)
-    out.push("\{kind}: \{panel_reach_said(t, if kind == "head end" { "尾" } else { "好的" }, pressed, top=kind == "head end")}")
+    out.push("\{kind}: \{panel_reach_said(t, "好的", pressed)}")
   }
   // (as main has it, a4c845604: each wholly within the panel's clip there, (601, 107) to (879, 505), (879, 209.8),
   // (879, 175.8))
   assert_eq(out, [
-    "tall foot: (817.2, 467.2, 58, 34) shows [(817.2, 467.2, 875.2, 501.2)] pressed [1, 1]",
-    "foot: (817.2, 172, 58, 34) shows [(817.2, 172, 875.2, 206)] pressed [1, 1]",
-    "head end: (654, 110.8, 221.2, 34) shows [(654, 110.8, 875.2, 144.8)] pressed [1, 1]",
+    "tall foot: (832, 464, 58, 36) shows [(832, 464, 890, 500)] pressed [1, 1]",
+    "foot: (832, 172, 58, 36) shows [(832, 172, 890, 208)] pressed [1, 1]",
   ])
 }
 

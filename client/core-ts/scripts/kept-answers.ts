@@ -24,6 +24,7 @@ import { toolCall, toolResult, type ToolPart } from "../src/tool-step.ts";
 import { wordsAnswer } from "../src/words.ts";
 import { tr, type Lang } from "../src/i18n.ts";
 import { Browsing, withDrive, type BrowsingState, type Ordered } from "../src/drive-browse.ts";
+import { driveCount } from "../src/drive.ts";
 
 const target = new URL("../../../apps/mbui/src/sfkept/kept.mbt", import.meta.url);
 // The browsing's steps asked, by their key (the made-up core's hash of the ask): what each is worked out from again.
@@ -68,7 +69,7 @@ const goes = new Set(Object.keys(was["chat.find.go"] ?? {}));
 const relays = new Set(Object.keys(was["chat.relayView"] ?? {}));
 // What a history step is: by what was asked (its name, call, result, whether it failed, whether its words show).
 const tools = new Set(Object.keys(was["history.tool"] ?? {}));
-// What is written, read (ref.at, ref.before, ref.marks, ref.pasted, paste.info, drive.check): by what was asked (the
+// What is written, read (ref.at, ref.before, ref.marks, ref.words, ref.pasted, paste.info, drive.check): by what was asked (the
 // call, the words, the caret, the station it is written on).
 const words = new Set(Object.keys(was.words ?? {}));
 // the prefs a rail is drawn from, as JSON (the app's runs say them in Chinese, as its fixtures are)
@@ -187,6 +188,7 @@ if (check) {
 /// (`topic`: driveBrowse or filesTabs, its params) or a call (`name`, `params`); or the stations a workspace lists, those
 /// with a drive (`withDrive`, as the `stations` topic asked with `drive` gives them).
 interface Step {
+  lang?: Lang;
   state: BrowsingState | null;
   prefs: Record<string, unknown>;
   folders: Record<string, Ordered[] | null>;
@@ -207,6 +209,7 @@ function browseStep(step: Step): unknown {
   let id = step.id;
   const b = new Browsing({
     prefs: () => step.prefs,
+    countText: (folders, files, hiddenOnly) => driveCount(folders, files, hiddenOnly, step.lang === "en" ? "en" : "zh"),
     setPrefs: (patch) => void patches.push(patch),
     entries: (station, root, path) => {
       const key = [station, root, path].join("\n");

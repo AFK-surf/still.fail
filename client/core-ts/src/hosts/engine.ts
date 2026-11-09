@@ -4,13 +4,12 @@
 // beta[, os])`. The engine calls `__stillfail.connect()`, `.receive(client, json)` (`.receiveBytes(client, json,
 // bytes)` for a call with bytes beside it), `.disconnect(client)` for the app, and `.complete(id, json, error, bytes)`
 // with the shell's answers; what the core says goes out through `__native.emit`.
-import type { CoreModule } from "../module.ts";
 import { startBridged, type Native } from "./bridge.ts";
 import type { HermesNative } from "./hermes-globals.ts";
 
-/// Puts `__stillfail` where the engine finds it, its core with `modules`; `os` is what the core says it runs on when the
-/// engine's `start` does not say.
-export function startEngine(modules: readonly CoreModule[], os: string): void {
+/// Puts `__stillfail` where the engine finds it; `os` is what the core says it runs on when the engine's `start` does
+/// not say.
+export function startEngine(os: string): void {
   // deno-lint-ignore no-explicit-any
   const g = globalThis as any;
   const native = g.__native as HermesNative;
@@ -35,7 +34,7 @@ export function startEngine(modules: readonly CoreModule[], os: string): void {
 
   g.__stillfail = {
     start(cloudOrigin: string, beta: boolean, said?: string) {
-      core = startBridged(shell, cloudOrigin, beta, said ?? os, (reason) => native.fatal(reason), { modules });
+      core = startBridged(shell, cloudOrigin, beta, said ?? os, (reason) => native.fatal(reason));
     },
     connect: (): number => core!.connect(),
     receive: (client: number, json: string) => core!.receive(client, json),

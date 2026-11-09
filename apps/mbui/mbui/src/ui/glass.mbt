@@ -9,7 +9,7 @@
 //     on past them
 //   8-11 tint rgba (over the frost) · 16-19, 24-27 clip (rect, corners)
 //   frosted: 12-14 the rim's hairline, its lit top-left, its back (white's
-//            alpha, Bar.kt rim) · 15 opacity · 21-23 a notch in its top
+//  alpha, Bar.kt rim) · 15 opacity · 21-23 a notch in its top
 //            edge (its box's notch_*: the circle's middle below the top,
 //            its radius, its fillets'; scene.mbt)
 //   liquid:  12 the rim's light · 13 the bezel's width · 14 unused
@@ -23,7 +23,7 @@
 //      one capture are one merged shape. Frosted glass made `shares_capture`
 //      takes the last capture whatever is drawn between and wherever it is
 //      (over that glass too, at its blur): it frosts what that glass frosts,
-//      not the glass (Bar.kt: the ball and the action frost the pages, not
+//  not the glass (Bar.kt: the ball and the action frost the pages, not
 //      the bar). A renderer copies what is under every instance of a
 //      capture when it reaches the first.
 // Text in liquid glass that is `adaptive` is drawn as kind 7: a glyph whose
@@ -42,7 +42,6 @@ priv struct GlassPaint {
   mut run_start : Int
   mut run_len : Int
   mut solid : Bool
-  mut checked_at : Int
   mut forced : Int
   mut in_group : Int
   // text in adaptive liquid glass: its centre and half its size (0: none)
@@ -58,7 +57,6 @@ let glass_paint : GlassPaint = {
   run_start: -1,
   run_len: 0,
   solid: false,
-  checked_at: -1000,
   forced: -1,
   in_group: 0,
   ink_x: 0.0,
@@ -73,7 +71,6 @@ fn reset_glass() -> Unit {
   glass_paint.run_start = -1
   glass_paint.run_len = 0
   glass_paint.solid = false
-  glass_paint.checked_at = -1000
   glass_paint.forced = -1
   glass_paint.in_group = 0
   glass_paint.ink_r = 0.0
@@ -88,20 +85,22 @@ pub fn set_glass_solid(solid : Bool?) -> Unit {
     Some(true) => 1
     Some(false) => 0
   }
-  glass_paint.checked_at = -1000
 }
 
 ///|
 /// Whether glass is drawn solid in this frame.
 pub fn Ctx::glass_solid(self : Ctx) -> Bool {
   ignore(self)
-  glass_paint.solid
+  if glass_paint.forced >= 0 {
+    glass_paint.forced == 1
+  } else {
+    glass_solid_said.now()
+  }
 }
 
 ///|
-/// At the start of painting a frame: a new set of captures; what the system
-/// says about transparency, asked now and then (it is a setting, seldom
-/// changed).
+/// At the start of painting a frame: a new set of captures; glass solid or not as the frame has it (Ctx::glass_solid),
+/// followed by the paint.
 fn Ctx::glass_frame(self : Ctx) -> Unit {
   glass_paint.run = 0
   glass_paint.frost_run = 0
@@ -109,13 +108,7 @@ fn Ctx::glass_frame(self : Ctx) -> Unit {
   glass_paint.run_len = 0
   glass_paint.in_group = 0
   glass_paint.ink_r = 0.0
-  if glass_paint.forced >= 0 {
-    glass_paint.solid = glass_paint.forced == 1
-  } else if self.frame_no - glass_paint.checked_at >= 30 ||
-    self.frame_no < glass_paint.checked_at {
-    glass_paint.checked_at = self.frame_no
-    glass_paint.solid = h_reduce_transparency()
-  }
+  glass_paint.solid = self.glass_solid()
 }
 
 ///|

@@ -14,7 +14,19 @@ export class Refused extends Error {}
 /// for a file says `whole: true` to have it all after the answer; a transport that carries no bytes takes that out, and
 /// the file is answered a chunk at a time, as stations from before answer.
 export const BYTES = Symbol("bytes");
-export type Bytes = AsyncIterable<Buffer>;
+/// An optional check made immediately before a transport writes each piece.
+export const CHECK_BYTES = Symbol("check-bytes");
+export type Bytes = AsyncIterable<Buffer> & { [CHECK_BYTES]?: () => void };
+
+/// Bytes whose permission may change while their receiver waits to write them.
+export function guardBytes(bytes: Bytes, check: () => void): Bytes {
+  return {
+    [CHECK_BYTES]: check,
+    async *[Symbol.asyncIterator]() {
+      for await (const piece of bytes) { check(); yield piece; }
+    },
+  };
+}
 
 /// The bytes `json` carries, if any.
 export const bytesOf = (json: Json): Bytes | null => (json !== null && typeof json === "object" && (json[BYTES] as Bytes | undefined)) || null;

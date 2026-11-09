@@ -6,15 +6,48 @@
 let work_line : String = "后台 4 · 清单 2/6：core 的 agentCard 加上后台和清单"
 
 ///|
+test "an agent's card offers its jobs when a compact chat says it has them" {
+  for has_jobs in [true, false] {
+    new_run()
+    let base = fixture("chat-agent")
+    let src : Source = {
+      ..base,
+      topic_read: fn(name, params) {
+        let got = base.topic(name, params).get().snapshot()
+        guard name == "chat" && got.value is Some(Object(chat)) else { return got }
+        let out = chat.copy()
+        out["agents"] = Json::array(items(got.value, "agents").map(fn(a) {
+          match a {
+            Object(agent) => {
+              let shown = agent.copy()
+              shown["jobs"] = Json::array([])
+              shown["hasJobs"] = Json::boolean(has_jobs)
+              Json::object(shown)
+            }
+            _ => a
+          }
+        }))
+        { ..got, value: Some(Json::object(out)) }
+      },
+    }
+    open_fixture_over("chat-agent", src)
+    let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+    t.run_for(@ui.move_most_ms)
+    sheet_rested(t, "sf-present")
+    assert_eq(t.find("后台") is Some(_), has_jobs)
+  }
+}
+
+///|
 /// The made-up core of `mode` whose agents' cards say four tasks in the background and a checklist of six, two done
 /// (views/brief.ts workOf), the tasks begun `ago` before the core's now.
-fn work_source(mode : String, on? : Ref[Bool] = Ref(true), running? : Bool = true) -> Source {
+fn work_source(mode : String, on? : @signals.Signal[Bool] = @signals.signal(true), running? : Bool = true) -> Source {
   let base = fixture(mode)
   {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
-      guard on.val && name == "agentCard" && got.value is Some(Object(card)) else { got }
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
+      guard on.get() && name == "agentCard" && got.value is Some(Object(card)) else { got }
       let now = (base.now)()
       let task = fn(id : String, kind : String, words : String, kind_words : String, ago : Double) -> Json {
         { "id": Json::string(id), "kind": Json::string(kind), "text": Json::string(words), "kindText": Json::string(kind_words), "since": Json::number(now - ago) }
@@ -50,7 +83,7 @@ fn work_source(mode : String, on? : Ref[Bool] = Ref(true), running? : Bool = tru
 test "an agent's card over its name, as over its picture: its background work and its checklist in one line, which leads to its execution history" {
   new_run()
   let src = work_source("chat-agent-card")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   let word = fn(s : String) { t.words().filter(fn(w) { w.0 == s && w.5 > 0.5 }) }
   assert_eq(word(work_line).length(), 0)
@@ -69,6 +102,8 @@ test "an agent's card over its name, as over its picture: its background work an
   assert_eq(line.length(), 1)
   let latest = word("改了 src/ui/list.mbt")
   assert_true(latest.length() == 1 && line[0].2 > latest[0].2, msg="\{(line, latest)}")
+  // the card's words start where the name does, its edge out to the side of them (its lines 14 in, after the dot)
+  assert_eq(latest[0].1, name.1 + 14.0)
   assert_eq(word("审阅 live.ts 的改动").length(), 0)
   assert_eq(word("截图").length(), 0)
   // as tall as one of its latest lines: it never wraps
@@ -83,7 +118,7 @@ test "an agent's card over its name, as over its picture: its background work an
 ///|
 test "the history's details: its turns' line says its work after it, none without it, nothing else moved; pressed, every task in the background and its whole checklist under it; the tabs and the head as they were" {
   new_run()
-  let on = Ref(false)
+  let on = @signals.signal(false)
   let src = work_source("chat-history-side", on~)
   decide_src.val = Some(src)
   open_fixture_over("chat-history-side", src)
@@ -98,7 +133,7 @@ test "the history's details: its turns' line says its work after it, none withou
   let before = t.words().filter(fn(w) { w.5 > 0.5 && w.0 != " · " }).map(fn(w) { (w.0, w.1, w.2) })
   // told: the mark at the turns' line's end, on its line; the line's words whole; nothing else anywhere moved (the
   // details as tall as they were)
-  on.val = true
+  on.set(true)
   t.frame()
   t.frame()
   let mark = forms()

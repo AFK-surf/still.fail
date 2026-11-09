@@ -1,4 +1,4 @@
-// Copies into a station's drive in the core (views/transfers.ts, docs/drive.md "Copying between stations"): the
+// Copies into a station's drive in the core (views/transfers.ts): the
 // person's transfers on every station of the workspace, read as each stream opens and told as they change, in words; a
 // copy from another station asked of the one the files are on first (its grant), then of the one they go to; one
 // within a station asked of it alone; a transfer stopped or taken up again.

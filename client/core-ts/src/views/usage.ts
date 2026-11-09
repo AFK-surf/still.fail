@@ -4,12 +4,14 @@
 // of it of one person, account or model where one is picked (`only`).
 import type { CoreError } from "../error.ts";
 import { current, t, tr, type Lang } from "../i18n.ts";
+import * as format from "../format.ts";
 import { waitNote } from "../looks.ts";
 import * as present from "../present.ts";
 import * as model from "../shapes/model.ts";
 import type { Value } from "../store.ts";
 import { arr as arrU, get as getU, isObject } from "../util.ts";
 import { scale } from "./scale.ts";
+import { isOwnSurface } from "../titles.ts";
 
 export { scale };
 
@@ -29,16 +31,7 @@ const two = (n: number) => String(n).padStart(2, "0");
 
 /// `YYYY-MM-DD` of a moment, on a clock `offset` minutes east of UTC.
 export function localDay(ms: number, offset: number): string {
-  const days = Math.floor((ms + offset * 60_000) / DAY_MS);
-  const z = days + 719_468;
-  const era = Math.floor(z / 146_097);
-  const doe = z - era * 146_097;
-  const yoe = Math.trunc((doe - Math.trunc(doe / 1460) + Math.trunc(doe / 36_524) - Math.trunc(doe / 146_096)) / 365);
-  const doy = doe - (365 * yoe + Math.trunc(yoe / 4) - Math.trunc(yoe / 100));
-  const mp = Math.trunc((5 * doy + 2) / 153);
-  const d = doy - Math.trunc((153 * mp + 2) / 5) + 1;
-  const m = mp < 10 ? mp + 3 : mp - 9;
-  const y = yoe + era * 400 + (m <= 2 ? 1 : 0);
+  const [y, m, d] = format.local(ms, offset);
   return `${String(y).padStart(4, "0")}-${two(m)}-${two(d)}`;
 }
 
@@ -167,7 +160,7 @@ export function priceTables(sources: Source[], first: string, last: string): J[]
         ? t("core-views.usage.prices.missing")
         : typeof get(table, "note") === "string"
           ? table.note
-          : t("core-views.usage.prices.unit");
+          : t("station.usage.priceNote");
     const used = new Set<string>();
     for (const r of arr(get(value, "rows"))) {
       const day = get(r, "day");
@@ -239,6 +232,15 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   const dayList: string[] = [];
   for (let i = days - 1; i >= 0; i--) dayList.push(localDay(now - i * DAY_MS, offset));
   const first = dayList[0];
+  // A station that began a new, incremental statistic can only say what happened from that point. When several
+  // stations are combined, a day is complete only if every one of them has its detail for that day.
+  let detailSince: number | null = null;
+  for (const source of sources) {
+    if (!source.online) continue;
+    const at = get(get(source.value, "ok"), "detailSince");
+    if (typeof at === "number" && Number.isFinite(at)) detailSince = detailSince === null ? at : Math.max(detailSince, at);
+  }
+  const firstDetailDay = detailSince === null ? null : localDay(detailSince, offset);
   // the days before as many, to say each total against
   const before = new Set<string>();
   for (let i = 2 * days - 1; i >= days; i--) before.add(localDay(now - i * DAY_MS, offset));
@@ -250,6 +252,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   const dayOnly = typeof pick.day === "string" && dayList.includes(pick.day) ? pick.day : null;
   const several = sources.filter((s) => s.online).length > 1;
   let reading = false;
+  let detailsPreparing = false;
   const waiting: string[] = [];
   const failing: { station: string; name: string; message: string }[] = [];
   const notes: string[] = [];
@@ -303,6 +306,13 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
       continue;
     }
     const value = s.value.ok as J;
+    if (get(value, "detailsPreparing") === true) {
+      // Its history can already be shown, but no recent totals have been read yet. Do not count an empty row set as
+      // zero, including when another station has already answered.
+      detailsPreparing = true;
+      waiting.push(s.name);
+      continue;
+    }
     reading ||= get(value, "reading") === true;
     const from = get(value, "from");
     if (typeof from !== "number" || localDay(from, offset) > beforeFirst) compared = false;
@@ -313,6 +323,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
     const stationProfiles = get(value, "profiles") ?? null;
     for (const row of arr(get(value, "rows"))) {
       const day = typeof get(row, "day") === "string" ? row.day : "";
+      if (firstDetailDay !== null && day < firstDetailDay) continue;
       const at = byDay.get(day);
       if (!at && !before.has(day)) continue;
       const text = (k: string): string | null => (typeof get(row, k) === "string" ? row[k] : null);
@@ -348,10 +359,11 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
 
       entry(chats, chatKey, () => {
         const known = thread !== null ? get(threads, String(thread)) : undefined;
-        const title = typeof get(known, "title") === "string" ? known.title : t("core-views.usage.deleted_chat");
+        // ("" where its station leaves its name to the client: a chat with no name)
+        const title = typeof get(known, "title") === "string" ? known.title || t("core-views.new_chat") : t("core-views.usage.deleted_chat");
         const archived = get(known, "archived") === true;
         const surface = get(known, "surface");
-        const slack = typeof surface === "string" && !(surface === "ember" || surface === "stillfail");
+        const slack = typeof surface === "string" && !isOwnSurface(surface);
         const sub = [place, slack ? "Slack" : null, archived ? t("core-views.usage.archived") : null].filter((x) => x !== null);
         let page: J = null;
         if (known !== undefined && !slack) page = { station: s.address, thread };
@@ -381,6 +393,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   }
 
   // (recorded only since within the days before: no telling what they spent; a day picked: none to say it against)
+  if (detailSince !== null) since = since === null ? detailSince : Math.max(since, detailSince);
   if (since !== null && localDay(since, offset) > beforeFirst) compared = false;
   if (dayOnly !== null) compared = false;
   // each chat said with who it was for and its model, the most of each, before where it is (who only where several
@@ -401,6 +414,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   // Too many days for each to say its date under its bar: today's and one a week back from the last.
   const many = byDay.size > 10;
   const daily = [...byDay].map(([day, [sum, byList]], i) => {
+    const unavailable = firstDetailDay !== null && day < firstDetailDay;
     const split_ = byList[split];
     const parts = top.map(([k]) => split_.get(k) ?? 0);
     if (rest) {
@@ -417,9 +431,9 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
       tick: !many || day === today || (byDay.size - 1 - i) % 7 === 0 ? name : "",
       shares: parts.map((p) => (sum.cost > 0 ? Math.min(1, Math.max(p > 0 ? 0.01 : 0, p / sum.cost)) : 0)),
       cost: sum.cost,
-      costText: sum.costText(),
+      costText: unavailable ? "—" : sum.costText(),
       calls: sum.calls,
-      callsText: t("core-views.usage.calls", { n: count(sum.calls) }),
+      callsText: unavailable ? "—" : t("core-views.usage.calls", { n: count(sum.calls) }),
       partsText: parts.map(money),
       sharesText: parts.map((p) => percent(p, sum.cost)),
       parts,
@@ -428,12 +442,13 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   const max = [...byDay.values()].reduce((m, [s]) => Math.max(m, s.cost), 0);
   const input = total.input + total.cacheRead + total.cacheWrite;
   const vs = (now_: number, before_: number) => (compared ? change(now_, before_) : { change: null, trend: "" });
+  const unavailableDay = dayOnly !== null && firstDetailDay !== null && dayOnly < firstDetailDay;
   const tiles = [
     { label: t("core-views.usage.tile.cost"), value: total.costText(), sub: t("core-views.usage.tile.cost_sub"), ...(total.unpriced > 0 || earlier.unpriced > 0 ? { change: null, trend: "" } : vs(total.cost, earlier.cost)) },
     { label: t("core-views.usage.tile.calls"), value: t("core-views.usage.tile.calls_value", { n: count(total.calls) }), sub: t("core-views.usage.tile.calls_sub", { n: count(total.calls / days) }), ...vs(total.calls, earlier.calls) },
     { label: t("core-views.usage.tile.input"), value: count(input), sub: t("core-views.usage.tile.input_sub", { percent: percent(total.cacheRead, input) }), ...vs(input, earlier.input + earlier.cacheRead + earlier.cacheWrite) },
     { label: t("core-views.usage.tile.output"), value: count(total.output), sub: t("core-views.usage.tile.output_sub", { n: count(total.calls > 0 ? total.output / total.calls : 0) }), ...vs(total.output, earlier.output) },
-  ];
+  ].map((tile) => unavailableDay ? { ...tile, value: "—", sub: "", change: null, trend: "" } : tile);
   for (const [key, used] of profileModels) {
     const most = [...used.values()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))[0];
     const item = profiles.get(key);
@@ -458,7 +473,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
       return { key: String(get(a, "key") ?? ""), title: String(get(a, "title") ?? ""), quota: a.profile.quota, cost: sum.cost, costText: sum.costText() };
     })
     .sort((a, b) => b.cost - a.cost || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
-  if (reading) notes.unshift(t("core-views.usage.note.reading"));
+  if (reading || detailsPreparing) notes.unshift(t("core-views.usage.note.reading"));
   if (since !== null && localDay(since, offset) > first) {
     const label = dayLabel(localDay(since, offset));
     const [month, day] = label.split("/");
@@ -469,7 +484,8 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   // the one seen alone, by its name in its list (none spent in the days: its key)
   const onlyShown = only !== null ? { list: only.list, key: only.key, title: lists_[only.list].get(only.key)?.title ?? only.key } : null;
   const dayShown = dayOnly !== null ? (dayOnly === today ? t("core-views.usage.today") : dayLabel(dayOnly)) : null;
-  return { days, day: dayOnly, accounts: allowances, split, only: onlyShown, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, total.calls === 0), empty: total.calls === 0, tiles, versus: t("core-views.usage.tile.versus", { n: days }), period: dayShown ?? t("core-views.usage.period", { n: days }), series, daily, many, max, top: scaleTop, ticks, lists, notes, basis: t("core-views.usage.basis") };
+  const empty = detailsPreparing || (total.calls === 0 && !unavailableDay);
+  return { days, day: dayOnly, accounts: allowances, split, only: onlyShown, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, empty), empty, ...(detailsPreparing ? { detailsPreparing: true } : {}), tiles, versus: t("core-views.usage.tile.versus", { n: days }), period: dayShown ?? t("core-views.usage.period", { n: days }), series, daily, many, max, top: scaleTop, ticks, lists, notes, basis: t("core-views.usage.basis") };
 }
 
 export { tr };

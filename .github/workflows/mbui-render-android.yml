@@ -1,5 +1,5 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
-# The renderer's pixels on Android (docs/determinism.md, "Pixel references belong to one kind of machine"): a Tester's
+# The renderer's pixels on Android ("Pixel references belong to one kind of machine"): a Tester's
 # draw list drawn offscreen by the app's GL renderer in an x86_64 emulator (SwiftShader) on GitHub's ubuntu-24.04
 # runner, twice in each of two jobs at once, against its reference (goldens/render/android-controls.png) to the byte,
 # on the runner image, emulator and system image the reference was made on (goldens/render/android.txt). The picture

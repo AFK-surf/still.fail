@@ -1,11 +1,11 @@
 // The operations' contracts (src/ops.ts `PARAMS`) say exactly what each reads of its params: the UIs' bindings are
 // made from them (scripts/operations.ts), so a field the core reads that a binding cannot send, or one it sends that
-// the core ignores, would be a bug either way. (scripts/operations.py checked this against ops.rs's source.)
+// the core ignores, would be a bug either way.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PARAMS, request } from "../src/ops.ts";
 
-const CLOUD = ["workspace", "invitation", "loginSession", "admin"];
+const CLOUD = ["workspace", "invitation", "loginSession", "account", "admin"];
 const SAMPLE: Record<string, unknown> = { string: "x", number: 1, boolean: true, strings: ["x"], json: {} };
 
 /// The params' fields `request` reads, the params as given.
@@ -44,11 +44,24 @@ test("every_operation_reads_what_its_contract_names_and_nothing_else", () => {
   }
 });
 
+test("an_accounts_own_picture_is_put_up_and_taken_away_on_still_fail_cloud_as_that_account", () => {
+  const set = request("account.setPicture", { account: "a", picture: "data:image/jpeg;base64,/9j/" });
+  assert.deepEqual([set?.target, set?.method, set?.path, set?.body], [{ cloud: "a" }, "PUT", "/v1/me/picture", { picture: "data:image/jpeg;base64,/9j/" }]);
+  const remove = request("account.removePicture", { account: "a" });
+  assert.deepEqual([remove?.target, remove?.method, remove?.path, remove?.body], [{ cloud: "a" }, "DELETE", "/v1/me/picture", null]);
+});
+
 test("a_chat_is_kept_by_put_and_let_go_by_delete", () => {
   const keep = (params: Record<string, unknown>) => request("chat.keep", { station: "w/s", thread: 3, ...params });
   assert.deepEqual([keep({})?.method, keep({})?.path], ["PUT", "/threads/3/keep"]);
   assert.equal(keep({ kept: true })?.method, "PUT");
   assert.deepEqual([keep({ kept: false })?.method, keep({ kept: false })?.path], ["DELETE", "/threads/3/keep"]);
+});
+
+test("a Codex repair is an explicit software update request", () => {
+  const update = (params: Record<string, unknown>) => request("software.update", { station: "w/s", id: "codex", ...params });
+  assert.deepEqual(update({ repair: true })?.body, { id: "codex", repair: true });
+  assert.deepEqual(update({})?.body, { id: "codex" });
 });
 
 test("a_slack_apps_form_writes_only_what_differs_from_what_it_started_from", () => {

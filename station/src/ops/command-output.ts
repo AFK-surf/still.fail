@@ -1,4 +1,4 @@
-// What a command's output and the page it opens say (docs/remote-login.md, 网址和端口的解析; a login command's, mostly:
+// What a command's output and the page it opens say (网址和端口的解析; a login command's, mostly:
 // the profiles' sign-in, accounts/login.ts, and a person's remote login, logins/): the pages it names,
 // whether one of them comes back to a loopback port on this machine (and to which path, with which state), a device
 // code to enter, a prompt that asks for Enter. Pure: read from text, nothing run.

@@ -13,7 +13,8 @@ fn tab_tester(calls : Array[Made], platform? : Int = 0) -> @ui.Tester {
   }
   let w : Workspace = { id: "ws1", name: "星火工作室", emoji: "", icon: "", email: "" }
   @ui.Tester::new(
-    fn(c) {
+    @ui.old_views_here,
+    tree=@sf.presented_tree(fn(c) {
       // (the library's words as the app's view says them: the tab's labels are found by them, and were its keys unless
       // another test had drawn the app first, 2026-10-24)
       @sf.set_words(fill)
@@ -22,7 +23,7 @@ fn tab_tester(calls : Array[Made], platform? : Int = 0) -> @ui.Tester {
       c.box(w=Px(480.0), h=Fill(1.0), fn() { @sfdesk.files_tab(c, src, w.id, "s-c1", "ws1/st1") }) |> ignore
       // (what the tab presents, its menus, over it, as the shell draws them)
       @sf.presented(c)
-    },
+    }),
     w=1280.0,
     h=800.0,
     platform~,
@@ -34,18 +35,20 @@ test "a chat's 文件 tab (DriveTab.tsx): at the chat's station's home, the trai
   let calls : Array[Made] = []
   let t = tab_tester(calls)
   t.frame()
-  // the home: its trail (Studio › 主目录), its folders in a list
-  assert_true(t.query(Button, label="Studio") is Some(_))
+  // the home: its trail (Willow › 主目录), its folders in a list
+  assert_true(t.query(Button, label="Willow") is Some(_))
   assert_true(t.find("主目录") is Some(_))
   assert_true(t.find("文档") is Some(_))
-  // the places: each station's home and its pinned folders
-  t.click(Button, label="Studio")
+  // the places: 个人收藏, each station's home, its folders and disks, and its pinned folders
+  t.click(Button, label="Willow")
   t.frame()
-  assert_true(t.find("照片") is Some(_), msg="MBA's pinned folder")
-  assert_true(t.find("离线") is Some(_), msg="MBA away")
-  t.click(Link, label="文档")
+  assert_true(t.find("照片") is Some(_), msg="Maple's pinned folder")
+  assert_true(t.find("离线") is Some(_), msg="Maple away")
+  // (文档 is among 个人收藏 too: the station's own, the later of the two)
+  let (px, py, pw, ph) = t.all(Link, label="文档").last().unwrap().rect
+  t.tap(px + pw / 2.0, py + ph / 2.0)
   t.frame()
-  // 文档 (pinned): its rows; a folder pressed: gone into
+  // 文档 (of the station's places): its rows; a folder pressed: gone into
   assert_true(t.find("长篇小说.txt") is Some(_))
   let (x, y) = t.find("设计稿").unwrap()
   t.tap(x, y)
@@ -100,7 +103,7 @@ test "a chat's 文件 tab, the same on a touch device and on a computer: the pla
     @sfdesk.tab_place_set("ws1", None)
     t.frame()
     // the places: each station a section, its home and its pinned folders a row each
-    assert_true(t.find("照片") is Some(_), msg="MBA's pinned folder: \{platform}")
+    assert_true(t.find("照片") is Some(_), msg="Maple's pinned folder: \{platform}")
     t.tap_text("文档")
     t.frame()
     t.frame()

@@ -1,5 +1,5 @@
 // Who the core's accounts are with: the control plane that signs them in (or is told who they are), lists their
-// workspaces and stations, issues their member credentials and tells what changes (docs/core-ts.md, "Account providers
+// workspaces and stations, issues their member credentials and tells what changes ("Account providers
 // and embedding"). still.fail cloud's is the default and what the core always did (Google PKCE, rotating refresh
 // tokens, /v1/me, /v1/workspaces/:ws/credential, /v1/events, push, the workspace operations); Comma's (comma.ts) is
 // given its session by the app that embeds the core. Everything the rest of the core keeps is in still.fail cloud's

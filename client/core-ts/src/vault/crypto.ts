@@ -1,4 +1,4 @@
-// The vault's formats on the device (docs/vault.md, 实现约定): what is signed and how, the seal a key or secret is sent
+// The vault's formats on the device (实现约定): what is signed and how, the seal a key or secret is sent
 // in, an item's ciphertext, the recovery words. The stations check the same (station/src/vault/crypto.ts, on node's
 // crypto); both are tested on the same values (station/test/fixtures/vault-vectors.json).
 import { chacha20poly1305 } from "@noble/ciphers/chacha.js";
@@ -42,10 +42,11 @@ export type Item = {
 export type Plain = { kind: Kind; name: string; fields: Record<string, string>; domains: string[]; notes: string };
 export type Request = {
   id: string; ws: string; vault: string; item: string; session: string; chat: string; mode: Mode; reason: string;
+  timeout?: Timeout;
   command?: string; hosts?: string[]; box: string; at: number; status: "pending" | "granted" | "denied" | "expired";
   /// The plain library's item's owner, or whom a secret to keep is for (their email).
   owner?: string;
-  /// An agent asking to keep a secret (secret_save, docs/vault.md agent 存入): the item as it is to be listed, written
+  /// An agent asking to keep a secret (secret_save agent 存入): the item as it is to be listed, written
   /// under `item` into `vault` (empty: one of the person's own, made when they have none).
   save?: Save;
   /// Its fields, sealed by the station that asked to each of the person's devices set up (`saveContext`).
@@ -57,7 +58,8 @@ export type Request = {
 };
 /// `typed`: its secret is what the person types in on its card (nothing sealed: the app writes what was typed).
 export type Save = { kind: Kind; name: string; modes: Mode[]; hosts: string[]; env?: string; username?: string; public_key?: string; filename?: string; typed?: true };
-export type Grant = { v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number; secret: string; at: number; sig: Sig };
+export type Timeout = { kind: "idle" | "fixed"; seconds: number };
+export type Grant = { v: 1; ws: string; request: string; vault: string; item: string; mode: Mode; hosts: string[]; scope: Scope; exp: number; timeout?: Timeout; secret: string; at: number; sig: Sig };
 export type Deny = { v: 1; ws: string; request: string; at: number; sig: Sig };
 
 export const TAG = {
@@ -118,9 +120,22 @@ export function signedBytes(o: Record<string, unknown>, tag: string): Uint8Array
 /// on this device for those bytes (verified.ts).
 export function signedOk(o: { sig: Sig } & Record<string, unknown>, tag: string): boolean {
   try {
-    const sig = o.sig;
+    return sigOver(o.sig, signedBytes(o, tag));
+  } catch {
+    return false;
+  }
+}
+
+/// The vault's rules' cryptography (rules/, MoonBit: views/vault.ts checks by them): whether `sig` is its key's over a
+/// record whose canonical text without it is `text`, under `tag`.
+export const rulesCrypto = {
+  recordSigValid: (sig: Sig, tag: string, text: string): boolean => sigOver(sig, concat(utf8(`${tag}\0`), sha256(utf8(text)))),
+};
+
+/// Whether `sig` is its key's over `bytes`.
+function sigOver(sig: Sig, bytes: Uint8Array): boolean {
+  try {
     if (sig === null || typeof sig !== "object" || typeof sig.key !== "string" || typeof sig.sig !== "string") return false;
-    const bytes = signedBytes(o, tag);
     if (sig.alg === "Ed25519" && /^ed25519:[0-9a-f]{64}$/.test(sig.key) && /^[0-9a-f]{128}$/.test(sig.sig)) return ed25519Ok(unhex(sig.sig), bytes, unhex(sig.key.slice(8)));
     if (sig.alg === "ES256" && sig.key.startsWith("p256:")) {
       const point = fromB64url(sig.key.slice(5)), s = fromB64url(sig.sig);

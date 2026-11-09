@@ -5,7 +5,7 @@
 fn touch_wide_tester() -> @ui.Tester raise {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=860.0, h=950.0, platform=2)
   let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\nuntil 发消息\n")
   assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
@@ -16,7 +16,7 @@ fn touch_wide_tester() -> @ui.Tester raise {
 test "touch wide: the desktop's frame, a chat's row held opens its menu (no right click there), the chat not opened" {
   let t = touch_wide_tester()
   assert_true(@sfdesk.is_wide(t.ctx()))
-  let log = t.drive("hold 700 首页的列表改成按天分组\nuntil 复制会话链接\nuntil 归档\n")
+  let log = t.drive("hold 700 首页的列表改成按天分组\nuntil 分享…\nuntil 归档\n")
   assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
   assert_true(
     match app.nav.top() {
@@ -38,7 +38,7 @@ test "touch wide: a row tapped is opened and left as it rests (a lifted finger h
 ///|
 test "touch wide: a row held shows its time while its menu is open, its 归档 in the menu, not on the row" {
   let t = touch_wide_tester()
-  let log = t.drive("hold 700 首页的列表改成按天分组\nuntil 复制会话链接\n")
+  let log = t.drive("hold 700 首页的列表改成按天分组\nuntil 分享…\n")
   assert_true(log.contains("EXIT 0"), msg=log.join("\n"))
   assert_true(t.find("8 分钟前") is Some(_))
   assert_true(t.query(Button, label="归档「首页的列表改成按天分组」") is None)
@@ -55,7 +55,7 @@ test "touch wide: a row held shows its time while its menu is open, its 归档 i
 fn touch_narrow_tester() -> @ui.Tester raise {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=600.0, h=900.0, platform=2)
   // (the tape's sidebar in use at first, a strip of the chat beside it)
   let log = t.drive("system {\"size_class\":{\"width\":\"regular\",\"height\":\"regular\"}}\nuntil 新建对话\n")

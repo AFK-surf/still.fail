@@ -1,4 +1,4 @@
-// The machine's state (host.rs `info`), read in a reader and kept here: given again within ten seconds, and the CPU
+// The machine's state, read in a reader and kept here: given again within ten seconds, and the CPU
 // ticks last seen kept across reads (readers come and go). GET /host, the events' `host` samples and what other stations
 // are told of this one's load (station_list, jobs/load.ts) share it.
 import type { Lang } from "../ops/i18n.ts";
@@ -6,6 +6,8 @@ import type { Seen, Ticks } from "../read/host.ts";
 import type { Readers } from "../read/pool.ts";
 import { wall } from "../ops/fibers.ts";
 import { platform } from "../platform/index.ts";
+import { cpuShare } from "../platform/cpu-share.ts";
+import { Gpus } from "../jobs/gpu.ts";
 
 /// How often the CPUs' ticks are noted for their recent average, and over how long that is.
 export const CPU_EVERY_MS = 15_000;
@@ -42,13 +44,16 @@ export class CpuWindow {
 
 export class Host {
   private readers: Readers;
+  readonly gpus: Pick<Gpus, "read">;
   private cached: { at: number; info: any } | null = null;
   private seen: Seen = null;
   private reading: Promise<any> | null = null;
+  private sampling: Promise<any> | null = null;
   private cpu = new CpuWindow();
 
-  constructor(readers: Readers) {
+  constructor(readers: Readers, gpus: Pick<Gpus, "read"> = new Gpus()) {
     this.readers = readers;
+    this.gpus = gpus;
   }
 
   /// Notes the CPUs' ticks now and every CPU_EVERY_MS after, until the returned function is called.
@@ -63,15 +68,51 @@ export class Host {
     return this.cpu.busy(wall.now(), platform.host.cpuTicks());
   }
 
-  /// At most ten seconds old; one read at a time however many ask.
+  /// The machine sample and its GPUs, one at a time however many ask. GPU failures do not prevent the other
+  /// measurements from being shown.
   sample(lang: Lang = "zh"): Promise<any> {
+    this.sampling ??= Promise.all([
+      this.info(lang),
+      process.env.STILLFAIL_TEST_HOST === "1"
+        ? Promise.resolve([{ name: "Test GPU", cores: 4, busy: 0.25 }])
+        : this.gpus.read().catch(() => null),
+    ])
+      .then(([info, gpus]) => ({ ...info, gpus }))
+      .finally(() => (this.sampling = null));
+    return this.sampling;
+  }
+
+  /// At most ten seconds old; one read at a time however many ask.
+  private info(lang: Lang): Promise<any> {
     if (this.cached !== null && wall.now() - this.cached.at < 10_000) return Promise.resolve(this.cached.info);
     // Ticks the last read saw over a minute ago would make it wait a moment for them to move: those followed are newer.
     const last = this.seen !== null && wall.now() - this.seen.at < 60_000 ? this.seen : (this.cpu.latest() ?? this.seen);
     this.reading ??= this.readers
       .read("host", { seen: last }, lang)
-      .then((text) => {
-        const { info, seen } = JSON.parse(text);
+      .then(async (text) => {
+        const parsed: { info: any; seen: Seen; needsTicks: boolean } = JSON.parse(text);
+        const { info, needsTicks } = parsed;
+        let { seen } = parsed;
+        if (needsTicks && seen !== null) {
+          // macOS can leave ticks unchanged for 500 ms or more. Wait outside the reader, then ask for ticks alone;
+          // the reader can serve other requests between samples. As before, give up after two seconds.
+          const first = seen.ticks;
+          const start = wall.now();
+          await wall.sleep(500);
+          for (;;) {
+            const ticks: Ticks | null = JSON.parse(await this.readers.read("hostTicks", {}, lang));
+            if (ticks === null) { seen = last; break; }
+            const busy = cpuShare(first, ticks);
+            if (busy !== null) {
+              info.cpuBusy = Math.round(busy * 100) / 100;
+              seen = { at: wall.now(), ticks };
+              break;
+            }
+            if (wall.now() - start >= 2_000) { seen = last; break; }
+            await wall.sleep(100);
+          }
+          info.checkedAt = wall.now();
+        }
         this.seen = seen;
         this.cached = { at: info.checkedAt, info };
         return info;

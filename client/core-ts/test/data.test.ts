@@ -1,4 +1,4 @@
-// The core's data (docs/core-db.md): a SQLite database per signed-in account (db/account.ts, db/schema.ts), reached
+// The core's data: a SQLite database per signed-in account (db/account.ts, db/schema.ts), reached
 // through Data (data.ts). What it promises: real tables, written row by row and only where something changed, by one
 // writer committing a burst at once and saying what it changed; lists loaded only when read, kept current from then
 // on; versions and migrations; what a newer core wrote only read; no room left said, and what was done here kept; what
@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Data, dbName, type RowChange } from "../src/data.ts";
 import { CHUNK, importFormer } from "../src/db/import.ts";
-import { placesFor } from "../src/db/account.ts";
+import { placesFor, sameTurns } from "../src/db/account.ts";
 import { VERSION } from "../src/db/schema.ts";
 import { type Sql, type SqlRow, type SqlValue, SqlError } from "../src/host.ts";
 import { NodeSql } from "../src/hosts/node-sql.ts";
@@ -399,6 +399,96 @@ test("a_session_event_says_whether_its_detail_is_to_be_read_again", async () => 
   runner.shutdown();
 });
 
+test("refreshing_sessions_does_not_read_unlisted_sessions_or_their_details", async () => {
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  class SessionsRead extends Counted {
+    rows: SqlRow[] | null = null;
+    override all(sql: string, params?: readonly SqlValue[]): SqlRow[] {
+      const rows = super.all(sql, params);
+      if (sql.startsWith("SELECT key, ord, summary, listed")) this.rows = rows;
+      return rows;
+    }
+  }
+  const sql = new SessionsRead(new NodeSql(new DatabaseSync(":memory:"), true));
+  host.openDbHook = () => sql;
+  const data = new Data(host, runner, { owner: () => "s1" });
+  await run(data.open(["s1"]));
+  data.set(sessions("w/a"), [{ key: "live", turns: 0 }]);
+  data.set({ topic: "session", station: "w/a", key: "live" }, { turns: [], jobs: [], note: "history".repeat(500) });
+  await run(data.written);
+  const detail = JSON.stringify({ turns: [], jobs: [], note: "history".repeat(500) });
+  sql.exec("BEGIN");
+  for (let i = 0; i < 1000; i++) {
+    sql.run("INSERT INTO session (station, key, listed, ord, summary, detail) VALUES (?, ?, 0, 0, ?, ?)", ["w/a", `old${i}`, JSON.stringify({ key: `old${i}` }), detail]);
+  }
+  sql.exec("COMMIT");
+  data.set(sessions("w/a"), [{ key: "live", turns: 0 }, { key: "old17", turns: 0 }]);
+  assert.equal(sql.rows?.length, 1, "only the already listed sessions need comparing");
+  assert.ok(sql.rows?.every((row) => row.every((value) => typeof value !== "string" || value.length < 1000)), "the details are not read to compare the list");
+  await run(data.written);
+  assert.equal((data.get({ topic: "session", station: "w/a", key: "old17" }) as J).note, "history".repeat(500), "a previously unlisted session keeps its detail when listed again");
+  assert.equal(sql.all("SELECT count(*) FROM session WHERE station = ? AND listed = 0", ["w/a"])[0]?.[0], 999, "unrelated unlisted sessions remain held");
+  runner.shutdown();
+});
+
+test("finding_sessions_to_refresh_does_not_read_earlier_turns", async () => {
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  class Observed extends Counted {
+    observing = false;
+    values: SqlRow[] = [];
+    override all(sql: string, params?: readonly SqlValue[]): SqlRow[] {
+      const rows = super.all(sql, params);
+      if (this.observing) this.values.push(...rows);
+      return rows;
+    }
+  }
+  const sql = new Observed(new NodeSql(new DatabaseSync(":memory:"), true));
+  host.openDbHook = () => sql;
+  const data = new Data(host, runner, { owner: () => "s1" });
+  await run(data.open(["s1"]));
+  const last = { kind: "chat", outcome: "done", startedAt: 7, endedAt: 8 };
+  const marker = "the old turn that should stay on disk ".repeat(1000);
+  data.set(sessions("w/a"), [
+    { key: "current", turns: 2, lastTurn: last },
+    { key: "changed", turns: 2, lastTurn: last },
+    { key: "missing", turns: 0, lastTurn: null },
+    { key: "empty", turns: 0, lastTurn: null },
+  ]);
+  data.set({ topic: "session", station: "w/a", key: "current" }, { turns: [{ kind: "old", detail: marker }, last], threads: [] });
+  data.set({ topic: "session", station: "w/a", key: "changed" }, { turns: [last], threads: [] });
+  data.set({ topic: "session", station: "w/a", key: "empty" }, { turns: "not a list", threads: [] });
+  await run(data.written);
+  sql.observing = true;
+  const need = data.sessionsToRead("w/a");
+  sql.observing = false;
+  assert.deepEqual(need, [["current", false], ["changed", true], ["missing", true], ["empty", false]]);
+  assert.ok(sql.values.every((row) => row.every((value) => typeof value !== "string" || !value.includes(marker))), "earlier turns are not read to decide which sessions need refreshing");
+  runner.shutdown();
+});
+
+test("the_sessions_to_refresh_match_their_held_turns_including_unusual_values", async () => {
+  const { data, open, db, runner } = fresh();
+  await open();
+  const sql = db();
+  const variants: unknown[] = [[], null, "not a list", [null], [true], ["text"], [{ kind: "chat" }], [{ kind: "chat", outcome: "done" }, { kind: "end", detail: { a: 1 } }]];
+  const last: unknown[] = [null, { kind: "chat" }, { kind: "end", detail: { a: 1 } }, "text"];
+  const expected: [string, boolean][] = [];
+  let n = 0;
+  for (const turns of variants) {
+    for (const end of last) {
+      const key = `s${n++}`;
+      const summary = { key, turns: Array.isArray(turns) ? turns.length : 0, lastTurn: end };
+      sql.run("INSERT INTO session (station, key, listed, ord, summary, detail) VALUES (?, ?, 1, ?, ?, ?)", ["w/a", key, n, JSON.stringify(summary), JSON.stringify({ turns })]);
+      expected.push([key, !sameTurns(turns, summary)]);
+    }
+  }
+  assert.deepEqual(data.sessionsToRead("w/a"), expected);
+  assert.deepEqual(data.sessionsToRead("w/a", ["s2", "s17", "s31"]), [expected[2], expected[17], expected[31]]);
+  runner.shutdown();
+});
+
 test("a_sessions_detail_says_its_summary_as_the_station_last_said_it_in_its_list_too", async () => {
   const { data, open, again, runner } = fresh();
   await open();
@@ -691,6 +781,146 @@ test("what_was_said_is_found_by_its_words_as_its_entries_change", async () => {
   runner.shutdown();
 });
 
+test("refreshing_open_jobs_does_not_read_the_stations_closed_jobs", async () => {
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  class JobsRead extends Counted {
+    jobIds: string[] = [];
+    override all(sql: string, params?: readonly SqlValue[]): SqlRow[] {
+      const rows = super.all(sql, params);
+      if (sql.startsWith("SELECT id, ord, json, chat, open FROM job WHERE station")) this.jobIds.push(...rows.map((r) => String(r[0])));
+      return rows;
+    }
+  }
+  const sql = new JobsRead(new NodeSql(new DatabaseSync(":memory:"), true));
+  host.openDbHook = () => sql;
+  const data = new Data(host, runner, { owner: () => "s1" });
+  await run(data.open(["s1"]));
+  sql.exec("BEGIN");
+  for (let i = 0; i < 1000; i++) {
+    sql.run("INSERT INTO job (station, id, open, ord, json) VALUES (?, ?, 0, 0, ?)", ["w/a", `closed${i}`, JSON.stringify({ id: `closed${i}` })]);
+  }
+  sql.run("INSERT INTO job (station, id, open, ord, json) VALUES (?, ?, 1, 0, ?)", ["w/a", "live", JSON.stringify({ id: "live", state: "running" })]);
+  sql.exec("COMMIT");
+  data.set({ topic: "jobs", station: "w/a" }, [{ id: "live", state: "running" }, { id: "closed5", state: "running" }, { id: "new", state: "running" }]);
+  assert.equal(sql.jobIds.length, 1, "only the already open jobs need to be compared");
+  assert.deepEqual(sql.jobIds, ["live"], "only the already open jobs need to be compared");
+  await run(data.written);
+  assert.deepEqual(sql.all("SELECT id FROM job WHERE station = ? AND open = 1 ORDER BY id", ["w/a"]).map((r) => r[0]), ["closed5", "live", "new"]);
+  assert.equal(sql.all("SELECT count(*) FROM job WHERE station = ? AND open = 0", ["w/a"])[0][0], 999, "unrelated closed jobs remain available");
+  runner.shutdown();
+});
+
+test("transcripts_for_cleanup_are_ordered_by_their_latest_use_across_stations", async () => {
+  const { data, open, db, runner } = fresh();
+  await open();
+  const account = data.db("s1")!;
+  const sql = db();
+  assert.deepEqual(account.transcriptsByUse(50), []);
+  for (const [station, session] of [["w/b", "last"], ["w/a", "first"], ["w/c", "unknown"], ["w/a", "late"], ["w/b", "first"], ["w/a", "unknown"]] as [string, string][]) {
+    for (const i of [2, 5, 8]) sql.run("INSERT INTO transcript (station, session, i, json) VALUES (?, ?, ?, ?)", [station, session, i, "{}"]);
+  }
+  for (const [station, id, opened] of [["w/a", "first", 10], ["w/b", "first", 3], ["w/a", "late", 15]] as [string, string, number][]) {
+    sql.run("INSERT INTO log_use (kind, station, id, opened) VALUES ('transcript', ?, ?, ?)", [station, id, opened]);
+  }
+  for (const [station, key, active] of [["w/a", "first", 2], ["w/b", "first", 10], ["w/a", "late", 20], ["w/b", "last", 30]] as [string, string, number][]) {
+    sql.run("INSERT INTO session (station, key, last_active) VALUES (?, ?, ?)", [station, key, active]);
+  }
+  const ordered = [
+    { station: "w/a", id: "unknown" }, { station: "w/c", id: "unknown" },
+    { station: "w/a", id: "first" }, { station: "w/b", id: "first" },
+    { station: "w/a", id: "late" }, { station: "w/b", id: "last" },
+  ];
+  assert.deepEqual(account.transcriptsByUse(0), []);
+  assert.deepEqual(account.transcriptsByUse(3), ordered.slice(0, 3));
+  assert.deepEqual(account.transcriptsByUse(50), ordered);
+  sql.run("DELETE FROM transcript WHERE station = ? AND session = ?", ["w/a", "unknown"]);
+  assert.deepEqual(account.transcriptsByUse(50), ordered.slice(1));
+  runner.shutdown();
+});
+
+test("opening_a_chat_during_history_cleanup_keeps_its_history", async () => {
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  class OnEvict extends Counted {
+    onDelete: (id: string) => void = () => {};
+    override run(sql: string, params?: readonly SqlValue[]): number {
+      if (sql.startsWith("DELETE FROM transcript WHERE")) this.onDelete(String(params?.[1]));
+      return super.run(sql, params);
+    }
+  }
+  const sql = new OnEvict(new NodeSql(new DatabaseSync(":memory:"), true));
+  host.openDbHook = () => sql;
+  const data = new Data(host, runner, { owner: () => "s1", kept: 256 * 1024 });
+  await run(data.open(["s1"]));
+  const text = "字".repeat(10_000);
+  for (const id of ["k1", "k2", "k3"]) data.putItems("transcript", "w/a", id, [[0, { text }]]);
+  data.putItems("entry", "w/a", "1", Array.from({ length: 20 }, (_, i) => [i + 1, { n: i + 1, kind: "message", text, at: i }] as [number, J]));
+  const events: string[] = [];
+  let opened!: () => void;
+  let removedLast!: () => void;
+  const didOpen = new Promise<void>((resolve) => { opened = resolve; });
+  const didRemoveLast = new Promise<void>((resolve) => { removedLast = resolve; });
+  sql.onDelete = (id) => {
+    events.push(id);
+    if (id === "k3") removedLast();
+    if (events.length === 1) setImmediate(() => {
+      events.push("opened");
+      data.opened("transcript", "w/a", "k2", true);
+      opened();
+    });
+  };
+  await run(data.written);
+  await Promise.all([didOpen, didRemoveLast]);
+  assert.ok(events.includes("opened"), "the chat was opened while cleanup was in progress");
+  assert.ok(!events.slice(0, events.indexOf("opened")).includes("k2"), "another chat can open before the next history is removed");
+  assert.deepEqual(data.logRange("transcript", "w/a", "k2", 0, 0).get(0), { text }, "cleanup keeps the history that was opened");
+  runner.shutdown();
+});
+
+test("signing_out_during_history_cleanup_stops_using_the_closed_database", async () => {
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  const defects: unknown[] = [];
+  runner.onDefect = (error) => defects.push(error);
+  class ClosingDb extends Counted {
+    closed = false;
+    afterClose = 0;
+    deleted: string[] = [];
+    signOut: () => void = () => {};
+    override all(sql: string, params?: readonly SqlValue[]): SqlRow[] {
+      if (this.closed) this.afterClose++;
+      return super.all(sql, params);
+    }
+    override run(sql: string, params?: readonly SqlValue[]): number {
+      if (this.closed) this.afterClose++;
+      if (sql.startsWith("DELETE FROM transcript WHERE")) {
+        this.deleted.push(String(params?.[1]));
+        if (this.deleted.length === 1) setImmediate(this.signOut);
+      }
+      return super.run(sql, params);
+    }
+    override close(): void { this.closed = true; }
+  }
+  const sql = new ClosingDb(new NodeSql(new DatabaseSync(":memory:"), true));
+  host.openDbHook = () => sql;
+  const data = new Data(host, runner, { owner: () => "s1", kept: 256 * 1024 });
+  await run(data.open(["s1"]));
+  const text = "字".repeat(10_000);
+  for (const id of ["k1", "k2", "k3"]) data.putItems("transcript", "w/a", id, [[0, { text }]]);
+  data.putItems("entry", "w/a", "1", Array.from({ length: 20 }, (_, i) => [i + 1, { n: i + 1, kind: "message", text, at: i }] as [number, J]));
+  const signedOut = new Promise<void>((resolve, reject) => {
+    sql.signOut = () => { void run(data.accounts([])).then(resolve, reject); };
+  });
+  await signedOut;
+  await flush();
+  assert.deepEqual(sql.deleted, ["k1"], "cleanup yields before removing the next transcript");
+  assert.equal(sql.closed, true);
+  assert.equal(sql.afterClose, 0, "cleanup does not query the signed-out account");
+  assert.deepEqual(defects, []);
+  runner.shutdown();
+});
+
 test("past_its_room_agents_transcripts_least_recently_used_go_and_a_chats_messages_stay", async () => {
   const host = new FakeHost();
   const runner = new Runner(host.time.clock);
@@ -814,20 +1044,22 @@ test("model_selection_survives_old_events_and_finishes_without_reverting", async
   const { data, open, again, runner } = fresh();
   await open();
   const topic = overview("w/s");
-  data.set(topic, { profiles: [{ id: "p", models: ["a"] }] });
-  assert.ok(data.beginModels("w/s", "p", ["a", "b"]));
+  // Named "a" and "b", and runs "c" its check found: "b" taken off.
+  data.set(topic, { profiles: [{ id: "p", models: ["a", "b", "c"], named: ["a", "b"] }] });
+  assert.ok(data.beginModels("w/s", "p", ["a"]));
   assert.ok(!data.beginModels("w/s", "p", []));
   data.update(topic, (o) => ({ ...(o as J), name: "event while saving" }));
-  assert.deepEqual((data.get(topic) as J).profiles[0].models, ["a"]);
-  assert.deepEqual((data.shown(topic) as J).profiles[0].models, ["a", "b"]);
+  assert.deepEqual((data.get(topic) as J).profiles[0].models, ["a", "b", "c"]);
+  assert.deepEqual((data.shown(topic) as J).profiles[0].models, ["a", "c"]);
+  assert.deepEqual((data.shown(topic) as J).profiles[0].named, ["a"]);
   assert.deepEqual((data.shown(topic) as J).profiles[0].modelsSaving, ["b"]);
   await run(data.written);
   const restart = await again();
-  assert.deepEqual((restart.shown(topic) as J).profiles[0].models, ["a"]);
-  data.set(topic, { profiles: [{ id: "p", models: ["a", "b"] }] });
+  assert.deepEqual((restart.shown(topic) as J).profiles[0].models, ["a", "b", "c"]);
+  data.set(topic, { profiles: [{ id: "p", models: ["a", "c"], named: ["a"] }] });
   assert.deepEqual((data.shown(topic) as J).profiles[0].modelsSaving, ["b"]);
   data.endModels("w/s", "p");
-  assert.deepEqual((data.shown(topic) as J).profiles[0].models, ["a", "b"]);
+  assert.deepEqual((data.shown(topic) as J).profiles[0].models, ["a", "c"]);
   assert.equal((data.shown(topic) as J).profiles[0].modelsSaving, undefined);
   runner.shutdown();
 });

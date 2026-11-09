@@ -1,4 +1,4 @@
-// 外观 › 字体 (settings/fonts.mbt; Fonts.kt) and the faces the app is then set in (faces.mbt), over the settings'
+// 外观 › 字体 (settings/fonts.mbt) and the faces the app is then set in (faces.mbt), over the settings'
 // fixture and its made-up faces (fonts_fixture.mbt).
 
 ///|
@@ -72,15 +72,15 @@ test "a face being fetched: how far said on its row, the app's own standing in u
 fn kept_here(base : Source) -> Source {
   {
     ..base,
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       if name == "prefs" {
         match field(t.value, "faces") {
           Some(Object(faces)) =>
             for place in ["ui", "text", "code"] {
               for f in items(faces.get(place), "files") {
                 match f {
-                  Object(m) => m["path"] = ("/data/" + number(Some(f), "weight").to_int().to_string()).to_json()
+                  Object(m) => m["path"] = ToJson::to_json("/data/" + number(Some(f), "weight").to_int().to_string())
                   _ => ()
                 }
               }
@@ -135,7 +135,7 @@ test "a face's file the host cannot read where it is: had through the core inste
   }
   // (the app from the frame its host is set so)
   let on = Ref(false)
-  let t = @ui.Tester::new(fn(c) { if on.val { view(c, src) } }, w=390.0, h=844.0, platform=2)
+  let t = @ui.Tester::new(fn(c) { if on.val { view(c, src) } }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.set_unreadable_font("/data/500")
   on.val = true
   t.draw()
@@ -314,8 +314,9 @@ test "a face pointed at tried in the chat above them: the chat held at its talle
     t.draw()
     assert_eq(t.find("Inter"), Some(moved))
   }
-  // along the faces (a narrower one tried, the gaps between rows): still held
-  let (x2, y2) = t.find("霞鹜文楷").unwrap()
+  // along the faces (a narrower one tried, the gaps between rows): still held (Inter's: the last rows, 霞鹜文楷's, below
+  // the window's foot once the chat is held taller)
+  let (x2, y2) = moved
   t.move(x2 + 4.0, y2 + 4.0)
   t.draw()
   t.draw()

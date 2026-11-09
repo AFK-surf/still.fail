@@ -35,6 +35,7 @@ export const SlackLive = Layer.effectDiscard(
         hub: () => agents.hub,
         overview: (viewer, lang) => agents.overview(viewer, lang),
         place: () => agents.place(),
+        heldBy: agents.heldBy,
         overviewChanged: () => events.overviewChanged(),
       }),
     );

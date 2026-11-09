@@ -14,6 +14,4 @@ pub fn overlays(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   attention_panel(c, src, w)
   // a chat made public (publish.mbt)
   @sfpages.publish_layer(c, src)
-  // a file open over the window (sfbase viewer_frame.mbt)
-  file_viewer(c, src)
 }

@@ -6,6 +6,7 @@
 import { args, epochMs, toolName } from "./activity.ts";
 import { parsePrompt } from "./history.ts";
 import * as format from "./format.ts";
+import { isOwnChannel } from "./titles.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -39,7 +40,7 @@ export function sending(tool: string, call: string): { to: string; text: string 
     const text = typeof a.text === "string" ? a.text : null;
     const split = to !== null ? format.splitThread(to) : null;
     if (to === null || text === null || text.trim() === "" || split === null) return null;
-    if (split[0] === "EMBER" || split[0] === "STILLFAIL") return null;
+    if (isOwnChannel(split[0])) return null;
     return { to, text };
   }
   if (name === "slack_api" && (a.method === "chat.postMessage" || a.method === "chat.scheduleMessage")) {

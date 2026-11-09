@@ -1,5 +1,5 @@
-// A station's page in its three parts (station_page.mbt, resources.mbt; the web's StationPage.tsx Body) alone over the
-// settings' fixture: Studio (ws1/st1), online. At a phone's width with a finger, in a box tall enough for all of a
+// A station's page in its three parts (station_node.mbt, resources.mbt) alone over the
+// settings' fixture: Willow (ws1/st1), online. At a phone's width with a finger, in a box tall enough for all of a
 // part.
 
 ///|
@@ -9,6 +9,204 @@ fn station_tester(address : String, part? : String = "overview", w? : Double = 3
   let t = setting_tester(Station(address), w, platform~, h=2400.0, ready=fn() { @settings.station_parts[address] = part })
   t.run_for(@ui.move_most_ms)
   t
+}
+
+///|
+/// A part of a station's page made once (`make`) alone in a window `w` wide and `h` high, pointed at as `platform`
+/// says, laid out as a page that wide is, the presenters and the old views it hosts round it (setting_tester's).
+fn station_part_tester(make : (@view.View) -> Unit, w~ : Double, h~ : Double, platform~ : Int) -> @ui.Tester {
+  let t = @ui.Tester::new(fn(_) {  }, w~, h~, platform~)
+  @ui.set_view_app(
+    fn(root) {
+      @ui.set_tree_theme(@sf.ui_theme_now)
+      root.box(fn(p) {
+        p.grow(Is(1.0)) |> ignore
+        @sf.look_lent(p, @sf.look_for(w))
+        make(p)
+      })
+      |> ignore
+    },
+    around=fn(c) {
+      @sf.begin(c) |> ignore
+      c.with_theme(@sf.ui_theme(), fn() {
+        @ui.old_views_here(c)
+        @sf.presented(c)
+      })
+    },
+  )
+  t.draw()
+  t
+}
+
+///|
+test "who is on a screen: each view's device and mode; a member lets one go or all, an agent's and a reader's not" {
+  for (w, platform) in page_cases {
+    @sfbase.reset()
+    reset()
+    @settings.reset()
+    @sffixture.fixture_reset()
+    @sf.presenters_reset()
+    @sf.set_words(@sfbase.fill)
+    let calls : Array[(String, Json)] = []
+    let base = @sffixture.fixture("settings")
+    let src : Source = {
+      ..base,
+      call: fn(name, params, done) {
+        if name.has_prefix("screen.") { calls.push((name, params)) }
+        done(Ok(Json::null()))
+      },
+    }
+    let view = fn(id : String, name : String, control : Bool, more : Map[String, Json]) -> Json {
+      let m : Map[String, Json] = {
+        "id": Json::string(id),
+        "name": Json::string(name),
+        "device": Json::string("still.fail 桌面版 · 书房"),
+        "ago": Json::string("13 小时前"),
+        "control": Json::boolean(control),
+      }
+      more.each(fn(k, v) { m[k] = v })
+      Json::object(m)
+    }
+    let may : Map[String, Json] = { "may": Json::boolean(true) }
+    let screen : Json = {
+      "id": Json::string("desktop"),
+      "views": Json::array([
+        view("v1", "Willow", true, may),
+        view("v2", "Bob", false, may),
+        view("v3", "Agent「部署」", true, { "agent": Json::boolean(true) }),
+      ]),
+    }
+    let core = @sfbase.settings_core(src, rig_workspace)
+    let t = station_part_tester(fn(p) {
+      screen_views_node(p, core, fn() { @settings.here_of(core, rig_workspace.id, rig_workspace.name) }, "ws1/st1", fn() {
+        Some(screen)
+      })
+    }, w~, h=500.0, platform~)
+    assert_true(t.find("still.fail 桌面版 · 书房 · 控制中 · 13 小时前") is Some(_), msg="\{w} platform \{platform}")
+    assert_true(t.find("still.fail 桌面版 · 书房 · 只看 · 13 小时前") is Some(_))
+    // 转为只看 for the one that drives; 断开 for both people's; the agent's has neither
+    let said = fn(word : String) { t.words().filter(fn(w) { w.0 == word }).length() }
+    assert_eq(said("转为只看"), 1)
+    assert_eq(said("断开"), 2)
+    t.click(Button, label="转为只看")
+    t.click(Button, label="全部断开")
+    t.draw()
+    assert_eq(calls.map(fn(c) { c.0 }), ["screen.watchOnly", "screen.endViews"])
+    assert_eq(text(Some(calls[0].1), "view"), "v1")
+    assert_eq(text(Some(calls[0].1), "screen"), "desktop")
+    assert_eq(text(Some(calls[0].1), "station"), "ws1/st1")
+  }
+}
+
+///|
+test "a failed software update shows its reason without a hover" {
+  for (w, platform) in page_cases {
+    @sfbase.reset()
+    reset()
+    @settings.reset()
+    @sffixture.fixture_reset()
+    @sf.presenters_reset()
+    @sf.set_words(@sfbase.fill)
+    let src = @sffixture.fixture("settings")
+    let reason = "文件可能已加密或损坏，请检查文件加密软件"
+    let update : Json = {
+      "id": "station", "name": "Station", "installed": true, "updatable": true,
+      "state": "failed", "shownText": "0.1.6814", "failedText": "更新失败", "message": Json::string(reason),
+    }
+    let core = @sfbase.settings_core(src, rig_workspace)
+    let t = station_part_tester(fn(p) {
+      software_row_node(p, core, "ws1/st1", fn() { Some(update) }, true, fn() { false }, fn() { false }, @sf.TipLayer::new(fn() { None }))
+    }, w~, h=300.0, platform~)
+    assert_true(t.find(reason) is Some(_), msg="\{w} platform \{platform}")
+    assert_true(t.query(Button, label="重试") is Some(_))
+  }
+}
+
+///|
+test "a station's update said beside its name keeps clear of the name" {
+  for (w, platform) in page_cases {
+    @sfbase.reset()
+    reset()
+    @settings.reset()
+    @sffixture.fixture_reset()
+    @sf.presenters_reset()
+    @sf.set_words(@sfbase.fill)
+    let src = @sffixture.fixture("settings")
+    let update : Json = {
+      "id": "station", "name": "Station", "installed": true, "updatable": true, "state": "idle",
+      "shownText": "0.1.8100", "done": "已更新到 0.1.8100，agent 未中断", "channel": "beta", "auto": true,
+    }
+    let core = @sfbase.settings_core(src, rig_workspace)
+    let t = station_part_tester(fn(p) {
+      software_row_node(p, core, "ws1/st1", fn() { Some(update) }, true, fn() { false }, fn() { true }, @sf.TipLayer::new(fn() { None }))
+    }, w~, h=300.0, platform~)
+    // (the phone in the report had its words bigger: the system's setting, 1.3)
+    for scale in [1.0, 1.3] {
+      t.set_font_scale(scale)
+      t.draw()
+      let at = "\{w} platform \{platform} words at \{scale}"
+      let words = t.words()
+      let name = words.search_by(fn(x) { x.0 == "Station" })
+      let said = words.search_by(fn(x) { x.0.contains("已更新到 0.1.8100") })
+      guard name is Some(n) && said is Some(d) else { fail("not drawn: \{at}") }
+      let (_, nx, ny, nw, nh, _) = words[n]
+      let (_, dx, dy, dw, dh, _) = words[d]
+      let apart = dx >= nx + nw || nx >= dx + dw || dy >= ny + nh || ny >= dy + dh
+      assert_true(apart, msg="\{at}: Station at (\{nx}, \{ny}, \{nw}, \{nh}), what it says at (\{dx}, \{dy}, \{dw}, \{dh})")
+      assert_eq(t.squeeze_faults(), [], msg=at)
+    }
+  }
+}
+
+///|
+test "an incomplete Codex offers its manager an explicit npm repair" {
+  for (w, platform) in page_cases {
+    @sfbase.reset()
+    reset()
+    @settings.reset()
+    @sffixture.fixture_reset()
+    @sf.presenters_reset()
+    @sf.set_words(@sfbase.fill)
+    let calls : Array[Json] = []
+    let base = @sffixture.fixture("settings")
+    let src : Source = {
+      ..base,
+      call: fn(name, params, done) {
+        if name == "software.update" { calls.push(params) }
+        done(Ok(Json::null()))
+      },
+    }
+    let codex : Json = {
+      "id": Json::string("codex"),
+      "name": Json::string("Codex"),
+      "installed": Json::boolean(true),
+      "repairable": Json::boolean(true),
+      "state": Json::string("idle"),
+      "shownText": Json::string("0.166.0"),
+      "note": Json::string("Codex 缺少执行组件"),
+    }
+    let core = @sfbase.settings_core(src, rig_workspace)
+    let t = station_part_tester(fn(p) {
+      software_row_node(p, core, "ws1/st1", fn() { Some(codex) }, true, fn() { false }, fn() { false }, @sf.TipLayer::new(fn() { None }))
+    }, w~, h=300.0, platform~)
+    assert_true(t.query(Button, label="用 npm 修复") is Some(_), msg="\{w} platform \{platform}")
+    t.click(Button, label="用 npm 修复")
+    t.frame()
+    assert_eq(calls.length(), 1)
+    assert_eq(text(Some(calls[0]), "id"), "codex")
+    assert_true(flag(Some(calls[0]), "repair"))
+  }
+}
+
+///|
+test "a station's workspace rows do not repeat an unmarked workspace's initial" {
+  for (w, platform) in page_cases {
+    let t = station_tester("ws1/st1", part="settings", w~, platform~)
+    let words = t.words()
+    let at = "\{w} platform \{platform}"
+    assert_true(words.iter().any(fn(w) { w.0 == "个人" }), msg=at)
+    assert_true(words.filter(fn(w) { w.0 == "个" }).is_empty(), msg=at)
+  }
 }
 
 ///|
@@ -32,6 +230,124 @@ test "a station's page in three parts: 概览 what runs on it, 设置 what it is
 }
 
 ///|
+test "an away station's 设置 shows none of what only it can change, a line saying so" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-away", h=2400.0)
+    t.run_for(@ui.move_most_ms)
+    let at = "\{w} platform \{platform}"
+    assert_true(t.find("station 离线，连接后可查看和修改设置") is Some(_), msg=at)
+    assert_true(t.find("Agent 环境变量") is None, msg="its variables: \{at}")
+    assert_true(t.find("高级网络设置") is None, msg="its network: \{at}")
+    assert_true(t.find("屏幕录制") is None, msg="its grants: \{at}")
+    // a login under way goes on there only; the logins done stay
+    assert_true(t.find("在浏览器里登录") is None, msg="its login under way: \{at}")
+    assert_true(t.find("gh") is Some(_), msg="its logins done: \{at}")
+    // the workspaces it is in, nothing there to change
+    assert_true(t.words().iter().any(fn(w) { w.0 == "个人" }), msg="its workspaces: \{at}")
+  }
+}
+
+///|
+test "a station's profiles are grouped by account kind and open their own page" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Station("ws1/st1"), w, platform~, h=2400.0)
+    t.run_for(@ui.move_most_ms)
+    scrolled_to(t, w, "Claude 订阅")
+    assert_true(t.find("Claude 订阅") is Some(_), msg="the Claude group at width \{w}")
+    assert_true(t.find("ChatGPT 订阅") is Some(_), msg="the ChatGPT group at width \{w}")
+    assert_true(t.find("1 个需查看") is Some(_), msg="the affected kind says it needs attention")
+    assert_true(t.find("Claude 主账号") is None, msg="not laid out on the overview")
+    t.tap_text("Claude 订阅")
+    presented_in(t)
+    assert_true(@sf.presenting(), msg="the account kind opens")
+    assert_true(t.find("Claude 主账号") is Some(_), msg="the kind's account is listed")
+    assert_true(t.find("3 个模型") is Some(_), msg="the account's models remain visible")
+    assert_true(t.find("62%") is Some(_), msg="the account's five-hour allowance remains visible")
+    assert_true(t.find("19%") is Some(_), msg="the account's weekly allowance remains visible")
+    assert_true(t.find("ChatGPT 团队") is None, msg="other kinds are not in this list")
+    t.tap_text("Claude 主账号")
+    t.draw()
+    assert_true(app.nav.top() is Setting(Profile("ws1/st1", "cc")), msg="the selected profile opens")
+  }
+}
+
+///|
+test "a station with many profiles can search within one kind" {
+  let many = fn(base : Source) -> Source {
+    {
+      ..base,
+      topic_read: fn(name, params) {
+        let read = base.topic(name, params).get().snapshot()
+        match (name, read.value) {
+          ("stations", Some(Array(stations))) => {
+            let shaped = stations.map(fn(station) {
+              match station {
+                Object(s) if text(Some(station), "station") == "ws1/st1" => {
+                  let copy = s.copy()
+                  copy["profileStates"] = { "extra-0": { "text": "额度查询失败", "tone": "amber" } }
+                  let ids : Array[Json] = []
+                  for i in 0..<12 {
+                    ids.push(Json::string("extra-" + i.to_string()))
+                  }
+                  copy["profileGroups"] = [{ "group": "claude", "title": "Claude 订阅", "profiles": Json::array(ids), "attention": 1 }]
+                  match field(Some(station), "overview") {
+                    Some(Object(overview)) => {
+                      let ov = overview.copy()
+                      let profiles = items(Some(Json::object(ov)), "profiles")
+                      match profiles[0] {
+                        Object(profile) => {
+                          let all : Array[Json] = []
+                          for i in 0..<12 {
+                            let p = profile.copy()
+                            p["id"] = Json::string("extra-" + i.to_string())
+                            p["name"] = Json::string("账号 " + i.to_string())
+                            all.push(Json::object(p))
+                          }
+                          ov["profiles"] = Json::array(all)
+                        }
+                        _ => ()
+                      }
+                      copy["overview"] = Json::object(ov)
+                    }
+                    _ => ()
+                  }
+                  Json::object(copy)
+                }
+                _ => station
+              }
+            })
+            { ..read, value: Some(Json::array(shaped)) }
+          }
+          _ => read
+        }
+      },
+    }
+  }
+  let t = setting_tester(Station("ws1/st1"), 390.0, platform=2, over=many)
+  t.run_for(@ui.move_most_ms)
+  scrolled_to(t, 390.0, "Claude 订阅")
+  assert_true(t.find("12 个") is Some(_), msg="all twelve are counted")
+  t.tap_text("Claude 订阅")
+  presented_in(t)
+  assert_true(t.find("账号 0") is Some(_), msg="the list starts with the first")
+  assert_true(t.find("额度查询失败") is Some(_), msg="a quota problem is visible even after a successful account check")
+  for _ in 0..<8 {
+    t.wheel(195.0, 450.0, 400.0)
+    t.draw()
+  }
+  assert_true(t.find("账号 11") is Some(_), msg="the list scrolls to the last account")
+  assert_true(t.find("搜索") is Some(_), msg="the search stays visible while the list scrolls")
+  t.tap_text("搜索")
+  t.type_text("账号 11")
+  t.draw()
+  assert_true(t.find("账号 11") is Some(_), msg="search finds the last account")
+  assert_true(t.find("62%") is Some(_), msg="search keeps the account's allowance")
+  t.tap_text("账号 11")
+  t.draw()
+  assert_true(app.nav.top() is Setting(Profile("ws1/st1", "extra-11")), msg="the last profile opens")
+}
+
+///|
 test "a station's page, its parts chosen by its choice: 设置 pressed shows it" {
   let t = station_tester("ws1/st1")
   match t.find_last("设置") {
@@ -41,6 +357,36 @@ test "a station's page, its parts chosen by its choice: 设置 pressed shows it"
   t.draw()
   assert_eq(@settings.station_parts.get("ws1/st1"), Some("settings"))
   assert_true(t.find("Agent 环境变量") is Some(_))
+}
+
+///|
+test "the station's GPUs are each visible on narrow and wide pages with either input" {
+  for (w, platform) in page_cases {
+    let t = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-gpu", h=2400.0)
+    t.run_for(@ui.move_most_ms)
+    assert_eq(t.squeeze_faults(), [])
+    assert_true(t.find("GPU 1 空闲率") is Some(_))
+    assert_true(t.find("显存剩 20/24G") is Some(_))
+    assert_true(t.find("GPU 2 空闲率") is Some(_))
+    assert_true(t.find("显存剩 23/24G") is Some(_))
+    assert_true(t.words().filter(fn(word) { word.0 == "NVIDIA GeForce RTX 4090" }).length() == 2)
+  }
+}
+
+///|
+test "more than three GPUs continue on another row" {
+  for (w, platform) in [(390.0, 2), (1280.0, 0)] {
+    let t = setting_tester(Station("ws1/st1"), w, platform~, mode="settings-station-gpu-many", h=2400.0)
+    t.run_for(@ui.move_most_ms)
+    assert_eq(t.squeeze_faults(), [])
+    let cpu = drawn(t, "CPU 空闲率")
+    let first = drawn(t, "GPU 1 空闲率")
+    let fourth = drawn(t, "GPU 4 空闲率")
+    if w > 1000.0 {
+      assert_true((first.1 - cpu.1).abs() < 0.5, msg="GPU and the other resources share the first wide row")
+    }
+    assert_true(fourth.1 > first.1 + first.3, msg="the fourth GPU starts a new row")
+  }
 }
 
 ///|
@@ -129,8 +475,8 @@ test "an older station's cache switch does not imply that it has a cost threshol
   let over = fn(base : Source) -> Source {
     {
       ..base,
-      topic: fn(name, params) {
-        let v = (base.topic)(name, params)
+      topic_read: fn(name, params) {
+        let v = base.topic(name, params).get().snapshot()
         match v.value {
           Some(x) => { ..v, value: Some(old(x)) }
           None => v
@@ -158,8 +504,8 @@ test "a workspace member can see the cache threshold but cannot change it" {
     over=fn(s) {
       {
         ..s,
-        topic: fn(name, params) {
-          let v = (s.topic)(name, params)
+        topic_read: fn(name, params) {
+          let v = s.topic(name, params).get().snapshot()
           match (name, v.value) {
             ("workspace", Some(Object(o))) => {
               let p = o.copy()
@@ -323,7 +669,7 @@ test "a login's link opens its station's page at 设置, where its card is" {
   })
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("更多") is None, msg="not the overview")
-  assert_true(t.find("在 Studio 上登录 codex") is Some(_))
+  assert_true(t.find("在 Willow 上登录 codex") is Some(_))
 }
 
 ///|
@@ -335,13 +681,13 @@ test "a station's page opened again begins at its overview" {
 }
 
 ///|
-/// MBA (ws1/st2, offline in the fixture) as this machine's station, as still.fail's desktop app left it on a Mac
+/// Maple (ws1/st2, offline in the fixture) as this machine's station, as still.fail's desktop app left it on a Mac
 /// (`local`: the host's words for it), its page open with a mouse at `w`.
 fn this_mba_tester(local : String, w? : Double = 390.0) -> @ui.Tester {
+  // (this machine's station as the system says it from the start: the host's)
   let t = setting_tester(Station("ws1/st2"), w, platform=0, h=2400.0, ready=fn() {
     @sfbase.machine_here.val = Some("ws1/st2")
-  })
-  t.set_local_station(local)
+  }, host=fn(h) { h.set_local_station(local) })
   t.run_for(@ui.move_most_ms)
   t
 }
@@ -350,7 +696,7 @@ fn this_mba_tester(local : String, w? : Double = 390.0) -> @ui.Tester {
 test "this machine's station not running here: its page says it stopped and offers 启动, not 重试; pressed, made a service" {
   for w in [390.0, 1100.0] {
     let t = this_mba_tester(
-      #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"MBA","removed":false}}
+      #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"Maple","removed":false}}
       ,
       w~,
     )
@@ -368,14 +714,14 @@ test "this machine's station not running here: its page says it stopped and offe
 ///|
 test "this machine's station being installed: its page says so, its 启动 busy; one running here, or another machine's, tried again" {
   let t = this_mba_tester(
-    #|{"data":"~/.stillfail","runner":"none","doing":"update","percent":42,"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"MBA","removed":false}}
+    #|{"data":"~/.stillfail","runner":"none","doing":"update","percent":42,"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"Maple","removed":false}}
     ,
   )
   assert_true(t.find("正在更新") is Some(_))
   assert_true(t.query(Button, label="重试") is None)
   // running here (the app not reaching it yet): tried again, as any
   let t = this_mba_tester(
-    #|{"data":"~/.stillfail","runner":"service","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"MBA","removed":false}}
+    #|{"data":"~/.stillfail","runner":"service","service":{"kind":"launchd","name":"fail.still.station"},"workspace":{"id":"ws1","station":"st2","name":"星火工作室","stationName":"Maple","removed":false}}
     ,
   )
   assert_true(t.query(Button, label="重试") is Some(_))
@@ -383,11 +729,12 @@ test "this machine's station being installed: its page says so, its 启动 busy;
   // another machine's: tried again
   let t = setting_tester(Station("ws1/st2"), 390.0, platform=0, h=2400.0, ready=fn() {
     @sfbase.machine_here.val = Some("ws1/st1")
+  }, host=fn(h) {
+    h.set_local_station(
+      #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st1","name":"星火工作室","stationName":"Willow","removed":false}}
+      ,
+    )
   })
-  t.set_local_station(
-    #|{"data":"~/.stillfail","runner":"none","workspace":{"id":"ws1","station":"st1","name":"星火工作室","stationName":"Studio","removed":false}}
-    ,
-  )
   t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="重试") is Some(_))
   assert_true(t.query(Button, label="启动") is None)
@@ -488,16 +835,40 @@ test "a station's 进程 on a computer's wide page: its totals four in a row, ea
 }
 
 ///|
-/// A station's variables (station_page.mbt station_env_editor, in its page's 设置): the field shows the core's draft as
+test "a station's 进程 with keyboard and mouse: a chat's process's stop is reached by Tab, said by what it ends, seen as it has the focus" {
+  let t = station_tester("ws1/st1", part="processes", w=1280.0, platform=0)
+  assert_eq(t.squeeze_faults(), [])
+  // (no row takes the focus: the stop is a stop of its own, found by Tab from the page's top)
+  let mut found = false
+  for _ in 0..<80 {
+    t.tab()
+    t.draw()
+    match t.focused() {
+      Some(n) if n.label == "结束 node" => {
+        found = true
+        break
+      }
+      _ => ()
+    }
+  }
+  assert_true(found, msg="Tab reaches 结束 node")
+  assert_eq(t.focused().map(fn(n) { n.role is Button }), Some(true))
+  assert_true(t.reachable("icon:stop").length() == 1, msg="its stop shows as it has the focus")
+  // the agent's own process, not to be ended, has none
+  assert_true(t.all(Button, label="结束 claude").is_empty())
+}
+
+///|
+/// A station's variables (station_node.mbt station_env_editor_node, in its page's 设置): the field shows the core's draft as
 /// it changes while nothing typed here waits on it.
 test "the variables' field follows the core's text that comes after the page opened" {
-  let env : Ref[(String, Int)] = Ref(("", 1))
+  let env : @signals.Signal[(String, Int)] = @signals.signal(("", 1))
   let over = fn(base : Source) -> Source {
     {
       ..base,
-      topic: fn(name, params) {
+      topic_read: fn(name, params) {
         if name == "agentEnvForm" {
-          let (words, v) = env.val
+          let (words, v) = env.get()
           {
             value: Some(
               Json::object({
@@ -512,7 +883,7 @@ test "the variables' field follows the core's text that comes after the page ope
             version: v,
           }
         } else {
-          (base.topic)(name, params)
+          base.topic(name, params).get().snapshot()
         }
       },
     }
@@ -523,12 +894,21 @@ test "the variables' field follows the core's text that comes after the page ope
   })
   t.run_for(@ui.move_most_ms)
   // opened on the text before a save the core tells a moment later
-  assert_false(t.dump().contains("\"E2E_A=1\""))
-  env.val = ("E2E_A=1", 2)
+  let in_field = fn() { t.semantics().iter().any(fn(n) { n.role is TextField && n.value == "E2E_A=1" }) }
+  assert_false(in_field())
+  env.set(("E2E_A=1", 2))
   t.draw()
   t.draw()
-  // (the field's words: the drawn tree's editor holds them)
-  assert_true(t.dump().contains("\"E2E_A=1\""), msg="the core's text, come after the page opened, in the field")
+  // (the field's words: what its editor holds, as it is read out)
+  assert_true(in_field(), msg="the core's text, come after the page opened, in the field")
+}
+
+///|
+/// All of what field `f` holds typed over with `words`, as a person would (picked whole, then typed: an edit of theirs,
+/// not the app's Field::set).
+fn type_over(t : @ui.Tester, f : @ui.Field, words : String) -> Unit {
+  f.pick(0, f.text().length())
+  t.type_text(words)
 }
 
 ///|
@@ -539,25 +919,25 @@ test "two station variables editors share the draft without sharing editor state
   @sffixture.fixture_reset()
   @sf.presenters_reset()
   @sf.set_words(@sfbase.fill)
-  let env : Ref[(String, Int, Bool)] = Ref(("E2E_A=1", 1, false))
-  let saving = Ref(false)
+  let env : @signals.Signal[(String, Int, Bool)] = @signals.signal(("E2E_A=1", 1, false))
+  let saving = @signals.signal(false)
   let edits : Array[Json] = []
   let base = @sffixture.fixture("settings")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "agentEnvForm" {
-        let (words, version, dirty) = env.val
-        { value: Some({ "text": Json::string(words), "lines": [], "errors": 0, "dirty": Json::boolean(dirty), "pending": Json::boolean(saving.val) }), error: None, version }
+        let (words, version, dirty) = env.get()
+        { value: Some({ "text": Json::string(words), "lines": [], "errors": 0, "dirty": Json::boolean(dirty), "pending": Json::boolean(saving.get()) }), error: None, version }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
       if name == "agentEnv.form.edit" {
         edits.push(params)
         if flag(field(Some(params), "input"), "reset") {
-          env.val = ("E2E_A=1", 5, false)
+          env.set(("E2E_A=1", 5, false))
         }
         done(Ok(Json::null()))
       } else {
@@ -565,27 +945,17 @@ test "two station variables editors share the draft without sharing editor state
       }
     },
   }
-  let first : Ref[@ui.Field?] = Ref(None)
-  let second : Ref[@ui.Field?] = Ref(None)
-  let t = @ui.Tester::new(fn(c) {
-    @sf.begin(c) |> ignore
-    c.with_theme(@sf.ui_theme(), fn() {
-      let core = @sfbase.settings_core(src, rig_workspace)
-      c.scope(1, fn() {
-        first.val = Some(c.editor_field("env/ws1/st1"))
-        station_env_editor(c, core, "ws1/st1")
-      })
-      c.scope(2, fn() {
-        second.val = Some(c.editor_field("env/ws1/st1"))
-        station_env_editor(c, core, "ws1/st1")
-      })
-    })
+  // (two pages' editors of one station's draft: each its own field)
+  let a = @ui.Field::new()
+  let b = @ui.Field::new()
+  let core = @sfbase.settings_core(src, rig_workspace)
+  let t = station_part_tester(fn(p) {
+    p.box(fn(k) { station_env_editor_node(k, core, "ws1/st1", a) }) |> ignore
+    p.box(fn(k) { station_env_editor_node(k, core, "ws1/st1", b) }) |> ignore
   }, w=390.0, h=900.0, platform=1)
   t.check_looks(false)
-  t.keep_parts(true)
+  t.set_rows_on_pixels(true)
   t.draw()
-  let a = first.val.unwrap()
-  let b = second.val.unwrap()
   assert_eq(a.text(), "E2E_A=1")
   assert_eq(b.text(), "E2E_A=1")
   a.pick(0, 0)
@@ -602,45 +972,45 @@ test "two station variables editors share the draft without sharing editor state
   t.draw()
   assert_eq(a.text(), "E2E_A=12")
   assert_eq(b.text(), "E2E_A=12", msg="the second editor follows an edit before the core answers")
-  a.set("E2E_A=1")
+  type_over(t, a, "E2E_A=1")
   t.draw()
   t.draw()
   assert_eq(b.text(), "E2E_A=1", msg="reverting to the old core value is an edit too")
-  a.set("E2E_A=123")
+  type_over(t, a, "E2E_A=123")
   t.draw()
   t.draw()
   assert_eq(b.text(), "E2E_A=123")
   assert_eq(edits.length(), 3)
 
-  env.val = ("E2E_A=12", 2, true)
+  env.set(("E2E_A=12", 2, true))
   t.draw()
   t.draw()
   assert_eq(a.text(), "E2E_A=123", msg="an older core answer does not replace a newer edit")
   assert_eq(b.text(), "E2E_A=123")
   assert_eq(edits.length(), 3, msg="an older answer does not send another edit")
-  env.val = ("E2E_A=123", 3, true)
+  env.set(("E2E_A=123", 3, true))
   t.draw()
   t.draw()
-  env.val = ("E2E_A=4", 4, true)
+  env.set(("E2E_A=4", 4, true))
   t.draw()
   t.draw()
   assert_eq(a.text(), "E2E_A=4", msg="later core changes reach both editors")
   assert_eq(b.text(), "E2E_A=4")
-  saving.val = true
+  saving.set(true)
   t.draw()
-  a.set("E2E_A=45")
+  type_over(t, a, "E2E_A=45")
   t.draw()
   t.draw()
   assert_eq(b.text(), "E2E_A=45")
   assert_eq(edits.length(), 3, msg="an edit made while saving is not sent until saving finishes")
-  saving.val = false
+  saving.set(false)
   t.draw()
   t.draw()
   assert_eq(edits.length(), 4, msg="the queued edit is sent after saving")
   t.tap_text(@sf.t("common.cancel"))
   t.draw()
   t.draw()
-  assert_eq(a.text(), "E2E_A=1", msg="cancel restores the core's draft on both pages")
+  assert_eq(a.text(), "E2E_A=1", msg="cancel restores the core's draft on both pages (\{edits.length()} edits: \{edits.map(fn(e) { e.stringify() }).join(" ")})")
   assert_eq(b.text(), "E2E_A=1")
   assert_eq(edits.length(), 5, msg="cancel sends one reset and does not resend the old edit")
 }
@@ -653,7 +1023,7 @@ test "on this machine's own page its display says so and opens nothing; its brow
   t.run_for(@ui.move_most_ms)
   assert_true(t.find("这是本机的屏幕") is Some(_), msg=t.words().map(fn(w) { w.0 }).join("|"))
   assert_true(t.find("3024 × 1964 · 无人在看") is None)
-  t.tap_text("Studio 的屏幕")
+  t.tap_text("Willow 的屏幕")
   t.draw()
   assert_true(!(@sfbase.app.nav.top() is Screen(_)))
   t.tap_text("发布清单 - 文档")

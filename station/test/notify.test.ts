@@ -1,4 +1,4 @@
-// What the chats' people hear about (admin/notify.rs): a turn told by how it ended, a person's message to the others,
+// What the chats' people hear about: a turn told by how it ended, a person's message to the others,
 // the station's ⚠️ to everyone; gathered and handed on once.
 import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
@@ -27,6 +27,7 @@ test("a turn is told by how it ended", () => {
   assert.equal(turnNotice(turn("final", "completed"), old, "k", "file", true), null);
   assert.equal(turnNotice(turn(null, "failed"), old, "k", "file", true), null);
   assert.equal(wentWrong("⚠️ 无法启动 agent：没有 claude"), "无法启动 agent：没有 claude");
+  assert.equal(wentWrong("⚠️ 模型服务出错，回复即可重试\n\n```\nAPI Error: 500\n```"), "模型服务出错，回复即可重试");
   assert.equal(wentWrong("已停止当前任务"), null);
   assert.equal(turnNotice(turn("final", "completed"), said("person", "a@b.c", 150), "k", "file", true), null);
   assert.equal(turnNotice(turn(null, "completed"), mine, "k", "file", true), null);
@@ -36,14 +37,16 @@ test("a turn is told by how it ended", () => {
   assert.equal(turnNotice(turn("block", "completed", "要 Stripe 的测试 key"), old, "k", "file", false), null);
 });
 
-test("a blocked turn's ask is told once, while it waits", () => {
+// A turn's end is kept in today's words (need_help, from the agent's chat_state) or, from before, in the station's own
+// (block): asked as `block` alone, today's ask was told again at every turn that ended on it.
+for (const blocked of ["need_help", "block"]) test(`a blocked turn's ask is told once, while it waits (${blocked})`, () => {
   const dir = mkdtempSync(join(tmpdir(), "notify-"));
   // A clock moving on a millisecond a step: each of the turns and messages below after the one before.
   let now = 1000;
   const store = Store.open(join(dir, "stillfail.db"), join(dir, "archive"), { currentTimeMillisUnsafe: () => now++ } as never);
   const reader = openStore(dir);
   store.insertSession({ key: "k", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "t", createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
-  const chat = store.openThread("ember", "EMBER", "1.1", null, "ada@x.com");
+  const chat = store.openThread("ember", "CHAT", "1.1", null, "ada@x.com");
   store.joinThread(chat.id, "k", "ember");
   // `about`: the message (by its ts) the turn says it is about; without, the one it said last.
   const kinds = (id: string, about?: string) => {
@@ -55,26 +58,69 @@ test("a blocked turn's ask is told once, while it waits", () => {
   // It asks, and the turn ends blocked on that: new.
   store.startTurn("t1", "k", "input");
   store.insertMessage(newMessage(chat.id, "1.2", "agent", "k", "要不要改 Surge？"));
-  store.endTurn("t1", "completed", null, "block", null);
+  store.endTurn("t1", "completed", null, blocked, null);
   assert.equal(kinds("t1")?.fresh, true);
   // Woken by a job, it says how things go and ends blocked on the same ask: told already.
   store.startTurn("t2", "k", "notice");
   store.endTurn("t2", "completed", null, "waiting", 60);
   store.startTurn("t3", "k", "notice");
   store.insertMessage(newMessage(chat.id, "1.3", "agent", "k", "CI 过了"));
-  store.endTurn("t3", "completed", null, "block", null);
+  store.endTurn("t3", "completed", null, blocked, null);
   assert.equal(kinds("t3", "1.2")?.fresh, false);
   // Without saying what it is about, what it said last is what it asks: new.
   assert.equal(kinds("t3")?.fresh, true);
   // Once a person has written, nothing waits for them, until it asks again.
   store.insertMessage(newMessage(chat.id, "1.4", "person", "ada@x.com", "先做别的"));
   store.startTurn("t4", "k", "input");
-  store.endTurn("t4", "completed", null, "block", null);
+  store.endTurn("t4", "completed", null, blocked, null);
   assert.equal(kinds("t4"), null);
   store.startTurn("t5", "k", "input");
   store.insertMessage(newMessage(chat.id, "1.5", "agent", "k", "那 Surge 呢？"));
-  store.endTurn("t5", "completed", null, "block", null);
+  store.endTurn("t5", "completed", null, blocked, null);
   assert.equal(kinds("t5")?.fresh, true);
+});
+
+test("a notice reads its chat's name and whom to tell, nothing counted over the chat or the session", () => {
+  // As lists have the chat, a notice counted all its messages (its unread, for no one) and all its session's turns:
+  // many pages of a chat of many messages on a station short of memory (2026-11-02), 3 to 16 s a notice, every other telling
+  // waiting behind it.
+  const dir = mkdtempSync(join(tmpdir(), "notify-"));
+  let now = 1000;
+  const store = Store.open(join(dir, "stillfail.db"), join(dir, "archive"), { currentTimeMillisUnsafe: () => now++ } as never);
+  const reader = openStore(dir);
+  const asked: string[] = [];
+  const db = reader.db;
+  (reader as any).db = new Proxy(db, {
+    get: (target, property) => {
+      if (property === "prepare") return (sql: string) => (asked.push(sql), target.prepare(sql));
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  store.insertSession({ key: "k", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "t", createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
+  const chat = store.openThread("ember", "CHAT", "1.1", null, "ada@x.com");
+  store.joinThread(chat.id, "k", "ember");
+  for (let i = 0; i < 20; i++) {
+    store.insertMessage(newMessage(chat.id, `1.${2 * i + 2}`, "person", "bob@x.com", "再看看"));
+    store.startTurn(`t${i}`, "k", "input");
+    store.insertMessage(newMessage(chat.id, `1.${2 * i + 3}`, "agent", "k", "要不要改？"));
+    store.endTurn(`t${i}`, "completed", null, "block", null);
+  }
+  const told = ops.turnNotices!(reader, { key: "k", since: 0, ended: null, lang: "zh" }) as any;
+  assert.deepEqual(told.notices.map((n: any) => [n.kind, n.to.join(","), n.text]), [["block", "ada@x.com,bob@x.com", "要不要改？"]]);
+  const entries = store.entriesBefore(chat.id, null, 1);
+  const heard = ops.saidNotices!(reader, { thread: chat.id, entries: entries.map((e) => ({ ...e, kind: "message", authorKind: "person", author: "bob@x.com", text: "在吗" })), since: 0, lang: "zh" }) as any[];
+  assert.deepEqual(heard.map((n) => [n.kind, n.to.join(","), n.text]), [["message", "ada@x.com", "在吗"]]);
+  assert.equal(told.notices[0].title, heard[0].title);
+  store.setChatMuted("ADA@x.com", chat.id, true);
+  const muted = ops.turnNotices!(reader, { key: "k", since: 0, ended: null, lang: "zh" }) as any;
+  assert.deepEqual(muted.notices.map((n: any) => n.to), [["bob@x.com"]], "the other participant still receives a push");
+  assert.deepEqual(ops.saidNotices!(reader, { thread: chat.id, entries: entries.map((e) => ({ ...e, kind: "message", authorKind: "person", author: "bob@x.com", text: "在吗" })), since: 0, lang: "zh" }), []);
+  store.setChatMuted("ada@x.com", chat.id, false);
+  const unmuted = ops.turnNotices!(reader, { key: "k", since: 0, ended: null, lang: "zh" }) as any;
+  assert.deepEqual(unmuted.notices[0].to, ["ada@x.com", "bob@x.com"]);
+  assert.deepEqual(asked.filter((sql) => /\bCOUNT\(/i.test(sql)), []);
+  assert.ok(!asked.some((sql) => sql.includes("m.n = t.person_n")), "own-chat titles do not read the first message");
 });
 
 test("a chat's people hear of its turns and of each other, once, gathered", async (t) => {
@@ -93,7 +139,7 @@ test("a chat's people hear of its turns and of each other, once, gathered", asyn
       }
     },
   };
-  // In its home workspace "ws", and in "w2" it joined (docs/multi-workspace.md).
+  // In its home workspace "ws", and in "w2" it joined.
   const cloud: any = Object.assign(Object.create(Cloud.prototype), {
     state: { origin: "http://x", station: "s", workspace: "ws", workspace_name: "ws", name: "s", peers: [], revocations: [], joined: [{ workspace: "w2", workspace_name: "W2", name: "s", peers: [], revocations: [] }] },
     lock: null,
@@ -107,7 +153,7 @@ test("a chat's people hear of its turns and of each other, once, gathered", asyn
   const workspaces: (string | undefined)[] = [];
   notifier.post = async (n, ws) => void (posted.push(n), workspaces.push(ws));
   store.insertSession({ key: "k", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "t", createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
-  const chat = store.openThread("ember", "EMBER", "1.1", null, "ada@x.com");
+  const chat = store.openThread("ember", "CHAT", "1.1", null, "ada@x.com");
   store.joinThread(chat.id, "k", "ember");
   store.insertMessage(newMessage(chat.id, "1.2", "person", "bob@x.com", "看一下"));
   store.startTurn("t1", "k", "input");
@@ -135,10 +181,10 @@ test("a chat's people hear of its turns and of each other, once, gathered", asyn
 
   // A chat of the joined workspace: its own post, naming it; one of a workspace the station is not in: none.
   store.insertSession({ key: "j", connect: "ember", runtime: "claude", profile: "cc", workspace: "/j", token: "tj", createdAt: 1, lastActiveAt: 1, createdBy: "cy@x.com", ws: "w2" } as any);
-  const theirs = store.openThread("ember", "EMBER", "2.1", null, "cy@x.com");
+  const theirs = store.openThread("ember", "CHAT", "2.1", null, "cy@x.com");
   store.joinThread(theirs.id, "j", "ember");
   store.insertSession({ key: "g", connect: "ember", runtime: "claude", profile: "cc", workspace: "/g", token: "tg", createdAt: 1, lastActiveAt: 1, createdBy: "dee@x.com", ws: "gone" } as any);
-  const gone = store.openThread("ember", "EMBER", "3.1", null, "dee@x.com");
+  const gone = store.openThread("ember", "CHAT", "3.1", null, "dee@x.com");
   store.joinThread(gone.id, "g", "ember");
   store.insertMessage(newMessage(theirs.id, "2.2", "person", "eve@x.com", "在吗"));
   store.insertMessage(newMessage(gone.id, "3.2", "person", "fay@x.com", "在吗"));

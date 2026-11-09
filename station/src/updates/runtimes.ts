@@ -1,4 +1,4 @@
-// Claude Code, Codex, DeepSeek Harness, Grok Build and Devin on this machine (Cursor's SDK: updates.ts readCursor) (the Rust station's updates.rs): where the station's PATH finds
+// Claude Code, Codex, DeepSeek Harness, Grok Build and Devin on this machine (Cursor's SDK: updates.ts readCursor): where the station's PATH finds
 // them, how each is updated the way it was installed (`claude update`, Devin's installer, npm, Homebrew, winget, Vite+, Codex's
 // standalone installer) or installed when it is not there, and running those commands.
 import { existsSync, lstatSync, readdirSync, readlinkSync, realpathSync, unlinkSync } from "node:fs";
@@ -7,6 +7,7 @@ import { basename, dirname, join, sep } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { wall } from "../ops/fibers.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
+import { withShellCommand } from "../ops/shell-path.ts";
 import { type Found as PlatformFound, type NodeBuild, platform } from "../platform/index.ts";
 import { RUNTIME_KINDS, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
 
@@ -122,6 +123,8 @@ export function howToUpdate(kind: Kind, found: Found, env: Env): How | Unable {
   const realPath = found.real.split(platform.paths.separator).join("/");
   const name = kindName(kind);
   if (kind === "station") return new Unable("");
+  // The Antigravity CLI updates itself on asking (it would in the background too, which its sessions here are kept from).
+  if (kind === "agy") return { program: found.onPath, args: ["update"] };
   if (kind === "hermes") return new Unable("station.updates.hermesExternal");
   // The Devin CLI's installer keeps its versions under its data directory (devin/cli/_versions), the command a link to
   // the current one: the installer again fetches the latest and switches it (`devin update` wants a terminal: without
@@ -205,6 +208,8 @@ export function howToInstall(kind: Kind, env: Env, node: OwnNode | null = null):
   if (kind === "station") return new Unable("");
   if (kind === "hermes") return new Unable("station.updates.hermesExternal");
   if (kind === "claude") return platform.claudeInstall;
+  // Its installer also writes the machine's shell profiles: installed by the person, from antigravity.google.
+  if (kind === "agy") return new Unable("station.updates.agyExternal");
   if (kind === "devin") return platform.devinInstall;
   // DeepSeek Harness is an npm package (it runs on the Node npm is of: 22.19 or newer).
   if (kind === "dsh" || kind === "grok") return npmInstall(env, node, ["install", "-g", `${kindPackage(kind)}@latest`], kindName(kind));
@@ -266,7 +271,8 @@ export function run(program: string, args: string[], env: Env, timeoutMs: number
   return runBoth(program, args, env, timeoutMs, () => {}, lang).then(([ok, , out, err]) => [ok, out + err]);
 }
 
-function runBoth(program: string, args: string[], env: Env, timeoutMs: number, onLine: (line: string) => void, lang: Lang): Promise<[boolean, string, string, string, number | null]> {
+async function runBoth(program: string, args: string[], env: Env, timeoutMs: number, onLine: (line: string) => void, lang: Lang): Promise<[boolean, string, string, string, number | null]> {
+  env = await withShellCommand(program, env);
   return new Promise((resolve, reject) => {
     const clean: Record<string, string> = {};
     for (const [k, v] of Object.entries(env)) if (v !== undefined) clean[k] = v;

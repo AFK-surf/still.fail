@@ -29,11 +29,11 @@ fn add_this_machine(c : @ui.Ctx, core : Core, then : () -> Unit) -> Unit {
   c.box(style=here_column, fn() {
     c.text(tr(if pc { "android-settings.station.addHerePc" } else { "android-settings.station.addHere" }), style=here_words)
     |> ignore
-    if @sf.button(c, tr(if pc { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }), key="add-here") {
+    @sf.button(c, tr(if pc { "web-pages.settings.thisPc.add" } else { "web-pages.settings.thisMac.add" }), key="add-here", on_press=fn() {
       then()
       (core.local_install)(true)
       (core.push)(LocalStation)
-    }
+    })
   })
   |> ignore
 }
@@ -71,5 +71,5 @@ pub fn local_folder_label() -> String {
 }
 
 ///|
-/// How often the page reads the station again while shown (LocalStation.tsx: 3 s).
+/// How often the page reads the station again while shown.
 pub let local_read_ms : Double = 3000.0

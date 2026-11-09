@@ -14,7 +14,7 @@ fn cards_core(calls : Array[Made], mode? : String = "chat", platform? : Int = 2)
       (base.call)(name, params, done)
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   open_cards_fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform~)
   // the chat pushed in over Home
@@ -27,14 +27,14 @@ fn cards_core(calls : Array[Made], mode? : String = "chat", platform? : Int = 2)
 fn out_of_sight(t : @ui.Tester) -> Unit {
   t.back()
   t.run_for(@ui.move_most_ms)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.run_for(@ui.move_most_ms)
   // (the chat's pictures brushed in once decoded: sfpages message_files.mbt)
   t.run_for(@sfpages.reveal_ms)
 }
 
 ///|
-test "answered options can be read again by hovering or tapping the outcome, without answering again" {
+test "answered options can be read again by pressing the outcome, without answering again" {
   for platform in [0, 2] {
     let calls : Array[Made] = []
     let t = cards_core(calls, platform~)
@@ -47,21 +47,22 @@ test "answered options can be read again by hovering or tapping the outcome, wit
     let (x, y) = t.find("你 选择了「一起换」").unwrap()
     let (_, _, width, _) = t.rect_of("你 选择了「一起换」").unwrap()
     assert_true(width < 250.0)
+    // (a pointer resting on it opens nothing: only a press does)
     if platform == 0 {
       t.move(x, y)
-      t.run_for(@sfpages.hover_open_ms)
-    } else {
-      t.press_at(x, y)
-      t.release(x, y)
+      t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
+      assert_true(t.find("这次只改列表，截图下次再说") is None)
     }
+    t.press_at(x, y)
+    t.release(x, y)
     t.run_for(@ui.move_most_ms)
     assert_true(t.find("把首页和聊天页的截图都更新") is Some(_))
     assert_true(t.find("这次只改列表，截图下次再说") is Some(_))
-    // A pointer can enter the card and read it without the history disappearing.
+    // The pointer leaving the line leaves what it opened open.
     if platform == 0 {
       let (cx, cy) = t.find("这次只改列表，截图下次再说").unwrap()
       t.move(cx, cy)
-      t.run_for(@sfpages.hover_close_ms)
+      t.run_for(@sfpages.hover_close_ms + @ui.move_most_ms)
       assert_true(t.find("把首页和聊天页的截图都更新") is Some(_))
     }
     tap_now(t, "这次只改列表，截图下次再说")
@@ -84,13 +85,14 @@ test "answered phone and sign-in requests show their original reason from the ou
       let (x, y) = t.find(outcome).unwrap()
       let relevant = fn() { calls.filter(fn(call) { call.name == "adb.decide" || call.name.has_prefix("signin.") || call.name == "vault.approve" }).length() }
       let before = relevant()
+      // (a pointer resting on it opens nothing: only a press does)
       if platform == 0 {
         t.move(x, y)
-        t.run_for(@sfpages.hover_open_ms)
-      } else {
-        t.press_at(x, y)
-        t.release(x, y)
+        t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
+        assert_true(t.find(reason) is None)
       }
+      t.press_at(x, y)
+      t.release(x, y)
       t.run_for(@ui.move_most_ms)
       assert_true(t.find(reason) is Some(_), msg="\{mode}, platform \{platform}")
       assert_eq(relevant(), before)
@@ -105,13 +107,14 @@ test "a granted proxy request reveals its reason and allowed host" {
     let t = cards_core(calls, mode="chat-vault-use", platform~)
     out_of_sight(t)
     let (x, y) = t.find("已允许使用 Axiom 查询 token").unwrap()
+    // (a pointer resting on it opens nothing: only a press does)
     if platform == 0 {
       t.move(x, y)
-      t.run_for(@sfpages.hover_open_ms)
-    } else {
-      t.press_at(x, y)
-      t.release(x, y)
+      t.run_for(@sfpages.hover_open_ms + @ui.move_most_ms)
+      assert_true(t.find("查询中继连接日志，定位拨号失败的原因") is None)
     }
+    t.press_at(x, y)
+    t.release(x, y)
     t.run_for(@ui.move_most_ms)
     assert_true(t.find("查询中继连接日志，定位拨号失败的原因") is Some(_))
     assert_true(t.find("代理 · 限 api.axiom.co") is Some(_))
@@ -166,7 +169,7 @@ test "an option answered on screen: its options close at once, how it went in th
   // (none of them answers again, closing as they are)
   tap_now(t, "这次只改列表，截图下次再说")
   assert_eq(named(calls, "decision.answer").length(), 1)
-  // on screen as out of sight: its room closed with what came of it, one move (docs/list-motion.md)
+  // on screen as out of sight: its room closed with what came of it, one move (mbui's view/list_motion.mbt)
   t.run_for(turn_most_ms)
   assert_true(t.find("把首页和聊天页的截图都更新") is None)
   assert_true(t.find("你 选择了「一起换」") is Some(_))

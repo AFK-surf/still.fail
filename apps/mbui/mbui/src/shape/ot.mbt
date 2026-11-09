@@ -1,4 +1,4 @@
-// The OpenType layout tables as harfrust reads them (ot/mod.rs, ot/lookup/coverage.rs, ot/lookup/build.rs): GDEF's
+// The OpenType layout tables as harfrust reads them (ot/mod.rs, ot/lookup/build.rs): GDEF's
 // glyph classes, GSUB's and GPOS's script, feature and lookup lists, coverage and class definitions. Everything is
 // read in place from the font's bytes; offsets here are from the start of the font file.
 

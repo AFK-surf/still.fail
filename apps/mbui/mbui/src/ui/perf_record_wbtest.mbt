@@ -28,6 +28,9 @@ test "the frame probe's summary goes into the performance record every 5 s while
   let frames = lines.filter(fn(l) { l.has_prefix("frames: fps=") })
   assert_eq(frames.length(), 1)
   assert_true(frames[0].contains(" main_busy=") && frames[0].contains(" slow="))
+  // (the window's tree's part of each frame first among its phases; the memory held, the most of the span's frames
+  // too: none on the fake host)
+  assert_true(frames[0].contains(" avg tree/msgs/build/layout/paint/present=[") && frames[0].contains(" mem=-1MB mem_peak=-1MB "), msg=frames[0])
   // its seconds' busiest beside its average, its span, what its last frame was for
   assert_true(frames[0].contains(" fps_peak=1 ") && frames[0].contains(" span=5") && frames[0].contains(" (last: "), msg=frames[0])
   // what they were for, the heaviest first, each its work and count
@@ -52,6 +55,58 @@ test "where the device keeps no performance record, it is not turned on and noth
   @hostapi.set_perf(true)
   @hostapi.perf_line("app: screen shown")
   assert_eq(t.perf_said(), ([], []))
+}
+
+///|
+test "the record times an outside event including nested work, once and only while recording" {
+  let t = Tester::new(perf_scene)
+  t.set_perf(0)
+  @hostapi.set_perf(true)
+  let clock = Ref(100.0)
+  set_work_clock(Some(fn() { clock.val }))
+  defer set_work_clock(None)
+  view_event_said(fn() {  }, fn() {
+    clock.val = 120.0
+    view_event_said(fn() {  }, fn() { clock.val = 180.0 }, what="pointer")
+  }, what="touch-up")
+  let events = t.perf_said().1.filter(fn(s) { s.has_prefix("event: ") })
+  assert_eq(events.length(), 1)
+  assert_true(events[0].contains("kind=touch-up") && events[0].contains("ms=80"), msg=events[0])
+  view_event_said(fn() {  }, fn() { clock.val = 190.0 }, what="touch-up")
+  assert_eq(t.perf_said().1.filter(fn(s) { s.has_prefix("event: ") }).length(), 1)
+  @hostapi.set_perf(false)
+  view_event_said(fn() {  }, fn() { clock.val = 290.0 }, what="touch-up")
+  assert_eq(t.perf_said().1.filter(fn(s) { s.has_prefix("event: ") }).length(), 1)
+}
+
+///|
+test "the record says how long a finger up waited for the next frame to be submitted" {
+  let t = Tester::new(perf_scene)
+  t.set_perf(0)
+  @hostapi.set_perf(true)
+  let clock = Ref(100.0)
+  set_work_clock(Some(fn() { clock.val }))
+  defer set_work_clock(None)
+  touch_in(0, 1, 10.0, 10.0)
+  touch_in(2, 1, 10.0, 10.0)
+  clock.val = 220.0
+  t.draw()
+  let touches = t.perf_said().1.filter(fn(s) { s.has_prefix("touch: ") })
+  assert_eq(touches.length(), 1)
+  assert_true(touches[0].contains("to_submit=120"), msg=touches[0])
+  t.draw()
+  assert_eq(t.perf_said().1.filter(fn(s) { s.has_prefix("touch: ") }).length(), 1)
+  // An unrecognised finger up, and a touch followed by the app leaving the foreground, must not time a later frame.
+  touch_in(2, 99, 10.0, 10.0)
+  clock.val = 320.0
+  t.draw()
+  touch_in(0, 2, 10.0, 10.0)
+  touch_in(2, 2, 10.0, 10.0)
+  touches_off()
+  clock.val = 420.0
+  t.draw()
+  assert_eq(t.perf_said().1.filter(fn(s) { s.has_prefix("touch: ") }).length(), 1)
+  @hostapi.set_perf(false)
 }
 
 ///|

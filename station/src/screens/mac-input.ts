@@ -15,7 +15,7 @@ export function flagsOf(mods: number): number {
   return (mods & 1 ? FLAGS.alt : 0) | (mods & 2 ? FLAGS.ctrl : 0) | (mods & 4 ? FLAGS.command : 0) | (mods & 8 ? FLAGS.shift : 0);
 }
 
-/// A page's KeyboardEvent.code (the key's place, whatever the layout) → the Mac's virtual key (Events.h kVK_*).
+/// A page's KeyboardEvent.code (the key's place, whatever the layout) → the Mac's virtual key.
 export const KEYCODES: Record<string, number> = {
   KeyA: 0x00, KeyS: 0x01, KeyD: 0x02, KeyF: 0x03, KeyH: 0x04, KeyG: 0x05, KeyZ: 0x06, KeyX: 0x07, KeyC: 0x08, KeyV: 0x09,
   IntlBackslash: 0x0a, KeyB: 0x0b, KeyQ: 0x0c, KeyW: 0x0d, KeyE: 0x0e, KeyR: 0x0f, KeyY: 0x10, KeyT: 0x11,
@@ -87,6 +87,10 @@ export class MacInput {
       }
       case "text":
         return e.text === "" ? [] : [{ op: "text", text: e.text }];
+      case "pose":
+      case "device":
+      case "button":
+        return [];
     }
   }
 }

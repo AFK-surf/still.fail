@@ -97,7 +97,7 @@ test "props: a node's words bound, then bound in pieces: one binding, the first 
         n
         .over(Is(true))
         .words(By(fn() { words.get() }))
-        .words_runs(By(fn() { [{ text: runs.get(), weight: 0, ink: 0L }] }))
+        .words_runs(By(fn() { [@view.words_run(runs.get())] }))
         |> ignore
       })
       |> ignore

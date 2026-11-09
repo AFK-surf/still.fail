@@ -1,4 +1,4 @@
-// ＋'s recent photos and videos (still.fail's Android app, chat/screens/Attach.kt RecentPhotos, latest): the gallery's
+// ＋'s recent photos and videos (still.fail's Android app, latest): the gallery's
 // latest across the top of the sheet after the camera, a video's tile marked with a play badge in its corner, a tap
 // putting one in the message (most of what goes to an agent is a screenshot just taken); read again as the sheet opens
 // and on each answer of the gallery's (@hostapi.gallery_*). Several go together as the system's photo picker and
@@ -171,13 +171,13 @@ pub fn recent_adding(c : @ui.Ctx, add : (@ui.Pick) -> Unit) -> Bool {
     return false
   }
   let id = c.id("attach/add")
-  if c.clicked(id) {
+  c.on_press(id, fn() {
     match @ui.pick_photos(recent.chosen.copy()) {
       Some(pick) => add(pick)
       None => ()
     }
     recent.chosen.clear()
-  }
+  })
   let words = @sf.t("web-mobile.files.addCount", args=[("n", n.to_string())])
   let corner = attach_block_corner()
   c.box(style=recent_add_row.then(@ui.style(pb=@sf.room_of(attach_foot()))), fn() {
@@ -202,7 +202,7 @@ fn recent_choose(src : String) -> Unit {
 }
 
 ///|
-/// The strip (Attach.kt RecentPhotos): the camera, the recent photos, the tile that asks; `tapped(i)` with the tile
+/// The strip: the camera, the recent photos, the tile that asks; `tapped(i)` with the tile
 /// tapped: 0 the camera, 1… a photo (none chosen: it alone), -1 the asking tile. A photo's ring (a finger's reach round
 /// it), or any of a photo while some are chosen, chooses it or not.
 pub fn recent_strip(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
@@ -233,13 +233,13 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
       let (dx, _) = d.take_move()
       if dx != 0.0 {
         // past either end it goes a third as far (its edges' give)
-        let next = a.get() + dx
-        a.snap(if next > 0.0 || next < least { a.get() + dx / 3.0 } else { next })
+        let next = a.get(c) + dx
+        a.snap(c, if next > 0.0 || next < least { a.get(c) + dx / 3.0 } else { next })
       }
       if d.take_end() {
-        let to = a.get() + d.vx * 325.0
+        let to = a.get(c) + d.vx * 325.0
         let to = if to > 0.0 { 0.0 } else if to < least { least } else { to }
-        a.animate(to, @motion.sheet_spring, velocity=d.vx * 1000.0)
+        a.animate(c, to, @motion.sheet_spring, velocity=d.vx * 1000.0)
       }
       if d.take_tap() {
         let (x0, y0) = match c.rect_of(id) {
@@ -247,7 +247,7 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
           None => (0.0, 0.0)
         }
         // (from the first tile's start and top: as far in as the row has them)
-        let x = d.x - x0 - side - a.get()
+        let x = d.x - x0 - side - a.get(c)
         let y = d.y - y0 - top
         let i = (x / recent_step).to_int()
         let across = x - i.to_double() * recent_step
@@ -266,10 +266,10 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
     }
     None => ()
   }
-  let off = a.get()
   c.drag_area(id, axis=Horizontal, w=Fill(1.0), fn() {
     c.box(style=recent_strip_row.then(@ui.style(pl=@sf.room_of(side), pr=@sf.room_of(side), pt=@sf.room_of(top))), fn() {
-      c.box(style=recent_tiles, tx=off, fn() {
+      // (across by where the strip is, as it is painted: drawn and tapped there, nothing built as it glides)
+      let tiles_at = c.box(style=recent_tiles, fn() {
         recent_tile(c, fn() { @sf.icon(c, "camera", size=24.0, color=t.p.text) |> ignore })
         for p in photos {
           let n = match recent.chosen.search(p.src) {
@@ -290,7 +290,7 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
                   |> ignore
                 })
                 |> ignore
-                // a video's still, its play mark in its foot corner (Attach.kt Thumbnail: 22 round, black at 45%)
+                // a video's still, its play mark in its foot corner (black at 45%)
                 if p.video {
                   @sf.play_mark(c, recent_mark_side, A(Theater, O45)) |> ignore
                 }
@@ -312,7 +312,7 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
           None => ()
         }
       })
-      |> ignore
+      c.moved_by(tiles_at, fn(_, _) { (a.get(c), 0.0) })
     })
     |> ignore
   })
@@ -326,7 +326,7 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
 let recent_strip_row : @ui.Style = @ui.css("row w=Full pb=S3 gap=S1_5 clip")
 
 ///|
-/// The room under ＋'s tiles (照片 文件 Station 文件, 添加 n 个): in a sheet 18 (Attach.kt); in a small panel none past
+/// The room under ＋'s tiles (照片 文件 Station 文件, 添加 n 个): in a sheet 18; in a small panel none past
 /// its padding, so they stand as far from its foot as the strip from its sides and top.
 pub fn attach_foot() -> Double {
   if @sf.in_small_panel() {
@@ -337,14 +337,16 @@ pub fn attach_foot() -> Double {
 }
 
 ///|
-/// How far in the strip's tiles stand from the panel's sides and under its top: in a sheet 12 and 4 (Attach.kt
-/// RecentPhotos' contentPadding); in a small panel beside ＋, at its padding, as a menu's rows (the first tile in its
+/// How far in the strip's tiles stand from the panel's sides and under its top: in a sheet on its words' line
+/// (panel_words, 24) and its first tile as far down the sheet as its corner is round (pane_corner, under its grabber:
+/// @sf.sheet_grab_h): under that corner, in none of it (12 in and 29 down it would have to be round by 13; 24 in and
+/// 37 down it is in the corner, not concentric with it; Attach.kt RecentPhotos' 12 and 4 were for a 34); in a small panel beside ＋, at its padding, as a menu's rows (the first tile in its
 /// corner, concentric with it: attach_block_corner).
 fn recent_in() -> (Double, Double) {
   if @sf.in_small_panel() {
     (@sf.panel_pad, 0.0)
   } else {
-    (12.0, 4.0)
+    (@sf.panel_words, @sf.pane_corner - @sf.sheet_grab_h)
   }
 }
 
@@ -376,13 +378,13 @@ pub fn attach_block_radius() -> @ui.Radius {
 let recent_marks : @ui.Style = @ui.css("w=Full h=Full justify=JBetween align=AStart")
 
 ///|
-/// The marks' side (Attach.kt Thumbnail's play mark: 22).
+/// The marks' side.
 let recent_mark_side : Double = 22.0
 
 ///|
 /// How far in a mark stands from the sides of a tile `corner` round: concentric with its corner (18 round: 7).
 fn recent_mark_in(corner : Double) -> Double {
-  @sf.capsule_in(corner, recent_mark_side)
+  @ui.capsule_in(corner, recent_mark_side)
 }
 
 ///|

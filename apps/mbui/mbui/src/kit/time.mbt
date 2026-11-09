@@ -1,9 +1,9 @@
-// Time for the components (docs/components.md, "Time and motion"): everything in them that waits or moves goes
-// through these three, on the Ctx's clock (a Tester moves it; screenshots and reduced motion put motion at its end at
-// once), so that nothing counts frames of its own and one scheduler can stand behind all of it later. `after` is a
-// delay (a tooltip's, a toast's time); `presence` is Motion's AnimatePresence (what is shown comes in, and once it is
-// not shown stays built, inert, until its exit has played); `animate` a value going where it is told by a transition
-// (Motion's animate, a spring or a tween: @motion.Spec).
+// Time for the components (mbui's kit/styles.mbt, "Time and motion"): everything in them that waits or moves goes
+// through the Ctx's clock (a Tester moves it; screenshots and reduced motion put motion at its end at once), so that
+// nothing counts frames of its own and one scheduler can stand behind all of it later. `after` is a delay (a tooltip's,
+// a toast's time); `presence` is Motion's AnimatePresence (what is shown comes in, and once it is not shown stays
+// built, inert, until its exit has played). A number going where it is told is @motion's (`told`, read where it is
+// drawn: Ctx::look_by, bg_by).
 
 ///|
 /// What the components keep from frame to frame outside the Ctx, made anew when a Tester starts.
@@ -15,9 +15,15 @@ priv struct KitState {
   /// a tooltip a finger held open on its trigger, until a moment after it is lifted or the next press: whether it has
   /// been lifted
   held_tips : Map[Int, Bool]
-  /// where what a popover, a hover card or a tooltip hangs on was drawn, by the panel's id, and the frame it was last
-  /// put by it (beside): kept on while it is shown, for the frames its trigger is drawn nowhere (gone as it goes out)
-  anchors : Map[Int, ((Double, Double, Double, Double), Int)]
+  /// The last tooltip to show, shared by old views and nodes of the window's tree. It keeps the slot while leaving.
+  tip_owner : @signals.Signal[TipOwner?]
+  /// A different identity for each tooltip made as a node, even if several name the same anchor.
+  mut tip_next : Int
+  /// Which ways an old view's tooltip was eligible to open, so an already displaced one does not take the slot back.
+  tip_ready : Map[Int, TipReady]
+  /// where what a popover, a hover card or a tooltip hangs on was drawn, by the panel's id (beside): kept while the
+  /// panel is built, for the frames its trigger is drawn nowhere (its exit as it goes), let go with it (anchor_of)
+  anchors : Map[Int, (Double, Double, Double, Double)]
   /// toasts as drawn (toast.mbt), by their viewport's id; when the next of a viewport's goes (toast_due), by its key
   toasts : Map[Int, Kept]
   toast_dues : Map[String, Double]
@@ -35,10 +41,6 @@ priv struct KitState {
   /// a sheet's springs and scrim (sheet.mbt), by its id; the id of the one built last by each key (sheet_rest)
   sheets : Map[Int, SheetKept]
   sheet_keys : Map[String, Int]
-  /// the pointer this frame and the last (whether it moved: what moves a menu's highlight), as of frame `ptr_frame`
-  mut ptr : (Double, Double)
-  mut ptr_was : (Double, Double)
-  mut ptr_frame : Int
 }
 
 ///|
@@ -47,6 +49,9 @@ fn KitState::new() -> KitState {
     opens: {},
     shut: {},
     held_tips: {},
+    tip_owner: @signals.signal(None, same=fn(a, b) { a == b }),
+    tip_next: 0,
+    tip_ready: {},
     anchors: {},
     toasts: {},
     toast_dues: {},
@@ -58,24 +63,22 @@ fn KitState::new() -> KitState {
     forms: {},
     sheets: {},
     sheet_keys: {},
-    ptr: (-1.0, -1.0),
-    ptr_was: (-1.0, -1.0),
-    ptr_frame: -1,
   }
 }
 
 ///|
-/// Whether the pointer moved since the last frame.
-fn pointer_moved(c : @ui.Ctx) -> Bool {
-  install()
-  let k = kit.val
-  if k.ptr_frame != c.frame_number() {
-    k.ptr_frame = c.frame_number()
-    k.ptr_was = k.ptr
-    let (x, y, _) = c.pointer()
-    k.ptr = (x, y)
-  }
-  k.ptr != k.ptr_was
+/// Whether the pointer's own event put it over `id` or moved it there since (what moves a menu's highlight): its latest
+/// event (Ctx::pointer_at) no earlier than it came over `id` (Ctx::hover_since: not `id` come under a pointer at rest, a
+/// menu opened or scrolled under it), and after the latest key (Ctx::pointer_after_keys: else the keys moved the
+/// highlight since).
+fn pointer_moved(c : @ui.Ctx, id : Int) -> Bool {
+  c.pointer_after_keys() && c.pointer_at() >= c.hover_since(id)
+}
+
+///|
+/// An id of the kit's own for `id`, to be told by as what built it is no longer built (@ui.Ctx::on_unbuilt).
+fn unbuilt_id(id : Int, what : Int) -> Int {
+  (id * 31 + what) ^ 0x6b697400
 }
 
 ///|
@@ -116,13 +119,14 @@ pub fn after(
 }
 
 ///|
-/// What `presence` says of something shown or not: whether to build it (shown, or still leaving), whether it is
-/// shown (not leaving: it takes input), how far in it is (0 out … 1 in; a spring may pass 1).
+/// What `presence` says of something shown or not: whether to build it (shown, or still leaving: till its exit's
+/// declared end), whether it is shown (not leaving: it takes input), how far in it is (0 out … 1 in; a spring may pass
+/// 1), read where it is drawn (Anim::get in Ctx::look_by), not as it is built.
 pub(all) struct Presence {
   built : Bool
   shown : Bool
-  t : Double
-} derive(Show)
+  t : @motion.Anim
+}
 
 ///|
 /// Whether it is leaving (built, not shown: inert, its exit drawn).
@@ -139,8 +143,9 @@ pub let presence_out_ms : Double = 100.0
 
 ///|
 /// Motion's AnimatePresence for one thing (see the file's head): `shown` comes in by `enter`, goes out by `exit`
-/// (Motion's `animate` and `exit` transitions) and is built until it is out. `initial`: shown from the start comes in
-/// too (Motion's `initial`); else it starts in.
+/// (Motion's `animate` and `exit` transitions) and is built until its exit's declared end (Anim::over), its way told
+/// as it is built and read where it is drawn. `initial`: shown from the start comes in too (Motion's `initial`); else
+/// it starts in.
 #callsite(autofill(loc))
 pub fn presence(
   c : @ui.Ctx,
@@ -152,26 +157,15 @@ pub fn presence(
   loc~ : SourceLoc,
 ) -> Presence {
   let k = "\u{2}presence/" + key
-  let a = @motion.anim(c, k, if shown && !initial { 1.0 } else { 0.0 })
-  if shown {
-    a.follow(1.0, enter, loc~)
-  } else {
-    a.follow(0.0, exit, loc~)
-  }
-  let t = a.get()
-  { built: shown || t > 0.0 || a.moving(), shown, t }
-}
-
-///|
-/// A number going to `target` by `transition` (Motion's animate; by default a spring): from where it is, as fast as
-/// it goes, when told anew. Its value this frame. `key` in the scope it is asked in.
-#callsite(autofill(loc))
-pub fn animate(
-  c : @ui.Ctx,
-  key : String,
-  target : Double,
-  transition? : @motion.Spec = @motion.spring(),
-  loc~ : SourceLoc,
-) -> Double {
-  @motion.animate(c, "\u{2}animate/" + key, target, spec=transition, loc~)
+  // (told reading no clock: where it is is read as it is drawn, @motion.told's way)
+  let a = @signals.untracked(fn() {
+    let a = @motion.anim(c, k, if shown && !initial { 1.0 } else { 0.0 })
+    if shown {
+      a.follow(c, 1.0, enter, loc~)
+    } else {
+      a.follow(c, 0.0, exit, loc~)
+    }
+    a
+  })
+  { built: shown || !a.over(c), shown, t: a }
 }

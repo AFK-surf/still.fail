@@ -56,7 +56,7 @@ fn bezier_at(x1 : Double, y1 : Double, x2 : Double, y2 : Double, t : Double) -> 
 }
 
 ///|
-/// What a timed motion's curve says it is (still.fail's docs/motion.md, Curves): one curve for each, so what moves the
+/// What a timed motion's curve says it is (sf/motion.mbt, Curves): one curve for each, so what moves the
 /// same way moves alike everywhere. No other: what is sprung is @motion's (its springs: rows making way, a sheet, a
 /// thing let go with the hand's speed, a thing lifted).
 pub(all) enum Ease {
@@ -76,49 +76,31 @@ pub(all) enum Ease {
   InOut
   /// progress, as it is: handed to another curve (a flight's way), or a cycle's turn
   Linear
-  /// (.6, 0, .2, 1): words sent on their way to their row (sfbase's flight.mbt; the web's madeChat.ts)
+  /// (.6, 0, .2, 1): words sent on their way to their row (sfbase's flight.mbt)
   Flight
 } derive(Eq, Show)
 
 ///|
-/// Move's spring: ω·T where it rests (its way within 0.5% of its end, landing at 3% of its mean speed: nothing seen
-/// of a tail longer than that but a wait, the user 2026-10-29: 「动效有点太墨迹了」), and how far it has got there, so
-/// that the curve ends at 1. Nine tenths of the way at half of T.
-let move_k : Double = 7.4
+/// Move's spring: ω·T where it rests, and how far it has got there (said once under what lays things out: flex's
+/// move.mbt, an item coming or going taking its way in the same layout).
+let move_k : Double = @flex.move_k
 
 ///|
-let move_end : Double = 1.0 - (1.0 + move_k) * @dmath.exp(-move_k)
+let move_end : Double = @flex.move_end
 
 ///|
-/// How long a Move takes over `points` (how far it goes this time, from where it is drawn now to where it goes: the
-/// user 2026-10-30, 「有些动效不应该固定播放时间，因为它的距离是不固定的」): 200 + 7.5·√points ms, so a row's 64 points
-/// take about 260, a phone's page width 350, across a 1000-point window 450; the further the longer, not in
-/// proportion. Between `move_least_ms` and `move_most_ms`, to whole frames: three at 60 Hz, six at 120, so that it ends
-/// on a frame there (as a page's 300 ms did), not between two.
+/// How long a Move takes over `points` (flex's move_ms: 200 + 7.5·√points ms, between move_least_ms and
+/// move_most_ms, to whole frames).
 pub fn move_ms(points : Double) -> Double {
-  let d = if points > 0.0 { points } else { 0.0 }
-  let ms = ((200.0 + 7.5 * d.sqrt()) / whole_frames_ms).round() * whole_frames_ms
-  // (NaN, a way not known: the longest)
-  if ms < move_least_ms {
-    move_least_ms
-  } else if ms > move_most_ms || ms.is_nan() {
-    move_most_ms
-  } else {
-    ms
-  }
+  @flex.move_ms(points)
 }
 
 ///|
-/// What a Move's length is a whole number of: three frames at 60 Hz, six at 120.
-let whole_frames_ms : Double = 50.0
+/// The shortest and the longest a Move takes (move_ms).
+pub let move_least_ms : Double = @flex.move_least_ms
 
 ///|
-/// The shortest and the longest a Move takes (move_ms): what goes nowhere far takes `move_least_ms`, what has gone the
-/// furthest is there by `move_most_ms`.
-pub let move_least_ms : Double = 200.0
-
-///|
-pub let move_most_ms : Double = 500.0
+pub let move_most_ms : Double = @flex.move_most_ms
 
 ///|
 /// Where a Move is `t` ms into its `dur`: `d` off its end as it set out, going `v` (per ms, of the same units) then

@@ -4,7 +4,7 @@
 
 ///|
 /// Words set bigger, on a taller line.
-let hand_big : @view.WordsLook = { size: 18.0, weight: 400, line: 26.0, wrap: true }
+let hand_big : @view.WordsLook = { size: 18.0, weight: 400, line: 26.0, wrap: true, tracking: @view.letters_own, balance: false }
 
 ///|
 /// A tree of buttons (taking presses, read out): `grow`, its words set bigger while pointed at; `ink`, its ground
@@ -46,7 +46,7 @@ fn hand_tree() -> Tester {
     root.box(fn(col) {
       // (a signal: the line before it made before it is, shown once it is there and pointed at)
       let after : @signals.Signal[@view.View?] = @signals.signal(None, same=fn(_, _) { false })
-      col.show(fn() {
+      col.show(at_once=true, fn() {
         match after.get() {
           Some(v) => @view.View::pointed(v)
           None => false

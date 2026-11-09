@@ -1,4 +1,4 @@
-// A picture the host decodes frame by frame (@ui's Stream: a remote screen's frames, still.fail's docs/remote-screens.md),
+// A picture the host decodes frame by frame (@ui's Stream: a remote screen's frames),
 // drawn by the app as an image: H.264 (a config, the avcC and the picture's size, then access units in AVCC, each NAL
 // after its length) or JPEG frames, each with its time `ts` (the sender's, only compared and handed back).
 //
@@ -124,11 +124,19 @@ pub fn stream_layers_tagged() -> Bool {
 
 ///|
 /// A pointer drawn by the host over stream `id`'s picture on its system video layer (`stream_layers`), composited with
-/// it by the system: its picture `png` (a PNG; empty: none), `w` × `h` points whatever the picture's size, its hot spot
+/// it by the system: its picture named `key`, `png` making it (a PNG; empty: none), `w` × `h` points whatever the picture's size, its hot spot
 /// (`hx`, `hy` points in from its top left) where it points. Moved by `stream_pointer_at`, nothing of the app drawn for
 /// it. Hosts without layers draw none (the app draws its own).
-pub fn stream_pointer(id : Int, png : Bytes, w : Double, h : Double, hx : Double, hy : Double) -> Unit {
-  st_pointer(id, png, w, h, hx, hy)
+pub fn stream_pointer(
+  id : Int,
+  key : String,
+  png : () -> Bytes,
+  w : Double,
+  h : Double,
+  hx : Double,
+  hy : Double,
+) -> Unit {
+  current.val.st_pointer_named(id, key, png, w, h, hx, hy)
 }
 
 ///|

@@ -1,4 +1,4 @@
-// An agent at work in a chat (Chat.kt Activity): its ring of eight arcs steps round, a step every 100 ms (Spokes.kt;
+// An agent at work in a chat: its ring of eight arcs steps round, a step every 100 ms (Spokes.kt;
 // the steps themselves: src/sf/spokes_test.mbt).
 
 ///|
@@ -7,14 +7,14 @@ test "activity: its ring steps round" {
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
   t.type_text("测试一下")
   tap_send(t)
   // delivered: its agent at work (the station's clock stays, so its turn's time does too)
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   t.run_for(flight_wait_ms + @ui.move_most_ms + 1000.0)
   assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
@@ -42,8 +42,8 @@ fn activity_card_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
   let base = fixture("chat-working")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       if name == "agentCard" && text(Some(Json::object(params)), "key") != "s-c1" {
         { ..got, value: None }
       } else {
@@ -51,7 +51,7 @@ fn activity_card_tester(w : Double, h : Double, platform : Int) -> @ui.Tester {
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
   t.run_for(@ui.move_most_ms)
   t
@@ -90,7 +90,7 @@ test "activity: the picture opens its agent's card under the pointer, and still 
     assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is None)
     t.tap(x, y)
     t.frame()
-    let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+    let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
     if w >= 600.0 {
       assert_eq(side_now(r).1, "s-c1", msg="pressing the picture opens this agent's history")
     } else {
@@ -124,7 +124,7 @@ test "activity: its line coming in at the list's end is followed, the list glidi
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   // (its line's first frame laid out twice, its room not opened yet at the first: a glide that set out then is under
   // way at the second, not over with the line still to open under the composer)
@@ -135,12 +135,12 @@ test "activity: its line coming in at the list's end is followed, the list glidi
   tap_send(t)
   // delivered, its agent not at work yet; at work a moment later
   fix_later(fix_deliver_ms + 1.0, fn() { fix_chat("s-c1").working = -1.0 })
-  clock.val = clock.val + fix_deliver_ms + 1.0
+  fix_clock_set(clock, clock.val + fix_deliver_ms + 1.0)
   t.draw()
   t.run_for(agent_soon_ms)
   assert_true(t.at_end())
   fix_later(1.0, fn() { fix_chat("s-c1").working = clock.val })
-  clock.val = clock.val + 1.0
+  fix_clock_set(clock, clock.val + 1.0)
   t.draw()
   t.run_for(flight_wait_ms)
   assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
@@ -149,17 +149,90 @@ test "activity: its line coming in at the list's end is followed, the list glidi
 }
 
 ///|
-test "its avatar is back in its activity once a message has come out of it, the agent still at work" {
+test "the viewer's own message taller than the list is followed to the end: its foot and its agent's line in view" {
+  new_run()
+  let clock : Ref[Double] = { val: 0.0 }
+  fix_clock.val = Some(fn() { clock.val })
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  // a message of the viewer's taller than the list (sent from here, or from another of their devices), its agent at
+  // work on it: an agent's message so long is read from its top, the viewer's own followed to the end
+  let lines = Array::makei(40, fn(i) { "第 \{i + 1} 行" })
+  lines.push("最后一行")
+  fix_later(1.0, fn() {
+    let fc = fix_chat("s-c1")
+    fc.sent.push(
+      msg(150, "person", by_person("林"), lines.join("\n\n"), "刚刚", { "ts": Json::string("me150"), "mine": true, "said": true }),
+    )
+    fc.working = clock.val
+  })
+  fix_clock_set(clock, clock.val + 1.0)
+  t.draw()
+  t.run_for(flight_wait_ms)
+  guard t.shown_of("最后一行") is Some((_, _, w, h)) && w > 0.0 && h > 0.0 else {
+    fail("the foot of the viewer's message is out of view")
+  }
+  guard t.shown_of(tr("android-chat.chat.working")) is Some((_, _, w, h)) && w > 0.0 && h > 0.0 else {
+    fail("its agent's line is out of view")
+  }
+  fix_clock.val = None
+}
+
+///|
+test "its line gone with the answer that came out of its avatar, the agent still at work: not back this turn" {
   let clock = Ref::new(0.0)
   let t = emit_core(clock)
   let em = emits_of("ws1/st1\u{1}s-c1")
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   t.run_for(emit_all_ms())
   assert_true(em.watched)
   assert_true(em.current is None)
-  assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
+  // (2026-11-09 the user: the answer takes its place, 「处理中」跟回复同一次换位)
+  assert_true(readings.get("ws1/st1\u{1}s-c1").unwrap().running.length() > 0)
+  assert_true(t.find(tr("android-chat.chat.working")) is None)
   // (the copy that flew is gone: the activity's own avatar shows again)
   assert_eq(em.copied, "")
   emit_restore()
+}
+
+///|
+test "its line stays after a post saying how far it got, the agent still at work: only an answer that ends the turn takes its place" {
+  // (2026-11-09 the user: 「agent 发完消息 activity 不出现」, its line gone for the rest of the turn after a progress post)
+  let clock = Ref::new(0.0)
+  let t = emit_core(clock, words="看下进度")
+  let em = emits_of("ws1/st1\u{1}s-c1")
+  fix_clock_set(clock, clock.val + fix_answer_ms)
+  t.draw()
+  t.run_for(emit_all_ms())
+  assert_true(em.current is None)
+  let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
+  assert_true(rd.running.length() > 0)
+  assert_true(rd.answered.is_empty())
+  assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
+  emit_restore()
+}
+
+///|
+test "activity: an agent given words it has yet to take is at work: its line there as they wait for it" {
+  // Queued (the station has the words, its agent not yet taken them; or a summary read before it took them says so):
+  // its line went, and came back as it took them, each time words were sent (2026-11-09).
+  new_run()
+  @sffixture.fix_working_status.val = "queued"
+  let clock : Ref[Double] = { val: 0.0 }
+  fix_clock.val = Some(fn() { clock.val })
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  t.type_text("测试一下")
+  tap_send(t)
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
+  t.draw()
+  t.run_for(flight_wait_ms + @ui.move_most_ms + 1000.0)
+  assert_true(t.find(tr("android-chat.chat.working")) is Some(_))
+  fix_clock.val = None
 }

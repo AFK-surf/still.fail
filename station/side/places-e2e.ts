@@ -1,4 +1,4 @@
-// A directory in a folder macOS protects, named to a station launchd runs (src/ops/places.ts; docs/drive.md
+// A directory in a folder macOS protects, named to a station launchd runs (src/ops/places.ts
 // "Directories and files the station is given"), end to end on a Mac: a dev cloud (cloud/test/dev.ts), a station of
 // this checkout started as launchd starts one (a job in the GUI session running the launcher itself; macOS keeps
 // Desktop and the rest from it), still.fail Helper started by it, and a member's device on iroh. A Codex session of
@@ -31,7 +31,7 @@ const PORT = Number(process.env.PORT ?? 8937);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 const RELAY = process.env.RELAY ?? "http://127.0.0.1:3340";
 const WORK = process.env.WORK ?? "/tmp/places-e2e";
-const LABEL = "dev.ember.places-e2e";
+const LABEL = "dev.stillfail.places-e2e";
 const native = (what: string) => execFileSync(process.execPath, [join(ROOT, "scripts/native.ts"), "file", what], { encoding: "utf8" }).trim();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const say = (s: string) => console.log(`\n== ${s}`);

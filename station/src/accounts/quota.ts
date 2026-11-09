@@ -1,4 +1,4 @@
-// How much of a profile's allowance is used, where the provider says (the Rust station's quota.rs):
+// How much of a profile's allowance is used, where the provider says:
 // - OpenCode Go: GET /zen/go/v1/usage (rolling, weekly and monthly windows);
 // - Kimi Code (its key, or a Kimi sign-in's current token): GET /coding/v1/usages (the week, and shorter windows), as
 //   kimi-cli's /usage reads it;
@@ -19,6 +19,7 @@ import { claudeOAuthToken } from "./oauth.ts";
 import { RenewRefused } from "./console.ts";
 import { type ProfileQuota, type QuotaWindow, URLS, type Urls } from "./profiles.ts";
 import { profileFetch } from "../ops/agent-env.ts";
+import { codexQuotaFailure } from "../../../client/core-ts/src/codex-quota.ts";
 
 type Json = any;
 
@@ -148,7 +149,9 @@ async function claudeUsageResponse(base: string, token: string, lang: Lang): Pro
           .filter((k) => body[k] !== null && typeof body[k] === "object" && !Array.isArray(body[k]) && labels[k] !== undefined)
           .map((k) => ({ label: labels[k]!, usedPercent: percent(body[k].utilization), resetsAt: at(body[k].resets_at), minutes: k === "five_hour" ? 300 : WEEK_MINUTES }))
       : [];
-  return [quota("ok", windows, null), false];
+  const q = quota("ok", windows, null);
+  if (typeof body?.extra_usage?.is_enabled === "boolean") q.extraUsage = body.extra_usage.is_enabled;
+  return [q, false];
 }
 
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -178,6 +181,14 @@ function withCodexCredits(q: ProfileQuota, limits: Json, resets: Json): ProfileQ
   }
   const count = resets?.availableCount ?? resets?.available_count;
   if (Number.isInteger(count) && count >= 0) q.resetCount = count;
+  if (q.resetCount && Array.isArray(resets?.credits)) {
+    const expiries = resets.credits.flatMap((credit: Json) => {
+      if (credit?.status !== "available") return [];
+      const expires = at(credit.expiresAt ?? credit.expires_at);
+      return expires !== null && Number.isSafeInteger(expires) && expires > 0 ? [expires] : [];
+    });
+    if (expiries.length) q.resetExpiries = expiries.sort((a: number, b: number) => a - b).slice(0, q.resetCount);
+  }
   if (q.credits !== undefined || q.resetCount !== undefined) {
     q.state = "ok";
     q.detail = null;
@@ -188,7 +199,9 @@ function withCodexCredits(q: ProfileQuota, limits: Json, resets: Json): ProfileQ
 /// A ChatGPT subscription's allowance as the app-server reports it.
 export function codexQuota(result: Json, lang: Lang = stationLang()): ProfileQuota {
   const limits = isObject(result?.rateLimits) ? result.rateLimits : result;
-  return withCodexCredits(okOrUnavailable(codexWindows(result), tr(lang, "station.quota.chatgptNoWindows")), limits, result?.rateLimitResetCredits);
+  const q = withCodexCredits(okOrUnavailable(codexWindows(result), tr(lang, "station.quota.chatgptNoWindows")), limits, result?.rateLimitResetCredits);
+  if (typeof limits?.planType === "string" && limits.planType.trim() !== "") q.plan = limits.planType.trim();
+  return q;
 }
 
 /// Reaches a profile's codex app-server for its account/rateLimits/read.
@@ -213,6 +226,17 @@ function failed(error: unknown, lang: Lang): ProfileQuota {
   return quota(blocked(detail) ? "blocked" : "unavailable", [], detail);
 }
 
+/// Codex's app-server wraps the provider response in RPC JSON. Do not show that response as the reason.
+function codexFailed(error: unknown, lang: Lang): ProfileQuota {
+  if (unanswered(error)) return quota("unavailable", [], tr(lang, "station.quota.unreachable"));
+  const failure = codexQuotaFailure(error instanceof Error ? error.message : String(error));
+  if (failure.kind === "login") return { ...quota("unavailable", [], tr(lang, "station.quota.codexLogin")), signedOut: true };
+  if (failure.kind === "network") return quota("unavailable", [], tr(lang, "station.quota.unreachable"));
+  if (failure.kind === "blocked") return quota("blocked", [], tr(lang, "station.quota.codexBlocked"));
+  if (failure.kind === "status") return quota("unavailable", [], tr(lang, "station.quota.codexStatus", { status: failure.status }));
+  return quota("unavailable", [], tr(lang, "station.quota.codexFailed"));
+}
+
 /// Asks the provider. `codexRateLimits` reaches the profile's codex app-server; `env` is the station's (for a machine
 /// profile's login). Never throws: what went wrong is an unavailable (or blocked) allowance.
 export async function checkQuota(profile: Profile, env: Env, codexRateLimits: CodexRateLimits | undefined, urls: Urls = URLS, lang: Lang = stationLang()): Promise<ProfileQuota> {
@@ -230,9 +254,24 @@ export async function checkQuota(profile: Profile, env: Env, codexRateLimits: Co
     if (profile.runtime === "cursor") return quota("unsupported", [], tr(lang, "station.quota.cursorUnsupported"));
     // Nor does the Devin CLI say its account's quota to a program (only its own /usage shows it).
     if (profile.runtime === "devin") return quota("unsupported", [], tr(lang, "station.quota.devinUnsupported"));
+    // Nor the Antigravity CLI.
+    if (profile.runtime === "agy") return quota("unsupported", [], tr(lang, "station.quota.agyUnsupported"));
     if (profile.runtime === "claude") return await claudeWithRefresh(env, profile.machine === true ? null : profile.home, urls, lang);
-    if (!codexRateLimits) throw new Error("no codex app-server to ask");
-    return codexQuota(await codexRateLimits(profile), lang);
+    try {
+      if (!codexRateLimits) throw new Error("no codex app-server to ask");
+      const q = codexQuota(await codexRateLimits(profile), lang);
+      // An app-server may return only the count (or a capped list). Ask for the missing details using the same
+      // profile's login; use that complete reading rather than mix it with a possibly older app-server login.
+      if (q.resetCount && (q.resetExpiries?.length ?? 0) < q.resetCount) {
+        const authFile = profile.machine === true ? codexAuthFile(env) : join(profile.home, "auth.json");
+        const direct = await codexUsage(authFile, urls, lang).catch(() => null);
+        if (direct?.state === "ok" && direct.resetCount !== undefined &&
+          (direct.resetCount !== q.resetCount || (direct.resetExpiries?.length ?? 0) > (q.resetExpiries?.length ?? 0))) return direct;
+      }
+      return q;
+    } catch (e) {
+      return codexFailed(e, lang);
+    }
   } catch (e) {
     return failed(e, lang);
   }
@@ -293,15 +332,18 @@ async function grokQuota(profile: Profile, env: Env, lang: Lang): Promise<Profil
 export function grokQuotaOf(said: Json, lang: Lang = stationLang()): ProfileQuota {
   const config = said?.config;
   const period = config?.currentPeriod;
+  const plan = typeof said?.subscription_tier === "string" ? said.subscription_tier.trim() : "";
   // Its answer leaves zero out (proto3 JSON): a period with no percentage is one nothing of was used yet.
   const used = typeof config?.creditUsagePercent === "number" ? config.creditUsagePercent : isObject(period) ? 0 : null;
-  if (used === null) return quota("unavailable", [], tr(lang, "station.quota.grokNoWindows"));
+  if (used === null) return { ...quota("unavailable", [], tr(lang, "station.quota.grokNoWindows")), ...(plan !== "" ? { plan } : {}) };
   const start = at(period?.start ?? config?.billingPeriodStart);
   const end = at(period?.end ?? config?.billingPeriodEnd);
   const type = String(period?.type ?? "");
   const minutes = start !== null && end !== null && end > start ? (end - start) / 60_000 : type.includes("WEEKLY") ? WEEK_MINUTES : type.includes("MONTHLY") ? 30 * DAY_MINUTES : null;
   const window: QuotaWindow = { label: windowLabel(minutes, type.includes("WEEKLY") ? "每周" : "每月"), usedPercent: percent(used), resetsAt: end, minutes };
-  return quota("ok", [window], typeof said?.subscription_tier === "string" ? said.subscription_tier : null);
+  const q = quota("ok", [window], typeof said?.subscription_tier === "string" ? said.subscription_tier : null);
+  if (plan !== "") q.plan = plan;
+  return q;
 }
 
 /// Asks a Grok Build started for it (ACP over stdio) for its billing: initialize, then `x.ai/billing`.
@@ -344,9 +386,8 @@ function grokBilling(env: Env): Promise<Json> {
   });
 }
 
-/// A ChatGPT subscription's allowance read with the tokens of a Codex auth.json (the machine's own login, which no
-/// app-server of the station's runs on): what Codex's /status shows. Null when there is no such file or token.
-export async function codexUsage(authFile: string, urls: Urls = URLS, lang: Lang = stationLang()): Promise<ProfileQuota | null> {
+/// The account named by a Codex login file; the credentials never leave the request headers.
+function codexHeaders(authFile: string): Record<string, string> | null {
   let tokens: Json;
   try {
     tokens = JSON.parse(readFileSync(authFile, "utf8"))?.tokens;
@@ -357,8 +398,39 @@ export async function codexUsage(authFile: string, urls: Urls = URLS, lang: Lang
   if (typeof access !== "string" || access === "") return null;
   const headers: Record<string, string> = { authorization: `Bearer ${access}`, "user-agent": "codex_cli_rs" };
   if (typeof tokens.account_id === "string") headers["chatgpt-account-id"] = tokens.account_id;
+  return headers;
+}
+
+/// Fetch details when a usage summary has fewer expiry dates than available cards. Keep the summary if this fails;
+/// when the count changed between requests, the newer detail response owns both its count and its dates.
+async function addCodexResetDetails(q: ProfileQuota, headers: Record<string, string>, urls: Urls): Promise<void> {
+  if (!q.resetCount || (q.resetExpiries?.length ?? 0) >= q.resetCount) return;
+  try {
+    const detail = await get(`${urls.chatgpt}/backend-api/wham/rate-limit-reset-credits`, headers);
+    if (!detail.ok) return;
+    const resets: Json = await detail.json();
+    if (!Array.isArray(resets?.credits)) return;
+    const said = resets.available_count ?? resets.availableCount;
+    const count = Number.isInteger(said) && said >= 0 ? said : q.resetCount;
+    const before = q.resetExpiries;
+    const sameCount = count === q.resetCount;
+    if (!sameCount) delete q.resetExpiries;
+    withCodexCredits(q, null, { available_count: count, credits: resets.credits });
+    // A capped or incomplete detail response must not discard dates the app-server already supplied.
+    if (sameCount && before && (q.resetExpiries?.length ?? 0) < before.length) q.resetExpiries = before;
+  } catch {}
+}
+
+/// A ChatGPT subscription's allowance read with the tokens of a Codex auth.json (the machine's own login, which no
+/// app-server of the station's runs on): what Codex's /status shows. Null when there is no such file or token.
+export async function codexUsage(authFile: string, urls: Urls = URLS, lang: Lang = stationLang()): Promise<ProfileQuota | null> {
+  const headers = codexHeaders(authFile);
+  if (!headers) return null;
   const response = await get(`${urls.chatgpt}/backend-api/wham/usage`, headers);
-  if (!response.ok) return refused("ChatGPT ", response, lang);
+  if (!response.ok) {
+    const result = await refused("ChatGPT ", response, lang);
+    return response.status === 401 ? { ...result, signedOut: true } : result;
+  }
   const body: Json = await response.json();
   const windows = (
     [
@@ -372,7 +444,11 @@ export async function codexUsage(authFile: string, urls: Urls = URLS, lang: Lang
     const minutes = seconds !== null ? seconds / 60 : key === "primary_window" ? 300 : WEEK_MINUTES;
     return [{ label: windowLabel(minutes, fallback), usedPercent: percent(w.used_percent), resetsAt: at(w.reset_at), minutes }];
   });
-  return withCodexCredits(okOrUnavailable(windows, tr(lang, "station.quota.chatgptNoWindows")), body, body?.rate_limit_reset_credits);
+  const q = withCodexCredits(okOrUnavailable(windows, tr(lang, "station.quota.chatgptNoWindows")), body, body?.rate_limit_reset_credits);
+  // The usage endpoint usually gives only the count, for both machine and borrowed logins.
+  await addCodexResetDetails(q, headers, urls);
+  if (typeof body?.plan_type === "string" && body.plan_type.trim() !== "") q.plan = body.plan_type.trim();
+  return q;
 }
 
 /// A borrowed Codex subscription's allowance, read with the login its host lent (kept in its home's auth.json) while that

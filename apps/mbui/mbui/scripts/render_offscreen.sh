@@ -32,7 +32,7 @@ MBUI_DL_PRINT=contained moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt
 [ -s $O/contained.dl ] || { echo "render_offscreen: no contained draw list"; exit 1; }
 MBUI_DL=$PWD/$O/contained.dl MBUI_DL_PNG=$PWD/$O/contained.png ./_build/native/release/build/render/render.exe
 "$D/chk" contained $O/contained.png
-# partial redraw (docs/partial-redraw.md): a spinner's two moments (src/kitdemo/gallery/dl_print_wbtest.mbt
+# partial redraw: a spinner's two moments (src/kitdemo/gallery/dl_print_wbtest.mbt
 # partial_shown), the second drawn only where it differs from the first, the same picture as the second drawn whole,
 # to the byte
 for k in partial-a partial-b; do
@@ -60,6 +60,10 @@ else
   echo "render_offscreen: what a rounded clip cuts is not the box's own rounded ground ($O/clip-cut.png, clip-box.png)"
   exit 1
 fi
+render_strips_dl "$O"
+MBUI_DL=$PWD/$O/strips.dl MBUI_DL_PNG=$PWD/$O/strips.png ./_build/native/release/build/render/render.exe
+MBUI_STRIPS=0 MBUI_DL=$PWD/$O/strips.dl MBUI_DL_PNG=$PWD/$O/strips.whole.png ./_build/native/release/build/render/render.exe
+render_strips offscreen "$O"
 render_matte_dl "$O"
 for k in matte-fill matte-fill-reference matte-contain matte-contain-reference matte-inset matte-inset-reference; do
   MBUI_DL="$PWD/$O/$k.dl" MBUI_DL_PNG="$PWD/$O/$k.png" ./_build/native/release/build/render/render.exe

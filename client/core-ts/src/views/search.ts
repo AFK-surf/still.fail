@@ -1,4 +1,4 @@
-// The search (docs/search.md): what a few words find in a workspace, from wherever it is, as ⌘K and the phones' search
+// The search: what a few words find in a workspace, from wherever it is, as ⌘K and the phones' search
 // list it. What the device holds is looked through here (the chats as the sidebar has them, the messages it keeps, the
 // stations, the members); what each station holds it says itself (its `stationSearch`: its chats archived or not, every
 // message, its services and tasks, its files), each as it answers, the rest shown meanwhile. The messages found here and

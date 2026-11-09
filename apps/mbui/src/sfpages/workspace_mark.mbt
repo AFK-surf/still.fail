@@ -1,6 +1,6 @@
-// A workspace where it is switched to (the web's WorkspaceMark.tsx): the mark its managers gave it (an icon of
+// A workspace where it is switched to: the mark its managers gave it (an icon of
 // still.fail's, a picture or an emoji, as a station's), else its first letter; and what is said beside it: an
-// invitation waiting (workspace.css.ts inviteDot). Where it goes and how large is its place's (the rail's squares, the
+// invitation waiting. Where it goes and how large is its place's (the rail's squares, the
 // workspaces' rows, Home's name).
 
 ///|

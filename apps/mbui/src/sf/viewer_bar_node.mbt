@@ -1,5 +1,5 @@
-// The bar across the top of a file opened over a wide window (viewer_bar's, ViewerBar.tsx) as nodes of the window's
-// tree (the way there, docs/retained.md 4): what it says bound to what says it as that changes (the way back's words,
+// The bar across the top of a file opened over a wide window (viewer_bar's) as nodes of the window's
+// tree (the way there 4): what it says bound to what says it as that changes (the way back's words,
 // the name, the line about it, where the file is, the window's width, the ink), its tools nodes of their own
 // (tool_node), its way back and each tool done at the press's moment. Gone up out of the way (hidden: a picture left
 // alone) from the moment it is told so, as far as that way has it by the moment each frame is drawn, whatever frames
@@ -17,6 +17,7 @@
 /// reduced), as far in as `shown` says of the node as it is drawn (the viewer's fade). A press on it where nothing of it
 /// takes one is its own, moving the window while it has none of the system's title bar (the app's own top row). Its
 /// tips in `tips`. The bar's node.
+#callsite(autofill(loc))
 pub fn viewer_bar_node(
   parent : @view.View,
   back : () -> String,
@@ -31,11 +32,12 @@ pub fn viewer_bar_node(
   tools : (@view.View, @view.Live[Double]) -> Unit,
   went : () -> Unit,
   tips : TipLayer,
+  loc~ : SourceLoc,
 ) -> @view.View {
   // (hidden as it is made: gone whole, not gone up; its way a motion's, there at once with motion reduced)
   let gone = EdgeWay::new(if @signals.untracked(hidden) { 1.0 } else { 0.0 })
   let mut bar : @view.View? = None
-  parent.box(fn(room) {
+  parent.box(made_for=loc, fn(room) {
     room.over(Is(true)) |> ignore
     room.reacts(hidden, fn(off) { gone.go(room, if off { 1.0 } else { 0.0 }, viewer_bar_ms) })
     let b = room.box(fn(b) {
@@ -68,7 +70,7 @@ pub fn viewer_bar_node(
         .gap(Is(@ui.Space::px(S4)))
         .padding(By(fn() { (bar_start_in(), 0.0, bar_end_in(width()), hairline_h) }))
         |> ignore
-        // clear of the window's buttons at its left, the system's (ViewerBar.css.ts: 84 in, not in full screen)
+        // clear of the window's buttons at its left, the system's (not in full screen)
         row.show(@ui.window_keys_left_now, fn(k) { k.width(Is(Some(viewer_buttons_w))) |> ignore })
         // the way back, at its start; short of room, its words give way, the chevron stays
         row.box(fn(start) {
@@ -190,16 +192,23 @@ fn bar_tool_corner() -> @view.Live[Double] {
 fn bar_words(size : @ui.TextSize, line : @ui.Leading, weight : Int) -> @view.WordsLook {
   let th = @ui.tree_theme()
   let (px, own) = th.text_size(size)
-  { size: px, weight, line: th.leading(line).unwrap_or(own), wrap: false }
+  { size: px, weight, line: th.leading(line).unwrap_or(own), wrap: false, tracking: @view.letters_own, balance: false }
 }
 
 ///|
-/// The way back (viewer_bar's: ViewerBar.css.ts back) in `parent`: 32 high, 4 before the chevron and 10 after the words,
+/// The way back in `parent`: 32 high, 4 before the chevron and 10 after the words,
 /// at the window's corner following it (bar_back_corner); the chevron and `words` in the ink's own, its hover ground
 /// where the hand is on it (or the keyboard's focus shows); `went` as it is pressed, at the press's moment. Read out a
 /// button, by its words.
-fn back_node(parent : @view.View, words : () -> String, ink : () -> ViewerInk, went : () -> Unit) -> @view.View {
-  parent.box(fn(v) {
+#callsite(autofill(loc))
+fn back_node(
+  parent : @view.View,
+  words : () -> String,
+  ink : () -> ViewerInk,
+  went : () -> Unit,
+  loc~ : SourceLoc,
+) -> @view.View {
+  parent.box(made_for=loc, fn(v) {
     let lit = fn() {
       v.focus_shown() ||
       (match @ui.pointing() {
@@ -255,16 +264,18 @@ fn back_shapes() -> Array[@ui.Shape] {
 }
 
 ///|
-/// How much of a file opened has come, in the bar across the top beside its tools, as nodes (viewer_coming's,
-/// FilePreview.tsx FileComing inBar): "正在读取 **1.2 MB** / 3.4 MB" in the meta's size in the ink's quieter colour, the
+/// How much of a file opened has come, in the bar across the top beside its tools, as nodes
+/// : "正在读取 **1.2 MB** / 3.4 MB" in the meta's size in the ink's quieter colour, the
 /// size so far in bold in its own, then a progress bar 120 wide (progress_node); before the core has said how much and
 /// with no size it was sent with, 正在打开 over a bar that sweeps. `got`: what has come and its whole size; `size`: the
 /// size it was sent with. Each as it changes. The row's node.
+#callsite(autofill(loc))
 pub fn viewer_coming_node(
   parent : @view.View,
   got : () -> (Double, Double?)?,
   size : () -> Double,
   ink : () -> ViewerInk,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let total = fn() -> Double? {
     match got() {
@@ -272,7 +283,7 @@ pub fn viewer_coming_node(
       _ => if size() > 0.0 { Some(size()) } else { None }
     }
   }
-  parent.box(fn(row) {
+  parent.box(made_for=loc, fn(row) {
     row
     .row(Is(true))
     .lines_up(Is(Some(Middle)))
@@ -294,7 +305,7 @@ pub fn viewer_coming_node(
       }))
       .words_look(By(fn() {
         let (size, line) = @ui.tree_theme().text_size(Meta)
-        { size, weight: 400, line, wrap: false }
+        { size, weight: 400, line, wrap: false, tracking: @view.letters_own, balance: false }
       }))
       .ink(By(fn() { ink().muted }))
       |> ignore

@@ -1,7 +1,7 @@
 // The system's pickers and the files the app keeps on the device (as @hostapi's pick.mbt and keep.mbt have them), through
-// the framework, so that under a Tester the system is the test's: its pickers give what the test said (Tester::picks)
-// and what the app keeps is kept by the test (Tester::kept), each answer at the next frame, as a host's event comes at
-// a frame's boundary.
+// the framework. Under a Tester the system is the test's (its fake host's pk_* and kp_*, fake_host.mbt): its pickers
+// give what the test said (Tester::picks) and what the app keeps is kept by the test (Tester::kept), each answer at the
+// next frame, as a host's event comes at a frame's boundary.
 
 ///|
 /// An ask of the system's pickers under way (@hostapi.Pick): one of the host's, or (photos of the gallery picked
@@ -10,48 +10,26 @@ pub struct Pick {
   priv hosts : Array[@hostapi.Pick]
   /// what each of `hosts` answered (taken from the host as it does)
   priv got : Array[Array[@hostapi.Picked]?]
-  priv fake : Int
-}
-
-///|
-priv struct FakePick {
-  kind : @hostapi.PickKind
-  /// the frame it was asked in: answered from the next on
-  frame : Int
-  mut taken : Bool
 }
 
 ///|
 /// Asks the system for files of `kind` (@hostapi.pick; `hold`: one too big to be read whole may be held by the host):
-/// None when this host cannot. Under a Tester, what the test said the pickers give (Tester::picks), from the next frame.
+/// None when this host cannot.
 pub fn pick(kind : @hostapi.PickKind, hold? : Bool = false) -> Pick? {
-  match fake.val {
-    Some(f) => {
-      f.pick_asks.push({ kind, frame: g().frame_no, taken: false })
-      f.wants = true
-      let p : Pick = { hosts: [], got: [], fake: f.pick_asks.length() - 1 }
+  match @hostapi.pick(kind, hold~) {
+    Some(h) => {
+      let p : Pick = { hosts: [h], got: [None] }
       p.wait("a pick")
       Some(p)
     }
-    None =>
-      match @hostapi.pick(kind, hold~) {
-        Some(h) => {
-          let p : Pick = { hosts: [h], got: [None], fake: -1 }
-          p.wait("a pick")
-          Some(p)
-        }
-        None => None
-      }
+    None => None
   }
 }
 
 ///|
 /// Waited on until the system answers and the answer is taken (hostcall.mbt's outside): each ask of the host's by its
-/// id as the host's event names it (outside_pick), a Tester's by its ask's place, from 1.
+/// id as the host's event names it (outside_pick).
 fn Pick::wait(self : Pick, what : String) -> Unit {
-  if self.hosts.is_empty() {
-    outside_start(outside_pick, self.fake + 1, what + " \{self.fake + 1}")
-  }
   for h in self.hosts {
     outside_start(outside_pick, h.id(), what + " \{h.id()}")
   }
@@ -61,38 +39,25 @@ fn Pick::wait(self : Pick, what : String) -> Unit {
 /// Photos of the gallery (`srcs`) read whole, as one pick of them in that order (@hostapi.pick_photo, each): None
 /// where the host has no gallery (a Tester's has none).
 pub fn pick_photos(srcs : Array[String]) -> Pick? {
-  match fake.val {
-    Some(_) => None
-    None => {
-      let hosts = []
-      for src in srcs {
-        match @hostapi.pick_photo(src) {
-          Some(h) => hosts.push(h)
-          None => ()
-        }
-      }
-      if hosts.is_empty() {
-        None
-      } else {
-        let p : Pick = { hosts, got: hosts.map(fn(_) { None }), fake: -1 }
-        p.wait("a gallery photo read")
-        Some(p)
-      }
+  let hosts = []
+  for src in srcs {
+    match @hostapi.pick_photo(src) {
+      Some(h) => hosts.push(h)
+      None => ()
     }
+  }
+  if hosts.is_empty() {
+    None
+  } else {
+    let p : Pick = { hosts, got: hosts.map(fn(_) { None }) }
+    p.wait("a gallery photo read")
+    Some(p)
   }
 }
 
 ///|
 /// What was picked, once the system has answered (empty: called off); None while it asks. Taken once.
 pub fn Pick::files(self : Pick) -> Array[@hostapi.Picked]? {
-  if self.hosts.is_empty() {
-    answer_here(outside_pick, self.fake + 1) |> ignore
-    let got = self.faked()
-    if got is Some(_) {
-      outside_end(outside_pick, self.fake + 1)
-    }
-    return got
-  }
   for i, h in self.hosts {
     if self.got[i] is None && answer_here(outside_pick, h.id()) {
       match h.files() {
@@ -120,25 +85,6 @@ pub fn Pick::files(self : Pick) -> Array[@hostapi.Picked]? {
 }
 
 ///|
-/// A Tester's answer: what the test said the pickers give, from the frame after it was asked.
-fn Pick::faked(self : Pick) -> Array[@hostapi.Picked]? {
-  match fake.val {
-    Some(f) if self.fake >= 0 && self.fake < f.pick_asks.length() => {
-      let a = f.pick_asks[self.fake]
-      if a.taken {
-        Some([])
-      } else if g().frame_no <= a.frame {
-        None
-      } else {
-        a.taken = true
-        Some(f.picks.copy())
-      }
-    }
-    _ => Some([])
-  }
-}
-
-///|
 /// What the system's pickers give from now on, whatever is asked (as MBUI_PICK_FILES does a host's): `files` (their
 /// names and bytes); none: the person calls the picker off.
 pub fn Tester::picks(self : Tester, files : Array[(String, Bytes)]) -> Unit {
@@ -157,116 +103,41 @@ pub fn Tester::pick_asks(self : Tester) -> Array[@hostapi.PickKind] {
 ///|
 /// A file being kept on the device (@hostapi.Keep).
 pub struct Keep {
-  priv host : @hostapi.Keep?
-  priv fake : Int
-}
-
-///|
-priv struct FakeKeep {
-  name : String
-  mime : String
-  way : @hostapi.KeepWay
-  data : Array[Byte]
-  /// the frame it was finished in (-1: not yet): kept from the next on; let go of
-  mut finished : Int
-  mut ended : Bool
+  priv host : @hostapi.Keep
 }
 
 ///|
 /// A file named `name` (`mime`, "" when unknown) to keep on the device, its bytes to come (@hostapi.keep_begin): None
 /// when this host keeps none.
 pub fn keep_begin(name : String, mime : String, way? : @hostapi.KeepWay = Downloads) -> Keep? {
-  match fake.val {
-    Some(f) => {
-      f.keeps.push({ name, mime, way, data: [], finished: -1, ended: false })
-      Some({ host: None, fake: f.keeps.length() - 1 })
-    }
-    None =>
-      match @hostapi.keep_begin(name, mime, way~) {
-        Some(k) => Some({ host: Some(k), fake: -1 })
-        None => None
-      }
-  }
-}
-
-///|
-fn Keep::faked(self : Keep) -> FakeKeep? {
-  match fake.val {
-    Some(f) if self.fake >= 0 && self.fake < f.keeps.length() => Some(f.keeps[self.fake])
-    _ => None
+  match @hostapi.keep_begin(name, mime, way~) {
+    Some(k) => Some({ host: k })
+    None => None
   }
 }
 
 ///|
 /// The next of its bytes; false when they could not be written.
 pub fn Keep::append(self : Keep, data : Bytes) -> Bool {
-  match self.host {
-    Some(k) => k.append(data)
-    None =>
-      match self.faked() {
-        Some(k) if k.finished < 0 && !k.ended => {
-          for b in data {
-            k.data.push(b)
-          }
-          true
-        }
-        _ => false
-      }
-  }
+  self.host.append(data)
 }
 
 ///|
 /// All of it is here: the host puts it in its place.
 pub fn Keep::finish(self : Keep) -> Unit {
-  match self.host {
-    Some(k) => k.finish()
-    None =>
-      match self.faked() {
-        Some(k) if k.finished < 0 => {
-          k.finished = g().frame_no
-          match fake.val {
-            Some(f) => f.wants = true
-            None => ()
-          }
-        }
-        _ => ()
-      }
-  }
+  self.host.finish()
 }
 
 ///|
-/// How it stands: under a Tester, kept from the frame after it was finished, where the system keeps downloads
-/// ("Download/" and its name; in MBUI_DOWNLOADS_DIR, as a scripted run's host keeps there, its path).
+/// How it stands.
 pub fn Keep::kept(self : Keep) -> @hostapi.Kept {
-  match self.host {
-    Some(k) => k.kept()
-    None =>
-      match self.faked() {
-        Some(k) if k.ended && k.finished < 0 => CalledOff
-        Some(k) if k.finished >= 0 && g().frame_no > k.finished =>
-          KeptAt(
-            match env("MBUI_DOWNLOADS_DIR") {
-              "" => "Download/" + k.name
-              dir => dir + "/" + k.name
-            },
-          )
-        Some(_) => Keeping
-        None => Failed
-      }
-  }
+  self.host.kept()
 }
 
 ///|
 /// Let go of: one not finished is called off.
 pub fn Keep::end(self : Keep) -> Unit {
-  match self.host {
-    Some(k) => k.end()
-    None =>
-      match self.faked() {
-        Some(k) => k.ended = true
-        None => ()
-      }
-  }
+  self.host.end()
 }
 
 ///|
@@ -394,28 +265,17 @@ pub fn GalleryRead::photos(self : GalleryRead) -> Array[@hostapi.GalleryPhoto]? 
 /// it changes (hostcall.mbt's outside_update). What the host says as it takes it (downloading, waiting) is read at
 /// once, not on its event a frame or more later: until then it said nothing was under way, and what shows how it goes
 /// went from nothing to 下载中 a frame late (the update dialog's bar gone and back, its sheet shorter and taller
-/// again, 2026-10-28). Under a Tester, kept as asked (Tester::update_asked).
+/// again, 2026-10-28).
 pub fn update_fetch(url : String, sha256 : String, size : Double, name : String, now : Bool) -> Unit {
-  match fake.val {
-    Some(_) => update_asked.push("fetch \{name} \{now}")
-    None => {
-      @hostapi.update_fetch(url, sha256, size, name, now)
-      update_told.set(@hostapi.update_state())
-    }
-  }
+  @hostapi.update_fetch(url, sha256, size, name, now)
+  update_told.set(@hostapi.update_state())
 }
 
 ///|
-/// The build made ready put in this app's place now (@hostapi.update_apply), as update_fetch. Under a Tester, kept as
-/// asked.
+/// The build made ready put in this app's place now (@hostapi.update_apply), as update_fetch.
 pub fn update_apply(said : String) -> Unit {
-  match fake.val {
-    Some(_) => update_asked.push("apply")
-    None => {
-      @hostapi.update_apply(said)
-      update_told.set(@hostapi.update_state())
-    }
-  }
+  @hostapi.update_apply(said)
+  update_told.set(@hostapi.update_state())
 }
 
 ///|
@@ -454,5 +314,5 @@ pub fn update_told_as(state : String) -> Unit {
 
 ///|
 /// How an update goes as the host last told it ("" before it has told anything: nothing under way).
-// kept across runs: a real host's alone (a Tester's host tells no update), set by the host's events
+// kept across runs: set by the host's events (a Tester's host tells none: Tester::tells_update), put back by each Tester
 let update_told : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })

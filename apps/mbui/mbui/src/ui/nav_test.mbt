@@ -11,9 +11,9 @@ fn nav_view(nav : @ui.Nav[Int]) -> (@ui.Ctx) -> Unit {
       fn(i) {
         c.column(w=Fill(1.0), h=Fill(1.0), fn() {
           c.text("title \{i}", wrap=false) |> ignore
-          if c.button("open \{i + 1}") {
+          c.button("open \{i + 1}", on_press=fn() {
             nav.push(i + 1)
-          }
+          })
           c.list("rows", 200, 30.0, fn(r) {
             c.text("row \{r} of \{i}", wrap=false) |> ignore
           })
@@ -56,8 +56,8 @@ test "a page pushed slides in from the right, the one under it out to the left" 
 
 ///|
 test "a page from the left comes in from there, the one under it out to the right; back and swiped back, that way" {
-  // page 1 is to the left of page 0 (still.fail's settings, its gear at the list's top left: App.kt transition)
-  let nav = @ui.Nav::new(0, from_left=fn(i) { i == 1 })
+  // page 1 is to the left of page 0
+  let nav = @ui.Nav::new(0, from_left=fn(i, under) { i == 1 && under is Some(0) })
   let t = @ui.Tester::new(nav_view(nav))
   t.tap_text("open 1")
   t.run_for(page_ms / 2.0)
@@ -462,9 +462,9 @@ test "a page covered by one sliding in takes no press: one where its button stil
       fn(i) {
         c.column(w=Fill(1.0), h=Fill(1.0), fn() {
           c.text("title \{i}", wrap=false) |> ignore
-          if c.button("press \{i}") {
+          c.button("press \{i}", on_press=fn() {
             pressed.push(i)
-          }
+          })
         })
         |> ignore
       },

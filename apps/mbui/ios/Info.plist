@@ -4,8 +4,8 @@
 <dict>
   <key>CFBundleIdentifier</key><string>fail.still.mbui.debug</string>
   <key>CFBundleExecutable</key><string>mbui</string>
-  <key>CFBundleName</key><string>still.fail mbui</string>
-  <key>CFBundleDisplayName</key><string>still.fail mbui</string>
+  <key>CFBundleName</key><string>still.fail</string>
+  <key>CFBundleDisplayName</key><string>still.fail</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleDevelopmentRegion</key><string>zh-Hans</string>
   <key>CFBundleLocalizations</key><array><string>zh-Hans</string><string>en</string></array>

@@ -1,4 +1,4 @@
-// svgtypes' filter value lists (filter_functions.rs): the CSS filter functions and url()s of a `filter`.
+// svgtypes' filter value lists: the CSS filter functions and url()s of a `filter`.
 
 ///|
 priv enum FilterValue {

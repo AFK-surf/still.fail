@@ -3,7 +3,7 @@
 // (`addWords`), in the language it says (`setLang`). The browser's until then: the share page follows nothing else; the
 // app follows its preferences (web/src/i18n.ts). `t` reads it as it is now: the page's root is drawn again, whole, when it
 // changes (I18nRoot).
-import { createElement, Fragment, type ReactNode } from "react";
+import { createElement, Fragment, type ReactNode } from "preact/compat";
 
 export type Lang = "zh" | "en";
 export type Words = Record<string, string | { one?: string; other: string }>;

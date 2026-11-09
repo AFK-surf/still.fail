@@ -1,4 +1,4 @@
-// An agent's execution history, a page of its own (slice 8: ember apps/android chat/screens/History.kt HistoryScreen,
+// An agent's execution history, a page of its own (slice 8: still.fail apps/android chat/screens/History.kt HistoryScreen,
 // Steps, Item, Message, Group, StepRow, Folding, Whole, PhaseLine, Details; ui/ToolStep.kt): what it received and what
 // it sent, drawn alike (a line saying what and where, then its words in brief beside a bar); what it did in between,
 // grouped, each group opening to its calls and thoughts, a call opening to what it asked for (a command, an edit as a
@@ -10,15 +10,6 @@
 // Slack user's name offers 这是我 or 不是我 (`slack.identity`); a place is a way there.
 
 ///|
-/// A page's compact bar (Parts.kt NavBar): back, with where it goes back to, in the accent; the title in the middle;
-/// what is at its end.
-fn page_bar(c : @ui.Ctx, key : String, back : String, title : String, trailing : () -> Unit) -> Unit {
-  if @sf.nav_bar(c, key + "/back", back, title, trailing~, bg=@sf.theme().p.bg, top=status_top()) {
-    @sfbase.go_back() |> ignore
-  }
-}
-
-///|
 fn history_params(r : ChatRef, key : String) -> Map[String, Json] {
   { "station": Json::string(r.station), "key": Json::string(key) }
 }
@@ -26,7 +17,7 @@ fn history_params(r : ChatRef, key : String) -> Map[String, Json] {
 ///|
 /// The history's page left: what it followed let go.
 fn history_left(src : Source, r : ChatRef, key : String) -> Unit {
-  (src.leave)("history", history_params(r, key))
+  (src.leave)("history", history_params(r, key), @sfbase.TopicLeave::Legacy)
   // the station's figures its details read
   @sfbase.let_go(src, @sfbase.history_scope(r.station, key))
   history_placed.remove("history/" + r.station + "/" + key)
@@ -34,148 +25,7 @@ fn history_left(src : Source, r : ChatRef, key : String) -> Unit {
 }
 
 ///|
-/// The page (History.kt HistoryScreen): its bar (copying its link at its end), the agent at its head with what can be
-/// done to it and the tabs, then its steps or its details; its steps opened at `entry` (a transcript entry), else at
-/// its newest.
-fn history_page(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : Int?) -> Unit {
-  let t = @sf.theme()
-  let chat = (src.topic)("chat", chat_params(r))
-  let title = text(chat.value, "title")
-  let link = match chat_link(r.station, key) {
-    "" => ""
-    l => l + "?history=" + @codec.encode_uri_component(key)
-  }
-  // over the navigation bar (History.kt: windowInsetsPadding(navigationBars))
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, pb=nav_foot(), fn() {
-    page_bar(c, "history", tr("common.back"), tr("android-chat.history.title"), fn() {
-      if title != "" && link != "" && nav_button(c, "copy", 18.0, key="history/copy", said=tr("web-mobile.history.copyLink")) {
-        copy_chat_link(c, title, link)
-      }
-    })
-    history_body(c, src, r, key, entry, chat)
-    // a Slack user's name tapped: its menu (link_menu.mbt)
-    link_menu_layer(c)
-  })
-  |> ignore
-}
-
-///|
-/// What the history's page shows under its bar: the
-/// agent at its head with what can be done to it and the tabs, then its steps or its details.
-fn history_body(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : Int?, chat : Topic) -> Unit {
-  let t = @sf.theme()
-  let a = agent_json(chat.value, key)
-  match a {
-    None => {
-      waiting_messages(
-        c,
-        match chat.error {
-          Some(e) => Some(error_words(e))
-          None => None
-        },
-      )
-      return
-    }
-    Some(_) => ()
-  }
-  let s = field(a, "session")
-  c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=18.0, pt=4.0, gap=6.0, align=ACenter, fn() {
-    model_mark_big(
-      c,
-      text(field(s, "maker"), "id"),
-      text(s, "runtime"),
-      20.0,
-      state_of_badge(text(a, "badge")),
-      t.p.bg,
-    )
-    // (its name cut short where what it does and its tabs leave it less: a name)
-    c.box(w=Fill(1.0), fn() {
-      c.text(text(s, "agentText"), size=t.t.title, weight=700, color=t.p.text, wrap=false, w=Cut) |> ignore
-    })
-    |> ignore
-    history_actions(c, src, r, a)
-    @sf.head_end(c, fn() {
-      dui.history_tab = @sf.segmented(
-        c,
-        "history/tab",
-        [tr("android-chat.history.tab.steps"), tr("android-chat.history.tab.details")],
-        dui.history_tab,
-      )
-    })
-  })
-  |> ignore
-  history_summary(c, a)
-  c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    if dui.history_tab == 0 {
-      // its steps, as every pane draws them (sfpages' history_steps.mbt); opened at an entry, brought to it once
-      let lkey = "history/" + r.station + "/" + key
-      match entry {
-        Some(e) if !history_placed.contains(lkey) => {
-          history_placed[lkey] = true
-          @sfpages.history_focus(r.station, key, e)
-        }
-        _ => ()
-      }
-      @sfpages.history_steps(c, src, r.station, key)
-    } else {
-      history_details(c, src, r, key, a)
-    }
-  })
-  |> ignore
-}
-
-///|
-/// What can be done to it now (History.kt Actions): stop a turn, let an idle process go; each a 28 disc, a spinner
-/// while it is asked.
-fn history_actions(c : @ui.Ctx, src : Source, r : ChatRef, a : Json?) -> Unit {
-  let t = @sf.theme()
-  let s = field(a, "session")
-  let key = text(s, "key")
-  let status = text(a, "status")
-  let one = fn(icon : String, done : String, call : String) {
-    let dkey = call + "/" + r.station + "/" + key
-    let busy = doing(dkey)
-    let id = c.id("history/" + call)
-    if !busy && c.clicked(id) {
-      act(
-        src,
-        done,
-        dkey,
-        call,
-        { "station": Json::string(r.station), "key": Json::string(key) },
-        done~,
-      )
-    }
-    c.box(
-      w=Px(28.0),
-      h=Px(28.0),
-      radius=14.0,
-      bg=t.p.chip,
-      align=ACenter,
-      justify=JCenter,
-      id~,
-      fn() {
-        if busy {
-          @sf.spinner(c, size=12.0) |> ignore
-        } else {
-          @sf.icon(c, icon, size=14.0, color=t.p.text) |> ignore
-        }
-        // History.kt: clip(CircleShape).clickable
-        @motion.ripple(c, id, 14.0)
-      },
-    )
-    |> ignore
-  }
-  if status == "running" || status == "queued" {
-    one("stop", tr("android-chat.history.stopped"), "session.stop")
-  }
-  if text(s, "process") == "warm" {
-    one("unplug", tr("android-chat.history.evicted"), "session.evict")
-  }
-}
-
-///|
-/// The head's short line (History.kt Summary): only what is worth a look now: a quota running out (its chip, what it
+/// The head's short line: only what is worth a look now: a quota running out (its chip, what it
 /// says and more in its tip), the disk filling up (amber), an account that cannot run (red).
 fn history_summary(c : @ui.Ctx, a : Json?) -> Unit {
   let t = @sf.theme()
@@ -212,7 +62,7 @@ fn history_summary(c : @ui.Ctx, a : Json?) -> Unit {
 }
 
 ///|
-/// How a history's steps were put in place as it opened (History.kt Steps: `follow.placed`), by its list's key: at
+/// How a history's steps were put in place as it opened, by its list's key: at
 /// its newest, followed (true), or at an entry, not followed (false). Not there: not put in place yet.
 let history_placed : Map[String, Bool] = {}
 
@@ -222,14 +72,14 @@ let history_placed : Map[String, Bool] = {}
 let history_short : Map[String, Bool] = {}
 
 ///|
-/// Its details (History.kt Details): where it stands and its figures as its card has them, how it runs in a line,
+/// Its details: where it stands and its figures as its card has them, how it runs in a line,
 /// what it runs on and has done, what it used, the station.
 fn history_details(c : @ui.Ctx, src : Source, r : ChatRef, key : String, a : Json?) -> Unit {
   let t = @sf.theme()
   let s = field(a, "session")
-  let card = (src.topic)("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).value
+  let card = src.topic("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).get().value
   let usage = @sfpages.history_usage(src, r.station, key)
-  let host = @sfbase.hold(src, @sfbase.history_scope(r.station, key), "host", { "station": Json::string(r.station) }).value
+  let host = @sfbase.hold(src, @sfbase.history_scope(r.station, key), "host", { "station": Json::string(r.station) }).get().value
   let detail = fn(label : String, value : String, marked : Bool) {
     c.box(dir=Row, w=Fill(1.0), gap=16.0, fn() {
       c.box(w=Px(76.0), fn() { c.text(label, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore })
@@ -253,11 +103,11 @@ fn history_details(c : @ui.Ctx, src : Source, r : ChatRef, key : String, a : Jso
       agent_tiles(c, card, 14.0)
       agent_notes(c, card, 10.0)
       c.box(h=Px(6.0), fn() {  }) |> ignore
-      // changing how it runs is a page of its own (RunSettingsScreen)
-      if run_row(c, a) {
-        @sfbase.history_push()
-        app.nav.push(Setting(@settings.Route::RunSettings(r.station, key)))
-      }
+      // How it runs is picked in the same panel as elsewhere in the app.
+      let from = c.id("history-run-row")
+      run_row(c, a, on_press=fn() {
+        @sfpages.open_triple_panel(src, r.station, "session:" + key, Of(from), saved=@sf.t("web-pages.chat.pickSaved"))
+      })
       c.box(w=Fill(1.0), pt=12.0, pb=10.0, gap=8.0, fn() {
         detail(tr("android-chat.history.detail.runtime"), text(s, "runtimeText"), false)
         match text(s, "processText") {
@@ -306,7 +156,7 @@ fn station_name_of(src : Source, r : ChatRef) -> String {
     Some(i) => r.station.view(end_offset=i).to_owned()
     None => r.station
   }
-  match stations_of((src.topic)("stations", { "scope": Json::string(scope) }).value).iter().find_first(fn(
+  match station_marks(src, scope).iter().find_first(fn(
     s,
   ) {
     s.address == r.station
@@ -317,9 +167,9 @@ fn station_name_of(src : Source, r : ChatRef) -> String {
 }
 
 ///|
-/// How it runs, in one line (History.kt RunRow): the model (never cut short), how hard it thinks, the account; a
-/// hairline round it. True on the frame after a tap (the run settings page opened).
-fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
+/// How it runs, in one line: the model (never cut short), how hard it thinks, the account; a
+/// hairline round it. `on_press` as it is tapped (the model picker opened).
+fn run_row(c : @ui.Ctx, a : Json?, on_press? : () -> Unit) -> Unit {
   let t = @sf.theme()
   let s = field(a, "session")
   let name = text(field(a, "account"), "name")
@@ -378,35 +228,13 @@ fn run_row(c : @ui.Ctx, a : Json?) -> Bool {
     |> ignore
   })
   |> ignore
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
-///|
-/// An entry opened in full (History.kt's reader, Sheet.kt ReaderHost): back to 执行历史, the line it was under, then
-/// all its words as Markdown, 20 from the sides, 12 between.
-fn words_page(c : @ui.Ctx, src : Source, head : String, words : String) -> Unit {
-  ignore(src)
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
-    page_bar(c, "words", tr("android-misc.reader.back"), "", fn() {  })
-    c.list("words/" + head + "/" + words.length().to_string(), 2, 200.0, fn(i) {
-      c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=if i == 1 { 30.0 } else { 12.0 }, fn() {
-        if i == 0 {
-          if head != "" {
-            c.text(head, size=t.t.meta, color=t.p.muted) |> ignore
-          }
-        } else {
-          @sf.markdown(c, words) |> ignore
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-}
-
-// ── a call, drawn by what it is (ui/ToolStep.kt) ────────────────────────
+// ── a call, drawn by what it is ────────────────────────
 
 ///|
 /// The boxes of a step drawn so far, numbered for where each is scrolled to (within the step's scope).

@@ -60,7 +60,7 @@ test "desk composer: its hint gone as its field takes the cursor, back once it i
   t.draw()
   // (the cursor in it as it is first drawn, the keyboard at hand): not shown; let go of, a capsule, it is (saying
   // which key brings the cursor back: what it says then, the only words in it)
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   assert_eq(hint_shown_at(t, "发消息"), None)
   t.ctx().blur()
   let rest = @sfpages.let_go_ms + @ui.move_most_ms + @sf.hint_back_ms
@@ -69,7 +69,7 @@ test "desk composer: its hint gone as its field takes the cursor, back once it i
   let at = hint_shown_at(t, hint).unwrap()
   let (x, y) = t.find(hint).unwrap()
   t.tap(x, y)
-  assert_true(t.ctx().editor_focused(@sfpages.composer_field_key))
+  assert_true(composer_focused())
   // opened to a box with the cursor in it: not shown at all, in any frame
   let opened = hint_watch(t, "发消息", @ui.move_most_ms + @sf.hint_back_ms)
   assert_eq(opened, [])

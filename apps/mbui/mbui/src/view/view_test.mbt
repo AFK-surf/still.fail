@@ -1,4 +1,4 @@
-// A view made once does only the work a change asks for (docs/retained.md, the model): counted as work done or not
+// A view made once does only the work a change asks for (the model): counted as work done or not
 // (Tree::work), never by how long it took.
 
 ///|
@@ -156,7 +156,7 @@ priv struct Item {
 /// A list of rows by key, each row's making counted, each row's words by its item.
 fn list_tree(items : @signals.Signal[Array[Item]], rows_made : Ref[Int]) -> @view.Tree {
   @view.Tree::new(fn(root) {
-    root.each(fn() { items.get() }, fn(it) { it.key }, fn(row, item) {
+    root.each(at_once=true, fn() { items.get() }, fn(it) { it.key }, fn(row, item) {
       rows_made.val = rows_made.val + 1
       row.words(By(fn() { item.get().words })) |> ignore
     })
@@ -213,7 +213,7 @@ test "a row gone: let go, its bindings stopped, what it read no longer runs anyt
   let rows_made = Ref(0)
   let outside = @signals.signal(0)
   let t = @view.Tree::new(fn(root) {
-    root.each(fn() { items.get() }, fn(it) { it.key }, fn(row, item) {
+    root.each(at_once=true, fn() { items.get() }, fn(it) { it.key }, fn(row, item) {
       rows_made.val = rows_made.val + 1
       // (reads something of its own besides its item: once let go, a change of it runs nothing)
       row.words(By(fn() { "\{item.get().words} \{outside.get()}" })) |> ignore
@@ -238,7 +238,7 @@ test "shown while it holds: made as it comes, let go as it goes, its holder's ot
   let made = Ref(0)
   let t = @view.Tree::new(fn(root) {
     root.box(fn(b) { b.words(Is("在上")) |> ignore }) |> ignore
-    root.show(fn() { on.get() }, fn(v) {
+    root.show(at_once=true, fn() { on.get() }, fn(v) {
       made.val = made.val + 1
       v.words(Is("出现")) |> ignore
     })
@@ -271,8 +271,8 @@ fn shown(d : Array[@view.Drawn]) -> Array[String] {
 fn rows_tree(items : @signals.Signal[Array[Item]], wide : @signals.Signal[Bool]) -> @view.Tree {
   @view.Tree::new(fn(root) {
     root.pad(Is(4.0)) |> ignore
-    root.show(fn() { wide.get() }, fn(v) { v.words(Is("宽")).height(Is(Some(10.0))) |> ignore })
-    root.each(fn() { items.get() }, fn(it) { it.key }, fn(row, item) {
+    root.show(at_once=true, fn() { wide.get() }, fn(v) { v.words(Is("宽")).height(Is(Some(10.0))) |> ignore })
+    root.each(at_once=true, fn() { items.get() }, fn(it) { it.key }, fn(row, item) {
       row.row(Is(true)).ground(By(fn() { if item.get().words.length() > 1 { 0xFF00FF00L } else { 0L } })) |> ignore
       row.box(fn(w) { w.words(By(fn() { item.get().words })) |> ignore }) |> ignore
     })
@@ -417,8 +417,8 @@ test "let go, a shown part holding rows, and then the whole tree: everything it 
   let top = @signals.signal("顶", same=fn(a, b) { a == b })
   let t = @view.Tree::new(fn(root) {
     root.box(fn(b) { b.words(By(fn() { top.get() })) |> ignore }) |> ignore
-    root.show(fn() { on.get() }, fn(part) {
-      part.each(fn() { items.get() }, fn(it) { it.key }, fn(row, item) {
+    root.show(at_once=true, fn() { on.get() }, fn(part) {
+      part.each(at_once=true, fn() { items.get() }, fn(it) { it.key }, fn(row, item) {
         row.words(By(fn() { "\{item.get().words}\{outside.get()}" })).on_press(fn() { () }) |> ignore
       })
     })
@@ -558,7 +558,7 @@ test "what a node is made with is its own: an effect made there stopped, its cle
       |> ignore
     })
     |> ignore
-    root.show(fn() { on.get() }, fn(_) {
+    root.show(at_once=true, fn() { on.get() }, fn(_) {
       @signals.effect_cleanup(fn() {
         outside.get() |> ignore
         runs.val = runs.val + 1
@@ -764,7 +764,7 @@ test "a row gone from the list leaves where it was, the rows after it kept below
 ///|
 test "shown and let go again and again: each node let go said once, as the host takes it" {
   let on = @signals.signal(false, same=fn(a, b) { a == b })
-  let t = @view.Tree::new(fn(root) { root.show(fn() { on.get() }, fn(v) { v.words(Is("出")) |> ignore }) })
+  let t = @view.Tree::new(fn(root) { root.show(at_once=true, fn() { on.get() }, fn(v) { v.words(Is("出")) |> ignore }) })
   t.frame(390.0, 844.0) |> ignore
   t.take_removed() |> ignore
   let made : Array[@view.NodeId] = []

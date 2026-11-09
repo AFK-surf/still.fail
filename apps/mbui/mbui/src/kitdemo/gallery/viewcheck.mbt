@@ -1,4 +1,4 @@
-// The native views' contract (docs/determinism.md, "What is compared, and where"; scripts/host_contract.sh HOST views):
+// The native views' contract ("What is compared, and where"; scripts/host_contract.sh HOST views):
 // on a real host, MBUI_VIEWCHECK=1: a video's view and a page's placed between pixels (a 16:9 picture fitted in 366
 // across, its top 147.3625 down; a page under it at 410.4375, 120.25 tall), each kind the host has (Windows has no
 // video player yet: its page alone), what the app told the host on the log (VIEWTOLD, in device pixels: ui's native.mbt) beside where the
@@ -33,7 +33,7 @@ let view_check_grown : Ref[Bool] = Ref(false)
 /// A page 40,000 tall (its CSS pixels the points it is placed in; Android: past the largest texture a GPU takes, many
 /// times over), placed so that only the middle of its band of green on red is seen: there, its picture shows the part
 /// of it that is there (NativeViews.Page), or the contract fails. Its root does not scroll (overflow: hidden), as a
-/// still.fail viz's does not (web/src/viz/ember-viz.css); it says when it has loaded.
+/// still.fail viz's does not (web/src/viz/viz.css); it says when it has loaded.
 let view_check_tall_html : String = "<html style=\"overflow:hidden\"><body style=\"margin:0;background:#c00\"><div style=\"height:29000px\"></div><div style=\"height:2000px;background:#0a0\"></div><div style=\"height:9000px\"></div><script>addEventListener('load',function(){mbuiHost.post('loaded')})</script></body></html>"
 
 ///|

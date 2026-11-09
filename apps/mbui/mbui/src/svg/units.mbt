@@ -1,4 +1,4 @@
-// usvg's units (parser/units.rs) and options (parser/options.rs).
+// usvg's units and options.
 
 ///|
 /// What a document is read with (usvg's Options, the parts this port uses).
@@ -148,7 +148,7 @@ fn convert_named_font_size(name : String, parent : Float) -> Float {
   parent * powi(1.2, factor)
 }
 
-// ── SvgNode's length helpers (converter.rs) ───────────────────────────
+// ── SvgNode's length helpers ───────────────────────────
 
 ///|
 fn SDoc::convert_length(self : SDoc, node : Int, aid : String, units : Units, state : State, def : Length) -> Float {
@@ -247,7 +247,7 @@ fn SDoc::resolve_transform(self : SDoc, node : Int, aid : String, state : State)
   transform
 }
 
-// ── switch (parser/switch.rs) ─────────────────────────────────────────
+// ── switch ─────────────────────────────────────────
 
 ///|
 let svg_features : Array[String] = [

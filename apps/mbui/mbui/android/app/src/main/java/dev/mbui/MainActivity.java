@@ -32,8 +32,11 @@ public class MainActivity extends Activity {
         Host.holdUpright(this);
         // `--es env K=V;K2=V2`: environment variables for the app's MoonBit (as a desktop run has them: the core
         // demo's MBUI_AUTH_BEGIN, MBUI_CORE_DUMP…), set before it starts.
-        // The test hooks (env, script, bench) come in an intent any app on the device may send this exported
-        // activity: a release build (the beta app) takes them only on an emulator (e2e/run.sh with E2E_APK).
+        // The test hooks (env, script, bench, shot_at) come in an intent any app on the device may send this exported
+        // activity: taken on an emulator (made-up accounts; e2e/run.sh with E2E_APK), on a phone only by a debug build
+        // the shell has opened them in (testHooks): a phone's app holds a real account, and another app's intent would
+        // drive it (a script typing and sending) or turn on what writes down what it shows (MBUI_DRAW_LOG,
+        // MBUI_TEXT_RECORD).
         boolean hooks = testHooks();
         // The app's own defaults first (its manifest's <meta-data android:name="dev.mbui.env" android:value="K=V;…">: a
         // build's settings, as still.fail mbui's release says where its updates come from), the intent's over them.
@@ -154,8 +157,11 @@ public class MainActivity extends Activity {
                 ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
                         .hideSoftInputFromWindow(mbView.getWindowToken(), 0);
             }
+            boolean turned = shown != imeShown;
             imeShown = shown;
             Host.imeVisible = shown;
+            // (the keyboard up: what is typed drawn at the display's highest; gone, let go of as a motion's end is)
+            if (turned) mbView.typingChanged();
             if (shown) Host.imeAwaited = false;
             return WindowInsets.CONSUMED;
         });
@@ -226,6 +232,12 @@ public class MainActivity extends Activity {
      */
     static volatile long hiddenAt;
 
+    /**
+     * How many of the app's activities are started (main thread): it is off the screen once none is. One going over
+     * another (OverActivity coming and going) starts before the other stops.
+     */
+    private static int started;
+
     /** The Wi-Fi multicast lock held while on screen, when the manifest asks for it (src/hostapi/system.mbt). */
     private android.net.wifi.WifiManager.MulticastLock multicast;
 
@@ -241,6 +253,7 @@ public class MainActivity extends Activity {
             }
         }
         if (multicast != null) multicast.acquire();
+        started++;
         Streams.behind(false);
         // a newer build ready stays out while the app is in sight (Updates.started)
         Updates.started();
@@ -259,8 +272,11 @@ public class MainActivity extends Activity {
         // the drawing paused once the window is off the screen, not as it starts going: the system's animation of
         // the window going (into the launcher's icon, to the recent apps) moves what it last drew, as a View's
         mbView.onPause();
-        // a remote screen's sound stops with its picture (Streams.behind)
-        Streams.behind(true);
+        if (--started == 0) {
+            // a remote screen's sound stops with its picture (Streams.behind); a video playing pauses
+            Streams.behind(true);
+            NativeViews.behind();
+        }
         folds.stop();
         if (multicast != null) multicast.release();
         if (hiddenAt == 0) hiddenAt = android.os.SystemClock.elapsedRealtime();
@@ -323,11 +339,12 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Brought back (singleTask): by BrowserLogin once the browser has come back, or by its page's link. */
+    /** Brought back (singleTask): by the browser coming back (WebAuth, BrowserLogin), or by a login page's link. */
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        WebAuth.took(intent);
         Notices.from(intent);
         Shares.take(intent);
         Host.log("activity onNewIntent " + (intent.getData() != null ? intent.getData().getScheme() + "://" + intent.getData().getHost() : "(in front again)"));
@@ -433,6 +450,7 @@ public class MainActivity extends Activity {
         // the core hears the app left the front (its drawing goes on until the window is off the screen: onStop)
         Host.resumed = false;
         Host.tellAppState();
+        WebAuth.paused();
     }
 
     @Override
@@ -450,6 +468,8 @@ public class MainActivity extends Activity {
         setBackEnabled(Host.backWanted);
         Host.resumed = true;
         Host.tellAppState();
+        // (after onNewIntent: the browser come back is told before this)
+        WebAuth.resumed();
         // back from giving the leave to install apps: a newer build ready goes on (Updates.resumed)
         Updates.resumed();
         // whether it is over another app, said to the app as it changes (src/hostapi/system.mbt `over`)
@@ -468,9 +488,34 @@ public class MainActivity extends Activity {
         Host.tellAppState();
     }
 
-    /** A debug build, or any build on the emulator (its hardware ranchu, goldfish before it). */
+    /**
+     * Whether the test hooks of the intent are taken: any build on the emulator (its hardware ranchu, goldfish before
+     * it), unless it is told to be taken as a phone (`adb shell setprop debug.mbui.as_phone 1`, to try a phone's way
+     * there); on a phone a debug build the shell has opened them in (`adb shell setprop debug.mbui.hooks 1`). A debug
+     * property is set by the shell alone, no app: another app on the phone opens no hook.
+     */
     private boolean testHooks() {
-        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) return true;
-        return Build.HARDWARE.equals("ranchu") || Build.HARDWARE.equals("goldfish");
+        boolean emulator = Build.HARDWARE.equals("ranchu") || Build.HARDWARE.equals("goldfish");
+        if (emulator && !"1".equals(debugProperty("debug.mbui.as_phone"))) return true;
+        boolean debug = (getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        boolean open = debug && "1".equals(debugProperty("debug.mbui.hooks"));
+        if (!open && getIntent().getExtras() != null) {
+            Bundle x = getIntent().getExtras();
+            if (x.containsKey("env") || x.containsKey("script") || x.containsKey("bench") || x.containsKey("shot_at"))
+                Host.log("test hooks not taken: a phone's (debug.mbui.hooks 1 opens them in a debug build)");
+        }
+        return open;
+    }
+
+    /** A system property (getprop's), or null. */
+    private static String debugProperty(String name) {
+        try {
+            Process p = new ProcessBuilder("getprop", name).start();
+            String v = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream())).readLine();
+            p.waitFor();
+            return v == null ? null : v.trim();
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

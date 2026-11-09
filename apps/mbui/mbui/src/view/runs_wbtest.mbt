@@ -14,9 +14,9 @@ test "words in pieces: drawn with their pieces, read as their words one after an
       })
       |> ignore
     },
-    measure_runs=fn(rs, look, w) {
+    measure_runs=fn(rs, look, set, w) {
       measured.push(rs.length())
-      runs_measure(rs, look, w)
+      runs_measure(rs, look, set, w)
     },
   )
   t.frame(390.0, 844.0) |> ignore
@@ -76,7 +76,7 @@ test "the pointer within a node: told as it was placed, the pointer there before
           about=At(0.0, 0.0),
         )
         |> ignore
-        holder.show(fn() { there.get() }, fn(band) {
+        holder.show(at_once=true, fn() { there.get() }, fn(band) {
           band.width(Is(Some(200.0))).height(Is(Some(20.0))) |> ignore
           band.reacts(fn() { band.pointer_within() }, fn(w) { within.val = w })
         })
@@ -114,7 +114,7 @@ test "the pointer within a node, read by how it is drawn (its alpha) and by what
       root.lines_up(Is(Some(Start))) |> ignore
       root.box(fn(holder) {
         holder.width(Is(Some(200.0))).height(Is(Some(100.0))).offset(By(fn() { (0.0, down.get()) })) |> ignore
-        holder.show(fn() { there.get() }, fn(band) {
+        holder.show(at_once=true, fn() { there.get() }, fn(band) {
           id.val = Some(band.id())
           band
           .width(Is(Some(200.0)))
@@ -122,7 +122,7 @@ test "the pointer within a node, read by how it is drawn (its alpha) and by what
           .ground(Is(1L))
           .alpha(By(fn() { if band.pointer_within() { 1.0 } else { 0.5 } }))
           |> ignore
-          band.show(fn() { band.pointer_within() }, fn(m) {
+          band.show(at_once=true, fn() { band.pointer_within() }, fn(m) {
             mark.val = Some(m.id())
             m.width(Is(Some(10.0))).height(Is(Some(10.0))).ground(Is(2L)) |> ignore
           })
@@ -272,4 +272,60 @@ test "the pointer within a node, at the moment of what changed where it is (an e
     }
     assert_eq(seen.last(), Some((true, 210.0)), msg="frame \{frame}: shown under it, told at the event's moment")
   }
+}
+
+///|
+test "how pieces are set (RunsLook): a node made again where one let go was, saying none of it, set as words are (runs_plain); code's ground's colour changed drawn again alone, its coming or going (code's room either side) measured again" {
+  let shown = @signals.signal(0, same=fn(a, b) { a == b })
+  let set = @signals.signal(runs_plain, same=fn(a, b) { a == b })
+  let measured = Ref(0)
+  let ids : Array[NodeId] = []
+  let t = Tree::new(
+    fn(root) {
+      root.lines_up(Is(Some(Start))) |> ignore
+      root.pick(fn() { shown.get() }, fn(p, k) {
+        // (1: none)
+        guard k != 1 else { return }
+        p.box(fn(n) {
+          ids.push(n.id())
+          n.words_runs(Is([words_run("a "), @text.code("b()")])) |> ignore
+          // (the first said its own; the second, made where it was, none)
+          if k == 0 {
+            n.runs_look(By(fn() { set.get() })) |> ignore
+          }
+        })
+        |> ignore
+      })
+    },
+    measure_runs=fn(rs, look, s, w) {
+      measured.val = measured.val + 1
+      runs_measure(rs, look, s, w)
+    },
+  )
+  t.frame(390.0, 844.0) |> ignore
+  let look = fn() { t.drawn_of(ids.last().unwrap()).unwrap().runs_look }
+  // (code with no ground, then one: measured again; then another colour: drawn again alone)
+  set.set({ ..runs_plain, code_ground: 0L, code_scale: 1.2, link: 0xFF0000FFL })
+  t.frame(390.0, 844.0) |> ignore
+  let was = measured.val
+  set.set({ ..runs_plain, code_ground: 0x11223344L, code_scale: 1.2, link: 0xFF0000FFL })
+  t.frame(390.0, 844.0) |> ignore
+  assert_true(measured.val > was, msg="a ground come: measured again")
+  let was = measured.val
+  set.set({ ..runs_plain, code_ground: 0x55667788L, code_scale: 1.2, link: 0xFF0000FFL })
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(measured.val, was, msg="another colour: not measured again")
+  assert_eq(look().code_ground, 0x55667788L)
+  set.set({ ..runs_plain, code_ground: 0L, code_scale: 1.2, link: 0xFF0000FFL })
+  t.frame(390.0, 844.0) |> ignore
+  assert_true(measured.val > was, msg="the ground gone: measured again")
+  // (let go, another made where it was: set as words are, none of the first's)
+  shown.set(1)
+  t.frame(390.0, 844.0) |> ignore
+  shown.set(2)
+  t.frame(390.0, 844.0) |> ignore
+  assert_eq(ids.length(), 2)
+  assert_eq(ids[1].at, ids[0].at, msg="made where the first was")
+  assert_true(ids[1].gen != ids[0].gen)
+  assert_eq(look(), runs_plain)
 }

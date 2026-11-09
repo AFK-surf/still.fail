@@ -1,4 +1,4 @@
-// The Arabic shaper (harfrust's ot/shaper/arabic.rs): each letter's joining form found by the joining state
+// The Arabic shaper: each letter's joining form found by the joining state
 // machine and given its feature's mask (isol, fina, medi, init and Syriac's), the features in their stages, and
 // modifier combining marks moved first.
 

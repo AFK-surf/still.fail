@@ -1,15 +1,16 @@
-// What a chat says of its connection (pill.rs; the `connection` topic): its link to its station while down or coming
+// What a chat says of its connection (the `connection` topic): its link to its station while down or coming
 // back, else what its workspace's `status` says. When it shows is decided here: trouble at once; coming back only
 // once it has lasted BUSY_MS; "已连上" for BACK_MS once all is well again, after a busy or a trouble was shown. These
 // timers only time what is on screen (rule 2: a display may sample while shown); nothing is asked of the network.
-import { Effect, type Fiber } from "effect";
 import * as brand from "./brand.ts";
 import type { Owner } from "./core/routing.ts";
 import { t } from "./i18n.ts";
 import * as looks from "./looks.ts";
 import { topicKey, type Topic } from "./protocol.ts";
 import type { Runner } from "./runtime.ts";
-import type { Store, Value, Watch } from "./store.ts";
+import type { Store, Value } from "./store.ts";
+import { Moments } from "./clock.ts";
+import { untracked } from "./reactive.ts";
 import { ofAddress } from "./workspace.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -65,19 +66,18 @@ export function raw(link: J, status: J): [J, boolean] | null {
   return null;
 }
 
-type Live = { watches: Watch[]; timing: Timing; due: number | null; timer: Fiber.Fiber<unknown, unknown> | null };
-
-/// The live `connection` topics.
+/// The live `connection` topics: what each read and when it shows (link, status and the moment its timing waits for are
+/// read in its computed: reactive.ts, clock.ts).
 export class Pills implements Owner {
   readonly #store: Store;
-  readonly #runner: Runner;
+  readonly #moments: Moments;
   readonly #now: () => number;
   readonly #stationName: (station: string) => string;
-  readonly #live = new Map<string, Live>();
+  readonly #live = new Map<string, Timing>();
 
   constructor(store: Store, runner: Runner, now: () => number, stationName: (station: string) => string) {
     this.#store = store;
-    this.#runner = runner;
+    this.#moments = new Moments(now, runner);
     this.#now = now;
     this.#stationName = stationName;
   }
@@ -86,49 +86,24 @@ export class Pills implements Owner {
     return topic.topic === "connection";
   }
 
-  static #sources(station: string): [Topic, Topic] {
-    return [{ topic: "link", station }, { topic: "status", workspace: ofAddress(station) }];
-  }
-
   start(topic: Topic): void {
-    const watches = Pills.#sources(topic.station as string).map((s) => this.#store.watch(s, () => this.#store.invalidate(topic)));
-    this.#live.set(topicKey(topic), { watches, timing: new Timing(), due: null, timer: null });
-    this.#store.invalidate(topic);
+    this.#live.set(topicKey(topic), new Timing());
   }
 
   stop(topic: Topic): void {
-    const live = this.#live.get(topicKey(topic));
     this.#live.delete(topicKey(topic));
-    if (!live) return;
-    for (const w of live.watches) w.drop();
-    if (live.timer) this.#runner.interrupt(live.timer);
   }
 
   compute(topic: Topic): Value | undefined {
     const station = topic.station as string;
-    const live = this.#live.get(topicKey(topic));
-    if (!live) return undefined;
-    const [linkTopic, statusTopic] = Pills.#sources(station);
-    const l = this.#store.get(linkTopic);
+    const timing = this.#live.get(topicKey(topic));
+    if (!timing) return undefined;
+    const l = this.#store.get({ topic: "link", station });
     const link = l !== undefined ? looks.linkShown(l, this.#stationName(station)) : null;
-    const status = this.#store.get(statusTopic) ?? null;
-    const now = this.#now();
-    const [value, again] = live.timing.step(now, raw(link, status));
-    const at = again !== null ? now + again : null;
-    const fresh = at !== null && live.due !== at;
-    live.due = at;
-    if (again !== null && fresh) {
-      if (live.timer) this.#runner.interrupt(live.timer);
-      live.timer = this.#runner.fork(
-        Effect.sleep(Math.max(Math.ceil(again), 0)).pipe(
-          Effect.andThen(
-            Effect.sync(() => {
-              if (this.#live.get(topicKey(topic)) === live) this.#store.invalidate(topic);
-            }),
-          ),
-        ),
-      ) as Fiber.Fiber<unknown, unknown>;
-    }
+    const status = this.#store.get({ topic: "status", workspace: ofAddress(station) }) ?? null;
+    const now = untracked(this.#now);
+    const [value, again] = timing.step(now, raw(link, status));
+    if (again !== null) this.#moments.reached(now + Math.max(Math.ceil(again), 0));
     return { ok: value };
   }
 }

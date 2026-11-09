@@ -1,4 +1,4 @@
-// The composer's parts as Android's (Composer.kt, ChatFiles.kt, StationFiles.kt, Keyboard.kt): what waits to go (its
+// The composer's parts as Android's: what waits to go (its
 // files in the order they were put in, a row that scrolls sideways; a picture opening in the viewer, a link opening,
 // a file going up said as it goes), the quotes kept to 176, the archived chat's restore, what the buttons are called,
 // a long press letting the keyboard be. Over the fake core of composer_wbtest.mbt.
@@ -28,7 +28,7 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
   @sfbase.writing_add(src, @sfbase.writing(src, "ws1/st1:s-c1"), "ws1/st1", "照片.png", png_head())
   t.draw()
   t.run_for(@ui.move_most_ms)
-  let id = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files[0]), "id")
+  let id = text(Some(@sfbase.writing(src, "ws1/st1:s-c1").files.get()[0]), "id")
   let seen = "ws1/st1//draft:" + id
   let tile = match thumb_of(t.ctx(), seen) {
     Some(tile) => tile
@@ -48,10 +48,80 @@ test "a picture waiting in the composer, tapped, opens in the viewer from the by
   }
   assert_eq(named(calls, "station.file").length(), 0)
   // the picture is not taken out by the tap
-  assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").files.length(), 1)
+  assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").files.get().length(), 1)
   t.back()
   t.run_for(preview_rest() - t.time())
   assert_true(viewer.get() is None)
+}
+
+///|
+/// A picture waiting in an existing chat or a new one's composer, opened and closed as a host takes a pointer's events.
+fn waiting_picture_return(new_chat : Bool) -> Unit raise {
+  new_run()
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.set_rows_on_pixels(true)
+  t.drawn_again(true)
+  t.check_looks(false)
+  t.run_for(@ui.move_most_ms)
+  if new_chat {
+    t.tap_text("新建对话")
+    t.run_for(@ui.move_most_ms)
+    assert_true(app.nav.top() == NewChat)
+  }
+  let w = @sfbase.writing(src, if new_chat { "new:ws1" } else { "ws1/st1:s-c1" })
+  @sfbase.writing_add(src, w, "ws1/st1", "照片.png", png_head())
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let id = text(Some(w.files.get()[0]), "id")
+  let picture = @sfbase.writing_pictures[id]
+  let tile = thumb_of(t.ctx(), "ws1/st1//draft:" + id).unwrap()
+  let visible = fn() {
+    t.drawn_instances().iter().any(fn(a) {
+      a[5] == 4.0 && t.image_src(a[20].to_int()) == picture && a[11] > 0.99 &&
+      (a[0] - tile.x).abs() < 1.0 && (a[1] - tile.y).abs() < 1.0
+    })
+  }
+  assert_true(visible(), msg="the picture is visible before opening")
+  let (x, y) = (tile.x + tile.w / 2.0, tile.y + tile.h / 2.0)
+  t.touch(0, x, y)
+  t.touch(2, x, y)
+  t.frames_owed()
+  let v = viewer.get().unwrap()
+  assert_true(v.flies, msg="the preview opens from the tile")
+  while t.time() + @ui.frame_period_default < v.fly.end() {
+    t.frame_at(t.time() + @ui.frame_period_default)
+  }
+  t.frame_at(v.fly.end() + @ui.frame_period_default)
+  let (cx, cy, cw, ch) = t.get(Button, label=@sf.t("common.close")).rect
+  let (cx, cy) = (cx + cw / 2.0, cy + ch / 2.0)
+  t.move(cx, cy)
+  t.touch(0, cx, cy)
+  t.touch(2, cx, cy)
+  t.frames_owed()
+  let closing = pv_leaving.get().unwrap()
+  assert_true(closing.flies && closing.fly_back, msg="the preview returns to the tile")
+  let end = closing.fly.end()
+  t.frame_at((t.time() + end) / 2.0)
+  assert_false(visible(), msg="the tile is hidden while the picture returns")
+  while t.time() + @ui.frame_period_default < end {
+    t.frame_at(t.time() + @ui.frame_period_default)
+  }
+  t.frame_at(end)
+  t.frame_at(end + @ui.frame_period_default)
+  assert_true(viewer.get() is None && pv_leaving.get() is None, msg="the preview has returned")
+  assert_true(visible(), msg="the picture is visible again without another input")
+}
+
+///|
+test "a picture waiting in an existing chat is visible as soon as its preview returns" {
+  waiting_picture_return(false)
+}
+
+///|
+test "a picture waiting in a new chat is visible as soon as its preview returns" {
+  waiting_picture_return(true)
 }
 
 ///|
@@ -97,7 +167,7 @@ test "a film waiting in the composer, opened, plays from the bytes picked: none 
 
 ///|
 test "what waits to go has its ✕ hung on its corner, its centre on the curve, a picture's and a file's card alike, on a phone and a computer alike, clear of the next; tapped, it takes it out" {
-  // (Android, then macOS: one design on every screen, docs/ui-panels.md)
+  // (Android, then macOS: one design on every screen, sf/align.mbt)
   for platform in [2, 0] {
     let calls : Array[Made] = []
     let made : Ref[Source?] = Ref(None)
@@ -109,7 +179,7 @@ test "what waits to go has its ✕ hung on its corner, its centre on the curve, 
     @sfbase.writing_add(src, w, "ws1/st1", "build.log", @utf8.encode("夜里的构建日志"))
     t.draw()
     t.run_for(@ui.move_most_ms)
-    let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.filter_map(fn(f) {
+    let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.get().filter_map(fn(f) {
       thumb_of(t.ctx(), "ws1/st1//draft:" + text(Some(f), "id"))
     })
     assert_eq(tiles.length(), 2)
@@ -145,7 +215,7 @@ test "what waits to go has its ✕ hung on its corner, its centre on the curve, 
     let (cx, cy, cw, ch) = t.query(Button, label=@sf.t("web-main.file.remove", args=[("name", "build.log")])).unwrap().rect
     t.tap(cx + cw / 2.0, cy + ch / 2.0)
     t.draw()
-    let left = @sfbase.writing(src, "ws1/st1:s-c1").files
+    let left = @sfbase.writing(src, "ws1/st1:s-c1").files.get()
     assert_eq(left.length(), 1)
     assert_eq(text(Some(left[0]), "name"), "第二张.png")
   }
@@ -174,12 +244,40 @@ test "a waiting file's card stands off the composer's frosted ground by its own 
     let drawn = t.drawn_rects().filter(fn(r) { near(r.0, x) && near(r.1, y) && near(r.2, cw) && near(r.3, ch) })
     assert_true(drawn.iter().any(fn(r) { r.4 == ground }), msg="its ground (platform \{platform}): \{drawn.map(fn(r) { r.4 })}, not \{ground}")
     assert_false(t.drawn_shadows().iter().any(fn(s) { near(s.0, x) && near(s.2, cw) }), msg="a shadow under it (platform \{platform})")
-    let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.filter_map(fn(f) {
+    let tiles = @sfbase.writing(src, "ws1/st1:s-c1").files.get().filter_map(fn(f) {
       thumb_of(t.ctx(), "ws1/st1//draft:" + text(Some(f), "id"))
     })
     assert_eq(tiles.length(), 1)
     assert_true(near(ch, tiles[0].h), msg="the card \{ch} high, the picture \{tiles[0].h} (platform \{platform})")
   }
+}
+
+///|
+test "an archived chat says sending restores it and accepts a message without first pressing restore" {
+  let calls : Array[Made] = []
+  let t = fake_core(calls, over=fn(name, tp) {
+    if name != "chat" {
+      return tp
+    }
+    match tp.value {
+      Some(Object(o)) => {
+        let o2 = o.copy()
+        o2["archived"] = Json::boolean(true)
+        { ..tp, value: Some(Json::object(o2)) }
+      }
+      _ => tp
+    }
+  })
+  assert_true(t.find("已归档，发送消息将还原") is Some(_))
+  assert_true(t.find("还原对话") is Some(_))
+  t.tap_text("发消息")
+  t.type_text("再看一下")
+  assert_eq(named(calls, "session.warm").length(), 0)
+  tap_send(t)
+  let sent = named(calls, "chat.send")
+  assert_eq(sent.length(), 1)
+  assert_eq(text(Some(sent[0].params), "text"), "再看一下")
+  assert_eq(named(calls, "chat.archive").length(), 0)
 }
 
 ///|
@@ -436,9 +534,41 @@ test "its agent's cache over, in the wide frame: said over the composer, 换新�
 }
 
 ///|
+test "an empty focused composer and its cache choice stay in place while the menu has focus" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-cache-cold", wide=true)
+  assert_true(t.ctx().field_focused(), msg="the composer's field has focus before the choice opens")
+  let (_, before_y, _, _) = t.rect_of("缓存已过期").unwrap()
+  t.click(Button, label="接着聊")
+  assert_true(t.query(MenuItemRadio, label="换新上下文") is Some(_))
+  // Beyond the empty composer's focus-loss delay and its shape's transition, the choice is still under the pointer.
+  t.run_for(@sfpages.let_go_ms + @ui.move_most_ms)
+  let (_, after_y, _, _) = t.rect_of("缓存已过期").unwrap()
+  assert_true((after_y - before_y).abs() < 1.0, msg="the open choice moved from \{before_y} to \{after_y}")
+  t.click(MenuItemRadio, label="换新上下文")
+  t.draw()
+  let asked = named(calls, "session.settings")
+  assert_eq(asked.length(), 1)
+  assert_eq(field(Some(asked[0].params), "afresh"), Some(Json::boolean(true)))
+}
+
+///|
+test "a cache choice opened over a collapsed composer leaves it collapsed" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-cache-cold", wide=true)
+  t.ctx().blur()
+  t.run_for(@sfpages.let_go_ms + @ui.move_most_ms)
+  let (_, before_y, _, _) = t.rect_of("缓存已过期").unwrap()
+  t.click(Button, label="接着聊")
+  t.run_for(@sfpages.let_go_ms + @ui.move_most_ms)
+  let (_, after_y, _, _) = t.rect_of("缓存已过期").unwrap()
+  assert_true((after_y - before_y).abs() < 1.0, msg="the collapsed composer moved from \{before_y} to \{after_y}")
+}
+
+///|
 test "a notice over the composer wrapped to lines: round as one line is, its mark on its first line" {
   let calls : Array[Made] = []
-  let said = "「ccvm」正在更新：当前显示的是之前读取的内容，更新完成后会自动重新连接，发出的消息届时送达"
+  let said = "「Birch」正在更新：当前显示的是之前读取的内容，更新完成后会自动重新连接，发出的消息届时送达"
   let t = fake_core(calls, over=fn(name, tp) {
     if name != "chat" {
       return tp
@@ -501,7 +631,7 @@ test "a notice over a phone's composer goes with its ground as it opens, as far 
       Some(Object(o)) => {
         let o2 = o.copy()
         o2["offline"] = Json::boolean(true)
-        o2["offlineNote"] = Json::string("「ccvm」离线")
+        o2["offlineNote"] = Json::string("「Birch」离线")
         { ..tp, value: Some(Json::object(o2)) }
       }
       _ => tp
@@ -568,8 +698,8 @@ test "a picture restored in the composer remains visible in the sending message"
     },
     // Its station has not supplied a picture: the message must use the one already in the composer.
     file: fn(_, _, _) { "" },
-    topic: fn(name, params) {
-      let now = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let now = base.topic(name, params).get().snapshot()
       if name != "composer" || !in_draft.val { return now }
       let m = match now.value { Some(Object(v)) => v.copy(); _ => {} }
       m["files"] = [{ "id": "kept-1", "name": "截图.png", "size": 120, "sent": 40 }]
@@ -587,7 +717,7 @@ test "a picture restored in the composer remains visible in the sending message"
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms + @ui.image_fade_ms)
   assert_true(t.locate("img:mem:test/restored").length() > 0)
@@ -606,7 +736,7 @@ test "a picture restored in the composer remains visible in the sending message"
 test "a freshly picked picture remains visible throughout sending" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   @sfbase.writing_add(src, @sfbase.writing(src, "ws1/st1:s-c1"), "ws1/st1", "截图.png", png_head())
@@ -627,7 +757,7 @@ test "files sent fly from their tiles to their places in the message, then are i
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   // a picture up at once (the fixture's station takes it), its tile in the composer

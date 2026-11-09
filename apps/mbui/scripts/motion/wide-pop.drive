@@ -1,4 +1,4 @@
-# What comes by its trigger on a computer (docs/motion.md, kind 2): a chat's row right-clicked, its menu growing out
+# What comes by its trigger on a computer (sf/motion.mbt, kind 2): a chat's row right-clicked, its menu growing out
 # of the pointer; 接力到频道…, the menu gone at once and the dialog coming; Escape, the dialog gone at once. Then a new
 # chat's model (its chip in the composer), its popover growing out of the chip; Escape. MBUI_WIN=1280x800 over the
 # made-up chat.

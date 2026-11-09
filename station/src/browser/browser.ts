@@ -1,4 +1,4 @@
-// The station's browser (docs/remote-screens.md): one real Chrome, kept for the agents, its tabs screens a person can
+// The station's browser: one real Chrome, kept for the agents, its tabs screens a person can
 // see and drive. Started when an agent asks for it (the `browser` tool), started again if it dies while in use, closed
 // after a long idle. It outlives a station process, as jobs do: the next one (a handover, a restart) finds it by its
 // DevToolsActivePort and takes it up, its tabs and logins as they were.
@@ -50,6 +50,7 @@ export type BrowserOptions = {
   later?: (ms: number, f: () => void) => () => void;
   /// The session whose chat's context a browser context is (browsers.ts): a tab in it is that session's.
   contextOwner?: (browserContextId: string | undefined) => string | undefined;
+  usedTab?: (session: string, targetId: string) => void;
 };
 
 type Up = { running: Running; cdp: Cdp; tabs: Tabs; keys: Authenticators; since: number };
@@ -271,6 +272,7 @@ export class StationBrowser {
         const ctx = tabs.contextOf(targetId);
         return ctx !== undefined && keys.has(ctx, rpId);
       },
+      usedTab: (session, targetId) => this.#o.usedTab?.(session, targetId),
     });
     try {
       await keys.start();

@@ -1,5 +1,5 @@
 // 44-notice-cancel (e2e/traces/notice-cancel.trace): a notice shown on Home; the chat then opened from its row, not
-// from the notice: its notification goes (App.kt: a chat on top takes its notification off).
+// from the notice: its notification goes.
 
 ///|
 test "44-notice-cancel" {

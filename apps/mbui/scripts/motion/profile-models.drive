@@ -1,5 +1,0 @@
-# A profile's models (sfpages accounts.mbt, one page in every frame): MBUI_FIXTURE=settings-profile-models.
-timeout 20000
-until GPT-6-MINI
-wait 1500
-exit

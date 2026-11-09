@@ -1,4 +1,4 @@
-// Observe adb's unencrypted transport (the phone's own adb session, docs/adb-share.md) without keeping its contents.
+// Observe adb's unencrypted transport (the phone's own adb session) without keeping its contents.
 // A station's adb server holds one connection while many commands run over it. A connection or its CNXN is not use:
 // OPEN starts a service; WRTE/OKAY on that service show a long-running one still in use. The two services the station
 // opens itself to keep lending enabled are excluded. An older phone's STLS makes the rest opaque, so stop observing.
@@ -14,6 +14,14 @@ const MAX_SERVICE = 8192;
 
 // Mark our own maintenance so the same command run by an agent still counts as use.
 export const KEEP_LENDING = "STILLFAIL_ADB_KEEP=1";
+
+/// adbd's plain port the app falls back to off Wi-Fi (link.ts keepTcp), and what the station asks of it first.
+export const TCP_PORT = 5555;
+export const KEEP_TCP = `${KEEP_LENDING} sh -c 'cat /proc/sys/kernel/random/boot_id; getprop service.adb.tcp.port'`;
+
+/// A command of the station's about the chat's display (displays.ts), marked so.
+export const DISPLAY_MARK = `${KEEP_LENDING} STILLFAIL_ADB_DISPLAY=1`;
+const displayCommand = (command: string) => command.startsWith(`${DISPLAY_MARK} `);
 
 export class AdbActivity {
   readonly #package: string;
@@ -85,7 +93,11 @@ export class AdbActivity {
     const service = this.#service.toString("utf8").replace(/\0+$/, "");
     this.#service = null;
     const command = /^shell(?:,[^:]*)?:(.*)$/.exec(service)?.[1];
-    const ours = this.#package !== "" && (command === `${KEEP_LENDING} pm grant ${this.#package} android.permission.WRITE_SECURE_SETTINGS` || command === `${KEEP_LENDING} cmd deviceidle whitelist +${this.#package}`);
+    const ours =
+      (this.#package !== "" && (command === `${KEEP_LENDING} pm grant ${this.#package} android.permission.WRITE_SECURE_SETTINGS` || command === `${KEEP_LENDING} cmd deviceidle whitelist +${this.#package}`)) ||
+      command === KEEP_TCP || service === `tcpip:${TCP_PORT}` ||
+      // The chat's display (displays.ts): what holds it up and what the station asks of it, and its pictures' socket.
+      (command !== undefined && displayCommand(command)) || /^localabstract:scrcpy_[0-9a-f]{8}$/.test(service);
     if (ours) return;
     this.#active.add(this.#serviceId);
     this.#used(true);

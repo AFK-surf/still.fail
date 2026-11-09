@@ -1,4 +1,4 @@
-// A web service and a visualization beside a chat on the desktop (sfdesk/service_tab.mbt; ember web/src/pages/Chat.tsx's
+// A web service and a visualization beside a chat on the desktop (sfdesk/service_tab.mbt; still.fail web/src/pages/Chat.tsx's
 // side panel, Preview.tsx): asked as a page, the chat's page with it in front among the side panel's tabs, its page
 // served from the station; closed, its site view let go.
 
@@ -7,7 +7,7 @@ test "desk: a web service asked as a page is its chat with the service beside it
   new_run()
   // (its agent's services known to the chat: the core keeps only a tab of one of them)
   let src = fixture("chat-info")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   // (a window whose side panel holds the whole of its bar, a press's room round each key: a 1280's leaves its size and
   // how far it came to its ⋯)
@@ -21,20 +21,20 @@ test "desk: a web service asked as a page is its chat with the service beside it
   assert_eq(side_now(r), (["service:j-web"], "service:j-web"))
   t.run_for(@ui.move_most_ms)
   assert_true(t.query(Button, label="刷新") is Some(_), msg="its bar")
-  // its page's size with keyboard and mouse: the bar's button, its choices in a panel beside it (ViewportSize.tsx), no toolbar
+  // its page's size with keyboard and mouse: the bar's button, its choices in a panel beside it, no toolbar
   // under the page as touch has
   assert_true(t.find("自适应") is None, msg="no toolbar under the page")
   let had = t.ctx().focused_id()
   t.click(Button, label="页面尺寸")
   t.frame()
   assert_true(t.find("自适应") is Some(_), msg="its sizes")
-  // as the web's (ViewportSize.tsx: the focus not taken as it opens: where it was, the composer's), all of them in the
+  // as the web's (the composer's), all of them in the
   // panel's room
   assert_eq(t.ctx().focused_id(), had)
   assert_eq(t.squeeze_faults(), [])
   t.key(@ui.key_escape)
   t.frame()
-  // marking it: what to do said in the address's place beside its keys (Marks.tsx mode), all of it in the tab's room
+  // marking it: what to do said in the address's place beside its keys, all of it in the tab's room
   t.click(Button, label="标注")
   t.frame()
   assert_true(t.find("点选页面上的元素") is Some(_), msg="what to do")
@@ -60,7 +60,7 @@ test "desk: a web service asked as a page is its chat with the service beside it
 test "desk: a visualization opened aside is a tab beside its chat, served from here with its name in the bar" {
   new_run()
   let src = fixture("chat-viz")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
@@ -83,7 +83,7 @@ test "desk: a visualization opened aside is a tab beside its chat, served from h
 test "desk: a service up pressed in 任务 beside the chat opens its own tab in front (JobsTab)" {
   new_run()
   let src = fixture("chat-jobs-side")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
@@ -103,7 +103,7 @@ test "desk: a service up pressed in 任务 beside the chat opens its own tab in 
 test "desk: wherever the pointer shows the side panel's edge's ↔, a drag from there sets its width (its room round it as the pointer lights it)" {
   new_run()
   let src = fixture("chat-info")
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   open_chat(r)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1440.0, h=900.0, platform=0)
   t.run_for(@ui.move_most_ms)

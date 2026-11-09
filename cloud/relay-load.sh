@@ -1,6 +1,6 @@
 #!/bin/sh
 # Sends this machine's relay's counters to still.fail cloud, for the admin's console (its 中继 page: src/relay-load.ts),
-# run every minute by a systemd timer on the relays on machines of their own (Beijing's, Hong Kong's, Shenzhen's). still.fail cloud
+# run every minute by a systemd timer on the relays on machines of their own (Beijing's, Hong Kong's, Shenzhen's, Tokyo's). still.fail cloud
 # believes it as the relay whose address it comes from. /etc/iroh-relay/load.env says which relay this is:
 #   RELAY_URL=https://39.105.157.122
 #   CLOUD=https://app.still.fail   (optional)
@@ -19,7 +19,7 @@ card=$(ip route show default | awk '{for (i = 1; i < NF; i++) if ($i == "dev") {
 machine=$(awk -v card="$card:" '$1 == card { print "node_rx " $2; print "node_tx " $10 }' /proc/net/dev; awk '{ print "node_load1 " $1 }' /proc/loadavg; echo "node_time $now")
 # Each client's TCP connection to the relay, as the kernel sees it (ss -ti): how the last stretch to each device and
 # station goes (its round trip, what had to be sent again, how fast it delivers), which the relay's own counters do not
-# say: 2026-10-30 a phone on 衡阳移动 got 8-19 KB/s through Beijing while the relay saw nothing wrong. One line each:
+# say: use the connection counters to see that last stretch. One line each:
 #   node_conn <peer, its last byte(s) zeroed> <port> <rtt ms> <min rtt ms> <bytes sent> <bytes sent again>
 #     <delivery rate, bits/s> <ms since it last sent> <1 when the sender had nothing more to send>
 # Only those that sent in the last minute; the address cut to its /24 (/48), never the whole of it.

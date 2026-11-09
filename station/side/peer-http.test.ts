@@ -12,7 +12,7 @@ import { Cloud } from "../src/cloud/state.ts";
 import { loadMesh } from "../src/mesh/native.ts";
 import { PEER_HTTP_ALPN, PeerHttp, serveHttp } from "../src/mesh/peer-http.ts";
 import { PEER_ALPN } from "../src/mesh/peer.ts";
-import { ALPN, FORMER_ALPN } from "../src/mesh/serve.ts";
+import { ALPN } from "../src/mesh/serve.ts";
 import { openAgentsDoor } from "../src/tools/http.ts";
 import { McpEndpoint } from "../src/tools/mcp.ts";
 
@@ -29,7 +29,7 @@ test("over real iroh: a new station is asked in its own protocol, an old one is 
   const mesh = loadMesh();
   const bind = (alpns: Buffer[]) => mesh.bind({ secretKey: randomBytes(32), alpns, relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
   // As mesh.ts binds a station: the members' protocols first.
-  const [here, there, old] = await Promise.all([bind([PEER_HTTP_ALPN, PEER_ALPN]), bind([ALPN, FORMER_ALPN, PEER_HTTP_ALPN, PEER_ALPN]), bind([ALPN, FORMER_ALPN, PEER_ALPN])]);
+  const [here, there, old] = await Promise.all([bind([PEER_HTTP_ALPN, PEER_ALPN]), bind([ALPN, PEER_HTTP_ALPN, PEER_ALPN]), bind([ALPN, PEER_ALPN])]);
   const roster = [{ id: here.id(), name: "here" }, { id: there.id(), name: "there" }, { id: old.id(), name: "old" }];
   const thereCloud = cloudOf(there.id(), roster);
   for (const endpoint of [there, old]) {

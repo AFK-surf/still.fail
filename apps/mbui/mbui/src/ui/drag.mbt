@@ -1,4 +1,4 @@
-// What a finger drags that is not a list or a pager: a sheet by its top, the bottom bar's ball and panel. A box
+// What a finger drags that is not a list: a sheet by its top, the bottom bar's ball and panel. A box
 // given a drag (Ctx::drag_area) takes the presses and drags that land on it as a list would (nothing under it, a
 // list behind a sheet, scrolls), and says each frame where the finger has it: pressed, moved past the slop along its
 // axis (then it is the drag's, not a tap), let go and how fast. What the drag does is the view's. Lying in a list, or
@@ -313,4 +313,77 @@ pub fn Ctx::on_back(self : Ctx, f : () -> Unit) -> Unit {
   self.back_node_next = -1
   self.back_island_next = self.island_said()
   self.back_says()
+}
+
+///|
+/// A press followed as it goes (Ctx::follow_press): gone down at (x, y) on the box that took it (where that box was hit
+/// then: x, y, w, h; none, no box), moved to (x, y), let go at (x, y), or called off (the host's word, a layer come over
+/// it).
+pub(all) enum PressStep {
+  Down(Double, Double, (Double, Double, Double, Double)?)
+  Moving(Double, Double)
+  Up(Double, Double)
+  Off
+} derive(Eq, Show, Debug)
+
+///|
+/// What follows the presses that go down on each box (Ctx::follow_press), by its id: what its last build said.
+// kept across runs: said as each box is built, let go with its page (Ctx::forget); a run's start clears it
+let press_followers : Map[Int, (PressStep) -> Unit] = {}
+
+///|
+/// What follows the press held now: what the box it went down on said as the press went down (none: none).
+// kept across runs: set as each press goes down, let go as it is let go or called off; a run's start clears it
+let press_following : Ref[((PressStep) -> Unit)?] = Ref(None)
+
+///|
+/// A press that goes down on box `id` (on it, as what it is pressed on: Ctx::pressed's) followed as it goes, each step
+/// given to `f` as it comes, outside any build, where the hand is then: for what a press carries along (a row dragged
+/// onto a folder: what it does as it moves and as it is let go is the press's own, not a frame's). It takes nothing of
+/// the press: a tap of the box is as ever, what scrolls under it scrolls, what else follows it follows it. Said as the
+/// box is built (what follows it is what the last build said); a press goes on with what it went down with.
+pub fn Ctx::follow_press(self : Ctx, id : Int, f : (PressStep) -> Unit) -> Unit {
+  if id == 0 {
+    return
+  }
+  press_followers[id] = f
+  self.own(id)
+}
+
+///|
+/// A press gone down at (x, y) on `target` (on_pointer's down): what follows it, told.
+fn press_follow_down(target : Int, x : Double, y : Double) -> Unit {
+  press_following.val = press_followers.get(target)
+  match press_following.val {
+    Some(f) => f(Down(x, y, if target != 0 { g().rect_of(target) } else { None }))
+    None => ()
+  }
+}
+
+///|
+/// The press held moved to (x, y): what follows it, told.
+fn press_follow_moved(x : Double, y : Double) -> Unit {
+  match press_following.val {
+    Some(f) => f(Moving(x, y))
+    None => ()
+  }
+}
+
+///|
+/// The press held let go at (x, y) (or called off: `off`): what follows it, told, and let go.
+fn press_follow_up(x : Double, y : Double, off : Bool) -> Unit {
+  match press_following.val {
+    Some(f) => {
+      press_following.val = None
+      f(if off { Off } else { Up(x, y) })
+    }
+    None => ()
+  }
+}
+
+///|
+/// A run begins: nothing follows a press.
+fn press_follow_reset() -> Unit {
+  press_followers.clear()
+  press_following.val = None
 }

@@ -240,6 +240,7 @@ pub fn Ctx::code_field(
         placeholder_color=0x00000000L,
         caret_color=0x00000000L,
         enter_sends=true,
+        ime_action=@hostapi.ime_action_number,
       )
       |> ignore
     })
@@ -261,6 +262,6 @@ pub fn Ctx::clear_code_field(self : Ctx, key : String) -> Unit {
   if !code_clears.contains(key) {
     code_clears.push(key)
   }
-  code_clears_said.set(@signals.untracked(fn() { code_clears_said.get() }) + 1)
+  code_clears_said.set(code_clears_said.untracked() + 1)
   self.read_changed("clear_code_field \"\{key}\"")
 }

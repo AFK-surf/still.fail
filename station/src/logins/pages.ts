@@ -1,7 +1,7 @@
-// A login's page in the station's own browser (docs/remote-login.md, 在 station 的浏览器中登录): a person who would
+// A login's page in the station's own browser (在 station 的浏览器中登录): a person who would
 // rather not do a login's browser step on their own device (or whose device cannot: a web page takes no loopback
 // callback) has the station open the page in a tab of its browser, and drives that tab from their app (a screen,
-// docs/remote-screens.md). The page is the one the login command opened: one that comes back to a loopback port comes
+//). The page is the one the login command opened: one that comes back to a loopback port comes
 // back to the command on this machine, with nothing to relay or paste. The tab is the login's, by a key of its own
 // (`machine:<id>`, `profile:<id>`): kept while the login goes on (a person who went back finds it again), closed as it
 // ends; a person closing it themselves is heard, and the login told again.

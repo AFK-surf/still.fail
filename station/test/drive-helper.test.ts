@@ -1,4 +1,4 @@
-// The drive's protected folders through still.fail Helper (src/drive/fs.ts, src/helper/files.ts; docs/drive.md): which
+// The drive's protected folders through still.fail Helper (src/drive/fs.ts, src/helper/files.ts): which
 // path goes through the helper, the bytes streamed both ways, what the station checks before asking and what the helper
 // is told, a grant missing (the window, once an attempt), and the helper ending in the middle of a read. The helper is a
 // fake in this process, speaking native/helper's `files.*` as Files.swift does, on the real file system (macOS's
@@ -9,7 +9,7 @@ import { chmodSync, closeSync, existsSync, fstatSync, fsyncSync, ftruncateSync, 
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { after, test } from "node:test";
+import { after, mock, test } from "node:test";
 import { routes } from "../src/api/routes/drive.ts";
 import type { Request } from "../src/api/request.ts";
 import { Drive, DriveError } from "../src/drive/drive.ts";
@@ -57,10 +57,11 @@ class FakeHelper {
     await this.#listen();
   };
   async #listen() {
+    if (this.#closed || this.#server !== null) return;
     rmSync(this.#where!.path, { force: true });
     const server = net.createServer((c) => this.#serve(c));
-    await new Promise<void>((resolve) => server.listen(this.#where!.path, resolve));
     this.#server = server;
+    await new Promise<void>((resolve) => server.listen(this.#where!.path, resolve));
   }
   /// It ends (a crash, macOS's Quit & Reopen): its socket gone, every connection with it.
   crash() {
@@ -321,6 +322,37 @@ const until = async (what: () => boolean) => {
 };
 
 const ops = (fake: FakeHelper) => fake.asked.map((a) => a.op).filter((o) => o.startsWith("files."));
+
+test("the fake helper closes every listener when started again", { skip: WINDOWS }, async () => {
+  const { base, fake } = machine();
+  const simultaneous = machine();
+  const servers: net.Server[] = [];
+  const create = net.createServer;
+  const made = mock.method(net, "createServer", ((...args: any[]) => {
+    const server = (create as (...args: any[]) => net.Server)(...args);
+    servers.push(server);
+    return server;
+  }) as typeof net.createServer);
+  try {
+    const dir = join(base, "helper");
+    mkdirSync(dir, { recursive: true });
+    const env = { STILLFAIL_HELPER_SOCKET: join(dir, "helper.sock"), STILLFAIL_HELPER_TOKEN: "test" };
+    await fake.launch("", env);
+    await fake.launch("", env);
+    fake.close();
+    const otherDir = join(simultaneous.base, "helper");
+    mkdirSync(otherDir, { recursive: true });
+    const otherEnv = { STILLFAIL_HELPER_SOCKET: join(otherDir, "helper.sock"), STILLFAIL_HELPER_TOKEN: "test" };
+    await Promise.all([simultaneous.fake.launch("", otherEnv), simultaneous.fake.launch("", otherEnv)]);
+    simultaneous.fake.close();
+    assert.equal(servers.filter((s) => s.listening).length, 0, "no listener outlives the fake helper");
+  } finally {
+    fake.close();
+    simultaneous.fake.close();
+    for (const s of servers) if (s.listening) await new Promise<void>((resolve) => s.close(() => resolve()));
+    made.mock.restore();
+  }
+});
 
 test("which way: a protected folder through still.fail Helper, by its name; any other directly", { skip: WINDOWS }, async () => {
   const { home, docs, project, fake, drive } = machine();

@@ -1,5 +1,6 @@
 import {
   "mbui/figure",
   "mbui/ui",
+  "moonbitlang/core/json",
   "stillfail/sf",
 }

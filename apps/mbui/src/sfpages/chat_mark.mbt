@@ -1,9 +1,9 @@
-// A chat's state as a mark in a line (ember web/src/ChatMark.tsx ChatMark `inline`, ChatMark.css.ts chatMarkInline):
+// A chat's state as a mark in a line:
 // before a row's title in the chats' lists (sidebar.mbt, a finger's and a mouse's alike), on the rail's lists and
 // workspaces. One meaning to a mark wherever it is (an agent's corner, agent_mark.mbt, says the same): yellow spokes
 // stepping round at work, a blue dot when it is the viewer's turn (a card or an agent waiting on them, or something
 // unread), a red one when something went wrong; nothing when nothing is for them. What kind of turn it is the row's
-// second line says (its bell, 奏, check), not a shape of its own here.
+// second line says (its bell, card label, check), not a shape of its own here.
 
 ///|
 /// A chat's mark `tone` (the core's: busy, done, alert, wait; anything else none), the row's ground behind it: a dot 8
@@ -38,30 +38,30 @@ let mark_alert : @ui.Style = @ui.style(w=S2, h=S2, radius=Full, bg=@sf.mark_red)
 let mark_busy : @ui.Style = @ui.css("w=S2_5 h=S2_5")
 
 ///|
-/// A row's mark (ChatMark.tsx ChatMark, its row's `key`): one that comes while the chat is in view (a new message, work
-/// begun) pops in (scale 0, 1.3 at 60%, 1: 320 ms, ease-out); one there as the list is first drawn does not.
+/// A row's mark (its row's `key`): one that comes while the chat is in view (a new message, work
+/// begun) pops in (scale 0, 1.3 at 60%, 1: 320 ms, ease-out; clear up to half its size); one there as the list is first drawn does not.
 pub fn row_mark(c : @ui.Ctx, key : String, tone : String) -> Unit {
   let pop = @motion.anim(c, "side/mark-pop/" + key, 1.0, global=true)
   match marks_seen.get(key) {
     Some(was) if was != tone => {
       marks_seen[key] = tone
       if tone != "" && !@ui.reduced_motion() {
-        pop.snap(0.0)
-        pop.animate(1.0, @motion.tween(mark_pop_ms, ease=Out))
+        pop.snap(c, 0.0)
+        pop.animate(c, 1.0, @motion.tween(mark_pop_ms, ease=Out))
       }
     }
     None => marks_seen[key] = tone
     _ => ()
   }
   let mark = chat_mark(c, tone)
-  let v = pop.get()
+  let v = pop.get(c)
   if mark != 0 && v < 1.0 {
-    c.look(mark, @ui.look(scale=pop_scale(v)))
+    c.look(mark, @ui.look(alpha=@sf.seen_at(pop_scale(v)), scale=pop_scale(v)))
   }
 }
 
 ///|
-/// The mark each chat has had, as its row was last drawn (ChatMark.tsx `shown`).
+/// The mark each chat has had, as its row was last drawn.
 let marks_seen : Map[String, String] = {}
 
 ///|
@@ -88,14 +88,13 @@ let mark_pop_peak : Double = 1.3
 ///|
 let mark_pop_peak_at : Double = 0.6
 
-
-// A row's second line from where its chat stands (ember web/src/ChatMark.tsx WaitingText `slot`, ChatMark.css.ts
+// A row's second line from where its chat stands (still.fail web/src/ChatMark.tsx WaitingText `slot`, ChatMark.css.ts
 // leadLine, leadSlot, waitingLead; Sidebar.css.ts navSessionLast): by what the core says leads it (ChatItem's
 // state_lead, its card's lead word state_lead_text, what follows state_rest), never read out of the words. A lead said
 // as an icon (needs the viewer a bell, done a check, done and offered to archive the archive box, waiting the waiting
 // arc, watching a radar) stands in the title's mark's column, centred under it, what follows where the title starts;
 // the two still going move (waiting's dots breathe in turn, the radar's dot beats and its arcs light up after it, inner
-// then outer, then rest: every 3.1 s). 奏 · … in ink, its lead word bold; needs the viewer in ink too; anything else
+// then outer, then rest: every 3.1 s). 待处理 · … in ink, its lead word bold; needs the viewer in ink too; anything else
 // as quiet as the last message.
 
 ///|
@@ -113,7 +112,7 @@ pub fn state_line(
   alert? : Bool = false,
 ) -> Unit {
   let turn = lead == "decision" || lead == "need"
-  // (the row's size, the theme's lists': Sidebar.css.ts navSessionLast, mobile/Home.css.ts mLast)
+  // (the row's size, the theme's lists': Sidebar.css.ts navSessionLast)
   let look = @sf.theme().chat_list
   let words = if alert { look.state_alert } else if turn { look.state_turn } else { look.state_quiet }
   match lead {
@@ -149,7 +148,7 @@ pub fn state_line(
         // (the theme's lists' lead word: bold with touch, as the phone's Home.kt StateLine; 600 with keyboard and mouse,
         // ChatMark.css.ts)
         c.text(lead_text, style=words.then(look.state_lead)) |> ignore
-        c.text(text.view(start_offset=lead_text.length()).to_owned(), style=words) |> ignore
+        c.text(text.view(start_offset=lead_text.length()).to_owned(), style=words.then(state_rest_cut)) |> ignore
       })
       |> ignore
     _ => c.text(text, style=words) |> ignore
@@ -295,10 +294,5 @@ let state_icon_at : @ui.Style = @ui.css("w=S3_5 h=S3_5")
 let state_row : @ui.Style = @ui.css("row w=Full align=ACenter")
 
 ///|
-/// A card's lead word (奏): a mouse's 600 (ChatMark.css.ts waitingLead), a finger's bold (Home.kt StateLine).
 // kept across runs: a value (no field of it changes)
-let lead_word : @ui.TextStyle = @ui.text_style(weight=Semibold, w=Hug)
-
-///|
-// kept across runs: a value (no field of it changes)
-let lead_word_touch : @ui.TextStyle = @ui.text_style(weight=Bold, w=Hug)
+let state_rest_cut : @ui.TextStyle = @ui.text_style(w=Cut)

@@ -1,4 +1,4 @@
-// A build of the Windows app that its updater takes only once its words verify (docs/release-signing.md), as the
+// A build of the Windows app that its updater takes only once its words verify (scripts/release-sign.ts), as the
 // Electron app it took the place of took its installer: the feed's release carries the installer's .sig (`signed`, scripts/release-sign.ts file --kind
 // stillfail-desktop-win), whose words say its version and build, its file, its SHA-256 and size; signed by one of the
 // release keys (station/src/updates/keys.ts; or one the app's environment adds, STILLFAIL_RELEASE_KEYS, as the station's
@@ -36,8 +36,8 @@ export function winReleaseUnverified(release: J, keys: readonly string[] = RELEA
   } catch {
     return "the release's words are not JSON";
   }
-  if (r?.kind !== "stillfail-desktop-win" || !Number.isSafeInteger(r.build) || r.version !== `0.1.${r.build}`) return "the words are not a Windows release";
-  if (r.build !== release.versionCode) return `the installer is signed as ${r.version}, offered as 0.1.${release.versionCode}`;
+  if (r?.kind !== "stillfail-desktop-win" || !Number.isSafeInteger(r.build) || !new RegExp(`^0\\.\\d+\\.${r.build}$`).test(r.version)) return "the words are not a Windows release";
+  if (r.build !== release.versionCode) return `the installer is signed as ${r.version}, offered as build ${release.versionCode}`;
   const file = String(release.file ?? "").split("/").pop();
   if (r.file !== file || r.sha256 !== release.sha256 || r.size !== release.size) return "the feed's installer is not the one signed";
   return "";

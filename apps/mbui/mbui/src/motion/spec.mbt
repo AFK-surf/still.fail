@@ -138,11 +138,39 @@ pub let sheet_spring : Spec = motion_spring(0.32, threshold=0.5)
 
 ///|
 /// What the hand holds or lifts (the one spring with a bounce: still.fail's
-/// docs/motion.md): a finger's ripple sinking (Android's), a switch's knob
+/// sf/motion.mbt): a finger's ripple sinking (Android's), a switch's knob
 /// held, a card lifted, the long-press menu's scale, the loupe following the
 /// finger (motionSpring(.25, bounce .35)).
 // kept across runs: a constant: its fields are not mut, nothing changes it
 pub let lift_spring : Spec = motion_spring(0.25, bounce=0.35)
+
+///|
+/// A cover's spring (@ui.Ctx::cover's: a sliding thumb sent to another item), for what moves one otherwise: its way
+/// solved as the cover's is (@ui.cover_spring_at), at rest when the cover's is (@ui.cover_spring_end). Gone from 0 (where
+/// it set out from) to 1 (the item it goes to), the way a cover's is.
+// kept across runs: a constant: its fields are not mut, nothing changes it
+pub let cover_spring : Spec = Motion({
+  kind: "cover",
+  delay: 0.0,
+  make: fn(from, to, v) {
+    let d = from - to
+    let end = @ui.cover_spring_end(d, v)
+    {
+      next_: fn(t) {
+        if t >= end {
+          { done: true, value: to }
+        } else {
+          { done: false, value: to + @ui.cover_spring_at(d, v, t).0 }
+        }
+      },
+      velocity_: Some(fn(t) { if t >= end { 0.0 } else { @ui.cover_spring_at(d, v, t).1 } }),
+      retarget_: None,
+      duration_: Some(end),
+      calculated: Some(end),
+    }
+  },
+  said: None,
+})
 
 ///|
 /// The long-press menu's scale: lifted by the hand (lift_spring).
@@ -189,7 +217,7 @@ pub fn spring_at(
 
 ///|
 /// How long a spring takes, in whole ms, as Compose reckons it
-/// (SpringEstimation.kt): until it stays within `threshold` of its rest.
+/// : until it stays within `threshold` of its rest.
 /// Under-damped, by its envelope (c·e^(−ζωt) = threshold); critically and
 /// over-damped, until the motion itself last leaves the threshold.
 pub fn spring_duration(

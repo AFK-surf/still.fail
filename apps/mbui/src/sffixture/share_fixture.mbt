@@ -16,28 +16,29 @@ pub fn fixture_share_topic(params : Map[String, Json]) -> Json? {
     Some(String(q)) => q
     _ => ""
   }
-  let chat = fn(id : String, title : String, preview : String, maker : String, runtime : String) -> Json {
+  let chat = fn(id : String, title : String, preview : String, maker : String, runtime : String, ago : String) -> Json {
     {
       "id": Json::string(id),
       "station": "ws1/st1",
       "session": Json::string(id),
       "title": Json::string(title),
-      "stationName": "Studio",
+      "stationName": "Willow",
       "last": { "preview": Json::string(preview) },
+      "time": { "lastActiveAt": { "ago": Json::string(ago) } },
       "agents": [{ "maker": { "id": Json::string(maker), "name": Json::string(maker) }, "runtime": Json::string(runtime) }],
     }
   }
   // the one a thing from the same site went to last first, as the core lists them
   let all = [
-    chat("s-c4", "收集视频", "下好了，放在 ~/视频 里", "openai", "codex"),
-    chat("s-c1", "整理发布清单", "清单里还差签名那一项", "anthropic", "claude"),
+    chat("s-c4", "收集视频", "下好了，放在 ~/视频 里", "openai", "codex", "20 小时前"),
+    chat("s-c1", "整理发布清单", "清单里还差签名那一项", "anthropic", "claude", "1 分钟前"),
   ]
   let items = all.filter(fn(c) { query == "" || text(Some(c), "title").contains(query) })
   Some({
     "site": "youtube.com",
     "items": Json::array(items),
     "kept": { "station": "ws1/st1", "id": "s-c4", "text": "youtube.com 的链接上次发到这里" },
-    "stations": [{ "station": "ws1/st1", "name": "Studio" }, { "station": "ws1/st2", "name": "MBA" }],
+    "stations": [{ "station": "ws1/st1", "name": "Willow" }, { "station": "ws1/st2", "name": "Maple" }],
     "newOn": "ws1/st1",
     "loading": false,
   })

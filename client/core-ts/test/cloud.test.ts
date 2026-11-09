@@ -101,6 +101,21 @@ test("says_nothing_until_a_wait_is_slow_then_what_and_how_fast", () => {
   assert.equal(v().state, null);
 });
 
+/// 2026-11-03: the splash said 「无法打开本机数据…· 共 4 项 · 172 KB/s」 under 正在读取你的 workspace. What is read is its
+/// bar's; its lines are only what lasts and is why it is slow.
+test("a_loading_pages_lines_are_only_what_lasts", () => {
+  const host = new FakeHost();
+  const status = new Status(host, new Runner(host.time.clock));
+  status.setNames((a) => (a === "ws/s1" ? "studio" : null));
+  const lines = () => (status.value() as { lines: string[] }).lines;
+  status.begin({ station: "ws/s1" }, stationWhat("GET", "/threads"), false).received(1536 * 1024);
+  status.begin(RELAY, "连接", true);
+  status.skew += 3_000;
+  assert.deepEqual(lines(), []);
+  status.setDb(new Map([["a", { kind: "failed", detail: "disk I/O error" }]]));
+  assert.deepEqual(lines(), ["本机数据无法打开，只能从网络读取"]);
+});
+
 test("a_connection_goes_first_and_a_socket_down_is_trouble", () => {
   const host = new FakeHost();
   const status = new Status(host, new Runner(host.time.clock));
@@ -141,7 +156,7 @@ test("a_workspaces_status_is_its_own_waits_its_accounts_socket_and_the_relay", (
   assert.deepEqual(texts(value([[w1, "all"], [w2, "all"], [device, "all"]])), ["无法连接 still.fail cloud，2 秒后重试", "正在连接 relay", "读取对话", "still.fail cloud 读取 workspace"]);
 });
 
-/// docs/multi-workspace.md: one station in two workspaces, named the same in each. Said together (the `status` topic of
+/// one station in two workspaces, named the same in each. Said together (the `status` topic of
 /// no workspace), each wait says its workspace; apart, they were one line.
 test("said_together_each_workspaces_stations_are_said_with_its_name", () => {
   const host = new FakeHost();
@@ -188,8 +203,6 @@ const req = (name: string, params: unknown) => request(name, params)!;
 test("operations_make_their_requests", () => {
   let r = req("job.stop", { station: "w/s", id: "job 1" });
   assert.deepEqual([r.target, r.method, r.path, r.body], [{ station: "w/s" }, "POST", "/jobs/job%201/stop", null]);
-  r = req("job.clearEnded", { station: "ws/st", session: "ember:c-1" });
-  assert.deepEqual([r.method, r.path], ["DELETE", "/sessions/ember%3Ac-1/jobs"]);
   r = req("session.settings", { station: "ws/st", key: "k", model: "m", profile: null });
   assert.deepEqual(r.body, { model: "m", profile: null });
   r = req("workspace.setRole", { account: "a", workspace: "w1", member: "x@y.z", role: "admin" });
@@ -206,8 +219,8 @@ test("operations_make_their_requests", () => {
 });
 
 test("pinning_a_chat_goes_by_its_session", () => {
-  const r = req("chat.pin", { station: "ws/st", session: "ember:c-1", pinned: true });
-  assert.deepEqual([r.method, r.path], ["PUT", "/sessions/ember%3Ac-1/pin"]);
+  const r = req("chat.pin", { station: "ws/st", session: "chat:c-1", pinned: true });
+  assert.deepEqual([r.method, r.path], ["PUT", "/sessions/chat%3Ac-1/pin"]);
   assert.equal(req("chat.pin", { station: "ws/st", session: "k", pinned: false }).method, "DELETE");
 });
 
@@ -231,6 +244,11 @@ test("renaming_a_chat_names_its_thread_or_its_session", () => {
   assert.deepEqual([r.method, r.path, r.body], ["PUT", "/threads/7/title", { title: "值班" }]);
   r = req("chat.rename", { station: "ws/st", session: "k", title: "" });
   assert.deepEqual([r.method, r.path, r.body], ["POST", "/sessions/k/title", { title: "" }]);
+});
+
+test("regenerating_a_chat_title_asks_its_thread", () => {
+  const r = req("chat.regenerateTitle", { station: "ws/st", thread: 7 });
+  assert.deepEqual([r.method, r.path, r.body], ["POST", "/threads/7/regenerate-title", null]);
 });
 
 test("unknown_names_and_missing_params", () => {
@@ -284,6 +302,31 @@ test("spans_nest_and_go_out_in_one_batch", async () => {
   const [start, end] = [BigInt(r.startTimeUnixNano as string), BigInt(r.endTimeUnixNano as string)];
   assert.ok(end >= start && start > 1_700_000_000_000_000_000n);
   assert.equal(context.traceparent(), `00-${r.traceId}-${r.spanId}-01`);
+});
+
+/// 2026-11-07: a phone's failed reconnects, sent as its network was down, never reached Axiom.
+test("a_batch_that_did_not_go_out_goes_with_the_next", async () => {
+  const host = new FakeHost();
+  const tracer = new Tracer(host, new Runner(host.time.clock), 1);
+  const bodies: unknown[] = [];
+  let down = 2;
+  tracer.setExport((b) => (down-- > 0 ? Effect.fail("offline") : Effect.sync(() => void bodies.push(parseJson(b)))));
+  tracer.root("station.reconnect", Kind.Internal).end();
+  await host.time.pass(EXPORT_MS + 20, 100);
+  assert.equal(bodies.length, 0);
+  tracer.root("mesh.connect", Kind.Internal).end();
+  // Tried again later and later while none goes out: not at EXPORT_MS, at twice it.
+  await host.time.pass(EXPORT_MS + 20, 100);
+  assert.equal(bodies.length, 0);
+  await host.time.pass(EXPORT_MS, 100);
+  assert.equal(bodies.length, 0);
+  await host.time.pass(4 * EXPORT_MS + 20, 100);
+  assert.equal(bodies.length, 1);
+  assert.deepEqual(exported(bodies).map((s) => s.name), ["station.reconnect", "mesh.connect"]);
+  // Going out again: the next waits EXPORT_MS, and nothing is sent twice.
+  tracer.root("chat.open", Kind.Internal).end();
+  await host.time.pass(EXPORT_MS + 20, 100);
+  assert.deepEqual(exported(bodies).map((s) => s.name), ["station.reconnect", "mesh.connect", "chat.open"]);
 });
 
 test("nothing_is_recorded_when_off_and_a_dropped_span_is_cancelled", async () => {

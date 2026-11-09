@@ -1,0 +1,139 @@
+/* ---------- Nav ----------
+   A thin bar of paper material over the page (content scrolls under it, blurred), a dashed rule under it and the page's
+   two guide lines through it. Over the dark band (main.js sets data-under) it turns dark with it. Its colours are local
+   variables, so one switch recolours every part. */
+.nav {
+  position: sticky; top: 0; z-index: 30; isolation: isolate;
+  --n-mat: rgba(250,250,248,.88); --g: var(--guide);
+  --n-fg: var(--ink); --n-mut: var(--graphite);
+  --n-line: var(--line); --n-hover: var(--panel); --n-cta: var(--ink); --n-on-cta: #fff; --n-cta-hover: #3A3936;
+}
+.nav[data-under=ink]:not([data-open]) {
+  --n-mat: rgba(31,30,29,.86); --g: rgba(244,243,240,.13);
+  --n-fg: #F4F3F0; --n-mut: #A3A19B;
+  --n-line: rgba(244,243,240,.16); --n-hover: rgba(244,243,240,.08); --n-cta: #F4F3F0; --n-on-cta: var(--ink); --n-cta-hover: #fff;
+  --ring: #F4F3F0;
+}
+.nav::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: var(--n-mat); -webkit-backdrop-filter: saturate(140%) blur(16px); backdrop-filter: saturate(140%) blur(16px);
+  transition: background-color var(--dur-ui) ease;
+}
+/* The dashed rule under the bar, across the page. */
+.nav::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; pointer-events: none; background: var(--dash-x); }
+/* The page's guides, on the container's edges. */
+.nav .w::before { content: ""; position: absolute; top: 0; bottom: 0; left: var(--gl); right: var(--gr); pointer-events: none;
+  background: var(--dash-y), var(--dash-y); background-position: left top, right top; }
+.nav .w { position: relative; display: flex; align-items: center; gap: clamp(16px, 2.2vw, 40px); height: var(--nav); }
+.brand {
+  display: inline-flex; align-items: center; gap: 10px; min-height: 44px; text-decoration: none; color: var(--ink); flex: none;
+  -webkit-user-select: none; user-select: none; touch-action: manipulation;
+  transition: color var(--dur-ui) ease, scale var(--dur-press) ease-out;
+}
+.nav .brand { color: var(--n-fg); }
+@media (prefers-reduced-motion: no-preference) { .brand:active { scale: .96; } }
+.brand img { width: 26px; height: 26px; border-radius: 6px; transition: box-shadow var(--dur-ui) ease; }
+/* Over Ink the dark mark gets a hairline, so its square still reads. */
+.nav[data-under=ink]:not([data-open]) .brand img { box-shadow: 0 0 0 1px rgba(255,255,255,.22); }
+/* The wordmark sits 1 px high so its x-height centres on the mark, not its cap height. */
+.wordmark { font-weight: 600; font-size: 20px; letter-spacing: -.035em; line-height: 1; transform: translateY(-1px); }
+
+/* Sections, in mono, centred in the bar. One indicator under the current one, sliding from link to link as the page
+   scrolls. */
+.nav-list { position: relative; display: flex; justify-content: center; align-self: stretch; gap: clamp(14px, 1.8vw, 28px); flex: 1; min-width: 0; }
+.nav-list a {
+  display: flex; align-items: center; text-decoration: none; font-family: var(--mono); font-size: 13px; font-weight: 400; letter-spacing: 0;
+  color: var(--n-mut); white-space: nowrap; transition: color var(--dur-ui) ease;
+}
+.nav-list a[aria-current=true] { color: var(--n-fg); }
+/* Chinese, Japanese and Korean have no mono of their own (the fallback spaces Hangul and kana apart): their labels in the sans. */
+:root:is(:lang(zh), :lang(ja), :lang(ko)) .nav-list a { font-family: var(--font); font-size: 14px; }
+.nav-list a:focus-visible { outline-offset: -2px; border-radius: 6px; }
+.nav-ind {
+  position: absolute; z-index: 1; left: 0; bottom: 0; width: 1px; height: 1px; background: var(--n-fg); pointer-events: none;
+  transform-origin: 0 0; transform: translateX(var(--x, 0px)) scaleX(var(--w, 0));
+  opacity: 0; transition: transform 280ms var(--ease-out), opacity var(--dur-ui) ease, background-color var(--dur-ui) ease;
+}
+.nav-ind[data-on] { opacity: 1; }
+.nav-ind[data-jump] { transition: opacity var(--dur-ui) ease, background-color var(--dur-ui) ease; }
+.nav-list .nav-cta { display: none; }
+
+.nav-tools { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
+/* Hit areas reach past the drawing (to 44 px on touch), so the row keeps its size. */
+.icon-link::after, .menu-btn::after { content: ""; position: absolute; inset: -6px -4px; }
+.icon-link, .menu-btn {
+  position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 6px; color: var(--n-fg); border: 0; background: transparent;
+  -webkit-user-select: none; user-select: none; touch-action: manipulation;
+  transition: background-color var(--dur-ui) ease, color var(--dur-ui) ease, scale var(--dur-press) ease-out;
+}
+.nav-tools > .btn-ink { background: var(--n-cta); color: var(--n-on-cta); }
+/* Touch: the controls themselves are 44 px; the round ones give back 4 px each side, so the row is no wider. */
+@media (pointer: coarse) {
+  .icon-link, .menu-btn { width: 44px; height: 44px; margin-inline: -4px; }
+  .icon-link::after, .menu-btn::after { content: none; }
+  /* The bar's call to action keeps its 36 px drawing; its hit area reaches 44 px. */
+  .nav-tools > .btn { position: relative; }
+  .nav-tools > .btn::after { content: ""; position: absolute; inset: -5px -1px; } /* from inside its 1 px border */
+}
+@media (prefers-reduced-motion: no-preference) { .icon-link:active, .menu-btn:not(:disabled):active { scale: .96; } }
+.icon-link svg { width: 20px; height: 20px; }
+.menu-btn { display: none; cursor: pointer; padding: 0; }
+.menu-btn svg { width: 22px; height: 22px; overflow: visible; stroke-width: 2.18; } /* 2 px drawn, as the bar's Book links */
+/* The three bars fold into a cross: the same lines, so the button says what a press will do next. */
+.menu-btn path { transform-box: view-box; transform-origin: 12px 12px; transition: transform var(--dur-ui) var(--ease-out), opacity var(--dur-ui) ease; }
+.nav[data-open] .menu-btn .m1 { transform: rotate(45deg) translateY(5px); }
+.nav[data-open] .menu-btn .m2 { opacity: 0; }
+.nav[data-open] .menu-btn .m3 { transform: rotate(-45deg) translateY(-5px); }
+.nav-scrim { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .nav-list a:hover { color: var(--n-fg); }
+  .icon-link:hover, .menu-btn:hover { background: var(--n-hover); }
+  .nav-tools > .btn-ink:hover { background: var(--n-cta-hover); }
+}
+
+/* Narrow screens: the sections move into a sheet that slides down from under the bar (the way it goes back), over a
+   dimmed page. It is hidden from focus and screen readers while closed (visibility), and holds the call to action. */
+@media (max-width: 980px) {
+  .menu-btn { display: grid; }
+  .nav-ind { display: none; }
+  .nav-list {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: -2; align-self: auto; flex-direction: column; gap: 0;
+    max-height: calc(100dvh - var(--nav)); overflow-y: auto; overscroll-behavior: contain;
+    padding: 4px var(--gr) 20px var(--gl); background: var(--paper); border-radius: 0 0 12px 12px;
+    box-shadow: 0 24px 48px -24px rgba(28,27,26,.24);
+    visibility: hidden; transform: translateY(-100%);
+    transition: transform 220ms var(--ease-out), visibility 0s linear 220ms;
+  }
+  .nav[data-open] .nav-list { visibility: visible; transform: none; transition: transform 380ms var(--ease-drawer), visibility 0s; }
+  .nav-list { justify-content: flex-start; }
+  .nav-list a { flex: none; min-height: 52px; font-size: 15px; color: var(--ink); background: var(--dash-x); background-position: left bottom; }
+  .nav-list a[aria-current=true]::after { content: ""; width: 6px; height: 6px; margin-left: 10px; border-radius: 1px; background: var(--brand-deep); }
+  .nav-list .nav-cta { display: inline-flex; align-self: stretch; margin-top: 20px; flex: none; min-height: 44px; font-family: var(--font); font-size: 15px; color: #fff; background: var(--ink); }
+  .nav[data-open]::before { background: var(--paper); }
+  .nav-scrim {
+    display: block; position: fixed; inset: 0; z-index: -3; background: rgba(28,27,26,.28);
+    opacity: 0; visibility: hidden; transition: opacity 220ms ease, visibility 0s linear 220ms;
+  }
+  .nav[data-open] .nav-scrim { opacity: 1; visibility: visible; transition: opacity 300ms ease, visibility 0s; }
+  :root.menu-open { overflow: hidden; }
+}
+@media (max-width: 640px) {
+  .nav .nav-tools > .btn-ink { display: none; }
+  .nav-tools { gap: 4px; }
+}
+/* Phone on its side: a short bar (--nav is 48 px, 00-base) without the call to action, which the menu sheet holds. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .nav .nav-tools > .btn-ink { display: none; }
+}
+/* Reduced motion: the sheet and scrim cross-fade in place. */
+@media (prefers-reduced-motion: reduce) and (max-width: 980px) {
+  .nav-list { transform: none; opacity: 0; }
+  .nav[data-open] .nav-list { opacity: 1; }
+  .nav-list, .nav-scrim { transition: opacity 150ms ease-out, visibility 0s linear 150ms !important; }
+  .nav[data-open] .nav-list, .nav[data-open] .nav-scrim { transition: opacity 200ms ease, visibility 0s !important; }
+}
+/* Reduced transparency: a solid bar. */
+@media (prefers-reduced-transparency: reduce) {
+  .nav::before { background: var(--paper); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .nav[data-under=ink]:not([data-open])::before { background: var(--night); }
+}

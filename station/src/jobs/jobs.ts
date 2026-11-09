@@ -1,4 +1,4 @@
-// Background jobs (the Rust station's jobs.rs): commands a session's agent starts that the station runs and keeps, apart from
+// Background jobs: commands a session's agent starts that the station runs and keeps, apart from
 // the agent's turns. Each runs in a process group of its own with its output in a log file; the agent hears when it
 // ends, and whatever the job says on the way (`stillfail-job notify …`). A job with a port is a web service: kept up
 // (started again when it ends, with a growing pause), and seen by the workspace's members through the station's
@@ -10,7 +10,7 @@
 // that writes no file (its shell killed) — Node has no exit event for a process that is not its child.
 import { randomBytes } from "node:crypto";
 import {
-  type FSWatcher, appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readlinkSync, renameSync, rmSync,
+  type FSWatcher, appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, rmSync,
   statSync, watch, writeFileSync,
 } from "node:fs";
 import { availableParallelism } from "node:os";
@@ -22,7 +22,6 @@ import { niced } from "../ops/nice.ts";
 import { startLasting } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
 import { inSandbox, keyPart, sandboxed, stopSandbox } from "../agents/sandbox.ts";
-import { linkSync } from "../ops/links.ts";
 import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "../ops/group.ts";
@@ -71,7 +70,6 @@ const quoted = (word: string) => `'${word.replace(/'/g, `'\\''`)}'`;
 /// window does not come up under another task's work, then gives the screen back at once and runs the command,
 /// holding nothing however long it lasts. A job of a station from before it (no
 /// STILLFAIL_JOB_SCREEN) runs the command as it is; one whose station has not answered for a minute runs it, said.
-/// `ember-job`, its name before the rename, is a link to it; a job started then has only the EMBER_JOB_* variables.
 export const JOB_COMMAND = `#!/bin/sh
 # stillfail-job notify <words>: tells the agent that started this job (the words, or stdin's).
 # stillfail-job screen <command>...: runs the command with this machine's screen (windows, a simulator, screenshots),
@@ -79,8 +77,8 @@ export const JOB_COMMAND = `#!/bin/sh
 # minutes; a window kept up for a person is show's.
 # stillfail-job show <command>...: puts up a window for a person (a virtual machine, a simulator to look at) and leaves
 # it: waits for the screen to be free, then runs the command holding nothing.
-token=\${STILLFAIL_JOB_TOKEN:-\${EMBER_JOB_TOKEN:-}}
-notify=\${STILLFAIL_JOB_NOTIFY:-\${EMBER_JOB_NOTIFY:-}}
+token=\${STILLFAIL_JOB_TOKEN:-}
+notify=\${STILLFAIL_JOB_NOTIFY:-}
 case "$1" in
   notify)
     shift
@@ -136,7 +134,6 @@ case "$1" in
 esac
 `;
 export const JOB_COMMAND_NAME = "stillfail-job";
-const FORMER_JOB_COMMAND_NAME = "ember-job";
 
 /// Tells a session's agent something (the hub's notify).
 export type Notify = (session: string, text: string) => void;
@@ -188,6 +185,7 @@ export function jobJson(j: JobRow): Json {
     // Said only when so: what a station from before the queue answered has neither.
     ...(j.queued === true ? { queued: true } : {}),
     ...(j.screen === true ? { screen: true } : {}),
+    ...(j.small === true ? { small: true } : {}),
   };
 }
 
@@ -258,7 +256,7 @@ export function chatOf(session: string): string {
 }
 
 /// How a job is named to its agent.
-export function named(job: JobRow): string {
+export function named(job: Pick<JobRow, "id" | "name" | "port">): string {
   return job.port !== null ? `Service "${job.name}" (${job.id}, port ${job.port})` : `Job "${job.name}" (${job.id})`;
 }
 
@@ -327,19 +325,6 @@ export class Jobs {
       if (!existsSync(script)) throw error;
       log.warn("jobs", "no stillfail-job for cmd and PowerShell", { error: String(error) });
     }
-    // The old name, for jobs and agents used to it: a link to the new one (in place of the script it was).
-    const former = join(dir, "bin", FORMER_JOB_COMMAND_NAME);
-    let linked: string | null = null;
-    try {
-      linked = readlinkSync(former);
-    } catch {}
-    if (linked !== JOB_COMMAND_NAME) {
-      const aside = join(dir, "bin", `.${FORMER_JOB_COMMAND_NAME}.${process.pid}`);
-      rmSync(aside, { force: true });
-      // Where links are refused, a copy will do: the script is written afresh at each start.
-      linkSync(JOB_COMMAND_NAME, aside, { copy: true });
-      renameSync(aside, former);
-    }
     this.scope = Effect.runSync(Scope.make());
     const runtime = Scope.provide(FiberSet.makeRuntimePromise<never, void, never>(), this.scope);
     this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
@@ -399,13 +384,14 @@ export class Jobs {
   /// screen, one such at a time. `size`: it runs in a sandbox of its own of that size (agents/sandbox.ts).
   startId(
     session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, id: string | null, checked = false,
-    queue: { screen: boolean } | null = null, size: string | null = null,
+    queue: { screen: boolean; small?: boolean } | null = null, size: string | null = null,
   ): JobRow {
     if (id !== null) {
       const job = this.store.getJob(id);
       if (job) return job;
     }
     if (command.trim() === "") throw new Error("command is empty");
+    if (queue?.screen && queue.small) throw new Error("a small task cannot use the screen");
     let isDir = checked;
     try {
       isDir ||= statSync(cwd).isDirectory();
@@ -416,12 +402,12 @@ export class Jobs {
     if (size !== null && (port !== null || queue !== null || !sandboxed(this.data))) {
       throw new Error("only a job this station runs in a sandbox has a size: not a service, not another station's task, and only while the station runs jobs in sandboxes");
     }
-    if (this.store.listJobs(session).filter((j) => j.state === "running").length >= MAX_RUNNING) {
+    if (this.store.runningJobsAtLeast(session, MAX_RUNNING)) {
       throw new Error(`this session runs ${MAX_RUNNING} jobs already; stop some first`);
     }
     if (port !== null) {
       // A service holds its port until it is stopped (between its restarts too).
-      const taken = this.store.jobsUp().find((j) => j.port === port);
+      const taken = this.store.jobAtPort(port);
       if (taken) throw new Error(`port ${port} is ${named(taken)}'s already`);
     }
     const jobId = id ?? `job_${hex(4)}`;
@@ -443,6 +429,7 @@ export class Jobs {
       restarts: 0,
       watch,
       ...(queue !== null ? { queued: true, screen: queue.screen } : {}),
+      ...(queue?.small === true ? { small: true } : {}),
       ...(size !== null ? { size } : {}),
     };
     this.store.insertJob(job);
@@ -469,10 +456,9 @@ export class Jobs {
   private line(): { waiting: Waiting[]; running: Started[] } {
     const waiting: Waiting[] = [];
     const running: Started[] = [];
-    for (const j of this.store.jobsRunning()) {
-      if (!queues(j)) continue;
-      if (j.queued === true) waiting.push({ id: j.id, session: j.sessionKey, screen: j.screen === true, queuedAt: j.startedAt });
-      else running.push({ id: j.id, screen: j.screen === true });
+    for (const j of this.store.remoteQueueJobs()) {
+      if (j.queued === true) waiting.push({ id: j.id, session: j.sessionKey, screen: j.screen === true, queuedAt: j.startedAt, ...(j.small ? { small: true } : {}) });
+      else running.push({ id: j.id, screen: j.screen === true, ...(j.small ? { small: true } : {}) });
     }
     waiting.sort((a, b) => a.queuedAt - b.queuedAt);
     return { waiting, running };
@@ -492,9 +478,12 @@ export class Jobs {
   private admitted(job: JobRow): Record<string, string> {
     const alone = this.line().running.length === 0;
     const now = this.queueNow();
-    this.lastStart = now;
-    this.lastStarted = job.id;
+    if (!job.small) {
+      this.lastStart = now;
+      this.lastStarted = job.id;
+    }
     this.lastOf.set(job.sessionKey, now);
+    if (job.small) return { STILLFAIL_CPUS: "1", MAKEFLAGS: "-j1", CARGO_BUILD_JOBS: "1", CMAKE_BUILD_PARALLEL_LEVEL: "1" };
     return cpusFor(startEnv(), this.machine.cpus(), this.busy.share(), alone);
   }
 
@@ -527,12 +516,14 @@ export class Jobs {
     ).catch(() => undefined);
   }
 
-  /// Starts what the queue picks now (one at most: the next waits for its ramp); while others wait, the queue watched.
+  /// Starts what the queue picks now. A small task has its own slot and does not have to wait for a build's ramp.
   /// Then the screen given out to the commands that ask for it, if no task has it now.
   private startNext(): void {
     if (this.closing) return;
     this.prune();
     this.admitNext();
+    const { waiting, running } = this.line();
+    if (waiting.some((w) => w.small) && !running.some((r) => r.small)) this.admitNext();
     this.serve();
     this.tellLong();
   }
@@ -594,9 +585,10 @@ export class Jobs {
     const job = this.store.getJob(id);
     if (!job || job.state !== "running" || job.queued !== true) return null;
     const { waiting, running } = this.line();
-    const p = place(waiting, id, (s) => this.lastOf.get(s) ?? null);
     const task = waiting.find((w) => w.id === id);
-    if (p === null || task === undefined) return null;
+    if (task === undefined) return null;
+    const p = place(waiting.filter((w) => !!w.small === !!task.small), id, (s) => this.lastOf.get(s) ?? null);
+    if (p === null) return null;
     const ramp = running.some((r) => r.id === this.lastStarted) ? this.lastStart : null;
     const cpuBusy = this.busy.sample(ramp);
     const selected = pick([task], running, { busy: cpuBusy?.share ?? null, pressure: this.pressure, person: this.person }, this.queueNow(), ramp, (s) => this.lastOf.get(s) ?? null, claimsOf(this.claims));
@@ -715,12 +707,9 @@ export class Jobs {
     rmSync(this.lostFile(job.id), { force: true });
     // With the variables the station's owners set for what it starts for its agents (ops/agent-env.ts).
     const env: NodeJS.ProcessEnv = { ...platform.prependPath(startEnv(), join(this.dir, "bin")), ...extra };
-    // Under both names: scripts written against the old ones go on working.
-    for (const prefix of ["STILLFAIL_", "EMBER_"]) {
-      env[`${prefix}JOB_ID`] = job.id;
-      env[`${prefix}JOB_TOKEN`] = job.token;
-      env[`${prefix}JOB_NOTIFY`] = this.notifyUrl;
-    }
+    env.STILLFAIL_JOB_ID = job.id;
+    env.STILLFAIL_JOB_TOKEN = job.token;
+    env.STILLFAIL_JOB_NOTIFY = this.notifyUrl;
     // Web services of the workspace's other stations, through the same door (mesh/peer-http.ts).
     if (this.notifyUrl !== "") env.STILLFAIL_PEER_HTTP = this.notifyUrl.replace(/\/jobs\/notify$/, "/peer");
     if (job.port !== null) env.PORT = String(job.port);
@@ -761,7 +750,7 @@ export class Jobs {
   /// The end of a job an earlier station started (not this one's child): its exit file appearing (heard from the watch
   /// on jobs/exit), or its leader gone (looked at once a second: that end writes no file and has no event). The file is
   /// looked for once a second too only where the directory is not watched: each look waits on the disk on the main
-  /// thread (four jobs followed on ccvm, 2026-10-25).
+  /// thread (four jobs followed on a station, 2026-10-25).
   private leaderGone(id: string, pgid: number): Effect.Effect<void> {
     const exit = this.exitFile(id);
     const over = () => !pidAlive(pgid) || (this.exitWatch === null && existsSync(exit));
@@ -942,7 +931,8 @@ export class Jobs {
   /// The record of a job's group an earlier station started (not one this station follows).
   private leftBehind(pgid: number): ProcessRow | null {
     for (const r of this.running.values()) if (r.pgid === pgid) return null;
-    return this.store.listProcesses().find((p) => p.runtime === "job" && p.pgid === pgid) ?? null;
+    const entry = this.store.processByGroup(pgid);
+    return entry?.runtime === "job" ? entry : null;
   }
 
   /// Stops a job for someone on the pages: its agent is told who did (it did not ask for it), if it was at work within

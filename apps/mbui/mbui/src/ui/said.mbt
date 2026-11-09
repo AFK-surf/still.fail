@@ -231,6 +231,15 @@ let said_log : SaidLog = { on: false, built: StringBuilder(), sb: StringBuilder(
 
 ///|
 /// Id `id` as shown (SaidLog's `ids`; 0 none).
+fn said_sel(k : SelKey) -> String {
+  match k {
+    NoSel => "0"
+    Para(id) => said_id(id).to_string()
+    Words(tree, row, place) => "w\{tree}/\{row.at}/\{row.gen}/\{place}"
+  }
+}
+
+///|
 fn said_id(id : Int) -> Int {
   if id == 0 {
     return 0
@@ -246,11 +255,8 @@ fn said_id(id : Int) -> Int {
 }
 
 ///|
-/// The frame's builds over: what they said, shown where a Tester asks.
+/// The frame's builds over: what they said, shown where a Tester asks (Tester::said: frame_said).
 fn Ctx::said_built_logged(self : Ctx) -> Unit {
-  if !said_log.on {
-    return
-  }
   said_log.built.reset()
   said_log.ids.clear()
   for l in build_lists {
@@ -259,11 +265,8 @@ fn Ctx::said_built_logged(self : Ctx) -> Unit {
 }
 
 ///|
-/// The frame painted: what its paint said, shown where a Tester asks.
+/// The frame painted: what its paint said, shown where a Tester asks (Tester::said: frame_said).
 fn Ctx::said_logged(self : Ctx) -> Unit {
-  if !said_log.on {
-    return
-  }
   said_log.sb.reset()
   for l in paint_lists {
     l.said_take(self, 0).said_show(said_log.sb)
@@ -278,6 +281,7 @@ fn Ctx::said_logged(self : Ctx) -> Unit {
 pub fn Tester::said(self : Tester) -> String {
   ignore(self)
   said_log.on = true
+  frame_said.val = Some(fn(c, at) { if at == 0 { c.said_built_logged() } else { c.said_logged() } })
   said_log.built.to_string() + said_log.sb.to_string()
 }
 
@@ -726,7 +730,7 @@ impl SaidAgain for ScrollsTaken with said_show(self, sb) {
 impl SaidAgain for SelsTaken with said_show(self, sb) {
   for t in self.sels {
     sb.write_string(
-      "sel \{said_id(t.base)} \{t.at} \{said_num(t.ox)} \{said_num(t.oy)} \{said_num(t.x0)} \{said_num(t.y0)} \{said_num(t.x1)} \{said_num(t.y1)} \{t.text.length()}\n",
+      "sel \{said_sel(t.base)} \{t.at} \{said_num(t.ox)} \{said_num(t.oy)} \{said_num(t.x0)} \{said_num(t.y0)} \{said_num(t.x1)} \{said_num(t.y1)} \{t.text.length()}\n",
     )
   }
 }

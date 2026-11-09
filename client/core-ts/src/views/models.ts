@@ -1,4 +1,4 @@
-// What a station can run, put together from its overview (views.rs, its second half): the runtimes a chat can start
+// What a station can run, put together from its overview (its second half): the runtimes a chat can start
 // on and their models, what a session can be moved to and who runs it, what is worth a look about a session, an
 // account's allowance in a few words.
 import * as format from "../format.ts";
@@ -19,8 +19,18 @@ const str = (v: J): string | null => (typeof v === "string" ? v : null);
 /// The runtimes a chat can run on, in the order they are offered.
 export const RUNTIMES = format.RUNTIMES;
 
-const profilesOf = (overview: J): J[] => arr(get(overview, "profiles"));
+const allProfilesOf = (overview: J): J[] => arr(get(overview, "profiles"));
+const profilesOf = (overview: J): J[] => allProfilesOf(overview).filter((p) => get(p, "enabled") !== false);
 const runs = (p: J, runtime: string) => arr(get(p, "runtimes")).some((r) => r === runtime);
+/// What the station's model catalog says of a model it lists as any of `ids` (its `modelMakers`: who made it, its
+/// series); none from a station older than it, or for a model the catalog does not name.
+const madeBy = (overview: J, ids: Iterable<string>): J => {
+  const said = get(overview, "modelMakers");
+  for (const id of ids) if (get(said, id) !== undefined) return get(said, id);
+  return null;
+};
+/// A model's maker and series: as the catalog says, its series as still.fail names it first (Opus, not Claude Opus).
+const makerFamily = (m: string, said: J) => ({ family: model.family(m) ?? str(get(said, "family")), maker: present.maker(m, said) });
 const sortedSet = (set: Set<string>) => [...set].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 /// The item of `list` whose `id` is `id`, or null.
@@ -96,81 +106,144 @@ function spellings(key: string, ids: Set<string>): [string, string[]] {
 export function choices(overview: J, session: J, now: number): J[] {
   const runtime = str(get(session, "runtime")) ?? "";
   const current = str(get(session, "profile"));
-  const byKey = new Map<string, Set<string>>();
+  const byKey = new Map<string, { ids: Set<string>; profiles: J[] }>();
   for (const p of profilesOf(overview).filter((p) => runs(p, runtime))) {
+    const seen = new Set<string>();
     for (const m of arr(get(p, "models"))) {
       if (typeof m !== "string") continue;
       const k = model.key(m);
-      if (!byKey.has(k)) byKey.set(k, new Set());
-      byKey.get(k)!.add(m);
+      let offered = byKey.get(k);
+      if (!offered) {
+        offered = { ids: new Set(), profiles: [] };
+        byKey.set(k, offered);
+      }
+      offered.ids.add(m);
+      if (!seen.has(k)) {
+        seen.add(k);
+        offered.profiles.push(p);
+      }
     }
   }
   const keys = sortedSet(new Set(byKey.keys())).sort(model.compareOrder);
   return keys.map((key) => {
-    const [m, ids] = spellings(key, byKey.get(key)!);
+    const offered = byKey.get(key)!;
+    const [m, ids] = spellings(key, offered.ids);
     return {
       model: m,
       name: model.name(m),
-      family: model.family(m),
       ids,
-      maker: present.maker(m),
+      ...makerFamily(m, madeBy(overview, ids)),
       runtimes: [runtime],
-      efforts: { [runtime]: modelEfforts(overview, runtime, m) },
-      accounts: { [runtime]: profilesRunning(overview, runtime, m, current, now) },
+      efforts: { [runtime]: commonEfforts(offered.profiles, runtime, m) },
+      contexts: { [runtime]: contextSteps(overview, runtime, ids) },
+      ...windowOf(overview, ids),
+      accounts: { [runtime]: profileLines(offered.profiles, runtime, m, current, now) },
     };
   });
 }
+
+/// The most context a chat can be kept to under a model's whole window, the most first (a station's sessions/context-cap.ts).
+const CONTEXT_STEPS = [500_000, 300_000, 200_000];
+
+/// How much less context than its whole window model `m` (spelled as any of `ids`) can run with on `runtime`, the most
+/// first: the steps under its window as its station's model catalog says it (`contextCaps`), on a runtime that takes
+/// one. None from a station from before them, for a model whose window is not known, or one too short for any.
+export function contextSteps(overview: J, runtime: string, ids: Iterable<string>): number[] {
+  const caps = get(overview, "contextCaps");
+  if (!arr(get(caps, "runtimes")).includes(runtime)) return [];
+  const least = typeof get(caps, "least") === "number" ? caps.least : 0;
+  const window = contextWindow(overview, ids);
+  return window === null ? [] : CONTEXT_STEPS.filter((s) => s >= least && s < window);
+}
+
+/// Model `m`'s whole context window (spelled as any of `ids`), as its station's model catalog says it; null, not said.
+export function contextWindow(overview: J, ids: Iterable<string>): number | null {
+  let window: number | null = null;
+  for (const id of ids) {
+    const w = get(get(get(overview, "contextCaps"), "windows"), id);
+    if (typeof w === "number") window = Math.max(window ?? 0, w);
+  }
+  return window;
+}
+
+const windowOf = (overview: J, ids: Iterable<string>): { contextWindow?: number } => {
+  const window = contextWindow(overview, ids);
+  return window === null ? {} : { contextWindow: window };
+};
 
 function profileEfforts(profile: J, runtime: string, m: string | null): string[] {
   const catalog = get(get(profile, "check"), "modelEfforts");
   return reasoning.available(runtime, m ?? str(get(profile, "model")), catalog ?? null);
 }
 
-function modelEfforts(overview: J, runtime: string, m: string | null): string[] {
-  const profiles = profilesOf(overview)
-    .filter((p) => runs(p, runtime))
-    .filter((p) => m === null || arr(get(p, "models")).some((id) => typeof id === "string" && model.same(id, m)))
-    .map((p) => profileEfforts(p, runtime, m));
-  return reasoning.common(profiles, runtime);
+/// The model's own reasoning level on `runtime` (its account's, `profile`, else the first account's that says one),
+/// where the runtime says one.
+export function effortDefault(overview: J, runtime: string, m: string | null, profile: string | null): string | null {
+  if (m === null) return null;
+  const said = (p: J): string | null => {
+    const levels = get(get(get(p, "check"), "modelEffortDefaults"), runtime);
+    if (levels === undefined || levels === null || typeof levels !== "object") return null;
+    const found = Object.entries(levels as Record<string, unknown>).find(([id]) => model.same(id, m));
+    return found !== undefined && typeof found[1] === "string" ? found[1] : null;
+  };
+  const profiles = profilesOf(overview).filter((p) => runs(p, runtime) && (profile === null || get(p, "id") === profile));
+  for (const p of profiles) {
+    const level = said(p);
+    if (level !== null) return level;
+  }
+  return null;
+}
+
+/// What its accounts share. One that has reported no levels (its check not done, or failed) is not known to lack any, so
+/// it does not hold back those that have; none having reported, the runtime's usual ones.
+function commonEfforts(profiles: J[], runtime: string, m: string | null): string[] {
+  const said = profiles
+    .map((p) => reasoning.reported(runtime, m ?? str(get(p, "model")), get(get(p, "check"), "modelEfforts") ?? null))
+    .filter((levels) => levels !== null);
+  return reasoning.common(said.length > 0 ? said : profiles.map((p) => profileEfforts(p, runtime, m)), runtime);
 }
 
 function profilesRunning(overview: J, runtime: string, m: string | null, current: string | null, now: number): J[] {
-  return profilesOf(overview)
+  const profiles = profilesOf(overview)
     .filter((p) => runs(p, runtime))
-    .filter((p) => m === null || arr(get(p, "models")).some((x) => typeof x === "string" && model.same(x, m)))
-    .map((p) => {
-      const id = str(get(p, "id")) ?? "";
-      const spent = spentUntil(p);
-      const line: J = {
-        id,
-        name: get(p, "name") ?? id,
-        current: id === current,
-        spent: spent !== null ? spentView(spent, now) : null,
-        efforts: profileEfforts(p, runtime, m),
-        kind: get(get(p, "access"), "kind") ?? null,
-        runtime: get(p, "runtime") ?? null,
-        quota: get(p, "quota") ?? null,
-        quotaLine: quotaLine(get(p, "quota")),
-      };
-      if (typeof get(p, "providerMark") === "string") line.mark = p.providerMark;
-      return line;
-    });
+    .filter((p) => m === null || arr(get(p, "models")).some((x) => typeof x === "string" && model.same(x, m)));
+  return profileLines(profiles, runtime, m, current, now);
 }
 
-/// The overview as the chats of `workspace` run on it (docs/multi-workspace.md): with the profiles the station says
+function profileLines(profiles: J[], runtime: string, m: string | null, current: string | null, now: number): J[] {
+  return profiles.map((p) => {
+    const id = str(get(p, "id")) ?? "";
+    const spent = spentUntil(p);
+    const line: J = {
+      id,
+      name: get(p, "name") ?? id,
+      current: id === current,
+      spent: spent !== null ? spentView(spent, now) : null,
+      efforts: profileEfforts(p, runtime, m),
+      kind: get(get(p, "access"), "kind") ?? null,
+      runtime: get(p, "runtime") ?? null,
+      quota: get(p, "quota") ?? null,
+      quotaLine: quotaLine(get(p, "quota")),
+    };
+    if (typeof get(p, "providerMark") === "string") line.mark = p.providerMark;
+    return line;
+  });
+}
+
+/// The overview as the chats of `workspace` run on it: with the profiles the station says
 /// they may (`serves`), else (a station of before it) those whose `workspaces` name it in one it joined (`joined`), every
 /// one in its home.
 export function servingIn(overview: J, workspace: string, joined: boolean): J {
   const profiles = get(overview, "profiles");
   if (!Array.isArray(profiles)) return overview;
-  return { ...overview, profiles: profiles.filter((p) => profileServes(p, workspace, joined)) };
+  return { ...overview, profiles: profiles.filter((p) => get(p, "enabled") !== false && profileServes(p, workspace, joined)) };
 }
 
 /// The models the station can run, each with the runtimes it runs on.
 export function models(overview: J, now: number): J[] {
-  const on = new Map<string, { runtimes: Set<string>; backs: (number | null)[]; ids: Set<string> }>();
+  const on = new Map<string, { runtimes: Set<string>; backs: (number | null)[]; ids: Set<string>; profiles: Map<string, J[]> }>();
   for (const p of profilesOf(overview)) {
-    const rts = arr(get(p, "runtimes")).filter((r): r is string => typeof r === "string");
+    const rts = [...new Set(arr(get(p, "runtimes")).filter((r): r is string => typeof r === "string"))];
     const back = spentUntil(p);
     const keys = new Set<string>();
     for (const m of arr(get(p, "models"))) {
@@ -178,7 +251,7 @@ export function models(overview: J, now: number): J[] {
       const k = model.key(m);
       let entry = on.get(k);
       if (!entry) {
-        entry = { runtimes: new Set(), backs: [], ids: new Set() };
+        entry = { runtimes: new Set(), backs: [], ids: new Set(), profiles: new Map() };
         on.set(k, entry);
       }
       for (const r of rts) entry.runtimes.add(r);
@@ -186,6 +259,14 @@ export function models(overview: J, now: number): J[] {
       if (!keys.has(k)) {
         keys.add(k);
         entry.backs.push(back);
+        for (const r of rts) {
+          let profiles = entry.profiles.get(r);
+          if (!profiles) {
+            profiles = [];
+            entry.profiles.set(r, profiles);
+          }
+          profiles.push(p);
+        }
       }
     }
   }
@@ -195,17 +276,20 @@ export function models(overview: J, now: number): J[] {
   };
   const keys = sortedSet(new Set(on.keys())).sort(model.compareOrder);
   return keys.map((key) => {
-    const { runtimes: rs, backs, ids } = on.get(key)!;
+    const { runtimes: rs, backs, ids, profiles } = on.get(key)!;
     const [m, spelled] = spellings(key, ids);
     const rts = sortedSet(rs).sort((a, b) => order(a) - order(b));
     const spent = backs.every((b) => b !== null) ? backs.reduce<number>((min, b) => Math.min(min, b as number), Infinity) : null;
     const efforts: Record<string, J> = {};
+    const contexts: Record<string, number[]> = {};
     const accounts: Record<string, J> = {};
     for (const r of rts) {
-      efforts[r] = modelEfforts(overview, r, m);
-      accounts[r] = profilesRunning(overview, r, m, null, now);
+      const offered = profiles.get(r) ?? [];
+      efforts[r] = commonEfforts(offered, r, m);
+      contexts[r] = contextSteps(overview, r, spelled);
+      accounts[r] = profileLines(offered, r, m, null, now);
     }
-    return { model: m, name: model.name(m), family: model.family(m), ids: spelled, runtimes: rts, maker: present.maker(m), efforts, accounts, spent: spent !== null ? spentView(spent, now) : null };
+    return { model: m, name: model.name(m), ids: spelled, runtimes: rts, ...makerFamily(m, madeBy(overview, spelled)), efforts, contexts, ...windowOf(overview, spelled), accounts, spent: spent !== null ? spentView(spent, now) : null };
   });
 }
 
@@ -266,7 +350,7 @@ export function machineMeta(session: J, now: number, offsetMin = 0): J {
   let ago: string | null = null;
   if (typeof session.updatedAt === "number") {
     const secs = Math.max(format.round((now - session.updatedAt) / 1000), 0);
-    ago = secs < 5 ? t("core-logic.jobs.ago.now") : secs >= 86_400 && secs < 2 * 86_400 ? t("core-logic.jobs.ago.yesterday") : t("core-logic.jobs.ago", { span: jobs.span(secs * 1000) });
+    ago = secs < 5 ? t("core-logic.jobs.ago.now") : t("core-logic.jobs.ago", { span: jobs.span(secs * 1000) });
   }
   const at = typeof session.updatedAt === "number" ? session.updatedAt : null;
   const today = at !== null && format.localDay(at, offsetMin) === format.localDay(now, offsetMin);
@@ -282,7 +366,7 @@ export function machineMeta(session: J, now: number, offsetMin = 0): J {
   };
 }
 
-// ── the workspace's models on a station (docs/station-share.md 借用) ──
+// ── the workspace's models on a station ( 借用) ──
 
 /// A station of the workspace as `stations` lists it: its address, id, name, whether it is up, and its overview.
 type StationOf = { station: string; id: string; name: string; online: boolean; joined: boolean; overview: J; emoji: string | null; icon: string | null };
@@ -323,7 +407,7 @@ export function borrowable(stations: J, here: string, have: J[], runtime: string
   const self = all.find((s) => s.station === here);
   if (self === undefined || self.joined) return [];
   const taken = new Set(have.map((o) => model.key(str(get(o, "model")) ?? "")));
-  const ownHere = new Set(profilesOf(self.overview).flatMap((p) => (typeof get(get(p, "share"), "id") === "string" ? [p.share.id] : [])));
+  const ownHere = new Set(allProfilesOf(self.overview).flatMap((p) => (typeof get(get(p, "share"), "id") === "string" ? [p.share.id] : [])));
   const out: J[] = [];
   for (const s of all) {
     if (s.station === here || !s.online || s.joined || get(s.overview, "sharing") !== true) continue;

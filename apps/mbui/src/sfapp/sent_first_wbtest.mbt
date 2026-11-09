@@ -39,10 +39,10 @@ test "words sent are in the list the frame they are sent, the core not answering
 
 ///|
 test "words sent from a window short of the chat's end: its latest page asked for, the list at its end as it comes" {
-  let short = Ref(true)
+  let short = @signals.signal(true)
   let calls : Array[Made] = []
   let t = fake_core(calls, over=fn(name, tp) {
-    if name != "chat" || !short.val {
+    if name != "chat" || !short.get() {
       return tp
     }
     match tp.value {
@@ -62,7 +62,7 @@ test "words sent from a window short of the chat's end: its latest page asked fo
   t.move(195.0, 400.0)
   t.wheel(195.0, 400.0, -900.0)
   assert_true(!t.at_end())
-  short.val = false
+  short.set(false)
   t.draw()
   t.draw()
   assert_true(t.at_end())
@@ -91,7 +91,7 @@ test "the core's row goes on from what was sent: the words fly on to it, it does
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
@@ -132,7 +132,7 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
   t.tap_text("发消息")
   t.type_text("再看一下按钮")
   // the answer to the first words taken: its agent's activity folding, the avatar on its way
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   t.run_for(Pose::Fold.ms() + 200.0)
   let sent_at = t.time()
@@ -155,7 +155,7 @@ test "words sent while an answer comes out of its avatar fly at once; the answer
     Some(turn) => {
       // not there before them, waiting: still on its way down, to come down as they land
       assert_true(turn.pose == Float)
-      assert_true(turn.clock.moving())
+      assert_false(turn.clock.over(t.ctx()))
       assert_true((turn.clock.ends() - landing).abs() < 0.001)
       [turn.agent]
     }
@@ -199,7 +199,7 @@ test "words sent are seen every frame from the field to their bubble: not gone t
 test "the core's row joined to the viewer's last as the words fly: the rows above go on up with them, never put up at once" {
   // as the core says it (views.ts drawn): words sent soon after the viewer's last are joined to it, its time going
   // under them; what was sent from here is drawn apart (LocalSent) until the core has it, a frame or two later
-  let has = Ref::new(false)
+  let has = @signals.signal(false)
   let calls : Array[Made] = []
   let t = fake_core(calls, over=fn(name, tp) {
     match (name, tp.value) {
@@ -210,7 +210,7 @@ test "the core's row joined to the viewer's last as the words fly: the rows abov
           _ => []
         }
         let mine : Map[String, Json] = { "mine": true, "author": "lin@example.com" }
-        if has.val {
+        if has.get() {
           mine["followed"] = true
           v["outbox"] = [
             {
@@ -226,7 +226,8 @@ test "the core's row joined to the viewer's last as the words fly: the rows abov
         }
         messages.push(msg(12, "person", by_person("林"), "先看一下列表", "刚刚", mine))
         v["messages"] = Json::array(messages)
-        { ..tp, value: Some(Json::object(v)), version: if has.val { 2 } else { 1 } }
+        // (a version of its own for each of the core's and each way the test has it: the core's later ones not hidden)
+        { ..tp, value: Some(Json::object(v)), version: tp.version * 2 + (if has.get() { 1 } else { 0 }) }
       }
       _ => tp
     }
@@ -238,7 +239,7 @@ test "the core's row joined to the viewer's last as the words fly: the rows abov
   tap_send(t)
   t.draw()
   // the core has it: its row, joined, shorter than what was sent from here (and the one before without its time)
-  has.val = true
+  has.set(true)
   t.frame()
   let lands = match send_flight.get() {
     Some(f) => {

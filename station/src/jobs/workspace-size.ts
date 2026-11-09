@@ -2,16 +2,38 @@
 // chats do not walk the disk at once; links are not followed and hard links count once (sessions/footprint.ts).
 import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Clock } from "effect";
 import { Fibers } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { measuredUpTo } from "../sessions/footprint.ts";
+import type { Store } from "../store/store.ts";
 
 export const GIB = 1024 ** 3;
 export const DEFAULT_LIMIT = 10 * GIB;
 export const CHECK_MS = 5 * 60_000;
 export const REMIND_MS = 60 * 60_000;
+
+/// Recheck the chat when its workspace reading comes back: its turn or jobs may have ended meanwhile.
+export function workspaceWorking(store: Pick<Store, "getSession" | "runningJobsAtLeast" | "lastTurn">,
+  processState: (key: string) => string, key: string): boolean {
+  const row = store.getSession(key);
+  if (row === null) return false;
+  return row.archivedAt === null && (row.running || processState(key) === "running"
+    || store.runningJobsAtLeast(key, 1) || store.lastTurn(key)?.declared === "waiting");
+}
+
+/// The live sessions whose workspaces should be measured this round.
+export function workspaceSessionsToMeasure(store: Pick<Store, "liveSessions" | "runningJobSessions" | "waitingOf">,
+  processState: (key: string) => string): ReturnType<Store["liveSessions"]> {
+  const live = store.liveSessions();
+  const idle = live.filter((s) => s.archivedAt === null && !s.running && processState(s.key) !== "running");
+  const jobsRunning = store.runningJobSessions(idle.map((s) => s.key));
+  const waiting = store.waitingOf(idle.filter((s) => !jobsRunning.has(s.key)).map((s) => s.key));
+  return live.filter((s) => s.archivedAt === null && (s.running || processState(s.key) === "running"
+    || jobsRunning.has(s.key) || waiting.has(s.key)));
+}
 
 export type WorkspaceSize = { bytes: number; complete: boolean };
 type Measurement = { size: WorkspaceSize | null; at: number; pending: boolean; limit: number };
@@ -104,6 +126,7 @@ export class WorkspaceWatch {
   }
 
   start(): void {
+    void this.#readAll();
     const tick = async () => {
       try { await this.look(); } finally { this.#fibers.after(CHECK_MS, tick); }
     };
@@ -115,6 +138,7 @@ export class WorkspaceWatch {
   /// An archived chat can be restored with its limit; a deleted chat has no settings left behind.
   forget(session: string): void {
     this.#limits.delete(session);
+    this.#read.delete(this.#file(session).slice(this.#directory.length + 1));
     try {
       rmSync(this.#file(session), { force: true });
     } catch (error) {
@@ -126,12 +150,27 @@ export class WorkspaceWatch {
     return join(this.#directory, `${createHash("sha256").update(session).digest("hex")}.json`);
   }
 
+  /// What each chat's file says, read off the station's thread as it starts: read on it at the first look after every
+  /// update, these reads can hold up its other work. By file name; null: none could be read.
+  readonly #read = new Map<string, string | null>();
+
+  async #readAll(): Promise<void> {
+    for (const name of await readdir(this.#directory).catch(() => [] as string[])) {
+      if (!name.endsWith(".json") || this.#read.has(name)) continue;
+      this.#read.set(name, await readFile(join(this.#directory, name), "utf8").catch(() => null));
+    }
+  }
+
   #of(session: string): Limits {
     let all = this.#limits.get(session);
     if (all) return all;
     all = Object.create(null) as Limits;
     try {
-      const parsed: unknown = JSON.parse(readFileSync(this.#file(session), "utf8"));
+      const file = this.#file(session);
+      const name = file.slice(this.#directory.length + 1);
+      const text = this.#read.get(name);
+      this.#read.delete(name);
+      const parsed: unknown = JSON.parse(text ?? readFileSync(file, "utf8"));
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         for (const [station, value] of Object.entries(parsed)) {
           if (!value || typeof value !== "object") continue;

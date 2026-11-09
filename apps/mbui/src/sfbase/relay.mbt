@@ -1,8 +1,8 @@
-// A chat relayed to a channel (docs/relay.md), for both frames: the places its station's bots are in, read as the
+// A chat relayed to a channel, for both frames: the places its station's bots are in, read as the
 // picker opens (`chat.relayPlaces`), what the picker shows of them for what is typed and the bot picked (the core's:
 // `chat.relayView`, relay-pick.ts), the people there its note can mention once an `@` is typed in it (`chat.relayPeople`,
 // then the core's `chat.relayMentions`), and the chat relayed where it was picked (`chat.relay`). The desktop's dialog
-// (sfdesk relay.mbt, Relay.tsx RelayDialog) and the phone's sheet (sfapp relay.mbt) draw it.
+// (sfdesk relay.mbt) and the phone's sheet (sfapp relay.mbt) draw it.
 
 ///|
 /// The picker open (`thread` -1: none), its places as read (0 being read, 1 read, 2 not: `error` says why), the bot
@@ -84,7 +84,7 @@ pub fn relay_reset() -> Unit {
 }
 
 ///|
-/// The picker opened for the chat `thread` of `station`: its places asked for (Relay.tsx useRelay's effect).
+/// The picker opened for the chat `thread` of `station`: its places asked for.
 pub fn relay_open(src : Source, station : String, thread : Double) -> Unit {
   relay_reset()
   relaying.station.set(station)
@@ -256,7 +256,7 @@ fn relay_mentions_asked(c : @ui.Ctx, src : Source, view : Json?) -> Json? {
 
 ///|
 /// The chat relayed to the place picked, or to the thread of the Slack message's link typed (through the bot gone on
-/// through), with the note: said where it went when done (Relay.tsx go), why not when not; `done` told once it went.
+/// through), with the note: said where it went when done, why not when not; `done` told once it went.
 pub fn relay_go(src : Source, view : Json?, done? : () -> Unit = fn() {  }) -> Unit {
   let p = match relay_target(view) {
     Some(p) => p

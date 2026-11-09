@@ -97,7 +97,7 @@ impl Runner {
 
     fn connect(&self) -> Client {
         let pipe = OpenOptions::new().read(true).write(true).open(self.info["socket"].as_str().unwrap()).unwrap();
-        Client { reader: BufReader::new(pipe.try_clone().unwrap()), writer: pipe }
+        Client { reader: BufReader::new(pipe.try_clone().unwrap()), writer: pipe, said: None }
     }
 
     fn files(&self) -> Vec<String> {
@@ -137,6 +137,8 @@ fn ready_line(stdout: impl std::io::Read) -> Value {
 struct Client {
     reader: BufReader<File>,
     writer: File,
+    /// What the runner said as it was attached to (where it begins): kept aside, the rest read on past it.
+    said: Option<Value>,
 }
 
 impl Client {
@@ -145,12 +147,18 @@ impl Client {
     }
 
     fn recv(&mut self) -> Option<Value> {
-        let mut line = String::new();
-        match self.reader.read_line(&mut line) {
-            Ok(0) => None,
-            Ok(_) => Some(serde_json::from_str(&line).unwrap()),
-            Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe || e.raw_os_error() == Some(233) => None,
-            Err(e) => panic!("reading from the runner: {e}"),
+        loop {
+            let mut line = String::new();
+            let message: Value = match self.reader.read_line(&mut line) {
+                Ok(0) => return None,
+                Ok(_) => serde_json::from_str(&line).unwrap(),
+                Err(e) if e.kind() == std::io::ErrorKind::BrokenPipe || e.raw_os_error() == Some(233) => return None,
+                Err(e) => panic!("reading from the runner: {e}"),
+            };
+            if message["op"] != "attached" {
+                return Some(message);
+            }
+            self.said = Some(message);
         }
     }
 
@@ -436,6 +444,21 @@ fn a_start_that_fails_says_why_and_leaves_nothing() {
     assert_eq!(usage.status.code(), Some(2));
     let bad = Command::new(BIN).args(["--dir", dir.to_str().unwrap(), "--id", r"a\b", "--", "cmd"]).output().unwrap();
     assert_eq!(bad.status.code(), Some(2));
+}
+
+#[test]
+fn a_pid_taken_by_a_later_process_does_not_hold_the_id() {
+    let dir = tmpdir("reused");
+    fs::create_dir_all(&dir).unwrap();
+    let mut later = Command::new("cmd").args(["/c", "pause"]).stdin(Stdio::piped()).stdout(Stdio::null()).spawn().unwrap();
+    // As a runner gone long ago left it, its pid given to a process started since.
+    fs::write(dir.join("a.json"), json!({ "id": "a", "runner": later.id(), "startedAt": 1 }).to_string()).unwrap();
+    let mut child = Command::new(BIN).args(["--dir", dir.to_str().unwrap(), "--id", "a", "--"]).args(cmd("set /p x=")).stdout(Stdio::piped()).spawn().unwrap();
+    let info = ready_line(child.stdout.take().unwrap());
+    let runner = Runner { dir, info, child: Some(child) };
+    assert_ne!(runner.pid("runner"), i64::from(later.id()));
+    later.kill().unwrap();
+    later.wait().unwrap();
 }
 
 #[test]

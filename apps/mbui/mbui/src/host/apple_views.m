@@ -1,5 +1,5 @@
 // Native views over the canvas (host_native.mbt's view_*), for macOS and iOS:
-// a video player (AVPlayer, its bytes read through the app) and a web page
+// a video player (AVPlayer, or WebKit for WebM on the Mac, its bytes read through the app) and a web page
 // (WKWebView). They live in a view just under the canvas's (mb_views_root);
 // the app paints a hole (kind 9: transparent, unblended) where one shows, and
 // what it paints after the hole draws over it. Also files saved
@@ -165,7 +165,7 @@ id mb_views_root(CGRect frame) {
 
 // ---------------------------------------------------------------------------
 
-@class MBSiteHandler;
+@class MBSiteHandler, MBWebVideo;
 
 // One request of a site's page (kind 3): its scheme task, answered by the app.
 @interface MBSiteReq : NSObject
@@ -194,6 +194,11 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic, strong) AVPlayerItem *item;
 @property(nonatomic, strong) AVPlayerLayer *playerLayer;
 @property(nonatomic, strong) AVPlayerItemVideoOutput *output;
+// WebM and some MP4 video on the Mac are decoded by WebKit, whose support is wider than AVPlayer's.
+@property(nonatomic, strong) MBWebVideo *webVideo;
+// MP4 can contain a video track AVPlayer silently ignores. Choose its decoder before telling the app it is ready.
+@property(nonatomic) BOOL decidingCodec, avDetached, readFailed;
+@property(nonatomic, strong) NSMutableArray<NSArray<NSNumber *> *> *codecControls;
 // a stream's (kind 4): the stream whose frames its layer shows
 @property(nonatomic) int32_t streamSid;
 @property(nonatomic, strong) MBLoader *loader;
@@ -263,6 +268,7 @@ id mb_views_root(CGRect frame) {
 - (void)playWhatCame;
 - (CGImageRef)copyFrame;
 - (void)stood;
+- (void)tell:(int)state;
 @end
 
 int32_t mb_host_view_info(int32_t vid, double *out);
@@ -302,7 +308,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   __weak MBNative *wv = self.view;
   dispatch_async(dispatch_get_main_queue(), ^{
     MBNative *v = wv;
-    if (!v || v.closed) return;
+    if (!v || v.closed || v.avDetached) return;
     l.next = off;
     l.end = toEnd ? -1 : off + len;
     l.hasData = data;
@@ -353,7 +359,8 @@ static int32_t player_failure(NSError *error) {
   self.stoodTold = YES;
   self.stoodState = st;
   memcpy(_stoodSaid, now, sizeof now);
-  mb_host_outside(MB_OUTSIDE_STOOD, self.vid, 0);
+  // State 2 says when the entire file has reached a decoder that has not shown a frame yet.
+  mb_host_outside(MB_OUTSIDE_STOOD, self.vid, st == 2 ? 2 : 0);
 }
 
 // To `ms`, exactly (or `near`: about there, the player's own choice of where it gets to at once), one seek at a time
@@ -647,7 +654,7 @@ static int32_t player_failure(NSError *error) {
   MBLoad *l = r.load;
   if (total == -2) {
     vlog(@"view %d: read at %lld failed", self.vid, r.off);
-    self.failed = YES;
+    self.failed = YES; self.readFailed = YES;
     [self tell:-1];
     for (MBLoad *x in [self.loads copy]) [self end:x error:YES];
     [self.pending removeAllObjects];
@@ -717,8 +724,13 @@ static int32_t player_failure(NSError *error) {
     return;
   }
   dispatch_async(dispatch_get_main_queue(), ^{
-    if (self.closed) return;
+    if (self.closed || self.webVideo || !self.observing) return;
     [self logState];
+    if (self.decidingCodec) {
+      [self stood];
+      mb_host_request_frame();
+      return;
+    }
     // a seek asked before it was ready (where it was left, opened again): taken up now
     if (self.chasing && !self.seeking && self.item.status == AVPlayerItemStatusReadyToPlay) {
       self.chasing = NO;
@@ -963,6 +975,93 @@ static int32_t player_failure(NSError *error) {
 
 @end
 
+#import "apple_webm.h"
+
+#if TARGET_OS_OSX
+void mb_host_view_control(int32_t vid, int32_t op, double value);
+
+// Switch an MP4's VP9 track to WebKit without changing the view's id, placement, pending controls, or read contract.
+// Old read ids are cancelled first and never reused; late answers cannot be mistaken for the WebKit player's reads.
+static void mp4_use_webkit(MBNative *v) {
+  v.avDetached = YES;
+  [v stopObserving];
+  [v.player pause];
+  for (MBLoad *load in [v.loads copy]) { [v end:load error:YES]; [v drop:load]; }
+  if (!v.lettingGo) v.lettingGo = [NSMutableArray new];
+  [v.lettingGo addObjectsFromArray:v.taken.allKeys];
+  [v.taken removeAllObjects];
+  [v.pending removeAllObjects];
+  [v.player replaceCurrentItemWithPlayerItem:nil];
+  v.playerLayer.player = nil;
+  v.loader.view = nil;
+  PView *old = v.content;
+  CGRect frame = old.frame;
+  CALayer *mask = old.layer.mask;
+  old.layer.mask = nil;
+  [old removeFromSuperview];
+  v.failed = NO; v.playerFailure = 0;
+  set_up_web_video(v, @"video/mp4");
+  v.webVideo.nextRid = v.nextRid;
+  v.webVideo.lettingGo = v.lettingGo;
+  v.content.frame = frame;
+  if (mask) { v.content.wantsLayer = YES; v.content.layer.mask = mask; }
+  [v.box addSubview:v.content];
+  views_moved = 1;
+}
+
+// `track.playable` distinguishes a track the system would silently skip from one it will actually display. VP9 in
+// MP4 is handed to WebKit where needed; another unplayable video is reported, rather than played as sound/black.
+static void mp4_decided(MBNative *v, BOOL vp9, BOOL unplayable) {
+  if (!v || v.closed || !v.decidingCodec) return;
+  NSArray<NSArray<NSNumber *> *> *controls = [v.codecControls copy];
+  v.codecControls = nil;
+  v.decidingCodec = NO;
+  if (!v.readFailed && unplayable && vp9) {
+    mp4_use_webkit(v);
+  } else if (!v.readFailed && unplayable) {
+    v.failed = YES; v.playerFailure = -2;
+    [v.player pause];
+    for (MBLoad *load in [v.loads copy]) { [v end:load error:YES]; [v drop:load]; }
+  }
+  if (v.failed) {
+    if (v.stillState == 1) {
+      v.stillState = -1;
+      mb_host_outside(MB_OUTSIDE_GRAB, v.vid, -1);
+    }
+    [v tell:-1];
+  } else {
+    for (NSArray<NSNumber *> *control in controls) mb_host_view_control(v.vid, control[0].intValue, control[1].doubleValue);
+    if (!v.webVideo) {
+      CGSize size = v.item.presentationSize;
+      if (v.playerLayer.readyForDisplay || (v.item.status == AVPlayerItemStatusReadyToPlay && size.width == 0 && size.height == 0))
+        [v tell:1];
+    }
+  }
+  [v stood];
+  mb_host_request_frame();
+}
+
+static void mp4_choose_decoder(MBNative *v, AVAsset *asset) {
+  __weak MBNative *weak = v;
+  [asset loadTracksWithMediaType:AVMediaTypeVideo completionHandler:^(NSArray<AVAssetTrack *> *tracks, NSError *error) {
+    AVAssetTrack *track = tracks.firstObject;
+    if (!track) {
+      dispatch_async(dispatch_get_main_queue(), ^{ mp4_decided(weak, NO, NO); });
+      return;
+    }
+    [track loadValuesAsynchronouslyForKeys:@[@"formatDescriptions", @"playable"] completionHandler:^{
+      BOOL known = [track statusOfValueForKey:@"formatDescriptions" error:nil] == AVKeyValueStatusLoaded &&
+                   [track statusOfValueForKey:@"playable" error:nil] == AVKeyValueStatusLoaded;
+      BOOL vp9 = NO;
+      if (known) for (id desc in track.formatDescriptions)
+        if (CMFormatDescriptionGetMediaSubType((__bridge CMFormatDescriptionRef)desc) == 0x76703039) vp9 = YES; // 'vp09'
+      BOOL unplayable = known && !track.playable;
+      dispatch_async(dispatch_get_main_queue(), ^{ mp4_decided(weak, vp9, unplayable); });
+    }];
+  }];
+}
+#endif
+
 // ---------------------------------------------------------------------------
 // The host API MoonBit calls
 
@@ -1001,7 +1100,23 @@ static NSString *uti_for(NSString *mime, NSString **ext) {
 }
 
 static MBNative *open_video(int32_t vid, NSString *mime) {
+#if TARGET_OS_OSX
+  NSString *type = [[[mime componentsSeparatedByString:@";"].firstObject
+      stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] lowercaseString];
+  if ([type isEqualToString:@"video/webm"]) return open_web_video(vid, type);
+  if ([type isEqualToString:@"video/ogg"]) {
+    MBNative *v = open_web_video(vid, type);
+    // Ogg is recognized, but macOS has no decoder for it. Report it after the view is registered.
+    __weak MBNative *weak = v;
+    dispatch_async(dispatch_get_main_queue(), ^{ [weak.webVideo failWithCode:-2]; });
+    return v;
+  }
+#endif
   MBNative *v = [MBNative new];
+#if TARGET_OS_OSX
+  v.decidingCodec = [type isEqualToString:@"video/mp4"];
+  if (v.decidingCodec) v.codecControls = [NSMutableArray new];
+#endif
   NSString *ext;
   v.uti = uti_for(mime, &ext);
   v.total = -1;
@@ -1047,6 +1162,9 @@ static MBNative *open_video(int32_t vid, NSString *mime) {
                                                 [wt stood];
                                               }];
   v.observing = YES;
+#if TARGET_OS_OSX
+  if (v.decidingCodec) mp4_choose_decoder(v, asset);
+#endif
   vlog(@"view %d: open video (%@, %@)", vid, mime, v.uti);
   return v;
 }
@@ -1281,25 +1399,38 @@ static void stack(MBNative *v) {
 #endif
 }
 
-// How much further in than a circle a capsule's end lies, in r, u r from its tip (mbui's capsule_ease, src/paint/
-// smooth.mbt, and corner.sl's mb_capsule_ease): 0 but from 1 - 0.675 k to 1 + 0.4 k.
-static double capsule_ease(double u, double k) {
-  double u0 = 1 - 0.675 * k, u1 = 1 + 0.4 * k;
-  if (k <= 0 || u <= u0 || u >= u1) return 0;
-  double h = u1 - u0, t = (u - u0) / h, t2 = t * t, t3 = t2 * t, t4 = t3 * t, m = 1 - t, m2 = m * m;
-  double s = sqrt(u0 * (2 - u0)), v = 1 - u0, s3 = s * s * s;
-  double c0 = 1 - s, c1 = -v / s * h, c2 = h * h / s3, c3 = -3 * v * h * h * h / (s3 * s * s);
-  double w0 = 1 - t4 * (35 - 84 * t + 70 * t2 - 20 * t3), w1 = t - t4 * (20 - 45 * t + 36 * t2 - 10 * t3),
-         w2 = (t2 - t4 * (10 - 20 * t + 15 * t2 - 4 * t3)) / 2, w3 = (t3 - t4 * (4 - 6 * t + 4 * t2 - t3)) / 6;
-  double eased = c0 * w0 + c1 * w1 + c2 * w2 + c3 * w3 + k * k * sqrt(k) * t4 * m2 * m2;
-  return eased - (u < 1 ? 1 - sqrt(u * (2 - u)) : 0);
+// A thumbnail asks for a frame before placing the player. WebKit only loads media in an attached view, so put it
+// under every other native view and under the opaque canvas until the app places it (or closes it after the grab).
+static void prime_webm_grab(MBNative *v) {
+#if TARGET_OS_OSX
+  if (!views_root || v.placed || v.box.superview || !v.webVideo) return;
+  v.box.frame = CGRectMake(0, 0, 320, 240);
+  v.content.frame = v.box.bounds;
+  v.box.hidden = NO;
+  [views_root addSubview:v.box positioned:NSWindowBelow relativeTo:nil];
+  v.webVideo.primed = YES;
+#else
+  (void)v;
+#endif
 }
 
-// How far a corner of R (given r, s smooth) eases into the edge along a side of half `ha`, the other `hc` (mbui's
+// The corner's numbers, corner.sl's own (its scalar part as C).
+#define MB_CORNER_SCALARS
+#define float double
+#define min fmin
+#define max fmax
+#define clamp(x, a, b) fmin(fmax(x, a), b)
+#include "corner.sl"
+#undef clamp
+#undef max
+#undef min
+#undef float
+
+// How far a corner of R (s smooth) eases into the edge along a side of half `ha`, the other `hc` (smooth.mbt
 // capsule_tail's weight; its share k of the room it needs in *k): as far as it has no room across.
-static double ease_weight(double r, double R, double s, double ha, double hc, double *k) {
-  *k = R > 0 ? fmin((ha - R) / R, 1) : 0;
-  double tight = 1 - (R <= 0 ? 0 : fmin(1, fmax(0, (hc - R) / (0.25 * R))));
+static double ease_weight(double R, double s, double ha, double hc, double *k) {
+  *k = R > 0 ? mb_capsule_room(ha, R) : 0;
+  double tight = 1 - mb_smoothness(R, hc);
   return s >= 1 || *k <= 0 || tight <= 0 ? 0 : (1 - s) * tight;
 }
 
@@ -1314,10 +1445,10 @@ static void corner_point(CGMutablePathRef p, double x, double y) {
 // across the edge as far as the ease says there, and on along the edge until the ease is done.
 static void smooth_corner(CGMutablePathRef p, double r, double room, double hx, double hy, double cx, double cy,
                           double sx, double sy, BOOL from_x) {
-  double s = r <= 0 ? 0 : fmin(1, fmax(0, (room - r) / (0.25 * r)));
+  double s = mb_smoothness(r, room);
   double R = fmin(r * (1 + 0.25 * s), room), n = 2 + 0.8284271247461903 * s;
   double kx, ky;
-  double wx = ease_weight(r, R, s, hx, hy, &kx), wy = ease_weight(r, R, s, hy, hx, &ky);
+  double wx = ease_weight(R, s, hx, hy, &kx), wy = ease_weight(R, s, hy, hx, &ky);
   const int steps = 24, on = 12;
   // (the way it goes: along the edge at x's end towards the corner, round it, along the edge at y's end away; or back)
   for (int part = 0; part < 3; part++) {
@@ -1330,20 +1461,20 @@ static void smooth_corner(CGMutablePathRef p, double r, double room, double hx, 
         y = R * pow(fmax(0, sin(t)), 2 / n);
         // (in across the edge it ends along: the end's point at the same place along it)
         double ux = 1 - x / R, uy = 1 - y / R;
-        double ex = wx * capsule_ease(ux, kx) * R, ey = wy * capsule_ease(uy, ky) * R;
+        double ex = wx * mb_capsule_ease(ux, kx) * R, ey = wy * mb_capsule_ease(uy, ky) * R;
         x -= ey;
         y -= ex;
       } else if (which == 0) {
         // along the edge at x's end (the side running along y), from where the ease ends to the corner, or back
         if (wy <= 0) continue;
         double u = 1 + ky * (from_x ? 1 - (double)j / on : (double)j / on);
-        x = R - wy * capsule_ease(u, ky) * R;
+        x = R - wy * mb_capsule_ease(u, ky) * R;
         y = R - u * R;
       } else {
         if (wx <= 0) continue;
         double u = 1 + kx * (from_x ? (double)j / on : 1 - (double)j / on);
         x = R - u * R;
-        y = R - wx * capsule_ease(u, kx) * R;
+        y = R - wx * mb_capsule_ease(u, kx) * R;
       }
       corner_point(p, cx + sx * x, cy + sy * y);
     }
@@ -1410,7 +1541,10 @@ void mb_host_view_place(int32_t vid, double x, double y, double w, double h, dou
   v.cx0 = cx0; v.cy0 = cy0; v.cx1 = cx1; v.cy1 = cy1;
   [CATransaction begin];
   [CATransaction setDisableActions:YES];
-  if (!v.box.superview) stack(v);
+  if (!v.box.superview || v.webVideo.primed) {
+    stack(v);
+    v.webVideo.primed = NO;
+  }
   v.box.hidden = !s;
   v.box.frame = CGRectMake(cx0, cy0, fmax(0, cx1 - cx0), fmax(0, cy1 - cy0));
   v.content.frame = CGRectMake(x - cx0, y - cy0, fmax(0, w), fmax(0, h));
@@ -1452,14 +1586,18 @@ void mb_host_view_close(int32_t vid) {
   [views removeObjectForKey:@(vid)];
   v.closed = YES;
   if (v.kind == 1) {
-    [v stopObserving];
-    [v.player pause];
-    for (MBLoad *l in [v.loads copy]) [v end:l error:YES];
-    [v.pending removeAllObjects];
-    [v.taken removeAllObjects];
-    [v.player replaceCurrentItemWithPlayerItem:nil];
-    v.playerLayer.player = nil;
-    vlog(@"view %d: closed (%.0f bytes read)", vid, v.answered);
+    if (v.webVideo) {
+      [v.webVideo close];
+    } else {
+      [v stopObserving];
+      [v.player pause];
+      for (MBLoad *l in [v.loads copy]) [v end:l error:YES];
+      [v.pending removeAllObjects];
+      [v.taken removeAllObjects];
+      [v.player replaceCurrentItemWithPlayerItem:nil];
+      v.playerLayer.player = nil;
+      vlog(@"view %d: closed (%.0f bytes read)", vid, v.answered);
+    }
   } else if (v.kind == 4) {
     mb_stream_attach_layer(v.streamSid, nil);
     vlog(@"view %d: closed", vid);
@@ -1497,6 +1635,16 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
     return;
   }
   if (!v || v.kind != 1) return;
+  if (v.decidingCodec) {
+    [v.codecControls addObject:@[@(op), @(value)]];
+    if (op == 21 || op == 22) { v.still = nil; v.stillState = 1; }
+    return;
+  }
+  if (v.webVideo) {
+    if (op == 21) prime_webm_grab(v);
+    [v.webVideo control:op value:value];
+    return;
+  }
   switch (op) {
     case 1: {
       // played again from its end: from the start, as the Android host's player does
@@ -1567,6 +1715,11 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
     out[6] = v.loaded ? 1 : 0;
     return v.failed ? -1 : v.loaded ? 1 : 0;
   }
+  if (v.webVideo) return [v.webVideo info:out];
+  if (v.decidingCodec) {
+    out[5] = v.answered;
+    return v.readFailed ? -1 : 0;
+  }
   [v logState];
   AVPlayerItem *it = v.item;
   out[0] = [v durationMs];
@@ -1602,6 +1755,7 @@ int32_t mb_host_view_info(int32_t vid, double *out) {
 
 int32_t mb_host_view_read_next(int32_t vid, double *out) {
   MBNative *v = views[@(vid)];
+  if (v.webVideo) return [v.webVideo readNext:out];
   if (v.lettingGo.count) {
     int32_t gone = v.lettingGo.firstObject.intValue;
     [v.lettingGo removeObjectAtIndex:0];
@@ -1619,9 +1773,20 @@ int32_t mb_host_view_read_next(int32_t vid, double *out) {
   return 0;
 }
 
+#if defined(MBUI_HOST_SELFTEST)
+double mb_host_video_test_rate(int32_t vid) {
+  MBNative *v = views[@(vid)];
+  return v.webVideo ? [v.webVideo.state[@"rate"] doubleValue] : v.player.rate;
+}
+#endif
+
 void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes_t data, double total, int32_t more) {
   MBNative *v = views[@(vid)];
   if (!v) return;
+  if (v.webVideo) {
+    [v.webVideo readAnswer:req data:(const uint8_t *)data length:Moonbit_array_length(data) total:total more:more != 0];
+    return;
+  }
   [v answer:req data:(const uint8_t *)data length:Moonbit_array_length(data) total:total more:more != 0];
 }
 
@@ -1976,7 +2141,8 @@ int mb_views_snapping(void) {
 // A snapshot is about to be taken: every page loaded and placed has its picture taken anew (apple.h).
 void mb_views_snap_all(void) {
   for (MBNative *v in views.allValues)
-    if (is_page(v) && !v.closed && v.loaded) [v refreshSnap];
+    if (v.webVideo && !v.closed) [v.webVideo refreshSnap];
+    else if (is_page(v) && !v.closed && v.loaded) [v refreshSnap];
 }
 
 void mb_views_draw_under(CGContextRef ctx, double scale) {
@@ -1996,7 +2162,7 @@ void mb_views_draw_under(CGContextRef ctx, double scale) {
     if (!is_page(v)) CGContextSetRGBFillColor(ctx, 0, 0, 0, 1);
     else CGContextSetRGBFillColor(ctx, 1, 1, 1, 1);
     CGContextFillRect(ctx, r);
-    CGImageRef img = v.kind == 1 ? [v copyFrame] : v.kind == 4 ? NULL : [v copySnap];
+    CGImageRef img = v.webVideo ? [v copySnap] : v.kind == 1 ? [v copyFrame] : v.kind == 4 ? NULL : [v copySnap];
     if (img) {
       // upright in its rect
       CGContextTranslateCTM(ctx, r.origin.x, r.origin.y + r.size.height);

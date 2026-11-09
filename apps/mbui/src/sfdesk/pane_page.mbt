@@ -54,9 +54,9 @@ fn pane_bar(
       c.box(style=chat_bar_inner, fn() {
         match back {
           Some((label, go)) =>
-            if @sf.icon_button(c, "chevron-left", key="settings-back", round=true, label~) {
+            @sf.icon_button(c, "chevron-left", key="settings-back", round=true, label~, on_press=fn() {
               go()
-            }
+            }) |> ignore
           None => ()
         }
         c.box(style=chat_bar_title_row, keep=true, fn() {

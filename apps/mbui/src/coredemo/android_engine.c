@@ -1,5 +1,5 @@
 // core_engine.m's Android twin, compiled by scripts/android.sh for APP=coredemo (moon never sees this file): the core
-// in ember's Hermes engine (src/sfcore/android_engine.c). MBUI_AUTH_BEGIN=1 and the other variables come from the
+// in still.fail's Hermes engine (src/sfcore/android_engine.c). MBUI_AUTH_BEGIN=1 and the other variables come from the
 // intent's `env` extra (MainActivity: `am start … --es env MBUI_AUTH_BEGIN=1`).
 #include "../sfcore/android_engine.c"
 

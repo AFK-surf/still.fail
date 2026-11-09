@@ -1,6 +1,6 @@
 // Web addresses written bare in text, found as a reader sees them: the core links them in an agent's Markdown
-// (markdown.ts), the web in a person's words (web/src/bareLinks.ts, the same), and the Android app finds the same
-// (ui/Links.kt). An address is http(s):// and the characters addresses are made of; it ends at a space or at a letter
+// (markdown.ts), the web in a person's words, and the Android app finds the same
+// . An address is http(s):// and the characters addresses are made of; it ends at a space or at a letter
 // outside ASCII (Chinese words, full-width marks such as `）` `，` `。`),
 // and gives back the marks that close a sentence after it (`.` `,` `:` `!` `?` …) and a closing bracket it did not
 // open. GFM's own finding ends only at a space: `（https://…/2854）已改到` became one link, its words with it.

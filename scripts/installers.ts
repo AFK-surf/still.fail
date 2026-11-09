@@ -1,6 +1,6 @@
 // The installers a station release carries (scripts/station-bundle.sh puts them in its bin/): the cloud's installer
 // (cloud/src/install.ts, install-windows.ts) in each language, its cloud the one the station that runs it names. The
-// station updates itself by these, not by what the cloud serves (docs/release-signing.md).
+// station updates itself by these, not by what the cloud serves (scripts/release-sign.ts).
 //   node scripts/installers.ts DIR [darwin-arm64|linux-x64|linux-arm64|win32-x64]
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";

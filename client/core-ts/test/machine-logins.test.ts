@@ -1,4 +1,4 @@
-// A station's logins in the core (docs/remote-login.md): read when its stream opens and told as they change, shown in
+// A station's logins in the core: read when its stream opens and told as they change, shown in
 // words; a station from before has none; a terminal's screen told on the stream while it is shown; a loopback login's
 // callback taken on this device (a host that can listen) and handed to the station, only the one it waits for, once.
 import assert from "node:assert/strict";
@@ -14,7 +14,7 @@ import { base, started, stationReplies } from "./station-fixture.ts";
 
 const ST = "ws/st";
 
-const device = { id: "l1", name: "gh", command: ["gh", "auth", "login"], state: "code", step: "device", url: "https://github.com/login/device", domain: "github.com", code: "1A2B-C3D4", waiting: false, by: { email: "a@x.com", name: "张三" }, chat: "ember:c-1", chatTitle: "部署", startedAt: Date.UTC(2026, 9, 12, 4), expiresAt: 2 };
+const device = { id: "l1", name: "gh", command: ["gh", "auth", "login"], state: "code", step: "device", url: "https://github.com/login/device", domain: "github.com", code: "1A2B-C3D4", waiting: false, by: { email: "a@x.com", name: "张三" }, chat: "chat:c-1", chatTitle: "部署", startedAt: Date.UTC(2026, 9, 12, 4), expiresAt: 2 };
 const past = { id: "l0", name: "npm", command: ["npm", "login"], state: "done", waiting: false, by: { email: "b@x.com", name: "李四" }, doneBy: { email: "c@x.com", name: "王五" }, startedAt: Date.UTC(2026, 9, 11, 4), expiresAt: 2, endedAt: Date.UTC(2026, 9, 11, 4, 3) };
 const loopback = { id: "l2", name: "gcloud", command: ["gcloud", "auth", "login"], state: "browser", step: "loopback", url: "https://accounts.google.com/o/oauth2/auth?redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F&state=s3", domain: "accounts.google.com", callback: { host: "localhost", port: 8085, path: "/", state: "s3", post: false }, waiting: false, by: { email: "a@x.com", name: "张三" }, startedAt: 3, expiresAt: 4 };
 
@@ -46,7 +46,7 @@ test("a station's logins: read as its stream opens, in words, told as they chang
   const one = v(values, 2);
   assert.deepEqual([one.title, one.command, one.statusText, one.code, one.url, one.domain, one.active, one.byText], ["在 studio 上登录 gh", "gh auth login", "验证码 1A2B-C3D4", "1A2B-C3D4", "https://github.com/login/device", "github.com", true, "张三"]);
   assert.match(one.whenText, /^10\/12 \d{1,2}:\d{2}$/);
-  assert.deepEqual([one.chat, one.chatTitle], ["ember:c-1", "部署"]);
+  assert.deepEqual([one.chat, one.chatTitle], ["chat:c-1", "部署"]);
   const done = all.logins.find((l: any) => l.id === "l0");
   assert.deepEqual([done.statusText, done.active, done.byText, done.doneByText, done.command], ["登录完成", false, "李四", "王五 完成", "npm login"]);
   // Ended, its card is a line.

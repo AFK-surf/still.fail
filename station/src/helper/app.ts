@@ -1,4 +1,4 @@
-// still.fail Helper (station/native/helper, docs/station-ts-native.md §4): the station's macOS app for what macOS
+// still.fail Helper (station/native/helper §4): the station's macOS app for what macOS
 // grants an app (Screen Recording, Accessibility), so that a grant, which takes effect only once the process holding
 // it starts again, restarts this app and never the station. LaunchServices starts it (`open -n -g`), which makes it its
 // own responsible process: the one macOS asks about, the one a person drags into System Settings. A process the

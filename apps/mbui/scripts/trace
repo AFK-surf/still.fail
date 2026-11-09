@@ -4,11 +4,60 @@
 # content). scripts/rerecord.sh runs it.
 D=$(cd "$(dirname "$0")" && pwd)
 A=$(cd "$D/.." && pwd)
+if [ "${1:-}" = make ] && { [ -z "${E2E_WORK:-}" ] || [ -z "${E2E_STATION:-}" ]; }; then
+  echo "trace: set E2E_WORK and E2E_STATION to the recorded run's paths; its destination was kept" >&2
+  exit 1
+fi
+if [ "${1:-}" = make ] && ! node "$D/recording-privacy.mjs" --check-context; then
+  echo "trace: invalid recording path context; its destination was kept" >&2
+  exit 1
+fi
+if [ "${1:-}" = make ] && [ -z "${E2E_WORK_ALIAS:-}" ]; then
+  E2E_WORK_ALIAS=$(node "$D/recording-privacy.mjs" --work-alias) || exit 1
+  export E2E_WORK_ALIAS
+fi
+if [ "${1:-}" = make ] && [ -z "${E2E_WORK_REAL:-}" ]; then
+  E2E_WORK_REAL=$(node "$D/recording-privacy.mjs" --work-real) || exit 1
+  export E2E_WORK_REAL
+fi
+if [ "${1:-}" = make ] && [ -z "${E2E_STATION_REAL:-}" ]; then
+  E2E_STATION_REAL=$(node "$D/recording-privacy.mjs" --station-real) || exit 1
+  export E2E_STATION_REAL
+fi
+if [ "${1:-}" = make ] && [ -z "${E2E_WORK_PATHS:-}" ]; then
+  E2E_WORK_PATHS=$(node "$D/recording-privacy.mjs" --work-paths) || exit 1
+  export E2E_WORK_PATHS
+fi
+if [ "${1:-}" = make ] && [ -z "${E2E_STATION_PATHS:-}" ]; then
+  E2E_STATION_PATHS=$(node "$D/recording-privacy.mjs" --station-paths) || exit 1
+  export E2E_STATION_PATHS
+fi
 T=$A/tools
-B=$T/_build/native/release/build/sftools/trace/trace.exe
-src=$(cd "$A" && find tools/trace tools/moon.mod tools/moon.work mbui/tools/re mbui/tools/rjson -type f | LC_ALL=C sort | xargs cat | cksum)
-if [ ! -x "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
-  (cd "$T" && env -u MOON_CC moon build --target native --release >&2) || { echo "trace: tools/trace did not build" >&2; exit 1; }
+TOOLS_SCRIPTS=$A/mbui/scripts; . "$TOOLS_SCRIPTS/tooltarget.sh"
+B=$T/_build/$TT/release/build/sftools/trace/trace.$TX
+src=$(cd "$A" && find tools/trace tools/moon.mod tools/moon.work mbui/tools/re mbui/tools/rjson mbui/tools/sys -type f | LC_ALL=C sort | xargs cat | cksum)
+if [ ! -f "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
+  (cd "$T" && env -u MOON_CC moon build --target $TT --release trace >&2) || { echo "trace: tools/trace did not build" >&2; exit 1; }
   echo "$src" > "$B.src"
 fi
-SF_ROOT=${SF_ROOT:-$A} exec "$B" "$@"
+if [ "${1:-}" = make ]; then
+  trace_root=${SF_ROOT:-$A}
+  mkdir -p "$trace_root/out" || exit 1
+  stage=$(mktemp -d "$trace_root/out/.trace.XXXXXX") || exit 1
+  trap 'rm -rf "$stage"' EXIT
+  if ! (SF_ROOT="$trace_root" MBUI_TRACE_STAGE="$stage" tool_exec "$B" "$@"); then
+    echo "trace: recording failed; its destination was kept" >&2
+    exit 1
+  fi
+  [ -f "$stage/target" ] && [ -f "$stage/trace" ] || exit 1
+  target=$(cat "$stage/target") || exit 1
+  case "$target" in "$trace_root/e2e/traces/"*.trace) ;; *) echo "trace: invalid destination" >&2; exit 1;; esac
+  machine=$(hostname -s) || exit 1
+  if ! node "$D/recording-privacy.mjs" "$stage/trace" "$machine"; then
+    echo "trace: recording contains local information; its destination was kept" >&2
+    exit 1
+  fi
+  mv "$stage/trace" "$target" || exit 1
+else
+  SF_ROOT=${SF_ROOT:-$A} tool_exec "$B" "$@"
+fi

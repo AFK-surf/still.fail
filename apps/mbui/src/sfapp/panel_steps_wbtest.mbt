@@ -55,9 +55,14 @@ test "a phone's sheet: the system's back gesture called off leaves the step wher
 test "wide, a dialog: Escape goes back a step, then closes it" {
   let t = preset_add(false, wide=true)
   assert_true(preset_adding(t) && !preset_fields(t), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  // (the window's tree's dialog: its own node, not the old frame's)
+  let outer = tree_said(Dialog, "新预设")
+  assert_true(outer is Some(_))
   t.key(@ui.key_escape)
   t.run_for(@ui.move_most_ms)
   assert_true(preset_fields(t) && !preset_adding(t), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  // (back on its first step in the same dialog)
+  assert_true(tree_said(Dialog, "新预设") == outer)
   t.key(@ui.key_escape)
   t.run_for(@ui.move_most_ms)
   assert_false(preset_fields(t), msg="\{t.text_runs().map(fn(r) { r.text })}")
@@ -75,10 +80,81 @@ test "two steps in: back from 浏览文件夹 goes back to 添加目录, not out
 }
 
 ///|
+test "wide, a confirm over the preset's dialog (both the window's tree's) dims what is under them once" {
+  new_run()
+  let src = fixture("newchat-preset-edit")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  open_mode("newchat-preset-edit")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  let scrims = fn() {
+    // (the page's own ground is the window's too: a scrim is what lets it show through)
+    t
+    .drawn_rects()
+    .filter(fn(r) { r.0 <= 0.0 && r.1 <= 0.0 && r.2 >= 1280.0 && r.3 >= 800.0 && (r.4 & 0xFFL) > 0L && (r.4 & 0xFFL) < 0xFFL })
+    .length()
+  }
+  assert_eq(scrims(), 1)
+  t.click(Button, label="删除")
+  t.run_for(@ui.move_most_ms)
+  // (the confirm the window's tree's: found in what is read out)
+  assert_true(t.semantics_dump().contains("删除预设"), msg=t.semantics_dump())
+  assert_eq(scrims(), 1)
+  // (the preset's dialog under it taking nothing: dimmed over itself)
+  let rects = t.drawn_rects()
+  let scrim = rects.iter().find_first(fn(r) { r.2 >= 1280.0 && r.3 >= 800.0 && (r.4 & 0xFFL) > 0L && (r.4 & 0xFFL) < 0xFFL })
+  assert_true(
+    scrim is Some(s) && rects.iter().any(fn(r) { r.2 < 1280.0 && (r.4 >> 8) == (s.4 >> 8) && (r.4 & 0xFFL) > 0L }),
+    msg="\{rects.filter(fn(r) { (r.4 & 0xFFL) < 0xFFL })}",
+  )
+}
+
+///|
+test "a new connect's wizard (the core's steps): 下一步 slides its next step in, back goes back a step as the core does, then closes" {
+  let t = settings_tester("connects", mode="settings-new-connect", shows="settings-new-connect")
+  assert_true(shows(t, "Slack 工作区") && shows(t, "下一步"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  t.tap_text("下一步")
+  t.run_for(@ui.move_most_ms)
+  // (the app's step, in the same dialog: its title and its way on, the step before's gone)
+  assert_true(shows(t, "Slack 应用") && shows(t, "创建 app"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  assert_false(shows(t, "下一步"))
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  assert_true(shows(t, "下一步") && !shows(t, "创建 app"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  t.back()
+  t.run_for(@kit.sheet_scrim_ms)
+  t.run_for(@ui.move_most_ms)
+  assert_false(shows(t, "下一步"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+}
+
+///|
+test "wide, a new connect's wizard in the window's tree's dialog: 下一步 slides its next step in, Escape back a step as the core does" {
+  new_run()
+  @settings.fixture_page("settings-new-connect") |> ignore
+  let src = fixture("settings-new-connect")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  open_setting("connects")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(shows(t, "Slack 工作区") && shows(t, "下一步"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  // (the window's tree's dialog: its own node, not the old frame's)
+  let outer = tree_said(Dialog, "添加连接")
+  assert_true(outer is Some(_))
+  t.tap_text("下一步")
+  t.run_for(@ui.move_most_ms)
+  assert_true(shows(t, "Slack 应用") && shows(t, "创建 app"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  assert_true(tree_said(Dialog, "添加连接") == outer)
+  assert_true(t.key_named("esc"))
+  t.run_for(@ui.move_most_ms)
+  assert_true(shows(t, "下一步") && !shows(t, "创建 app"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  assert_true(tree_said(Dialog, "添加连接") == outer)
+}
+
+///|
 test "a folder picked in 添加目录 goes back to the fields with it among the preset's folders" {
   let t = preset_add(false)
-  t.tap_text("tstst")
+  t.tap_text("web-app")
   t.run_for(@ui.move_most_ms)
   assert_true(preset_fields(t) && !preset_adding(t), msg="\{t.text_runs().map(fn(r) { r.text })}")
-  assert_true(shows(t, "tstst"))
+  assert_true(shows(t, "web-app"))
 }

@@ -1,4 +1,4 @@
-// The conformance suite (conformance_graph_wbtest.mbt): Dynamic Dependencies (dynamicDeps.ts).
+// The conformance suite (conformance_graph_wbtest.mbt): Dynamic Dependencies.
 
 ///|
 test "dynamic #12 active dep triggers, inactive dep does not" {

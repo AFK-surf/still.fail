@@ -1,4 +1,4 @@
-// Execution of named client calls (core/execute.rs), as Effects. What changes something takes effect in the core at
+// Execution of named client calls, as Effects. What changes something takes effect in the core at
 // once and answers when its source has it (rule 4); a write to still.fail cloud answers once what it changed is read
 // again (the account topics show it).
 import { Effect } from "effect";
@@ -18,6 +18,7 @@ import { t } from "../i18n.ts";
 import { isObject } from "../util.ts";
 import { Wake } from "../wake.ts";
 import type { Call } from "./calls.ts";
+import { UI_FAULT_CATEGORIES, UI_FAULT_OTHER } from "../ui-faults.ts";
 
 export type Handler = (inner: Inner, call: Call, progress: Progress, at: [ClientId, RequestId], ctx: SpanContext) => Effect.Effect<unknown, CoreError>;
 
@@ -32,7 +33,7 @@ export const hooks: {
   enrolled?: (inner: Inner, sub: string, workspace: string, made: unknown) => Effect.Effect<unknown, CoreError>;
   /// A station refused this device for the workspace lock (what to say of it); why a station is not asked now
   /// (views/lock.ts).
-  lockRefused?: (inner: Inner, workspace: string, station: string, theirs: unknown) => CoreError | null;
+  lockRefused?: (inner: Inner, workspace: string, station: string, theirs: unknown, told?: { person?: unknown; entries?: unknown }) => CoreError | null;
   lockWaiting?: (inner: Inner, workspace: string, station: string) => CoreError | null;
   /// A new device's connection, met face to face (views/pair.ts).
   lockPair?: (inner: Inner, connection: import("../iroh.ts").IrohConnection) => void;
@@ -68,7 +69,10 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         return Effect.succeed({});
       }
       case "clientError": {
-        const key = `${call.source}\u0000${call.message}`;
+        // A UI fault's text can hold editor keys made from file paths: only its category leaves (ui-faults.ts), whatever
+        // an app sends, an older one's original text too.
+        const message = call.source === "ui_fault" && !UI_FAULT_CATEGORIES.includes(call.message) ? UI_FAULT_OTHER : call.message;
+        const key = `${call.source}\u0000${message}`;
         const now = inner.host.nowMs();
         const was = inner.reported.get(key);
         if (was === undefined || now - was > 60_000) {
@@ -76,7 +80,7 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
           const span = inner.tracer.always("client.error", Kind.Internal);
           span.set("stillfail.source", call.source);
           span.set("error.type", "client");
-          span.set("exception.message", [...call.message].slice(0, 1000).join(""));
+          span.set("exception.message", [...message].slice(0, 1000).join(""));
           span.fail();
           span.end();
         }
@@ -134,7 +138,6 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
       case "stationUpdateNotice":
         if (call.action === "dismiss") {
           prefs.dismissStationUpdate(inner.data, call.station, call.version!);
-          inner.store.invalidate({ topic: "prefs" });
         }
         hooks.updateNoticeOpen?.(inner, call.station, call.action === "open");
         return Effect.succeed({});
@@ -162,8 +165,6 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
       case "draftGet": {
         return Effect.succeed(inner.composers.readDraft(call.station, call.chat));
       }
-      case "module":
-        return call.call.def.run(call.call.params, { progress, client: at[0], id: at[1], trace: ctx });
       case "migrate":
         return Effect.gen(function* () {
           if (call.accounts !== null) yield* inner.accounts.migrate(call.accounts);

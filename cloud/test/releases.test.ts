@@ -84,38 +84,6 @@ test("a release is served whole or by ranges, the versioned builds cached for go
   }
 });
 
-test("a module's package: its feeds as they change, its archive (named by its version) cached for good", async () => {
-  const h = await harness();
-  try {
-    const bucket = (await h.mf.getR2Bucket("RELEASES", "api")) as unknown as { put(key: string, value: Uint8Array | string): Promise<unknown> };
-    const archive = new Uint8Array(70_000).map((_, i) => (i * 13) & 255);
-    await bucket.put("modules/media/media-0.1.3600.tar.gz", archive);
-    await bucket.put("modules/media/media.json", '{"version":"0.1.3590"}');
-    await bucket.put("modules/media/media-beta.json", '{"version":"0.1.3600"}');
-
-    const whole = await h.fetch("/releases/modules/media/media-0.1.3600.tar.gz");
-    assert.equal(whole.status, 200);
-    assert.equal(whole.headers.get("content-type"), "application/gzip");
-    assert.equal(whole.headers.get("cache-control"), "public, max-age=31536000, immutable");
-    assert.deepEqual(new Uint8Array(await whole.arrayBuffer()), archive);
-    for (const [feed, version] of [["media.json", "0.1.3590"], ["media-beta.json", "0.1.3600"]]) {
-      const got = await h.fetch(`/releases/modules/media/${feed}`);
-      assert.equal(got.headers.get("content-type"), "application/json");
-      assert.equal(got.headers.get("cache-control"), "no-store");
-      assert.equal(((await got.json()) as { version: string }).version, version);
-    }
-    // Another module's feed is not this one's; nothing else under modules/ is served.
-    for (const path of ["modules/media/books.json", "modules/media/media-0.1.3600.zip", "modules/Media/Media.json", "modules/media/../station.json", "modules/media.json"]) {
-      const got = await h.fetch(`/releases/${path}`);
-      assert.equal(got.status, 404, path);
-      await got.arrayBuffer();
-    }
-    assert.equal((await h.fetch("/releases/modules/media/media-0.1.3599.tar.gz")).status, 404, "not put");
-  } finally {
-    await h.close();
-  }
-});
-
 test("a face's files: a page's stylesheet and slices, the Android app's file, cached for good and fetched from any origin", async () => {
   const h = await harness();
   try {
@@ -162,7 +130,7 @@ test("/releases/latest/<app> goes to the app's latest build, as its updater's fe
   try {
     assert.equal((await h.fetch("/releases/latest/mac", { redirect: "manual" })).status, 404, "none released yet");
     const bucket = (await h.mf.getR2Bucket("RELEASES", "api")) as unknown as { put(key: string, value: Uint8Array | string): Promise<unknown> };
-    await bucket.put("desktop/stillfail-mac.yml", "version: 0.1.1200\nfiles:\n  - url: stillfail-0.1.1200-arm64-mac.zip\n    size: 5\npath: stillfail-0.1.1200-arm64-mac.zip\nsha512: x\n");
+    await bucket.put("mac/latest.json", JSON.stringify({ versionCode: 1200, file: "desktop/stillfail-0.1.1200-arm64-mac.zip" }));
     await bucket.put("android/latest.json", JSON.stringify({ versionCode: 1200, file: "android/stillfail-1200.apk" }));
     const mac = await h.fetch("/releases/latest/mac", { redirect: "manual" });
     assert.equal(mac.status, 302);
@@ -171,12 +139,45 @@ test("/releases/latest/<app> goes to the app's latest build, as its updater's fe
     assert.equal(new URL(android.headers.get("location")!, "http://x").pathname, "/releases/android/stillfail-1200.apk");
     assert.equal((await h.fetch("/releases/latest/windows", { redirect: "manual" })).status, 404);
     assert.equal((await h.fetch("/releases/latest/win", { redirect: "manual" })).status, 404, "no Windows app released yet");
-    await bucket.put("desktop/stillfail.yml", "version: 0.1.1200\nfiles:\n  - url: stillfail-0.1.1200-x64-win.exe\n    size: 5\npath: stillfail-0.1.1200-x64-win.exe\nsha512: x\n");
-    await bucket.put("desktop/stillfail-beta.yml", "version: 0.1.1201\npath: stillfail-beta-0.1.1201-x64-win.exe\n");
+    await bucket.put("win/latest.json", JSON.stringify({ versionCode: 1200, file: "desktop/stillfail-0.1.1200-x64-win.exe" }));
+    await bucket.put("win/beta/latest.json", JSON.stringify({ versionCode: 1201, file: "desktop/stillfail-beta-0.1.1201-x64-win.exe" }));
     const win = await h.fetch("/releases/latest/win", { redirect: "manual" });
     assert.equal(new URL(win.headers.get("location")!, "http://x").pathname, "/releases/desktop/stillfail-0.1.1200-x64-win.exe");
     const winBeta = await h.fetch("/releases/latest/win-beta", { redirect: "manual" });
     assert.equal(new URL(winBeta.headers.get("location")!, "http://x").pathname, "/releases/desktop/stillfail-beta-0.1.1201-x64-win.exe");
+  } finally {
+    await h.close();
+  }
+});
+
+test("a cloud of its own reads the station's releases from still.fail's when its bucket has none, never an app's", async () => {
+  const asked: string[] = [];
+  const h = await harness({
+    upstream: (file, request): { status: number; body?: string; headers?: Record<string, string> } => {
+      asked.push(`${file} ${request.headers.range ?? ""}`.trim());
+      if (file === "station.json") return { status: 200, body: '{"version":"0.1.9"}', headers: { "content-type": "application/json" } };
+      if (file === "stillfail-station-linux-x64.tar.gz") return { status: 206, body: "tion", headers: { "content-range": "bytes 3-6/10", "content-type": "application/gzip" } };
+      return { status: 404 };
+    },
+  });
+  try {
+    const bucket = (await h.mf.getR2Bucket("RELEASES", "api")) as unknown as { put(key: string, value: string): Promise<unknown> };
+    await bucket.put("fonts/noto-sans-sc/2.004/font.css", "/* own */");
+
+    const feed = await h.fetch("/releases/station.json");
+    assert.equal(feed.status, 200);
+    assert.equal(await feed.text(), '{"version":"0.1.9"}');
+    const part = await h.fetch("/releases/stillfail-station-linux-x64.tar.gz", { headers: { range: "bytes=3-6" } });
+    assert.equal(part.status, 206);
+    assert.equal(part.headers.get("content-range"), "bytes 3-6/10");
+    assert.equal(await part.text(), "tion");
+    // its own bucket's first
+    assert.equal(await (await h.fetch("/releases/fonts/noto-sans-sc/2.004/font.css")).text(), "/* own */");
+    // none there either: none
+    assert.equal((await h.fetch("/releases/station-beta.json")).status, 404);
+    // an app's feed is its own alone, even when it has none
+    assert.equal((await h.fetch("/releases/android/latest.json")).status, 404);
+    assert.deepEqual(asked, ["station.json", "stillfail-station-linux-x64.tar.gz bytes=3-6", "station-beta.json"]);
   } finally {
     await h.close();
   }

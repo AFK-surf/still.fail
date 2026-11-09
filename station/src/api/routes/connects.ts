@@ -4,44 +4,24 @@
 // What is a kind's own (its platform's part of a connect: Slack's tokens, Feishu's app) is said by that kind's part
 // (connects/connections.ts `ConnectKind`). Config edits go through config.json (ConfigFile.update); what answers with
 // the overview is given it (`overview`).
-import { type Answer, type Request, error, json, percentDecode } from "../request.ts";
+import { type Answer, type Request, error, Refused, input, ok, segment } from "../request.ts";
 import type { Route } from "../admin.ts";
 import type { Viewer } from "../../mesh/credential.ts";
 import type { ConfigFile } from "../../ops/config.ts";
 import { type Lang, tr } from "../../ops/i18n.ts";
 import { log } from "../../ops/log.ts";
-import { hubConfig, sameModel } from "../../sessions/config.ts";
+import { hubConfig, runs, runtimeTitle } from "../../sessions/config.ts";
 import type { Hub } from "../../sessions/hub.ts";
-import { bindSingle } from "../../sessions/lifecycle.ts";
+import type { SessionChange } from "../../sessions/accounts.ts";
+import { bindSingle, configure } from "../../sessions/lifecycle.ts";
 import { runtimeKind, type RuntimeKind } from "../../agents/runtime.ts";
 import type { EntryEdit } from "../../connects/connections.ts";
 
 type Json = any;
 export type Input = Record<string, unknown>;
 
-/// A path segment as the pages send it (a + is a +).
-export const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
-export const ok = (value: unknown) => json(200, JSON.stringify(value));
-export class Refused extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
-
-/// A request's JSON object (`read_json`): nothing is `{}`, as is anything not an object; more than a megabyte refused.
-export function input(r: Request): Input {
-  if (r.body.length > 1_000_000) throw new Refused(413, "request too large");
-  if (r.body.length === 0) return {};
-  let value: unknown;
-  try {
-    value = JSON.parse(r.body.toString("utf8"));
-  } catch {
-    throw new Refused(400, "invalid JSON");
-  }
-  return isObject(value) ? (value as Input) : {};
-}
+// (the request helpers, as Slack's and Feishu's routes take them from here)
+export { Refused, input, ok, segment };
 
 export const isObject = (v: unknown): v is Record<string, Json> => v !== null && typeof v === "object" && !Array.isArray(v);
 /// `Input::str`: a string field, as given.
@@ -51,7 +31,7 @@ export const text = (v: unknown): string => (v === undefined || v === null ? "" 
 /// serde's `Value::get`: a field of an object, nothing of anything else.
 export const get = (v: unknown, key: string): unknown => (isObject(v) ? v[key] : undefined);
 
-/// Who asks: their id (an email), their name, whether they manage the workspace (access.rs `Viewer`).
+/// Who asks: their id (an email), their name, whether they manage the workspace.
 export const idOf = (v: Viewer) => v.email;
 export const nameOf = (v: Viewer) => (v.name === "" ? v.email : v.name);
 export const manages = (v: Viewer) => v.role === "owner" || v.role === "admin";
@@ -87,6 +67,9 @@ export type ConnectEditDeps = {
   place?: () => { origin: string; workspace: string; station: string } | null;
   /// How a kind's part of a connect is edited (none: a kind this station does not know, kept as it was).
   entry: (kind: string) => EntryEdit | undefined;
+  /// The station of workspace `ws` a connect of `kind` with this part (its tokens) runs on already, by its name (null:
+  /// none): one being added there is refused (connects/workspace.ts). Absent: none is asked.
+  heldBy?: (ws: string | null, kind: string, own: unknown) => Promise<string | null>;
 };
 
 export function connectEdits(deps: ConnectEditDeps) {
@@ -108,7 +91,7 @@ export function connectEdits(deps: ConnectEditDeps) {
   };
   const raw = () => config.raw();
   const connectsRaw = (raw: Json): Json[] => (Array.isArray(raw.connects) ? raw.connects : (raw.connects = []));
-  /// A connect is of the workspace it was added in (docs/multi-workspace.md; none said: the station's home one), and
+  /// A connect is of the workspace it was added in (none said: the station's home one), and
   /// only that workspace's people see and change it. One of another workspace is no connect of theirs (404).
   const home = () => deps.place?.()?.workspace ?? null;
   const ofViewer = (r: Request, c: Json) => home() === null || ((typeof c?.workspace === "string" && c.workspace !== "" ? c.workspace : home()) === r.viewer.workspace);
@@ -118,45 +101,58 @@ export function connectEdits(deps: ConnectEditDeps) {
     return id;
   };
 
-  /// A connect added or edited (edits.rs `put_connect`): its kind's part as `deps.entry` makes it, its runtime as it
-  /// was made.
-  const putConnect = (r: Request, id: string, i: Input) =>
-    save(r, `connect ${id}`, (raw) => {
+  /// A connect added or edited: its kind's part as `deps.entry` makes it. Another runtime, model,
+  /// effort or profile is what its new sessions start on, and reaches a single-session connect's session too, from its
+  /// next turn on, as a chat's own change does (lifecycle.ts `configure`).
+  const putConnect = async (r: Request, id: string, i: Input) => {
+    const hub = deps.hub();
+    // A connect runs on one station of its workspace: one added here that runs on another already is refused.
+    const adding = !(Array.isArray(raw().connects) ? raw().connects : []).some((c: Json) => c?.id === id);
+    const addedKind = str(i.kind) ?? "slack";
+    if (adding && deps.heldBy !== undefined) {
+      const held = await deps.heldBy(r.viewer.workspace || home(), addedKind, deps.entry(addedKind)?.(i[addedKind], null) ?? null);
+      if (held !== null) throw new Refused(409, tr(r.lang, "station.connect.heldElsewhere", { station: held }));
+    }
+    const follow: { session?: string; run?: SessionChange } = {};
+    change(r, `connect ${id}`, (raw) => {
       const lang = r.lang;
       const connects = connectsRaw(raw);
       const existing = connects.find((c) => c?.id === id);
       if (existing !== undefined && !ofViewer(r, existing)) throw new Refused(404, `unknown connect ${id}`);
       const bind = i.bind;
       const oldBind: Json = existing && isObject(existing.bind) ? existing.bind : null;
+      const given = get(bind, "runtime");
+      const was = oldBind === null ? null : (runtimeKind(oldBind.runtime) ?? "claude");
+      let runtime: RuntimeKind;
+      if (given !== undefined) {
+        const named = runtimeKind(given);
+        if (named === undefined) throw new Error(`unknown runtime ${typeof given === "string" ? given : JSON.stringify(given)}`);
+        runtime = named;
+      } else if (was !== null) runtime = was;
+      else throw new Error("runtime is required");
+      const moved = was !== null && runtime !== was;
+      // (what went with the old runtime is not kept on another)
       const kept = (key: string) => {
         const [given, value] = field(bind, key);
-        return given ? value : typeof oldBind?.[key] === "string" ? (oldBind[key] as string) : null;
+        return given ? value : !moved && typeof oldBind?.[key] === "string" ? (oldBind[key] as string) : null;
       };
       const model = kept("model");
       const effort = kept("effort");
       const profile = kept("profile");
-      // A connect's runtime is chosen when it is made: its sessions and their history belong to it.
-      const given = get(bind, "runtime");
-      let runtime: RuntimeKind;
-      if (oldBind !== null) runtime = runtimeKind(oldBind.runtime) ?? "claude";
-      else if (given !== undefined) {
-        const named = runtimeKind(given);
-        if (named === undefined) throw new Error(`unknown runtime ${typeof given === "string" ? given : JSON.stringify(given)}`);
-        runtime = named;
-      } else throw new Error("runtime is required");
+      if (moved) {
+        const profiles = (deps.hub()?.config() ?? hubConfig(raw, deps.data)).profiles.filter((p) => p.enabled !== false && p.runtimes.includes(runtime));
+        if (profiles.length === 0) throw new Error(tr(lang, "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
+        if (model !== null && !profiles.some((p) => runs(p, model))) throw new Error(tr(lang, "station.session.noProfileForModel", { model, runtime: runtimeTitle(runtime) }));
+      }
       // The profile its sessions keep to (null: the pool's pick), one that runs its runtime and model.
       if (profile !== null) {
-        const p = hubConfig(raw, deps.data).profiles.find((p) => p.id === profile);
+        // (as the hub has it: running what its check found too)
+        const p = (deps.hub()?.config() ?? hubConfig(raw, deps.data)).profiles.find((p) => p.id === profile);
         if (!p || !p.runtimes.includes(runtime)) throw new Error(tr(lang, "station.profile.cannotRun", { profile, runtime }));
-        if (model !== null) {
-          const rawProfile = (Array.isArray(raw.profiles) ? raw.profiles : []).find((x: Json) => x?.id === profile);
-          const models: unknown[] = Array.isArray(rawProfile?.models) ? rawProfile.models : [];
-          if (!models.some((m) => typeof m === "string" && sameModel(m, model))) {
-            throw new Error(tr(lang, "station.profile.modelOff", { profile: typeof rawProfile?.name === "string" ? rawProfile.name : profile, model }));
-          }
-        }
+        if (p.enabled === false && (moved || get(bind, "profile") !== undefined)) throw new Error(tr(lang, "station.profile.disabled", { profile: p.name }));
+        if (model !== null && !runs(p, model)) throw new Error(tr(lang, "station.profile.modelOff", { profile: p.name, model }));
       }
-      if (effort !== null && ["model", "effort", "profile"].some((f) => get(bind, f) !== undefined)) {
+      if (effort !== null && (moved || ["model", "effort", "profile"].some((f) => get(bind, f) !== undefined))) {
         const allowed = deps.hub()?.accounts.modelEfforts(runtime, model, profile);
         if (allowed !== undefined && !allowed.includes(effort)) {
           throw new Error(tr(lang, "station.profile.efforts", { runtime, efforts: allowed.join(tr(lang, "station.list.separator")) }));
@@ -175,6 +171,9 @@ export function connectEdits(deps: ConnectEditDeps) {
         if (own !== null) next[next.kind] = own;
       }
       if (owner !== null) next.createdBy = owner;
+      // The station of its workspace a new conversation of it runs on (connects/workspace.ts); null: this one.
+      if (typeof i.station === "string" && i.station !== "") next.station = i.station;
+      else if (i.station === undefined && typeof existing?.station === "string") next.station = existing.station;
       // Added in a workspace the station joined: that workspace's (one of the home workspace says none, as before).
       if (existing === undefined && home() !== null && r.viewer.workspace !== home()) next.workspace = r.viewer.workspace;
       const b: Json = { runtime };
@@ -182,13 +181,32 @@ export function connectEdits(deps: ConnectEditDeps) {
       if (effort !== null) b.effort = effort;
       if (profile !== null) b.profile = profile;
       next.bind = b;
+      // (checked before it is saved: a model its session cannot run is refused for both)
+      const bound = hub !== undefined && oldBind !== null && next.mode === "single-session" ? hub.store.binding(id) : null;
+      if (hub !== undefined && bound !== null) {
+        const run: SessionChange = moved ? { runtime, model, effort, profile } : {};
+        const differs = (key: string) => !moved && (oldBind[key] ?? null) !== (b[key] ?? null);
+        if (differs("model")) run.model = model;
+        if (differs("model") || differs("effort")) run.effort = effort;
+        if (differs("profile")) run.profile = profile;
+        if (Object.keys(run).length > 0) {
+          hub.accounts.change(bound, run, lang);
+          Object.assign(follow, { session: bound, run });
+        }
+      }
       // What this station does not know of it is kept (but its kind's part, and the part of a kind it was).
-      const known = new Set(["id", "enabled", "kind", "mode", "requireMention", "createdBy", "bind", next.kind, typeof existing?.kind === "string" ? existing.kind : "slack"]);
+      const known = new Set(["id", "enabled", "kind", "mode", "requireMention", "createdBy", "bind", "station", next.kind, typeof existing?.kind === "string" ? existing.kind : "slack"]);
       for (const [k, v] of Object.entries(existing ?? {})) if (!known.has(k)) next[k] = v;
       const at = connects.findIndex((c) => c?.id === id);
       if (at >= 0) connects[at] = next;
       else connects.push(next);
     });
+    if (hub !== undefined && follow.session !== undefined && follow.run !== undefined) {
+      await configure(hub, follow.session, follow.run, r.lang);
+      log.info("admin", "single-session connect's session follows its run", { connect: id, session: follow.session });
+    }
+    return overview(r);
+  };
 
   return { overview, change, save, raw, connectsRaw, home, ofViewer, mine, putConnect };
 }
@@ -256,7 +274,7 @@ export const connectRoutes = (deps: ConnectRoutesDeps): Route[] => {
   ];
 };
 
-/// Who a connect belongs to (edits.rs `owner_of`): whoever added it, unless `requested` hands it to someone else. Only
+/// Who a connect belongs to: whoever added it, unless `requested` hands it to someone else. Only
 /// a workspace owner or admin, or the current owner, may do that.
 function ownerOf(current: Json, requested: unknown, viewer: Viewer, lang: Lang): { id: string; name: string } | null {
   if (requested === undefined) return isObject(current) ? (current as { id: string; name: string }) : { id: idOf(viewer), name: nameOf(viewer) };

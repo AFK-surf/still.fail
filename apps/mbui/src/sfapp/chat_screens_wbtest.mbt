@@ -3,7 +3,7 @@
 // menu of them, the machine's own display first and the one an agent drives said so.
 
 ///|
-let screens_chat : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+let screens_chat : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
 
 ///|
 test "a chat's screen button opens its station's display beside it" {
@@ -25,7 +25,7 @@ test "a chat's screen button with more of them: a menu, its display first, the o
   let t = decide_core(calls, "chat-station-screens", wide=true)
   t.click(Button, label="Station 屏幕")
   t.run_for(@ui.move_most_ms)
-  let (_, desk) = t.find("Studio 的桌面").unwrap()
+  let (_, desk) = t.find("Willow 的桌面").unwrap()
   let (_, tab) = t.find("登录 - GitHub · agent 正在操作").unwrap()
   assert_true(desk < tab, msg="its display first")
   t.tap_text("登录 - GitHub · agent 正在操作")
@@ -34,6 +34,25 @@ test "a chat's screen button with more of them: a menu, its display first, the o
   let opened = named(calls, "chat.tabs.open")
   assert_eq(opened.length(), 1)
   assert_eq(text(Some(opened[0].params), "tab"), "screen:[\"ws1/st1\",\"browser:T1\"]")
+}
+
+///|
+test "a chat's screen button says how many there are where more than one" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-station-screens", wide=true)
+  assert_eq(screen_count_on(t), ["2"])
+  let one = decide_core(calls, "chat-station-screen", wide=true)
+  assert_eq(screen_count_on(one), [])
+}
+
+///|
+/// The words drawn on the screen button's box.
+fn screen_count_on(t : @ui.Tester) -> Array[String] raise {
+  let (bx, by, bw, bh) = t.get(Button, label="Station 屏幕").rect
+  t
+  .words()
+  .filter(fn(w) { w.5 > 0.0 && w.1 >= bx && w.1 < bx + bw && w.2 >= by - bh / 2.0 && w.2 < by + bh / 2.0 })
+  .map(fn(w) { w.0 })
 }
 
 ///|
@@ -49,8 +68,8 @@ test "an agent's card names its station's screen and opens it" {
   let t = decide_core(calls, "chat-station-screen")
   open_agent(decide_src.val.unwrap(), screens_chat, "s-c1")
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("Studio 的桌面") is Some(_), msg="its row says the display")
-  t.tap_text("Studio 的桌面")
+  assert_true(t.find("Willow 的桌面") is Some(_), msg="its row says the display")
+  t.tap_text("Willow 的桌面")
   t.run_for(@ui.move_most_ms)
   match app.nav.top() {
     Screen(at) => {
@@ -69,7 +88,7 @@ test "an agent's card says an agent drives one of the screens, and its row opens
   t.run_for(@ui.move_most_ms)
   t.tap_text("agent 正在操作")
   t.run_for(@ui.move_most_ms)
-  assert_true(t.find("Studio 的桌面") is Some(_), msg="its display in the menu")
+  assert_true(t.find("Willow 的桌面") is Some(_), msg="its display in the menu")
   t.tap_text("登录 - GitHub · agent 正在操作")
   t.run_for(@ui.move_most_ms)
   match app.nav.top() {

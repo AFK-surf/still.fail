@@ -1,12 +1,14 @@
-// A face's files kept by the core for an app that keeps none (src/font-files.ts, docs/fonts.md): fetched in parts, how
+// A face's files kept by the core for an app that keeps none (src/font-files.ts, sf/faces.mbt): fetched in parts, how
 // far said each percent; kept by hash, gzipped as fetched, then as the app unzipped them; every face fetched stays;
 // previews fetched once.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Effect } from "effect";
 import { FontFiles } from "../src/font-files.ts";
 import * as fonts from "../src/fonts.ts";
 import { parseCall } from "../src/core/calls.ts";
+import { SHARE_LOOKS_FILES } from "../src/share-looks.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Beside } from "../src/protocol.ts";
 import type { Store } from "../src/store.ts";
@@ -28,8 +30,24 @@ function rig() {
   const said = () => (files.compute() as { ok: unknown }).ok;
   // each file in parts of a tenth of the face, failing where `refuse` says
   const refuse = new Set<string>();
+  // the share card's looks' files the site answers, in parts of 64 KB: none (a site that has not got them answers its page)
+  const site = new Map<string, Uint8Array>();
   host.onFetchStream((req) =>
     Effect.sync(() => {
+      if (req.url.startsWith(`${ORIGIN}/share-looks/`)) {
+        const file = site.get(req.url.slice(`${ORIGIN}/share-looks/`.length)) ?? new TextEncoder().encode("<!doctype html><title>still.fail</title>");
+        let at = 0;
+        const parts = {
+          take: Effect.sync(() => {
+            seen.push(said());
+            if (at >= file.length) return null;
+            const part = file.slice(at, at + 65536);
+            at += part.length;
+            return part;
+          }),
+        };
+        return { status: refuse.has(req.url) ? 503 : 200, headers: [] as [string, string][], body: parts };
+      }
       const f = ["inter", "lxgw-wenkai"].flatMap((id) => fonts.faceOf(id)!.files).find((x) => x.url === req.url)!;
       if (refuse.has(req.url)) return { status: 503, headers: [] as [string, string][], body: { take: Effect.succeed(null) } };
       const whole = fonts.faceOf(f.url.includes("/inter/") ? "inter" : "lxgw-wenkai")!.bytes;
@@ -50,7 +68,7 @@ function rig() {
       };
     }),
   );
-  return { host, files, seen, said, refuse, changed: () => changed };
+  return { host, files, seen, said, refuse, site, changed: () => changed };
 }
 
 test("a face's files are fetched once, how far said as they come, kept gzipped until the app keeps them unzipped", async () => {
@@ -63,7 +81,7 @@ test("a face's files are fetched once, how far said as they come, kept gzipped u
   assert.equal(far[0], 0);
   assert.deepEqual(far, [...far].sort((a, b) => a - b));
   assert.ok(far.some((p) => p > 0.4 && p < 0.6), JSON.stringify(far));
-  assert.deepEqual(r.said(), { fetching: {}, failed: {}, kept: ["lxgw-wenkai"] });
+  assert.deepEqual(r.said(), { fetching: {}, failed: {}, kept: ["lxgw-wenkai"], share: {}, shareFailed: {} });
   // kept as fetched
   const first = (await run(r.files.file(face.files[0].sha256))) as Beside;
   assert.deepEqual(first.value, { zipped: true });
@@ -106,7 +124,7 @@ test("a fetch that fails says why until the face is fetched again; a face fetche
   assert.match(failed.inter, /503/);
   r.refuse.clear();
   await run(r.files.fetch("inter"));
-  assert.deepEqual(r.said(), { fetching: {}, failed: {}, kept: ["inter"] });
+  assert.deepEqual(r.said(), { fetching: {}, failed: {}, kept: ["inter"], share: {}, shareFailed: {} });
   // another fetched: inter's file stays, chosen again with nothing asked of the network
   await run(r.files.fetch("lxgw-wenkai"));
   assert.deepEqual((r.said() as { kept: string[] }).kept, ["inter", "lxgw-wenkai"]);
@@ -133,9 +151,74 @@ test("a face's preview is fetched once and kept", async () => {
   await assert.rejects(run(r.files.preview("comic-sans")));
 });
 
+/// A file of the share card's looks as still.fail's site has it (web/public/share-looks/).
+const onSite = (file: string) => new Uint8Array(readFileSync(new URL(`../../../web/public/share-looks/${file}`, import.meta.url)));
+
+test("the share card's looks' table says the site's files as they are (node scripts/share-looks.ts)", async () => {
+  const { made } = await import("../../../scripts/share-looks.ts");
+  assert.equal(readFileSync(new URL("../src/share-looks.ts", import.meta.url), "utf8"), made());
+});
+
+test("a file of the share card's looks is fetched from the site once, how far said as it comes, and kept; nothing else is", async () => {
+  const r = rig();
+  const file = "1/a1-murasame-adv.webp";
+  r.site.set(file, onSite(file));
+  const got = (await run(r.files.share(file))) as Beside;
+  assert.deepEqual(got.bytes, onSite(file));
+  const far = r.seen.map((s) => (s as { share: Record<string, { got: number; bytes: number }> }).share[file]);
+  assert.deepEqual(far[0], { got: 0, bytes: SHARE_LOOKS_FILES[file]!.bytes });
+  assert.ok(far.some((p) => p !== undefined && p.got > 0 && p.got < p.bytes), JSON.stringify(far));
+  assert.deepEqual(r.said(), { fetching: {}, failed: {}, kept: [], share: {}, shareFailed: {} });
+  // kept: asked again, nothing fetched
+  const asked = r.host.requests.length;
+  assert.deepEqual(((await run(r.files.share(file))) as Beside).bytes, onSite(file));
+  assert.equal(r.host.requests.length, asked);
+  for (const other of ["../avatars/a.gz", "1/nobody.webp", "x/face-400.gz", "https://evil.test/a.gz", "1/../1/face-400.gz"]) await assert.rejects(run(r.files.share(other)));
+});
+
+test("what a site without the file answers (its page) is not kept as it: said failed, fetched again once asked again", async () => {
+  const r = rig();
+  const file = "1/face-400.gz";
+  // kept by a core before files were checked: the page, dropped
+  r.host.storage.set(`fonts/share/${file}`, new TextEncoder().encode("<!doctype html>"));
+  await assert.rejects(run(r.files.share(file)), /下载到的文件不对/);
+  assert.deepEqual((r.said() as { shareFailed: Record<string, string> }).shareFailed, { [file]: "下载到的文件不对" });
+  assert.equal(r.host.storage.has(`fonts/share/${file}`), false);
+  assert.equal(r.host.storage.has(`share-looks/${file}`), false);
+  // a site that answers but not 200
+  r.site.set(file, onSite(file));
+  r.refuse.add(`${ORIGIN}/share-looks/${file}`);
+  await assert.rejects(run(r.files.share(file)), /503/);
+  // the site has it now: fetched, kept, the failure gone
+  r.refuse.clear();
+  assert.deepEqual(((await run(r.files.share(file))) as Beside).bytes, onSite(file));
+  assert.deepEqual(r.said(), { fetching: {}, failed: {}, kept: [], share: {}, shareFailed: {} });
+  // one cut short or longer than said: not the file either
+  const short = "1/face-600.gz";
+  r.site.set(short, onSite(short).slice(0, 1000));
+  await assert.rejects(run(r.files.share(short)), /下载到的文件不对/);
+  r.site.set(short, new Uint8Array([...onSite(short), 0]));
+  await assert.rejects(run(r.files.share(short)), /下载到的文件不对/);
+  assert.equal(r.host.storage.has(`share-looks/${short}`), false);
+});
+
+test("still.fail's own app on the test channel has the looks' files from the test channel's site, which main deploys", () => {
+  fonts.setOrigin("https://app.still.fail", true);
+  assert.equal(fonts.shareLooksFile("1/face-400.gz"), "https://app.youdid.wtf/share-looks/1/face-400.gz");
+  fonts.setOrigin("https://app.still.fail");
+  assert.equal(fonts.shareLooksFile("1/a1-murasame-adv.webp"), "https://app.still.fail/share-looks/1/a1-murasame-adv.webp");
+  // a cloud of its own (a page's, a local one): its own
+  fonts.setOrigin("https://app.youdid.wtf/", true);
+  assert.equal(fonts.shareLooksFile("1/face-400.gz"), "https://app.youdid.wtf/share-looks/1/face-400.gz");
+  fonts.setOrigin("http://localhost:8787", true);
+  assert.equal(fonts.shareLooksFile("1/face-400.gz"), "http://localhost:8787/share-looks/1/face-400.gz");
+  fonts.setOrigin(ORIGIN);
+});
+
 test("the calls: fonts.fetch, fonts.preview {id}; fonts.file {sha256}; fonts.keep {sha256} with the file beside", () => {
   assert.deepEqual(parseCall("fonts.fetch", { id: "inter" }), { kind: "fonts", call: { kind: "fetch", id: "inter" } });
   assert.deepEqual(parseCall("fonts.preview", { id: "inter" }), { kind: "fonts", call: { kind: "preview", id: "inter" } });
+  assert.deepEqual(parseCall("fonts.share", { file: "1/face-400.gz" }), { kind: "fonts", call: { kind: "share", file: "1/face-400.gz" } });
   assert.deepEqual(parseCall("fonts.file", { sha256: "ab" }), { kind: "fonts", call: { kind: "file", sha256: "ab" } });
   assert.deepEqual(parseCall("fonts.keep", { sha256: "ab" }, new Uint8Array([1])), { kind: "fonts", call: { kind: "keep", sha256: "ab", bytes: new Uint8Array([1]) } });
   assert.throws(() => parseCall("fonts.keep", { sha256: "ab" }));

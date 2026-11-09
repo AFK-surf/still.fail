@@ -3,17 +3,16 @@
 #   quick: what a commit or push touches, in seconds (icons, TypeScript); the git hooks (.githooks) run it, on
 #          whoever commits or pushes, so merging stays quick.
 #   full:  that, the tests, cloud's tests, the core's tests, the web against the real iroh wasm, Rust:
-#          minutes. Run before a deploy (~/bin/ember-deploy on studio runs it on what the deploy carries).
+#          minutes. Run before a deploy on what the deploy carries.
 #
 #   sh scripts/check.sh commit        quick, on what is staged (pre-commit)
 #   sh scripts/check.sh push <range>  quick, on what a push carries (pre-push), e.g. origin/main..HEAD
 #   sh scripts/check.sh full <range>  full, on what the range changed
 #   sh scripts/check.sh all           full, as if every file changed
 #
-# STILLFAIL_CHECK_PART="<part> …" (ts, browser, station, core) runs only those parts of it: ts the icons, the clients'
+# STILLFAIL_CHECK_PART="<part> …" (ts, station, core) runs only those parts of it: ts the icons, the clients'
 # types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core: client/core-ts);
-# browser the web in Chrome (its stories measured, the message list's motion watched; STILLFAIL_BROWSER="stories <i>/<n>"
-# or "motion <i>/<n>" one share of it); station the station (station/, its typecheck and tests) and its native parts' own tests
+# station the station (station/, its typecheck and tests) and its native parts' own tests
 # (station/native); core client/'s Rust (the core's native shells: iroh for the web and the apps' IO).
 # Unset: all of them.
 #
@@ -21,10 +20,10 @@
 # output is kept to itself, and they are reported in the order they are listed here, as each is done, with the seconds
 # it took (the end of its output when it failed). A run takes as long as its longest step, not all of them.
 #
-# STILLFAIL_SKIP_CHECKS=1 (or EMBER_SKIP_CHECKS=1) skips it all (git's --no-verify does too); say why when you do.
+# STILLFAIL_SKIP_CHECKS=1 skips it all (git's --no-verify does too); say why when you do.
 set -eu
 cd "$(dirname "$0")/.."
-[ -n "${STILLFAIL_SKIP_CHECKS:-${EMBER_SKIP_CHECKS:-}}" ] && { echo "checks skipped (STILLFAIL_SKIP_CHECKS)"; exit 0; }
+[ -n "${STILLFAIL_SKIP_CHECKS:-}" ] && { echo "checks skipped (STILLFAIL_SKIP_CHECKS)"; exit 0; }
 export PATH="$HOME/.cargo/bin:$PATH"
 # One-off builds: incremental state only fills target/, and sccache (if set as the rustc wrapper) skips
 # incremental crates.
@@ -32,8 +31,12 @@ export CARGO_INCREMENTAL=0
 
 mode=${1:-commit}
 full=0
+# A commit that concludes a merge (main merged into a branch) is checked against what is merged in: what the branch has
+# that main does not, as CI checks it. Against HEAD it would be all main got meanwhile, none of it this commit's.
+against=HEAD
+if [ "$mode" = commit ] && git rev-parse -q --verify MERGE_HEAD > /dev/null; then against=MERGE_HEAD; fi
 case "$mode" in
-  commit) changed=$(git diff --cached --name-only --diff-filter=ACMRD) ;;
+  commit) changed=$(git diff --cached --name-only --diff-filter=ACMRD "$against" 2>/dev/null || git diff --cached --name-only --diff-filter=ACMRD) ;;
   push) range=${2:?push needs a range}; changed=$(git diff --name-only "$range") ;;
   full) full=1; range=${2:?full needs a range}; changed=$(git diff --name-only "$range") ;;
   all) full=1; changed=$(git ls-files) ;;
@@ -47,7 +50,7 @@ touches() { printf '%s\n' "$changed" | grep -qE "$1"; }
 # it only moves (taken out of one of them, put in another as it was: a part moved into web/ui) is not added.
 added() {
   case "$mode" in
-    commit) git diff --cached -U0 -- "$@" ;;
+    commit) git diff --cached -U0 "$against" -- "$@" 2>/dev/null || git diff --cached -U0 -- "$@" ;;
     push|full) git diff -U0 "$range" -- "$@" ;;
     *) ;;
   esac > "$tmp/diff"
@@ -109,7 +112,26 @@ running() {
 }
 # Stopped (CI's time up, ^C): which steps were still running, and where each had got to, said before it ends (a
 # check stopped after 10 minutes said only the last step done, not the one it waited for: 39468530573).
-trap 'echo "stopped; still running:"; running tail; exit 1' INT TERM
+# And the test files still running under it, how long each had run: a step's output says only the tests that ended, and
+# the one that hung never does (the station's tests stopped at 5 minutes, feat/outflow-tailcat, 41570711413).
+below() { for c in $(pgrep -P "$1" 2>/dev/null); do echo "$c"; below "$c"; done; }
+open_tests() {
+  for p in $(below $$); do ps -o etime= -o args= -p "$p" 2>/dev/null; done | awk 'gsub(/\.test\.(ts|mts|mjs|js)/, "&") == 1 { for (i = 2; i <= NF; i++) if ($i ~ /\.test\.(ts|mts|mjs|js)$/) print "  ◦ " $1 " " $i }'
+  # Each of them asked which of its tests runs, or what it still has open (station/test/setup-env.mjs), and the
+  # processes under it: the file alone did not say which test hung (41597210040, test/sandbox.test.ts).
+  hung=""
+  # (One file each: the runner above them names them all.)
+  for p in $(below $$); do ps -o args= -p "$p" 2>/dev/null | awk 'gsub(/\.test\.(ts|mts|mjs|js)/, "&") != 1 { exit 1 }' && kill -USR2 "$p" 2>/dev/null && hung="$hung $p"; done
+  [ -n "$hung" ] || return 0
+  sleep 1
+  for p in $hung; do
+    sed 's/^/    /' "$STILLFAIL_TEST_HUNG/$p" 2>/dev/null
+    for c in $(below "$p"); do ps -o pid= -o etime= -o args= -p "$c" 2>/dev/null | cut -c1-200 | sed 's/^/      under it: /'; done
+  done
+}
+export STILLFAIL_TEST_HUNG="$tmp/hung"
+mkdir -p "$STILLFAIL_TEST_HUNG"
+trap 'echo "stopped; still running:"; running tail; open_tests; exit 1' INT TERM
 # Says each step, in order, as it is done; every minute spent waiting, the ones still running.
 report() {
   i=0
@@ -212,7 +234,8 @@ if part ts; then
   # (the core's own files the web imports and typechecks under its stricter settings: a change there alone, #2395's
   # util.ts import in error.ts, passed its own check and turned main red at the next change to the web, 8cb036d5)
   web_reads='^client/core-ts/src/'
-  ts_cloud='^cloud/'
+  # (cloud's lock is station's, through the rules: cloud/src/lock.ts imports station/src/cloud/lock.ts)
+  ts_cloud='^cloud/|^station/src/cloud/lock\.ts$|^client/core-ts/src/lock-form\.ts$|^rules/js/'
   ts_core='^client/core-ts/|^web/src/core/delta\.ts$'
 
   # The clients' types and the UIs' operation bindings are made from the core's (client/core-ts/src/shapes/schema.ts,
@@ -222,9 +245,25 @@ if part ts; then
     step "clients' types" after core node client/core-ts/scripts/shapes.ts --check
     step "operation bindings" after core node client/core-ts/scripts/operations.ts --check
   fi
+  # still.fail's colours are web/ui/src/palette.ts's (the app's palette made from it); the web's curves are the app's.
+  if touches '^web/ui/src/(palette|curves-data)\.ts$|^scripts/(palette|curves)\.ts$|^apps/mbui/src/sf/(palette_data|tokens)\.mbt$|^apps/mbui/mbui/src/ui/motion\.mbt$'; then
+    step "palette and curves" sh -c 'node scripts/palette.ts --check && node scripts/curves.ts --check'
+  fi
+  # The app's UI fault categories are the core's (client/core-ts/src/ui-faults.ts).
+  if touches '^client/core-ts/(src/ui-faults\.ts|scripts/ui-faults\.ts)$|^apps/mbui/src/stillfail/ui_faults\.mbt$'; then
+    step "UI fault categories" node client/core-ts/scripts/ui-faults.ts --check
+  fi
+
+  # The agents' rules name only what is there (AGENTS.md: These files are kept true): any change may move what one names.
+  step "AGENTS.md paths" node scripts/agents-paths.ts
 
   if touches '^design/(station-)?icons/|^apps/mbui/(tools/icons/|scripts/icons$)|^web/ui/src/icons\.tsx$'; then
     step icons bash apps/mbui/scripts/icons . --check
+  fi
+  # Every file cloud's api, the station and the beta apps' core are built from deploys them (scripts/plan.sh).
+  if touches '^(cloud/src/|station/src/|client/|apps/mbui/core/|rules/|scripts/plan)'; then
+    prep station deps station
+    step "what is deployed for each file" after station node scripts/plan-covers.ts
   fi
   # Every CI job may take 5 minutes at most (only scripts/ci-timeouts.py's LONGER 10), and says so (timeout-minutes).
   if touches '^\.github/workflows/|^scripts/ci-timeouts\.py$'; then
@@ -232,6 +271,10 @@ if part ts; then
   fi
   # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
   # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
+  # the Wasm side of the native host's calls as their declarations make it
+  if touches '^apps/mbui/(mbui/src/host|src/(core|stillfail|pinyin|sfreplay))/.*native\.mbt$|^apps/mbui/mbui/tools/wasmhost/'; then
+    step "wasm host calls" bash apps/mbui/scripts/wasm-app.sh check
+  fi
   if touches '^(web/src|web/ui|apps/mbui/src)/'; then
     step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/mbui/src'
   fi
@@ -274,7 +317,7 @@ if part ts; then
     added 'web/src/*.css.ts' 'web/ui/*.css.ts' | grep -E '[bB]order[A-Za-z]*Radius: *([`"][^`"]*([5-9]|[1-9][0-9]+)(\.[0-9]+)?px|([5-9]|[1-9][0-9]+)\b)' \
       | grep -vE 'Radius: *("999px"|999\b)|own corner:' > "$tmp/corners" || true
     step "no corner of its own (in what this adds)" sh -c "! grep . '$tmp/corners'"
-    # One light for the pointer in what a change adds (docs/ui-panels.md 悬停): a hover lays the ink, `vars.hover` (lit.ts
+    # One light for the pointer in what a change adds: a hover lays the ink, `vars.hover` (lit.ts
     # `litOver` over a ground of its own), or takes a solid ground a step towards the page (`vars.primaryHover`, a colour
     # 85% mixed with the canvas); never a colour, a tint or a filter of its own. One that must says why with "own hover:".
     added 'web/src/*.css.ts' 'web/ui/*.css.ts' | grep -E ':hover[^{]*\{[^}]*(background(Color)?|filter): *' \
@@ -283,9 +326,26 @@ if part ts; then
     # No margin taken back by hand: a ground reaching past its words, a corner, a column, a centring is one of
     # styles/align.ts's (bleedX, surface, columns, centred…), so its numbers are said once (a var's own negative may be).
     step "no hand-written negative margins" sh -c '! git grep -nE "margin[A-Za-z]*: *(-[0-9]|[\"\`][^\"\`]*[ (]-[0-9]|[\"\`]-[0-9])" -- "web/src/*.css.ts" "web/ui/*.css.ts" | grep -v "calc(-1 \* var("'
-    # A small panel stands on controls.css.ts popover (docs/ui-panels.md): surface() only for it and the three that are not
+    # A small panel stands on controls.css.ts popover: surface() only for it and the three that are not
     # popovers (a notice, ⌘K, the composer's list of chats).
     step "small panels on one ground" sh -c '! git grep -n "\.\.\.surface(" -- "web/src/*.css.ts" "web/ui/*.css.ts" ":!web/ui/src/styles/controls.css.ts" ":!web/src/SystemBubbles.css.ts" ":!web/src/Switcher.css.ts" ":!web/src/ChatRef.css.ts"'
+  fi
+  # (Its own condition: inside the web pages' block it ran only when a change touched web/src or web/ui.)
+  if touches '^(client/core-ts/src|station/src|cloud/src)/'; then
+    # No polling between still.fail's own parts (AGENTS.md): what a change adds to the core, the station or the cloud sets
+    # no timer that reads something of another part again; that part tells (an event, a stream). A timer that must be
+    # says on its line which it is with "timer:" (a heartbeat, a sample of this machine, a retry after a failure, a
+    # timeout or deadline, a debounce, an outside system that tells nothing). (`.every(` with a time: a list's is not one.)
+    added 'client/core-ts/src/*.ts' 'station/src/*.ts' 'cloud/src/*.ts' | grep -nE '\.every\(([A-Z0-9]|this\.timing)|setInterval\(|Schedule\.(spaced|fixed|exponential)|Effect\.repeat\(|Effect\.forever\(' \
+      | grep -v 'timer:' > "$tmp/timers" || true
+    step "no polling between still.fail's parts (in what this adds)" sh -c "! grep . '$tmp/timers'"
+  fi
+  # No way into a station from outside (AGENTS.md): every socket a station listens on is this machine's own, and says
+  # so on its line (127.0.0.1; the fd the launcher holds, a Unix socket's path); the mesh's endpoint is bound by
+  # mesh/native.ts. No tunnel in the station or the cloud. (A `.listen(` given a function is an event's, not a socket's.)
+  if touches '^(station/src|station/native|cloud/src)/'; then
+    step "stations listen on this machine only" sh -c '! git grep -nE "\.listen\((\{|[^()=>]*,)|TcpListener::bind|UdpSocket::bind" -- station/src station/native cloud/src ":!*/tests/*" ":!*.test.*" | grep -vE "127\.0\.0\.1|\bfd\b|\bpath\b"'
+    step "no tunnel into a station" sh -c '! git grep -niE "tailcat|ngrok|cloudflared|localtunnel|trycloudflare|tailscale (funnel|serve)" -- station/src station/native cloud/src'
   fi
   # Core tests also run for Rust-only client changes. A fresh CI checkout needs both
   # their JS dependencies and the real wasm package even when no TS file changed.
@@ -293,7 +353,7 @@ if part ts; then
   if [ $full = 1 ] && touches '^(test|client|web/src/core)/|^package\.json$'; then core_tests=1; fi
   if touches "$ts_root" || touches "$ts_web" || touches "$web_reads" || touches "$ts_cloud" || [ $core_tests = 1 ]; then prep root deps .; fi
   if touches "$ts_root" || touches "$ts_web" || touches "$web_reads" || [ $core_tests = 1 ]; then wasm_pkg; fi
-  # The stable channel's release notes (docs/changelog.md): each one read as CI will.
+  # The stable channel's release notes (scripts/changelog.ts): each one read as CI will.
   if touches '^docs/releases/|^scripts/changelog\.ts$'; then step "release notes" sh -c 'node scripts/changelog.ts --stable > /dev/null'; fi
   # Root tests also import the core's Markdown reader. Wait for its packages on a cold checkout, as the web does.
   if touches "$ts_root" || [ $core_tests = 1 ]; then prep core deps client/core-ts; fi
@@ -303,64 +363,24 @@ if part ts; then
     prep core deps client/core-ts
     step "typecheck: web" after root after core pnpm exec tsgo -p web/tsconfig.json
     [ -f web/src/core/iroh-pkg/.stand-in ] && later "web against the real iroh wasm"
-    # The web in Chrome (its stories, its message list's motion): the browser part, with the full check's steps below.
   fi
   if touches "$ts_cloud"; then
     prep cloud deps cloud
     prep cloud-types after_cloud_types
     step "typecheck: cloud" after cloud after cloud-types sh -c 'cd cloud && pnpm run check'
   fi
-  # The TypeScript core (docs/core-ts.md): its own tsconfig.
+  # The TypeScript core: its own tsconfig.
   if touches "$ts_core"; then prep core deps client/core-ts; step "typecheck: core-ts" after core sh -c 'cd client/core-ts && pnpm exec tsgo --noEmit'; fi
   if touches "$ts_core|^client/math/|^apps/mbui/src/sf/math_glyphs\\.mbt$"; then prep core deps client/core-ts; step "shared math alphabet" after core node client/core-ts/scripts/math-font.ts --check; fi
   if touches "$ts_core|^client/fixtures/math\\.json$|^apps/mbui/src/sf/math\\.json$"; then prep core deps client/core-ts; step "shared math fixture" after core node client/core-ts/scripts/math-fixture.ts --check; fi
   # The core's pure answers the mbui app's runs without a core keep (apps/mbui/src/sfkept), as the core answers them now.
   if touches "$ts_core|^apps/mbui/src/sfkept/kept\\.mbt$"; then prep core deps client/core-ts; step "kept core answers" after core node client/core-ts/scripts/kept-answers.ts --check; fi
-  # What makes the views writes only on what it made, never on what it was given (docs/core-ts.md「谁能改什么」).
+  # What makes the views writes only on what it made, never on what it was given (「谁能改什么」).
   if touches '^client/core-ts/(src|scripts)/'; then prep core deps client/core-ts; step "core writes on its own" after core node client/core-ts/scripts/writes.ts --check; fi
-  # The media app's service and its module of the core (media/, docs/media-service.md, docs/core-modules.md).
-  if touches '^media/'; then
-    prep root deps .
-    prep core deps client/core-ts
-    prep media-core deps media/core
-    step "typecheck: media" after root after core after media-core sh -c 'pnpm exec tsgo -p media/service/tsconfig.json && cd media/core && ../../node_modules/.bin/tsgo -p tsconfig.json'
-  fi
 
 fi
 
 if [ $full = 1 ]; then
-  # Every story (web/stories) opened and every corner and small panel in it measured (test/browser/stories.mjs,
-  # docs/ui-panels.md), then what moves in a chat's message list watched frame by frame (test/browser/list-settle.mjs,
-  # docs/list-motion.md), a viewer's bar staying while pointed at (test/browser/viewer-bar.mjs, the motion's last share),
-  # a folder dropped in the files' columns leaving nothing said over the list (test/browser/drive-drop.mjs, there too),
-  # a wheel over a files column scrolling it alone, never the page under them (test/browser/drive-columns-wheel.mjs, there too),
-  # a chat's side panel giving way to the chat once the window narrows (test/browser/side-panel-width.mjs, there too)
-  # and a station's screen driven by a mouse, keys and fingers (test/browser/screen-input.mjs, there too):
-  # on a Chrome the machine has (CI's Linux runners have one). On CI shared out between jobs side by
-  # side (STILLFAIL_BROWSER): on one of GitHub's four cores it all took ~3 minutes (2026-10-15).
-  if part browser && { touches '^web/' || touches '^test/browser/(stories|measure|list-settle|viewer-bar|drive-drop|drive-columns-wheel|side-panel-width|chat-pagination|screen-input|share-markdown)\.mjs$'; }; then
-    if command -v google-chrome >/dev/null 2>&1; then
-      prep root deps .
-      wasm_pkg
-      prep core deps client/core-ts
-      chrome='export PLAYWRIGHT_MODULE=playwright-core PLAYWRIGHT_CHANNEL=chrome'
-      # Its share: "<part> <i>/<n>" (none said: all of it).
-      share=${STILLFAIL_BROWSER#* }; [ "$share" = "${STILLFAIL_BROWSER:-}" ] && share=1/1
-      case "${STILLFAIL_BROWSER:-}" in
-        stories*) step "web: stories measured (${STILLFAIL_BROWSER#stories })" after root after core sh -c "$chrome SHARD='${STILLFAIL_BROWSER#stories }'; node test/browser/stories.mjs" ;;
-        motion*) step "web: the message list's motion watched ($share), a viewer's bar kept" after root after core sh -c "$chrome SHARD='$share'; node test/browser/list-settle.mjs && { [ '${share%/*}' != '${share#*/}' ] || { node test/browser/viewer-bar.mjs && node test/browser/drive-drop.mjs && node test/browser/drive-columns-wheel.mjs && node test/browser/side-panel-width.mjs && node test/browser/chat-pagination.mjs && node test/browser/screen-input.mjs; }; }" ;;
-        *) step "web: stories measured, the message list's motion watched, a viewer's bar kept" after root after core sh -c "$chrome; node test/browser/stories.mjs && node test/browser/list-settle.mjs && node test/browser/viewer-bar.mjs && node test/browser/drive-drop.mjs && node test/browser/drive-columns-wheel.mjs && node test/browser/side-panel-width.mjs && node test/browser/chat-pagination.mjs && node test/browser/screen-input.mjs" ;;
-      esac
-      case "${STILLFAIL_BROWSER:-}" in
-        ""|motion*)
-          if [ "${share%/*}" = "${share#*/}" ]; then
-            step "web: share Markdown and file previews" after root after core sh -c "$chrome; node test/browser/share-markdown.mjs"
-          fi ;;
-      esac
-    else
-      later "web: stories measured, the message list's motion watched (no Chrome here)"
-    fi
-  fi
   # The tests drive the web core itself (test/core-client.test.ts): only with a real build of it.
   if part ts && [ $core_tests = 1 ]; then
     if [ -f web/src/core/iroh-pkg/.stand-in ] || [ ! -f web/src/core/iroh-pkg/built.js ]; then later "tests (need the iroh wasm)"; else step "tests" after root after core pnpm test; fi
@@ -369,27 +389,29 @@ if [ $full = 1 ]; then
   # package.json). Its side run's (real relays, networks made up at random) are scripts/side.sh's.
   # Run whenever one of what they read changed (the list `remembered` keys them by): a change to the words alone
   # (client/i18n) broke them on main unseen (2026-10-17, a28f78496).
-  if part ts && touches "$ts_core|^client/i18n/|^web/src/core/|^web/public/avatars/|^station/native/mesh/|^vendor/|^scripts/native\.ts$"; then prep core deps client/core-ts; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor scripts/native.ts" after core sh -c 'cd client/core-ts && pnpm test'; fi
-  if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n" after cloud sh -c 'cd cloud && pnpm test'; fi
+  if part ts && touches "$ts_core|^client/i18n/|^web/src/core/|^web/public/avatars/|^station/native/mesh/|^vendor/|^rules/js/|^station/src/cloud/lock\.ts$|^station/test/lock-(chains|oracle)\.ts$|^scripts/native\.ts$"; then prep core deps client/core-ts; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor rules/js station/src/cloud/lock.ts station/test/lock-chains.ts station/test/lock-oracle.ts scripts/native.ts" after core sh -c 'cd client/core-ts && pnpm test'; fi
+  if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n station/src/cloud/lock.ts client/core-ts/src/lock-form.ts rules/js" after cloud sh -c 'cd cloud && pnpm test'; fi
   # The station, with its native parts prebuilt (mesh addon, runner, the Rust station's archive for the compatibility
   # tests): its tests run whenever it, one of them or the words it says changed.
-  if part station && touches '^station/|^vendor/|^client/i18n/|^scripts/native\.ts$'; then
+  if part station && touches '^station/|^vendor/|^client/i18n/|^client/shell/|^apps/mbui/mbui/src/effect/|^rules/js/|^scripts/native\.ts$'; then
     prep station deps station
+    # Its programs in MoonBit (station/mb): what of them runs without a host (src/wire).
+    remembered "tests: station's MoonBit" "station/mb apps/mbui/mbui/src/effect apps/mbui/mbui/moon.mod" sh -c 'cd station/mb && moon test --target native src/wire && moon test --target native src/jsjson && moon test --target native src/nodepath && moon test --target native src/jscase'
     step "typecheck: station" after station sh -c 'cd station && pnpm exec tsgo --noEmit'
-    # The station's time is its Clock's (docs/station-ts.md, 写法): the machine's only through ops/fibers.ts' wall. Cursor's
+    # The station's time is its Clock's (写法): the machine's only through ops/fibers.ts' wall. Cursor's
     # driver (agents/cursor-bridge.mjs) and the sandbox bridge (agents/sandbox-bridge.mjs) run in processes of their own,
     # not the station's.
     step "station: time through its clock" sh -c '! git grep -nE "Date\.now\(|new Date\(\)|setTimeout\(|setInterval\(" -- station/src ":!station/src/ops/fibers.ts" ":!station/src/agents/cursor-bridge.mjs" ":!station/src/agents/sandbox-bridge.mjs"'
-    remembered "tests: station" "station client/i18n vendor scripts/native.ts" after station sh -c 'cd station && pnpm test'
+    # (STILLFAIL_NODE_TEST_JOBS, on a machine CI's runners share: station/package.json's `test`, that many files at a
+    # time, .github/actions/setup-mac)
+    remembered "tests: station" "station client/i18n client/shell vendor rules/js apps/mbui/mbui/src/effect scripts/native.ts" after station sh -c 'cd station && if [ -n "${STILLFAIL_NODE_TEST_JOBS:-}" ]; then node ../scripts/native.ts run mesh runner archive-rs reader -- node --import ./test/setup-env.mjs --test --test-concurrency="$STILLFAIL_NODE_TEST_JOBS" --test-timeout=600000 test/*.test.ts; else pnpm test; fi'
   fi
-  # The media app's (media/): its service's tests, its core module's, and the two end to end beside the station's module
-  # layer (media/test): whenever it, the core or the station changed.
-  if part station && touches '^media/|^client/core-ts/src/|^station/src/|^scripts/native\.ts$'; then
+  # The usage stream exercises the real station reader and the client together. Keep it out of either side's own
+  # typecheck and prepare both sides before checking and running it, including on a fresh checkout.
+  if part station && touches '^station/(src/|integration/|test/setup-env\.mjs$)|^client/core-ts/(src/|test/(helpers|station-fixture)\.ts$)|^scripts/check\.sh$'; then
     prep station deps station
     prep core deps client/core-ts
-    prep media-core deps media/core
-    prep media-test deps media/test
-    remembered "tests: media" "media client/core-ts station/src scripts/native.ts" after station after core after media-core after media-test sh -c 'cd media/service && node --test --test-timeout=120000 test/*.test.ts && cd ../core && pnpm test && cd ../test && pnpm test'
+    step "tests: station and core usage stream" after station after core sh -c 'cd station && pnpm exec tsgo -p integration/tsconfig.json && node --disable-warning=ExperimentalWarning --import ./test/setup-env.mjs --test --test-timeout=30000 integration/usage-client-stream.test.ts'
   fi
   # The native parts' own tests, where their Rust changed (the mesh addon's: the vendored crates it patches in, too).
   for crate in launcher runner mesh screen; do
@@ -401,6 +423,10 @@ if [ $full = 1 ]; then
   done
   # still.fail Helper (Swift, station/native/helper and the PermissionFlow it uses): built where it changed, on a Mac.
   if part station && touches '^station/native/helper/|^vendor/PermissionFlow/' && has swift; then step "Swift: station/native/helper" node scripts/native.ts path helper; fi
+  # The iOS app's crash reports as PostHog is sent them (apps/mbui/src/host/apple_reports.m), where they changed, on a Mac.
+  if touches '^apps/mbui/(src/host/apple_reports\.m|scripts/ios-reports-test\.sh|scripts/ios_reports_test\.m)$' && has xcrun; then
+    step "iOS crash reports" bash apps/mbui/scripts/ios-reports-test.sh
+  fi
   # The core's native shells (client/shell for Android, client/iroh-wasm for the web).
   if part core && touches '^client/(shell|iroh-wasm)/|^client/Cargo\.(toml|lock)$|^vendor/'; then
     if has cargo; then remembered "Rust: client" "client vendor" heavy cargo_test client --workspace -q; else later "Rust: client"; fi

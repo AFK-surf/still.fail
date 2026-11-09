@@ -56,7 +56,7 @@
 #pragma comment(linker, "\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 static const char MAGIC[8] = {'M', 'B', 'S', 'E', 'T', 'U', 'P', '1'};
-// System.AppUserModel.ID (propkey.h's PKEY_AppUserModel_ID)
+// System.AppUserModel.ID
 static const PROPERTYKEY app_id_key = {{0x9F4C2855, 0x9F79, 0x4B39, {0xA8, 0xD0, 0xE1, 0xD4, 0x2D, 0xE1, 0xD5, 0xF3}}, 5};
 
 // ---- what it says ----
@@ -461,6 +461,28 @@ static int shortcut(const wchar_t *lnk, const wchar_t *target) {
   return ok;
 }
 
+// An older preview install made shortcuts under its former name. Rename only shortcuts to this installation, and
+// leave an existing shortcut at the new name or an unrelated shortcut at the old name alone.
+static void rename_preview_shortcut(const wchar_t *folder, const wchar_t *exe) {
+  if (wcscmp(app_id, L"fail.still.mbui") || wcscmp(app_name, L"still.fail preview") || !folder[0]) return;
+  wchar_t old[MAX_PATH * 2], next[MAX_PATH * 2], target[MAX_PATH * 2] = {0};
+  _snwprintf(old, MAX_PATH * 2, L"%ls\\still.fail mbui.lnk", folder);
+  _snwprintf(next, MAX_PATH * 2, L"%ls\\%ls.lnk", folder, app_name);
+  if (GetFileAttributesW(old) == INVALID_FILE_ATTRIBUTES || GetFileAttributesW(next) != INVALID_FILE_ATTRIBUTES) return;
+  IShellLinkW *sl = NULL;
+  if (FAILED(CoCreateInstance(&CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, &IID_IShellLinkW, (void **)&sl))) return;
+  IPersistFile *pf = NULL;
+  int ours = 0;
+  if (SUCCEEDED(IShellLinkW_QueryInterface(sl, &IID_IPersistFile, (void **)&pf))) {
+    ours = SUCCEEDED(IPersistFile_Load(pf, old, STGM_READ)) &&
+        SUCCEEDED(IShellLinkW_GetPath(sl, target, MAX_PATH * 2, NULL, SLGP_RAWPATH)) &&
+        !_wcsicmp(target, exe);
+    IPersistFile_Release(pf);
+  }
+  IShellLinkW_Release(sl);
+  if (ours) MoveFileW(old, next);
+}
+
 static void known(REFKNOWNFOLDERID id, wchar_t *out) {
   PWSTR p = NULL;
   out[0] = 0;
@@ -596,10 +618,12 @@ static int install(int silent, int run_after, const wchar_t *dir_given) {
   CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
   wchar_t lnk[MAX_PATH * 2], folder[MAX_PATH];
   known(&FOLDERID_Programs, folder);
+  rename_preview_shortcut(folder, exe);
   _snwprintf(lnk, MAX_PATH * 2, L"%ls\\%ls.lnk", folder, app_name);
   if (GetFileAttributesW(lnk) == INVALID_FILE_ATTRIBUTES) say(L"the start menu's shortcut %ls", shortcut(lnk, exe) ? L"made" : L"not made");
+  known(&FOLDERID_Desktop, folder);
+  rename_preview_shortcut(folder, exe);
   if (fresh) {
-    known(&FOLDERID_Desktop, folder);
     _snwprintf(lnk, MAX_PATH * 2, L"%ls\\%ls.lnk", folder, app_name);
     if (GetFileAttributesW(lnk) == INVALID_FILE_ATTRIBUTES) shortcut(lnk, exe);
   }

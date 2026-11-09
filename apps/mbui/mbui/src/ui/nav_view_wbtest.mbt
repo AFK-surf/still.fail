@@ -9,9 +9,10 @@
 fn stacked(
   ready? : @signals.Signal[Bool],
   most? : Double = 0.0,
+  from_left? : (String, String?) -> Bool = fn(_, _) { false },
 ) -> (Tester, Nav[String], Array[String]) {
   let left : Array[String] = []
-  let nav = Nav::new("a", on_leave=fn(p) { left.push(p) })
+  let nav = Nav::new("a", on_leave=fn(p) { left.push(p) }, from_left~)
   let t = Tester::new(fn(_c) {  })
   t.check_looks(false)
   set_view_app(fn(root) {
@@ -27,6 +28,33 @@ fn stacked(
   })
   t.draw()
   (t, nav, left)
+}
+
+///|
+test "window tree: a page's side follows where it was pushed from, including when it goes back" {
+  let (t, nav, _) = stacked(from_left=fn(p, under) { p == "settings" && under is Some("other") })
+  let half = move_ms(390.0) / 2.0
+  nav.push("settings")
+  t.draw()
+  t.run_for(half)
+  assert_true(pages_drawn()[1].0 > 0.0)
+  t.run_for(half)
+  assert_true(nav.pop())
+  t.draw()
+  t.run_for(half)
+  assert_true(pages_drawn()[1].0 > 0.0)
+  t.run_for(half)
+  nav.replace("other")
+  t.draw()
+  nav.push("settings")
+  t.draw()
+  t.run_for(half)
+  assert_true(pages_drawn()[1].0 < 0.0)
+  t.run_for(half)
+  assert_true(nav.pop())
+  t.draw()
+  t.run_for(half)
+  assert_true(pages_drawn()[1].0 < 0.0)
 }
 
 ///|
@@ -271,9 +299,9 @@ fn buttoned() -> (Tester, Nav[String], Map[String, Int]) {
       nav,
       fn(c, p) {
         let id = c.id("button " + p)
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           pressed[p] = pressed.get(p).unwrap_or(0) + 1
-        }
+        })
         c.box(w=Px(100.0), h=Px(100.0), bg=0x3366CCFFL, id~, fn() { c.text(p, size=12.0) |> ignore }) |> ignore
       },
       bg=fn() { 0xFFFFFFFFL },

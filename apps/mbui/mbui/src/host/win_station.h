@@ -1,5 +1,5 @@
 // This machine's station on Windows (@hostapi.local_station, local_station_act), as mac_app.m has it on the Mac and
-// still.fail's desktop app managed it on Windows (apps/desktop/src/installed.ts, station.ts): its data
+// still.fail's desktop app managed it on Windows (station.ts): its data
 // (%USERPROFILE%\.stillfail), whether it runs (run\station.json's pid alive) and by what (the scheduled task the
 // installer made, "still.fail station": cloud/src/install-windows.ts; or a process started by hand), its release, whether
 // the installer put one there (<data>\app: the desktop app's carried station had none), the workspace its data is in
@@ -16,7 +16,18 @@
 #pragma comment(lib, "taskschd.lib")
 #pragma comment(lib, "oleaut32.lib")
 
-#define STATION_TASK L"still.fail station"
+// (another product's app, its station's own: MBUI_STATION_ID's directory, MBUI_STATION_NAME's task; cloud/src/
+// install-windows.ts names them so, monoid's ~\.monoid and 「monoid station」 beside still.fail's)
+static const WCHAR *station_env(const WCHAR *name, const WCHAR *otherwise) {
+  const WCHAR *v = _wgetenv(name);
+  return v && *v ? v : otherwise;
+}
+static const WCHAR *station_task(void) {
+  static WCHAR task[128];
+  if (!task[0]) _snwprintf(task, 127, L"%ls station", station_env(L"MBUI_STATION_NAME", L"still.fail"));
+  return task;
+}
+#define STATION_TASK station_task()
 
 static SRWLOCK local_lock = SRWLOCK_INIT;
 static char local_doing[16];     // what is being done ("": nothing), under local_lock
@@ -31,7 +42,7 @@ static void local_set(WCHAR **at, const WCHAR *s) {
 // %USERPROFILE%\.stillfail
 static void local_data(WCHAR *out, size_t cap) {
   const WCHAR *home = _wgetenv(L"USERPROFILE");
-  _snwprintf(out, cap, L"%ls\\.stillfail", home ? home : L"");
+  _snwprintf(out, cap, L"%ls\\.%ls", home ? home : L"", station_env(L"MBUI_STATION_ID", L"stillfail"));
   out[cap - 1] = 0;
 }
 
@@ -153,7 +164,7 @@ moonbit_string_t mb_host_local_station(void) {
   // a release of its own (<data>\app: the installer's); a station still.fail's desktop app ran from its own has none
   _snwprintf(path, MAX_PATH * 2, L"%ls\\app", data);
   if (GetFileAttributesW(path) != INVALID_FILE_ATTRIBUTES) o += (size_t)snprintf(b + o, cap - o, ",\"installed\":true");
-  if (task) o += (size_t)snprintf(b + o, cap - o, ",\"service\":{\"kind\":\"task\",\"name\":\"still.fail station\"}");
+  if (task) o += (size_t)snprintf(b + o, cap - o, ",\"service\":{\"kind\":\"task\",\"name\":\"%ls\"}", STATION_TASK);
   _snwprintf(path, MAX_PATH * 2, L"%ls\\mesh\\cloud.json", data);
   jv cloud = local_json(path);
   const char *ws = jtext(&cloud, "workspace");
@@ -345,9 +356,10 @@ void mb_host_local_station_act(moonbit_string_t action) {
         ps_plain(token)) {
       size_t cap = wcslen(origin) + wcslen(token) + 200;
       WCHAR *command = (WCHAR *)calloc(cap, sizeof(WCHAR));
+      // (OutputEncoding: what it says in UTF-8, as local_run reads it; by default the system's code page, GBK in Chinese)
       if (command)
         _snwprintf(command, cap,
-                   L"powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& ([scriptblock]::Create((irm '%ls/install.ps1'))) %ls\"",
+                   L"powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"[Console]::OutputEncoding = [Text.Encoding]::UTF8; & ([scriptblock]::Create((irm '%ls/install.ps1'))) %ls\"",
                    origin, token);
       if (command) local_begin(install ? "install" : "update", command, beta ? L"beta" : NULL);
     } else {

@@ -1,7 +1,7 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # The demo on Windows: build with MoonBit and MSVC, its input method's script run in a window (Direct3D falls back to
-# WARP on the GPU-less runner); then the text against DirectWrite's own. No picture of the app's window is compared
-# with a kept one (goldens/windows.png is scripts/shots.sh's, by hand): what Direct3D draws is held to its references
+# WARP on the GPU-less runner), text against DirectWrite's own, and WebView2, as independent jobs. No picture of the
+# app's window is compared with a kept one (goldens/windows.png is scripts/shots.sh's, by hand): what Direct3D draws is held to its references
 # by mbui-render-windows (a Tester's draw list drawn offscreen), as the macOS job does (mbui-ci.yml).
 name: mbui-windows
 on:
@@ -24,6 +24,12 @@ jobs:
   demo:
     runs-on: windows-latest
     timeout-minutes: 5
+    # Each builds its own program. In run 41539716977 attempt 2, setup, the demo and textdiff used 294 s before
+    # webdemo even began to build. Keep each contract's five-minute limit, without spending it on the others first.
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [ime, text, webviews]
     # (the units mbc compiles kept by content, MBC_STORE: restored on every run, saved by main's alone; without them
     # each run compiled the demo, textdiff and webdemo whole, 193 s on average and 466 s at most, 2026-10-22)
     env:
@@ -44,20 +50,30 @@ jobs:
       - uses: actions/cache/restore@v4
         with:
           path: .ci/mbc-store
-          key: mbui-windows-demo-${{ github.sha }}
-          restore-keys: mbui-windows-demo-
+          key: mbui-windows-demo-${{ matrix.check }}-${{ github.sha }}
+          restore-keys: |
+            mbui-windows-demo-${{ matrix.check }}-
+            mbui-windows-demo-
       - name: Build
+        if: matrix.check == 'ime'
         run: |
           moon version --all
           scripts/win.sh build
           echo "binary: $(stat -c %s out/win/mod/_build/native/release/build/demo/demo.exe) bytes"
       - name: IME script
+        if: matrix.check == 'ime'
         run: scripts/win.sh script ime
       - name: Text against DirectWrite's own (scripts/textdiff.sh windows; the report is in the artifact)
+        if: matrix.check == 'text'
         run: |
           mkdir -p out/node && (cd out/node && { [ -f package.json ] || npm init -y >/dev/null; } && npm i pngjs >/dev/null)
+          export MBC_LOG="$RUNNER_TEMP/mbc.log"
+          s=$SECONDS
           scripts/textdiff.sh windows
+          echo "textdiff: $((SECONDS - s)) s, its build's C:"
+          grep -E ' compiled \(|^mbc: linked' "$MBC_LOG" | cut -c1-220 || true
       - name: Web views (WebView2) - a page, a site the app answers, and with no runtime to be had
+        if: matrix.check == 'webviews'
         run: |
           APP=webdemo scripts/win.sh build
           mkdir -p out/webviews
@@ -81,11 +97,11 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: .ci/mbc-store
-          key: mbui-windows-demo-${{ github.sha }}
+          key: mbui-windows-demo-${{ matrix.check }}-${{ github.sha }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: windows-shots
+          name: windows-shots-${{ matrix.check }}
           path: |
             apps/mbui/mbui/out/webviews/
             apps/mbui/mbui/out/shot-kit/

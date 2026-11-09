@@ -1,6 +1,6 @@
-// 快捷键 (ember web/src/Shortcuts.tsx ShortcutsPage, Shortcuts.css.ts), one page in every frame: each action of the
-// core's keymap (the prefs' `keymap`) gets new keys by pressing them (`keys.set`). ⌘/'s list of them is the shell's
-// (sfdesk shortcuts.mbt keys_dialog).
+// 快捷键, one page made once on every screen: each action
+// of the core's keymap (the prefs' `keymap`) gets new keys by pressing them (`keys.set`). ⌘/'s list of them is the
+// shell's (sfdesk shortcuts.mbt keys_dialog).
 
 ///|
 /// An action's keys changed (`keys.set`: none, its own again; no action, every one's), what the core says of it
@@ -23,219 +23,157 @@ fn set_keys(core : Core, action : String?, keys : Json) -> Unit {
 }
 
 ///|
-/// 快捷键 (Shortcuts.tsx ShortcutsPage): each group's actions, their keys; pressed, the next key press is its new keys
-/// (Esc leaves them, ⌫ clears them; keys another action had are moved here, said so); 恢复默认 an action's own again,
-/// 全部恢复默认 every one's. Kept on this device.
-pub fn shortcuts_page(c : @ui.Ctx, core : Core, frame : PageFrame) -> Unit {
-  let look = look_of(c)
-  let prefs = (core.topic)("prefs", Map::new()).value
-  let keymap = field(prefs, "keymap")
-  // recording: the next key press
-  let recording = keys_recording.val
-  if recording != "" {
-    for k in c.keys() {
-      let (code, mods, _) = k
-      if code == @ui.key_escape && mods == 0 {
-        keys_recording.val = ""
-        break
-      }
-      if code == 1 && mods == 0 {
-        // ⌫: none
-        c.after_build("keys-clear", fn() { set_keys(core, Some(recording), Json::array([])) })
-        keys_recording.val = ""
-        break
-      }
-      match binding_of(code, mods) {
-        Some(b) => {
-          c.after_build("keys-set", fn() { set_keys(core, Some(recording), Json::array([Json::string(b)])) })
-          keys_recording.val = ""
-          break
-        }
-        None => ()
-      }
+/// 快捷键 made once as nodes of the window's tree (page_node, laid out by the `width` its
+/// frame gives it, narrow where none is given): first how a message is sent (Enter, or ⌘Enter: the prefs' `sendKey`,
+/// the keys of both said under it), then each group of the core's keymap a section, its actions' rows
+/// (keys_rows_node), what the keys do said under the first, and 全部恢复默认 there once any was changed. An action's
+/// keys pressed, the next key press is its new keys: Esc leaves them, ⌫ clears them, keys another action had are moved
+/// here (the core says so); pressed again, or this page no longer the one on top of its stack (`active`: another put
+/// over it, it gone back off), it records none. 恢复默认 an action's own again. Kept on this device. What it says of
+/// itself told `said`.
+pub fn shortcuts_node(
+  v : @view.View,
+  core : Core,
+  on_back~ : () -> Unit,
+  frame~ : () -> PageFrame,
+  active~ : () -> Bool,
+  said? : (@sf.PageSaid) -> Unit,
+  width? : () -> Double,
+) -> Unit {
+  // (what this page records, while it is the one that does: another made of the same page its own)
+  keys_recorders.val += 1
+  let me = keys_recorders.val
+  let record = fn(action : String) {
+    keys_recorder.val = me
+    keys_recording.set(action)
+  }
+  let stop = fn() {
+    if keys_recorder.val == me {
+      keys_recording.set("")
     }
   }
-  let listed = key_actions(prefs).filter(fn(a) { flag(Some(a), "listed") })
-  let any = listed.iter().any(fn(a) { flag(Some(a), "changed") })
-  let blocks : Array[() -> Unit] = []
-  for i, g in items(keymap, "groups") {
-    let group = text(Some(g), "group")
-    blocks.push(fn() {
-      let rows = fn() {
-        c.box(style=if look is Narrow { keys_rows_carded } else { keys_rows }, fn() {
-          for a in listed {
-            if text(Some(a), "group") == group {
-              shortcut_row(c, core, a)
-            }
-          }
-        })
-        |> ignore
-      }
-      let reset_all = fn() {
-        if keys_toggle(c, "keys-reset-all", @sf.t("web-main.shortcuts.resetAll")) {
-          c.tell("keys-reset-all", fn() { set_keys(core, None, Json::null()) })
-        }
-      }
-      match look {
-        Wide =>
-          @sf.section(
-            c,
-            text(Some(g), "name"),
-            note=if i == 0 { @sf.t("web-main.shortcuts.hint") } else { "" },
-            actions?=if i == 0 && any { Some(reset_all) } else { None },
-            rows,
-          )
-        // narrow: its heading, its rows on a card, what the keys do under the first
-        Narrow => {
-          @sf.heading(c, text(Some(g), "name"))
-          @sf.page_card(c, rows)
-          if i == 0 {
-            @sf.page_note(c, @sf.t("web-main.shortcuts.hint"))
-            if any {
-              c.box(style=narrow_note_box, reset_all) |> ignore
-            }
-          }
-        }
-      }
-    })
-  }
-  @sf.page(c, on_back=core.pop, frame~, "shortcuts", @sf.t("web-main.shortcuts.title"), blocks)
-}
-
-///|
-/// An action's row (Shortcuts.css.ts row): its name, 恢复默认 once changed, its keys on a button that, pressed, records
-/// new ones.
-fn shortcut_row(c : @ui.Ctx, core : Core, a : Json) -> Unit {
-  let av = Some(a)
-  let action = text(av, "action")
-  let on = keys_recording.val == action
-  c.box(style=shortcut_row_box, fn() {
-    c.box(style=keys_row_label, fn() { c.text(text(av, "name"), style=keys_row_words) |> ignore }) |> ignore
-    if flag(av, "changed") && keys_toggle(c, "keys-reset/" + action, @sf.t("web-main.shortcuts.reset")) {
-      c.tell("keys-reset/" + action, fn() { set_keys(core, Some(action), Json::null()) })
-    }
-    let id = c.id("keys/" + action)
-    c.focusable(id)
-    let none = strings(av, "keys").length() == 0
-    c.box(
-      id~,
-      style=if on { keys_record_on } else { keys_record },
-      fn() {
-        c.text(if on { @sf.t("web-main.shortcuts.recording") } else { text(av, "text") }, style=if on {
-          keys_record_on_words
-        } else if none {
-          keys_record_none
-        } else {
-          keys_record_words
-        })
-        |> ignore
+  let prefs = fn() { (core.topic)("prefs", Map::new()).get().value }
+  let keymap = fn() { field(prefs(), "keymap") }
+  let listed = fn() { key_actions(prefs()).filter(fn(a) { flag(Some(a), "listed") }) }
+  let groups = fn() { items(keymap(), "groups") }
+  let any = fn() { listed().iter().any(fn(a) { flag(Some(a), "changed") }) }
+  // how the composer sends: one of two ways (`sendKey`), not keys of its own
+  let send = fn() { field(keymap(), "send") }
+  let sending = fn(v : @view.View) {
+    @sf.setting_choice_node(
+      v,
+      fn() { @sf.t("web-main.shortcuts.sending") },
+      fn() { items(send(), "choices").map(fn(c) { text(Some(c), "name") }) },
+      fn() { items(send(), "choices").search_by(fn(c) { text(Some(c), "by") == text(send(), "by") }).unwrap_or(0) },
+      fn(i) {
+        let by = text(@signals.untracked(fn() { items(send(), "choices") }).get(i), "by")
+        @settings.set_pref(core, "sendKey", if by == "mod" { "mod" } else { "" })
       },
+      note=fn() { text(send(), "text") },
+      alone=true,
     )
-    |> ignore
-    if hit(c, id) {
-      keys_recording.val = if on { "" } else { action }
+  }
+  // (the next key press, while one records: none of it anything else's (pressed, window_zoom's stand aside))
+  v.on_key(fn(k) {
+    let recording = keys_recording.untracked()
+    if recording == "" || keys_recorder.val != me {
+      return false
+    }
+    if k.code == @ui.key_escape && k.mods == 0 {
+      stop()
+      return true
+    }
+    // ⌫: none
+    if k.code == 1 && k.mods == 0 {
+      stop()
+      set_keys(core, Some(recording), Json::array([]))
+      return true
+    }
+    match binding_of(k.code, k.mods) {
+      Some(b) => {
+        stop()
+        set_keys(core, Some(recording), Json::array([Json::string(b)]))
+        true
+      }
+      // (a modifier alone: the keys still to come)
+      None => false
     }
   })
   |> ignore
+  // (no longer on top of its stack, or let go: what it records, none; another's left as it is)
+  v.reacts(active, fn(on) { if !on { stop() } })
+  v.owns(stop) |> ignore
+  @sf.page_node(
+    v,
+    fn() { @sf.t("web-main.shortcuts.title") },
+    fn() {
+      let keys = groups().mapi(fn(i, g) { "\{i}/" + text(Some(g), "group") })
+      // (a core before the choice says none)
+      if send() is Some(_) {
+        keys.insert(0, "send")
+      }
+      keys
+    },
+    fn(b, key) {
+      if key == "send" {
+        sending(b)
+        return
+      }
+      let i = @string.parse_int(key[:key.find("/").unwrap_or(0)]) catch { _ => 0 }
+      let group = fn() { text(groups().get(i), "group") }
+      let first = i == 0
+      @sf.section_node(
+        b,
+        fn() { text(groups().get(i), "name") },
+        fn(s) {
+          @sf.keys_rows_node(s, fn(l) {
+            l.each(fn() { listed().filter(fn(a) { text(Some(a), "group") == group() }) }, fn(a) { text(Some(a), "action") }, fn(
+              r,
+              a,
+            ) {
+              let action = text(Some(a.untracked()), "action")
+              @sf.keys_row_node(
+                r,
+                fn() { text(Some(a.get()), "name") },
+                fn() { text(Some(a.get()), "text") },
+                fn() { strings(Some(a.get()), "keys").length() == 0 },
+                fn() { keys_recording.get() == action && keys_recorder.val == me },
+                fn() {
+                  if keys_recording.untracked() == action && keys_recorder.val == me {
+                    stop()
+                  } else {
+                    record(action)
+                  }
+                },
+                fn() { flag(Some(a.get()), "changed") },
+                fn() { set_keys(core, Some(action), Json::null()) },
+                fn() { @sf.t("web-main.shortcuts.reset") },
+                fn() { @sf.t("web-main.shortcuts.recording") },
+              )
+            })
+          })
+        },
+        about=fn() { if first { @sf.t("web-main.shortcuts.hint") } else { "" } },
+        actions?=if first {
+          Some((any, fn(a) { @sf.text_toggle_node(a, fn() { @sf.t("web-main.shortcuts.resetAll") }, fn() { set_keys(core, None, Json::null()) }) }))
+        } else {
+          None
+        },
+      )
+    },
+    on_back~,
+    frame~,
+    said?,
+    width?,
+  )
 }
 
 ///|
-/// A quiet word to press (controls.css.ts textToggle): 12 muted, the words' colour pointed at. Whether it was pressed.
-fn keys_toggle(c : @ui.Ctx, key : String, words : String) -> Bool {
-  let id = c.id(key)
-  c.focusable(id)
-  c.box(id~, style=keys_toggle_box, fn() {
-    c.text(words, style=if c.lit(id) { keys_toggle_hot } else { keys_toggle_words }) |> ignore
-  })
-  |> ignore
-  hit(c, id)
-}
+/// The page made once that records now (shortcuts_node's own count, what keys_recording says is its), and how many
+/// were made.
+// kept across runs: said as a page records; the count goes on
+let keys_recorder : Ref[Int] = Ref(0)
 
 ///|
-// kept across runs: a value (no field of it changes)
-let keys_rows : @ui.Style = @ui.css("w=Full gap=S0_5")
-
-///|
-/// The rows on a card (narrow): the first's and the last's keys in its corners as far from both its edges.
-// kept across runs: a value (no field of it changes)
-let keys_rows_carded : @ui.Style = keys_rows.then(@sf.card_rows_reach(keys_row_h, keys_record_h))
-
-///|
-/// (Shortcuts.css.ts row: 40 high at least, 8 apart, the list's words)
-// kept across runs: a value (no field of it changes)
-let shortcut_row_box : @ui.Style = @ui.style(row=true, w=Full, min_h=Fixed(keys_row_h), gap=S2, align=ACenter)
-
-///|
-let keys_row_h : Double = 40.0
-
-///|
-// kept across runs: a value (no field of it changes)
-let keys_row_label : @ui.Style = @ui.style(w=@sf.grow)
-
-///|
-// kept across runs: a value (no field of it changes)
-let keys_row_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, w=Full)
-
-///|
-/// Its keys (Shortcuts.css.ts record): 120 wide at least, 30 high, 12 in, the ladder's small block's corner (the first's
-/// and the last's in the card's corners on its words' inset, concentric there: every one alike), the hover ground (and
-/// the pointer's over it, pointed at: docs/ui-panels.md 悬停), in the middle; none, subtle; recording, the accent's
-/// ground and words.
-// kept across runs: a value (no field of it changes)
-let keys_record : @ui.Style = @ui.style(
-  row=true,
-  min_w=Fixed(keys_record_w),
-  h=Fixed(keys_record_h),
-  px=S3,
-  radius=@sf.small_radius,
-  bg=Hover,
-  align=ACenter,
-  justify=JCenter,
-  hovered=@ui.patch(bg=Hover),
-)
-
-///|
-let keys_record_w : Double = 120.0
-
-///|
-let keys_record_h : Double = 30.0
-
-
-///|
-// kept across runs: a value (no field of it changes)
-let keys_record_on : @ui.Style = keys_record.then(@ui.css("bg=AccentBg"))
-
-///|
-// kept across runs: a value (no field of it changes)
-let keys_record_words : @ui.TextStyle = @ui.text_style(size=Ui, leading=L5, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let keys_record_none : @ui.TextStyle = keys_record_words.then(@ui.text_style(color=Subtle))
-
-///|
-// kept across runs: a value (no field of it changes)
-let keys_record_on_words : @ui.TextStyle = keys_record_words.then(@ui.text_style(color=AccentText))
-
-///|
-/// (controls.css.ts textToggle: 2 by 4 in)
-// kept across runs: a value (no field of it changes)
-let keys_toggle_box : @ui.Style = @ui.css("px=S1 py=S0_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let keys_toggle_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L4_75, color=Muted, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let keys_toggle_hot : @ui.TextStyle = keys_toggle_words.then(@ui.text_style(color=Fg))
-
-///|
-// kept across runs: a value (no field of it changes)
-let keys_reset_box : @ui.Style = @ui.css("px=S2 py=S1 radius=Base hovered{bg=Hover}")
-
-///|
-// kept across runs: a value (no field of it changes)
-let keys_reset_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false)
-
-
+// kept across runs: it goes on counting
+let keys_recorders : Ref[Int] = Ref(0)

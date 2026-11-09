@@ -81,7 +81,7 @@ fn Ctx::node_targets(self : Ctx, i : Int, alpha_in : Double) -> Unit {
   let across_from = self.across_seen.length()
   self.paint_held(n, alpha)
   match bar {
-    Some(b) if self.bar_shows(b) * alpha > 0.002 => self.bar_target(b)
+    Some(b) if self.bar_shows(b, self.clock) * alpha > 0.002 => self.bar_target(b)
     _ => ()
   }
   if n.kind == kind_list {
@@ -180,9 +180,11 @@ fn Ctx::targets_found(self : Ctx, root : Int, tree : @view.Tree) -> Int {
   let mode = dr.mode
   dr.mode = mode_hits
   next_old_hits.clear()
-  tree.each_drawn(fn(c, _, _, a) {
-    if c.id.at == 0 || a <= 0.002 || !c.hosted {
-      return
+  // (the old views alone, where the scene's walk finds them: old_drawn)
+  for d in old_drawn(tree) {
+    let (c, _, _, a, _, _, _, _) = d
+    if c.id.at == 0 || a <= 0.002 {
+      continue
     }
     targets_island.val = Some(c.id)
     if old_whole.val {
@@ -224,7 +226,7 @@ fn Ctx::targets_found(self : Ctx, root : Int, tree : @view.Tree) -> Int {
         None => ()
       }
     }
-  })
+  }
   targets_island.val = None
   let layers_from = self.next_hit_ids.length()
   next_layer_hits.clear()
@@ -272,23 +274,24 @@ fn editor_scrolls(n : Node) -> Bool {
 }
 
 ///|
-/// Whether `n` scrolls or is dragged its own way: a list, a pager, a drag, a capture, what scrolls sideways.
+/// Whether `n` scrolls or is dragged its own way: a list, a drag, a capture, what scrolls sideways.
 fn scrolls(n : Node) -> Bool {
   n.kind == kind_list ||
   (
     n.id != 0 &&
-    (pagers.contains(n.id) || drags.contains(n.id) || captures.contains(n.id) || sideways.contains(n.id))
+    (drags.contains(n.id) || captures.contains(n.id) || sideways.contains(n.id))
   )
 }
 
 ///|
 /// What the frame's targets were last found from (Ctx::view_targets): the old frame's builds and layout as committed,
-/// what of it was moved by what moves it, what of the tree's is where (Tree::hits_said), whether the one old view is the
-/// whole window, the hand; and whether what finding them read (a bar's showing, its clock) was told changed since
+/// what of it was moved by what moves it, which old views the tree draws and in what order (old_drawn_said: where it
+/// draws them is no part of it, their targets placed there as an input comes, old_hits_place), whether the one old view
+/// is the whole window, the hand; and whether what finding them read (a bar's showing, its clock) was told changed since
 /// (`stale`, by their `watch`). Where the layers' begin among them.
 priv struct TargetsKept {
   mut found : Bool
-  mut key : (Int, Int, Int, Int, Bool, Bool)
+  mut key : (Int, Int, Int, Array[Int], Bool, Bool)
   mut stale : Bool
   mut watch : @signals.Watch?
   mut layers_from : Int
@@ -298,10 +301,25 @@ priv struct TargetsKept {
 // kept across runs: put back as a run begins (targets_forget)
 let targets_kept : TargetsKept = {
   found: false,
-  key: (0, 0, 0, 0, false, false),
+  key: (0, 0, 0, [], false, false),
   stale: true,
   watch: None,
   layers_from: 0,
+}
+
+///|
+/// The old views the tree draws now, as targets are found from it (Ctx::targets_found, old_drawn): each one's node, in
+/// the tree's order, and whether it shows; where it is drawn not, a scrolled list moving it or what is round it, nor how
+/// far into the order (rows coming into a list before it move that, nothing of its targets).
+fn old_drawn_said(tree : @view.Tree) -> Array[Int] {
+  let out = []
+  for d in old_drawn(tree) {
+    let (c, _, _, a, _, _, _, _) = d
+    out.push(c.id.at)
+    out.push(c.id.gen)
+    out.push(if a <= 0.002 { 0 } else { 1 })
+  }
+  out
 }
 
 ///|
@@ -319,12 +337,12 @@ fn targets_forget() -> Unit {
 
 ///|
 /// What the frame's targets are found from, as of now (TargetsKept's `key`).
-fn Ctx::targets_key(self : Ctx, tree : @view.Tree) -> (Int, Int, Int, Int, Bool, Bool) {
+fn Ctx::targets_key(self : Ctx, tree : @view.Tree) -> (Int, Int, Int, Array[Int], Bool, Bool) {
   (
     self.build_no,
     commit_counts[0] + commit_counts[1] + commit_counts[2],
     moves_said.val,
-    tree.hits_said(),
+    old_drawn_said(tree),
     old_whole.val,
     pointing() is Mouse,
   )

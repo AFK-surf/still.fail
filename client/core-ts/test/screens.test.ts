@@ -1,4 +1,4 @@
-// A station's screens seen and driven (docs/remote-screens.md; src/screens.ts, src/screen-frames.ts): the `screens`
+// A station's screens seen and driven (src/screens.ts, src/screen-frames.ts): the `screens`
 // topic from the station's GET /screens and its `screens` events, and a view's stream as a fake station answers it.
 // What varies is how the station's bytes are cut on the way (each seed its own cuts; a failure names its seed, and
 // SIM_SEED=<seed> runs it again); nothing waits for real time.
@@ -9,7 +9,7 @@ import { linkTarget } from "../src/asks.ts";
 import { parseCall } from "../src/core/calls.ts";
 import { CoreError } from "../src/error.ts";
 import { CLIP_PNG_MAX, CLIP_TEXT_MAX, FrameReader, ackFrame, clipboardFrame, configFrame, copiedFrame, inputFrame, keyframeFrame, lookFrame, readClientFrames, stateFrame, videoFrame, type ClientFrame, type StationFrame } from "../src/screen-frames.ts";
-import { LOOK_MS, checkInput, othersOf } from "../src/screens.ts";
+import { LOOK_MS, accessOf, checkInput, othersOf } from "../src/screens.ts";
 import { HostWire, type RequestHead, type ScreenAsk, type StationWire } from "../src/station/wire.ts";
 import type { FakeHost } from "../src/testing.ts";
 import { base64 } from "../src/util.ts";
@@ -19,6 +19,11 @@ import { base, started } from "./station-fixture.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
+
+test("desktop setup help crosses the screen state without accepting arbitrary links", () => {
+  assert.deepEqual(accessOf({ capture: false, control: false, help: "linux-desktop" }), { capture: false, control: false, help: "linux-desktop" });
+  assert.deepEqual(accessOf({ capture: false, control: false, help: "https://example.com" }), { capture: false, control: false });
+});
 
 /// Draws from a seed (xorshift): the same seed, the same cuts.
 function random(seed: number): () => number {
@@ -115,6 +120,7 @@ test("a_persons_input_is_checked_and_put_in_the_frame", () => {
   assert.deepEqual(checkInput({ t: "pointer", kind: "down", x: 1.5, y: -0.1, buttons: 1, extra: true }), { t: "pointer", kind: "down", x: 1, y: 0, buttons: 1 });
   assert.deepEqual(checkInput({ t: "key", kind: "up", key: "Enter", code: "Enter", mods: 9 }), { t: "key", kind: "up", key: "Enter", code: "Enter", mods: 9 });
   assert.deepEqual(checkInput({ t: "wheel", x: 0.5, y: 0.5, dx: 0, dy: -120 }), { t: "wheel", x: 0.5, y: 0.5, dx: 0, dy: -120 });
+  assert.deepEqual(checkInput({ t: "device", name: "rotate" }), { t: "device", name: "rotate" });
   for (const bad of [null, { t: "pointer", kind: "drag", x: 0, y: 0 }, { t: "pointer", kind: "down", x: Number.NaN, y: 0 }, { t: "key", kind: "down", key: "" }, { t: "text", text: "" }, { t: "paste" }]) {
     assert.throws(() => checkInput(bad), (e: J) => e.code === "invalid_params");
   }
@@ -291,6 +297,40 @@ test("a_tab_says_the_chat_that_opened_it_and_is_closed_by_a_member_not_a_reader"
   await reader.host.settle();
   apply(reader.host, seen);
   assert.equal((seen.get(1) as J).screens[1].closable, false);
+  reader.core.close();
+});
+
+test("a_simulators_apps_are_debugged_by_a_member_not_a_reader", async () => {
+  const sim = { id: "simulator:U", kind: "simulator", title: "iPhone 17 · iOS 27.1", width: 1206, height: 2622, viewers: [], controlledBy: [], debug: true };
+  const answers = { ...base(), "GET /screens": { screens: [sim] } };
+  const { host, core, ui } = await viewing(1, answers);
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "screens", station: "ws/st" });
+  await host.settle();
+  apply(host, values);
+  assert.equal((values.get(1) as J).screens[0].debug, true);
+  call(core, ui, 2, "screen.logs", { station: "ws/st", screen: "simulator:U", after: 7 });
+  call(core, ui, 3, "screen.apps", { station: "ws/st", screen: "simulator:U" });
+  call(core, ui, 4, "screen.relaunch", { station: "ws/st", screen: "simulator:U", app: "fail.still.a" });
+  call(core, ui, 5, "screen.openUrl", { station: "ws/st", screen: "simulator:U", url: "myapp://x" });
+  call(core, ui, 6, "screen.location", { station: "ws/st", screen: "simulator:U", at: "1,2" });
+  call(core, ui, 7, "screen.location", { station: "ws/st", screen: "simulator:U" });
+  call(core, ui, 8, "screen.statusBar", { station: "ws/st", screen: "simulator:U", tidy: true });
+  call(core, ui, 9, "screen.push", { station: "ws/st", screen: "simulator:U", app: "fail.still.a", text: "hi" });
+  await host.settle();
+  for (const path of ["open-url", "location", "status-bar", "push"])
+    assert.ok(host.requests.some((r: J) => r.method === "POST" && String(r.url).endsWith(`/screens/simulator%3AU/${path}`)), path);
+  assert.ok(host.requests.some((r: J) => r.method === "GET" && String(r.url).endsWith("/screens/simulator%3AU/logs?after=7")));
+  assert.ok(host.requests.some((r: J) => r.method === "GET" && String(r.url).endsWith("/screens/simulator%3AU/apps")));
+  assert.ok(host.requests.some((r: J) => r.method === "POST" && String(r.url).endsWith("/screens/simulator%3AU/relaunch")));
+  core.close();
+
+  const reader = await viewing(1, answers, "viewer");
+  const seen = new Map<number, unknown>();
+  subscribe(reader.core, reader.ui, 1, { topic: "screens", station: "ws/st" });
+  await reader.host.settle();
+  apply(reader.host, seen);
+  assert.equal((seen.get(1) as J).screens[0].debug, false);
   reader.core.close();
 });
 
@@ -681,6 +721,82 @@ each("a_read_only_member_only_looks", async (seed) => {
   assert.deepEqual(views[0]!.got, []);
   const s = lastState(log, 1);
   assert.deepEqual([s.may, s.control, s.line], [false, false, "只看"]);
+  core.close();
+});
+
+each("each_view_of_a_screen_says_its_device_and_a_member_lets_it_go_a_reader_does_not", async (seed) => {
+  const mine = { id: "v1", name: "a@x.com", control: true, at: 1000, device: "cb93bcd36171ffff", client: "youdid.wtf 桌面版 · pengx17", app: "desktop" };
+  const older = { id: "v2", name: "Bob", control: false, at: 2000, device: "abcdef0123456789" };
+  const agent = { id: "v3", name: "agent: 部署", control: true, at: 3000, agent: true };
+  // (a person's name alone does not make a view an agent's: it stays theirs to let go of)
+  const named = { id: "v4", name: "agent: Eve", control: false, at: 4000 };
+  const answers = { ...base(), "GET /screens": { screens: [{ ...SCREENS.screens[0], viewers: ["a@x.com", "Bob", "agent: 部署"], controlledBy: ["a@x.com", "agent: 部署"], views: [mine, older, agent, named, { id: "", name: "broken" }] }] }, "POST /screens/desktop/views/v1/end": {}, "POST /screens/desktop/views/v1/watch": {}, "POST /screens/desktop/views/end": { ended: 2 } };
+  const { host, core, ui, views } = await viewing(seed, answers);
+  const values = new Map<number, unknown>();
+  subscribe(core, ui, 1, { topic: "screens", station: "ws/st" });
+  await host.settle();
+  apply(host, values);
+  const [desktop] = (values.get(1) as J).screens;
+  assert.deepEqual(desktop.views.map((v: J) => [v.id, v.name, v.device, v.app, v.control, v.may === true, v.agent === true]), [
+    ["v1", "a@x.com", "youdid.wtf 桌面版 · pengx17", "desktop", true, true, false],
+    ["v2", "Bob", "设备 abcdef01", "", false, true, false],
+    ["v3", "Agent「部署」", "", "", true, false, true],
+    ["v4", "Agent「Eve」", "", "", false, true, false],
+  ]);
+  call(core, ui, 2, "screen.watchOnly", { station: "ws/st", screen: "desktop", view: "v1" });
+  call(core, ui, 3, "screen.endView", { station: "ws/st", screen: "desktop", view: "v1" });
+  call(core, ui, 4, "screen.endViews", { station: "ws/st", screen: "desktop" });
+  await host.settle();
+  for (const path of ["/screens/desktop/views/v1/watch", "/screens/desktop/views/v1/end", "/screens/desktop/views/end"]) assert.ok(host.requests.some((r: J) => r.method === "POST" && String(r.url).endsWith(path)), path);
+
+  // Open here too: the bar says where else it is open, what it may let go of beside it.
+  const log: J[] = [];
+  call(core, ui, 5, "screen.view", { station: "ws/st", screen: "desktop", view: "v", control: true });
+  await host.settle();
+  views[0]!.send(stateFrame({ control: true, viewers: ["a@x.com", "a@x.com"], controlledBy: ["a@x.com", "a@x.com"], views: [mine, { ...mine, id: "v9", device: "elsewhere", client: "still.fail iOS" }] }));
+  await host.settle();
+  said(host, log);
+  const s = lastState(log, 5);
+  assert.match(s.line, /还开在 youdid\.wtf 桌面版 · pengx17、still\.fail iOS/);
+  assert.deepEqual(s.otherViews.map((v: J) => v.id), ["v1", "v9"]);
+  core.close();
+
+  const reader = await viewing(seed, answers, "viewer");
+  const seen = new Map<number, unknown>();
+  subscribe(reader.core, reader.ui, 1, { topic: "screens", station: "ws/st" });
+  await reader.host.settle();
+  apply(reader.host, seen);
+  assert.equal((seen.get(1) as J).screens[0].views.some((v: J) => v.may), false, "a read-only member only sees who is on it");
+  reader.core.close();
+});
+
+each("a_view_made_to_only_look_from_elsewhere_stays_so_when_it_opens_again", async (seed) => {
+  const { host, core, ui, views } = await viewing(seed);
+  const log: J[] = [];
+  call(core, ui, 1, "screen.view", { station: "ws/st", screen: "desktop", view: "v", control: true });
+  await host.settle();
+  views[0]!.send(join([stateFrame({ title: "t", control: true }), configFrame({ codec: "jpeg", width: 640, height: 480 }), videoFrame(true, 1, bytesOf(100, seed))]));
+  await host.settle();
+  views[0]!.send(stateFrame({ control: false, login: null, passkey: null }));
+  await host.settle();
+  said(host, log);
+  assert.equal(lastState(log, 1).control, false);
+  call(core, ui, 2, "screen.input", { view: "v", input: { t: "text", text: "x" } });
+  await host.settle();
+  assert.deepEqual(views[0]!.got, [], "no input once it only looks");
+  // The station updates: the view opens again, and does not take the screen back.
+  views[0]!.end();
+  await host.settle();
+  await host.time.pass(1_000);
+  assert.equal(views.length, 2);
+  assert.equal(views[1]!.ask.control, false);
+  assert.equal(views[1]!.ask.taken, undefined);
+  said(host, log);
+  assert.equal(lastState(log, 1).watchOnly, 1);
+  // Its person takes it back themselves, saying so to the station, which holds it otherwise.
+  call(core, ui, 3, "screen.control", { view: "v", control: true });
+  await host.settle();
+  assert.deepEqual([views.at(-1)!.ask.control, views.at(-1)!.ask.taken], [true, true]);
   core.close();
 });
 

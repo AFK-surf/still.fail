@@ -1,5 +1,5 @@
 // A connect's live link to its chat platform (Slack's, Feishu's: config.json's `connects`), and one kept per enabled
-// connect that has what it connects with (connections.rs), following the config: a new or re-credentialed connect is
+// connect that has what it connects with, following the config: a new or re-credentialed connect is
 // (re)connected, a removed or disabled one disconnected, the rest left alone. Rapid edits apply in order.
 import { log } from "../ops/log.ts";
 import type { ChatEvent, ChatSurface, Handler } from "../sessions/chat.ts";

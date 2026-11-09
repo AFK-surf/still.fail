@@ -1,5 +1,5 @@
 // 87-device-pages (e2e/traces/settings-device-pages.trace): 下方栏: Station's "−" on the first bar, then put in the
-// second from its 添加 (prefs.set barsBy); 本机缓存 (cache.usage); 关于 → 更新日志; 用量 → 价目表.
+// second from its 添加, 密钥 taken off it first to make room (prefs.set barsBy); 本机缓存 (cache.usage); 关于 → 更新日志; 用量 → 价目表.
 
 ///|
 test "87-device-pages" {
@@ -14,6 +14,9 @@ test "87-device-pages" {
     // Station's "−" (an icon, no words: by what it is called; where it is, a Mac's window has its buttons' band over a
     // phone's page, a phone none)
     f.tap("=从此栏移除Station")
+    // (the second bar full as it comes (密钥 its fourth since #3400): room made in it, its own 添加 the one tapped, the
+    // lower of the two)
+    f.tap("=从此栏移除密钥")
     f.tap("=添加")
     f.run_to(@kit.sheet_rest("sf-present"))
     f.see("添加到第 2 栏")
@@ -21,6 +24,8 @@ test "87-device-pages" {
     f.run_to(@kit.sheet_rest("sf-present"))
     f.back()
     f.run_to(@ui.nav_rest())
+    // (under the view's foot till then: the wheel above went as far as the list was counted then)
+    f.wheel_at("=下方栏", 200.0)
     f.tap("=本机缓存")
     f.run_to(@ui.nav_rest())
     // (the chats kept here, each by its title)
@@ -35,7 +40,9 @@ test "87-device-pages" {
     f.run_to(@ui.nav_rest())
     f.back()
     f.run_to(@ui.nav_rest())
-    f.wheel_at("=本机缓存", -500.0)
+    // (to its top, the account's picture asked for as it shows; then down to 用量)
+    f.wheel_at("=本机缓存", -700.0)
+    f.wheel_at("=设置", 300.0)
     f.tap("=用量")
     f.run_to(@ui.nav_rest())
     f.tap("查看价目表")

@@ -1,20 +1,28 @@
 // The workspace lock's tests' rig (lock-prompts.test.ts, lock-pair.test.ts): a core on an app's host, its locks at a cloud
 // that keeps chains and requests, its device's base key ME.
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { Effect } from "effect";
+import { Effect, Queue } from "effect";
 import { apply as applyOps } from "../src/delta.ts";
+import { CoreError } from "../src/error.ts";
 import type { HttpRequest } from "../src/host.ts";
 import { type Entry, Signer, entryHash, next, shortCode } from "../src/lock.ts";
 import type { FakeHost } from "../src/testing.ts";
-import { hex, utf8 } from "../src/util.ts";
+import { base64url as toB64url, hex, utf8 } from "../src/util.ts";
+import type { Duplex } from "../src/views/pair.ts";
 import { call, subscribe } from "./helpers.ts";
-import { started, stationReplies } from "./station-fixture.ts";
+import { Status, started, stationReplies } from "./station-fixture.ts";
 
 export const unhex = (h: string) => Uint8Array.from(h.match(/../g) ?? [], (b) => parseInt(b, 16));
 /// The base key of the testing core's device (its mesh's).
 export const ME = "ab".repeat(32);
 /// A phone of the member s2's, waiting.
 export const PHONE = "cd".repeat(32);
+
+/// This fixture reaches its station through fetch, not a mesh; background connection attempts fail normally.
+export const withoutMesh = (device: string) => Effect.succeed({
+  deviceId: () => device,
+  link: () => Effect.fail(new CoreError("unsupported", "this fixture has no mesh")),
+} as never);
 
 /// A workspace's lock: s1 the owner, `signer` (this device's key, when it is in) their app; s2 a member; `more` devices.
 export function genesis(ws: string, signer: { id: string; signBytes(b: Uint8Array): string }, withMe: boolean, stations: { key: string; name: string }[] = [], cloudKeys: unknown = {}, me = ME, more: Record<string, unknown>[] = []): Entry {
@@ -41,6 +49,8 @@ export function lockCloud() {
   const devices = new Map<string, Record<string, unknown>[]>();
   const posted: { ws: string; kind: string; id?: string }[] = [];
   const asked: string[] = [];
+  // How many of the next posts of entries are kept but their answer lost on the way back (a gateway's 502).
+  const lose = { posts: 0 };
   const head = (ws: string) => {
     const c = chains.get(ws) ?? [];
     return c.length === 0 ? null : { seq: c.length - 1, hash: entryHash(c.at(-1)!), genesis: entryHash(c[0]!) };
@@ -74,25 +84,32 @@ export function lockCloud() {
       chains.set(ws, [...(chains.get(ws) ?? []), e]);
       posted.push({ ws, kind: e.kind, id: (e.body as { id?: string }).id });
     }
+    if (lose.posts > 0) {
+      lose.posts--;
+      return new Status(502, { error: "bad gateway" });
+    }
     return { ok: true };
   };
-  return { chains, requests, devices, posted, asked, head, reply };
+  return { chains, requests, devices, posted, asked, lose, head, reply };
 }
 
 /// A core on an app's host reaching `ws` (W) and `w2` (日常), each with its lock in the cloud; `before` changes the host.
-export async function rig(locks: (signer: Signer) => Record<string, Entry>, before?: (host: FakeHost) => void) {
+/// `station`: the id of `ws`'s station (station-fixture.ts's "st" unless given; one the lock names is an iroh id), or of
+/// each of its stations.
+export async function rig(locks: (signer: Signer) => Record<string, Entry>, before?: (host: FakeHost) => void, station?: string | string[]) {
+  const ids = station === undefined ? [] : typeof station === "string" ? [station] : station;
   const cloud = lockCloud();
   const s = await started(undefined, 0, undefined, (x) => {
     x.host.appKeys = true;
     const signer = Effect.runSync(Signer.make(x.host));
     for (const [ws, g] of Object.entries(locks(signer))) cloud.chains.set(ws, [g]);
-    x.cloud.also = { name: "W", role: "owner", lock: cloud.head("ws"), lock_requests: 0 };
+    x.cloud.also = { name: "W", role: "owner", lock: cloud.head("ws"), lock_requests: 0, ...(ids.length > 0 ? { stations: ids.map((id, i) => ({ id, name: i === 0 ? "studio" : `studio ${i + 1}`, online: true, last_seen: null })) } : {}) };
     x.cloud.more = [{ id: "w2", name: "日常", emoji: "☀️", role: "owner", lock: cloud.head("w2"), lock_requests: 0 }];
     stationReplies(x.host, cloud.reply);
     before?.(x.host);
   });
   // This device's base key, as its mesh's (the fixture reaches its station another way, with no mesh).
-  s.core.inner.mesh = () => Effect.succeed({ deviceId: () => ME } as never);
+  s.core.inner.mesh = () => withoutMesh(ME);
   const ui = s.core.connect();
   const values = new Map<number, unknown>();
   const done = new Map<number, Record<string, unknown>>();
@@ -133,3 +150,26 @@ export async function rig(locks: (signer: Signer) => Record<string, Entry>, befo
   return { ...s, cloud, ask, watch };
 }
 
+/// The cloud's grant key, as the lock names it, and credentials it signs.
+export function grant() {
+  const seed = new Uint8Array(32).fill(7);
+  const jwk = { kty: "OKP", crv: "Ed25519", kid: "k1", x: toB64url(ed25519.getPublicKey(seed)) };
+  const credential = (ws: string, device: string, sub: string, exp = 4102444800, role = "member") => {
+    const head = toB64url(utf8(JSON.stringify({ alg: "EdDSA", typ: "stillfail-member+jwt", kid: "k1" })));
+    const body = toB64url(utf8(JSON.stringify({ iss: "stillfail-cloud", sub, email: `${sub}@x.com`, name: sub === "s2" ? "李二" : sub, ws, role, device, exp })));
+    return `${head}.${body}.${toB64url(ed25519.sign(utf8(`${head}.${body}`), seed))}`;
+  };
+  return { keys: { keys: [jwk] }, credential };
+}
+
+/// Two ends of a stream of lines.
+export async function pipe(): Promise<[Duplex, Duplex]> {
+  const a = await Effect.runPromise(Queue.unbounded<unknown>());
+  const b = await Effect.runPromise(Queue.unbounded<unknown>());
+  const end = (mine: Queue.Queue<unknown>, theirs: Queue.Queue<unknown>): Duplex => ({
+    send: (m) => Effect.sync(() => void Queue.offerUnsafe(theirs, JSON.parse(JSON.stringify(m)))),
+    next: () => Queue.take(mine) as Effect.Effect<any>,
+    close: () => void Queue.offerUnsafe(theirs, null),
+  });
+  return [end(a, b), end(b, a)];
+}

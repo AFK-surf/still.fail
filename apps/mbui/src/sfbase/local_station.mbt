@@ -54,7 +54,7 @@ fn local_station_install(src : Source, workspace : String) -> Unit {
 ///|
 /// The account `workspace` is reached through (the `workspaces` topic, as the settings' here_of reads it), "" none.
 fn account_of(src : Source, workspace : String) -> String {
-  match (src.topic)("workspaces", Map::new()).value {
+  match src.topic("workspaces", Map::new()).get().value {
     Some(Array(accounts)) =>
       for a in accounts {
         for w in items(Some(a), "workspaces") {

@@ -17,6 +17,8 @@ pub(all) struct NewFix {
   mut d_runtime : String
   mut d_effort : String
   mut d_profile : String
+  /// The most context it runs with, in tokens ("" its model's whole window)
+  mut context : String
   mut made : Int
   /// MBUI_FIXTURE=stations-slow: its stations not asked for yet (0), being read (1), read (2)
   mut reading : Int
@@ -30,6 +32,12 @@ pub(all) struct NewFix {
   presets : Array[Json]
   /// The first station's presets not said yet (their topic as a station still to answer has it)
   mut presets_late : Bool
+  /// The models starred in the model control (`pick.like`), the first starred first
+  liked : Array[String]
+  /// MBUI_FIXTURE=newchat-providers…: as crowded, with keys of many providers besides (fix_providers)
+  mut providers : Bool
+  /// MBUI_FIXTURE=settings-connect-borrow: the model drafted another station's, borrowed first (the pick's `borrow`)
+  mut borrow : Bool
 }
 
 ///|
@@ -42,13 +50,17 @@ pub let new_fix : NewFix = {
   d_runtime: "claude",
   d_effort: "high",
   d_profile: "",
+  context: "",
   made: 0,
   reading: 0,
   crowded: false,
   tall: false,
   preset: "",
   presets_late: false,
-  presets: [fix_preset_design(), fix_preset("p-tc", "tstst + iroh", ["tstst", "iroh"], "")],
+  presets: [fix_preset_design(), fix_preset("p-tc", "web-app + backend", ["web-app", "backend"], "")],
+  liked: [],
+  providers: false,
+  borrow: false,
 }
 
 ///|
@@ -57,7 +69,7 @@ pub fn fix_preset(id : String, name : String, dirs : Array[String], instructions
   {
     "id": Json::string(id),
     "name": Json::string(name),
-    "dirs": Json::array(dirs.map(fn(d) { { "path": Json::string(if d == "still.fail" { "/Users/me/WebstormProjects/still.fail" } else { "/Users/me/code/" + d }), "repo": Json::string(fix_repo(d)) } })),
+    "dirs": Json::array(dirs.map(fn(d) { { "path": Json::string(if d == "still.fail" { "/Users/me/projects/still.fail" } else { "/Users/me/code/" + d }), "repo": Json::string(fix_repo(d)) } })),
     "instructions": Json::string(instructions),
     "createdBy": "me@example.com",
     "createdAt": 1793500000000.0,
@@ -70,7 +82,7 @@ fn fix_repo(name : String) -> String {
   match name {
     "still.fail" => "github.com/AFK-surf/still.fail"
     "mbui" => "github.com/AFK-surf/mbui"
-    _ => "github.com/zzj3720/" + name
+    _ => "github.com/acme/" + name
   }
 }
 
@@ -88,16 +100,16 @@ pub fn fix_presets_say() -> Unit {
 }
 
 ///|
-/// still.fail 开发: still.fail on the first station, its design folder on MBA.
+/// still.fail 开发: still.fail on the first station, its design folder on Maple.
 fn fix_preset_design() -> Json {
-  match fix_preset("p-sf", "still.fail 开发", ["still.fail"], "改界面先发改前改后对比图。") {
+  match fix_preset("p-sf", "still.fail 开发", ["still.fail"], "先检查页面布局。") {
     Object(m) => {
       let p = m.copy()
       let dirs = match p.get("dirs") {
         Some(Array(a)) => a.copy()
         _ => []
       }
-      dirs.push({ "path": "/Users/me/Design/still.fail 设计稿", "repo": Json::null(), "station": "ws1/st2", "stationName": "MBA" })
+      dirs.push({ "path": "/Users/me/Design/still.fail 设计稿", "repo": Json::null(), "station": "ws1/st2", "stationName": "Maple" })
       p["dirs"] = Json::array(dirs)
       Json::object(p)
     }
@@ -106,8 +118,8 @@ fn fix_preset_design() -> Json {
 }
 
 ///|
-/// A made-up station's presets and the folders it offers (the `presets` topic): MBA's a design folder and a clone of
-/// still.fail of its own (offered once, as the first station's), the first station's the rest.
+/// A made-up station's presets and the folders it offers (the `presets` topic): Maple's a design folder and a clone of
+/// still.fail of its own (offered under Maple too), the first station's the rest.
 pub fn fix_presets_of(station : String) -> Json {
   if station.has_suffix("st2") {
     {
@@ -141,10 +153,10 @@ pub fn fix_presets_of(station : String) -> Json {
 pub fn fix_candidates() -> Json {
   Json::array(
     [
-      ("still.fail", "~/WebstormProjects/still.fail", "github.com/AFK-surf/still.fail", 41, false),
-      ("tstst", "~/code/tstst", "github.com/zzj3720/tstst", 9, false),
-      ("iroh", "github.com/zzj3720/iroh", "github.com/zzj3720/iroh", 3, true),
-      ("riff", "~/code/riff", "github.com/zzj3720/riff", 0, false),
+      ("still.fail", "~/projects/still.fail", "github.com/AFK-surf/still.fail", 12, false),
+      ("web-app", "~/code/web-app", "github.com/acme/web-app", 9, false),
+      ("backend", "github.com/acme/backend", "github.com/acme/backend", 3, true),
+      ("notes", "~/code/notes", "github.com/acme/notes", 0, false),
     ].map(fn(x) {
       let (name, at, repo, chats, cached) = x
       let path = if cached { "/Users/me/.stillfail/repos/" + name } else { "/Users/me" + at.unsafe_substring(start=1, end=at.length()) }
@@ -171,16 +183,16 @@ pub fn fix_candidates() -> Json {
 ///|
 /// A station a new chat can start on, as the core's `newChat` lists it (StationView): what it is, its agents at work
 /// (`overview`) and what is left of its machine (`host`); how this device reaches it is the `stationNet` view's (the
-/// made-up stations' `net`: Studio's, none of MBA's).
+/// made-up stations' `net`: Willow's, none of Maple's).
 pub fn fix_station(id : String) -> Json {
   match id {
     "st2" =>
       {
         "station": "ws1/st2",
         "id": "st2",
-        "name": "MBA",
+        "name": "Maple",
         "icon": "glyph:laptop",
-        "summary": "空闲 · Apple M4 · 16 GB · macOS 27.0.1",
+        "summary": "空闲 · Apple M4 · 16 GB · macOS 26",
         "online": true,
         "host": {
           "meters": [
@@ -197,14 +209,14 @@ pub fn fix_station(id : String) -> Json {
       {
         "station": "ws1/st1",
         "id": "st1",
-        "name": "Studio",
+        "name": "Willow",
         "icon": "glyph:desktop",
-        "summary": "2 个 agent 正在运行 · Apple M2 Max · 64 GB · macOS 27.0.1",
+        "summary": "2 个 agent 正在运行 · Apple M1 Pro · 32 GB · macOS 26",
         "online": true,
         "host": {
           "meters": [
             fix_meter("CPU", 72, "ok", "72", "%"),
-            fix_meter("内存", 18, "amber", "11.5", "GB"),
+            fix_meter("内存", 18, "amber", "5.8", "GB"),
             fix_meter("磁盘", 41, "ok", "380", "GB"),
           ],
         },
@@ -249,12 +261,45 @@ pub fn fix_crowded_model(model : String, name : String, family : String, maker :
     "model": Json::string(model),
     "name": Json::string(name),
     "family": Json::string(family),
-    "maker": { "id": Json::string(maker), "name": Json::string(maker) },
+    "maker": { "id": Json::string(maker), "name": Json::string(fix_maker_name(maker)) },
     "runtimes": Json::array(runtimes.map(Json::string(_))),
     "ids": [Json::string(model)],
     "efforts": {},
     "accounts": {},
     "availability": "here",
+  }
+}
+
+///|
+/// The models of newchat-providers besides newchat-crowded's (2026-11-02 用户「我 20 个 provider 你怎么排」, 「分组应该是
+/// 模型厂商」): each its id, name, and maker (its id, as format.ts names it, and its name), many makers among them.
+// kept across runs: a table, never written
+pub let fix_providers : Array[(String, String, String, String)] = [
+  ("gemini-3-pro", "Gemini 3 Pro", "gemini", "Google"),
+  ("devstral-3", "Devstral 3", "mistral", "Mistral"),
+  ("qwen3-8-coder", "Qwen3.8 Coder", "qwen", "Qwen"),
+  ("glm-5-3", "GLM-5.3", "zhipu", "Z.ai"),
+  ("minimax-m3", "MiniMax M3", "minimax", "MiniMax"),
+  ("mimo-3", "MiMo 3", "xiaomi", "Xiaomi"),
+  ("nemotron-4", "Nemotron 4", "nvidia", "NVIDIA"),
+  ("gpt-oss-2", "gpt-oss 2", "openai", "OpenAI"),
+]
+
+///|
+/// The makers' names, by id.
+fn fix_maker_name(id : String) -> String {
+  match id {
+    "anthropic" => "Anthropic"
+    "openai" => "OpenAI"
+    "deepseek" => "DeepSeek"
+    "xai" => "xAI"
+    "kimi" => "Moonshot AI"
+    "devin" => "Cognition"
+    other =>
+      match fix_providers.iter().find_first(fn(p) { p.2 == other }) {
+        Some(p) => p.3
+        None => other
+      }
   }
 }
 
@@ -268,12 +313,16 @@ pub fn fix_model(model : String) -> Json {
     "swe-2" => fix_crowded_model(model, "SWE-2", "SWE", "devin", ["devin"])
     "gpt-6-1-sol" => fix_crowded_model(model, "GPT-6.1 Sol", "Sol", "openai", ["codex"])
     "gpt-6-1-terra" => fix_crowded_model(model, "GPT-6.1 Terra", "GPT", "openai", ["codex"])
+    m if fix_providers.iter().any(fn(p) { p.0 == m }) => {
+      let p = fix_providers.iter().find_first(fn(p) { p.0 == m }).unwrap()
+      fix_crowded_model(m, p.1, p.1, p.2, ["claude"])
+    }
     "claude-sonnet-5" =>
       {
         "model": "claude-sonnet-5",
         "name": "Sonnet 5",
         "family": "Sonnet",
-        "maker": { "id": "anthropic", "name": "anthropic" },
+        "maker": { "id": "anthropic", "name": "Anthropic" },
         "runtimes": ["claude"],
         "ids": ["claude-sonnet-5"],
         "efforts": {},
@@ -285,7 +334,7 @@ pub fn fix_model(model : String) -> Json {
         "model": "gpt-6",
         "name": "GPT-6",
         "family": "GPT",
-        "maker": { "id": "openai", "name": "openai" },
+        "maker": { "id": "openai", "name": "OpenAI" },
         "runtimes": ["codex"],
         "ids": ["gpt-6"],
         "efforts": {},
@@ -297,7 +346,7 @@ pub fn fix_model(model : String) -> Json {
         "model": "claude-opus-5-5",
         "name": "Opus 5.5",
         "family": "Opus",
-        "maker": { "id": "anthropic", "name": "anthropic" },
+        "maker": { "id": "anthropic", "name": "Anthropic" },
         "runtimes": ["claude"],
         "ids": ["claude-opus-5-5"],
         "efforts": {},
@@ -312,6 +361,31 @@ pub fn fix_runtime_of(model : String) -> String {
   match items(Some(fix_model(model)), "runtimes").get(0) {
     Some(String(r)) => r
     _ => "claude"
+  }
+}
+
+///|
+/// The models the model control offers, in the core's order.
+fn fix_shown_models() -> Array[Json] {
+  let n = new_fix
+  if n.tall {
+    fix_crowded_models.map(fix_model) + fix_tall_models.map(fix_model)
+  } else if n.providers {
+    fix_crowded_models.map(fix_model) + fix_providers.map(fn(p) { fix_model(p.0) })
+  } else if n.crowded {
+    fix_crowded_models.map(fix_model)
+  } else {
+    [fix_model("claude-opus-5-5"), fix_model("claude-sonnet-5"), fix_model("gpt-6")]
+  }
+}
+
+///|
+/// The models new chats here started on most, most first.
+fn fix_near() -> Array[String] {
+  if new_fix.crowded {
+    ["gpt-6-astra", "deepseek-v4-1-flash", "swe-2"]
+  } else {
+    ["claude-opus-5-5", "gpt-6"]
   }
 }
 
@@ -333,17 +407,36 @@ pub fn fix_pick() -> Json {
     Json::object(o)
   }
   {
-    "options": fix_pick_options(
-      if n.tall {
-        fix_crowded_models.map(fix_model) + fix_tall_models.map(fix_model)
-      } else if n.crowded {
-        fix_crowded_models.map(fix_model)
-      } else {
-        [fix_model("claude-opus-5-5"), fix_model("claude-sonnet-5"), fix_model("gpt-6")]
-      },
-    ),
-    "near": if n.crowded { ["gpt-6-astra", "deepseek-v4-1-flash", "swe-2"] } else { ["claude-opus-5-5", "gpt-6"] },
+    "options": fix_pick_options(fix_shown_models()),
+    // (those used most, the starred left out)
+    "near": Json::array(fix_near().filter(fn(m) { !n.liked.contains(m) }).map(Json::string(_))),
+    // (every one starred, however often used)
+    "liked": Json::array(n.liked.map(Json::string(_))),
+    // (the makers of its models, in their order, as the core says them)
+    "makers": {
+      let makers : Array[(String, String, Int)] = []
+      for o in fix_shown_models() {
+        let id = text(field(Some(o), "maker"), "id")
+        match makers.search_by(fn(m) { m.0 == id }) {
+          Some(i) => makers[i] = (id, makers[i].1, makers[i].2 + 1)
+          None => makers.push((id, text(field(Some(o), "maker"), "name"), 1))
+        }
+      }
+      Json::array(makers.map(fn(m) { { "id": Json::string(m.0), "title": Json::string(m.1), "count": Json::number(m.2.to_double()) } }))
+    },
     "runtimeFixed": false,
+    // (the model drafted another station's: borrowed first, asked, from the panel's foot)
+    "borrow": if n.borrow {
+      {
+        "title": "借用 Maple 的 Fable 5.1？",
+        "lines": ["Fable 5.1 由 Maple 上的 Claude 订阅运行。", "借用后，这个连接的会话也用它的额度。"],
+        "action": "借用",
+        "allowed": true,
+        "note": "Fable 5.1 在 Maple 上，借用后这里也能用。",
+      }
+    } else {
+      Json::null()
+    },
     "value": picked(n.model, n.runtime, n.effort, ""),
     "valueOption": fix_model(n.model),
     "draft": picked(n.d_model, n.d_runtime, n.d_effort, n.d_profile),
@@ -362,6 +455,16 @@ pub fn fix_pick() -> Json {
       ["low", "medium", "high"]
     },
     "fastAvailable": n.tall,
+    // (how much context Claude Code can be kept to under the model's 1M)
+    "contexts": if n.d_runtime == "claude" {
+      [("", "完整 · 1M"), ("500000", "500K"), ("300000", "300K"), ("200000", "200K")].map(fn(c) {
+        Json::object({ "id": Json::string(c.0), "text": Json::string(c.1) })
+      })
+      |> Json::array
+    } else {
+      []
+    },
+    "contextNow": Json::string(n.context),
     "accounts": [
       {
         "id": "p1",
@@ -418,6 +521,7 @@ fn fix_pick_options(all : Array[Json]) -> Json {
         Object(m) => {
           let m = m.copy()
           let model = text(Some(o), "model")
+          m["liked"] = Json::boolean(n.liked.contains(model))
           let many = items(Some(o), "runtimes").length() > 1
           let ran = if model == n.d_model {
             Some((n.d_runtime, n.d_effort, used.get(model).map(fn(u) { u.2 }).unwrap_or(0)))
@@ -501,14 +605,15 @@ fn fix_new_chat_of(f : Fixture) -> Json {
       "frequent": [],
     }
   }
-  // its station with no profile open here: what to add first (newchat-noprofile)
-  if f.mode == "newchat-noprofile" {
+  // Its station has no profile, or its only available profiles are disabled.
+  if f.mode == "newchat-noprofile" || f.mode == "newchat-disabled" {
     return {
       "kept": Json::string(n.station),
       "stations": [fix_station("st1"), fix_station("st2")],
       "any": true,
       "station": fix_station(n.station),
-      "blocked": "profile",
+      "blocked": Json::string(if f.mode == "newchat-disabled" { "disabled" } else { "profile" }),
+      "problem": Json::string(if f.mode == "newchat-disabled" { "Willow 的可用 Profile 均已停用，请在 Profile 页面重新启用。" } else { "" }),
       "model": Json::null(),
       "runtime": "",
       "effort": "",
@@ -534,7 +639,7 @@ fn fix_new_chat_of(f : Fixture) -> Json {
       "accounts": [],
       "pickAccount": false,
       "waiting": true,
-      "problem": "正在读取 Studio 的 Profile",
+      "problem": "正在读取 Willow 的 Profile",
       "pick": Json::null(),
       "frequent": [],
     }
@@ -758,6 +863,16 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       f.changed()
       Some(Ok(Json::object({})))
     }
+    "pick.like" => {
+      take("model", fn(s) {
+        n.liked.retain(fn(m) { m != s })
+        if flag(p, "liked") {
+          n.liked.push(s)
+        }
+      })
+      f.changed()
+      Some(Ok(Json::object({})))
+    }
     "pick.save" => {
       // (with picks of its own, a model's as it last ran or a change in the panel: those picked first)
       take("model", fn(s) {
@@ -767,6 +882,7 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
       take("runtime", fn(s) { n.d_runtime = s })
       take("effort", fn(s) { n.d_effort = s })
       take("profile", fn(s) { n.d_profile = s })
+      take("context", fn(s) { n.context = s })
       n.model = n.d_model
       n.runtime = n.d_runtime
       n.effort = n.d_effort
@@ -793,7 +909,7 @@ pub fn fixture_new_call(f : Fixture, name : String, params : Json) -> Result[Jso
 
 ///|
 /// The files' page's tabs of files-split, as the core keeps them: two, the one shown split, 文档 in front and the home
-/// beside it; 照片 of MBA the other.
+/// beside it; 照片 of Maple the other.
 pub fn fix_split_tabs() -> Json {
   {
     "tabs": [

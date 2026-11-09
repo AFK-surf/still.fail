@@ -1,4 +1,4 @@
-// The `@` menu over the desktop's composer (ember web/src/ChatRef.tsx ChatRefMenu, Chat.tsx useComposerText's
+// The `@` menu over the desktop's composer (still.fail web/src/ChatRef.tsx ChatRefMenu, Chat.tsx useComposerText's
 // reference and its keys; ChatRef.css.ts refMenu, refHead, refQuery, refEmpty, refItem, refLogo, refTitleCell,
 // refTitle, refChipStation, refTime): `@` and a few letters at the caret offer the workspace's chats, then the
 // viewer's other workspaces' (the core's `chatSearch`); the one picked goes in as its mark. What the field's words hold
@@ -45,10 +45,14 @@ fn ref_menu(
           ""
         }
       }
-      // whether what the menu offers is still this `@`'s: neither closed nor picked since (refs_at), the field still
-      // holding it as it was where it was, the caret where what was after it then begins
+      // whether what the menu offers is still this `@`'s, as it was shown (what the core reads of the words typed
+      // since, not drawn yet, none of it): neither closed nor picked since, the field still holding it as it was
+      // where it was, the caret where what was after it then begins
       let offered = fn() {
-        @sfbase.refs_at(w.key) == at_then && @sfbase.refs_still_at(w.field, at_then, before_then, after_then)
+        match at_then {
+          Some((start, _)) => !@sfbase.refs_closed(w.key, start) && @sfbase.refs_still_at(w.field, at_then, before_then, after_then)
+          None => false
+        }
       }
       // the one chosen put in for this `@`, while it is offered (a press's and a key's alike). Whether it was.
       let pick = fn(x : Json) -> Bool {
@@ -56,7 +60,8 @@ fn ref_menu(
           return false
         }
         let item = @sfbase.chat_item(x)
-        @sfbase.refs_pick(c, src, w.key, w.field, into, item.station, item.id, item.title, fn(why) {
+        guard at_then is Some((start, _)) else { return false }
+        @sfbase.refs_pick(c, src, w.key, w.field, start, into, item.station, item.id, item.title, fn(why) {
           toast_later(@sf.t("web-main.composer.refFailed", args=[("title", item.title), ("error", why)]))
         })
         // (the menu's opening over as it is picked in: its keys, presses and Escape no longer its, leaving as it is
@@ -103,10 +108,11 @@ fn ref_menu(
               None => ref_menu_least
             }
             // (its chats scrolling past its most, or past what the window leaves them)
-            c.box(style=ref_menu_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
-              @kit.in_room(c, s, key="composer/ref-list", most=ref_menu_max - 2.0 * @sf.panel_pad, body) |> ignore
+            // (the menu: the surface of the look it comes in by: Ctx::surface)
+            let menu = c.box(style=ref_menu_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
+              @kit.in_room(c, s, key="composer/ref-list", most=ref_menu_max - 2.0 * @sf.panel_pad, for_field=c.focused_id(), body) |> ignore
             })
-            |> ignore
+            c.surface(menu)
           },
           fn() {
             c.box(style=@sf.full_width, fn() {

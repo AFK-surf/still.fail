@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import * as ts from "../src/agents/instructions.ts";
-import { NOTES, latest, untold } from "../src/agents/migrations.ts";
+import { NOTES, latest, untold, REWRITTEN } from "../src/agents/migrations.ts";
 
 test("the session instructions name the session's places, and a project only when it has one", () => {
   const plain = ts.sessionInstructions("/w/s/workspace", null, "/w/repos", "/w/agent/MEMORY.md");
@@ -37,11 +37,32 @@ test("the migration notes are numbered 1, 2, 3…, and told once", () => {
   assert.ok(NOTES.every(([, note]) => note.length > 0 && !note.includes("\n")));
   assert.equal(untold(latest(), "/w/i.md"), "");
   const all = untold(0, "/w/i.md");
-  assert.ok(all.startsWith("[still.fail changed how you work") && all.includes("need_human") && all.includes("/w/i.md"));
+  assert.ok(all.startsWith("[still.fail changed how you work") && all.includes("rewritten") && all.includes("/w/i.md"));
+  // A session from before the rewrite hears that it happened, not the notes it replaced.
+  assert.ok(!all.includes(NOTES[REWRITTEN - 2]![1]));
   assert.ok(!untold(latest() - 1, "/w/i.md").includes(NOTES[0]![1]));
 });
 
 test("thread addresses as the agent writes them", () => {
   assert.deepEqual(ts.parseThreadAddress(" C123/1790000000.000100 "), ["C123", "1790000000.000100"]);
   for (const bad of ["c123/1.2", "C123/1", "C123/.2", "/1.2", "C123-1.2"]) assert.equal(ts.parseThreadAddress(bad), null, bad);
+});
+
+test("earlier choices on cards say when they were made and that what follows is not about them", () => {
+  const choice = { thread: 1, n: 2, ts: "1700000000.000100", where: ["CHAT", "1700000000.000001"] as [string, string], question: "要部署吗？\n\n第二段", by: "ada@x.com", option: "不需要部署", at: 1_700_000_000_000 };
+  assert.equal(ts.formatCardChoices([], new Map(), 0), "");
+  const said = ts.formatCardChoices([choice, { ...choice, n: 3, ts: null, where: null, question: null, at: choice.at + 60 * 60_000 }], new Map([["ada@x.com", "Ada"]]), choice.at + 26 * 60 * 60_000 + 5 * 60_000);
+  const [head, ...rest] = said.split("\n");
+  assert.ok(head!.startsWith("[Earlier choices on your cards, told to you now.") && head!.includes("not about them unless it says so"), head);
+  assert.equal(rest.join("\n"), [
+    '<card-choice thread="CHAT/1700000000.000001" card="1700000000.000100" by="Ada (ada@x.com)" at="1700000000.000000" ago="1 d 2 h">',
+    "Asked: 要部署吗？ 第二段",
+    "Chosen: 不需要部署",
+    "</card-choice>",
+    '<card-choice by="Ada (ada@x.com)" at="1700003600.000000" ago="1 d 1 h">',
+    "Chosen: 不需要部署",
+    "</card-choice>",
+  ].join("\n"));
+  const ago = (ms: number) => ts.formatCardChoices([choice], new Map(), choice.at + ms).match(/ago="([^"]+)"/)![1];
+  assert.deepEqual([0, 59_999, 60_000, 59 * 60_000, 60 * 60_000, 61 * 60_000, 24 * 60 * 60_000].map(ago), ["less than a minute", "less than a minute", "1 min", "59 min", "1 h", "1 h 1 min", "1 d"]);
 });

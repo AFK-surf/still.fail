@@ -1,4 +1,4 @@
-// What marking a service's page shows on the phone (ember apps/android chat/screens/Preview.kt: MarkMode, MarksOver,
+// What marking a service's page shows on the phone (still.fail apps/android chat/screens/Preview.kt: MarkMode, MarksOver,
 // Note): the bar's edit key, the mode's bar, each mark's box, pin and bubble, its note; what marking does is sfbase's
 // (service_marks.mbt).
 
@@ -6,7 +6,7 @@
 /// The bar's edit key (Preview.kt BarIcon(Icons.Edit, pressed)): 28 round, a 14 icon; picking, the accent's 14% under
 /// it and its icon in the accent's ink. Named 标注 for a screen reader, what it does said on hover (Marks.tsx: 停止点选
 /// while picking).
-fn page_mark_key(c : @ui.Ctx, on : Bool) -> Bool {
+fn page_mark_key(c : @ui.Ctx, on : Bool, on_press? : () -> Unit) -> Unit {
   let t = @sf.theme()
   let id = c.id("service/mark")
   let b = c.box(style=if on { mark_key_on } else { mark_key }, id~, fn() {
@@ -16,11 +16,14 @@ fn page_mark_key(c : @ui.Ctx, on : Bool) -> Bool {
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.annotate.mark"))
   @sf.tip(c, "service/mark/tip", id, @sf.t(if on { "web-main.annotate.stopPicking" } else { "web-main.annotate.pageTip" }))
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
-/// A bar key's icon (Preview.kt BarIcon: 14).
+/// A bar key's icon.
 let bar_icon_size : Double = 14.0
 
 ///|
@@ -32,7 +35,7 @@ let mark_key : @ui.Style = @ui.css("w=S7 h=S7 radius=Full align=ACenter justify=
 let mark_key_on : @ui.Style = mark_key.then(@ui.style(bg=@sf.mark_key_on))
 
 ///|
-/// The address's place while marking (Preview.kt Bar's `instead`: 4 in at each side, all the room there is).
+/// The address's place while marking (all the room there is).
 // kept across runs: a value (no field of it changes)
 let mark_mode_place : @ui.Style = @ui.css("w=Full px=S1")
 
@@ -72,7 +75,7 @@ let mark_dot_on : @ui.Style = mark_dot.then(@ui.css("bg=Accent"))
 
 ///|
 /// What it says: how many (or what to do), 13 medium in the ink; 可继续点选 muted; why it failed in red; all on one line,
-/// in what the bar leaves, cut short with an ellipsis where that is less (Marks.css.ts modeText: flex 1, min-width 0),
+/// in what the bar leaves, cut short with an ellipsis where that is less (min-width 0),
 /// four of its characters kept (what is beside it in the page's bar gives way first: service.mbt bar_drop_nav).
 // kept across runs: a value (no field of it changes)
 let mark_words_box : @ui.Style = @ui.css("row w=Full gap=S2")
@@ -122,11 +125,11 @@ let mark_put_words : @ui.TextStyle = @ui.text_style(
 )
 
 ///|
-/// A small icon in marking's bar (Preview.kt: 12).
+/// A small icon in marking's bar.
 let mark_small_icon : Double = 12.0
 
 ///|
-/// In the address's place while marking (Preview.kt MarkMode): what to do or how many, then putting them into the
+/// In the address's place while marking: what to do or how many, then putting them into the
 /// chat.
 fn page_mark_mode(c : @ui.Ctx, src : Source, p : ServicePage, site : @ui.NativeView) -> Unit {
   let t = @sf.theme()
@@ -156,9 +159,11 @@ fn page_mark_mode(c : @ui.Ctx, src : Source, p : ServicePage, site : @ui.NativeV
     |> ignore
     // ×: marking left
     let close = c.id("service/mark-close")
-    if !busy && c.clicked(close) {
-      page_marks_leave(p, site)
-    }
+    c.on_press(close, fn() {
+      if !busy {
+        page_marks_leave(p, site)
+      }
+    })
     c.box(style=mark_close, id=if busy { 0 } else { close }, fn() {
       @sf.icon(c, "close", size=mark_small_icon, color=t.p.muted) |> ignore
     })
@@ -166,9 +171,11 @@ fn page_mark_mode(c : @ui.Ctx, src : Source, p : ServicePage, site : @ui.NativeV
     // 添加到对话 (正在截图 while it is)
     let able = !busy && n > 0
     let put = c.id("service/mark-put")
-    if able && c.clicked(put) {
-      page_marks_put(p, site, src)
-    }
+    c.on_press(put, fn() {
+      if able {
+        page_marks_put(p, site, src)
+      }
+    })
     let ink = if t.dark { t.p.bg } else { 0xFFFFFFFFL }
     c.box(style=if able { mark_put_pill } else { mark_put_off }, id=if able { put } else { 0 }, fn() {
       @sf.icon(c, "send", size=mark_small_icon, color=ink) |> ignore
@@ -181,7 +188,7 @@ fn page_mark_mode(c : @ui.Ctx, src : Source, p : ServicePage, site : @ui.NativeV
 }
 
 ///|
-/// A mark's box on its element (Preview.kt MarksOver): 4 round, its edge the accent's 55% (1.5), open the accent (2)
+/// A mark's box on its element: 4 round, its edge the accent's 55% (1.5), open the accent (2)
 /// over its 8%.
 // kept across runs: a value (no field of it changes)
 let mark_box_open : @ui.Style = @ui.style(radius=Base, border=B2, border_color=Accent, bg=@sf.mark_open_bg)
@@ -228,7 +235,7 @@ let mark_said : @ui.Style = @ui.style(
 let mark_said_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Fg, wrap=false)
 
 ///|
-/// The marks over the page, where it is drawn (Preview.kt MarksOver): each a box on its element, a numbered pin on its
+/// The marks over the page, where it is drawn: each a box on its element, a numbered pin on its
 /// corner (kept in sight at the page's edges), what is said of it beside the pin, or its note open. `ox`, `oy`: the
 /// page's top left on the stage; `view_w` its width there before its scale; `stage_w` the stage's width.
 fn page_marks_over(
@@ -263,13 +270,13 @@ fn page_marks_over(
       let pin_x = dmax(pin_edge, x)
       let pin_y = dmax(pin_top, y)
       let pin = c.id("service/pin/\{mark.n}")
-      if c.clicked(pin) {
+      c.on_press(pin, fn() {
         m.editing = if open { None } else { Some(mark.n) }
         if !open {
           m.note.set(mark.comment)
-          c.focus_editor("service/note")
+          c.focus_field(m.note)
         }
-      }
+      })
       c.box(style=mark_pin, tx=pin_x - pin_edge, ty=pin_y - pin_rise, id=pin, fn() {
         c.box(style=mark_pin_in, fn() { c.text("\{mark.n}", style=mark_pin_words) |> ignore }) |> ignore
       })
@@ -281,11 +288,11 @@ fn page_marks_over(
         let right = stage_w - pin_x - said_from >= dmin(said_room, pin_x - said_left)
         let max_w = dmax(said_least, if right { stage_w - pin_x - said_from } else { pin_x - said_left })
         let said = c.id("service/said/\{mark.n}")
-        if c.clicked(said) {
+        c.on_press(said, fn() {
           m.editing = Some(mark.n)
           m.note.set(mark.comment)
-          c.focus_editor("service/note")
-        }
+          c.focus_field(m.note)
+        })
         let row = @ui.style(row=true, w=Fixed(if right { max_w } else { pin_x - said_beside }), justify=if right {
           JStart
         } else {
@@ -305,7 +312,7 @@ fn page_marks_over(
 }
 
 ///|
-/// Where a pin sits (Preview.kt MarksOver): 24 wide, its point 2 in from its left and 22 down, kept 2 from the
+/// Where a pin sits: 24 wide, its point 2 in from its left and 22 down, kept 2 from the
 /// stage's left and 24 from its top; what is said 36 right of its point (28 past it), 220 wanted there, else left of it
 /// (14 clear, 6 from the pin), 40 at least.
 let pin_w : Double = 24.0
@@ -335,7 +342,7 @@ let said_beside : Double = 6.0
 let said_least : Double = 40.0
 
 ///|
-/// A mark's note (Preview.kt Note): 280 wide at most (8 clear of the stage's sides), 36 high, round, frosted, a
+/// A mark's note: 280 wide at most (8 clear of the stage's sides), 36 high, round, frosted, a
 /// stronger shadow, 12 in at its start and 4 at its end, 6 apart; 28 right of the pin's point and 28 above it (8 from
 /// the stage's top at least).
 // kept across runs: a value (no field of it changes)
@@ -377,7 +384,7 @@ let note_font : Double = 13.0
 let note_icon : Double = 14.0
 
 ///|
-/// What is said about one mark, in a bubble beside its pin (Preview.kt Note): what it is for while empty; done, closed;
+/// What is said about one mark, in a bubble beside its pin: what it is for while empty; done, closed;
 /// its remove key takes the mark off the page too.
 fn page_mark_note(
   c : @ui.Ctx,
@@ -416,10 +423,10 @@ fn page_mark_note(
     })
     |> ignore
     let remove = c.id("service/note-remove")
-    if c.clicked(remove) {
+    c.on_press(remove, fn() {
       page_marks_remove(p, site, mark.n)
       c.blur()
-    }
+    })
     c.box(style=mark_note_remove, id=remove, fn() {
       @sf.icon(c, "trash", size=note_icon, color=t.p.muted) |> ignore
     })

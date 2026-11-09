@@ -403,8 +403,8 @@ impl Dht {
     ) -> Result<GetStream<MutableItem>, ActorShutdown> {
         let salt = salt.map(|s| s.into());
         let target = MutableItem::target_from_key(public_key, salt.as_deref());
-        // ember: named for the app's record (an iroh endpoint's lookup: its id's first 4 bytes)
-        crate::ember::named(target, public_key);
+        // stillfail: named for the app's record (an iroh endpoint's lookup: its id's first 4 bytes)
+        crate::stillfail::named(target, public_key);
         let (tx, rx) = mpsc::unbounded_channel();
         self.send(ActorMessage::Get(
             GetRequestSpecific::GetValue(GetValueRequestArguments {
@@ -1103,12 +1103,12 @@ mod test {
         }
     }
 
-    // ember: a DHT whose socket's reads keep failing at once, readable all the while (what a phone's record showed
+    // stillfail: a DHT whose socket's reads keep failing at once, readable all the while (what a phone's record showed
     // after the app came back), on a runtime of two workers as client/shell's: the process is not kept busy, a task
     // beside it keeps its time, and once the socket is bound anew a lookup finds what another node put. The record's
-    // lines say each step (crate::ember). The fault is made where the socket is read (actor/socket.rs `fault`).
+    // lines say each step (crate::stillfail). The fault is made where the socket is read (actor/socket.rs `fault`).
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn ember_failing_socket_spares_the_runtime_and_lookups_recover() {
+    async fn failing_socket_spares_the_runtime_and_lookups_recover() {
         use crate::actor::socket::fault;
         use std::sync::atomic::Ordering::Relaxed;
         use std::time::{Duration, Instant};
@@ -1125,9 +1125,9 @@ mod test {
             Duration::from_secs(t[0] as u64) + Duration::from_nanos(t[1] as u64)
         };
 
-        let _serial = crate::ember::SERIAL.lock().unwrap_or_else(|e| e.into_inner());
-        crate::ember::reset();
-        crate::ember::said(true);
+        let _serial = crate::stillfail::SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        crate::stillfail::reset();
+        crate::stillfail::said(true);
 
         let testnet = Testnet::new(10).await.unwrap();
         let a = Dht::builder().bootstrap(&testnet.bootstrap).build().unwrap();
@@ -1156,12 +1156,12 @@ mod test {
             b.get_mutable_most_recent(signer.verifying_key().as_bytes(), None),
         )
         .await;
-        let said: Vec<String> = crate::ember::said(true).0.into_iter().map(|s| s.text).collect();
+        let said: Vec<String> = crate::stillfail::said(true).0.into_iter().map(|s| s.text).collect();
         println!("cpu {spent:?} in 2 s, a 10 ms sleep at most {latest:?} late, found {:?}", found.as_ref().map(|f| f.is_ok()));
         for line in &said {
             println!("dht: {line}");
         }
-        crate::ember::reset();
+        crate::stillfail::reset();
         fault::PORT.store(0, Relaxed);
 
         assert!(spent < Duration::from_millis(400), "the process spent {spent:?} of CPU in 2 s");

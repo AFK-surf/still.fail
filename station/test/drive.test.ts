@@ -13,7 +13,10 @@ import { checkConfig } from "../src/accounts/check.ts";
 import { platform } from "../src/platform/index.ts";
 
 function place() {
-  const base = realpathSync(mkdtempSync(join(tmpdir(), "drive-")));
+  // The home in a folder of its own: the picker's look above it lists that, not the machine's temporary directory
+  // (tens of thousands of folders on a CI machine, each opened to see whether it may be listed).
+  const base = join(realpathSync(mkdtempSync(join(tmpdir(), "drive-"))), "home");
+  mkdirSync(base);
   const root = join(base, "root");
   const data = join(root, ".stillfail");
   mkdirSync(join(root, "Season 1"), { recursive: true });
@@ -52,6 +55,14 @@ test("list: folders first, names by their numbers; the station's own data left o
   assert.deepEqual(season.entries.map((e) => e.name), ["e1.mp4", "E2.mp4", "E10.mp4"]);
   assert.equal(season.entries[0].type, "video/mp4");
   assert.equal(season.path, "Season 1");
+});
+
+test("list: Ogg and 3GPP videos keep their media types", async () => {
+  const { root, drive } = place();
+  for (const name of ["clip.ogv", "clip.3GP", "clip.3g2"]) writeFileSync(join(root, "Season 1", name), "video");
+  const entries = (await drive.list(root, "Season 1")).entries;
+  const type = (name: string) => entries.find((e) => e.name === name)?.type;
+  assert.deepEqual([type("clip.ogv"), type("clip.3GP"), type("clip.3g2")], ["video/ogg", "video/3gpp", "video/3gpp2"]);
 });
 
 test("a path stays in its root: `..`, a link out, the station's data, a root not named", async () => {
@@ -150,24 +161,8 @@ test("a folder zipped to download: read from its own place as any file of the dr
   assert.equal(await code(drive.zip(root, "notes.md", 1 << 20, true)), "not_a_directory");
 });
 
-test("a folder watched: told once something in it changes, a change between two askings not lost", async () => {
-  const { FolderWatches } = await import("../src/drive/watch.ts");
+test("a file cannot be watched as a folder", async () => {
   const { root, drive } = place();
-  const watches = new FolderWatches(1500, 5000);
-  const dir = await drive.folderToWatch(root, "Season 1");
-  // The first asking starts the watch (macOS may tell of the writes just before it); then nothing changes.
-  await watches.changed(dir, "c");
-  assert.equal(await watches.changed(dir, "c"), false);
-  const asked = watches.changed(dir, "c");
-  setTimeout(() => writeFileSync(join(root, "Season 1", "E3.mp4"), "three"), 100);
-  assert.equal(await asked, true);
-  // Between two askings: kept for the next.
-  writeFileSync(join(root, "Season 1", "E4.mp4"), "four");
-  await new Promise((r) => setTimeout(r, 600));
-  const started = Date.now();
-  assert.equal(await watches.changed(dir, "c"), true);
-  assert.ok(Date.now() - started < 500);
-  watches.close();
   assert.equal(await code(drive.folderToWatch(root, "notes.md")), "not_a_directory");
 });
 

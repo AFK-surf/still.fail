@@ -38,14 +38,14 @@ function parse(text: string): unknown {
   try { return JSON.parse(t); } catch { /* cut short, perhaps */ }
   const cut = /\n… \(\d+ more characters\)$/.exec(t);
   if (!cut) return undefined;
-  try { return JSON.parse(close(t.slice(0, cut.index))); } catch { return undefined; }
+  try { return JSON.parse(closeCut(t.slice(0, cut.index))); } catch { return undefined; }
 }
 
 /**
  * JSON the station cut short (a long call is kept to its first 4000 characters, then `… (n more characters)`), closed
- * where it stops: the string it was in ends with an ellipsis, and what was open is closed.
+ * where it stops: the string it was in ends with an ellipsis, and what was open is closed. (activity.ts too.)
  */
-function close(json: string): string {
+export function closeCut(json: string): string {
   const open: string[] = [];
   let quoted = false;
   let escaped = false;

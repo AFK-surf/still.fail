@@ -1,9 +1,8 @@
-// React on the core: `useTopic` renders a topic's current value, `useCall`
+// The pages on the core: `useTopic` renders a topic's current value, `useCall`
 // makes calls. Components that want the same topic share one subscription.
-import { use, useCallback, useContext, useRef, useSyncExternalStore } from "react";
+import { useCallback, useContext, useRef, useSyncExternalStore } from "preact/compat";
 import { InBones } from "@stillfail/ui/inBones.ts";
 import { connectCore, type CoreClient, type CoreError, type Topic } from "./client.ts";
-import { migrateChatRefs, migrateLegacy, migrateNewChat, migratePrefs } from "./migrate.ts";
 
 declare const __BUILD__: string | null;
 
@@ -13,20 +12,11 @@ let client: CoreClient | null = null;
 export function core(): CoreClient {
   if (!client) {
     client = connectCore();
-    void migrateLegacy(client);
-    void migrateChatRefs(client);
-    void migrateNewChat(client);
-    void migratePrefs(client);
     // What this device is, said once: the core decides what follows from it (phone or computer, the name it signs in
     // as, the app a message is sent from). A core from before it has the page say those itself.
     client.call("client.device", { app: "web", build: typeof __BUILD__ === "string" ? __BUILD__ : "", userAgent: navigator.userAgent, locale: navigator.language ?? "" }).catch(() => undefined);
   }
   return client;
-}
-
-/** For tests and debugging: use this client instead of starting a worker. */
-export function setCore(next: CoreClient): void {
-  client = next;
 }
 
 export interface TopicState<T> {
@@ -64,23 +54,13 @@ let known: ((topic: Topic) => unknown) | null = null;
  * For a page whose data is its own (the site's demo): each topic starts at the value `source` gives, instead of loading,
  * so the first render (on the server too: the site is built to HTML) already shows it.
  */
-export function setTopicSource(source: (topic: Topic) => unknown): void {
+function setTopicSource(source: (topic: Topic) => unknown): void {
   known = source;
 }
 
 /** What the page knows of a topic before any core answers (setTopicSource), if it knows anything. */
 export function knownOf(topic: Topic): unknown {
   return known?.(topic) ?? undefined;
-}
-
-/**
- * Forgets what is known of every topic, so that each starts again at what the source gives now: for a page built to HTML
- * more than once in one run, its source saying otherwise each time (the site's demo, opening elsewhere or in another
- * language: demo/prerender.tsx).
- */
-export function forgetTopics(): void {
-  for (const e of entries.values()) if (e.drop) clearTimeout(e.drop);
-  entries.clear();
 }
 const IDLE: TopicState<never> = { value: undefined, error: null, loading: false };
 
@@ -176,77 +156,8 @@ export function useTopicSelect<T, S>(topic: Topic | null, select: (state: TopicS
   return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
 
-/**
- * Holds the render back until the topic has its first value, or the core says it waits on a station for it, `ms` at
- * most. Rendered as part of a navigation (a transition), the page that was there stays until then instead of an empty
- * one showing first. Once only per topic.
- */
-export function useReady(topic: Topic | null, ms: number): void {
-  if (useContext(InBones)) topic = null;
-  const wait = topic ? waitFor(topicKey(topic), topic, ms) : null;
-  if (wait) use(wait);
-}
-
-function waitFor(key: string, topic: Topic, ms: number): Promise<void> | null {
-  const e = entry(key, topic);
-  // Once waited on, always the same (settled) one: the render that suspended on it must use it again when it goes on.
-  if (e.ready) return e.ready;
-  if (!e.state.loading) return null;
-  let resolve!: () => void;
-  const ready = new Promise<void>((r) => { resolve = r; });
-  e.ready = ready;
-  let over = false;
-  let off: (() => void) | null = null;
-  const done = () => {
-    if (over) return;
-    over = true;
-    clearTimeout(timer);
-    off?.();
-    // Marked as React reads it: used again, it goes on at once rather than suspending for a tick.
-    Object.assign(ready, { status: "fulfilled", value: undefined });
-    resolve();
-  };
-  const timer = setTimeout(done, ms);
-  off = listen(key, topic, () => { if (!e.state.loading || e.state.waiting) done(); });
-  if (over) off();
-  return ready;
-}
-
-/** A topic's value as the page has it now, read when asked (a tap), not followed; undefined while none. */
-export function topicNow<T>(topic: Topic): T | undefined {
-  return entries.get(topicKey(topic))?.state.value as T | undefined;
-}
-
-/** Starts reading a topic ahead of a page that will show it (a row hovered), kept a while for it. */
-export function prime(topic: Topic): void {
-  const key = topicKey(topic);
-  listen(key, topic, () => undefined)();
-}
-
-/** Several topics at once (as many as there are, which may change): their states in the order given. */
-export function useTopics<T = unknown>(topics: Topic[]): TopicState<T>[] {
-  if (useContext(InBones)) topics = [];
-  const keys = topics.map(topicKey);
-  const joined = keys.join("\n");
-  const given = useRef({ topics, keys });
-  given.current = { topics, keys };
-  const subscribe = useCallback((listener: () => void) => {
-    const { topics: now, keys: at } = given.current;
-    const offs = now.map((topic, i) => listen(at[i]!, topic, listener));
-    return () => { for (const off of offs) off(); };
-  }, [joined]);
-  // The same array while no state in it changed, as useSyncExternalStore needs.
-  const last = useRef<TopicState<unknown>[]>([]);
-  const snapshot = useCallback(() => {
-    const states = given.current.keys.map((key, i) => entry(key, given.current.topics[i]).state);
-    if (states.length !== last.current.length || states.some((s, i) => s !== last.current[i])) last.current = states;
-    return last.current;
-  }, [joined]);
-  return useSyncExternalStore(subscribe, snapshot, snapshot) as TopicState<T>[];
-}
-
 /** `call(name, params)` on the page's core. */
-export function useCall(): (name: string, params?: unknown, onProgress?: (value: unknown) => void, signal?: AbortSignal) => Promise<unknown> {
+function useCall(): (name: string, params?: unknown, onProgress?: (value: unknown) => void, signal?: AbortSignal) => Promise<unknown> {
   const quiet = useContext(InBones);
   return useCallback((name: string, params?: unknown, onProgress?: (value: unknown) => void, signal?: AbortSignal) => quiet ? Promise.resolve(undefined) : core().call(name, params, onProgress, signal), [quiet]);
 }

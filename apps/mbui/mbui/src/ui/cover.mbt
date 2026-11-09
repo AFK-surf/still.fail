@@ -32,13 +32,91 @@ struct CoverAsk {
 ///|
 /// A cover's spring (Ctx::spring's: 420 stiff, 32 damped), from 0 (where it set out) to 1 (the item it goes to): at
 /// rest within 1/2000 of the way.
+let cover_k : Double = 420.0
+
+///|
+let cover_c : Double = 32.0
+
+///|
+let cover_rest : Double = 0.0005
+
+///|
 fn cover_spring() -> SpringPath {
-  SpringPath::new(1.0, k=420.0, c=32.0, rest=0.0005)
+  SpringPath::new(1.0, k=cover_k, c=cover_c, rest=cover_rest)
+}
+
+///|
+/// A cover's spring's way (cover_spring's, for what moves a cover otherwise: a node's, @motion.cover_spring): `t` ms
+/// after it set out `d` from its rest at `v` a second, how far from it and how fast (a second).
+pub fn cover_spring_at(d : Double, v : Double, t : Double) -> (Double, Double) {
+  spring_at(d, v, cover_k, cover_c, t / 1000.0)
+}
+
+///|
+/// When (ms after it set out `d` from its rest at `v` a second) a cover's spring is at rest: cover_spring's end.
+pub fn cover_spring_end(d : Double, v : Double) -> Double {
+  1000.0 * spring_end(d, v, cover_k, cover_c, cover_rest)
 }
 
 ///|
 /// How long a cover takes from one item to another (ms): the same however far, its way being from 0 to 1.
-pub let cover_slide_ms : Double = 1000.0 * spring_end(-1.0, 0.0, 420.0, 32.0, 0.0005)
+pub let cover_slide_ms : Double = cover_spring_end(-1.0, 0.0)
+
+///|
+/// Where a cover sets out from as it is sent to another item: where it is (`p` of the way from `from`, the items it
+/// set out from by their shares, to `to`) as a blend of items by their shares, summing to 1.
+pub fn cover_set_out(from : Array[(Int, Double)], to : Int, p : Double) -> Array[(Int, Double)] {
+  let out : Array[(Int, Double)] = []
+  let mut put_to = false
+  for e in from {
+    if e.0 == to {
+      out.push((e.0, e.1 * (1.0 - p) + p))
+      put_to = true
+    } else {
+      out.push((e.0, e.1 * (1.0 - p)))
+    }
+  }
+  if !put_to {
+    out.push((to, p))
+  }
+  out
+}
+
+///|
+/// Where a cover is, `p` of its way from `from` (items by their shares) to `to`: the blend of the items' boxes (x, y,
+/// width, height) as `rect` has them where they are now (None: an item gone, left out of what it set out from; the
+/// one it goes to gone, None).
+pub fn cover_rect(
+  from : Array[(Int, Double)],
+  to : Int,
+  p : Double,
+  rect : (Int) -> (Double, Double, Double, Double)?,
+) -> (Double, Double, Double, Double)? {
+  guard rect(to) is Some(t) else { return None }
+  let mut x = 0.0
+  let mut y = 0.0
+  let mut w = 0.0
+  let mut h = 0.0
+  let mut share = 0.0
+  for e in from {
+    match rect(e.0) {
+      Some(r) => {
+        x = x + r.0 * e.1
+        y = y + r.1 * e.1
+        w = w + r.2 * e.1
+        h = h + r.3 * e.1
+        share = share + e.1
+      }
+      None => ()
+    }
+  }
+  let (fx, fy, fw, fh) = if share.abs() < 1.0e-9 {
+    t
+  } else {
+    (x / share, y / share, w / share, h / share)
+  }
+  Some((fx + (t.0 - fx) * p, fy + (t.1 - fy) * p, dmax(0.0, fw + (t.2 - fw) * p), dmax(0.0, fh + (t.3 - fh) * p)))
+}
 
 ///|
 /// A box over item `at` of `items` (the items' nodes, built this frame), built by `look` (given its width and height)
@@ -71,20 +149,7 @@ pub fn Ctx::cover(
   if at != s.to {
     // where it is now, as a blend: what it set out from by 1 - p, the item it went to by p; from there to `at`
     let p = s.path.value(self.now_before(s.path.end()))
-    let from : Array[(Int, Double)] = []
-    let mut put_to = false
-    for e in s.from {
-      if e.0 == s.to {
-        from.push((e.0, e.1 * (1.0 - p) + p))
-        put_to = true
-      } else {
-        from.push((e.0, e.1 * (1.0 - p)))
-      }
-    }
-    if !put_to {
-      from.push((s.to, p))
-    }
-    s.from = from
+    s.from = cover_set_out(s.from, s.to, p)
     s.to = at
     s.path.put(0.0)
     s.path.go(self.clock, 1.0)
@@ -119,35 +184,7 @@ fn Ctx::covers_after_layout(self : Ctx) -> Unit {
         None
       }
     }
-    guard rect(a.to) is Some(t) else { continue }
-    // (items gone since it set out are left out of what it set out from)
-    let mut x = 0.0
-    let mut y = 0.0
-    let mut w = 0.0
-    let mut h = 0.0
-    let mut share = 0.0
-    for e in a.from {
-      match rect(e.0) {
-        Some(r) => {
-          x = x + r.0 * e.1
-          y = y + r.1 * e.1
-          w = w + r.2 * e.1
-          h = h + r.3 * e.1
-          share = share + e.1
-        }
-        None => ()
-      }
-    }
-    let (fx, fy, fw, fh) = if share.abs() < 1.0e-9 {
-      t
-    } else {
-      (x / share, y / share, w / share, h / share)
-    }
-    let p = a.p
-    let bx = fx + (t.0 - fx) * p
-    let by = fy + (t.1 - fy) * p
-    let bw = dmax(0.0, fw + (t.2 - fw) * p)
-    let bh = dmax(0.0, fh + (t.3 - fh) * p)
+    guard cover_rect(a.from, a.to, a.p, rect) is Some((bx, by, bw, bh)) else { continue }
     let saved = self.cur
     let (saved_theme, saved_dir) = (self.theme, self.direction)
     self.theme = a.theme

@@ -3,9 +3,9 @@ import { Miniflare, convertV4MiniflareOptions, Response as MFResponse, Log, LogL
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { ulid } from "ulid";
 import { digest, randomSecret, type Tokens } from "../src/auth.ts";
-import { shareFiles } from "../src/share.ts";
 import type { MailMessage } from "../src/mail.ts";
 import { createRequire } from "node:module";
+import { brotliCompressSync } from "node:zlib";
 
 // workerd keeps a WebSocket's TCP connection open some ten seconds after a close the Worker began (Cloudflare does
 // not), and the ws client miniflare hands sockets through says "close" only once it ends: a test waiting on a close
@@ -37,6 +37,9 @@ export interface OutboundRequest {
   body: Uint8Array;
 }
 
+/** The Cloudflare Access team the harness's `access` puts in front of the console. */
+const ACCESS_TEAM = "https://team.cloudflareaccess.example";
+
 export async function harness(
   options: {
     relay?: string;
@@ -51,13 +54,15 @@ export async function harness(
     /** RELAY_URLS and RELAY_NAMES: relays beside it, and what they are called (the console's 中继 page). */
     relayUrls?: string;
     relayNames?: Record<string, string>;
+    /** STATUS_PAGES: the pages the cron checks for still.fail/status; answered by `push` (they are outside). */
+    statusPages?: Record<string, string>;
+    /** STATUS_REPO: whose issues labelled `incident` it shows; answered by `push`. */
+    statusRepo?: string;
     /** The console's admin (alice unless said otherwise). */
     adminEmail?: string;
     /** The console's host. */
     adminOrigin?: string;
     previewOrigin?: string;
-    /** The share host (src/share.ts): published chats. */
-    shareOrigin?: string;
     /** The test channel's host (BETA_ORIGIN): the web app and the API, for accounts let in. */
     betaOrigin?: string;
     /** The hosts' old names (before the rename to still.fail), bound to the same Workers: PUBLIC_ORIGIN_ALIASES and so on. */
@@ -79,6 +84,10 @@ export async function harness(
     /** Signing in with an email: the codes sent are kept in `mails` (and handed to this, if it is one: false, or an
      * error code, and the binding throws as Cloudflare's would). */
     mail?: true | ((message: MailMessage) => boolean | string);
+    /** Cloudflare Access in front of the console's host (ACCESS_TEAM_DOMAIN, ACCESS_AUD): `accessToken` makes its tokens. */
+    access?: true;
+    /** Another cloud's releases its own bucket lacks some of (RELEASES_UPSTREAM, https://upstream.test/releases): its answer to each file asked there. */
+    upstream?: (file: string, request: OutboundRequest) => { status: number; body?: string; headers?: Record<string, string> };
     /** Push services, FCM and its token endpoint: a stand-in answering every other outbound request. */
     push?: (request: OutboundRequest) => Promise<{ status: number; body?: string }> | { status: number; body?: string };
   } = {},
@@ -86,7 +95,6 @@ export async function harness(
   const origin = options.origin ?? "https://relay.example";
   const adminOrigin = options.adminOrigin ?? "https://admin.relay.example";
   const previewOrigin = options.previewOrigin ?? "https://preview.relay.example";
-  const shareOrigin = options.shareOrigin ?? "https://share.relay.example";
   const betaOrigin = options.betaOrigin ?? "https://app.beta-domain.example";
   const oldOrigin = options.oldOrigin ?? "https://old.relay.example";
   const oldAdminOrigin = options.oldAdminOrigin ?? "https://admin.old.relay.example";
@@ -94,7 +102,8 @@ export async function harness(
   /** still.fail cloud's time, in seconds: what a station signs with, say. */
   const now = () => Math.floor((options.clock === "real" ? Date.now() : NOW_MS) / 1000);
   const signingKey = options.signingKey ?? randomSecret(),
-    adminToken = randomSecret();
+    adminToken = randomSecret(),
+    feedbackToken = randomSecret();
   const { publicKey, privateKey } = await generateKeyPair("RS256");
   const publicJwk = {
     ...(await exportJWK(publicKey)),
@@ -136,7 +145,7 @@ export async function harness(
         ...common,
         name: "static",
         script: await bundle("test/static-worker.ts"),
-        bindings: { PUBLIC_ORIGIN: origin, ADMIN_ORIGIN: adminOrigin, PREVIEW_ORIGIN: previewOrigin, PUBLIC_ORIGIN_ALIASES: oldOrigin, ADMIN_ORIGIN_ALIASES: oldAdminOrigin, PREVIEW_ORIGIN_ALIASES: oldPreviewOrigin, BETA_ORIGIN: betaOrigin, SHARE_ORIGIN: shareOrigin },
+        bindings: { PUBLIC_ORIGIN: origin, ADMIN_ORIGIN: adminOrigin, PREVIEW_ORIGIN: previewOrigin, PUBLIC_ORIGIN_ALIASES: oldOrigin, ADMIN_ORIGIN_ALIASES: oldAdminOrigin, PREVIEW_ORIGIN_ALIASES: oldPreviewOrigin, BETA_ORIGIN: betaOrigin },
         serviceBindings: { ASSETS: (options.assets ?? standInAssets) as any },
       }, {
         ...common,
@@ -161,11 +170,16 @@ export async function harness(
         GOOGLE_CLIENT_SECRET: randomSecret(),
         AUTH_SIGNING_KEY: signingKey,
         ADMIN_TOKEN: adminToken,
+        FEEDBACK_TOKEN: feedbackToken,
         ADMIN_EMAIL: options.adminEmail ?? "alice@example.test",
+        ...(options.access ? { ACCESS_TEAM_DOMAIN: ACCESS_TEAM, ACCESS_AUD: "test-access-aud" } : {}),
+        ...(options.upstream ? { RELEASES_UPSTREAM: "https://upstream.test/releases" } : {}),
         GRANT_SIGNING_JWK: JSON.stringify(grantJwk),
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
         ...(options.relayUrls ? { RELAY_URLS: options.relayUrls } : {}),
         ...(options.relayNames ? { RELAY_NAMES: options.relayNames } : {}),
+        ...(options.statusPages ? { STATUS_PAGES: options.statusPages } : {}),
+        ...(options.statusRepo ? { STATUS_REPO: options.statusRepo } : {}),
         ...(options.vapid ? { VAPID_PUBLIC_KEY: options.vapid.publicKey, VAPID_PRIVATE_KEY: options.vapid.privateKey, VAPID_SUBJECT: "mailto:ops@example.test" } : {}),
         ...(options.fcm ? { FCM_SERVICE_ACCOUNT: options.fcm } : {}),
         ...(options.apns ? { APNS_KEY: options.apns } : {}),
@@ -175,11 +189,18 @@ export async function harness(
       },
       r2Buckets: ["RELEASES"],
       durableObjects: {
-        ...Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter", "RelayLoad"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS", "RELAY_LOAD"][i], { className, useSQLite: true }])),
+        ...Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter", "RelayLoad", "ServiceStatus"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS", "RELAY_LOAD", "SERVICE_STATUS"][i], { className, useSQLite: true }])),
         RELAY: { className: "Relay", scriptName: "relay", useSQLite: true },
       },
       outboundService: async (request) => {
         const url = new URL(request.url);
+        if (options.access && url.href === `${ACCESS_TEAM}/cdn-cgi/access/certs`) {
+          return MFResponse.json({ keys: [{ ...publicJwk, kid: "test-access" }] });
+        }
+        if (options.upstream && url.href.startsWith("https://upstream.test/releases/")) {
+          const answer = options.upstream(url.pathname.slice("/releases/".length), { url: url.href, method: request.method, headers: Object.fromEntries(request.headers), body: new Uint8Array() });
+          return new MFResponse(answer.body ?? null, { status: answer.status, headers: answer.headers ?? {} });
+        }
         if (url.href === "https://www.googleapis.com/oauth2/v3/certs") {
           return MFResponse.json({ keys: [publicJwk] }, { headers: { "cache-control": "max-age=3600" } });
         }
@@ -240,7 +261,6 @@ export async function harness(
   /** A request to the console's host. */
   const fetchAdmin = (path: string, init?: RequestInit) => mf.dispatchFetch(adminOrigin + path, init as any);
   const fetchPreview = (path: string, init?: RequestInit) => mf.dispatchFetch(previewOrigin + path, init as any);
-  const fetchShare = (path: string, init?: RequestInit) => mf.dispatchFetch(shareOrigin + path, init as any);
   /** A request to the test channel's host. */
   const fetchBeta = (path: string, init?: RequestInit) => mf.dispatchFetch(betaOrigin + path, init as any);
   /** A request to a host's old name (before the rename): "main", "admin" or "preview". */
@@ -309,6 +329,15 @@ export async function harness(
     return (await response.json()) as Tokens;
   }
   /** Calls the API as a logged-in account (on the console's host with `on: "admin"`, the test channel's with "beta"). */
+  /** A token Cloudflare Access would add for `email` (Cf-Access-Jwt-Assertion); `aud` another application's, `expired`. */
+  const accessToken = (email: string, made: { aud?: string; expired?: boolean; issuer?: string } = {}) =>
+    new SignJWT({ email, type: "app" })
+      .setProtectedHeader({ alg: "RS256", kid: "test-access" })
+      .setIssuedAt(now() - 600)
+      .setExpirationTime(made.expired ? now() - 60 : now() + 300)
+      .setIssuer(made.issuer ?? ACCESS_TEAM)
+      .setAudience(made.aud ?? "test-access-aud")
+      .sign(privateKey);
   const as = (tokens: Tokens, on: "main" | "admin" | "beta" = "main") => (method: string, path: string, value?: unknown) =>
     ({ main: fetch, admin: fetchAdmin, beta: fetchBeta })[on](path, {
       method,
@@ -318,6 +347,7 @@ export async function harness(
   return {
     mf,
     now,
+    accessToken,
     origin,
     adminOrigin,
     betaOrigin,
@@ -327,13 +357,13 @@ export async function harness(
     grantJwk,
     grantPublicJwk,
     adminToken,
+    feedbackToken,
     signingKey,
     codes,
     mails,
     fetch,
     fetchAdmin,
     fetchPreview,
-    fetchShare,
     fetchBeta,
     fetchOld,
     fetchWorker,
@@ -345,12 +375,14 @@ export async function harness(
   };
 }
 
-/** The static sites' files, by site (`/web/…`, `/admin/…`, `/preview/…`, `/share/…`: see test/static-worker.ts). */
+/** The static sites' files, by site (`/web/…`, `/admin/…`, `/preview/…`: see test/static-worker.ts). */
 export const STAND_IN_FILES: Record<string, string> = {
   "/web/index.html": "<title>still.fail</title>",
   "/web/web.html": "<title>still.fail · web</title>",
   "/web/assets/app.js": "// the web app",
   "/web/sw.js": "// the notifications' worker",
+  "/web/mbui/app.js": "// the app, as mbui-web built it",
+  "/web/mbui/host.js": "// mbui's web host",
   "/admin/index.html": "<title>still.fail 管理后台</title>",
   "/admin/assets/console.js": "// the console",
   "/preview/_stillfail/frame.html": "<title>still.fail preview</title>",
@@ -358,13 +390,15 @@ export const STAND_IN_FILES: Record<string, string> = {
   "/preview/_ember/frame.html": "<title>still.fail preview (old path)</title>",
   "/preview/_ember/sw.js": "// the preview's service worker (old path)",
   "/preview/404.html": "这是 still.fail 的预览地址",
-  "/share/index.html": "<title>still.fail 分享</title>",
-  "/share/assets/share.js": "// the share page",
-  ...Object.fromEntries(Object.entries(shareFiles({ cloud: "https://relay.example", relays: ["https://relay.example", "https://39.105.157.122"] })).map(([path, text]) => [`/share/${path}`, text])),
 };
+
+/** The files the build brotlis beside them (apps/mbui/scripts/web-app.sh): app.js's, not host.js's (a build without one). */
+const STAND_IN_PACKED: Record<string, string> = { "/web/mbui/app.js.br": "/web/mbui/app.js" };
 
 function standInAssets(request: Request): Response {
   const path = new URL(request.url).pathname;
+  const packed = STAND_IN_PACKED[path];
+  if (packed) return new MFResponse(brotliCompressSync(STAND_IN_FILES[packed]!)) as unknown as Response;
   const body = STAND_IN_FILES[path];
   const headers = path.endsWith(".html") ? { "content-type": "text/html; charset=utf-8" } : {};
   return body === undefined ? new MFResponse("Not found", { status: 404 }) as unknown as Response : new MFResponse(body, { headers }) as unknown as Response;

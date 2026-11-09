@@ -1,8 +1,7 @@
 // What of this machine still.fail uses (resources/watch.ts), as a part of the station (parts.ts): looked at while a
 // page asks; GET /resources.
 import { execFile, execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
@@ -20,23 +19,20 @@ import { ResourceWatch } from "./watch.ts";
 const APP_ID = "fail.still.desktop";
 
 /// Whether `command` runs from a bundle of the desktop app's: its Info.plist names the id (as text in an XML plist or a
-/// binary one alike). Each bundle read once.
-function appBundles(): (command: string) => boolean {
+/// binary one alike). Each bundle read once, off the station's thread: one not read yet is none until it is (the next
+/// look). Read as each was asked, the first look after the station started read every app's running (53 on a station,
+/// 2026-11-03) from a disk short of memory, and held the station 7.8 s, a message sent waiting on it.
+export function appBundles(read: (path: string) => Promise<Buffer> = (path) => readFile(path)): (command: string) => boolean {
   const known = new Map<string, boolean>();
   return (command) => {
     const at = command.indexOf(".app/Contents/");
     if (at < 0) return false;
     const bundle = command.slice(0, at + 4);
-    let is = known.get(bundle);
-    if (is === undefined) {
-      try {
-        is = readFileSync(`${bundle}/Contents/Info.plist`).includes(APP_ID);
-      } catch {
-        is = false;
-      }
-      known.set(bundle, is);
-    }
-    return is;
+    const is = known.get(bundle);
+    if (is !== undefined) return is;
+    known.set(bundle, false);
+    read(`${bundle}/Contents/Info.plist`).then((plist) => known.set(bundle, plist.includes(APP_ID)), () => {});
+    return false;
   };
 }
 
@@ -86,7 +82,7 @@ export const ResourcesLive = Layer.effectDiscard(
     }
     const mesh = loadMesh();
     const isApp = appBundles();
-    const whose = runnerSessions(store);
+    const whose = runnerSessions(store, (runners) => hub.runnerNameSessions(runners));
     const watch = yield* Effect.acquireRelease(
       Effect.sync(() => new ResourceWatch({
         clock: hub.clock,
@@ -94,11 +90,12 @@ export const ResourcesLive = Layer.effectDiscard(
         args: async () => parseArgs((await run("ps", ["-axo", "pid=,args="], { maxBuffer: 32 << 20 })).stdout),
         // A chat's own directory, not where it works (a repository people also work in).
         places: () => store.liveSessions().flatMap((s) => (s.workspace && s.workspace !== "/" && s.workspace !== homedir() ? [{ dir: s.workspace, session: s.key }] : [])),
+        placesInArguments: (lines) => hub.sessionsInArguments(lines, homedir()),
         usage: (pids) => (typeof mesh.processUsage === "function" ? mesh.processUsage(pids) : pids.map(() => null)),
         // Every process's, once: some 20 ms.
         traffic: async () => parseNettop((await run("nettop", ["-P", "-L", "1", "-x", "-J", "bytes_in,bytes_out", "-n"], { maxBuffer: 16 << 20, timeout: 5000 })).stdout),
         runners: () => runnersWithSessions(data, whose),
-        jobs: () => watchedJobs(store),
+        jobs: () => watchedJobs(store, hub.processJobLookup()),
         isApp,
         self: [process.pid, ...(launcher() ? [process.ppid] : [])],
       })),

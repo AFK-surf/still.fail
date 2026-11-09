@@ -1,4 +1,4 @@
-// tiny-skia's PathBuilder (path/src/path_builder.rs).
+// tiny-skia's PathBuilder.
 
 ///|
 priv enum PathDirection {

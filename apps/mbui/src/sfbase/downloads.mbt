@@ -83,7 +83,7 @@ pub fn download_start_zip(src : Source, station : String, root : String, path : 
 ///|
 /// The core's download of a file or folder of a station's drive while it is listed; None when there is none.
 pub fn download_of_drive(src : Source, station : String, root : String, path : String) -> Json? {
-  let v = (src.topic)("downloads", {}).value
+  let v = src.topic("downloads", {}).get().value
   for d in items(v, "downloads") {
     let d = Some(d)
     if text(d, "station") == station && text(d, "root") == root && text(d, "path") == path && field(d, "root") is Some(_) {
@@ -109,7 +109,7 @@ pub fn download_cancel(src : Source, id : String) -> Unit {
 /// The core's download of that file while it is listed: its `progress` (0 to 1), `state`, `active` (not failed) and
 /// `statusText`; None when there is none.
 pub fn download_of(src : Source, station : String, key : String, name : String) -> Json? {
-  let v = (src.topic)("downloads", {}).value
+  let v = src.topic("downloads", {}).get().value
   for d in items(v, "downloads") {
     let d = Some(d)
     if text(d, "station") == station && text(d, "key") == key && text(d, "name") == name {
@@ -124,7 +124,7 @@ pub fn download_of(src : Source, station : String, key : String, name : String) 
 /// client/core-ts fill.ts): its `progress`, `state` (going, yielding, waiting, queued), `statusText` and `id`; None
 /// while it is not.
 pub fn keeping_of(src : Source, station : String, key : String, name : String) -> Json? {
-  for k in items((src.topic)("downloads", {}).value, "keeping") {
+  for k in items(src.topic("downloads", {}).get().value, "keeping") {
     let k = Some(k)
     if text(k, "station") == station && text(k, "key") == key && text(k, "name") == name {
       return k
@@ -155,16 +155,10 @@ pub fn keeping_stop(src : Source, id : String) -> Unit {
 }
 
 ///|
-/// None of them brought any more, what came of each kept (`fill.stopAll`).
-pub fn keeping_stop_all(src : Source) -> Unit {
-  (src.call)("fill.stopAll", {}, fn(_) {  })
-}
-
-///|
 /// What comes to this device from workspace `ws`'s stations (the `downloads` topic): its downloads (a chat's file, a
 /// drive's, a folder zipped), newest first, and what was opened and let go being brought, the one coming first.
 pub fn coming_of(src : Source, ws : String) -> (Array[Json], Array[Json]) {
-  let v = (src.topic)("downloads", {}).value
+  let v = src.topic("downloads", {}).get().value
   let mine = fn(d : Json) { text(Some(d), "station").has_prefix(ws + "/") }
   (items(v, "downloads").filter(mine), items(v, "keeping").filter(mine))
 }
@@ -176,7 +170,7 @@ pub fn downloads_frame(c : @ui.Ctx, src : Source) -> Unit {
     downloads.unread = 0
     say(c, @sf.t("android-chat.file.saveFailed"))
   }
-  let listed = items((src.topic)("downloads", {}).value, "downloads")
+  let listed = items(src.topic("downloads", {}).get().value, "downloads")
   // (taken once the frame's builds are over: every build works it out alike from the list)
   c.after_build("downloads-take", fn() { take_ready(src, listed) })
 }
@@ -208,7 +202,9 @@ fn take_ready(src : Source, listed : Array[Json]) -> Unit {
       continue
     }
     downloads.saving[id] = true
-    let (name, size) = (text(d, "name"), number(d, "size"))
+    // The station's stored name can have an upload timestamp; the core's title is the sender's filename.
+    let title = text(d, "title")
+    let (name, size) = (if title == "" { text(d, "name") } else { title }, number(d, "size"))
     (src.call)("download.take", { "id": Json::string(id) }, fn(r) {
       match r {
         Ok(a) if flag(Some(a), "taken") => save_download(src, id, name, size)

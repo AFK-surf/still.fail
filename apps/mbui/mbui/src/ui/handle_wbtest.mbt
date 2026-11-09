@@ -110,6 +110,25 @@ test "the caret at the start of a field with no frame of its own: whole in the f
 }
 
 ///|
+test "the caret at the start of a field that starts on a half pixel: on whole pixels across" {
+  let field = Field::new()
+  let t = Tester::new(
+    fn(c) {
+      c.box(pl=21.0, w=Fill(1.0), fn() { c.editor("field", font_size=16.0, plain=true, field~) |> ignore })
+      |> ignore
+    },
+    w=300.0,
+    h=200.0,
+    platform=3,
+    scale=1.5,
+  )
+  t.tap(40.0, 8.0)
+  t.draw()
+  let x = caret_drawn()[0] * 1.5
+  assert_eq(x, x.round())
+}
+
+///|
 test "Android: the caret's handle hangs from the middle of the caret's foot, at a line's start too" {
   let field = Field::new()
   field.set("hello world")
@@ -202,4 +221,37 @@ test "Android: the caret's handle under a layer opened over its field" {
   }
   assert_true(button >= 0 && handle >= 0 && layer >= 0)
   assert_true(button < handle && handle < layer)
+}
+
+///|
+test "Android: a paste too long for the field, not taken, is taken back from the host's words; typing goes on" {
+  let field = Field::new()
+  let pasted : Array[String] = []
+  let t = Tester::new(
+    fn(c) {
+      match c.editor("field", font_size=16.0, paste_limit=20, field~).pasted {
+        Some(s) => pasted.push(s)
+        None => ()
+      }
+    },
+    w=300.0,
+    h=200.0,
+    platform=2,
+  )
+  t.tap(40.0, 10.0)
+  t.ime_state("hi", 2, 2)
+  let long = "x".repeat(30)
+  // the input method's paste, made on the host's copy of the words (MBView.MBInput)
+  let told = fake.val.unwrap().ime_told
+  t.ime_state("hi" + long, 32, 32)
+  assert_eq(pasted, [long])
+  assert_eq(field.text(), "hi")
+  // the host told the field's words again, as its copy is to hold them
+  assert_true(fake.val.unwrap().ime_told > told)
+  assert_eq(t.ime(), (true, "hi", 2, 2))
+  // what is typed next, on that copy, is taken
+  let (_, host, _, _) = t.ime()
+  t.ime_state(host + "!", 3, 3)
+  assert_eq(field.text(), "hi!")
+  assert_eq(pasted, [long])
 }

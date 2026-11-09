@@ -1,0 +1,142 @@
+//! The certificate and key a host presents to a device over TLS.
+
+use alloc::vec;
+use alloc::vec::Vec;
+use std::time::SystemTime;
+
+use rsa::pkcs8::EncodePrivateKey;
+use rsa::rand_core::CryptoRngCore;
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
+
+use crate::keys::cert::{self, CertError};
+use crate::keys::AdbKey;
+
+/// Why an identity could not be built from a key.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum TlsIdentityError {
+    /// The certificate could not be built or signed.
+    Certificate(CertError),
+    /// The private key could not be encoded as PKCS#8.
+    PrivateKey(rsa::pkcs8::Error),
+}
+
+impl core::fmt::Display for TlsIdentityError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Certificate(e) => write!(f, "tls identity certificate: {e}"),
+            Self::PrivateKey(e) => write!(f, "tls identity private key: {e}"),
+        }
+    }
+}
+
+impl core::error::Error for TlsIdentityError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Certificate(e) => Some(e),
+            Self::PrivateKey(e) => Some(e),
+        }
+    }
+}
+
+/// What the host proves itself with over TLS: a self-signed certificate
+/// carrying an [`AdbKey`]'s public key, and that key to sign with.
+///
+/// Building one signs a certificate, so do it once per key: make a
+/// [`TlsClientConfig`](crate::tls::TlsClientConfig) from it with
+/// [`TlsClientConfig::adb`](crate::tls::TlsClientConfig::adb) and share
+/// that between connections, pairing included.
+///
+/// This identity's copy of the private key is wiped when it is dropped.
+/// A `TlsClientConfig` built from it keeps a parsed copy of its own for
+/// as long as the config lives, and that one is not wiped.
+pub struct TlsIdentity {
+    certificate: CertificateDer<'static>,
+    private_key: PrivatePkcs8KeyDer<'static>,
+}
+
+impl TlsIdentity {
+    /// Build the identity `key` presents: a certificate dated from the
+    /// system clock, valid for ten years and signed with `key`. `rng`
+    /// blinds the signature.
+    ///
+    /// # Errors
+    ///
+    /// [`TlsIdentityError::Certificate`] with [`CertError::Clock`] if the
+    /// clock reads a time no certificate can carry, or with another
+    /// [`CertError`] if encoding or signing fails;
+    /// [`TlsIdentityError::PrivateKey`] if the key will not encode as
+    /// PKCS#8.
+    pub fn from_key<R: CryptoRngCore>(key: &AdbKey, rng: &mut R) -> Result<Self, TlsIdentityError> {
+        Self::from_key_at(key, rng, SystemTime::now())
+    }
+
+    /// [`from_key`](Self::from_key), dated from `not_before` instead of
+    /// the clock: for a host whose clock cannot be trusted, or a
+    /// certificate that must come out the same every time.
+    pub fn from_key_at<R: CryptoRngCore>(
+        key: &AdbKey,
+        rng: &mut R,
+        not_before: SystemTime,
+    ) -> Result<Self, TlsIdentityError> {
+        let certificate =
+            cert::build_at(key, rng, not_before).map_err(TlsIdentityError::Certificate)?;
+        let pkcs8 = key
+            .private_key()
+            .to_pkcs8_der()
+            .map_err(TlsIdentityError::PrivateKey)?;
+
+        Ok(Self {
+            certificate: CertificateDer::from(certificate),
+            private_key: PrivatePkcs8KeyDer::from(pkcs8.as_bytes().to_vec()),
+        })
+    }
+
+    /// The certificate in DER, for a caller that wants to inspect or
+    /// publish it.
+    pub fn certificate_der(&self) -> &[u8] {
+        self.certificate.as_ref()
+    }
+
+    /// The chain and key in the shape `rustls` asks for. `rustls` wipes
+    /// this copy of the key once it has parsed it, but the parsed key
+    /// lives in the `ClientConfig` for as long as that does, and nothing
+    /// wipes it.
+    pub(crate) fn rustls_parts(&self) -> (Vec<CertificateDer<'static>>, PrivateKeyDer<'static>) {
+        (
+            vec![self.certificate.clone()],
+            PrivateKeyDer::Pkcs8(self.private_key.clone_key()),
+        )
+    }
+}
+
+impl core::fmt::Debug for TlsIdentity {
+    /// Never prints the private key.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("TlsIdentity")
+            .field("certificate_len", &self.certificate.as_ref().len())
+            .finish_non_exhaustive()
+    }
+}
+
+impl Drop for TlsIdentity {
+    fn drop(&mut self) {
+        // The key is copied out of the zeroizing document it was encoded
+        // into, and is the host's own: every device that trusts the host
+        // trusts this key. Nothing else would wipe the copy.
+        zeroize::Zeroize::zeroize(&mut self.private_key);
+    }
+}
+
+impl zeroize::ZeroizeOnDrop for TlsIdentity {}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_identity_is_marked_zeroize_on_drop() {
+        // Pins only the marker, which is claimed by hand next to the Drop
+        // impl; the wipe itself is that impl, which this cannot see.
+        fn marked<T: zeroize::ZeroizeOnDrop>() {}
+        marked::<super::TlsIdentity>();
+    }
+}

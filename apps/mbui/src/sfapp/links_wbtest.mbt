@@ -45,7 +45,7 @@ test "a link held still: its menu (打开链接, 复制链接: the presenters' s
   // (its menu, the presenters': a sheet with a finger, in)
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
   assert_true(t.find("打开链接") is Some(_))
-  // felt as it opened, once (Links.kt: LongPress)
+  // felt as it opened, once
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   // no words picked by the same press
   assert_eq(pk.ts, "")
@@ -80,11 +80,11 @@ fn links_core(
   let base = fixture(mode)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match (name, history, accounts) {
         ("history", Some(h), _) => { value: Some(h), error: None, version: 1 }
         ("accounts", _, Some(a)) => { value: Some(a), error: None, version: 1 }
-        _ => (base.topic)(name, params)
+        _ => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -98,7 +98,7 @@ fn links_core(
     },
   }
   if mode.has_prefix("chat") {
-    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h~, platform~)
   t.run_for(@ui.move_most_ms)
@@ -163,6 +163,24 @@ test "a link to this chat's own item with ?service=: only its web service over t
   let pages = app.nav.pages()
   assert_eq(pages.length(), 3)
   assert_true(pages[2] == Service("ws1/st1", "j-web"))
+}
+
+///|
+test "a web service's own page's link (/w/…/s/…/services/<job>): the service over this chat; another workspace's, over its Home" {
+  let calls : Array[Made] = []
+  let t = links_core(calls, "chat")
+  open_link("https://app.still.fail/w/ws1/s/st1/services/j-web")
+  let pages = app.nav.pages()
+  assert_eq(pages.length(), 3)
+  assert_true(pages[1] is Chat(_))
+  assert_true(pages[2] == Service("ws1/st1", "j-web"))
+  assert_eq(t.opened().length(), 0)
+  open_link("https://app.still.fail/w/ws2/s/st9/services/j-x")
+  assert_eq(app.picked.get(), "ws2")
+  let pages = app.nav.pages()
+  assert_eq(pages.length(), 2)
+  assert_true(pages[0] == Home)
+  assert_true(pages[1] == Service("ws2/st9", "j-x"))
 }
 
 ///|
@@ -263,7 +281,7 @@ test "a history's link with an entry: its page over the chat, that entry's item 
     _ => fail("not the history")
   }
   t.run_for(@ui.move_most_ms)
-  // entries 11–15: the third item (h3), marked (sfpages' history_steps.mbt), its mark gone after
+  // entries 11–15: the third item (h3), marked (sfpages' history_steps_node.mbt), its mark gone after
   assert_eq(@sfpages.history_marked().1, "h3")
   t.run_for(@sfpages.steps_marked_ms)
   t.assert_idle()
@@ -363,14 +381,14 @@ test "a login's page on this device: the notice that holds the app up says which
   let base = fixture("chat")
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       match name {
         "machineLogins" => { value: Some({ "canLogin": true, "canRelay": true }), error: None, version: 1 }
         "machineLogin" =>
           {
             value: Some({
               "id": "login-1",
-              "title": "在 Studio 上登录 gcloud",
+              "title": "在 Willow 上登录 gcloud",
               "state": "browser",
               "step": "loopback",
               "active": true,
@@ -379,7 +397,7 @@ test "a login's page on this device: the notice that holds the app up says which
             error: None,
             version: 1,
           }
-        _ => (base.topic)(name, params)
+        _ => base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -390,11 +408,11 @@ test "a login's page on this device: the notice that holds the app up says which
       }
     },
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("在浏览器里登录")
   assert_eq(named(calls, "machineLogin.open").length(), 1)
-  assert_eq(t.hold_words(), Some(("登录", "在 Studio 上登录 gcloud", "正在等待浏览器")))
+  assert_eq(t.hold_words(), Some(("登录", "在 Willow 上登录 gcloud", "正在等待浏览器")))
   assert_eq(t.opened(), ["https://accounts.example.com/o/oauth2/auth?x=1"])
 }

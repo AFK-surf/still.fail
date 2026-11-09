@@ -110,10 +110,12 @@ test "a move whose first frames are late one after another (its state built over
   d.fold.val = true
   t.draw()
   let start = t.time()
+  // (its first two frames, each the display's next, drawn by the test itself: what is late is the frame the test says,
+  // whatever frames a run at a rate draws on run_for's way, MBUI_TEST_FPS)
   t.frame_late(move_first_late_ms)
-  t.run_for(first_frame_ms)
+  t.frame()
   t.frame_late(move_first_late_ms)
-  t.run_for(first_frame_ms)
+  t.frame()
   // (each late frame's time not run: as on time, from the second's)
   t.run_for(start + 2.0 * move_first_late_ms + dock_ms / 2.0 - t.time())
   assert_true((width_of(d.node.val) - half).abs() < 1.0e-6, msg="\{width_of(d.node.val)} against \{half}")

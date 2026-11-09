@@ -1,4 +1,4 @@
-// The forms' topics and calls (core/routing.rs, core/execute.rs for the forms in forms.ts).
+// The forms' topics and calls.
 import { Effect } from "effect";
 import type { Inner } from "./core.ts";
 import { handlers } from "./core/execute.ts";
@@ -42,12 +42,6 @@ export class Forms implements Owner {
         }
       },
       {
-        // A Feishu bot no longer waited for: the station stops following it (nobody waits on this; a failure leaves it
-        // to expire there).
-        cancel: (station, id) => {
-          const op = ops.request("feishu.cancelRegistration", { station, id });
-          if (op !== null) inner.runner.fork(Effect.ignore(inner.stations.perform(op, null), { log: "Unhandled", message: "form op performed" }));
-        },
         // Its bot made: the connect is added, as `create` would.
         ready: (topic) => {
           if (this.connects.ready(topic)) inner.runner.fork(Effect.ignore(Effect.suspend(() => this.operate(topic, this.connects.ownerOf(topic), "create", null)), { log: "Unhandled", message: "connect created" }));

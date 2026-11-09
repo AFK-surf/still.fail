@@ -1,5 +1,5 @@
 // Streams on macOS and iOS (src/hostapi/stream.mbt, @ui's Stream): a picture decoded frame by frame, drawn by the app as
-// an image. As still.fail's Android app decodes a remote screen (its remote/Decoders.kt), with what is shown said by
+// an image. As still.fail's Android app decodes a remote screen, with what is shown said by
 // the app.
 //
 // H.264 by VideoToolbox: a decompression session made from the config's avcC (its parameter sets, its NAL length:

@@ -28,7 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * This phone's adb, lent to a station's agents (docs/adb-share.md; still.fail's Android app's AdbShare.kt, as it is):
+ * This phone's adb, lent to a station's agents (as it is):
  * Wireless debugging's ports found on the phone (DNS-SD: AdbPorts) and given to the core (`adb.share`), which offers
  * them to the station and carries what its agents' adb sends. A foreground service (AdbShareService) holds the app up
  * meanwhile and says so, with 停止. While the pairing dialog is open its code is read off it (AdbCodeReader, where the
@@ -48,7 +48,7 @@ final class AdbShare {
     private AdbShare() {}
 
     static final String STATION = "station";
-    /** The service's station while it lends for chats' grants (docs/adb-share.md): to every station they want it on. */
+    /** The service's station while it lends for chats' grants: to every station they want it on. */
     static final String GRANTS = "*grants";
     static final String NAME = "name";
     static final String CODE = "code";
@@ -513,6 +513,18 @@ final class AdbShare {
                 .setCategory(Notification.CATEGORY_SERVICE)
                 .addAction(new Notification.Action.Builder(null, stopLabel, stop).build())
                 .build();
+    }
+
+    /**
+     * The chats whose own screens (virtual displays the stations made) are up on the phone, in a line;
+     * null with none, or with words from before it (kept from an older app's texts).
+     */
+    static String screens(JSONObject view) {
+        org.json.JSONArray titles = view == null ? null : view.optJSONArray("screens");
+        if (titles == null || titles.length() == 0) return null;
+        String key = titles.length() == 1 ? "android-misc.adb.notify.screen" : "android-misc.adb.notify.screens";
+        String said = t(key, "title", titles.optString(0), "n", String.valueOf(titles.length()));
+        return said.equals(key) ? null : said;
     }
 
     /** Whether the pairing dialog is open (its port is announced) and its code still wanted. */

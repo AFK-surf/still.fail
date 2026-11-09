@@ -1,7 +1,7 @@
 // Code coloured once, here, for every client, as Markdown is read here (markdown.ts): a code block comes to the clients
 // with its `ink`, what each piece of it is (a comment, a string, a keyword…), and each client only paints those in its
 // theme's colours. The colours are Shiki's vitesse-light and vitesse-dark, as the web drew code before; the
-// tokenizer is the light one the Android app had (ui/Highlight.kt), not a grammar per language as Shiki has: it knows
+// tokenizer is the light one the Android app had, not a grammar per language as Shiki has: it knows
 // how the common languages write comments, strings and numbers and, per language family, which words vitesse draws as
 // control words (green), which as declarations and operators (red), and whether plain names are variables (brown) or
 // plain text, token for token as Shiki gives them (checked against `codeToTokens` on samples of each family).

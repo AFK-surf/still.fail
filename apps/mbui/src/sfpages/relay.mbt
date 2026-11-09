@@ -1,4 +1,4 @@
-// A chat relayed to a channel (docs/relay.md; web/src/Relay.tsx useRelay, RelayDialog, and the phone's RelaySheet in
+// A chat relayed to a channel (web/src/Relay.tsx useRelay, RelayDialog, and the phone's RelaySheet in
 // mobile/Chat.tsx; Relay.css.ts), one on every screen: from a chat's row's menu, its title bar's panel or its info, the
 // picking opens through the presenters (a dialog with 取消 and 接力 at its foot, a sheet from the foot with touch
 // short of Large). It offers the channels and groups one of the station's connects' bots is in (the chat's own bot as
@@ -46,12 +46,12 @@ pub fn open_relay(src : Source, r : ChatRef, thread : Double, from~ : @sf.Anchor
         Some(row) => @sf.t("web-main.relay.goTo", args=[("place", text(Some(row), "name"))])
         None => @sf.t("web-main.relay.go")
       }
-      if @sf.button(c, @sf.t("common.cancel"), key="relay/cancel", tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key="relay/cancel", tone=Ghost, on_press=fn() {
         close()
-      }
-      if @sf.button(c, label, key="relay/go", tone=Primary, busy=relaying.busy.get(), disabled=!ready) {
+      }) |> ignore
+      @sf.button(c, label, key="relay/go", tone=Primary, busy=relaying.busy.get(), disabled=!ready, on_press=fn() {
         relay_go(src, view, done=close)
-      }
+      }) |> ignore
     },
     gone=fn() {
       if !relaying.busy.get() {
@@ -74,7 +74,7 @@ fn relay_focused(c : @ui.Ctx, key : String) -> Unit {
 }
 
 ///|
-/// The dialog's search, its places, then the note (Relay.css.ts body: one column, 12 apart).
+/// The dialog's search, its places, then the note (12 apart).
 fn relay_body(c : @ui.Ctx, src : Source, view : Json?, link : String?, picked : Json?) -> Unit {
   c.box(style=relay_column, fn() {
     // the bots to go on through, when there are several (scopes)
@@ -84,10 +84,10 @@ fn relay_body(c : @ui.Ctx, src : Source, view : Json?, link : String?, picked : 
       c.box(style=relay_scopes, fn() {
         for b in bots {
           let id = text(Some(b), "id")
-          if relay_scope(c, src, id, text(Some(b), "label"), id == on) {
+          relay_scope(c, src, id, text(Some(b), "label"), id == on, on_press=fn() {
             relaying.bot.set(id)
             relaying.all.set(false)
-          }
+          })
         }
       })
       |> ignore
@@ -105,10 +105,10 @@ fn relay_body(c : @ui.Ctx, src : Source, view : Json?, link : String?, picked : 
         })
       (None, Some(row)) =>
         relay_list(c, fn() {
-          if relay_place(c, "relay/picked", text(Some(row), "kind"), text(Some(row), "name"), Some(text(Some(row), "note")), true, true) {
+          relay_place(c, "relay/picked", text(Some(row), "kind"), text(Some(row), "name"), Some(text(Some(row), "note")), true, true, on_press=fn() {
             relaying.picked.set(None)
             relay_focus.val = "relay/search"
-          }
+          })
           relay_via(c, src, text(Some(row), "connect"))
         })
       (None, None) =>
@@ -152,10 +152,10 @@ fn relay_places(c : @ui.Ctx, view : Json?) -> Unit {
     }
     for row in rows {
       let key = "relay/place/" + text(Some(row), "connect") + "/" + text(field(Some(row), "place"), "id")
-      if relay_place(c, key, text(Some(row), "kind"), text(Some(row), "name"), opt_text(Some(row), "aside"), false, false) {
+      relay_place(c, key, text(Some(row), "kind"), text(Some(row), "name"), opt_text(Some(row), "aside"), false, false, on_press=fn() {
         relaying.picked.set(Some(row))
         relay_focus.val = "relay/note"
-      }
+      })
     }
     match text(view, "empty") {
       "noPlaces" => relay_said(c, @sf.t("web-main.relay.noPlaces"), relay_empty)
@@ -165,9 +165,9 @@ fn relay_places(c : @ui.Ctx, view : Json?) -> Unit {
     let total = number(view, "total").to_int()
     if recent && total > rows.length() {
       let id = c.id("relay/all")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         relaying.all.set(true)
-      }
+      })
       let label = @sf.t("web-main.relay.showAll", args=[("count", total.to_string())])
       let b = c.box(style=relay_more, id~, fn() { c.text(label, style=relay_more_words) |> ignore })
       c.semantics(b, Button, id~, label~)
@@ -195,8 +195,8 @@ fn relay_list(c : @ui.Ctx, body : () -> Unit) -> Unit {
 
 ///|
 /// A place to pick (place): its platform's mark, its name, what relaying there does at its end (`note`, with 更换 after
-/// it where `change`); picked (`on`), on the accent's ground. True on the frame after a press.
-fn relay_place(c : @ui.Ctx, key : String, kind : String, name : String, note : String?, on : Bool, change : Bool) -> Bool {
+/// it where `change`); picked (`on`), on the accent's ground. `on_press` as it is pressed.
+fn relay_place(c : @ui.Ctx, key : String, kind : String, name : String, note : String?, on : Bool, change : Bool, on_press? : () -> Unit) -> Unit {
   let id = c.id(key)
   let b = c.box(style=if on { relay_place_on } else { relay_place_box }, id~, fn() {
     relay_mark(c, kind)
@@ -217,11 +217,14 @@ fn relay_place(c : @ui.Ctx, key : String, kind : String, name : String, note : S
     }
   })
   c.semantics(b, Button, id~, label=name)
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
-/// The people the note can mention (Relay.tsx's popover, the composer's `@` menu's look: ref_menu) while it is
+/// The people the note can mention (the composer's `@` menu's look: ref_menu) while it is
 /// focused and offers some, under it and as wide: its head (可以 @ 的人 and the words typed), then each person, the
 /// one chosen on the hover's ground. ↑ / ↓ choose (round), Enter or Tab (taken as each comes, before the field:
 /// Ctx::on_key) or a press puts the one chosen in; Escape (or a press away) closes it for this `@`.
@@ -348,10 +351,11 @@ fn relay_mentions_pop(
         Some((_, _, w, _)) => w
         None => ref_menu_least
       }
-      c.box(style=ref_menu_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
-        @kit.in_room(c, s, key="relay/mention-list", most=ref_menu_max - 2.0 * @sf.panel_pad, body) |> ignore
+      // (the menu: the surface of the look it comes in by: Ctx::surface)
+      let menu = c.box(style=ref_menu_box.then(@ui.style(w=Fixed(width))), glass=@sf.glass_floating(), fn() {
+        @kit.in_room(c, s, key="relay/mention-list", most=ref_menu_max - 2.0 * @sf.panel_pad, for_field=c.focused_id(), body) |> ignore
       })
-      |> ignore
+      c.surface(menu)
     },
     fn() {
       c.box(style=@sf.full_width, fn() {
@@ -430,9 +434,9 @@ fn relay_avatar(c : @ui.Ctx, src : Source, conn : Json) -> Unit {
 }
 
 ///|
-/// A bot to go on through (scope): its picture and name; the one gone on through filled. True on the frame after a
-/// press.
-fn relay_scope(c : @ui.Ctx, src : Source, bot : String, label : String, on : Bool) -> Bool {
+/// A bot to go on through (scope): its picture and name; the one gone on through filled; `on_press` as it is
+/// pressed.
+fn relay_scope(c : @ui.Ctx, src : Source, bot : String, label : String, on : Bool, on_press? : () -> Unit) -> Unit {
   let id = c.id("relay/bot/" + bot)
   let lit = !on && c.lit(id)
   let b = c.box(style=if on { relay_scope_on } else { relay_scope_box }, id~, fn() {
@@ -443,7 +447,10 @@ fn relay_scope(c : @ui.Ctx, src : Source, bot : String, label : String, on : Boo
     c.text(label, style=if on { relay_scope_name_on } else if lit { relay_scope_name_lit } else { relay_scope_name }) |> ignore
   })
   c.semantics(b, Button, id~, label~, selected=on)
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
@@ -485,7 +492,7 @@ let relay_mark_size : Double = 16.0
 let relay_kind_size : Double = 10.0
 
 ///|
-/// A person's picture (Relay.css.ts person: 16, a menu row's mark).
+/// A person's picture (a menu row's mark).
 let relay_person_size : Double = 16.0
 
 ///|

@@ -17,7 +17,7 @@ test "two identical Mermaid blocks in one message are two pictures, the chart as
       (fixture.call)(name, params, done)
     },
   }
-  let chat = (src.topic)("chat", { "station": "ws1/st1", "session": "s-c1" }).value.unwrap()
+  let chat = src.topic("chat", { "station": "ws1/st1", "session": "s-c1" }).get().value.unwrap()
   let view = @sfbase.chat_view_made(chat)
   let original = view.messages[view.messages.length() - 1]
   let block : Json = ["pre", { "code": "graph TD; A-->B", "lang": "mermaid" }]
@@ -53,13 +53,13 @@ test "a mermaid chart the core makes is drawn as a picture in the theme's colour
     call: fn(name, params, done) {
       if name == "mermaid.chart" {
         asked.push(params)
-        done(Ok({ "svg": svg.to_json(), "width": 200.0.to_json(), "height": 100.0.to_json() }))
+        done(Ok({ "svg": ToJson::to_json(svg), "width": ToJson::to_json(200.0), "height": ToJson::to_json(100.0) }))
       } else {
         (fixture.call)(name, params, done)
       }
     },
   }
-  let chat = (src.topic)("chat", { "station": "ws1/st1", "session": "s-c1" }).value.unwrap()
+  let chat = src.topic("chat", { "station": "ws1/st1", "session": "s-c1" }).get().value.unwrap()
   let view = @sfbase.chat_view_made(chat)
   let original = view.messages[view.messages.length() - 1]
   let block : Json = ["pre", { "code": "graph TD; A-->B", "lang": "mermaid" }]
@@ -109,7 +109,7 @@ test "a chart the core will not make shows as its code" {
       }
     },
   }
-  let chat = (src.topic)("chat", { "station": "ws1/st1", "session": "s-c1" }).value.unwrap()
+  let chat = src.topic("chat", { "station": "ws1/st1", "session": "s-c1" }).get().value.unwrap()
   let view = @sfbase.chat_view_made(chat)
   let original = view.messages[view.messages.length() - 1]
   let block : Json = ["pre", { "code": "graph TD; A-->", "lang": "mermaid" }]

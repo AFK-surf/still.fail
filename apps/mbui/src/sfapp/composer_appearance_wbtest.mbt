@@ -7,7 +7,7 @@ let composer_sample_ms : Double = 50.0
 test "a quote already in the composer moves with its ground as another is added" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
@@ -44,7 +44,7 @@ test "on a small screen a waiting quote moves with the composer when another arr
 test "a quote without a visible source comes in within the growing composer" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   @sfbase.writing_quote(src, @sfbase.writing(src, "ws1/st1:s-c1"), {
@@ -53,7 +53,8 @@ test "a quote without a visible source comes in within the growing composer" {
   t.run_for(composer_sample_ms)
   let (_, ground_y, _, _) = composer_glass(t)
   let cards = t.drawn_instances().filter(fn(a) {
-    a[5] == 0.0 && a[2] > 750.0 && a[2] < 800.0 && a[3] > 55.0 && a[3] < 65.0 && a[1] > 500.0
+    // (its card's shape, as big as the composer's room has grown for it by then)
+    a[5] == 0.0 && a[3] > 0.0 && a[2] / a[3] > 11.5 && a[2] / a[3] < 14.5 && a[2] < 800.0 && a[1] > 500.0
   })
   assert_true(cards.length() > 0, msg="the quote's card should be drawn")
   assert_true(cards.iter().any(fn(a) { a[1] >= ground_y - 1.0 }), msg="the new quote appeared above the composer's ground")
@@ -63,7 +64,7 @@ test "a quote without a visible source comes in within the growing composer" {
 test "a file without a visible source comes in within the growing composer" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   @sfbase.writing_add(src, @sfbase.writing(src, "ws1/st1:s-c1"), "ws1/st1", "新文件.txt", b"test")
@@ -77,13 +78,13 @@ test "a file without a visible source comes in within the growing composer" {
 test "a newly added picture appears within the growing composer" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
   @sfbase.writing_add(src, w, "ws1/st1", "新图片.png", png_head())
   t.run_for(composer_sample_ms)
-  let picture = @sfbase.writing_pictures[text(Some(w.files[0]), "id")]
+  let picture = @sfbase.writing_pictures[text(Some(w.files.get()[0]), "id")]
   let images = t.drawn_instances().filter(fn(a) { a[5] == 4.0 && t.image_src(a[20].to_int()) == picture })
   let (_, ground_y, _, _) = composer_glass(t)
   assert_true(images.length() > 0, msg="the picture was not drawn as the composer opened")
@@ -95,10 +96,40 @@ test "a newly added picture appears within the growing composer" {
 }
 
 ///|
+test "a newly added picture comes in whole, never cut or faded across as the composer opens" {
+  new_run()
+  let src = fixture("chat")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  t.run_for(@ui.move_most_ms)
+  let w = @sfbase.writing(src, "ws1/st1:s-c1")
+  @sfbase.writing_add(src, w, "ws1/st1", "新图片.png", png_head())
+  let picture = @sfbase.writing_pictures[text(Some(w.files.get()[0]), "id")]
+  let mut seen = 0
+  let mut ms = 0.0
+  while ms < @ui.move_most_ms {
+    t.run_for(@ui.frame_period_default)
+    ms = ms + @ui.frame_period_default
+    let (_, ground_y, _, _) = composer_glass(t)
+    for a in t.drawn_instances() {
+      if a[5] != 4.0 || t.image_src(a[20].to_int()) != picture || a[11] <= 0.0 {
+        continue
+      }
+      seen = seen + 1
+      let (top, bottom) = (a[1], a[1] + a[3])
+      assert_true(a[17] <= top + 0.5 && a[19] >= bottom - 0.5, msg="at \{ms} ms the picture \{top}–\{bottom} was cut to \{a[17]}–\{a[19]}")
+      assert_true(!(a[53] > 0.0 && a[52] + a[53] > top + 0.5) && !(a[55] > 0.0 && a[54] - a[55] < bottom - 0.5), msg="at \{ms} ms the picture \{top}–\{bottom} faded across: from its top \{a[52]}+\{a[53]}, its foot \{a[54]}-\{a[55]}")
+      assert_true(top >= ground_y - 1.0, msg="at \{ms} ms the picture showed above the composer's ground")
+    }
+  }
+  assert_true(seen > 0, msg="the picture was not drawn as the composer opened")
+}
+
+///|
 test "a quote sent while the composer opens leaves from where it was seen" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.tap_text("发消息")
   t.type_text("先上屏")
@@ -117,14 +148,14 @@ test "a quote sent while the composer opens leaves from where it was seen" {
 test "a picture sent while the composer opens leaves from where it was seen" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.tap_text("发消息")
   t.type_text("看这张")
   t.run_for(@ui.move_most_ms)
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
   @sfbase.writing_add(src, w, "ws1/st1", "新图片.png", png_head())
-  let picture = @sfbase.writing_pictures[text(Some(w.files[0]), "id")]
+  let picture = @sfbase.writing_pictures[text(Some(w.files.get()[0]), "id")]
   t.run_for(composer_sample_ms * 2.0)
   let before = picture_instances(t, picture)[0].1
   tap_send(t)
@@ -149,7 +180,8 @@ test "an image's marks come into the room the composer opens" {
   t.run_for(composer_sample_ms)
   assert_eq(named(calls, "composer.quote").length(), 1, msg="the mark was not put in the composer")
   let (_, ground_y, _, _) = composer_glass(t)
-  let cards = t.drawn_cut().filter(fn(r) { r.0 == 0 && r.3 > 750.0 && r.3 < 800.0 && r.4 > 55.0 && r.4 < 65.0 })
+  // (its card's shape, as big as the composer's room has grown for it by then)
+  let cards = t.drawn_cut().filter(fn(r) { r.0 == 0 && r.4 > 0.0 && r.3 / r.4 > 11.5 && r.3 / r.4 < 14.5 && r.3 < 800.0 })
   assert_true(cards.length() > 0, msg="the mark's card was not drawn")
   assert_true(cards.iter().any(fn(r) {
     let (_, _, y, _, h, (_, top, _, bottom)) = r
@@ -164,7 +196,7 @@ test "an image's marks come into the room the composer opens" {
 test "an existing file stays in place when a quote is added above it" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.run_for(@ui.move_most_ms)
   let w = @sfbase.writing(src, "ws1/st1:s-c1")
@@ -195,7 +227,7 @@ test "the composer follows a waiting video's picture becoming available" {
     glasses[glasses.length() - 1].1
   }
   let before = ground()
-  let id = text(Some(w.files[0]), "id")
+  let id = text(Some(w.files.get()[0]), "id")
   @sfbase.writing_pictures[id] = "mem:fixture/video-still.png"
   t.draw()
   let first = ground()
@@ -209,7 +241,7 @@ test "the composer follows a waiting video's picture becoming available" {
 test "a quote appears in place when motion is reduced" {
   new_run()
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
   t.set_reduce_motion(true)
   t.draw()

@@ -1,4 +1,4 @@
-// A page's login filled from this device's password manager (ember docs/remote-screens.md, "Filling a login"): while
+// A page's login filled from this device's password manager ("Filling a login"): while
 // this viewer drives a tab of a station's browser whose focus is in a login field, the station says the site (the
 // tab's address, not the page's word); the person's own 1Password (@hostapi passwords.mbt: its command-line tool,
 // which asks them itself) is asked for that site's logins, they pick one where there are more, and its account and
@@ -112,23 +112,28 @@ fn ScreenSess::fill_stop(self : ScreenSess) -> Unit {
 }
 
 ///|
+/// Why 1Password did not give a login, in the person's words (a page's fill and a sign-in's card say it alike).
+fn op_trouble_words(t : @hostapi.OpTrouble) -> String {
+  match t {
+    NoTool => @sf.t("android-misc.screen.fill.noOp")
+    Unreached => @sf.t("android-misc.screen.fill.unreached")
+    Other(why) => @sf.t("android-misc.screen.fill.failed", args=[("why", why)])
+  }
+}
+
+///|
 /// The run under way ended: what it said taken (once).
 fn ScreenSess::fill_took(self : ScreenSess) -> Unit {
   guard self.fill_run is Some(r) else { return }
   guard r.done() is Some(d) else { return }
   r.end()
   self.fill_run = None
-  if d.code != 0 {
-    // (`op` missing, not signed in through the desktop app, or the person said no)
-    let why = d.err.trim(chars=" \n").to_owned()
-    self.fill_said(
-      if d.code == -1 || why.contains("not found") || why.contains("not currently signed in") || why.contains("integration") {
-        @sf.t("android-misc.screen.fill.noOp")
-      } else {
-        @sf.t("android-misc.screen.fill.failed", args=[("why", why)])
-      },
-    )
-    return
+  match d.trouble() {
+    Some(t) => {
+      self.fill_said(op_trouble_words(t))
+      return
+    }
+    None => ()
   }
   match self.fill_step.get() {
     "listing" => {
@@ -206,8 +211,10 @@ fn login_fill(c : @ui.Ctx, s : ScreenSess) -> Unit {
         }
         c.box(style=drop_words, fn() { c.text(title, style=if step == "said" { drop_path_words } else { drop_name }) |> ignore })
         |> ignore
-        if step != "" && screen_row_key(c, "fill-close", "close", @sf.t("common.close")) {
-          s.fill_stop()
+        if step != "" {
+          screen_row_key(c, "fill-close", "close", @sf.t("common.close"), on_press=fn() {
+            s.fill_stop()
+          })
         }
       }, fn() {
         match step {
@@ -218,9 +225,7 @@ fn login_fill(c : @ui.Ctx, s : ScreenSess) -> Unit {
               None => ()
             }
             c.box(style=drop_buttons, fn() {
-              if soft_button(c, "fill", @sf.t("android-misc.screen.fill.button")) {
-                c.tell("screen-fill-start/" + s.view, fn() { s.fill_start() })
-              }
+              soft_button(c, "fill", @sf.t("android-misc.screen.fill.button"), on_press=fn() { s.fill_start() })
             })
             |> ignore
           }
@@ -229,10 +234,7 @@ fn login_fill(c : @ui.Ctx, s : ScreenSess) -> Unit {
             c.box(style=fill_choice_list, fn() {
               for i, l in s.fill_choices {
                 let words = if l.username == "" { l.title } else { l.title + " · " + l.username }
-                if soft_button(c, "fill-pick/\{i}", words) {
-                  let picked = l
-                  c.tell("screen-fill-pick/" + s.view, fn() { s.fill_pick(picked) })
-                }
+                soft_button(c, "fill-pick/\{i}", words, on_press=fn() { s.fill_pick(l) })
               }
             })
             |> ignore

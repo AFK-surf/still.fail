@@ -1,4 +1,4 @@
-// The conformance suite (conformance_graph_wbtest.mbt): Inner Write (innerWrite.ts): what an effect or a computed
+// The conformance suite (conformance_graph_wbtest.mbt): Inner Write: what an effect or a computed
 // writes as it runs (still.fail's topic_read sets a topic's version signal inside a computed's getter). Here a
 // computed may write, so the cases' "side effects forbidden" way out is never taken; #114 and #113 bail out by throwing
 // after 20 and 100 runs (here: they stop there), and #185 is not here (nothing throws).
