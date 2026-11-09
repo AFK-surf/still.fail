@@ -123,6 +123,42 @@ test "a failed software update shows its reason without a hover" {
 }
 
 ///|
+test "a station's update said beside its name keeps clear of the name" {
+  for (w, platform) in page_cases {
+    @sfbase.reset()
+    reset()
+    @settings.reset()
+    @sffixture.fixture_reset()
+    @sf.presenters_reset()
+    @sf.set_words(@sfbase.fill)
+    let src = @sffixture.fixture("settings")
+    let update : Json = {
+      "id": "station", "name": "Station", "installed": true, "updatable": true, "state": "idle",
+      "shownText": "0.1.8100", "done": "已更新到 0.1.8100，agent 未中断", "channel": "beta", "auto": true,
+    }
+    let core = @sfbase.settings_core(src, rig_workspace)
+    let t = station_part_tester(fn(p) {
+      software_row_node(p, core, "ws1/st1", fn() { Some(update) }, true, fn() { false }, fn() { true }, @sf.TipLayer::new(fn() { None }))
+    }, w~, h=300.0, platform~)
+    // (the phone in the report had its words bigger: the system's setting, 1.3)
+    for scale in [1.0, 1.3] {
+      t.set_font_scale(scale)
+      t.draw()
+      let at = "\{w} platform \{platform} words at \{scale}"
+      let words = t.words()
+      let name = words.search_by(fn(x) { x.0 == "Station" })
+      let said = words.search_by(fn(x) { x.0.contains("已更新到 0.1.8100") })
+      guard name is Some(n) && said is Some(d) else { fail("not drawn: \{at}") }
+      let (_, nx, ny, nw, nh, _) = words[n]
+      let (_, dx, dy, dw, dh, _) = words[d]
+      let apart = dx >= nx + nw || nx >= dx + dw || dy >= ny + nh || ny >= dy + dh
+      assert_true(apart, msg="\{at}: Station at (\{nx}, \{ny}, \{nw}, \{nh}), what it says at (\{dx}, \{dy}, \{dw}, \{dh})")
+      assert_eq(t.squeeze_faults(), [], msg=at)
+    }
+  }
+}
+
+///|
 test "an incomplete Codex offers its manager an explicit npm repair" {
   for (w, platform) in page_cases {
     @sfbase.reset()

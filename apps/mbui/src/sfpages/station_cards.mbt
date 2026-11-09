@@ -343,8 +343,8 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
       }
     })
     |> ignore
-    // its name and what is newer with updating it on its first line; its version, why it cannot be updated and its
-    // own switches under them, as wide as its words (lines of their own)
+    // its name and what is newer with updating it on its first line; its version, what an update says, why it cannot
+    // be updated and its own switches under them, as wide as its words (lines of their own)
     @sf.row_lines(c, spaced=true, fn() {
       c.box(style=sw_name_line.then(sw_name_grow), fn() {
         c.text(text(v, "name"), style=sw_name) |> ignore
@@ -359,7 +359,6 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
             Some(Number(p, ..)) => @sf.progress(c, "software/" + station + "/" + id, Some(p / 100.0), w=Px(sw_progress_w))
             _ => ()
           }
-          c.text(text(v, "updatingText"), style=sw_newer) |> ignore
         } else if state == "failed" {
           c.text(text(v, "failedText"), style=sw_failed) |> ignore
           if flag(v, "repairable") {
@@ -377,8 +376,6 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
         } else if flag(v, "downgrade") && latest != "" {
           c.text(latest, style=sw_newer) |> ignore
           button(@sf.t("web-main.versions.backToStable"), false)
-        } else if text(v, "done") != "" {
-          c.text(text(v, "done"), style=sw_newer) |> ignore
         }
       })
       |> ignore
@@ -387,6 +384,10 @@ fn software_row(c : @ui.Ctx, core : Core, station : String, v : Json?, manager :
       c.box(id=vid, style=sw_version_box, fn() { c.text(text(v, "shownText"), style=sw_version) |> ignore }) |> ignore
       if text(v, "tipText") != "" {
         @sf.tip(c, "software-tip/" + station + "/" + id, vid, text(v, "tipText"))
+      }
+      // (what an update under way or done says: on a line of its own, not beside its name)
+      if software_said(v) != "" {
+        c.text(software_said(v), style=sw_note) |> ignore
       }
       if text(v, "note") != "" {
         c.text(text(v, "note"), style=sw_note) |> ignore
