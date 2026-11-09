@@ -289,24 +289,40 @@ fn Ctx::flat_from(self : Ctx, i0 : Int) -> Unit {
 
 ///|
 /// Instance `b` of `s` cut to (h0, h1, h2, h3) as well, as a header's clip cuts its group's (its 16-19; none, all 0):
-/// where its own clip is square, that clip cut to it; else its outer, or it as its outer where it has none. As the host
-/// draws a header out (groups.h's mb_groups_draw_out), the same.
+/// where its own clip is square or it has no outer, its own clip cut to it as a square clip cuts a round one it holds
+/// (push_box_clip, clamp_inst_clip: a corner the cut moves square); else its outer. Never the header's as its outer
+/// where it has none: an outer with no corner's radius is none (scene.mbt 40-51), what it cut drawn whole (a row's
+/// words in a round box scrolled past the list's top, over what is above it). As the host draws a header out
+/// (groups.h's mb_groups_draw_out), the same.
 fn inst_cut_to(s : FixedArray[Double], b : Int, h0 : Double, h1 : Double, h2 : Double, h3 : Double) -> Unit {
   if h0 == 0.0 && h1 == 0.0 && h2 == 0.0 && h3 == 0.0 {
     return
   }
-  if s[b + 24] == 0.0 && s[b + 25] == 0.0 && s[b + 26] == 0.0 && s[b + 27] == 0.0 {
-    s[b + 16] = dmax(s[b + 16], h0)
-    s[b + 17] = dmax(s[b + 17], h1)
-    s[b + 18] = dmin(s[b + 18], h2)
-    s[b + 19] = dmin(s[b + 19], h3)
-  } else if s[b + 40] == 0.0 && s[b + 41] == 0.0 && s[b + 42] == 0.0 && s[b + 43] == 0.0 {
-    s[b + 40] = h0
-    s[b + 41] = h1
-    s[b + 42] = h2
-    s[b + 43] = h3
-    for j in 44..<52 {
-      s[b + j] = 0.0
+  if (s[b + 24] == 0.0 && s[b + 25] == 0.0 && s[b + 26] == 0.0 && s[b + 27] == 0.0) ||
+    (s[b + 40] == 0.0 && s[b + 41] == 0.0 && s[b + 42] == 0.0 && s[b + 43] == 0.0) {
+    let m0 = s[b + 16]
+    let m1 = s[b + 17]
+    let m2 = s[b + 18]
+    let m3 = s[b + 19]
+    s[b + 16] = dmax(m0, h0)
+    s[b + 17] = dmax(m1, h1)
+    s[b + 18] = dmin(m2, h2)
+    s[b + 19] = dmin(m3, h3)
+    if s[b + 16] != m0 || s[b + 17] != m1 {
+      s[b + 24] = 0.0
+      s[b + 28] = 0.0
+    }
+    if s[b + 18] != m2 || s[b + 17] != m1 {
+      s[b + 25] = 0.0
+      s[b + 29] = 0.0
+    }
+    if s[b + 18] != m2 || s[b + 19] != m3 {
+      s[b + 26] = 0.0
+      s[b + 30] = 0.0
+    }
+    if s[b + 16] != m0 || s[b + 19] != m3 {
+      s[b + 27] = 0.0
+      s[b + 31] = 0.0
     }
   } else {
     s[b + 40] = dmax(s[b + 40], h0)

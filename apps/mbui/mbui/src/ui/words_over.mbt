@@ -209,12 +209,12 @@ fn Ctx::words_over_details(self : Ctx) -> Array[(String, String, Double, Double,
     let y1 = dmin(a[b + 1] + a[b + 3] - 0.75, a[b + 19])
     let y1 = if a[b + 55] > 0.0 { dmin(y1, a[b + 54] - a[b + 55] * least) } else { y1 }
     let (x0, y0, x1, y1) = (dmax(x0, 0.0), dmax(y0, 0.0), dmin(x1, self.width), dmin(y1, self.height))
-    // (and by its outer, where it has one (its 40-43: a round clip's in a square one, a row's in the list's group that
-    // cuts it, inst_cut_to): what the renderers cut it by too)
-    let (x0, y0, x1, y1) = if a[b + 40] == 0.0 && a[b + 41] == 0.0 && a[b + 42] == 0.0 && a[b + 43] == 0.0 {
-      (x0, y0, x1, y1)
-    } else {
+    // (and by its outer, where it has one (40-51, a corner's radius: a round clip's in a square one): what the
+    // renderers cut it by too; a rect there with no corner's radius is none, cutting nothing as they draw it)
+    let (x0, y0, x1, y1) = if inst_has_outer(a, b) {
       (dmax(x0, a[b + 40]), dmax(y0, a[b + 41]), dmin(x1, a[b + 42]), dmin(y1, a[b + 43]))
+    } else {
+      (x0, y0, x1, y1)
     }
     if x1 > x0 && y1 > y0 {
       ks.push(k)
