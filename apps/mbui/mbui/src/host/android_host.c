@@ -3,6 +3,7 @@
 // GLES3 renderer and forwards between Java and the MoonBit callbacks. All
 // MoonBit code runs on the GL thread. Built by scripts/android.sh.
 #include <sys/resource.h>
+#include <dlfcn.h>
 #include <jni.h>
 #include <GLES3/gl3.h>
 #include <android/log.h>
@@ -1017,6 +1018,54 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   jint r = (*env)->CallStaticIntMethod(env, host_cls, m_drive, (jint)kind, s);
   (*env)->DeleteLocalRef(env, s);
   return r;
+}
+
+// Input to the screen measured (Latency.java): the frame the next swap presents, and what the system says of it
+// (EGL_ANDROID_get_frame_timestamps: when the GPU finished it, when the compositor latched it, composited it, and when
+// the display showed it, CLOCK_MONOTONIC's ns as System.nanoTime's; -1 none, -2 not yet). EGL is GLSurfaceView's,
+// in the process already: its calls looked up there, nothing linked for them. A frame with no id says why: -2 no EGL,
+// -3 no such extension, -4 the surface keeps no timestamps, -5 the system gave no id.
+typedef unsigned long long lat_u64;
+static unsigned (*lat_next_id)(void *, void *, lat_u64 *);
+static unsigned (*lat_times)(void *, void *, lat_u64, int, const int *, long long *);
+static void *(*lat_display)(void);
+static void *(*lat_surface)(int);
+static unsigned (*lat_attrib)(void *, void *, int, int);
+static void *lat_kept_on;
+
+JNIEXPORT jlong JNICALL Java_dev_mbui_Native_latencyFrame(JNIEnv *env, jclass c) {
+  if (!lat_next_id) {
+    void *egl = dlopen("libEGL.so", RTLD_NOW);
+    if (!egl) return -2;
+    void *(*proc)(const char *) = (void *(*)(const char *))dlsym(egl, "eglGetProcAddress");
+    lat_display = (void *(*)(void))dlsym(egl, "eglGetCurrentDisplay");
+    lat_surface = (void *(*)(int))dlsym(egl, "eglGetCurrentSurface");
+    lat_attrib = (unsigned (*)(void *, void *, int, int))dlsym(egl, "eglSurfaceAttrib");
+    if (!proc || !lat_display || !lat_surface || !lat_attrib) return -2;
+    lat_times = (unsigned (*)(void *, void *, lat_u64, int, const int *, long long *))proc("eglGetFrameTimestampsANDROID");
+    lat_next_id = (unsigned (*)(void *, void *, lat_u64 *))proc("eglGetNextFrameIdANDROID");
+    if (!lat_times || !lat_next_id) {
+      lat_next_id = NULL;
+      return -3;
+    }
+  }
+  void *d = lat_display(), *s = lat_surface(0x3059 /* EGL_DRAW */);
+  // (EGL_TIMESTAMPS_ANDROID: kept for the surface's frames from now on)
+  if (s != lat_kept_on) {
+    if (!lat_attrib(d, s, 0x3430, 1)) return -4;
+    lat_kept_on = s;
+  }
+  lat_u64 id;
+  return lat_next_id(d, s, &id) ? (jlong)id : -5;
+}
+
+JNIEXPORT jint JNICALL Java_dev_mbui_Native_latencyTimes(JNIEnv *env, jclass c, jlong id, jlongArray out) {
+  // rendering complete, composition latch, first composition start, display present
+  static const int names[] = {0x3435, 0x3436, 0x3437, 0x343A};
+  long long v[4];
+  if (!lat_times || !lat_times(lat_display(), lat_surface(0x3059), (lat_u64)id, 4, names, v)) return 0;
+  (*env)->SetLongArrayRegion(env, out, 0, 4, (const jlong *)v);
+  return 1;
 }
 
 // MainActivity sets the intent's `env` extras as the process's environment before the app starts. A release build

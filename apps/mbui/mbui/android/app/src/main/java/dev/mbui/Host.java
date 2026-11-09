@@ -522,6 +522,8 @@ final class Host {
     static int drive(int kind, String text) {
         // a notification of the app's, tapped or looked for by its words (Notices.drive)
         if (kind == 6 || kind == 7) return Notices.drive(kind == 6, text);
+        // input to the screen measured (Latency)
+        if (kind == 12) return Latency.start(text);
         if (kind == 4 || kind > 5) return 0;
         main.post(() -> {
             MBView v = view;

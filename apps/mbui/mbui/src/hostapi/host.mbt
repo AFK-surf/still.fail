@@ -2333,7 +2333,9 @@ pub fn install_package(name : String, data : Bytes) -> Unit {
 /// app's notifications (notify.mbt) whose title or words hold `text`, tapped (6) or only looked for (7), false when none
 /// does; 8 the window resized to "<w>x<h>"; 9 the directory `text` watched for what the run's runner has done, each
 /// file come there posted on channel "runner" (done_watch.h: macOS, Android, Windows); 10 the canvas's GL context made
-/// anew, as one lost (Linux and the browser: the images' contract, scripts/host_contract.sh), 11 whether it has been since. False where
+/// anew, as one lost (Linux and the browser: the images' contract, scripts/host_contract.sh), 11 whether it has been since;
+/// 12 input to the screen measured by the host, `text` "MODE X Y" (macOS's mac_latency.h, Android's Latency.java: its
+/// own events from then on, the process ending with what it measured). False where
 /// the host has no such path (the caller sends it to the app itself).
 pub fn drive(kind : Int, text : String) -> Bool {
   current.val.drive(kind, text)

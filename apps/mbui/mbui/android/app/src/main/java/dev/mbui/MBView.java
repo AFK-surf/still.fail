@@ -221,6 +221,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         // a view not the host's (its activity paused under another of the app's: an OverActivity's draws), kept as it
         // last drew: one thread draws the app at a time
         if (Host.view != this) return;
+        Latency.frameBegins();
         boolean app = pacer.appWanted.getAndSet(false), pictured = pacer.picturesOnly.getAndSet(false);
         // another view set the drawing up in its own context since this one did (an OverActivity came and went): set
         // up again here, at this view's size
@@ -248,6 +249,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             showAt(at[1]);
             NativeViews.framed(false);
             pacer.redrawn();
+            Latency.frameEnds();
             return;
         }
         long began = System.nanoTime();
@@ -265,6 +267,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         NativeViews.framed(more || later);
         Script.frameDrawn();
         frameWorked(System.nanoTime() - began);
+        Latency.frameEnds();
     }
 
     // ---- the drawing thread, as the system's own ----

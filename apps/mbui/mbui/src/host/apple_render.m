@@ -1083,6 +1083,13 @@ static double present_ms[4];
 __attribute__((weak)) int mb_perf_on(void) { return 0; }
 __attribute__((weak)) void mb_perf_note(const char *line) { (void)line; }
 
+// A frame's drawable about to be presented (mac_latency.h, a run measuring input to the screen: none elsewhere, this
+// default): when the frame asked for a buffer of the ring (p0), had one (p1), asked for the drawable (p2) and had it
+// (p3), CACurrentMediaTime's seconds.
+__attribute__((weak)) void mb_latency_presenting(id<CAMetalDrawable> d, double p0, double p1, double p2, double p3) {
+  (void)d, (void)p0, (void)p1, (void)p2, (void)p3;
+}
+
 static void present_probe(double ring, double upload_s, double drawable, double encode_s) {
   if (present_probing < 0) {
     const char *v = getenv("MBUI_PROBE");
@@ -1186,6 +1193,7 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
     const float *f = (const float *)buf.contents;
     for (int32_t i = 0; i < count && !shown_streams; i++) shown_streams = f[i * MB_INST + 20] > (float)MB_STREAM_TEX;
   }
+  if (drawable) mb_latency_presenting(drawable, p0, p1, p2, p3);
   // (a layer that presents with its transaction: shown with the window's change it was drawn for, mac_app.m
   // drawWithWindow, or the views' moves; once its commands are scheduled, as Core Animation asks)
   if (drawable && mlayer.presentsWithTransaction) {

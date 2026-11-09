@@ -132,6 +132,8 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   contracts (`mbui-host-*`), the render contracts, and a few end-to-end smoke flows that wait for named events; their
   pictures are for people, not compared. detlint's `device-shot` counts each picture taken off a device: a new one
   fails.
+- How long input takes to show (`scripts/latency.sh`: a Mac's window, a phone) is measured for people on a real host,
+  never a check: its runs differ with the window server's state, so it says medians of several, two builds in turn.
 
 ## The host is asked through mbui/hostapi
 
