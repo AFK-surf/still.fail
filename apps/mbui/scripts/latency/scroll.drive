@@ -1,0 +1,7 @@
+# A long chat's messages scrolled under the window's middle: a trackpad on a Mac, a finger on a phone
+# (mac_latency.h, Latency.java)
+timeout 20000
+until 发消息
+latency scroll
+timeout 600000
+ends

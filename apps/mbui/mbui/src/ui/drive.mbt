@@ -69,6 +69,10 @@
 //   exit                        ends the run: DRIVE PASS, exit 0
 //   ends                        the app ends by itself, its host quitting it (an update handed to its installer), within
 //                               the timeout; else the run fails. What follows it is never reached
+//   latency MODE TEXT           input to the screen measured by the host itself (macOS, Android), from the lowest TEXT
+//                               on screen (or @X,Y; none: the window's middle): its own events from then on (type,
+//                               scroll, drag; anim none), the process ending with what it measured (LATENCY …, said by
+//                               the host: still.fail's scripts/latency.sh); `ends` after it. For people, never a check
 //   linger MS                   the run passed (DRIVE PASS said now), the app left running MS more for what the last
 //                               step set off (a share sheet, a download): a check beside the run looks at it
 //   answered CALL               a call to the core named CALL (drive.read; or a subscription's topic key, its first
@@ -713,6 +717,18 @@ fn number(s : String) -> Double {
 }
 
 ///|
+/// The place a step says as `@X,Y` (none where it says no such place).
+fn point_said(what : String) -> Array[(Double, Double)] {
+  match what.find(",") {
+    Some(i) => {
+      let x = number(what.unsafe_substring(start=1, end=i))
+      [(x, number(what.unsafe_substring(start=i + 1, end=what.length())))]
+    }
+    None => []
+  }
+}
+
+///|
 /// The lowest of the places found (a list builds its rows in no order on screen: the newest is the lowest).
 fn lowest(at : Array[(Double, Double)]) -> (Double, Double) {
   let mut best = at[0]
@@ -1137,17 +1153,7 @@ fn drive_steps(c : Ctx) -> Unit {
         }
         let what = words[4:].to_owned().join(" ")
         // (`@X,Y`: there, words in a field being none of what is on screen to find)
-        let at = if what.has_prefix("@") {
-          match what.find(",") {
-            Some(i) => {
-              let x = number(what.unsafe_substring(start=1, end=i))
-              [(x, number(what.unsafe_substring(start=i + 1, end=what.length())))]
-            }
-            None => []
-          }
-        } else {
-          reachable(c, what)
-        }
+        let at = if what.has_prefix("@") { point_said(what) } else { reachable(c, what) }
         if at.length() == 0 {
           if waited > d.timeout {
             drive_fail(c, d, not_reachable(c, what, d.timeout))
@@ -1369,6 +1375,34 @@ fn drive_steps(c : Ctx) -> Unit {
           }
           "wheelxat" => on_wheel(x, y, dy, 0.0, 4)
           _ => on_wheel(x, y, 0.0, dy, 4)
+        }
+        acted()
+        return
+      }
+      "latency" => {
+        let (mode, what) = match arg.find(" ") {
+          Some(i) => (arg.unsafe_substring(start=0, end=i), arg.unsafe_substring(start=i + 1, end=arg.length()))
+          None => (arg, "")
+        }
+        // (where a wheel or a key goes: what is under the words, whatever lies over them)
+        let at = if what == "" {
+          [(c.width / 2.0, c.height / 2.0)]
+        } else if what.has_prefix("@") {
+          point_said(what)
+        } else {
+          on_screen(c, what)
+        }
+        if at.length() == 0 {
+          if waited > d.timeout {
+            drive_fail(c, d, not_reachable(c, what, d.timeout))
+          }
+          return
+        }
+        let (x, y) = lowest(at)
+        h_log("DRIVE latency \{mode} at \{x.to_int()},\{y.to_int()}")
+        if !h_drive(12, "\{mode} \{x} \{y}") {
+          drive_fail(c, d, "latency: this host measures no input latency, or not \{mode} (type, scroll, drag, anim)")
+          return
         }
         acted()
         return

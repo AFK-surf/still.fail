@@ -140,6 +140,8 @@ void mb_host_set_window_key(int32_t (*f)(int32_t, int32_t)) { window_key = f; }
 
 // the device beyond the window (device.mbt): a key catcher's keys, the clipboard, awake, haptics
 #include "apple_device.h"
+// input to the screen measured (a drive's `latency`, scripts/latency.sh)
+#include "mac_latency.h"
 
 static int32_t drop_pick(NSArray<NSURL *> *urls);
 
@@ -320,6 +322,7 @@ static double record_t0 = -1;
   mb_text_set_scale(scale * window_content_zoom);
   mb_render_set_size(s.width / window_content_zoom, s.height / window_content_zoom, scale * window_content_zoom);
   self.wantFrame = NO;
+  lat_frame_begins();
   if (record_dir) {
     if (record_t0 < 0) {
       record_t0 = mb_now_ms();
@@ -1887,7 +1890,12 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   if (!getenv("MBUI_MACHINE") && gethostname(machine, sizeof machine) == 0) setenv("MBUI_MACHINE", machine, 0);
   @autoreleasepool {
     [NSApplication sharedApplication];
-    [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    // (a run measuring input to the screen, mac_latency.h: out of the way of whoever works here, its window shown
+    // without the app made active, and its wakes as the app in front's: App Nap would put them off by milliseconds)
+    [NSApp setActivationPolicy:latency_run() ? NSApplicationActivationPolicyAccessory : NSApplicationActivationPolicyRegular];
+    if (latency_run())
+      [NSProcessInfo.processInfo beginActivityWithOptions:NSActivityUserInitiated | NSActivityLatencyCritical
+                                                   reason:@"measuring input latency"];
     // the app's life (put away as its window closes, back from the Dock) and its menu bar's items: MBAppDelegate
     if (!app_delegate) app_delegate = [MBAppDelegate new];
     NSApp.delegate = app_delegate;
@@ -1974,7 +1982,8 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
       w.alphaValue = 0;
       w.ignoresMouseEvents = YES;
     }
-    [w makeKeyAndOrderFront:nil];
+    if (latency_run()) [w orderFrontRegardless];
+    else [w makeKeyAndOrderFront:nil];
     [w makeFirstResponder:the_view];
     // full screen from as the system starts taking the window there, a window from as it starts bringing it back
     // (full_screen_on)
@@ -1982,7 +1991,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
                                                   usingBlock:^(NSNotification *n) { full_screen_going(w, true); }];
     [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowWillExitFullScreenNotification object:w queue:nil
                                                   usingBlock:^(NSNotification *n) { full_screen_going(w, false); }];
-    [NSApp activateIgnoringOtherApps:YES];
+    if (!latency_run()) [NSApp activateIgnoringOtherApps:YES];
     // closed, the program ends (an app's bundle's window is put away instead: MBAppDelegate windowShouldClose)
     w.delegate = app_delegate;
     [[NSNotificationCenter defaultCenter] addObserverForName:NSWindowWillCloseNotification
@@ -3315,6 +3324,9 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
     case 7: return notice_drive(kind == 6, s);
     // the directory the run's runner says what it has done in, watched (done_watch.h)
     case 9: return mb_done_watch(text);
+    // input to the screen measured, "MODE X Y" (mac_latency.h): the run's own events from now on, the process ending
+    // with what it measured
+    case 12: return lat_start(s);
     default: return 0;
   }
   [v requestFrame];
