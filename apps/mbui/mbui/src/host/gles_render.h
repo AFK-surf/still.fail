@@ -13,6 +13,7 @@
 // What is drawn where is the host's to say: the frame's size in points and its scale (cur_w, cur_h, cur_scale), the
 // surface's in pixels (fb_w, fb_h), the framebuffer drawn into (target_fb); gl_setup once its context is current.
 #include "contained.h"
+#include "bands.h"
 
 // the numbers of an instance (src/ui/scene.mbt)
 #define MB_INST 60
@@ -307,6 +308,15 @@ static const char *FS =
     "}\n";
 
 // glass's passes over its copy of what is under it
+// the flat pipeline: a ground's colour where it is covered whole, cut by straight clips alone (bands.h mb_pieces): what
+// FS writes there, nothing worked out
+static const char *FS_FLAT =
+    "#version 300 es\n"
+    "precision highp float;\n"
+    "flat in vec4 v_color;\n"
+    "out vec4 o;\n"
+    "void main() { o = vec4(v_color.rgb, 1.0) * v_color.a; }\n";
+
 static const char *PVS =
     "#version 300 es\n"
     "void main() {\n"
@@ -364,6 +374,9 @@ static const char *PFS =
     "}\n";
 
 static GLuint prog, vao, vbo, atlas, catlas, post;
+// a ground's flat middle (bands.h mb_pieces), and where its window's size goes
+static GLuint prog_flat;
+static GLint uf_vp;
 static GLint u_vp, u_scale, u_atlas, u_catlas, u_img, u_bd, u_map, u_uvc, u_gb, u_shape, u_rad, u_n, pu_src, pu_a, pu_b, pu_c;
 static float *fbuf;
 // the pieces of the frame's shapes (src/ui/shape.mbt: the instances of kind 12 after every one drawn), for the shader
@@ -419,6 +432,11 @@ static void gl_setup(void) {
   u_rad = glGetUniformLocation(prog, "u_rad");
   u_n = glGetUniformLocation(prog, "u_n");
   u_segs = glGetUniformLocation(prog, "u_segs");
+  prog_flat = glCreateProgram();
+  glAttachShader(prog_flat, compile(GL_VERTEX_SHADER, VS));
+  glAttachShader(prog_flat, compile(GL_FRAGMENT_SHADER, FS_FLAT));
+  glLinkProgram(prog_flat);
+  uf_vp = glGetUniformLocation(prog_flat, "u_vp");
   segs_tex = 0;
   segs_rows = 0;
   segs_had_n = 0;
@@ -973,6 +991,42 @@ static void draw_kept(void) {
 // The frame kept drawn into framebuffer `fb` (the surface's size): `part` 1, only the part `cut` over what it holds
 // (the frame's ground there first), else all of it, cleared to the ground. Whether a picture was missing in
 // encode_missing.
+// Instances first to first + n drawn (GLES has no base instance: the attributes start at the first).
+static void draw_run(int32_t first, int32_t n) {
+  for (int i = 0; i < MB_INST / 4; i++)
+    glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(first * MB_INST * 4 + i * 16));
+  glDrawArraysInstanced(GL_TRIANGLES, 0, 6, n);
+}
+
+// Instances start to end drawn, each that pays for it in strips (bands.h), the
+// rest as they come.
+static void draw_banded(int32_t start, int32_t end, int32_t count) {
+  int top = vy0 + vhp;
+  MBStrip to = cut_on ? mb_strip(cut[0], top - (cut[1] + cut[3]), cut[0] + cut[2], top - cut[1]) : mb_strip(0, 0, fb_w, vhp);
+  MBStrip st[MB_STRIPS];
+  int32_t s = start;
+  for (int32_t i = start; i < end; i++) {
+    if (!mb_band_kind(fbuf, i)) continue;
+    int n = mb_bands(fbuf, i, count, (float)cur_scale, to, st);
+    if (n < 0) continue;
+    if (i > s) draw_run(s, i - s);
+    glEnable(GL_SCISSOR_TEST);
+    for (int k = 0; k < n; k++) {
+      if (k == 0 || st[k].flat != st[k - 1].flat) {
+        glUseProgram(st[k].flat ? prog_flat : prog);
+        if (st[k].flat) glUniform2f(uf_vp, (float)cur_w, (float)cur_h);
+      }
+      glScissor(st[k].x0, top - st[k].y1, st[k].x1 - st[k].x0, st[k].y1 - st[k].y0);
+      draw_run(i, 1);
+    }
+    if (n > 0 && st[n - 1].flat) glUseProgram(prog);
+    if (cut_on) glScissor(cut[0], cut[1], cut[2], cut[3]);
+    else glDisable(GL_SCISSOR_TEST);
+    s = i + 1;
+  }
+  if (end > s) draw_run(s, end - s);
+}
+
 static void draw_into(GLuint fb, int part) {
   int32_t count = kept_count;
   double r = kept_r, g = kept_g, b = kept_b;
@@ -1068,7 +1122,8 @@ static void draw_into(GLuint fb, int part) {
       int under = tid > MB_VIEW_TEX && view_under(tid);
       if (under) glBlendFunc(GL_ZERO, GL_ONE_MINUS_SRC_ALPHA);
 #endif
-      glDrawArraysInstanced(GL_TRIANGLES, 0, 6, end - start);
+      if (tid == 0) draw_banded(start, end, count);
+      else glDrawArraysInstanced(GL_TRIANGLES, 0, 6, end - start);
 #ifdef MB_VIEWS_UNDER
       if (under) glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 #endif

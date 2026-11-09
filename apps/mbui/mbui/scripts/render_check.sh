@@ -57,6 +57,10 @@ else
   echo "render_check: a frame drawn only where it differs is not the frame drawn whole ($O/partial.png, partial.whole.png)"
   exit 1
 fi
+render_strips_dl "$O"
+MBUI_DL=$PWD/$O/strips.dl MBUI_DL_PNG=$PWD/$O/strips.png ./_build/native/release/build/render/render.exe
+MBUI_STRIPS=0 MBUI_DL=$PWD/$O/strips.dl MBUI_DL_PNG=$PWD/$O/strips.whole.png ./_build/native/release/build/render/render.exe
+render_strips check "$O"
 for k in clip-cut clip-box; do
   MBUI_DL_PRINT=$k moon_test_native src/kitdemo/gallery/dl_print_wbtest.mbt 2>/dev/null |
     awk '/^DLEND/{p=0} p{print} /^DLBEGIN/{p=1}' > $O/$k.dl

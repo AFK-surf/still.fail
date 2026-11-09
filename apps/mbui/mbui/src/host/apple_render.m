@@ -1,7 +1,8 @@
-// Metal renderer: one pipeline, one instanced quad per scene instance.
+// Metal renderer: one pipeline, one instanced quad per scene instance (some drawn in strips: bands.h).
 #import "apple.h"
 #include "corner_sl.h"
 #include "contained.h"
+#include "bands.h"
 #import <ImageIO/ImageIO.h>
 #import <CoreGraphics/CoreGraphics.h>
 
@@ -14,6 +15,8 @@ static id<MTLRenderPipelineState> mpipe;
 static id<MTLRenderPipelineState> rpipe_off;
 // holes for native views (kind 9): written, not blended
 static id<MTLRenderPipelineState> hpipe;
+// a ground's flat middle (bands.h mb_pieces)
+static id<MTLRenderPipelineState> fpipe;
 // the words' glyphs (R8) and colour glyphs (RGBA), square (apple.h)
 static id<MTLTexture> atlas, catlas;
 static CAMetalLayer *mlayer;
@@ -287,6 +290,12 @@ MB_CORNER_SL
 "  }\n"
 "  return (fill * a) * cover;\n"
 "}\n"
+"// the flat pipeline: a ground's colour where it is covered whole, cut by straight clips alone (bands.h mb_pieces): what\n"
+"// fmain writes there, nothing worked out\n"
+"fragment float4 fflat(VOut in [[stage_in]], const device Inst* inst [[buffer(0)]]) {\n"
+"  float4 col = inst[in.iid].color;\n"
+"  return float4(col.rgb, 1.0) * col.a;\n"
+"}\n"
 "// The backdrop's passes: a.xy the source's texel, a.z 1 halving (dual Kawase's down), 2 a Gaussian along b.zw of\n"
 "// deviation a.w (texels); b.xy the last texel's centre of what the source holds\n"
 "struct PU { float4 a; float4 b; float4 map, box, rr, clip, rc, rs, outer, orc, ors; };\n"
@@ -330,10 +339,10 @@ MB_CORNER_SL
 "  return o / wsum;\n"
 "}\n";
 
-static id<MTLRenderPipelineState> make_pipe(id<MTLLibrary> lib, MTLPixelFormat fmt, BOOL blend) {
+static id<MTLRenderPipelineState> make_pipe(id<MTLLibrary> lib, MTLPixelFormat fmt, BOOL blend, NSString *frag) {
   MTLRenderPipelineDescriptor *d = [MTLRenderPipelineDescriptor new];
   d.vertexFunction = [lib newFunctionWithName:@"vmain"];
-  d.fragmentFunction = [lib newFunctionWithName:@"fmain"];
+  d.fragmentFunction = [lib newFunctionWithName:frag];
   d.colorAttachments[0].pixelFormat = fmt;
   d.colorAttachments[0].blendingEnabled = blend;
   d.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
@@ -369,8 +378,9 @@ static void prepare_gpu(void) {
   NSError *err = nil;
   id<MTLLibrary> lib = [dev newLibraryWithSource:shader_src options:nil error:&err];
   if (!lib) NSLog(@"shader: %@", err);
-  mpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm, YES);
-  hpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm, NO);
+  mpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm, YES, @"fmain");
+  hpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm, NO, @"fmain");
+  fpipe = make_pipe(lib, MTLPixelFormatBGRA8Unorm, YES, @"fflat");
   rpipe_off = mpipe;
   MTLRenderPipelineDescriptor *pd = [MTLRenderPipelineDescriptor new];
   pd.vertexFunction = [lib newFunctionWithName:@"vpost"];
@@ -796,6 +806,31 @@ static id<MTLRenderCommandEncoder> begin_pass(id<MTLCommandBuffer> cb, id<MTLTex
   return enc;
 }
 
+// Instances start to end drawn, each that pays for it in strips (bands.h), the rest as they come.
+static void draw_banded(id<MTLRenderCommandEncoder> enc, id<MTLRenderPipelineState> p, const float *f, int32_t start,
+                        int32_t end, int32_t count, int tw, int th) {
+  MBStrip to = sc_on ? mb_strip((int)sc.x, (int)sc.y, (int)(sc.x + sc.width), (int)(sc.y + sc.height))
+                     : mb_strip(0, 0, tw, th);
+  MBStrip st[MB_STRIPS];
+  int32_t s = start;
+  for (int32_t i = start; i < end; i++) {
+    if (!mb_band_kind(f, i)) continue;
+    int n = mb_bands(f, i, count, (float)vscale, to, st);
+    if (n < 0) continue;
+    if (i > s) [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:i - s baseInstance:s];
+    for (int k = 0; k < n; k++) {
+      if (k == 0 || st[k].flat != st[k - 1].flat) [enc setRenderPipelineState:st[k].flat ? fpipe : p];
+      [enc setScissorRect:(MTLScissorRect){(NSUInteger)st[k].x0, (NSUInteger)st[k].y0, (NSUInteger)(st[k].x1 - st[k].x0),
+                                           (NSUInteger)(st[k].y1 - st[k].y0)}];
+      [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:1 baseInstance:i];
+    }
+    if (n > 0 && st[n - 1].flat) [enc setRenderPipelineState:p];
+    [enc setScissorRect:sc_on ? sc : (MTLScissorRect){0, 0, (NSUInteger)tw, (NSUInteger)th}];
+    s = i + 1;
+  }
+  if (end > s) [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6 instanceCount:end - s baseInstance:s];
+}
+
 // `part`: only that part of the target drawn again, over what it holds (the frame's ground first: the instance after
 // the frame's, upload's); NULL, all of it, cleared to the ground.
 static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderPipelineState> p,
@@ -866,8 +901,9 @@ static void encode(id<MTLCommandBuffer> cb, id<MTLTexture> target, id<MTLRenderP
     }
     if (!hole && tid > 0 && tid <= MB_STREAM_TEX && !t) encode_missing = 1;
     [enc setFragmentTexture:(t ?: atlas) atIndex:1];
-    [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6
-            instanceCount:end - start baseInstance:start];
+    if (hole) [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6
+                      instanceCount:end - start baseInstance:start];
+    else draw_banded(enc, p, f, start, end, count, (int)target.width, (int)target.height);
     start = end;
   }
   [enc endEncoding];

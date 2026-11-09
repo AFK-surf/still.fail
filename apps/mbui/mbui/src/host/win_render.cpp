@@ -20,6 +20,7 @@
 #include "win.h"
 #include "corner_sl.h"
 #include "contained.h"
+#include "bands.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
@@ -37,6 +38,8 @@ static IDXGISwapChain1 *chain;
 static ID3D11RenderTargetView *rtv;
 static ID3D11VertexShader *vs;
 static ID3D11PixelShader *ps;
+// a ground's flat middle (bands.h mb_pieces)
+static ID3D11PixelShader *ps_flat;
 static ID3D11InputLayout *layout;
 static ID3D11Buffer *vbuf, *ubuf;
 static size_t vbuf_cap;
@@ -340,6 +343,14 @@ static const char *shader_src =
     "    fill = lerp(bc, fill, inner);\n"
     "  }\n"
     "  return (fill * a) * cover;\n"
+    "}\n"
+    "// the flat pipeline: a ground's colour where it is covered whole, cut by straight clips alone (bands.h mb_pieces):\n"
+    "// what fmain writes there, nothing worked out\n"
+    "FOut fflat(VOut I) {\n"
+    "  FOut o;\n"
+    "  o.c = float4(I.color.rgb, 1.0) * I.color.a;\n"
+    "  o.w = o.c.aaaa;\n"
+    "  return o;\n"
     "}\n";
 
 // glass's passes over its copy of what is under it
@@ -504,9 +515,11 @@ int mb_render_init(void *hwnd) {
 
 // The shaders, buffers, atlas and states every target is drawn with (the window's, the offscreen one).
 static void make_pipeline(void) {
-  ID3DBlob *vcode = compile("vmain", "vs_4_0"), *pcode = compile("fmain", "ps_4_0");
+  ID3DBlob *vcode = compile("vmain", "vs_4_0"), *pcode = compile("fmain", "ps_4_0"), *fcode = compile("fflat", "ps_4_0");
   dev->CreateVertexShader(vcode->GetBufferPointer(), vcode->GetBufferSize(), NULL, &vs);
   dev->CreatePixelShader(pcode->GetBufferPointer(), pcode->GetBufferSize(), NULL, &ps);
+  dev->CreatePixelShader(fcode->GetBufferPointer(), fcode->GetBufferSize(), NULL, &ps_flat);
+  fcode->Release();
   // the instance's fifteen float4s (scene.mbt): rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth,
   // how it is turned, a box's corners' radii, the outer clip's rect, corners' radii and how smooth, how it fades down
   // and across
@@ -924,6 +937,31 @@ static void main_state(ID3D11RenderTargetView *target, int pw, int ph) {
   ctx->OMSetBlendState(blend, NULL, 0xffffffff);
 }
 
+// Instances start to end drawn, each that pays for it in strips (bands.h), the rest as they come.
+static void draw_banded(const float *f, int32_t start, int32_t end, int32_t count, int pw, int ph) {
+  MBStrip to = cut_on ? mb_strip((int)cut.left, (int)cut.top, (int)cut.right, (int)cut.bottom) : mb_strip(0, 0, pw, ph);
+  MBStrip st[MB_STRIPS];
+  int32_t s = start;
+  for (int32_t i = start; i < end; i++) {
+    if (!mb_band_kind(f, i)) continue;
+    int n = mb_bands(f, i, count, (float)vscale, to, st);
+    if (n < 0) continue;
+    if (i > s) ctx->DrawInstanced(6, (UINT)(i - s), 0, (UINT)s);
+    ctx->RSSetState(raster_cut);
+    for (int k = 0; k < n; k++) {
+      if (k == 0 || st[k].flat != st[k - 1].flat) ctx->PSSetShader(st[k].flat ? ps_flat : ps, NULL, 0);
+      D3D11_RECT r = {st[k].x0, st[k].y0, st[k].x1, st[k].y1};
+      ctx->RSSetScissorRects(1, &r);
+      ctx->DrawInstanced(6, 1, 0, (UINT)i);
+    }
+    if (n > 0 && st[n - 1].flat) ctx->PSSetShader(ps, NULL, 0);
+    if (cut_on) ctx->RSSetScissorRects(1, &cut);
+    else ctx->RSSetState(raster);
+    s = i + 1;
+  }
+  if (end > s) ctx->DrawInstanced(6, (UINT)(end - s), 0, (UINT)s);
+}
+
 // `part`: only that part of the target drawn again, over what it holds (the frame's ground first: the instance after
 // the frame's in the vertex buffer, submit's); NULL, all of it, cleared to the ground.
 static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count, const float *bg,
@@ -981,7 +1019,8 @@ static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count
     if (!hole && tid > 0 && tid <= MB_STREAM_TEX && !t) encode_missing = 1;
     ctx->PSSetShaderResources(1, 1, t ? &t : &atlas_srv);
     if (hole) ctx->OMSetBlendState(NULL, NULL, 0xffffffff);
-    ctx->DrawInstanced(6, (UINT)(end - start), 0, (UINT)start);
+    if (hole) ctx->DrawInstanced(6, (UINT)(end - start), 0, (UINT)start);
+    else draw_banded(f, start, end, count, pw, ph);
     if (hole) ctx->OMSetBlendState(blend, NULL, 0xffffffff);
     start = end;
   }
