@@ -613,6 +613,7 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
     None
   }
   looks_heads_only.val = false
+  let heads_moved = moved is Some(_)
   let parts = match moved {
     Some(parts) => parts
     None =>
@@ -650,8 +651,17 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
   } else {
     0.0
   }
-  // (what of it cannot be seen left out: drawn the same, to the byte, with less to draw)
-  let (shown, n) = presented.occlude(buf, count, c.window_w, c.window_h)
+  // (what of it cannot be seen left out: drawn the same, to the byte, with less to draw; where only its lists' headers
+  // moved, those alone asked again)
+  let occluded = if heads_moved {
+    presented.occlude_moved(buf, count, c.window_w, c.window_h, list_heads.map(fn(h) { h.at }))
+  } else {
+    None
+  }
+  let (shown, n) = match occluded {
+    Some(o) => o
+    None => presented.occlude(buf, count, c.window_w, c.window_h)
+  }
   @hostapi.present(shown, n, r, gg, b)
   ride_groups_told()
 }

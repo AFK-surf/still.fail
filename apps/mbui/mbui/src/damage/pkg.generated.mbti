@@ -19,6 +19,7 @@ pub fn Damage::moved(Self, FixedArray[Double], Int32, Double, Double, Double, Do
 pub fn Damage::new() -> Self
 pub fn Damage::next(Self, FixedArray[Double], Int32, Double, Double, Double, Double, Double, Double, groups? : Bool, known? : Array[(Double, Double, Double, Double)]) -> Array[(Double, Double, Double, Double)]
 pub fn Damage::occlude(Self, FixedArray[Double], Int32, Double, Double) -> (FixedArray[Double], Int32)
+pub fn Damage::occlude_moved(Self, FixedArray[Double], Int32, Double, Double, Array[Int32]) -> (FixedArray[Double], Int32)?
 pub fn Damage::tell(Self, Bool) -> Unit
 pub fn Damage::telling(Self) -> Bool
 pub fn Damage::told(Self) -> String

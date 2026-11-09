@@ -37,7 +37,16 @@ pub fn Damage::occlude(
   if self.unit_at.length() < count {
     self.unit_at = FixedArray::make(count * 2, 0)
     self.hidden = FixedArray::make(count * 2, false)
+    self.shown_at = FixedArray::make(count * 2, -1)
   }
+  // (what it found kept for the next frame that moves only headers of it: Damage::occlude_moved)
+  self.occ_ok = false
+  self.occ_count = count
+  self.occ_w = w
+  self.occ_h = h
+  self.occ_hid = 0
+  self.occ_last = -1
+  self.cover_log.clear()
   // each unit: an instance, or a header with its group's room after it; the pieces of shapes from the first of them.
   // (Nothing after the last that may be a cover is hidden: from there back.)
   let least = w * h * cover_least
@@ -56,9 +65,13 @@ pub fn Damage::occlude(
     k = k + (if kind == 13 { dmax(inst[o + 14], 1.0).to_int() } else { 1 })
   }
   let pieces = if k < count { k } else { count }
+  self.occ_units = units
+  self.occ_pieces = pieces
   if last <= 0 {
+    self.occ_ok = true
     return (inst, count)
   }
+  self.occ_last = last
   let mut covers = 0
   let mut hid = 0
   // (all the covers lie in: what is not, by its rect, is not looked at more)
@@ -69,6 +82,8 @@ pub fn Damage::occlude(
     let k = self.unit_at[u]
     let o = k * inst_size
     let kind = kind_at(inst, k)
+    // (what the covers become from here on said as of this unit: Damage::cover_log)
+    self.cover_unit = u
     if covers > 0 &&
       (
         kind == 13 ||
@@ -92,21 +107,166 @@ pub fn Damage::occlude(
       }
     }
     if is_glass(kind) || (kind == 13 && self.reads_under(inst[o + 12].to_int(), 0)) {
-      covers = 0
-      all.clear()
+      if covers > 0 {
+        covers = 0
+        all.clear()
+        self.cover_logged(-1, Rect::none())
+      }
     } else if kind == 0 {
+      let was = self.cover_log.length()
       covers = self.cover_add(inst, k, w, h, covers)
-      all.clear()
-      for j in 0..<covers {
-        let c = j * 4
-        all.add(self.covers[c], self.covers[c + 1], self.covers[c + 2], self.covers[c + 3])
+      if self.cover_log.length() != was {
+        all.clear()
+        for j in 0..<covers {
+          let c = j * 4
+          all.add(self.covers[c], self.covers[c + 1], self.covers[c + 2], self.covers[c + 3])
+        }
       }
     }
     u = u - 1
   }
+  self.occ_hid = hid
+  self.occ_ok = true
   if hid == 0 {
     return (inst, count)
   }
+  self.shown_put(inst)
+}
+
+///|
+/// The frame `inst` (as many instances, in the same window as the last given Damage::occlude) without what of it cannot
+/// be seen, where it is that frame with only the headers at `moved` (their indices among its instances) written anew
+/// (a frame of its looks alone, its lists moved by their headers: src/ui/frame_watch.mbt's looks_frame): only those
+/// asked again, against the covers met before each of them last time (nothing else of the frame moved: none of them,
+/// nor what reads what is under it), nothing else of it gone through. None where it cannot be (another number of
+/// instances or window, a group set or let go since, an index not a header's): Damage::occlude then.
+pub fn Damage::occlude_moved(
+  self : Damage,
+  inst : FixedArray[Double],
+  count : Int,
+  w : Double,
+  h : Double,
+  moved : Array[Int],
+) -> (FixedArray[Double], Int)? {
+  guard self.occ_ok && count == self.occ_count && w == self.occ_w && h == self.occ_h else { return None }
+  let mut flipped = false
+  let r = Rect::none()
+  for k in moved {
+    guard k >= 0 && k < count && kind_at(inst, k) == 13 else { return None }
+    guard self.unit_at_k(k) is Some(u) else { return None }
+    let hide = u <= self.occ_last &&
+      self.hideable(inst, k, 13) &&
+      {
+        let n = self.covers_at(u)
+        n > 0 &&
+        {
+          r.clear()
+          self.reach_of(inst, k, r)
+          r.x0 = dmax(r.x0, 0.0)
+          r.y0 = dmax(r.y0, 0.0)
+          r.x1 = dmin(r.x1, w)
+          r.y1 = dmin(r.y1, h)
+          !r.empty() && covered_in(self.replay, n, r)
+        }
+      }
+    if hide != self.hidden[u] {
+      // (one that reads what is under it, hidden or shown now: what is before it sees otherwise, all of it asked again)
+      if self.reads_under(inst[k * inst_size + 12].to_int(), 0) {
+        return None
+      }
+      self.hidden[u] = hide
+      self.occ_hid = self.occ_hid + (if hide { 1 } else { -1 })
+      flipped = true
+    }
+  }
+  if self.occ_hid == 0 {
+    return Some((inst, count))
+  }
+  if flipped {
+    return Some(self.shown_put(inst))
+  }
+  // (the rest of it as it was kept: only the headers moved that show written where they are in it)
+  for k in moved {
+    guard self.unit_at_k(k) is Some(u) && !self.hidden[u] else { continue }
+    inst.blit_to(self.shown, len=inst_size, src_offset=k * inst_size, dst_offset=self.shown_at[u] * inst_size)
+  }
+  Some((self.shown, self.occ_shown))
+}
+
+///|
+/// The unit instance `k` starts, as Damage::occlude last found them (they start in order): none where none does.
+fn Damage::unit_at_k(self : Damage, k : Int) -> Int? {
+  let mut lo = 0
+  let mut hi = self.occ_units
+  while lo < hi {
+    let mid = (lo + hi) / 2
+    let at = self.unit_at[mid]
+    if at == k {
+      return Some(mid)
+    } else if at < k {
+      lo = mid + 1
+    } else {
+      hi = mid
+    }
+  }
+  None
+}
+
+///|
+/// A cover put at `j` (-1: all let go) as Damage::occlude looks at unit `cover_unit`: what it is asked by from the unit
+/// before it on (Damage::covers_at).
+fn Damage::cover_logged(self : Damage, j : Int, c : Rect) -> Unit {
+  self.cover_log.push(self.cover_unit.to_double())
+  self.cover_log.push(j.to_double())
+  self.cover_log.push(c.x0)
+  self.cover_log.push(c.y0)
+  self.cover_log.push(c.x1)
+  self.cover_log.push(c.y1)
+}
+
+///|
+/// The covers met before unit `u` as Damage::occlude last looked at it (those after it put, in the order they were),
+/// written in `replay`: how many.
+fn Damage::covers_at(self : Damage, u : Int) -> Int {
+  let log = self.cover_log
+  let mut n = 0
+  let mut e = 0
+  while e < log.length() && log[e].to_int() > u {
+    let j = log[e + 1].to_int()
+    if j < 0 {
+      n = 0
+    } else {
+      for q in 0..<4 {
+        self.replay[j * 4 + q] = log[e + 2 + q]
+      }
+      if j + 1 > n {
+        n = j + 1
+      }
+    }
+    e = e + 6
+  }
+  n
+}
+
+///|
+/// Whether one of the first `n` covers in `c` holds `r`.
+fn covered_in(c : FixedArray[Double], n : Int, r : Rect) -> Bool {
+  for j in 0..<n {
+    let o = j * 4
+    if r.x0 >= c[o] && r.y0 >= c[o + 1] && r.x1 <= c[o + 2] && r.y1 <= c[o + 3] {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// The frame `inst` without its units hidden (as Damage::occlude found them), written in `shown`, each unit's place
+/// there kept: it, and how many instances it is.
+fn Damage::shown_put(self : Damage, inst : FixedArray[Double]) -> (FixedArray[Double], Int) {
+  let count = self.occ_count
+  let units = self.occ_units
+  let pieces = self.occ_pieces
   if self.shown.length() < count * inst_size {
     self.shown = FixedArray::make(count * inst_size * 2, 0.0)
   }
@@ -117,11 +277,13 @@ pub fn Damage::occlude(
     }
     let at = self.unit_at[v]
     let end = if v + 1 < units { self.unit_at[v + 1] } else { pieces }
+    self.shown_at[v] = n
     inst.blit_to(self.shown, len=(end - at) * inst_size, src_offset=at * inst_size, dst_offset=n * inst_size)
     n = n + end - at
   }
   inst.blit_to(self.shown, len=(count - pieces) * inst_size, src_offset=pieces * inst_size, dst_offset=n * inst_size)
-  (self.shown, n + count - pieces)
+  self.occ_shown = n + count - pieces
+  (self.shown, self.occ_shown)
 }
 
 ///|
@@ -257,6 +419,7 @@ fn Damage::cover_add(self : Damage, a : FixedArray[Double], k : Int, w : Double,
 
 ///|
 fn Damage::cover_put(self : Damage, j : Int, c : Rect) -> Unit {
+  self.cover_logged(j, c)
   self.covers[j * 4] = c.x0
   self.covers[j * 4 + 1] = c.y0
   self.covers[j * 4 + 2] = c.x1
