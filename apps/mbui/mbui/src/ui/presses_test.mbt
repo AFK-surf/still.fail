@@ -85,9 +85,9 @@ test "words partly under what lies over them: tapped at the point of them in sig
   let t = @ui.Tester::new(
     fn(c) {
       let row = c.id("row")
-      if c.clicked(row) {
+      c.on_press(row, fn() {
         tapped.val += 1
-      }
+      })
       c.box(w=Fill(1.0), h=Fill(1.0), fn() {
         c.box(h=Px(80.0), fn() {  }) |> ignore
         c.box(id=row, h=Px(20.0), fn() { c.text("忽略这一行", wrap=false) |> ignore }) |> ignore

@@ -396,12 +396,9 @@ pub struct Ctx {
   mut focus : Int
   clicked : Array[Int]
   /// what was clicked twice since the last frame, the second within double_click_ms of the first and where it was
-  /// (Ctx::double_clicked); the last click (its id, when, where), for the next to be the second of two
+  /// (Ctx::on_double_press, hand's `double`); the last click (its id, when, where), for the next to be the second of two
   double_clicked : Array[Int]
   mut last_click : (Int, Double, Double, Double)
-  /// where the pointer let go of the last click since the last frame (none: a key's, a reader's Activate), for where in
-  /// what was clicked it was (Ctx::clicked_on)
-  mut click_at : (Double, Double)?
   /// how many presses in a row the last one was (NSEvent's clickCount: 2 a double click's second), and how many, when
   /// and where, for the next to count on from
   mut clicks : Int
@@ -763,7 +760,6 @@ fn Ctx::new() -> Ctx {
     clicked: [],
     double_clicked: [],
     last_click: (0, 0.0, 0.0, 0.0),
-    click_at: None,
     clicks: 0,
     press_run: (0, -1.0e9, 0.0, 0.0),
     drag_scroll: 0,
@@ -2107,46 +2103,11 @@ let no_text_patch : TextPatch = text_patch()
 // Interaction
 
 ///|
-/// Whether `id` was clicked twice in a row since the last frame (a desktop's double click: the second within
-/// double_click_ms of the first, both on it, as near as double_click_slop). Its first click was `clicked` too.
-pub fn Ctx::double_clicked(self : Ctx, id : Int) -> Bool {
-  if id == 0 {
-    return false
-  }
-  // (read so: what reads it is built again as it is clicked twice, hand.mbt)
-  hand.double.has(id) |> ignore
-  self.double_clicked.contains(id)
-}
-
-///|
 /// How soon after the first the second of two clicks is (macOS's default: 500 ms), and how near it (4).
 pub let double_click_ms : Double = 500.0
 
 ///|
 pub let double_click_slop : Double = 4.0
-
-///|
-/// Whether `id` was clicked since the last frame (pressed and let go on it, not dragged; Enter or Space while it has
-/// the focus; the Activate a screen reader asks). Asked, `id` takes presses: the pointer is a hand over it (desktop.mbt
-/// show_cursor). What only watches it pressed (a tip that shuts as its trigger is) asks Ctx::watch_press.
-pub fn Ctx::clicked(self : Ctx, id : Int) -> Bool {
-  self.takes_presses(id)
-  self.click_seen(id)
-}
-
-///|
-/// Whether `id` was clicked since the last frame on `part`, a box in it only pointed at (Ctx::box's `points`: a press
-/// on it is `id`'s): where in it the pointer let go, for what a click there does more (a chat's row opens at the message
-/// its state line is about). A key's click or a reader's Activate is on none of its parts.
-pub fn Ctx::clicked_on(self : Ctx, id : Int, part : Int) -> Bool {
-  if !self.clicked(id) {
-    return false
-  }
-  match (self.click_at, self.rect_of(part)) {
-    (Some((x, y)), Some((px, py, pw, ph))) => x >= px && x < px + pw && y >= py && y < py + ph
-    _ => false
-  }
-}
 
 ///|
 /// Whether `id` was clicked since the last frame, asked by nothing that takes the click.
@@ -2160,7 +2121,7 @@ fn Ctx::click_seen(self : Ctx, id : Int) -> Bool {
 
 ///|
 /// Whether `id` is pressed or was clicked since the last frame, as what stands beside it sees it (a tip that shuts as
-/// its trigger is pressed, an edge's tip that goes): asked so, `id` is not taken to take presses (Ctx::clicked).
+/// its trigger is pressed, an edge's tip that goes): asked so, `id` is not taken to take presses (Ctx::takes_presses).
 pub fn Ctx::watch_press(self : Ctx, id : Int) -> Bool {
   self.pressed(id) || self.click_seen(id)
 }

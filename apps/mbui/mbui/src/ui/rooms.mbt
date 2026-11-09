@@ -2,10 +2,10 @@
 // frame just built, as the corner and the spacing rules are (corners.mbt, gaps.mbt). Each fault a line saying its
 // rule, the boxes (Ctx::named) and by how much:
 //
-// room: what shows whole and takes presses (its click read, Ctx::clicked; or said, Ctx::takes_presses) has room to be
+// room: what shows whole and takes presses (its press said, Ctx::on_press; or Ctx::takes_presses) has room to be
 //   pressed `room_least()` across each way at least (by the native input: a finger's 44, a keyboard and mouse's 36).
 //   A part of what holds it (a row's state line, its station's mark) is only pointed at (Ctx::box's `points`: a
-//   press on it is the row's, where in the row Ctx::clicked_on says), no target of its own. Drawn smaller, a press
+//   press on it is the row's, where in the row the pointer let go: Ctx::pointer, as its handler runs), no target of its own. Drawn smaller, a press
 //   reaches it from round it, by a finger or a pointer alike (Ctx's press_reach): its room is it grown so round its
 //   middle, moved in from the window's edge rather than cut short there, within what holds it that takes presses (a
 //   row's button: in the row's room, not its neighbour's) (press_room); where two rooms meet, each has the part

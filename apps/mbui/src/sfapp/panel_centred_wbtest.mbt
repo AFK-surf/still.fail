@@ -140,9 +140,9 @@ test "panel centred, 大屏 keyboard and mouse: untitled, what it holds reaching
     "",
     fn(c, _) {
       let id = c.id("under close")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         under.val = under.val + 1
-      }
+      })
       // (in the dialog's corners, round as a row there is: the ladder's 18, 24 in from its 42)
       c.box(id~, w=Fill(1.0), h=Px(60.0), bg=0x336699FFL, radius=@sf.row_corner, label="底下", fn() {  }) |> ignore
     },

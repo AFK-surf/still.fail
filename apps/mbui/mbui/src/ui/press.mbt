@@ -2,7 +2,7 @@
 // went down and in which frame (the press's name), whether it has moved past the slop since, whether it was held there
 // still for a long press's time. What an app works out of a press of its own (a press outside a field lets the
 // keyboard go; a menu a press opened is not opened again by it; a held word picked), the same in every build of the
-// frame and for every app: the framework's own presses are its claims (claim.mbt) and its taps (Ctx::clicked).
+// frame and for every app: the framework's own presses are its claims (claim.mbt) and its taps (Ctx::on_press).
 
 ///|
 /// A press as a frame saw it. `fresh`: it went down since the frame before (a frame saw it up, this one down); `lifted`:

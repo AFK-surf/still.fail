@@ -668,9 +668,9 @@ test "kept layouts: pages pushed and popped, mid-slide" {
         fn(i) {
           c.column(w=Fill(1.0), h=Fill(1.0), fn() {
             c.text("title \{i}", wrap=false) |> ignore
-            if c.button("open \{i + 1}") {
+            c.button("open \{i + 1}", on_press=fn() {
               nav.push(i + 1)
-            }
+            })
             c.list("rows", 50, 30.0, fn(r) { c.text("row \{r} of \{i}") |> ignore }) |> ignore
           })
           |> ignore

@@ -22,9 +22,9 @@ fn ground_cut_across() -> (Double, Double)? {
 fn cut_tester(cut : @signals.Signal[(Double, Double)], taps : Ref[Int]) -> Tester {
   Tester::new(fn(c) {
     let id = c.id("cut")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       taps.val = taps.val + 1
-    }
+    })
     let b = c.box(w=Px(100.0), h=Px(20.0), id~, fn() {
       c.box(w=Px(100.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  }) |> ignore
     })

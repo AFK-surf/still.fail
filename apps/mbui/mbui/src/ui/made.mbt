@@ -272,6 +272,12 @@ let made_presses : Map[Int, () -> Unit] = {}
 let made_double_presses : Map[Int, () -> Unit] = {}
 
 ///|
+/// What a part beside each target does as a press on the target is let go, as well as the target's own (a popover its
+/// trigger opens: Ctx::on_press_beside), by its id, as it was last built.
+// kept across runs: written as what says it is built; a run's start clears it
+let made_beside_presses : Map[Int, () -> Unit] = {}
+
+///|
 /// A run begins: nothing made is kept.
 fn made_forget() -> Unit {
   for _, m in made_roots {
@@ -281,6 +287,7 @@ fn made_forget() -> Unit {
   made_placed.clear()
   made_presses.clear()
   made_double_presses.clear()
+  made_beside_presses.clear()
   keys_taken.clear()
 }
 
@@ -422,14 +429,14 @@ fn Ctx::made_put_back(self : Ctx, n : Node, slot : Int) -> Unit {
 /// A press on target `id` (a tap, a click, Enter or Space where it takes the focus, the Activate a screen reader asks),
 /// let go on it, does `f`: then, as it is let go, outside any build, not read as the next frame is built (the model's
 /// 5: acting is a callback); its moment the event's (Ctx::moment). Said as `id`'s box is built (what it does is what the last build said), it takes presses (the pointer's
-/// hand over it). What a frame read of the press (Ctx::clicked) it reads as before. It runs in the scope it was said in
+/// hand over it). It runs in the scope it was said in
 /// (Ctx::id, Ctx::scope): a key it names is the target or the field it named where it was said (in_said_scope).
 pub fn Ctx::on_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
   if id == 0 {
     return
   }
   self.takes_presses(id)
-  // (read so: what said it is built again as it is pressed, as what reads a click is (Ctx::clicked, hand.mbt), and
+  // (read so: what said it is built again as it is pressed, as what reads a click is (a part's Response, hand.mbt), and
   // draws what the press changed of what it holds)
   hand.clicked.has(id) |> ignore
   hand.asked.has(id) |> ignore
@@ -461,6 +468,21 @@ pub fn Ctx::on_double_press(self : Ctx, id : Int, f : () -> Unit) -> Unit {
   // (read so: what said it is built again as it is pressed twice, hand.mbt)
   hand.double.has(id) |> ignore
   made_double_presses[id] = self.in_said_scope(f)
+}
+
+///|
+/// A press let go on target `id` does `f` too, beside what the target's own handler does (Ctx::on_press, said by what
+/// the target is): what a part that stands by another's target does as it is pressed (a popover its trigger opens or
+/// shuts), as it is let go, outside any build, its moment the event's. Said as the part is built; its own, one for each
+/// target, not the target's.
+pub fn Ctx::on_press_beside(self : Ctx, id : Int, f : () -> Unit) -> Unit {
+  if id == 0 {
+    return
+  }
+  self.takes_presses(id)
+  // (read so: what said it is built again as the target is pressed, hand.mbt)
+  hand.clicked.has(id) |> ignore
+  made_beside_presses[id] = self.in_said_scope(f)
 }
 
 ///|
@@ -549,6 +571,7 @@ fn keys_taken_built() -> Unit {
 /// any build (Made::on_press).
 fn made_pressed(id : Int) -> Unit {
   run_press(made_presses.get(id))
+  run_press(made_beside_presses.get(id))
 }
 
 ///|

@@ -11,9 +11,9 @@ test "scrolling within the visible rows moves their drawing and hit without anot
     c.list("rows", items.length(), 40.0, fn(k) {
       let item = items[k]
       let id = c.id("row/\{item}")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         pressed.push(item)
-      }
+      })
       c.box(id~, h=Px(40.0), bg=0x224466FFL, fn() {
         c.text("row \{item}", wrap=false) |> ignore
       }) |> ignore
@@ -278,7 +278,7 @@ test "a scroll keeps targets and hits the row in its new clipped position" {
     c.list("rows", items.length(), 40.0, fn(k) {
       let item = items[k]
       let id = c.id("row/\{item}")
-      if c.clicked(id) { pressed.push(item) }
+      c.on_press(id, fn() { pressed.push(item) })
       c.box(id~, h=Px(40.0), fn() { c.text("row \{item}", wrap=false) |> ignore }) |> ignore
     }, rows_read=true, sized=rows.sized()) |> ignore
   }, w=300.0, h=160.0)

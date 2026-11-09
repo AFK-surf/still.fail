@@ -26,9 +26,9 @@ fn old_through(anew : Bool, frames? : Bool = true, still? : Bool = false) -> Arr
       old(b, fn(c) {
         let n = name.get()
         let id = c.id(n)
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           note("\{n} clicked")
-        }
+        })
         if c.held_long(id) {
           note("\{n} held")
         }
@@ -126,9 +126,9 @@ fn old_moved_through(to : Double, frames : Bool) -> (Array[String], Double, Arra
           Some(d) => moved.val = moved.val + d.take_move().0
           None => ()
         }
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           note("area clicked")
-        }
+        })
         if c.held_long(id) {
           note("area held")
         }

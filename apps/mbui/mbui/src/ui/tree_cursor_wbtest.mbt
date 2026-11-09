@@ -33,7 +33,7 @@ fn shaped_tester(
       h.width(Is(Some(200.0))) |> ignore
       old(h, fn(c) {
         let id = c.id("old button")
-        c.clicked(id) |> ignore
+        c.takes_presses(id)
         c.box(w=Px(80.0), h=Px(40.0), id~, fn() {  }) |> ignore
         // (a layer of the old frame's over all of the window, taking no press itself, while `layer`)
         if layer.get() {

@@ -170,9 +170,9 @@ test "a tap taken into state in the build that sees it holds when the frame is b
     fn(c) {
       let b = c.id("button")
       // what the tap says, kept as it is seen (the next builds of the frame see no tap)
-      if c.clicked(b) {
+      c.on_press(b, fn() {
         open.val = !open.val
-      }
+      })
       let a = c.id("panel")
       let h = match c.laid_size(a) {
         Some((_, h)) => h

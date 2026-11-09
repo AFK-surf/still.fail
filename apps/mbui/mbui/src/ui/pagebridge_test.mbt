@@ -200,9 +200,9 @@ test "a page that takes no touch: the canvas has it, the page never does" {
       v
     })
     let id = c.id("over")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       tapped.val += 1
-    }
+    })
     c.box(w=Fill(1.0), h=Px(300.0), id~, fn() { c.native(v) |> ignore }) |> ignore
   })
   let id = cell.val.unwrap().id()
@@ -273,9 +273,9 @@ test "a run replayed that sends its page another script parts there" {
     @ui.Tester::new(fn(c) {
       let v = page_once(cell, fn() { @ui.NativeView::page("<p>hi</p>") })
       c.native(v, h=Px(200.0)) |> ignore
-      if c.clicked(c.id("go")) {
+      c.on_press(c.id("go"), fn() {
         v.script(which.val)
-      }
+      })
       c.box(w=Px(100.0), h=Px(50.0), id=c.id("go"), fn() {  }) |> ignore
     })
   }

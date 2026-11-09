@@ -22,9 +22,9 @@ fn layers() -> Layers {
       match button {
         Some((x, y)) => {
           let id = c.id("button \{k}")
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             taps[k] = taps[k] + 1
-          }
+          })
           c.box(left=x, top=y, w=Px(100.0), h=Px(100.0), bg=0x3366CCFFL, id~, fn() {  }) |> ignore
         }
         None => ()
@@ -93,9 +93,9 @@ fn pointed_over(w : Double) -> Layers {
     old(root, fn(c) {
       builds[1] = builds[1] + 1
       let id = c.id("page button")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         taps[1] = taps[1] + 1
-      }
+      })
       c.box(left=100.0, top=100.0, w=Px(w), h=Px(w), bg=0x3366CCFFL, id~, fn() {  }) |> ignore
     })
     .over(Is(true))
@@ -201,9 +201,9 @@ fn under_overlay(
       if open.get() {
         c.overlay("over", modal=ground, scrim=if ground { 0x00000040L } else { 0L }, fn() {
           let id = c.id("over button")
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             over_taps.val = over_taps.val + 1
-          }
+          })
           c.box(w=Px(60.0), h=Px(60.0), bg=over_ground, id~, fn() {  }) |> ignore
         })
         |> ignore
@@ -362,9 +362,9 @@ test "window tree: a message the frame takes makes a node over an old view talle
     old(root, fn(c) {
       rooms.push((c.width, c.height))
       let id = c.id("page button")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         taps.val = taps.val + 1
-      }
+      })
       c.box(w=Px(100.0), h=Px(40.0), bg=0x3366CCFFL, id~, fn() { c.text("page", size=12.0) |> ignore }) |> ignore
     })
     .grow(Is(1.0))
@@ -396,9 +396,9 @@ test "window tree: one old view the window's, a node over it shown and let go: t
   set_view_app(fn(root) {
     old(root, fn(c) {
       let id = c.id("page button")
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         taps.val = taps.val + 1
-      }
+      })
       c.box(w=Px(100.0), h=Px(40.0), bg=0x3366CCFFL, id~, fn() { c.text("page", size=12.0) |> ignore }) |> ignore
     })
     .over(Is(true))

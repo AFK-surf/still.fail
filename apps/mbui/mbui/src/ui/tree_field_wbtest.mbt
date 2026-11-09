@@ -938,7 +938,7 @@ fn bar_field(
         c.overlay("cover", modal=modal_layer, outside=false, fn() {
           // (pressed where it is: its own, whatever is under it)
           let k = c.id("cover box")
-          c.clicked(k) |> ignore
+          c.takes_presses(k)
           c.box(id=k, w=Px(300.0), h=Px(200.0), bg=0x00000020L, fn() {  }) |> ignore
         })
         |> ignore

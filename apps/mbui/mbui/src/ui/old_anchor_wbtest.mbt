@@ -19,7 +19,7 @@ test "old_anchor: follows an old target the frame the old frame's own reading of
         c.box(w=Px(10.0), h=Px(at.get()), fn() {  }) |> ignore
         if drawn.get() {
           c.box(id~, w=Px(50.0), h=Px(20.0), fn() {  }) |> ignore
-          c.clicked(id) |> ignore
+          c.takes_presses(id)
         }
       })
       |> ignore

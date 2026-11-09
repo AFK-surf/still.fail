@@ -483,9 +483,9 @@ fn window_row(node : Bool) -> (Array[Int], Array[Bool], Int) raise {
         let top = c.id("top")
         let key = c.id("key")
         c.window_drag(top)
-        if c.clicked(key) {
+        c.on_press(key, fn() {
           pressed.val += 1
-        }
+        })
         c.box(id=top, w=Fill(1.0), h=Px(44.0), fn() { c.box(id=key, w=Px(40.0), h=Px(44.0), fn() {  }) |> ignore })
         |> ignore
       }

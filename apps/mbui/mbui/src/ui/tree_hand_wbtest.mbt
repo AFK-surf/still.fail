@@ -326,7 +326,7 @@ test "the frame's targets found again only as what they are found from changes: 
       old(b, fn(c) {
         let id = c.id("button")
         button.val = id
-        c.clicked(id) |> ignore
+        c.takes_presses(id)
         let i = c.box(w=Px(wide.get()), h=Px(40.0), id~, fn() {  })
         c.bg_by(i, fn() { ink.get() })
       }).grow(Is(1.0))
@@ -365,7 +365,7 @@ test "each old view's place among the frame's targets given out with them: one l
       old(v, fn(c) {
         for k in 0..<3 {
           let id = c.id("a \{k}")
-          c.clicked(id) |> ignore
+          c.takes_presses(id)
           c.box(w=Px(40.0), h=Px(40.0), id~, fn() {  }) |> ignore
         }
       }).grow(Is(1.0))
@@ -376,7 +376,7 @@ test "each old view's place among the frame's targets given out with them: one l
       old(v, fn(c) {
         let id = c.id("b")
         b_button.val = id
-        c.clicked(id) |> ignore
+        c.takes_presses(id)
         c.box(w=Px(80.0), h=Px(40.0), id~, fn() {  }) |> ignore
         if layer.get() {
           c.overlay("over-all", modal=true, fn() { c.box(w=Px(400.0), h=Px(200.0), fn() {  }) |> ignore }) |> ignore
@@ -423,13 +423,13 @@ test "a native view in an old view in the window's tree: what takes a press over
       old(b, fn(c) {
         // (under it: a button the page is drawn over)
         let under = c.id("under")
-        c.clicked(under) |> ignore
+        c.takes_presses(under)
         c.box(w=Px(60.0), h=Px(40.0), id=under, fn() {  }) |> ignore
         c.layer(fn() { c.native(page) |> ignore }) |> ignore
         if over.get() {
           c.layer(fn() {
             let id = c.id("over")
-            c.clicked(id) |> ignore
+            c.takes_presses(id)
             let i = c.box(w=Px(80.0), h=Px(40.0), id~, fn() {  })
             c.bg_by(i, fn() { ink.get() })
           })

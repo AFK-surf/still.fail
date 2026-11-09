@@ -244,13 +244,15 @@ test "hover: a box only pointed at is pointed at, and a press on it is what hold
       // a row (0 … 160) and in it a chip (60 … 100) that says what it is on hover, pressing nothing of its own
       let row = c.id("row")
       let chip = c.id("chip")
-      if c.clicked(row) {
+      c.on_press(row, fn() {
         pressed.push("row")
-      }
-      // (where in the row: on its chip)
-      if c.clicked_on(row, chip) {
-        pressed.push("on the chip")
-      }
+        // (where in the row: on its chip, where the pointer let go)
+        let (x, y, _) = c.pointer()
+        match c.rect_of(chip) {
+          Some((px, py, pw, ph)) if x >= px && x < px + pw && y >= py && y < py + ph => pressed.push("on the chip")
+          _ => ()
+        }
+      })
       c.cursor(row, Hand)
       c.box(w=Px(160.0), h=Px(40.0), id=row, fn() {
         c.box(w=Px(40.0), h=Px(20.0), ml=60.0, mt=10.0, id=chip, taps=false, points=true, fn() {  }) |> ignore
