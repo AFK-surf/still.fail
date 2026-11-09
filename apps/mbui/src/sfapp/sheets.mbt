@@ -1689,128 +1689,172 @@ fn open_job(src : Source, r : ChatRef, id : String) -> Unit {
 }
 
 ///|
-/// What is left up a long while on the workspace's stations, at the top of Home's list: web services and
-/// background jobs, each under its heading, three of a group and the rest folded under 还有 N 个; nothing while there
-/// are none. A row leads to its chat; its stop at its end.
-fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let groups = items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups")
-  if groups.length() == 0 {
-    return
-  }
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), pl=10.0, pr=10.0, pt=4.0, pb=10.0, gap=8.0, fn() {
-    for g in groups {
-      let gv = Some(g)
-      let gkey = "open-jobs/" + text(gv, "key")
-      let list = items(gv, "jobs")
-      let shown = if dui.opened.contains(gkey) || list.length() <= 4 {
-        list
+/// What is left up a long while on the workspace's stations, at the top of Home's list (in node `v`): web services and
+/// background jobs, each under its heading, three of a group and the rest folded under 还有 N 个. A row leads to its
+/// chat; its stop at its end.
+fn open_jobs_node(v : @view.View, src : Source, w : Workspace) -> Unit {
+  let groups = fn() { items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups") }
+  @sf.style_node(v, fn() { open_jobs_at })
+  v.each(groups, fn(g) { text(Some(g), "key") }, fn(gb, g) {
+    let gv = fn() { Some(g.get()) }
+    let gkey = fn() { "open-jobs/" + text(gv(), "key") }
+    let list = fn() { items(gv(), "jobs") }
+    let shown = fn() {
+      let l = list()
+      if dui.opened.contains(gkey()) || l.length() <= 4 {
+        l
       } else {
-        list[:3].to_array()
+        l[:3].to_array()
       }
-      c.box(w=Fill(1.0), gap=2.0, fn() {
-        c.box(padx=10.0, pady=2.0, fn() {
-          c.text(text(gv, "head"), size=t.t.caption, color=t.p.muted, wrap=false) |> ignore
-        })
-        |> ignore
-        for j in shown {
-          open_job_row(c, src, Some(j))
-        }
-        if shown.length() < list.length() {
-          let id = c.id(gkey + "/more")
-          c.on_press(id, fn() {
-            dui.opened[gkey] = true
-          })
-          c.box(padx=10.0, pady=3.0, radius=8.0, id~, fn() {
-            c.text(
-              fill("android-misc.openJobs.more", [("n", (list.length() - shown.length()).to_string())]),
-              size=t.t.caption,
-              color=t.p.muted,
-              wrap=false,
-            )
-            |> ignore
-          })
-          |> ignore
-        }
-      })
-      |> ignore
     }
+    @sf.style_node(gb, fn() { open_jobs_group })
+    gb.box(fn(h) {
+      @sf.style_node(h, fn() { open_jobs_head })
+      @sf.words_node(h, fn() { text(gv(), "head") }, fn() { open_jobs_head_words }) |> ignore
+    })
+    |> ignore
+    gb.each(shown, fn(j) { text(Some(j), "station") + "/" + text(Some(j), "id") }, fn(row, j) {
+      open_job_row_node(row, src, fn() { Some(j.get()) })
+    })
+    gb.show(fn() { shown().length() < list().length() }, fn(m) {
+      @sf.style_node(m, fn() { open_jobs_more })
+      let more = fn() { fill("android-misc.openJobs.more", [("n", (list().length() - shown().length()).to_string())]) }
+      @sf.rippled_node(m, fn() { dui.opened[@signals.untracked(gkey)] = true }, open_jobs_more_corner, more)
+      @sf.words_node(m, more, fn() { open_jobs_more_words }) |> ignore
+    })
+  })
+}
+
+///|
+/// A job left up (in node `row`): its dot, its name over where it is and how long; the row to its chat, stop at its end.
+fn open_job_row_node(row : @view.View, src : Source, job : () -> Json?) -> Unit {
+  let station = fn() { text(job(), "station") }
+  let id = fn() { text(job(), "id") }
+  let skey = fn() { "job-stop/" + station() + "/" + id() }
+  @sf.style_node(row, fn() { open_job_row })
+  @sf.rippled_node(
+    row,
+    fn() {
+      let j = @signals.untracked(job)
+      let chat = field(j, "chat")
+      if chat is Some(Object(_)) {
+        let station = text(j, "station")
+        @sfbase.history_push()
+        app.nav.push(Chat({ station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }))
+        // a service: its page over its chat
+        if flag(j, "service") {
+          app.nav.push(Service(station, text(j, "id")))
+        }
+      }
+    },
+    open_job_row_corner,
+    fn() { text(job(), "name") },
+  )
+  row.box(fn(d) {
+    @sf.style_node(d, fn() { open_job_dot })
+    job_dot_node(d, fn() { text(job(), "tone") })
+  })
+  |> ignore
+  row.box(fn(words) {
+    @sf.style_node(words, fn() { open_job_words }, in_row=true)
+    @sf.words_node(words, fn() { text(job(), "name") }, fn() { open_job_name }) |> ignore
+    @sf.words_node(words, fn() { text(job(), "whereText") + " · " + text(job(), "age") }, fn() { open_job_meta }) |> ignore
+  })
+  |> ignore
+  row.box(fn(s) {
+    @sf.style_node(s, fn() { open_job_stop })
+    @sf.rippled_node(
+      s,
+      fn() {
+        let j = @signals.untracked(job)
+        let key = @signals.untracked(skey)
+        if !doing(key) {
+          @ui.haptic(Confirm)
+          // a job's own stop, or a simulator's or a view's (its `stop`: 关闭, 断开)
+          let (call, params, _) = long_stop(text(j, "station"), j)
+          act(src, fill("android-misc.jobs.stopWhat", [("name", text(j, "name"))]), key, call, params)
+        }
+      },
+      open_job_stop_side / 2.0,
+      fn() {
+        match text(field(job(), "stop"), "word") {
+          "" => tr("android-misc.jobs.stop")
+          word => word
+        }
+      },
+    )
+    s.show(fn() { doing(skey()) }, fn(b) { @sf.spinner_node(b, size=open_job_stop_spin) |> ignore })
+    s.show(fn() { !doing(skey()) }, fn(b) {
+      @sf.icon_node(b, "stop", open_job_stop_icon, By(fn() { @sf.theme().p.muted })) |> ignore
+    })
   })
   |> ignore
 }
 
 ///|
-/// A job left up: its dot, its name over where it is and how long; the row to its chat, stop at
-/// its end.
-fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
-  let t = @sf.theme()
-  let station = text(job, "station")
-  if station == "" {
-    return
-  }
-  let id = text(job, "id")
-  let chat = field(job, "chat")
-  let row = c.id("open-job/" + station + "/" + id)
-  c.on_press(row, fn() {
-    if chat is Some(Object(_)) {
-      @sfbase.history_push()
-      app.nav.push(Chat({ station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }))
-      // a service: its page over its chat
-      if flag(job, "service") {
-        app.nav.push(Service(station, id))
-      }
-    }
-  })
-  let skey = "job-stop/" + station + "/" + id
-  let stop = c.id("open-job-stop/" + station + "/" + id)
-  c.on_press(stop, fn() {
-    if !doing(skey) {
-      @ui.haptic(Confirm)
-      // a job's own stop, or a simulator's or a view's (its `stop`: 关闭, 断开)
-      let (call, params, _) = long_stop(station, job)
-      act(src, fill("android-misc.jobs.stopWhat", [("name", text(job, "name"))]), skey, call, params)
-    }
-  })
-  c.box(
-    dir=Row,
-    w=Fill(1.0),
-    pl=10.0,
-    pr=4.0,
-    pt=5.0,
-    pb=5.0,
-    gap=10.0,
-    radius=10.0,
-    align=ACenter,
-    id=row,
-    fn() {
-      c.box(w=Px(16.0), align=ACenter, fn() { job_dot(c, text(job, "tone")) }) |> ignore
-      c.box(w=Fill(1.0), fn() {
-        c.text(text(job, "name"), size=t.t.ui, color=t.p.text, wrap=false, line=18.0, allow_ellipsis=true) |> ignore
-        c.text(
-          text(job, "whereText") + " · " + text(job, "age"),
-          size=t.t.caption,
-          color=t.p.muted,
-          wrap=false,
-          line=16.0,
-          allow_ellipsis=true,
-        )
-        |> ignore
-      })
-      |> ignore
-      c.box(w=Px(32.0), h=Px(32.0), radius=16.0, align=ACenter, justify=JCenter, id=stop, fn() {
-        if doing(skey) {
-          @sf.spinner(c, size=12.0) |> ignore
-        } else {
-          @sf.icon(c, "stop", size=15.0, color=t.p.muted) |> ignore
-        }
-      })
-      |> ignore
-      // the row clickable over its clip
-      @motion.ripple(c, row, 10.0)
-    },
-  )
-  |> ignore
-}
+/// 10 in at its sides, 4 over, 10 under, its groups 8 apart.
+// kept across runs: a value (no field of it changes)
+let open_jobs_at : @ui.Style = @ui.css("w=Full pl=S2_5 pr=S2_5 pt=S1 pb=S2_5 gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_jobs_group : @ui.Style = @ui.css("w=Full gap=S0_5 align=AStart")
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_jobs_head : @ui.Style = @ui.css("px=S2_5 py=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_jobs_head_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_jobs_more : @ui.Style = @ui.css("px=S2_5 py=S1")
+
+///|
+let open_jobs_more_corner : Double = 8.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_jobs_more_words : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false)
+
+///|
+/// Across, 10 in at its left, 4 at its right, 5 over and under, its parts 10 apart and on its middle.
+// kept across runs: a value (no field of it changes)
+let open_job_row : @ui.Style = @ui.css("row w=Full pl=S2_5 pr=S1 py=S1_25 gap=S2_5 align=ACenter")
+
+///|
+let open_job_row_corner : Double = 10.0
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_job_dot : @ui.Style = @ui.css("w=S4 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_job_words : @ui.Style = @ui.css("w=Full")
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_job_name : @ui.TextStyle = @ui.text_style(size=Ui, color=Fg, wrap=false, w=Cut, leading=L4_75)
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_job_meta : @ui.TextStyle = @ui.text_style(size=Caption, color=Muted, wrap=false, w=Cut, leading=L4)
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_job_stop : @ui.Style = @ui.css("w=S8 h=S8 radius=Full align=ACenter justify=JCenter")
+
+///|
+let open_job_stop_side : Double = 32.0
+
+///|
+let open_job_stop_spin : Double = 12.0
+
+///|
+let open_job_stop_icon : Double = 15.0
 
 ///|
 /// An info row's words (14, the ink, on one line).

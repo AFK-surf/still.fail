@@ -130,8 +130,11 @@ pub fn tool_node(
     let on_it = fn(d : @view.Drag) { v.finger_target(d.wx, d.wy) }
     v.gesture(
       @ui.touch_slop(),
-      press?=rippled,
+      press?=rippled.map(fn(r) { r.down }),
       tap=fn(d) {
+        if rippled is Some(r) {
+          (r.tapped)(d)
+        }
         if on_it(d) && !@signals.untracked(fn() { said().disabled }) {
           press()
         }

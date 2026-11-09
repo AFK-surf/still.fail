@@ -17,7 +17,7 @@ priv struct Decide {
   /// a job's sheet: what it said (0) or its output (1)
   mut job_tab : Int
   /// groups and steps of a history opened, by their key
-  opened : Map[String, Bool]
+  opened : @sf.LiveMap[String, Bool]
 }
 
 ///|
@@ -26,7 +26,7 @@ let dui : Decide = {
   letters_open: "",
   letters_held: {},
   job_tab: 0,
-  opened: {},
+  opened: @sf.LiveMap::new(),
 }
 
 ///|

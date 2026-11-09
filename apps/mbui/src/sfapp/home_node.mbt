@@ -34,7 +34,7 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
     after: fn(_, _) {
       match workspace() {
         Some(w) if items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups").length() > 0 =>
-          [{ key: "open-jobs", make: fn(p) { @ui.old(p, fn(c) { open_jobs(c, src, w) }, natural=true, unlaid=fn() { p.window().1 }) |> ignore } }]
+          [{ key: "open-jobs", make: fn(p) { open_jobs_node(p, src, w) } }]
         _ => []
       }
     },

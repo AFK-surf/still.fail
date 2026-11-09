@@ -1247,6 +1247,13 @@ fn list_put(
   h2 : Double,
   h3 : Double,
 ) -> Unit {
+  list_move(s, b, m, dx, dy)
+  inst_cut_to(s, b, h0, h1, h2, h3)
+}
+
+///|
+/// Instance `b` of `s` moved by (dx, dy), what of its clip and outer `m` says (ride_moves) with it.
+fn list_move(s : FixedArray[Double], b : Int, m : Int, dx : Double, dy : Double) -> Unit {
   s[b] = s[b] + dx
   s[b + 1] = s[b + 1] + dy
   if m != 0 {
@@ -1264,7 +1271,19 @@ fn list_put(
       s[b + 34] = s[b + 34] + dy
     }
   }
-  inst_cut_to(s, b, h0, h1, h2, h3)
+}
+
+///|
+/// An old view hosted in a list drawn whole as one (ListRiding) drew itself from instance `k0` on where the window has
+/// it, the column's offset in it (its old frame built where Tree::drawn_one finds it, which takes that offset in); the
+/// list as it ends moves all it holds by that offset (list_put): taken back by it first, so the old view moves with
+/// the rows round it, once (Home's list on a phone drew what was left up long under it twice as fast as its rows).
+fn Ctx::island_in_list(self : Ctx, k0 : Int) -> Unit {
+  guard list_riding.val is Some(l) && (l.dx != 0.0 || l.dy != 0.0) else { return }
+  for k in k0..<self.ninst {
+    let b = k * inst_size
+    list_move(self.inst, b, ride_moves(self.inst, b, l.clip), -l.dx, -l.dy)
+  }
 }
 
 ///|

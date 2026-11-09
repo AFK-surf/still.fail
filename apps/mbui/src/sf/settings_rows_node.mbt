@@ -168,8 +168,13 @@ pub fn danger_row_node(parent : @view.View, title : () -> String, press : () -> 
     let on_it = fn(d : @view.Drag) { r.finger_target(d.wx, d.wy) }
     r.gesture(
       @ui.touch_slop(),
-      press=fn(d) { if @signals.untracked(live) { rippled(d) } },
-      tap=fn(d) { if on_it(d) { go() } },
+      press=fn(d) { if @signals.untracked(live) { (rippled.down)(d) } },
+      tap=fn(d) {
+        (rippled.tapped)(d)
+        if on_it(d) {
+          go()
+        }
+      },
       drag=fn(d) { if d.kind == Up && @ui.pointing() is Mouse && on_it(d) { go() } },
     )
     |> ignore
