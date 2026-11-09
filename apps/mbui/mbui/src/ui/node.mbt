@@ -787,13 +787,18 @@ fn Node::radius_at(self : Node, j : Int) -> Double {
 }
 
 ///|
-/// Its corners made `r` (radius_at's order): all four one, `radius`; else each its own.
+/// Its corners made `r` (radius_at's order): all four one, `radius`; else each its own. One within a millionth of a
+/// point: a corner worked out from where boxes are (corners.mbt, concentric) has their rounding in it, and a box laid
+/// out again and one kept and moved there are a rounding apart (layout.mbt's moved_shift): their corners are the same
+/// either way, said the same way.
 fn Node::set_radii(self : Node, r : FixedArray[Double]) -> Unit {
-  if r[0] == r[1] && r[1] == r[2] && r[2] == r[3] {
-    self.radius = r[0]
+  let most = dmax(dmax(r[0], r[1]), dmax(r[2], r[3]))
+  let least = dmin(dmin(r[0], r[1]), dmin(r[2], r[3]))
+  if most - least < 1.0e-6 {
+    self.radius = most
     self.radii = None
   } else {
-    self.radius = dmax(dmax(r[0], r[1]), dmax(r[2], r[3]))
+    self.radius = most
     self.radii = Some(r)
   }
 }

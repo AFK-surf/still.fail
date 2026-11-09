@@ -715,9 +715,12 @@ fn tree_sig(c : Ctx) -> Int64 {
 }
 
 ///|
-/// `x` folded into `h` as tree_sig folds a length: to 1/64 of a point.
+/// `x` folded into `h` as tree_sig folds a length: to the bit. To 1/64 of a point, a layout still moving by less than
+/// that a frame was taken as settled, the frames after it painted from it, and what was laid out where it had come to
+/// at the next built whole: at 120 frames a second a way's last tenths of a point frozen where at 60 they were not
+/// (kept_panes_wbtest, MBUI_TEST_FPS=120, 2026-11-09). A build of the same lays out the same to the bit.
 fn sig_num(h : Int64, x : Double) -> Int64 {
-  hash_mix(h, (x * 64.0).round().to_int64())
+  hash_mix(h, x.reinterpret_as_int64())
 }
 
 ///|

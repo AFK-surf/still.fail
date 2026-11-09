@@ -253,8 +253,9 @@ pub fn sheet(
       look(c, { t: s.fade.get(), h: hx, below: bx }, fn() {
         // behind what it shows (its buttons take their taps), over the sheet (it takes the drags): what lies on it
         // (its title, its grabber) pressed through it, while it takes presses (not as it sinks away, nor raised under
-        // another, which takes them: its top may be past the window's then)
-        if now && raised <= 0.0 {
+        // another, which takes them: its top may be past the window's then; nor while what it drags by is above the
+        // window, the sheet pulled past its most and giving way, springing back: nothing of it there to press)
+        if now && raised <= 0.0 && total - hx + bx - raised + drag_h > 0.0 {
           c.presses_to(top_id)
         }
         c.layer(fn() { c.drag_area(top_id, axis=Vertical, w=Fill(1.0), h=Px(drag_h), fn() {  }) |> ignore }) |> ignore
