@@ -73,6 +73,16 @@ for (const line of out.trim().split("\n")) {
     if (lacking.length) missed.push(`${file}: ${p.name} is built from it, but a change to it alone deploys no ${lacking.join(", ")}`);
   }
 }
+// The agents' rules are built into none of them, and deploy nothing wherever they lie (plan.sh `decide`).
+const rules = execFileSync("git", ["ls-files", "AGENTS.md", "CLAUDE.md", "*/AGENTS.md", "*/CLAUDE.md"], { cwd: root, encoding: "utf8" }).trim().split("\n");
+const all = `PLAN_SOURCE=1; . scripts/plan.sh; range=
+while IFS= read -r changed; do decide; echo "$changed parts=\${static[*]-} api=$api relay=$relay station=$station android_beta=$android_beta mac_beta=$mac_beta win_beta=$win_beta windows_natives=$windows_natives mbui=$mbui"; done`;
+for (const line of execFileSync("bash", ["-c", all], { cwd: root, input: rules.join("\n") + "\n", encoding: "utf8" }).trim().split("\n")) {
+  const [file, ...said] = line.split(" ");
+  const does = said.filter((s) => s.endsWith("=true") || (s.startsWith("parts=") && s !== "parts="));
+  if (files.has(file!)) missed.push(`${file}: a part is built from it, so it is no rule file alone: name it otherwise`);
+  else if (does.length) missed.push(`${file}: the agents' rules deploy nothing, but a change to it alone does ${does.join(", ")}`);
+}
 console.log(`plan-covers: ${files.size} files ${parts.map((p) => p.name).join(", ")} are built from`);
 if (missed.length) {
   console.error(missed.join("\n") + "\n(say so in scripts/plan.sh)");

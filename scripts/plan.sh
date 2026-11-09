@@ -15,6 +15,11 @@ has_but() {
 }
 
 decide() {
+  # The agents' rules (AGENTS.md, CLAUDE.md) are built into nothing, and kept true by small changes of their own: one
+  # deploys and releases nothing (client/core-ts/AGENTS.md alone put out the web, the admin and three apps' betas, by
+  # its directory). scripts/plan-covers.ts holds it.
+  # (the right side reads the caller's `changed`: it is expanded before the local one is made)
+  local changed="$(printf '%s\n' "$changed" | grep -vE '(^|/)(AGENTS|CLAUDE)\.md$' || true)"
   # Part by part.
   static=()
   # A reviewed stable release gets a fresh, pinned web artifact even when only its notes changed.

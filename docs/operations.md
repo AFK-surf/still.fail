@@ -22,7 +22,6 @@ station 必须加入 workspace 才接 Slack、运行 agent。数据默认在 `~/
 
 ```json
 {
-  "admin": { "access": { "teamDomain": "…", "aud": "…" } },
   "connects": [
     { "id": "ds", "kind": "slack", "mode": "multi-session",
       "bind": { "runtime": "claude", "profile": "claude-ocg", "model": "deepseek-flash" },
@@ -90,7 +89,7 @@ station 必须加入 workspace 才接 Slack、运行 agent。数据默认在 `~/
 
 安卓、Mac、Windows 的正式版和测试版都是 `apps/mbui` 构建的（apps/mbui/README.md「Which app is built」）。此外 main 上每次推送都出一个 still.fail preview（`fail.still.mbui`，和正式版、测试版并排装的预览版），只有 Windows 和 Linux（Linux 只有这个通道；安卓和 Mac 的预览版 2026-11-03 起不再构建，测试版就是它们的测试通道），不在 pipeline 里：`.github/workflows/preview.yml` 在 GitHub 的 runner 上自己跑（`apps/mbui/scripts/beta.sh`），main 每次改到它的来源（`apps/mbui/`、`client/`、`vendor/`、`scripts/native.ts` 等，见 workflow 的 `paths`）就构建、签名、放进 R2（`win/stillfail-mbui-<n>-x64-win.exe`、`linux/stillfail-mbui-<n>-<arch>-linux.tar.gz`），从线上地址取回核对大小和 SHA-256 之后才写 feed `win/mbui/latest.json`、`linux/mbui/latest.json`；下载 `/releases/latest/win-mbui`、`linux-mbui`、`linux-arm64-mbui`。feed 和 app id 还叫 mbui：装着的预览版靠它们更新。它不等 pipeline 的检查（用户定：测试 app 不被测试挡），pipeline 也不等它、不因它失败；分支只构建不发。mbui 框架本身在本仓库的 `apps/mbui/mbui`（2026-10-21 从 zzj3720/mbui 连历史并进来，不再钉提交）。
 
-- **分支**：每次 push 跑完整检查（`scripts/check.sh full <merge-base>..HEAD`），并把改到的部分构建、打包一遍（`deploy.py --dry-run`，不部署、不读密钥）。结果当合并的证据，不卡合并。
+- **分支**：每次 push 跑完整检查（`scripts/check.sh full <merge-base>..HEAD`），并把改到的部分构建、打包一遍（`deploy.py --dry-run`，不部署、不读密钥）。PR 要其中的 `gate` 通过才能合（见下面「main 有保护」）。
 - **main**：检查上次部署（tag `deployed/beta`）以来改到的部分，过了就按顺序部署改到的：先 api（stillfail-cloud，正式环境，只有一份），再 web-beta（app.youdid.wtf）、admin、preview、site-beta（youdid.wtf），以及测试通道的 station 发布包（`.github/release.sh station`：TypeScript station 加它的 Node 和原生部分，三个平台，传完按配置更新测试 station）、Mac 测试版（2026-10-26 起是 mbui 的 app 顶替 Electron 的：`.github/release-desktop.sh` 跑 `scripts/release.sh --beta desktop`，在 GitHub 的 macos-26 runner 上构建、用原签名身份签名并公证、验证是 Electron 那个 app 的 id 和我们的 team 后上传；改了 mbui 的 app 就发，同一个 zip 写进 mbui 自己的更新源 `mac/beta/latest.json` 和 Electron 的 `desktop/stillfail-beta-mac.yml`，已装的 Electron 版点「更新」就换成它，数据、登录、密钥照旧）、Windows 测试版（同日起也是 mbui 的：desktop-win job 在 GitHub 的 Windows runner 上跑 `scripts/release.sh --beta desktop-win`，安装包签 `.sig`，写进 `win/beta/latest.json` 和 Electron 的 `desktop/stillfail-beta.yml`）和安卓测试版（`.github/release.sh android`，用 secret `ANDROID_DEBUG_KEYSTORE_B64` 里的 key 签，不能换）。哪一步不过，后面的都不发（api 和网页只等跟它们有关的检查，不等安卓的，2026-10-17 起）；全部发完才把 `deployed/beta` 挪到这个提交，所以被取消或失败的那次，改动会算进下一次。relay 改了只在 Actions 里给个警告，不自动部署（会断所有连接）。
 - **正式版手动一键发布**：在 GitHub Actions 的 **Publish stable → Run workflow**，选择 main，revision 留空即可。它按 main 上最新已审核的 `docs/releases/0.1.<n>.md` 选提交（`.github/stable-plan.py`）。正式版发的是前一天的 main（在测试版上跑满一天）加当天提交里写了 `Stable: yes` 的严重修复（用户定，2026-11-09）：
   - 没有严重修复：n 是 main 上那个基础提交的提交数，日志之后再合进 main，不在那个提交里。它得有跑通的 main pipeline；这次 pipeline 留了网页 artifact（90 天）就原样转正，没有（那次没改网页）就在本 workflow 里从该提交构建网页。
