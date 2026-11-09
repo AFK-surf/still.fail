@@ -1369,6 +1369,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
         // origin; what it put over all of it at its root (its overlays) after the tree, as where it is in a box: theirs)
         // (in the order the old frame's root holds them in, as painting it would: what goes over its siblings after
         // them)
+        self.segs_whole()
         self.paint_held(self.nodes[root], 1.0, but=fn(ch) { self.nodes[ch].layer || self.nodes[ch].portal })
       } else {
         match old_box_of.get(c.id) {
@@ -2225,6 +2226,7 @@ fn Ctx::view_blit(
   let block = made.inst
   let n = block.length() / inst_size
   // (its shapes' pieces after the frame's: its bands told where they are now)
+  self.segs_whole()
   let seg_base = (self.segs.length() / 4).to_double()
   self.segs_put(made.segs, made.pack)
   while (self.ninst + n) * inst_size > self.inst.length() {
@@ -4226,7 +4228,7 @@ fn Ctx::back_told_host(self : Ctx) -> Unit {
 /// The bands each node's shapes came to (shape_bands), by node, for the shapes they are of: drawn again in another tint,
 /// the same; let go with the node.
 // kept across runs: let go as the nodes are, and with the tree (view_forget)
-let view_shape_bands : Map[@view.NodeId, ShapeBands] = Map([])
+let view_shape_bands : ByNode[ShapeBands] = ByNode::new()
 
 ///|
 /// The middle of the box round the instances `inst` (their rects; none: the origin), as an old view's cycle look finds
@@ -4268,7 +4270,7 @@ fn inst_range_middle(inst : FixedArray[Double], from : Int, upto : Int) -> (Doub
 /// Each node's picture as it was last cut (View::picture): of which, how wide, for how many pixels a point, the shapes
 /// it came to, and those with the node's own before them (of which); let go with the node, or as it draws none.
 // kept across runs: let go as the nodes are, and with the tree (view_forget)
-let view_pictures : Map[@view.NodeId, ViewPicture] = Map([])
+let view_pictures : ByNode[ViewPicture] = ByNode::new()
 
 ///|
 priv struct ViewPicture {
@@ -4521,7 +4523,7 @@ let tree_said_ids : Map[Int, @view.NodeId] = Map([])
 
 ///|
 // kept across runs: written as the tree is read out, put back as a run begins (view_forget)
-let tree_said_of : Map[@view.NodeId, Int] = Map([])
+let tree_said_of : ByNode[Int] = ByNode::new()
 
 ///|
 /// The next id given (tree_said_ids).
@@ -4618,7 +4620,7 @@ fn Ctx::semantics_spliced(self : Ctx, tree : @view.Tree) -> Array[SemNode] {
     moved[k] = out.length() - 1
   }
   // (those let go read out no more: their ids nobody's)
-  let gone = tree_said_of.keys().filter(fn(id) { !tree.lives(id) }).collect()
+  let gone = tree_said_of.keys().filter(fn(id) { !tree.lives(id) })
   for id in gone {
     match tree_said_of.get(id) {
       Some(k) => tree_said_ids.remove(k)

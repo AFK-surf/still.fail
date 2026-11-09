@@ -581,7 +581,7 @@ fn Ctx::ride_begin(
     id: c.id,
     rev,
     k0: self.ninst,
-    seg0: self.segs.length() / 4,
+    seg0: self.segs_whole_at(),
     clips0: clips,
     rings0: rings,
     x,
@@ -671,7 +671,7 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
       )
     }
   }
-  let segs = self.segs[r.seg0 * 4:].to_array()
+  let segs = self.segs_from(r.seg0)
   // (kept by the host where it keeps groups and nothing of them is worked on as the frame ends; in a list drawn whole
   // as one as well, its header in that list's group where it is drawn again: ListRiding)
   let group = if ridings.is_empty() && groups_on() && ride_groupable(inst, n) {
@@ -851,6 +851,7 @@ fn Ctx::ride_again(self : Ctx, k : RideKept, dx : Double, dy : Double) -> Unit {
     list_drawn_anew()
   }
   ride_caps.clear()
+  self.segs_whole()
   let seg_by = (self.segs.length() / 4 - k.seg0).to_double()
   self.segs_put(k.segs, k.pack)
   // (in what is being drawn to be kept, all of it that one's as well, as were it drawn anew: ride_into_outer)
@@ -1197,6 +1198,8 @@ fn island_still(id : @view.NodeId, built : Int) -> Bool {
 /// (as the frame's paint follows what it reads: a frame asked for as it changes, that paint read anew), and the glyphs
 /// it draws from kept for it (held in the atlas while it is drawn again: view_glyphs_held).
 fn Ctx::island_painted(self : Ctx, c : @view.Content, paint : () -> Unit) -> Unit {
+  // (its pieces from an instance's first on, whether it is kept or drawn anew: Ctx::segs_whole)
+  self.segs_whole()
   guard riding_now() is Some(r) && r.island && r.id == c.id else { return paint() }
   let w = match island_watches.get(c.id) {
     Some(w) => w
@@ -1332,7 +1335,7 @@ fn Ctx::list_ride_begin(
     by,
     rev,
     k0: self.ninst,
-    seg0: self.segs.length() / 4,
+    seg0: self.segs_whole_at(),
     clips0: clips,
     rings0: rings,
     x,
@@ -1449,7 +1452,7 @@ fn Ctx::list_ride_end(self : Ctx) -> Unit {
       )
     }
   }
-  let segs = self.segs[l.seg0 * 4:].to_array()
+  let segs = self.segs_from(l.seg0)
   // (the group it was kept as before, where it drew the same: the host's kept, nothing told it again)
   let was = match ride_kept.get(l.id) {
     Some(k) if k.group >= 0 && k.moves == moves && k.inst == inst => Some(k.group)
@@ -1651,6 +1654,7 @@ fn Ctx::list_again(
   dy : Double,
   hc : FixedArray[Double],
 ) -> Unit {
+  self.segs_whole()
   let seg_by = (self.segs.length() / 4 - k.seg0).to_double()
   self.segs_put(k.segs, k.pack)
   let n = k.out
