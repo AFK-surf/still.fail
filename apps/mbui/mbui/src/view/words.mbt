@@ -580,9 +580,9 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
   // (what takes the pointer where, as whether it takes presses is (View::presses): said at the moment it changes, its
   // hits found anew, nothing laid out for it; said anew, what was said before let go of)
   guard self.live() is Some(n) else { return self }
-  match n.props.get(Points) {
+  match n.props.get(Prop::Points.ord()) {
     Some(stop) => {
-      n.props.remove(Points)
+      n.props.remove(Prop::Points.ord())
       stop()
     }
     None => ()
@@ -600,7 +600,7 @@ pub fn View::points(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[Points] = stop
+        n.props[Prop::Points.ord()] = stop
       })
   }
   self

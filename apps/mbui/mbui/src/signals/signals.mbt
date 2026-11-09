@@ -151,8 +151,8 @@ fn notify(first : ReactiveNode) -> Unit {
     // so as the batch ends: Watch::on_marked)
     if effect.kind is WatchNode {
       guard effect.own is WatchOwned(o) else { abort("a watch without its own") }
-      o.marked_by.val = setting.val
-      match o.marked.val {
+      o.marked_by = setting.val
+      match o.marked {
         Some(f) => f()
         None => ()
       }
@@ -470,12 +470,12 @@ fn run_effect(e : ReactiveNode) -> Unit {
       // as it was set)
       let was = setting.val
       if was is None {
-        setting.val = o.marked_by.val
+        setting.val = o.marked_by
       }
-      (o.told)()
+      o.told()
       setting.val = was
     }
-    o.marked_by.val = None
+    o.marked_by = None
     return
   }
   if (flags & DIRTY) != 0 || ((flags & PENDING) != 0 && check_dirty(e.deps.unwrap(), e)) {
@@ -725,8 +725,8 @@ fn effect_scope_oper(e : ReactiveNode) -> Unit {
   // it by what it read keeps nothing by it, Watch::gone)
   if e.kind is WatchNode {
     guard e.own is WatchOwned(o) else { abort("a watch without its own") }
-    o.stale.val = true
-    o.gone.val = true
+    o.stale = true
+    o.gone = true
   }
   e.flags = NONE
   dispose_all_deps_in_reverse(e)
@@ -873,24 +873,35 @@ pub fn[T, U] Computed::lend(self : Computed[T], to : Computed[U]) -> Unit {
 /// What reads anew (the next read) follows what that run reads. For what is worked out when asked, and asked only as
 /// it is stale: a window's frame, built anew only where what its last build read changed.
 /// What a watch's node holds: what it calls as it is told (as the batch it was marked in ends), and what as it is marked
-/// (Watch::on_marked).
+/// (Watch::on_marked). One object, its states its fields (no cell of its own for each: a binding of a node's has one
+/// watch, made and let go with the node, and each object more is an allocation and a free of every node).
 priv struct WatchOwn {
-  told : () -> Unit
-  marked : Ref[(() -> Unit)?]
-  /// stale, as Watch's; and stopped (Watch::stop, or by what owns it as that one stops: Watch::gone)
-  stale : Ref[Bool]
-  gone : Ref[Bool]
+  changed : () -> Unit
+  mut marked : (() -> Unit)?
+  /// stale (what its last read read changed, or it was never read); and stopped (Watch::stop, or by what owns it as
+  /// that one stops: Watch::gone)
+  mut stale : Bool
+  mut gone : Bool
   /// the set that marked it, as it marked it (`setting`, None: a trigger, …): said as it is told (setting_at), where
   /// that is later (a batch's end) and no set is under way then
-  marked_by : Ref[SourceLoc?]
+  mut marked_by : SourceLoc?
+  /// where what it read was set again as its last read ran, the first few (Watch::set_as_read; none: nowhere)
+  mut set_by : Array[String]?
+}
+
+///|
+/// Told: once till it reads anew, what changes again meanwhile adding nothing to its being stale.
+fn WatchOwn::told(self : WatchOwn) -> Unit {
+  if !self.stale {
+    self.stale = true
+    (self.changed)()
+  }
 }
 
 ///|
 pub struct Watch {
   priv node : ReactiveNode
-  priv stale : Ref[Bool]
-  /// where what it read was set again as its last read ran, the first few (Watch::set_as_read)
-  priv set_by : Array[String]
+  priv own : WatchOwn
 }
 
 ///|
@@ -908,16 +919,8 @@ let watch_reading : WatchReading = { depth: 0, sets: [] }
 /// A watch (Watch): stale until it is first read; `changed` called as what a read read first changes after it, once
 /// till the next read.
 pub fn watch(changed : () -> Unit) -> Watch {
-  let stale = Ref(true)
-  // (told once till it reads anew: what changes again meanwhile adds nothing to its being stale)
-  let told : () -> Unit = fn() {
-    if !stale.val {
-      stale.val = true
-      changed()
-    }
-  }
   // (told, it runs nothing of what it read: what it read stays followed till it reads anew, run_effect)
-  let own : WatchOwn = { told, marked: Ref(None), stale, gone: Ref(false), marked_by: Ref(None) }
+  let own : WatchOwn = { changed, marked: None, stale: true, gone: false, marked_by: None, set_by: None }
   let node = ReactiveNode::new(NONE, WatchNode, own=WatchOwned(own))
   // (made where an owner is set (set_owner: a scope that is not reading, an old view's): that owner's, let go with it;
   // not what is reading's, whose reading anew would let it go)
@@ -928,7 +931,7 @@ pub fn watch(changed : () -> Unit) -> Watch {
     }
     None => ()
   }
-  { node, stale, set_by: [] }
+  { node, own }
 }
 
 ///|
@@ -942,11 +945,12 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
     watch_reading.sets.clear()
   }
   watch_reading.depth += 1
-  self.set_by.clear()
+  let own = self.own
+  own.set_by = None
   e.deps_tail = None
   e.flags = WATCHING | RECURSED_CHECK
   // (fresh from here: made stale again as it reads (Watch::touch: what it holds told as it is built), it stays so)
-  self.stale.val = false
+  own.stale = false
   let prev_sub = set_active_sub(Some(e))
   run.cycle += 1
   let v = f()
@@ -955,11 +959,10 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
   e.flags = e.flags & RECURSED_CHECK.lnot()
   purge_deps(e)
   // (let go as it read (what owned it let go meanwhile): what it read after that let go too, none of it kept as read)
-  guard e.own is WatchOwned(own) else { abort("a watch without its own") }
-  if own.gone.val {
+  if own.gone {
     e.flags = NONE
     dispose_all_deps_in_reverse(e)
-    self.stale.val = true
+    own.stale = true
     return v
   }
   // (what it read set again as it ran, after it was read: told then as what reads it is, the run still going)
@@ -971,11 +974,8 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
       })
     e.flags = WATCHING
     if dirty {
-      for s in watch_reading.sets {
-        self.set_by.push(s)
-      }
-      guard e.own is WatchOwned(o) else { abort("a watch without its own") }
-      (o.told)()
+      own.set_by = Some(watch_reading.sets.copy())
+      own.told()
     }
   }
   v
@@ -985,7 +985,10 @@ pub fn[T] Watch::read(self : Watch, f : () -> T) -> T {
 /// Where values were set as the last read ran, where what it read changed as it ran (the first few; none where it did
 /// not): what changed what it read as it read.
 pub fn Watch::set_as_read(self : Watch) -> Array[String] {
-  self.set_by.copy()
+  match self.own.set_by {
+    Some(s) => s.copy()
+    None => []
+  }
 }
 
 ///|
@@ -999,28 +1002,27 @@ pub fn Watch::changed_as_read(self : Watch) -> Bool {
 ///|
 /// Whether what the watch's last read read changed since (or it was never read).
 pub fn Watch::is_stale(self : Watch) -> Bool {
-  self.stale.val
+  self.own.stale
 }
 
 ///|
 /// The watch stale, as though what it read changed (`changed` not called): read anew before it is relied on.
 pub fn Watch::touch(self : Watch) -> Unit {
-  self.stale.val = true
+  self.own.stale = true
 }
 
 ///|
 /// Whether the watch was stopped (Watch::stop, or by what owned it as that stopped: a scope, an effect run again): it
 /// follows nothing, and nothing that kept a thing by it may keep it so; a new one, owned where it is made again, may.
 pub fn Watch::gone(self : Watch) -> Bool {
-  guard self.node.own is WatchOwned(o) else { abort("a watch without its own") }
-  o.gone.val
+  self.own.gone
 }
 
 ///|
 /// The watch let go of what it read: it follows nothing, and is stale.
 pub fn Watch::stop(self : Watch) -> Unit {
   effect_scope_oper(self.node)
-  self.stale.val = true
+  self.own.stale = true
 }
 
 ///|
@@ -1058,7 +1060,7 @@ pub fn last_set_at() -> String {
 /// run but that. For what must read the latest at once (a size asked mid-change), not what waits for the change's end.
 /// Found the same, it is watching again: a change after it marks it again (Watch::on_marked), in the same batch too.
 pub fn Watch::changed_now(self : Watch) -> Bool {
-  if self.stale.val {
+  if self.own.stale {
     return true
   }
   let e = self.node
@@ -1085,6 +1087,5 @@ pub fn Watch::changed_now(self : Watch) -> Bool {
 /// `f` called as what the watch read changes, at once, in a batch too (before it is told as the batch ends): only to
 /// note that it may be stale (a flag, a list), nothing read or set there. Whether it is is Watch::changed_now's to say.
 pub fn Watch::on_marked(self : Watch, f : () -> Unit) -> Unit {
-  guard self.node.own is WatchOwned(o) else { abort("a watch without its own") }
-  o.marked.val = Some(f)
+  self.own.marked = Some(f)
 }

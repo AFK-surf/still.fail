@@ -314,8 +314,8 @@ struct Node {
   drops : Map[Int, () -> Unit]
   /// the key the next of them is kept by
   mut drop_next : Int
-  /// its properties' bindings, by property: what stops each
-  props : Map[Prop, () -> Unit]
+  /// its properties' bindings, by property (Prop::ord): what stops each
+  props : Map[Int, () -> Unit]
   mut on_press : (() -> Unit)?
   /// what a step up (1) or down (-1) asked of it does (View::on_step: a slider's, as a screen reader moves it)
   mut on_step : ((Int) -> Unit)?
@@ -592,12 +592,11 @@ pub struct Tree {
   mut logic : Double
   /// the bindings whose reads changed, to run as the frame begins (Tree::queued)
   bindings_due : Array[Bound]
-  /// every binding's watch and what runs it, by a number of its own, while it lives (let go as it stops): what is asked
-  /// at once (View::laid_size, Tree::bring_to) pulls those whose reads changed by then, told or not
-  pulls : Map[Int, (@signals.Watch, Bound)]
-  mut pulls_made : Int
-  /// those marked as what they read changed, since they last ran (Tree::pull)
-  pulls_marked : Array[Int]
+  /// how many bindings it holds, while they live (let go as each stops)
+  mut bindings : Int
+  /// those marked as what they read changed, since they last ran: what is asked at once (View::laid_size,
+  /// Tree::bring_to) pulls those whose reads changed by then, told or not (Tree::pull)
+  pulls_marked : Array[Bound]
   mut layout_due : Bool
   mut order_due : Bool
   /// where what is held changed since the order was last worked out (Tree::order_marked_in): the order made again from
@@ -835,6 +834,10 @@ struct Bound {
   mut queued : Bool
   mut marked : Bool
   mut live : Bool
+  /// when what it read was told changed (-1: not since it ran)
+  mut told_at : Double
+  /// what follows what it read (none once let go)
+  mut watch : @signals.Watch?
   mut run : () -> Unit
 }
 
@@ -891,8 +894,7 @@ pub fn Tree::new(
     looks_due: [],
     places_due: [],
     bindings_due: [],
-    pulls: {},
-    pulls_made: 0,
+    bindings: 0,
     pulls_marked: [],
     timeline: [],
     leave_holders: [],
@@ -1043,15 +1045,22 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.ink = 0L
       n.look.words = ""
       n.look.words_drawn = None
-      n.shorter = []
+      // (each array it holds empty made anew only where it is not: never changed in place, only set again)
+      if n.shorter.length() > 0 {
+        n.shorter = []
+      }
       n.shrink_said = None
       n.min_w_said = None
       n.max_w_said = None
-      n.look.runs = []
+      if n.look.runs.length() > 0 {
+        n.look.runs = []
+      }
       n.look.runs_look = runs_plain
       n.look.runs_pressed = -1
       n.look.runs_picked = (0, 0)
-      n.look.shapes = []
+      if n.look.shapes.length() > 0 {
+        n.look.shapes = []
+      }
       n.look.tint = 0L
       n.look.radius = 0.0
       n.look.corners = None
@@ -1089,7 +1098,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.look.drawn_off = (0.0, 0.0)
       n.look.ground_drawn = ground_as_laid
       n.look.cut_soft = false
-      n.look.lines = []
+      if n.look.lines.length() > 0 {
+        n.look.lines = []
+      }
       n.drew = false
       n.drawn_off = (0.0, 0.0, 0.0, 0.0)
       n.moved_by = None
@@ -1157,7 +1168,9 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.wheel_said = 0
       n.on_drag = None
       n.takes = None
-      n.takes_units = []
+      if n.takes_units.length() > 0 {
+        n.takes_units = []
+      }
       n.takes_ver = None
       n.drag_end = None
       n.look_due = false
@@ -1615,7 +1628,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.looks_due.clear()
   self.places_due.clear()
   self.bindings_due.clear()
-  self.pulls.clear()
+  self.bindings = 0
   self.pulls_marked.clear()
   self.timeline.clear()
   self.order.clear()
@@ -1981,16 +1994,14 @@ priv enum Phase {
 fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Unit {
   // (its one state, every way it is run read from it: queued for a frame (told as a change ended), marked as what it
   // read changed (in a change's batch too: what asks at once pulls it), live; run once it is due, by any of them, and
-  // done with all of them)
-  let b : Bound = { queued: false, marked: false, live: true, run: fn() {  } }
-  // (when what it read was told changed: its cause's moment, whatever frame works it out)
-  let told_at = Ref(-1.0)
-  let k = self.pulls_made
-  self.pulls_made = k + 1
+  // done with all of them. One object with its watch: a node's bindings are made and let go with it, each object more
+  // an allocation and a free of every node)
+  let b : Bound = { queued: false, marked: false, live: true, told_at: -1.0, watch: None, run: bound_runs_not }
   let w = @signals.watch(fn() {
     if b.live && !b.queued {
       b.queued = true
-      told_at.val = match self.time {
+      // (when what it read was told changed: its cause's moment, whatever frame works it out)
+      b.told_at = match self.time {
         Some(f) => f()
         None => self.logic
       }
@@ -1998,15 +2009,16 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
       self.marked()
       // (where things stand once the change that told it is told whole, a frame drawn after or none: placed then, where
       // something asks, View::laid_before_causes)
-      self.settle_after_change(told_at.val)
+      self.settle_after_change(b.told_at)
     }
   })
   w.on_marked(fn() {
     if b.live && !b.marked {
       b.marked = true
-      self.pulls_marked.push(k)
+      self.pulls_marked.push(b)
     }
   })
+  b.watch = Some(w)
   b.run = fn() {
     b.queued = false
     b.marked = false
@@ -2015,20 +2027,30 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit) -> () -> Uni
     }
     let v = w.read(read)
     let was = self.cause_at
-    self.cause_at = told_at.val
-    told_at.val = -1.0
-    @signals.untracked(fn() { then(v) })
+    self.cause_at = b.told_at
+    b.told_at = -1.0
+    // (untracked: what it sets read by nothing that reads now)
+    let was_sub = @signals.set_active_sub(None)
+    then(v)
+    @signals.set_active_sub(was_sub) |> ignore
     self.cause_at = was
   }
   (b.run)()
-  self.pulls[k] = (w, b)
+  self.bindings = self.bindings + 1
   fn() {
-    b.live = false
-    b.run = fn() {  }
-    self.pulls.remove(k)
-    w.stop()
+    if b.live {
+      b.live = false
+      b.run = bound_runs_not
+      b.watch = None
+      self.bindings = self.bindings - 1
+      w.stop()
+    }
   }
 }
+
+///|
+/// What a binding let go of runs: nothing.
+let bound_runs_not : () -> Unit = fn() {  }
 
 ///|
 /// The bindings marked since (what they read changed, told or not: a change under way, in its batch, tells them as it
@@ -2039,9 +2061,9 @@ fn Tree::pull(self : Tree) -> Unit {
   while self.pulls_marked.length() > 0 {
     let marked = self.pulls_marked.copy()
     self.pulls_marked.clear()
-    for k in marked {
-      match self.pulls.get(k) {
-        Some((w, b)) if b.marked => {
+    for b in marked {
+      match b.watch {
+        Some(w) if b.live && b.marked => {
           self.work.pulled = self.work.pulled + 1
           if w.changed_now() {
             (b.run)()
@@ -2058,7 +2080,7 @@ fn Tree::pull(self : Tree) -> Unit {
 ///|
 /// How many bindings the tree holds (each property bound By, while its node lives): for a test to see what is let go.
 pub fn Tree::bindings_held(self : Tree) -> Int {
-  self.pulls.length()
+  self.bindings
 }
 
 ///|
@@ -2244,7 +2266,96 @@ priv enum Prop {
   Corners
   Bones
   BoneWhole
-} derive(Eq, Hash)
+} derive(Eq)
+
+///|
+/// Its place among the properties: what the node's table of them keeps it by, an Int (its derived hash a Hasher made for
+/// each look in it, and every binding said, Is or By, looks there).
+fn Prop::ord(self : Prop) -> Int {
+  match self {
+    Width => 0
+    Height => 1
+    Padding => 2
+    Margin => 3
+    Row => 4
+    Grow => 5
+    Ground => 6
+    Alpha => 7
+    Offset => 8
+    Words => 9
+    RunsSet => 10
+    RunsInk => 11
+    RunsPressed => 12
+    RunsPicked => 13
+    Over => 14
+    Shift => 15
+    MovedBy => 16
+    Presses => 17
+    Modal => 18
+    Shapes => 19
+    Tint => 20
+    Radius => 21
+    Glass => 22
+    Says => 23
+    Hides => 24
+    Focusable => 25
+    TabStop => 26
+    Cursor => 27
+    Basis => 28
+    Ink => 29
+    Shadow => 30
+    MaxWidth => 31
+    MaxHeight => 32
+    WordsLook => 33
+    AllowEllipsis => 34
+    Shrink => 35
+    Gap => 36
+    Wraps => 37
+    WrapsLeast => 38
+    Shorter => 39
+    MinWidth => 40
+    LinesUp => 41
+    LiesAlong => 42
+    Scale => 43
+    DrawnAs => 44
+    OverAll => 45
+    Stacked => 46
+    MovesWindow => 47
+    KeepsHeld => 48
+    Clips => 49
+    BoundsInput => 50
+    OverScrim => 51
+    Measured => 52
+    WordsCentered => 53
+    EllipsisPast => 54
+    Points => 55
+    Picture => 56
+    Drop => 57
+    Fits => 58
+    FitWhole => 59
+    Turn => 60
+    Lines => 61
+    Fades => 62
+    Stretch => 63
+    Opens => 64
+    CutsSoftly => 65
+    DrawnOff => 66
+    GroundDrawn => 67
+    MinHeight => 68
+    Aspect => 69
+    Nowhere => 70
+    Edge => 71
+    Image => 72
+    ImageFor => 73
+    ImageCover => 74
+    ImageContain => 75
+    ImageFade => 76
+    ImageIn => 77
+    Corners => 78
+    Bones => 79
+    BoneWhole => 80
+  }
+}
 
 ///|
 /// Properties bound together on one node (View::binds_together): each read as its binding would be, all of them in one
@@ -2316,21 +2427,9 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
   guard self.live() is Some(n) else { return }
   let tree = self.tree
   let at = self.at
-  let marked = fn() {
-    match phase {
-      Layout => tree.layout_marked_at(at)
-      Paint => tree.look_marked_at(at)
-      Place => tree.place_marked_at(at)
-      Both => {
-        tree.layout_marked_at(at)
-        tree.look_marked_at(at)
-      }
-      Said => tree.marked()
-    }
-  }
-  match n.props.get(prop) {
+  match n.props.get(prop.ord()) {
     Some(stop) => {
-      n.props.remove(prop)
+      n.props.remove(prop.ord())
       stop()
     }
     None => ()
@@ -2338,7 +2437,7 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
   match live {
     Is(v) => {
       apply(v)
-      marked()
+      tree.bound_marked(at, phase)
     }
     By(f) => {
       let last : Ref[T?] = Ref(None)
@@ -2364,12 +2463,12 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
               }
               last.val = Some(v)
               apply(v)
-              marked()
+              tree.bound_marked(at, phase)
             },
           }
           g.parts.push(part)
           g.left = g.left + 1
-          n.props[prop] = fn() {
+          n.props[prop.ord()] = fn() {
             if part.live {
               part.live = false
               g.left = g.left - 1
@@ -2397,10 +2496,25 @@ fn[T : Eq] View::bind(self : View, prop : Prop, live : Live[T], phase : Phase, a
         }
         last.val = Some(v)
         apply(v)
-        marked()
+        tree.bound_marked(at, phase)
       })
-      n.props[prop] = stop
+      n.props[prop.ord()] = stop
     }
+  }
+}
+
+///|
+/// What a property of node `at` set again marks, by its phase (View::bind).
+fn Tree::bound_marked(self : Tree, at : Int, phase : Phase) -> Unit {
+  match phase {
+    Layout => self.layout_marked_at(at)
+    Paint => self.look_marked_at(at)
+    Place => self.place_marked_at(at)
+    Both => {
+      self.layout_marked_at(at)
+      self.look_marked_at(at)
+    }
+    Said => self.marked()
   }
 }
 
@@ -3607,9 +3721,9 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
   // (whether it takes input is the logic's: said at the moment it changes, as a structure's change is, a finger held on
   // it or in it let go of then; said anew, what was said before let go of, as any property's binding is)
   guard self.live() is Some(n) else { return self }
-  match n.props.get(Presses) {
+  match n.props.get(Prop::Presses.ord()) {
     Some(stop) => {
-      n.props.remove(Presses)
+      n.props.remove(Prop::Presses.ord())
       stop()
     }
     None => ()
@@ -3631,7 +3745,7 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[Presses] = stop
+        n.props[Prop::Presses.ord()] = stop
       })
   }
   self
@@ -3646,9 +3760,9 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
 /// A modal layer of its own holds the rest of it, as any. Said at the moment it changes, as whether a layer is modal is.
 pub fn View::over_all(self : View, on : Live[Bool]) -> View {
   guard self.live() is Some(n) else { return self }
-  match n.props.get(OverAll) {
+  match n.props.get(Prop::OverAll.ord()) {
     Some(stop) => {
-      n.props.remove(OverAll)
+      n.props.remove(Prop::OverAll.ord())
       stop()
     }
     None => ()
@@ -3666,7 +3780,7 @@ pub fn View::over_all(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[OverAll] = stop
+        n.props[Prop::OverAll.ord()] = stop
       })
   }
   self
@@ -3835,9 +3949,9 @@ pub fn Tree::over_all_takes(self : Tree, x : Double, y : Double) -> Bool {
 /// pages their input back as it begins to go, whatever is still drawn of it).
 pub fn View::modal(self : View, on : Live[Bool]) -> View {
   guard self.live() is Some(n) else { return self }
-  match n.props.get(Modal) {
+  match n.props.get(Prop::Modal.ord()) {
     Some(stop) => {
-      n.props.remove(Modal)
+      n.props.remove(Prop::Modal.ord())
       stop()
     }
     None => ()
@@ -3858,7 +3972,7 @@ pub fn View::modal(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[Modal] = stop
+        n.props[Prop::Modal.ord()] = stop
       })
   }
   self
@@ -4208,7 +4322,7 @@ pub fn View::shorter(self : View, alts : Live[Array[String]]) -> View {
   let at = self.at
   let tree = self.tree
   // (how narrow it may be follows how its words look as the system's size of words changes: worked out again then)
-  if self.live() is Some(n) && n.props.get(Shorter) is None {
+  if self.live() is Some(n) && n.props.get(Prop::Shorter.ord()) is None {
     self.reacts(fn() { self.words_redone() }, fn(_) { tree.give_way_applied(at) })
   }
   self.bind(Shorter, alts, Layout, fn(a) {
@@ -4626,9 +4740,9 @@ pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
   guard self.live() is Some(n) else { return self }
   n.top_row = true
   self.tree.hits = self.tree.hits + 1
-  match n.props.get(MovesWindow) {
+  match n.props.get(Prop::MovesWindow.ord()) {
     Some(stop) => {
-      n.props.remove(MovesWindow)
+      n.props.remove(Prop::MovesWindow.ord())
       stop()
     }
     None => ()
@@ -4642,7 +4756,7 @@ pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
     By(f) =>
       self.owning(fn() {
         let stop = self.tree.structured(f, fn(v) { self.owning(fn() { set(v) }) })
-        n.props[MovesWindow] = stop
+        n.props[Prop::MovesWindow.ord()] = stop
       })
   }
   self
@@ -6758,12 +6872,7 @@ fn Tree::laid_out(self : Tree, upto : Double) -> Unit {
   }
   self.bindings_due.clear()
   // (those marked that ran so, no longer to be pulled; one marked in a change not ended yet still is)
-  let still = self.pulls_marked.filter(fn(k) {
-    match self.pulls.get(k) {
-      Some((_, b)) => b.marked
-      None => false
-    }
-  })
+  let still = self.pulls_marked.filter(fn(b) { b.live && b.marked })
   self.pulls_marked.clear()
   self.pulls_marked.append(still)
   // (laid out in a change holding its boxes, a host drawing a frame at once as it is told of one: those put first)
