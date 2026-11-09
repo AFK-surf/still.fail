@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [b443cafbd](https://github.com/AFK-surf/still.fail/commit/b443cafbda59c37823d84d081e780878e8617b6b) mbui: no pairs or iterators made for each node pla | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
 | [90e201981](https://github.com/AFK-surf/still.fail/commit/90e20198115d774d5dc5412459e8e09b85a386f1) app: what shares a chat in one 分享… of its menu (#5 | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
 | [bbd8dfb56](https://github.com/AFK-surf/still.fail/commit/bbd8dfb56ccf3cec8327cb3f0f12542896a1f896) mbui: a film's flight under the chat's bar on 小屏,  | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
 | [f4874d328](https://github.com/AFK-surf/still.fail/commit/f4874d32855e3ca64bc80e4dfbc61f3a6409f83f) mbui: an agent's line gives its place to its answe | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
