@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [9c17d8cb7](https://github.com/AFK-surf/still.fail/commit/9c17d8cb78abdf4d656cc465346c3cc9773dd2c7) mbui: a zoom is read by the old view's Ctx and tol | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.17 | 46.1 | 93.23 | 148.8 |
 | [181c034b0](https://github.com/AFK-surf/still.fail/commit/181c034b00968d3d452dea3090801c75f0825841) mbui: Anim and Way read the old view's Ctx they ar | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.17 | 46.1 | 93.36 | 140.6 |
 | [ddf2feea3](https://github.com/AFK-surf/still.fail/commit/ddf2feea390bf276ff74c483804ae88dd2251874) mbui: Home's news and update cards made once, as n | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.16 | 46.1 | 93.18 | 136.32 |
 | [1fd232e1f](https://github.com/AFK-surf/still.fail/commit/1fd232e1f0935aa7ee629680c5e10ee307f3cda3) app: the page that shares a chat as a picture come | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.16 | 46.1 | 93.49 | 143.42 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [febf598ae](https://github.com/AFK-surf/still.fail/commit/febf598aed4f00abe4454788bc734e2b45976e40) mbui: how fast a held finger goes worked out only  | 1.72 | 2.29 | 9.54 | 28.06 | 33.25 | 25.06 | 45.75 | 93.52 | 124.57 |
 | [87876e5e9](https://github.com/AFK-surf/still.fail/commit/87876e5e968298405ae7202753539dec8618af46) mbui: a shape's bands kept for the same outlines i | 1.72 | 2.29 | 9.54 | 28.06 | 33.25 | 25.05 | 45.75 | 93.06 | 156.81 |
 | [79d9fe67b](https://github.com/AFK-surf/still.fail/commit/79d9fe67b372469b06b33c823159f172086ceb14) A device refused for the lock is told its person's | 1.72 | 2.29 | 9.54 | 28.06 | 33.25 | 25.05 | 45.75 | 93.06 | 156.81 |
-| [7cfa246bc](https://github.com/AFK-surf/still.fail/commit/7cfa246bcbd63a27753e3160e957aeee637743dc) mbui: whether a decoration on the resident clock i | 1.72 | 2.29 | 9.54 | 28.06 | 33.25 | 25.05 | 45.75 | 93.06 | 156.81 |
