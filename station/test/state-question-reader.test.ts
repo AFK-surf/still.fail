@@ -55,6 +55,8 @@ test("named questions retain their visibility and pending-card rules through the
     assert.equal(await r.call(key, "chat_state", args), "Recorded state need_human.");
     say(r.hub, thread.id, "ada@x.com", "yes");
     assert.match(await r.refused(key, "chat_state", args), /no longer pending/);
+    await settle();
+    r.claude.last().reads();
     const card = { type: "options", options: [{ label: "yes" }] };
     await r.call(key, "chat_post", { to, text: "First card?", card });
     const first = r.said(thread.id).at(-1)!;

@@ -4,7 +4,7 @@
 // hub.rs and compares); what they do is src/sessions/.
 import { sandboxed } from "../agents/sandbox.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
-import { chatHistory, chatLeave, chatPost, chatState, mayStage, fromSandbox, staged, target } from "../sessions/conversations.ts";
+import { chatHistory, chatLeave, chatPost, chatState, mayStage, fromSandbox, staged, target, unheld, NOT_POSTED } from "../sessions/conversations.ts";
 import type { Hub } from "../sessions/hub.ts";
 import { sessionSend } from "../sessions/messages.ts";
 import { chatCreate } from "../sessions/opened.ts";
@@ -18,13 +18,17 @@ import { slackTools } from "./slack.ts";
 export const CHAT_POST = {
   name: "chat_post",
   description:
-    "Post a message to one of your conversations, in Markdown (a Slack thread and a Feishu chat draw it too; mentions and files differ: see Formatting in your instructions). With only to and title, name the conversation without posting a message or ending the turn. Users always have a chat input box and can reply freely. When you ask people to choose among answers you can name or to confirm one, carry it as a card (options, a single one is fine), and a field (text) when they must write a value; no filler options or unnecessary questions. A post that ends your turn says how with kind: all_done (nothing in the chat is left unfinished: done says why, with the evidence) or need_human (a person has to give, do or decide something: need says what; after posting a card, this is how the turn ends).",
+    "Post a message to one of your conversations, in Markdown (a Slack thread and a Feishu chat draw it too; mentions and files differ: see Formatting in your instructions). With only to and title, name the conversation without posting a message or ending the turn. Users always have a chat input box and can reply freely. When you ask people to choose among answers you can name or to confirm one, carry it as a card (options, a single one is fine), and a field (text) when they must write a value; no filler options or unnecessary questions. A post that ends your turn says how with kind: all_done (nothing in the chat is left unfinished: done says why, with the evidence) or need_human (a person has to give, do or decide something: need says what; after posting a card, this is how the turn ends). If messages you had not read came in that thread first, the post is held back, not sent: read them, then send it as written by its id (send) or post what fits now.",
   inputSchema: {
     "type": "object",
     "properties": {
       "to": {
         "type": "string",
         "description": "CHANNEL/THREAD_TS: the thread attribute of the message you are answering."
+      },
+      "send": {
+        "type": "string",
+        "description": "Send a post held back as written: the id its chat_post answered when messages you had not read came in its thread first. Give only to, send and the state the turn now ends with (kind, need, done, about); its text, files, card and title are the held post's. If more unread messages came meanwhile, it is held again under the same id."
       },
       "withdraw": {
         "type": "string",
@@ -487,9 +491,11 @@ export function chatTools(hub: Hub): Tool[] {
         try {
           stillfail = target(hub, key, args.to).thread.surface === STILLFAIL_SURFACE;
         } catch {}
-        const said = await withStaged(hub, key, args, stillfail, (a) => chatPost(hub, key, a));
+        // A held post sent by its id is staged again, as it was written.
+        const held = unheld(hub, key, args);
+        const said = await withStaged(hub, key, held.args, stillfail, (a) => chatPost(hub, key, a, held));
         // A turn ended all_done (or final from before): whether the chat is finished is asked in the background.
-        if (args.kind === "all_done" || args.kind === "final") suggestArchive(hub, key);
+        if ((args.kind === "all_done" || args.kind === "final") && !said.startsWith(NOT_POSTED)) suggestArchive(hub, key);
         return said;
       },
     },

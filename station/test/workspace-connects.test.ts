@@ -92,6 +92,7 @@ test("a new conversation of a connect that names another station runs there; wha
   assert.deepEqual(s.rig.said(thread.id).map((m) => m.text), ["<@UBOT> look at the build", "and the tests"]);
 
   // What the agent says, and a file with it, are posted by H's bot.
+  s.rig.claude.last().reads();
   const file = join(s.rig.dir, "report.txt");
   writeFileSync(file, "all green");
   const answer = await s.rig.call(key, "chat_post", { to: `${first.channel}/${first.threadTs}`, text: "done", files: [file] });

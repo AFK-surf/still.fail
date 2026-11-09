@@ -432,7 +432,7 @@ test("pending readers share old edit preparation after handover when one cancels
   } finally { previous.resolve(); readers.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("a post reports unread timestamps without loading every pending message", async () => {
+test("a post held for unread messages names them without loading every pending message", async () => {
   const rig = new Rig();
   try {
     session(rig.store);
@@ -443,7 +443,7 @@ test("a post reports unread timestamps without loading every pending message", a
     deliver(rig.store, elsewhere, 1);
     rig.store.pendingMessages = () => { throw new Error("all pending messages were loaded"); };
     const result = await rig.call("worker", "chat_post", { to: "CHAT/1.1", text: "posted" });
-    assert.match(result, /Before this post went up, a message you had not read yet came in this thread \(ts 1\.1\)/);
+    assert.match(result, /^Not posted: a message you had not read came in CHAT\/1\.1 \(ts 1\.1\)/);
   } finally { await rig.close(); }
 });
 

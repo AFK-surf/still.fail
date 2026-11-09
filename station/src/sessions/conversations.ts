@@ -357,7 +357,7 @@ export async function attach(hub: Hub, key: string, paths: string[], into: strin
 }
 
 /// chat_post: a message to one of the session's conversations, maybe with files and a card, maybe ending its turn.
-export async function chatPost(hub: Hub, key: string, args: Args): Promise<string> {
+export async function chatPost(hub: Hub, key: string, args: Args, held: Held = { id: null, args }): Promise<string> {
   const identity = actorOf(hub, key)?.messageIdentity() ?? undefined;
   const { store } = hub;
   if (args.withdraw !== undefined) {
@@ -440,6 +440,17 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
     if (about === null) throw new Error(`about must be the ts of a message in ${threadAddress(thread.thread.channel, thread.thread.threadTs)} (or leave it out), got ${ts}`);
     if (kind?.kind === "need_help" && card !== null) throw new Error("a new card is this post's question: omit about so the wait points to it");
   }
+  // Messages in this thread the agent has not read: the post may no longer fit them, so it is held back and they come
+  // to the agent first; it sends the post as written by its id, or writes another.
+  const unseen = unseenIn(hub, key, thread.thread.id, Number.MAX_SAFE_INTEGER);
+  if (unseen.length > 0) {
+    const id = held.id ?? hold(hub, key);
+    const { kind: _k, need: _n, done: _d, about: _a, ...post } = held.args;
+    hub.heldPosts.get(key)!.set(id, post);
+    const one = unseen.length === 1;
+    return `${NOT_POSTED} ${one ? "a message" : "messages"} you had not read came in ${threadAddress(thread.thread.channel, thread.thread.threadTs)} (ts ${unseen.join(", ")}), and ${one ? "it comes" : "they come"} to you next; no state was recorded. Held as ${id}. After reading ${one ? "it" : "them"}, if this post still stands as written, call chat_post with to, send="${id}" and the state the turn now ends with (kind, need, done, about), without writing it again; otherwise post what fits now.`;
+  }
+  if (held.id !== null) hub.heldPosts.get(key)?.delete(held.id);
   // Slack gets the files in the thread below the text. An app made before it could upload (no files:write) links to
   // them in still.fail instead.
   if (thread.thread.surface === STILLFAIL_SURFACE) {
@@ -532,12 +543,50 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
     : `Posted to ${place}.${crossed}${titled}${offered}`;
 }
 
+/// How chat_post's answer begins when it held the post back.
+export const NOT_POSTED = "Not posted:";
+
+/// A post as the agent gave it (before its files are staged, which go once it returns) and, sent by send, its id.
+export type Held = { id: string | null; args: Args };
+
+/// chat_post's arguments with a held post sent by send (below) put back as it was written: its text, files, card and
+/// title; its state is what this call gives, as the messages read meanwhile may change how the turn ends.
+export function unheld(hub: Hub, key: string, args: Args): Held {
+  if (args.send === undefined) return { id: null, args };
+  if (Object.keys(args).some((k) => !SEND_KEYS.has(k))) throw new Error("send takes only to, send and the state (kind, need, done, about): the held post goes as it was written");
+  const id = jsString(args.send);
+  const held = hub.heldPosts.get(key)?.get(id);
+  if (held === undefined) throw new Error(`no held post ${id}: it was sent already, or the station restarted since; write the post again`);
+  if (args.to !== held.to) throw new Error(`held post ${id} goes to ${jsString(held.to)}`);
+  const { send: _, ...state } = args;
+  return { id, args: { ...held, ...state } };
+}
+
+/// What chat_post with send takes besides the held post.
+const SEND_KEYS = new Set(["to", "send", "kind", "need", "done", "about"]);
+/// Held posts kept per session: the oldest goes beyond it.
+const HELD_KEPT = 20;
+
+/// A new id for a post held back from session `key`.
+function hold(hub: Hub, key: string): string {
+  let held = hub.heldPosts.get(key);
+  if (held === undefined) hub.heldPosts.set(key, held = new Map());
+  while (held.size >= HELD_KEPT) held.delete(held.keys().next().value!);
+  return `held-${++hub.heldCount}`;
+}
+
+/// The ts of the messages in the thread before entry `n` that the session has not read: not yet given to it, or given to
+/// its running turn but not yet read by its model.
+function unseenIn(hub: Hub, key: string, thread: number, n: number): string[] {
+  const pending = hub.store.pendingBefore(key, thread, n);
+  const unread = (actorOf(hub, key)?.unreadIn(thread, n) ?? []).map((m) => m.message.ts);
+  return [...new Set([...pending, ...unread])];
+}
+
 /// Messages said in the thread before the agent's post (entry `n`) that it had not read when it wrote it, as the post's
 /// result says them: they come to it next, written without seeing the post. Empty when none.
 function unreadBefore(hub: Hub, key: string, thread: number, n: number): string {
-  const pending = hub.store.pendingBefore(key, thread, n);
-  const unread = (actorOf(hub, key)?.unreadIn(thread, n) ?? []).map((m) => m.message.ts);
-  const ts = [...new Set([...pending, ...unread])];
+  const ts = unseenIn(hub, key, thread, n);
   if (ts.length === 0) return "";
   const one = ts.length === 1;
   return ` Before this post went up, ${one ? "a message" : "messages"} you had not read yet came in this thread (ts ${ts.join(", ")}): written without seeing your post, ${one ? "it comes" : "they come"} to you next.`;
