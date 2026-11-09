@@ -554,9 +554,6 @@
     "click-read": {},
     "key-read": {
       "src/sfbase/viewer.mbt": 1,
-      "src/sfdesk/drive.mbt": 1,
-      "src/sfdesk/files.mbt": 4,
-      "src/sfdesk/files_go.mbt": 3,
       "src/sfpages/composer.mbt": 2,
       "src/sfpages/find.mbt": 1,
       "src/sfpages/outside.mbt": 1,

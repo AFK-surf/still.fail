@@ -29,6 +29,9 @@ priv struct Go {
   switching : @signals.Signal[Int]
   /// its dialog as presented (@sf.last_presented; 0 none)
   mut shown : Int
+  /// how many times ↓ ↑ moved what is chosen (its action's), and as of which the chosen row was last brought into view
+  keyed : @signals.Signal[Int]
+  mut keyed_shown : Int
 }
 
 ///|
@@ -44,6 +47,8 @@ let go : Go = {
   asked: @signals.signal("", same=fn(a, b) { a == b }),
   switching: @signals.signal(0, same=fn(a, b) { a == b }),
   shown: 0,
+  keyed: @signals.signal(0, same=fn(a, b) { a == b }),
+  keyed_shown: 0,
 }
 
 ///|
@@ -58,6 +63,8 @@ fn go_reset() -> Unit {
   go.asked.set("")
   go.switching.set(0)
   go.shown = 0
+  go.keyed.set(0)
+  go.keyed_shown = 0
 }
 
 ///|
@@ -246,26 +253,35 @@ fn go_body(c : @ui.Ctx, src : Source, ws : String, here : DriveAt, to : (DriveAt
       _ => ()
     }
   }
-  // ↓ ↑ move what is chosen, Tab completes it (read in the dialog: its keys while it is open)
-  let mut keyed = false
-  if c.key_pressed(@ui.key_code_down, in_field=true) && go.at.get() < rows.length() - 1 {
-    go.at.set(go.at.get() + 1)
-    keyed = true
-  }
-  if c.key_pressed(@ui.key_code_up, in_field=true) && go.at.get() > 0 {
-    go.at.set(go.at.get() - 1)
-    keyed = true
-  }
-  if c.key_pressed(@ui.key_tab, in_field=true) {
-    match rows.get(go.at.get()) {
-      Some((_, complete, _)) => {
-        go.field.set(complete)
-        go.typed.set(complete)
-        go.at.set(0)
-      }
-      None => ()
+  // ↓ ↑ move what is chosen, Tab completes it: the dialog's field's keys, each as it comes, before the field sees it
+  // (Ctx::on_key); what is chosen moved by them brought into view as it is built after
+  c.on_key(c.id("files-goto/field"), fn(code, mods) {
+    if mods != 0 {
+      return false
     }
-  }
+    if code == @ui.key_code_down || code == @ui.key_code_up {
+      let at = go.at.get() + (if code == @ui.key_code_down { 1 } else { -1 })
+      if at >= 0 && at < rows.length() {
+        go.at.set(at)
+        go.keyed.set(go.keyed.get() + 1)
+      }
+      true
+    } else if code == @ui.key_tab {
+      match rows.get(go.at.get()) {
+        Some((_, complete, _)) => {
+          go.field.set(complete)
+          go.typed.set(complete)
+          go.at.set(0)
+        }
+        None => ()
+      }
+      true
+    } else {
+      false
+    }
+  })
+  let keyed = go.keyed.get() != go.keyed_shown
+  go.keyed_shown = go.keyed.get()
   c.box(style=go_field_box, fn() {
     let res = c.editor(
       "files-goto/field",

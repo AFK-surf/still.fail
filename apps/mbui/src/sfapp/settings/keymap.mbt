@@ -153,8 +153,8 @@ pub fn binding_of(code : Int, mods : Int) -> String? {
 /// its group (anywhere; `Chat` in a chat; `Files` in a folder of the files) and with the cursor in a field by its
 /// `typing` (always; never: `!Field`; with the field empty: `!Field || FieldEmpty`); then the app's own, never changed
 /// (Escape the frame's `frame.escape`, a mouse's forward button `nav.forward`, ⌃1 … ⌃9 on a Mac and Alt elsewhere
-/// `workspace.1` … `workspace.9`, a player's and a reader's keys where one is up: @sf.player_bindings,
-/// reader_bindings). None while the 快捷键 page records new keys: the next key is its.
+/// `workspace.1` … `workspace.9`, a player's, a reader's and the files' keys where they are up: @sf.player_bindings,
+/// reader_bindings, files_bindings). None while the 快捷键 page records new keys: the next key is its.
 pub fn keymap_of(prefs : Json?) -> @view.Keymap {
   if keys_recording.get() != "" {
     return @view.Keymap::new([])
@@ -175,6 +175,8 @@ pub fn keymap_of(prefs : Json?) -> @view.Keymap {
   bindings.append(@sf.player_bindings())
   // (a reader's where a text is read: sf/reader.mbt)
   bindings.append(@sf.reader_bindings())
+  // (the files' own where they are: sfdesk's files.mbt)
+  bindings.append(files_bindings())
   for a in key_actions(prefs) {
     let action = text(Some(a), "action")
     let group : @view.KeyWhen = match text(Some(a), "group") {
@@ -255,4 +257,26 @@ pub fn send_lines(prefs : Json?) -> (String, String) {
   } else {
     (text(s, "send"), text(s, "newline"))
   }
+}
+
+///|
+/// The files' keys, the app's own, never changed (sfdesk's files.mbt and what is open in it): in the files (`Files`),
+/// not with the cursor in a field, ⌘T (Ctrl elsewhere) a new tab, ⌃Tab or ⌘⇧] the next tab and ⌃⇧Tab or ⌘⇧[ the one
+/// before, ⌘⌥D the other side, ⌘⇧G a folder by its path (Finder's 前往文件夹).
+fn files_bindings() -> Array[@view.Binding] {
+  // (not with the cursor in a field, as before: those keys its)
+  let files : @view.KeyWhen = All([In("Files"), Not(In("Field"))])
+  let shift = @ui.mod_shift_key
+  let b = fn(code : Int, mods : Int, action : String, when : @view.KeyWhen) -> @view.Binding {
+    { keys: [{ code, mods }], action, when }
+  }
+  [
+    b(@ui.key_of_char('t'), mod_key(), "files.tab_new", files),
+    b(@ui.key_tab, @ui.mod_ctrl, "files.tab_next", files),
+    b(@ui.key_of_char(']'), mod_key() | shift, "files.tab_next", files),
+    b(@ui.key_tab, @ui.mod_ctrl | shift, "files.tab_back", files),
+    b(@ui.key_of_char('['), mod_key() | shift, "files.tab_back", files),
+    b(@ui.key_of_char('d'), @ui.mod_cmd | @ui.mod_alt, "files.split", files),
+    b(@ui.key_of_char('g'), @ui.mod_cmd | shift, "files.go_to", files),
+  ]
 }

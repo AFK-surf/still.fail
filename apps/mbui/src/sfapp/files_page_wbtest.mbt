@@ -371,3 +371,40 @@ test "a phone's folder: a name changed in place, its row kept in view over the s
 ///|
 /// A phone's soft keyboard, about.
 let keyboard_h : Double = 340.0
+
+///|
+test "the files' keys: ⌘⇧G (the keymap's) opens 前往文件夹; in its field Tab completes what is typed, ↓ ↑ choose; Escape closes it" {
+  let t = files_page_tester(1280.0, 800.0, 0)
+  assert_true(t.find("前往文件夹…") is None)
+  t.key(@ui.key_of_char('g'), mods=@ui.mod_cmd + @ui.mod_shift_key)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("前往文件夹…") is Some(_))
+  // (the row chosen: the one its Tab is drawn after)
+  let chosen = fn() {
+    let words = t.words().map(fn(w) { w.0 })
+    match words.search("Tab") {
+      Some(i) if i > 0 => words[i - 1]
+      _ => ""
+    }
+  }
+  // (a station's name begun: the station chosen; Tab puts its home in, its folders offered then, the first chosen; ↓
+  // the next, ↑ back)
+  t.type_text("wil")
+  t.frame()
+  let first = chosen()
+  t.key(@ui.key_tab)
+  t.frame()
+  let completed = chosen()
+  t.key(@ui.key_code_down)
+  t.frame()
+  let down = chosen()
+  t.key(@ui.key_code_up)
+  t.frame()
+  assert_eq(
+    (first, completed, down, chosen()),
+    ("Willow", "Willow › /Users/lin/文档", "Willow › /Users/lin/项目", "Willow › /Users/lin/文档"),
+  )
+  t.key(@ui.key_escape)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find("前往文件夹…") is None)
+}
