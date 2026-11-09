@@ -549,8 +549,9 @@ fn size_node(
       node.p_ok &&
       same(node.p_kw, kw) &&
       same(node.p_kh, kh) &&
-      same(node.p_cbw, cb_w) &&
-      same(node.p_cbh, cb_h) {
+      laid_in_cb(node, kw, kh, cb_w, cb_h) {
+      node.p_cbw = cb_w
+      node.p_cbh = cb_h
       node.skip_gen = generation.val
       counters[1] = counters[1] + 1
       out_h.val = node.p_h
@@ -636,6 +637,26 @@ fn size_node(
   node.cache_n = n + 8
   out_h.val = h
   w
+}
+
+///|
+/// Whether `node`'s last layout, asked `kw` × `kh` again, holds in the containing block `cb_w` × `cb_h`: the one it was
+/// laid out in, or, given both its sizes, another its box takes nothing from (of_cb_w, of_cb_h), as a size measured in
+/// one holds in another (size_node). Given both, nothing else of its layout reads the containing block: what it holds
+/// is laid out in its own content box, its insets are moved by what holds it, what is absolute in it by its own
+/// containing block (not given them, a root, the containing block is the room it has). A list's column growing as a row
+/// comes in gives every row in it a containing block as tall, which none of them reads.
+fn laid_in_cb(node : Node, kw : Double, kh : Double, cb_w : Double, cb_h : Double) -> Bool {
+  let w_same = same(node.p_cbw, cb_w)
+  let h_same = same(node.p_cbh, cb_h)
+  if w_same && h_same {
+    return true
+  }
+  if !known(kw) || !known(kh) {
+    return false
+  }
+  let b = box_for(node, cb_w, cb_h)
+  (w_same || !b.of_cb_w) && (h_same || !b.of_cb_h)
 }
 
 ///|
