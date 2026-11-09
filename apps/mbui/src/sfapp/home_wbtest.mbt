@@ -1213,3 +1213,49 @@ test "Home's rows stay while a page more of them is on its way, not its skeleton
   assert_true(t.find("整理发布清单") is Some(_))
   assert_eq(left, [@sfbase.chats_page])
 }
+
+///|
+test "Home's long list held and dragged: a frame moves the list's header alone, nothing built, laid out or painted, but where a row comes in or goes or a mark in one steps" {
+  // (2026-11-09: each such frame laid out, placed and painted all of the window, the list moved as a placement)
+  new_run()
+  let src = fixture("long")
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.set_rows_on_pixels(true)
+  t.run_for(@ui.move_most_ms)
+  let (_, y0) = t.find("整理发布清单").unwrap()
+  // (down on the list and up past the slop: the hold the list's)
+  t.hold_drag(195.0, 600.0, 195.0, 580.0, steps=2)
+  // (then on 3 points a move: each frame of the looks alone drawn whole after it as well and the two compared, as in
+  // every test; each painted for its cause: the list's rows come in or gone or measured (list_window.mbt), a mark's
+  // step on the resident clock, its bar's coming in over once (a moment said as it was first scrolled, its thumb no
+  // more drawn by the time: scroll_bar.mbt's BarState::rested_at), or, the frame after one of these, the paint before
+  // it having drawn otherwise)
+  let others = []
+  let mut looks = 0
+  let mut caused = false
+  let mut bar_in = false
+  for i in 0..<40 {
+    let was = t.looks_alone()
+    let step = (t.time() / @view.resident_step_ms).floor()
+    t.hold_move(195.0, 580.0 - 3.0 * (i + 1).to_double())
+    if t.looks_alone() > was {
+      looks = looks + 1
+      caused = false
+      continue
+    }
+    let why = t.built_why() + t.painted_why()
+    let bar_came = !bar_in && why.contains("scroll_bar.mbt")
+    bar_in = bar_in || bar_came
+    caused = why.contains("list_window.mbt") ||
+      (t.time() / @view.resident_step_ms).floor() != step ||
+      bar_came ||
+      (caused && why == "the paint before it drew otherwise")
+    if !caused {
+      others.push("move \{i}: \{why}")
+    }
+  }
+  let (_, y1) = t.find("整理发布清单").unwrap()
+  t.release(195.0, 460.0)
+  assert_true(y1 < y0 - 100.0, msg="the list moved from \{y0} to \{y1}")
+  assert_eq(others, [], msg="\{looks} of 40 frames of the looks alone; \{others}")
+}

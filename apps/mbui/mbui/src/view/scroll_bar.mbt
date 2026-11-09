@@ -34,7 +34,8 @@ pub(all) struct ScrollBar {
 priv struct BarState {
   in_at : @signals.Signal[Double]
   in_from : @signals.Signal[Double]
-  scrolled : @signals.Signal[Double]
+  /// (not followed: read as what it says comes, its going said for when it was, BarState::woke)
+  mut scrolled : Double
   near : @signals.Signal[Bool]
   near_left : @signals.Signal[Double]
   held : @signals.Signal[Bool]
@@ -50,7 +51,7 @@ fn BarState::new(fling_end : () -> Double) -> BarState {
     fling_end,
     in_at: @signals.signal(-1.0e9, same=fn(a, b) { a == b }),
     in_from: @signals.signal(0.0, same=fn(a, b) { a == b }),
-    scrolled: @signals.signal(-1.0e9, same=fn(a, b) { a == b }),
+    scrolled: -1.0e9,
     near: @signals.signal(false, same=fn(a, b) { a == b }),
     near_left: @signals.signal(-1.0e9, same=fn(a, b) { a == b }),
     held: @signals.signal(false, same=fn(a, b) { a == b }),
@@ -66,7 +67,7 @@ fn BarState::hides_at(self : BarState, b : ScrollBar) -> Double {
   if self.near.get() || self.held.get() {
     1.0e300
   } else {
-    dmax(dmax(self.scrolled.get(), (self.fling_end)()), dmax(self.near_left.get(), self.let_go.get())) + b.hold_ms
+    dmax(dmax(self.scrolled, (self.fling_end)()), dmax(self.near_left.get(), self.let_go.get())) + b.hold_ms
   }
 }
 
@@ -84,19 +85,34 @@ fn BarState::shown(self : BarState, b : ScrollBar, now : Double) -> Double {
 }
 
 ///|
-/// Come out at `now` (what it is for scrolled then, `scrolled`; the pointer come to it, its thumb held), from how far it
-/// shows then unless it is out already, as one change; at rest, said on the timeline, once it has gone (or come, while
-/// it stays).
-fn BarState::woke(self : BarState, b : ScrollBar, v : View, now : Double, scrolled? : Bool = false) -> Unit {
+/// Come out at `now` (what it is for scrolled then, `scrolled`, by the hand, `by_hand`; the pointer come to it, its
+/// thumb held), from how far it shows then unless it is out already, as one change; at rest, said on the timeline, once
+/// it has gone (or come, while it stays).
+fn BarState::woke(
+  self : BarState,
+  b : ScrollBar,
+  v : View,
+  now : Double,
+  scrolled? : Bool = false,
+  by_hand? : Bool = false,
+) -> Unit {
   @signals.untracked(fn() {
+    // (coming in or out, and scrolled again by the hand before it goes: nothing told now, its coming in's end or its
+    // going said for when it was and read anew as that comes, BarState::rested_at, so what scrolls it each moment the
+    // hand moves it sets nothing that shows it; scrolled by what it is on by itself (a fling set going, come to its
+    // end), its going said anew, once each)
+    let phase = self.phase.get()
+    let out = scrolled && by_hand && (phase == 1 || phase == 2) && now < self.hides_at(b)
     if now >= self.hides_at(b) {
       self.in_from.set(self.shown(b, now))
       self.in_at.set(now)
     }
     if scrolled {
-      self.scrolled.set(now)
+      self.scrolled = now
     }
-    self.rested_at(b, v)
+    if !out {
+      self.rested_at(b, v)
+    }
   })
 }
 
@@ -229,19 +245,30 @@ fn View::scroll_bar(
       // (a thumb, for what over it yields to one: Tree::is_thumb)
       let me = thumb.id()
       self.tree.thumbs[me.at] = me
+      // (along its track as far as the column is scrolled at the moment drawn, by its offset alone (Node's scroll_off):
+      // nothing of it placed again as it scrolls)
+      let tn = self.tree.nodes[me.at]
+      tn.scroll_by = self.at
+      tn.scroll_off = Some(fn(t) {
+        let by = track(s.where_at(if s.goes_on() { t } else { 0.0 })).0 - track(0.0).0
+        if across {
+          (by, 0.0)
+        } else {
+          (0.0, by)
+        }
+      })
       thumb.owns(fn() { if self.tree.thumbs.get(me.at) == Some(me) { self.tree.thumbs.remove(me.at) } }) |> ignore
       let held_y = Ref(0.0)
-      let long = fn() { Some(track(s.where_at(0.0)).1 + b.grab * 2.0) }
+      let long = fn() { Some(track(0.0).1 + b.grab * 2.0) }
       let thick = Is(Some(b.size + b.grab * 2.0))
       // (along its right; across, along its foot)
       (if across { thumb.height(thick).width(By(long)) } else { thumb.width(thick).height(By(long)) })
       .offset(By(fn() {
         let (w, h) = self.laid_size_told().unwrap_or((0.0, 0.0))
-        let x = s.where_at(if s.fling.get() is Some(_) { thumb.drawn_at() } else { 0.0 })
         if across {
-          (track(x).0 - b.grab, h - b.inset - b.size - b.grab)
+          (track(0.0).0 - b.grab, h - b.inset - b.size - b.grab)
         } else {
-          (w - b.inset - b.size - b.grab, track(x).0 - b.grab)
+          (w - b.inset - b.size - b.grab, track(0.0).0 - b.grab)
         }
       }))
       // (a target while it shows: coming, out or going, or out at rest along its edge or held; said by its state,
@@ -274,7 +301,7 @@ fn View::scroll_bar(
       })
       |> ignore
       thumb.box(fn(ink) {
-        let long = fn() { Some(track(s.where_at(0.0)).1) }
+        let long = fn() { Some(track(0.0).1) }
         (if across { ink.height(Is(Some(b.size))).width(By(long)) } else { ink.width(Is(Some(b.size))).height(By(long)) })
         .offset(Is((b.grab, b.grab)))
         .radius(Is(b.size / 2.0))

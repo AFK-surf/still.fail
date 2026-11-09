@@ -286,13 +286,18 @@ fn chats_pane_node(
   // scrolled to within a screen and a half of its foot while the core has more of its rows: a page more asked for
   // (how many more the core has, read anew only as its list changes, not each time the column is scrolled)
   let more = @signals.computed(fn(_) { @sfbase.chats_more(src, id, filter) })
-  v.reacts(fn() { (scroll.drawn(v.tree), scroll.reach(), more.get()) }, fn(now) {
-    let (at, most, more) = now
-    if more <= 0 {
-      return
+  // (whether it has more and is within a screen and a half of its foot, told as that changes, not each time it is
+  // scrolled: how tall it is followed as it is told once laid out, View::laid_size_told)
+  let near_foot = @signals.computed(fn(_) {
+    let more = more.get()
+    let h = match v.laid_size_told() {
+      Some((_, h)) => h
+      None => 0.0
     }
-    let (_, _, _, h) = v.placed_window_now()
-    if h > 0.0 && most - at < 1.5 * h {
+    more > 0 && h > 0.0 && scroll.reach() - scroll.drawn(v.tree) < 1.5 * h
+  }, same=fn(a, b) { a == b })
+  v.reacts(fn() { (near_foot.get(), more.get()) }, fn(now) {
+    if now.0 {
       @sfbase.chats_ask_more(src, id, filter, @signals.untracked(fn() { @sfbase.chats_limit(id, filter) }))
     }
   })

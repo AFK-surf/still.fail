@@ -357,7 +357,7 @@ fn Scroll::list_fling(
   guard list_planned(t, x0, speed, way, same, density, bound) is Some(f) else { return }
   self.past.set(None)
   self.fling.set(Some(f))
-  (self.on_scrolled)(t)
+  self.scrolled_at(t)
   self.list_settles(v, t)
 }
 
@@ -506,7 +506,7 @@ fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
   self.settle_off = fn() {  }
   self.x.set(x0)
   self.notch.set(Some({ x0, total, v0, t0: t }))
-  (self.on_scrolled)(t)
+  self.scrolled_at(t)
   self.list_settles(v, t)
   true
 }
@@ -517,6 +517,8 @@ fn Scroll::notched(self : Scroll, v : View, t : Double, d : Double) -> Bool {
 fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
   (self.settle_off)()
   self.settle_off = fn() {  }
+  // (what it does by itself set going or stopped: drawn moved by it from now, Scroll::offset_said)
+  self.offset_said()
   guard @signals.untracked(fn() { self.rest_now() }) is Some(rest) else { return }
   (v.tree.glides)(self.serial, fn() { self.glides_till() })
   ignore(t)
@@ -525,7 +527,7 @@ fn Scroll::list_settles(self : Scroll, v : View, t : Double) -> Unit {
     let flung = @signals.untracked(fn() { self.fling.get() })
     let notch = @signals.untracked(fn() { self.notch.get() })
     if flung is Some(_) || notch is Some(_) {
-      (self.on_scrolled)(rest)
+      self.scrolled_at(rest)
     }
     self.fling.set(None)
     self.past.set(None)

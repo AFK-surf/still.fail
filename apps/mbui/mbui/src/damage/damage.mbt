@@ -282,6 +282,17 @@ fn Damage::reach_of(self : Damage, a : FixedArray[Double], k : Int, into : Rect)
     return
   }
   match self.groups.get(a[o + 12].to_int()) {
+    // (cut to its clip where it says one, 16-19: a list's whole, cut to its column, src/ui/view_ride.mbt's ListRiding)
+    Some(g) if !g.empty() &&
+      !(a[o + 16] == 0.0 && a[o + 17] == 0.0 && a[o + 18] == 0.0 && a[o + 19] == 0.0) => {
+      let x0 = dmax(g.x0 + a[o], a[o + 16] - reach_pad)
+      let y0 = dmax(g.y0 + a[o + 1], a[o + 17] - reach_pad)
+      let x1 = dmin(g.x1 + a[o], a[o + 18] + reach_pad)
+      let y1 = dmin(g.y1 + a[o + 1], a[o + 19] + reach_pad)
+      if x0 < x1 && y0 < y1 {
+        into.add(x0, y0, x1, y1)
+      }
+    }
     Some(g) if !g.empty() => into.add(g.x0 + a[o], g.y0 + a[o + 1], g.x1 + a[o], g.y1 + a[o + 1])
     Some(_) => ()
     // (one not known: all of it)

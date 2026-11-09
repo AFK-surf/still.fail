@@ -63,7 +63,78 @@ priv struct RideKept {
   /// its instances as the host keeps them (@hostapi.group_set), drawn again by a header in their place (ride_head);
   /// -1, copied each time
   group : Int
+  /// a list drawn whole as one (ListRiding) with what is drawn anew each time it is drawn in it (a picture, one not seen
+  /// asked for): drawn again only by going through it
+  anew : Bool
 }
+
+///|
+/// What a column scrolls by its offset alone (a page's list's held, its bar's thumb: @view.Tree::scroll_off_of) being
+/// drawn as the tree is painted: all of it drawn where it is placed in the column, not where the column has scrolled
+/// it, in no clip of the window's (one open, push_unclipped), each row of it kept as drawn there (Riding, the inner of
+/// the two); as it closes, kept whole as one group of the host's (@hostapi.group_set), drawn by one header moved as far
+/// as the column has it and cut to the column's clip (ListHead), what moves it as it scrolls; else (one of its
+/// instances worked on as the frame ends, an old view, bones: ride_groupable's) drawn out moved and cut so in its place
+/// (list_put).
+priv struct ListRiding {
+  id : @view.NodeId
+  /// the node of the column that scrolls it
+  by : Int
+  rev : Int
+  k0 : Int
+  seg0 : Int
+  clips0 : Int
+  rings0 : Int
+  x : Double
+  y : Double
+  a : Double
+  off_x : Double
+  off_y : Double
+  /// how big the window draws it: what the column's offset is multiplied by
+  s : Double
+  /// how far the window has it drawn off where it is placed, as it is drawn (its header's 0, 1), and the column's clip
+  /// there (x0, y0, x1, y1: its header's 16-19)
+  dx : Double
+  dy : Double
+  hc : FixedArray[Double]
+  /// the clip it is drawn in (the open one), its 24 numbers
+  clip : FixedArray[Double]
+  mut spoiled : Bool
+  mut anew : Bool
+  mut nodes : Int
+  kept : Array[Array[(Int, Double, Double)]]
+}
+
+///|
+/// A header among the frame's instances of what a column scrolls by its offset alone (ListRiding): where it is, its
+/// numbers as written, whose, how far it is moved besides (where it was kept from elsewhere: its header's 0, 1 less the
+/// column's offset) and how big the window draws it; its header's 0, 1 written anew at each frame's moment by the
+/// column's offset then (list_looks), nothing painted for it.
+priv struct ListHead {
+  mut at : Int
+  head : FixedArray[Double]
+  id : @view.NodeId
+  bx : Double
+  by : Double
+  s : Double
+}
+
+///|
+/// The headers of what columns scroll by their offsets alone among the frame's instances, in order (ListHead).
+// kept across runs: emptied as a frame's instances are (Ctx::spans_cut)
+let list_heads : Array[ListHead] = []
+
+///|
+/// The columns whose offset moves what was drawn out in the window's terms in the last paint (ListRiding: one of its
+/// instances worked on as the frame ends, an old view, bones), by their nodes: moved, painted anew (view_offset_moved).
+// kept across runs: emptied as each frame is painted
+let offsets_flat : Array[Int] = []
+
+///|
+/// What a column scrolls by its offset alone being drawn now, as the tree is painted (none between paints): the outer
+/// of the two rides there are (Riding the inner).
+// kept across runs: none between paints
+let list_riding : Ref[ListRiding?] = Ref(None)
 
 ///|
 /// A row being drawn as the tree is painted, kept as it closes (Ctx::ride_end).
@@ -212,7 +283,36 @@ fn Ctx::flat_from(self : Ctx, i0 : Int) -> Unit {
     let first = s[b + 13].to_int()
     let n = s[b + 14].to_int()
     guard ride_groups.get(id) is Some(k) else { abort("flat_from: group \{id} let go") }
-    ride_put(k, first, n, s, at, s[b], s[b + 1], s[b + 15])
+    ride_put(k, first, n, s, at, s[b], s[b + 1], s[b + 15], s[b + 16], s[b + 17], s[b + 18], s[b + 19])
+  }
+}
+
+///|
+/// Instance `b` of `s` cut to (h0, h1, h2, h3) as well, as a header's clip cuts its group's (its 16-19; none, all 0):
+/// where its own clip is square, that clip cut to it; else its outer, or it as its outer where it has none. As the host
+/// draws a header out (groups.h's mb_groups_draw_out), the same.
+fn inst_cut_to(s : FixedArray[Double], b : Int, h0 : Double, h1 : Double, h2 : Double, h3 : Double) -> Unit {
+  if h0 == 0.0 && h1 == 0.0 && h2 == 0.0 && h3 == 0.0 {
+    return
+  }
+  if s[b + 24] == 0.0 && s[b + 25] == 0.0 && s[b + 26] == 0.0 && s[b + 27] == 0.0 {
+    s[b + 16] = dmax(s[b + 16], h0)
+    s[b + 17] = dmax(s[b + 17], h1)
+    s[b + 18] = dmin(s[b + 18], h2)
+    s[b + 19] = dmin(s[b + 19], h3)
+  } else if s[b + 40] == 0.0 && s[b + 41] == 0.0 && s[b + 42] == 0.0 && s[b + 43] == 0.0 {
+    s[b + 40] = h0
+    s[b + 41] = h1
+    s[b + 42] = h2
+    s[b + 43] = h3
+    for j in 44..<52 {
+      s[b + j] = 0.0
+    }
+  } else {
+    s[b + 40] = dmax(s[b + 40], h0)
+    s[b + 41] = dmax(s[b + 41], h1)
+    s[b + 42] = dmin(s[b + 42], h2)
+    s[b + 43] = dmin(s[b + 43], h3)
   }
 }
 
@@ -233,6 +333,9 @@ fn inst_after(a : FixedArray[Double], q : Int) -> Int {
 fn Ctx::spans_cut(self : Ctx) -> Unit {
   while ride_spans.length() > 0 && ride_spans[ride_spans.length() - 1] >= self.ninst {
     ride_spans.pop() |> ignore
+  }
+  while list_heads.length() > 0 && list_heads[list_heads.length() - 1].at >= self.ninst {
+    list_heads.pop() |> ignore
   }
 }
 
@@ -286,10 +389,12 @@ fn ride_moves(a : FixedArray[Double], b : Int, e : FixedArray[Double]) -> Int {
     }
   }
   let none = a[b + 40] == 0.0 && a[b + 41] == 0.0 && a[b + 42] == 0.0 && a[b + 43] == 0.0
+  // (`e`'s own outer, where it has one: none, every edge of the instance's its own)
+  let e_none = e[12] == 0.0 && e[13] == 0.0 && e[14] == 0.0 && e[15] == 0.0
   if !none {
     for j in 0..<4 {
       let v = a[b + 40 + j]
-      if v != e[j] && v != e[12 + j] {
+      if v != e[j] && (e_none || v != e[12 + j]) {
         m = m | (1 << (4 + j))
       }
     }
@@ -394,8 +499,9 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
   for j in (r.seg0 * 4)..<self.segs.length() {
     segs.push(self.segs[j])
   }
-  // (kept by the host where it keeps groups and nothing of them is worked on as the frame ends)
-  let group = if groups_on() && ride_groupable(inst, n) {
+  // (kept by the host where it keeps groups and nothing of them is worked on as the frame ends; in a list drawn whole
+  // as one, by that list's group, its rows' drawn out in it: ListRiding)
+  let group = if groups_on() && list_riding.val is None && ride_groupable(inst, n) {
     ride_groups_made.val = ride_groups_made.val + 1
     ride_groups_made.val
   } else {
@@ -426,6 +532,7 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
     nodes: r.nodes,
     kept: r.kept,
     group,
+    anew: false,
   }
   ride_keep(r.id, kept)
   if group >= 0 {
@@ -440,6 +547,16 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
 /// what moving it would not draw again (`moved_not`: turned, grown, faded or stretched, in a layer, glass, bones, an
 /// old view, a field).
 fn ride_node(c : @view.Content, x : Double, y : Double, s : Double, moved_not : Bool) -> Unit {
+  // (of a list drawn whole as one: an old view, or bones, drawn otherwise than as its instances say, ListRiding)
+  match list_riding.val {
+    Some(l) => {
+      l.nodes = l.nodes + 1
+      if c.hosted || c.bones != 0L {
+        l.spoiled = true
+      }
+    }
+    None => ()
+  }
   guard riding.val is Some(r) else { return }
   r.nodes = r.nodes + 1
   if moved_not ||
@@ -467,6 +584,7 @@ fn Ctx::ride_spot(
   a : Double,
   seen : Bool,
 ) -> Unit {
+  list_drawn_anew()
   match riding.val {
     Some(r) => {
       let at = self.ninst
@@ -553,6 +671,9 @@ fn Ctx::ride_kept_for(
 /// so in its place among them.
 fn Ctx::ride_again(self : Ctx, k : RideKept, dx : Double, dy : Double) -> Unit {
   ride_drawn.val = ride_drawn.val + 1
+  if !k.spots.is_empty() {
+    list_drawn_anew()
+  }
   ride_caps.clear()
   let seg_by = (self.segs.length() / 4 - k.seg0).to_double()
   self.segs_put(k.segs, k.pack)
@@ -607,7 +728,7 @@ fn Ctx::ride_copy(self : Ctx, k : RideKept, i0 : Int, i1 : Int, dx : Double, dy 
   if k.group >= 0 && dr.mode == 0 && !shooting.val {
     self.ride_head(k.group, i0, n, at, dx, dy, seg_by)
   } else {
-    ride_put(k, i0, n, self.inst, at, dx, dy, seg_by)
+    ride_put(k, i0, n, self.inst, at, dx, dy, seg_by, 0.0, 0.0, 0.0, 0.0)
   }
   if k.owned {
     for i in 0..<n {
@@ -661,7 +782,8 @@ let ride_head_blank : FixedArray[Double] = FixedArray::make(inst_size, 0.0)
 
 ///|
 /// Row kept `k`'s instances from `i0`, `n` of them, written into `s` from instance `at`, moved by (dx, dy), their
-/// shapes' pieces `seg_by` on: what a header of its group stands for (the host's mb_groups_draw_out, groups.h).
+/// shapes' pieces `seg_by` on, cut to (h0, h1, h2, h3) as well (none: all 0; inst_cut_to): what a header of its group
+/// stands for (the host's mb_groups_draw_out, groups.h).
 fn ride_put(
   k : RideKept,
   i0 : Int,
@@ -671,6 +793,10 @@ fn ride_put(
   dx : Double,
   dy : Double,
   seg_by : Double,
+  h0 : Double,
+  h1 : Double,
+  h2 : Double,
+  h3 : Double,
 ) -> Unit {
   k.inst.blit_to(s, len=n * inst_size, src_offset=i0 * inst_size, dst_offset=at * inst_size)
   for i in 0..<n {
@@ -714,6 +840,7 @@ fn ride_put(
         s.unsafe_set(b + 34, s.unsafe_get(b + 34) + dy)
       }
     }
+    inst_cut_to(s, b, h0, h1, h2, h3)
   }
 }
 
@@ -877,4 +1004,324 @@ fn island_watches_clear() -> Unit {
   for id in island_watches.keys() {
     island_watch_gone(id)
   }
+}
+
+///|
+/// What is drawn now draws something anew each time it is drawn (a picture, one not seen asked for): the list drawn
+/// whole as one it is in (ListRiding) drawn again only by going through it.
+fn list_drawn_anew() -> Unit {
+  match list_riding.val {
+    Some(l) => l.anew = true
+    None => ()
+  }
+}
+
+///|
+/// The glyphs a block drawn now draws from (ViewBlock's `kept`), held for the row and the list being drawn (view_glyphs_held).
+fn ride_glyphs_kept(kept : Array[(Int, Double, Double)]) -> Unit {
+  match riding.val {
+    Some(r) => r.kept.push(kept)
+    None => ()
+  }
+  match list_riding.val {
+    Some(l) => l.kept.push(kept)
+    None => ()
+  }
+}
+
+///|
+/// What column `by` scrolls by its offset alone (node `c`: a page's list's held, its bar's thumb) begun being drawn
+/// whole as one (ListRiding), at (x, y) where it is placed in the column, as opaque as `a`, laid out at (ux, uy), the
+/// window drawing it `s` times as big, (dx, dy) off that as the column has it scrolled now, the column's clip `hc` (the
+/// clip it is in now, square): what it holds drawn in a clip open from here (popped as it ends, with what it opened
+/// since there were `clips` clips and `rings` edges open: view_paint's).
+fn Ctx::list_ride_begin(
+  self : Ctx,
+  c : @view.Content,
+  by : Int,
+  rev : Int,
+  x : Double,
+  y : Double,
+  a : Double,
+  ux : Double,
+  uy : Double,
+  s : Double,
+  dx : Double,
+  dy : Double,
+  clips : Int,
+  rings : Int,
+) -> Unit {
+  let k = clip_top()
+  let hc = FixedArray::makei(4, fn(j) { clip_stack[k + j] })
+  push_unclipped()
+  list_riding.val = Some({
+    id: c.id,
+    by,
+    rev,
+    k0: self.ninst,
+    seg0: self.segs.length() / 4,
+    clips0: clips,
+    rings0: rings,
+    x,
+    y,
+    a,
+    off_x: ux - x,
+    off_y: uy - y,
+    s,
+    dx,
+    dy,
+    hc,
+    clip: ride_clip_at(clip_top()),
+    spoiled: false,
+    anew: false,
+    nodes: 0,
+    kept: [],
+  })
+}
+
+///|
+/// The list being drawn whole as one ended (ListRiding), all of it drawn and what it opened closed: kept as one group of
+/// the host's, a header in its place moved as far as the column has it and cut to its clip (the group it was kept as
+/// before where it drew the same); where the host keeps none, or one of its instances is worked on as the frame ends (a
+/// look's tag, a native view's hole, a stream's picture: ride_groupable), or it holds an old view or bones, drawn out
+/// moved and cut so in its place, its column's offset moving it painted anew (offsets_flat).
+fn Ctx::list_ride_end(self : Ctx) -> Unit {
+  guard list_riding.val is Some(l) else { return }
+  list_riding.val = None
+  let n = self.ninst - l.k0
+  if n <= 0 {
+    ride_let_go(l.id)
+    return
+  }
+  let e = l.clip
+  let inst = FixedArray::make(n * inst_size, 0.0)
+  self.inst.blit_to(inst, len=n * inst_size, src_offset=l.k0 * inst_size)
+  let moves = FixedArray::make(n, 0)
+  for i in 0..<n {
+    moves[i] = ride_moves(inst, i * inst_size, e)
+  }
+  let (h0, h1, h2, h3) = (l.hc[0], l.hc[1], l.hc[2], l.hc[3])
+  if l.spoiled || !groups_on() || dr.mode != 0 || shooting.val || !ride_groupable(inst, n) {
+    ride_let_go(l.id)
+    let s = self.inst
+    for i in 0..<n {
+      list_put(s, (l.k0 + i) * inst_size, moves[i], l.dx, l.dy, h0, h1, h2, h3)
+    }
+    offsets_flat.push(l.by)
+    // (its column going on by itself (a fling, a wheel's notches easing in, what shows past an end going back): painted
+    // anew each frame till that ends, as it is drawn moved so, nothing else telling the paint)
+    match view_app.val {
+      Some(tree) =>
+        match tree.glide_end_of(l.by) {
+          Some(end) => self.now_before(end) |> ignore
+          None => ()
+        }
+      None => ()
+    }
+    return
+  }
+  let owned = inst_owners_kept()
+  let owners : Array[(Int, (Double, Double), @view.NodeId?, Int)] = []
+  if owned {
+    let o = inst_owners.owner
+    let cl = inst_owners.cell
+    let tr = inst_owners.tree
+    let mk = inst_owners.mark
+    for k in l.k0..<self.ninst {
+      owners.push(
+        (
+          if k < o.length() { o[k] } else { -1 },
+          if k < cl.length() { cl[k] } else { (0.0, 1.0) },
+          if k < tr.length() { tr[k] } else { None },
+          if k < mk.length() { mk[k] } else { 0 },
+        ),
+      )
+    }
+  }
+  let segs = []
+  for j in (l.seg0 * 4)..<self.segs.length() {
+    segs.push(self.segs[j])
+  }
+  // (the group it was kept as before, where it drew the same: the host's kept, nothing told it again)
+  let was = match ride_kept.get(l.id) {
+    Some(k) if k.group >= 0 && k.moves == moves && k.inst == inst => Some(k.group)
+    _ => None
+  }
+  let group = match was {
+    Some(g) => g
+    None => {
+      ride_groups_made.val = ride_groups_made.val + 1
+      ride_groups_made.val
+    }
+  }
+  let kept : RideKept = {
+    rev: l.rev,
+    x: l.x,
+    y: l.y,
+    a: l.a,
+    off_x: l.off_x,
+    off_y: l.off_y,
+    // (the frame's pixels a point of the list's own: as big as it was drawn, list_kept_for)
+    scale: self.scale * l.s,
+    zoom: words_zoom.val,
+    glyphs: ride_glyphs_gone.val,
+    owned,
+    clip: e,
+    inst,
+    moves,
+    segs,
+    seg0: l.seg0,
+    pack: SegPack::new(),
+    spots: [],
+    owners,
+    reach: (0.0, 0.0, 0.0, 0.0),
+    inside_x: true,
+    inside_y: true,
+    nodes: l.nodes,
+    kept: l.kept,
+    group,
+    anew: l.anew,
+  }
+  if was is Some(_) {
+    ride_kept[l.id] = kept
+  } else {
+    ride_keep(l.id, kept)
+    presented.group_set(group, inst, n)
+    @hostapi.group_set(group, inst, FixedArray::makei(n, fn(i) { moves[i].to_double() }), n)
+  }
+  ride_groups[group] = kept
+  let s = self.inst
+  ride_head_blank.blit_to(s, len=inst_size, dst_offset=l.k0 * inst_size)
+  ride_spans.push(l.k0)
+  ride_heads.val = ride_heads.val + 1
+  self.list_head_put(l.k0, group, 0, n, 0.0, 0.0, 0.0, l.id, l.s, l.dx, l.dy, l.hc)
+}
+
+///|
+/// The header at instance `at` of a list drawn whole as one (ListHead): group `group`'s instances from `first`, `n` of
+/// them, their shapes' pieces `seg_by` on, moved by (bx, by) besides (dx, dy) as column's offset has it now, `s` the
+/// window's scale of it, cut to `hc`; said among the frame's list headers.
+fn Ctx::list_head_put(
+  self : Ctx,
+  at : Int,
+  group : Int,
+  first : Int,
+  n : Int,
+  seg_by : Double,
+  bx : Double,
+  by : Double,
+  id : @view.NodeId,
+  s : Double,
+  dx : Double,
+  dy : Double,
+  hc : FixedArray[Double],
+) -> Unit {
+  let a = self.inst
+  let b = at * inst_size
+  a[b] = bx + dx
+  a[b + 1] = by + dy
+  a[b + 5] = 13.0
+  a[b + 12] = group.to_double()
+  a[b + 13] = first.to_double()
+  a[b + 14] = n.to_double()
+  a[b + 15] = seg_by
+  for j in 0..<4 {
+    a[b + 16 + j] = hc[j]
+  }
+  let head = FixedArray::make(inst_size, 0.0)
+  a.blit_to(head, len=inst_size, src_offset=b)
+  list_heads.push({ at, head, id, bx, by, s })
+}
+
+///|
+/// Instance `b` of `s`, of a list drawn whole as one, where its header would draw it out (ride_put's, by its `moves`
+/// bits): moved by (dx, dy), cut to (h0, h1, h2, h3).
+fn list_put(
+  s : FixedArray[Double],
+  b : Int,
+  m : Int,
+  dx : Double,
+  dy : Double,
+  h0 : Double,
+  h1 : Double,
+  h2 : Double,
+  h3 : Double,
+) -> Unit {
+  s[b] = s[b] + dx
+  s[b + 1] = s[b + 1] + dy
+  if m != 0 {
+    for j in 0..<4 {
+      let d = if j % 2 == 0 { dx } else { dy }
+      if (m & (1 << j)) != 0 {
+        s[b + 16 + j] = s[b + 16 + j] + d
+      }
+      if (m & (1 << (4 + j))) != 0 {
+        s[b + 40 + j] = s[b + 40 + j] + d
+      }
+    }
+    if (m & 256) != 0 {
+      s[b + 33] = s[b + 33] + dx
+      s[b + 34] = s[b + 34] + dy
+    }
+  }
+  inst_cut_to(s, b, h0, h1, h2, h3)
+}
+
+///|
+/// What list `c` (ListRiding's) kept as one, where it may be drawn again by its header alone, moved by where it is
+/// placed now (x, y) from where it was, `s` the window's scale of it: nothing of it changed since (its count of changes no
+/// more than what was kept's), nothing in it drawn anew each time, as opaque, laid out, as big, set on the pixels and its
+/// words as big as then, moved by whole pixels; the host keeping its group.
+fn Ctx::list_kept_for(
+  self : Ctx,
+  tree : @view.Tree,
+  c : @view.Content,
+  x : Double,
+  y : Double,
+  a : Double,
+  ux : Double,
+  uy : Double,
+  s : Double,
+) -> RideKept? {
+  guard ride_kept.get(c.id) is Some(k) else { return None }
+  let fits = k.group >= 0 &&
+    !k.anew &&
+    a == k.a &&
+    ux - x == k.off_x &&
+    uy - y == k.off_y &&
+    self.scale * s == k.scale &&
+    words_zoom.val == k.zoom &&
+    ride_glyphs_gone.val == k.glyphs &&
+    inst_owners_kept() == k.owned &&
+    tree.drawn_rev(c.id) <= k.rev &&
+    ride_whole(x - k.x, self.scale) &&
+    ride_whole(y - k.y, self.scale)
+  if fits {
+    Some(k)
+  } else {
+    None
+  }
+}
+
+///|
+/// List kept `k` (ListRiding's) drawn again by its header alone, moved by (bx, by) from where it was kept and (dx, dy)
+/// as its column has it now, `s` the window's scale of it, cut to `hc`: its shapes' pieces put among the frame's, who
+/// drew what as kept.
+fn Ctx::list_again(
+  self : Ctx,
+  k : RideKept,
+  id : @view.NodeId,
+  bx : Double,
+  by : Double,
+  s : Double,
+  dx : Double,
+  dy : Double,
+  hc : FixedArray[Double],
+) -> Unit {
+  let seg_by = (self.segs.length() / 4 - k.seg0).to_double()
+  self.segs_put(k.segs, k.pack)
+  let n = k.inst.length() / inst_size
+  let at = self.ninst
+  self.ride_copy(k, 0, n, 0.0, 0.0, seg_by)
+  self.list_head_put(at, k.group, 0, n, seg_by, bx, by, id, s, dx, dy, hc)
 }

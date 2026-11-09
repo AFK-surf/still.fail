@@ -428,6 +428,12 @@ struct Node {
   /// whether what it scrolls it scrolls across (View::scrolls with Scroll::across): which way Tree::scrolls_now asks
   /// whether it can go
   mut scroll_across : Bool
+  /// how far it is drawn off where it is placed by how far a column scrolls it at a moment (a page's list's held, a
+  /// bar's thumb: View::scrolls), read at that moment as it is drawn, found or read out, never followed: no place of it
+  /// or of what it holds changes as the column scrolls, what it holds drawn as it was, moved (none: nothing)
+  mut scroll_off : ((Double) -> (Double, Double))?
+  /// the node that scrolls it so (-1: none)
+  mut scroll_by : Int
   /// whether it holds a page's list's rows (Scroll::list's, up and down): on a host that sets them on its pixels
   /// (Tree::set_rows_grid), each laid out as tall as whole pixels (@flex.Style's rows_grid) and all moved alike so the
   /// first one's top is on one, as an old view's list's are (ui's Ctx::row_slot, Ctx::rows_on_pixels)
@@ -672,6 +678,9 @@ pub struct Tree {
   /// when its glide ends as it is asked (none: at rest); and as that column is let go
   mut glides : (Int, () -> Double?) -> Unit
   mut glides_gone : (Int) -> Unit
+  /// told as a column moves what it scrolls by its offset alone (Node's scroll_off: a page's list, its bar's thumb),
+  /// which column: nothing placed or drawn anew for it, what hosts it moves what it drew (Tree::on_offset)
+  mut offset_moved : (NodeId) -> Unit
   /// how a page's list moves where it is drawn, and how many pixels a point is there (Tree::lists_feel)
   mut list_feel : () -> (ListFeel, Double)
   /// what its host tells its nodes of where they are drawn (env.mbt: Tree::drawn_by)
@@ -905,6 +914,7 @@ pub fn Tree::new(
     retarget: fn(t, _, _, _) { t },
     glides: fn(_, _) {  },
     glides_gone: fn(_) {  },
+    offset_moved: fn(_) {  },
     list_feel: fn() { (Desktop, 1.0) },
     env: Env::new(),
     laid_waits: [],
@@ -1119,6 +1129,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
       n.scroll_held = -1
       n.drawn_rev = 0
       n.scroll_across = false
+      n.scroll_off = None
+      n.scroll_by = -1
       n.list_rows = false
       n.focus_shown_cell = None
       n.key_said = 0
@@ -1216,6 +1228,8 @@ fn Tree::made(self : Tree, parent : Int) -> View {
         scroll_held: -1,
         drawn_rev: 0,
         scroll_across: false,
+        scroll_off: None,
+        scroll_by: -1,
         list_rows: false,
         focus_shown_cell: None,
         on_drag: None,
@@ -2863,7 +2877,9 @@ fn off_of(n : Node) -> (Double, Double) {
 /// big it is asked at that size: where it goes, not where it was placed.
 fn Tree::off_now(self : Tree, n : Node) -> (Double, Double) {
   let (mx, my) = self.moved_of(n)
-  (n.look.dx + n.look.sx * n.flex.width + mx, n.look.dy + n.look.sy * n.flex.height + my)
+  // (and as far as a column scrolls it now: Node's scroll_off)
+  let (sx, sy) = self.scroll_off_now(n)
+  (n.look.dx + n.look.sx * n.flex.width + mx + sx, n.look.dy + n.look.sy * n.flex.height + my + sy)
 }
 
 ///|
@@ -3219,7 +3235,7 @@ fn Tree::rows_laid_y(self : Tree, at : Int) -> Double {
     if !m.slot {
       y = y + m.flex.top
       if m.parent >= 0 && self.nodes[m.parent].scroll_held == i {
-        y = y + m.look.dy
+        y = y + m.look.dy + self.scroll_off_now(m).1
       }
     }
     i = m.parent
@@ -3267,6 +3283,12 @@ pub fn View::placed_window_now(self : View) -> (Double, Double, Double, Double) 
     if !m.slot {
       x = x + m.lx
       y = y + m.ly
+      // (and as far as a column scrolls it now: Node's scroll_off)
+      if m.scroll_off is Some(_) {
+        let (sx, sy) = self.tree.scroll_off_now(m)
+        x = x + sx
+        y = y + sy
+      }
     }
     i = m.parent
   }
@@ -6965,8 +6987,13 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
       self.outs_gone.push(at)
     }
   }
-  // (what a node that scrolls holds, moved from where it was placed: scrolled, Tree::take_scrolled)
-  if n.placed && (x != n.lx || y != n.ly) && n.parent >= 0 && self.nodes[n.parent].scroll_held == at {
+  // (what a node that scrolls holds, moved from where it was placed: scrolled, Tree::take_scrolled; not one it moves
+  // by its offset alone, which is drawn as it was wherever it is scrolled to: Node's scroll_off)
+  if n.placed &&
+    (x != n.lx || y != n.ly) &&
+    n.scroll_off is None &&
+    n.parent >= 0 &&
+    self.nodes[n.parent].scroll_held == at {
     self.scrolled_now = true
     let p = self.nodes[n.parent]
     let id = { at: n.parent, gen: p.gen }
@@ -7273,8 +7300,9 @@ pub fn Tree::each_drawn_laid_or_past(
   self : Tree,
   f : (Content, Double, Double, Double, Double, Double, Double) -> Bool,
   draws? : (Content) -> Bool,
+  offsets? : (Content) -> Bool,
 ) -> Unit {
-  self.each_drawn_in_order(fn(_, c, x, y, a, s, ux, uy) { f(c, x, y, a, s, ux, uy) }, drawing?=draws)
+  self.each_drawn_in_order(fn(_, c, x, y, a, s, ux, uy) { f(c, x, y, a, s, ux, uy) }, drawing?=draws, offsets?)
 }
 
 ///|
@@ -7284,6 +7312,7 @@ fn Tree::each_drawn_in_order(
   self : Tree,
   f : (Int, Content, Double, Double, Double, Double, Double, Double) -> Bool,
   drawing? : (Content) -> Bool,
+  offsets? : (Content) -> Bool,
 ) -> Unit {
   // (where each in the order is drawn, how opaque, how big, and where it would be were nothing grown, shrunk or drawn
   // off: kept for the next walk, one for each walk inside another's `f`; each place written
@@ -7357,6 +7386,19 @@ fn Tree::each_drawn_in_order(
     // pixels, as an old view's are painted where they are laid out and then moved by its look)
     let mut lx = n.lx
     let mut ly = n.ly
+    // (as far as a column scrolls it now (Node's scroll_off), but where `offsets` says it is not: what it holds drawn
+    // as it is placed in it, it drawn off as a whole by what hosts it, a page's list's header)
+    if n.scroll_off is Some(_) &&
+      (match (offsets, n.content) {
+        (Some(o), Some(c)) => o(c)
+        _ => true
+      }) {
+      let (sx, sy) = self.scroll_off_now(n)
+      x = x + sx
+      y = y + sy
+      lx = lx + sx
+      ly = ly + sy
+    }
     if h >= 0 {
       let bs = ws.unsafe_get(h)
       x = wx.unsafe_get(h) + bs * x
@@ -7429,6 +7471,13 @@ pub fn Tree::drawn_one(
     let mut ns = n.ls
     let mut lx = n.lx
     let mut ly = n.ly
+    if n.scroll_off is Some(_) {
+      let (sx, sy) = self.scroll_off_now(n)
+      nx = nx + sx
+      ny = ny + sy
+      lx = lx + sx
+      ly = ly + sy
+    }
     if k < path.length() - 1 {
       nx = x + s * nx
       ny = y + s * ny
@@ -7715,8 +7764,10 @@ fn Tree::projected(self : Tree, at : Int) -> (Double, Double, Double, Double) {
   let mut s = 1.0
   for k = chain.length() - 1; k >= 0; k = k - 1 {
     let m = self.nodes[chain[k]]
-    x = x + s * (m.lx + (1.0 - m.ls) * m.lpx)
-    y = y + s * (m.ly + (1.0 - m.ls) * m.lpy)
+    // (and as far as a column scrolls it now: Node's scroll_off)
+    let (sx, sy) = self.scroll_off_now(m)
+    x = x + s * (m.lx + sx + (1.0 - m.ls) * m.lpx)
+    y = y + s * (m.ly + sy + (1.0 - m.ls) * m.lpy)
     a = a * m.la
     s = s * m.ls
   }
@@ -8057,6 +8108,79 @@ pub fn Tree::on_target(self : Tree, f : (Target, Array[Target], Double, Double) 
 pub fn Tree::on_glides(self : Tree, glides : (Int, () -> Double?) -> Unit, gone : (Int) -> Unit) -> Unit {
   self.glides = glides
   self.glides_gone = gone
+}
+
+///|
+/// What hosts the tree is told as a column of it moves what it scrolls by its offset alone (Node's scroll_off: a page's
+/// list up and down, its bar's thumb), which column (`moved`): nothing of it placed or drawn anew, so nothing asks a
+/// frame for it but this; where it moved, as of the moment drawn, is Tree::scroll_off_of's.
+pub fn Tree::on_offset(self : Tree, moved : (NodeId) -> Unit) -> Unit {
+  self.offset_moved = moved
+}
+
+///|
+/// Column `at` (View::scrolls) moved what it scrolls by its offset alone (Node's scroll_off), at the logic's moment: what
+/// the pointer is within told anew where it is a mouse's (Tree::withins_told: what is under it moved, the pointer not),
+/// what goes beside one of what it holds placed again (View::beside: the popover of a row of it goes with it), and what
+/// hosts the tree told (Tree::on_offset).
+fn Tree::offset_told(self : Tree, at : Int) -> Unit {
+  guard at >= 0 && at < self.nodes.length() && self.nodes[at].live else { return }
+  let id = { at, gen: self.nodes[at].gen }
+  if self.pointer_xy.0 >= 0.0 {
+    self.withins_told() |> ignore
+  }
+  for b in self.besides_at {
+    match self.nodes[b].beside {
+      Some(s) if self.nodes[b].live && self.alive_id(s.anchor) && self.holds_at(at, s.anchor.at) =>
+        self.place_marked_at(b)
+      _ => ()
+    }
+  }
+  (self.offset_moved)(id)
+}
+
+///|
+/// How far node `n` is drawn off by the column that scrolls it (Node's scroll_off) at the moment what is drawn is drawn,
+/// read once, nothing followed: what moves it says so (Tree::on_offset). Nothing where none does.
+fn Tree::scroll_off_now(self : Tree, n : Node) -> (Double, Double) {
+  match n.scroll_off {
+    Some(f) => @signals.untracked(fn() { f(self.clock.get()) })
+    None => (0.0, 0.0)
+  }
+}
+
+///|
+/// How far node `id` is drawn off at `t` by the column that scrolls it (Node's scroll_off: a page's list's held, its
+/// bar's thumb), read once, nothing followed; none where nothing scrolls it so (or it is let go).
+pub fn Tree::scroll_off_of(self : Tree, id : NodeId, t : Double) -> (Double, Double)? {
+  guard self.alive_id(id) else { return None }
+  match self.nodes[id.at].scroll_off {
+    Some(f) => Some(@signals.untracked(fn() { f(t) }))
+    None => None
+  }
+}
+
+///|
+/// The column that scrolls node `id` by its offset alone (Node's scroll_off): -1 where none does.
+pub fn Tree::scroll_off_by(self : Tree, id : NodeId) -> Int {
+  guard self.alive_id(id) else { return -1 }
+  if self.nodes[id.at].scroll_off is Some(_) {
+    self.nodes[id.at].scroll_by
+  } else {
+    -1
+  }
+}
+
+///|
+/// When what column `at` (View::scrolls) is on by itself ends as it is now (Scroll::glides_till: a fling, a wheel's
+/// notches easing in, what shows past an end going back), nothing followed: none at rest, held, or where it scrolls
+/// nothing.
+pub fn Tree::glide_end_of(self : Tree, at : Int) -> Double? {
+  guard at >= 0 && at < self.nodes.length() && self.nodes[at].live else { return None }
+  match self.scrolls_at.get(at) {
+    Some(s) => s.glides_till()
+    None => None
+  }
 }
 
 ///|

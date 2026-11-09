@@ -38,6 +38,31 @@ fn scroll_said(c : Ctx) -> Array[String] {
 }
 
 ///|
+/// The instances of `a`, `n` of them, that draw something: those its clip (16-19) or its outer clip (40-43), where it
+/// has one, cut wholly away left out; and how many.
+fn looks_seen(a : FixedArray[Double], n : Int) -> (FixedArray[Double], Int) {
+  let out = FixedArray::make(n * inst_size + 1, 0.0)
+  let mut k = 0
+  let away = fn(b : Int, c : Int) {
+    let set = a[b + c] != 0.0 || a[b + c + 1] != 0.0 || a[b + c + 2] != 0.0 || a[b + c + 3] != 0.0
+    set &&
+    a[b + 2] > 0.0 &&
+    a[b + 3] > 0.0 &&
+    (dmin(a[b] + a[b + 2], a[b + c + 2]) <= dmax(a[b], a[b + c]) ||
+    dmin(a[b + 1] + a[b + 3], a[b + c + 3]) <= dmax(a[b + 1], a[b + c + 1]))
+  }
+  for q in 0..<n {
+    let b = q * inst_size
+    if away(b, 16) || away(b, 40) {
+      continue
+    }
+    a.blit_to(out, len=inst_size, src_offset=b, dst_offset=k * inst_size)
+    k = k + 1
+  }
+  (out, k)
+}
+
+///|
 /// The frame painted alone or of the looks alone (`painted`; `alone`, `n` instances; its looks asking to be woken at
 /// `wake`, or drawn each frame: `cycling`) against the same frame built whole (`c`'s): the same instances, its looks
 /// asking the same, else the test fails, saying where they part: the first instance that differs (what it is and
@@ -54,14 +79,17 @@ fn looks_compare(
 ) -> Unit {
   let at = t.to_int()
   let kind = if painted { "painted alone" } else { "of its looks alone" }
-  let m = c.ninst
+  // (what is drawn of each: one its clips cut wholly away draws nothing, as a host draws it (a page's list's rows past
+  // where it shows, kept in its group, cut by its header's clip: view_ride.mbt's inst_cut_to))
+  let (alone, n) = looks_seen(alone, n)
+  let (whole, m) = looks_seen(c.inst, c.ninst)
   let mut first = -1
   let mut slot = -1
   for q in 0..<(if n < m { n } else { m }) {
     let b = q * inst_size
     for j in 0..<inst_size {
       let x = alone[b + j]
-      let y = c.inst[b + j]
+      let y = whole[b + j]
       if first < 0 && !drawn_same(x, y) {
         first = q
         slot = j
@@ -83,7 +111,7 @@ fn looks_compare(
     }
     // (what is drawn there, as built whole: the words of the nodes over the place)
     let (px, py) = if first < m {
-      (c.inst[first * inst_size], c.inst[first * inst_size + 1])
+      (whole[first * inst_size], whole[first * inst_size + 1])
     } else {
       (alone[first * inst_size], alone[first * inst_size + 1])
     }
@@ -95,7 +123,7 @@ fn looks_compare(
       }
     }
     looks_fail(
-      "the frame at \{at} ms \{kind} (\{n} instances) parts from it built whole (\{m}) at instance \{first}: \{inst(alone, first, n)}, built whole \{inst(c.inst, first, m)}; words there: \{there.join(" | ")}; \{looks_node_moved(c, then)}",
+      "the frame at \{at} ms \{kind} (\{n} instances) parts from it built whole (\{m}) at instance \{first}: \{inst(alone, first, n)}, built whole \{inst(whole, first, m)}; words there: \{there.join(" | ")}; \{looks_node_moved(c, then)}",
     )
   }
   if cycling != looks_own.cycling || wake != looks_own.wake {
@@ -280,4 +308,12 @@ fn looks_looked(
     }
     None => ()
   }
+}
+
+///|
+/// How many frames were drawn of their looks alone so far (frame_watch.mbt: nothing built, laid out or painted, a list
+/// moved by its header), each drawn whole after it as well and compared where the looks are checked.
+pub fn Tester::looks_alone(self : Tester) -> Int {
+  ignore(self)
+  looks_frames.val
 }

@@ -304,6 +304,7 @@ pub fn Scroll::grew_above(self : Scroll, d : Double) -> Unit {
       Some(n) => self.notch.set(Some({ ..n, x0: n.x0 + d }))
       None => ()
     }
+    self.offset_said()
     // (at rest when it now is: said again on its timeline)
     match self.host {
       // (the hand past its edge: said on by its own way, above)
@@ -369,7 +370,7 @@ fn Scroll::stopped(self : Scroll, t : Double) -> Double {
     self.edge.set(None)
     self.x.set(x)
     if !e.parked {
-      (self.on_scrolled)(t)
+      self.scrolled_at(t)
     }
   }
   // (a page's list's notches easing in: as far as they came)
@@ -385,7 +386,7 @@ fn Scroll::stopped(self : Scroll, t : Double) -> Double {
     self.x.set(x)
     // (stopped on its way: it scrolled till now, no further: its bar's showing from here)
     if t < f.end_t {
-      (self.on_scrolled)(t)
+      self.scrolled_at(t)
     }
   }
   self.x.set(x)
@@ -402,6 +403,7 @@ pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
     _ => ()
   }
   self.x.set(dmax(to, 0.0))
+  self.offset_said()
 }
 
 ///|
@@ -419,13 +421,54 @@ fn Scroll::at_foot(self : Scroll) -> Bool {
 }
 
 ///|
+/// Scrolled by the hand at `t` (the wheel, a finger, a fling, a part brought into sight): what is told so told (its
+/// bar), and what hosts the tree that it moved (Scroll::offset_said).
+fn Scroll::scrolled_at(self : Scroll, t : Double) -> Unit {
+  (self.on_scrolled)(t)
+  self.offset_said()
+}
+
+///|
+/// What it holds moved (or what it is on by itself set going or stopped), told the tree it scrolls in (Tree::offset_told):
+/// what it moves by its offset alone (a page's list, its bar's thumb: Node's scroll_off) drawn moved by what hosts it,
+/// nothing placed for it. Not scrolling in a node, nothing.
+fn Scroll::offset_said(self : Scroll) -> Unit {
+  match self.host {
+    Some(v) if v.alive() => v.tree.offset_told(v.at)
+    _ => ()
+  }
+}
+
+///|
+/// How far a page's list's held (node `at` of `tree`, up and down: Scroll::list) is drawn off where it is placed at `t`,
+/// as far as it is scrolled and what shows past an end moves it (iOS's rubber band): by whole pixels, on its host's
+/// grid where it sets the list's rows on it (the first row's top on a pixel wherever it is scrolled to, as it is placed:
+/// Tree::rows_placed), else on the pixels the tree is drawn at (Tree::set_pixel_grid): what it holds drawn once, moved
+/// so, its words stay on the pixels they were drawn on (an old view's list drew its boxes off by part of a pixel, its
+/// words each set on a pixel as they came). Read as it is drawn, found or read out at a moment (Node's scroll_off),
+/// nothing followed.
+fn Scroll::held_dy(self : Scroll, tree : Tree, at : Int, t : Double) -> Double {
+  let d = -self.where_at(t) + self.past_moved(t)
+  let n = tree.nodes[at]
+  if tree.rows_grid > 0.0 && n.list_rows {
+    let y = n.flex.top + off_of(n).1
+    tree.rows_placed(at, y + d) - tree.rows_placed(at, y)
+  } else if tree.pixel_grid > 0.0 {
+    let g = tree.pixel_grid
+    (d * g).round() / g
+  } else {
+    d
+  }
+}
+
+///|
 /// Moved by `d` (down the column) at `t`, as far as it can go: whether it moved.
 fn Scroll::moved(self : Scroll, t : Double, d : Double) -> Bool {
   let was = self.stopped(t)
   let to = dclamp(was + d, 0.0, self.most())
   self.x.set(to)
   if to != was {
-    (self.on_scrolled)(t)
+    self.scrolled_at(t)
   }
   to != was
 }
@@ -437,7 +480,7 @@ fn Scroll::sent(self : Scroll, t : Double, to : Double) -> Unit {
   let to = dclamp(to, 0.0, self.most())
   self.x.set(to)
   if to != was {
-    (self.on_scrolled)(t)
+    self.scrolled_at(t)
   }
 }
 
@@ -468,14 +511,14 @@ fn Scroll::flung(self : Scroll, v : View, t : Double) -> Unit {
   }
   let end_t = t + t_end.ceil()
   self.fling.set(Some({ x0, v0, t0: t, end_t, end_x, till: bound, way: None }))
-  (self.on_scrolled)(t)
+  self.scrolled_at(t)
   // (what hosts the tree told it glides, which column it is and how to ask it when it ends now: Tree::on_glides)
   (v.tree.glides)(self.serial, fn() { self.glides_till() })
   // (at rest at its end, said on the timeline: then nothing reads the time for it)
   self.settle_off = v.at_moment(end_t, fn() {
     self.settle_off = fn() {  }
     // (scrolled till its end: told so while it still counts as under way, its bar's showing from there)
-    (self.on_scrolled)(end_t)
+    self.scrolled_at(end_t)
     self.fling.set(None)
     // (within how far it can go as of then: what holds it may have come to be shorter meanwhile)
     self.x.set(dclamp(end_x, 0.0, self.most()))
@@ -539,17 +582,17 @@ fn Scroll::edge_planned(self : Scroll, v : View, e : Edge, x0 : Double, t : Doub
     // (at its end: nothing moving, nothing reading the time; told so as it is there no more since now)
     self.edge.set(Some({ ..e, x0: bound, t0: t, bound, end_t: t, parked: true }))
     if !e.parked {
-      (self.on_scrolled)(t)
+      self.scrolled_at(t)
     }
     return
   }
   self.edge.set(Some({ x0, v: e.v, t0: t, bound, end_t, parked: false }))
-  (self.on_scrolled)(t)
+  self.scrolled_at(t)
   // (what hosts the tree told it goes on by itself, till when as it is asked: Tree::on_glides)
   (v.tree.glides)(self.serial, fn() { self.glides_till() })
   self.settle_off = v.at_moment(end_t, fn() {
     self.settle_off = fn() {  }
-    (self.on_scrolled)(end_t)
+    self.scrolled_at(end_t)
     match @signals.untracked(fn() { self.edge.get() }) {
       Some(g) => self.edge.set(Some({ ..g, x0: g.bound, t0: end_t, end_t, parked: true }))
       None => ()
@@ -637,21 +680,30 @@ pub fn View::scrolls(
     self.tree.nodes[self.at].scroll_held = held.at
     self.tree.nodes[self.at].scroll_across = across
     // (a page's list's rows set on its host's pixels as an old view's list's are: Tree::set_rows_grid)
+    // (a page's list's, down a column, drawn off by how far it is scrolled by its offset alone, read as it is drawn
+    // (Node's scroll_off): nothing of it placed again as it scrolls, what it holds drawn as it was, moved by what hosts
+    // the tree; on iOS moved past its end as far as its rubber band shows it)
     if s.as_list && !across {
       self.tree.rows_list(held.at)
+      let hn = self.tree.nodes[held.at]
+      hn.scroll_by = self.at
+      let tree = self.tree
+      let at = held.at
+      hn.scroll_off = Some(fn(t) { (0.0, s.held_dy(tree, at, if s.goes_on() { t } else { 0.0 })) })
+      held.shrink(Is(0.0)) |> ignore
+    } else {
+      held
+      .shrink(Is(0.0))
+      .offset(By(fn() {
+        let t = if s.goes_on() { held.drawn_at() } else { 0.0 }
+        if across {
+          (-s.where_at(t), 0.0)
+        } else {
+          (0.0, -s.where_at(t) + s.past_moved(t))
+        }
+      }))
+      |> ignore
     }
-    held
-    .shrink(Is(0.0))
-    .offset(By(fn() {
-      let t = if s.goes_on() { held.drawn_at() } else { 0.0 }
-      // (a page's list's on iOS moved past its end as far as its rubber band shows it)
-      if across {
-        (-s.where_at(t), 0.0)
-      } else {
-        (0.0, -s.where_at(t) + s.past_moved(t))
-      }
-    }))
-    |> ignore
     // (across with a bar: room at its foot for it while it can go, as laid out (none while it cannot), its bar never
     // over what it holds' last line: Ctx::sideways's bar_room, from this layout's told reach, not a frame's before)
     // (under what it holds, its own room at its foot counted, as Ctx::sideways' `foot` is the more of its padding there
@@ -683,7 +735,10 @@ pub fn View::scrolls(
         }
       })
       self.scroll_bar(s, b, state, bar_in~, bar_clear~)
-      s.on_scrolled = fn(t) { state.woke(b, self, t, scrolled=true) }
+      // (by the hand where it is on nothing by itself: Scroll::goes_on)
+      s.on_scrolled = fn(t) {
+        state.woke(b, self, t, scrolled=true, by_hand=!@signals.untracked(fn() { s.goes_on() }))
+      }
     }
     None => ()
   }
