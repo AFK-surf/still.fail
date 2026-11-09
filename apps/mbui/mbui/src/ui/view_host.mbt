@@ -305,6 +305,8 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
     fn(root) {
       // (where its nodes are drawn told it first: what they read of it as they are made, as later)
       view_drawn_by(root.tree)
+      // (what a node says moves, from the first it makes: View::said_moving)
+      root.tree.on_moves(view_moves)
       make(root)
       // (its words shaped as the theme it is drawn in says (its digits all one width or not: the app's, set_tree_theme,
       // else the window's for its width): as that changes, every word measured and drawn again so at the change's
@@ -5695,6 +5697,36 @@ priv struct TreeGlide {
 impl Moving for TreeGlide with rest_at(self, _now, _frame) {
   (self.ends)().unwrap_or(-1.0)
 }
+
+///|
+/// What a node says moves (View::said_moving): said to move as an old view's motion is, one mover for each key.
+fn view_moves(key : String, what : String, rest : (Double) -> Double) -> Unit {
+  let who = match tree_movers.get(key) {
+    Some(m) => m
+    None => {
+      let m = Mover::new()
+      tree_movers[key] = m
+      m
+    }
+  }
+  g().moving_as(who, ({ rest, } : TreeMoves) as &Moving, what)
+}
+
+///|
+/// What a node of the window's tree says moves (Tree::on_moves): when it is at rest as of a moment.
+priv struct TreeMoves {
+  rest : (Double) -> Double
+}
+
+///|
+impl Moving for TreeMoves with rest_at(self, now, _frame) {
+  (self.rest)(now)
+}
+
+///|
+/// Who tells what each key a node says moves (view_host's on_moves): one each, as an old view's motion is its own.
+// kept across runs: a key's mover only names it to the frame's context, which keeps its own list (Ctx::moving_as)
+let tree_movers : Map[String, Mover] = {}
 
 ///|
 /// Who tells each of the tree's columns' glides, by its number (view_host's on_glides): one each, as an old view's list

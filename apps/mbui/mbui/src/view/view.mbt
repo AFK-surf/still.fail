@@ -784,6 +784,9 @@ pub struct Tree {
   /// when its glide ends as it is asked (none: at rest); and as that column is let go
   mut glides : (Int, () -> Double?) -> Unit
   mut glides_gone : (Int) -> Unit
+  /// what hosts the tree is told as a node says something of it moves (View::said_moving): its key, what it is, and
+  /// when it is at rest as of a moment (Tree::on_moves)
+  mut moves : (String, String, (Double) -> Double) -> Unit
   /// told as a column moves what it scrolls by its offset alone (Node's scroll_off: a page's list, its bar's thumb),
   /// which column: nothing placed or drawn anew for it, what hosts it moves what it drew (Tree::on_offset)
   mut offset_moved : (NodeId) -> Unit
@@ -1097,6 +1100,7 @@ pub fn Tree::new(
     retarget: fn(t, _, _, _) { t },
     glides: fn(_, _) {  },
     glides_gone: fn(_) {  },
+    moves: fn(_, _, _) {  },
     offset_moved: fn(_) {  },
     list_feel: fn() { (Desktop, 1.0) },
     motion_reduced: fn() { false },
@@ -9828,6 +9832,22 @@ pub fn Tree::on_target(self : Tree, f : (Target, Array[Target], Double, Double) 
 pub fn Tree::on_glides(self : Tree, glides : (Int, () -> Double?) -> Unit, gone : (Int) -> Unit) -> Unit {
   self.glides = glides
   self.glides_gone = gone
+}
+
+///|
+/// What hosts the tree is told as a node says something of it moves (View::said_moving), `moves`: its key (the same
+/// for what moves again), what it is and who told it, and when it is at rest as of a moment (-1 done), what waits on
+/// what moves (a test's run to rest, Tester::moving, rest_of) reading it as an old view's motion.
+pub fn Tree::on_moves(self : Tree, moves : (String, String, (Double) -> Double) -> Unit) -> Unit {
+  self.moves = moves
+}
+
+///|
+/// Says something of this node moves, set out now by its cause: `key` the same each time it is told to go again,
+/// `what` what it is and who told it (what a test names it by: Tester::rest_of), `rest` when it is at rest as of a
+/// moment (-1 done). Only what waits on what moves reads it; how it is drawn is the node's own (its look's moment).
+pub fn View::said_moving(self : View, key : String, what : String, rest : (Double) -> Double) -> Unit {
+  (self.tree.moves)(key, what, rest)
 }
 
 ///|

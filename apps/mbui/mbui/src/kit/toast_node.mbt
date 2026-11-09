@@ -388,7 +388,6 @@ priv struct ToastWay {
   way : @motion.Way
   ended : @signals.Signal[Int]
   mut due : () -> Unit
-  mover : @ui.Mover
   name : String
   mut rest : (Double) -> Double
   mut alive : Bool
@@ -396,14 +395,7 @@ priv struct ToastWay {
 
 ///|
 fn ToastWay::new(v : Double, name : String) -> ToastWay {
-  { way: @motion.Way::new(v), ended: @signals.signal(0), due: fn() {  }, mover: @ui.Mover::new(), name, rest: fn(_) { -1.0 }, alive: true }
-}
-
-///|
-impl @ui.Moving for ToastWay with rest_at(self, now, frame) {
-  // (as of the moment the frames are at, as any of what is said to move answers: Ctx::motion_owed's)
-  ignore(frame)
-  (self.rest)(now)
+  { way: @motion.Way::new(v), ended: @signals.signal(0), due: fn() {  }, name, rest: fn(_) { -1.0 }, alive: true }
 }
 
 ///|
@@ -415,7 +407,8 @@ fn ToastWay::go(self : ToastWay, n : @view.View, to : Double, spec : @motion.Spe
   } else {
     fn() {  }
   }
-  @ui.current().moving_as(self.mover, self as &@ui.Moving, "Anim \"\u{2}presence/" + self.name + "\" to \{to}")
+  // (as of the moment the frames are at, as any of what is said to move answers: Ctx::motion_owed's)
+  n.said_moving(self.name, "Anim \"\u{2}presence/" + self.name + "\" to \{to}", fn(now) { (self.rest)(now) })
 }
 
 ///|
