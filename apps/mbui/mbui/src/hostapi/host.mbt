@@ -48,6 +48,7 @@ pub(open) trait Host {
   platform(Self) -> Int = _
   request_frame(Self) -> Unit = _
   request_frame_on(Self) -> Unit = _
+  frames_paced(Self, Double) -> Unit = _
   wake_after(Self, Double) -> Unit = _
   font_metrics(Self, Double, Int, Int, FixedArray[Double]) -> Unit = _
   shape(Self, String, Double, Int, Int, FixedArray[Double]) -> Int = _
@@ -435,6 +436,11 @@ impl Host with request_frame(_) {
 ///|
 impl Host with request_frame_on(self) {
   self.request_frame()
+}
+
+///|
+impl Host with frames_paced(self, _) {
+  self.request_frame_on()
 }
 
 ///|
@@ -1713,6 +1719,16 @@ pub fn request_frame() -> Unit {
 /// next display frame, as request_frame; a run whose time goes by as it says (a Tester's) owes none at this moment.
 pub fn request_frame_on() -> Unit {
   current.val.request_frame_on()
+}
+
+///|
+/// A frame asked for what moves on by the clock (as request_frame_on, in the frame that asks) that needs only `hz`
+/// frames a second: drawn at the display's frame about `1000 / hz` ms after this one's, those between drawing nothing,
+/// and the display told it may refresh that slowly meanwhile (iOS's and macOS's CADisplayLink preferredFrameRateRange,
+/// Android's Surface.setFrameRate); anything asking for a frame before then (request_frame: an input, a change) has
+/// the display's next and every frame again. A host with nothing for it draws the display's next (request_frame_on).
+pub fn frames_paced(hz : Double) -> Unit {
+  current.val.frames_paced(hz)
 }
 
 ///|

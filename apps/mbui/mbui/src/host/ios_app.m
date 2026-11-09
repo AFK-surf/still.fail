@@ -127,6 +127,9 @@ static double frame_late, last_target = -1;
 // display link's targets' clock), or -1; the time of the frame being built (what wake_after counts from), and the
 // display's frame (ms).
 static double wake_for = -1, building_for = -1, link_period = 1000.0 / 120.0;
+// How many frames a second what moves on by the clock needs, as the last frame said it (mb_host_frames_paced; 0: the
+// display's every frame, as anything that asks for a frame has), and what the display link was last told of it.
+static double paced_hz, link_hz = -1;
 // How far the soft keyboard reaches over the view's foot past the safe area's, in points, where it is on the screen
 // now (its motion followed frame by frame: the controller's), and whether it is moving.
 static double ime_over(void);
@@ -177,7 +180,17 @@ static void run_script_step(int step);
 
 - (void)requestFrame {
   self.wantFrame = YES;
+  paced_hz = 0;
   self.link.paused = NO;
+}
+
+// The display link told the rate the frames want (paced_hz), where it changed: the display's highest, or that of what
+// moves on by the clock alone, so a ProMotion screen refreshes as slowly (as the tick draws only at the paced frames).
+static void link_rate(CADisplayLink *l) {
+  if (link_hz == paced_hz) return;
+  link_hz = paced_hz;
+  l.preferredFrameRateRange = paced_hz > 0 ? CAFrameRateRangeMake(paced_hz, paced_hz, paced_hz)
+                                           : CAFrameRateRangeMake(60, 120, 120);
 }
 
 // The floating edit menu over the words it is about (Android's ActionMode.TYPE_FLOATING's content rect), kept there
@@ -243,6 +256,7 @@ static double drawn_for;
 
 - (void)tick:(CADisplayLink *)l {
   link_period = (l.targetTimestamp - l.timestamp) * 1000.0;
+  link_rate(l);
   // a frame waited for (wake_after): the first whose time is at or past it, on the display's frames (not when a timer
   // happens to fire and the link wakes after it: a step a frame or two late, by as much as the timer and the link's
   // wake fall, so a resident cycle's steps 75 to 108 ms apart, not 100); the ticks before it draw nothing
@@ -1655,6 +1669,25 @@ void mb_host_wake_after(double ms) {
     // (a wake asked later since, or met already: not this one's)
     if (wake_for == at) the_view.link.paused = NO;
   });
+}
+
+// A frame for what moves on by the clock that needs only `hz` frames a second (@hostapi.frames_paced, said in the
+// frame): not drawn at the next tick but woken for (wake_after) at the display's frame a whole number of its frames on,
+// as near `hz` as they come (40 on a 60 Hz display: every second, 30), the ticks between drawing nothing and the link
+// told the rate; anything asking for a frame before then (requestFrame) has the next tick and every one again. Counted
+// in the display's fastest frames, not the link's now (at a rate told, its frames are that rate's). The next tick's,
+// as any frame asked for, in a scripted run (its frames are its steps') and where the frame asks for it besides (the
+// soft keyboard moving: drawFor).
+void mb_host_frames_paced(double hz) {
+  double top = (double)(the_view.window.screen ?: UIScreen.mainScreen).maximumFramesPerSecond;
+  double every = top > 0 && hz > 0 ? round(top / hz) : 1;
+  if (script || building_for < 0 || the_view.wantFrame || every <= 1) {
+    mb_host_request_frame();
+    return;
+  }
+  paced_hz = top / every;
+  // (half a display frame short of it: the tick at it, whatever its time's rounding)
+  mb_host_wake_after((every - 0.5) * 1000.0 / top);
 }
 
 #include "groups.h"

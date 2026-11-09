@@ -276,6 +276,7 @@ impl @hostapi.Host for FakeHost with keys_platform(self) {
 ///|
 impl @hostapi.Host for FakeHost with request_frame(self) {
   self.wants = true
+  self.paced = 0.0
 }
 
 ///|
@@ -283,6 +284,15 @@ impl @hostapi.Host for FakeHost with request_frame(self) {
 /// (Tester::frames_on).
 impl @hostapi.Host for FakeHost with request_frame_on(self) {
   self.frames_on = self.frames_on + 1
+  self.paced = 0.0
+}
+
+///|
+/// A frame for what moves on by the clock that needs only `hz` frames a second: counted as request_frame_on's, its rate
+/// told (Tester::frames_paced); its own frames are run_for's, whatever it is told.
+impl @hostapi.Host for FakeHost with frames_paced(self, hz) {
+  self.frames_on = self.frames_on + 1
+  self.paced = hz
 }
 
 ///|

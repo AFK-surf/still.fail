@@ -208,14 +208,29 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   bench.held = false
   looks_left(c, held)
   if c.wants_frame || c.took_input || bench.mode > 0 || held || paint_left() || layout_left() || glyphs_short_owed() {
+    pace_none()
     h_request_frame()
   } else if c.motion_left || c.cycling || c.fiber_frame {
     // what moves on (a motion, a fiber stepping a frame at a time) is drawn as the clock goes, on the host's next
-    // frame: no frame is owed at this moment (a Tester's draw draws none for it; its run_for does, as its time goes)
+    // frame: no frame is owed at this moment (a Tester's draw draws none for it; its run_for does, as its time goes);
+    // a motion as often as it needs where it is seen (frame_pace.mbt), a fiber every frame
     c.wants_frame = true
-    h_request_frame_on()
-  } else if c.wake_at > 0.0 {
-    h_wake_after(dmax(c.wake_at - t, 1.0))
+    let pace = if c.fiber_frame {
+      pace_none()
+      0.0
+    } else {
+      pace_by_clock(t)
+    }
+    if pace > 0.0 {
+      @hostapi.frames_paced(pace)
+    } else {
+      h_request_frame_on()
+    }
+  } else {
+    pace_none()
+    if c.wake_at > 0.0 {
+      h_wake_after(dmax(c.wake_at - t, 1.0))
+    }
   }
   // what is still awaited from the host (an image decoding, a view loading): a run to a declared moment keeps its
   // clock still while any is (mac_app.m, MBView, web/host.js), so its picture does not hang on how fast the machine is

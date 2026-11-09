@@ -173,6 +173,9 @@ static double frame_late, last_tick = -1;
 // The frame the app waits for (@hostapi.wake_after: a resident cycle's next step), by its time (ms, mb_now_ms's
 // clock), or -1; the time of the frame being built (what wake_after counts from); the display's frame (ms).
 static double wake_for = -1, building_for = -1, link_period = 1000.0 / 60.0;
+// How many frames a second what moves on by the clock needs, as the last frame said it (mb_host_frames_paced; 0: the
+// display's every frame, as anything that asks for a frame has), and what the display link was last told of it.
+static double paced_hz, link_hz = -1;
 
 @implementation MBView
 
@@ -284,6 +287,7 @@ static double wake_for = -1, building_for = -1, link_period = 1000.0 / 60.0;
 
 - (void)requestFrame {
   self.wantFrame = YES;
+  paced_hz = 0;
   if (settle) {
     app_wants = YES;
     pump_soon();
@@ -431,6 +435,13 @@ static void pump(void) {
 - (void)tick:(CADisplayLink *)l {
   if (CACurrentMediaTime() - self.drawnWithWindowAt < l.targetTimestamp - l.timestamp) return;
   link_period = (l.targetTimestamp - l.timestamp) * 1000.0;
+  // the rate the frames want told the display link where it changed: the display's own, or that of what moves on by
+  // the clock alone (paced_hz), so a ProMotion screen refreshes as slowly (ios_app.m's link_rate)
+  if (link_hz != paced_hz) {
+    link_hz = paced_hz;
+    l.preferredFrameRateRange =
+        paced_hz > 0 ? CAFrameRateRangeMake(paced_hz, paced_hz, paced_hz) : CAFrameRateRangeDefault;
+  }
   // a frame waited for (wake_after): the first of the display's frames at or past its time (not when a timer happens
   // to fire and the link wakes after it, a step a frame or two late by as much as they fall, so a resident cycle's
   // steps unevenly apart); the ticks before it draw nothing (ios_app.m's the same)
@@ -2077,6 +2088,25 @@ static int window_seen = 1;
 static int looked_at_run(void) {
   return script || settle || record_dir || shot_path || getenv("MBUI_DRIVE") || getenv("MBUI_DRIVE_B64") ||
          getenv("MBUI_BENCH") || getenv("MBUI_SHOT_DIR") || getenv("MBUI_WIN") || getenv("MBUI_RECORD");
+}
+
+// A frame for what moves on by the clock that needs only `hz` frames a second (@hostapi.frames_paced, said in the
+// frame): woken for (wake_after) at the display's frame a whole number of its fastest frames on, as near `hz` as they
+// come, the ticks between drawing nothing and the link told the rate (ios_app.m's the same); anything asking for a
+// frame before then (requestFrame) has the next tick and every one again. The next tick's, as any frame asked for, in
+// a run someone stands for (its frames are its steps', its recording's or its bench's) and where the frame asks for
+// it besides.
+void mb_host_frames_paced(double hz) {
+  NSScreen *screen = the_view.window.screen ?: NSScreen.mainScreen;
+  double top = screen ? (double)screen.maximumFramesPerSecond : 0;
+  double every = top > 0 && hz > 0 ? round(top / hz) : 1;
+  if (looked_at_run() || building_for < 0 || the_view.wantFrame || every <= 1) {
+    mb_host_request_frame();
+    return;
+  }
+  paced_hz = top / every;
+  // (half a display frame short of it: the first tick at it, whatever its time's rounding)
+  mb_host_wake_after((every - 0.5) * 1000.0 / top);
 }
 
 #include "groups.h"

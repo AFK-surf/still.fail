@@ -29,6 +29,8 @@ extern "C" fn ffi_platform() -> Int = "mb_host_platform"
 
 extern "C" fn ffi_request_frame() -> Unit = "mb_host_request_frame"
 
+extern "C" fn ffi_frames_paced(hz : Double) -> Unit = "mb_host_frames_paced"
+
 extern "C" fn ffi_wake_after(ms : Double) -> Unit = "mb_host_wake_after"
 
 #borrow(out)
@@ -548,6 +550,12 @@ fn platform() -> Int {
 ///|
 fn request_frame() -> Unit {
   ffi_request_frame()
+}
+
+///|
+/// The frame asked for what moves on by the clock needs only `hz` frames a second (@hostapi.frames_paced).
+fn frames_paced(hz : Double) -> Unit {
+  ffi_frames_paced(hz)
 }
 
 ///|

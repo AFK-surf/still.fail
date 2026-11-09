@@ -93,6 +93,7 @@ fn reset_globals() -> Unit {
   the_ctx.val.let_go()
   the_ctx.val = Ctx::new()
   looks_reset()
+  pace_none()
   notices_reset()
   hand_reset()
   corners_hold.val = true
@@ -325,6 +326,7 @@ pub fn Tester::new(
     scale,
     wants: false,
     frames_on: 0,
+    paced: 0.0,
     wake: -1.0,
     instances: 0,
     ime_active: false,

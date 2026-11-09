@@ -942,6 +942,12 @@ int32_t mb_host_platform(void) { return 5; }
 
 void mb_host_request_frame(void) { schedule(); }
 
+// A frame for what moves on by the clock that needs fewer (@hostapi.frames_paced): not paced here, the next drawn.
+void mb_host_frames_paced(double hz) {
+  (void)hz;
+  mb_host_request_frame();
+}
+
 // (the loop waits no longer than it: run_loop)
 void mb_host_wake_after(double ms) {
   double t = mb_now_ms() + ms;

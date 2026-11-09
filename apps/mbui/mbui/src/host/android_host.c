@@ -41,7 +41,7 @@ static jclass host_cls, text_cls, images_cls, login_cls, picks_cls, views_cls, p
 static jmethodID m_reduce_motion;
 static jmethodID m_text_menu;
 static jmethodID m_posted;
-static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m_bench,
+static jmethodID m_request_frame, m_wake_after, m_frames_paced, m_set_ime, m_clipboard, m_log, m_bench,
     m_exit, m_metrics, m_shape, m_glyph, m_glyph_put, m_generation, m_img_load, m_img_free, m_img_reload, m_bl_start, m_bl_port,
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes, m_pk_info,
     m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key, m_v_open, m_v_place, m_v_close,
@@ -91,6 +91,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_request_frame = (*env)->GetStaticMethodID(env, host_cls, "requestFrame", "()V");
   m_posted = (*env)->GetStaticMethodID(env, host_cls, "posted", "()V");
   m_wake_after = (*env)->GetStaticMethodID(env, host_cls, "wakeAfter", "(D)V");
+  m_frames_paced = (*env)->GetStaticMethodID(env, host_cls, "framesPaced", "(D)Z");
   m_set_ime = (*env)->GetStaticMethodID(env, host_cls, "setIme", "(ZDDDDLjava/lang/String;II)V");
   m_clipboard = (*env)->GetStaticMethodID(env, host_cls, "clipboardSet", "(Ljava/lang/String;)V");
   m_text_menu = (*env)->GetStaticMethodID(env, host_cls, "textMenu", "(ZDDDDI)V");
@@ -747,6 +748,16 @@ moonbit_string_t mb_host_update_state(void) {
 void mb_host_wake_after(double ms) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_wake_after, ms);
+}
+
+// A frame for what moves on by the clock that needs only `hz` frames a second (@hostapi.frames_paced, said in the
+// frame): MBView's to wake for and to say of the display (Host.framesPaced); the next vsync's, as any frame asked for,
+// where it paces none (the display's rate no more than it), in a run to a declared moment (its frames are its clock's:
+// MBView's shotFrame) and where the frame asks for one besides.
+void mb_host_frames_paced(double hz) {
+  JNIEnv *env = env_();
+  if (own_clock || want_frame || !(*env)->CallStaticBooleanMethod(env, host_cls, m_frames_paced, hz))
+    mb_host_request_frame();
 }
 
 void mb_host_font_metrics(double size, int32_t weight, int32_t style, double *out) {

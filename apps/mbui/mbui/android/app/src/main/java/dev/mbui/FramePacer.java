@@ -197,19 +197,25 @@ final class FramePacer {
 
     /**
      * The app's frame ended (drawing thread): whether it asks for another ({@code more}, what it said; {@code later}, a
-     * back said for a later vsync), and whether it followed the one before (Begun's): the rate said, the next asked for.
+     * back said for a later vsync), whether it followed the one before (Begun's), and the rate what moves on by the
+     * clock alone needs where the frame said one ({@code paced}, MBView.framesPaced: its next woken for, not asked for
+     * here; 0 none): the rate said, the next asked for. Paced, what moves is said at its rate, the display free to
+     * refresh as slowly; anything else moving, at the display's highest.
      */
-    void ended(boolean more, boolean later, boolean following) {
+    void ended(boolean more, boolean later, boolean following, float paced) {
         askedAtEnd = more || later;
         drawn++;
-        if (more || later || following) {
+        if (paced > 0 && !more && !later && !touching && !p.typing()) {
+            moved = drawn;
+            sayRate(paced);
+        } else if (more || later || following) {
             moved = drawn;
             sayRate(true);
         } else if (p.typing()) {
             // (typing: what it draws comes as keys are struck, its fingers on the keyboard's window, not on this surface
             // and nothing of the app's own moving; each key's frame at the display's highest, 2026-11-05)
             sayRate(true);
-        } else if (rateSaid) stillAfter(moved);
+        } else if (rateSaid != 0) stillAfter(moved);
         if (more || later) wantFrame();
         else ahead.set(false);
     }
@@ -230,8 +236,8 @@ final class FramePacer {
      * own views' get. Said only while it moves: a rate said keeps the display at it for as long as the surface shows,
      * still or not.
      */
-    /** Whether this surface says the display's highest rate now (drawing thread; a new surface says nothing). */
-    private boolean rateSaid;
+    /** The rate this surface says of the display now (drawing thread; 0 none: a new surface says nothing). */
+    private float rateSaid;
     /** The app's frames drawn (drawing thread): one drawn since a frame that asked for none is told by it. */
     private int drawn;
     /** The last frame drawn that moved something (drawing thread): a motion, the hand moving what it holds. */
@@ -239,17 +245,21 @@ final class FramePacer {
     /** The motion whose end is being counted down to saying no rate (drawing thread; -1 none). */
     private int stillFrom = -1;
 
-    /** Whether the surface says the display's highest rate now (drawing thread). */
-    boolean rateSaid() {
+    /** The rate the surface says of the display now (drawing thread; 0 none). */
+    float rateSaid() {
         return rateSaid;
     }
 
     /** The surface says the display's highest rate, or nothing (drawing thread). */
     void sayRate(boolean on) {
-        if (on == rateSaid) return;
-        float rate = on ? topRate : 0;
-        if (on && rate <= 0) return;
-        if (p.setRate(rate)) rateSaid = on;
+        if (on && topRate <= 0) return;
+        sayRate(on ? topRate : 0);
+    }
+
+    /** The surface says the display's rate {@code rate} (drawing thread; 0 nothing). */
+    private void sayRate(float rate) {
+        if (rate == rateSaid) return;
+        if (p.setRate(rate)) rateSaid = rate;
     }
 
     /**
@@ -268,7 +278,7 @@ final class FramePacer {
 
     private void stillFor(int at, int left) {
         p.atNextVsyncOnDrawing(() -> {
-            if (moved != at || appWanted.get() || touching || p.typing() || !rateSaid) {
+            if (moved != at || appWanted.get() || touching || p.typing() || rateSaid == 0) {
                 if (stillFrom == at) stillFrom = -1;
                 return;
             }
@@ -284,6 +294,6 @@ final class FramePacer {
     /** The field's typing begun or ended (drawing thread): the rate said or let go from now. */
     void typingChanged() {
         if (p.typing()) sayRate(true);
-        else if (rateSaid) stillAfter(moved);
+        else if (rateSaid != 0) stillAfter(moved);
     }
 }
