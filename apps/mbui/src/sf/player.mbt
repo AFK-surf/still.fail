@@ -1035,89 +1035,80 @@ fn desk_player(
   let z = v.zoom
   let (room_top, room_foot) = player_room(c.width)
   p.near(!finger && py >= 0.0 && (py < room_top || py >= c.height - room_foot))
-  // the keys (see the file's head), once it is up
+  // the keys (see the file's head), once it is up: the keymap's player.* (player_bindings), done at their key's moment
   if !flying {
-    let char = fn(ch : Char) { c.key_pressed(@ui.key_of_char(ch)) }
-    let shifted = fn(ch : Char) {
-      c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key) || c.key_pressed(@ui.key_of_char(ch.to_ascii_uppercase()))
+    c.key_context("Player")
+    let on = fn(action : String, f : () -> Unit) {
+      c.on_action("player." + action, fn() {
+        f()
+        true
+      })
     }
-    if c.key_pressed(@ui.key_space) || char('k') {
+    on("play", fn() {
       p.play_pause()
       p.wake()
-    }
-    if char(',') {
-      step_frame(c, p, fr, -1)
-    }
-    if char('.') {
-      step_frame(c, p, fr, 1)
-    }
-    if c.key_pressed(@ui.key_code_left) {
+    })
+    on("frame_back", fn() { step_frame(c, p, fr, -1) })
+    on("frame_on", fn() { step_frame(c, p, fr, 1) })
+    on("back", fn() {
       if playing {
         p.seek_by(-p.nudge_ms())
         p.wake()
       } else {
         step_frame(c, p, fr, -1)
       }
-    }
-    if c.key_pressed(@ui.key_code_right) {
+    })
+    on("on", fn() {
       if playing {
         p.seek_by(p.nudge_ms())
         p.wake()
       } else {
         step_frame(c, p, fr, 1)
       }
-    }
-    if char('j') {
+    })
+    on("jump_back", fn() {
       p.seek_by(-p.nudge_ms())
       p.wake()
-    }
-    if char('l') {
+    })
+    on("jump_on", fn() {
       p.seek_by(p.nudge_ms())
       p.wake()
-    }
-    if c.key_pressed(@ui.key_code_up) || c.key_pressed(@ui.key_code_down) {
+    })
+    let loud = fn(by : Double) {
       let (volume, _) = p.volume()
-      p.set_volume(volume + (if c.key_pressed(@ui.key_code_up) { player_volume_key } else { -player_volume_key }))
+      p.set_volume(volume + by)
       p.wake()
     }
-    if char('m') {
+    on("louder", fn() { loud(player_volume_key) })
+    on("quieter", fn() { loud(-player_volume_key) })
+    on("mute", fn() {
       p.toggle_mute()
       p.wake()
+    })
+    if picture && mac {
+      on("full", full)
     }
-    if char('f') && picture && mac {
-      full()
+    if p.subtitle().0 {
+      on("subtitle", fn() {
+        p.toggle_subtitle()
+        p.wake()
+      })
     }
-    if char('c') && p.subtitle().0 {
-      p.toggle_subtitle()
-      p.wake()
+    match next {
+      Some(other) => on("next", fn() { go(other) })
+      None => ()
     }
-    if shifted('n') {
-      match next {
-        Some(other) => go(other)
-        None => ()
-      }
-    }
-    if shifted('p') {
-      match prev {
-        Some(other) => go(other)
-        None => ()
-      }
+    match prev {
+      Some(other) => on("prev", fn() { go(other) })
+      None => ()
     }
     if picture && z.nw > 0.0 {
-      let zoom_key = fn(ch : Char) {
-        c.key_pressed(@ui.key_of_char(ch)) || c.key_pressed(@ui.key_of_char(ch), mods=@ui.mod_shift_key)
-      }
-      if zoom_key('+') || zoom_key('=') {
-        z.zoom_to(z.scale * player_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-      } else if zoom_key('-') || zoom_key('_') {
-        z.zoom_to(z.scale / player_zoom_step, z.bw / 2.0, z.bh / 2.0, true)
-      } else if char('0') {
-        z.reset()
-      } else if char('1') {
-        z.zoom_to(player_whole, z.bw / 2.0, z.bh / 2.0, true)
-      }
+      on("zoom_in", fn() { z.zoom_to(z.scale * player_zoom_step, z.bw / 2.0, z.bh / 2.0, true) })
+      on("zoom_out", fn() { z.zoom_to(z.scale / player_zoom_step, z.bw / 2.0, z.bh / 2.0, true) })
+      on("zoom_reset", fn() { z.reset() })
+      on("zoom_whole", fn() { z.zoom_to(player_whole, z.bw / 2.0, z.bh / 2.0, true) })
     }
-    if c.key_pressed(@ui.key_escape) {
+    on("escape", fn() {
       if v.rates {
         v.rates = false
       } else if listing {
@@ -1125,7 +1116,7 @@ fn desk_player(
       } else {
         desk_leave(c, v, on_back)
       }
-    }
+    })
   }
   c.box(style=desk_play_ground.then(@ui.style(bg=Data(if flying { no_ground } else { ink.stage }))), fn() {
     // the picture, in the window less the list beside it, as a phone's (Media::stage): a click or a finger's tap shows
@@ -2509,3 +2500,42 @@ fn two_digits(n : Int64) -> String {
   }
 }
 
+
+///|
+/// The player's keys (the file's head), the keymap's own, never changed: where a player is up (`Player`), not with the
+/// cursor in a field. Each its action, `player.` and what it does (desk_player's): Space and K play or pause, , and .
+/// step a frame, ← → step or jump, J L jump, ↑ ↓ the sound, M mutes, F fills the screen, C the subtitle, ⇧N ⇧P the
+/// next and the one before, + = − _ 0 1 zoom, Escape closes what is open over it, or it.
+pub fn player_bindings() -> Array[@view.Binding] {
+  let when : @view.KeyWhen = All([In("Player"), Not(In("Field"))])
+  let ch = fn(c : Char) { @ui.key_of_char(c) }
+  let shift = @ui.mod_shift_key
+  let keys : Array[(String, Array[(Int, Int)])] = [
+    ("play", [(@ui.key_space, 0), (ch('k'), 0)]),
+    ("frame_back", [(ch(','), 0)]),
+    ("frame_on", [(ch('.'), 0)]),
+    ("back", [(@ui.key_code_left, 0)]),
+    ("on", [(@ui.key_code_right, 0)]),
+    ("jump_back", [(ch('j'), 0)]),
+    ("jump_on", [(ch('l'), 0)]),
+    ("louder", [(@ui.key_code_up, 0)]),
+    ("quieter", [(@ui.key_code_down, 0)]),
+    ("mute", [(ch('m'), 0)]),
+    ("full", [(ch('f'), 0)]),
+    ("subtitle", [(ch('c'), 0)]),
+    ("next", [(ch('n'), shift), (ch('N'), 0)]),
+    ("prev", [(ch('p'), shift), (ch('P'), 0)]),
+    ("zoom_in", [(ch('+'), 0), (ch('+'), shift), (ch('='), 0), (ch('='), shift)]),
+    ("zoom_out", [(ch('-'), 0), (ch('-'), shift), (ch('_'), 0), (ch('_'), shift)]),
+    ("zoom_reset", [(ch('0'), 0)]),
+    ("zoom_whole", [(ch('1'), 0)]),
+    ("escape", [(@ui.key_escape, 0)]),
+  ]
+  let out : Array[@view.Binding] = []
+  for k in keys {
+    for s in k.1 {
+      out.push({ keys: [{ code: s.0, mods: s.1 }], action: "player." + k.0, when })
+    }
+  }
+  out
+}

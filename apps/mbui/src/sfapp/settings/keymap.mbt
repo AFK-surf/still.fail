@@ -153,7 +153,8 @@ pub fn binding_of(code : Int, mods : Int) -> String? {
 /// its group (anywhere; `Chat` in a chat; `Files` in a folder of the files) and with the cursor in a field by its
 /// `typing` (always; never: `!Field`; with the field empty: `!Field || FieldEmpty`); then the app's own, never changed
 /// (Escape the frame's `frame.escape`, a mouse's forward button `nav.forward`, ⌃1 … ⌃9 on a Mac and Alt elsewhere
-/// `workspace.1` … `workspace.9`). None while the 快捷键 page records new keys: the next key is its.
+/// `workspace.1` … `workspace.9`, a player's keys where one is up: @sf.player_bindings). None while the 快捷键 page
+/// records new keys: the next key is its.
 pub fn keymap_of(prefs : Json?) -> @view.Keymap {
   if keys_recording.get() != "" {
     return @view.Keymap::new([])
@@ -170,6 +171,8 @@ pub fn keymap_of(prefs : Json?) -> @view.Keymap {
       when: Always,
     })
   }
+  // (a player's keys where one is up: its own, the library's, sf/player.mbt)
+  bindings.append(@sf.player_bindings())
   for a in key_actions(prefs) {
     let action = text(Some(a), "action")
     let group : @view.KeyWhen = match text(Some(a), "group") {
