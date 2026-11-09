@@ -419,6 +419,11 @@ struct Node {
   /// never pressed nor held
   mut points : Bool
   mut bar_near_cell : @signals.Signal[Bool]?
+  /// whether it takes a finger or the pointer some way (pressed, held, hosting the old view, a top row, pointed at,
+  /// taking holds over: Tree::inputs_own_said), and how many of what it holds, it with them, do: what finds what
+  /// takes a point passes over what holds none (Tree::each_drawn_in_order's `inputs_only`)
+  mut inputs_own : Bool
+  mut inputs_in : Int
   /// what brings a part of what it holds into its sight (View::shows): given where that is in its own terms (its top,
   /// its foot), how far it moved what it holds to
   mut shows : ((Double, Double) -> Double)?
@@ -1259,6 +1264,8 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
       n.bar_across = false
       n.points = false
       n.bar_near_cell = None
+      n.inputs_own = false
+      n.inputs_in = 0
       n.shows = None
       n.shows_across = false
       n.claims = None
@@ -1363,6 +1370,8 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
         bar_across: false,
         points: false,
         bar_near_cell: None,
+        inputs_own: false,
+        inputs_in: 0,
         shows: None,
         shows_across: false,
         claims: None,
@@ -3015,6 +3024,7 @@ pub fn View::claims(
 ) -> View {
   guard self.live() is Some(n) else { return self }
   n.claims = Some(f)
+  self.tree.inputs_own_said(self.at)
   n.claims_from = from
   n.claims_scroll = scrolls
   n.claims_said = n.claims_said + 1
@@ -3061,7 +3071,7 @@ pub fn Tree::claimers_at(
             found.val = Some(c.id)
           }
         }
-      })
+      }, inputs_only=true)
       found.val
     }
   }
@@ -5082,6 +5092,7 @@ fn Tree::asked_at(
 pub fn View::on_press(self : View, f : () -> Unit) -> View {
   guard self.live() is Some(n) else { return self }
   n.on_press = Some(f)
+  self.tree.inputs_own_said(self.at)
   self.tree.said_marked(self.at, words=false, state=true)
   self.tree.hits = self.tree.hits + 1
   self
@@ -5095,6 +5106,7 @@ pub fn View::on_press(self : View, f : () -> Unit) -> View {
 pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
   guard self.live() is Some(n) else { return self }
   n.top_row = true
+  self.tree.inputs_own_said(self.at)
   self.tree.hits = self.tree.hits + 1
   match n.props.get(Prop::MovesWindow.ord()) {
     Some(stop) => {
@@ -5176,6 +5188,7 @@ pub fn View::on_drag(self : View, f : (Drag) -> Unit, fingers? : Int = 1) -> Vie
     _ => ()
   }
   n.on_drag = Some(f)
+  self.tree.inputs_own_said(self.at)
   self.tree.hits = self.tree.hits + 1
   self
 }
@@ -5969,6 +5982,11 @@ fn View::let_go(self : View) -> Unit {
   n.on_drag = None
   n.drag_said = n.drag_said + 1
   n.takes = None
+  // (what holds it holds one taking a point the fewer: what it held let go of already, each so)
+  if n.inputs_own {
+    n.inputs_own = false
+    self.tree.inputs_count(self.at, -1)
+  }
   // (held: let go of with it, nothing more told it, nothing of it handed to what is made in its place)
   match self.tree.held {
     Some(h) if h.at == self.at && h.gen == self.gen => self.tree.held_to(None)
@@ -6168,6 +6186,10 @@ fn View::park(self : View, v : View) -> () -> Unit {
     Some(i) => n.kids.remove(i) |> ignore
     None => ()
   }
+  // (what takes a point in it held by what held it no more)
+  if m.inputs_in != 0 {
+    self.tree.inputs_count(self.at, -m.inputs_in)
+  }
   m.parent = -1
   self.tree.touched(self.at)
   self.tree.order_marked_in(self.at)
@@ -6215,6 +6237,9 @@ fn View::take_in(self : View, v : View) -> Unit {
   guard self.live() is Some(n) && v.live() is Some(m) && m.parent < 0 else { return }
   m.parent = self.at
   n.kids.push(v.at)
+  if m.inputs_in != 0 {
+    self.tree.inputs_count(self.at, m.inputs_in)
+  }
   self.box_appended(v.at)
   if m.size_cell is Some(_) {
     self.tree.sizes_due = true
@@ -8299,11 +8324,20 @@ pub fn Tree::each_drawn(self : Tree, f : (Content, Double, Double, Double) -> Un
 ///|
 /// The scene gone through as each_drawn goes through it, `f` given besides how big each is drawn (its own scale and its
 /// holders', View::scale: what it draws as big about where the window draws its origin).
-pub fn Tree::each_drawn_scaled(self : Tree, f : (Content, Double, Double, Double, Double) -> Unit) -> Unit {
-  self.each_drawn_in_order(fn(_, c, x, y, a, s, _, _) {
-    f(c, x, y, a, s)
-    false
-  })
+/// `inputs_only`: what holds nothing that takes a finger or the pointer some way passed over whole (Node's `inputs_in`),
+/// for what finds what takes a point.
+pub fn Tree::each_drawn_scaled(
+  self : Tree,
+  f : (Content, Double, Double, Double, Double) -> Unit,
+  inputs_only? : Bool = false,
+) -> Unit {
+  self.each_drawn_in_order(
+    fn(_, c, x, y, a, s, _, _) {
+      f(c, x, y, a, s)
+      false
+    },
+    inputs_only~,
+  )
 }
 
 ///|
@@ -8348,6 +8382,7 @@ fn Tree::each_drawn_in_order(
   drawing? : (Content) -> Bool,
   offsets? : (Content) -> Bool,
   drawing_rev? : Int = -1,
+  inputs_only? : Bool = false,
 ) -> Unit {
   // (where each in the order is drawn, how opaque, how big, and where it would be were nothing grown, shrunk or drawn
   // off: kept for the next walk, one for each walk inside another's `f`; each place written
@@ -8403,7 +8438,7 @@ fn Tree::each_drawn_in_order(
     let n = self.nodes.unsafe_get(self.order.unsafe_get(i))
     let h = self.order_holder.unsafe_get(i)
     // (left out: it and all it holds, the order's run of them passed over at once)
-    if n.out {
+    if n.out || (inputs_only && n.inputs_in == 0) {
       i = self.order_end.unsafe_get(i)
       continue
     }
@@ -8886,6 +8921,7 @@ pub fn View::hosted(self : View, make? : (View) -> Unit = fn(v) { v.grow(Is(1.0)
   let tree = self.tree
   self.box(fn(v) {
     tree.nodes[v.at].hosted = true
+    tree.inputs_own_said(v.at)
     tree.said_marked(v.at, kids=true)
     tree.hosting = v.at
     make(v)
@@ -9025,6 +9061,34 @@ pub fn Tree::moves_window(self : Tree, id : NodeId) -> Bool {
 }
 
 ///|
+/// Whether node `at` takes a finger or the pointer some way, told anew as one of those it says changes: what holds it
+/// counts it among those it holds (Node's `inputs_in`).
+fn Tree::inputs_own_said(self : Tree, at : Int) -> Unit {
+  let n = self.nodes[at]
+  let own = n.on_press is Some(_) ||
+    n.on_drag is Some(_) ||
+    n.hosted ||
+    n.top_row ||
+    n.points ||
+    n.claims is Some(_)
+  if own != n.inputs_own {
+    n.inputs_own = own
+    self.inputs_count(at, if own { 1 } else { -1 })
+  }
+}
+
+///|
+/// Node `at` and each that holds it counting `d` more that take a point among what they hold.
+fn Tree::inputs_count(self : Tree, at : Int, d : Int) -> Unit {
+  let mut i = at
+  while i >= 0 {
+    let n = self.nodes[i]
+    n.inputs_in = n.inputs_in + d
+    i = n.parent
+  }
+}
+
+///|
 /// What a press at (x, y) is for: the topmost node drawn there (by the order drawn, where the scene composed draws it:
 /// the same places as what is drawn) that is held (View::on_drag), does something when pressed or hosts the old view.
 pub fn Tree::target_at(self : Tree, x : Double, y : Double) -> Target {
@@ -9085,7 +9149,7 @@ fn Tree::target_in(self : Tree, x : Double, y : Double, tracked~ : Bool) -> Targ
         found.push(TopRow(c.id))
       }
     }
-  })
+  }, inputs_only=true)
   self.chosen(found, x, y)
 }
 
@@ -9127,7 +9191,7 @@ fn Tree::points_over(self : Tree, x : Double, y : Double) -> NodeId? {
         found.val = None
       }
     }
-  })
+  }, inputs_only=true)
   found.val
 }
 
