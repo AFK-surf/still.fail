@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [94512b59f](https://github.com/AFK-surf/still.fail/commit/94512b59f5983e916656a0f5e654351c64652e30) mbui: a panel whose body and foot are nodes has no | 1.73 | 2.31 | 9.63 | 28.17 | 33.65 | 25.16 | 46.1 | 92.96 | 169.65 |
 | [8cc3a8001](https://github.com/AFK-surf/still.fail/commit/8cc3a8001baf1ecca1e6652ebdeea5c88c38b085) mbui: sizes_steady and rows_steady take words made | 1.73 | 2.31 | 9.63 | 28.16 | 33.63 | 25.16 | 46.08 | 93.31 | 125.58 |
 | [89b5f3891](https://github.com/AFK-surf/still.fail/commit/89b5f3891b53ddf4476c1edfffedf38947420653) mbui: what show, pick and each make or let go down | 1.73 | 2.31 | 9.63 | 28.16 | 33.63 | 25.16 | 46.08 | 93.24 | 124.1 |
 | [cbcff387d](https://github.com/AFK-surf/still.fail/commit/cbcff387d28d7225739ad0383db1da794fd7bfd7) mbui: a list window tells only the rows that come  | 1.73 | 2.31 | 9.61 | 28.14 | 33.49 | 25.12 | 45.93 | 92.91 | 147.16 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [0757499ca](https://github.com/AFK-surf/still.fail/commit/0757499ca5381dcc1f55f0b4a5910135f160bf8c) mbui: the order and what takes input worked out wh | 1.72 | 2.29 | 9.53 | 28.04 | 33.23 | 25.04 | 45.73 | 93.06 | 156.81 |
 | [56601c3b1](https://github.com/AFK-surf/still.fail/commit/56601c3b119a46306a0fa0623792c34e6a9fe274) Locks through the stations, not the cloud: read, t | 1.72 | 2.29 | 9.53 | 28.04 | 33.23 | 25.04 | 45.73 | 93.06 | 156.81 |
 | [b443cafbd](https://github.com/AFK-surf/still.fail/commit/b443cafbda59c37823d84d081e780878e8617b6b) mbui: no pairs or iterators made for each node pla | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
-| [90e201981](https://github.com/AFK-surf/still.fail/commit/90e20198115d774d5dc5412459e8e09b85a386f1) app: what shares a chat in one 分享… of its menu (#5 | 1.72 | 2.29 | 9.53 | 28.02 | 33.23 | 25.03 | 45.73 | 93.06 | 156.81 |
