@@ -264,7 +264,13 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
           c_top[i] = dmax(c_top[i], top)
           c_bot[i] = dmin(c_bot[i], top + ya[p] * pn.fh)
         }
-        if pn.kind == kind_list || pn.kind == kind_scroll || pn.scroller != 0 || pn.tree_scrolls {
+        if pn.tree_rows {
+          // (a row of a page's list of the window's tree: its place the list's (rows_steady.mbt, Scroll::grew_above),
+          // what is in it measured from its top)
+          row_at[i] = ya[i] * n.y + yb[i]
+          in_row[i] = true
+          set_out[i] = -1.0
+        } else if pn.kind == kind_list || pn.kind == kind_scroll || pn.scroller != 0 || pn.tree_scrolls {
           // (less how far its scroll was put for what came out another height over what shows: what is under that moved
           // down in it as far, held where it was)
           row_at[i] = ya[i] * (n.y + pn.tree_corrected) + yb[i]

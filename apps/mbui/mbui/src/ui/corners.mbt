@@ -291,6 +291,7 @@ fn[T] Ctx::with_tree_nodes(self : Ctx, f : () -> T, laid? : Bool = false) -> T {
     n.opacity = d.alpha
     n.tree_scrolls = tree.scrolls_now(d.id)
     n.tree_corrected = tree.scroll_corrected(d.id)
+    n.tree_rows = tree.holds_rows(d.id)
     n.parent = parent
     if presses {
       n.hit = true
