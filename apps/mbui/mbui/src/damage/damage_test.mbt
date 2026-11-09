@@ -302,6 +302,27 @@ test "a header compared as itself, its room passed over; moved, where its group 
 }
 
 ///|
+test "a group holding a header of another reaches as far as that one does, moved where it stands in it" {
+  let d = @damage.Damage::new()
+  d.group_set(7, frame([(100.0, 50.0, 20.0, 10.0, 0), (100.0, 70.0, 20.0, 10.0, 0)]), 2)
+  // (group 8: an instance, and group 7's header 100 down in one place of it, standing for its two)
+  let inner = FixedArray::make(2 * 60, 0.0)
+  frame([(10.0, 10.0, 10.0, 10.0, 0)]).blit_to(inner, len=60)
+  inner[60 + 1] = 100.0
+  inner[60 + 5] = 13.0
+  inner[60 + 12] = 7.0
+  inner[60 + 14] = 2.0
+  d.group_set(8, inner, 2)
+  let next_h = fn(a : FixedArray[Double]) {
+    d.next(a, a.length() / 60, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true)
+  }
+  // (its header standing for the three it draws out to)
+  ignore(next_h(headed(8, 3, 0.0, 3.0)))
+  // (moved 40 down: from its own instance's top to group 7's foot where it stands in it, where it was and is)
+  inspect(next_h(headed(8, 3, 40.0, 3.0)), content="[(8, 8, 114, 214)]")
+}
+
+///|
 test "a frame with only its headers moved: those compared alone, the same parts as the whole frame compared; else none" {
   let whole = @damage.Damage::new()
   let alone = @damage.Damage::new()

@@ -63,6 +63,10 @@ priv struct RideKept {
   /// its instances as the host keeps them (@hostapi.group_set), drawn again by a header in their place (ride_head);
   /// -1, copied each time
   group : Int
+  /// whether its instances hold headers (a list's rows kept: ListRiding), each in one place of them, drawn out in its
+  /// turn (ride_put_out); how many it draws out to
+  heads : Bool
+  out : Int
   /// a list drawn whole as one (ListRiding) with what is drawn anew each time it is drawn in it (a picture, one not seen
   /// asked for): drawn again only by going through it
   anew : Bool
@@ -277,14 +281,76 @@ fn Ctx::flat_from(self : Ctx, i0 : Int) -> Unit {
       break
     }
     ride_spans.pop() |> ignore
-    let s = self.inst
-    let b = at * inst_size
-    let id = s[b + 12].to_int()
+    ride_draw_out(self.inst, at)
+  }
+}
+
+///|
+/// The header at instance `at` of `s` drawn out in its place, its group's instances there, as the host draws them
+/// (groups.h's mb_group_out).
+fn ride_draw_out(s : FixedArray[Double], at : Int) -> Unit {
+  let b = at * inst_size
+  let id = s[b + 12].to_int()
+  guard ride_groups.get(id) is Some(k) else { abort("flat_from: group \{id} let go") }
+  if k.heads {
+    ride_put_out(k, s, at, s[b], s[b + 1], s[b + 15], s[b + 16], s[b + 17], s[b + 18], s[b + 19]) |> ignore
+  } else {
     let first = s[b + 13].to_int()
     let n = s[b + 14].to_int()
-    guard ride_groups.get(id) is Some(k) else { abort("flat_from: group \{id} let go") }
     ride_put(k, first, n, s, at, s[b], s[b + 1], s[b + 15], s[b + 16], s[b + 17], s[b + 18], s[b + 19])
   }
+}
+
+///|
+/// List kept `k`, whose instances hold headers (its rows kept, each in one place of it), written out whole into `s`
+/// from instance `at`, moved by (dx, dy), its shapes' pieces `seg_by` on, cut to (h0, h1, h2, h3) as well: each header
+/// drawn out where it comes, moved with it and cut so, as many as it says (groups.h's mb_group_out). How many it wrote.
+fn ride_put_out(
+  k : RideKept,
+  s : FixedArray[Double],
+  at : Int,
+  dx : Double,
+  dy : Double,
+  seg_by : Double,
+  h0 : Double,
+  h1 : Double,
+  h2 : Double,
+  h3 : Double,
+) -> Int {
+  let a = k.inst
+  let m = a.length() / inst_size
+  let mut q = at
+  let mut i = 0
+  while i < m {
+    let b = i * inst_size
+    if a[b + 5] != 13.0 {
+      // (those up to the next header written at once)
+      let mut j = i + 1
+      while j < m && a[j * inst_size + 5] != 13.0 {
+        j = j + 1
+      }
+      ride_put(k, i, j - i, s, q, dx, dy, seg_by, h0, h1, h2, h3)
+      q = q + j - i
+      i = j
+      continue
+    }
+    guard ride_groups.get(a[b + 12].to_int()) is Some(r) else { abort("ride_put_out: group let go") }
+    // (its clip this one's where it says none, else as much of both)
+    let none = a[b + 16] == 0.0 && a[b + 17] == 0.0 && a[b + 18] == 0.0 && a[b + 19] == 0.0
+    let cut = !(h0 == 0.0 && h1 == 0.0 && h2 == 0.0 && h3 == 0.0)
+    let (c0, c1, c2, c3) = if !cut {
+      (a[b + 16], a[b + 17], a[b + 18], a[b + 19])
+    } else if none {
+      (h0, h1, h2, h3)
+    } else {
+      (dmax(a[b + 16], h0), dmax(a[b + 17], h1), dmin(a[b + 18], h2), dmin(a[b + 19], h3))
+    }
+    let n = a[b + 14].to_int()
+    ride_put(r, a[b + 13].to_int(), n, s, q, a[b] + dx, a[b + 1] + dy, a[b + 15] + seg_by, c0, c1, c2, c3)
+    q = q + n
+    i = i + 1
+  }
+  q - at
 }
 
 ///|
@@ -511,13 +577,10 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
       )
     }
   }
-  let segs = []
-  for j in (r.seg0 * 4)..<self.segs.length() {
-    segs.push(self.segs[j])
-  }
+  let segs = self.segs[r.seg0 * 4:].to_array()
   // (kept by the host where it keeps groups and nothing of them is worked on as the frame ends; in a list drawn whole
-  // as one, by that list's group, its rows' drawn out in it: ListRiding)
-  let group = if groups_on() && list_riding.val is None && ride_groupable(inst, n) {
+  // as one as well, its header in that list's group where it is drawn again: ListRiding)
+  let group = if groups_on() && ride_groupable(inst, n) {
     ride_groups_made.val = ride_groups_made.val + 1
     ride_groups_made.val
   } else {
@@ -548,6 +611,8 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
     nodes: r.nodes,
     kept: r.kept,
     group,
+    heads: false,
+    out: n,
     anew: false,
   }
   ride_keep(r.id, kept)
@@ -743,6 +808,8 @@ fn Ctx::ride_copy(self : Ctx, k : RideKept, i0 : Int, i1 : Int, dx : Double, dy 
   let at = self.ninst
   if k.group >= 0 && dr.mode == 0 && !shooting.val {
     self.ride_head(k.group, i0, n, at, dx, dy, seg_by)
+  } else if k.heads {
+    ride_put_out(k, self.inst, at, dx, dy, seg_by, 0.0, 0.0, 0.0, 0.0) |> ignore
   } else {
     ride_put(k, i0, n, self.inst, at, dx, dy, seg_by, 0.0, 0.0, 0.0, 0.0)
   }
@@ -1110,18 +1177,56 @@ fn Ctx::list_ride_end(self : Ctx) -> Unit {
     return
   }
   let e = l.clip
-  let inst = FixedArray::make(n * inst_size, 0.0)
-  self.inst.blit_to(inst, len=n * inst_size, src_offset=l.k0 * inst_size)
-  let moves = FixedArray::make(n, 0)
-  for i in 0..<n {
-    moves[i] = ride_moves(inst, i * inst_size, e)
+  // (its instances, each of its rows kept among them by a header (Ctx::ride_head) in one place, the room after it
+  // passed over: kept so by the host, drawn out whole by a header of it, n of them)
+  let src = self.inst
+  let mut m = 0
+  let mut heads = false
+  let mut q = 0
+  while q < n {
+    let b = (l.k0 + q) * inst_size
+    let c = if src[b + 5] == 13.0 {
+      heads = true
+      src[b + 14].to_int()
+    } else {
+      1
+    }
+    q = q + (if c < 1 { 1 } else { c })
+    m = m + 1
+  }
+  let inst = FixedArray::make(m * inst_size, 0.0)
+  let moves = FixedArray::make(m, 0)
+  let mut q = 0
+  let mut i = 0
+  while q < n {
+    let b = (l.k0 + q) * inst_size
+    if src[b + 5] == 13.0 {
+      src.blit_to(inst, len=inst_size, src_offset=b, dst_offset=i * inst_size)
+      let c = src[b + 14].to_int()
+      q = q + (if c < 1 { 1 } else { c })
+      i = i + 1
+    } else {
+      let mut r = q + 1
+      while r < n && src[(l.k0 + r) * inst_size + 5] != 13.0 {
+        r = r + 1
+      }
+      src.blit_to(inst, len=(r - q) * inst_size, src_offset=b, dst_offset=i * inst_size)
+      for j in i..<(i + r - q) {
+        moves[j] = ride_moves(inst, j * inst_size, e)
+      }
+      i = i + r - q
+      q = r
+    }
   }
   let (h0, h1, h2, h3) = (l.hc[0], l.hc[1], l.hc[2], l.hc[3])
-  if l.spoiled || !groups_on() || dr.mode != 0 || shooting.val || !ride_groupable(inst, n) {
+  if l.spoiled || !groups_on() || dr.mode != 0 || shooting.val || !ride_groupable(inst, m) {
     ride_let_go(l.id)
+    // (its rows' headers drawn out first, each instance then moved and cut in its place)
+    self.flat_from(l.k0)
     let s = self.inst
     for i in 0..<n {
-      list_put(s, (l.k0 + i) * inst_size, moves[i], l.dx, l.dy, h0, h1, h2, h3)
+      let b = (l.k0 + i) * inst_size
+      list_put(s, b, ride_moves(s, b, e), l.dx, l.dy, h0, h1, h2, h3)
     }
     offsets_flat.push(l.by)
     // (its column going on by itself (a fling, a wheel's notches easing in, what shows past an end going back): painted
@@ -1154,10 +1259,7 @@ fn Ctx::list_ride_end(self : Ctx) -> Unit {
       )
     }
   }
-  let segs = []
-  for j in (l.seg0 * 4)..<self.segs.length() {
-    segs.push(self.segs[j])
-  }
+  let segs = self.segs[l.seg0 * 4:].to_array()
   // (the group it was kept as before, where it drew the same: the host's kept, nothing told it again)
   let was = match ride_kept.get(l.id) {
     Some(k) if k.group >= 0 && k.moves == moves && k.inst == inst => Some(k.group)
@@ -1196,18 +1298,24 @@ fn Ctx::list_ride_end(self : Ctx) -> Unit {
     nodes: l.nodes,
     kept: l.kept,
     group,
+    heads,
+    out: n,
     anew: l.anew,
   }
   if was is Some(_) {
     ride_kept[l.id] = kept
   } else {
     ride_keep(l.id, kept)
-    presented.group_set(group, inst, n)
-    @hostapi.group_set(group, inst, FixedArray::makei(n, fn(i) { moves[i].to_double() }), n)
+    presented.group_set(group, inst, m)
+    @hostapi.group_set(group, inst, FixedArray::makei(m, fn(i) { moves[i].to_double() }), m)
   }
   ride_groups[group] = kept
   let s = self.inst
   ride_head_blank.blit_to(s, len=inst_size, dst_offset=l.k0 * inst_size)
+  // (its rows' headers in it stood for by its own now)
+  while ride_spans.length() > 0 && ride_spans[ride_spans.length() - 1] >= l.k0 {
+    ride_spans.pop() |> ignore
+  }
   ride_spans.push(l.k0)
   ride_heads.val = ride_heads.val + 1
   self.list_head_put(l.k0, group, 0, n, 0.0, 0.0, 0.0, l.id, l.s, l.dx, l.dy, l.hc)
@@ -1355,7 +1463,7 @@ fn Ctx::list_again(
 ) -> Unit {
   let seg_by = (self.segs.length() / 4 - k.seg0).to_double()
   self.segs_put(k.segs, k.pack)
-  let n = k.inst.length() / inst_size
+  let n = k.out
   let at = self.ninst
   self.ride_copy(k, 0, n, 0.0, 0.0, seg_by)
   self.list_head_put(at, k.group, 0, n, seg_by, bx, by, id, s, dx, dy, hc)
