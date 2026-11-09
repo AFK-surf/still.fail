@@ -11,6 +11,10 @@ struct Reader {
   mut writer : Int64?
   /// The connection reads are made on, made at the first.
   mut reading : @sql.Db?
+  /// The station's data directory, its paths' separator, and where transcripts were found (kept between reads).
+  data : String
+  sep : String
+  finder : @locate.Finder
 }
 
 ///|
@@ -73,7 +77,7 @@ fn Reader::answer(self : Reader, line : String) -> Json {
 ///|
 /// The reads moved here from read/worker.ts (read/pool.ts `MOVED`).
 fn moved(op : String) -> Bool {
-  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid"].contains(
+  ["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid", "widgetState", "transcriptFile"].contains(
     op,
   )
 }
@@ -103,6 +107,8 @@ fn Reader::read(self : Reader, op : String, args : Json) -> Json raise {
     "latestMessages" => @readops.latest_messages(db, args)
     "chatHistoryMessages" => @readops.chat_history_messages(db, args)
     "openedChatSaid" => @readops.opened_chat_said(db, args)
+    "widgetState" => @readops.widget_state(db, args)
+    "transcriptFile" => @readops.transcript_file(db, self.host, self.data, self.sep, self.finder, args)
     _ => fail("no read \{op}")
   }
 }
@@ -704,7 +710,8 @@ fn main {
       }))
     (None, _, Some(data)) =>
       @host.run(shell_dir=data + "/shell", host => {
-        let reader = { host, db: data + "/stillfail.db", writer: None, reading: None }
+        let sep = flag("--sep").unwrap_or("/")
+        let reader = { host, db: data + "/stillfail.db", writer: None, reading: None, data, sep, finder: @locate.Finder::new(host, sep) }
         let ready : Json = { "ready": { "loadedMs": 0, "openedMs": 0 } }
         host.say(ready.stringify())
         while host.line() is Some(line) {
