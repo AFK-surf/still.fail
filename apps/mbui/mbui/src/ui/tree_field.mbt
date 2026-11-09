@@ -59,6 +59,12 @@ priv struct TreeField {
 let tree_fields : Map[@view.NodeId, TreeField] = Map([])
 
 ///|
+/// How many times a field was put in tree_fields or taken out: what view_draws reads besides a node's content
+/// (@view.Tree::each_drawn_laid_or_past's `draws_rev`).
+// kept across runs: only counts
+let tree_fields_rev : Ref[Int] = Ref(0)
+
+///|
 /// The words by which a drawn node is found in tests and drives. An editor is found by its hint as an old editor's
 /// Node.text is; its glyphs are painted by the editor, so Drawn.words is deliberately empty.
 fn view_words_found(d : @view.Drawn) -> String {
@@ -161,6 +167,7 @@ pub fn field(
     // (the person's edit of its words told as it is made, EditorState::typed_told: what an old view's editor is told
     // as `on_change`)
     st.on_change = edited
+    tree_fields_rev.val = tree_fields_rev.val + 1
     tree_fields[id] = {
       st,
       font_size: size,
@@ -324,6 +331,7 @@ fn tree_field_gone(id : @view.NodeId) -> Unit {
   match tree_fields.get(id) {
     Some(tf) => {
       tree_fields.remove(id)
+      tree_fields_rev.val = tree_fields_rev.val + 1
       match tree_said_of.get(id) {
         Some(k) => {
           match g().editors.get(k) {

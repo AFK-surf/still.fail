@@ -1444,7 +1444,7 @@ fn Ctx::view_paint(self : Ctx, root : Int) -> Unit {
       rings.push((c.id, held, by))
     }
     false
-  }, draws=view_draws, offsets~)
+  }, draws=view_draws, offsets~, draws_rev=tree_fields_rev.val)
   match riding.val {
     Some(r) => {
       close_down(r.clips0, r.rings0)
@@ -5595,9 +5595,7 @@ fn Ctx::view_unseen(self : Ctx, c : @view.Content, s : Double) -> Unit {
 /// Whether the window's paint draws anything for content `c` of its own (Tree::each_drawn_laid_or_past: what holds
 /// nothing that does passed over): what the tree says it draws, its words set in runs or as drawn, a field of its own.
 fn view_draws(c : @view.Content) -> Bool {
-  c.draws() ||
-  !c.runs.is_empty() ||
-  c.words_drawn is Some(_) ||
+  c.draws_any ||
   (!tree_fields.is_empty() && tree_fields.contains(c.id))
 }
 
