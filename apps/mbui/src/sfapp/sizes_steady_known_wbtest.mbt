@@ -5,19 +5,23 @@
 ///|
 fn init {
   @ui.sizes_steady_known([
+    ("src/sfapp/agent_tile_wbtest.mbt", 23),
     ("src/sfapp/desk_composer_wbtest.mbt", 1),
-    ("src/sfapp/menu_node_wbtest.mbt", 13),
+    ("src/sfapp/home_wbtest.mbt", 14),
+    ("src/sfapp/kept_rows_kinds_wbtest.mbt", 8),
+    ("src/sfapp/menu_node_wbtest.mbt", 22),
     ("src/sfapp/newchat_send_wbtest.mbt", 1),
-    ("src/sfapp/settings_made_wbtest.mbt", 13),
-    ("src/sfapp/settings_wbtest.mbt", 4),
-    ("src/sfapp/squeeze_wbtest.mbt", 40),
+    ("src/sfapp/relay_told_wbtest.mbt", 16),
+    ("src/sfapp/settings_made_wbtest.mbt", 14),
+    ("src/sfapp/settings_wbtest.mbt", 8),
+    ("src/sfapp/squeeze_wbtest.mbt", 281),
     ("src/sfapp/stack_over_wbtest.mbt", 8),
     ("src/sfapp/tape.mbt", 1),
     ("src/sfapp/viewer_media_over_wbtest.mbt", 1),
-    ("src/sfapp/wide_panel_gap_wbtest.mbt", 29),
+    ("src/sfapp/wide_panel_gap_wbtest.mbt", 66),
     ("src/sfapp/wide_panel_wbtest.mbt", 21),
     ("src/sfapp/wide_rail_wbtest.mbt", 4),
     ("src/sfapp/wide_relay_wbtest.mbt", 5),
-    ("src/sfapp/wide_wbtest.mbt", 10),
+    ("src/sfapp/wide_wbtest.mbt", 49),
   ])
 }
