@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [9914a5e47](https://github.com/AFK-surf/still.fail/commit/9914a5e478c18956927f74cb53f0181a487b3456) mbui app: an agent's card opens each part as what  | 1.66 | 2.21 | 9.11 | 27.85 | 32.28 | 24.86 | 44.81 | 93.47 | 180.56 |
 | [7f38f3c7b](https://github.com/AFK-surf/still.fail/commit/7f38f3c7bde8f5cf1c6c8bc0c5758485e794a5a1) mbui: a screen reader told what changed, node by n | 1.66 | 2.21 | 9.11 | 27.84 | 32.27 | 24.86 | 44.79 | 92.75 | 128.54 |
 | [7274a2bc1](https://github.com/AFK-surf/still.fail/commit/7274a2bc142591a5462c6281ff237cc67289d45d) app: a history step's label goes on in the next li | 1.66 | 2.21 | 9.09 | 27.83 | 32.22 | 24.84 | 44.76 | 92.6 | 131.54 |
 | [4aa7dac25](https://github.com/AFK-surf/still.fail/commit/4aa7dac250cd34a8c99d421ec988e6486139e3e1) mbui: a list's rows of one kind taken by those tha | 1.66 | 2.21 | 9.09 | 27.83 | 32.22 | 24.84 | 44.76 | 92.88 | 166.44 |
