@@ -20,8 +20,16 @@ else
   npx --yes esbuild@$ESBUILD --minify "$MBUI_APP_MOD/out/web/demo.js" --outfile="$out/app.js" --log-level=error
 fi
 cp "$MBUI_DIR/web/host.js" "$out/host.js"
+# each script brotlied at the highest level beside it, what the web's Worker sends a browser that takes brotli
+# (cloud/src/web.ts packed): Cloudflare's own on the fly is a lower level's, app.js 2.26 MB against 1.66 (2026-11-09)
+for f in app.js host.js; do
+  node -e 'const z = require("node:zlib"), fs = require("node:fs"), [src, dst] = process.argv.slice(1), b = fs.readFileSync(src);
+fs.writeFileSync(dst, z.brotliCompressSync(b, { params: { [z.constants.BROTLI_PARAM_QUALITY]: 11,
+  [z.constants.BROTLI_PARAM_LGWIN]: 24, [z.constants.BROTLI_PARAM_SIZE_HINT]: b.length } }))' "$out/$f" "$out/$f.br"
+done
 # the files the app carries, fetched beside its script (tools/assets; the page's src/mbui/core.ts)
 rm -rf "$out/assets"
 bash "$D/assets" "$MBUI_APP_MOD" "$out/assets" > /dev/null
 ls -la "$out"
 gzip -9 -c "$out/app.js" | wc -c | xargs echo "app.js gzip bytes:"
+wc -c < "$out/app.js.br" | xargs echo "app.js brotli bytes (sent):"

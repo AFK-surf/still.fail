@@ -5,6 +5,7 @@ import { ulid } from "ulid";
 import { digest, randomSecret, type Tokens } from "../src/auth.ts";
 import type { MailMessage } from "../src/mail.ts";
 import { createRequire } from "node:module";
+import { brotliCompressSync } from "node:zlib";
 
 // workerd keeps a WebSocket's TCP connection open some ten seconds after a close the Worker began (Cloudflare does
 // not), and the ws client miniflare hands sockets through says "close" only once it ends: a test waiting on a close
@@ -380,6 +381,8 @@ export const STAND_IN_FILES: Record<string, string> = {
   "/web/web.html": "<title>still.fail · web</title>",
   "/web/assets/app.js": "// the web app",
   "/web/sw.js": "// the notifications' worker",
+  "/web/mbui/app.js": "// the app, as mbui-web built it",
+  "/web/mbui/host.js": "// mbui's web host",
   "/admin/index.html": "<title>still.fail 管理后台</title>",
   "/admin/assets/console.js": "// the console",
   "/preview/_stillfail/frame.html": "<title>still.fail preview</title>",
@@ -389,8 +392,13 @@ export const STAND_IN_FILES: Record<string, string> = {
   "/preview/404.html": "这是 still.fail 的预览地址",
 };
 
+/** The files the build brotlis beside them (apps/mbui/scripts/web-app.sh): app.js's, not host.js's (a build without one). */
+const STAND_IN_PACKED: Record<string, string> = { "/web/mbui/app.js.br": "/web/mbui/app.js" };
+
 function standInAssets(request: Request): Response {
   const path = new URL(request.url).pathname;
+  const packed = STAND_IN_PACKED[path];
+  if (packed) return new MFResponse(brotliCompressSync(STAND_IN_FILES[packed]!)) as unknown as Response;
   const body = STAND_IN_FILES[path];
   const headers = path.endsWith(".html") ? { "content-type": "text/html; charset=utf-8" } : {};
   return body === undefined ? new MFResponse("Not found", { status: 404 }) as unknown as Response : new MFResponse(body, { headers }) as unknown as Response;
