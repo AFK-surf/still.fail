@@ -6,12 +6,14 @@ import { test } from "node:test";
 import { Effect } from "effect";
 import { CoreError } from "../src/error.ts";
 import { type Entry, type Head, Signer, entryHash, next } from "../src/lock.ts";
-import { Lock, fold, held, read } from "../src/views/lock.ts";
+import { Lock, OTHERS_MS, fold, held, personalStations, read } from "../src/views/lock.ts";
 import { ME, genesis, grant, rig } from "./lock-rig.ts";
 import { hooks } from "../src/core/execute.ts";
 import { Status, stationReplies } from "./station-fixture.ts";
 
 const A = "aa".repeat(32);
+/// A second station of the workspace's, gone silent (its machine asleep): asked, it never answers.
+const S = "bb".repeat(32);
 
 /// A station of the lock as station/src/mesh/serve.ts answers it: its chain (`chain`), the devices that came to it
 /// (`came`); `old`: one from before, which serves none of it.
@@ -33,15 +35,18 @@ function station(first: Entry) {
       return Effect.succeed({ taken: 1, head: head() });
     }
     if (method === "GET" && path === "/lock/devices") return Effect.succeed({ devices: came });
+    if (method === "GET" && path === "/lock/person") return Effect.succeed({ chains: [] });
+    if (method === "POST" && path === "/lock/person") return Effect.succeed({ taken: 1 });
     return Effect.fail(new CoreError("http_404", "no route", 404));
   };
   return { chain, came, say, head, answer };
 }
 
-async function setUp() {
+async function setUp(silent = false) {
   const g = grant();
   let me: Signer | null = null;
-  const r = await rig((signer) => ((me = signer), { ws: genesis("ws", signer, true, [{ key: A, name: "a" }], g.keys, ME, []) }), undefined, A);
+  const named = silent ? [{ key: A, name: "a" }, { key: S, name: "s" }] : [{ key: A, name: "a" }];
+  const r = await rig((signer) => ((me = signer), { ws: genesis("ws", signer, true, named, g.keys, ME, []) }), undefined, silent ? [A, S] : A);
   const inner = r.core.inner;
   const st = station(r.cloud.chains.get("ws")![0]!);
   // What the cloud is asked of the lock, and whether it answers.
@@ -55,6 +60,7 @@ async function setUp() {
   inner.stations.requests.call = ((addr: { toString(): string }, method: string, path: string, body: unknown, ...rest: unknown[]) => {
     const [ws, id] = addr.toString().split("/");
     if (ws === "ws" && id === A && path.startsWith("/lock")) return st.answer(method, path, body);
+    if (ws === "ws" && id === S) return Effect.never;
     return (original as (...a: unknown[]) => unknown)(addr, method, path, body, ...rest);
   }) as typeof inner.stations.requests.call;
   const run = async <X>(e: Effect.Effect<X, any>) => {
@@ -126,4 +132,29 @@ test("a station refusing this device tells its lock's last entries: one taken ou
   hooks.lockRefused!(inner, "ws", A, st.head(), { entries: [other] });
   await r.host.time.pass(100);
   assert.equal(held(inner, "ws")?.head?.seq, 1);
+});
+
+test("a station gone silent is not waited on: the locks are read of the one that answered and brought there", async () => {
+  const { inner, st, cloud, run, signer, r } = await setUp(true);
+  st.chain.push(signer().sign(next("ws", st.head(), 1001, "member", { sub: "s3", email: "c@x.com", role: "member" })));
+  cloud.asked.length = 0;
+  // Read of the one that answers, the other waited for OTHERS_MS more, not until its link gives up.
+  const t0 = r.host.nowMs();
+  await run(read(inner, "ws"));
+  assert.ok(r.host.nowMs() - t0 <= OTHERS_MS + 100, `read in ${r.host.nowMs() - t0} ms`);
+  assert.equal(held(inner, "ws")?.head?.seq, 1);
+  assert.equal(cloud.asked.length, 0, cloud.asked.join());
+  // An entry: the lock read first (as above), then done once the one took it.
+  const t1 = r.host.nowMs();
+  await run(new Lock(inner, "ws", "s1", null).append("member", { sub: "s4", email: "d@x.com", role: "member" }));
+  assert.ok(r.host.nowMs() - t1 <= OTHERS_MS + 100, `taken in ${r.host.nowMs() - t1} ms`);
+  assert.equal(st.chain.length, 3);
+  // The person's own lock: read of the one that answered, brought, done once it took it.
+  const own = personalStations(inner);
+  const t2 = r.host.nowMs();
+  assert.deepEqual(await run(own.read("s1")), []);
+  assert.ok(r.host.nowMs() - t2 <= OTHERS_MS + 100, `own lock read in ${r.host.nowMs() - t2} ms`);
+  const t3 = r.host.nowMs();
+  assert.equal(await run(own.bring("s1", [])), 1);
+  assert.ok(r.host.nowMs() - t3 <= 100, `own lock taken in ${r.host.nowMs() - t3} ms`);
 });

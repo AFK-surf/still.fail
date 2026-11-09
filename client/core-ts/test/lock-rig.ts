@@ -94,14 +94,16 @@ export function lockCloud() {
 }
 
 /// A core on an app's host reaching `ws` (W) and `w2` (日常), each with its lock in the cloud; `before` changes the host.
-/// `station`: the id of `ws`'s station (station-fixture.ts's "st" unless given; one the lock names is an iroh id).
-export async function rig(locks: (signer: Signer) => Record<string, Entry>, before?: (host: FakeHost) => void, station?: string) {
+/// `station`: the id of `ws`'s station (station-fixture.ts's "st" unless given; one the lock names is an iroh id), or of
+/// each of its stations.
+export async function rig(locks: (signer: Signer) => Record<string, Entry>, before?: (host: FakeHost) => void, station?: string | string[]) {
+  const ids = station === undefined ? [] : typeof station === "string" ? [station] : station;
   const cloud = lockCloud();
   const s = await started(undefined, 0, undefined, (x) => {
     x.host.appKeys = true;
     const signer = Effect.runSync(Signer.make(x.host));
     for (const [ws, g] of Object.entries(locks(signer))) cloud.chains.set(ws, [g]);
-    x.cloud.also = { name: "W", role: "owner", lock: cloud.head("ws"), lock_requests: 0, ...(station ? { stations: [{ id: station, name: "studio", online: true, last_seen: null }] } : {}) };
+    x.cloud.also = { name: "W", role: "owner", lock: cloud.head("ws"), lock_requests: 0, ...(ids.length > 0 ? { stations: ids.map((id, i) => ({ id, name: i === 0 ? "studio" : `studio ${i + 1}`, online: true, last_seen: null })) } : {}) };
     x.cloud.more = [{ id: "w2", name: "日常", emoji: "☀️", role: "owner", lock: cloud.head("w2"), lock_requests: 0 }];
     stationReplies(x.host, cloud.reply);
     before?.(x.host);
