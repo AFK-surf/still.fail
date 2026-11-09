@@ -199,13 +199,16 @@ pub fn Tester::wanted_why(self : Tester) -> String {
 /// `script` run (Tester::drive's steps) on the display's frames at `fps` a second, a frame drawn at one only where the
 /// app asks for it there, as a host draws (Tester::wanted_after): `each` told, at each of the display's frames from the
 /// script's step `log measure` on (what comes before it, the app opening, not measured), whether one was drawn there.
-/// Until the script ends or `max` of the display's frames went by. What the Tester logged.
+/// `around` told as each measured frame drawn begins (false) and ends (true), with the display's frame it is at: what
+/// counts a frame's work from outside (mbui/film's mark, a profiled run's). Until the script ends or `max` of the
+/// display's frames went by. What the Tester logged.
 pub fn Tester::bench(
   self : Tester,
   script : String,
   fps? : Double = 120.0,
   max? : Int = 20000,
   each~ : (Tester, Bool) -> Unit,
+  around? : (Int, Bool) -> Unit,
 ) -> Array[String] {
   self.fake.logs.clear()
   drive_start(script, "")
@@ -218,7 +221,13 @@ pub fn Tester::bench(
     let due = self.wanted_after()
     let frame = due <= tick + 1.0e-9 || (measuring && bench_whole.val)
     if frame {
+      if measuring && around is Some(f) {
+        f(n, false)
+      }
       self.frame_at(tick)
+      if measuring && around is Some(f) {
+        f(n, true)
+      }
     } else {
       // (no frame: the time goes on)
       self.fake.time = tick

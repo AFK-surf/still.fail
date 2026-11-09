@@ -130,6 +130,8 @@ const film = {
   snapshot: transparent => (transparent ? native.snapshotTransparent(filmText()) : native.snapshot(filmText())),
   spin: () => native.turn(),
   now: () => performance.now(),
+  // (a bench's measured frame begun or ended: counted only by a profiling host, mbui's wasm_shell.c)
+  mark() {},
 };
 const imports = { probe, film, wasi_snapshot_preview1: { fd_write(fd, iovs, count, written) {
   const memory = new DataView(core.memory.buffer); let total = 0;

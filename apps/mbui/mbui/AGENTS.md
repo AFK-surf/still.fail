@@ -13,7 +13,8 @@ yet and you can add one, add it.
   segmentation), `src/shape`, `src/paint`, `src/skia`, `src/svg`, `src/pixels`: drawing. `src/hostapi` and
   `src/host`: what is asked of a platform and each platform's answer. `src/effect`: Effect-TS's model on the frames'
   clock.
-- `tools/`: the build's and checks' programs (`detlint`, `mbc` the C step, `wasmhost`, `chk`), in MoonBit.
+- `tools/`: the build's and checks' programs (`detlint`, `mbc` the C step, `wasmhost`, `chk`, `wasmgas` what a Wasm
+  program runs counted), in MoonBit.
 
 ## Two views: the old one and the one made once
 

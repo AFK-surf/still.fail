@@ -151,6 +151,10 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
   On Studio or a laptop it is wasm-gc in a row, half an hour and more, with every other agent queued behind it, so
   both scripts refuse outside CI. There run `check`, detlint and the test files the change touches
   (`moon test --target wasm-gc --release src/sfapp/<file>_wbtest.mbt`), and a bench when it is a speed change.
+- A speed change is measured by `scripts/instrbench.sh`: what each frame runs, counted by kind of instruction, the same
+  every run (its `compare` sets two checkouts' runs side by side). It says numbers, each kind's and weighted, never a
+  verdict: what they say of the change is weighed and told as it is (the user, 2026-11-09). A device's or the native
+  build's time (`scripts/appbench.sh`) is what a frame takes there.
 - A push starts CI. Push when the work is meant to merge (the change done, its files' tests and the bench passed),
   not after each small change: Studio's runs take the worktree by `station_task`'s `dir`, no push needed.
 - A PR that has not met what it must to merge is not waited on: no watching its CI, go on with the next step.
