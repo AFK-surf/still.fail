@@ -2693,6 +2693,7 @@ pub fn Tester::room_faults(Self) -> Array[String]
 pub fn Tester::row(Self, Int32) -> (Double, Double, Double, Double)?
 pub fn Tester::rows(Self) -> Array[(Int32, Double, Double)]
 pub fn Tester::rows_as_nodes(Self) -> (Int32, Int32)
+pub fn Tester::rows_built(Self) -> Array[(Int32, Int32)]
 pub fn Tester::rows_kept(Self) -> Int32
 pub fn Tester::rows_read_built(Self) -> Int32
 pub fn Tester::run_as_host(Self, Double, skip_unasked? : Bool) -> Unit

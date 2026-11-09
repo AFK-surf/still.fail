@@ -36,6 +36,10 @@ priv struct Hand {
   /// the hand's discrete events so far, counted (hand_event): what reads what came (a key, a menu asked for, words
   /// dropped) is built again as one comes
   events : @signals.Signal[Int]
+  /// what was typed into a field of an old view with the focus so far, counted (hand_typed): its words and the keys it
+  /// takes as its own, which go to its old view alone (view_host.mbt's typed_part); what reads the keys reads them
+  /// with the discrete events (hand_keys_read), nothing else of what reads the hand (a press, a menu asked for)
+  typed : @signals.Signal[Int]
   /// the pointer's presses going down or up so far, counted (hand_pressed): what reads how a press goes (Ctx::press, an
   /// editor's caret, a second finger) is built again as one does, nothing else
   presses : @signals.Signal[Int]
@@ -60,6 +64,7 @@ let hand : Hand = {
   pointing: @signals.signal(Finger),
   beyond: @signals.signal(false),
   events: @signals.signal(0),
+  typed: @signals.signal(0),
   presses: @signals.signal(0),
   asked: @signals.keyed(),
 }
@@ -99,9 +104,26 @@ fn hand_event() -> Unit {
 }
 
 ///|
-/// What the hand's discrete events are, read (Ctx::keys and the rest of what reads what came): followed.
+/// Words or a key typed into a field of an old view with the focus (view_host.mbt's typed_part): what reads the keys is
+/// built again (hand_keys_read), and the field (Ctx::editor), not what reads how a press goes or a menu asked for (a
+/// row's button elsewhere in the page).
+fn hand_typed() -> Unit {
+  hand.typed.set(@signals.untracked(fn() { hand.typed.get() }) + 1)
+}
+
+///|
+/// What the hand's discrete events are, read (a menu asked for, words dropped, and the rest of what reads what came):
+/// followed.
 fn hand_events_read() -> Unit {
   hand.events.get() |> ignore
+}
+
+///|
+/// The keys that came, read (Ctx::keys, key_pressed): followed, with the discrete events and what was typed into a
+/// field (hand_typed).
+fn hand_keys_read() -> Unit {
+  hand.events.get() |> ignore
+  hand.typed.get() |> ignore
 }
 
 ///|

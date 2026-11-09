@@ -835,21 +835,31 @@ pub fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> 
   // (the same answer while the made-up core is as it was, as the core's own: a subscription's value kept, not worked
   // out again each time it is read)
   let version = f.changes() + @settings.fixture_version() + fix_browse.changes + fix_presets_said.val
+  // (a draft's own changes, its words as they are typed: its topic's alone, fix_compose_call)
+  let own = if name == "composer" {
+    @settings.fixture_draft_followed()
+    match fix_writes.get(text(Some(Json::object(params)), "key")) {
+      Some(w) => w.version
+      None => 0
+    }
+  } else {
+    0
+  }
   let key = name + "\u{1}" + f.mode + "\u{1}" + Json::object(params).stringify()
   match fixture_answers.get(key) {
-    Some(t) if t.version == version => return t
+    Some((at, at_own, t)) if at == version && at_own == own => return t
     _ => ()
   }
   let t = fixture_answer(f, name, params, version)
-  fixture_answers[key] = t
+  fixture_answers[key] = (version, own, t)
   t
 }
 
 ///|
-/// The made-up core's answers given, by topic and what was asked, each as of the version it was given at
-/// (fixture_topic).
+/// The made-up core's answers given, by topic and what was asked, each as of the version it was given at, and its
+/// draft's for a draft's topic (fixture_topic).
 // kept across runs: let go as a fixture is made (fixture)
-let fixture_answers : Map[String, Topic] = {}
+let fixture_answers : Map[String, (Int, Int, Topic)] = {}
 
 ///|
 /// Topic `name` asked with `params`, worked out of the made-up core as it is (`version`).
@@ -1401,9 +1411,12 @@ pub fn fixture(mode : String) -> Source {
     topic_alive: fn() { true },
     topic_lease_own: None,
     call: fn(name, params, done) {
-      // (answered at once, as a core's answer comes from outside: what it changes of what is no signal taken so)
+      // (answered at once, as a core's answer comes from outside: what it changes of what is no signal taken so; but one
+      // whose answer changes only signals, as the core's is taken as it comes, sfbase's calls_said)
       let done = fn(r) {
-        @ui.came_from_outside()
+        if !@sfbase.call_said(name) {
+          @ui.came_from_outside()
+        }
         done(r)
       }
       match fixture_kept(name, params, None) {

@@ -66,6 +66,9 @@ priv struct RowNodes {
   mut own : Bool
   /// a part's: whether the rows of the lists in it go on as it does (Ctx::kept_part's `rows_stay`)
   mut rows_stay : Bool
+  /// a part's: whether it goes on through a frame built anew for what was typed into a field of another part of its old
+  /// view alone, its lists' rows with it (Ctx::kept_part's `typed_stays`)
+  mut typed_stays : Bool
   mut theme : Theme?
   mut ok : Bool
   mut why : String
@@ -137,6 +140,9 @@ priv struct NodesRun {
   /// where what came is the hand's alone and went to one old view (view_host.mbt), that one's part (its id): a part kept
   /// for another is no part it came to (-1: it came to all)
   mut evented_only : Int
+  /// what came is what was typed into a field of the old view `evented_only` names, nothing else: a part that goes on
+  /// through it (Ctx::kept_part's `typed_stays`) is kept, its lists' rows with it
+  mut typed_alone : Bool
   /// built keeping none at all (a run's start, a Tester's build to compare with): a list whose rows show only what
   /// they read builds them anew too
   mut whole : Bool
@@ -159,6 +165,9 @@ priv struct NodesRun {
   /// Tester::rows_read_built)
   mut built_read : Int
   kept_at : Array[(Int, Int)]
+  /// the rows and parts the frames built since a test last took them, as kept_at (not those a build keeping none built:
+  /// Tester::rows_built)
+  built_at : Array[(Int, Int)]
   mut on : Bool
 }
 
@@ -168,6 +177,7 @@ let nodes_run : NodesRun = {
   fresh: true,
   evented: false,
   evented_only: -1,
+  typed_alone: false,
   whole: true,
   part_fresh: false,
   told: false,
@@ -180,6 +190,7 @@ let nodes_run : NodesRun = {
   built: 0,
   built_read: 0,
   kept_at: [],
+  built_at: [],
   on: true,
 }
 
@@ -247,9 +258,11 @@ fn Ctx::rows_detach(self : Ctx) -> Unit {
     // it in the frame: left where they were, a node more or less built before them (a bar's in a motion) put another
     // node in each of their places, all of them laid out anew; a part's left there, for it to make again in its place.
     // But a row that shows only what it read, unless none is kept at all)
-    if nodes_run.whole || (nodes_run.fresh && !rn.reads_all && self.goes_with_frame(rn)) {
+    if self.built_with_frame(rn) {
       if rn.item >= 0 {
         self.row_nodes_out(rn)
+      } else {
+        self.inner_staying_out(rn)
       }
       rn.in_pool = false
       rn.n = 0
@@ -262,16 +275,51 @@ fn Ctx::rows_detach(self : Ctx) -> Unit {
 }
 
 ///|
+/// Whether this pass builds row or part `rn` anew, none of it kept (rows_detach).
+fn Ctx::built_with_frame(self : Ctx, rn : RowNodes) -> Bool {
+  nodes_run.whole || (nodes_run.fresh && !rn.reads_all && self.goes_with_frame(rn))
+}
+
+///|
+/// The parts kept among part `rn`'s nodes that go on as it is built anew (an own part or one whose rows stay, in an old
+/// view's built for what came to it alone: rows_detach), out of the frame's into their own, spares in their places: `rn`
+/// left in the frame's for its build to make again there, what it builds over where they were is not theirs, and they
+/// are put back from their own. Those built anew with it are left with it, theirs in turn looked through.
+fn Ctx::inner_staying_out(self : Ctx, rn : RowNodes) -> Unit {
+  for p in rn.inner {
+    let (i, _) = p
+    if self.built_with_frame(i) {
+      self.inner_staying_out(i)
+    } else {
+      self.row_nodes_out(i)
+      i.in_pool = false
+    }
+  }
+}
+
+///|
 /// Whether a frame built anew builds row or part `rn` anew: not an old view's own part, nor a row of a list in a part
-/// whose rows stay with it (Ctx::kept_part's `rows_stay`), but for an event that came to it.
+/// whose rows stay with it (Ctx::kept_part's `rows_stay`), but for an event that came to it; nor, where what came is what
+/// was typed alone, a part that goes on through that (`typed_stays`) or a row of a list in one.
 fn Ctx::goes_with_frame(self : Ctx, rn : RowNodes) -> Bool {
   if rn.item < 0 {
+    if typed_stays_now(rn.typed_stays, rn.list) {
+      return false
+    }
     return !(rn.own || rn.rows_stay) || evented_for(rn.list)
   }
   match self.lists.get(rn.list) {
+    Some(st) if st.typed_stays && nodes_run.typed_alone => false
     Some(st) if st.island != 0 => evented_for(st.island)
     _ => true
   }
+}
+
+///|
+/// Whether part `id`, going on through what was typed elsewhere alone (`typed_stays`), goes on through this frame: what
+/// came is that alone, and it came to another part than this.
+fn typed_stays_now(typed_stays : Bool, id : Int) -> Bool {
+  typed_stays && nodes_run.typed_alone && nodes_run.evented_only != id
 }
 
 ///|
@@ -421,6 +469,9 @@ fn nodes_forget() -> Unit {
   nodes_run.built = 0
   nodes_run.built_read = 0
   nodes_run.kept_at.clear()
+  nodes_run.built_at.clear()
+  nodes_run.typed_alone = false
+  typed_frame_last.val = -1
   nodes_run.on = true
 }
 
@@ -583,6 +634,7 @@ fn row_nodes_new(list : Int, item : Int) -> RowNodes {
     reads_all: false,
     own: false,
     rows_stay: false,
+    typed_stays: false,
     back: None,
     theme: None,
     ok: false,
@@ -828,6 +880,9 @@ fn Ctx::nodes_begin(self : Ctx, rn : RowNodes) -> NodesBegun {
 /// nodes all its own and none of a kind built each frame; a part may hold lists, laid out each frame).
 fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bool) -> Unit {
   nodes_run.built = nodes_run.built + 1
+  if !nodes_run.whole {
+    nodes_run.built_at.push((rn.list, rn.item))
+  }
   if !part && rn.reads_all {
     nodes_run.built_read = nodes_run.built_read + 1
   }
@@ -915,11 +970,17 @@ fn Ctx::nodes_end(self : Ctx, rn : RowNodes, r : Int, b : NodesBegun, part~ : Bo
       rn.links.push((at(nd.parent), at(nd.first), at(nd.last), at(nd.next)))
       if nd.kind == kind_list {
         rn.lists.push(nd.id)
-        if rn.rows_stay {
-          match self.lists.get(nd.id) {
-            Some(st) => st.island = rn.list
-            None => ()
+        match self.lists.get(nd.id) {
+          Some(st) => {
+            if rn.rows_stay {
+              st.island = rn.list
+            }
+            // (the part it is in, not one that holds that: Ctx::list says none as it is built)
+            if rn.typed_stays {
+              st.typed_stays = true
+            }
           }
+          None => ()
         }
       }
     }
@@ -1104,6 +1165,7 @@ fn Ctx::part_nodes(
   read_out : Bool,
   own? : Bool = false,
   rows_stay? : Bool = false,
+  typed_stays? : Bool = false,
   named? : String = "",
   made_at? : SourceLoc,
   flows? : Bool = false,
@@ -1137,13 +1199,20 @@ fn Ctx::part_nodes(
   rn.laid_pass.val = nodes_run.pass
   rn.own = own
   rn.rows_stay = rows_stay
+  rn.typed_stays = typed_stays
+  // (going on through what was typed elsewhere alone: kept as an old view's own part is, this frame)
+  let stays = typed_stays_now(typed_stays, id)
   rn.named = named
   rn.made_at = made_at
   rn.holder.val = outer
   // (`own`: what puts it here is made once (made.mbt's made_island), so what it is built from is its key and what it
   // read alone, whatever else the frame built anew)
-  let may_keep = if own || rows_stay {
+  // (`typed_stays` alone: kept through what was typed elsewhere alone, built as what holds it is otherwise, what its
+  // lists are built from given them anew)
+  let may_keep = if own || rows_stay || stays {
     nodes_run.on && !nodes_run.whole && !evented_for(id) && !inst_owners.on && !self.lit_every
+  } else if typed_stays {
+    false
   } else {
     self.nodes_keep()
   }
@@ -1177,13 +1246,19 @@ fn Ctx::part_nodes(
   }
   // (built for what it read, or as it is new or built elsewhere: what it builds its lists from may be otherwise, their
   // rows built anew; built only as it may not be kept, nothing it read changed: its lists' rows kept)
-  let fresh = (nodes_run.fresh && (!(own || rows_stay) || evented_for(id))) ||
+  // (`typed_stays` alone, built as it is not kept: its lists' rows as they would be built in what holds it, anew where
+  // that builds them anew, kept where it keeps them, whatever else of it changed)
+  let fresh = if typed_stays && !(own || rows_stay) {
+    !stays && (nodes_run.fresh || nodes_run.part_fresh)
+  } else {
+    (nodes_run.fresh && !stays && (!(own || rows_stay) || evented_for(id))) ||
     rn.n == 0 ||
     rn.watch.is_stale() ||
     rn.key != key ||
     rn.read != read_out ||
     rn.seed != self.id_seed ||
     rn.owner != self.owner
+  }
   // (its nodes of before out of the frame's, as a part not built a while (a page covered) has them: put where its
   // build makes them, for each to be known as who it is (Ctx::node_known), laid out as before; left in the frame's
   // (a frame built anew), found there)
@@ -1247,6 +1322,16 @@ fn Ctx::held_by(self : Ctx, outer : RowNodes?, rn : RowNodes) -> Unit {
     }
     None => ()
   }
+}
+
+///|
+/// The rows (their list and item) and the parts (their id, -1) the frames built, not kept, since this was last asked
+/// (a test's), each time one was: none of those a build keeping none built to compare with.
+pub fn Tester::rows_built(self : Tester) -> Array[(Int, Int)] {
+  ignore(self)
+  let out = nodes_run.built_at.copy()
+  nodes_run.built_at.clear()
+  out
 }
 
 ///|

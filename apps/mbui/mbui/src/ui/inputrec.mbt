@@ -29,7 +29,9 @@ let inputs_since : Ref[Bool] = Ref::new(false)
 let inputs_taken : Ref[Bool] = Ref::new(false)
 
 ///|
-fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -> Unit {
+/// `typed`: an input that goes into the field with the focus (words typed, a key of the field's own), the part of the
+/// old view it is in (typed_part); -1, every old view's.
+fn took_input(kind : String, t : Double, args : Array[Double], text? : String, typed? : Int = -1) -> Unit {
   // (the event's own moment, taken once as it began: view_host.mbt)
   let t = if view_app.val is Some(tr) && tr.moment() is Some(m) { m } else { t }
   input_came()
@@ -45,15 +47,17 @@ fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -
   if !(moved || wheel) {
     // (a press is the hand's: what it changes is built again, and what is kept is built for it where it went (the hand's
     // events, frame_watch.mbt; an old view's alone where it went to one: view_host.mbt), not as from outside)
-    if kind == "pointer" {
+    // (and what is typed into a field of one old view: the hand's too, gone to that one, as a press is to what it is on)
+    if kind == "pointer" || typed >= 0 {
       outside_counted()
     } else {
       outside_came()
     }
   }
-  // (what is no pointer's goes to whatever old view takes it: all of them, view_host.mbt)
+  // (what is no pointer's goes to whatever old view takes it: all of them, but what is typed into a field, that field's
+  // alone, view_host.mbt)
   if kind != "pointer" {
-    view_input_went(-1)
+    view_input_went(typed)
   }
   input_taped(kind, t, args, text?)
 }

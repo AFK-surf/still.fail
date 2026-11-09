@@ -2048,8 +2048,9 @@ fn on_key_now(code : Int, mods : Int) -> Unit {
     input_taped("key", h_now(), [code.to_double(), mods.to_double()])
     return
   }
-  took_input("key", h_now(), [code.to_double(), mods.to_double()])
-  hand_event()
+  let typed = typed_key_part(code, mods)
+  took_input("key", h_now(), [code.to_double(), mods.to_double()], typed~)
+  typed_event(typed)
   key_in(code, mods)
   // (Escape to the topmost layer it dismisses, at its moment: overlay.mbt)
   if code == key_escape {
@@ -2151,8 +2152,9 @@ fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
 
 ///|
 fn on_text_now(kind : Int, s : String, a : Int, b : Int) -> Unit {
-  took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s)
-  hand_event()
+  let typed = typed_text_part(kind)
+  took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s, typed~)
+  typed_event(typed)
   let c = g()
   // (words for a focus a modal layer of the window's tree keeps from input: none's, island_allows; but a field it
   // leaves what is typed to, its: Ctx::typing_allowed)

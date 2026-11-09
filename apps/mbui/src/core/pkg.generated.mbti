@@ -48,6 +48,8 @@ pub fn release_topic(String, params? : Map[String, @json.Json]) -> Unit
 
 pub let restarted_text : @ref.Ref[String]
 
+pub fn said(String) -> Unit
+
 pub fn screen_ack(Int32, Double) -> Bool
 
 pub fn sign_in((Result[@json.Json, @json.Json]) -> Unit) -> Unit
@@ -108,6 +110,7 @@ pub fn Client::refresh_topic(Self, String, params? : Map[String, @json.Json]) ->
 pub fn Client::release_topic(Self, String, params? : Map[String, @json.Json]) -> Unit
 pub fn Client::reset(Self) -> Unit
 pub fn Client::restarted(Self) -> Unit
+pub fn Client::said(Self, String) -> Unit
 pub fn Client::stream(Self, String, params? : @json.Json, bytes? : Bytes?, on_value~ : (@json.Json, Bytes?) -> Unit, on_done? : (Result[@json.Json, @json.Json]) -> Unit) -> Int32
 pub fn Client::stream_bytes(Self, String, params? : @json.Json, on_value~ : (@json.Json, Bytes?) -> Unit, on_done~ : (Result[(@json.Json, Bytes?), @json.Json]) -> Unit) -> Int32
 pub fn Client::subscribe(Self, String, params? : Map[String, @json.Json]) -> Sub

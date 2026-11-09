@@ -334,6 +334,24 @@ pub fn fixture_followed() -> Unit {
 }
 
 ///|
+/// A draft's words told the made-up core (`composer.text`): its topic alone changed, told to what reads that topic
+/// (fixture_draft_followed), nothing else of the made-up core's, as the core changes the draft's alone.
+// kept across runs: a count of changes; a run anew reads its topics anew
+let fixture_draft_changes : @signals.Signal[Int] = @signals.signal(0)
+
+///|
+/// A draft's words changed in the made-up core (fixture_draft_changes).
+pub fn fixture_draft_changed() -> Unit {
+  fixture_draft_changes.set(@signals.untracked(fn() { fixture_draft_changes.get() }) + 1)
+}
+
+///|
+/// A draft's topic of the made-up core read: followed as its words change (fixture_draft_changed).
+pub fn fixture_draft_followed() -> Unit {
+  fixture_draft_changes.get() |> ignore
+}
+
+///|
 /// How the new device's prompt went (`lockPrompt.deny` "deny", `lockPrompt.hide` "hide"; "" while it is up).
 pub fn fixture_pair_ended() -> String {
   fx.pair_ended

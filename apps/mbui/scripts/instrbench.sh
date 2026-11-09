@@ -23,7 +23,8 @@ cd "$A"
 table="home scroll-home long 390x844
 medium scroll-medium chat-long 690x840
 open open long 390x844
-paged scroll-deep long-paged 390x844"
+paged scroll-deep long-paged 390x844
+type type chat-long 390x844"
 gas() { "$MBUI_DIR/scripts/wasmgas" "$@"; }
 if [ "${1:-run}" = compare ]; then
   [ $# = 3 ] || { echo 'instrbench.sh compare BEFORE_OUT AFTER_OUT' >&2; exit 2; }

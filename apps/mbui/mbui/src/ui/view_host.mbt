@@ -3302,6 +3302,55 @@ fn Ctx::island_now_of_id(self : Ctx, id : Int) -> (Double, Double, Double, Doubl
 }
 
 ///|
+/// The part of the old view whose field has the focus, where what is typed may go into it (Ctx::typing_allowed): what
+/// is typed goes there alone, as a press goes to the old view it is on (view_input_went); what reads the keys of
+/// the hand's elsewhere reads them as signals (Ctx::key_pressed). -1 (all of them): no field of an old view hosted in
+/// the window's tree has it.
+fn typed_part() -> Int {
+  let c = g()
+  let focus = c.typing_allowed()
+  guard focus != 0 && c.editors.contains(focus) && !old_whole.val else { return -1 }
+  match c.island_of_id(focus) {
+    Some(id) => old_part_of(id)
+    None => -1
+  }
+}
+
+///|
+/// Words from the input method (on_text's `kind`): the field's with the focus (typed_part), but the keyboard put away
+/// (the focus let go of, what shows it is not the field's alone).
+fn typed_text_part(kind : Int) -> Int {
+  if kind == text_keyboard_gone {
+    -1
+  } else {
+    typed_part()
+  }
+}
+
+///|
+/// A key (`code`, `mods` held) the field with the focus takes as its own (field_key: what it writes, moves, deletes;
+/// none with ⌘ or Ctrl held, nor Escape): that field's (typed_part); any other key, every old view's.
+fn typed_key_part(code : Int, mods : Int) -> Int {
+  if field_key(code) && (mods & (mod_cmd | mod_ctrl)) == 0 {
+    typed_part()
+  } else {
+    -1
+  }
+}
+
+///|
+/// What was typed (on_key_now's, on_text_now's), gone to `typed` (typed_part: the old view whose field has the focus;
+/// -1 every old view's): one of the hand's events (hand_event), but what is typed into a field of an old view the
+/// field's (hand_typed), not what reads how a press goes elsewhere.
+fn typed_event(typed : Int) -> Unit {
+  if typed >= 0 {
+    hand_typed()
+  } else {
+    hand_event()
+  }
+}
+
+///|
 /// The old view in node `id`'s part (-1: none known: all of them).
 fn old_part_of(id : @view.NodeId) -> Int {
   match old_islands.iter().find_first(fn(o) { o.id == id }) {

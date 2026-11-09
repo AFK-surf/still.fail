@@ -79,6 +79,9 @@ pub struct Client {
   /// the calls whose answers nobody reads (Client::unread), by name; and the ids of those under way
   priv unread_names : Map[String, Bool]
   priv unread_calls : Map[Int, Bool]
+  /// the calls whose answers change only signals (Client::said), by name; and the ids of those under way
+  priv said_names : Map[String, Bool]
+  priv said_calls : Map[Int, Bool]
   priv mut next_id : Int
   /// Distinguishes subscriptions when reset reuses an id.
   priv mut epoch : Int
@@ -131,6 +134,8 @@ pub fn Client::new(
     quiet_calls: {},
     unread_names: {},
     unread_calls: {},
+    said_names: {},
+    said_calls: {},
     next_id: 1,
     epoch: 0,
     generation: 0,
@@ -543,6 +548,10 @@ pub fn Client::call(
   } else {
     self.call_waits[id] = (self.start_wait)("core: \{name} (call \{id})")
   }
+  // (one whose answer changes only signals: taken as it comes, what read them built again, nothing else)
+  if self.said_names.contains(name) {
+    self.said_calls[id] = true
+  }
   match self.echo_of(name, params) {
     Some(e) => self.echo_waits[id] = (e.id, false, false)
     None => ()
@@ -673,8 +682,17 @@ pub fn Client::unread(self : Client, name : String) -> Unit {
 }
 
 ///|
-/// Whether message `m` is a call's alone and changes nothing a frame reads: a value of a call that says it changes
-/// nothing (Client::quiet), or the answer of one whose answer nobody reads (Client::unread, its wait ended with it),
+/// The answer of a call `name` changes only signals (what is done with it sets them and nothing else a frame reads:
+/// a draft's words told, `composer.text`), so it may be taken as it comes (Client::call_said): what read those signals
+/// is built again, nothing else; awaited as any call. Said once, as the app starts.
+pub fn Client::said(self : Client, name : String) -> Unit {
+  self.said_names[name] = true
+}
+
+///|
+/// Whether message `m` is a call's alone and changes nothing a frame reads but its signals: a value of a call that says
+/// it changes nothing (Client::quiet), the answer of one whose answer nobody reads (Client::unread, its wait ended with
+/// it) or of one whose answer changes only signals (Client::said),
 /// so it may be taken as it comes, before the frame decides what it does (@ui.on_message_said).
 pub fn Client::call_said(self : Client, m : Map[String, Json]) -> Bool {
   if m.contains("fatal") {
@@ -688,7 +706,7 @@ pub fn Client::call_said(self : Client, m : Map[String, Json]) -> Bool {
     return false
   }
   if m.contains("ok") || m.contains("error") {
-    return self.unread_calls.contains(id) && !self.echo_waits.contains(id)
+    return (self.unread_calls.contains(id) || self.said_calls.contains(id)) && !self.echo_waits.contains(id)
   }
   match (m.get("value"), self.quiet_calls.get(id)) {
     (Some(v), Some(f)) => self.progress.contains(id) && f(v)
@@ -732,6 +750,7 @@ fn Client::take(self : Client, msg : Json) -> Unit {
       let calls = self.calls.to_array()
       self.calls.clear()
       self.unread_calls.clear()
+      self.said_calls.clear()
       self.echo_waits.clear()
       for c in calls {
         self.end_call_wait(c.0)
@@ -876,6 +895,7 @@ pub fn Client::perf_forget(self : Client) -> Unit {
 ///|
 fn Client::answer(self : Client, id : Int, r : Result[Json, Json]) -> Unit {
   self.unread_calls.remove(id)
+  self.said_calls.remove(id)
   match self.echo_waits.get(id) {
     // (an edit answered before its draft came: awaited still, until it does; refused: nothing to come)
     Some((sub, _, false)) if r is Ok(_) => self.echo_waits[id] = (sub, true, false)
@@ -906,6 +926,7 @@ pub fn Client::restarted(self : Client) -> Unit {
   self.progress.clear()
   self.quiet_calls.clear()
   self.unread_calls.clear()
+      self.said_calls.clear()
   self.echo_waits.clear()
   @signals.start_batch()
   self.generation += 1
@@ -953,6 +974,7 @@ pub fn Client::reset(self : Client) -> Unit {
   self.progress.clear()
   self.quiet_calls.clear()
   self.unread_calls.clear()
+      self.said_calls.clear()
   self.echo_waits.clear()
   self.call_waits.clear()
   self.sub_waits.clear()

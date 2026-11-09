@@ -635,7 +635,7 @@ pub fn Ctx::mouse_drags_lists(self : Ctx, on : Bool) -> Unit {
 /// Whether key `code` came since the last frame with exactly `mods` held (with `in_field`, also one a focused field
 /// took: an Enter it sent, an arrow it moved by).
 pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Bool = false) -> Bool {
-  hand_events_read()
+  hand_keys_read()
   // (under an open menu or dialog, none: they are its)
   if !self.keys_here() {
     return false
@@ -653,7 +653,7 @@ pub fn Ctx::key_pressed(self : Ctx, code : Int, mods? : Int = 0, in_field? : Boo
 /// read) has none to look for when none came, as on every frame of a phone without a keyboard.
 pub fn Ctx::keys_came(self : Ctx) -> Bool {
   ignore(self)
-  hand_events_read()
+  hand_keys_read()
   !desk.keys.is_empty()
 }
 
@@ -661,7 +661,7 @@ pub fn Ctx::keys_came(self : Ctx) -> Bool {
 /// Key `code` with exactly `mods` held, if it came since the last frame and nothing took it yet: taken now (what reads
 /// keys after this does not see it). For a widget's own keys while it has the focus (a slider's arrows).
 pub fn Ctx::take_key(self : Ctx, code : Int, mods? : Int = 0) -> Bool {
-  hand_events_read()
+  hand_keys_read()
   if !self.keys_here() {
     return false
   }
@@ -687,7 +687,7 @@ pub fn Ctx::shortcut(self : Ctx, ch : Char, shift? : Bool = false) -> Bool {
 /// The keys since the last frame (code, modifiers, whether a field took it); none under an open menu or dialog (they
 /// are its).
 pub fn Ctx::keys(self : Ctx) -> Array[(Int, Int, Bool)] {
-  hand_events_read()
+  hand_keys_read()
   if !self.keys_here() {
     return []
   }

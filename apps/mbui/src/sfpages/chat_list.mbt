@@ -122,7 +122,10 @@ pub fn chat_list(
   // (and what the chat says: what came on its way is shown as it comes, the rows built anew for it)
   let rows_key = way.id +
     " " +
-    [list_w, c.height, list_top, foot_room, foot, ask_clear, bar].map(fn(x) { x.to_string() }).join(" ") +
+    [list_w, c.height, list_top, foot_room, foot, ask_clear, bar, room, lit.1].map(fn(x) { x.to_string() }).join(" ") +
+    // (and what else of the frame its rows are built from: the composer's room on its way, the message lit, words
+    // sent flying)
+    " \{on_foot_way} \{lit.0} \{whole} \{flight is Some(_)}" +
     " " +
     n.to_string() +
     " " +
@@ -269,11 +272,9 @@ pub fn chat_list(
     )
     |> ignore
     }
-    if held {
-      c.kept_part(c.id(key + "/rows"), rows_key, rows, read_out=true, rows_stay=true)
-    } else {
-      rows()
-    }
+    // (its rows a part of their own: on a page's way, going on as they are (`rows_stay`); and through what is typed into
+    // the composer beside them, the composer alone built for each word, mbui's typed_part)
+    c.kept_part(c.id(key + "/rows"), rows_key, rows, read_out=true, rows_stay=held, typed_stays=true)
     let found_now = Ref(false)
     let la = list_after(
       c,
