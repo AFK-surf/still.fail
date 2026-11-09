@@ -69,11 +69,13 @@ export const seqTs = (seq: number) => `${seq}.000000`;
 const text = (v: Json, key: string): string => (v !== null && typeof v === "object" && typeof v[key] === "string" ? v[key].trim() : "");
 const count = (v: unknown): number | null => (typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : null);
 
-/// Comma's address for its connector socket: `server` (https or http) as a WebSocket address, with who dials.
-export function connectUrl(server: string, name: string): string {
+/// Comma's address for its connector socket: `server` (https or http) as a WebSocket address, with who dials and the
+/// still.fail workspace the connect is of (Comma takes one connect of a workspace in a Group: its usage counted once).
+export function connectUrl(server: string, name: string, workspace: string | null = null): string {
   const url = new URL("/v1/connect", server.replace(/\/+$/, "") + "/");
   url.protocol = url.protocol === "http:" ? "ws:" : "wss:";
   url.searchParams.set("name", name);
+  if (workspace !== null) url.searchParams.set("stillfail_workspace", workspace);
   url.searchParams.set("os", platform());
   url.searchParams.set("arch", arch());
   return url.toString();
@@ -131,6 +133,8 @@ export type CommaSurfaceOptions = {
   token: string;
   /// What the station is called among the Group's computers.
   name: string;
+  /// The still.fail workspace the connect is of; null before the station is in one.
+  workspace?: string | null;
   tasks: CommaTasks;
   store: Store;
   /// The models its sessions can run (the hub's `modelsFor` the connect).
@@ -162,6 +166,7 @@ export class CommaSurface extends ConnectedSurface {
   private readonly server: string;
   private readonly token: string;
   private readonly name: string;
+  private readonly ofWorkspace: string | null;
   private readonly tasks: CommaTasks;
   private readonly store: Store;
   private readonly models: () => ModelChoice[];
@@ -189,6 +194,7 @@ export class CommaSurface extends ConnectedSurface {
     this.server = options.server;
     this.token = options.token;
     this.name = options.name;
+    this.ofWorkspace = options.workspace ?? null;
     this.tasks = options.tasks;
     this.store = options.store;
     this.models = options.models;
@@ -206,7 +212,7 @@ export class CommaSurface extends ConnectedSurface {
   }
 
   protected async address(): Promise<string> {
-    return connectUrl(this.server, this.name);
+    return connectUrl(this.server, this.name, this.ofWorkspace);
   }
 
   runSocket(url: string, handler: Handler): Effect.Effect<void, Error> {

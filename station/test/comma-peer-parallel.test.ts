@@ -13,7 +13,7 @@ test("an unavailable station does not keep an available station from being read"
   let failSlow!: () => void;
   const slow = new Promise<never>((_, reject) => { failSlow = () => reject(new Error("unavailable")); });
   const read = workspaceRead({
-    home: () => "home",
+    of: () => ({ workspace: "home", home: true }),
     here: async (op) => answer(op),
     others: async () => ["slow", "fast"],
     there: async (station, op) => {
@@ -42,7 +42,7 @@ test("peer reads stay bounded and their results retain roster order", async () =
   }
   let active = 0, most = 0;
   const read = workspaceRead({
-    home: () => "home",
+    of: () => ({ workspace: "home", home: true }),
     here: async (op) => answer(op),
     others: async () => ids,
     there: async (station, op) => {

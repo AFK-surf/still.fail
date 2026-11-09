@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { homeIndex } from "../src/comma/home-index.ts";
+import { workspaceIndex } from "../src/comma/workspace-index.ts";
 import { CommaStats, type StationRows } from "../src/comma/stats.ts";
 
 const quiet = () => () => {};
@@ -19,14 +19,14 @@ test("a home uses only its own persistent index, including on restart", () => {
   const old = CommaStats.inWorkspace(dir, "old-home", empty, quiet);
   try { old.apply([row(2, "old home")], [], 0); } finally { old.close(); }
   let home = "new-home", version = 1;
-  const next = homeIndex(dir, home, () => home, () => version, empty, quiet);
+  const next = workspaceIndex(dir, home, () => true, () => version, empty, quiet);
   try {
     assert.equal(next.stats.taskTitle("1"), "");
     assert.equal(next.stats.taskTitle("2"), "");
     next.stats.apply([row(3, "new home")], [], 0);
   } finally { next.stats.close(); }
   home = "old-home"; version++;
-  const reopened = homeIndex(dir, home, () => home, () => version, empty, quiet);
+  const reopened = workspaceIndex(dir, home, () => true, () => version, empty, quiet);
   try {
     assert.equal(reopened.stats.taskTitle("2"), "old home");
     assert.equal(reopened.stats.taskTitle("3"), "");
@@ -48,7 +48,7 @@ test("a read spanning a home change is discarded, even if that home returns", as
   let home = "one", version = 0, calls = 0;
   let release!: (value: { stations: StationRows[]; unread: string[] }) => void;
   const pending = new Promise<{ stations: StationRows[]; unread: string[] }>((resolve) => { release = resolve; });
-  const index = homeIndex(dir, "one", () => home, () => version,
+  const index = workspaceIndex(dir, "one", () => home === "one", () => version,
     async () => ++calls === 1 ? pending : { stations: [row(1, "current")], unread: [] }, quiet);
   const written: string[] = [];
   const stop = index.stats.tasks.listen(() => written.push(index.stats.taskTitle("1")));
@@ -67,7 +67,7 @@ test("a read spanning a home change is discarded, even if that home returns", as
 test("a home change during bounded index preparation discards the old build", async () => {
   const dir = mkdtempSync(join(tmpdir(), "comma-home-prepare-"));
   let home = "one", version = 0, read = false;
-  const index = homeIndex(dir, "one", () => home, () => version,
+  const index = workspaceIndex(dir, "one", () => home === "one", () => version,
     async () => { read = true; return { stations: [row(9, "obsolete")], unread: [] }; }, quiet);
   try {
     const usage = Array.from({ length: 512 }, (_, i) => ({ day: "9999-12-31", session: `s${i}`, runtime: "test", calls: 1 }));

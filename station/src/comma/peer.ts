@@ -59,17 +59,17 @@ export async function textOf(bytes: Bytes): Promise<string> {
 }
 
 export type WorkspaceReads = {
-  /// The home workspace now, null before the station joined one.
-  home: () => string | null;
+  /// The workspace read and whether it is this station's home one; null before the station is in one.
+  of: () => { workspace: string; home: boolean } | null;
   /// This station's read: as the reader pool answers it.
   here: (op: string, args: Json) => Promise<string>;
-  /// The other stations of the home workspace, by id; throws when the roster is not known now.
+  /// The other stations of the workspace, by id; throws when the roster is not known now.
   others: () => Promise<string[]>;
   /// Another station's read.
   there: (station: string, op: string, args: Json) => Promise<string>;
 };
 
-/// One station's usage and chats of the home workspace from `from` until `to`, by `ask`.
+/// One station's usage and chats of the workspace from `from` until `to`, by `ask`.
 async function stationRows(ask: (op: string, args: Json) => Promise<string>, from: number, to: number): Promise<{ usage: Json; chats: Json[] }> {
   const usage = JSON.parse(await ask("outflowUsage", { from, to, tz: 0 }));
   // A partial answer must not make this station's previously indexed rows look absent.
@@ -102,11 +102,11 @@ async function stationRows(ask: (op: string, args: Json) => Promise<string>, fro
 /// What a build reads: this station's rows, and each other station's of the workspace that answers.
 export function workspaceRead(w: WorkspaceReads): Read {
   return async (from, to) => {
-    const home = w.home();
-    const ws = home === null ? {} : { ws: { workspace: home, home: true } };
+    const of = w.of();
+    const ws = of === null ? {} : { ws: of };
     const stations: StationRows[] = [await stationRows((op, args) => w.here(op, { ...args, ...ws }), from, to)];
     const unread: string[] = [];
-    const others = home === null ? [] : await w.others();
+    const others = of === null ? [] : await w.others();
     const results: (StationRows | null)[] = Array.from({ length: others.length }, () => null);
     let next = 0;
     await Promise.all(Array.from({ length: Math.min(PEER_READS, others.length) }, async () => {

@@ -20,7 +20,7 @@ test("the Router reads the current title of the requested workspace chat", async
     { kind: "edit", n: 5, text: "later" },
   ], last: 5 });
   const reads = {
-    home: () => "home",
+    of: () => ({ workspace: "home", home: true }),
     here: async (op: string, args: unknown) => (asked.push(["here", op, args]), reply),
     there: async (id: string, op: string, args: unknown) => (asked.push([id, op, args]), reply),
   };
@@ -71,7 +71,7 @@ test("the title is read after the workspace's message read completes", async () 
   const stats = CommaStats.at(dir, async () => ({ stations: [], unread: [] }), () => () => {});
   let finish!: (value: string) => void;
   const pending = new Promise<string>((resolve) => { finish = resolve; });
-  const reads = { home: () => null, here: () => pending, there: () => pending };
+  const reads = { of: () => null, here: () => pending, there: () => pending };
   try {
     stats.apply([station([chat(7, "Before")])], [], from);
     const result = routerReads(stats, reads, "7", 0, 20);

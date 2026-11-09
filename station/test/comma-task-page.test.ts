@@ -45,7 +45,7 @@ test("a Router page counts messages rather than intervening edits", async () => 
     assert.equal(raw.more, true);
     assert.equal(raw.messagesOnly, undefined, "the old peer answer is unchanged");
     const reads = {
-      home: () => null,
+      of: () => null,
       here: async (op: string, args: any) => {
         assert.equal(op, "outflowMessages");
         return JSON.stringify(outflowMessages(reader, args.thread, args.after, args.limit, undefined, args.messagesOnly === true));
@@ -277,7 +277,7 @@ test("the messages-only option crosses the peer read and preserves workspace sco
       return JSON.stringify(usageOps[op]!(reader, { ...(args as any), lang }));
     }, () => "home", () => "en", () => 0, () => {});
     const reads = {
-      home: () => "home",
+      of: () => ({ workspace: "home", home: true }),
       here: async () => { throw new Error("unexpected local read"); },
       there: async (_id: string, op: string, args: any) => textOf(bytesOf(await answer("caller", { op, args }, "home"))!),
     };
@@ -298,7 +298,7 @@ test("an older peer's raw pages are followed past edits", async () => {
     f.add(8, "message", "next");
     const reader = makeStore(f.db, "."), requests: any[] = [];
     const reads = {
-      home: () => "home",
+      of: () => ({ workspace: "home", home: true }),
       here: async () => { throw new Error("unexpected local read"); },
       there: async (id: string, op: string, args: any) => {
         assert.equal(id, "other");
@@ -317,7 +317,7 @@ test("an older peer's raw pages are followed past edits", async () => {
 test("an older peer with an endless edit run is refused after a bounded number of pages", async () => {
   let calls = 0;
   const reads = {
-    home: () => null,
+    of: () => null,
     here: async (_op: string, args: any) => {
       calls++;
       return JSON.stringify({ messages: Array.from({ length: args.limit }, (_, i) => ({ n: args.after + i + 1, kind: "edit" })),
@@ -333,7 +333,7 @@ test("a workspace change while paging an older peer prevents a Router reply", as
   let allowed = true, calls = 0;
   const waiting = Promise.withResolvers<void>(), resume = Promise.withResolvers<void>();
   const reads = {
-    home: () => "home",
+    of: () => ({ workspace: "home", home: true }),
     here: async () => { throw new Error("unexpected local read"); },
     there: async (_id: string, _op: string, args: any) => {
       if (++calls === 1) return JSON.stringify({ messages: [{ n: 1, kind: "edit" }, { n: 2, kind: "edit" }], more: true, last: 3 });
@@ -369,14 +369,14 @@ test("a peer cannot advance a message page with a repeated or invalid position",
     { messages: [], messagesOnly: true, more: true, last: 3 },
     { messages: [], messagesOnly: true, last: 3 },
   ]) {
-    const reads = { home: () => null, here: async () => JSON.stringify(reply), there: async () => "null" };
+    const reads = { of: () => null, here: async () => JSON.stringify(reply), there: async () => "null" };
     await assert.rejects(routerReads(stats, reads, "1", 0, 2), /message (cursor does not continue|answer is incomplete)/);
   }
 });
 
 test("an older peer that rolls its history back between pages is refused", async () => {
   let calls = 0;
-  const reads = { home: () => null,
+  const reads = { of: () => null,
     here: async () => JSON.stringify(++calls === 1
       ? { messages: [{ n: 1, kind: "message", text: "old" }, { n: 2, kind: "edit" }], more: true, last: 3 }
       : { messages: [], more: false, last: 0 }),
