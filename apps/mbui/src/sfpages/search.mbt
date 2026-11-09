@@ -370,11 +370,14 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
   // back (and Esc): from one kind to every kind first, then the search away
   if !search.leaving && (app.nav.depth() == 1 || search.over) {
     c.take_back(fn() { if !finder_back() { search_close(c) } })
-    if c.key_pressed(@ui.key_escape) || c.key_pressed(@ui.key_escape, in_field=true) {
+    // (Esc: the keymap's search.escape where the search is up, at its key's moment)
+    c.key_context("Search")
+    c.on_action("search.escape", fn() {
       if !finder_back() {
         search_close(c)
       }
-    }
+      true
+    })
   }
   if !search.open {
     return
