@@ -265,6 +265,25 @@ for t in $targets; do
       else [ "$(app_group_of "${APP_GROUP#*/}" $r)" = "${APP_GROUP%/*}" ] && mine+=("$r"); fi
     done
     runs=("${mine[@]}")
+    # (APP_PART=k/m: the k-th of m shares of this group's pages' files, every m-th of them: a group too long for one
+    # runner's five minutes at a rate's frames (mbui-check's at 120 a second) on m)
+    if [ -n "${APP_PART:-}" ]; then
+      mine=()
+      for r in "${runs[@]}"; do
+        if [ "${r%% *}" = @pages ]; then
+          read -r -a words <<< "$r"
+          kept=() i=0
+          for f in "${words[@]:3}"; do
+            [ $((i % ${APP_PART#*/})) = $((${APP_PART%/*} - 1)) ] && kept+=("$f")
+            i=$((i + 1))
+          done
+          [ ${#kept[@]} = 0 ] || mine+=("${words[0]} ${words[1]} ${words[2]} ${kept[*]}")
+        elif [ "${APP_PART%/*}" = 1 ]; then
+          mine+=("$r")
+        fi
+      done
+      runs=("${mine[@]}")
+    fi
   fi
   run_name() {
     [ "$1" = @flows ] && shift

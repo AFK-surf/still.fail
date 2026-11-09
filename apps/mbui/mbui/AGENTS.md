@@ -53,8 +53,8 @@ yet and you can add one, add it.
   declared duration, by name) and asserts. The frames in between must not matter: a picture or a state at a moment is
   a function of the inputs and that moment, at 60 Hz, at 120 Hz, or in one jump.
 - So every test the Tester runs, mbui's and the app's, runs again with frames drawn on `run_for`'s way (while the app
-  asks for them, as a host draws them) at 60, 120, 24 and 7 a second (`MBUI_TEST_FPS`, `scripts/fps_check.sh`), and must
-  come out the same; CI runs it once the old view's lists are the window's tree's (the user, 2026-11-09). Only
+  asks for them, as a host draws them) at 60, 120, 24 and 7 a second (`MBUI_TEST_FPS`, `scripts/fps_check.sh`; in CI
+  mbui-ci's `native at …` and mbui-check's `… at … fps`, a runner a rate), and must come out the same. Only
   `run_for`'s way gets them: what a test walks itself (inputs, `frame()`) is on the display's frames as ever. Those runs
   hold results only; how a motion goes frame to frame (`sizes_steady`, `rows_steady`, `words_over`) is judged on the
   default run's frames (the user, 2026-11-09: 平滑度另开一条线).
