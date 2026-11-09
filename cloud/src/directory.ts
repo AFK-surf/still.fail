@@ -80,10 +80,11 @@ export const sockets = { where: (env: Env): "objects" | "primary" => (env.DIRECT
 
 /**
  * What an account's or a station's object is told (#deliver): frames to send on its sockets (events, revocations, what
- * goes to all); `beta`, its account's test channel now; `state`, the station's state changed (it reads it here and
- * sends it, or, in no workspace now, lets its socket go). It answers whether it holds a socket (`live`).
+ * goes to all); `beta`, its account's test channel now; `state`, the station's state changed: `frame`, its state frame
+ * as it is as this is sent, null in no workspace now (it lets its socket go). It answers whether it holds a socket
+ * (`live`).
  */
-export type Delivery = { frames?: string[]; beta?: boolean; state?: true };
+export type Delivery = { frames?: string[]; beta?: boolean; state?: true; frame?: string | null };
 /** The longest wait before a delivery that failed is tried again (from 2 s, doubling). */
 const OUTBOX_MAX_DELAY = 600;
 /** How many hours of its requests the directory keeps counted (adminLoad): a week, as the console's longest chart. */
@@ -342,8 +343,9 @@ export class Directory extends DurableObject<Env> {
       const body: Delivery = {
         frames: bodies.flatMap((b) => b.frames ?? []),
         ...(beta === undefined ? {} : { beta }),
-        // Tried again, a station reads its state too: what was told late is then followed by all of it as it is.
-        ...(bodies.some((b) => b.state) || (kind === "station" && tried) ? { state: true as const } : {}),
+        // Tried again, a station is told its state too: what was told late is then followed by all of it as it is.
+        // Made as it is sent, so the station need not ask for it.
+        ...(bodies.some((b) => b.state) || (kind === "station" && tried) ? { state: true as const, frame: this.#frame(key) } : {}),
       };
       const ids = group.map((r) => r.id as number);
       const marks = ids.map(() => "?").join(", ");

@@ -1,8 +1,7 @@
 // One station's own object, named by its key (hex): its presence socket (hibernatable, so an idle one costs nothing),
 // and whether it is enrolled, which every request it signs asks (tracing.ts stationSender). What it is told (where it
 // is, its peers, what is revoked: the `state` frame) stays the Directory's: this object reads it there as the socket
-// opens and as the Directory tells it it changed (directory.ts #deliver), and keeps nothing of it but that the station
-// is enrolled. Whether a station is up is not the cloud's to say: devices find it out over the mesh.
+// opens, is told it as it changes (directory.ts #deliver), and keeps nothing of it but that the station is enrolled. Whether a station is up is not the cloud's to say: devices find it out over the mesh.
 import { DurableObject } from "cloudflare:workers";
 import { header } from "./compat";
 import { CLOSE, SILENT_MS, sockets, type Delivery } from "./directory";
@@ -75,14 +74,14 @@ export class Station extends DurableObject<Env> {
   /** What the Directory tells it (directory.ts #deliver): sent on its socket; whether it holds one. */
   async deliver(station: string, body: Delivery): Promise<{ live: boolean }> {
     if (this.#opening > 0) this.#toldMeanwhile = true;
-    if (body.state && !(await this.#sendState(station))) return { live: false };
+    if (body.state && !(await this.#sendState(station, body.frame))) return { live: false };
     for (const frame of body.frames ?? []) this.#send(frame);
     return { live: this.#open().length > 0 };
   }
 
-  /** Its state as the Directory has it now, sent; in no workspace now, it is let go (false). */
-  async #sendState(station: string): Promise<boolean> {
-    const frame = await this.#directory().stationState(station);
+  /** Its state as the Directory has it now (`told` with a delivery, else asked), sent; in no workspace now, it is let go (false). */
+  async #sendState(station: string, told?: string | null): Promise<boolean> {
+    const frame = told !== undefined ? told : await this.#directory().stationState(station);
     if (frame === null) {
       this.#gone();
       return false;
