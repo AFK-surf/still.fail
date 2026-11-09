@@ -307,10 +307,10 @@ fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
 }
 
 ///|
-/// What of the window's tree shows `what` (its words, `=WORDS` exactly, `icon:NAME` what it draws is called so:
-/// View::drawn_as; or is called `what`, its label whole: View::says), the middle of each where it is drawn, in the
-/// window, as it is made, however faded this frame (made transparent, coming in), as on_screen_nodes finds an old
-/// view's laid out; not on its way out (View::leaving: drawn only, as an old layer leaving is, Ctx::overlay's inert);
+/// What of the window's tree shows `what` (its words, `=WORDS` exactly, `field:WORDS` a field by the words in it,
+/// `icon:NAME` what it draws is called so: View::drawn_as; or is called `what`, its label whole: View::says), the
+/// middle of each where it is drawn, in the window, as it is made, however faded this frame (made transparent, coming
+/// in), as on_screen_nodes finds an old view's laid out; not on its way out (View::leaving: drawn only, as an old layer leaving is, Ctx::overlay's inert);
 /// whether it takes a press or not, whatever lies over it (reachable says which of it a finger
 /// reaches). What is seen is the glyphs' to say (Tester::glyphs_seen), not this.
 fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId)] {
@@ -335,6 +335,12 @@ fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId
       // a switch by what it turns (its label, whole), as on_screen_nodes finds an old view's: the switch alone
       let label = what.unsafe_substring(start=7, end=what.length())
       tree.said_of(d.id) is Some({ role: Switch, label: l, .. }) && l == label
+    } else if what.has_prefix("field:") && what.length() > 6 {
+      // a field by the words in it, not its placeholder, as on_screen_nodes finds an old view's
+      match tree_fields.get(d.id) {
+        Some(tf) => tf.st.shown().contains(what.unsafe_substring(start=6, end=what.length()))
+        None => false
+      }
     } else if what.has_prefix("=") && what.length() > 1 {
       let exact = what.unsafe_substring(start=1, end=what.length())
       words == exact || (label != "" && label == exact)

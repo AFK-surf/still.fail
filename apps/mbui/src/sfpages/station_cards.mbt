@@ -6,24 +6,24 @@
 /// A machine's CPU, memory and disk (MeterDials): each what is left large over its cells, filled as far as is used,
 /// its name and its total under them.
 fn meter_dials(c : @ui.Ctx, meters : Array[Json], details? : Array[String] = [], columns? : Int = 0) -> Unit {
-  @sf.dials(
-    c,
-    meters.map(fn(m) {
-      let mv = Some(m)
-      {
-        number: text(mv, "big"),
-        unit: text(mv, "unit"),
-        fill: 100 - count(mv, "left"),
-        level: text(mv, "level"),
-        label: text(mv, "title"),
-        note: text(mv, "total"),
-        label_short: text(mv, "titleShort"),
-        note_short: text(mv, "totalShort"),
-      }
-    }),
-    details~,
-    columns~,
-  )
+  @sf.dials(c, meters.map(meter_dial), details~, columns~)
+}
+
+///|
+/// A meter as its dial: what is left large, filled as far as is used, its name and its total under (each its short
+/// words too).
+fn meter_dial(m : Json) -> @sf.Dial {
+  let mv = Some(m)
+  {
+    number: text(mv, "big"),
+    unit: text(mv, "unit"),
+    fill: 100 - count(mv, "left"),
+    level: text(mv, "level"),
+    label: text(mv, "title"),
+    note: text(mv, "total"),
+    label_short: text(mv, "titleShort"),
+    note_short: text(mv, "totalShort"),
+  }
 }
 
 ///|
@@ -33,11 +33,31 @@ fn station_resource_dials(c : @ui.Ctx, meters : Array[Json], gpus : Array[Json])
     meter_dials(c, meters)
     return
   }
+  let (all, models) = station_dials_of(meters, gpus)
+  meter_dials(c, all, details=models, columns=3)
+}
+
+///|
+/// The machine's meters and its GPUs as one row of dials, and what is said under each (a GPU's model; "" none).
+fn station_dials_of(meters : Array[Json], gpus : Array[Json]) -> (Array[Json], Array[String]) {
   let all = meters.copy()
   all.append(gpus)
   let models = meters.map(fn(_) { "" })
   models.append(gpus.map(fn(g) { text(Some(g), "model") }))
-  meter_dials(c, all, details=models, columns=3)
+  (all, models)
+}
+
+///|
+/// The machine's dials (station_resource_dials', as nodes), as `host` says them now.
+fn station_dials_node(p : @view.View, host : () -> Json?) -> Unit {
+  p.pick(fn() { items(host(), "gpus").length() > 0 }, fn(d, gpus) {
+    if gpus {
+      let both = fn() { station_dials_of(items(host(), "meters"), items(host(), "gpus")) }
+      @sf.dials_node(d, fn() { both().0.map(meter_dial) }, details=fn() { both().1 }, columns=3)
+    } else {
+      @sf.dials_node(d, fn() { items(host(), "meters").map(meter_dial) })
+    }
+  })
 }
 
 ///|
@@ -98,17 +118,88 @@ fn station_net(c : @ui.Ctx, net : Json?) -> Unit {
 }
 
 ///|
+/// This device's connection to it (station_net's, as nodes), as `net` says it now: how it goes and packets lost, its
+/// round trip; beside them ↑ over ↓ (under them where the line has not the room).
+fn station_net_node(p : @view.View, net : () -> Json?) -> Unit {
+  let has = fn(key : String) { field(net(), key) is Some(Object(_)) }
+  p.box(fn(r) {
+    @sf.style_node(r, fn() { nt_row })
+    r.wraps(Is(Some(nt_lines))) |> ignore
+    r.box(fn(part) {
+      @sf.style_node(part, fn() { nt_part }, in_row=true)
+      part.cuts(Is(true)) |> ignore
+      part.box(fn(l) {
+        @sf.style_node(l, fn() { nt_line })
+        @sf.words_node(l, fn() { text(net(), "path") }, fn() { nt_words_cut }) |> ignore
+        l.show(fn() { has("loss") }, fn(f) { figure_node(f, fn() { field(net(), "loss") }) })
+      })
+      |> ignore
+      part.show(fn() { has("rtt") }, fn(x) {
+        x.box(fn(l) {
+          @sf.style_node(l, fn() { nt_line })
+          let parts = fn() {
+            let words = @sf.t("web-pages.stations.latency", args=[("latency", "\u{0}")])
+            words.split("\u{0}").map(fn(p) { p.to_string() }).collect()
+          }
+          @sf.words_node(l, fn() { parts().get(0).unwrap_or("") }, fn() { nt_words }) |> ignore
+          figure_node(l, fn() { field(net(), "rtt") })
+          @sf.words_node(l, fn() { parts().get(1).unwrap_or("") }, fn() { nt_words_cut }) |> ignore
+        })
+        |> ignore
+      })
+    })
+    |> ignore
+    r.box(fn(rates) {
+      @sf.style_node(rates, fn() { nt_rates }, in_row=true)
+      for way in [("↑", "up", "upTotal"), ("↓", "down", "downTotal")] {
+        rates.box(fn(l) {
+          @sf.style_node(l, fn() { nt_rate })
+          @sf.words_node(l, fn() { way.0 }, fn() { nt_words }) |> ignore
+          l.box(fn(sp) {
+            @sf.style_node(sp, fn() { nt_speed }, in_row=true)
+            @sf.words_node(sp, fn() { text(net(), way.1) }, fn() { nt_figure }) |> ignore
+          })
+          |> ignore
+          @sf.words_node(
+            l,
+            fn() {
+              match text(net(), way.2) {
+                "" => ""
+                total => @sf.t("web-pages.stations.total", args=[("total", total)])
+              }
+            },
+            fn() { nt_words },
+          )
+          |> ignore
+        })
+        |> ignore
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A figure (figure's, as a node), as `f` says it now.
+fn figure_node(p : @view.View, f : () -> Json?) -> Unit {
+  @sf.words_node(p, fn() { text(f(), "text") }, fn() { figure_style(text(f(), "level")) }) |> ignore
+}
+
+///|
+/// A figure's words by its level: bold in the words' ink, in its level's colour when off.
+fn figure_style(level : String) -> @ui.TextStyle {
+  match level {
+    "amber" => nt_figure.then(@ui.text_style(color=WarnInk))
+    "red" => nt_figure.then(@ui.text_style(color=Danger))
+    _ => nt_figure
+  }
+}
+
+///|
 /// A figure (Figure): bold in the words' ink, in its level's colour when off.
 pub fn figure(c : @ui.Ctx, f : Json?) -> Unit {
-  c.text(
-    text(f, "text"),
-    style=match text(f, "level") {
-      "amber" => nt_figure.then(@ui.text_style(color=WarnInk))
-      "red" => nt_figure.then(@ui.text_style(color=Danger))
-      _ => nt_figure
-    },
-  )
-  |> ignore
+  c.text(text(f, "text"), style=figure_style(text(f, "level"))) |> ignore
 }
 
 ///|
@@ -429,7 +520,8 @@ fn station_logins(c : @ui.Ctx, core : Core, station : String, online? : Bool = t
 
 ///|
 /// Which program's tries are open on a station's page, by station ("" none: closed again).
-let st_logins_open : Map[String, String] = {}
+// kept across runs: said as a program's row is pressed; login_cards_reset empties it
+let st_logins_open : @sf.LiveMap[String, String] = @sf.LiveMap::new()
 
 // ── styles ──────────────────────────────────────────────────────────────
 

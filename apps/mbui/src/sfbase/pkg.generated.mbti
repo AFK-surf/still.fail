@@ -481,6 +481,8 @@ pub fn feel_needed(@ui.Ctx, ChatRef, ChatView) -> Unit
 
 pub fn felt_change(@ui.Ctx, String, Bool, @ui.Haptic) -> Unit
 
+pub fn felt_change_node(@view.View, () -> Bool, @ui.Haptic) -> Unit
+
 pub fn file_image_id(String, String, String) -> String
 
 pub fn file_key(Attachment) -> String

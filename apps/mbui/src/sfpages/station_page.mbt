@@ -269,46 +269,47 @@ fn station_start(c : @ui.Ctx, core : Core, local : Json?, address : String) -> U
 /// online (its launcher hands over, its sessions go on, what its advanced settings saved taking effect), removing it
 /// from the workspace (asked first).
 fn station_menu(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Unit {
-  let address = text(s, "station")
-  let key = "station-more/" + address
+  let key = "station-more/" + text(s, "station")
   @sf.icon_action(c, "more", key, @sf.t("common.more"), on_press=fn() {
-    let mid = c.id(key)
-    let remove = fn() {
-      confirm(
-        @sf.t("web-pages.settings.stations.removeConfirm", args=[("name", text(s, "name"))]),
-        @sf.t("web-pages.settings.stations.removeConfirmBody", args=[("name", "still.fail")]),
-        @sf.t("web-pages.settings.stations.removeAction"),
-        danger=true,
-        // back to the list at once (the page of a station going has nothing to show), its answer said there
-        fn() {
-          (core.pop)()
-          @settings.act(
-            core,
-            @sf.t("web-pages.settings.stations.remove"),
-            "workspace.removeStation",
-            obj([("workspace", str(here.workspace)), ("station", str(text(s, "id"))), ("account", str(here.sub))]),
-            done=@sf.t("android-settings.station.removed"),
-          )
-        },
-      )
-    }
-    @sf.menu(
-      [
-        Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { station_rename(core, here, s) })),
-        if flag(s, "online") {
-          Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.restart"), icon="power", fn() {
-            @settings.act(core, @sf.t("web-pages.settings.stations.restartWhat"), "station.restart",
-              obj([("station", str(address))]), done=@sf.t("web-pages.settings.stations.restarting"))
-          }))
-        } else {
-          None
-        },
-        Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.remove"), icon="trash", danger=true, remove)),
-      ],
-      from=Of(mid),
-      along=End,
-    )
+    @sf.menu(station_menu_items(core, here, s), from=Of(c.id(key)), along=End)
   })
+}
+
+///|
+/// What its ⋯ holds (station_menu's): renaming it, restarting it while it is online, removing it (asked first).
+fn station_menu_items(core : Core, here : Here, s : Json?) -> Array[@sf.MenuItem?] {
+  let address = text(s, "station")
+  let remove = fn() {
+    confirm(
+      @sf.t("web-pages.settings.stations.removeConfirm", args=[("name", text(s, "name"))]),
+      @sf.t("web-pages.settings.stations.removeConfirmBody", args=[("name", "still.fail")]),
+      @sf.t("web-pages.settings.stations.removeAction"),
+      danger=true,
+      // back to the list at once (the page of a station going has nothing to show), its answer said there
+      fn() {
+        (core.pop)()
+        @settings.act(
+          core,
+          @sf.t("web-pages.settings.stations.remove"),
+          "workspace.removeStation",
+          obj([("workspace", str(here.workspace)), ("station", str(text(s, "id"))), ("account", str(here.sub))]),
+          done=@sf.t("android-settings.station.removed"),
+        )
+      },
+    )
+  }
+  [
+      Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.rename"), icon="edit", fn() { station_rename(core, here, s) })),
+      if flag(s, "online") {
+        Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.restart"), icon="power", fn() {
+          @settings.act(core, @sf.t("web-pages.settings.stations.restartWhat"), "station.restart",
+            obj([("station", str(address))]), done=@sf.t("web-pages.settings.stations.restarting"))
+        }))
+      } else {
+        None
+      },
+      Some(@sf.menu_item_of(@sf.t("web-pages.settings.stations.remove"), icon="trash", danger=true, remove)),
+  ]
 }
 
 ///|
@@ -457,7 +458,7 @@ fn station_overview(c : @ui.Ctx, core : Core, here : Here, s : Json?) -> Array[(
               trouble=if attention > 0 { @sf.t("web-mobile.settings.profilesShort", args=[("n", attention.to_string())]) } else { "" },
               lead=fn() { @settings.group_mark(c, kind) },
               on_press=fn() {
-                station_profiles_panel(core, here, address, kind, name, from, ids.length() >= @sf.pick_search_from)
+                station_profiles_panel(core, here, address, kind, name, Of(from), ids.length() >= @sf.pick_search_from)
               },
             ) |> ignore
           }
@@ -568,7 +569,15 @@ let st_row_glyph : Double = 16.0
 
 ///|
 /// One account kind, with its live profiles and their allowances. A long kind can be searched without leaving it.
-fn station_profiles_panel(core : Core, here : Here, address : String, kind : String, title : String, from : Int, many : Bool) -> Unit {
+fn station_profiles_panel(
+  core : Core,
+  here : Here,
+  address : String,
+  kind : String,
+  title : String,
+  from : @sf.Anchor,
+  many : Bool,
+) -> Unit {
   let search_key = "station-profiles-search/" + address + "/" + kind
   let query = @ui.Field::new()
   @sf.panel(
@@ -611,7 +620,7 @@ fn station_profiles_panel(core : Core, here : Here, address : String, kind : Str
         }) |> ignore
       }
     },
-    from=Of(from),
+    from~,
     field=if many { search_key } else { "" },
     tall=if many { 0.85 } else { 0.0 },
     grows=many,

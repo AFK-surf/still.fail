@@ -300,3 +300,16 @@ pub fn provider_logo_node(parent : @view.View, runtime : String, kind : String, 
     maker_mark_node(parent, maker, runtime, size)
   }
 }
+
+///|
+/// A program a station logs in to (tool_mark's) as a node, `size` across: its maker's mark in its colours, those whose
+/// colour is black in the page's ink as it is now; a terminal's where it has none.
+pub fn tool_mark_node(parent : @view.View, mark : String, size : Double) -> Unit {
+  let name = "tool_" + mark.replace_all(old="-", new="_")
+  if mark == "" || !drawables.contains(name) {
+    station_mark_node(parent, fn() { "" }, fn() { "glyph:terminal" }, size, fn() { theme().p.muted }, fn() { 0 })
+    return
+  }
+  let ink = ink_tools.contains(mark)
+  drawable_node(parent, name, size, tint=fn() { if ink { Some(theme().p.text) } else { None } }) |> ignore
+}

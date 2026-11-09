@@ -334,10 +334,17 @@ fn local_start(core : Core, s : Json?) -> Unit {
 /// stations' row) and is not running, but can be started from here (stopped, or being started, installed or updated):
 /// 启动 offered for it there, not a try at reaching it again. None for any other.
 pub fn local_stopped(address : String) -> Json? {
+  local_stopped_in(address, @ui.local_station())
+}
+
+///|
+/// The station here as `said` (the host's words for it) has it, where it is the station at `address` and is not running
+/// but can be started from here (local_stopped's).
+fn local_stopped_in(address : String, said : String) -> Json? {
   if address == "" || address != this_machine() {
     return None
   }
-  let s = match @ui.local_station() {
+  let s = match said {
     "" => return None
     j => try Some(@json.parse(j)) catch { _ => return None }
   }

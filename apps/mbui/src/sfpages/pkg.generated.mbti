@@ -315,6 +315,8 @@ pub fn lock_wait_page(@ui.Ctx, @settings.Core, @settings.Here) -> Unit
 
 pub fn login_card(@ui.Ctx, @settings.Core, String, String, marked? : Bool, place? : String) -> Unit
 
+pub fn login_card_node(@view.View, @settings.Core, String, String, marked? : Bool, place? : String) -> Unit
+
 pub fn login_cards_reset() -> Unit
 
 pub fn login_steps(@ui.Ctx, @settings.Core, String, @json.Json?, String, Bool, (String, () -> Unit) -> Unit, in_station? : (String, Bool, (String) -> Unit)) -> Unit
@@ -600,6 +602,8 @@ pub fn state_line_node(@view.View, @sf.TipLayer, () -> String, () -> String, () 
 pub fn station_archiving_node(@view.View, @settings.Core, () -> @settings.Here, String, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double) -> Unit
 
 pub fn station_figures(@ui.Ctx, @sfbase.Source, @json.Json?) -> Unit
+
+pub fn station_node(@view.View, @settings.Core, () -> @settings.Here, String, on_back~ : () -> Unit, frame~ : () -> @sf.PageFrame, said? : (@sf.PageSaid) -> Unit, width? : () -> Double, tips? : @sf.TipLayer, stint? : () -> Int32) -> Unit
 
 pub fn station_page(@ui.Ctx, @settings.Core, @settings.Here, @sf.PageFrame, String) -> Unit
 

@@ -184,8 +184,10 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
     }
     let faults : Array[(Int, String)] = []
     // (each node's drawn down the window as its looks and theirs over it have it, y -> a * y + b; how opaque; what
-    // of the window its holders' clips leave it; its row's top as drawn, where it is in a list's row: worked out from
-    // what holds it, which comes before it)
+    // of the window its holders' clips leave it; its row's top as drawn, where it is in a list's row, or in what a node of
+    // the tree scrolls (View::scrolls): there the one node it holds, drawn moved by how far it is scrolled alone (Node's
+    // scroll_off), so what is in it measured from that node's top has the scroll taken out and nothing else: worked out
+    // from what holds it, which comes before it)
     let k = self.count
     let ya = Array::make(k, 1.0)
     let yb = Array::make(k, 0.0)
@@ -218,7 +220,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
           c_top[i] = dmax(c_top[i], top)
           c_bot[i] = dmin(c_bot[i], top + ya[p] * pn.fh)
         }
-        if pn.kind == kind_list {
+        if pn.kind == kind_list || pn.tree_scrolls {
           row_at[i] = ya[i] * n.y + yb[i]
           in_row[i] = true
         } else {

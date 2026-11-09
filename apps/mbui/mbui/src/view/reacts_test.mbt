@@ -399,3 +399,17 @@ test "reacts: its node let go by what was due before the change that tells it (n
   assert_eq((reads.val, done.val), (1, 1))
   assert_true(!s.watched())
 }
+
+///|
+test "reacts, not at_start: done as of each change of what it reads alone, never with what it reads as it is said" {
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let seen : Array[Bool] = []
+  let tree = @view.Tree::new(fn(root) { root.reacts(fn() { on.get() }, fn(b) { seen.push(b) }, at_start=false) })
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  assert_eq(seen, [], msg="nothing as it is said: true as it was then")
+  tree.event(10.0, fn() { on.set(false) })
+  tree.event(20.0, fn() { on.set(true) })
+  // (set to what it is: no change, nothing done)
+  tree.event(30.0, fn() { on.set(true) })
+  assert_eq(seen, [false, true])
+}
