@@ -1999,7 +1999,7 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
   // (its references as the field's marks, which its flight takes off as; its row's runs as the core read its words)
   let marks = @sfbase.refs_sent_marks(w.key, words)
   let runs = @sfbase.refs_sent_runs(w.key, words)
-  let row = sent_local(c, rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), runs~)
+  let row = sent_local(c, rk, Some(v), words, up_files(w), going=going_files(w), quotes=sent_quotes(w), runs~, now=(src.now)())
   // its words take off from the field as they are (before it is emptied), the composer (its box and its room) held as
   // tall as it shows till they let go of it, as the list's foot over it is: sent on its way to a line more or less,
   // where it is drawn then, not where that way ends (the rows over it went there at once, in the frame it was sent, or

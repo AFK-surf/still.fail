@@ -13,6 +13,7 @@ using @sffixture {
   fix_chat,
   fix_clock,
   fix_clock_set,
+  fix_core_for,
   fix_deliver_ms,
   fix_docs,
   fix_download_step_ms,

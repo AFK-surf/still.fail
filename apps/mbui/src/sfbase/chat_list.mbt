@@ -1420,10 +1420,7 @@ pub fn row_keys(
         break
       }
     }
-    for j, l in still {
-      all.insert(at + j, Out(l.row))
-      all_keys.insert(at + j, "o:" + l.row.id)
-    }
+    sent_among(all, all_keys, at, still)
   }
   // an agent whose card was just answered from here: at work from the frame the answer is sent, its line coming with
   // the answer (answered_at)

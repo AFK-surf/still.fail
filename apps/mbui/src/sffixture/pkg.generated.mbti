@@ -97,6 +97,7 @@ pub fn fix_crowded_frequent() -> Json
 
 pub fn fix_crowded_model(String, String, String, String, Array[String]) -> Json
 
+pub let fix_core_for : @ref.Ref[Double]
 pub let fix_crowded_models : Array[String]
 
 pub let fix_ctx : @ref.Ref[@ui.Ctx?]
