@@ -66,7 +66,8 @@ export function verifyFeed(feed: any, trusted: Map<string, string> = trustedKeys
   const r = verifySigned(feed, trusted);
   if (r?.kind !== "stillfail-station-release" || typeof r.version !== "string" || !Number.isSafeInteger(r.build) || typeof r.builds !== "object" || r.builds === null)
     throw new Unverified("the release's words are not a station release");
-  if (r.version !== `0.1.${r.build}` || (feed.version !== undefined && feed.version !== r.version)) throw new Unverified("the feed's version is not the signed one");
+  // (0.<m>.<n>: m only said, n the build; 0.1. until m was counted, the user, 2026-11-09)
+  if (!new RegExp(`^0\\.\\d+\\.${r.build}$`).test(r.version) || (feed.version !== undefined && feed.version !== r.version)) throw new Unverified("the feed's version is not the signed one");
   for (const [p, b] of Object.entries<any>(r.builds)) {
     if (!SHA.test(b?.sha256 ?? "") || !SHA.test(b?.nodeSha256 ?? "") || !Number.isSafeInteger(b?.size)) throw new Unverified(`the release's ${p} build is not well formed`);
   }

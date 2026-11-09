@@ -216,7 +216,7 @@ export function changelog(root: string, rev = "HEAD"): Entry[] {
 export function stable(root: string, beta: Entry[] = []): Entry[] {
   const dir = join(root, "docs/releases");
   const releases = (existsSync(dir) ? readdirSync(dir) : [])
-    .filter((f) => /^0\.1\.\d+\.md$/.test(f))
+    .filter((f) => /^0\.\d+\.\d+\.md$/.test(f))
     .map((f) => readRelease(readFileSync(join(dir, f), "utf8"), f))
     .sort((a, b) => b.version - a.version);
   return releases.map((release, i) => {
@@ -249,7 +249,7 @@ export function readRelease(file: string, name = "release"): Entry {
 export function lastBase(root: string): number {
   const dir = join(root, "docs/releases");
   const newest = (existsSync(dir) ? readdirSync(dir) : [])
-    .filter((f) => /^0\.1\.\d+\.md$/.test(f))
+    .filter((f) => /^0\.\d+\.\d+\.md$/.test(f))
     .map((f) => readFileSync(join(dir, f), "utf8"))
     .map((file) => ({ version: readRelease(file).version, base: Number(/^base:\s*(\d+)\s*$/m.exec(/^---\n([\s\S]*?)\n---/.exec(file)?.[1] ?? "")?.[1] ?? 0) }))
     .sort((a, b) => b.version - a.version)[0];
