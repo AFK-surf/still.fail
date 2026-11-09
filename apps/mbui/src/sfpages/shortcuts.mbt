@@ -59,12 +59,6 @@ pub fn shortcuts_node(
   let any = fn() { listed().iter().any(fn(a) { flag(Some(a), "changed") }) }
   // how the composer sends: one of two ways (`sendKey`), not keys of its own
   let send = fn() { field(keymap(), "send") }
-  let wide = fn() {
-    match width {
-      Some(w) => @sf.look_for(w()) is Wide
-      None => false
-    }
-  }
   let sending = fn(v : @view.View) {
     @sf.setting_choice_node(
       v,
@@ -76,6 +70,7 @@ pub fn shortcuts_node(
         @settings.set_pref(core, "sendKey", if by == "mod" { "mod" } else { "" })
       },
       note=fn() { text(send(), "text") },
+      alone=true,
     )
   }
   // (the next key press, while one records: none of it anything else's (pressed, window_zoom's stand aside))
@@ -121,11 +116,7 @@ pub fn shortcuts_node(
     },
     fn(b, key) {
       if key == "send" {
-        if wide() {
-          @sf.group_node(b, fn(g) { sending(g) })
-        } else {
-          sending(b)
-        }
+        sending(b)
         return
       }
       let i = @string.parse_int(key[:key.find("/").unwrap_or(0)]) catch { _ => 0 }
