@@ -91,14 +91,26 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       None => (est, false)
     }
   }
+  // (what they come to, one array kept and written again from the first whose height changed down, those over it as
+  // they were: told changed each time it is worked out, the same array)
+  let laid_out : Array[(K, Double, Double, Bool)] = []
+  let laid_grid = Ref(-1.0)
   let laid = @signals.computed(fn(_) {
     told.get() |> ignore
     laid_n.val = laid_n.val + 1
     let ks = keys()
-    if physical_equal(ks, laid_keys.val) {
+    // (as tall as each is laid out in the column: on its host's pixels where it sets a page's list's rows on them,
+    // Tree::rows_slot)
+    let g = self.tree.rows_grid_now()
+    let mut from = 0
+    if physical_equal(ks, laid_keys.val) && g == laid_grid.val && laid_out.length() == ks.length() {
+      from = ks.length()
       for k in heights_changed {
         match laid_at.get(k) {
-          Some(i) => laid_h[i] = height_of(k)
+          Some(i) => {
+            laid_h[i] = height_of(k)
+            from = from.min(i)
+          }
           None => ()
         }
       }
@@ -106,24 +118,33 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       laid_keys.val = ks
       laid_at.clear()
       laid_h.clear()
+      laid_out.clear()
       for i, k in ks {
         laid_at[k] = i
         laid_h.push(height_of(k))
       }
     }
+    laid_grid.val = g
     heights_changed.clear()
-    let out : Array[(K, Double, Double, Bool)] = Array::new(capacity=ks.length())
-    let mut top = 0.0
-    for i, k in ks {
+    let mut top = if from > 0 {
+      let b = laid_out[from - 1]
+      b.1 + b.2
+    } else {
+      0.0
+    }
+    for i in from..<ks.length() {
       let (h, known) = laid_h[i]
-      // (as tall as it is laid out in the column: on its host's pixels where it sets a page's list's rows on them,
-      // Tree::rows_slot)
-      let h = self.tree.rows_slot(h)
-      out.push((k, top, h, known))
+      let h = rows_slot_on(h, g)
+      let b = (ks[i], top, h, known)
+      if i < laid_out.length() {
+        laid_out[i] = b
+      } else {
+        laid_out.push(b)
+      }
       top = top + h
     }
-    out
-  })
+    laid_out
+  }, same=fn(_, _) { false })
   // (the first of them whose foot is past `y`, as they go down: each foot no higher than the next one's)
   let first_past = fn(all : Array[(K, Double, Double, Bool)], y : Double) {
     let mut lo = 0

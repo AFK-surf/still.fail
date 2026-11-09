@@ -308,15 +308,20 @@ fn Damage::units_of(self : Damage, inst : FixedArray[Double], count : Int) -> (F
   let u = self.units
   let mut k = 0
   let mut n = 0
+  // (each run up to a header and the header copied as one: the frame's instances moved a run at a time, not one by one)
   while k < count {
-    inst.blit_to(u, len=inst_size, src_offset=k * inst_size, dst_offset=n * inst_size)
-    if kind_at(inst, k) == 13 {
-      self.heads_at.push((k, n))
-      n = n + 1
-      k = k + inst[k * inst_size + 14].to_int()
+    let mut e = k
+    while e < count && kind_at(inst, e) != 13 {
+      e = e + 1
+    }
+    let run = if e < count { e - k + 1 } else { e - k }
+    inst.blit_to(u, len=run * inst_size, src_offset=k * inst_size, dst_offset=n * inst_size)
+    n = n + run
+    if e < count {
+      self.heads_at.push((e, n - 1))
+      k = e + inst[e * inst_size + 14].to_int()
     } else {
-      n = n + 1
-      k = k + 1
+      k = e
     }
   }
   (u, n)

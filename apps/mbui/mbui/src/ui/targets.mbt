@@ -308,15 +308,15 @@ let targets_kept : TargetsKept = {
 }
 
 ///|
-/// The old views the tree draws now, as targets are found from it (Ctx::targets_found, old_drawn): each one's node, its
-/// place in the tree's order, and whether it shows; where it is drawn not, a scrolled list moving it or what is round it.
+/// The old views the tree draws now, as targets are found from it (Ctx::targets_found, old_drawn): each one's node, in
+/// the tree's order, and whether it shows; where it is drawn not, a scrolled list moving it or what is round it, nor how
+/// far into the order (rows coming into a list before it move that, nothing of its targets).
 fn old_drawn_said(tree : @view.Tree) -> Array[Int] {
   let out = []
   for d in old_drawn(tree) {
-    let (c, _, _, a, _, _, _, at) = d
+    let (c, _, _, a, _, _, _, _) = d
     out.push(c.id.at)
     out.push(c.id.gen)
-    out.push(at)
     out.push(if a <= 0.002 { 0 } else { 1 })
   }
   out
