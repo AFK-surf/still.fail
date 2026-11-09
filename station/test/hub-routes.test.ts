@@ -21,6 +21,7 @@ import { digest } from "../src/read/digest.ts";
 import { answersSince, openStore } from "../src/read/store.ts";
 import { chatMarks, chatRows, chats } from "../src/read/views.ts";
 import { marksOf, rowsMade } from "../../client/core-ts/src/station/rows-made.ts";
+import { worded } from "../../client/core-ts/src/chat-row.ts";
 import { isDeepStrictEqual } from "node:util";
 import { FakeDriver, settle } from "./hub-fakes.ts";
 import { referenceAnswersSince } from "./card-answer-reference.ts";
@@ -720,11 +721,12 @@ test("a file a message names by its path: its peek and the file whole, only with
     const [cloned, c] = await peek("web/src/Peeks.tsx");
     assert.deepEqual([cloned, c.path, c.lines?.text[0]], [200, realpathSync(join(r.data, "repos", "new", "web", "src", "Peeks.tsx")), "// new"]);
     // Nothing outside, however named; nothing that is not there.
-    assert.deepEqual(await peek("../../../../stillfail.db"), [403, { error: en("station.files.outside") }]);
+    // (refused by the key of its words: the client says them)
+    assert.deepEqual(await peek("../../../../stillfail.db"), [403, { error: "station.files.outside" }]);
     // A file there is, outside: Windows has its own.
     const outside = process.platform === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "win.ini") : "/etc/hosts";
-    assert.deepEqual(await peek(outside), [403, { error: en("station.files.outside") }]);
-    assert.deepEqual(await peek("src/nope.ts"), [404, { error: en("station.files.notFound") }]);
+    assert.deepEqual(await peek(outside), [403, { error: "station.files.outside" }]);
+    assert.deepEqual(await peek("src/nope.ts"), [404, { error: "station.files.notFound" }]);
     const [, whole] = await r.ask("GET", `/sessions/${key}/open`, undefined, [["path", "src/a.ts"]]);
     assert.equal(Buffer.from(whole.bytes, "base64").toString("utf8").split("\n").length, 40);
     assert.equal(whole.name, "a.ts");
@@ -1091,6 +1093,8 @@ test("a device makes the sidebar from the summaries and marks as the station mak
     assert.ok(marks !== null, JSON.stringify(answer));
     const words = { untitled: tr("en", "station.chat.untitled"), directMessage: tr("en", "station.chat.directMessage"), quotedOnly: tr("en", "station.chat.quotedOnly") };
     const device = rowsMade(sessions, threads, marks!, viewer.email, words);
+    // (the station's rows with what names them: in the client's words, chat-row.ts `worded`)
+    station.splice(0, station.length, ...(station as any[]).map((row) => worded(row, { ...words, admin: tr("en", "station.author.admin") })));
     const byId = (rows: any[]) => Object.fromEntries(rows.map((row) => [String(row.id), row]));
     assert.deepEqual(byId(device), byId(station));
     assert.ok(station.some((row: any) => row.card) && station.some((row: any) => row.pinned !== null) && station.length >= 3, "the cases looked at");

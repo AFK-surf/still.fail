@@ -20,7 +20,6 @@ import { type InWorkspace, sees } from "../store/rows.ts";
 import { watching } from "./store.ts";
 import * as store from "./store.ts";
 import type { Json, SessionRow, Store, ThreadRow, ThreadSummary } from "./store.ts";
-import { setLang, tr } from "./spoken.ts";
 import { sessionPlaces, transcriptSources } from "./transcript.ts";
 import { type Read, chainOf, entriesOf, lengthOf, marksDir, stateOf } from "./transcripts.ts";
 import { log } from "../ops/log.ts";
@@ -150,7 +149,6 @@ export function summary(s: Store, key: string): Json {
 /// GET /sessions: the sessions shown in lists, or only the archived ones; those of one connect;
 /// those of the viewer's workspace (all of them for a read made for no one).
 export function sessions(s: Store, connect: string | null, archived: boolean, lang: Lang, viewer: InWorkspace | null = null): Json[] {
-  setLang(lang);
   const rows = store.listedSessions(s, connect, archived, viewer);
   const keys = rows.map((row) => row.key);
   const bindings = store.listBindings(s, keys);
@@ -163,7 +161,6 @@ export function sessions(s: Store, connect: string | null, archived: boolean, la
 /// (`turns`, `workMs`): all of them were read for that, many of one session in 25 s on a station (2026-11-03).
 /// `now`: only its jobs that may matter now (`jobsNow`, `?jobs=now`), not its every one.
 export function session(s: Store, key: string, viewer: Viewer, lang: Lang, turns: number | null = null, now = false): Json {
-  setLang(lang);
   // One of another workspace is none.
   const row = store.getSession(s, key);
   if (row !== null && !sees(viewer, row.ws)) throw new HttpError(404, `unknown session ${key}`);
@@ -234,13 +231,11 @@ function threadViews(s: Store, viewer: Viewer, session: string | null): Json[] {
 
 /// GET /threads?session=: the threads (of one session).
 export function threads(s: Store, viewer: Viewer, session: string | null, lang: Lang): Json[] {
-  setLang(lang);
   return threadViews(s, viewer, session);
 }
 
 /// GET /threads/:id (admin/mod.rs): the id an i64, the thread there.
 export function thread(s: Store, viewer: Viewer, id: string, lang: Lang): Json {
-  setLang(lang);
   const n = parseI64(id);
   if (n === null || store.getThread(s, n) === null || !store.seesThread(s, viewer, n)) throw new HttpError(404, `unknown thread ${id}`);
   const found = store.listThreads(s, viewer.email, null, n)[0];
@@ -264,7 +259,6 @@ export function parseI64(text: string): number | null {
 /// is read again when it is opened. `end`: how many entries the transcript has. The transcript is found through the
 /// session's profile; none found: nothing.
 export function timeline(s: Store, key: string, beforeParam: string | undefined, limitParam: string | undefined, lang: Lang, fromParam?: string, toParam?: string, briefParam?: string, afterParam?: string): Json {
-  setLang(lang);
   const before = parseUsize(beforeParam) ?? 0;
   const limit = Math.min(Math.max(parseUsize(limitParam) ?? 200, 1), 1000);
   const started = performance.now();
@@ -319,7 +313,6 @@ export function transcriptState(s: Store, key: string): Json {
 /// GET /sessions/:key/transcript: where its runtime keeps the session's transcript on this machine (the current runtime
 /// session's, found as `timeline` finds it), for a person to open or hand to another tool; null before it is written.
 export function transcriptFile(s: Store, key: string, lang: Lang): Json {
-  setLang(lang);
   const row = sessionRow(s, key);
   if (row.runtimeSessionId === null) return { path: null };
   const source = store.runtimeSessionSource(s, key, row.runtimeSessionId);
@@ -331,7 +324,6 @@ export function transcriptFile(s: Store, key: string, lang: Lang): Json {
 /// GET /sessions/:key/widget-state?path: what a widget in one of the session's messages holds, null when nothing or
 /// what is kept does not read as JSON.
 export function widgetState(s: Store, key: string, path: string | undefined, lang: Lang): Json {
-  setLang(lang);
   sessionRow(s, key);
   const kept = store.widgetState(s, key, path ?? "");
   let state: Json = null;
@@ -381,9 +373,9 @@ export function ioMessage(e: NodeJS.ErrnoException): string {
 /// links followed first: a page reads what the session works on, not the rest of the machine. What it is, for the
 /// route to read.
 export function sessionPlace(s: Store, key: string, given: string, lang: Lang): Json {
-  setLang(lang);
   const row = sessionRow(s, key);
-  const notFound = () => new HttpError(404, tr("station.files.notFound"));
+  // (refused by the key of its words: the client says them, core-ts station/requests.ts `httpError`)
+  const notFound = () => new HttpError(404, "station.files.notFound");
   const asked = given.trim();
   if (asked === "" || asked.includes("\0")) throw notFound();
   const base = row.cwd ?? row.workspace;
@@ -394,11 +386,11 @@ export function sessionPlace(s: Store, key: string, given: string, lang: Lang): 
   // Nothing in a folder macOS protects is looked at here (its links followed up to one, ops/places.ts): that would hold
   // this reader on a prompt for the station's launcher, and the pages with it.
   const outside = realOutside(clean(full));
-  if (outside !== null && protectedPlace(outside) !== null && platform.hasFolderPermissions) throw new HttpError(403, tr("station.files.protected"));
+  if (outside !== null && protectedPlace(outside) !== null && platform.hasFolderPermissions) throw new HttpError(403, "station.files.protected");
   const path = outside ?? (relative ? inRepositories([row.workspace, row.cwd], asked) ?? inRepositories([join(s.dataDir, "repos")], asked, true) : null);
   if (path === null) throw notFound();
   const roots = [row.workspace, row.cwd, join(s.dataDir, "repos"), agentHomeOf(s.dataDir)].flatMap((r) => (r ? [realOutside(r)] : [])).filter((r): r is string => r !== null);
-  if (!roots.some((r) => within(path, r))) throw new HttpError(403, tr("station.files.outside"));
+  if (!roots.some((r) => within(path, r))) throw new HttpError(403, "station.files.outside");
   let st;
   try {
     st = statSync(path);

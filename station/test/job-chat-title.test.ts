@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { worded } from "../../client/core-ts/src/chat-row.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -30,7 +31,9 @@ function oldEdits(store: Store, thread: number) {
   addClientColumn(db);
 }
 const jobChats = (rows: any[]) => rows.map((j) => [j.id, j.chat?.id, j.chat?.title, j.chat?.archived]);
-const titleRows = (rows: any[]) => rows.map((r) => [r.id, r.title, r.agents.map((a: any) => a.key)]);
+/// (the rows in a client's words: chat-row.ts `worded`)
+const titleRows = (rows: any[]) => rows.map((r) => worded(r, WORDS)).map((r) => [r.id, r.title, r.agents.map((a: any) => a.key)]);
+const WORDS = { untitled: "新对话", directMessage: "私信", quotedOnly: "引用了一条消息" };
 
 for (const title of ["Given title", null]) test(`a job's own chat with title ${title} does not need its message edits`, () => {
   const store = Store.open(":memory:");
@@ -40,14 +43,14 @@ for (const title of ["Given title", null]) test(`a job's own chat with title ${t
     store.joinThread(chat.id, "a", "ember");
     store.insertMessage({ ...newMessage(chat.id, "1", "person", "ann@x", "first"), at: 1 });
     const reader = makeStore(store.db, ".");
-    const expected = jobChats(openJobs(reader, viewer, "en"));
+    const expected = jobChats(openJobs(reader, viewer));
     assert.equal(expected[0][1], "a");
     if (title !== null) assert.equal(expected[0][2], title);
     oldEdits(store, chat.id);
     assert.throws(() => lastSaid(reader, chat.id), { status: 503, message: "legacy edit lookup pending" });
     assert.throws(() => firstText(reader, chat.id), { status: 503, message: "legacy edit lookup pending" });
-    assert.deepEqual(openJobs(reader, viewer, "en", false).map((j) => j.id), ["j-a"]);
-    assert.deepEqual(jobChats(openJobs(reader, viewer, "en")), expected);
+    assert.deepEqual(openJobs(reader, viewer, false).map((j) => j.id), ["j-a"]);
+    assert.deepEqual(jobChats(openJobs(reader, viewer)), expected);
   } finally { store.close(); }
 });
 
@@ -63,11 +66,11 @@ for (const own of [false, true]) test(`a named ${own ? "own chat" : "external or
     store.joinThread(source.id, "a", "one");
     store.insertMessage({ ...newMessage(source.id, "1", "person", "ann@x", "first"), at: 1 });
     const reader = makeStore(store.db, ".");
-    const expected = jobChats(openJobs(reader, viewer, "en"));
+    const expected = jobChats(openJobs(reader, viewer));
     assert.equal(expected[0][2], own ? "Own title" : "Origin title");
     oldEdits(store, source.id);
     assert.throws(() => firstText(reader, source.id), { status: 503, message: "legacy edit lookup pending" });
-    assert.deepEqual(jobChats(openJobs(reader, viewer, "en")), expected);
+    assert.deepEqual(jobChats(openJobs(reader, viewer)), expected);
   } finally { store.close(); }
 });
 
@@ -79,13 +82,13 @@ test("an unnamed external origin still needs its first text for the job's chat",
     store.joinThread(source.id, "a", "one");
     store.insertMessage({ ...newMessage(source.id, "1", "person", "ann@x", "The first message"), at: 1 });
     const reader = makeStore(store.db, ".");
-    const expected = jobChats(openJobs(reader, viewer, "en"));
+    const expected = jobChats(openJobs(reader, viewer));
     assert.equal(expected[0][2], "The first message");
     oldEdits(store, source.id);
-    assert.throws(() => openJobs(reader, viewer, "en"), { status: 503, message: "legacy edit lookup pending" });
+    assert.throws(() => openJobs(reader, viewer), { status: 503, message: "legacy edit lookup pending" });
     while (!legacyEditStep(store.db).ready) { /* prepare */ }
     while (legacyEditDrain(store.db) > 0) { /* reconcile */ }
-    assert.deepEqual(jobChats(openJobs(reader, viewer, "en")), expected);
+    assert.deepEqual(jobChats(openJobs(reader, viewer)), expected);
   } finally { store.close(); }
 });
 
@@ -123,10 +126,10 @@ test("the selected origin and its name share the reader's snapshot", () => {
     const reader = makeStore(observed, dir);
     reader.db.exec("BEGIN");
     try {
-      assert.equal(jobChats(openJobs(reader, viewer, "en"))[0][2], "Before");
+      assert.equal(jobChats(openJobs(reader, viewer))[0][2], "Before");
       assert.equal(changed, true);
     } finally { reader.db.exec("COMMIT"); }
-    assert.equal(jobChats(openJobs(reader, viewer, "en"))[0][2], "After");
+    assert.equal(jobChats(openJobs(reader, viewer))[0][2], "After");
   } finally { writer.close(); store.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -165,7 +168,7 @@ test("job title rows preserve the full sidebar's names, agents and order", () =>
         assert.equal(byId.has("away"), false);
       }
     }
-    assert.deepEqual(jobChats(openJobs(reader, viewer, "en")).sort(), [
+    assert.deepEqual(jobChats(openJobs(reader, viewer)).sort(), [
       ["j-a", "a", "Newer origin text", false], ["j-b", "b", "B name", false], ["j-old", "old", "Old name", true],
     ]);
   } finally { store.close(); }

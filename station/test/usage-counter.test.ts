@@ -2,6 +2,7 @@
 // copy of a real station is at $USAGE_WORK, default /tmp/usage-work) what it records against what the Rust recorded.
 import type { Clock } from "effect";
 import assert from "node:assert/strict";
+import { tr } from "../src/ops/i18n.ts";
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
@@ -158,9 +159,10 @@ test("GPT usage has a price, and unknown variants do not borrow one", () => {
   assert.ok(Math.abs(cost(g)! - 102.470002) < 1e-9);
 });
 
-test("the price note finishes its explanation in both languages", () => {
-  assert.ok((priceTable("zh") as any).note.endsWith("。"));
-  assert.ok((priceTable("en") as any).note.endsWith("."));
+test("the price note finishes its explanation in both languages (the client's words: core-ts views/usage.ts)", () => {
+  assert.equal((priceTable("zh") as any).note, undefined);
+  assert.ok(tr("zh", "station.usage.priceNote").endsWith("。"));
+  assert.ok(tr("en", "station.usage.priceNote").endsWith("."));
 });
 
 type Rig = { data: string; store: Store; usage: UsageCounter };

@@ -357,7 +357,7 @@ function corpus(): { claude: string; codex: string } {
 
 /// What lines gave when READING was each: a reading kept on disk (read/transcripts.ts) counts and marks entries as lines
 /// gave them then.
-const READ_AS: Record<number, string> = { 2: "8a08a82d23cb7c00" };
+const READ_AS: Record<number, string> = { 2: "8a08a82d23cb7c00", 3: "a566fc514beb28bf" };
 
 test("a prompt that came while a Claude agent worked is read as one that began a turn, where it was given", () => {
   const dir = temp();

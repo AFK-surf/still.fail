@@ -14,6 +14,8 @@ import { topicKey, type Topic } from "./protocol.ts";
 import { Marks, signal, tracking, untracked, type Source as ReactiveSource } from "./reactive.ts";
 import type { Runner } from "./runtime.ts";
 import { equal, get, isObject, parseJson, toJsonBytes } from "./util.ts";
+import { worded } from "./chat-row.ts";
+import { current, tr } from "./i18n.ts";
 import { ofAddress } from "./workspace.ts";
 
 export { frozen };
@@ -798,9 +800,9 @@ export class Data {
     const list = Array.isArray(value) ? value : [];
     switch (topic.topic) {
       case "chatRows":
-        return db.setChats(station, false, list, at);
+        return db.setChats(station, false, list.map(inWords), at);
       case "archivedRows":
-        return db.setChats(station, true, list, at);
+        return db.setChats(station, true, list.map(inWords), at);
       case "sessions":
         return db.setSessions(station, list, at);
       case "threads":
@@ -1033,7 +1035,7 @@ export class Data {
 
   /// A sidebar row as an event has it.
   putChat(station: string, row: unknown): void {
-    this.of(station)?.putChat(station, row);
+    this.of(station)?.putChat(station, inWords(row));
   }
 
   dropChat(station: string, id: string): void {
@@ -1431,4 +1433,12 @@ export class Data {
   static detail(e: unknown): string {
     return e instanceof HostError || e instanceof Error ? e.message : String(e);
   }
+}
+
+/// A chat's row as its station gives it (station/src/read/views.ts `chats`: what names it, `named`, and a last message
+/// that only quotes, marked so) in this device's words; one a station from before worded itself, as it is.
+function inWords(row: unknown): unknown {
+  if (!isObject(row)) return row;
+  const lang = current();
+  return worded(row as Record<string, any>, { untitled: tr(lang, "core-views.new_chat"), directMessage: tr(lang, "core-views.direct_message"), quotedOnly: tr(lang, "station.chat.quotedOnly"), admin: tr(lang, "station.author.admin") });
 }

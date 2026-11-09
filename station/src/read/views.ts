@@ -126,9 +126,16 @@ export function chatTitle(t: ThreadSummary, channelName: string | null): string 
   return titleOf(t.thread, t.firstText, channelName);
 }
 
-/// What a thread is called, by the one rule the core names it by too (client/core-ts/src/titles.ts).
+/// What a thread is called, by the one rule the core names it by too (client/core-ts/src/titles.ts), in the station's
+/// words: for what the station says itself (a notification, a message an agent or a platform is given).
 export function titleOf(thread: ThreadRow, firstText: string | null, channelName: string | null): string {
   return titles.chatTitle(thread, firstText, channelName, { untitled: untitled(), directMessage: tr("station.chat.directMessage") });
+}
+
+/// What a thread is called for a client: as `titleOf`, but "" where the rule would say a word (a chat with no name,
+/// an unnamed direct message): the client says it in its own language.
+export function shownTitleOf(thread: ThreadRow, firstText: string | null, channelName: string | null): string {
+  return titles.chatTitle(thread, firstText, channelName, { untitled: "", directMessage: "" });
 }
 
 // ---- people ----
@@ -139,7 +146,8 @@ let cloudNames = new Map<string, string>();
 
 export function creator(reference: string | null): Json | null {
   if (reference === null) return null;
-  if (reference === "local") return { id: "local", name: tr("station.creator.localPage"), email: null, via: "local" };
+  // (the local page named by the client: core-ts present.ts `person`)
+  if (reference === "local") return { id: "local", name: null, email: null, via: "local" };
   if (reference.startsWith("slack:") && currentStore !== null) {
     const slack = slackCreator(currentStore, reference);
     if (slack !== null) return slack;
@@ -207,7 +215,8 @@ export function authorNames(api: Api, thread: number): Names {
       const c = api.connects.find((c) => c.id === connect);
       name = c ? c.name : (session?.title ?? null);
     } else if (th !== null && th.surface === STILLFAIL_SURFACE) {
-      name = author === "local" ? tr("station.author.admin") : (api.store.names.get(author) ?? author);
+      // (the local page's admin named by the client: core-ts entries.ts)
+      name = author === "local" ? null : (api.store.names.get(author) ?? author);
     } else {
       // A Slack person: by the name their connect's Slack gives them, as far as known.
       const connect = members.map((m) => m.connect).find((c) => c !== STILLFAIL_CONNECT) ?? null;
@@ -545,11 +554,12 @@ export function chatMarks(station: Store, viewer: Viewer, scope: { sessions: str
 export function chats(station: Store, viewer: Viewer, archived: boolean, scope: Scope | null = null, titlesOnly = false): Json[] {
   // Only the chats of the viewer's workspace.
   const rows = sharedChats(station, archived, scope, titlesOnly).filter((row) => sees(viewer, row.ws));
-  const words = { untitled: untitled(), directMessage: tr("station.chat.directMessage"), quotedOnly: tr("station.chat.quotedOnly") };
+  // (each row with what names it, `named`, and a last message that only quotes marked so: the words are the client's,
+  // core-ts chat-row.ts `worded`)
   if (titlesOnly) {
     // Jobs only use each row's id, title and agents. The viewer's marks do not change any of those.
     const own: chatRow.Own = { mine: () => false, reads: new Map(), dismissed: new Set(), kept: new Set(), pins: new Map() };
-    return rows.map((row) => chatRow.rowFor(row, own, words));
+    return rows.map((row) => chatRow.rowFor(row, own));
   }
   const api = apiOf(station);
   const s = api.store;
@@ -565,7 +575,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean, scope: 
     // When the viewer pinned each to the top of their list.
     pins: store.pins(s, viewer.email, scope === null ? null : keys),
   };
-  return rows.map((row) => chatRow.rowFor(row, own, words));
+  return rows.map((row) => chatRow.rowFor(row, own));
 }
 
 /// The chat list as the station makes it once for everyone who sees it (`chats` without a viewer): each row with its
@@ -848,7 +858,7 @@ export function entries(station: Store, _viewer: Viewer, thread: number, params:
     if (v === undefined) return null;
     const n = parseF64(v);
     if (n !== null && Number.isFinite(n) && Math.trunc(n) === n && n >= 0) return asI64(n);
-    throw new HttpError(400, tr("station.admin.notInteger", { name }));
+    throw new HttpError(400, `${name} must be an integer`);
   };
   const [after, before, from, to] = [number("after"), number("before"), number("from"), number("to")];
   const asked = param("limit");
@@ -856,7 +866,7 @@ export function entries(station: Store, _viewer: Viewer, thread: number, params:
   const wanted = parsedLimit === null || parsedLimit === 0 ? 50 : parsedLimit;
   // f64::clamp keeps NaN, which `as usize` makes 0.
   const limit = Number.isNaN(wanted) ? 0 : Math.trunc(Math.min(Math.max(wanted, 1), 500));
-  if ((from !== null) !== (to !== null)) throw new HttpError(400, tr("station.admin.fromAndTo"));
+  if ((from !== null) !== (to !== null)) throw new HttpError(400, "Provide from and to together");
   const s = api.store;
   const last = store.lastEntry(s, thread);
   const found =
@@ -878,14 +888,14 @@ export function letters(station: Store, _viewer: Viewer, thread: number, params:
     if (v === undefined) return null;
     const n = parseF64(v);
     if (n !== null && Number.isFinite(n) && Math.trunc(n) === n && n >= 0) return asI64(n);
-    throw new HttpError(400, tr("station.admin.notInteger", { name }));
+    throw new HttpError(400, `${name} must be an integer`);
   };
   const [after, before, from, to] = [number("after"), number("before"), number("from"), number("to")];
   const asked = param("limit");
   const parsedLimit = asked === undefined ? null : parseF64(asked);
   const wanted = parsedLimit === null || parsedLimit === 0 ? 50 : parsedLimit;
   const limit = Number.isNaN(wanted) ? 0 : Math.trunc(Math.min(Math.max(wanted, 1), 500));
-  if ((from !== null) !== (to !== null)) throw new HttpError(400, tr("station.admin.fromAndTo"));
+  if ((from !== null) !== (to !== null)) throw new HttpError(400, "Provide from and to together");
   const s = api.store;
   const last = store.lastLetter(s, thread);
   const found =

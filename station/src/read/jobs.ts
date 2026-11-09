@@ -3,11 +3,9 @@
 // hub, which runs them, keeps it current, so a read gives the state it last wrote.
 import { closeSync, fstatSync, openSync, readSync, statSync } from "node:fs";
 import type { Viewer } from "../mesh/credential.ts";
-import { setLang } from "./spoken.ts";
 import * as store from "./store.ts";
 import type { Json, JobRow, Store } from "./store.ts";
-import { HttpError, chats, scopeOfJobNames } from "./views.ts";
-import type { Lang } from "../ops/i18n.ts";
+import { HttpError, chats, scopeOfJobNames, shownTitleOf } from "./views.ts";
 import { log } from "../ops/log.ts";
 
 /// How much of a log `tail` reads at most.
@@ -96,14 +94,13 @@ export function rustLines(text: string): string[] {
 /// archive, this could hold up every device reading the station again.
 /// `chats`: each with the chat it is in; without (a device that names it from the sidebar it holds), the jobs alone: the
 /// sidebar's items do not need to be read for it.
-export function openJobs(s: Store, viewer: Viewer, lang: Lang, named = true): Json[] {
+export function openJobs(s: Store, viewer: Viewer, named = true): Json[] {
   // Record what a slow read spent at each stage, including whether it included chats.
   const started = performance.now();
   const slow = (stage: Record<string, unknown>) => {
     const ms = Math.round(performance.now() - started);
     if (ms >= 1_000) log.warn("readers", "a jobs read's stages", { ms, named, ...stage });
   };
-  setLang(lang);
   const up = store.upJobs(s, viewer);
   const seen = store.seenBy(s, viewer, up.map((j) => j.sessionKey));
   const open = up.filter((j) => seen(j.sessionKey));
@@ -123,7 +120,10 @@ export function openJobs(s: Store, viewer: Viewer, lang: Lang, named = true): Js
     const own = new Map<string, Json>();
     const any = new Map<string, Json>();
     for (const chat of chats(s, viewer, archived, scope, true)) {
-      const shownChat = { id: chat.id ?? null, title: chat.title ?? null, archived };
+      // (named as the list names it, "" where the client says the word: views.ts `shownTitleOf`)
+      const named = chat.named;
+      const title = named ? shownTitleOf(named.thread, named.firstText ?? null, named.channelName ?? null) : (chat.title ?? null);
+      const shownChat = { id: chat.id ?? null, title, archived };
       for (const agent of Array.isArray(chat.agents) ? chat.agents : []) {
         const key = agent?.key;
         if (typeof key !== "string" || !keys.has(key)) continue;

@@ -7,7 +7,7 @@
 import { knownChannel, slackCreator } from "./slack-known.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type Lang, tr } from "../ops/i18n.ts";
+import type { Lang } from "../ops/i18n.ts";
 import { type BatchedUsage, type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, remoteRunCount, remoteRunsSince, seenBy, sessionThreads, usageChatTotals, usageGroups, usageSince, usageThreads } from "./store.ts";
 import { usageCardOutcomesComplete } from "../store/usage-chat-stats.ts";
 import type { UsageSqlTimings } from "./usage-batched.ts";
@@ -15,7 +15,7 @@ import { type InWorkspace, sees } from "../store/rows.ts";
 import { usageDetailSince } from "../store/usage-detail.ts";
 import { hasCompactUsage } from "../store/usage-compact.ts";
 import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_TOTAL, hasUsageHistory, quarter, usageHistorySince } from "../store/usage-history.ts";
-import { titleOf } from "./views.ts";
+import { shownTitleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
 import { facts } from "../accounts/catalog.ts";
 import { log } from "../ops/log.ts";
@@ -60,8 +60,8 @@ const PRICES: [string, Price][] = [
 /// station's own table and of the `models` its rows name.
 export function priceTable(lang: Lang, models: (string | null)[] = []): Json {
   const keys = [...new Set([...PRICES.map(([model]) => model), ...models.flatMap((m) => (m === null ? [] : [modelKey(m).split("[")[0]!]))])];
+  // (what the table's numbers mean said by the client: core-ts views/usage.ts)
   return {
-    note: tr(lang, "station.usage.priceNote"),
     rows: keys.flatMap((model) => {
       const p = price(model);
       if (p === null) return [];
@@ -222,7 +222,7 @@ export function configProfiles(dataDir: string): Record<string, Json> {
 
 /// A creator reference in words. No Slack connection knows anyone: a Slack user goes by their id, with no email.
 function creator(s: Store, lang: Lang, reference: string): Json {
-  if (reference === "local") return { id: "local", name: tr(lang, "station.creator.localPage"), email: null, via: "local" };
+  if (reference === "local") return { id: "local", name: null, email: null, via: "local" };
   const slack = slackCreator(s, reference);
   if (slack !== null) return slack;
   return { id: reference, name: s.names.get(reference) ?? reference, email: reference, via: "cloud" };
@@ -291,7 +291,7 @@ export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetM
   const threads: Record<string, Json> = {};
   for (const [t, first] of usageThreads(s, wanted)) {
     // A Slack channel's name, as far as known (`known_channel`).
-    const title = titleOf(t, first, t.surface === STILLFAIL_SURFACE ? null : knownChannel(s, threadConnect(s, t.id), t.channel));
+    const title = shownTitleOf(t, first, t.surface === STILLFAIL_SURFACE ? null : knownChannel(s, threadConnect(s, t.id), t.channel));
     threads[String(t.id)] = { title, surface: t.surface, home: t.home, archived: t.hiddenAt !== null };
   }
   mark("threads");
@@ -427,7 +427,7 @@ export function resourceChats(s: Store, sessions: string[], viewer: InWorkspace 
     }
     const thread = sessionThreads(s, key)[0] ?? null;
     const [, first] = thread !== null ? (usageThreads(s, [thread.id])[0] ?? [thread, null]) : [null, null];
-    const title = thread !== null ? titleOf(thread, first, thread.surface === STILLFAIL_SURFACE ? null : knownChannel(s, threadConnect(s, thread.id), thread.channel)) : null;
+    const title = thread !== null ? shownTitleOf(thread, first, thread.surface === STILLFAIL_SURFACE ? null : knownChannel(s, threadConnect(s, thread.id), thread.channel)) : null;
     out[key] = { thread: thread?.id ?? null, title };
   }
   return out;

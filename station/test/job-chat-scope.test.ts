@@ -23,7 +23,7 @@ for (const owner of ["a", "b"]) test(`a named shared chat does not read ${owner}
     s.joinThread(chat.id, "a", "ember");
     s.joinThread(chat.id, "b", "ember");
     const reader = makeStore(s.db, ".");
-    const expected = openJobs(reader, viewer, "en");
+    const expected = openJobs(reader, viewer);
     assert.deepEqual(result(expected), [["j-a", "a", "Given title", false]]);
     const origins = new Set<number>();
     for (let i = 0; i < 400; i++) {
@@ -49,7 +49,7 @@ for (const owner of ["a", "b"]) test(`a named shared chat does not read ${owner}
       const value = Reflect.get(target, property, target);
       return typeof value === "function" ? value.bind(target) : value;
     } });
-    assert.deepEqual(openJobs(makeStore(observed, "."), viewer, "en"), expected);
+    assert.deepEqual(openJobs(makeStore(observed, "."), viewer), expected);
     assert.deepEqual(visited, [], "an already named chat needs no origin details");
   } finally { s.close(); }
 });
@@ -68,7 +68,7 @@ test("an unnamed shared chat may use an archived member's origin before its acti
     s.insertMessage({ ...newMessage(old.id, "old", "person", "ann@x", "old"), at: 1 });
     s.insertMessage({ ...newMessage(recent.id, "new", "person", "ann@x", "new"), at: 9 });
     s.setArchived("b", true, MANUAL);
-    assert.deepEqual(result(openJobs(makeStore(s.db, "."), viewer, "en")), [["j-a", "a", "B origin", false]]);
+    assert.deepEqual(result(openJobs(makeStore(s.db, "."), viewer)), [["j-a", "a", "B origin", false]]);
   } finally { s.close(); }
 });
 
@@ -82,7 +82,7 @@ test("a missing member's origin remains usable when another member of that origi
     const origin = s.openThread("slack:one", "C1", "origin", "Missing member origin", "ann@x");
     s.joinThread(origin.id, "missing", "one");
     s.joinThread(origin.id, "other", "one");
-    assert.deepEqual(result(openJobs(makeStore(s.db, "."), viewer, "en")), [["j-a", "a", "Missing member origin", false]]);
+    assert.deepEqual(result(openJobs(makeStore(s.db, "."), viewer)), [["j-a", "a", "Missing member origin", false]]);
   } finally { s.close(); }
 });
 
@@ -96,7 +96,7 @@ test("job selection keeps the sidebar's order across multiple named chats", () =
     s.joinThread(newer.id, "a", "ember");
     s.insertMessage({ ...newMessage(older.id, "old", "person", "ann@x", "old"), at: 1 });
     s.insertMessage({ ...newMessage(newer.id, "new", "person", "ann@x", "new"), at: 9 });
-    assert.deepEqual(result(openJobs(makeStore(s.db, "."), viewer, "en")), [["j-a", "a", "Older", false]]);
+    assert.deepEqual(result(openJobs(makeStore(s.db, "."), viewer)), [["j-a", "a", "Older", false]]);
   } finally { s.close(); }
 });
 
@@ -129,7 +129,7 @@ test("finding a job's chats does not traverse unrelated station chats", () => {
     } });
     const read = () => {
       visited = 0;
-      assert.deepEqual(result(openJobs(makeStore(observed, "."), viewer, "en")), [["j-a", "a", "Given title", false]]);
+      assert.deepEqual(result(openJobs(makeStore(observed, "."), viewer)), [["j-a", "a", "Given title", false]]);
       assert.ok(traced);
       return visited;
     };
@@ -158,10 +158,10 @@ test("job names remain readable without the session membership index", () => {
     const origin = s.openThread("slack:one", "C1", "origin", "Origin", "ann@x");
     s.joinThread(origin.id, "b", "one");
     const reader = makeStore(s.db, ".");
-    const expected = openJobs(reader, viewer, "en");
+    const expected = openJobs(reader, viewer);
     assert.deepEqual(result(expected), [["j-a", "b", "Origin", false]]);
     s.db.exec("DROP INDEX thread_sessions_session; DROP INDEX sessions_ws");
-    assert.deepEqual(openJobs(reader, viewer, "en"), expected);
+    assert.deepEqual(openJobs(reader, viewer), expected);
   } finally { s.close(); }
 });
 
@@ -199,9 +199,9 @@ test("the scope and the selected title share the reader's snapshot", () => {
     const reader = makeStore(observed, dir);
     reader.db.exec("BEGIN");
     try {
-      assert.deepEqual(result(openJobs(reader, viewer, "en")), [["j-a", "a", "Given title", false]]);
+      assert.deepEqual(result(openJobs(reader, viewer)), [["j-a", "a", "Given title", false]]);
       assert.equal(changed, true);
     } finally { reader.db.exec("COMMIT"); }
-    assert.deepEqual(result(openJobs(reader, viewer, "en")), [["j-a", "a", "Later origin", false]]);
+    assert.deepEqual(result(openJobs(reader, viewer)), [["j-a", "a", "Later origin", false]]);
   } finally { writer.close(); s.close(); rmSync(dir, { recursive: true, force: true }); }
 });

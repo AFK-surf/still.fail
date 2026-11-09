@@ -60,7 +60,7 @@ for (const home of [false, true]) test(`job lists read only the viewer's workspa
       const value = Reflect.get(target, property, target);
       return typeof value === "function" ? value.bind(target) : value;
     } });
-    assert.deepEqual(openJobs(makeStore(observed, "."), viewer(home), "en", false).map((r) => r.id), expected);
+    assert.deepEqual(openJobs(makeStore(observed, "."), viewer(home), false).map((r) => r.id), expected);
     assert.deepEqual(returned.filter((key) => key === "elsewhere" || key.startsWith("away-")), []);
   } finally { s.close(); }
 });
@@ -71,7 +71,7 @@ test("job lists retain their workspace semantics without the workspace index", (
     session(s, "a", "A"); session(s, "b", "B");
     job(s, "ja", "a", "running", null); job(s, "jb", "b", "running", null);
     s.db.exec("DROP INDEX sessions_ws");
-    assert.deepEqual(openJobs(makeStore(s.db, "."), viewer(false), "en", false).map((r) => r.id), ["ja"]);
+    assert.deepEqual(openJobs(makeStore(s.db, "."), viewer(false), false).map((r) => r.id), ["ja"]);
   } finally { s.close(); }
 });
 
@@ -93,7 +93,7 @@ test("job lists keep JavaScript workspace visibility for unusual stored identiti
       const raw = s.db.prepare(JOBS_UP).all() as Array<{ id: string; session_key: string }>;
       const canSee = seenBy(makeStore(s.db, "."), who, raw.map((r) => r.session_key));
       const expected = raw.filter((r) => canSee(r.session_key)).map((r) => r.id);
-      assert.deepEqual(openJobs(makeStore(s.db, "."), who, "en", false).map((r) => r.id), expected,
+      assert.deepEqual(openJobs(makeStore(s.db, "."), who, false).map((r) => r.id), expected,
         `workspace ${JSON.stringify(workspace)}, home ${home}`);
     }
   } finally { s.close(); }
@@ -130,10 +130,10 @@ for (const ready of [false, true]) test(`job selection and workspace visibility 
     const reader = makeStore(observed, dir);
     reader.db.exec("BEGIN");
     try {
-      assert.deepEqual(openJobs(reader, viewer(false), "en", false).map((r) => r.id), ["ja"]);
+      assert.deepEqual(openJobs(reader, viewer(false), false).map((r) => r.id), ["ja"]);
       assert.equal(changed, true);
     } finally { reader.db.exec("COMMIT"); }
-    assert.deepEqual(openJobs(reader, viewer(false), "en", false).map((r) => r.id), ["jb"]);
+    assert.deepEqual(openJobs(reader, viewer(false), false).map((r) => r.id), ["jb"]);
   } finally { writer.close(); s.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -146,7 +146,7 @@ test("an old sessions table without a workspace belongs to the home workspace", 
       CREATE TABLE job_notices(job_id TEXT, at INTEGER, text TEXT);
       INSERT INTO sessions VALUES ('a');
       INSERT INTO jobs VALUES ('ja', 'a', 'job', 'true', '/', NULL, 'token', 'running', NULL, NULL, 1, NULL, 0, '/dev/null', 0);`);
-    assert.deepEqual(openJobs(makeStore(db, "."), viewer(true), "en", false).map((r) => r.id), ["ja"]);
-    assert.deepEqual(openJobs(makeStore(db, "."), viewer(false), "en", false), []);
+    assert.deepEqual(openJobs(makeStore(db, "."), viewer(true), false).map((r) => r.id), ["ja"]);
+    assert.deepEqual(openJobs(makeStore(db, "."), viewer(false), false), []);
   } finally { db.close(); }
 });

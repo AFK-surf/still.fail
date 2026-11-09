@@ -35,6 +35,12 @@ export type Context = {
   md?: MdStore;
 };
 
+/// An entry in this device's words: a call's result that is in its script's output, which its station leaves the
+/// words of to the client (station/src/read/transcript.ts `inScript`).
+function worded(e: J): J {
+  return e?.inScript === true && e.text === "" ? { ...e, text: t("station.transcript.inScriptOutput") } : e;
+}
+
 function kindKey(kind: string): string {
   return ["read", "search", "edit", "command", "web", "agent", "thread"].includes(kind) ? kind : "other";
 }
@@ -328,7 +334,7 @@ type Item =
 type Row = { thought: number } | { step: number };
 
 export function presentHistory(live: J, cx: Context): J {
-  const timeline: J[] = Array.isArray(live?.timeline) ? live.timeline : [];
+  const timeline: J[] = (Array.isArray(live?.timeline) ? live.timeline : []).map(worded);
   const base = typeof live?.first === "number" ? live.first : 0;
   const s = (e: J, k: string): string => (typeof e?.[k] === "string" ? e[k] : "");
   const flag = (e: J, k: string): boolean => e?.[k] === true;

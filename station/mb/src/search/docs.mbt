@@ -149,7 +149,8 @@ fn Reading::session(self : Reading, key : Json) -> Map[String, Json]? raise {
 // ── chats ──
 
 ///|
-/// What a chat is called (views.ts titleOf, core-ts titles.ts `chatTitle`) in the language the worker read in (zh).
+/// What a chat is called for a client (views.ts `shownTitleOf`, core-ts titles.ts `chatTitle`): "" where the rule says a
+/// word (a chat with no name, an unnamed direct message), which the client says in its language.
 fn title_of(row : Map[String, Json], first_text : String?) -> String {
   let given = (k : String) => match row.get(k) {
     Some(String(s)) => @jscase.trim_white(s)
@@ -162,7 +163,7 @@ fn title_of(row : Map[String, Json], first_text : String?) -> String {
     return given("auto_title")
   }
   if row.get("surface") is Some(String("chat" | "ember" | "stillfail")) {
-    return "新对话"
+    return ""
   }
   let first = without_mentions(first_text.unwrap_or(""))
   for line in first.split("\n") {
@@ -172,10 +173,7 @@ fn title_of(row : Map[String, Json], first_text : String?) -> String {
       return joined
     }
   }
-  if given("channel").has_prefix("D") {
-    return "私信"
-  }
-  "新对话"
+  ""
 }
 
 ///|

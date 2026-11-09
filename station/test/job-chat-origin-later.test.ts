@@ -32,7 +32,7 @@ for (const later of [4, 400]) test(`a job's unnamed chat does not read ${later} 
     for (const key of ["a", "b", "c"]) session(s, key);
     job(s, "a"); own(s, "own", ["b", "c", "a"]);
     origin(s, "first", "First origin", ["b"]);
-    const expected = openJobs(makeStore(s.db, "."), viewer, "en");
+    const expected = openJobs(makeStore(s.db, "."), viewer);
     assert.deepEqual(result(expected), [["j-a", "b", "First origin", false]]);
     const laterIds = new Set<number>();
     for (let i = 0; i < later; i++) laterIds.add(origin(s, `later-${i}`, null, ["c"], i + 10));
@@ -53,7 +53,7 @@ for (const later of [4, 400]) test(`a job's unnamed chat does not read ${later} 
       const value = Reflect.get(target, property, target);
       return typeof value === "function" ? value.bind(target) : value;
     } });
-    assert.deepEqual(openJobs(makeStore(observed, "."), viewer, "en"), expected);
+    assert.deepEqual(openJobs(makeStore(observed, "."), viewer), expected);
     assert.deepEqual(visited, [], "a later member cannot change the selected title");
   } finally { s.close(); }
 });
@@ -65,7 +65,7 @@ test("an unnamed chat finds the first member whose external origin is readable",
     job(s, "a"); own(s, "own", ["missing", "c", "a"]);
     origin(s, "unreadable", "Missing-only origin", ["missing"], 1);
     origin(s, "readable", null, ["c"], 2);
-    assert.deepEqual(result(openJobs(makeStore(s.db, "."), viewer, "en")), [["j-a", "c", "Text readable", false]]);
+    assert.deepEqual(result(openJobs(makeStore(s.db, "."), viewer)), [["j-a", "c", "Text readable", false]]);
   } finally { s.close(); }
 });
 
@@ -79,7 +79,7 @@ test("an archived or missing earlier member can still supply a shared chat's tit
       origin(s, "first", "First origin", missing ? ["b", "helper"] : ["b"], 1);
       origin(s, "later", "Later origin", ["c"], 9);
       if (!missing) s.setArchived("b", true, MANUAL);
-      assert.deepEqual(result(openJobs(makeStore(s.db, "."), viewer, "en")), [["j-a", "c", "First origin", false]]);
+      assert.deepEqual(result(openJobs(makeStore(s.db, "."), viewer)), [["j-a", "c", "First origin", false]]);
     } finally { s.close(); }
   }
 });
@@ -91,7 +91,7 @@ test("different unnamed chats can select different members' origins", () => {
     job(s, "a"); job(s, "d");
     own(s, "first-chat", ["b", "a"]); own(s, "second-chat", ["c", "d"]);
     origin(s, "b-origin", "B origin", ["b"]); origin(s, "c-origin", "C origin", ["c"]);
-    const rows = result(openJobs(makeStore(s.db, "."), viewer, "en")).sort((a, b) => a[0].localeCompare(b[0]));
+    const rows = result(openJobs(makeStore(s.db, "."), viewer)).sort((a, b) => a[0].localeCompare(b[0]));
     assert.deepEqual(rows, [["j-a", "b", "B origin", false], ["j-d", "c", "C origin", false]]);
   } finally { s.close(); }
 });
@@ -127,7 +127,7 @@ test("origin selection stops before probing later members", () => {
       const value = Reflect.get(target, property, target);
       return typeof value === "function" ? value.bind(target) : value;
     } });
-    assert.deepEqual(result(openJobs(makeStore(observed, "."), viewer, "en")), [["j-a", "b", "First origin", false]]);
+    assert.deepEqual(result(openJobs(makeStore(observed, "."), viewer)), [["j-a", "b", "First origin", false]]);
     assert.ok(traced);
     assert.ok(visited.includes(first));
     assert.deepEqual(visited.filter((id) => later.has(id)), []);
@@ -162,7 +162,7 @@ test("one job read checks a shared member's origins once across many chats", () 
     } });
     const read = () => {
       visits = 0; probes = 0;
-      assert.equal(openJobs(makeStore(observed, "."), viewer, "en").length, 1);
+      assert.equal(openJobs(makeStore(observed, "."), viewer).length, 1);
       assert.equal(probes, 1);
       return visits;
     };
@@ -205,9 +205,9 @@ test("the selected member and origin details share the reader's snapshot", () =>
     const reader = makeStore(observed, dir);
     reader.db.exec("BEGIN");
     try {
-      assert.deepEqual(result(openJobs(reader, viewer, "en")), [["j-a", "b", "First origin", false]]);
+      assert.deepEqual(result(openJobs(reader, viewer)), [["j-a", "b", "First origin", false]]);
       assert.equal(changed, true);
     } finally { reader.db.exec("COMMIT"); }
-    assert.deepEqual(result(openJobs(reader, viewer, "en")), [["j-a", "b", "Second origin", false]]);
+    assert.deepEqual(result(openJobs(reader, viewer)), [["j-a", "b", "Second origin", false]]);
   } finally { writer.close(); s.close(); rmSync(dir, { recursive: true, force: true }); }
 });

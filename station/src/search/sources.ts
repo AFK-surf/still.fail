@@ -17,7 +17,7 @@ import { readFrom } from "../usage/counter.ts";
 import { agentHomeOf, memory } from "../read/memory.ts";
 import { runtimeKind } from "../agents/runtime.ts";
 import { STILLFAIL_SURFACE } from "../read/store.ts";
-import { given, titleOf } from "../read/views.ts";
+import { given, shownTitleOf } from "../read/views.ts";
 import { type Asker, type Doc, type Group, type Hit, excerpt, has, sees } from "./match.ts";
 import { readSearchScopePage } from "./scope-read.ts";
 import { smallJobScope } from "./job-scope.ts";
@@ -78,8 +78,8 @@ function* threadDocSteps(s: Store, id: number, asker?: Asker, kinds: Set<string>
   if (onlyArchived && !archived) return;
   const surface = row.surface === STILLFAIL_SURFACE ? "stillfail" : "slack";
   const firstText = (s.db.prepare("SELECT m.text FROM thread_state t JOIN merged m ON m.thread = t.thread AND m.n = t.person_n WHERE t.thread = ?").get(id) as { text: string | null } | undefined)?.text ?? null;
-  // As the chat list calls it (read/views.ts titleOf).
-  const title = titleOf(row, firstText, null);
+  // As the chat list calls it (read/views.ts shownTitleOf: "" where the client names it).
+  const title = shownTitleOf(row, firstText, null);
   const wantsMessages = kinds === null || kinds.has("message");
   const wantsChat = kinds === null || kinds.has("chat");
   const body = wantsChat ? [...sessions.map((x) => x.title ?? ""), ...sessions.map((x) => x.model ?? "")].filter((w) => w !== "").join("\n") : "";

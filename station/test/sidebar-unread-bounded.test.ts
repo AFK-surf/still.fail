@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { worded } from "../../client/core-ts/src/chat-row.ts";
 import { test } from "node:test";
 import { Store } from "../src/store/store.ts";
 import { listThreads, makeStore } from "../src/read/store.ts";
@@ -97,8 +98,10 @@ test("the chat list is made once for everyone: a viewer's row is it with what is
     assert.deepEqual(sharedChatRows(read, other, null, null), shared);
     assert.deepEqual(shared.map((r: any) => [r.thread, r.named.thread.autoTitle, r.said]), [[thread, "部署", { n: 2, authorKind: "agent", author: "s", other: 2 }]]);
     // Each viewer's: the same chat and name, their own unread and whether it is theirs.
-    const mine = chats(read, viewer, false)[0]!;
-    const yours = chats(read, other, false)[0]!;
+    // (in the client's words: chat-row.ts `worded`)
+    const words = { untitled: "新对话", directMessage: "私信", quotedOnly: "引用了一条消息" };
+    const mine = worded(chats(read, viewer, false)[0]!, words);
+    const yours = worded(chats(read, other, false)[0]!, words);
     assert.deepEqual([mine.title, mine.unread, mine.mine], ["部署", false, true]);
     assert.deepEqual([yours.title, yours.unread, yours.mine], ["部署", true, false]);
     assert.equal(mine.hidden, true);

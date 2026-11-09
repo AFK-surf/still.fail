@@ -1136,6 +1136,7 @@ export const SHAPES: Record<string, Shape> = {
     ["ok", opt("bool")],
     ["callId", opt("String")],
     ["subagent", opt("bool")],
+    ["inScript", opt("bool"), { doc: "A call's result that is in its script's output: its text the client's words (its station's \"\")." }],
   ]),
   TranscriptUsage: struct([
     ["modelCalls", "i64", { client: "I54" }],

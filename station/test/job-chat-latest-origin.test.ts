@@ -31,7 +31,7 @@ for (const older of [4, 400]) test(`a job loads only its latest origin's details
   try {
     session(s, "a"); session(s, "b"); job(s, "a"); own(s, "own", ["b", "a"]);
     origin(s, "latest", "Latest origin", ["b"], 10_000);
-    const expected = openJobs(makeStore(s.db, "."), viewer, "en");
+    const expected = openJobs(makeStore(s.db, "."), viewer);
     assert.deepEqual(result(expected), [["j-a", "b", "Latest origin", false]]);
     const otherIds = new Set<number>();
     for (let i = 0; i < older; i++) otherIds.add(origin(s, `older-${i}`, null, ["b"], i + 1));
@@ -52,7 +52,7 @@ for (const older of [4, 400]) test(`a job loads only its latest origin's details
       const value = Reflect.get(target, property, target);
       return typeof value === "function" ? value.bind(target) : value;
     } });
-    assert.deepEqual(openJobs(makeStore(observed, "."), viewer, "en"), expected);
+    assert.deepEqual(openJobs(makeStore(observed, "."), viewer), expected);
     assert.equal(details, 0, "older origins cannot affect this job's name");
   } finally { s.close(); }
 });
@@ -66,11 +66,11 @@ test("latest origin uses message time, then creation time and thread id", () => 
     const created = s.db.prepare("UPDATE threads SET created_at = ? WHERE id = ?");
     created.run(1, first); created.run(2, second);
     const reader = makeStore(s.db, ".");
-    assert.deepEqual(result(openJobs(reader, viewer, "en")), [["j-a", "b", "First", false]]);
+    assert.deepEqual(result(openJobs(reader, viewer)), [["j-a", "b", "First", false]]);
     s.db.prepare("UPDATE entries SET at = 20 WHERE thread = ? AND kind = 'message'").run(second);
-    assert.deepEqual(result(openJobs(reader, viewer, "en")), [["j-a", "b", "Second", false]]);
+    assert.deepEqual(result(openJobs(reader, viewer)), [["j-a", "b", "Second", false]]);
     created.run(2, first);
-    assert.deepEqual(result(openJobs(reader, viewer, "en")), [["j-a", "b", "Second", false]]);
+    assert.deepEqual(result(openJobs(reader, viewer)), [["j-a", "b", "Second", false]]);
   } finally { s.close(); }
 });
 
@@ -82,9 +82,9 @@ test("an edit does not change origin order, while the chosen first text includes
     origin(s, "new", null, ["b"], 20);
     s.editMessage("slack:one", "C1", "old", "old", "Edited old");
     const reader = makeStore(s.db, ".");
-    assert.deepEqual(result(openJobs(reader, viewer, "en")), [["j-a", "b", "Text new", false]]);
+    assert.deepEqual(result(openJobs(reader, viewer)), [["j-a", "b", "Text new", false]]);
     s.editMessage("slack:one", "C1", "new", "new", "Edited new");
-    assert.deepEqual(result(openJobs(reader, viewer, "en")), [["j-a", "b", "Edited new", false]]);
+    assert.deepEqual(result(openJobs(reader, viewer)), [["j-a", "b", "Edited new", false]]);
   } finally { s.close(); }
 });
 
@@ -94,7 +94,7 @@ test("a thread without a message uses zero for origin ordering", () => {
     session(s, "a"); session(s, "b"); job(s, "a"); own(s, "own", ["b", "a"]);
     origin(s, "negative", "Negative", ["b"], -1);
     origin(s, "empty", "Empty", ["b"], null);
-    assert.deepEqual(result(openJobs(makeStore(s.db, "."), viewer, "en")), [["j-a", "b", "Empty", false]]);
+    assert.deepEqual(result(openJobs(makeStore(s.db, "."), viewer)), [["j-a", "b", "Empty", false]]);
   } finally { s.close(); }
 });
 
@@ -105,7 +105,7 @@ test("shared origins can be latest for different members of different job chats"
     job(s, "a"); job(s, "d"); own(s, "first-chat", ["b", "a"]); own(s, "second-chat", ["c", "d"]);
     origin(s, "shared", "Shared", ["b", "c"], 10);
     origin(s, "c-new", "C latest", ["c"], 20);
-    const rows = result(openJobs(makeStore(s.db, "."), viewer, "en")).sort((a, b) => a[0].localeCompare(b[0]));
+    const rows = result(openJobs(makeStore(s.db, "."), viewer)).sort((a, b) => a[0].localeCompare(b[0]));
     assert.deepEqual(rows, [["j-a", "b", "Shared", false], ["j-d", "c", "C latest", false]]);
   } finally { s.close(); }
 });
@@ -134,7 +134,7 @@ test("many independent jobs select their origins together", () => {
       const value = Reflect.get(target, property, target);
       return typeof value === "function" ? value.bind(target) : value;
     } });
-    const rows = openJobs(makeStore(observed, "."), viewer, "en");
+    const rows = openJobs(makeStore(observed, "."), viewer);
     assert.deepEqual(new Map(rows.map((j) => [j.id, j.chat?.title])), expected);
     assert.equal(selections, 1);
   } finally { s.close(); }
@@ -172,9 +172,9 @@ test("the latest origin and its details share the reader's snapshot", () => {
     const reader = makeStore(observed, dir);
     reader.db.exec("BEGIN");
     try {
-      assert.deepEqual(result(openJobs(reader, viewer, "en")), [["j-a", "b", "Second", false]]);
+      assert.deepEqual(result(openJobs(reader, viewer)), [["j-a", "b", "Second", false]]);
       assert.equal(changed, true);
     } finally { reader.db.exec("COMMIT"); }
-    assert.deepEqual(result(openJobs(reader, viewer, "en")), [["j-a", "b", "First", false]]);
+    assert.deepEqual(result(openJobs(reader, viewer)), [["j-a", "b", "First", false]]);
   } finally { writer.close(); s.close(); rmSync(dir, { recursive: true, force: true }); }
 });

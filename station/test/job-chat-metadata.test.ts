@@ -20,7 +20,7 @@ for (const children of [4, 400]) test(`naming a job does not read ${children} ch
     const db = station.db;
     db.prepare("INSERT INTO job_notices (job_id, at, text) VALUES ('j', 3, 'notice')").run();
     const reader = makeStore(db, ".");
-    const expected = openJobs(reader, viewer, "en");
+    const expected = openJobs(reader, viewer);
     assert.deepEqual(expected.map((j) => [j.id, j.chat?.id, j.chat?.title, j.notices]),
       [["j", "a", "Given title", [{ at: 3, text: "notice" }]]]);
 
@@ -53,7 +53,7 @@ for (const children of [4, 400]) test(`naming a job does not read ${children} ch
       const value = Reflect.get(target, property, target);
       return typeof value === "function" ? value.bind(target) : value;
     } });
-    assert.deepEqual(openJobs(makeStore(observed, "."), viewer, "en"), expected);
+    assert.deepEqual(openJobs(makeStore(observed, "."), viewer), expected);
     assert.deepEqual(looked, [], "job names do not need the sidebar's children, shares, watches or viewer marks");
   } finally { station.close(); }
 });
@@ -69,7 +69,7 @@ test("an archived job is named without reading its chat's children", () => {
       state: "running", pgid: null, exitCode: null, startedAt: 1, endedAt: null, restarts: 0, log: "/dev/null", watch: false });
     station.setArchived("a", true, MANUAL);
     const db = station.db, reader = makeStore(db, ".");
-    const expected = openJobs(reader, viewer, "en");
+    const expected = openJobs(reader, viewer);
     assert.deepEqual(expected.map((j) => [j.id, j.chat?.title, j.chat?.archived]), [["j", "Archived title", true]]);
     const put = db.prepare("INSERT INTO opened_chats (child_station, child, parent_station, parent, key, title, created_at) VALUES ('remote', ?, '', 'a', ?, ?, ?)");
     for (let i = 0; i < 4; i++) put.run(`child-${i}`, `key-${i}`, `Child ${i}`, i);
@@ -83,7 +83,7 @@ test("an archived job is named without reading its chat's children", () => {
       const value = Reflect.get(target, property, target);
       return typeof value === "function" ? value.bind(target) : value;
     } });
-    assert.deepEqual(openJobs(makeStore(observed, "."), viewer, "en"), expected);
+    assert.deepEqual(openJobs(makeStore(observed, "."), viewer), expected);
     assert.equal(opened, 0);
   } finally { station.close(); }
 });

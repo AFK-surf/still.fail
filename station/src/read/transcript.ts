@@ -14,14 +14,14 @@
 import { closeSync, existsSync, openSync, readdirSync, readSync, realpathSync, statSync } from "node:fs";
 import { basename, isAbsolute, join, relative, sep } from "node:path";
 import { isPlanTool } from "./plan.ts";
-import { tr } from "./spoken.ts";
 import type { Json } from "./store.ts";
 import { runtimeKind, type RuntimeKind } from "../agents/runtime.ts";
 import { unpackedWhole } from "./packed.ts";
 
 /// TimelineEntry as serde writes it: `tool`, `ok`, `callId`, `subagent` left out when none; `brief` when what it says is
 /// cut to what a history shows before it is opened (`brief`).
-export type TimelineEntry = { at: string | null; kind: string; text: string; tool?: string; ok?: boolean; callId?: string; subagent?: boolean; brief?: boolean };
+/// `inScript`: a call's result that is in its script's output (said so by the client in its words, its text "").
+export type TimelineEntry = { at: string | null; kind: string; text: string; tool?: string; ok?: boolean; callId?: string; subagent?: boolean; brief?: boolean; inScript?: true };
 
 const MAX_TEXT = 4000;
 
@@ -82,7 +82,7 @@ export const utf8 = new TextDecoder("utf-8", { ignoreBOM: true });
 
 /// How lines are read into entries (`timelineOf`): a change to how many entries a line gives, or which, takes this one
 /// higher, so what was counted and marked of transcripts the way before is read anew (read/transcripts.ts).
-export const READING = 2;
+export const READING = 3;
 
 /**
  * An entry as an execution history shows it before it is opened (`brief: true` when anything was left out; the whole of
@@ -823,7 +823,7 @@ function codexTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
     const count = callId === undefined ? 0 : (state.inner.get(callId) ?? 0);
     // Done with: what is kept between lines (and at every mark, read/transcripts.ts) is the scripts still running.
     if (callId !== undefined) state.inner.delete(callId);
-    for (let i = 0; i < count; i++) out.push(result(!failed, `${callId ?? ""}#${i}`, tr("station.transcript.inScriptOutput")));
+    for (let i = 0; i < count; i++) out.push({ ...result(!failed, `${callId ?? ""}#${i}`, ""), inScript: true });
   }
 }
 

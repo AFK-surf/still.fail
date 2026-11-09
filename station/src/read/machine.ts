@@ -7,7 +7,7 @@
 // recent files comes first, and which project a Claude session is found in first, stay the Rust's.
 import { type Dirent, closeSync, opendirSync, openSync, readSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { type Lang, tr } from "../ops/i18n.ts";
+import type { Lang } from "../ops/i18n.ts";
 import { type Json, type Store, sessionOfRuntime } from "./store.ts";
 import { HttpError } from "./views.ts";
 import { parseIso } from "./transcript.ts";
@@ -517,7 +517,7 @@ export function machineSession(s: Store, lang: Lang, runtime: string, id: string
   const asked = limitParam !== undefined && /^\+?[0-9]+$/.test(limitParam) && BigInt(limitParam) <= 18446744073709551615n ? BigInt(limitParam) : 200n;
   const limit = Number(asked < 1n ? 1n : asked > 1000n ? 1000n : asked);
   const found = find(roots(), runtime, id);
-  if (found === null) throw new HttpError(404, tr(lang, "station.admin.noLocalSession", { id }));
+  if (found === null) throw new HttpError(404, `No such local session: ${id}`);
   const said = conversation(runtime, found.path);
   found.session = sessionOfRuntime(s, runtime, found.id);
   const total = said.length;

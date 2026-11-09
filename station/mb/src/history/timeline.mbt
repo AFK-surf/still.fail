@@ -532,10 +532,6 @@ fn typed_parts(content : @jsjson.JValue?) -> String {
   }
 }
 
-///|
-/// What the station says of a call taken out of a script when the script's output comes (station.transcript
-/// .inScriptOutput, in the worker's language).
-let in_script_output : String = "（结果在脚本的输出里）"
 
 ///|
 fn codex(r : @jsjson.JValue, state : ReadState, out : Array[Entry]) -> Unit {
@@ -617,7 +613,8 @@ fn codex(r : @jsjson.JValue, state : ReadState, out : Array[Entry]) -> Unit {
       state.inner.remove(id)
     }
     for _ in 0..<count {
-      out.push({ at, kind: "tool_result", text: in_script_output, tool: None })
+      // (a result in the script's output: its words the client's, its text none)
+      out.push({ at, kind: "tool_result", text: "", tool: None })
     }
   }
 }
