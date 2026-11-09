@@ -474,7 +474,7 @@ export class Core {
     const inner = this.inner;
     switch (message.kind) {
       case "subscribe":
-        return inner.store.subscribe(client, message.id, message.subscribe, message.keyed === true);
+        return inner.store.subscribe(client, message.id, message.subscribe, message.keyed === true, message.from);
       case "unsubscribe":
         return inner.store.unsubscribe(client, message.id);
       case "cancel": {

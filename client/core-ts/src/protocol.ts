@@ -12,7 +12,9 @@ export type RequestId = number;
 /// them in the message, the native hosts hand them over as they are (never as base64 in the JSON).
 export type ClientMessage =
   | { kind: "call"; id: RequestId; call: string; params: unknown; bytes?: Uint8Array }
-  | { kind: "subscribe"; id: RequestId; subscribe: Topic; keyed?: boolean }
+  /// `from`: another of its subscriptions to the same topic with other params (a list's first rows, more of them asked
+  /// now), still held: this one's first value goes as a keyed delta to what that one has (store.ts `#firstFrom`).
+  | { kind: "subscribe"; id: RequestId; subscribe: Topic; keyed?: boolean; from?: RequestId }
   | { kind: "unsubscribe"; id: RequestId; unsubscribe: boolean }
   | { kind: "cancel"; id: RequestId; cancel: boolean };
 
@@ -24,6 +26,8 @@ export type CoreMessage =
   /// native hosts hand them over as they are (never as base64 in the JSON).
   | { id: RequestId; value: unknown; bytes?: Uint8Array }
   | { id: RequestId; delta: AnyOp[] }
+  /// A subscription's first value as what changed from what its `from` has now (a subscribe's `from`).
+  | { id: RequestId; delta: AnyOp[]; from: RequestId }
   /// A topic with no value yet whose value waits on a station (or the cloud), not on the core reading what the device
   /// holds (store.ts `waits`): what shows it can show what is to come now, not what it holds a moment later.
   | { id: RequestId; waiting: true };
@@ -227,7 +231,13 @@ export function parseClientMessage(raw: unknown, bytes?: Uint8Array): ClientMess
   if ("subscribe" in raw) {
     const topic = parseTopic(raw.subscribe);
     // `keyed`: the UI applies keyed ops (collections.ts); the Rust core ignores it.
-    if (topic) return raw.keyed === true ? { kind: "subscribe", id, subscribe: topic, keyed: true } : { kind: "subscribe", id, subscribe: topic };
+    if (topic) {
+      if (raw.keyed !== true) return { kind: "subscribe", id, subscribe: topic };
+      const from = raw.from;
+      return typeof from === "number" && Number.isInteger(from) && from >= 0 && from !== id
+        ? { kind: "subscribe", id, subscribe: topic, keyed: true, from }
+        : { kind: "subscribe", id, subscribe: topic, keyed: true };
+    }
   }
   if (typeof raw.unsubscribe === "boolean") return { kind: "unsubscribe", id, unsubscribe: raw.unsubscribe };
   if (typeof raw.cancel === "boolean") return { kind: "cancel", id, cancel: raw.cancel };

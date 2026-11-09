@@ -541,3 +541,28 @@ test "a quiet call's values and an unread call's answer may be taken as they com
   c.receive_json({ "id": view, "ok": {} })
   assert_false(said({ "id": view, "value": { "frame": { "ts": 3 } } }))
 }
+
+///|
+test "more of a list asked from what it has: its first value what changed from that one's, which is kept till it comes" {
+  let (c, sent) = recorder()
+  let first = c.subscribe("chatRows", params={ "station": "ws/a", "limit": 2 })
+  assert_true(c.receive("{\"id\":1,\"value\":{\"items\":[{\"id\":\"a\"},{\"id\":\"b\"}]}}"))
+  let more = c.subscribe("chatRows", params={ "station": "ws/a", "limit": 4 })
+  assert_eq(sent[1].stringify(), ({ "id": 2, "subscribe": { "topic": "chatRows", "station": "ws/a", "limit": 4 }, "keyed": true, "from": 1 } : Json).stringify())
+  // (the one shown till then let go of: kept, as the delta to come is from it)
+  c.unsubscribe(first)
+  assert_eq(sent.length(), 2)
+  let ops = "[{\"path\":[\"items\"],\"key\":[\"id\"],\"put\":{\"id\":\"c\"},\"before\":null},{\"path\":[\"items\"],\"key\":[\"id\"],\"put\":{\"id\":\"d\"},\"before\":null}]"
+  assert_true(c.receive("{\"id\":2,\"delta\":" + ops + ",\"from\":1}"))
+  assert_eq(more.value.unwrap().stringify(), "{\"items\":[{\"id\":\"a\"},{\"id\":\"b\"},{\"id\":\"c\"},{\"id\":\"d\"}]}")
+  // (its rows had kept as they were)
+  match (first.value, more.value) {
+    (Some(Object(a)), Some(Object(b))) =>
+      match (a.get("items"), b.get("items")) {
+        (Some(Array(x)), Some(Array(y))) => assert_true(physical_equal(x[0], y[0]))
+        _ => fail("no items")
+      }
+    _ => fail("no values")
+  }
+  assert_eq(sent[2].stringify(), ({ "id": 1, "unsubscribe": true } : Json).stringify())
+}
