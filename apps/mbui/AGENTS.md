@@ -132,6 +132,9 @@ Write PR descriptions and anything said to people in these words: not 电脑版,
 - A screen changed is checked by `t.audit()` (every rule at once, each fault saying where what it names was made), not
   by judging a picture; what people point at (their words on a screenshot) is found back to its line by
   `t.sources_of(words)` or `t.sources_at(x, y)` on the same screen in the Tester (mbui's AGENTS.md: What is seen).
+- Every screen is swept at the default size of words (corners_wbtest.mbt) and, in a phone's window, at the system's
+  words set to 1.3 (`src/sfapp/words_large_wbtest.mbt`: what fits and words over words at rest; the user, 2026-11-10).
+  A new state a report shows gets a fixture mode in `corner_modes`, so both sweeps see it.
 - For development stills, prepare a `scripts/media-job.sh picture` job for each source state and reuse its Wasm
   renderer across scenes; use a `film` job for video (`scripts/media-job.sh` says how).
 - No check runs the whole app on a device, an emulator, a simulator or a desktop window and compares its picture

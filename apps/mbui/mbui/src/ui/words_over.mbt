@@ -358,3 +358,14 @@ fn Ctx::words_over_made(self : Ctx, by : InstBy) -> String {
     Nobody => ""
   }
 }
+
+///|
+/// The pairs of nodes' words the frame last drawn shows one over the other, moving or not, each once, with where they
+/// meet: for a sweep of screens at rest (still.fail's words_large_wbtest.mbt), where words over words are otherwise
+/// the squeeze's, which measures an old view's boxes side by side but not the window tree's words.
+pub fn Tester::words_over_now(self : Tester) -> Array[String] {
+  ignore(self)
+  g()
+  .words_over_details()
+  .map(fn(f) { "「\{f.0}」 under 「\{f.1}」 at (\{f.2.round()}, \{f.3.round()})" })
+}

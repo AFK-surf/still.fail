@@ -56,6 +56,7 @@ let corners_tape_rail : Array[String] = [
   "settings-workspace", "settings-security", "settings-vault", "settings-vault-items", "settings-vault-item",
   "settings-stations", "settings-station", "settings-station-offline", "settings-station-env",
   "settings-station-processes", "settings-station-mark", "settings-station-lower", "settings-station-versions",
+  "settings-station-updated",
   "settings-station-network", "settings-stations-add", "settings-stations-existing", "settings-stations-command",
   "settings-first-station", "settings-adb", "settings-adb-unpaired", "settings-adb-pairing",
   "settings-adb-connected", "settings-adb-failed", "settings-adb-chats", "settings-adb-chats-long",
