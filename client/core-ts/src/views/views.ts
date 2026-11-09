@@ -2213,7 +2213,7 @@ export class Views implements Owner {
       ...(feishuUrl !== null ? { feishuUrl } : {}),
       title,
       people,
-      agents,
+      agents: answeredAt(agents, messages, outbox),
       messages,
       elsewhere,
       more: u64(page.first) !== null && page.first > 1,
@@ -2998,4 +2998,44 @@ export function stationProblems(online: boolean, silent: boolean, blocked: strin
   if (!online && updating) return [{ key: "updating", level: "amber", text: t("core-views.station.updating_back") }];
   if (!online) return [{ key: "away", level: seen ? "red" : "amber", text: seen ? t("core-views.station.away", { name: brand.name() }) : t("core-views.station.never_connected", { name: brand.name() }) }];
   return [];
+}
+
+
+/// The chat's agents (`agents`), each whose card was answered from here at work (queued) from the moment the answer
+/// is sent: while the answer is on its way (`outbox`: one quoting the card, or any under it as the chat's last word),
+/// and once it is here (`messages`, the viewer's last) till a turn of the agent's begins after it, as its station says
+/// once it has taken the answer. So its activity comes in with the answer, the card folding and the answer coming on
+/// one way of the list, not a moment after as the station tells it (the user, 2026-11-09: 「点选项时「处理中」立刻出来」).
+export function answeredAt(agents: J[], messages: J[], outbox: J[]): J[] {
+  const cardBy = (m: J | undefined): string | null => (m !== undefined && isObject(m.card) ? str(get(m.by, "agent")) : null);
+  const cards = new Map<string, string>();
+  for (const m of messages) {
+    const by = cardBy(m);
+    if (by !== null && typeof m.ts === "string") cards.set(m.ts, by);
+  }
+  if (cards.size === 0) return agents;
+  const said = messages.filter((m) => m.system !== true);
+  const quoted = (m: J): string[] => arr(m.quotes).flatMap((q) => {
+    const by = get(q, "role") === "agent" && typeof get(q, "ts") === "string" ? cards.get(q.ts) : undefined;
+    return by === undefined ? [] : [by];
+  });
+  const waiting = new Map<string, number>();
+  for (const m of outbox) {
+    if (m.state === "failed") continue;
+    const under = cardBy(said[said.length - 1]);
+    for (const by of [...quoted(m), ...(under !== null ? [under] : [])]) waiting.set(by, Infinity);
+  }
+  const last = said[said.length - 1];
+  if (last !== undefined && last.mine === true) {
+    const under = cardBy(said[said.length - 2]);
+    for (const by of [...quoted(last), ...(under !== null ? [under] : [])]) if (!waiting.has(by)) waiting.set(by, u64(last.createdAt) ?? 0);
+  }
+  if (waiting.size === 0) return agents;
+  return agents.map((a) => {
+    const key = str(get(a.session, "key"));
+    const since = key !== null ? waiting.get(key) : undefined;
+    if (since === undefined || a.status === "running" || a.status === "queued") return a;
+    const began = u64(get(get(a.session, "lastTurn"), "startedAt"));
+    return began !== null && began >= since ? a : { ...a, status: "queued" };
+  });
 }

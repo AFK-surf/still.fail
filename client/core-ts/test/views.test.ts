@@ -13,7 +13,7 @@ import { Runner } from "../src/runtime.ts";
 import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
 import { attention, choices, runnableOn } from "../src/views/models.ts";
-import { Views, betaOffered, blockedUnder, chatDerive, down, noticeOf, shownMessage, stationOn } from "../src/views/views.ts";
+import { Views, answeredAt, betaOffered, blockedUnder, chatDerive, down, noticeOf, shownMessage, stationOn } from "../src/views/views.ts";
 import { localDay } from "../src/views/usage.ts";
 import { installView, profile as presentProfile } from "../src/present.ts";
 import { markdown } from "../src/markdown.ts";
@@ -2991,4 +2991,32 @@ test("a_slack_threads_row_has_its_link_there_as_its_page_does_for_its_menu", asy
   t.set(overview("ws/st"), overviewOf([{ ...connect("c1", "Slack"), connection: connected }], []));
   await t.read(chats, 1);
   assert.deepEqual([of("k").slackUrl, of("k").slackApp, of("7").slackUrl], ["https://afk.slack.com/archives/C1/p12", "slack://channel?team=T1&id=C1&message=1.2", undefined]);
+});
+
+test("an_agent_whose_card_is_answered_from_here_is_at_work_from_the_answer_on_till_its_turn_after_it_begins", () => {
+  const agent = (status: string, startedAt: number | null) => ({
+    status,
+    session: { key: "s-1", lastTurn: startedAt === null ? null : { startedAt } },
+  });
+  const card = { seq: 5, ts: "t-5", by: { name: "Claude", agent: "s-1" }, card: { type: "options" }, createdAt: 100 };
+  const quotes = [{ author: "Claude", text: "换吗？", comment: "", role: "agent", ts: "t-5" }];
+  // on its way: at work at once
+  assert.equal(answeredAt([agent("final", 50)], [card], [{ id: "o-1", state: "sending", quotes }])[0].status, "queued");
+  // not sent: as it was
+  assert.equal(answeredAt([agent("final", 50)], [card], [{ id: "o-1", state: "failed", quotes }])[0].status, "final");
+  // here, its turn not begun since: still at work
+  const answer = { seq: 6, ts: "t-6", mine: true, quotes, createdAt: 200 };
+  assert.equal(answeredAt([agent("final", 50)], [card, answer], [])[0].status, "queued");
+  // its turn after it begun (and over): as the station says
+  assert.equal(answeredAt([agent("final", 250)], [card, answer], [])[0].status, "final");
+  // words sent under the card, the chat's last word: they answer it as a pick does
+  const said = { seq: 6, ts: "t-6", mine: true, quotes: [], createdAt: 200 };
+  assert.equal(answeredAt([agent("final", 50)], [card], [{ id: "o-1", state: "sending", quotes: [] }])[0].status, "queued");
+  assert.equal(answeredAt([agent("final", 50)], [card, said], [])[0].status, "queued");
+  // words under something said after it, quoting no card: as they are
+  const after = { seq: 6, ts: "t-6", by: { name: "Claude", agent: "s-1" }, createdAt: 150 };
+  const later = { seq: 7, ts: "t-7", mine: true, quotes: [], createdAt: 200 };
+  assert.equal(answeredAt([agent("final", 50)], [card, after, later], [])[0].status, "final");
+  // at work already: as it is
+  assert.equal(answeredAt([agent("running", 50)], [card], [{ id: "o-1", state: "sending", quotes }])[0].status, "running");
 });
