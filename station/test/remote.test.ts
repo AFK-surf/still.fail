@@ -387,9 +387,7 @@ describe("remote", { concurrency: true }, () => {
 
   test("a queued task tells the agent the measured capacity and the reason for its wait", async () => {
     const clock = testClock();
-    let busy = 0;
-    let total = 0;
-    const machine: Machine = { cpus: () => 12, ticks: () => [busy += 55, total += 100], pressure: async () => "normal" };
+    const machine: Machine = { pressure: async () => "normal" };
     const r = station({ jobsClock: clock, machine });
     const capacity = { cpus: 12, cpuBusy: { share: 0.55, seconds: 60 }, memory: { totalBytes: 64 * 1024 ** 3, availableBytes: 45 * 1024 ** 3 }, checkedAt: 123 };
     let reads = 0;
@@ -427,7 +425,7 @@ describe("remote", { concurrency: true }, () => {
   test("a slow capacity reading never holds up a queued task's reply", async () => {
     const clock = testClock();
     const jobsClock = testClock();
-    const machine: Machine = { cpus: () => 12, ticks: () => [0, 0], pressure: async () => "normal" };
+    const machine: Machine = { pressure: async () => "normal" };
     const r = station({ clock, jobsClock, machine });
     r.remote.setLoad(() => new Promise(() => {}));
     await callAs(r, "s", "first", "task.prepare", { spec: { command: FOREVER, screen: true } });
@@ -446,9 +444,7 @@ describe("remote", { concurrency: true }, () => {
   test("a task that starts while its capacity is read is no longer reported queued", async () => {
     const clock = testClock();
     const jobsClock = testClock();
-    let busy = 0;
-    let total = 0;
-    const machine: Machine = { cpus: () => 12, ticks: () => [busy += 20, total += 100], pressure: async () => "normal" };
+    const machine: Machine = { pressure: async () => "normal" };
     const r = station({ clock, jobsClock, machine });
     let read = false;
     let release!: (load: Json) => void;
@@ -1020,8 +1016,7 @@ describe("remote", { concurrency: true }, () => {
   test("a task waiting for the screen is not reported ended before it actually runs", async () => {
     {
       const jobsClock = testClock();
-      let ticks = 0;
-      const machine: Machine = { cpus: () => 8, ticks: () => [0, ticks += 1000], pressure: async () => "normal" };
+      const machine: Machine = { pressure: async () => "normal" };
       const { a, b, use, clock } = pair(undefined, { jobsClock, machine });
       const first = { station: "B", key: "first" };
       const second = { station: "B", key: "second" };

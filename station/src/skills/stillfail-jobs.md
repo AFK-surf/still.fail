@@ -69,9 +69,9 @@ it must.
 
 A station runs other stations' tasks through its own queue. Busy CPUs never hold a task back; when one must wait,
 `start` answers with `queue` (its place and why it waits: memory under pressure, the screen another task's or a
-person's, the small-task slot taken) and the task starts by itself when that passes. A task started beside others may
-get `STILLFAIL_CPUS` (and `MAKEFLAGS`, `CARGO_BUILD_JOBS`, `CMAKE_BUILD_PARALLEL_LEVEL` when not set) with how many CPUs
-are free: pass it to tools that take every core otherwise. You end `waiting` as for any task; its end is told as usual.
+person's, the small-task slot taken) and the task starts by itself when that passes. A task is not told how many CPUs
+to take either (no `STILLFAIL_CPUS`, `MAKEFLAGS` or `CARGO_BUILD_JOBS` from the station; only a small task is told
+one): the system shares the cores. You end `waiting` as for any task; its end is told as usual.
 
 For a brief offscreen task such as a single picture made with a prebuilt renderer, `station_task` prepare takes
 `small: true`: one such task may run beside the rest even while the memory is under pressure (not when it is about

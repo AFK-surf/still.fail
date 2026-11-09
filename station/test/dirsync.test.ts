@@ -69,11 +69,8 @@ const cloudOf = (station: string, peers: string[]): any =>
     relays: () => [],
   });
 
-/// A machine with room for every task (jobs/admit.ts): its CPUs idle, its memory under no pressure.
-const idle: Machine = (() => {
-  let t = 0;
-  return { cpus: () => 8, ticks: () => [0, (t += 1000)] as [number, number], pressure: async () => "normal" as const };
-})();
+/// A machine with room for every task (jobs/admit.ts): its memory under no pressure.
+const idle: Machine = { pressure: async () => "normal" as const };
 
 /// A source station A and a target B of workspace "ws", A's requests to B over the station transport (in memory). `old`:
 /// B answers as a station from before directory sync would. `asked`: the methods A asked B, in order. `queue`: B's jobs
