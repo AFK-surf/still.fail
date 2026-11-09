@@ -72,7 +72,7 @@ export const OTHERS_MS = 2_000;
 /// rest had OTHERS_MS more (`grace`); or by TAKEN_MS whatever came. A station gone silent (its machine asleep, its
 /// network gone: no answer, no close, until its link gives up) is not waited on; nor is the person, who would wait
 /// with it to be let in, to approve a device, to see one taken off. What it says later it tells as it comes back.
-function answersOf<A, E>(inner: Inner, asks: Effect.Effect<A, E>[], enough: (r: Result.Result<A, E>) => boolean, grace = OTHERS_MS): Effect.Effect<Result.Result<A, E>[]> {
+export function answersOf<A, E>(inner: Inner, asks: Effect.Effect<A, E>[], enough: (r: Result.Result<A, E>) => boolean, grace = OTHERS_MS): Effect.Effect<Result.Result<A, E>[]> {
   return Effect.gen(function* () {
     if (asks.length === 0) return [];
     const got: (Result.Result<A, E> | undefined)[] = asks.map(() => undefined);

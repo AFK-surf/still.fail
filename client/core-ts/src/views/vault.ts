@@ -57,7 +57,7 @@ import type { Owner } from "../core/routing.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { type Entry, Signer } from "../lock.ts";
-import { askPerson, deviceText, fold, held as lockHeld, lockSeen, nameOf as workspaceName, signerOf } from "./lock.ts";
+import { OTHERS_MS, answersOf, askPerson, deviceText, fold, held as lockHeld, lockSeen, nameOf as workspaceName, signerOf } from "./lock.ts";
 import { workspaceIds } from "./marks.ts";
 import type { Topic } from "../protocol.ts";
 import { StationAddr } from "../station/addr.ts";
@@ -1341,10 +1341,12 @@ class Vaults {
     const self = this;
     return Effect.gen(function* () {
       const inner = self.#inner;
-      const published = yield* Effect.forEach(stationsOf(inner, self.ws), (s) => Effect.map(Effect.result(self.#station(s.id, "PUT", "/vault/boxes", cert)), (r) => [s.id, r._tag === "Success"] as const), { concurrency: 4 });
-      if (!published.some(([, ok]) => ok)) return yield* fail("vault_no_station", t("core-misc.vault.noStation"));
+      // (done once one took it: a station gone silent is not waited on, the others still told it; lock.ts answersOf)
+      const published = yield* answersOf(inner, stationsOf(inner, self.ws).map((s) => Effect.as(self.#station(s.id, "PUT", "/vault/boxes", cert), s.id)), (r) => r._tag === "Success", 0);
+      const took = published.flatMap((r) => (r._tag === "Success" ? [r.success] : []));
+      if (took.length === 0) return yield* fail("vault_no_station", t("core-misc.vault.noStation"));
       change(inner, self.ws, (h) => void (h.boxes[cert.device] = cert));
-      return published.filter(([, ok]) => ok).map(([id]) => id);
+      return took;
     });
   }
 
@@ -1443,8 +1445,8 @@ class Vaults {
       if (!scope) return yield* Effect.fail(CoreError.invalid("lasts: once, hour or chat"));
       if (id === PLAIN) {
         const at = nowS(inner);
-        const told = yield* Effect.forEach(held(inner, self.ws).plainOn, (s) => Effect.map(Effect.result(self.#station(s, "PUT", "/vault/plain/lasts", { lasts: scope, at })), (r) => r._tag === "Success"), { concurrency: 4 });
-        if (!told.some((ok) => ok)) return yield* fail("vault_no_station", t("core-misc.vault.noStation"));
+        const told = yield* answersOf(inner, held(inner, self.ws).plainOn.map((s) => self.#station(s, "PUT", "/vault/plain/lasts", { lasts: scope, at })), (r) => r._tag === "Success", 0);
+        if (!told.some((r) => r._tag === "Success")) return yield* fail("vault_no_station", t("core-misc.vault.noStation"));
         change(inner, self.ws, (h) => void (h.plainLasts = { lasts: scope, at }));
         return { lasts: scope };
       }
@@ -1607,7 +1609,7 @@ class Vaults {
     return Effect.gen(function* () {
       const inner = self.#inner;
       if (!held(inner, self.ws).requests[id]) {
-        for (const s of stationsOf(inner, self.ws)) yield* Effect.ignore(readStation(inner, `${self.ws}/${s.id}`), { log: "Unhandled", message: "vault station read" });
+        yield* answersOf(inner, stationsOf(inner, self.ws).map((s) => readStation(inner, `${self.ws}/${s.id}`)), () => held(inner, self.ws).requests[id] !== undefined, OTHERS_MS);
       }
       const h = held(inner, self.ws);
       const r = h.requests[id];
