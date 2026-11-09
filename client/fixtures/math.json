@@ -1,5 +1,5 @@
 {
-  "text": "Inline \\(E=mc^2\\) stays with the words.\n\nFraction \\(\\frac{1}{2}\\) and \\(a+\\text{你好}\\) keep the baseline.\n\n$$\n\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}\n$$\n\n$$\n\\begin{pmatrix}a&b\\\\c&d\\end{pmatrix}\n$$\n\n$$\n\\sum_{k=1}^{n} x_k = x_1 + x_2 + x_3 + x_4 + x_5 + x_6 + x_7 + x_8 + x_9 + x_{10}\n$$\n\nInvalid \\(\\unknowncommand{x}\\) stays readable. Code: `$x$`.\n",
+  "text": "Inline \\(E=mc^2\\) stays with the words.\n\n$$\n\\boxed{\\Pr(U\\perp V)=0}\n$$\n\nFraction \\(\\frac{1}{2}\\) and \\(a+\\text{你好}\\) keep the baseline.\n\n$$\n\\frac{-b\\pm\\sqrt{b^2-4ac}}{2a}\n$$\n\n$$\n\\begin{pmatrix}a&b\\\\c&d\\end{pmatrix}\n$$\n\n$$\n\\sum_{k=1}^{n} x_k = x_1 + x_2 + x_3 + x_4 + x_5 + x_6 + x_7 + x_8 + x_9 + x_{10}\n$$\n\nInvalid \\(\\unknowncommand{x}\\) stays readable. Code: `$x$`.\n",
   "md": [
     [
       "p",
@@ -70,18 +70,126 @@
       ]
     ],
     [
+      "pre",
+      {
+        "code": [
+          44,
+          67
+        ],
+        "math": true,
+        "drawing": {
+          "font": "tex-4.1.3",
+          "width": 7088.1,
+          "height": 1534,
+          "baseline": 1017,
+          "draw": [
+            [
+              "70b9d25f",
+              1,
+              -1,
+              267,
+              1017
+            ],
+            [
+              "b760f16",
+              1,
+              -1,
+              948,
+              1017
+            ],
+            [
+              "19576bcd",
+              1,
+              -1,
+              1340,
+              1017
+            ],
+            [
+              "f61f02ef",
+              1,
+              -1,
+              1729,
+              1017
+            ],
+            [
+              "32f5f694",
+              1,
+              -1,
+              2773.8,
+              1017
+            ],
+            [
+              "48d49875",
+              1,
+              -1,
+              3829.6,
+              1017
+            ],
+            [
+              "43fc68ed",
+              1,
+              -1,
+              4598.6,
+              1017
+            ],
+            [
+              "831e6878",
+              1,
+              -1,
+              5265.3,
+              1017
+            ],
+            [
+              "15c33f3f",
+              1,
+              -1,
+              6321.1,
+              1017
+            ]
+          ],
+          "rects": [
+            [
+              0,
+              1467,
+              7088.1,
+              67
+            ],
+            [
+              0,
+              0,
+              7088.1,
+              67
+            ],
+            [
+              0,
+              0,
+              67,
+              1534
+            ],
+            [
+              7021.1,
+              0,
+              67,
+              1534
+            ]
+          ],
+          "text": []
+        }
+      }
+    ],
+    [
       "p",
       [
         [
-          41,
-          50
+          72,
+          81
         ],
         [
           "code",
           {
             "content": [
-              52,
-              63
+              83,
+              94
             ],
             "math": true,
             "drawing": {
@@ -118,15 +226,15 @@
           }
         ],
         [
-          65,
-          70
+          96,
+          101
         ],
         [
           "code",
           {
             "content": [
-              72,
-              83
+              103,
+              114
             ],
             "math": true,
             "drawing": {
@@ -164,8 +272,8 @@
           }
         ],
         [
-          85,
-          104
+          116,
+          135
         ]
       ]
     ],
@@ -173,8 +281,8 @@
       "pre",
       {
         "code": [
-          109,
-          139
+          140,
+          170
         ],
         "math": true,
         "drawing": {
@@ -290,8 +398,8 @@
       "pre",
       {
         "code": [
-          147,
-          183
+          178,
+          214
         ],
         "math": true,
         "drawing": {
@@ -352,8 +460,8 @@
       "pre",
       {
         "code": [
-          191,
-          272
+          222,
+          303
         ],
         "math": true,
         "drawing": {
@@ -638,36 +746,36 @@
       "p",
       [
         [
-          277,
-          285
+          308,
+          316
         ],
         [
           "code",
           {
             "content": [
-              287,
-              305
+              318,
+              336
             ],
             "math": true,
             "drawing": null
           }
         ],
         [
-          307,
-          330
+          338,
+          361
         ],
         [
           "code",
           {
             "content": [
-              331,
-              334
+              362,
+              365
             ]
           }
         ],
         [
-          335,
-          336
+          366,
+          367
         ]
       ]
     ]

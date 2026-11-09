@@ -38,7 +38,7 @@ export type MdStore = { has(key: string): boolean; get(key: string): string | nu
 
 /// How the trees kept are read: another number whenever what `parse` makes of a text changes (a test holds it to the
 /// trees of a set of texts: markdown.test.ts). A drawable older tree can be shown while it is read again in the background.
-export const MD_READING = 9;
+export const MD_READING = 10;
 
 /// Earlier readings whose tree format this core can still draw while they are read again. Raise this independently of
 /// MD_READING if a future change makes an old tree impossible to draw; a change in interpretation alone need not.

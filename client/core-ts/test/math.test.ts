@@ -46,6 +46,27 @@ test("inline formulas are one drawing, display fractions have their own layout",
   assert(b.height > a.height);
 });
 
+test("boxed formulas keep a hollow frame, including nested and scaled boxes", () => {
+  for (const display of [false, true]) {
+    const d = mathDrawing(String.raw`\boxed{\Pr(U\perp V)=0}`, display)!;
+    assert(d.draw.length > 0, "the contents are present");
+    assert.deepEqual(d.rects, [
+      [0, d.height - 67, d.width, 67],
+      [0, 0, d.width, 67],
+      [0, 0, 67, d.height],
+      [d.width - 67, 0, 67, d.height],
+    ], "the 67-unit stroke surrounds the formula without filling its center");
+  }
+  const nested = mathDrawing(String.raw`\boxed{\boxed{x}}`, true)!;
+  assert.equal(nested.rects.length, 8, "both boxes have four edges");
+  const fraction = mathDrawing(String.raw`\boxed{\frac{x}{y}}`, true)!;
+  assert.equal(fraction.rects.length, 5, "a filled fraction rule remains inside the four edges");
+  assert(fraction.rects.some(([x, y, w, h]) => x > 67 && y > 67 && w > 67 && h === 60));
+  const subscript = mathDrawing(String.raw`x_{\boxed{y}}`, true)!;
+  assert.equal(subscript.rects.length, 4);
+  assert(subscript.rects[0]![3] > 0 && subscript.rects[0]![3] < 67, "the frame's stroke scales with the subscript");
+});
+
 test("macros cannot leak between messages; invalid and recursive TeX stay source", () => {
   assert(mathDrawing(String.raw`\def\mine{x}\mine`, false));
   assert.equal(mathDrawing(String.raw`\mine`, false), null);
