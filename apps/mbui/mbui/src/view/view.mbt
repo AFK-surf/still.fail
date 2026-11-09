@@ -605,6 +605,9 @@ pub struct Tree {
   /// the moment what is drawn is drawn at (a frame's, to be shown then), a signal a look follows (Tree::drawn_at); the
   /// logic follows no clock (its moment `logic`, what is due on its timeline said once: Tree::advance)
   clock : @signals.Signal[Double]
+  /// the moment the last frame is drawn at (Tree::at), where the clock stands but while it is set to a change's
+  /// moment and back (Tree::measured_now, a settling): what makes its way follows this one alone (View::comes)
+  mut frame_ms : Double
   /// the same moment, for what draws a wait by it (a cycle: View::cycle): what never ends, read apart from what moves
   beat : @signals.Signal[Double]
   /// the same moment on the resident clock's steps (resident_step_ms): for an endless decoration drawn by it
@@ -1014,6 +1017,7 @@ pub fn Tree::new(
   }
   let t : Tree = {
     clock: @signals.signal(start, same=fn(a, b) { a == b }),
+    frame_ms: start,
     beat: @signals.signal(start, same=fn(a, b) { a == b }),
     resident: @signals.signal(resident_of(start), same=fn(a, b) { a == b }),
     resident_readers: {},
@@ -1810,6 +1814,7 @@ pub fn Tree::cycle_read(self : Tree) -> Bool {
 ///|
 /// The clock set to `ms` (a frame's time).
 pub fn Tree::at(self : Tree, ms : Double) -> Unit {
+  self.frame_ms = ms
   self.clock_to(ms)
   self.beat_set(ms)
 }
@@ -6947,12 +6952,16 @@ fn View::comes(self : View, v : View, from : Double, to : Double) -> Bool {
           if !m.live || m.gen != gen {
             return
           }
-          // (never back: the clock set to a change's moment ahead and back again as it is measured then
-          // (Tree::measured_now) leaves its way where that moment had it, not laid out again at the frame's and again
-          // at the moment's, each laying out what reads it again: one way, the same however often it is measured)
+          // (the clock set to a change's moment and back again as things are measured or settled then
+          // (Tree::measured_now) moves no way: laid out where the frame has it, not again at that moment's and again
+          // at the frame's, each laying out what reads it anew)
+          match t {
+            Some(t) if t != tree.frame_ms && m.flex.style.come_now == m.flex.style.come_now => return
+            _ => ()
+          }
           let was = m.flex.style.come_now
           let now = match t {
-            Some(t) => if was == was && was > t { was } else { t }
+            Some(t) => t
             None => 0.0 / 0.0
           }
           if now == was || (now != now && was != was) {
