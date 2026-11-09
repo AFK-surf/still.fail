@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [dfbe26655](https://github.com/AFK-surf/still.fail/commit/dfbe266551d1dd9d363defbe0d9e9d4ea09a9d6d) mbui: what a row coming in costs as big as the row | 1.72 | 2.29 | 9.52 | 28.01 | 33.19 | 25.03 | 45.72 | 93.06 | 156.81 |
 | [d1aff8e78](https://github.com/AFK-surf/still.fail/commit/d1aff8e78a8d3ba61d94e9822a88498c54ed53f7) mbui: the chat bar's screen button says how many s | 1.71 | 2.28 | 9.52 | 28.01 | 33.18 | 25.02 | 45.7 | 93.06 | 156.81 |
 | [8ba01a5d7](https://github.com/AFK-surf/still.fail/commit/8ba01a5d7dbafb82b2376fb6feb58f8931ea4c00) ci: the Mac release's bytecode installs its packag | 1.71 | 2.28 | 9.52 | 28.01 | 33.18 | 25.02 | 45.7 | 93.06 | 156.81 |
 | [426cefb1f](https://github.com/AFK-surf/still.fail/commit/426cefb1f07546d0bc73df0918238fc4d5c23b8e) mbui: what a change costs as big as the change, no | 1.71 | 2.28 | 9.52 | 28.01 | 33.18 | 25.02 | 45.7 | 93.06 | 156.81 |
