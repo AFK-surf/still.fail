@@ -52,6 +52,12 @@
 let inst_size = 60
 
 ///|
+/// `len` of the numbers of `a` from `from` on, as an array of their own: copied, not made first and then written over.
+fn inst_copy(a : FixedArray[Double], from : Int, len : Int) -> FixedArray[Double] {
+  FixedArray::from_array(a[from:from + len])
+}
+
+///|
 fn Ctx::grow(self : Ctx) -> Unit {
   let old = self.inst
   let bigger = FixedArray::make(old.length() * 2, 0.0)

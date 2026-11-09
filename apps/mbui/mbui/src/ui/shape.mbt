@@ -92,6 +92,11 @@ let seg_inst : FixedArray[Double] = {
 fn Ctx::paint_shapes(self : Ctx, n : Node, alpha : Double) -> Unit {
   let bands = match n.shape_bands {
     Some(b) if physical_equal(b.of, n.shapes) => b
+    Some(b) if b.fits(n.shapes) => {
+      let b = { ..b, of: n.shapes }
+      n.shape_bands = Some(b)
+      b
+    }
     _ => {
       let b = shape_bands(n.shapes)
       n.shape_bands = Some(b)
@@ -127,6 +132,26 @@ priv struct ShapeBand {
   h : Double
   pieces : Array[Double]
   even_odd : Bool
+}
+
+///|
+/// Whether `shapes` come to the bands these are (shape_bands): the same outlines, each filled, stroked as wide and by
+/// the same rule as those they were worked out for, whatever their colours (put as each band is drawn).
+fn ShapeBands::fits(self : ShapeBands, shapes : Array[Shape]) -> Bool {
+  let of = self.of
+  guard of.length() == shapes.length() else { return false }
+  for k, s in shapes {
+    let o = of[k]
+    let stroked = s.stroke != 0L && s.width > 0.0
+    if (o.fill != 0L) != (s.fill != 0L) ||
+      (o.stroke != 0L && o.width > 0.0) != stroked ||
+      (stroked && o.width != s.width) ||
+      o.even_odd != s.even_odd ||
+      !(physical_equal(o.outlines, s.outlines) || o.outlines == s.outlines) {
+      return false
+    }
+  }
+  true
 }
 
 ///|

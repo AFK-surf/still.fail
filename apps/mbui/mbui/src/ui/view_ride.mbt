@@ -647,8 +647,7 @@ fn Ctx::ride_end(self : Ctx) -> Unit {
     ride_let_go(r.id)
     return
   }
-  let inst = FixedArray::make(n * inst_size, 0.0)
-  self.inst.blit_to(inst, len=n * inst_size, src_offset=r.k0 * inst_size)
+  let inst = inst_copy(self.inst, r.k0 * inst_size, n * inst_size)
   let moves = FixedArray::make(n, 0)
   for i in 0..<n {
     moves[i] = ride_moves(inst, i * inst_size, e)
