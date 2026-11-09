@@ -495,8 +495,8 @@ fn lint_mbt(
     if !in_t && build_clock_read(f, c, returns) && !painting(c.at) {
       add("build-clock", c.at, f.line_text(c.at))
     }
-    // an animated value read as it is built (build-motion): @motion.animate's, an Anim's, a Way's, a Value's read
-    // (`get`, `sample`) outside what a frame's paint is given; not in the tests, nor in the readers themselves
+    // an animated value read as it is built (build-motion): @motion.animate's, an Anim's, a Way's read (`get`)
+    // outside what a frame's paint is given; not in the tests, nor in the readers themselves
     if !in_t && motion_read_built(f, c, returns, motion_fields) && !painting(c.at) {
       add("build-motion", c.at, f.line_text(c.at))
     }
@@ -1049,7 +1049,7 @@ fn literal_time(f : MbtFile, idx : Array[Int]) -> Bool {
 }
 
 ///|
-/// Which positional argument of call `c` is the target a motion follows: an Anim's or a Value's `follow(target, …)`,
+/// Which positional argument of call `c` is the target a motion follows: an Anim's `follow(target, …)`,
 /// `@motion.animate(c, key, target)`, `Ctx::spring(key, target)`; None for any other call.
 fn follow_target(f : MbtFile, c : Call, returns : Map[String, String]) -> Int? {
   if c.kind == "method" && c.name == "follow" {
@@ -1842,18 +1842,16 @@ fn paint_fns(files : Array[MbtFile]) -> Map[String, Unit] {
 
 ///|
 /// The types whose value moves by the clock, read as they are (build-motion)
-let motion_types : Array[String] = ["Anim", "Way", "Value"]
+let motion_types : Array[String] = ["Anim", "Way"]
 
 ///|
 /// What @motion's functions give that moves by the clock, by their name, where no file linted says (build-motion: the
 /// app's run, @motion not among its files)
-let motion_returns : Array[(String, String)] = [("anim", "Anim"), ("told", "Anim"), ("value", "Value")]
+let motion_returns : Array[(String, String)] = [("anim", "Anim"), ("told", "Anim")]
 
 ///|
 /// The readers themselves, and what they read in to give it (build-motion): not counted inside them
-let motion_readers : Array[String] = [
-  "Anim::get", "Anim::moving", "Way::get", "Value::get", "Value::sample", "animate", "pressing",
-]
+let motion_readers : Array[String] = ["Anim::get", "Way::get", "animate", "pressing"]
 
 ///|
 /// The fields of the files' structs of a type that moves by the clock (`fade : @motion.Anim`), by their name
@@ -1881,8 +1879,8 @@ fn motion_fields(files : Array[MbtFile]) -> Map[String, Unit] {
 
 ///|
 /// Whether the call `c` reads an animated value as it is built (build-motion): @motion.animate (its value this
-/// frame; motion's own `animate` in motion), or `get` / `sample` on an Anim, a Way or a Value (told by its type where
-/// the receiver is said, by its field where it is one: motion_fields)
+/// frame; motion's own `animate` in motion), or `get` on an Anim or a Way (told by its type where the receiver is
+/// said, by its field where it is one: motion_fields)
 fn motion_read_built(
   f : MbtFile,
   c : Call,
@@ -1899,7 +1897,7 @@ fn motion_read_built(
     ((c.kind == "pkg" && c.qual == "@motion") || (c.kind == "bare" && under(f.rel, ["src/motion"]))) {
     return true
   }
-  if c.kind != "method" || (c.name != "get" && c.name != "sample") {
+  if c.kind != "method" || c.name != "get" {
     return false
   }
   let r = c.at - 2

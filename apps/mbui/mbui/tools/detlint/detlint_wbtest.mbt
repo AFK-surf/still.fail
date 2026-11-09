@@ -2259,7 +2259,7 @@ test "build-clock: what a frame's paint reads is not counted" {
 
 ///|
 test "build-motion" {
-  // an animated value read as it is built: @motion.animate's, an Anim's, a Way's, a Value's `get` (told by the type
+  // an animated value read as it is built: @motion.animate's, an Anim's, a Way's `get` (told by the type
   // said, by what made it, by a field of that type); read in what a paint taker is given, a signal's get, in a test,
   // not
   let fs = found(

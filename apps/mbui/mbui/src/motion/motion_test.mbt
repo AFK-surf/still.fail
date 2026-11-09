@@ -1121,7 +1121,7 @@ test "a chain of tweens each from the one before's declared end, whichever frame
     if i < 0 {
       k.val = 0
       segs[0].animate(1.0, @motion.tween(lengths[0], ease=Linear))
-    } else if i < 3 && !segs[i].moving() {
+    } else if i < 3 && segs[i].over() {
       if !seen_end.val {
         // seen at its end: the next told only the frame after
         seen_end.val = true
@@ -1172,7 +1172,7 @@ test "a chain caught up after a while unseen: what is over is there at once, onl
     }
     if shown.val {
       // in the same build, each over one followed by the next from its declared end, till one is under way
-      while k.val < 2 && !segs[k.val].moving() {
+      while k.val < 2 && segs[k.val].over() {
         segs[k.val + 1].animate(1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
         k.val += 1
       }
@@ -1191,8 +1191,8 @@ test "a chain caught up after a while unseen: what is over is there at once, onl
   t.draw()
   assert_eq(k.val, 1)
   assert_true(near(segs[1].get(), (t.time() - (start + lengths[0])).floor() / lengths[1], 1.0e-9))
-  assert_false(segs[0].moving())
-  assert_true(segs[1].moving())
+  assert_true(segs[0].over())
+  assert_false(segs[1].over())
   // (said to move: only the one under way)
   assert_eq(t.moving().length(), 1)
   // unseen past the whole chain's end, seen again: caught up in one build, at the last one's end, nothing moving
@@ -1203,7 +1203,7 @@ test "a chain caught up after a while unseen: what is over is there at once, onl
   t.draw()
   assert_eq(k.val, 2)
   assert_eq(segs[2].get(), 1.0)
-  assert_false(segs[2].moving())
+  assert_true(segs[2].over())
   assert_true(near(segs[2].ends(), start + lengths[0] + lengths[1] + lengths[2], 1.0e-9))
   t.assert_idle()
 }
@@ -1219,7 +1219,7 @@ test "a chain with motion reduced: each there at once, its end the moment it was
       segs[0].animate(1.0, @motion.tween(lengths[0], ease=Linear))
     }
     // each at its end followed by the next from its declared end, in the same build
-    while k.val < 2 && !segs[k.val].moving() {
+    while k.val < 2 && segs[k.val].over() {
       segs[k.val + 1].animate(1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
       k.val += 1
     }
@@ -1231,7 +1231,7 @@ test "a chain with motion reduced: each there at once, its end the moment it was
   assert_eq(k.val, 2)
   for s in segs {
     assert_eq(s.get(), 1.0)
-    assert_false(s.moving())
+    assert_true(s.over())
     assert_true(s.ends() <= t.time())
   }
   t.assert_idle()

@@ -7,7 +7,7 @@
 // (「hover 让高度变化了」). So a test builds one frame with every id lit at once and all that shows only under the hand
 // shown (Ctx::lit_every, lit_all), at the same moment as the frame before it with none (Tester::hand_moves), and finds
 // what is otherwise (Ctx::hand_faults). Across, a row may make room for what shows in it under the hand, as the web's
-// rows do. What goes by an animation the hand starts (motion's while_hover) is where it starts in both.
+// rows do. What goes by an animation the hand starts is where it starts in both.
 //
 // A hover answers one thing: what moves if pressed now (the user, 2026-10-25: 「hover 效果需要系统性设计一下」). So
 // one light, ink laid over what is there, which reads as a step forward on any ground where a solid colour would
