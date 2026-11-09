@@ -798,6 +798,12 @@ fn looks_left(c : Ctx, held : Bool) -> Unit {
 }
 
 ///|
+/// Whether the frame is of its looks alone with nothing but lists moved by their headers written anew among the last
+/// frame's instances (looks_frame): what the host draws again of it is found from those headers (h_present).
+// kept across runs: false as each frame begins, and once it is presented
+let looks_heads_only : Ref[Bool] = Ref(false)
+
+///|
 /// Whether the frame left its paint something to come (what its paint read changed as it was painted): the next frame
 /// is asked for, to paint it.
 fn paint_left() -> Bool {
@@ -826,8 +832,10 @@ fn looks_frame(c : Ctx, t : Double) -> Double {
     ride_spans.append(looks_base.spans)
     looks_apply(c)
   } else if !list_heads.is_empty() {
-    // (what columns scroll by their offsets alone moved by their headers, the rest as it was painted: list_looks)
+    // (what columns scroll by their offsets alone moved by their headers, the rest as it was painted: list_looks; what
+    // the host draws again of it found from those headers alone, h_present)
     looks_apply(c)
+    looks_heads_only.val = true
   }
   // (what is read out as the frame has it, said as a paint says it, the paint not run for it: a list moved by its
   // header alone, what the window's tree was told that changed nothing drawn (whether a node takes the focus); said
@@ -874,6 +882,7 @@ fn paint_frame(c : Ctx, t : Double) -> Double {
 /// or it left something to come (why: built_why); else painted alone where what its paint read changed, a moment its
 /// paint waits for came or the paint before drew otherwise (painted_why); else of its looks alone. When it began.
 fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
+  looks_heads_only.val = false
   // (where the hand's inputs since the frame before went, among the old views: view_host.mbt)
   let went_to = view_input_taken()
   let watch = frame_watch_of()

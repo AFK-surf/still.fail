@@ -302,6 +302,46 @@ test "a header compared as itself, its room passed over; moved, where its group 
 }
 
 ///|
+test "a frame with only its headers moved: those compared alone, the same parts as the whole frame compared; else none" {
+  let whole = @damage.Damage::new()
+  let alone = @damage.Damage::new()
+  for d in [whole, alone] {
+    d.group_set(7, frame([(100.0, 50.0, 20.0, 10.0, 0), (100.0, 70.0, 20.0, 10.0, 0)]), 2)
+    ignore(d.next(headed(7, 2, 0.0, 3.0), 3, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true))
+  }
+  for dy in [40.0, 41.0, 41.0, 0.0] {
+    let a = headed(7, 2, dy, 3.0)
+    let by_whole = whole.next(a, 3, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true)
+    assert_eq(alone.moved(a, 3, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, [1]), Some(by_whole), msg="moved to \{dy}")
+  }
+  // (glass over where the group moves: what it copies drawn again with it, as the whole frame compared has it)
+  let glassed = fn(dy : Double) {
+    let a = headed(7, 2, dy, 3.0)
+    let g = frame([(90.0, 60.0, 60.0, 30.0, 5)])
+    g[20] = -1.0
+    let b = FixedArray::make(a.length() + 60, 0.0)
+    a.blit_to(b, len=a.length())
+    g.blit_to(b, len=60, dst_offset=a.length())
+    b
+  }
+  let gw = @damage.Damage::new()
+  let ga = @damage.Damage::new()
+  for d in [gw, ga] {
+    d.group_set(7, frame([(100.0, 50.0, 20.0, 10.0, 0), (100.0, 70.0, 20.0, 10.0, 0)]), 2)
+    ignore(d.next(glassed(0.0), 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true))
+  }
+  for dy in [40.0, 41.0] {
+    let a = glassed(dy)
+    let by_whole = gw.next(a, 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, groups=true)
+    assert_eq(ga.moved(a, 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, [1]), Some(by_whole), msg="under glass, moved to \{dy}")
+  }
+  // (another number of instances, another window, or what was no header: not so)
+  assert_eq(alone.moved(headed(7, 3, 0.0, 3.0), 4, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, [1]), None)
+  assert_eq(alone.moved(headed(7, 2, 0.0, 3.0), 3, 500.0, 300.0, 2.0, 1.0, 1.0, 1.0, [1]), None)
+  assert_eq(alone.moved(headed(7, 2, 0.0, 3.0), 3, 400.0, 300.0, 2.0, 1.0, 1.0, 1.0, [0]), None)
+}
+
+///|
 test "known drawn anew: a part from the start, past half the window whole with nothing compared" {
   let a = frame([(10.0, 10.0, 20.0, 20.0, 0), (300.0, 200.0, 20.0, 20.0, 0)])
   let d = seen(a)

@@ -156,6 +156,15 @@ pub struct Damage {
   priv mut cur_at : FixedArray[Int]
   priv mut stamp : Int
   priv mut prev_stamp : Int
+  /// the kept frame as it was given (Damage::next): how many instances, headers and their groups' rooms among them,
+  /// and where each header was among them and among its units (Damage::moved)
+  priv mut given_n : Int
+  priv heads_at : Array[(Int, Int)]
+  /// of the kept frame, found as a frame of its headers alone is first compared with it (Damage::moved), what no
+  /// header changes: whether a picture of it changes under the same numbers (a stream's), and what its glass copies
+  priv mut kept_read : Bool
+  priv mut kept_streams : Bool
+  priv mut kept_glass : Array[Rect]
 }
 
 ///|
@@ -182,6 +191,11 @@ pub fn Damage::new() -> Damage {
     cur_at: FixedArray::make(0, -1),
     stamp: 0,
     prev_stamp: -1,
+    given_n: -1,
+    heads_at: [],
+    kept_read: false,
+    kept_streams: false,
+    kept_glass: [],
   }
 }
 
@@ -210,7 +224,10 @@ pub fn Damage::next(
   groups? : Bool = false,
   known? : Array[(Double, Double, Double, Double)] = [],
 ) -> Array[(Double, Double, Double, Double)] {
+  let given = count
+  self.heads_at.clear()
   let (inst, count) = if groups { self.units_of(inst, count) } else { (inst, count) }
+  self.given_n = given
   self.stamp = self.stamp + 1
   let same_frame = self.has &&
     w == self.w &&
@@ -267,10 +284,143 @@ fn Damage::units_of(self : Damage, inst : FixedArray[Double], count : Int) -> (F
   let mut n = 0
   while k < count {
     inst.blit_to(u, len=inst_size, src_offset=k * inst_size, dst_offset=n * inst_size)
-    n = n + 1
-    k = if kind_at(inst, k) == 13 { k + inst[k * inst_size + 14].to_int() } else { k + 1 }
+    if kind_at(inst, k) == 13 {
+      self.heads_at.push((k, n))
+      n = n + 1
+      k = k + inst[k * inst_size + 14].to_int()
+    } else {
+      n = n + 1
+      k = k + 1
+    }
   }
   (u, n)
+}
+
+///|
+/// The parts of the frame `inst` (`count` instances, a window `w` × `h` points at `scale`, its ground `r`, `g`, `b`)
+/// that differ from the frame given before it, where it is that frame with only the headers at `moved` (their indices
+/// among its instances) written anew (a frame of its looks alone, a list moved by its header: src/ui/frame_watch.mbt's
+/// looks_frame): each of them compared as Damage::next compares it, nothing else gone through; `known` as Damage::next's.
+/// None where it cannot be (another window, scale, ground or number of instances; a header not among the kept frame's;
+/// a picture that changes under the same numbers, glass): Damage::next then.
+pub fn Damage::moved(
+  self : Damage,
+  inst : FixedArray[Double],
+  count : Int,
+  w : Double,
+  h : Double,
+  scale : Double,
+  r : Double,
+  g : Double,
+  b : Double,
+  moved : Array[Int],
+  known? : Array[(Double, Double, Double, Double)] = [],
+) -> Array[(Double, Double, Double, Double)]? {
+  guard self.has &&
+    count == self.given_n &&
+    w == self.w &&
+    h == self.h &&
+    scale == self.scale &&
+    r == self.r &&
+    g == self.g &&
+    b == self.b else {
+    return None
+  }
+  // (each header where it is among the kept frame's units)
+  let units = []
+  for k in moved {
+    let mut u = -1
+    for p in self.heads_at {
+      if p.0 == k {
+        u = p.1
+        break
+      }
+    }
+    guard u >= 0 && u < self.n && kind_at(inst, k) == 13 else { return None }
+    units.push(u)
+  }
+  // (what is drawn anew under the same numbers: compared whole, Damage::next)
+  let prev = self.prev
+  if !self.kept_read {
+    self.kept_streams = false
+    for k in 0..<self.n {
+      let t = prev[k * inst_size + 20]
+      if t >= stream_tex_base && t < view_tex_base {
+        self.kept_streams = true
+        break
+      }
+    }
+    self.kept_glass = glass_groups(prev, pieces_from(prev, self.n))
+    self.kept_read = true
+  }
+  if self.kept_streams {
+    return None
+  }
+  self.stamp = self.stamp + 1
+  self.why = 0
+  self.seen.clear()
+  let window = { x0: 0.0, y0: 0.0, x1: w, y1: h }
+  let parts : Array[Rect] = []
+  let most_area = whole_share * w * h
+  for kr in known {
+    let (x0, y0, x1, y1) = kr
+    let p = { x0, y0, x1, y1 }
+    p.cut_to(window)
+    add_part(parts, p) |> ignore
+  }
+  let was = Rect::none()
+  let now = Rect::none()
+  for i, k in moved {
+    let u = units[i]
+    if same_pair(prev, u, inst, k) {
+      continue
+    }
+    was.clear()
+    now.clear()
+    self.reach_of(prev, u, was)
+    was.cut_to(window)
+    // (kept as it is now: the kept frame this one, its hash worked out again when it is asked)
+    inst.blit_to(prev, len=inst_size, src_offset=k * inst_size, dst_offset=u * inst_size)
+    if u < self.prev_at.length() {
+      self.prev_at[u] = -1
+    }
+    self.reach_of(prev, u, now)
+    now.cut_to(window)
+    if !was.empty() && !now.empty() && was.near(now) {
+      was.add(now.x0, now.y0, now.x1, now.y1)
+      add_part(parts, was) |> ignore
+    } else {
+      add_part(parts, was) |> ignore
+      add_part(parts, now) |> ignore
+    }
+  }
+  if parts.is_empty() {
+    return Some([])
+  }
+  // (what captures of glass copy, where a part reaches it: all of it in that part, as Damage::changed takes it in)
+  let groups = self.kept_glass
+  let mut grew = true
+  while grew {
+    grew = false
+    for gr in groups {
+      for p in parts {
+        if p.meets(gr) && !p.holds(gr.within(window)) {
+          let g = gr.within(window)
+          p.add(g.x0, g.y0, g.x1, g.y1)
+          grew = true
+        }
+      }
+      if grew {
+        settle(parts)
+        break
+      }
+    }
+  }
+  if parts_area(parts) > most_area {
+    self.why = 5
+    return Some([(0.0, 0.0, -1.0, -1.0)])
+  }
+  Some(parts.map(fn(p) { (p.x0, p.y0, p.x1 - p.x0, p.y1 - p.y0) }))
 }
 
 ///|
@@ -353,6 +503,7 @@ fn Damage::keep(
   self.cur_hash = was_hash
   self.cur_at = was_at
   self.prev_stamp = self.stamp
+  self.kept_read = false
   self.n = count
   self.w = w
   self.h = h
