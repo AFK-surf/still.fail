@@ -4,7 +4,8 @@
 # each scene's script run by the shell over sffix's made-up chats (MBUI_PROFILE_FILE: mbui's wasm_shell.c). The same
 # count every run, whatever the machine and its load; what a frame of each kind of instruction runs, and which
 # functions, said. Not the time a frame takes on a device: the native build's (scripts/appbench.sh) and a device's
-# are that. Numbers, never a verdict: what they say of a change is the reader's to weigh (the user, 2026-11-09).
+# are that. What the Tester's fake host runs in its stead (its Host methods: a device's host's own code) is said apart.
+# Numbers, never a verdict: what they say of a change is the reader's to weigh (the user, 2026-11-09).
 #   scripts/instrbench.sh [run] [OUT]     every scene (SCENES="home" those) into OUT (out/instr/run), each said
 #   scripts/instrbench.sh compare A B     two runs' OUTs side by side, A before and B after (each from its checkout),
 #                                         both compiled by the same MoonBit (MBUI_TOOLS): another one's code is
@@ -35,7 +36,9 @@ fi
 O=$(mkdir -p "${1:-out/instr/run}" && cd "${1:-out/instr/run}" && pwd)
 APP=sfbench bash "$D/wasm-app.sh" build > "$O/build.log" 2>&1 || { tail -30 "$O/build.log"; exit 1; }
 cp "$A/$(pkg_build sfbench wasm release)/sfbench.wasm" "$O/program.wasm"
-gas profile "$O/program.wasm" "$O/profiled.wasm"
+# (the Tester's fake host apart, its Host methods: what a device's host does in its own code, FakeHost::present's flat_from
+# of every group header among them, is no work of the app's; each call of one counted as one host call)
+gas profile "$O/program.wasm" "$O/profiled.wasm" _M0IP24mbui2ui8FakeHostP24mbui7hostapi4Host
 git rev-parse --short HEAD > "$O/commit" 2>/dev/null || true
 moon version 2>/dev/null | head -1 > "$O/moon"
 while read -r scene drive fixture win; do

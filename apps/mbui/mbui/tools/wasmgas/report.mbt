@@ -21,6 +21,9 @@ priv struct Run {
   incl : Map[Int, Int64]
   names : Map[Int, String]
   imported : Int
+  // what the functions counted apart (the test's host) ran over all frames, and their calls
+  mut apart : Int64
+  mut apart_calls : Int64
 }
 
 ///|
@@ -91,6 +94,8 @@ fn read_run(program : String, profile : String) -> Run {
     incl: {},
     names: function_names(data),
     imported: imported_functions(data),
+    apart: 0L,
+    apart_calls: 0L,
   }
   for line in text.split("\n") {
     let p = line.split(" ").map(fn(v) { v.to_owned() }).to_array()
@@ -101,6 +106,10 @@ fn read_run(program : String, profile : String) -> Run {
         run.own[k] = number(own)
         run.calls[k] = number(calls)
         run.incl[k] = number(incl)
+      }
+      ["APART", n, calls] => {
+        run.apart = number(n)
+        run.apart_calls = number(calls)
       }
       ["KINDS", .. cs] => for c in cs {
         run.kinds.push(number(c))
@@ -301,6 +310,9 @@ fn report(run : Run, top : Int) -> Unit {
     ])
   }
   row([("all", 9), (k(run.all()), 10), ("", 6), (k(run.weighted()), 10)])
+  @sys.println_out(
+    "apart, not counted above (the test's stand-in for the host, a device's host's own code): \{k(run.per_frame(run.apart))} a frame, in \{tenths(run.per_frame(run.apart_calls))} calls (each one host call above)",
+  )
   @sys.println_out("")
   @sys.println_out("by their own instructions, a frame on average:")
   top_functions(run, top, false)
@@ -345,6 +357,11 @@ fn compare(a : Run, b : Run, top : Int) -> Unit {
   row([("all", 9), (k(x), 10), (k(y), 10), (signed(k(y - x), y - x), 10), (pct(x, y), 7)])
   let (x, y) = (a.weighted(), b.weighted())
   row([("weighted", 9), (k(x), 10), (k(y), 10), (signed(k(y - x), y - x), 10), (pct(x, y), 7)])
+  let (x, y) = (a.per_frame(a.apart), b.per_frame(b.apart))
+  row([("apart", 9), (k(x), 10), (k(y), 10), (signed(k(y - x), y - x), 10), (pct(x, y), 7)])
+  @sys.println_out(
+    "(apart: not in the counts above, what the test's stand-in for the host ran, a device's host's own code; its calls \{tenths(a.per_frame(a.apart_calls))} before, \{tenths(b.per_frame(b.apart_calls))} after, each one host call above)",
+  )
   // each function's own a frame, by its name (the two programs number them apart)
   let own_a = by_name(a)
   let own_b = by_name(b)
