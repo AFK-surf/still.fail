@@ -641,7 +641,9 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
   } else {
     0.0
   }
-  @hostapi.present(buf, count, r, gg, b)
+  // (what of it cannot be seen left out: drawn the same, to the byte, with less to draw)
+  let (shown, n) = presented.occlude(buf, count, c.window_w, c.window_h)
+  @hostapi.present(shown, n, r, gg, b)
   ride_groups_told()
 }
 
