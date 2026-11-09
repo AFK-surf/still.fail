@@ -486,8 +486,10 @@ static wasm_trap_t *film_say(void *env, wasmtime_caller_t *caller, const wasmtim
 // each function ran in it (its own instructions, all its calls ran, its calls) and each kind of instruction, written
 // to the file a frame at a time:
 //
-//   COUNTERS N                    the functions counted (wasmgas's `__pm`, 40 bytes each)
-//   F FRAME K OWN CALLS INCL      a function's (K: its place among those defined) in a frame (MBUI_PROFILE_EACH=1)
+//   COUNTERS N                    the functions counted (wasmgas's `__pm`, 64 bytes each)
+//   F FRAME K OWN CALLS INCL ALLOCS ALLOCS_INCL
+//                                 a function's (K: its place among those defined) in a frame (MBUI_PROFILE_EACH=1),
+//                                 the calls of the allocator it made itself, and inside its calls
 //   FRAME FRAME SUM               the instructions run in a frame
 //   K FRAME C0 C1 …               each kind's in it (wasmgas's `__k<i>`), their sum SUM
 //   A FRAME N CALLS               what the functions counted apart ran in it, in how many calls
@@ -499,7 +501,7 @@ static wasm_trap_t *film_say(void *env, wasmtime_caller_t *caller, const wasmtim
 //
 // The clock (film.now) says 0 always: what is counted is never by the time the machine took.
 typedef struct {
-  uint64_t own, incl, calls, start, depth;
+  uint64_t own, incl, calls, start, depth, allocs, allocs_start, allocs_incl;
 } profiled_fn;
 
 static FILE *profiled_out;
@@ -610,13 +612,16 @@ static wasm_trap_t *film_mark(void *env, wasmtime_caller_t *caller, const wasmti
   for (size_t i = 0; i < profiled_n; i++) {
     uint64_t own = now[i].own - profiled_before[i].own, calls = now[i].calls - profiled_before[i].calls;
     uint64_t incl = now[i].incl - profiled_before[i].incl;
+    uint64_t allocs = now[i].allocs - profiled_before[i].allocs;
+    uint64_t allocs_incl = now[i].allocs_incl - profiled_before[i].allocs_incl;
     profiled_own[i] += own;
     profiled_calls[i] += calls;
     profiled_incl[i] += incl;
     sum += own;
     if (profiled_each && (own || calls))
-      fprintf(profiled_out, "F %d %zu %llu %llu %llu\n", frame, i, (unsigned long long)own, (unsigned long long)calls,
-              (unsigned long long)incl);
+      fprintf(profiled_out, "F %d %zu %llu %llu %llu %llu %llu\n", frame, i, (unsigned long long)own,
+              (unsigned long long)calls, (unsigned long long)incl, (unsigned long long)allocs,
+              (unsigned long long)allocs_incl);
   }
   fprintf(profiled_out, "FRAME %d %llu\n", frame, (unsigned long long)sum);
   uint64_t kinds[64], ksum = 0;

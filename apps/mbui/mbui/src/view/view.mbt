@@ -3337,10 +3337,17 @@ fn Tree::moved_of(self : Tree, n : Node) -> (Double, Double) {
 }
 
 ///|
-/// How far node `n` is drawn off where it is laid out: its offset, its shift by how big it is laid out, and how far
-/// what moves it by that moved it as it was placed (View::moved_by).
-fn off_of(n : Node) -> (Double, Double) {
-  (n.look.dx + n.look.sx * n.flex.width + n.moved.0, n.look.dy + n.look.sy * n.flex.height + n.moved.1)
+/// How far node `n` is drawn off where it is laid out across (off_y: down; each its own, no pair made for each node
+/// placed): its offset, its shift by how big it is laid out, and how far what moves it by that moved it as it was
+/// placed (View::moved_by).
+fn off_x(n : Node) -> Double {
+  n.look.dx + n.look.sx * n.flex.width + n.moved.0
+}
+
+///|
+/// How far node `n` is drawn off where it is laid out down (off_x's other).
+fn off_y(n : Node) -> Double {
+  n.look.dy + n.look.sy * n.flex.height + n.moved.1
 }
 
 ///|
@@ -3494,8 +3501,7 @@ fn Tree::drawn_box_of(self : Tree, at : Int) -> (Double, Double, Double, Double)
       if c.slot {
         take(k, ox, oy)
       } else {
-        let (dx, dy) = off_of(c)
-        take(k, ox + c.flex.left + dx, oy + c.flex.top + dy)
+        take(k, ox + c.flex.left + off_x(c), oy + c.flex.top + off_y(c))
       }
     }
   }
@@ -7714,16 +7720,32 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   let n = self.nodes[at]
   n.place_due = false
   // (what moves it by how big it is laid out: by how big it is laid out now, Tree::place's own moment, View::moved_by)
-  n.moved = self.moved_of(n)
-  let (dx, dy) = off_of(n)
-  let x = n.flex.left + dx
-  // (a page's list's first row on the host's pixels where it sets them so: Tree::rows_placed)
-  let y = self.rows_placed(at, n.flex.top + dy)
-  let a = n.look.alpha
+  // (no pair made for each node placed where nothing moves it so, nor for its offset or its pivot: placed every time
+  // anything about it is)
+  match n.moved_by {
+    Some(_) => n.moved = self.moved_of(n)
+    None => if n.moved.0 != 0.0 || n.moved.1 != 0.0 { n.moved = (0.0, 0.0) }
+  }
   let w = n.flex.width
   let h = n.flex.height
+  let x = n.flex.left + n.look.dx + n.look.sx * w + n.moved.0
+  // (a page's list's first row on the host's pixels where it sets them so: Tree::rows_placed)
+  let y = self.rows_placed(at, n.flex.top + n.look.dy + n.look.sy * h + n.moved.1)
+  let a = n.look.alpha
   let s = n.look.scale
-  let (px, py) = self.pivot_of(at, w, h)
+  let mut px = 0.0
+  let mut py = 0.0
+  match n.look.pivot {
+    At(fx, fy) => {
+      px = fx * w
+      py = fy * h
+    }
+    _ => {
+      let p = self.pivot_of(at, w, h)
+      px = p.0
+      py = p.1
+    }
+  }
   // (left out of its row: laid out nowhere; told once all of it is laid out, View::left_out)
   let out = n.flex.left_out()
   let went = !n.placed || x != n.lx || y != n.ly || a != n.la || s != n.ls || px != n.lpx || py != n.lpy || out != n.out
@@ -8616,7 +8638,15 @@ pub fn Tree::laid_held_toward(self : Tree, wanted : (Content) -> Bool) -> Array[
 /// its ground, under the edge round it (an old view's box's border_over: drawn after what it holds).
 pub fn Tree::holds_drawn(self : Tree, id : NodeId) -> Bool {
   guard self.alive_id(id) else { return false }
-  self.nodes[id.at].kids.iter().any(fn(k) { self.nodes[k].live && !self.nodes[k].out })
+  // (by its index: no iterator made, asked of each node drawn with an edge)
+  let kids = self.nodes[id.at].kids
+  for i in 0..<kids.length() {
+    let k = self.nodes[kids[i]]
+    if k.live && !k.out {
+      return true
+    }
+  }
+  false
 }
 
 ///|

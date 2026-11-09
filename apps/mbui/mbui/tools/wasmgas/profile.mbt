@@ -5,10 +5,11 @@
 // br, br_if, br_table, br_on_null, br_on_non_null, return, return_call*, unreachable; a call's return is no cut) adds
 // as it begins its length to:
 // - the exported i64 global `__gas`, all the program has run;
-// - the function's own count in a memory of its own, appended and exported as `__pm` (five i64s a function, at 40·k,
+// - the function's own count in a memory of its own, appended and exported as `__pm` (eight i64s a function, at 64·k,
 //   k its place among the defined functions: its index less the imported functions'): its own (+0), all run inside
 //   its calls (+8: the outermost call alone where it is reentered), its calls (+16); +24 and +32 where its outermost
-//   call began and how deep it is. Each defined function gets a wrapper appended that counts around it; every call of
+//   call began and how deep it is; +40 the calls of MoonBit's allocator it made itself (who made what is allocated),
+//   +56 those made inside its calls (the outermost alone, as +8), +48 how many there were as its outermost call began. Each defined function gets a wrapper appended that counts around it; every call of
 //   it (call, return_call, ref.func, the tables' elements, the exports) goes to the wrapper. The memory holds two such
 //   tables, in its halves: the first the program's, the second what the functions counted apart (`apart`, below) run;
 // - each kind's (KINDS, below) in an exported i64 global `__k<i>`, i its place in KINDS: how many of each kind the run
@@ -534,7 +535,7 @@ fn profile(data : Bytes, apart : (String) -> Bool) -> Bytes {
   let gas = g
   let nk = kinds.length()
   let mi = s.memories
-  let half = ((nd * 40 + 65535) / 65536).max(1)
+  let half = ((nd * 64 + 65535) / 65536).max(1)
   let mem_entry = @buffer.new()
   mem_entry.write_byte(b'\x00')
   leb_u(mem_entry, (2 * half).to_int64())
@@ -722,7 +723,7 @@ fn code_section(
       r.p = fend
       continue
     }
-    let base = 40 * fi
+    let base = 64 * fi
     // its locals
     let groups = r.uint()
     for _ in 0..<groups {
@@ -767,6 +768,9 @@ fn code_section(
           counter(nb, gas + 1 + k, per[k])
         }
       }
+      if per[K_ALLOC] > 0L {
+        bump(nb, pb, mi, base + 40, per[K_ALLOC])
+      }
       for k in i..=last {
         let to = if k + 1 < n_ops { starts[k + 1] } else { fend }
         let t = targets[k]
@@ -804,23 +808,32 @@ fn code_section(
 /// all run inside its calls
 fn wrapper(s : Shape, k : Int, gas : Int, pb : Int) -> @buffer.Buffer {
   let mi = s.memories
-  let base = 40 * k
+  let base = 64 * k
   let incl = base + 8
   let calls = base + 16
   let began = base + 24
   let d = base + 32
+  let a_began = base + 48
+  let a_incl = base + 56
+  // (the allocator's calls so far: the kind's global, KINDS)
+  let allocs = gas + 1 + K_ALLOC
   let params = s.type_params[s.func_types[k]]
   let nb = @buffer.new()
   // no locals
   nb.write_byte(b'\x00')
   bump(nb, pb, mi, calls, 1L)
-  // if depth == 0 { began = gas }; depth += 1
+  // if depth == 0 { began = gas; a_began = allocs }; depth += 1
   ld(nb, pb, mi, d)
   put(nb, [0x50, 0x04, 0x40, 0x23])
   leb_u(nb, pb.to_int64())
   nb.write_byte(b'\x23')
   leb_u(nb, gas.to_int64())
   st(nb, mi, began)
+  nb.write_byte(b'\x23')
+  leb_u(nb, pb.to_int64())
+  nb.write_byte(b'\x23')
+  leb_u(nb, allocs.to_int64())
+  st(nb, mi, a_began)
   nb.write_byte(b'\x0b')
   bump(nb, pb, mi, d, 1L)
   for a in 0..<params {
@@ -829,7 +842,7 @@ fn wrapper(s : Shape, k : Int, gas : Int, pb : Int) -> @buffer.Buffer {
   }
   nb.write_byte(b'\x10')
   leb_u(nb, (s.imported_funcs + k).to_int64())
-  // depth -= 1; if depth == 0 { incl += gas - began }
+  // depth -= 1; if depth == 0 { incl += gas - began; a_incl += allocs - a_began }
   bump(nb, pb, mi, d, -1L)
   ld(nb, pb, mi, d)
   put(nb, [0x50, 0x04, 0x40, 0x23])
@@ -840,6 +853,14 @@ fn wrapper(s : Shape, k : Int, gas : Int, pb : Int) -> @buffer.Buffer {
   ld(nb, pb, mi, began)
   put(nb, [0x7d, 0x7c])
   st(nb, mi, incl)
+  nb.write_byte(b'\x23')
+  leb_u(nb, pb.to_int64())
+  ld(nb, pb, mi, a_incl)
+  nb.write_byte(b'\x23')
+  leb_u(nb, allocs.to_int64())
+  ld(nb, pb, mi, a_began)
+  put(nb, [0x7d, 0x7c])
+  st(nb, mi, a_incl)
   nb.write_byte(b'\x0b')
   nb.write_byte(b'\x0b')
   nb
@@ -852,7 +873,7 @@ fn wrapper(s : Shape, k : Int, gas : Int, pb : Int) -> @buffer.Buffer {
 /// they were before it (its calls in `__ac` where the app made them, not one of those)
 fn apart_wrapper(s : Shape, k : Int, gas : Int, nk : Int, pb : Int, apart_at : Int) -> @buffer.Buffer {
   let mi = s.memories
-  let base = 40 * k
+  let base = 64 * k
   let params = s.type_params[s.func_types[k]]
   // its locals after its parameters: the table in use's address, then __gas and each kind's as they were
   let at = params

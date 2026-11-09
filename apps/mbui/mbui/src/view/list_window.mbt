@@ -6,6 +6,17 @@
 // or gone over it), the column is moved with it: what shows stays where it is.
 
 ///|
+/// A block of a list's column as its tops are worked out (View::scrolls_window's `laid`): its key, its top in the
+/// column, its height, and whether it was laid out (else as tall as said it would be). Written again in its place as
+/// they are worked out again, none made each time.
+priv struct Laid[K] {
+  mut key : K
+  mut top : Double
+  mut h : Double
+  mut known : Bool
+}
+
+///|
 /// A page's list (`s`: Scroll::list, what it holds above moved with it as it grows: Scroll::grew_above) scrolling up and
 /// down in it (View::scrolls, `slop` and `bar` as there) holding the
 /// blocks `keys` names, in their order, one under another from its top, nothing else: each made by `make` in a node of
@@ -93,7 +104,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   }
   // (what they come to, one array kept and written again from the first whose height changed down, those over it as
   // they were: told changed each time it is worked out, the same array)
-  let laid_out : Array[(K, Double, Double, Bool)] = []
+  let laid_out : Array[Laid[K]] = []
   let laid_grid = Ref(-1.0)
   let laid = @signals.computed(fn(_) {
     told.get() |> ignore
@@ -128,30 +139,34 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     heights_changed.clear()
     let mut top = if from > 0 {
       let b = laid_out[from - 1]
-      b.1 + b.2
+      b.top + b.h
     } else {
       0.0
     }
     for i in from..<ks.length() {
       let (h, known) = laid_h[i]
       let h = rows_slot_on(h, g)
-      let b = (ks[i], top, h, known)
+      // (each written again in its place, none made but for one more than before)
       if i < laid_out.length() {
-        laid_out[i] = b
+        let b = laid_out[i]
+        b.key = ks[i]
+        b.top = top
+        b.h = h
+        b.known = known
       } else {
-        laid_out.push(b)
+        laid_out.push({ key: ks[i], top, h, known })
       }
       top = top + h
     }
     laid_out
   }, same=fn(_, _) { false })
   // (the first of them whose foot is past `y`, as they go down: each foot no higher than the next one's)
-  let first_past = fn(all : Array[(K, Double, Double, Bool)], y : Double) {
+  let first_past = fn(all : Array[Laid[K]], y : Double) {
     let mut lo = 0
     let mut hi = all.length()
     while lo < hi {
       let mid = (lo + hi) / 2
-      if all[mid].1 + all[mid].2 > y {
+      if all[mid].top + all[mid].h > y {
         hi = mid
       } else {
         lo = mid + 1
@@ -179,14 +194,14 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     let all = laid.get()
     for i in first_past(all, x)..<all.length() {
       let b = all[i]
-      if b.1 >= x + vh {
+      if b.top >= x + vh {
         break
       }
-      if b.1 + b.2 > x {
-        out.push(b.0)
+      if b.top + b.h > x {
+        out.push(b.key)
         // (one never laid out shows as it is laid out, those under it only once it is: where they start is known then,
         // nothing made that turns out to be past the foot, as an old view's list lays a row and then the next)
-        if !b.3 {
+        if !b.known {
           break
         }
       }
@@ -204,9 +219,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let put_n = Ref(-1)
   let first_was : Ref[K?] = Ref(None)
   // (the first that shows from `i` on that holds what shows: none of them, the first that shows)
-  let holding = fn(all : Array[(K, Double, Double, Bool)], i : Int) {
+  let holding = fn(all : Array[Laid[K]], i : Int) {
     let mut j = i
-    while j < all.length() && !holds(all[j].0) {
+    while j < all.length() && !holds(all[j].key) {
       j = j + 1
     }
     if j < all.length() {
@@ -233,13 +248,13 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     match anchor.val {
       Some((k, was, i)) => {
         // (where it was among them, else looked for: none come or gone over it, it is where it was)
-        let at = if i < all.length() && all[i].0 == k {
+        let at = if i < all.length() && all[i].key == k {
           Some(i)
         } else {
-          all.search_by(fn(b) { b.0 == k })
+          all.search_by(fn(b) { b.key == k })
         }
         match at {
-          Some(i) => d = all[i].1 - was
+          Some(i) => d = all[i].top - was
           None => ()
         }
       }
@@ -252,15 +267,15 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     put_n.val = n
     // (the first that shows where it is now: none told before it is laid out, where it is put then not known)
     let f = first_past(all, x + d)
-    if (s.room)() is Some(_) && f < all.length() && first_was.val != Some(all[f].0) {
-      first_was.val = Some(all[f].0)
-      first_told(all[f].0)
+    if (s.room)() is Some(_) && f < all.length() && first_was.val != Some(all[f].key) {
+      first_was.val = Some(all[f].key)
+      first_told(all[f].key)
     }
     let i = match held.val {
       Some(k) =>
         match anchor.val {
-          Some((a, _, i)) if a == k && i < all.length() && all[i].0 == k => i
-          _ => all.search_by(fn(b) { b.0 == k }).unwrap_or(all.length())
+          Some((a, _, i)) if a == k && i < all.length() && all[i].key == k => i
+          _ => all.search_by(fn(b) { b.key == k }).unwrap_or(all.length())
         }
       None => {
         let i = first_past(all, x + d)
@@ -271,7 +286,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
         }
       }
     }
-    anchor.val = if i < all.length() { Some((all[i].0, all[i].1, i)) } else { None }
+    anchor.val = if i < all.length() { Some((all[i].key, all[i].top, i)) } else { None }
   })
   // (the block `centres` names brought to the middle of where it shows, once each time it names one: as soon as it is
   // among them and the column is laid out; held there then)
@@ -284,11 +299,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     guard vh is Some(vh) && centred.val != Some(k) else { return }
     let all = @signals.untracked(fn() { laid.get() })
-    guard all.search_by(fn(b) { b.0 == k }) is Some(i) else { return }
+    guard all.search_by(fn(b) { b.key == k }) is Some(i) else { return }
     centred.val = Some(k)
-    let to = all[i].1 + all[i].2 / 2.0 - vh / 2.0
+    let to = all[i].top + all[i].h / 2.0 - vh / 2.0
     held.val = Some(k)
-    anchor.val = Some((k, all[i].1, i))
+    anchor.val = Some((k, all[i].top, i))
     put_x.val = to
     put_n.val = laid_n.val
     s.put(to)
@@ -306,7 +321,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     }
     let all = @signals.untracked(fn() { laid.get() })
     let foot = match all.last() {
-      Some(b) => b.1 + b.2
+      Some(b) => b.top + b.h
       None => 0.0
     }
     let vh = match @signals.untracked(fn() { self.laid_size_told() }) {
