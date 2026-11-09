@@ -45,8 +45,14 @@ fn panel_in_of(v : @view.View) -> PanelIn {
 ///|
 /// A group of a panel's rows in `parent` (panel_group's): under a small `label` (12, muted, in by a row's padding, 2
 /// over its rows; none where it is ""), what `body` makes, 2 apart.
-pub fn panel_group_node(parent : @view.View, label : () -> String, body : (@view.View) -> Unit) -> Unit {
-  parent.box(fn(g) {
+#callsite(autofill(loc))
+pub fn panel_group_node(
+  parent : @view.View,
+  label : () -> String,
+  body : (@view.View) -> Unit,
+  loc~ : SourceLoc,
+) -> Unit {
+  parent.box(made_for=loc, fn(g) {
     style_node(g, fn() { panel_group_box })
     g.show(fn() { label() != "" }, fn(l) {
       style_node(l, fn() { panel_label_at })
@@ -59,8 +65,9 @@ pub fn panel_group_node(parent : @view.View, label : () -> String, body : (@view
 
 ///|
 /// A note in a panel in `parent` (panel_note's): 12, muted, in by a row's padding.
-pub fn panel_note_node(parent : @view.View, words : () -> String) -> Unit {
-  parent.box(fn(n) {
+#callsite(autofill(loc))
+pub fn panel_note_node(parent : @view.View, words : () -> String, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(n) {
     style_node(n, fn() { panel_text_box })
     words_node(n, words, fn() { panel_note_words }) |> ignore
   })
@@ -72,6 +79,7 @@ pub fn panel_note_node(parent : @view.View, words : () -> String) -> Unit {
 /// the red where `danger`, what it is at now (`note`) at its end, quiet, and `end` an icon after that; reaching past the
 /// panel's padding as a menu's row does (menu_row_reach), its words a row's padding in, its ground under the hand.
 /// Read out a button named by its words and its note; `press` as it is pressed.
+#callsite(autofill(loc))
 pub fn panel_row_node(
   parent : @view.View,
   label : () -> String,
@@ -80,25 +88,29 @@ pub fn panel_row_node(
   note? : () -> String = fn() { "" },
   end? : String = "",
   danger? : Bool = false,
+  loc~ : SourceLoc,
 ) -> Unit {
-  panel_row_by(parent, label, fn(_) { press() }, icon, note, end, danger)
+  panel_row_by(loc~, parent, label, fn(_) { press() }, icon, note, end, danger)
 }
 
 ///|
 /// A panel's row (panel_row_node's) that opens a panel beside itself: `open` given the row, as it is pressed, what that
 /// panel goes beside (Anchor's Node); a chevron at its end.
+#callsite(autofill(loc))
 pub fn panel_row_opens_node(
   parent : @view.View,
   label : () -> String,
   open : (Anchor) -> Unit,
   icon? : () -> String = fn() { "" },
   note? : () -> String = fn() { "" },
+  loc~ : SourceLoc,
 ) -> Unit {
-  panel_row_by(parent, label, fn(r) { open(Node(r)) }, icon, note, "chevron-right", false)
+  panel_row_by(loc~, parent, label, fn(r) { open(Node(r)) }, icon, note, "chevron-right", false)
 }
 
 ///|
 /// panel_row_node's row, `press` given the row itself as it is pressed.
+#callsite(autofill(loc))
 fn panel_row_by(
   parent : @view.View,
   label : () -> String,
@@ -107,9 +119,10 @@ fn panel_row_by(
   note : () -> String,
   end : String,
   danger : Bool,
+  loc~ : SourceLoc,
 ) -> Unit {
   let at = panel_in_of(parent)
-  parent.box(fn(r) {
+  parent.box(made_for=loc, fn(r) {
     let t = fn() { theme() }
     // (out across the room a large panel leaves, a card's corner there; else a capsule in a small panel's corners, past
     // its padding to where it is concentric with them: menu_item's)
@@ -172,14 +185,21 @@ let panel_row_line : Double = 20.0
 /// which alone answers (`on`, `turn`: switch_node's). In a sheet (narrow) a narrow row's (min a row's height, 12
 /// between), its words as far in as the panel's (words_in_now's); beside what opened it (wide) a wide control row's,
 /// its title as strong as a setting's.
-pub fn panel_switch_row_node(parent : @view.View, title : () -> String, on : () -> Bool, turn : (Bool) -> Unit) -> Unit {
+#callsite(autofill(loc))
+pub fn panel_switch_row_node(
+  parent : @view.View,
+  title : () -> String,
+  on : () -> Bool,
+  turn : (Bool) -> Unit,
+  loc~ : SourceLoc,
+) -> Unit {
   let control = fn(r : @view.View) { switch_node(r, on, turn, title) }
   if look_node(parent) is Wide {
     wide_control_row_node(parent, title, fn() { "" }, None, control, looks=(fn() { setting_title() }, fn() { theme().rows.note }))
     return
   }
   let at = panel_in_of(parent)
-  parent.box(fn(r) {
+  parent.box(made_for=loc, fn(r) {
     style_node(r, fn() { pg_said_row_square.then(@ui.style(min_h=Fixed(theme().items.least), px=room(at.words))) })
     r.box(fn(words) {
       style_node(words, fn() { pg_row_words }, in_row=true)

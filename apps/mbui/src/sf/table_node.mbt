@@ -167,6 +167,7 @@ fn table_runs_look() -> @view.RunsLook {
 /// made-up one's, nothing asked of the core), in `parent`: as Md::table draws it narrow, `bleed` past its room either
 /// side where it scrolls across. Its columns' widths from the room it is laid out in (told as it is), at the system's
 /// size of words.
+#callsite(autofill(loc))
 pub fn table_node(
   parent : @view.View,
   text : () -> String,
@@ -175,9 +176,10 @@ pub fn table_node(
   copy? : Bool = true,
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
+  loc~ : SourceLoc,
 ) -> Unit {
   let table = fn() { table_of(text(), tree()) }
-  parent.box(fn(outer) {
+  parent.box(made_for=loc, fn(outer) {
     // (its text asked of the core as it is made and as it says another, none where it is told its reading; read by it
     // till it says another or is let go: md_read_by)
     let reading = Ref("")
@@ -351,17 +353,19 @@ let table_nodes_made : Ref[Int] = Ref(0)
 /// (`beside` saying it is pointed at alone, View::points; what is over it taking the pointer: not), its menu open or it
 /// saying it copied, always to a finger; its room kept either way, as tall as the key, nothing in it to press or read
 /// out while it has faded out.
+#callsite(autofill(loc))
 fn table_key_node(
   beside : @view.View,
   key : String,
   table : () -> MdTable?,
   head_h : () -> Double,
   widths_for : (MdTable) -> (Array[Double], Double),
+  loc~ : SourceLoc,
 ) -> Unit {
   let copied = @signals.signal(false)
   let copied_off : Ref[() -> Unit] = Ref(fn() {  })
   let menu_open = @signals.signal(false)
-  beside.box(fn(k) {
+  beside.box(made_for=loc, fn(k) {
     // (its room kept, as tall as the key, whether it shows or not)
     let top = fn() { dmax(0.0, (head_h() - table_key_size) / 2.0) }
     k

@@ -112,7 +112,8 @@ fn reader_layout_nodes(root : @view.View) -> Unit {
 ///|
 /// The layout's controls in `col` (desk_layout's as it was): in the panel's 280 (320 less 20 either side), or a sheet's
 /// width less 20 either side (`narrow`, the face and the indent side by side there); on paper `p`.
-fn layout_body(col : @view.View, narrow : Bool, p : () -> ReaderPaper) -> Unit {
+#callsite(autofill(loc))
+fn layout_body(col : @view.View, narrow : Bool, p : () -> ReaderPaper, loc~ : SourceLoc) -> Unit {
   let style = fn() { (viewer_host().reader_style)() }
   let set = fn(change : ReaderStyleChange) { (viewer_host().set_reader_style)(change) }
   let inner = fn() { if narrow { dmax(desk_none, col.window().0 - 2.0 * desk_layout_in) } else { desk_layout_inner } }
@@ -123,7 +124,7 @@ fn layout_body(col : @view.View, narrow : Bool, p : () -> ReaderPaper) -> Unit {
   let label = fn(parent : @view.View, key : String) {
     words_node(parent, fn() { t(key) }, fn() { desk_layout_label.then(@ui.text_style(color=Data(p().muted))) }) |> ignore
   }
-  col.box(fn(b) {
+  col.box(made_for=loc, fn(b) {
     style_node(b, fn() { desk_layout_box })
     // the day's papers; night is the app's dark (外观), never picked here
     b.box(fn(k) {
@@ -240,6 +241,7 @@ fn layout_body(col : @view.View, narrow : Bool, p : () -> ReaderPaper) -> Unit {
 ///|
 /// One paper in `row`, drawn in itself (desk_swatch's): 文 on its ground, ringed in the accent when it is the one (`on`),
 /// its name under it, `w()` wide; `press` as it is pressed.
+#callsite(autofill(loc))
 fn layout_swatch(
   row : @view.View,
   key : String,
@@ -247,12 +249,13 @@ fn layout_swatch(
   p : () -> ReaderPaper,
   w : () -> Double,
   press : () -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
   // (each as it is by day, whatever the app's theme)
   let paper = paper_by_key(key)
   let glyph = fn() { t("web-pages.drive.reader.paperGlyph") }
   let name = fn() { t("web-pages.drive.reader.paper." + key) }
-  row.box(fn(s) {
+  row.box(made_for=loc, fn(s) {
     style_node(s, fn() { desk_swatch_box.then(@ui.style(w=Fixed(w()))) }, in_row=true)
     presses_node(s, press)
     s.says(By(fn() { Some(@view.said(Button, label=glyph() + " " + name())) })) |> ignore
@@ -292,6 +295,7 @@ let desk_swatch_off_line : Double = 1.0
 ///|
 /// A size's key in `row` (desk_size_key's): A− or A+, 32 high, 44 wide at least, quiet where it can go no further (not
 /// `on`), the tint under the hand; read out a button named `said`, `press` as it is pressed.
+#callsite(autofill(loc))
 fn layout_size_key(
   row : @view.View,
   words : String,
@@ -299,8 +303,9 @@ fn layout_size_key(
   p : () -> ReaderPaper,
   said : () -> String,
   press : () -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
-  row.box(fn(k) {
+  row.box(made_for=loc, fn(k) {
     style_node(k, fn() { desk_size_key_box })
     k
     .alpha(By(fn() { if on() { desk_whole } else { desk_size_key_off } }))
@@ -321,6 +326,7 @@ let desk_size_key_off : Double = 0.35
 /// A setting along a hairline with a knob in `parent` (desk_slider_row's): its name (`label_w()` wide), the line, its
 /// value as `shown` says; dragged or tapped, the value follows, and is kept (`keep`) as the pointer lets go there, or a
 /// key steps it.
+#callsite(autofill(loc))
 fn layout_slider_row(
   parent : @view.View,
   name_key : String,
@@ -332,9 +338,10 @@ fn layout_slider_row(
   p : () -> ReaderPaper,
   shown : (Double) -> String,
   keep : (Double) -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
   let name = fn() { t(name_key) }
-  parent.box(fn(row) {
+  parent.box(made_for=loc, fn(row) {
     style_node(row, fn() { desk_slider_box })
     // (held: where it is drawn, a draft; let go: kept, the draft let go with it)
     let draft : @signals.Signal[Double?] = @signals.signal(None)
@@ -371,6 +378,7 @@ fn layout_slider_row(
 /// the value under the hand at each step, `let_go` the value as it is let go; with the keyboard's focus on it the arrows
 /// a step (→ and ↑ more), Page Up and Down ten, Home and End its ends, and a screen reader's step, each `moved` and
 /// let go at once. Read out a slider named `label`, its value as @kit.slider says it.
+#callsite(autofill(loc))
 fn slider_node(
   parent : @view.View,
   label : () -> String,
@@ -381,6 +389,7 @@ fn slider_node(
   p : () -> ReaderPaper,
   moved : (Double) -> Unit,
   let_go : (Double) -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
   let span = if max > min { max - min } else { 1.0 }
   let at = fn() { dmin(desk_whole, dmax(desk_none, (now() - min) / span)) }
@@ -396,7 +405,7 @@ fn slider_node(
     moved(v)
     let_go(v)
   }
-  parent.box(fn(s) {
+  parent.box(made_for=loc, fn(s) {
     s
     .height(Is(Some(slider_thumb_d + slider_room)))
     .lies_along(Is(Middle))

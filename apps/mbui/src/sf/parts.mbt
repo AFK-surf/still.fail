@@ -2213,8 +2213,9 @@ pub fn empty(c : @ui.Ctx, body : () -> Unit) -> Unit {
 ///|
 /// What a list with nothing in it shows (empty's, as a node) in `parent`: what `body` makes, in the middle of the room
 /// left, 40 in.
-pub fn empty_node(parent : @view.View, body : (@view.View) -> Unit) -> Unit {
-  parent.box(fn(b) {
+#callsite(autofill(loc))
+pub fn empty_node(parent : @view.View, body : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(b) {
     style_node(b, fn() { empty_box })
     body(b)
   })
@@ -4826,7 +4827,14 @@ pub fn coming_mark(c : @ui.Ctx, key : String, coming : Double?, size : Double, c
 /// coming_mark as a node of the window's tree in `parent`: the download's mark `size` across in `color`, the ring round
 /// it the accent from its top as far round as `coming` says it has come (0 to 1), going to a part told anew over
 /// @kit.progress_ms, eased out (progress_spinner's).
-pub fn coming_mark_node(parent : @view.View, coming : () -> Double, size : Double, color : () -> Int64) -> Unit {
+#callsite(autofill(loc))
+pub fn coming_mark_node(
+  parent : @view.View,
+  coming : () -> Double,
+  size : Double,
+  color : () -> Int64,
+  loc~ : SourceLoc,
+) -> Unit {
   let stroke = size * icon_stroke / 24.0
   let side = size * coming_ring / 24.0 + stroke
   let pi = 3.141592653589793
@@ -4845,7 +4853,7 @@ pub fn coming_mark_node(parent : @view.View, coming : () -> Double, size : Doubl
   }
   let way = EdgeWay::new(@signals.untracked(part))
   let look = coming_mark_box(size)
-  parent.box(fn(m) {
+  parent.box(made_for=loc, fn(m) {
     style_node(m, fn() { look })
     m.reacts(part, fn(k) { way.go(m, k, @kit.progress_ms) })
     m.box(fn(l) {

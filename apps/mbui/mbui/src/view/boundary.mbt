@@ -76,9 +76,10 @@ pub fn View::faults_to(self : View, shown : (String) -> Unit) -> View {
 
 ///|
 /// What `make` makes, in its place what `fallback` makes (told what faulted) once something under it faults.
-pub fn View::boundary(self : View, make : (View) -> Unit, fallback : (View, String) -> Unit) -> Unit {
+#callsite(autofill(loc))
+pub fn View::boundary(self : View, make : (View) -> Unit, fallback : (View, String) -> Unit, loc~ : SourceLoc) -> Unit {
   guard self.alive() else { return }
-  let slot = self.slot()
+  let slot = self.slot(loc)
   let faulted : @signals.Signal[String?] = @signals.signal(None)
   slot.faults_to(fn(said) { faulted.set(Some(said)) }) |> ignore
   slot.pick(fn() { faulted.get() }, fn(v, said) {
@@ -86,5 +87,5 @@ pub fn View::boundary(self : View, make : (View) -> Unit, fallback : (View, Stri
       None => make(v)
       Some(s) => fallback(v, s)
     }
-  })
+  }, loc~)
 }

@@ -55,8 +55,9 @@ pub fn View::bones(self : View, color : Live[Int64]) -> View {
 ///|
 /// In its bones, drawn as one piece: its own box in its own corners (with none, round at its ends: a control's),
 /// nothing in it drawn (a picture of someone with their initial on it, a chip, a button). Out of them, nothing.
-pub fn View::bone_whole(self : View, whole : Live[Bool]) -> View {
-  self.bind(BoneWhole, whole, Paint, fn(w) {
+#callsite(autofill(loc))
+pub fn View::bone_whole(self : View, whole : Live[Bool], loc~ : SourceLoc) -> View {
+  self.bind(loc~, BoneWhole, whole, Paint, fn(w) {
     self.tree.nodes[self.at].bone_whole = w
     self.tree.bones_marked_below(self.at)
   })

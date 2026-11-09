@@ -210,6 +210,9 @@ struct FakeHost {
   /// a list's rows set on its pixels (rows_on_pixels): every platform's host does; a Tester's only where its test says
   /// so (Tester::set_rows_on_pixels), its frames' layout else as it always was
   mut rows_on_pixels : Bool
+  /// the window's tree keeps where in the source each node was made (keeps_sources): a Tester's does, unless what it
+  /// runs is measured as a device runs it (Tester::new's `keeps_sources`)
+  keeps_sources : Bool
   /// the marks' drawings answered as the test says (Tester::marks_by_hand, Tester::marks_answer), not by the frame
   /// after each is asked
   mut marks_by_hand : Bool

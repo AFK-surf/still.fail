@@ -159,6 +159,7 @@ pub fn pick_node(
 /// A choice of a long pick's (menu_item's look) in `b`: its mark or icon in a column before its words, its value after
 /// them, its note under them, in the accent where it is the one chosen; lit under the pointer or the keyboard's focus;
 /// pressed, `go`.
+#callsite(autofill(loc))
 fn pick_row_node(
   b : @view.View,
   x : Choice,
@@ -166,12 +167,13 @@ fn pick_row_node(
   go : () -> Unit,
   last : () -> Bool,
   reach : Double,
+  loc~ : SourceLoc,
 ) -> Unit {
   let t = theme()
   let panel = x.icon != "" || x.mark is Some(_)
   let gap = if panel { panel_row_gap } else { menu_row_gap }
   let said = [x.label, x.value, x.note].filter(fn(s) { s != "" })
-  b.box(fn(r) {
+  b.box(made_for=loc, fn(r) {
     r
     .row(Is(true))
     .lines_up(Is(Some(Middle)))

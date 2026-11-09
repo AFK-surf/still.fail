@@ -5,8 +5,15 @@
 
 ///|
 /// The mark in `parent`, saying `words` in its tip (in `tips`), read out `label`. The node.
-pub fn about_mark_node(parent : @view.View, words : () -> String, label : () -> String, tips : TipLayer) -> @view.View {
-  parent.box(fn(v) {
+#callsite(autofill(loc))
+pub fn about_mark_node(
+  parent : @view.View,
+  words : () -> String,
+  label : () -> String,
+  tips : TipLayer,
+  loc~ : SourceLoc,
+) -> @view.View {
+  parent.box(made_for=loc, fn(v) {
     let lit = fn() {
       v.focus_shown() ||
       (match @ui.pointing() {

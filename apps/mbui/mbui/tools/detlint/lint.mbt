@@ -231,6 +231,55 @@ fn lint_mbt(
       add("build-clock", k, f.line_text(k))
     }
   }
+  // a part of the app's component library made in a node it is given (its first parameter a @view.View it makes a box
+  // in) that takes no place of its caller's (`loc~ : SourceLoc`, its outside made as what was asked for there,
+  // `made_for=loc`): what is found in it is not traced back to the app's line that asked for it (view's source.mbt)
+  if under(f.rel, cfg.library) && !f.test_file {
+    for it in f.items {
+      if it.kind != "fn" {
+        continue
+      }
+      // (its parameters: the first bracket after its name)
+      let mut open = it.start
+      while open <= it.end && toks[open].text != "(" {
+        open += 1
+      }
+      if open > it.end || toks[open].end < 0 || open + 5 > it.end {
+        continue
+      }
+      let close = toks[open].end
+      let name = toks[open + 1]
+      let given = name.kind == "ident" &&
+        toks[open + 2].text == ":" &&
+        toks[open + 3].text == "@view" &&
+        toks[open + 4].text == "." &&
+        toks[open + 5].text == "View" &&
+        (toks[open + 6].text == "," || toks[open + 6].text == ")")
+      if !given {
+        continue
+      }
+      let mut placed = false
+      for k in open..<close {
+        if toks[k].kind == "ident" && toks[k].text == "SourceLoc" {
+          placed = true
+        }
+      }
+      let mut boxed = false
+      for k in (close + 1)..<(it.end - 2) {
+        if toks[k].kind == "ident" &&
+          toks[k].text == name.text &&
+          toks[k + 1].text == "." &&
+          toks[k + 2].text == "box" &&
+          toks[k + 3].text == "(" {
+          boxed = true
+          break
+        }
+      }
+      if boxed && !placed {
+        add("part-place", it.start, f.line_text(it.start))
+      }
+    }
+  }
   // a click read by a build (`c.clicked(id)`, `clicked_on`, `double_clicked`: a Bool the frame after it) outside mbui's
   // ui and kit, which take presses, and outside the tests: what a press does is its handler's (Ctx::on_press, a part's
   // on_press / on_pick / on_change)

@@ -36,6 +36,7 @@ fn node_fitted(
 /// do: as alike as their words let them, their sides narrower, else their words smaller alike (to the system's own
 /// size of words), else the chosen one alone in its track with a chevron, the others in a pick (@sf.pick) a press on
 /// it opens. Always one line, each one's words whole.
+#callsite(autofill(loc))
 pub fn seg_node(
   parent : @view.View,
   labels : () -> Array[String],
@@ -43,6 +44,7 @@ pub fn seg_node(
   choose : (Int) -> Unit,
   item_w? : Double = 0.0,
   said? : String = "",
+  loc~ : SourceLoc,
 ) -> @view.View {
   // (measured again as all words are, the system's size of words changed: View::words_redone)
   let col = fn() {
@@ -54,7 +56,7 @@ pub fn seg_node(
   let whole = fn() { col() * labels().length().to_double() + gaps() + 2.0 * segmented_pad }
   // (a line of its own round its track, whatever way `parent` lays out what it holds: the track's basis its width
   // there; it gives way as the track does, down to nothing)
-  parent.box(fn(line) {
+  parent.box(made_for=loc, fn(line) {
     line.row(Is(true)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
     line.box(fn(track) {
       // how its options fit the room its track was laid out in (none: their columns whole), as segmented's
@@ -311,14 +313,16 @@ let seg_lens_shadow_y : Double = 2.0
 /// it. As wide as where it is laid out, its words at the system's size of words, in the language as it is, as those
 /// change. `labels()` says how many options there are once, as it is made: their words may change (another language),
 /// their number not.
+#callsite(autofill(loc))
 pub fn seg_fill_node(
   parent : @view.View,
   labels : () -> Array[String],
   chosen : () -> Int,
   choose : (Int) -> Unit,
   said? : String = "",
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(track) {
+  parent.box(made_for=loc, fn(track) {
     // how its options share the room its track was laid out in, as seg's: where their words with their sides come to
     // more than it, fitted to it (seg's fitted); else none, the layout sharing it alike (none narrower than its words
     // with their sides: Seg's flex)
@@ -680,14 +684,16 @@ fn seg_room_of(v : @view.View, labels : Array[String]) -> (Double, Double) {
 /// chevron where its line has less (giving way first: what is at a head's end does), filling what that leaves it, as
 /// seg_fill_node is; its words at the system's size of words as that changes. `labels`, `chosen`, `choose`, `said`:
 /// seg_fill_node's.
+#callsite(autofill(loc))
 pub fn seg_head_node(
   parent : @view.View,
   labels : () -> Array[String],
   chosen : () -> Int,
   choose : (Int) -> Unit,
   said? : String = "",
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(b) {
+  parent.box(made_for=loc, fn(b) {
     let room = fn() { seg_room_of(b, labels()) }
     b
     .width(By(fn() { Some(room().0) }))
@@ -703,6 +709,7 @@ pub fn seg_head_node(
 /// lays out: narrow, Seg (seg_fill_node) sharing its line, the slot growing from none to what the line leaves it, or
 /// at a head's end (`head`) as wide as its options (seg_head_node); wide, the web's Segmented (seg_node), as wide as
 /// its options, the slot as wide as it. `labels`, `chosen`, `choose`, `said`: theirs.
+#callsite(autofill(loc))
 pub fn segmented_node(
   slot : @view.View,
   labels : () -> Array[String],
@@ -710,9 +717,10 @@ pub fn segmented_node(
   choose : (Int) -> Unit,
   head? : Bool = false,
   said? : String = "",
+  loc~ : SourceLoc,
 ) -> Unit {
   match look_node(slot) {
-    Wide => seg_node(slot, labels, chosen, choose, said~) |> ignore
+    Wide => seg_node(loc~, slot, labels, chosen, choose, said~) |> ignore
     Narrow if head => seg_head_node(slot, labels, chosen, choose, said~) |> ignore
     Narrow => {
       slot.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore

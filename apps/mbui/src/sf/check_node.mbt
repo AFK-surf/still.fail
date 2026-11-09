@@ -6,14 +6,16 @@
 /// while `disabled`. Pressed (a tap, a click, Space or Enter with the keyboard's focus, a screen reader's Activate),
 /// `turn` told what it becomes; a ring round it while the keyboard's focus is on it. Read out a checkbox named `label`,
 /// on or off.
+#callsite(autofill(loc))
 pub fn check_node(
   parent : @view.View,
   on : () -> Bool,
   turn : (Bool) -> Unit,
   label : () -> String,
   disabled? : () -> Bool = fn() { false },
+  loc~ : SourceLoc,
 ) -> Unit {
-  parent.box(fn(b) {
+  parent.box(made_for=loc, fn(b) {
     b
     .width(Is(Some(check_side)))
     .height(Is(Some(check_side)))

@@ -6,6 +6,7 @@
 /// none), 30 high and 30 wide at least, 10 in either side where it has words, 10 round; on a tint of its ink, deeper
 /// under the hand; drawn whole in bones. Named `said` (read out a button, its tip in `tips`) where said; `press` done as
 /// it is pressed. The node.
+#callsite(autofill(loc))
 pub fn chip_node(
   parent : @view.View,
   label : () -> String,
@@ -14,8 +15,9 @@ pub fn chip_node(
   ink? : () -> Int64 = fn() { theme().p.text },
   said? : () -> String = fn() { "" },
   tips? : TipLayer,
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     let lit = fn() {
       v.focus_shown() ||
       (match @ui.pointing() {
@@ -69,7 +71,14 @@ pub fn chip_node(
 /// A pill (pill's) as a node in `parent`: `words` in its tone's ink on its tone's ground, a capsule pill_h high, pill_in
 /// in at either end, cut short where its row has not the room; `icon` leading it (pill_icon, its ink, 4 before its
 /// words; "" none); one piece in bones. The node.
-pub fn pill_node(parent : @view.View, words : () -> String, tone? : PillTone = Neutral, icon? : String = "") -> @view.View {
+#callsite(autofill(loc))
+pub fn pill_node(
+  parent : @view.View,
+  words : () -> String,
+  tone? : PillTone = Neutral,
+  icon? : String = "",
+  loc~ : SourceLoc,
+) -> @view.View {
   let colours = fn() {
     let p = theme().p
     match tone {
@@ -81,7 +90,7 @@ pub fn pill_node(parent : @view.View, words : () -> String, tone? : PillTone = N
       Accented => (p.accent_bg, p.accent_text)
     }
   }
-  parent.box(fn(b) {
+  parent.box(made_for=loc, fn(b) {
     b
     .row(Is(true))
     .height(Is(Some(pill_h)))

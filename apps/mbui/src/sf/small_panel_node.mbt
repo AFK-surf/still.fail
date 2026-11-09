@@ -32,13 +32,15 @@ let small_panel_shadow : (Double, Double) = (16.0, 12.0)
 /// the words' ink where the hand is on it; Accent: the accent's words; Filled: those on the accent's pale ground); read
 /// out a button named by its words, `press` done as it is pressed. Its words changed (复制链接 to 已复制), its ground
 /// and its words go together to where they are laid out (button_reshape, as panel_button's). The node.
+#callsite(autofill(loc))
 pub fn panel_button_node(
   parent : @view.View,
   label : () -> String,
   press : () -> Unit,
   tone? : PanelTone = Plainly,
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     style_node(v, fn() { if tone == Filled { panel_button_filled } else { panel_button_box } })
     let hot = fn() { lit_node(v) }
     // (its hovered{bg=Hover}: the hover's ground where the hand is on it; Filled's own ground kept)

@@ -36,11 +36,13 @@ priv struct PressLook {
 /// (View::pressed). A finger's press in what scrolls shows once it has stayed tap_indication_ms (Ctx::pressed's, Compose's
 /// clickable in a scrollable container): one that goes on to scroll shows nothing; a tap quicker than that shows
 /// as it is let go.
+#callsite(autofill(loc))
 fn press_look(
   v : @view.View,
   corner : @view.Live[Double],
   grounded : () -> Bool,
   ink? : Int64 = @motion.ripple_ink,
+  loc~ : SourceLoc,
 ) -> PressLook {
   // (the ripples going, by their numbers, in the order they began)
   let ripples : @signals.Signal[Array[Int]] = @signals.signal([], same=fn(a, b) { a == b })
@@ -91,7 +93,7 @@ fn press_look(
     lift(v.cause_at())
   })
   // (the discs, over what it holds, cut to its corners)
-  v.box(fn(over) {
+  v.box(made_for=loc, fn(over) {
     over.over(Is(true)).radius(corner).clips(Is(true)) |> ignore
     over.each(fn() { ripples.get() }, fn(n) { n }, fn(d, n) {
       match made.get(@signals.untracked(fn() { n.get() })) {

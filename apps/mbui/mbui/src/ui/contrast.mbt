@@ -606,11 +606,13 @@ fn Ctx::drawn_over(self : Ctx, k : Int, own : Int, px : Double, py : Double) -> 
 }
 
 ///|
-/// Where node `i` is, and the words nearest it (its own, or the first of what holds it), to find it by: ` at x,y w×h
-/// by "…"`.
+/// Where node `i` is (and where the old view it is in was made: Ctx::old_source_said), and the words nearest it (its
+/// own, or the first of what holds it), to find it by: ` at x,y w×h (in an old view made at …) by "…"`.
 fn Ctx::contrast_where(self : Ctx, i : Int) -> String {
   let n = self.nodes[i]
-  let at = " at \{n.x.round()},\{n.y.round()} \{n.fw.round()}×\{n.fh.round()}"
+  let src = self.old_source_said(i)
+  let at = " at \{n.x.round()},\{n.y.round()} \{n.fw.round()}×\{n.fh.round()}" +
+    (if src == "" { "" } else { " (" + src + ")" })
   // (the first words in it, depth first, or in what holds it, up to four boxes out)
   let words_in = fn(r : Int) -> String {
     let todo = [r]
@@ -759,7 +761,9 @@ fn Ctx::contrast_faults_drawn(self : Ctx, marks : Double) -> Array[String] {
           ("line", marks)
         }
         let said = if r < least - 0.005 {
-          "\{what} (a node of the window's tree's) at \{a[b].round()},\{a[b + 1].round()}: " +
+          "\{what} (a node of the window's tree's) at \{a[b].round()},\{a[b + 1].round()}" +
+          tree_source_said(id, paren=true) +
+          ": " +
           "\{shown.hex()} on \{ground.hex()} \{ratio_said(r)}:1, under \{least}"
         } else {
           ""

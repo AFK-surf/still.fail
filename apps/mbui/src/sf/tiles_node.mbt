@@ -9,16 +9,18 @@
 /// tiles): its heading 8 over its tiles, three a row 4 apart, a tile its mark in a 28 square and its name, flat, the
 /// hover's ground, 28 under the group. Narrow: its heading muted, a group's card of rows, each its mark, its name and a
 /// chevron.
+#callsite(autofill(loc))
 pub fn pick_tiles_node(
   parent : @view.View,
   title : () -> String,
   items : () -> Array[(String, String)],
   mark : (@view.View, String) -> Unit,
   pick : (String) -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
   match look_node(parent) {
     Wide =>
-      parent.box(fn(g) {
+      parent.box(made_for=loc, fn(g) {
         style_node(g, fn() { tile_group })
         words_node(g, title, fn() { tile_group_head }) |> ignore
         g.box(fn(rows) {
@@ -71,8 +73,16 @@ pub fn pick_tiles_node(
 ///|
 /// A tile of pick_tiles_node's, wide: its mark in a 28 square, its name, 10 by 12 in, 12 apart, flat, the hover's ground
 /// under the hand; read out a button by its name, pressed `pick` given its id.
-fn tile_node(slot : @view.View, id : String, name : String, mark : (@view.View, String) -> Unit, pick : (String) -> Unit) -> Unit {
-  slot.box(fn(t) {
+#callsite(autofill(loc))
+fn tile_node(
+  slot : @view.View,
+  id : String,
+  name : String,
+  mark : (@view.View, String) -> Unit,
+  pick : (String) -> Unit,
+  loc~ : SourceLoc,
+) -> Unit {
+  slot.box(made_for=loc, fn(t) {
     style_node(t, fn() { tile_look })
     t.ground(By(fn() { if lit_node(t) { @ui.tree_theme().color(Hover) } else { 0L } })) |> ignore
     pressed_node(t, fn() { pick(id) }, By(fn() { @ui.tree_theme().corner(Lg) }), Button, fn() { name })
@@ -91,15 +101,17 @@ fn tile_node(slot : @view.View, id : String, name : String, mark : (@view.View, 
 /// as they are now; pressed, `choose` given its id. Wide (methods, method): side by side, 12 apart, each its title and
 /// what it is on a card, the hover's ground under the hand. Narrow: a group's card of rows, each `mark` before its title,
 /// what it is under it.
+#callsite(autofill(loc))
 pub fn ways_node(
   parent : @view.View,
   ways : () -> Array[(String, String, String)],
   choose : (String) -> Unit,
   mark? : (@view.View, String) -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
   match look_node(parent) {
     Wide =>
-      parent.box(fn(r) {
+      parent.box(made_for=loc, fn(r) {
         style_node(r, fn() { way_cards })
         r.each(ways, fn(w) { w.0 }, fn(card, w) {
           let id = @signals.untracked(fn() { w.get().0 })

@@ -958,10 +958,13 @@ let corner_line : Double = 6.0
 
 ///|
 /// Node `i` as a fault names it: the words built in it, else its nearest container's that has any (said so), where
-/// it is and how large, and its number in the frame.
+/// it is and how large, and its number in the frame, and where the source made the old view it is in
+/// (tester_sources.mbt).
 fn Ctx::named(self : Ctx, i : Int) -> String {
   let n = self.nodes[i]
-  let place = "at \{n.x.round()},\{n.y.round()} \{n.fw.round()}×\{n.fh.round()}, node \{i}"
+  let src = self.old_source_said(i)
+  let place = "at \{n.x.round()},\{n.y.round()} \{n.fw.round()}×\{n.fh.round()}, node \{i}" +
+    (if src == "" { "" } else { ", " + src })
   match self.words_cut(i) {
     Some(w) => "「\{w}」 (\{place})"
     None => {

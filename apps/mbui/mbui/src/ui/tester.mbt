@@ -272,6 +272,8 @@ fn leaked_state() -> Array[String] {
 /// `nav_able`: whether the system lays out the app's tabs itself (an iPhone Duo's: @hostapi.nav_bar_able), as a host
 /// says it from the app's first frame on; Tester::set_nav_able changes it later.
 /// `before`: a live renderer's frame setup, called before every frame including the first (a film's offscreen target).
+/// `keeps_sources`: whether the window's tree keeps where in the source each node was made (Tester::sources_at); off
+/// for a run measured as a device runs it.
 /// `loc`: where it is made, said where a check of its frames fails (frame_watch.mbt, words_over.mbt).
 #callsite(autofill(loc))
 pub fn Tester::new(
@@ -305,6 +307,7 @@ pub fn Tester::new(
   nav_able? : Bool = false,
   tree? : (@view.View) -> Unit,
   before? : () -> Unit,
+  keeps_sources? : Bool = true,
   loc~ : SourceLoc,
 ) -> Tester {
   let f = {
@@ -424,6 +427,7 @@ pub fn Tester::new(
     marks_next: None,
     marks_by_hand: false,
     rows_on_pixels: false,
+    keeps_sources,
     shares: [],
     perf: -1,
     perf_sets: [],

@@ -13,6 +13,7 @@
 /// its tags and a pencil after it, the lines under it as wide as its words. Narrow: its mark, its name and what it does
 /// in one line (what it does on back's line over it where the page puts back there: head_back_holds), the name a size
 /// under the page's large title on as many lines as it takes, pressed to rename it; its tags and lines under them.
+#callsite(autofill(loc))
 pub fn own_head_node(
   parent : @view.View,
   mark : (@view.View, Double) -> Unit,
@@ -28,6 +29,7 @@ pub fn own_head_node(
   dot? : () -> String = fn() { "" },
   state_shown? : () -> Bool = fn() { true },
   warnings? : () -> Array[(String, Bool)] = fn() { [] },
+  loc~ : SourceLoc,
 ) -> Unit {
   let narrow = look_node(parent) is Narrow
   let shown = fn() { lines().filter(fn(l) { l != "" }) }
@@ -82,7 +84,7 @@ pub fn own_head_node(
   }
   if narrow {
     let at_back = parent.lent(head_back_holds).unwrap_or(fn() { false })
-    parent.box(fn(h) {
+    parent.box(made_for=loc, fn(h) {
       // (16 over what follows; under a state's line, its button's room is that room already)
       style_node(h, fn() { if state is None || !state_shown() { head_narrow.then(head_narrow_foot) } else { head_narrow } })
       h.box(fn(top) {
@@ -184,6 +186,7 @@ let head_pressed_alpha : Double = 0.6
 /// A button of a mark alone (icon_action's, as a node: a head's rename, check again, ⋯) in `parent`, said to be
 /// `label`: as wide as the native input's hand needs (a finger's 44, a pointer's 32); `press` done as it is pressed,
 /// while it is not `disabled`. The node.
+#callsite(autofill(loc))
 pub fn icon_action_node(
   parent : @view.View,
   icon : String,
@@ -191,13 +194,15 @@ pub fn icon_action_node(
   press : () -> Unit,
   disabled? : () -> Bool = fn() { false },
   tips? : TipLayer,
+  loc~ : SourceLoc,
 ) -> @view.View {
-  icon_action_by(parent, icon, label, fn(_) { press() }, disabled, tips)
+  icon_action_by(loc~, parent, icon, label, fn(_) { press() }, disabled, tips)
 }
 
 ///|
 /// icon_action_node's button that opens what goes beside it (a ⋯'s menu): `open` given the button itself as it is
 /// pressed, where it is placed then.
+#callsite(autofill(loc))
 pub fn icon_action_opens_node(
   parent : @view.View,
   icon : String,
@@ -205,12 +210,14 @@ pub fn icon_action_opens_node(
   open : (@view.View) -> Unit,
   disabled? : () -> Bool = fn() { false },
   tips? : TipLayer,
+  loc~ : SourceLoc,
 ) -> @view.View {
-  icon_action_by(parent, icon, label, open, disabled, tips)
+  icon_action_by(loc~, parent, icon, label, open, disabled, tips)
 }
 
 ///|
 /// icon_action_node's button, `press` given the button itself: as wide as the native input's hand needs.
+#callsite(autofill(loc))
 fn icon_action_by(
   parent : @view.View,
   icon : String,
@@ -218,9 +225,10 @@ fn icon_action_by(
   press : (@view.View) -> Unit,
   disabled : () -> Bool,
   tips : TipLayer?,
+  loc~ : SourceLoc,
 ) -> @view.View {
   if native_input() is Finger {
-    icon_button_by(parent, icon, label, press, tips, touch_target, touch_glyph, None, disabled)
+    icon_button_by(loc~, parent, icon, label, press, tips, touch_target, touch_glyph, None, disabled)
   } else {
     icon_button_by(parent, icon, label, press, tips, icon_button_side, 16.0, None, disabled)
   }
@@ -231,6 +239,7 @@ fn icon_action_by(
 /// mark; narrow, the heading's trailing words in the link's ink, room round them for a finger, rippling as pressed; a
 /// spinner in their place while it is `busy`; `bad`: one that takes something away, in the red. `press` done as it is
 /// pressed, while it is not `disabled`.
+#callsite(autofill(loc))
 pub fn action_node(
   parent : @view.View,
   label : () -> String,
@@ -239,9 +248,10 @@ pub fn action_node(
   busy? : () -> Bool = fn() { false },
   disabled? : () -> Bool = fn() { false },
   bad? : Bool = false,
+  loc~ : SourceLoc,
 ) -> Unit {
   match look_node(parent) {
-    Wide => button_node(parent, label, press, tone=if bad { GhostDanger } else { Ghost }, icon~, busy~, disabled~) |> ignore
+    Wide => button_node(loc~, parent, label, press, tone=if bad { GhostDanger } else { Ghost }, icon~, busy~, disabled~) |> ignore
     Narrow =>
       parent.pick(fn() { if busy() { 0 } else if disabled() { 1 } else { 2 } }, fn(p, what) {
         match what {
@@ -264,8 +274,15 @@ pub fn action_node(
 /// A command to copy (copy_command's, as a node) in `parent`: `text` in the code face (12) on one line, its copy button
 /// at its end, on the paper, 14 in at its start; pressed, the words copied and a check for a moment (copied_ms from the
 /// press: `copied` its name then, `copy` before).
-pub fn copy_command_node(parent : @view.View, text : () -> String, copy~ : String, copied~ : String) -> Unit {
-  parent.box(fn(b) {
+#callsite(autofill(loc))
+pub fn copy_command_node(
+  parent : @view.View,
+  text : () -> String,
+  copy~ : String,
+  copied~ : String,
+  loc~ : SourceLoc,
+) -> Unit {
+  parent.box(made_for=loc, fn(b) {
     // (已复制 from each press till copied_ms after it, a press while it shows starting it again: the box's own, let go
     // with it; a time it shows for, not waited for)
     let (copied_now, just) = b.holds_for(copied_ms, later=true)
@@ -296,9 +313,10 @@ pub fn copy_command_node(parent : @view.View, text : () -> String, copy~ : Strin
 /// Figures side by side (figures', as a node) in `parent`: what each is, its number large, a line under it where it has
 /// one, as `figures` says them now, on the page's ground as cards of their own; always on one line, sharing it: narrow,
 /// closer and their numbers a size smaller, each's line under it there only where it fits whole.
-pub fn figures_node(parent : @view.View, figures : () -> Array[(String, String, String)]) -> Unit {
+#callsite(autofill(loc))
+pub fn figures_node(parent : @view.View, figures : () -> Array[(String, String, String)], loc~ : SourceLoc) -> Unit {
   let narrow = look_node(parent) is Narrow
-  parent.box(fn(o) {
+  parent.box(made_for=loc, fn(o) {
     style_node(o, fn() { if narrow { pg_card_room } else { wide_block } })
     o.box(fn(r) {
       style_node(r, fn() { if narrow { fig_row_narrow } else { fig_row } })
@@ -330,9 +348,10 @@ pub fn figures_node(parent : @view.View, figures : () -> Array[(String, String, 
 /// What a section holds that is neither rows nor a card (loose's, as a node: its chips, a field with its button) in
 /// `parent`, what `body` makes in it 12 apart: narrow, as far in as the page's headings' words, 10 under it; wide, at
 /// the column's edges.
-pub fn loose_node(parent : @view.View, body : (@view.View) -> Unit) -> Unit {
+#callsite(autofill(loc))
+pub fn loose_node(parent : @view.View, body : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
   let narrow = look_node(parent) is Narrow
-  parent.box(fn(b) {
+  parent.box(made_for=loc, fn(b) {
     style_node(b, fn() { if narrow { pg_loose } else { wide_block } })
     body(b)
   })
@@ -342,15 +361,17 @@ pub fn loose_node(parent : @view.View, body : (@view.View) -> Unit) -> Unit {
 ///|
 /// A field (field's, as a node) in `parent`: its `label` (13, 500), what `body` makes (the input), and under it what is
 /// wrong (`error`, 12 red) or else a `hint` (12, muted), as each says it now, 6 apart; on a wide page 420 at most.
+#callsite(autofill(loc))
 pub fn labelled_field_node(
   parent : @view.View,
   label : () -> String,
   body : (@view.View) -> Unit,
   hint? : () -> String = fn() { "" },
   error? : () -> String = fn() { "" },
+  loc~ : SourceLoc,
 ) -> Unit {
   let wide = look_node(parent) is Wide
-  parent.box(fn(b) {
+  parent.box(made_for=loc, fn(b) {
     style_node(b, fn() { if wide { field_box_wide } else { field_box } })
     words_node(b, label, fn() { field_label }) |> ignore
     body(b)

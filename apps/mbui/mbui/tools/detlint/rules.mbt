@@ -10,7 +10,7 @@ let rule_names : Array[String] = [
   "motion-read", "page-old-part", "page-old-sheet", "corners-each", "cursor-hand", "tier-outside-shell", "fixture-import",
   "motion-spring", "built-by-hand", "layout-read-back", "motion-length", "tester-branch", "frame-number", "ui-current",
   "build-clock", "build-motion", "old-list", "old-island", "old-panel",
-  "click-read", "key-read",
+  "click-read", "key-read", "part-place",
 ]
 
 ///|
@@ -62,6 +62,7 @@ let rule_words : Map[String, String] = {
   "after-build-input": "what an input took (a click, a row or a switch used, a choice made) told by Ctx::after_build: that is the frame's last build's alone, and a build after the one that took the input sees it not, so a frame built again (a layout read back, what it read changed) loses it; do it in the input's handler (Ctx::on_press; a part's on_press, on_pick, on_change, on_submit: at the input's moment, outside any build)",
   "unsettled-ok": "a test leaves out its end's idle check (unsettled_ok=…: what still moves or asks, until it says its end): counted so the ones left only go",
   "library-import": "a package of the app's component library (detlint.json `library`) imports what is not the framework's nor said to be its own (the app's pages, its core, a station's, the cloud's): what it needs of the app, the app gives it as it starts (a function it sets: @sf.set_shortcuts)",
+  "part-place": "a part of the app's component library (detlint.json `library`) made in the node it is given takes no place of its caller's (`#callsite(autofill(loc))`, `loc~ : SourceLoc`, its outside made as `box(made_for=loc, …)`): what a test finds in it is not traced back to the app's line that asked for it (view's source.mbt), only to the library's inside it",
   "follow-layout": "a motion follows what the layout measured (a node's size or place, the window's, the keyboard's): what changed it is not its cause; tell the motion at its cause, with what it moves for (@motion.layout's `by`), and what its container does to it is no motion of its own (the app's sf/motion.mbt)",
   "built-by-hand": "the app says by hand that what was built is to be built again (Ctx::forget_parts, built_from_changed): what changed is a signal (same= by its value), read where it is used, and what read it is built again by itself, nothing else; a kept build that differs from one built whole is a read not followed, made followed, never covered by building more",
   "layout-read-back": "the app reads back where or how large something was laid out (Ctx::rect_of, laid_size, laid_rect) for what it builds: the first frame has none and draws it wrong, a change lays the frame out again; say it as layout (a box's own rules, by the width it is given, Ctx::place_by_size, cover), a press by what took it (c.hovered, press_within); a flight's ends by @motion.measure",

@@ -7,6 +7,7 @@
 /// The icon button in `parent` showing icon `icon`, `size` across (round), its icon `icon_size`; named `label` (read
 /// out, and its tip in `tips`); `press` done as it is pressed. While `disabled()`, faded (icon_button's: 0.45), taking
 /// no press nor the focus. The node.
+#callsite(autofill(loc))
 pub fn icon_button_node(
   parent : @view.View,
   icon : String,
@@ -17,19 +18,28 @@ pub fn icon_button_node(
   icon_size? : Double = 16.0,
   icon_now? : () -> String,
   disabled? : () -> Bool = fn() { false },
+  loc~ : SourceLoc,
 ) -> @view.View {
-  icon_button_by(parent, icon, label, fn(_) { press() }, tips, size, icon_size, icon_now, disabled)
+  icon_button_by(loc~, parent, icon, label, fn(_) { press() }, tips, size, icon_size, icon_now, disabled)
 }
 
 ///|
 /// icon_button_node's button that opens what goes beside it (a menu under it): `open` given the button itself as it is
 /// pressed, where it is placed then.
-pub fn icon_button_opens_node(parent : @view.View, icon : String, label : () -> String, open : (@view.View) -> Unit) -> @view.View {
-  icon_button_by(parent, icon, label, open, None, icon_button_side, 16.0, None, fn() { false })
+#callsite(autofill(loc))
+pub fn icon_button_opens_node(
+  parent : @view.View,
+  icon : String,
+  label : () -> String,
+  open : (@view.View) -> Unit,
+  loc~ : SourceLoc,
+) -> @view.View {
+  icon_button_by(loc~, parent, icon, label, open, None, icon_button_side, 16.0, None, fn() { false })
 }
 
 ///|
 /// icon_button_node's button, `press` given the button itself as it is pressed (what opens beside it: its menu).
+#callsite(autofill(loc))
 fn icon_button_by(
   parent : @view.View,
   icon : String,
@@ -40,9 +50,10 @@ fn icon_button_by(
   icon_size : Double,
   icon_now : (() -> String)?,
   disabled : () -> Bool,
+  loc~ : SourceLoc,
 ) -> @view.View {
   let live = fn() { !disabled() }
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     let press = fn() {
       if @signals.untracked(live) {
         press(v)

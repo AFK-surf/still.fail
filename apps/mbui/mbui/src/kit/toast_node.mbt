@@ -143,6 +143,7 @@ fn toast_node_rest(key : String) -> Double? {
 /// building each (its ToastNode); `acted` and `gone` told with a toast's id as its action is taken and as it goes by
 /// itself (its time out, swiped away), each once, each its own. Read out as a region named `label`; its times as
 /// `key`'s (toast_due, toast_rest). The node.
+#callsite(autofill(loc))
 pub fn toaster_node(
   parent : @view.View,
   toasts : () -> Array[Toast],
@@ -154,12 +155,13 @@ pub fn toaster_node(
   key? : String = "toast",
   w? : Double = 560.0,
   label? : String = "通知",
+  loc~ : SourceLoc,
 ) -> @view.View {
   // (how many hold the time of all of them: the pointer over one, the focus in one)
   let held = @signals.signal(0, same=fn(a, b) { a == b })
   let times : ToastTimes = { key, rows: Map([]) }
   toast_nodes[key] = times
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     v.owns(fn() {
       if toast_nodes.get(key) is Some(t) && physical_equal(t, times) {
         toast_nodes.remove(key)
@@ -200,6 +202,7 @@ pub fn toaster_node(
 
 ///|
 /// Toast `item` in `row` (toaster_node's): its way in and out, its time, its swipe; built by `look`.
+#callsite(autofill(loc))
 fn toast_lives(
   row : @view.View,
   item : @signals.Signal[Toast],
@@ -210,6 +213,7 @@ fn toast_lives(
   look : (@view.View, ToastNode) -> Unit,
   acted : (String) -> Unit,
   gone : (String) -> Unit,
+  loc~ : SourceLoc,
 ) -> Unit {
   let id = @signals.untracked(fn() { item.get().id })
   let shown = ToastWay::new(0.0, times.key + "/" + id)
@@ -327,7 +331,7 @@ fn toast_lives(
     from_foot=true,
   )
   |> ignore
-  row.box(fn(gap) {
+  row.box(made_for=loc, fn(gap) {
     gap.padding(Is((0.0, 8.0, 0.0, 0.0))) |> ignore
     gap.box(fn(b) {
       b

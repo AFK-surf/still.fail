@@ -495,8 +495,9 @@ pub fn View::words_redone(self : View) -> Int {
 /// What it draws called by name, as it changes (an icon's: "/icon/copy/", as an old view's icon is called), for what
 /// finds things on screen by what they show (a test's, a scripted run's: Tester::locate's icon:NAME); drawn and read
 /// out as ever.
-pub fn View::drawn_as(self : View, name : Live[String]) -> View {
-  self.bind(DrawnAs, name, Said, fn(s) { self.tree.nodes[self.at].look.drawn_as = s })
+#callsite(autofill(loc))
+pub fn View::drawn_as(self : View, name : Live[String], loc~ : SourceLoc) -> View {
+  self.bind(loc~, DrawnAs, name, Said, fn(s) { self.tree.nodes[self.at].look.drawn_as = s })
   self
 }
 
@@ -517,9 +518,15 @@ pub fn Tree::drawn_name(self : Tree, id : NodeId) -> String {
 /// theme, the size of words), how wide it is laid out as of that change's own moment (View::laid_size), kept as its
 /// least width, no more than `most` says it may be as that changes. Whatever frames are drawn between two changes, the
 /// same: what is kept is what each change laid it out at, never what a frame happened to see.
-pub fn[T : Eq] View::keeps_width(self : View, by : () -> T, most? : () -> Double = fn() { @double.infinity }) -> View {
+#callsite(autofill(loc))
+pub fn[T : Eq] View::keeps_width(
+  self : View,
+  by : () -> T,
+  most? : () -> Double = fn() { @double.infinity },
+  loc~ : SourceLoc,
+) -> View {
   let widest : @signals.Signal[Double] = @signals.signal(0.0, same=fn(a, b) { a == b })
-  self.min_width(
+  self.min_width(loc~,
     By(fn() {
       let w = widest.get()
       let m = most()

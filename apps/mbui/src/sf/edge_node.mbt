@@ -15,6 +15,7 @@
 /// across (its own terms) that lands where it lies over what is beside the column: that one's, `beside` told of it
 /// instead); `held` told as a press of it goes down and as it ends (let go, called off, passed on to what lies under
 /// it); its words `label()`, its tip in `tips` on `side`. The node.
+#callsite(autofill(loc))
 pub fn edge_node(
   parent : @view.View,
   label : () -> String,
@@ -28,8 +29,9 @@ pub fn edge_node(
   beside? : (Double) -> Unit = fn(_) {  },
   tips? : TipLayer,
   side? : @view.Side = Right,
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     v
     .grow(Is(1.0))
     .presses(Is(true))

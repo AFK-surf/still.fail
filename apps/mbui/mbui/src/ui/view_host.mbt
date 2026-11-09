@@ -316,6 +316,7 @@ fn view_made_now(make : (@view.View) -> Unit) -> Unit {
     measure_runs=view_runs_measure,
     measure_shorter=view_shorter_measure,
     time=fn() { h_event_time() },
+    sources=@hostapi.keeps_sources(),
   )
   made.val = Some(t)
   // (what the old frame's topmost modal layer holds under it, as it is as an input asks: one dismissed by it, at once;
