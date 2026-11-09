@@ -56,9 +56,10 @@ final class Reports {
             // a topic subscribed (its name, its subscription's id): 1 when a switch times it
             case "followed":
                 return BarTiming.followed(n, a, now) ? 1 : 0;
-            // its first message taken: its id, its value's size in bytes (-1: an error)
+            // its first message taken: its id, its value's size in bytes (-1: an error), and of a heavy one where its
+            // bytes are, by field (`b`: {path: bytes}, src/core/weights.mbt; "" none)
             case "decoded":
-                BarTiming.decoded(n, m, now);
+                BarTiming.decoded(n, m, b, now);
                 return 0;
             default:
                 return 0;
