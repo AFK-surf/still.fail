@@ -776,7 +776,8 @@ fn lock_gate_node(q : @view.View, src : Source, core : @settings.Core) -> Unit {
   |> ignore
   q.box(fn(bar) {
     bar.over(Is(true)).lies_along(Is(Start)) |> ignore
-    home_top_bar_node(bar, src, workspace, fn() { None }, bell=false)
+    // (nothing it shows has a tip: no chats' view, so nothing catching up)
+    home_top_bar_node(bar, src, @sf.TipLayer::new(fn() { None }), workspace, fn() { None }, bell=false)
   })
   |> ignore
 }
