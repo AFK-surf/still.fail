@@ -23,8 +23,9 @@
 /// column is moved otherwise (the hand, the wheel). `first_told`: told the first block that shows as that changes, the
 /// column moved first for what came or changed over it (how near its top the reader has got). `reused`: of a block
 /// whose key it gives a kind, what shows is made by `make_reused` with its key as it is now, and as it no more shows put
-/// by, not let go, what it binds following nothing meanwhile (View::park), for the next of its kind to come to show to
-/// take, its key that one's then (what it binds read again for it, what changed set again): a list's rows of one make, as a RecyclerView's views, not made and let go each as
+/// by, not let go: left in its slot out of sight, what it binds following nothing meanwhile (View::rests), so its going
+/// draws nothing again; the next of its kind to come to show takes it (moved into that one's slot: View::park,
+/// View::take_in), its key that one's then (what it binds read again for it, what changed set again): a list's rows of one make, as a RecyclerView's views, not made and let go each as
 /// the list is scrolled.
 pub fn[K : Hash + Eq] View::scrolls_window(
   self : View,
@@ -265,9 +266,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       s.to_foot()
     }
   })
-  // (those of a kind another may take put by as they no more show (`reused`), each with what says its key now and
-  // what wakes what it binds (View::park): so many at most of each, the rest let go; all let go with the list)
-  let spare : Map[Int, Array[(View, @signals.Signal[K], () -> Unit)]] = Map([])
+  // (those of a kind another may take put by as they no more show (`reused`), each with what says its key now, what
+  // wakes what it binds (View::rests) and the slot it is still in: so many at most of each, the rest let go; all let go
+  // with the list)
+  let spare : Map[Int, Array[(View, @signals.Signal[K], () -> Unit, View)]] = Map([])
   let spare_let_go = fn() {
     for _, all in spare {
       for b in all {
@@ -365,7 +367,16 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                   _ => None
                 }
                 match taken {
-                  Some((v, key, wake)) if v.alive() => {
+                  // (still in this slot, out of sight: as it was, what it binds read again)
+                  Some((v, key, wake, was_in)) if v.alive() && physical_equal(was_in, slot) => {
+                    showing[k] = true
+                    key.set(k)
+                    wake()
+                    mine.val = Some((v, key))
+                  }
+                  // (in another's slot, out of sight there: moved into this one, made this one's)
+                  Some((v, key, wake, was_in)) if v.alive() => {
+                    was_in.park(v) |> ignore
                     slot.take_in(v)
                     showing[k] = true
                     key.set(k)
@@ -391,8 +402,10 @@ pub fn[K : Hash + Eq] View::scrolls_window(
                     all
                   }
                 }
+                // (left where it is, in its slot out of sight, what it binds at rest: nothing drawn changes as it goes,
+                // so it is drawn again for nothing; moved only as the next to show takes it)
                 if all.length() < spare_most && v.alive() {
-                  all.push((v, key, slot.park(v)))
+                  all.push((v, key, v.rests(), slot))
                 } else {
                   slot.drop(v)
                 }
@@ -406,6 +419,15 @@ pub fn[K : Hash + Eq] View::scrolls_window(
             if mine.val is Some(_) {
               showing.remove(k)
               mine.val = None
+            }
+            // (what was put by in it let go with it)
+            match spare.get(kind) {
+              Some(all) =>
+                match all.search_by(fn(b) { physical_equal(b.3, slot) }) {
+                  Some(i) => all.remove(i) |> ignore
+                  None => ()
+                }
+              None => ()
             }
           })
           |> ignore
