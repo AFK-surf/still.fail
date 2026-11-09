@@ -5131,6 +5131,39 @@ pub fn View::moves_window(self : View, on : Live[Bool]) -> View {
 }
 
 ///|
+/// How fast a finger goes as of one of its events (Drag's): known (none, called off), or its trackers as they were
+/// then, worked out as it is asked.
+pub struct DragSpeed {
+  priv across : TrackerSaid?
+  priv down : TrackerSaid?
+} derive(Eq, Show, Debug)
+
+///|
+/// No speed (a finger called off, or one that cannot tell).
+let drag_still : DragSpeed = { across: None, down: None }
+
+///|
+/// How fast the finger goes as of this event, across (the window's points a ms), from its own events since it went down
+/// by their own times (Tracker: Compose's VelocityTracker, a pause cutting it, as an old view's list flings at): 0 where
+/// it cannot tell. Worked out as it is asked, of those events as they were then (a finger's moves come many a frame,
+/// most never asked how fast).
+pub fn Drag::vx(self : Drag) -> Double {
+  match self.speed.across {
+    Some(s) => s.velocity()
+    None => 0.0
+  }
+}
+
+///|
+/// How fast the finger goes as of this event, down (Drag::vx's).
+pub fn Drag::vy(self : Drag) -> Double {
+  match self.speed.down {
+    Some(s) => s.velocity()
+    None => 0.0
+  }
+}
+
+///|
 /// A finger or the pointer held on a node (View::on_drag): put down, moved, let go or called off (the host took it:
 /// a gesture of the system's), where (in the node's own terms: from its top left as it is drawn then) and when (the
 /// event's own moment).
@@ -5165,11 +5198,9 @@ pub(all) struct Drag {
   /// ripple as big as what it ripples, nothing of its layout read back for it; nothing, called off)
   w : Double
   h : Double
-  /// how fast the finger goes as of this event (the window's points a ms, across and down), from its own events since
-  /// it went down by their own times (Tracker: Compose's VelocityTracker, a pause cutting it, as an old view's list
-  /// flings at): 0 where it cannot tell
-  vx : Double
-  vy : Double
+  /// how fast the finger goes as of this event (Drag::vx, Drag::vy): its own events since it went down, kept as they
+  /// were then, the speed worked out of them only where it is asked
+  priv speed : DragSpeed
 } derive(Eq, Show, Debug)
 
 ///|
@@ -5406,8 +5437,7 @@ pub fn Tree::hold_lost_in(self : Tree, at : Int) -> Unit {
             since: t,
             w: 0.0,
             h: 0.0,
-            vx: 0.0,
-            vy: 0.0,
+            speed: drag_still,
           })
         }
       })
@@ -5497,8 +5527,7 @@ pub fn Tree::drag_at(
         // (this finger's own events by their own times, from where it went down, each counted once it is taken:
         // `track` its events before this one's, a hold taken over as it moved; a new hold, none of another's)
         let track_now = fn(down : Bool) { self.tracked(finger, down, track, t, x, y) }
-        let told = fn(kind : DragIs, finger : Int, v : (Double, Double)) {
-          let (vx, vy) = v
+        let told = fn(kind : DragIs, finger : Int, speed : DragSpeed) {
           f({
             kind,
             x: (x - nx) / ns,
@@ -5512,8 +5541,7 @@ pub fn Tree::drag_at(
             since: t,
             w: n.flex.width,
             h: n.flex.height,
-            vx,
-            vy,
+            speed,
           })
         }
         // (called off, all of it: the hold and the fingers let go of first, then each finger down told so while the node
@@ -5524,7 +5552,7 @@ pub fn Tree::drag_at(
           let fingers = self.fingers_off()
           for g in fingers {
             guard bound_still(n, id, said) else { break }
-            told(Off, g, (0.0, 0.0))
+            told(Off, g, drag_still)
           }
         }
         if self.pressless_at(id.at) {
@@ -5579,8 +5607,8 @@ pub fn Tree::drag_at(
 ///|
 /// Finger `finger`'s event at `t` at (x, y) in the window counted with its own before it (`down`: it goes down, `track`
 /// what it did before this from where it went down, by their own times (this one where it went down among them), else
-/// from here): how fast it goes as of it (across, down, points a ms; Tracker::velocity_at). `up`: it goes up there, no
-/// sample where it says the last place again (Tracker::up).
+/// from here): how fast it goes as of it (across, down, points a ms; Tracker::velocity_at), kept to be worked out as it
+/// is asked. `up`: it goes up there, no sample where it says the last place again (Tracker::up).
 fn Tree::tracked(
   self : Tree,
   finger : Int,
@@ -5590,7 +5618,7 @@ fn Tree::tracked(
   x : Double,
   y : Double,
   up? : Bool = false,
-) -> (Double, Double) {
+) -> DragSpeed {
   let (tx, ty) = match self.held_tracks.get(finger) {
     Some(p) if !down => p
     _ => {
@@ -5611,7 +5639,7 @@ fn Tree::tracked(
     tx.add(t, x)
     ty.add(t, y)
   }
-  (tx.velocity_at(t), ty.velocity_at(t))
+  { across: Some(tx.said_at(t)), down: Some(ty.said_at(t)) }
 }
 
 ///|

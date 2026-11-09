@@ -655,18 +655,18 @@ fn swipe_node(
       Up => {
         let at = @signals.untracked(fn() { off.target() })
         past.set(false)
-        if swipe_archives(at, w, d.vx) {
+        if swipe_archives(at, w, d.vx()) {
           if row_busy(src, i) {
-            back(d.vx)
+            back(d.vx())
           } else if i.swipe_ask is Some(_) {
             // (one keeping watch, or at work: springs back and asks first, in the core's words: swipeAsk)
-            back(d.vx)
+            back(d.vx())
             archive_row(src, i, ask=i.swipe_ask)
           } else {
             // off to the left, then archived there (no copy of it left behind as it leaves the list: it is out of
             // sight); refused, it comes back from there
             rows.swiped_off[key] = true
-            off.go_by(sw, -w, @motion.move(), velocity=d.vx * 1000.0)
+            off.go_by(sw, -w, @motion.move(), velocity=d.vx() * 1000.0)
             sw.at_moment(off.end(), fn() {
               archive_row(src, i, failed=fn() {
                 rows.swiped_off.remove(key)
@@ -677,7 +677,7 @@ fn swipe_node(
             |> ignore
           }
         } else {
-          back(d.vx)
+          back(d.vx())
         }
       }
       Off => {
