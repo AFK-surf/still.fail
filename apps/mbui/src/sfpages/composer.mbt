@@ -277,13 +277,17 @@ pub fn composer(
   // ready as the core says, or as soon as there are words in the field: the core's say comes a moment after them (its
   // topic), and send pressed meanwhile is not lost (what goes is the core's to take: composer.take, nothing taken
   // nothing sent)
-  let ready = (w.ready.get() || (w.text.get().trim() != "" && !w.starting.get())) && !spec.locked
+  let ready_now = fn() { (w.ready.get() || (w.field.text().trim() != "" && !w.starting.get())) && !spec.locked }
+  let ready = ready_now()
   // sent once what it refers to can be read in this workspace (sfbase's outside.mbt): at once when
   // it refers to nothing of another workspace, else once the viewer has said so (outside.mbt's dialog)
   @sfbase.sharing_go(w.key)
   let quote_had = quote_has_focus(c, w)
+  // (asked again as send is pressed, of the field: words typed since this build, a frame not drawn yet, told to the
+  // core first and go with it)
   let submit = fn() {
-    if ready {
+    if ready_now() {
+      writing_text(src, w, w.field.text())
       // (the line of a quote it takes had the focus: the words' field has it from here, as Enter in that line gives
       // it, not lost with the line as its card sets out)
       quote_focus_to_words(c, w, quote_had)
@@ -872,11 +876,8 @@ fn send_button(c : @ui.Ctx, ready : Bool, starting : Bool, submit : () -> Unit) 
   let p = @sf.theme().p
   let id = c.id("composer/send")
   let hot = ready && c.lit(id)
-  if ready {
-    c.on_press(id, fn() {
-      submit()
-    })
-  }
+  // (whatever this build saw: submit asks whether it is ready as it is pressed)
+  c.on_press(id, fn() { submit() })
   @sf.tip(c, "composer/send", id, @sf.t("web-main.composer.send"))
   let able = @sf.ease_to(c, "composer/send/able", ready)
   let lit = @sf.ease_to(c, "composer/send/lit", hot)
