@@ -868,6 +868,9 @@ pub struct Tree {
   scrolled_ats : Array[NodeId]
   /// the count of changes to how its nodes are drawn, each node's drawn_rev one of them (Tree::touched)
   mut drawn_revs : Int
+  /// the count of changes to where any of its nodes is drawn as the walk works it out but by the clock (placed, sized,
+  /// left out, drawn off, on a flight's way or off it, the order, the pixels a point): Tree::places_rev
+  priv mut places_rev : Int
   /// the count of changes to what is read out (each node's said_rev and the rest one of them: Tree::said_marked), the last
   /// pass's (Tree::said_pass), the modal layers it went through as (Tree::said_pass), and what it reads out again each
   /// pass: what names itself or holds by what hosts an old view (by index, its making), what moves as it scrolls
@@ -1117,6 +1120,7 @@ pub fn Tree::new(
     scrolled_now: false,
     scrolled_ats: [],
     drawn_revs: 1,
+    places_rev: 0,
     said_revs: 1,
     said_seen: 0,
     said_modal: (-3, -3, -3, -3),
@@ -2146,6 +2150,7 @@ fn Tree::order_marked_in(self : Tree, at : Int) -> Unit {
 /// changed, where that is not known, or where more than a few did.
 fn Tree::order_again(self : Tree) -> Unit {
   self.draws_rev = self.draws_rev + 1
+  self.places_rev = self.places_rev + 1
   let n = self.nodes.length()
   while self.order_of.length() < n {
     self.order_of.push(-1)
@@ -3778,7 +3783,10 @@ pub fn Tree::cut_soft_of(self : Tree, id : NodeId) -> (Double, Double, Double)? 
 /// out now: @motion's Moves::moves_with). Place's: nothing of it laid out or made again.
 #callsite(autofill(loc))
 pub fn View::drawn_off(self : View, d : Live[(Double, Double)], loc~ : SourceLoc) -> View {
-  self.bind(loc~, DrawnOff, d, Place, fn(d) { self.tree.nodes[self.at].look.drawn_off = d })
+  self.bind(loc~, DrawnOff, d, Place, fn(d) {
+    self.tree.nodes[self.at].look.drawn_off = d
+    self.tree.places_rev = self.tree.places_rev + 1
+  })
   self
 }
 
@@ -3829,6 +3837,9 @@ pub fn Tree::ground_drawn_of(self : Tree, id : NodeId) -> GroundShape {
 /// What hosts the tree draws it at `g` device pixels a point (0: none said): what is drawn off where it is laid out is
 /// drawn off by whole pixels (View::drawn_off).
 pub fn Tree::set_pixel_grid(self : Tree, g : Double) -> Unit {
+  if g != self.pixel_grid {
+    self.places_rev = self.places_rev + 1
+  }
   self.pixel_grid = g
 }
 
@@ -8062,6 +8073,7 @@ fn Tree::place(self : Tree, at : Int) -> Unit {
   n.lpx = px
   n.lpy = py
   if went || sized {
+    self.places_rev = self.places_rev + 1
     self.touched(at, words=came, state=came, kids=came)
   }
   if went {
@@ -8441,6 +8453,30 @@ fn Tree::marked_up(
 pub fn Tree::drawn_rev(self : Tree, id : NodeId) -> Int {
   guard self.alive_id(id) else { return -1 }
   self.nodes.unsafe_get(id.at).drawn_rev
+}
+
+///|
+/// The count of changes to where any node is drawn as the walk works it out (Tree::each_drawn_in_order, drawn_one), but
+/// by the clock: while it is what it was and no node from `id` to the root is drawn off by a column at a moment
+/// (Tree::placed_by_clock), node `id` is drawn where it was.
+pub fn Tree::places_rev(self : Tree) -> Int {
+  self.places_rev
+}
+
+///|
+/// Whether node `id`, or anything that holds it, is drawn off by how far a column scrolls it at a moment (Node's
+/// `scroll_off`): where it is drawn read at that moment, never counted in Tree::places_rev.
+pub fn Tree::placed_by_clock(self : Tree, id : NodeId) -> Bool {
+  guard self.alive_id(id) else { return false }
+  let mut i = id.at
+  while i >= 0 {
+    let n = self.nodes.unsafe_get(i)
+    if n.scroll_off is Some(_) {
+      return true
+    }
+    i = n.parent
+  }
+  false
 }
 
 ///|
