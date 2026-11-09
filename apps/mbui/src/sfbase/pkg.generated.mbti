@@ -1682,6 +1682,8 @@ pub fn update_go(Source) -> Unit
 
 pub fn update_now() -> UpdateNow
 
+pub fn update_on_release(@ui.Ctx, Source) -> Unit
+
 pub fn update_reset() -> Unit
 
 pub fn update_row_tapped(Source) -> Unit

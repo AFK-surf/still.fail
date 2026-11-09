@@ -980,6 +980,8 @@ pub fn update_go(@sfbase.Source) -> Unit
 
 pub fn update_now() -> @sfbase.UpdateNow
 
+pub fn update_on_release(@ui.Ctx, @sfbase.Source) -> Unit
+
 pub fn update_reset() -> Unit
 
 pub fn update_row_tapped(@sfbase.Source) -> Unit

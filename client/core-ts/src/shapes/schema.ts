@@ -1556,6 +1556,9 @@ export const SHAPES: Record<string, Shape> = {
     ["build", opt("String")],
     ["entries", vec("ChangelogItem")],
   ], { doc: "What this app got since the changelog was last shown here: its `build` (0.1.n) and those changes." }),
+  ReleasesView: struct([
+    ["told", "i64", { client: "I54" }],
+  ], { doc: "How many times this run a newer build of the app may have come out (the `releases` topic): still.fail cloud said\na release is out, or its events socket opened again. The app asks for a newer build (`app.update`) as it grows.", keepNone: true }),
   DoingView: struct([
     ["doing", vec("DoingItem")],
   ], { doc: "What people set going on this device and the core has not finished (the `doing` topic; client/core-ts/src/doing.ts),\noldest first.", keepNone: true }),
@@ -4171,6 +4174,7 @@ export const TOPIC_SHAPES: Record<string, Ty> = {
   machineLoginScreen: { opt: "MachineLoginScreen" },
   prefs: "PrefsView",
   changelog: "ChangelogView",
+  releases: "ReleasesView",
   connectFlow: "ConnectFlowView",
   slackTokens: "SlackTokensView",
   doing: "DoingView",

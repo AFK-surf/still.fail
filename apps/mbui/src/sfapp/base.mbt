@@ -355,6 +355,7 @@ pub using @sfbase {
   update_error,
   update_first,
   update_again,
+  update_on_release,
   update_asks,
   update_dialog,
   update_dialog_open,
