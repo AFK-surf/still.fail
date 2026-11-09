@@ -4365,8 +4365,10 @@ pub fn waiting_page_node(
     room.box(fn(col) {
       style_node(col, fn() { if touch { wait_column_touch } else { wait_column } })
       icon_node(col, mark, if touch { wait_icon_touch } else { wait_icon }, By(fn() { theme().p.text })) |> ignore
-      words_node(col, title, fn() { if touch { wait_title_touch } else { wait_title } }) |> ignore
-      words_node(col, lead, fn() { wait_lead }) |> ignore
+      // (each line in the middle, as the old view's centred words: Ctx::text's `center`)
+      words_node(col, title, fn() { if touch { wait_title_touch } else { wait_title } }).words_centered(Is(true))
+      |> ignore
+      words_node(col, lead, fn() { wait_lead }).words_centered(Is(true)) |> ignore
       body(col)
     })
     |> ignore

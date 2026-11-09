@@ -77,12 +77,14 @@ fn home_node(v : @view.View, src : Source, tips : @sf.TipLayer, stint : () -> In
 
 ///|
 /// Home's top bar (top_bar's) in `v`, on its glass, under the status bar: the filter at the left (with stations to
-/// narrow), what is catching up and going up beside it, the workspace's switcher and settings at the right.
+/// narrow), what is catching up and going up beside it, the workspace's switcher and settings at the right; 待处理
+/// first unless not `bell` (over the page of a device waiting in the lock: nothing of the workspace's to attend to).
 fn home_top_bar_node(
   v : @view.View,
   src : Source,
   workspace : () -> Workspace?,
   view : () -> ChatsView?,
+  bell? : Bool = true,
 ) -> Unit {
   v.box(fn(g) {
     g.glass(By(fn() { Some(@sf.glass_bar()) })) |> ignore
@@ -95,22 +97,24 @@ fn home_top_bar_node(
       .lines_up(Is(Some(Middle)))
       |> ignore
       // 待处理, first on the bar: as a system's bar has it (no rail here to hold its bell)
-      row.box(fn(k) {
-        @sf.round_key_node(k, "bell", fn() { tr("web-main.attention.entry") }, fn() {
-          guard @signals.untracked(workspace) is Some(w) else { return }
-          let (x, y, wd, h) = k.placed_window_now()
-          @sfdesk.open_attention_panel(src, w, At(x, y, wd, h))
-        })
-        k.show(fn() { workspace().map(fn(w) { @sfdesk.attention_any(src, w) }).unwrap_or(false) }, fn(m) {
-          m.over(Is(true)).row(Is(true)).lies_along(Is(End)).lines_up(Is(Some(Start))) |> ignore
-          m.box(fn(at) {
-            at.offset(Is((-home_bell_dot_at, home_bell_dot_at))) |> ignore
-            @sfpages.chat_mark_node(at, fn() { "done" })
+      if bell {
+        row.box(fn(k) {
+          @sf.round_key_node(k, "bell", fn() { tr("web-main.attention.entry") }, fn() {
+            guard @signals.untracked(workspace) is Some(w) else { return }
+            let (x, y, wd, h) = k.placed_window_now()
+            @sfdesk.open_attention_panel(src, w, At(x, y, wd, h))
           })
-          |> ignore
+          k.show(fn() { workspace().map(fn(w) { @sfdesk.attention_any(src, w) }).unwrap_or(false) }, fn(m) {
+            m.over(Is(true)).row(Is(true)).lies_along(Is(End)).lines_up(Is(Some(Start))) |> ignore
+            m.box(fn(at) {
+              at.offset(Is((-home_bell_dot_at, home_bell_dot_at))) |> ignore
+              @sfpages.chat_mark_node(at, fn() { "done" })
+            })
+            |> ignore
+          })
         })
-      })
-      |> ignore
+        |> ignore
+      }
       // the filter, and the archive in its menu: nothing to narrow or look back on with no station
       row.show(fn() { view().map(fn(v) { v.stations > 0 }).unwrap_or(false) }, fn(f) {
         let key : Ref[@view.View?] = Ref(None)

@@ -80,6 +80,7 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
                 words => words
               }
             }, fn() { lock_failed })
+            .words_centered(Is(true))
             |> ignore
           })
           // (how long the code holds, and a new one asked for at any time: the code gone or not read in time)
@@ -108,7 +109,7 @@ fn pair_steps_node(col : @view.View, core : Core, ws : String) -> Unit {
       }
       Asked => {
         v.show(fn() { state() == "failed" }, fn(n) {
-          @sf.words_node(n, fn() { text(pair(), "error") }, fn() { lock_failed }) |> ignore
+          @sf.words_node(n, fn() { text(pair(), "error") }, fn() { lock_failed }).words_centered(Is(true)) |> ignore
         })
         v.show(fn() { state() != "failed" }, fn(n) {
           lock_note_node(n, fn() {
@@ -148,7 +149,8 @@ fn lock_note_node(parent : @view.View, words : () -> String, turning? : Bool = f
     if turning {
       @sf.spinner_node(row, size=lock_spin) |> ignore
     }
-    @sf.words_node(row, words, fn() { lock_note_words }) |> ignore
+    // (each line in the middle: lock_note_words' center)
+    @sf.words_node(row, words, fn() { lock_note_words }).words_centered(Is(true)) |> ignore
   })
   |> ignore
 }

@@ -776,7 +776,7 @@ fn lock_gate_node(q : @view.View, src : Source, core : @settings.Core) -> Unit {
   |> ignore
   q.box(fn(bar) {
     bar.over(Is(true)).lies_along(Is(Start)) |> ignore
-    home_top_bar_node(bar, src, workspace, fn() { None })
+    home_top_bar_node(bar, src, workspace, fn() { None }, bell=false)
   })
   |> ignore
 }
