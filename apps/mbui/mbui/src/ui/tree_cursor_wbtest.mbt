@@ -42,7 +42,7 @@ fn shaped_tester(
       }).grow(Is(1.0))
       |> ignore
       // (the tree's ground over the old view's button, said to be the arrow)
-      h.show(fn() { cover.get() }, fn(g) {
+      h.show(at_once=true, fn() { cover.get() }, fn(g) {
         g
         .over(Is(true))
         .width(Is(Some(80.0)))
@@ -168,7 +168,7 @@ test "a node's shape said by a saying, said anew as a value or the node let go: 
   let t = Tester::new(fn(_c) {  }, w=400.0, h=200.0)
   t.check_looks(false)
   set_view_app(fn(root) {
-    root.show(fn() { there.get() }, fn(n) {
+    root.show(at_once=true, fn() { there.get() }, fn(n) {
       v.val = Some(n)
       n.width(Is(Some(40.0))).height(Is(Some(40.0))).cursor(By(fn() { shape.get() })) |> ignore
     })

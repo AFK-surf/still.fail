@@ -42,8 +42,10 @@ fn marks_foot_node(h : @view.View, foot : () -> Double) -> Unit {
           },
           fn(r) { note_cards_node(r) },
         )
-        // (the note being written, over the tools' room: note_box_node)
+        // (the note being written, over the tools' room: note_box_node; the one in the other's place at once, its own
+        // coming in its own: NotePop)
         parts.show(
+          at_once=true,
           fn() {
             marks_said()
             marks_note_shown() is Some(_)
@@ -51,6 +53,7 @@ fn marks_foot_node(h : @view.View, foot : () -> Double) -> Unit {
           fn(n) { note_box_node(n) },
         )
         parts.show(
+          at_once=true,
           fn() {
             marks_said()
             marking.note < 0

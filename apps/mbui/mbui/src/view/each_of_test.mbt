@@ -16,7 +16,7 @@ test "each_of: a row for each object, made once, kept across a set and a move, g
   let made : Array[String] = []
   let gone : Array[String] = []
   let t = @view.Tree::new(fn(root) {
-    root.each_of(fn() { items.get() }, fn(v, r) {
+    root.each_of(at_once=true, fn() { items.get() }, fn(v, r) {
       made.push(r.name)
       v.owns(fn() { gone.push(r.name) }) |> ignore
     })

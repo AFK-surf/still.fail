@@ -28,7 +28,8 @@ pub fn reveal_node(
       if @signals.untracked(fn() { made.get() }) {
         make(h)
       } else {
-        h.show(fn() { made.get() }, make)
+        // (its way this room's: at once)
+        h.show(fn() { made.get() }, make, at_once=true)
       }
     })
     let shown = fn() { way.shown(room) }

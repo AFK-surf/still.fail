@@ -16,7 +16,7 @@ fn steady_scroll_case(over : @signals.Signal[Bool]) -> (Tester, @view.Scroll) {
       .width(Is(Some(400.0)))
       .height(Is(Some(200.0)))
       .scrolls(scroll, fn(held) {
-        held.show(fn() { over.get() }, fn(o) { o.box(fn(b) { b.height(Is(Some(100.0))) |> ignore }) |> ignore })
+        held.show(at_once=true, fn() { over.get() }, fn(o) { o.box(fn(b) { b.height(Is(Some(100.0))) |> ignore }) |> ignore })
         for i in 0..<12 {
           held.box(fn(r) {
             r.width(Is(Some(160.0))).height(Is(Some(40.0))).ground(Is(0x336699FFL)).words(Is("第\{i}行")) |> ignore

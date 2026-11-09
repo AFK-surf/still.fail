@@ -9,7 +9,7 @@ test "sets_together: one binding for them all, set again as what it read changes
   let on = @signals.signal(true, same=fn(a, b) { a == b })
   let node : Ref[@view.View?] = Ref(None)
   let tree = @view.Tree::new(fn(root) {
-    root.show(fn() { on.get() }, fn(v) {
+    root.show(at_once=true, fn() { on.get() }, fn(v) {
       v.box(fn(b) {
         node.val = Some(b)
         b.sets_together(fn() { (w.get(), h.get()) }, fn(s) {
@@ -53,7 +53,7 @@ test "sets_together: its binding let go with the node" {
   let w = @signals.signal(40.0, same=fn(a, b) { a == b })
   let on = @signals.signal(true, same=fn(a, b) { a == b })
   let tree = @view.Tree::new(fn(root) {
-    root.show(fn() { on.get() }, fn(v) {
+    root.show(at_once=true, fn() { on.get() }, fn(v) {
       v.box(fn(b) { b.sets_together(fn() { w.get() }, fn(x) { b.width(Is(Some(x))) |> ignore }) |> ignore })
       |> ignore
     })

@@ -27,7 +27,7 @@ fn reuse_case() -> ReuseCase {
   let outside = @signals.signal(0, same=fn(a, b) { a == b })
   let reads = Ref(0)
   let tree = @view.Tree::new(fn(root) {
-    root.show(fn() { on.get() }, fn(s) {
+    root.show(at_once=true, fn() { on.get() }, fn(s) {
       s.box(fn(o) {
         o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
         o.scrolls_window(

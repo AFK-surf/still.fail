@@ -565,6 +565,15 @@ struct Node {
   mut back_at : Double
   mut back_from : Double
   mut going : @signals.Signal[Int]?
+  /// making its way in or out of its column (View::comes: laid out as the clock goes, cut at its edges), told to what
+  /// lays it out so as that starts or ends; when it is there called off; what it and what it holds bind woken, where
+  /// they rest as it leaves so (none: none)
+  mut coming : Bool
+  mut come_said : @signals.Signal[Int]?
+  mut come_off : () -> Unit
+  mut come_wake : (() -> Unit)?
+  /// whether it is said to cut what it draws at its edges (View::clips), as it is cut too while it makes its way
+  mut clips_said : Bool
   /// it, and what it holds, take no press (View::presses)
   mut inert : Bool
   /// it is a modal layer while this holds (View::modal): what it does not hold takes no input
@@ -641,6 +650,9 @@ pub struct Tree {
   mut told : Int
   /// the nodes whose move holds what is leaving that holds them till it is over (View::moved_by's `holds_leaving`)
   leave_holders : Array[NodeId]
+  /// what a show set making or closing its way down a column at the moment of the change being made (View::arrives,
+  /// View::goes): one coming where another goes in the same column at the same moment is in its place (View::swapped)
+  priv swaps : Array[Swap]
   /// what is due being done (Tree::advance)
   mut advancing : Bool
   /// where its logic stands: what is due by then done (Tree::advance), what is said from then on said as of then at the
@@ -777,6 +789,9 @@ pub struct Tree {
   mut offset_moved : (NodeId) -> Unit
   /// how a page's list moves where it is drawn, and how many pixels a point is there (Tree::lists_feel)
   mut list_feel : () -> (ListFeel, Double)
+  /// whether motion is reduced where what hosts the tree draws it (Tree::reduces_motion): what comes or goes there at
+  /// once (View::comes)
+  mut motion_reduced : () -> Bool
   /// how soon (ms) and how near (points) a press let go after one of the same node's is its second, by the hand as it
   /// is now (Tree::twice_within); and the last press let go that may be a first: its node, moment and place in the
   /// window's terms (twice.mbt)
@@ -1033,6 +1048,7 @@ pub fn Tree::new(
     pulls_marked: [],
     timeline: [],
     leave_holders: [],
+    swaps: [],
     told: 0,
     advancing: false,
     logic: start,
@@ -1083,6 +1099,7 @@ pub fn Tree::new(
     glides_gone: fn(_) {  },
     offset_moved: fn(_) {  },
     list_feel: fn() { (Desktop, 1.0) },
+    motion_reduced: fn() { false },
     twice_feel: fn() { (double_press_ms, double_press_slop) },
     last_press: None,
     env: Env::new(),
@@ -1367,6 +1384,11 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
       n.back_at = -1.0
       n.back_from = 0.0
       n.going = None
+      n.coming = false
+      n.come_said = None
+      n.come_off = fn() {  }
+      n.come_wake = None
+      n.clips_said = false
       n.inert = false
       n.modal = false
       n.back_goes_on = false
@@ -1503,6 +1525,11 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
         back_at: -1.0,
         back_from: 0.0,
         going: None,
+        coming: false,
+        come_said: None,
+        come_off: fn() {  },
+        come_wake: None,
+        clips_said: false,
         inert: false,
         modal: false,
         back_goes_on: false,
@@ -2358,7 +2385,8 @@ fn[T] Tree::queued(self : Tree, read : () -> T, then : (T) -> Unit, at? : Int = 
   b.run = fn() {
     b.queued = false
     b.marked = false
-    if !b.live {
+    // (at rest since it was told: nothing of it worked out again till it wakes, told anew then (View::rests))
+    if !b.live || w.resting() {
       return
     }
     let v = w.read(read)
@@ -2609,6 +2637,7 @@ priv enum Prop {
   Corners
   Bones
   BoneWhole
+  Comes
 } derive(Eq, Show)
 
 ///|
@@ -2697,6 +2726,7 @@ fn Prop::ord(self : Prop) -> Int {
     Corners => 78
     Bones => 79
     BoneWhole => 80
+    Comes => 81
   }
 }
 
@@ -3069,7 +3099,11 @@ pub fn View::over(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
 /// finger or the pointer is taken is as it was (what is past it still takes them), unlike an old view's clip.
 #callsite(autofill(loc))
 pub fn View::clips(self : View, on : Live[Bool], loc~ : SourceLoc) -> View {
-  self.bind(loc~, Clips, on, Paint, fn(on) { self.tree.nodes[self.at].look.clips = on })
+  self.bind(loc~, Clips, on, Paint, fn(on) {
+    let n = self.tree.nodes[self.at]
+    n.clips_said = on
+    n.look.clips = on || n.coming
+  })
   self
 }
 
@@ -6412,13 +6446,16 @@ fn View::take_in(self : View, v : View) -> Unit {
 ///|
 /// `then`'s node while `when` holds, made as it comes to and let go as it stops (what it made with it too: its scope).
 /// `leave`: it leaves over that long first (View::leave), and no shorter than a move it holds that holds its leaving
-/// is (View::moved_by's `holds_leaving`): its end what that move says it is, at the size it is laid out.
+/// is (View::moved_by's `holds_leaving`): its end what that move says it is, at the size it is laid out. Down a column
+/// it makes its way in and closes it as it goes (View::comes, View::goes), but as it is made with what holds it, or
+/// `at_once`, or where it is said to go over a time (`leave`: its coming and going its own).
 #callsite(autofill(loc))
 pub fn View::show(
   self : View,
   when : () -> Bool,
   then : (View) -> Unit,
   leave? : Double = 0.0,
+  at_once? : Bool = false,
   loc~ : SourceLoc,
 ) -> Unit {
   guard self.alive() else { return }
@@ -6426,6 +6463,8 @@ pub fn View::show(
   let had : Ref[View?] = Ref(None)
   // (the one leaving, shown again as it leaves: the same node, come back)
   let gone : Ref[View?] = Ref(None)
+  // (made with what holds it: there at once)
+  let first = Ref(true)
   let stop = slot.tree.structured(when, fn(on) {
     guard slot.alive() else { return }
     match (on, had.val) {
@@ -6436,26 +6475,40 @@ pub fn View::show(
             slot.come_back(g)
             had.val = Some(g)
           }
-          _ => had.val = Some(slot.box(then, loc~))
+          _ => {
+            let v = slot.box(then, loc~)
+            if !first.val && !at_once && leave <= 0.0 {
+              slot.arrives(v)
+            }
+            had.val = Some(v)
+          }
         }
         gone.val = None
       }
       (false, Some(v)) => {
         slot.tree.work.structure = slot.tree.work.structure + 1
-        slot.leave(v, leave)
         had.val = None
-        gone.val = if leave > 0.0 { Some(v) } else { None }
+        gone.val = if slot.goes(v, leave, at_once || leave > 0.0, swaps=true) { Some(v) } else { None }
       }
       _ => ()
     }
   })
+  first.val = false
   slot.owns(stop) |> ignore
 }
 
 ///|
 /// A node made by `make` for what `which` is, made anew (the one before let go) as that changes, kept as it does not.
+/// Down a column the new one makes its way from as tall as the one before was to as tall as it comes to (View::comes),
+/// but `at_once`.
 #callsite(autofill(loc))
-pub fn[K : Eq] View::pick(self : View, which : () -> K, make : (View, K) -> Unit, loc~ : SourceLoc) -> Unit {
+pub fn[K : Eq] View::pick(
+  self : View,
+  which : () -> K,
+  make : (View, K) -> Unit,
+  at_once? : Bool = false,
+  loc~ : SourceLoc,
+) -> Unit {
   guard self.alive() else { return }
   let slot = self.slot(loc)
   let had : Ref[(K, View)?] = Ref(None)
@@ -6465,11 +6518,19 @@ pub fn[K : Eq] View::pick(self : View, which : () -> K, make : (View, K) -> Unit
       Some((was, _)) if was == k => ()
       _ => {
         slot.tree.work.structure = slot.tree.work.structure + 1
-        match had.val {
-          Some((_, v)) => slot.drop(v)
-          None => ()
+        let tall = match had.val {
+          Some((_, v)) => {
+            // (one over what holds it, or along a row, took none of the column's room)
+            let tall = if v.live() is Some(n) && slot.tree.in_column(v.at) { n.flex.height } else { 0.0 }
+            slot.drop(v)
+            tall
+          }
+          None => 0.0 / 0.0
         }
         let v = slot.box(fn(v) { make(v, k) }, loc~)
+        if tall == tall && !at_once {
+          slot.comes(v, tall, 1.0) |> ignore
+        }
         had.val = Some((k, v))
       }
     }
@@ -6480,7 +6541,9 @@ pub fn[K : Eq] View::pick(self : View, which : () -> K, make : (View, K) -> Unit
 ///|
 /// A node for each of `items` by its key, made as its key comes, kept while it stays, moved as the order changes, let
 /// go as it goes. Each is given its item as a signal of its own, set again only as the item comes out otherwise (by
-/// its data, not by which object it is): a row whose item is the same runs nothing.
+/// its data, not by which object it is): a row whose item is the same runs nothing. Down a column a row makes its way
+/// in as it comes and closes it as it goes (View::comes, View::goes), but those made with what holds them, or
+/// `at_once`, or where they are said to go over a time (`leave`: their coming and going their own).
 #callsite(autofill(loc))
 pub fn[T : Eq, K : Hash + Eq] View::each(
   self : View,
@@ -6488,6 +6551,7 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
   key : (T) -> K,
   row : (View, @signals.Signal[T]) -> Unit,
   leave? : Double = 0.0,
+  at_once? : Bool = false,
   loc~ : SourceLoc,
 ) -> Unit {
   guard self.alive() else { return }
@@ -6495,9 +6559,12 @@ pub fn[T : Eq, K : Hash + Eq] View::each(
   let rows : Map[K, (View, @signals.Signal[T])] = Map([])
   // (the rows leaving, by key: one whose key comes back as it leaves is the same row, come back)
   let gone_rows : Map[K, (View, @signals.Signal[T])] = Map([])
+  // (the rows made with what holds them: there at once)
+  let way = Ref(false)
   let stop = slot.tree.structured(items, fn(all) {
-    slot.tree.holding_boxes(fn() { each_change(slot, all, rows, gone_rows, key, row, leave, loc) })
+    slot.tree.holding_boxes(fn() { each_change(slot, all, rows, gone_rows, key, row, leave, way.val, loc) })
   })
+  way.val = !at_once && leave <= 0.0
   slot.owns(stop) |> ignore
 }
 
@@ -6512,6 +6579,7 @@ fn[T : Eq, K : Hash + Eq] each_change(
   key : (T) -> K,
   row : (View, @signals.Signal[T]) -> Unit,
   leave : Double,
+  way : Bool,
   loc : SourceLoc,
 ) -> Unit {
   guard slot.live() is Some(sn) else { return }
@@ -6544,6 +6612,9 @@ fn[T : Eq, K : Hash + Eq] each_change(
               v.tree.nodes[v.at].each_row = true
               row(v, item)
             }, loc~)
+            if way {
+              slot.comes(v, 0.0, 1.0) |> ignore
+            }
             rows[k] = (v, item)
             order.push(v.at)
           }
@@ -6555,8 +6626,7 @@ fn[T : Eq, K : Hash + Eq] each_change(
   for k, r in rows {
     if !seen.contains(k) {
       gone.push(k)
-      slot.leave(r.0, leave)
-      if leave > 0.0 {
+      if slot.goes(r.0, leave, !way) {
         gone_rows[k] = r
       }
     }
@@ -6604,13 +6674,15 @@ fn each_place(slot : View, sn : Node, order : Array[Int]) -> Unit {
 /// A node for each of `items`, by the item itself: one object, one row (two alike in what they hold are two rows), made
 /// as it comes, kept while that object stays in the list, moved as the order changes, let go as it goes (over `leave`,
 /// coming back where the same object comes back as it leaves). For a list whose items are the rows themselves (what is
-/// being written, each its own fields), which own nothing to be keyed by: each's by a key, this by which object.
+/// being written, each its own fields), which own nothing to be keyed by: each's by a key, this by which object. Down a
+/// column its rows make and close their way as each's do, but `at_once`.
 #callsite(autofill(loc))
 pub fn[T] View::each_of(
   self : View,
   items : () -> Array[T],
   row : (View, T) -> Unit,
   leave? : Double = 0.0,
+  at_once? : Bool = false,
   loc~ : SourceLoc,
 ) -> Unit {
   guard self.alive() else { return }
@@ -6618,9 +6690,12 @@ pub fn[T] View::each_of(
   let rows : Array[(T, View)] = []
   // (the rows leaving: one whose object comes back as it leaves is the same row, come back)
   let gone_rows : Array[(T, View)] = []
+  // (the rows made with what holds them: there at once)
+  let way = Ref(false)
   let stop = slot.tree.structured(fn() { TheseItems(items()) }, fn(all) {
-    slot.tree.holding_boxes(fn() { each_of_change(slot, all.0, rows, gone_rows, row, leave, loc) })
+    slot.tree.holding_boxes(fn() { each_of_change(slot, all.0, rows, gone_rows, row, leave, way.val, loc) })
   })
+  way.val = !at_once && leave <= 0.0
   slot.owns(stop) |> ignore
 }
 
@@ -6650,6 +6725,7 @@ fn[T] each_of_change(
   gone_rows : Array[(T, View)],
   row : (View, T) -> Unit,
   leave : Double,
+  way : Bool,
   loc : SourceLoc,
 ) -> Unit {
   guard slot.live() is Some(sn) else { return }
@@ -6681,6 +6757,9 @@ fn[T] each_of_change(
               v.tree.nodes[v.at].each_row = true
               row(v, it)
             }, loc~)
+            if way {
+              slot.comes(v, 0.0, 1.0) |> ignore
+            }
             now.push((it, v))
             order.push(v.at)
           }
@@ -6690,8 +6769,7 @@ fn[T] each_of_change(
   @signals.end_batch()
   // (what is left of the rows before: gone)
   for r in rows {
-    slot.leave(r.1, leave)
-    if leave > 0.0 {
+    if slot.goes(r.1, leave, !way) {
       gone_rows.push(r)
     }
   }
@@ -6796,7 +6874,260 @@ fn View::come_back(self : View, v : View) -> Unit {
   }
   // (a modal layer back: over what is held again)
   self.tree.modals_told(within=v.at)
+  // (closing its way: what it binds woken, its way made again from as tall as it is)
+  if n.coming {
+    match n.come_wake {
+      Some(wake) => {
+        n.come_wake = None
+        wake()
+      }
+      None => ()
+    }
+    self.comes(v, n.flex.height, 1.0) |> ignore
+  }
   self.tree.marked()
+}
+
+///|
+/// Node `v`, one this slot's show, pick or each makes or lets go, making its way from `from` tall (points) to `to` of
+/// what it comes to (1: all of it; 0: none) from its cause's moment, on a Move's way as long as how far that is
+/// (Style's come_*, flex's move.mbt): laid out so as the clock goes, cut at its edges, what is under it in its column
+/// moved by as much and the gap before it opening with it, in the same layout (the user, 2026-11-09: what comes or goes
+/// makes its way in or closes it, the framework's, not each page's). Only where it is laid out in its turn down a
+/// column, the tree has been drawn, motion is not reduced, nothing of it is shared by an id and nothing of it scrolls
+/// (a page's, a pane's): elsewhere nothing, and false.
+fn View::comes(self : View, v : View, from : Double, to : Double) -> Bool {
+  let tree = self.tree
+  // (what is shared by an id flies to its place instead: View::shared)
+  guard self.alive() &&
+    v.live() is Some(n) &&
+    tree.last_w >= 0.0 &&
+    !@signals.untracked(tree.motion_reduced) &&
+    tree.in_column(v.at) &&
+    !tree.holds_shared(v.at) &&
+    !tree.holds_scroll(v.at) else {
+    return false
+  }
+  let st = n.flex.style
+  let at = tree.cause_now()
+  st.come_from = from
+  st.come_to = to
+  st.come_at = at
+  st.come_now = at
+  // (going: as long as a Move as tall as it is; coming, as far as what it comes to, the first time it is laid out)
+  st.come_ends = if to <= 0.0 { at + @flex.move_ms(from) } else { 0.0 / 0.0 }
+  n.coming = true
+  n.look.clips = true
+  (n.come_off)()
+  n.come_off = fn() {  }
+  let said = match n.come_said {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(0)
+      n.come_said = Some(s)
+      let gen = n.gen
+      let vat = v.at
+      // (the clock followed by the tree, not by what it holds: what rests as it closes its way does not rest this)
+      let owner = @signals.set_owner(None)
+      let stop = tree.queued(
+        fn() {
+          s.get() |> ignore
+          if tree.nodes[vat].coming {
+            Some(tree.drawn_at())
+          } else {
+            None
+          }
+        },
+        fn(t) {
+          let m = tree.nodes[vat]
+          if !m.live || m.gen != gen {
+            return
+          }
+          m.flex.style.come_now = match t {
+            Some(t) => t
+            None => 0.0 / 0.0
+          }
+          m.look.clips = m.clips_said || m.coming
+          tree.layout_marked_at(vat)
+          tree.look_marked_at(vat)
+        },
+      )
+      @signals.set_owner(owner) |> ignore
+      n.props[Comes.ord()] = stop
+      s
+    }
+  }
+  said.set(@signals.untracked(fn() { said.get() }) + 1)
+  tree.layout_marked_at(v.at)
+  tree.look_marked_at(v.at)
+  if to >= 1.0 {
+    // (there as its way, as long as a Move as far as it is laid out first, ends: Style's come_ends)
+    @signals.after_flush(fn() {
+      guard v.live() is Some(m) && m.coming && st.come_at == at && st.come_to >= 1.0 else { return }
+      tree.measured_now()
+      let ends = if st.come_ends == st.come_ends { st.come_ends } else { at + @flex.move_most_ms }
+      m.come_off = v.at_moment(ends, fn() {
+        // (there: laid out as it is, cut as it says, and what followed the clock for it let go)
+        m.coming = false
+        m.come_off = fn() {  }
+        st.come_now = 0.0 / 0.0
+        m.look.clips = m.clips_said
+        m.come_said = None
+        match m.props.get(Comes.ord()) {
+          Some(stop) => {
+            m.props.remove(Comes.ord())
+            stop()
+          }
+          None => ()
+        }
+        tree.layout_marked_at(v.at)
+        tree.look_marked_at(v.at)
+      })
+    })
+  }
+  true
+}
+
+///|
+/// Node `v`, one this slot's show or each lets go: down a column (View::comes) closing its way as it leaves over as
+/// long as that takes and no shorter than `ms` (View::leave), what it and what it holds bind at rest meanwhile where
+/// nothing of it was said to go over a time (`ms` 0: drawn as it was, nothing of it worked out again); else, or
+/// `at_once`, leaving over `ms`. Whether it is still there, leaving.
+fn View::goes(self : View, v : View, ms : Double, at_once : Bool, swaps? : Bool = false) -> Bool {
+  if !at_once && v.live() is Some(n) {
+    let tall = n.flex.height
+    // (nothing tall: nothing to close)
+    if tall < 0.5 || !self.tree.in_column(v.at) {
+      self.leave(v, ms)
+      return ms > 0.0
+    }
+    // (a show's, where another came in the same column at the same moment: that one in its place, from as tall as this)
+    if swaps {
+      match self.tree.swapped(v, false) {
+        Some(w) =>
+          if w.node.alive() {
+            w.slot.comes(w.node, tall, 1.0) |> ignore
+            self.leave(v, ms)
+            return ms > 0.0
+          }
+        None => ()
+      }
+    }
+    if self.comes(v, tall, 0.0) {
+      let way = @flex.move_ms(tall)
+      if ms <= 0.0 && n.come_wake is None {
+        n.come_wake = Some(v.rests())
+      }
+      self.leave(v, if ms > way { ms } else { way })
+      if swaps {
+        self.tree.swaps.push({ slot: self, node: v, column: self.tree.column_of(v.at), at: self.tree.cause_now(), tall, going: true })
+      }
+      return true
+    }
+  }
+  self.leave(v, ms)
+  ms > 0.0
+}
+
+///|
+/// Whether node `at` or what it holds scrolls what it holds (View::scrolls): a page's or a pane's, one in another's
+/// place, not a piece of one making its way.
+fn Tree::holds_scroll(self : Tree, at : Int) -> Bool {
+  let n = self.nodes[at]
+  n.scroll_held >= 0 || n.kids.iter().any(fn(k) { self.holds_scroll(k) })
+}
+
+///|
+/// Whether node `at` or what it holds is shared by an id (View::shared).
+fn Tree::holds_shared(self : Tree, at : Int) -> Bool {
+  // (none shared at all: nothing walked)
+  if self.shared_live.is_empty() {
+    return false
+  }
+  let n = self.nodes[at]
+  n.share is Some(_) || n.kids.iter().any(fn(k) { self.holds_shared(k) })
+}
+
+///|
+/// One a show set making or closing its way (Tree's swaps): the slot it is in, it, the column it is laid out in, the
+/// moment, as tall as it was where it goes.
+priv struct Swap {
+  slot : View
+  node : View
+  column : Int
+  at : Double
+  tall : Double
+  going : Bool
+}
+
+///|
+/// The node laying out node `at` (past the slots holding it).
+fn Tree::column_of(self : Tree, at : Int) -> Int {
+  let mut p = self.nodes[at].parent
+  while p >= 0 && self.nodes[p].slot {
+    p = self.nodes[p].parent
+  }
+  p
+}
+
+///|
+/// The one set making or closing its way (`going`) in node `v`'s column at the moment of this change, taken from the
+/// swaps; those of another moment forgotten.
+fn Tree::swapped(self : Tree, v : View, going : Bool) -> Swap? {
+  let now = self.cause_now()
+  self.swaps.retain(fn(w) { w.at == now && w.node.alive() })
+  let col = self.column_of(v.at)
+  match self.swaps.search_by(fn(w) { w.going == going && w.column == col }) {
+    Some(i) => Some(self.swaps.remove(i))
+    None => None
+  }
+}
+
+///|
+/// Node `v`, made by this slot's show down a column: in the place of one closing its way in the same column at the
+/// same moment (the other of a show and its opposite: what is shown in another's place), that one let go of at once and
+/// this one's way from as tall as it was, as a pick's; else its way made from nothing.
+fn View::arrives(self : View, v : View) -> Unit {
+  match self.tree.swapped(v, true) {
+    Some(w) => {
+      w.slot.leave(w.node, 0.0)
+      self.comes(v, w.tall, 1.0) |> ignore
+    }
+    None =>
+      if self.comes(v, 0.0, 1.0) {
+        self.tree.swaps.push({
+          slot: self,
+          node: v,
+          column: self.tree.column_of(v.at),
+          at: self.tree.cause_now(),
+          tall: 0.0,
+          going: false,
+        })
+      }
+  }
+}
+
+///|
+/// Whether node `at` is laid out in its turn down a column, as tall as it comes to: not over what holds it nor grown,
+/// what lays it out (past the slots holding it) a column, and in no page's list's rows (which come and go as the list moves them: Scroll::list).
+fn Tree::in_column(self : Tree, at : Int) -> Bool {
+  let n = self.nodes[at]
+  // (over what holds it, or as tall as the column leaves it (grown): no way of its own to make)
+  if n.flex.style.position == @flex.PositionType::Absolute || n.flex.style.grow > 0.0 {
+    return false
+  }
+  let mut p = n.parent
+  while p >= 0 && self.nodes[p].slot {
+    p = self.nodes[p].parent
+  }
+  guard p >= 0 && self.nodes[p].flex.style.direction == @flex.FlexDirection::Column else { return false }
+  while p >= 0 {
+    if self.nodes[p].list_rows {
+      return false
+    }
+    p = self.nodes[p].parent
+  }
+  true
 }
 
 ///|
@@ -9587,6 +9918,13 @@ fn Tree::once_laid_out(self : Tree, f : () -> Unit) -> Unit {
 /// them); none said, the desktop's, at 1.
 pub fn Tree::lists_feel(self : Tree, f : () -> (ListFeel, Double)) -> Unit {
   self.list_feel = f
+}
+
+///|
+/// Whether motion is reduced where what hosts the tree draws it, as it is asked: what a structure makes or lets go
+/// there at once, no way made (View::comes); none said, not.
+pub fn Tree::reduces_motion(self : Tree, f : () -> Bool) -> Unit {
+  self.motion_reduced = f
 }
 
 ///|

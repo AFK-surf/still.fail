@@ -1039,6 +1039,12 @@ pub fn Watch::gone(self : Watch) -> Bool {
 }
 
 ///|
+/// Whether it is at rest (rest): what it read followed by none of it till it wakes.
+pub fn Watch::resting(self : Watch) -> Bool {
+  self.own.resting
+}
+
+///|
 /// The watch let go of what it read: it follows nothing, and is stale.
 pub fn Watch::stop(self : Watch) -> Unit {
   effect_scope_oper(self.node)

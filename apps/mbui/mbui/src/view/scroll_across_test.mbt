@@ -33,7 +33,7 @@ fn across_case(bar? : Bool = false, now? : Ref[Double] = Ref(0.0)) -> AcrossCase
             // (its cells side by side)
             let held = fn(rh : @view.View) {
               rh.row(Is(true)) |> ignore
-              rh.each(fn() { Array::makei(cells.get(), fn(i) { i }) }, fn(i) { i }, fn(c, i) {
+              rh.each(at_once=true, fn() { Array::makei(cells.get(), fn(i) { i }) }, fn(i) { i }, fn(c, i) {
                 c.width(Is(Some(60.0))).height(Is(Some(40.0))).ground(Is(0x101010FFL)) |> ignore
                 if @signals.untracked(fn() { i.get() }) == 9 {
                   c.focusable(Is(true)) |> ignore
@@ -246,7 +246,7 @@ test "scrolls across: let go flinging, made again holding the same scroll: at re
   let scroll = @view.Scroll::across()
   let tree = @view.Tree::new(
     fn(root) {
-      root.show(fn() { there.get() }, fn(v) {
+      root.show(at_once=true, fn() { there.get() }, fn(v) {
         v
         .width(Is(Some(300.0)))
         .height(Is(Some(100.0)))

@@ -6,7 +6,7 @@
 fn held_tree(seen : Array[@view.Drag], there : @signals.Signal[Bool]) -> @view.Tree {
   @view.Tree::new(
     fn(root) {
-      root.show(fn() { there.get() }, fn(v) {
+      root.show(at_once=true, fn() { there.get() }, fn(v) {
         v.box(fn(b) {
           b.width(Is(Some(100.0))).height(Is(Some(100.0))).on_drag(fn(d) { seen.push(d) }) |> ignore
         })
@@ -60,11 +60,11 @@ test "held node let go, another made in its place with nothing held on it: not h
   let seen : Array[Int] = []
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { which.get() == 0 }, fn(v) {
+      root.show(at_once=true, fn() { which.get() == 0 }, fn(v) {
         v.box(fn(b) { b.width(Is(Some(100.0))).height(Is(Some(100.0))).on_drag(fn(_) { seen.push(0) }) |> ignore })
         |> ignore
       })
-      root.show(fn() { which.get() == 1 }, fn(v) {
+      root.show(at_once=true, fn() { which.get() == 1 }, fn(v) {
         v.box(fn(b) { b.width(Is(Some(100.0))).height(Is(Some(100.0))) |> ignore }) |> ignore
       })
     },
@@ -280,6 +280,7 @@ fn held_then_lost(how : String, frames : Array[Double]) -> Array[String] {
   let t = @view.Tree::new(
     fn(root) {
       root.show(
+        at_once=true,
         fn() { how != "leaving" || on.get() },
         fn(v) {
           v.box(fn(p) {
@@ -435,7 +436,7 @@ test "a gesture ended mid-call (its node let go by what it told, its on_drag sai
   let node : Ref[@view.View?] = Ref(None)
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { there.get() }, fn(v) {
+      root.show(at_once=true, fn() { there.get() }, fn(v) {
         node.val = Some(
           v.box(fn(b) {
             b
@@ -480,7 +481,7 @@ fn far_up(how : String) -> Array[String] {
   let said : Array[String] = []
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { there.get() }, fn(v) {
+      root.show(at_once=true, fn() { there.get() }, fn(v) {
         v.box(fn(b) {
           b
           .width(Is(Some(100.0)))

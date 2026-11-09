@@ -45,11 +45,11 @@ test "beside: leaving, or its anchor gone, it stays where it last went beside it
   let ids : Map[String, @view.NodeId] = {}
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { anchor_on.get() }, fn(a) {
+      root.show(at_once=true, fn() { anchor_on.get() }, fn(a) {
         ids["a"] = a.id()
         a.over(Is(true)).width(Is(Some(40.0))).height(Is(Some(20.0))).offset(By(fn() { (100.0, ay.get()) })) |> ignore
       })
-      root.show(fn() { on.get() }, leave=100.0, fn(b) {
+      root.show(at_once=true, fn() { on.get() }, leave=100.0, fn(b) {
         ids["b"] = b.id()
         b
         .width(Is(Some(60.0)))
@@ -95,7 +95,7 @@ test "lives_with: a node held elsewhere let go with its owner" {
   let t = @view.Tree::new(
     fn(root) {
       let layer = root.box(fn(l) { l.over(Is(true)) |> ignore })
-      root.show(fn() { owner_on.get() }, fn(o) {
+      root.show(at_once=true, fn() { owner_on.get() }, fn(o) {
         made.val = Some(layer.box(fn(x) { x.width(Is(Some(10.0))) |> ignore }).lives_with(o))
       })
     },
@@ -116,7 +116,7 @@ test "lives_with: held beside its owner in one layer, the layer let go whole (a 
   let after : Ref[@view.View?] = Ref(None)
   let t = @view.Tree::new(
     fn(root) {
-      root.pick(fn() { theme.get() }, fn(p, _) {
+      root.pick(at_once=true, fn() { theme.get() }, fn(p, _) {
         let layer = p.box(fn(l) { l.over(Is(true)) |> ignore })
         layer.box(fn(o) {
           mades.push(layer.box(fn(x) { x.width(Is(Some(10.0))) |> ignore }).lives_with(o))
@@ -275,7 +275,7 @@ fn went_tree(ay : @signals.Signal[Double], on : @signals.Signal[Bool]) -> (@view
   let ids : Map[String, @view.NodeId] = {}
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { on.get() }, fn(s) {
+      root.show(at_once=true, fn() { on.get() }, fn(s) {
         s.box(fn(a) {
           ids["a"] = a.id()
           a.over(Is(true)).width(Is(Some(40.0))).height(Is(Some(20.0))).offset(By(fn() { (100.0, ay.get()) })) |> ignore

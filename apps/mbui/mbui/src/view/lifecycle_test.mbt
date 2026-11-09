@@ -11,8 +11,8 @@ test "a parent withdrawn between frames stops its children before advancing the 
     root.box(fn(clock) {
       clock.words(By(fn() { clock.drawn_at().to_string() })) |> ignore
     }) |> ignore
-    root.show(fn() { data.get() is Some(_) }, fn(part) {
-      part.show(fn() {
+    root.show(at_once=true, fn() { data.get() is Some(_) }, fn(part) {
+      part.show(at_once=true, fn() {
         match data.get() {
           Some(name) => name != ""
           None => { missing.val += 1; false }
@@ -58,7 +58,7 @@ test "a shown part let go with its own binding queued: that binding runs no more
   let words = @signals.signal("甲", same=fn(a, b) { a == b })
   let runs = Ref(0)
   let t = @view.Tree::new(fn(root) {
-    root.show(fn() { on.get() }, fn(v) {
+    root.show(at_once=true, fn() { on.get() }, fn(v) {
       v.words(By(fn() {
         runs.val = runs.val + 1
         words.get()
@@ -108,7 +108,7 @@ test "made in untracked inside a node's making: still the node's, let go with it
   let runs = Ref(0)
   let cleanups = Ref(0)
   let t = @view.Tree::new(fn(root) {
-    root.show(fn() { on.get() }, fn(_) {
+    root.show(at_once=true, fn() { on.get() }, fn(_) {
       @signals.untracked(fn() {
         @signals.effect_cleanup(fn() {
           outside.get() |> ignore
