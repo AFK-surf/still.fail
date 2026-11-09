@@ -49,7 +49,8 @@ import { CURSOR, authFile as cursorAuthFile, cursorIn } from "./cursor.ts";
 import { KIMI_AUTH, kimiDue, readKimi, renewKimiToken, writeKimi } from "./kimi.ts";
 import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
 import { codexAccountIdentity, codexClaimsIn, type MachineLogin, MachineLogins } from "./machine.ts";
-import { OUTDATED, uncheckOutdated } from "./models.ts";
+import { facts } from "./catalog.ts";
+import { uncheckOutdated } from "./models.ts";
 import { claudeOAuthToken } from "./oauth.ts";
 import { accessKinds, checkProfile, devinAccountFile, devinNotedIn, grokAuthFile, grokEmailIn, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
 import { checkQuota, codexUsage, lentCodexUsage, machineUsage } from "./quota.ts";
@@ -275,7 +276,7 @@ export class Accounts {
     }
   }
 
-  /// Starts what runs on its own: the pool told of profiles' health, the known outdated models unchecked, sign-ins
+  /// Starts what runs on its own: the pool told of profiles' health, the outdated models unchecked, sign-ins
   /// followed, the checks after start, the allowance rounds, the machine's logins read.
   start() {
     this.deps.hub?.accounts.setHealth((id) => this.health(id));
@@ -902,23 +903,24 @@ export class Accounts {
     });
   }
 
-  /// The known outdated models (models.ts) unchecked on this station's profiles, each once: config.json keeps which were
-  /// (`outdatedUnchecked`), so one checked again by hand stays, and a model added to the table is unchecked when the
-  /// station that has it next starts.
+  /// The models outdated on this station's profiles (models.ts) unchecked, each once: config.json keeps which were
+  /// (`outdatedUnchecked`), so one checked again by hand stays. Worked out at the start and again as a check finds other
+  /// models (a newer one offered, an old one gone).
   private uncheckOutdated() {
     const found = (id: string) => this.checks.get(id)?.models ?? null;
     const unchecked = (raw: Json) => {
       const done = new Set<string>(Array.isArray(raw?.outdatedUnchecked) ? raw.outdatedUnchecked.filter((k: unknown) => typeof k === "string") : []);
-      const { changes, deferred } = uncheckOutdated(raw, found, done);
-      const now = [...new Set([...done, ...[...OUTDATED.keys()].filter((k) => !deferred.has(k))])].sort();
-      return { changes, now, grew: now.length > done.size };
+      const { changes, unchecked } = uncheckOutdated(raw, found, done);
+      return { changes, now: [...new Set([...done, ...unchecked])].sort() };
     };
     // Worked out on a copy first: config.json is written only when something changes.
-    const { changes, grew } = unchecked(structuredClone(this.deps.config.raw()));
-    if (changes.length === 0 && !grew) return;
+    if (unchecked(structuredClone(this.deps.config.raw())).changes.length === 0) return;
+    let changes: ReturnType<typeof unchecked>["changes"] = [];
     try {
       this.deps.config.update((raw) => {
-        raw.outdatedUnchecked = unchecked(raw).now;
+        const done = unchecked(raw);
+        changes = done.changes;
+        raw.outdatedUnchecked = done.now;
       });
     } catch (e) {
       log.warn("accounts", "could not uncheck the outdated models", { error: (e as Error).message });
@@ -927,12 +929,47 @@ export class Accounts {
     for (const c of changes) log.info("accounts", "outdated models unchecked", { profile: c.profile, removed: c.removed.join(" "), added: c.added.join(" ") });
   }
 
+  /// The catalog named models it had not (models/module.ts): the profiles whose check found a model of one of their
+  /// makers are checked again, so a model a provider has just begun to offer is offered here, and replaces the one before
+  /// it, without the station starting again (Fable 5.2 came out with the stations up, 2026-11-09).
+  newModels(keys: readonly string[]) {
+    const makers = new Set(keys.flatMap((k) => facts(k)?.maker ?? []));
+    if (makers.size === 0) return;
+    const ids = this.profiles()
+      .filter((p) => p.enabled !== false && (this.checks.get(p.id)?.models ?? []).some((m) => makers.has(facts(m)?.maker ?? "")))
+      .map((p) => p.id);
+    if (ids.length === 0) return;
+    log.info("accounts", "new models in the catalog: their makers' profiles checked again", { models: keys.join(" "), profiles: ids.join(" ") });
+    this.background.spawn(() => this.checkEach(ids, stationLang()).catch(() => undefined));
+  }
+
+  /// Checks the profiles, four at a time; throws the first refusal once all are done.
+  private async checkEach(ids: readonly string[], lang: Lang) {
+    const errors: unknown[] = [];
+    let next = 0;
+    const worker = async () => {
+      while (next < ids.length) {
+        const id = ids[next++]!;
+        try {
+          await this.check(id, lang);
+        } catch (e) {
+          errors.push(e);
+        }
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    if (errors.length > 0) throw errors[0];
+  }
+
   // ── checks and allowances ──
 
   private keepCheck(id: string, check: ProfileCheck) {
     check.checkedAt = this.background.now();
+    const before = this.checks.get(id)?.models ?? null;
     this.checks.set(id, check);
     this.deps.store.setProfileCheck(id, check);
+    // Other models found: one may now replace one the profile names.
+    if (JSON.stringify(before) !== JSON.stringify(check.models)) this.uncheckOutdated();
     this.changed();
   }
 
@@ -1342,21 +1379,7 @@ export class Accounts {
   /// POST /automatic-decisions/refresh: every profile checked again (four at a time).
   async refreshDecisionModels(viewer: Viewer, lang: Lang = stationLang()) {
     if (!manages(viewer)) throw new Refusal(403, tr(lang, "station.decisions.managersOnlyRefresh"));
-    const ids = this.profiles().filter((p) => p.enabled !== false).map((p) => p.id);
-    const errors: unknown[] = [];
-    let next = 0;
-    const worker = async () => {
-      while (next < ids.length) {
-        const id = ids[next++]!;
-        try {
-          await this.check(id, lang);
-        } catch (e) {
-          errors.push(e);
-        }
-      }
-    };
-    await Promise.all([worker(), worker(), worker(), worker()]);
-    if (errors.length > 0) throw errors[0];
+    await this.checkEach(this.profiles().filter((p) => p.enabled !== false).map((p) => p.id), lang);
   }
 
   // ── what the overview shows of the accounts ──

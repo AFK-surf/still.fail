@@ -108,3 +108,22 @@ test("the catalog is kept across a restart and asked for again with its ETag, by
     learn(null);
   }
 });
+
+test("models a catalog names that the one before did not are told, none the first time", async () => {
+  const file = join(mkdtempSync(join(tmpdir(), "model-catalog-")), "model-catalog.json");
+  let models: Record<string, unknown> = MODELS;
+  let n = 0;
+  const get = async () => new Response(JSON.stringify({ models }), { headers: { etag: `"${++n}"` } });
+  const told: string[][] = [];
+  try {
+    const catalog = new ModelCatalog(file, () => "https://cloud.test", () => 0, get, (keys) => told.push(keys));
+    await catalog.refresh();
+    assert.deepEqual(told, []);
+    models = { ...MODELS, "claude-fable-5-2": { maker: "anthropic" } };
+    await catalog.refresh();
+    await catalog.refresh();
+    assert.deepEqual(told, [["claude-fable-5-2"]]);
+  } finally {
+    learn(null);
+  }
+});
