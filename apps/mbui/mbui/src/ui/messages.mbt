@@ -169,7 +169,7 @@ fn messages_between() -> Unit {
 /// (`on_message_said`); from the first that is not, it and all after it left for the frame (messages_in).
 fn messages_take(came : Array[(String, String, Bytes?)]) -> Unit {
   // (one event, at its own moment: what had ended by then settled before any handler runs, view_host.mbt)
-  view_event(fn() { messages_take_now(came) })
+  view_event(fn() { messages_take_now(came) }, what="messages")
 }
 
 ///|

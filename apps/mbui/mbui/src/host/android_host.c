@@ -884,8 +884,8 @@ void mb_host_clipboard_secret_off(void) {
   (*env)->CallStaticVoidMethod(env, host_cls, m_clipboard_secret_off);
 }
 
-// The last lines the program said that a crash's report says again (wasm_shell.c report_depth): its PERF lines, each kept
-// as it is said, the oldest let go
+// The last lines the program said that a crash's report says again (wasm_shell.c report_depth): its PERF lines and its
+// HANG lines (src/ui/journal.mbt), each kept as it is said, the oldest let go
 #define MB_RECENT 12
 static char mb_recent[MB_RECENT][240];
 static int mb_recent_at, mb_recent_n;
@@ -899,7 +899,9 @@ static void recent_keep(moonbit_string_t s) {
   if (n < 4) return;
   int perf = 0;
   for (int32_t k = 0; k + 3 < n && k < 16; k++)
-    if (s[k] == 'P' && s[k + 1] == 'E' && s[k + 2] == 'R' && s[k + 3] == 'F') perf = 1;
+    if ((s[k] == 'P' && s[k + 1] == 'E' && s[k + 2] == 'R' && s[k + 3] == 'F') ||
+        (s[k] == 'H' && s[k + 1] == 'A' && s[k + 2] == 'N' && s[k + 3] == 'G'))
+      perf = 1;
   if (!perf) return;
   char *out = mb_recent[mb_recent_at];
   int32_t m = n < (int32_t)sizeof mb_recent[0] - 1 ? n : (int32_t)sizeof mb_recent[0] - 1;

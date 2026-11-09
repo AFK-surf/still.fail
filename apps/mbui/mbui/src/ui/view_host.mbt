@@ -2468,7 +2468,7 @@ fn view_old_moved(x : Double, y : Double) -> Unit {
     view_down.val = None
     return
   }
-  view_event(fn() { view_claimed(tree, x, y, view_moment()) |> ignore })
+  view_event(fn() { view_claimed(tree, x, y, view_moment()) |> ignore }, what="pointer")
 }
 
 ///|
@@ -3158,7 +3158,9 @@ let event_depth : Ref[Int] = Ref(0)
 /// before it is taken (Tree::event_said).
 fn view_event_said(said : () -> Unit, f : () -> Unit, what? : String = "event") -> Unit {
   let recording = event_depth.val == 0 && @hostapi.perf_recording()
-  let start = if recording { work_now() } else { 0.0 }
+  // (the outermost event between frames, into the window thread's journal: journal.mbt; one in a frame is the frame's)
+  let journaled = event_depth.val == 0 && !frame_running.val
+  let start = if recording || journaled { work_now() } else { 0.0 }
   let tree = if recording { view_app.val } else { None }
   let before = tree.map(fn(t) { t.work() })
   let alive = tree.map(fn(t) { t.alive() }).unwrap_or(0)
@@ -3179,6 +3181,9 @@ fn view_event_said(said : () -> Unit, f : () -> Unit, what? : String = "event") 
   // the event has run. An event inside a frame leaves its handovers for the frame's end instead.
   if event_depth.val == 0 && !frame_running.val {
     frame_afters_run()
+  }
+  if journaled {
+    journal_event(what, start)
   }
   if recording {
     let elapsed = work_now() - start
