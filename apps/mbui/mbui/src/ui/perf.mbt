@@ -196,12 +196,26 @@ pub fn Tester::wanted_why(self : Tester) -> String {
 }
 
 ///|
+/// What a bench is told as the measured frame being drawn has been drawn by the app (Tester::bench's `around`)
+// kept across runs: set by a bench as each measured frame begins, taken as it ends
+let bench_frame_end : Ref[(() -> Unit)?] = Ref(None)
+
+///|
+fn bench_frame_ends() -> Unit {
+  if bench_frame_end.val is Some(f) {
+    bench_frame_end.val = None
+    f()
+  }
+}
+
+///|
 /// `script` run (Tester::drive's steps) on the display's frames at `fps` a second, a frame drawn at one only where the
 /// app asks for it there, as a host draws (Tester::wanted_after): `each` told, at each of the display's frames from the
 /// script's step `log measure` on (what comes before it, the app opening, not measured), whether one was drawn there.
-/// `around` told as each measured frame drawn begins (false) and ends (true), with the display's frame it is at: what
-/// counts a frame's work from outside (mbui/film's mark, a profiled run's). Until the script ends or `max` of the
-/// display's frames went by. What the Tester logged.
+/// `around` told as each measured frame drawn begins (false) and as the app has drawn it (true: the Tester's own
+/// checks of it after, which a device runs not), with the display's frame it is at: what counts a frame's work from
+/// outside (mbui/film's mark, a profiled run's). Until the script ends or `max` of the display's frames went by. What
+/// the Tester logged.
 pub fn Tester::bench(
   self : Tester,
   script : String,
@@ -223,11 +237,11 @@ pub fn Tester::bench(
     if frame {
       if measuring && around is Some(f) {
         f(n, false)
+        bench_frame_end.val = Some(fn() { f(n, true) })
       }
       self.frame_at(tick)
-      if measuring && around is Some(f) {
-        f(n, true)
-      }
+      // (a frame that drew nothing of the app's: ended here)
+      bench_frame_ends()
     } else {
       // (no frame: the time goes on)
       self.fake.time = tick
