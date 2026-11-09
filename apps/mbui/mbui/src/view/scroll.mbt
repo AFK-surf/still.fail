@@ -77,6 +77,13 @@ pub struct Scroll {
   priv across : Bool
   /// brought on by the hand held past its edge (Scroll::edge_toward), while it is said
   priv edge : @signals.Signal[Edge?]
+  /// how far it was put to tuck a node over its top as that was first laid out (Scroll::tucks: none, never), whether it
+  /// is to be put there still (the hand not on it since), and the room a page's list's foot keeps for it
+  priv tuck_at : @signals.Signal[Double?]
+  priv mut tuck_owed : Bool
+  priv tuck_room : @signals.Signal[Double]
+  /// the node it scrolls in that keeps that room, while it does
+  priv mut tuck_in : View?
 }
 
 ///|
@@ -126,6 +133,10 @@ fn Scroll::made(as_list : Bool, across? : Bool = false) -> Scroll {
     tall: fn() { 0.0 },
     host: None,
     edge: @signals.signal(None, same=fn(a, b) { same_ref(a, b) }),
+    tuck_at: @signals.signal(None, same=fn(a, b) { a == b }),
+    tuck_owed: false,
+    tuck_room: @signals.signal(0.0, same=fn(a, b) { a == b }),
+    tuck_in: None,
   }
 }
 
@@ -404,6 +415,62 @@ pub fn Scroll::put(self : Scroll, to : Double) -> Unit {
   }
   self.x.set(dmax(to, 0.0))
   self.offset_said()
+}
+
+///|
+/// Node `v`, made in what it scrolls, tucked out of sight over its top (a page's list's search, as iOS's are): put, as
+/// `v` is first laid out in it, so far down that `v`'s foot is `cover()` under its top (what lies over its top: a bar),
+/// once for it (made again with another node in its place, it is where it was put then, as far as the hand left it);
+/// put there again while what it holds comes short of that as it is laid out, till the hand is on it; its foot keeping
+/// the room it lacks to go there however few what it holds is (a page's list's: View::scrolls_window) while `kept()`
+/// says so, whether `v` shows or not. Where `v` is laid out is its own reading, not its caller's.
+pub fn Scroll::tucks(self : Scroll, v : View, cover : () -> Double, kept? : () -> Bool = fn() { true }) -> Unit {
+  guard self.host is Some(host) && v.alive() else { return }
+  v.reacts(fn() { v.laid_size_told() is Some(_) }, fn(laid) {
+    guard laid && @signals.untracked(fn() { self.tuck_at.get() }) is None else { return }
+    // (not scrolled yet: where it is in what it holds is where it is laid out in it)
+    let (_, vy, _, vh) = v.placed_window_now()
+    let (_, hy, _, _) = host.placed_window_now()
+    let at = vy - hy + vh - @signals.untracked(cover)
+    self.tuck_owed = true
+    self.tuck_at.set(Some(at))
+    self.put(at)
+  })
+  // (said once for the node it scrolls in, however many times what is tucked is made in it)
+  match self.tuck_in {
+    Some(h) if h.at == host.at && h.gen == host.gen => return
+    _ => ()
+  }
+  self.tuck_in = Some(host)
+  // (as far as it goes with less than it is tall: its foot keeps the room it lacks to go there; put there again where it
+  // came short of it as it was laid out, till the hand is on it)
+  host.reacts(fn() { (self.tuck_at.get(), self.reach(), kept()) }, fn(now) {
+    let had = @signals.untracked(fn() { self.tuck_room.get() })
+    let want = match now {
+      (Some(at), most, true) => dmax(0.0, at - (most - had))
+      _ => 0.0
+    }
+    if (want - had).abs() >= 0.5 {
+      self.tuck_room.set(want)
+      return
+    }
+    match now.0 {
+      Some(at) if self.tuck_owed && self.at(host.tree) < at - 0.5 && now.1 >= at - 0.5 => self.put(at)
+      _ => ()
+    }
+  })
+  // (the hand on it, or it gliding: put there no more)
+  host.reacts(fn() { host.pointed_in() || self.glides_till() is Some(_) }, fn(on) {
+    if on {
+      self.tuck_owed = false
+    }
+  })
+  host.owns(fn() {
+    self.tuck_owed = false
+    self.tuck_room.set(0.0)
+    self.tuck_in = None
+  })
+  |> ignore
 }
 
 ///|

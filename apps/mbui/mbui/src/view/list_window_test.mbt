@@ -16,6 +16,8 @@ fn window_case(
   holds? : (Int) -> Bool = fn(_) { true },
   follows? : () -> Bool = fn() { false },
   centres? : () -> Int? = fn() { None },
+  near_foot? : (Double, () -> Bool, () -> Unit),
+  tucks? : Int,
 ) -> WindowCase {
   let scroll = @view.Scroll::list()
   let keys = @signals.signal(Array::makei(10, fn(i) { i }), same=fn(a, b) { a == b })
@@ -35,8 +37,11 @@ fn window_case(
   let tree = @view.Tree::new(fn(root) {
     root.box(fn(o) {
       o.width(Is(Some(300.0))).height(Is(Some(100.0))) |> ignore
-      o.scrolls_window(scroll, fn() { keys.get() }, est=80.0, holds~, follows~, centres~, fn(b, k) {
+      o.scrolls_window(scroll, fn() { keys.get() }, est=80.0, holds~, follows~, centres~, near_foot?, fn(b, k) {
         made.push(k)
+        if tucks == Some(k) {
+          scroll.tucks(b, fn() { 0.0 })
+        }
         live[k] = b
         b.owns(fn() { live.remove(k) }) |> ignore
         let h = tall(k)
@@ -168,4 +173,33 @@ test "scrolls_window: following its foot, scrolled up to its top, blocks come ov
   k.tree.frame(390.0, 844.0) |> ignore
   let (_, y0_now, _, _) = k.live[0].rect()
   assert_eq((k.scroll.at(k.tree), k.shown(), y0_now), (400.0, [0, 1, 2], y0))
+}
+
+///|
+test "scrolls_window near_foot: asked as it is scrolled to within so many of its heights of its foot while it wants, and again as its keys change there" {
+  let asked = Ref(0)
+  let wants = @signals.signal(true)
+  let c = window_case(near_foot=(1.5, fn() { wants.get() }, fn() { asked.val = asked.val + 1 }))
+  // (ten in 100, those not laid out yet counted 80: far from its foot at its top)
+  assert_eq(asked.val, 0, msg="at its top: far from its foot")
+  c.scroll.put(10000.0)
+  c.tree.frame(390.0, 844.0) |> ignore
+  assert_eq(asked.val, 1, msg="near its foot")
+  c.keys.set(Array::makei(11, fn(i) { i }))
+  c.tree.frame(390.0, 844.0) |> ignore
+  assert_eq(asked.val, 2, msg="more came, still near: asked again")
+  wants.set(false)
+  c.keys.set(Array::makei(12, fn(i) { i }))
+  c.tree.frame(390.0, 844.0) |> ignore
+  assert_eq(asked.val, 2, msg="wanting no more: not asked")
+}
+
+///|
+test "Scroll::tucks: put as the block is first laid out so its foot is at the top, its foot keeping the room to go there with fewer than it is tall" {
+  let c = window_case(tucks=1)
+  c.keys.set([0, 1])
+  c.tree.frame(390.0, 844.0) |> ignore
+  // (two of 40 in 100: the second's foot 80 down, room kept under them to go there)
+  assert_eq(c.scroll.at(c.tree), 80.0)
+  assert_eq(c.scroll.most(), 80.0)
 }
