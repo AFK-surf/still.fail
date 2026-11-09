@@ -114,6 +114,12 @@ pub struct Client {
   /// While the device's performance record is kept (@hostapi.perf_recording): each call's name by its id until it is
   /// answered, so what the core says of it is put to its name (Client::perf_name)
   priv perf_calls : Map[Int, String]
+  /// What the ids let go of last were (a subscription ended, a stream cancelled: `topic chats`, `call screen.view`), the
+  /// last `gone_kept`: what a message come for one of them after is counted as (Client::unheld)
+  priv let_go_of : Map[Int, String]
+  /// The messages come for ids nothing held, let be unread (Client::unheld), by what the id was: how many, their
+  /// length in all (Client::unheld_said)
+  priv unheld_counts : Map[String, (Int, Int)]
 }
 
 ///|
@@ -151,6 +157,8 @@ pub fn Client::new(
     echo_waits: {},
     timing: None,
     perf_calls: {},
+    let_go_of: {},
+    unheld_counts: {},
   }
 }
 
@@ -395,6 +403,7 @@ pub fn Client::refresh_topic(self : Client, topic : String, params? : Map[String
       self.end_sub_wait(old_id)
       s.clear_retirement_watch()
       self.subs.remove(old_id)
+      self.let_go(old_id, "topic " + topic_name(s.topic))
       let id = self.next_id
       self.next_id += 1
       s.id = id
@@ -430,6 +439,7 @@ fn Client::came_from(self : Client, s : Sub) -> Unit {
   match self.subs.get(f) {
     Some(o) if o.ending && !self.subs.values().any(fn(x) { x.from == Some(f) }) => {
       self.subs.remove(f)
+      self.let_go(f, "topic " + topic_name(o.topic))
       (self.send)(({ "id": Json::number(f.to_double()), "unsubscribe": true } : Json).stringify())
     }
     _ => ()
@@ -451,6 +461,7 @@ fn Client::end_subscription(self : Client, s : Sub) -> Unit {
       return
     }
     self.subs.remove(s.id)
+    self.let_go(s.id, "topic " + topic_name(s.topic))
     let m : Map[String, Json] = {
       "id": Json::number(s.id.to_double()),
       "unsubscribe": Json::boolean(true),
@@ -635,6 +646,7 @@ pub fn Client::cancel(self : Client, id : Int) -> Unit {
     self.progress.remove(id)
     self.quiet_calls.remove(id)
     self.calls.remove(id)
+    self.let_go(id, "call " + self.perf_calls.get(id).unwrap_or("?"))
     self.perf_calls.remove(id)
     self.end_call_wait(id)
     let m : Map[String, Json] = { "id": Json::number(id.to_double()), "cancel": Json::boolean(true) }
@@ -712,6 +724,91 @@ pub fn Client::call_said(self : Client, m : Map[String, Json]) -> Bool {
     (Some(v), Some(f)) => self.progress.contains(id) && f(v)
     _ => false
   }
+}
+
+///|
+/// How many of the ids let go of last are kept by what they were (Client::let_go).
+let gone_kept : Int = 64
+
+///|
+/// Id `id` let go of (its subscription ended, its stream cancelled), `what` it was: kept among the last `gone_kept`,
+/// for what the core still says to it to be counted by (Client::unheld).
+fn Client::let_go(self : Client, id : Int, what : String) -> Unit {
+  self.let_go_of[id] = what
+  if self.let_go_of.length() > gone_kept {
+    match self.let_go_of.keys().head() {
+      Some(first) => self.let_go_of.remove(first)
+      None => ()
+    }
+  }
+}
+
+///|
+/// The id of a message that begins `{"id":<digits>,"value":` or `{"id":<digits>,"delta":`, read from its head alone:
+/// as the core writes a topic's value, what changed of it, and a call's value before its answer (client/core-ts
+/// store.ts `to`, JSON.stringify's order). None: not written so (read whole, as any message).
+fn head_id(text : String) -> Int? {
+  let lead = "{\"id\":"
+  guard text.has_prefix(lead) else { return None }
+  let n = text.length()
+  let mut i = lead.length()
+  let mut id = 0
+  let from = i
+  while i < n && i - from < 9 {
+    let ch = text.unsafe_charcode_at(i)
+    if ch < 48 || ch > 57 {
+      break
+    }
+    id = id * 10 + (ch - 48)
+    i += 1
+  }
+  guard i > from else { return None }
+  let rest = text.view(start_offset=i)
+  if rest.has_prefix(",\"value\":") || rest.has_prefix(",\"delta\":") {
+    Some(id)
+  } else {
+    None
+  }
+}
+
+///|
+/// Whether message `text` is a value, or what changed, for an id nothing of this client holds (no subscription, one
+/// let go of and kept for another's first value neither, no call awaiting its answer, no stream): the core said it
+/// before it was told the id was let go of (a topic left as its value was on its way, a stream cancelled), and taking
+/// it changes nothing. Told from its head alone, the message not read: one such was read whole twice and the frame
+/// built again for it, 13 to 23 ms each reading on a phone (2026-11-10). Counted by what its id was
+/// (Client::unheld_said).
+pub fn Client::unheld(self : Client, text : String) -> Bool {
+  guard head_id(text) is Some(id) else { return false }
+  if self.subs.contains(id) ||
+    self.calls.contains(id) ||
+    self.progress.contains(id) ||
+    self.echo_waits.contains(id) ||
+    self.call_waits.contains(id) ||
+    self.sub_waits.contains(id) {
+    return false
+  }
+  let what = self.let_go_of.get(id).unwrap_or("?")
+  let (k, b) = self.unheld_counts.get(what).unwrap_or((0, 0))
+  self.unheld_counts[what] = (k + 1, b + text.length())
+  true
+}
+
+///|
+/// The messages let be unread since this was last asked (Client::unheld), by what their ids were, the most first (of as
+/// many, by name): how many and their length in all. Begun again.
+pub fn Client::unheld_said(self : Client) -> Array[(String, Int, Int)] {
+  let out = self.unheld_counts.to_array().map(fn(e) { (e.0, e.1.0, e.1.1) })
+  out.sort_by(fn(a, b) {
+    let by = b.1.compare(a.1)
+    if by != 0 {
+      by
+    } else {
+      a.0.compare(b.0)
+    }
+  })
+  self.unheld_counts.clear()
+  out
 }
 
 ///|

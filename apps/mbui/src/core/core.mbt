@@ -250,6 +250,10 @@ pub fn fatal() -> String? {
 /// frame sees depends on frames, not on when the core's thread answered. A kept conversation given again (replay.mbt)
 /// comes this way too.
 pub fn receive(text : String, bytes : Bytes?) -> Unit {
+  // (for an id nothing holds: let be, unread)
+  if unheld(text) {
+    return
+  }
   let t0 = if perf_counts() { ffi_now() } else { -1.0 }
   // (how long it took, parsed and taken, by what it was (never what it said), for a hang it is in:
   // @hostapi.work_part)
@@ -258,10 +262,42 @@ pub fn receive(text : String, bytes : Bytes?) -> Unit {
 }
 
 ///|
+/// Whether message `text` is for an id nothing holds (Client::unheld): let be unread, a kept conversation's clock told
+/// it came all the same (receive_hook).
+fn unheld(text : String) -> Bool {
+  guard client.unheld(text) else { return false }
+  match receive_hook.val {
+    Some(f) => f()
+    None => ()
+  }
+  true
+}
+
+///|
+/// The messages let be unread since this was last asked, for ids nothing held, by what the ids were (`topic stations`,
+/// `call screen.view`; `?` one let go of longer ago), the most first: how many, their length in all
+/// (Client::unheld_said).
+pub fn unheld_said() -> Array[(String, Int, Int)] {
+  client.unheld_said()
+}
+
+///|
+/// The message receive_said read and left for the frame, with what it read of it: `receive`, handed the same text as
+/// the frame is built, reads it no second time.
+// kept across runs: taken by the `receive` it was left for, another's put in its place
+let parsed_left : Ref[(String, Json)?] = Ref(None)
+
+///|
 /// Message `text` parsed and taken (receive's), what it was said in `name`; its counts kept where `t0` (the record's
 /// clock as it came) is not below 0.
 fn receive_taken(text : String, bytes : Bytes?, t0 : Double, name : Ref[String]) -> Unit {
-  let msg = @json.parse(text) catch { _ => return }
+  let msg = match parsed_left.val {
+    Some((t, m)) if physical_equal(t, text) => {
+      parsed_left.val = None
+      m
+    }
+    _ => @json.parse(text) catch { _ => return }
+  }
   let what = client.perf_name(msg)
   name.val = what
   take(msg, bytes)
@@ -359,9 +395,13 @@ pub fn perf_said(span : Double) -> String {
 /// answer nobody reads), before the frame decides what it does: what read the topic is built again, nothing else
 /// (@ui.on_message_said, "core"). Whether it was; else it is left for `receive`, as the frame is built.
 pub fn receive_said(text : String, bytes : Bytes?) -> Bool {
+  // (for an id nothing holds: taken as it comes, unread, nothing built for it)
+  if unheld(text) {
+    return true
+  }
   let t0 = if perf_counts() { ffi_now() } else { -1.0 }
   // (how long it took, parsed and taken, by what it was, for a hang it is in: @hostapi.work_part; one left for
-  // `receive` is said parsed, as its parse is done again there)
+  // `receive` is said parsed: taken there, read here)
   let name = Ref("parsed")
   @hostapi.work_part(fn() { "core " + name.val }, fn() {
     let msg = @json.parse(text) catch { _ => return false }
@@ -377,7 +417,11 @@ pub fn receive_said(text : String, bytes : Bytes?) -> Bool {
         }
         true
       }
-      _ => false
+      _ => {
+        // (left for `receive`, which reads it no second time)
+        parsed_left.val = Some((text, msg))
+        false
+      }
     }
   })
 }

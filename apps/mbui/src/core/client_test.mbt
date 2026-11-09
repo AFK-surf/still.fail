@@ -577,3 +577,61 @@ test "a call still answering keeps its name as the record forgets the others: it
   assert_eq(c.perf_name({ "id": Json::number(id.to_double()), "value": { "chunk": true } }), "progress station.preview")
   assert_eq(c.perf_name({ "id": Json::number(id.to_double()), "ok": Json::null() }), "answer station.preview")
 }
+
+///|
+test "a value or a delta for an id nothing holds is told from its head, unread, and counted by what the id was" {
+  let (c, sent) = recorder()
+  let stations = c.subscribe("stations")
+  let view = c.stream("screen.view", on_value=fn(_, _) {  })
+  let other = c.call("prefs.set")
+  // held: read as any message (a subscription's, a stream's, a call's awaiting its answer)
+  assert_false(c.unheld("{\"id\":\{stations.id},\"value\":{\"a\":1}}"))
+  assert_false(c.unheld("{\"id\":\{view},\"value\":{\"frame\":{}}}"))
+  assert_false(c.unheld("{\"id\":\{other},\"value\":1}"))
+  // let go of: what the core said before it was told so is not read (not JSON past its head here: never parsed)
+  c.unsubscribe(stations)
+  assert_eq(sent[sent.length() - 1].stringify(), ({ "id": 1, "unsubscribe": true } : Json).stringify())
+  c.cancel(view)
+  assert_true(c.unheld("{\"id\":\{stations.id},\"value\":{never read"))
+  assert_true(c.unheld("{\"id\":\{stations.id},\"delta\":[never read"))
+  assert_true(c.unheld("{\"id\":\{view},\"value\":{never read"))
+  // an id never let go of here: `?`
+  assert_true(c.unheld("{\"id\":77,\"value\":1}"))
+  // not written as a value or a delta at its head: read whole, as ever (an answer, a fatal, what is no message)
+  assert_false(c.unheld("{\"id\":77,\"ok\":1}"))
+  assert_false(c.unheld("{\"id\":77,\"error\":{}}"))
+  assert_false(c.unheld("{\"id\":77}"))
+  assert_false(c.unheld("{\"fatal\":\"boom\"}"))
+  assert_false(c.unheld("{\"value\":1,\"id\":77}"))
+  assert_false(c.unheld("{\"id\":\"77\",\"value\":1}"))
+  assert_false(c.unheld("{\"id\":12345678901,\"value\":1}"))
+  assert_false(c.unheld("not json"))
+  assert_false(c.unheld(""))
+  assert_eq(c.unheld_said(), [("topic stations", 2, 54), ("?", 1, 19), ("call screen.view", 1, 27)])
+  // (begun again)
+  assert_eq(c.unheld_said(), [])
+}
+
+///|
+test "a list's page asked from the one shown: that one is held till the page comes, then what is said to it is not" {
+  let (c, _) = recorder()
+  let first = c.subscribe("chatRows", params={ "station": "ws/a", "limit": 2 })
+  assert_true(c.receive("{\"id\":1,\"value\":{\"items\":[]}}"))
+  let _more = c.subscribe("chatRows", params={ "station": "ws/a", "limit": 4 })
+  c.unsubscribe(first)
+  // (let go of, kept for the page's first value: still read)
+  assert_false(c.unheld("{\"id\":1,\"delta\":[]}"))
+  assert_true(c.receive("{\"id\":2,\"delta\":[],\"from\":1}"))
+  assert_true(c.unheld("{\"id\":1,\"delta\":[]}"))
+  assert_eq(c.unheld_said(), [("topic chatRows", 1, 19)])
+}
+
+///|
+test "what the core says to an id nothing holds is taken as it comes, and as a frame is built, unread" {
+  @core.unheld_said() |> ignore
+  // (as it comes: taken, nothing left for the frame to build for; not JSON past its head: never parsed)
+  assert_true(@core.receive_said("{\"id\":424242,\"value\":{never read", None))
+  // (after one left for the frame, handed straight to `receive`)
+  @core.receive("{\"id\":424242,\"delta\":[never read", None)
+  assert_eq(@core.unheld_said(), [("?", 2, 64)])
+}
