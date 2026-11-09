@@ -791,7 +791,7 @@ pub fn icon_action_opens_node(@view.View, String, () -> String, (@view.View) -> 
 
 pub fn icon_button(@ui.Ctx, String, key? : String, size? : Double, icon_size? : Double, on? : Bool, lit? : Bool, round? : Bool, corner? : Double, linked? : @paint.CornerOf, ink? : Int64, quiet? : Int64, disabled? : Bool, label? : String, shortcut? : String, on_press? : () -> Unit) -> Bool
 
-pub fn icon_button_node(@view.View, String, () -> String, () -> Unit, tips? : TipLayer, size? : Double, icon_size? : Double, icon_now? : () -> String) -> @view.View
+pub fn icon_button_node(@view.View, String, () -> String, () -> Unit, tips? : TipLayer, size? : Double, icon_size? : Double, icon_now? : () -> String, disabled? : () -> Bool) -> @view.View
 pub fn icon_button_opens_node(@view.View, String, () -> String, (@view.View) -> Unit) -> @view.View
 
 pub let icon_button_side : Double
@@ -918,7 +918,7 @@ pub fn link_menu(String, from~ : Beside, () -> Unit, () -> Unit) -> Unit
 
 pub fn link_row(@ui.Ctx, String, String, value? : String, value_lit? : Bool, value_bad? : Bool, value_dot? : Bool, strong? : Bool, danger? : Bool, out? : Bool, chevron? : Bool, chevron_room? : Bool, folds? : Bool, note? : String, lacks? : Bool, trouble? : String, lead? : () -> Unit, tail? : () -> Unit, below? : () -> Unit, below_open? : Double, goes? : Bool, acts? : Bool, adds? : Bool, title_after? : () -> Unit, control? : () -> Unit, note_cut? : Bool, face? : Bool, title_style? : @ui.TextStyle, title_cut? : Bool, value_cut? : Bool, tile? : Bool, on_press? : () -> Unit) -> Bool
 
-pub fn link_row_node(@view.View, () -> String, () -> Unit, value? : () -> String, value_bad? : () -> Bool, value_dot? : () -> Bool, note? : () -> String, wide_note? : () -> String, trouble? : () -> String, strong? : Bool, lead? : RowLead, goes? : Bool, chevron? : Bool, out? : Bool, acts? : Bool, below? : (@view.View) -> Unit, below_open? : () -> Double, note_cut? : Bool, title_after? : (@view.View) -> Unit, title_after_shown? : () -> Bool, folds? : () -> Bool) -> Unit
+pub fn link_row_node(@view.View, () -> String, () -> Unit, value? : () -> String, value_bad? : () -> Bool, value_dot? : () -> Bool, value_lit? : Bool, note? : () -> String, wide_note? : () -> String, trouble? : () -> String, strong? : Bool, danger? : Bool, lacks? : Bool, lead? : RowLead, face? : Bool, goes? : Bool, chevron? : Bool, out? : Bool, acts? : Bool, below? : (@view.View) -> Unit, below_open? : () -> Double, note_cut? : Bool, title_after? : (@view.View) -> Unit, title_after_shown? : () -> Bool, folds? : () -> Bool, tail? : (@view.View) -> Unit, tail_shown? : () -> Bool, control? : (@view.View) -> Unit, adds? : Bool, wide_title? : () -> @ui.TextStyle, title_cut? : Bool, value_cut? : Bool, chevron_room? : Bool) -> Unit
 
 pub fn link_to_of(@json.Json, text? : String, bare? : Bool) -> LinkTo
 
@@ -1344,7 +1344,7 @@ pub let page_list_opened : @ref.Ref[(@ui.Ctx, String, Int32) -> Unit]
 
 pub let page_narrow_most : Double
 
-pub fn page_node(@view.View, () -> String, () -> Array[String], (@view.View, String) -> Unit, on_back~ : () -> Unit, frame? : () -> PageFrame, lead? : () -> String, about? : () -> String, actions? : (@view.View) -> Unit, said? : (PageSaid) -> Unit, width? : () -> Double, scroll? : @view.Scroll, tips? : TipLayer) -> Unit
+pub fn page_node(@view.View, () -> String, () -> Array[String], (@view.View, String) -> Unit, on_back~ : () -> Unit, frame? : () -> PageFrame, lead? : () -> String, about? : () -> String, actions? : (@view.View) -> Unit, said? : (PageSaid) -> Unit, width? : () -> Double, scroll? : @view.Scroll, tips? : TipLayer, head? : (@view.View) -> Unit) -> Unit
 
 pub fn page_none_node(@view.View, () -> String) -> Unit
 
@@ -1533,6 +1533,8 @@ pub fn pick_reach() -> @ui.Style
 pub let pick_search_from : Int32
 
 pub let pick_sub_line : @ui.Leading
+
+pub fn pick_tiles_node(@view.View, () -> String, () -> Array[(String, String)], (@view.View, String) -> Unit, (String) -> Unit) -> Unit
 
 pub let picture_of : @ref.Ref[(String, Int32) -> String]
 
@@ -1816,7 +1818,7 @@ pub let secondary : @ui.TextStyle
 
 pub fn section(@ui.Ctx, String, () -> Unit, heads? : Bool, note? : String, actions? : () -> Unit, title_after? : () -> Unit) -> Unit
 
-pub fn section_node(@view.View, () -> String, (@view.View) -> Unit, heads? : Bool, note? : () -> String, about? : () -> String, actions? : (() -> Bool, (@view.View) -> Unit)) -> Unit
+pub fn section_node(@view.View, () -> String, (@view.View) -> Unit, heads? : Bool, note? : () -> String, about? : () -> String, actions? : (() -> Bool, (@view.View) -> Unit), ends? : (@view.View) -> Unit, title_after? : (@view.View) -> Unit) -> Unit
 
 pub fn section_none_node(@view.View, () -> String) -> Unit
 
@@ -2088,7 +2090,7 @@ pub fn switch_node(@view.View, () -> Bool, (Bool) -> Unit, () -> String) -> Unit
 
 pub fn switch_row(@ui.Ctx, String, String, Bool, note? : String, disabled? : Bool, busy? : Bool, lead? : (@ui.Ctx) -> Unit, on_change? : (Bool) -> Unit) -> Bool
 
-pub fn switch_row_node(@view.View, () -> String, () -> Bool, (Bool) -> Unit, note? : () -> String) -> Unit
+pub fn switch_row_node(@view.View, () -> String, () -> Bool, (Bool) -> Unit, note? : () -> String, disabled? : () -> Bool, lead? : (@view.View) -> Unit, in_words? : Bool, busy? : () -> Bool) -> Unit
 
 pub let switch_small_h : Double
 
@@ -2393,6 +2395,8 @@ pub fn way_in_title_node(@view.View, () -> String) -> @view.View
 pub fn way_line(@ui.Ctx, String, Array[String], WayLook, (Int32) -> Unit, last_link? : Bool) -> Unit
 
 pub let way_more : String
+
+pub fn ways_node(@view.View, () -> Array[(String, String, String)], (String) -> Unit, mark? : (@view.View, String) -> Unit) -> Unit
 
 pub let white : Int64
 
@@ -3077,7 +3081,9 @@ pub(all) struct Round {
 pub(all) enum RowLead {
   NoLead
   LeadIcon(String)
+  LeadLine((@view.View) -> Unit)
   LeadMade((@view.View) -> Unit)
+  LeadTile((@view.View) -> Unit)
 }
 
 pub(all) struct Rows {

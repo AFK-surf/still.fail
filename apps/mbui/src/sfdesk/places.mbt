@@ -95,19 +95,46 @@ fn place_split(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit
     match place_route(src, w, place) {
       // a station's: one page in every frame (src/sfpages station_page.mbt)
       Some(Station(a)) => @sfpages.station_page(c, core, @settings.here_of(core, w.id, w.name), { back: None, top: 0.0, foot: 0.0, named: false }, a)
-      // a profile's: one page in every frame (src/sfpages accounts.mbt)
-      Some(Profile(a, id)) => @sfpages.profile_page(c, core, @settings.here_of(core, w.id, w.name), { back: None, top: 0.0, foot: 0.0, named: false }, a, id)
       Some(r) => @settings.page(c, core, @settings.here_of(core, w.id, w.name), r, root=true)
       // none to pick yet: the first to add (the web's StationsFirst, RuntimeSettings' first)
-      None =>
-        if place == "profiles" {
-          profiles_first(c, core, @settings.here_of(core, w.id, w.name), stations_listed(src, w))
-        } else {
-          stations_first(c, core, @settings.here_of(core, w.id, w.name), src, w)
-        }
+      // (the profiles' place made once as nodes: profiles_place_node)
+      None => stations_first(c, core, @settings.here_of(core, w.id, w.name), src, w)
     }
   })
   |> ignore
+}
+
+///|
+/// The profiles' place in node `v` (pane_made's, tape_made's): the profile picked in its list (place_route's), made once
+/// as its page is (another, another page), at the stack's root; none to pick yet, the first to add.
+fn profiles_place_node(
+  v : @view.View,
+  src : Source,
+  core : @settings.Core,
+  here : () -> @settings.Here,
+  stint : () -> Int,
+  frame : () -> @sf.PageFrame,
+  width : () -> Double,
+  said? : (@sf.PageSaid) -> Unit,
+  tips? : @sf.TipLayer,
+) -> Unit {
+  let picked = fn() {
+    match @sfbase.workspace_in_view(src).0 {
+      Some(w) =>
+        match place_route(src, w, "profiles") {
+          Some(Profile(a, id)) => Some((a, id))
+          _ => None
+        }
+      None => None
+    }
+  }
+  v.pick(picked, fn(p, at) {
+    p.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+    match at {
+      Some((a, id)) => @sfpages.profile_node(p, core, here, a, id, on_back=core.pop, frame~, said?, width~, tips?, stint~)
+      None => @sfpages.profiles_first_node(p, core, here, on_back=core.pop, frame~, said?, width~, tips?)
+    }
+  })
 }
 
 ///|
@@ -377,81 +404,7 @@ fn stations_first(c : @ui.Ctx, core : Core, here : Here, src : Source, w : Works
 }
 
 ///|
-/// Not one profile yet (RuntimeSettings' first): what a profile is, then each station in a row, where one is added (an
-/// online one's 添加 Profile; an offline one's, later), with its machine's own logins not used yet under it.
-fn profiles_first(c : @ui.Ctx, core : Core, here : Here, stations : Array[Json]) -> Unit {
-  let t = @sf.theme()
-  desk_page(c, core, "profiles-first", "Profile", [
-    fn() {
-      @sf.first_one(
-        c,
-        @sf.t("web-pages.settings.profiles.addFirst"),
-        lead=@sf.t("web-pages.settings.profiles.lead", args=[("name", "still.fail")]),
-        art=fn() { @sf.drawable(c, if t.dark { "illus_no_profile_dark" } else { "illus_no_profile" }, pl_art_w) |> ignore },
-        fn() {
-          c.box(style=pl_first_stations, fn() {
-            for st in stations {
-              let sv = Some(st)
-              let address = text(sv, "station")
-              let online = flag(sv, "online")
-              c.box(style=pl_first_station, fn() {
-                c.box(style=pl_first_row, fn() {
-                  @sf.status_dot(c, if online { "online" } else { "offline" })
-                  c.text(text(sv, "name"), style=pl_first_name) |> ignore
-                  if online {
-                    @sf.button(
-                      c,
-                      @sf.t("web-pages.settings.profiles.add"),
-                      key="profiles-first/add/" + address,
-                      tone=if stations.length() == 1 { Primary } else { Plain },
-                      icon="plus",
-                      on_press=fn() { (core.push)(NewProfile(address)) },
-                    )
-                    |> ignore
-                  } else {
-                    c.text(@sf.t("web-pages.settings.profiles.offlineAdd"), style=desk_muted_line) |> ignore
-                  }
-                })
-                |> ignore
-                if online {
-                  machine_offers(c, core, sv, fn(rt) {
-                    // the machine's login signed in again as its vendor's plan, on the add page
-                    add_profile_start[address] = [("provider", str(if rt == "claude" { "anthropic" } else { "openai" })), ("method", str("plan"))]
-                    (core.push)(NewProfile(address))
-                  })
-                }
-              })
-              |> ignore
-            }
-          })
-          |> ignore
-        },
-      )
-    },
-  ])
-  ignore(here)
-}
-
-///|
 let pl_art_w : Double = 240.0
-
-///|
-/// Each station a row (firstStations: 28 apart, at the start; firstStationRow: 10 apart; its name semibold, taking the
-/// room; its machine's logins 14 under it).
-// kept across runs: a value (no field of it changes)
-let pl_first_stations : @ui.Style = @ui.css("w=Full gap=S7 align=AStretch")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pl_first_station : @ui.Style = @ui.css("w=Full gap=S3_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pl_first_row : @ui.Style = @ui.css("row w=Full gap=S2_5 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let pl_first_name : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, weight=Semibold, color=Fg, wrap=false, w=@sf.grow)
 
 ///|
 // kept across runs: a value (no field of it changes)
