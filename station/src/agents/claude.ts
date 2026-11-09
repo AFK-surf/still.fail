@@ -16,7 +16,7 @@
 //   say owned_by_subagent. They all end with the process.
 import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { REPO_RULES_COMMAND } from "./repo-rules.ts";
 import { log } from "../ops/log.ts";
 import { claudeProject } from "../read/transcript.ts";
 import { LiveFromClaude, chars, type ClaudeLiveState } from "./live.ts";
@@ -174,18 +174,12 @@ const RENEW_ATTEMPTS = 2;
 ///   never has (the desktop app's browser and computer use, connectors, a terminal, permission prompts, a scheduler of
 ///   its own, settings in a profile's home it leaves when it changes account); "name-only" for those seldom needed.
 const DISALLOWED = ["ScheduleWakeup", "CronCreate", "CronDelete", "CronList", "RemoteTrigger"];
-/// The hook that tells a session a repository's rules (its AGENTS.md files) as its tools first touch the repository:
-/// Claude Code reads them itself only from where it was started up, or below when its Read tool opens a file there,
-/// and a session starts in its workspace, its clones below it, and mostly reads them with the shell.
-export const REPO_RULES_HOOK = fileURLToPath(new URL("./repo-rules-hook.mjs", import.meta.url));
-const quoted = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 const SETTINGS = {
   disableClaudeAiConnectors: true,
-  // (failing quietly where the station's files are not, in a sandbox elsewhere)
+  // A repository's rules told as its tools first touch it (./repo-rules.ts), and again after a compaction.
   hooks: {
-    PostToolUse: [{ matcher: "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob", hooks: [{ type: "command", command: `${quoted(process.execPath)} ${quoted(REPO_RULES_HOOK)} 2>/dev/null || true` }] }],
-    // (after a compaction: told again as tools touch them)
-    SessionStart: [{ matcher: "compact", hooks: [{ type: "command", command: `${quoted(process.execPath)} ${quoted(REPO_RULES_HOOK)} 2>/dev/null || true` }] }],
+    PostToolUse: [{ matcher: "Bash|Read|Edit|Write|MultiEdit|NotebookEdit|Grep|Glob", hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
+    SessionStart: [{ matcher: "compact", hooks: [{ type: "command", command: REPO_RULES_COMMAND }] }],
   },
   skillOverrides: {
     ...Object.fromEntries(["loop", "schedule", "keybindings-help", "fewer-permission-prompts", "plugin-authoring", "update-config"].map((name) => [name, "off"])),

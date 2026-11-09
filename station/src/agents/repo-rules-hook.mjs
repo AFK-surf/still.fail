@@ -1,11 +1,12 @@
-// A Claude Code PostToolUse hook: the rules a repository keeps for agents (AGENTS.md, else CLAUDE.md, in its root and
-// in each directory down to the one a tool touched), told to the agent the first time it touches that directory.
-// Claude Code reads them itself only from its working directory up and, below it, when its Read tool opens a file
-// there; a station session works in its workspace, its clones and worktrees below it, and mostly through the shell,
-// so it read a repository's rules only now and then (25 of 55 subagents on mbui, 2026-11-08).
-// As a SessionStart hook after a compaction it forgets what the session was told: the summary keeps little of it, so
-// the next tool to touch a directory tells its rules again. A rules file a tool itself names (the agent editing it)
-// is not told again for that change: the agent has just written it.
+// A PostToolUse hook of Claude Code's and Codex's: the rules a repository keeps for agents (AGENTS.md, else CLAUDE.md,
+// in its root and in each directory down to the one a tool touched), told to the agent the first time it touches that
+// directory. Claude Code reads them itself only from its working directory up and, below it, when its Read tool opens
+// a file there (Codex never below it); a station session works in its workspace, its clones and worktrees below it,
+// and mostly through the shell, so it read a repository's rules only now and then (25 of 55 subagents on mbui,
+// 2026-11-08).
+// After a compaction (Claude Code's SessionStart of "compact", Codex's PostCompact) it forgets what the session was
+// told: the summary keeps little of it, so the next tool to touch a directory tells its rules again. A rules file a
+// tool itself names (the agent editing it) is not told again for that change: the agent has just written it.
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
@@ -72,8 +73,8 @@ function rulesFor(dir) {
 const who = `${input.session_id ?? "none"}-${input.agent_id ?? "main"}`.replace(/[^\w.-]/g, "_");
 const stateDir = join(tmpdir(), "stillfail-repo-rules");
 const stateFile = join(stateDir, `${who}.json`);
-if (input.hook_event_name === "SessionStart") {
-  if (input.source === "compact") rmSync(stateFile, { force: true });
+if (input.hook_event_name === "SessionStart" || input.hook_event_name === "PostCompact") {
+  if (input.hook_event_name === "PostCompact" || input.source === "compact") rmSync(stateFile, { force: true });
   process.exit(0);
 }
 let seen = {};
