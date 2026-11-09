@@ -36,6 +36,8 @@ pub(all) struct NewFix {
   liked : Array[String]
   /// MBUI_FIXTURE=newchat-providers…: as crowded, with keys of many providers besides (fix_providers)
   mut providers : Bool
+  /// MBUI_FIXTURE=settings-connect-borrow: the model drafted another station's, borrowed first (the pick's `borrow`)
+  mut borrow : Bool
 }
 
 ///|
@@ -58,6 +60,7 @@ pub let new_fix : NewFix = {
   presets: [fix_preset_design(), fix_preset("p-tc", "web-app + backend", ["web-app", "backend"], "")],
   liked: [],
   providers: false,
+  borrow: false,
 }
 
 ///|
@@ -422,6 +425,18 @@ pub fn fix_pick() -> Json {
       Json::array(makers.map(fn(m) { { "id": Json::string(m.0), "title": Json::string(m.1), "count": Json::number(m.2.to_double()) } }))
     },
     "runtimeFixed": false,
+    // (the model drafted another station's: borrowed first, asked, from the panel's foot)
+    "borrow": if n.borrow {
+      {
+        "title": "借用 Maple 的 Fable 5.1？",
+        "lines": ["Fable 5.1 由 Maple 上的 Claude 订阅运行。", "借用后，这个连接的会话也用它的额度。"],
+        "action": "借用",
+        "allowed": true,
+        "note": "Fable 5.1 在 Maple 上，借用后这里也能用。",
+      }
+    } else {
+      Json::null()
+    },
     "value": picked(n.model, n.runtime, n.effort, ""),
     "valueOption": fix_model(n.model),
     "draft": picked(n.d_model, n.d_runtime, n.d_effort, n.d_profile),

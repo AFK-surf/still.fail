@@ -2107,6 +2107,10 @@ pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral, icon? : Str
 let pill_icon : Double = 14.0
 
 ///|
+/// What is between a pill's icon and its words (pill_box's gap=S1).
+let pill_icon_gap : Double = 4.0
+
+///|
 /// Steps to take in order (controls.css.ts steps: an ordered list, its numbers in the muted ink in 20 at its start,
 /// 8 apart, the ui's 13): each what `steps` draws for it (its words, a button after them), their parts 8 apart in a
 /// line, going on in the next where they do not fit.

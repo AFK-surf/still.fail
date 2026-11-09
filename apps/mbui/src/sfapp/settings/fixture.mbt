@@ -559,7 +559,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-me-reading" => "me"
     "settings-usage-details-pending" => "usage"
     "settings-profiles-pick" | "settings-profiles-monthly" => "profiles"
-    "settings-connect" => "connect:ws1/st1#k1"
+    "settings-connect" | "settings-connect-borrow" => "connect:ws1/st1#k1"
     _ =>
       if m.has_prefix("settings-") {
         m.unsafe_substring(start=9, end=m.length())

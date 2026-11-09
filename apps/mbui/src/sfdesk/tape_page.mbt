@@ -429,6 +429,15 @@ fn tape_made(
         context_node(p)
         @sfpages.vault_items_node(p, core, here, on_back=core.pop, frame=fn() { tape_made_frame }, said=told, width~, tips~)
       })
+    // (by its station and id: another's another page; 添加连接 in the bar)
+    Setting(Connects(only)) if pane_makes.val =>
+      made("connects/" + only, fn(p, core, here, stint, told, acts) {
+        @sfpages.connects_node(p, src, core, here, only, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told, width~, tips~, bar_actions=acts)
+      })
+    Setting(Connect(station, id)) if pane_makes.val =>
+      made("connect/" + station + "/" + id, fn(p, core, here, stint, told, _acts) {
+        @sfpages.connect_node(p, src, core, here, station, id, on_back=core.pop, frame=fn() { tape_made_frame }, stint~, said=told, width~, tips~)
+      })
     Setting(AutoCompletion) if pane_makes.val =>
       made("auto-completion", fn(p, core, here, _stint, told, acts) {
         context_node(p)

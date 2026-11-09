@@ -43,6 +43,9 @@ priv struct TriplePanel {
   /// the level the model picked was last brought into view in (its first, all of them, a kind's; "" none yet): once
   /// as each is come to, not each frame, so what the person scrolled stays where they left it
   mut shown : String
+  /// how its borrowing is asked, where what opened it asks it itself (a control made once: model_triple_node), given
+  /// what the pick says of it; None, its control's build's dialog (borrow_dialog)
+  asks : ((Json?) -> Unit)?
 }
 
 ///|
@@ -131,6 +134,8 @@ pub fn open_triple_panel(
   saved? : String = "",
   side? : @ui.Side = Bottom,
   page? : Json? = None,
+  gone? : () -> Unit = fn() {  },
+  asks? : (Json?) -> Unit,
 ) -> Unit {
   let me = station + "\u{1}" + of
   if triple.open == me {
@@ -138,7 +143,7 @@ pub fn open_triple_panel(
     return
   }
   triple.open = me
-  let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", kind: "", all: false, pick: page, sheet: false, shown: "" }
+  let contents : TriplePanel = { serial: 0, field: @ui.Field::new(), query: "", kind: "", all: false, pick: page, sheet: false, shown: "", asks }
   pick_draft(src, station, of, { "open": Json::boolean(true) })
   @sf.panel(
     @sf.t("android-chat.new.model"),
@@ -151,7 +156,10 @@ pub fn open_triple_panel(
     // (beside what opened it, its title over its models' column, its search beside it, how hard it thinks titled over
     // its own: triple_body's; 2026-11-02 用户「搜索在左边区域，思考深度和模型在同一个层级」)
     heads_itself=true,
-    gone=fn() { triple.open = "" },
+    gone=fn() {
+      triple.open = ""
+      gone()
+    },
     focus=false,
     // (the models scroll by themselves, what goes with the one picked beside them in view)
     lists=true,
@@ -315,6 +323,141 @@ pub fn model_triple(
   )
   |> ignore
   borrow_dialog(c, src, station, of, v)
+}
+
+///|
+/// The control of the pick `of` on `station` (model_triple's, as nodes, made once) in `parent`, its words as the core's
+/// pick says them now: the model's mark and name, then (each left out where the line has not the room, what matters
+/// least first) its runtime, how hard it thinks, how fast, who runs it (its mark, its name, its allowance's chips); a
+/// ring in place of its chevron while what was picked is on its way; on its hover's ground while the hand is on it and
+/// while its panel is open. Pressed, its panel opens beside it (open_triple_panel); borrowing a model from there is
+/// asked in the presenters' confirm. `saved`: as model_triple's. Nothing while the pick is not read.
+fn model_triple_node(parent : @view.View, src : Source, station : String, of : String, saved? : String = "") -> Unit {
+  let me = station + "\u{1}" + of
+  let dkey = "pick.save/" + station + "/" + of
+  let v = fn() { src.topic("pick", pick_params(station, of)).get().value }
+  let value = fn() { field(v(), "value") }
+  let vo = fn() { field(v(), "valueOption") }
+  let account = fn() { field(v(), "account") }
+  let runtime = fn() { text(value(), "runtime") }
+  let opened = @signals.signal(false, same=fn(a, b) { a == b })
+  // borrowing a model of another station's, asked first (borrow_dialog's, put up by the presenters)
+  let asks = fn(borrow : Json?) { borrow_ask(src, station, of, borrow) }
+  parent.show(fn() { v() is Some(Object(_)) }, fn(o) {
+    o.box(fn(b) {
+      @sf.style_node(b, fn() { triple_style }, in_row=true)
+      // (no wider than its row leaves it: what it says given way within it, its parts left out, its name cut last)
+      b
+      .shrink(Is(1.0))
+      .min_width(Is(Some(0.0)))
+      .ground(By(fn() { if @sf.lit_node(b) || opened.get() { @ui.tree_theme().color(Hover) } else { 0L } }))
+      |> ignore
+      let can = fn() { items(v(), "options").length() > 0 && !doing(dkey) }
+      @sf.presses_node(b, fn() {
+        guard @signals.untracked(can) && triple.open != me else { return }
+        triple.asked = ""
+        let (x, y, w, h) = b.placed_window_now()
+        opened.set(true)
+        open_triple_panel(src, station, of, At(x, y, w, h), saved~, gone=fn() { opened.set(false) }, asks~)
+      }, on=can)
+      // (each part what its row holds itself, so the row leaves it out where it has not the room: View::drops)
+      let part = fn(r : @view.View, drop : Int, shown : () -> Bool, body : (@view.View) -> Unit) {
+        r.show(shown, fn(x) {
+          @sf.style_node(x, fn() { triple_part }, in_row=true)
+          x.drops(Is(drop)) |> ignore
+          body(x)
+        })
+      }
+      let dot = fn(x : @view.View) { @sf.words_node(x, fn() { "·" }, fn() { triple_muted }) |> ignore }
+      b.pick(fn() { items(v(), "options").length() == 0 }, fn(r, none) {
+        // (its parts in a row, as the capsule's: what has not the room left out of it, View::drops)
+        r
+        .row(Is(true))
+        .gap(Is(triple_gap))
+        .lines_up(Is(Some(Middle)))
+        .fits(Is(true))
+        .shrink(Is(1.0))
+        .min_width(Is(Some(0.0)))
+        |> ignore
+        if none {
+          @sf.words_node(r, fn() { @sf.t("web-main.model.none") }, fn() { triple_muted }) |> ignore
+          return
+        }
+        r.pick(fn() { (text(field(vo(), "maker"), "id"), runtime()) }, fn(m, k) { @sf.maker_mark_node(m, k.0, k.1, 14.0) |> ignore })
+        // (within the room it has, the most it can say: model_triple's; the model never, its name cut short last)
+        @sf.words_node(r, fn() {
+          let model = text(value(), "model")
+          if model == "" {
+            @sf.t("web-main.model.pick")
+          } else {
+            match text(vo(), "name") {
+              "" => model
+              n => n
+            }
+          }
+        }, fn() { triple_name })
+        .shrink(Is(1.0))
+        .min_width(Is(Some(0.0)))
+        .cuts(Is(true))
+        .allow_ellipsis(Is(true))
+        // (what may be left out leaving for it first, its name cut short only then: View::fit_whole)
+        .fit_whole(Is(true))
+        |> ignore
+        part(r, triple_drop_runtime, fn() { !flag(v(), "runtimeFixed") && items(vo(), "runtimes").length() > 1 }, fn(x) {
+          dot(x)
+          @sf.words_node(x, fn() { @settings.runtime_label(runtime()) }, fn() { triple_words }) |> ignore
+        })
+        part(r, triple_drop_effort, fn() { text(value(), "effort") != "" || items(v(), "efforts").length() > 0 }, fn(x) {
+          dot(x)
+          @sf.words_node(x, fn() {
+            let effort = text(value(), "effort")
+            if effort == "" {
+              @sf.t("web-main.model.defaultEffort")
+            } else {
+              effort_text(effort)
+            }
+          }, fn() { triple_words })
+          |> ignore
+        })
+        part(r, triple_drop_effort, fn() { text(v(), "fastText") != "" }, fn(x) {
+          dot(x)
+          @sf.words_node(x, fn() { text(v(), "fastText") }, fn() { triple_words }) |> ignore
+        })
+        // (who runs it: its mark where it has one, then its name, then its allowance's chips: model_triple's)
+        let profile = fn() { field(account(), "profile") }
+        let marked = fn() { profile() is Some(Object(_)) }
+        part(r, triple_drop_account, fn() { account() is Some(Object(_)) && marked() }, fn(x) {
+          dot(x)
+          x.pick(fn() { (text(profile(), "mark"), runtime()) }, fn(m, k) { @sf.maker_mark_node(m, k.0, k.1, 14.0) |> ignore })
+        })
+        r.show(fn() { account() is Some(Object(_)) }, fn(x) {
+          @sf.style_node(x, fn() { if marked() { triple_alone } else { triple_part } }, in_row=true)
+          x.drops(Is(triple_drop_name)) |> ignore
+          x.show(fn() { !marked() }, dot)
+          @sf.words_node(x, fn() { text(account(), "text") }, fn() {
+            match text(account(), "level") {
+              "amber" => triple_amber
+              "red" => triple_red
+              _ => triple_words
+            }
+          })
+          |> ignore
+        })
+        part(r, triple_drop_account, fn() { account() is Some(Object(_)) && marked() }, fn(x) {
+          @sf.quota_chips_node(x, fn() { field(profile(), "quota") }, small=true)
+        })
+      })
+      // what was picked on its way: a ring in place of the chevron
+      b.pick(fn() { doing(dkey) }, fn(e, saving) {
+        if saving {
+          @sf.spinner_node(e, size=12.0) |> ignore
+        } else {
+          @sf.icon_node(e, "chevron-down", 12.0, By(fn() { @sf.theme().p.muted })) |> ignore
+        }
+      })
+    })
+    |> ignore
+  })
 }
 
 ///|
@@ -979,8 +1122,12 @@ fn triple_foot(c : @ui.Ctx, src : Source, station : String, of : String, content
   if borrow is Some(Object(_)) {
     @sf.button(c, text(borrow, "action"), key="triple/borrow", tone=Primary, disabled=!flag(borrow, "allowed"), on_press=fn() {
       triple.open = ""
-      triple.borrow_asking = station + "\u{1}" + of
+      // (the panel shut first: shutting it shuts what is over it, the ask put up after it is not)
       close()
+      match contents.asks {
+        Some(ask) => ask(borrow)
+        None => triple.borrow_asking = station + "\u{1}" + of
+      }
     }) |> ignore
   }
 }
@@ -1381,6 +1528,53 @@ fn borrow_dialog(c : @ui.Ctx, src : Source, station : String, of : String, v : J
 }
 
 ///|
+/// Borrowing a model of another station's asked first (borrow_dialog's), put up by the presenters as its panel's 借用 is
+/// pressed (open_triple_panel's `asks`), what it holds nodes: its title, its lines, 取消 and its action at its foot (a
+/// ring before them while it borrows), closed once it has borrowed it.
+fn borrow_ask(src : Source, station : String, of : String, borrow : Json?) -> Unit {
+  let dkey = "pick.borrow/" + station + "/" + of
+  let lines = items(borrow, "lines").map(fn(l) {
+    match l {
+      String(s) => s
+      _ => ""
+    }
+  })
+  let action = text(borrow, "action")
+  let allowed = flag(borrow, "allowed")
+  @sf.panel_nodes(
+    text(borrow, "title"),
+    from=Unanchored,
+    w=confirm_w,
+    fn(b, _) {
+      for l in lines {
+        @sf.words_node(b, fn() { l }, fn() { confirm_line }) |> ignore
+      }
+    },
+    foot=fn(f, shut) {
+      f.box(fn(r) {
+        @sf.style_node(r, fn() { confirm_foot })
+        @sf.button_node(r, fn() { @sf.t("common.cancel") }, shut, tone=Ghost) |> ignore
+        r.show(fn() { doing(dkey) }, fn(s) { @sf.spinner_node(s, size=14.0) |> ignore })
+        @sf.button_node(
+          r,
+          fn() { action },
+          fn() {
+            act(src, action, dkey, "pick.borrow", Json::object(pick_params(station, of)), done=@sf.t("web-main.model.borrowed"), ok=fn(_) {
+              shut()
+            })
+          },
+          tone=Primary,
+          busy=fn() { doing(dkey) },
+          disabled=fn() { !allowed },
+        )
+        |> ignore
+      })
+      |> ignore
+    },
+  )
+}
+
+///|
 /// A dialog that asks before something is done (the web's Confirm, Dialog): its title, its lines, 取消 and `action`
 /// (`danger`: in red). `said` told true as the action is pressed, false as 取消 is, or as Esc or a press outside closes
 /// it.
@@ -1478,6 +1672,10 @@ let triple_drop_effort : Int = 4
 /// a finger's taller row, its own 8 in neither).
 // kept across runs: a value (no field of it changes)
 let triple_style : @ui.Style = @ui.css("row h=S7 px=S2_5 gap=S1_5 align=ACenter radius=Full hovered{bg=Hover}")
+
+///|
+/// The room between a model control's parts (triple_style's gap=S1_5), as nodes: the row of them in the capsule.
+let triple_gap : Double = 6.0
 
 ///|
 // kept across runs: a value (no field of it changes)

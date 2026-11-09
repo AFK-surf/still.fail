@@ -312,6 +312,15 @@ fn pane_made(
       made("vault-items", fn(a, core, here, _stint, frame, width) {
         @sfpages.vault_items_node(a, core, here, on_back=core.pop, frame~, width~, tips~)
       })
+    // (by its station and id: another's another page)
+    Setting(Connects(only)) =>
+      made("connects/" + only, fn(a, core, here, stint, frame, width) {
+        @sfpages.connects_node(a, src, core, here, only, on_back=core.pop, frame~, stint~, width~, tips~)
+      })
+    Setting(Connect(station, id)) =>
+      made("connect/" + station + "/" + id, fn(a, core, here, stint, frame, width) {
+        @sfpages.connect_node(a, src, core, here, station, id, on_back=core.pop, frame~, stint~, width~, tips~)
+      })
     Setting(AutoCompletion) =>
       made("auto-completion", fn(a, core, here, _stint, frame, width) {
         @sfpages.completion_node(a, core, here, on_back=core.pop, frame~, width~, tips~)

@@ -33,6 +33,7 @@ fn wide_page_node(
   scroll : @view.Scroll,
   about : () -> String,
   tips : TipLayer,
+  head : ((@view.View) -> Unit)?,
 ) -> Unit {
   let items = fn() -> Array[WideItem] {
     let f = frame()
@@ -40,7 +41,7 @@ fn wide_page_node(
     if f.top > 0.0 {
       out.push(WideTop)
     }
-    if !f.named {
+    if head is Some(_) || !f.named {
       out.push(WideHead)
     } else if lead() != "" {
       out.push(WideLead)
@@ -57,7 +58,13 @@ fn wide_page_node(
       match item {
         // the room the frame keeps over it (a status bar's)
         WideTop => s.height(By(fn() { Some(frame().top) })) |> ignore
-        WideHead => lane_node(s, fn(col) { wide_head_node(col, title, on_back, frame, lead, actions, about, tips) })
+        WideHead =>
+          match head {
+            // (a head of its own as far down as a title's head stands, back over it where the frame says it goes;
+            // under the frame's bar that names it, as far under it as what follows a head: wide_page's, barred_page's)
+            Some(h) => lane_node(s, fn(col) { own_head_lane_node(col, h, on_back, frame) })
+            None => lane_node(s, fn(col) { wide_head_node(col, title, on_back, frame, lead, actions, about, tips) })
+          }
         // what it is for under the frame's bar that names it (barred_page's: desk_barred_lead, 16 in, 12 under)
         WideLead =>
           lane_node(s, fn(col) {
@@ -165,6 +172,31 @@ fn wide_head_node(
 }
 
 ///|
+/// A wide page's own head in its lane (wide_page's desk_own_head: 16 in, 40 over it, 20 with back over it; under the
+/// frame's bar that names it, 16 under that, barred_page's desk_first): back (desk_back's) where the frame says it goes,
+/// then what `head` makes.
+fn own_head_lane_node(col : @view.View, head : (@view.View) -> Unit, on_back : () -> Unit, frame : () -> PageFrame) -> Unit {
+  col
+  .padding(By(fn() {
+    let f = frame()
+    let top = if f.named {
+      desk_first_top
+    } else if f.back is Some(_) {
+      desk_head_deep_top
+    } else {
+      desk_head_top
+    }
+    (head_in(col), top, head_in(col), 0.0)
+  }))
+  |> ignore
+  col.show(fn() { frame().back is Some(_) && !frame().named }, fn(line) {
+    line.row(Is(true)).padding(Is((0.0, 0.0, 0.0, desk_back_foot))) |> ignore
+    desk_back_node(line, fn() { frame().back.unwrap_or("") }, on_back)
+  })
+  head(col)
+}
+
+///|
 /// desk_head's room (pt=S10, deep pt=S5, pb=S3), its title line's gap (S2_5), what it is for under it (pt=S1_5),
 /// back's line's room under it (pb=S2).
 let desk_head_top : Double = 40.0
@@ -238,7 +270,9 @@ let section_none_foot : Double = 8.0
 /// it holds (all of them back as they were), made while it says so: wide at its title's end, 8 apart (wide_section's
 /// section_actions); narrow at the section's foot after what it is for, in a page's note's room (pg_note_box: 快捷键's
 /// 全部恢复默认 as its old view put it). Not the old view's section's narrow `actions`, which stand on its heading's line
-/// (heading's): a section whose actions belong there says its title's own.
+/// (heading's): a section whose actions belong there says its title's own (`ends`: what is done on its title's line,
+/// at its end, either way: narrow, heading_node's `ends`; wide, as `actions` stand). `title_after`: what its title holds
+/// after its words, wide (a count: 8 after them in a line, section_title_line's); narrow none, as section's.
 pub fn section_node(
   parent : @view.View,
   title : () -> String,
@@ -247,13 +281,15 @@ pub fn section_node(
   note? : () -> String = fn() { "" },
   about? : () -> String = fn() { "" },
   actions? : (() -> Bool, (@view.View) -> Unit),
+  ends? : (@view.View) -> Unit,
+  title_after? : (@view.View) -> Unit,
 ) -> Unit {
   let at = part_of(parent)
   match at.look {
     Narrow => {
       if heads {
         parent.show(fn() { title() != "" }, fn(h) {
-          heading_node(h, title)
+          heading_node(h, title, ends?)
           h.show(fn() { note() != "" }, fn(n) { page_note_node(n, note) })
         })
       }
@@ -285,7 +321,16 @@ pub fn section_node(
           |> ignore
           line.box(fn(head) {
             head.grow(Is(1.0)).basis(Is(Some(0.0))).min_width(Is(Some(0.0))) |> ignore
-            words_node(head, title, fn() { section_title }) |> ignore
+            match title_after {
+              Some(after) =>
+                head.box(fn(l) {
+                  l.row(Is(true)).gap(Is(section_title_after_gap)).lines_up(Is(Some(Middle))) |> ignore
+                  words_node(l, title, fn() { section_title }) |> ignore
+                  after(l)
+                })
+                |> ignore
+              None => words_node(head, title, fn() { section_title }) |> ignore
+            }
             // (what it holds said, and what it is for: under its title)
             let said = fn() {
               match (note(), about()) {
@@ -310,6 +355,15 @@ pub fn section_node(
               })
             None => ()
           }
+          match ends {
+            Some(make) =>
+              line.box(fn(r) {
+                r.row(Is(true)).gap(Is(section_actions_gap)).lines_up(Is(Some(Middle))) |> ignore
+                make(r)
+              })
+              |> ignore
+            None => ()
+          }
         })
         |> ignore
         sec.box(fn(b) {
@@ -330,6 +384,10 @@ let section_actions_apart : Double = 12.0
 let section_actions_gap : Double = 8.0
 
 ///|
+/// What a wide section's title holds after its words, how far after them (section_title_line's gap=S2).
+let section_title_after_gap : Double = 8.0
+
+///|
 /// section_box's room under it (mb=S7), its note's widest (section_note_most).
 let section_foot : Double = 28.0
 
@@ -339,8 +397,8 @@ let section_note_w : Double = 624.0
 ///|
 /// Rows together on a wide page (group's, wide): at the column's edges, a list card (desk_list: its rows `list_pad` in,
 /// 2 apart, its corner the list card's: what is made on it a list's rows, part_of) or, a `card` of words, desk_card
-/// (20 in, 14 apart, Xl3); standing as a section does where it is in none (wide_alone: 28 under it).
-fn wide_group_node(parent : @view.View, at : PartAt, rows : (@view.View) -> Unit, card : Bool) -> Unit {
+/// (20 in, 14 apart, Xl3); standing as a section does where it is in none (wide_alone: 28 under it), where it says so (`alone`).
+fn wide_group_node(parent : @view.View, at : PartAt, rows : (@view.View) -> Unit, card : Bool, alone? : Bool = true) -> Unit {
   let make = fn(p : @view.View) {
     p.box(fn(k) {
       if card {
@@ -362,7 +420,7 @@ fn wide_group_node(parent : @view.View, at : PartAt, rows : (@view.View) -> Unit
     })
     |> ignore
   }
-  if at.section {
+  if at.section || !alone {
     make(parent)
   } else {
     parent.box(fn(r) {
@@ -371,6 +429,13 @@ fn wide_group_node(parent : @view.View, at : PartAt, rows : (@view.View) -> Unit
     })
     |> ignore
   }
+}
+
+///|
+/// A list card (desk_list's, wide whatever the page's width) in `parent`: its rows `list_pad` in, 2 apart, its corner the
+/// list card's, nothing under it of a section's.
+pub fn list_card_node(parent : @view.View, rows : (@view.View) -> Unit) -> Unit {
+  wide_group_node(parent, { ..part_of(parent), look: Wide }, rows, false, alone=false)
 }
 
 ///|
@@ -413,6 +478,9 @@ fn wide_link_row_node(
   tail_shown : () -> Bool,
   control : ((@view.View) -> Unit)?,
   title_look : (() -> @ui.TextStyle)?,
+  title_cut : Bool,
+  value_cut : Bool,
+  chevron_room : Bool,
 ) -> Unit {
   let at = part_of(parent)
   let under = fn() { note() != "" || trouble() != "" || below is Some(_) }
@@ -468,7 +536,7 @@ fn wide_link_row_node(
     // across its middle)
     match lead {
       NoLead => ()
-      LeadIcon(name) =>
+      LeadIcon(_) | LeadLine(_) =>
         r.box(fn(l) {
           l
           .row(Is(true))
@@ -482,7 +550,11 @@ fn wide_link_row_node(
             }
           }))
           |> ignore
-          icon_node(l, name, desk_mark, By(lead_ink)) |> ignore
+          match lead {
+            LeadIcon(name) => icon_node(l, name, desk_mark, By(lead_ink)) |> ignore
+            LeadLine(f) => f(l)
+            _ => ()
+          }
         })
         |> ignore
       LeadMade(f) => r.box(fn(l) { f(l) }) |> ignore
@@ -502,11 +574,11 @@ fn wide_link_row_node(
           t.grow(Is(1.0)).shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
           // (what follows its title on its line while it is said, 8 apart across their middle, the title cut short where
           // the line leaves it less: link_row's title_line; its title the same words all along)
-          t.row(Is(true)).lines_up(Is(Some(Middle))) |> ignore
+          t.row(Is(true)).lines_up(Is(Some(Middle))).fits(Is(title_after is Some(_))) |> ignore
           t.box(fn(w) {
             w.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
             styled_words(w, title, fn() {
-              if title_after is Some(_) && title_after_shown() { titled().then(cut_words) } else { titled() }
+              if (title_after is Some(_) && title_after_shown()) || title_cut { titled().then(cut_words) } else { titled() }
             })
             |> ignore
             if acts {
@@ -527,12 +599,23 @@ fn wide_link_row_node(
         first.show(fn() { value() != "" }, fn(said) {
           said.row(Is(true)).gap(Is(6.0)).lines_up(Is(Some(Middle))) |> ignore
           said.show(value_dot, fn(d) { status_dot_node(d) })
-          said.box(fn(w) { styled_words(w, value, fn() { value_look(if value_bad() { wide_value.then(bad) } else { wide_value }) }) |> ignore })
+          if value_cut {
+            said.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+          }
+          said.box(fn(w) {
+            styled_words(w, value, fn() {
+              let look = value_look(if value_bad() { wide_value.then(bad) } else { wide_value })
+              if value_cut { look.then(cut_words) } else { look }
+            })
+            |> ignore
+          })
           |> ignore
         })
         row_tail_node(first, tail, tail_shown)
         if ends {
           icon_node(first, mark(), desk_chevron, By(fn() { theme().p.muted }), name_now=mark) |> ignore
+        } else if chevron_room {
+          first.box(fn(e) { e.width(Is(Some(desk_chevron))).height(Is(Some(desk_chevron))) |> ignore }) |> ignore
         }
         row_control_node(first, control, under, face, false)
       })

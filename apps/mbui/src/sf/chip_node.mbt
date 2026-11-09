@@ -67,8 +67,9 @@ pub fn chip_node(
 
 ///|
 /// A pill (pill's) as a node in `parent`: `words` in its tone's ink on its tone's ground, a capsule pill_h high, pill_in
-/// in at either end, cut short where its row has not the room; one piece in bones. The node.
-pub fn pill_node(parent : @view.View, words : () -> String, tone? : PillTone = Neutral) -> @view.View {
+/// in at either end, cut short where its row has not the room; `icon` leading it (pill_icon, its ink, 4 before its
+/// words; "" none); one piece in bones. The node.
+pub fn pill_node(parent : @view.View, words : () -> String, tone? : PillTone = Neutral, icon? : String = "") -> @view.View {
   let colours = fn() {
     let p = theme().p
     match tone {
@@ -85,13 +86,19 @@ pub fn pill_node(parent : @view.View, words : () -> String, tone? : PillTone = N
     .row(Is(true))
     .height(Is(Some(pill_h)))
     .padding(Is((pill_in, 0.0, pill_in, 0.0)))
-    .radius(Is(pill_h / 2.0))
+    // (round at its ends as pill_box is, radius=Full: the same capsule, the corner the old pill said)
+    .radius(Is(1.0e6))
     .lines_up(Is(Some(Middle)))
     .ground(By(fn() { colours().0 }))
     .bone_whole(Is(true))
     .shrink(Is(1.0))
     .min_width(Is(Some(0.0)))
     |> ignore
+    // (none, the pill as it was: its words alone)
+    if icon != "" {
+      b.gap(Is(pill_icon_gap)) |> ignore
+      icon_node(b, icon, pill_icon, By(fn() { colours().1 })) |> ignore
+    }
     b.box(fn(w) {
       w
       .words(By(words))

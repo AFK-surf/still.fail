@@ -1,5 +1,5 @@
 // The settings pages' small parts made once (the web's parts.tsx StatusDot; a note with its way after it; a station's
-// row's lead), laid out by the width the page's frame gives it (look_node): the page gives what they say, these how.
+// row's lead; the first of something to add, EmptyState's), laid out by the width the page's frame gives it (look_node): the page gives what they say, these how.
 
 ///|
 /// How something stands, at a glance (status_dot's, as a node): a dot 7 round, online the online green, busy amber,
@@ -191,3 +191,42 @@ let danger_row_words : @ui.TextStyle = body.then(bad)
 
 ///|
 let danger_row_spin : Double = 14.0
+
+///|
+/// The first of something to add (first_one's, as a node: StationsFirst, ProfilesFirst) in `parent`: `art` over its
+/// `title` and what it is for (`lead`), the ways to add it (`actions`) under them, all in the middle of the room, as wide
+/// as first_most at most.
+pub fn first_one_node(
+  parent : @view.View,
+  title : () -> String,
+  actions : (@view.View) -> Unit,
+  art? : (@view.View) -> Unit,
+  lead? : () -> String = fn() { "" },
+) -> Unit {
+  parent.box(fn(r) {
+    style_node(r, fn() { first_room })
+    r.box(fn(b) {
+      style_node(b, fn() { first_box })
+      match art {
+        Some(f) => f(b)
+        None => ()
+      }
+      b.box(fn(t) {
+        style_node(t, fn() { first_title_at })
+        words_node(t, title, fn() { first_title }) |> ignore
+      })
+      |> ignore
+      b.show(fn() { lead() != "" }, fn(l) {
+        style_node(l, fn() { first_lead_box })
+        words_node(l, lead, fn() { first_lead }) |> ignore
+      })
+      b.box(fn(a) {
+        style_node(a, fn() { first_actions })
+        actions(a)
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}

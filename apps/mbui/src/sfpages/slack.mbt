@@ -45,6 +45,21 @@ fn slack_tokens(
   install? : String = "",
   form? : String = "",
 ) -> SlackTokens {
+  slack_tokens_draft(core, station, key, connect, install, form, fn(tk, open) { c.tell("tokens-open/" + tk.form, open) })
+}
+
+///|
+/// The draft `key` holds (slack_tokens'), opened as the first to ask for it does: the core told it is opened by `told`
+/// (given the draft and that call: a build's after the frame's builds, what is made once at once).
+fn slack_tokens_draft(
+  core : Core,
+  station : String,
+  key : String,
+  connect : String,
+  install : String,
+  form : String,
+  told : (SlackTokens, () -> Unit) -> Unit,
+) -> SlackTokens {
   match slack_token_forms.get(key) {
     Some(tk) => tk
     None => {
@@ -60,9 +75,7 @@ fn slack_tokens(
         error: @signals.signal(""),
       }
       slack_token_forms[key] = tk
-      c.tell("tokens-open/" + tk.form, fn() {
-        tokens_send(core, tk, "edit", Some(obj([("connect", opt_str(connect)), ("install", opt_str(install))])))
-      })
+      told(tk, fn() { tokens_send(core, tk, "edit", Some(obj([("connect", opt_str(connect)), ("install", opt_str(install))]))) })
       tk
     }
   }
@@ -239,6 +252,98 @@ fn create_app_steps(c : @ui.Ctx, core : Core, station : String, name : String) -
     fn() { c.text(@sf.t("web-main.slack.step.appToken"), style=@sf.step_words) |> ignore },
     fn() { c.text(@sf.t("web-main.slack.step.install"), style=@sf.step_words) |> ignore },
     fn() { c.text(@sf.t("web-main.slack.step.fill"), style=@sf.step_words) |> ignore },
+  ])
+}
+
+///|
+/// The two tokens' fields (token_fields', as nodes) in `b`, the connect's page's: App-Level Token and Bot Token, each a
+/// secret's line told to the core's draft as it is typed; who they were checked as, in green, while the draft is what is
+/// typed; what checking them found wrong, and why a call failed, in red under them. (Their old view stays the
+/// dialogs' till they are nodes: token_fields.)
+fn token_fields_node(b : @view.View, core : Core, tk : SlackTokens) -> Unit {
+  let view = fn() { tokens_view(core, tk) }
+  b.box(fn(f) {
+    @sf.style_node(f, fn() { sk_fields })
+    @sf.labelled_field_node(f, fn() { "App-Level Token" }, fn(l) {
+      @sf.input_node(l, tk.app, placeholder="xapp-…", secret=true) |> ignore
+    })
+    @sf.labelled_field_node(f, fn() { "Bot Token" }, fn(l) {
+      @sf.input_node(l, tk.bot, placeholder="xoxb-…", secret=true) |> ignore
+    })
+    // (told the core as it is typed)
+    f.reacts(fn() { tk.app.text().trim(chars=" \t\n").to_owned() }, fn(typed) {
+      if typed != tk.app_sent {
+        tk.app_sent = typed
+        tokens_send(core, tk, "edit", Some(obj([("appToken", str(typed))])))
+      }
+    })
+    f.reacts(fn() { tk.bot.text().trim(chars=" \t\n").to_owned() }, fn(typed) {
+      if typed != tk.bot_sent {
+        tk.bot_sent = typed
+        tokens_send(core, tk, "edit", Some(obj([("botToken", str(typed))])))
+      }
+    })
+    let verified = fn() {
+      let v = view()
+      match field(v, "verified") {
+        Some(Object(_)) as w if text(v, "appToken") == tk.app.text().trim(chars=" \t\n").to_owned() &&
+          text(v, "botToken") == tk.bot.text().trim(chars=" \t\n").to_owned() =>
+          @sf.t("web-main.slack.verified", args=[("team", text(w, "team")), ("bot", text(w, "botName"))])
+        _ => ""
+      }
+    }
+    f.show(fn() { verified() != "" }, fn(o) { @sf.verify_ok_node(o, verified) })
+    f.show(fn() { strings(view(), "errors").length() > 0 }, fn(e) {
+      e.box(fn(l) {
+        @sf.style_node(l, fn() { sk_errors })
+        l.each(fn() { strings(view(), "errors").mapi(fn(i, w) { (i, w) }) }, fn(x) { x.0 }, fn(w, x) {
+          @sf.words_node(w, fn() { "• " + x.get().1 }, fn() { sk_error }) |> ignore
+        })
+      })
+      |> ignore
+    })
+    f.show(fn() { tk.error.get() != "" }, fn(e) { @sf.words_node(e, fn() { tk.error.get() }, fn() { sk_error }) |> ignore })
+  })
+  |> ignore
+}
+
+///|
+/// Making the app in Slack (create_app_steps', as nodes) in `b`, named as `name` says now (still.fail where it says
+/// none): from still.fail's manifest, opened by the station's link; its App-Level Token, installing it, the two tokens
+/// filled in below. (Their old view stays the new connect's dialog's till it is nodes: create_app_steps.)
+fn create_app_steps_node(b : @view.View, core : Core, station : String, name : () -> String) -> Unit {
+  let named = fn() {
+    match name().trim(chars=" \t\n").to_owned() {
+      "" => "still.fail"
+      n => n
+    }
+  }
+  let words = fn(s : @view.View, w : () -> String) { @sf.words_node(s, w, fn() { @sf.step_words }) |> ignore }
+  @sf.steps_node(b, [
+    fn(s) {
+      words(s, fn() { @sf.t("web-main.slack.step.create", args=[("app", "still.fail"), ("name", named())]) })
+      @sf.button_node(
+        s,
+        fn() { @sf.t("web-main.slack.create") },
+        fn() {
+          let n = @signals.untracked(named)
+          @settings.act(core, @sf.t("web-main.slack.create"), "slack.createAppUrl", obj([("station", str(station)), ("name", str(n))]), then=fn(
+            v,
+          ) {
+            match opt_text(Some(v), "url") {
+              Some(url) => (core.open_link)(url)
+              None => ()
+            }
+          })
+        },
+        icon="external",
+        busy=fn() { is_doing(core, ["slack.createAppUrl"], [("station", station)]) },
+      )
+      |> ignore
+    },
+    fn(s) { words(s, fn() { @sf.t("web-main.slack.step.appToken") }) },
+    fn(s) { words(s, fn() { @sf.t("web-main.slack.step.install") }) },
+    fn(s) { words(s, fn() { @sf.t("web-main.slack.step.fill") }) },
   ])
 }
 
