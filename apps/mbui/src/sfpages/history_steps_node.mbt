@@ -540,6 +540,7 @@ fn item_node(
       let failed = flag(content, "failed")
       ev_node(v, "send", "", if failed { "red" } else { "accent" }, rail=ends != "", rail_last=ends == "" && rail, fn(b) {
         steps_box_node(b, h_label, fn(l) {
+          label_wraps(l)
           steps_words(l, fn() { @sf.t("web-main.history.sentTo") }, h_label_words)
           match field(content, "place") {
             Some(Object(_)) as p => place_node(l, station, p)
@@ -683,6 +684,14 @@ fn fold_node(v : @view.View, key : String, lines : Int, line : Double, body : (@
 }
 
 ///|
+/// A step's label in `l` going on in the next line where its line has not the room: each part as wide as its words
+/// while its line has the room, giving way only alone in a line (a row of parts each giving way squeezed every one of
+/// them, 收到来… with its name in two lines, desktop 0.1.7973).
+fn label_wraps(l : @view.View) -> Unit {
+  l.wraps(Is(Some(0.0))) |> ignore
+}
+
+///|
 /// A message to the agent in `v`.
 fn received_node(
   v : @view.View,
@@ -698,6 +707,7 @@ fn received_node(
   let job = notice == "job"
   ev_node(v, "received", "", "", rail~, rail_last~, fn(b) {
     steps_box_node(b, h_label, fn(l) {
+      label_wraps(l)
       steps_words(l, fn() {
         @sf.t(if job { "web-main.history.jobMessage.before" } else { "web-main.history.message.before" })
       }, h_label_words)
@@ -712,10 +722,13 @@ fn received_node(
         @sf.t(if job { "web-main.history.jobMessage.after" } else { "web-main.history.message.after" })
       }, h_label_words)
       match field(m, "place") {
-        Some(Object(_)) as p => {
-          steps_words(l, fn() { " · " }, h_label_words)
-          place_node(l, station, p)
-        }
+        Some(Object(_)) as p =>
+          // (the dot going on with its place, never left at a line's end)
+          steps_box_node(l, h_label_place, fn(dp) {
+            dp.shrink(Is(1.0)).min_width(Is(Some(0.0))) |> ignore
+            steps_words(dp, fn() { "·" }, h_label_words)
+            place_node(dp, station, p)
+          })
         _ => ()
       }
     })
@@ -1682,6 +1695,10 @@ let h_strong : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, weight=Semi
 /// A reminder's label stays on one line; its preview gives way when the row is narrow.
 // kept across runs: a value (no field of it changes)
 let h_reminder : @ui.TextStyle = h_strong.then(@ui.text_style(wrap=false))
+
+///|
+// kept across runs: a value (no field of it changes)
+let h_label_place : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
