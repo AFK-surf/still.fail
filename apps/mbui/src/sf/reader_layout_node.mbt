@@ -10,7 +10,8 @@
 ///|
 /// What of the reader the window's tree lays over it, in `root` (presented_nodes'): its layout's panel while one is
 /// open, docked beside the text or a sheet on 小屏.
-fn reader_layout_nodes(root : @view.View) -> Unit {
+#callsite(autofill(loc))
+fn reader_layout_nodes(root : @view.View, loc~ : SourceLoc) -> Unit {
   let small = fn() { layout(root.window().0) is Small }
   let open = fn() { layout_open.get() is Some(_) }
   // (the reading whose panel it is, as it opens)
@@ -102,7 +103,7 @@ fn reader_layout_nodes(root : @view.View) -> Unit {
       None => ()
     }
   }
-  root.box(fn(layer) {
+  root.box(made_for=loc, fn(layer) {
     layer.over(Is(true)).stacked(Is(0)) |> ignore
     sheet_node(layer, fn() { open() && small() }, x, x.nodes.unwrap(), shut, shut, Unanchored)
   })
