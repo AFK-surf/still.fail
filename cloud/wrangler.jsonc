@@ -86,6 +86,8 @@
     "bindings": [
       { "name": "ACCOUNTS", "class_name": "Account" },
       { "name": "DIRECTORY", "class_name": "Directory" },
+      // One per station, by its key: its presence socket, and whether it is enrolled (src/station.ts).
+      { "name": "STATIONS", "class_name": "Station" },
       { "name": "LOGINS", "class_name": "LoginAttempt" },
       { "name": "LOGIN_LIMITS", "class_name": "LoginLimiter" },
       { "name": "TELEMETRY_LIMITS", "class_name": "TelemetryLimiter" },
@@ -105,5 +107,6 @@
     { "tag": "stillfail-v1", "new_sqlite_classes": ["Account", "Directory", "LoginAttempt", "LoginLimiter", "TelemetryLimiter"] },
     { "tag": "stillfail-v2", "new_sqlite_classes": ["RelayLoad"] },
     { "tag": "stillfail-v3", "new_sqlite_classes": ["ServiceStatus"] },
+    { "tag": "stillfail-v4", "new_sqlite_classes": ["Station"] },
   ],
 }

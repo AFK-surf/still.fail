@@ -3,13 +3,15 @@
 // transaction. Callers have already verified the account's access token;
 // methods here check what that account may do in a workspace.
 //
-// It also holds the sockets that make this live (hibernatable, so idle ones
-// cost nothing): each device's `/v1/events` socket, tagged `sub:<account>`,
-// to which every change is pushed as the accounts it affects; and each
-// station's socket, tagged `station:<id>`: what still.fail cloud tells the station
-// (its name and workspace, the credential keys, what is revoked). Whether a
-// station is up is not decided here: each device finds it out, reaching the
-// station over the mesh.
+// The sockets that make this live are not here: each device's `/v1/events` socket is on its account's object
+// (account.ts), each station's presence socket on the station's own (station.ts). What a change affects is told to
+// those objects after its transaction (#deliver: each account the events it gets, each station that its state changed,
+// which it then reads here), at least once (the outbox). What scales with devices, stations and requests stays off this
+// object; what scales with changes to who belongs where is here. Whether a station is up is not decided here: each
+// device finds it out, reaching the station over the mesh.
+//
+// Sockets held here are those of before (`sub:<account>`, `station:<id>`), and, with DIRECTORY_SOCKETS "primary",
+// those opened while the cloud is rolled back to them (`sockets`): told as they were, beside the objects.
 import { DurableObject } from "cloudflare:workers";
 import { ulid } from "ulid";
 import { STATIONS_PER_WORKSPACE } from "../../client/limits.ts";
@@ -68,6 +70,25 @@ const LIST: AccountEvent = { type: "workspaces" };
 const SHOWN_PICTURE = "COALESCE(own_picture, picture)";
 type Attachment = { station: string; at: number; dropped?: boolean } | { sub: string };
 
+/**
+ * Where devices' events sockets and stations' presence sockets open, and who says whether a station is enrolled or an
+ * account let into the test channel: their own objects (account.ts, station.ts), or, with DIRECTORY_SOCKETS "primary"
+ * (wrangler.jsonc vars), this one, as before them: the way back while nothing else depends on those objects. Told
+ * either way. A test sets `where` to move them.
+ */
+export const sockets = { where: (env: Env): "objects" | "primary" => (env.DIRECTORY_SOCKETS === "primary" ? "primary" : "objects") };
+
+/**
+ * What an account's or a station's object is told (#deliver): frames to send on its sockets (events, revocations, what
+ * goes to all); `beta`, its account's test channel now; `state`, the station's state changed (it reads it here and
+ * sends it, or, in no workspace now, lets its socket go). It answers whether it holds a socket (`live`).
+ */
+export type Delivery = { frames?: string[]; beta?: boolean; state?: true };
+/** The longest wait before a delivery that failed is tried again (from 2 s, doubling). */
+const OUTBOX_MAX_DELAY = 600;
+/** How many hours of its requests the directory keeps counted (adminLoad): a week, as the console's longest chart. */
+const HOURS_KEPT = 7 * 24;
+
 export class DirectoryError extends Error {
   readonly status: number;
   readonly code: string;
@@ -124,6 +145,10 @@ export class Directory extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS devices (workspace TEXT NOT NULL, sub TEXT NOT NULL, device TEXT NOT NULL, base TEXT, kind TEXT, label TEXT, first_seen INTEGER NOT NULL, last_seen INTEGER NOT NULL, PRIMARY KEY (workspace, sub, device));
       CREATE TABLE IF NOT EXISTS lock_turned_off (workspace TEXT NOT NULL, genesis TEXT NOT NULL, seq INTEGER NOT NULL, entry TEXT NOT NULL, PRIMARY KEY (workspace, genesis, seq));
       CREATE TABLE IF NOT EXISTS lock_requests (workspace TEXT NOT NULL, base TEXT NOT NULL, sub TEXT NOT NULL, request TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (workspace, base));
+      CREATE INDEX IF NOT EXISTS users_by_email ON users (lower(email));
+      CREATE TABLE IF NOT EXISTS outbox (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, key TEXT NOT NULL, body TEXT NOT NULL, tries INTEGER NOT NULL DEFAULT 0, next_at INTEGER NOT NULL DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS live (kind TEXT NOT NULL, key TEXT NOT NULL, gen INTEGER NOT NULL, PRIMARY KEY (kind, key));
+      CREATE TABLE IF NOT EXISTS hits (hour INTEGER NOT NULL, family TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (hour, family));
     `);
     // users had neither column before invite codes, nor beta (1: let into the test channel) before it, nor blocked (1:
     // the admin blocked the account; the account's own object is what keeps it out) before the console could block,
@@ -163,6 +188,28 @@ export class Directory extends DurableObject<Env> {
     }
     this.migrateFreePlan();
     this.migrateStationMembers();
+    if (sockets.where(env) === "objects") this.handOff();
+    // What deliveries a restart cut short still owe.
+    if (this.#one("SELECT 1 AS x FROM outbox LIMIT 1")) void ctx.blockConcurrencyWhile(() => this.#arm());
+  }
+
+  /**
+   * Sockets held here while devices' and stations' open on their own objects (those of before this object let them go,
+   * and any an old Worker's request still opened here as it was replaced): closed as a restarting service's (1012), so
+   * each reconnects onto its own object, reading everything again as it does after any reconnect.
+   */
+  protected handOff(): void {
+    for (const ws of this.ctx.getWebSockets()) {
+      const attachment = ws.deserializeAttachment() as Attachment;
+      if ("station" in attachment) this.#drop(ws, 1012, "moved");
+      else {
+        try {
+          ws.close(1012, "moved");
+        } catch {
+          // Closed already.
+        }
+      }
+    }
   }
 
   /**
@@ -219,10 +266,11 @@ export class Directory extends DurableObject<Env> {
 
   // ── notifications ───────────────────────────────────────────────────────
 
-  /** Pushes events to every open events socket of these accounts. */
+  /** Pushes events to every events socket of these accounts: on their objects, and any held here. */
   #tell(subs: Iterable<string>, ...events: AccountEvent[]): void {
     const frames = events.map((event) => JSON.stringify(event));
     for (const sub of new Set(subs)) {
+      this.#deliver("account", sub, { frames });
       for (const ws of this.ctx.getWebSockets(`sub:${sub}`)) {
         for (const frame of frames) {
           try {
@@ -233,6 +281,127 @@ export class Directory extends DurableObject<Env> {
         }
       }
     }
+  }
+
+  // ── deliveries to the objects that hold the sockets ─────────────────────
+  // Written in the same step as the change that makes them (nothing awaits between them, so the runtime keeps them
+  // together), and sent as that step ends, each object's together in one call and one call at a time, so an object hears
+  // its changes in order. One that fails is tried again with a backoff until it gets there (the alarm); one that is late
+  // costs a device or a station told late, which reads everything again as it reconnects anyway. What keeps someone's
+  // access (a revocation, a station leaving a workspace) is awaited before the change answers (#delivered); the rest
+  // goes out as it answers, so no answer waits on a member's object across the world. Frames are only for sockets: an
+  // object holding none (not in `live`) is not called for them, and reads all of it as one opens.
+
+  /** Each object's sending now (`kind key`): what is written for it meanwhile goes next, in the same run. */
+  readonly #sending = new Map<string, Promise<void>>();
+  /** Objects the step being run must have reached before its request answers (#delivered). */
+  #urgent: string[] = [];
+  #soon: Promise<void> | null = null;
+
+  /** `always`: whether or not it holds a socket (what its object keeps: an account's test channel, a station let go). */
+  #deliver(kind: "account" | "station", key: string, body: Delivery, how: { urgent?: boolean; always?: boolean } = {}): void {
+    if (!how.always && !this.#one("SELECT 1 AS x FROM live WHERE kind = ? AND key = ?", kind, key)) return;
+    this.#run("INSERT INTO outbox (kind, key, body) VALUES (?, ?, ?)", kind, key, JSON.stringify(body));
+    this.#soon ??= Promise.resolve().then(() => {
+      this.#soon = null;
+      this.#flush();
+    });
+    if (how.urgent) this.#urgent.push(`${kind} ${key}`);
+  }
+
+  /**
+   * Waits until the deliveries the step that just ran made urgent got there or failed once (then they are tried again
+   * after). Called in that same step, before anything is awaited: what another request's step makes is its own.
+   */
+  async #delivered(): Promise<void> {
+    const keys = this.#urgent.splice(0);
+    await this.#soon;
+    await Promise.all(keys.map((k) => this.#sending.get(k)));
+  }
+
+  /** Sends what is due, to each object not being sent to already. */
+  #flush(): void {
+    for (const r of this.#rows("SELECT DISTINCT kind, key FROM outbox WHERE next_at <= ?", nowSeconds())) {
+      const kind = r.kind as "account" | "station", key = r.key as string, k = `${kind} ${key}`;
+      if (this.#sending.has(k)) continue;
+      this.#sending.set(k, this.#sendAll(kind, key).finally(() => {
+        this.#sending.delete(k);
+        // Written between its last read and now.
+        if (this.#one("SELECT 1 AS x FROM outbox WHERE kind = ? AND key = ? AND next_at <= ?", kind, key, nowSeconds())) this.#flush();
+      }));
+    }
+  }
+
+  async #sendAll(kind: "account" | "station", key: string): Promise<void> {
+    for (;;) {
+      const group = this.#rows("SELECT id, body, tries FROM outbox WHERE kind = ? AND key = ? AND next_at <= ? ORDER BY id", kind, key, nowSeconds());
+      if (group.length === 0) return;
+      const bodies = group.map((r) => JSON.parse(r.body as string) as Delivery);
+      const tried = group.some((r) => (r.tries as number) > 0);
+      const beta = [...bodies].reverse().find((b) => b.beta !== undefined)?.beta;
+      const body: Delivery = {
+        frames: bodies.flatMap((b) => b.frames ?? []),
+        ...(beta === undefined ? {} : { beta }),
+        // Tried again, a station reads its state too: what was told late is then followed by all of it as it is.
+        ...(bodies.some((b) => b.state) || (kind === "station" && tried) ? { state: true as const } : {}),
+      };
+      const ids = group.map((r) => r.id as number);
+      const marks = ids.map(() => "?").join(", ");
+      const gen = this.#one("SELECT gen FROM live WHERE kind = ? AND key = ?", kind, key)?.gen as number | undefined;
+      try {
+        const said = await this.send(kind, key, body);
+        this.#run(`DELETE FROM outbox WHERE id IN (${marks})`, ...ids);
+        // It holds no socket: out of `live`, unless one opened since (a newer gen).
+        if (!said.live && gen !== undefined) this.#run("DELETE FROM live WHERE kind = ? AND key = ? AND gen <= ?", kind, key, gen);
+      } catch (error) {
+        const tries = Math.max(...group.map((r) => r.tries as number)) + 1;
+        if (tries % 8 === 0) console.warn(`directory: ${kind} ${key} not told after ${tries} tries: ${(error as Error).message}`);
+        this.#run(`UPDATE outbox SET tries = ?, next_at = ? WHERE id IN (${marks})`, tries, nowSeconds() + Math.min(2 ** tries, OUTBOX_MAX_DELAY), ...ids);
+        await this.#arm();
+        return;
+      }
+    }
+  }
+
+  /** One delivery to an object (a test makes it fail). */
+  protected send(kind: "account" | "station", key: string, body: Delivery): Promise<{ live: boolean }> {
+    return kind === "account" ? this.env.ACCOUNTS.getByName(key).deliver(key, body) : this.env.STATIONS.getByName(key).deliver(key, body);
+  }
+
+  /** The alarm at the next delivery due again, unless it is set sooner. */
+  async #arm(): Promise<void> {
+    const next = this.#one("SELECT MIN(next_at) AS at FROM outbox")?.at as number | null | undefined;
+    if (next === null || next === undefined) return;
+    const at = Math.max(next * 1000, Date.now());
+    const set = await this.ctx.storage.getAlarm();
+    if (set === null || at < set) await this.ctx.storage.setAlarm(at); // timer: a retry after a failure, with a backoff
+  }
+
+  /** Every delivery under way has got there or failed (the tests' barrier, instead of waiting a while). */
+  protected async settled(): Promise<void> {
+    while (this.#soon !== null || this.#sending.size > 0) await Promise.all([this.#soon, ...this.#sending.values()]);
+  }
+
+  /**
+   * An object holding a socket now (an account's events socket, a station's presence socket): told what is for its
+   * sockets, and what goes to all, until it says it holds none (closed, or a delivery's answer). Its `gen` tells a
+   * close from before a later open.
+   */
+  #opened(kind: "account" | "station", key: string): number {
+    const gen = ((this.#one("SELECT MAX(gen) AS gen FROM live")?.gen as number | null) ?? 0) + 1;
+    this.#run("INSERT INTO live (kind, key, gen) VALUES (?, ?, ?) ON CONFLICT (kind, key) DO UPDATE SET gen = excluded.gen", kind, key, gen);
+    return gen;
+  }
+
+  /** An account's object opened an events socket (account.ts): seen now (the console's last seen), and live. */
+  seen(sub: string): number {
+    this.#run("UPDATE users SET last_seen = ? WHERE sub = ?", nowSeconds(), sub);
+    return this.#opened("account", sub);
+  }
+
+  /** An account's object closed its last events socket, opened as `gen`. */
+  closed(sub: string, gen: number): void {
+    this.#run("DELETE FROM live WHERE kind = 'account' AND key = ? AND gen = ?", sub, gen);
   }
 
   /** Tells every connected device of every account `event`, and every connected station `station` (a release out). */
@@ -248,6 +417,10 @@ export class Directory extends DurableObject<Env> {
         // Closing already; it reads what it needs as it connects again.
       }
     }
+    for (const r of this.#rows("SELECT kind, key FROM live")) {
+      const frame = r.kind === "station" ? frames[1] : frames[0];
+      if (frame !== null) this.#deliver(r.kind as "account" | "station", r.key as string, { frames: [frame] });
+    }
   }
 
   /** Tells every connected station `event` (the models' catalog changed). */
@@ -260,6 +433,7 @@ export class Directory extends DurableObject<Env> {
         ws.send(frame);
       } catch {}
     }
+    for (const r of this.#rows("SELECT key FROM live WHERE kind = 'station'")) this.#deliver("station", r.key as string, { frames: [frame] });
   }
 
   /** The models' catalog the cron made (models.ts `checkModels`): told to every connected station when it changed. */
@@ -270,10 +444,14 @@ export class Directory extends DurableObject<Env> {
     this.tellStations({ type: "models", etag });
   }
 
-  /** Tells the operator's connected devices `event` (their console reads it again). */
+  /**
+   * Tells the operator's connected devices `event` (their console reads it again): its accounts, found by their email.
+   * The cron's, every minute: what this object counted of its requests is kept then too (#keepCounts).
+   */
   tellAdmins(event: AccountEvent): void {
-    const admins = this.#rows("SELECT sub, email FROM users").filter((r) => isAdmin(this.env, r.email as string)).map((r) => r.sub as string);
-    this.#tell(admins, event);
+    this.#keepCounts();
+    if (!this.env.ADMIN_EMAIL) return;
+    this.#tell(this.#byEmail(this.env.ADMIN_EMAIL), event);
   }
 
   #members(workspace: string): string[] {
@@ -371,7 +549,10 @@ export class Directory extends DurableObject<Env> {
     const row = this.#one("SELECT beta, may_create FROM pending WHERE email = ?", email.toLowerCase());
     if (!row) return;
     this.ctx.storage.transactionSync(() => {
-      if (row.beta) this.#run("UPDATE users SET beta = 1 WHERE sub = ?", sub);
+      if (row.beta) {
+        this.#run("UPDATE users SET beta = 1 WHERE sub = ?", sub);
+        this.#betaTold(sub);
+      }
       if (row.may_create) this.#run("UPDATE users SET admitted = 'granted' WHERE sub = ? AND (admitted IS NULL OR admitted IN ('invitation', 'free'))", sub);
       this.#run("DELETE FROM pending WHERE email = ?", email.toLowerCase());
     });
@@ -386,7 +567,7 @@ export class Directory extends DurableObject<Env> {
     if (!ROLES.includes(role)) fail(400, "invalid_role");
     if (role === "owner" && mine !== "owner") fail(403, "forbidden");
     const { joined, added, already } = this.#addEmails(sub, workspace, role, emailsOf(emails));
-    return { joined, added, already, view: this.workspace(sub, workspace) };
+    return { joined, added, already, view: this.#view(sub, workspace) };
   }
 
   /** addMembers once allowed: each email a member now, or as soon as it first signs in. */
@@ -430,7 +611,7 @@ export class Directory extends DurableObject<Env> {
     this.#role(sub, workspace, MANAGERS);
     this.#run("DELETE FROM added WHERE workspace = ? AND email = ?", workspace, email.trim().toLowerCase());
     this.#changed(workspace, true);
-    return this.workspace(sub, workspace);
+    return this.#view(sub, workspace);
   }
 
   me(sub: string): { user: MeView | null; workspaces: WorkspaceSummary[] } {
@@ -472,6 +653,7 @@ export class Directory extends DurableObject<Env> {
         this.#run("UPDATE invite_codes SET used_by = ?, used_at = ?, workspace = ? WHERE code = ?", sub, now, id, redeem);
         // A code made with the test channel lets its account in too.
         this.#run("UPDATE users SET beta = 1 WHERE sub = ? AND (SELECT beta FROM invite_codes WHERE code = ?) = 1", sub, redeem);
+        this.#betaTold(sub);
         this.#run("UPDATE users SET admitted = 'code' WHERE sub = ? AND (admitted IS NULL OR admitted IN ('invitation', 'free'))", sub);
       } else if (!standard) {
         // In a workspace, but not from before codes (#standard).
@@ -479,7 +661,7 @@ export class Directory extends DurableObject<Env> {
       }
     });
     this.#tell([sub], LIST);
-    return this.workspace(sub, id);
+    return this.#view(sub, id);
   }
 
   /** Whether an account is on the standard plan (the admin aside): see createWorkspace. */
@@ -521,6 +703,11 @@ export class Directory extends DurableObject<Env> {
   }
 
   workspace(sub: string, id: string): WorkspaceView {
+    return this.#view(sub, id);
+  }
+
+  /** A workspace as the caller sees it (what its changes answer with: called within them, it is not counted again). */
+  #view(sub: string, id: string): WorkspaceView {
     const role = this.#role(sub, id);
     const w = this.#one("SELECT id, name, created_at, relays, ways_off, emoji, icon FROM workspaces WHERE id = ?", id)!;
     const members = this.#rows(`
@@ -779,7 +966,7 @@ export class Directory extends DurableObject<Env> {
       this.#run("UPDATE workspaces SET ways_off = ? WHERE id = ?", kept.length ? JSON.stringify(kept) : null, id);
     });
     this.#changed(id, true);
-    return this.workspace(sub, id);
+    return this.#view(sub, id);
   }
 
   /**
@@ -798,7 +985,7 @@ export class Directory extends DurableObject<Env> {
     if (!ways.some((w) => w.kind === "relay" && !off.includes(w.id))) fail(409, "last_relay");
     this.#run("UPDATE workspaces SET ways_off = ? WHERE id = ?", off.length ? JSON.stringify(off) : null, id);
     this.#changed(id, true);
-    return this.workspace(sub, id);
+    return this.#view(sub, id);
   }
 
   /** Fails unless the caller manages the workspace (before a picture it sends is kept: api.ts). */
@@ -818,12 +1005,13 @@ export class Directory extends DurableObject<Env> {
     if (icon !== undefined) this.#run("UPDATE workspaces SET icon = ? WHERE id = ?", icon, id);
     // Invitations show the name; the switchers, the mark.
     this.#changed(id, true, name !== undefined ? this.#invitees(id) : []);
-    return this.workspace(sub, id);
+    return this.#view(sub, id);
   }
 
-  deleteWorkspace(sub: string, id: string): void {
+  async deleteWorkspace(sub: string, id: string): Promise<void> {
     this.#role(sub, id, ["owner"]);
     this.#remove(id);
+    await this.#delivered();
   }
 
   /** A workspace gone: its people told, its stations let go. */
@@ -888,7 +1076,7 @@ export class Directory extends DurableObject<Env> {
       else if (ROLES.indexOf(row!.role as Role) < ROLES.indexOf(existing.role as Role)) this.#run("UPDATE members SET role = ? WHERE workspace = ? AND sub = ?", row!.role, workspace, sub);
     });
     this.#changed(workspace, true);
-    return this.workspace(sub, workspace);
+    return this.#view(sub, workspace);
   }
 
   /** Invitations waiting for this email: what someone sees right after signing in. */
@@ -912,7 +1100,7 @@ export class Directory extends DurableObject<Env> {
       if (!existing) this.#run("INSERT INTO members (workspace, sub, role, added_at) VALUES (?, ?, ?, ?)", workspace, sub, row!.role, nowSeconds());
     });
     this.#changed(workspace, true);
-    return this.workspace(sub, workspace);
+    return this.#view(sub, workspace);
   }
 
   declineById(email: string, id: string): void {
@@ -932,7 +1120,7 @@ export class Directory extends DurableObject<Env> {
     this.#tell(this.#byEmail(row.email as string | null), LIST);
   }
 
-  setRole(sub: string, workspace: string, target: string, role: Role): WorkspaceView {
+  async setRole(sub: string, workspace: string, target: string, role: Role): Promise<WorkspaceView> {
     this.#role(sub, workspace, ["owner"]);
     if (!ROLES.includes(role)) fail(400, "invalid_role");
     const current = this.#one("SELECT role FROM members WHERE workspace = ? AND sub = ?", workspace, target);
@@ -943,11 +1131,13 @@ export class Directory extends DurableObject<Env> {
     this.#revoke(workspace, "sub", target);
     this.#changed(workspace, false);
     this.#tell([target], LIST);
-    return this.workspace(sub, workspace);
+    const view = this.#view(sub, workspace);
+    await this.#delivered();
+    return view;
   }
 
   /** Removes a member; anyone may remove themselves (leave). */
-  removeMember(sub: string, workspace: string, target: string): void {
+  async removeMember(sub: string, workspace: string, target: string): Promise<void> {
     const mine = this.#role(sub, workspace);
     const row = this.#one("SELECT role FROM members WHERE workspace = ? AND sub = ?", workspace, target);
     if (!row) fail(404, "member_not_found");
@@ -959,6 +1149,7 @@ export class Directory extends DurableObject<Env> {
     this.#run("DELETE FROM members WHERE workspace = ? AND sub = ?", workspace, target);
     this.#revoke(workspace, "sub", target);
     this.#changed(workspace, true, [target]);
+    await this.#delivered();
   }
 
   /**
@@ -967,7 +1158,7 @@ export class Directory extends DurableObject<Env> {
    * lock requests, bug reports, and what waits for its email (pending, added, invitations). Refused (409 sole_owner)
    * while it is the only owner of a workspace others are in: they would be left with no one to manage it.
    */
-  deleteAccount(sub: string): void {
+  async deleteAccount(sub: string): Promise<void> {
     const email = this.#one("SELECT email FROM users WHERE sub = ?", sub)?.email as string | undefined;
     const memberships = this.#rows("SELECT workspace, role FROM members WHERE sub = ?", sub).map((r) => ({ workspace: r.workspace as string, role: r.role as Role }));
     const alone = memberships.filter((m) => this.#members(m.workspace).length === 1).map((m) => m.workspace);
@@ -975,7 +1166,10 @@ export class Directory extends DurableObject<Env> {
       if (m.role !== "owner" || alone.includes(m.workspace)) continue;
       if ((this.#one("SELECT COUNT(*) AS n FROM members WHERE workspace = ? AND role = 'owner'", m.workspace)!.n as number) <= 1) fail(409, "sole_owner");
     }
-    for (const workspace of alone) this.deleteWorkspace(sub, workspace);
+    for (const workspace of alone) {
+      this.#role(sub, workspace, ["owner"]);
+      this.#remove(workspace);
+    }
     for (const { workspace } of memberships.filter((m) => !alone.includes(m.workspace))) {
       this.#run("DELETE FROM members WHERE workspace = ? AND sub = ?", workspace, sub);
       this.#revoke(workspace, "sub", sub);
@@ -992,6 +1186,7 @@ export class Directory extends DurableObject<Env> {
       this.#run("DELETE FROM users WHERE sub = ?", sub);
     });
     this.#tell([sub], LIST);
+    await this.#delivered();
   }
 
   #keepAnOwner(workspace: string): void {
@@ -1055,9 +1250,11 @@ export class Directory extends DurableObject<Env> {
     const w = this.#one("SELECT name FROM workspaces WHERE id = ?", workspace)!;
     this.#changed(workspace, true);
     for (const other of left) this.#changed(other, true);
-    // Already connected (re-enrolled while running): it learns where it is now.
-    this.#sendState(station);
-    return { workspace, workspace_name: w.name as string, name: row!.name as string, home: this.#memberships(station)[0]! };
+    // Already connected (re-enrolled while running): it learns where it is now, before the answer when it left some.
+    this.#sendState(station, left.length > 0);
+    const home = this.#memberships(station)[0]!;
+    await this.#delivered();
+    return { workspace, workspace_name: w.name as string, name: row!.name as string, home };
   }
 
   /** A new name, a new emoji, a new icon (null or "" takes either away), or several; what is not given stays. */
@@ -1072,17 +1269,18 @@ export class Directory extends DurableObject<Env> {
     if (icon !== undefined) this.#run("UPDATE station_members SET icon = ? WHERE station = ? AND workspace = ?", icon, station, workspace);
     this.#changed(workspace, false);
     if (name !== undefined) this.#sendState(station);
-    return this.workspace(sub, workspace);
+    return this.#view(sub, workspace);
   }
 
   /** Takes a station out of this workspace only; it stays in the others it is in. */
-  removeStation(sub: string, workspace: string, station: string): void {
+  async removeStation(sub: string, workspace: string, station: string): Promise<void> {
     this.#role(sub, workspace, MANAGERS);
     const home = this.#memberships(station)[0];
     if (!this.#one("SELECT 1 AS x FROM station_members WHERE station = ? AND workspace = ?", station, workspace)) return;
     this.#run("DELETE FROM station_members WHERE station = ? AND workspace = ?", station, workspace);
     this.#changed(workspace, true);
     this.#left(station, home!);
+    await this.#delivered();
   }
 
   /**
@@ -1094,16 +1292,47 @@ export class Directory extends DurableObject<Env> {
     const now = this.#memberships(station);
     if (now.length === 0) {
       this.#run("DELETE FROM stations WHERE id = ?", station);
-      this.#disconnect(station, CLOSE.removed, "station_removed");
+      this.#disconnect(station);
       return;
     }
     if (now[0] !== home) this.#changed(now[0]!, true);
-    else this.#sendState(station);
+    // Until it hears it, it takes that workspace's members still.
+    this.#sendState(station, true);
   }
 
   /** Whether a station is enrolled (in some workspace). */
   isStation(station: string): boolean {
     return this.#one("SELECT 1 AS found FROM station_members WHERE station = ?", station) !== undefined;
+  }
+
+  // ── what a station's own object asks (station.ts) ──────────────────────
+
+  /**
+   * A station's presence socket opens on its object: when it was here noted, it is live, and what to tell it (`frame`,
+   * null for one in no workspace, which is turned away).
+   */
+  stationConnected(station: string, version: string | null): { frame: string | null; gen: number } {
+    if (this.#memberships(station).length === 0) return { frame: null, gen: 0 };
+    this.#run("UPDATE stations SET last_seen = ?, version = COALESCE(?, version) WHERE id = ?", nowSeconds(), version, station);
+    return { frame: this.#frame(station), gen: this.#opened("station", station) };
+  }
+
+  /** What a station is told as it changed: its state frame, null in no workspace now (it is let go). */
+  stationState(station: string): string | null {
+    return this.#frame(station);
+  }
+
+  /** A station's presence socket, opened as `gen`, closed or went silent on its object: when it was here. */
+  stationLeft(station: string, gen: number): void {
+    this.#run("UPDATE stations SET last_seen = ? WHERE id = ?", nowSeconds(), station);
+    this.#run("DELETE FROM live WHERE kind = 'station' AND key = ? AND gen = ?", station, gen);
+  }
+
+  /** What a station said on its socket (on its object), and the frames that answer it. */
+  async stationSaid(station: string, message: string): Promise<string[]> {
+    const out: string[] = [];
+    await this.#said(station, message, (frame) => out.push(frame));
+    return out;
   }
 
   /** A mstill.fail's role, which its credential names (grants.ts). */
@@ -1124,6 +1353,7 @@ export class Directory extends DurableObject<Env> {
     // Which workspace's: a station in several takes it back there alone (one from before them reads no such field).
     const frame = JSON.stringify({ type: "revoke", kind, id, at, workspace });
     for (const station of this.#stationsIn(workspace)) {
+      this.#deliver("station", station, { frames: [frame] }, { urgent: true });
       for (const ws of this.#presence(station)) {
         try {
           ws.send(frame);
@@ -1135,7 +1365,7 @@ export class Directory extends DurableObject<Env> {
   }
 
   /** Sessions signed out (all of an account's with none named): their credentials go, in every workspace of the account. */
-  revokeSessions(sub: string, sids: string[] | null): void {
+  async revokeSessions(sub: string, sids: string[] | null): Promise<void> {
     if (sids === null) this.#run("DELETE FROM push WHERE sub = ?", sub);
     else for (const sid of sids) this.#run("DELETE FROM push WHERE sub = ? AND sid = ?", sub, sid);
     for (const row of this.#rows("SELECT workspace FROM members WHERE sub = ?", sub)) {
@@ -1143,6 +1373,7 @@ export class Directory extends DurableObject<Env> {
       if (sids === null) this.#revoke(workspace, "sub", sub);
       else for (const sid of sids) this.#revoke(workspace, "sid", sid);
     }
+    await this.#delivered();
   }
 
   // ── push registrations ──────────────────────────
@@ -1294,20 +1525,27 @@ export class Directory extends DurableObject<Env> {
   setBeta(sub: string, on: boolean): { sub: string; beta: boolean } {
     if (!this.#one("SELECT 1 AS x FROM users WHERE sub = ?", sub)) fail(404, "user_not_found");
     this.#run("UPDATE users SET beta = ? WHERE sub = ?", on ? 1 : null, sub);
+    this.#betaTold(sub);
     // Its `/v1/me` says so: its devices read it again (the 测试版 switch of its stations comes or goes at once).
     this.#tell([sub], LIST);
     return { sub, beta: on };
   }
 
-  /** Whether the account may use the test channel. */
+  /** Whether the account may use the test channel (its object asks once, then is told: #betaTold). */
   isBeta(sub: string): boolean {
     return Boolean(this.#one("SELECT beta FROM users WHERE sub = ?", sub)?.beta);
   }
 
+  /** The account's object keeps whether it is let into the test channel (account.ts `live`): it is told it now. */
+  #betaTold(sub: string): void {
+    this.#deliver("account", sub, { beta: Boolean(this.#one("SELECT beta FROM users WHERE sub = ?", sub)?.beta) }, { always: true });
+  }
+
   /** The operator removes a workspace as its owner would; one made for a company may have no owner signed in yet. */
-  adminDeleteWorkspace(id: string): void {
+  async adminDeleteWorkspace(id: string): Promise<void> {
     if (!this.#one("SELECT 1 AS x FROM workspaces WHERE id = ?", id)) fail(404, "workspace_not_found");
     this.#remove(id);
+    await this.#delivered();
   }
 
   /**
@@ -1389,6 +1627,45 @@ export class Directory extends DurableObject<Env> {
         ? { seats: w.max_members as number, plan: "enterprise" as const }
         : { seats: PLANS[plan(w)].members, plan: plan(w) }),
     }));
+  }
+
+  /**
+   * How loaded this object is, for the console (its 中继 page, relay-load.ts): its calls an hour by what they serve (the
+   * last HOURS_KEPT hours, oldest first), the sockets it still holds (those of before their objects, which leave as
+   * they reconnect), the objects told what is for their sockets, deliveries waiting to be tried again, and its storage.
+   */
+  adminLoad(): DirectoryLoad {
+    this.#keepCounts();
+    const now = nowSeconds();
+    const first = Math.floor(now / 3600) - HOURS_KEPT + 1;
+    const families: Record<string, number[]> = {};
+    for (const r of this.#rows("SELECT hour, family, n FROM hits WHERE hour >= ? ORDER BY hour", first)) {
+      (families[r.family as string] ??= new Array<number>(HOURS_KEPT).fill(0))[(r.hour as number) - first] = r.n as number;
+    }
+    const held = this.ctx.getWebSockets().map((ws) => ws.deserializeAttachment() as Attachment);
+    const live = (kind: string) => this.#one("SELECT COUNT(*) AS n FROM live WHERE kind = ?", kind)!.n as number;
+    return {
+      at: now,
+      calls: { start: first * 3600, step: 3600, families },
+      held: { devices: held.filter((a) => "sub" in a).length, stations: held.filter((a) => "station" in a && !a.dropped).length },
+      live: { accounts: live("account"), stations: live("station") },
+      waiting: this.#one("SELECT COUNT(*) AS n FROM outbox")!.n as number,
+      bytes: this.ctx.storage.sql.databaseSize,
+    };
+  }
+
+  /** The calls counted since it last ran, kept (the cron's minute: tellAdmins; adminLoad), and the hours past HOURS_KEPT gone. */
+  #keepCounts(): void {
+    const counts = counted.get(this);
+    if (!counts?.size) return;
+    this.ctx.storage.transactionSync(() => {
+      for (const [k, n] of counts) {
+        const [hour, family] = k.split(" ");
+        this.#run("INSERT INTO hits (hour, family, n) VALUES (?, ?, ?) ON CONFLICT (hour, family) DO UPDATE SET n = n + excluded.n", Number(hour), family!, n);
+      }
+      this.#run("DELETE FROM hits WHERE hour <= ?", Math.floor(nowSeconds() / 3600) - HOURS_KEPT);
+    });
+    counts.clear();
   }
 
   inviteCodes(): InviteCodeView[] {
@@ -1539,6 +1816,9 @@ export class Directory extends DurableObject<Env> {
    * station (whose signature it checked) in `x-stillfail-station`.
    */
   async fetch(request: Request): Promise<Response> {
+    // Only while the sockets are rolled back here (sockets.where). An old Worker's, in flight as it is replaced, is
+    // turned away as a restarting service: the device or station tries again, through the new one, onto its object.
+    if (sockets.where(this.env) === "objects") return Response.json({ error: "moved" }, { status: 503 });
     const path = new URL(request.url).pathname;
     const pair = new WebSocketPair();
     if (path === "/events") {
@@ -1576,8 +1856,10 @@ export class Directory extends DurableObject<Env> {
     }
   }
 
-  #disconnect(station: string, code: number, reason: string): void {
-    for (const ws of this.#presence(station)) this.#drop(ws, code, reason);
+  /** A station in no workspace now: its object hears it (and lets its socket go, 4004), and any socket held here goes. */
+  #disconnect(station: string): void {
+    this.#deliver("station", station, { state: true }, { urgent: true, always: true });
+    for (const ws of this.#presence(station)) this.#drop(ws, CLOSE.removed, "station_removed");
   }
 
   /**
@@ -1586,12 +1868,19 @@ export class Directory extends DurableObject<Env> {
    * says at the top is of the station's home, as it was when a station was in one workspace (all a station from before
    * several knows); `workspaces`, each other one it is in, with its own peers, revocations and lock head.
    */
-  #sendState(station: string): void {
+  #sendState(station: string, urgent = false): void {
+    this.#deliver("station", station, { state: true }, { urgent });
     const sockets = this.#presence(station);
     if (!sockets.length) return;
+    const frame = this.#frame(station);
+    if (frame !== null) for (const ws of sockets) ws.send(frame);
+  }
+
+  /** A station's state frame (#sendState); null for one in no workspace. */
+  #frame(station: string): string | null {
     const found = this.#rows(`SELECT m.workspace, w.name AS workspace_name, m.name, w.relays FROM station_members m JOIN workspaces w ON w.id = m.workspace
       WHERE m.station = ? ORDER BY m.enrolled_at, m.rowid`, station);
-    if (!found.length) return;
+    if (!found.length) return null;
     const since = nowSeconds() - REVOCATION_DAYS * 86400;
     const [home, ...joined] = found.map(({ relays: _, ...row }) => ({
       ...(row as { workspace: string; workspace_name: string; name: string }),
@@ -1607,8 +1896,7 @@ export class Directory extends DurableObject<Env> {
     const relay_urls = [...told.relay_urls];
     for (const url of found.flatMap((w) => parseRelays(w.relays))) if (!relay_urls.map(sameUrl).includes(sameUrl(url))) relay_urls.push(url);
     const lock = this.#lockHead(row.workspace);
-    const frame = JSON.stringify({ type: "state", peers, ...row, origin: this.env.PUBLIC_ORIGIN, ...told, relay_urls, grant_keys: grantKeys(this.env), revocations, lock, workspaces: joined });
-    for (const ws of sockets) ws.send(frame);
+    return JSON.stringify({ type: "state", peers, ...row, origin: this.env.PUBLIC_ORIGIN, ...told, relay_urls, grant_keys: grantKeys(this.env), revocations, lock, workspaces: joined });
   }
 
   #offline(station: string): void {
@@ -1622,13 +1910,18 @@ export class Directory extends DurableObject<Env> {
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const attachment = ws.deserializeAttachment() as Attachment;
     if (typeof message !== "string" || !("station" in attachment)) return;
+    await this.#said(attachment.station, message, (frame) => ws.send(frame));
+  }
+
+  /** What a station said (here or on its object), answered with `send`. */
+  async #said(station: string, message: string, send: (frame: string) => void): Promise<void> {
     let body: { type?: unknown; after?: unknown; entries?: unknown; workspace?: unknown; genesis?: unknown };
     try {
       body = JSON.parse(message);
     } catch {
       return;
     }
-    const all = this.#memberships(attachment.station);
+    const all = this.#memberships(station);
     const named = typeof body.workspace === "string" ? body.workspace : null;
     const workspace = named === null ? all[0] : all.includes(named) ? named : undefined;
     if (!workspace) return;
@@ -1637,10 +1930,10 @@ export class Directory extends DurableObject<Env> {
       // A station that holds a chain turned off since (it was offline then, and the lock was turned on again after):
       // the rest of that chain, its `disable` with it, so it lets that chain go by itself (it checks each entry).
       const off = typeof body.genesis === "string" ? this.#lockTurnedOff(workspace, body.genesis, after) : [];
-      ws.send(JSON.stringify({ type: "lock", entries: off.length > 0 ? off : this.#lockAfter(workspace, after), ...(named === null ? {} : { workspace }) }));
+      send(JSON.stringify({ type: "lock", entries: off.length > 0 ? off : this.#lockAfter(workspace, after), ...(named === null ? {} : { workspace }) }));
     } else if (body.type === "lock.put") {
       // Refused when it does not follow: the station hears the cloud's head in the state frame and asks again.
-      await this.#appendLock(workspace, body.entries).catch(() => this.#sendState(attachment.station));
+      await this.#appendLock(workspace, body.entries).catch(() => this.#sendState(station));
     }
   }
 
@@ -1667,8 +1960,12 @@ export class Directory extends DurableObject<Env> {
   // interval however many stations there are — pinging from here would wake
   // the object for every ping, and without the check a vanished station would
   // show online until the runtime happened to notice.
+  // (Only while the sockets are rolled back here: on their objects, each station's does the same.) The same alarm
+  // tries again the deliveries that failed (#arm); one that fails again sets it for its next try.
   async alarm(): Promise<void> {
-    if (this.sweep(Date.now())) await this.ctx.storage.setAlarm(Date.now() + SILENT_MS);
+    if (this.sweep(Date.now())) await this.ctx.storage.setAlarm(Date.now() + SILENT_MS); // timer: a heartbeat's check, the stations' pings
+    this.#flush();
+    await Promise.all(this.#sending.values());
   }
 
   /** Drops station sockets silent at `now`; says whether any station is still connected. */
@@ -1685,6 +1982,51 @@ export class Directory extends DurableObject<Env> {
     }
     return connected;
   }
+}
+
+/** What the console shows of the directory's own load (adminLoad). */
+export type DirectoryLoad = {
+  at: number;
+  /** Calls an hour from `start` (seconds), `step` apart, by family. */
+  calls: { start: number; step: number; families: Record<string, number[]> };
+  held: { devices: number; stations: number };
+  live: { accounts: number; stations: number };
+  waiting: number;
+  bytes: number;
+};
+
+/** What each of the directory's calls serves, as its load is counted (adminLoad); "other" for one not listed. */
+const FAMILIES: Record<string, string> = {
+  accountFor: "signin", upsertUser: "signin",
+  me: "me", invitationsFor: "me", setOwnPicture: "me", deleteAccount: "me", revokeSessions: "me",
+  isBeta: "beta",
+  seen: "sockets", closed: "sockets", stationConnected: "sockets", stationState: "sockets", stationLeft: "sockets", stationSaid: "sockets",
+  fetch: "sockets", webSocketMessage: "sockets", webSocketClose: "sockets", webSocketError: "sockets",
+  enroll: "stations", isStation: "stations", pushTargets: "stations", addFeedback: "stations", fixedUntold: "stations", toldFixed: "stations", markFixed: "stations",
+  registerPush: "push", unregisterPush: "push", dropPush: "push",
+  tellAll: "broadcast", tellStations: "broadcast", modelsMade: "broadcast", tellAdmins: "broadcast", alarm: "broadcast",
+};
+for (const name of ["workspace", "createWorkspace", "updateWorkspace", "deleteWorkspace", "invite", "previewInvitation", "acceptInvitation", "acceptById", "declineById", "revokeInvitation",
+  "setRole", "removeMember", "addMembers", "removeAdded", "setRelays", "setWay", "manages", "createEnrollment", "updateStation", "removeStation", "memberRole", "recordDevice", "devices",
+  "lock", "appendLock", "clearLock", "requestLock", "lockRequests", "dropLockRequest"]) FAMILIES[name] = "workspaces";
+for (const name of ["adminUsers", "setMayCreate", "adminPending", "setPending", "removePending", "setBlocked", "setBeta", "adminDeleteWorkspace", "adminCreateWorkspace", "adminSetLimits",
+  "adminEnrollment", "adminWorkspaces", "inviteCodes", "createInviteCode", "revokeInviteCode", "adminFeedback", "setFeedbackStatus", "adminLoad"]) FAMILIES[name] = "admin";
+/** What it runs for itself rather than being called for. */
+const UNCOUNTED = new Set(["constructor", "handOff", "migrateStationMembers", "migrateFreePlan", "send", "settled", "sweep"]);
+
+/** Each directory's calls since they were last kept, by `hour family`: counted in memory, so a call that only reads writes nothing. */
+const counted = new WeakMap<Directory, Map<string, number>>();
+for (const name of Object.getOwnPropertyNames(Directory.prototype)) {
+  const prototype = Directory.prototype as unknown as Record<string, unknown>;
+  const method = prototype[name];
+  if (UNCOUNTED.has(name) || typeof method !== "function") continue;
+  const family = FAMILIES[name] ?? "other";
+  prototype[name] = function (this: Directory, ...args: unknown[]) {
+    const counts = counted.get(this) ?? counted.set(this, new Map()).get(this)!;
+    const k = `${Math.floor(nowSeconds() / 3600)} ${family}`;
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+    return (method as (...a: unknown[]) => unknown).apply(this, args);
+  };
 }
 
 function cleanName(value: unknown): string | null {

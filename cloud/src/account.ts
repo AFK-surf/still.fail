@@ -1,4 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
+import { header } from "./compat";
+import { EVENTS_PROTOCOLS, sockets, type Delivery } from "./directory";
 import type { Env } from "./env";
 import { noted, type SpanNotes } from "./tracing";
 import { extendPersonal, type PersonalEntry } from "./personal-lock";
@@ -22,8 +24,33 @@ type Session = {
   rotated?: number;
 };
 type AccountData = Identity & { blocked: boolean; sessions: Session[]; ended?: Ended[] };
-/** One Google account's sessions. What it may reach is the Directory's business. */
+/** What `live` says of an access token: its session is live, over its requests a minute, or not let in where it asks. */
+export type Live = boolean | "limited" | "not_beta";
+/**
+ * One account's sessions, and its devices' `/v1/events` sockets (hibernatable, so idle ones cost nothing), on which
+ * what the Directory tells it is sent (directory.ts #deliver). What it may reach is the Directory's business.
+ */
 export class Account extends DurableObject<Env> {
+  /** How many times it was told whether it is let into the test channel while this object lives (`beta`). */
+  #betaTold = 0;
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+    if (sockets.where(env) === "primary") this.handBack();
+  }
+
+  /** Rolled back (directory.ts `sockets`): its devices' sockets closed as a restarting service's, to reconnect onto the Directory. */
+  protected handBack(): void {
+    for (const ws of this.ctx.getWebSockets()) {
+      try {
+        ws.close(1012, "moved");
+      } catch {
+        // Closed already.
+      }
+    }
+  }
+
   private data(): AccountData | undefined {
     return this.ctx.storage.kv.get<AccountData>("account");
   }
@@ -254,14 +281,86 @@ export class Account extends DurableObject<Env> {
     }
   }
 
-  /** Whether an access token's session is still live (not logged out, blocked or expired); `limited` when it is, but
-   * over its requests a minute. */
-  live(claims: Claims): boolean | "limited" {
+  /**
+   * Whether an access token's session is still live (not logged out, blocked or expired); `limited` when it is, but
+   * over its requests a minute; on the test channel (`testChannel`), `not_beta` for an account not let in.
+   */
+  async live(claims: Claims, testChannel = false): Promise<Live> {
     if (!this.session(this.data(), claims)) return false;
+    if (testChannel && !(await this.beta(claims.sub))) return "not_beta";
     return this.charge() ? true : "limited";
   }
 
+  /** Whether it is let into the test channel: asked of the Directory once, then told as it changes (`deliver`). */
+  private async beta(sub: string): Promise<boolean> {
+    const kept = this.ctx.storage.kv.get<boolean>("beta");
+    if (kept !== undefined) return kept;
+    const told = this.#betaTold;
+    const beta = await this.env.DIRECTORY.getByName("primary").isBeta(sub);
+    if (told === this.#betaTold) this.ctx.storage.kv.put("beta", beta);
+    return beta;
+  }
+
+  /** What the Directory tells it (directory.ts #deliver): sent on its devices' sockets; whether it holds any. */
+  deliver(_sub: string, body: Delivery): { live: boolean } {
+    if (body.beta !== undefined) {
+      this.#betaTold++;
+      this.ctx.storage.kv.put("beta", body.beta);
+    }
+    const open = this.ctx.getWebSockets().filter((ws) => ws.readyState === WebSocket.OPEN);
+    for (const ws of open) {
+      for (const frame of body.frames ?? []) {
+        try {
+          ws.send(frame);
+        } catch {
+          // Closing already; its device reconnects and reads it all again.
+        }
+      }
+    }
+    return { live: open.length > 0 };
+  }
+
+  /**
+   * A device's events socket, which the Worker checked the access token's signature of (its session, `x-stillfail-sub`
+   * and `-sid`, is checked here; the subprotocol to select in `-protocol`; `-channel` beta on the test channel).
+   * The Directory notes the device was seen, and tells this object what its devices are to hear from then on.
+   */
+  private async events(request: Request): Promise<Response> {
+    const claims = { sub: header(request, "sub") ?? "", sid: header(request, "sid") ?? "" } as Claims;
+    if (!this.session(this.data(), claims)) return denied();
+    if (header(request, "channel") === "beta" && !(await this.beta(claims.sub))) return reply({ error: "not_beta" }, 403);
+    if (!this.charge()) return limited();
+    const gen = await this.env.DIRECTORY.getByName("primary").seen(claims.sub);
+    this.ctx.storage.kv.put("events-gen", gen);
+    const pair = new WebSocketPair();
+    this.ctx.acceptWebSocket(pair[1]);
+    pair[1].serializeAttachment({ sub: claims.sub });
+    return new Response(null, { status: 101, webSocket: pair[0], headers: { "sec-websocket-protocol": header(request, "protocol") ?? EVENTS_PROTOCOLS[0] } });
+  }
+
+  async webSocketClose(ws: WebSocket, code: number): Promise<void> {
+    try {
+      ws.close(code === 1005 || code === 1006 ? 1000 : code);
+    } catch {
+      // The runtime completed the close.
+    }
+    await this.#closed(ws);
+  }
+
+  async webSocketError(ws: WebSocket): Promise<void> {
+    await this.#closed(ws);
+  }
+
+  /** Its last socket gone: the Directory need not tell it what is for them (the latest opening's, so not one after). */
+  async #closed(gone: WebSocket): Promise<void> {
+    if (this.ctx.getWebSockets().some((ws) => ws !== gone && ws.readyState === WebSocket.OPEN)) return;
+    const { sub } = gone.deserializeAttachment() as { sub: string };
+    const gen = this.ctx.storage.kv.get<number>("events-gen");
+    if (gen !== undefined) await this.env.DIRECTORY.getByName("primary").closed(sub, gen);
+  }
+
   async fetch(request: Request): Promise<Response> {
+    if (new URL(request.url).pathname === "/events") return this.events(request);
     const token = bearerToken(request);
     const claims = token ? await verifyToken(this.env, token, "access") : null;
     const data = this.data();

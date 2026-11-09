@@ -189,7 +189,7 @@ export async function harness(
       },
       r2Buckets: ["RELEASES"],
       durableObjects: {
-        ...Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter", "RelayLoad", "ServiceStatus"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS", "RELAY_LOAD", "SERVICE_STATUS"][i], { className, useSQLite: true }])),
+        ...Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter", "RelayLoad", "ServiceStatus", "Station"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS", "RELAY_LOAD", "SERVICE_STATUS", "STATIONS"][i], { className, useSQLite: true }])),
         RELAY: { className: "Relay", scriptName: "relay", useSQLite: true },
       },
       outboundService: async (request) => {
@@ -267,6 +267,17 @@ export async function harness(
   const fetchOld = (on: "main" | "admin" | "preview", path: string, init?: RequestInit) => mf.dispatchFetch({ main: oldOrigin, admin: oldAdminOrigin, preview: oldPreviewOrigin }[on] + path, init as any);
   /** A request straight to one of the Workers ("api", "relay", "static"), whatever the routes say. */
   const fetchWorker = async (name: string, url: string, init?: RequestInit) => ((await mf.getWorker(name)) as unknown as { fetch(url: string, init?: RequestInit): Promise<Response> }).fetch(url, init);
+  /** One of the API's Durable Objects, by its binding and name, with the test hooks test/worker.ts gives it. */
+  // deno-lint-ignore no-explicit-any
+  const object = async (binding: "DIRECTORY" | "ACCOUNTS" | "STATIONS", name: string): Promise<any> => {
+    const namespace: any = await mf.getDurableObjectNamespace(binding, "api");
+    return namespace.get(namespace.idFromName(name));
+  };
+  /**
+   * Once what still.fail cloud tells devices' and stations' objects after a change has got there (the Directory's
+   * deliveries go out as the change answers): the barrier a test waits at instead of waiting a while.
+   */
+  const settled = async () => (await object("DIRECTORY", "primary")).settled();
   async function begin(sub = "google-test-user", invalid?: string, callback = "http://127.0.0.1:32145/oauth/callback") {
     const verifier = randomSecret(),
       state = randomSecret();
@@ -367,6 +378,8 @@ export async function harness(
     fetchBeta,
     fetchOld,
     fetchWorker,
+    object,
+    settled,
     begin,
     complete,
     exchange,
