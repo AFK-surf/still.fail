@@ -1297,10 +1297,6 @@ export class Data {
     this.of(station)?.dropThread(station, id);
   }
 
-  unlistThread(station: string, id: number): void {
-    this.of(station)?.unlistThread(station, id);
-  }
-
   raiseLast(station: string, id: number, n: number): void {
     if (!Number.isInteger(id)) return;
     this.of(station)?.raiseLast(station, id, n);

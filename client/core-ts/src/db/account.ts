@@ -1326,11 +1326,6 @@ export class AccountDb {
     });
   }
 
-  /// A thread out of the lists (it is not there any more), its entries kept.
-  unlistThread(station: string, id: number): void {
-    this.#write(() => this.#deleteThread(station, id));
-  }
-
   /// A thread goes at least to `n` (an event, a message sent).
   raiseLast(station: string, id: number, n: number): void {
     this.#write(() => {

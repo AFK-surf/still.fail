@@ -2106,18 +2106,19 @@ export class Views implements Owner {
     if (pageV === undefined) return undefined;
     if ("err" in pageV) return pageV;
     const page = pageV.ok as J;
-    let thread: J;
     const data = this.#core.data;
-    if (data.listed(station, "threads")) {
-      const found = data.listedThread(station, id);
-      if (found === undefined) return { err: new CoreError("http_404", t("core-views.error.no_chat"), 404) };
-      thread = structuredClone(found);
-    } else {
+    const listed = data.listed(station, "threads");
+    if (!listed) {
       const threadsV = this.value({ topic: "threads", station });
       if (threadsV !== undefined && "err" in threadsV) return threadsV;
-      if (!isObject(page.thread)) return undefined;
-      thread = structuredClone(page.thread);
     }
+    // Its summary as the station lists it, else as held (one not in the list read last: made since, elsewhere or while
+    // away, or told before that list came back), else not known yet. A chat not in the list held is not one gone: that
+    // is the station's to say (sync.ts #threadGone, the page's error); it said so at once of a chat made since
+    // (2026-11-09).
+    const summary = (listed ? data.listedThread(station, id) : undefined) ?? (isObject(page.thread) ? page.thread : undefined);
+    if (summary === undefined) return undefined;
+    const thread: J = structuredClone(summary);
     const agents = timed("chat.agents", () => this.#agentsOf(station, thread));
     // What two chats' agents wrote each other is not said in it: it has a page of its own (`chatLetters`).
     const keys = new Set(members(thread));
