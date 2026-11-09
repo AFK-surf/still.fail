@@ -38,7 +38,7 @@ pub fn View::bones(self : View, color : Live[Int64]) -> View {
         self.tree.focus_lost_in(self.at)
         self.tree.back_lost_in(self.at)
       }
-      self.tree.modals_told()
+      self.tree.modals_told(within=self.at)
     }
   }
   match color {

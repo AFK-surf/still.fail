@@ -53,6 +53,9 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // it); forgotten as the column is laid out at another width, or as all words are measured anew (the system's size of
   // words, how the theme shapes them: Tree::words_again))
   let heights : Map[K, Double] = Map([])
+  // (those whose height changed or was forgotten since their tops were last worked out: those alone looked up again
+  // then, not every key hashed each time one is told)
+  let heights_changed : Array[K] = []
   let told : @signals.Signal[Int] = @signals.signal(0)
   let tell = fn() { told.set(@signals.untracked(fn() { told.get() }) + 1) }
   // (the same, each block's own, by its key, while it is made: what its height reads, not all of them read again as
@@ -65,6 +68,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     if gone.length() > 0 {
       for k in gone {
         heights.remove(k)
+        heights_changed.push(k)
         if tall.get(k) is Some(c) {
           c.set(None)
         }
@@ -76,16 +80,42 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // they were worked out, what is read for whether they changed: not all of them compared each time the column is
   // scrolled)
   let laid_n = Ref(0)
+  // (the keys they were worked out for, where each is among them, and its height and whether it was laid out: made
+  // again as the keys change, else only those whose height changed since)
+  let laid_keys : Ref[Array[K]] = Ref([])
+  let laid_at : Map[K, Int] = Map([])
+  let laid_h : Array[(Double, Bool)] = []
+  let height_of = fn(k : K) {
+    match heights.get(k) {
+      Some(h) => (h, true)
+      None => (est, false)
+    }
+  }
   let laid = @signals.computed(fn(_) {
     told.get() |> ignore
     laid_n.val = laid_n.val + 1
-    let out : Array[(K, Double, Double, Bool)] = []
-    let mut top = 0.0
-    for k in keys() {
-      let (h, known) = match heights.get(k) {
-        Some(h) => (h, true)
-        None => (est, false)
+    let ks = keys()
+    if physical_equal(ks, laid_keys.val) {
+      for k in heights_changed {
+        match laid_at.get(k) {
+          Some(i) => laid_h[i] = height_of(k)
+          None => ()
+        }
       }
+    } else {
+      laid_keys.val = ks
+      laid_at.clear()
+      laid_h.clear()
+      for i, k in ks {
+        laid_at[k] = i
+        laid_h.push(height_of(k))
+      }
+    }
+    heights_changed.clear()
+    let out : Array[(K, Double, Double, Bool)] = Array::new(capacity=ks.length())
+    let mut top = 0.0
+    for i, k in ks {
+      let (h, known) = laid_h[i]
       // (as tall as it is laid out in the column: on its host's pixels where it sets a page's list's rows on them,
       // Tree::rows_slot)
       let h = self.tree.rows_slot(h)
@@ -315,6 +345,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       match now {
         (k, Some((_, h))) if heights.get(k) != Some(h) => {
           heights[k] = h
+          heights_changed.push(k)
           if tall.get(k) is Some(c) {
             c.set(Some(h))
           }

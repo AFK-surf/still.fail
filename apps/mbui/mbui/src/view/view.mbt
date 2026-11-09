@@ -776,6 +776,11 @@ pub struct Tree {
   mut withins_passing : Bool
   /// the nodes whose taking input is read (View::takes_input), as first read
   inputs_at : Array[Int]
+  /// what is to be told whether each node in it takes input as the change is committed (Tree::inputs_told): the nodes
+  /// what changed is in, each with all it holds (`inputs_whole`: all of the tree's, a modal layer said, a layer's place
+  /// in the stack or another's modal layer changed)
+  inputs_in : Array[Int]
+  mut inputs_whole : Bool
   /// which following of the point is the one now (Tree::follow_point): each said, and each let go, another
   mut point_said : Int
   /// how many times what a point would hit may have changed (a layout, a place, the order, a node made or let go, what
@@ -992,6 +997,8 @@ pub fn Tree::new(
     withins_at: [],
     withins_passing: false,
     inputs_at: [],
+    inputs_in: [],
+    inputs_whole: false,
     point_said: 0,
     hits: 0,
     downs: [],
@@ -3865,7 +3872,7 @@ pub fn View::presses(self : View, on : Live[Bool]) -> View {
       self.tree.back_lost_in(self.at)
     }
     // (what hosts it holds in it told, at this cause, once the change is committed whole: Tree::on_modals)
-    self.tree.modals_told()
+    self.tree.modals_told(within=self.at)
   }
   match on {
     Is(v) => set(v)
@@ -4114,7 +4121,15 @@ pub fn View::modal(self : View, on : Live[Bool]) -> View {
 /// A modal layer said on or off, or where what is drawn is among what holds it changed (one made, let go, moved, back
 /// from leaving): a finger held on what the topmost no longer lets take input called off, and what hosts the tree told
 /// (Tree::on_modals), once the change doing it is committed whole, at that change's moment (Tree::modals_settled).
-fn Tree::modals_told(self : Tree) -> Unit {
+fn Tree::modals_told(self : Tree, within? : Int = -1) -> Unit {
+  // (what takes input in it alone where the change is node `within` and what it holds (one made, moved, leaving, said
+  // to take no press): whether each else takes input reads only what holds it and modal layers, none of which it
+  // changed while no modal layer is said, nor the old frame's moved; else all of it)
+  if within < 0 || !self.modals.is_empty() || self.held_under_now() != self.held_under {
+    self.inputs_whole = true
+  } else if !self.inputs_whole && !self.inputs_in.contains(within) {
+    self.inputs_in.push(within)
+  }
   // (what takes input changed: which column's bar the pointer is along told anew too, at this change's end)
   if !self.bar_cols.is_empty() {
     self.bars_due = true
@@ -4306,17 +4321,19 @@ pub fn Tree::allows(self : Tree, id : NodeId) -> Bool {
 }
 
 ///|
+/// Where the old frame's topmost modal layer is in the window's stack of layers (Tree::hold_under): as it is as asked
+/// where what hosts it said how to ask it, else as last told.
+fn Tree::held_under_now(self : Tree) -> Int {
+  match self.held_under_of {
+    Some(f) => f()
+    None => self.held_under
+  }
+}
+
+///|
 fn Tree::allows_at(self : Tree, at : Int, held? : Bool = true) -> Bool {
   // (an old frame's modal layer over it in the window's stack of layers: Tree::held_under)
-  // (as it is as asked where what hosts it said how to ask it, else as last told)
-  let under = if !held {
-    -2
-  } else {
-    match self.held_under_of {
-      Some(f) => f()
-      None => self.held_under
-    }
-  }
+  let under = if !held { -2 } else { self.held_under_now() }
   if under > -2 && self.stack_at(at) <= under {
     return false
   }
@@ -5846,7 +5863,7 @@ fn View::box_appended(self : View, child : Int) -> Unit {
   // boxes_put does)
   self.tree.layout_marked_at(at, within=true)
   self.tree.order_marked_in(at)
-  self.tree.modals_told()
+  self.tree.modals_told(within=child)
 }
 
 ///|
@@ -5885,7 +5902,7 @@ fn Tree::boxes_put(self : Tree, at : Int) -> Unit {
   self.layout_marked_at(at, within=true)
   self.order_marked_in(at)
   // (what is drawn over what, among what holds it, changed: whether a modal layer is over what is held)
-  self.modals_told()
+  self.modals_told(within=at)
 }
 
 ///|
@@ -5961,7 +5978,7 @@ fn View::park(self : View, v : View) -> () -> Unit {
   self.tree.touched(self.at)
   self.tree.order_marked_in(self.at)
   self.boxes_again()
-  self.tree.modals_told()
+  self.tree.modals_told(within=v.at)
   fn() {
     for w in wakes {
       w()
@@ -6376,7 +6393,7 @@ fn View::leave(self : View, v : View, ms : Double) -> Unit {
   self.tree.hold_lost_in(v.at)
   self.tree.focus_lost_in(v.at)
   self.tree.back_lost_in(v.at)
-  self.tree.modals_told()
+  self.tree.modals_told(within=v.at)
   self.tree.due_leaving(v.id())
   self.tree.marked()
 }
@@ -6397,7 +6414,7 @@ fn View::come_back(self : View, v : View) -> Unit {
     self.tree.place_marked_at(v.at)
   }
   // (a modal layer back: over what is held again)
-  self.tree.modals_told()
+  self.tree.modals_told(within=v.at)
   self.tree.marked()
 }
 
