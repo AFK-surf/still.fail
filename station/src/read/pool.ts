@@ -110,7 +110,7 @@ function filling(op: string, args: unknown): boolean {
 const PAGES = new Set(["timeline", "machineSessions"]);
 /// The reads the MoonBit reader answers itself (station/mb src/readops), on readers of their own (`moved`) where its
 /// program is there; every other read is a worker's.
-const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries"]);
+const MOVED = new Set(["job", "jobLog", "historyPendingCard", "statePendingCard", "deliveryCardState", "reviewPendingCard", "stateQuestion", "pendingDeliveries", "latestMessages", "chatHistoryMessages", "openedChatSaid"]);
 
 export class Readers {
   /// What devices ask, and what the station tells (`told`), each answered by readers of its own.

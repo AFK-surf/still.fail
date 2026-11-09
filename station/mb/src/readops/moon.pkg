@@ -4,6 +4,7 @@ import {
   "station/sql",
   "station/cards",
   "station/legacy",
+  "station/letters",
   "station/jsjson",
   "moonbitlang/core/json",
 }
