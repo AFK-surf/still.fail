@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [daab295ed](https://github.com/AFK-surf/still.fail/commit/daab295edb63c379ed421d4eb603d3681e912c26) mbui: a node's bones asked of a tree with none in  | 1.72 | 2.3 | 9.55 | 28.06 | 33.29 | 25.06 | 45.78 | 93.29 | 173.87 |
 | [d7e667d5c](https://github.com/AFK-surf/still.fail/commit/d7e667d5ca44930cb92519df54004e1dfca47b8e) A station gone silent does not hold the vault up:  | 1.72 | 2.3 | 9.55 | 28.06 | 33.29 | 25.06 | 45.78 | 93.55 | 180.72 |
 | [4609f133e](https://github.com/AFK-surf/still.fail/commit/4609f133ef61e66ed6679607e52b60bf1f3d7208) mbui: send pressed before the composer is built ag | 1.72 | 2.29 | 9.55 | 28.06 | 33.27 | 25.06 | 45.77 | 93.41 | 162.57 |
 | [d2e401bf4](https://github.com/AFK-surf/still.fail/commit/d2e401bf4c1346d44c0064e9b2a08d1077ffea46) mbui: the chat's untested ways tested, and its lis | 1.72 | 2.29 | 9.55 | 28.06 | 33.27 | 25.06 | 45.77 | 93.46 | 173.41 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [7274a2bc1](https://github.com/AFK-surf/still.fail/commit/7274a2bc142591a5462c6281ff237cc67289d45d) app: a history step's label goes on in the next li | 1.66 | 2.21 | 9.09 | 27.83 | 32.22 | 24.84 | 44.76 | 92.6 | 131.54 |
 | [4aa7dac25](https://github.com/AFK-surf/still.fail/commit/4aa7dac250cd34a8c99d421ec988e6486139e3e1) mbui: a list's rows of one kind taken by those tha | 1.66 | 2.21 | 9.09 | 27.83 | 32.22 | 24.84 | 44.76 | 92.88 | 166.44 |
 | [8209a1e38](https://github.com/AFK-surf/still.fail/commit/8209a1e38fb7433856b9eb1e2915e2e68c173d02) mbui: a pipeline of the shader for each kind it dr | 1.66 | 2.21 | 9.06 | 27.8 | 32.1 | 24.83 | 44.69 | 92.39 | 141.77 |
-| [ed1f4e05e](https://github.com/AFK-surf/still.fail/commit/ed1f4e05e9d0704d6c8cb28bac976511dd740420) mbui-size: run main's scripts, not the measured co | 1.66 | 2.21 | 9.06 | 27.8 | 32.1 | 24.83 | 44.69 | 92.39 | 155.57 |
