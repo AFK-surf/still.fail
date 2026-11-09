@@ -310,13 +310,13 @@ fn filter_button(
   let look = if in_bar { filter_box_bar() } else { filter_box }
   let b = c.box(style=look, id~, fn() {
     let plain = @sf.icon(c, "filter", size=side_icon, color=t.p.muted)
-    c.look_by(plain, fn() { @ui.look(alpha=1.0 - dmax(0.0, dmin(1.0, hot.get()))) })
+    c.look_by(plain, fn() { @ui.look(alpha=1.0 - dmax(0.0, dmin(1.0, hot.get(c)))) })
     let lit = c.layer(fn() {
       c.box(style=filter_lit_at, fn() { @sf.icon(c, "filter", size=side_icon, color=t.p.text) |> ignore }) |> ignore
     })
-    c.look_by(lit, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, hot.get()))) })
+    c.look_by(lit, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, hot.get(c)))) })
   })
-  c.bg_by(b, fn() { @sf.alpha(hover, hot.get()) })
+  c.bg_by(b, fn() { @sf.alpha(hover, hot.get(c)) })
   c.semantics(b, Button, id~, label=@sf.t("web-main.filter.chats.named", args=[("named", filter_named(shown))]))
   @sf.tip(c, "side/filter-tip", id, @sf.t("web-main.filter.chats"))
 }

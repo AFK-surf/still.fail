@@ -1361,7 +1361,7 @@ fn narrow_reader_chrome(
     c.layer(fn() { c.box(style=@ui.style(w=Full, h=Fixed(room_top), bg=Data(p.ground)), fn() {  }) |> ignore }) |> ignore
   }
   // how far through it is while they are away
-  if !r.chrome || !k.over() {
+  if !r.chrome || !k.over(c) {
     let n = c.layer(fn() {
       c.box(style=desk_hairline_place, fn() {
         c.box(style=desk_hairline.then(@ui.style(bg=Data(alpha(p.ink, desk_hairline_share)))), fn() {
@@ -1374,14 +1374,14 @@ fn narrow_reader_chrome(
       })
       |> ignore
     })
-    c.look_by(n, fn() { @ui.look(alpha=desk_whole - k.get()) })
+    c.look_by(n, fn() { @ui.look(alpha=desk_whole - k.get(c)) })
   }
   let title = match book {
     Some(b) =>
       joined([if chapter >= 0 && chapters.length() >= 2 { chapters[chapter].0 } else { "" }, pct], " · ")
     None => ""
   }
-  if r.chrome || !k.over() {
+  if r.chrome || !k.over(c) {
     c.layer(fn() {
       c.box(style=desk_found_place, fn() {
         c.box(style=@ui.style(h=Fixed(room_top + narrow_bar_off)), fn() {  }) |> ignore
@@ -1444,7 +1444,7 @@ fn narrow_reader_chrome(
             |> ignore
           })
           c.look_by(n, fn() {
-            let k = k.get()
+            let k = k.get(c)
             @ui.look(alpha=k, dy=-narrow_bars_step * (desk_whole - k))
           })
         })
@@ -1460,13 +1460,13 @@ fn narrow_reader_chrome(
       c.box(style=desk_found_place, fn() {
         c.box(style=@ui.style(h=Fixed(room_top + narrow_bar_off + narrow_found_down * to)), fn() {  }) |> ignore
         let found = c.box(style=narrow_bar_row, fn() { desk_found(c, r, p) })
-        c.moved_by(found, fn(_, _) { (0.0, narrow_found_down * (k.get() - to)) })
+        c.moved_by(found, fn(_, _) { (0.0, narrow_found_down * (k.get(c) - to)) })
       })
       |> ignore
     })
     |> ignore
   }
-  if r.chrome || !k.over() {
+  if r.chrome || !k.over(c) {
     c.layer(fn() {
       c.box(style=narrow_foot_place, fn() {
         c.box(style=narrow_bar_row, fn() {
@@ -1523,7 +1523,7 @@ fn narrow_reader_chrome(
             |> ignore
           })
           c.look_by(n, fn() {
-            let k = k.get()
+            let k = k.get(c)
             @ui.look(alpha=k, dy=narrow_bars_step * (desk_whole - k))
           })
         })

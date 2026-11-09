@@ -688,7 +688,7 @@ pub fn over_flight(c : @ui.Ctx, i : Int) -> Unit {
     None => pv_leaving.get()
   }
   match v {
-    Some(v) if v.flies && v.flying() <= 0.0 => c.stratum(i, OverLayers)
+    Some(v) if v.flies && v.flying(c) <= 0.0 => c.stratum(i, OverLayers)
     _ => ()
   }
 }
@@ -2068,12 +2068,12 @@ pub fn Viewer::cancel_download(self : Viewer, src : Source, dl : Json?) -> Unit 
 
 ///|
 /// How far its flight has got (0 the thumbnail, 1 the stage): its share past the going out of the flight's one Move
-/// (a thing moved); 1 when it is not flying.
-pub fn Viewer::flying(self : Viewer) -> Double {
+/// (a thing moved), as the old view `c` reads it; 1 when it is not flying.
+pub fn Viewer::flying(self : Viewer, c : @ui.Ctx) -> Double {
   if !self.flies {
     return 1.0
   }
-  let e = self.fly.get()
+  let e = self.fly.get(c)
   if e <= self.fly_lift {
     0.0
   } else {

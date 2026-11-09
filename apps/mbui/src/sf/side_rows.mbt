@@ -23,8 +23,8 @@ pub fn nav_ground_by(c : @ui.Ctx, key : String, hover : Bool, on : Bool, lit? : 
   let h = @motion.told(c, key + "/hover", if hover { 1.0 } else { 0.0 }, spec=nav_fade)
   let o = @motion.told(c, key + "/on", if on { 1.0 } else { 0.0 }, spec=nav_fade)
   fn() {
-    let h = h.get()
-    let o = o.get()
+    let h = h.get(c)
+    let o = o.get(c)
     if h <= 0.0 && o <= 0.0 {
       0L
     } else {

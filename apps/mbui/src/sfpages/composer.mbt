@@ -365,7 +365,7 @@ pub fn composer(
     composing.toolbar_leaving = if spec.toolbar is None { composing.toolbar_before } else { None }
   }
   let fade = @sfbase.new_fade(c)
-  if fade.over() {
+  if fade.over(c) {
     composing.toolbar_leaving = None
   }
   composing.toolbar = spec.toolbar
@@ -422,7 +422,7 @@ pub fn composer(
             }
             (None, Some(f)) => {
               chosen = c.box(style=choices, fn() { c.hidden_from_semantics(f) })
-              c.look(chosen, @ui.look(alpha=1.0 - fade.get()))
+              c.look(chosen, @ui.look(alpha=1.0 - fade.get(c)))
               c.draw_only(chosen)
             }
             (None, None) => c.box(style=tools_gap, fn() {  }) |> ignore
@@ -715,7 +715,7 @@ fn composer_text(
         max_lines=text_lines(c),
         plain=true,
         color=p.text,
-        placeholder_color=@sf.alpha(p.subtle, hint_in.get() * said_look.alpha),
+        placeholder_color=@sf.alpha(p.subtle, hint_in.get(c) * said_look.alpha),
         caret_color=if away { @sf.alpha(p.accent, 0.0) } else { p.accent },
         enter_sends=@sf.enter_sends(command=by_command),
         command_sends=@sf.command_sends(by_command),
@@ -788,12 +788,12 @@ fn composer_hint(
     ("\u{1}" + spec.session == composing.draft_before || moved)
   composing.hint_shape = shape
   if hidden || @sfbase.flight_hint_away(c, w.key) {
-    hint.snap(0.0)
+    hint.snap(c, 0.0)
   } else if reshaped {
-    hint.snap(0.0)
-    hint.animate(1.0, @motion.tween(@sf.hint_back_ms, ease=Out, delay=going.duration(0.0, 1.0, 0.0)))
+    hint.snap(c, 0.0)
+    hint.animate(c, 1.0, @motion.tween(@sf.hint_back_ms, ease=Out, delay=going.duration(0.0, 1.0, 0.0)))
   } else {
-    hint.follow(1.0, @motion.tween(@sf.hint_back_ms, ease=Out))
+    hint.follow(c, 1.0, @motion.tween(@sf.hint_back_ms, ease=Out))
   }
   hint
 }
@@ -1040,7 +1040,7 @@ fn composer_extra_items(c : @ui.Ctx, src : Source, spec : ComposerSpec, w : Writ
 fn held_coming(c : @ui.Ctx, i : Int, key : String, room : Ref[Int]) -> Unit {
   @motion.entering(c, i, key + "/in", @sf.waiting_in, at_once=!composing.same_draft)
   c.look_by(i, fn() {
-    match @motion.grown_shown("composer/extras") {
+    match @motion.grown_shown(c, "composer/extras") {
       Some(shown) if room.val >= 0 => {
         let (_, top, _, _) = c.node_rect(room.val)
         let (_, y, _, h) = c.node_rect(i)
@@ -2054,15 +2054,15 @@ pub fn send_in_chat(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, w : Wr
 /// . Then its box is laid
 /// out as it is, its ground going down to that (composer's reshape, for this), and its room down on the same curve.
 fn composer_hold(c : @ui.Ctx, draft : String, room : Double, box : Double, ms : Double) -> Unit {
-  @motion.anim(c, "composer/held/" + draft, 0.0, global=true).snap(room)
+  @motion.anim(c, "composer/held/" + draft, 0.0, global=true).snap(c, room)
   let a = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true)
-  a.snap(1.0)
+  a.snap(c, 1.0)
   // (down on the flight's clock of what was sent, as its ground does: composer_let_go)
   // det-ok(motion-length): words sent's own, set with their flight (sf/motion.mbt kind 4)
-  a.animate(0.0, @motion.tween(@sfbase.sent_down_of(draft), ease=Move, delay=ms))
+  a.animate(c, 0.0, @motion.tween(@sfbase.sent_down_of(draft), ease=Move, delay=ms))
   let b = @motion.anim(c, "composer/held-box/" + draft, 0.0, global=true)
-  b.snap(box)
-  b.animate(0.0, @motion.Snap(ms))
+  b.snap(c, box)
+  b.animate(c, 0.0, @motion.Snap(ms))
 }
 
 ///|
@@ -2127,7 +2127,7 @@ fn composer_was(c : @ui.Ctx) -> String {
 /// it is down, its declared end), its ground going down with its room.
 fn composer_let_go(c : @ui.Ctx, draft : String) -> Bool {
   let a = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true)
-  a.target() == 0.0 && !a.over()
+  a.target() == 0.0 && !a.over(c)
 }
 
 ///|
@@ -2141,14 +2141,14 @@ fn composer_released_at(c : @ui.Ctx, draft : String) -> Double {
 /// Whether words sent from draft `draft`'s composer hold its room (composer_hold: from as they are sent till it is
 /// down, its declared end): its room theirs, not its ground's as that reshapes.
 fn composer_held(c : @ui.Ctx, draft : String) -> Bool {
-  !@motion.anim(c, "composer/hold/" + draft, 0.0, global=true).over()
+  !@motion.anim(c, "composer/hold/" + draft, 0.0, global=true).over(c)
 }
 
 ///|
 /// How tall draft `draft`'s composer box is held for words sent from it, while they are in it (composer_hold); 0 when
 /// it is not.
 fn composer_held_box(c : @ui.Ctx, draft : String) -> Double {
-  @motion.anim(c, "composer/held-box/" + draft, 0.0, global=true).get()
+  @motion.anim(c, "composer/held-box/" + draft, 0.0, global=true).get(c)
 }
 
 ///|
@@ -2171,8 +2171,8 @@ pub fn composer_room(c : @ui.Ctx, draft : String, settled? : Bool = false, held?
   if !held {
     return now
   }
-  let held = @motion.anim(c, "composer/held/" + draft, 0.0, global=true).get()
-  let share = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true).get()
+  let held = @motion.anim(c, "composer/held/" + draft, 0.0, global=true).get(c)
+  let share = @motion.anim(c, "composer/hold/" + draft, 0.0, global=true).get(c)
   if held > now {
     now + (held - now) * share
   } else {
@@ -2768,9 +2768,9 @@ pub fn composer_foot_in(c : @ui.Ctx, pane : Double) -> Double {
     None if way.id == "" => to
     None => {
       let a = @motion.Anim::new(composer_foot_at(pane))
-      a.follow(to, @sf.move_spring)
+      a.follow(c, to, @sf.move_spring)
       composer_foot_way.val = Some((a, way.id, way.ends))
-      a.get()
+      a.get(c)
     }
     Some((a, last, _)) if way.id == "" && last == "" && to != a.target() => {
       composer_foot_way.val = None
@@ -2779,15 +2779,15 @@ pub fn composer_foot_in(c : @ui.Ctx, pane : Double) -> Double {
     // (the way there: on from the moment it is, whichever frame sees it)
     Some((a, last, ends)) if way.id == "" && last != "" => {
       if to != a.target() {
-        a.animate(to, @sf.move_spring, start_at=dmin(ends, c.moment()))
+        a.animate(c, to, @sf.move_spring, start_at=dmin(ends, c.moment()))
       }
       composer_foot_way.val = Some((a, "", 0.0))
-      a.get()
+      a.get(c)
     }
     Some((a, _, _)) => {
-      a.follow(to, @sf.move_spring)
+      a.follow(c, to, @sf.move_spring)
       composer_foot_way.val = Some((a, way.id, way.ends))
-      a.get()
+      a.get(c)
     }
   }
 }

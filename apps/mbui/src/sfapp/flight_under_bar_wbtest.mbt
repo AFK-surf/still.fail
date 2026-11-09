@@ -91,7 +91,7 @@ fn picture_under_bar_faults(top : Double, platform : Int, w : Double, film? : Bo
         Some(v) if v.flies => {
           set_out.val = true
           match thumb_of(t.ctx(), v.thumb_id()) {
-            Some({ clear: Some((bar, _)), .. }) if v.flying() <= 0.0 && last_kind_at(t, x, bar / 2.0) == 4 =>
+            Some({ clear: Some((bar, _)), .. }) if v.flying(t.ctx()) <= 0.0 && last_kind_at(t, x, bar / 2.0) == 4 =>
               faults.push("frame \{frame.val}: the picture over the bar (gone out \{v.lifted_at(t.ctx().moment())})")
             _ => ()
           }

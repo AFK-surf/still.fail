@@ -774,7 +774,7 @@ pub fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : 
     let sending = fn() {
       match send_flight.get() {
         Some(f) if f.turns == rk && !f.placed => -2.0
-        Some(f) if f.turns == rk && !f.way.over() => f.way.ends()
+        Some(f) if f.turns == rk && !f.way.over(c) => f.way.ends()
         _ => -1.0
       }
     }
@@ -1055,7 +1055,7 @@ pub fn floor_of(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) -
     rd.floor_takers.clear()
     rd.floor_laid.clear()
     rd.floor_was = 0.0
-    out.snap(0.0)
+    out.snap(c, 0.0)
     return 0.0
   }
   if !rd.floor_counted {
@@ -1091,19 +1091,19 @@ pub fn floor_of(c : @ui.Ctx, rd : Reading, key : String, keys : Array[String]) -
   // stood, on the rows' spring, nothing dropped at once and no room left empty for good (whether rows came before
   // the line went or after, the list at rest the same)
   if rd.floor > rd.floor_was {
-    out.snap(out.get() + rd.floor - rd.floor_was)
-    out.animate(0.0, @sf.move_spring)
+    out.snap(c, out.get(c) + rd.floor - rd.floor_was)
+    out.animate(c, 0.0, @sf.move_spring)
   }
   rd.floor_was = rd.floor
   // (made way: none left)
-  if out.target() == 0.0 && out.get() <= 0.0 {
+  if out.target() == 0.0 && out.get(c) <= 0.0 {
     rd.floor = 0.0
     rd.floor_was = 0.0
     rd.floor_takers.clear()
     rd.floor_laid.clear()
     return 0.0
   }
-  dmax(0.0, dmin(out.get(), rd.floor - took))
+  dmax(0.0, dmin(out.get(c), rd.floor - took))
 }
 
 ///|
@@ -1757,10 +1757,11 @@ pub fn flash_rest() -> Double {
 
 ///|
 /// The flash of the message gone to, all of its way said as it starts.
-pub fn flash_start(rd : Reading) -> Unit {
+pub fn flash_start(c : @ui.Ctx, rd : Reading) -> Unit {
   rd.flash_n += 1
-  rd.flash_lit.snap(0.0)
+  rd.flash_lit.snap(c, 0.0)
   rd.flash_lit.animate(
+    c,
     0.0,
     @motion.keyframes_to(
       [1.0, 1.0, 0.0],
@@ -1788,7 +1789,7 @@ pub fn flash_of(c : @ui.Ctx, rd : Reading, ts : String) -> Double {
   if @ui.reduced_motion() {
     return if @kit.after(c, "chat-flash/\{rd.flash_n}", true, flash_ms) { 0.0 } else { 1.0 }
   }
-  rd.flash_lit.get()
+  rd.flash_lit.get(c)
 }
 
 ///|
@@ -2192,7 +2193,7 @@ pub fn list_after(
           if found {
             on_found(rd)
           } else {
-            flash_start(rd)
+            flash_start(c, rd)
           }
           c.list_scroll_to(key, at, offset=-top)
           @hostapi.log("chat: gone to message \{target.to_int()}")

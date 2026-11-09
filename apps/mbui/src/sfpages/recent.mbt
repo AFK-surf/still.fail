@@ -233,13 +233,13 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
       let (dx, _) = d.take_move()
       if dx != 0.0 {
         // past either end it goes a third as far (its edges' give)
-        let next = a.get() + dx
-        a.snap(if next > 0.0 || next < least { a.get() + dx / 3.0 } else { next })
+        let next = a.get(c) + dx
+        a.snap(c, if next > 0.0 || next < least { a.get(c) + dx / 3.0 } else { next })
       }
       if d.take_end() {
-        let to = a.get() + d.vx * 325.0
+        let to = a.get(c) + d.vx * 325.0
         let to = if to > 0.0 { 0.0 } else if to < least { least } else { to }
-        a.animate(to, @motion.sheet_spring, velocity=d.vx * 1000.0)
+        a.animate(c, to, @motion.sheet_spring, velocity=d.vx * 1000.0)
       }
       if d.take_tap() {
         let (x0, y0) = match c.rect_of(id) {
@@ -247,7 +247,7 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
           None => (0.0, 0.0)
         }
         // (from the first tile's start and top: as far in as the row has them)
-        let x = d.x - x0 - side - a.get()
+        let x = d.x - x0 - side - a.get(c)
         let y = d.y - y0 - top
         let i = (x / recent_step).to_int()
         let across = x - i.to_double() * recent_step
@@ -312,7 +312,7 @@ fn recent_strip_across(c : @ui.Ctx, tapped : (Int) -> Unit) -> Unit {
           None => ()
         }
       })
-      c.moved_by(tiles_at, fn(_, _) { (a.get(), 0.0) })
+      c.moved_by(tiles_at, fn(_, _) { (a.get(c), 0.0) })
     })
     |> ignore
   })

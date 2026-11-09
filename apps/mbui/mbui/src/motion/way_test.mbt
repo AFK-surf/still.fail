@@ -12,7 +12,7 @@ fn sent_back(ahead : Double) -> (Array[Double], Double) {
   if ahead >= 0.0 {
     t.frame_at(ahead)
     // (read where that frame has it)
-    w.get() |> ignore
+    w.get(@ui.current()) |> ignore
   }
   w.go(0.0, @motion.tween(way_ms, ease=Linear), at=back_at)
   (looks.map(fn(at) { w.value_at(at) }), w.ends_at())
@@ -110,7 +110,7 @@ let asked_going : Array[(Bool, Bool)] = [(true, true), (true, true), (false, fal
 ///|
 /// A box as wide as the way says, built from it.
 fn built_from(w : @motion.Way) -> @ui.Tester {
-  @ui.Tester::new(fn(c) { c.box(w=Px(10.0 + 100.0 * w.get()), h=Px(10.0), fn() {  }) |> ignore })
+  @ui.Tester::new(fn(c) { c.box(w=Px(10.0 + 100.0 * w.get(c)), h=Px(10.0), fn() {  }) |> ignore })
 }
 
 ///|
@@ -123,7 +123,7 @@ test "a way read as the view is painted alone (a look worked out as it is painte
   let painted = fn(w : @motion.Way) {
     @ui.Tester::new(fn(c) {
       let i = c.box(w=Px(10.0), h=Px(10.0), bg=0x3366CCFFL, fn() {  })
-      c.look_by(i, fn() { @ui.look(dx=100.0 * w.get()) })
+      c.look_by(i, fn() { @ui.look(dx=100.0 * w.get(c)) })
     })
   }
   assert_eq(asked_on(painted, going_then_end), asked_going)
@@ -136,7 +136,7 @@ test "a way read by an old view kept in the window's tree, its parts kept as the
     t.set_rows_on_pixels(true)
     @ui.set_view_app(fn(root) {
       root.box(fn(v) {
-        @ui.old(v, fn(c) { c.box(w=Px(10.0 + 100.0 * w.get()), h=Px(10.0), fn() {  }) |> ignore }).grow(Is(1.0))
+        @ui.old(v, fn(c) { c.box(w=Px(10.0 + 100.0 * w.get(c)), h=Px(10.0), fn() {  }) |> ignore }).grow(Is(1.0))
         |> ignore
       })
       |> ignore
@@ -183,7 +183,7 @@ test "a way going read by nothing, or by what is let go as it goes: no frame ask
     fn(w) {
       @ui.Tester::new(fn(c) {
         if shown.get() {
-          c.box(w=Px(10.0 + 100.0 * w.get()), h=Px(10.0), fn() {  }) |> ignore
+          c.box(w=Px(10.0 + 100.0 * w.get(c)), h=Px(10.0), fn() {  }) |> ignore
         }
       })
     },

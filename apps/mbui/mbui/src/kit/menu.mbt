@@ -430,7 +430,7 @@ pub fn dropdown_menu(
   } else {
     None
   }
-  let dimming = dim is Some(d) && !d.over()
+  let dimming = dim is Some(d) && !d.over(c)
   let mut chosen = None
   if shown || dimming {
     // A menu opened by touch alongside a field leaves its input method in place. When opened by the keyboard, the
@@ -464,7 +464,7 @@ pub fn dropdown_menu(
       if out.back { now = false }
     })
     match dim {
-      Some(d) if o.scrim >= 0 => c.bg_by(o.scrim, fn() { faded(scrim, d.get()) })
+      Some(d) if o.scrim >= 0 => c.bg_by(o.scrim, fn() { faded(scrim, d.get(c)) })
       _ => ()
     }
     if o.dismissed is Some(_) || chosen is Some(_) {

@@ -65,7 +65,7 @@ test "a film flying in: its capsule goes with the still as it leaves its thumbna
   // nearly in, its ground whole: the player's controls coming with it (their clock showing), not after it lands
   let nearly = v.fly.end() - @ui.move_most_ms / 8.0
   t.run_for(nearly - t.time())
-  assert_true(v.flies && v.flying() > @sfbase.bars_from)
+  assert_true(v.flies && v.flying(t.ctx()) > @sfbase.bars_from)
   assert_true(words_show(t, "0:00"))
   t.run_for(@ui.move_most_ms)
   assert_true(words_show(t, "0:00"))

@@ -62,7 +62,7 @@ test "a dialog with another come over it: dimmed over itself as each frame is pa
     fn(c) {
       // (as the presenters tell it: by its cause, the one over it opened)
       if covered.get() && veil.target() != 1.0 {
-        veil.animate(1.0, @motion.tween(confirm_ground_ms, ease=Out))
+        veil.animate(c, 1.0, @motion.tween(confirm_ground_ms, ease=Out))
       }
       dialog(c, "d", true, "标题", fn() { c.text("内容") |> ignore }, veil~) |> ignore
     },
@@ -133,7 +133,7 @@ test "words to press the pointer comes onto (忽略): their ink mixed from the q
   // each frame: how far it is lit, and whether every glyph is drawn in the mix of the two inks that far (as one ink
   // mixed, whole: nothing under it showing through)
   let (built, seen) = painted_until(t, t.time() + dur_ms, fn() {
-    let k = lit.val.unwrap().get()
+    let k = lit.val.unwrap().get(t.ctx())
     (k, glyph_inks(t).iter().all(fn(g) { g == ink_drawn(mix(text, k, muted)) }))
   })
   assert_true(seen.iter().all(fn(s) { s.1 }), msg="\{seen} \{glyph_inks(t)}")

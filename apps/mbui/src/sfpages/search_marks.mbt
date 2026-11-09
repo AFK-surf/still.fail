@@ -14,11 +14,11 @@ pub let found_draw_ms : Double = @sf.strokes_ms(found_last_step)
 
 ///|
 /// The strokes start being drawn in (the message gone to).
-fn found_start(rd : @sfbase.Reading, finding : Bool) -> Unit {
+fn found_start(c : @ui.Ctx, rd : @sfbase.Reading, finding : Bool) -> Unit {
   rd.found_centre = true
-  rd.found_drawn.snap(0.0)
+  rd.found_drawn.snap(c, 0.0)
   let duration = if finding { @sf.stroke_ms } else { found_draw_ms }
-  rd.found_drawn.animate(duration, @motion.tween(duration, ease=Linear))
+  rd.found_drawn.animate(c, duration, @motion.tween(duration, ease=Linear))
 }
 
 ///|

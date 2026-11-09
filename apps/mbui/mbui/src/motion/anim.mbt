@@ -51,10 +51,10 @@ priv struct AnimWay {
 } derive(Eq)
 
 ///|
-fn Anim::way(self : Anim) -> AnimWay {
+fn Anim::way(self : Anim, c : @ui.Ctx) -> AnimWay {
   // (going by its way at this moment: where it is, stepped by the clock, and its getting to its end as the frame goes
   // are no change of it; still, or at its end by now: where it is)
-  let now = @ui.current().moment()
+  let now = c.moment()
   let going = self.running && !(self.start >= 0.0 && @ui.whole_ms(now - self.start) >= self.dur)
   {
     running: going,
@@ -85,14 +85,14 @@ let laid_ways : Ref[Array[(Anim, AnimWay)]?] = Ref(None)
 ///|
 /// `f`, the motions it tells told only once it is done, each whose way came out otherwise than before it: where each
 /// went taken as it is first told or set by hand (Anim::tells_now).
-fn laid_once(f : () -> Unit) -> Unit {
+fn laid_once(c : @ui.Ctx, f : () -> Unit) -> Unit {
   let ways : Array[(Anim, AnimWay)] = []
   let was = laid_ways.val
   laid_ways.val = Some(ways)
   f()
   laid_ways.val = was
   for w in ways {
-    if w.0.way() != w.1 {
+    if w.0.way(c) != w.1 {
       w.0.id.changed()
     }
   }
@@ -101,11 +101,11 @@ fn laid_once(f : () -> Unit) -> Unit {
 ///|
 /// Whether what is built from where it is is told now (false: once the layout's motions are done, laid_once), where it
 /// went before kept for that the first time: said before it is told anew or its place set by hand.
-fn Anim::tells_now(self : Anim) -> Bool {
+fn Anim::tells_now(self : Anim, c : @ui.Ctx) -> Bool {
   match laid_ways.val {
     Some(ways) => {
       if !ways.iter().any(fn(w) { physical_equal(w.0, self) }) {
-        ways.push((self, self.way()))
+        ways.push((self, self.way(c)))
       }
       false
     }
@@ -229,9 +229,8 @@ pub fn Anim::ends(self : Anim) -> Double {
 /// Whether the end it declared as it was told (`ends()`) has come, on the frames' clock: what waits for a motion (what
 /// is shown after it, a press it holds back, state let go once it is over) waits till then, from its cause, not for it
 /// to be seen still (sf/motion.mbt: no logic reads whether a motion runs). Never told: it has; with motion reduced, as
-/// it was told.
-pub fn Anim::over(self : Anim) -> Bool {
-  let c = @ui.current()
+/// it was told. `c`: the old view that reads it, at its moment.
+pub fn Anim::over(self : Anim, c : @ui.Ctx) -> Bool {
   let over = self.start < 0.0 || c.moment() >= self.ends()
   // (what is built from it changes as it is told, and at its end, or the next frame where it starts then)
   c.shows_motion(self.id, !over && self.ends() == @double.infinity)
@@ -242,10 +241,9 @@ pub fn Anim::over(self : Anim) -> Bool {
 }
 
 ///|
-/// Where it is this frame (what is built from it, built again as it is told and each frame as it goes:
-/// Ctx::shows_motion).
-pub fn Anim::get(self : Anim) -> Double {
-  let c = @ui.current()
+/// Where it is this frame of the old view `c` (what is built from it, built again as it is told and each frame as it
+/// goes: Ctx::shows_motion).
+pub fn Anim::get(self : Anim, c : @ui.Ctx) -> Double {
   self.step(c)
   c.shows_motion(self.id, self.running)
   self.value
@@ -262,19 +260,20 @@ pub fn Anim::target(self : Anim) -> Double {
 /// moment on (told between frames: from that moment, the next frame drawing it as far on). `start_at`: from that moment instead, one the
 /// framework worked out (the motion before's `ends()`), never later than now: one motion going on from where the one
 /// before it was declared to end, whichever frame saw that; its value this frame as far on as the time since says.
-/// Already over by now (a chain caught up after a while unseen), it is there at once and is not said to move.
+/// Already over by now (a chain caught up after a while unseen), it is there at once and is not said to move. `c`: the
+/// old view it moves in, whose moment it is told at and whose frames show it.
 #callsite(autofill(loc))
 pub fn Anim::animate(
   self : Anim,
+  c : @ui.Ctx,
   target : Double,
   spec : Spec,
   velocity? : Double,
   start_at? : Double,
   loc~ : SourceLoc,
 ) -> Unit {
-  let c = @ui.current()
   self.step(c)
-  let tell = self.tells_now()
+  let tell = self.tells_now(c)
   self.from = self.value
   self.v0 = match velocity {
     Some(v) => v
@@ -351,18 +350,18 @@ pub fn Anim::animate(
 /// Off to `target`, unless it goes there already or is there (animate*AsState): told again
 /// mid-way it goes on from where it is, as fast as it goes.
 #callsite(autofill(loc))
-pub fn Anim::follow(self : Anim, target : Double, spec : Spec, loc~ : SourceLoc) -> Unit {
-  self.step(@ui.current())
+pub fn Anim::follow(self : Anim, c : @ui.Ctx, target : Double, spec : Spec, loc~ : SourceLoc) -> Unit {
+  self.step(c)
   if target == self.target {
     return
   }
-  self.animate(target, spec, loc~)
+  self.animate(c, target, spec, loc~)
 }
 
 ///|
-/// There at once, still (Animatable.snapTo).
-pub fn Anim::snap(self : Anim, v : Double) -> Unit {
-  if (self.value != v || self.target != v || self.running) && self.tells_now() {
+/// There at once, still (Animatable.snapTo), as of the old view `c`'s moment.
+pub fn Anim::snap(self : Anim, c : @ui.Ctx, v : Double) -> Unit {
+  if (self.value != v || self.target != v || self.running) && self.tells_now(c) {
     self.id.changed()
   }
   self.value = v
@@ -371,7 +370,7 @@ pub fn Anim::snap(self : Anim, v : Double) -> Unit {
   self.gen = None
   self.velocity = 0.0
   self.running = false
-  self.stepped_at = @ui.current().moment()
+  self.stepped_at = c.moment()
 }
 
 ///|
@@ -469,15 +468,15 @@ pub fn animate(
     None => target
   })
   if first && a.value != target {
-    a.animate(target, spec, loc~)
+    a.animate(c, target, spec, loc~)
   } else {
-    a.follow(target, spec, loc~)
+    a.follow(c, target, spec, loc~)
   }
   if a.running && logging() {
     @ui.log("MOTION \{c.moment()} \{key} value=\{a.value} to=\{a.target}")
   }
   // (read so: what reads it is built again as it is told and each frame while it goes, Anim::get)
-  a.get()
+  a.get(c)
 }
 
 ///|
@@ -491,7 +490,7 @@ pub fn told(c : @ui.Ctx, key : String, target : Double, spec? : Spec = spring(),
     let first = !anims.contains(c.id(key))
     let a = anim(c, key, target)
     if !first {
-      a.follow(target, spec, loc~)
+      a.follow(c, target, spec, loc~)
     }
     a
   })
@@ -516,9 +515,9 @@ pub fn pressing(c : @ui.Ctx, id : Int) -> Double {
   anim_built(c, motion_key(key), a)
   a.step(c)
   if down {
-    a.follow(1.0, tween(75.0, ease=Linear))
+    a.follow(c, 1.0, tween(75.0, ease=Linear))
   } else if !(a.running && a.target == 1.0) {
-    a.follow(0.0, tween(150.0, ease=Linear))
+    a.follow(c, 0.0, tween(150.0, ease=Linear))
   }
-  a.get()
+  a.get(c)
 }

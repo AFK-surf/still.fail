@@ -321,7 +321,7 @@ test "the chat's bars under the viewer's ground while the picture is grown, the 
   // on its way back, grown still: the bar the page's, drawn under the picture (and under the ground over the page)
   t.run_for(@ui.move_most_ms / 4.0)
   let v = pv_leaving.get().unwrap()
-  assert_true(v.flies && v.flying() > 0.0 && v.flying() < 1.0)
+  assert_true(v.flies && v.flying(t.ctx()) > 0.0 && v.flying(t.ctx()) < 1.0)
   let order = t.drawn_order()
   let picture = order.search_by(fn(i) { i.0 == 4 && i.5 > 0.5 }).unwrap()
   let bar = order.search_by(fn(i) { i.0 == 0 && (i.4 - flight_bar_h).abs() < 0.5 && i.2 > 844.0 - flight_bar_h - 0.5 })
@@ -346,10 +346,10 @@ test "the way back is a move of its own: most of it as it sets out, at rest as i
   let back = t.time()
   // a quarter of its time out: over half of its way back, the bars over it as much
   t.run_for(@ui.move_most_ms / 4.0)
-  assert_true(v.flying() < 0.5, msg="\{v.flying()}")
+  assert_true(v.flying(t.ctx()) < 0.5, msg="\{v.flying(t.ctx())}")
   // its last tenth: hardly any of the way left, so the thumbnail and the bars come back by nothing at the end
   t.run_for(back + @ui.move_most_ms * 0.9 - t.time())
-  assert_true(v.flying() < 0.02, msg="\{v.flying()}")
+  assert_true(v.flying(t.ctx()) < 0.02, msg="\{v.flying(t.ctx())}")
   t.run_for(back + @ui.move_most_ms - t.time())
   assert_true(pv_leaving.get() is None)
 }
@@ -375,11 +375,11 @@ test "a picture under the composer goes out from under it at its own size first,
   // (a hair each side of where the going out ends: a fortieth of its time)
   let near = out * open_ms / 40.0
   t.run_for(out * open_ms - near)
-  assert_eq(v.flying(), 0.0)
+  assert_eq(v.flying(t.ctx()), 0.0)
   assert_true(v.lifted_at(t.ctx().moment()) > 0.95, msg="\{v.lifted_at(t.ctx().moment())}")
   assert_true(composer_over_picture(t))
   t.run_for(near * 2.0)
-  assert_true(v.flying() > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
+  assert_true(v.flying(t.ctx()) > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
   // growing: the composer the page's, under the ground and the picture
   assert_true(!composer_over_picture(t))
   // then grown to its place on the stage
@@ -392,10 +392,10 @@ test "a picture under the composer goes out from under it at its own size first,
   let lift = v.fly_lift
   let close_ms = fly_ms_of(t, v)
   t.run_for(way_at(1.0 - lift) * close_ms - near)
-  assert_true(v.flying() > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
+  assert_true(v.flying(t.ctx()) > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
   assert_true(!composer_over_picture(t))
   t.run_for(near * 2.0)
-  assert_eq(v.flying(), 0.0)
+  assert_eq(v.flying(t.ctx()), 0.0)
   assert_true(v.lifted_at(t.ctx().moment()) < 1.0)
   assert_true(composer_over_picture(t))
   t.run_for(back + close_ms - t.time())
@@ -418,7 +418,7 @@ test "a picture going back in under the composer keeps its corners round: what i
   let v = pv_leaving.get().unwrap()
   let lift = v.fly_lift
   t.run_for(way_at(1.0 - lift / 2.0) * fly_ms_of(t, v))
-  assert_eq(v.flying(), 0.0)
+  assert_eq(v.flying(t.ctx()), 0.0)
   assert_true(v.lifted_at(t.ctx().moment()) > 0.2 && v.lifted_at(t.ctx().moment()) < 0.8, msg="\{v.lifted_at(t.ctx().moment())}")
   let clips = t.drawn_image_clips()
   let flying = t.drawn_images().mapi(fn(k, i) { (i, clips[k]) }).filter(fn(p) { p.0[8] > 0.5 && p.0[2] > 0.0 })
@@ -532,7 +532,7 @@ test "a picture under the chat's bar goes out from under it at its own size firs
   let near = way_at(lift) * open_ms / 40.0
   // halfway out from under the bar: at its own size, the bar over it, its corners round
   t.run_for(way_at(lift / 2.0) * open_ms)
-  assert_eq(v.flying(), 0.0)
+  assert_eq(v.flying(t.ctx()), 0.0)
   assert_true(v.lifted_at(t.ctx().moment()) > 0.2 && v.lifted_at(t.ctx().moment()) < 0.8, msg="\{v.lifted_at(t.ctx().moment())}")
   assert_true(head_over_picture(t))
   let clips = t.drawn_image_clips()
@@ -550,7 +550,7 @@ test "a picture under the chat's bar goes out from under it at its own size firs
   assert_true(v.lifted_at(t.ctx().moment()) > 0.95, msg="\{v.lifted_at(t.ctx().moment())}")
   assert_true(drawn_at(t, (th.x, flight_bar_h + 12.0, th.w, th.h)) || v.lifted_at(t.ctx().moment()) < 1.0, msg="\{t.drawn_images()}")
   t.run_for(near * 2.0)
-  assert_true(v.flying() > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
+  assert_true(v.flying(t.ctx()) > 0.0 && v.lifted_at(t.ctx().moment()) == 1.0)
   assert_true(!head_over_picture(t))
   t.run_for(start + open_ms - t.time())
   let to = v.zoom.rect().unwrap()
@@ -562,7 +562,7 @@ test "a picture under the chat's bar goes out from under it at its own size firs
   let lift = v.fly_lift
   let close_ms = fly_ms_of(t, v)
   t.run_for(way_at(1.0 - lift / 2.0) * close_ms)
-  assert_eq(v.flying(), 0.0)
+  assert_eq(v.flying(t.ctx()), 0.0)
   assert_true(v.lifted_at(t.ctx().moment()) > 0.2 && v.lifted_at(t.ctx().moment()) < 0.8, msg="\{v.lifted_at(t.ctx().moment())}")
   assert_true(head_over_picture(t))
   let clips = t.drawn_image_clips()
@@ -621,8 +621,8 @@ test "a picture mostly under the chat's bar goes out from under it as quick as i
     m / step
   }
   let out = speed(joint - step * 2.0)
-  assert_true(v.flying() == 0.0)
+  assert_true(v.flying(t.ctx()) == 0.0)
   let grow = speed(joint + step)
-  assert_true(v.flying() > 0.0)
+  assert_true(v.flying(t.ctx()) > 0.0)
   assert_true(out < grow * 1.25 && grow < out * 1.25, msg="going out \{out}, growing \{grow}")
 }

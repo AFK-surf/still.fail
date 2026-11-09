@@ -121,7 +121,7 @@ fn viewer_head(
     )
     |> ignore
   })
-  c.look_by(n, fn() { @ui.look(alpha=seen.get() * shown) })
+  c.look_by(n, fn() { @ui.look(alpha=seen.get(c) * shown) })
   c.laid_size(head).map(fn(s) { s.0 }).unwrap_or(0.0)
 }
 

@@ -480,7 +480,7 @@ test "wide: next and previous move the stroke between occurrences in one message
   t.frame()
   t.frame()
   assert_eq(@sfpages.find_k(), 1)
-  assert_true(reading_of("ws1/st1\u{1}s-c1").found_drawn.get() < @sf.stroke_ms, msg="the stroke draws in again for the next occurrence")
+  assert_true(reading_of("ws1/st1\u{1}s-c1").found_drawn.get(t.ctx()) < @sf.stroke_ms, msg="the stroke draws in again for the next occurrence")
   assert_true(coloured(first) && coloured(second), msg="the colouring in is still, as the reader moves")
   t.run_for(@sf.stroke_ms)
   assert_true(!strong_under(first) && strong_under(second), msg="the second occurrence is current")

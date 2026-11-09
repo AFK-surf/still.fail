@@ -89,9 +89,9 @@ pub fn picking(
           if find_chat() == here.list.unwrap().rk {
             // (⌘F's: every match coloured in, the stroke over it the current one's alone)
             found_scribbles(c, "pick/" + at, marked, x, y)
-            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(), x, y, only=if rd.found_at == ts { find_k() } else { -1 })
+            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(c), x, y, only=if rd.found_at == ts { find_k() } else { -1 })
           } else {
-            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(), x, y, faint=rd.found_at != ts)
+            found_strokes(c, "pick/" + at, marked, rd.found_drawn.get(c), x, y, faint=rd.found_at != ts)
           }
         }
       }
@@ -216,10 +216,10 @@ fn mine_message(c : @ui.Ctx, src : Source, here : MessageHere, m : Message) -> U
                 if f.placed && lands < @double.infinity && c.moment() >= lands {
                   let a = @motion.anim(c, "time-in/" + m.ts, 0.0, global=true)
                   if a.target() != 1.0 {
-                    a.animate(1.0, @motion.tween(@sf.enter_ms, ease=Out), start_at=lands)
+                    a.animate(c, 1.0, @motion.tween(@sf.enter_ms, ease=Out), start_at=lands)
                   }
                   // (faded in as it is drawn)
-                  c.look_by(at, fn() { @ui.look(alpha=a.get()) })
+                  c.look_by(at, fn() { @ui.look(alpha=a.get(c)) })
                 } else {
                   // (built again as they land)
                   if f.placed && lands < @double.infinity {

@@ -1084,7 +1084,7 @@ fn tape_behind(c : @ui.Ctx, p : TapePane, body : () -> Unit) -> Unit {
   tape_goes.said.get() |> ignore
   tape_goes.way.said()
   let t = if tape_goes.way.goes_at(c.moment()) {
-    tape_goes.way.get() |> ignore
+    tape_goes.way.get(c) |> ignore
     c.moment()
   } else {
     @double.infinity

@@ -48,14 +48,14 @@ test "presence: shown comes in; not shown, built until its exit has played, then
   assert_true(p.val.built && p.val.shown)
   t.run_for(presence_in_ms)
   // (how far in, read at the frame's moment as its look reads it)
-  assert_eq(p.val.t.get(), 1.0)
+  assert_eq(p.val.t.get(t.ctx()), 1.0)
   shown.val = false
   t.draw()
   // half its exit's time
   let mid_way = presence_out_ms / 2.0
   t.run_for(mid_way)
   assert_true(p.val.leaving())
-  assert_true(p.val.t.get() < 1.0)
+  assert_true(p.val.t.get(t.ctx()) < 1.0)
   t.run_for(presence_out_ms - mid_way)
   assert_false(p.val.built)
   t.assert_idle()

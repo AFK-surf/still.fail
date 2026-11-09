@@ -126,7 +126,7 @@ pub fn viewer_bar(
     |> ignore
   })
   c.look_by(node, fn() {
-    let gone = gone.get()
+    let gone = gone.get(c)
     @ui.look(alpha=1.0 - gone, dy=-(viewer_bar_h + top) * gone)
   })
 }

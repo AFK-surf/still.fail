@@ -964,7 +964,7 @@ fn told_once(ask : Bool, fade_ms : Double, kept : Ref[@motion.Anim?]) -> @ui.Tes
     let v = @motion.anim(c, "a", 0.0)
     if go.val {
       go.val = false
-      v.animate(100.0, @motion.tween(fade_ms, ease=Out))
+      v.animate(c, 100.0, @motion.tween(fade_ms, ease=Out))
       kept.val = Some(v)
       if ask {
         // started here, at this frame's time: its end said at once
@@ -973,7 +973,7 @@ fn told_once(ask : Bool, fade_ms : Double, kept : Ref[@motion.Anim?]) -> @ui.Tes
         }
       }
     }
-    ignore(v.get())
+    ignore(v.get(c))
   })
 }
 
@@ -1099,7 +1099,7 @@ test "run_for: what its last frame says starts there is drawn at that moment, it
     }
     // (a toast's deadline: it goes once shown that long, from the first frame: a frame at that moment, Ctx::every)
     if c.every(shown, from=begun.val) >= 1 && a.target() != 0.0 {
-      a.animate(0.0, @motion.tween(200.0, ease=Out))
+      a.animate(c, 0.0, @motion.tween(200.0, ease=Out))
     }
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
@@ -1123,19 +1123,19 @@ test "a chain of tweens each from the one before's declared end, whichever frame
     let i = k.val
     if i < 0 {
       k.val = 0
-      segs[0].animate(1.0, @motion.tween(lengths[0], ease=Linear))
-    } else if i < 3 && segs[i].over() {
+      segs[0].animate(c, 1.0, @motion.tween(lengths[0], ease=Linear))
+    } else if i < 3 && segs[i].over(c) {
       if !seen_end.val {
         // seen at its end: the next told only the frame after
         seen_end.val = true
       } else if i < 2 {
         seen_end.val = false
         k.val = i + 1
-        segs[i + 1].animate(1.0, @motion.tween(lengths[i + 1], ease=Linear), start_at=segs[i].ends())
+        segs[i + 1].animate(c, 1.0, @motion.tween(lengths[i + 1], ease=Linear), start_at=segs[i].ends())
       }
     }
     let j = k.val
-    seen.push((c.moment(), j, segs[j].get()))
+    seen.push((c.moment(), j, segs[j].get(c)))
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
   t.draw()
@@ -1171,15 +1171,15 @@ test "a chain caught up after a while unseen: what is over is there at once, onl
   let t = @ui.Tester::new(fn(c) {
     if k.val < 0 {
       k.val = 0
-      segs[0].animate(1.0, @motion.tween(lengths[0], ease=Linear))
+      segs[0].animate(c, 1.0, @motion.tween(lengths[0], ease=Linear))
     }
     if shown.val {
       // in the same build, each over one followed by the next from its declared end, till one is under way
-      while k.val < 2 && segs[k.val].over() {
-        segs[k.val + 1].animate(1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
+      while k.val < 2 && segs[k.val].over(c) {
+        segs[k.val + 1].animate(c, 1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
         k.val += 1
       }
-      segs[k.val].get() |> ignore
+      segs[k.val].get(c) |> ignore
     }
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
@@ -1193,9 +1193,9 @@ test "a chain caught up after a while unseen: what is over is there at once, onl
   shown.val = true
   t.draw()
   assert_eq(k.val, 1)
-  assert_true(near(segs[1].get(), (t.time() - (start + lengths[0])).floor() / lengths[1], 1.0e-9))
-  assert_true(segs[0].over())
-  assert_false(segs[1].over())
+  assert_true(near(segs[1].get(t.ctx()), (t.time() - (start + lengths[0])).floor() / lengths[1], 1.0e-9))
+  assert_true(segs[0].over(t.ctx()))
+  assert_false(segs[1].over(t.ctx()))
   // (said to move: only the one under way)
   assert_eq(t.moving().length(), 1)
   // unseen past the whole chain's end, seen again: caught up in one build, at the last one's end, nothing moving
@@ -1205,8 +1205,8 @@ test "a chain caught up after a while unseen: what is over is there at once, onl
   shown.val = true
   t.draw()
   assert_eq(k.val, 2)
-  assert_eq(segs[2].get(), 1.0)
-  assert_true(segs[2].over())
+  assert_eq(segs[2].get(t.ctx()), 1.0)
+  assert_true(segs[2].over(t.ctx()))
   assert_true(near(segs[2].ends(), start + lengths[0] + lengths[1] + lengths[2], 1.0e-9))
   t.assert_idle()
 }
@@ -1219,11 +1219,11 @@ test "a chain with motion reduced: each there at once, its end the moment it was
   let t = @ui.Tester::new(fn(c) {
     if k.val < 0 {
       k.val = 0
-      segs[0].animate(1.0, @motion.tween(lengths[0], ease=Linear))
+      segs[0].animate(c, 1.0, @motion.tween(lengths[0], ease=Linear))
     }
     // each at its end followed by the next from its declared end, in the same build
-    while k.val < 2 && segs[k.val].over() {
-      segs[k.val + 1].animate(1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
+    while k.val < 2 && segs[k.val].over(c) {
+      segs[k.val + 1].animate(c, 1.0, @motion.tween(lengths[k.val + 1], ease=Linear), start_at=segs[k.val].ends())
       k.val += 1
     }
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
@@ -1233,8 +1233,8 @@ test "a chain with motion reduced: each there at once, its end the moment it was
   t.draw()
   assert_eq(k.val, 2)
   for s in segs {
-    assert_eq(s.get(), 1.0)
-    assert_true(s.over())
+    assert_eq(s.get(t.ctx()), 1.0)
+    assert_true(s.over(t.ctx()))
     assert_true(s.ends() <= t.time())
   }
   t.assert_idle()
@@ -1515,7 +1515,7 @@ test "an Anim is over at the end it declared as it was told, whoever asks and ho
   let seen : Array[Bool] = []
   let t = @ui.Tester::new(fn(c) {
     ignore(c)
-    seen.push(a.over())
+    seen.push(a.over(c))
     c.box(fn() {  }) |> ignore
   })
   // never told: over
@@ -1525,15 +1525,15 @@ test "an Anim is over at the end it declared as it was told, whoever asks and ho
   let t2 = @ui.Tester::new(fn(c) {
     if !told.val {
       told.val = true
-      a.animate(1.0, @motion.tween(reshape_ms, ease=Linear))
+      a.animate(c, 1.0, @motion.tween(reshape_ms, ease=Linear))
     }
-    seen.push(a.over())
+    seen.push(a.over(c))
     c.box(fn() {  }) |> ignore
   })
   assert_false(seen[seen.length() - 1])
   t2.run_for(reshape_midway_ms)
-  assert_false(a.over())
+  assert_false(a.over(t2.ctx()))
   t2.run_for(reshape_ms - reshape_midway_ms)
-  assert_true(a.over())
+  assert_true(a.over(t2.ctx()))
   ignore(t)
 }

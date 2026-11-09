@@ -198,7 +198,7 @@ pub fn accordion(
         let spec = @motion.tween(if opens || !closes { collapsible_open_ms } else { collapsible_close_ms }, ease=Out)
         @motion.layout(c, item, "kit-fold/" + key + "/" + it.value, spec~, by=opened, cut=false)
         // (on its way: what it does moves what is under it)
-        if p.built && !p.t.over() {
+        if p.built && !p.t.over(c) {
           if p.shown {
             opens = true
           } else {

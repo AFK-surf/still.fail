@@ -1018,7 +1018,7 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   let end = t.time() + @ui.move_most_ms
   while t.time() < end {
     t.frame()
-    let p = v.flying()
+    let p = v.flying(t.ctx())
     let ex = th.x + (to.0 - th.x) * p + (th.w + (to.2 - th.w) * p) / 2.0
     let ey = th.y + (to.1 - th.y) * p + (th.h + (to.3 - th.h) * p) / 2.0
     let drawn = t

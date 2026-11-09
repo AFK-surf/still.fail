@@ -166,7 +166,7 @@ pub fn video_capsule(
     }
     c.box(style=foot, fn() {
       let b = c.box(style=video_capsule_box.then(@ui.style(w=Fixed(if shown { share_w } else { length_w }))), fn() {
-        if !shown || !length_k.over() {
+        if !shown || !length_k.over(c) {
           c.layer(fn() {
             c.box(style=video_capsule_over.then(@ui.style(w=Fixed(length_w))), fn() {
               let l = c.box(style=video_capsule_row, fn() {
@@ -175,20 +175,20 @@ pub fn video_capsule(
                   c.text(length, style=video_capsule_words) |> ignore
                 }
               })
-              c.look_by(l, fn() { @ui.look(alpha=length_k.get()) })
+              c.look_by(l, fn() { @ui.look(alpha=length_k.get(c)) })
             })
             |> ignore
           })
           |> ignore
         }
-        if shown || !share_k.over() {
+        if shown || !share_k.over(c) {
           c.layer(fn() {
             c.box(style=video_capsule_over.then(@ui.style(w=Fixed(share_w))), fn() {
               let r = c.box(style=video_capsule_row, fn() {
                 progress_ring(c, video_capsule_ring, part, white) |> ignore
                 c.text(share, style=video_capsule_words) |> ignore
               })
-              c.look_by(r, fn() { @ui.look(alpha=share_k.get()) })
+              c.look_by(r, fn() { @ui.look(alpha=share_k.get(c)) })
             })
             |> ignore
           })

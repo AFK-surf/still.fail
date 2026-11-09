@@ -1244,7 +1244,7 @@ test "animate plays inertia to where it ends, not to the target asked" {
   let t = @ui.Tester::new(fn(c) {
     let v = @motion.anim(c, "i", 0.0)
     if go.val && a.val is None {
-      v.animate(0.0, @motion.inertia_to(power=1.0, time_constant=200.0, modify_target=fn(x) { @math.round(x / 50.0) * 50.0 }), velocity=420.0)
+      v.animate(c, 0.0, @motion.inertia_to(power=1.0, time_constant=200.0, modify_target=fn(x) { @math.round(x / 50.0) * 50.0 }), velocity=420.0)
       a.val = Some(v)
     }
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
@@ -1256,7 +1256,7 @@ test "animate plays inertia to where it ends, not to the target asked" {
     // 420 a second at power 1 would end at 420: the snap point nearest is 400 (where it is at its own end)
     Some(v) => {
       t.run_for(v.ends_at() - t.time())
-      assert_eq(v.get(), 400.0)
+      assert_eq(v.get(t.ctx()), 400.0)
     }
     None => fail("animated")
   }

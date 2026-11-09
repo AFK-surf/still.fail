@@ -534,12 +534,12 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
     st.at = at
     st.pending = None
     st.important_next = None
-    swap.snap(1.0)
-    reveal.snap(0.0)
+    swap.snap(c, 1.0)
+    reveal.snap(c, 0.0)
     // A list can reserve this row's turn in the future, while the message above it is still landing. A delayed
     // tween waits for that turn; an already-started turn catches up from its declared start.
     let later = dmax(at - c.moment(), 0.0)
-    reveal.animate(1.0, @motion.tween(activity_glyph_in_ms, ease=Linear, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
+    reveal.animate(c, 1.0, @motion.tween(activity_glyph_in_ms, ease=Linear, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
   } else {
     let now = c.moment()
     let mut next : (String, String, Bool, Bool, Double)? = None
@@ -618,8 +618,8 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
       st.mono = next_mono
       st.important = next_important
       st.at = at
-      swap.snap(0.0)
-      reveal.snap(0.0)
+      swap.snap(c, 0.0)
+      reveal.snap(c, 0.0)
       // (a Move as long as the line's change in width)
       let style = if hot { now_words_hot } else { now_words }
       let old_cells = c.words_glyph_cells(st.was, style, mono=st.was_mono)
@@ -627,12 +627,12 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
       // The reading order spans the part that can actually be seen, even when one step is much longer than the line.
       let visible = activity_visible_width(c, row, clock, stop_room)
       st.places = activity_change_places(old_cells, new_cells, visible)
-      reveal.animate(1.0, @motion.tween(@sfbase.glyph_change_in_ms, ease=Linear), start_at=at)
+      reveal.animate(c, 1.0, @motion.tween(@sfbase.glyph_change_in_ms, ease=Linear), start_at=at)
       let widened = dmin(c.words_across(st.words, style, mono=st.mono), visible) - dmin(c.words_across(st.was, style, mono=st.was_mono), visible)
-      swap.animate(1.0, @motion.move(over=dmax(c.text_size(Meta).1, widened.abs())), start_at=at)
+      swap.animate(c, 1.0, @motion.move(over=dmax(c.text_size(Meta).1, widened.abs())), start_at=at)
     }
   }
-  let k = swap.get()
+  let k = swap.get(c)
   let style = if hot { now_words_hot } else { now_words }
   // the line short of what they asked of it last frame: it cuts them where it ends during the turn too
   let cut = match @motion.measured_size(c, "now-room/" + row) {
@@ -640,7 +640,7 @@ fn steady_words(c : @ui.Ctx, row : String, said : (String, String, Bool, Bool), 
     None => false
   }
   let room = c.box(style=now_room, fn() {
-    if k < 1.0 || (!reveal.over() && st.was != "") {
+    if k < 1.0 || (!reveal.over(c) && st.was != "") {
       // Both steps keep their shaped text. At each place the outgoing glyph fades before the incoming one arrives,
       // so their ink does not overlap. The window keeps the line no wider than it has room for.
       let line = c.text_size(Meta).1
@@ -718,7 +718,7 @@ fn activity_change_glyphs(
   c.glyphs_by(node, fn(at) {
     let intervals = if places > 1 { places - 1 } else { 1 }
     let along = dmin(at.index.to_double() / intervals.to_double(), 1.0)
-    let look = @sfbase.glyph_change(reveal.get() * @sfbase.glyph_change_in_ms, along * @sfbase.glyph_change_line_ms, at.index, row.length(), incoming)
+    let look = @sfbase.glyph_change(reveal.get(c) * @sfbase.glyph_change_in_ms, along * @sfbase.glyph_change_line_ms, at.index, row.length(), incoming)
     let (dx, sx) = if at.index < old_cells.length() && at.index < new_cells.length() {
       let (old_x, old_w) = old_cells[at.index]
       let (new_x, new_w) = new_cells[at.index]
@@ -749,7 +749,7 @@ fn activity_change_glyphs(
 /// The first activity uses the message's per-glyph arrival. Existing activity when a chat opens has no arrival clock
 /// and is shown whole.
 fn activity_glyphs(c : @ui.Ctx, node : Int, row : String, reveal : @motion.Anim) -> Unit {
-  if reveal.over() {
+  if reveal.over(c) {
     return
   }
   let key = "now-glyph-box/" + row
@@ -758,7 +758,7 @@ fn activity_glyphs(c : @ui.Ctx, node : Int, row : String, reveal : @motion.Anim)
     match @motion.measured_rect(c, key) {
       Some((x, _, w, _)) => {
         let along = if w > 0.0 { dmax(dmin((at.x - x) / w, 1.0), 0.0) } else { 0.0 }
-        let elapsed = reveal.get() * activity_glyph_in_ms - activity_glyph_delay_ms
+        let elapsed = reveal.get(c) * activity_glyph_in_ms - activity_glyph_delay_ms
         @sfbase.glyph_in(elapsed, along * @sfbase.glyph_line_ms, at.index, row.length())
       }
       None => { alpha: 0.0, dx: 0.0, dy: 0.0, scale: 1.0, sx: 1.0 }

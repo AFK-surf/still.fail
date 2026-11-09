@@ -699,8 +699,8 @@ fn page_view(
     },
   )
   if root {
-    c.moved_by(at, fn(_, _) { (app.switch_way.to_double() * switch_slide * (1.0 - place_switch.get()), 0.0) })
-    c.look_by(at, fn() { @ui.look(alpha=place_switch.get()) })
+    c.moved_by(at, fn(_, _) { (app.switch_way.to_double() * switch_slide * (1.0 - place_switch.get(c)), 0.0) })
+    c.look_by(at, fn() { @ui.look(alpha=place_switch.get(c)) })
   }
 }
 
