@@ -252,6 +252,8 @@ fn signed_in_frame(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   update_first(src)
   // and again while it stays open (one never shown again asks no more otherwise)
   update_again(c, src)
+  // and as soon as a release may be out
+  update_on_release(c, src)
   // what another app shared in (share.mbt)
   share_in_frame(c)
   // files being kept on the device, said once kept (keep.mbt)

@@ -15,6 +15,7 @@ import { name as brandName } from "../src/brand.ts";
 import { Core } from "../src/core.ts";
 const STATION = (station: string) => ({ station });
 import { FakeHost, jsonResponse } from "../src/testing.ts";
+import { SOCKET_RETRY_MS } from "../src/sync/cloud.ts";
 import { account, apply, call, nowS, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
 import { base, entry, overview, session, started, stationHost, stationLater, stationReplies, status, threadView } from "./station-fixture.ts";
@@ -173,6 +174,45 @@ test("a_beta_app_says_so_and_an_account_not_let_in_is_blocked", async () => {
   await host.settle();
   const answer = host.takeEmitted().map(([, m]) => m as J).find((m) => m.id === 2 && "ok" in m);
   assert.equal(answer?.ok.versionCode, 1250);
+  core.close();
+});
+
+test("a_release_missed_while_the_events_socket_was_closed_is_read_again_and_the_app_told", async () => {
+  // A Mac asleep through a release: the feed's newest was kept from before, so the app got that build ready, put it in
+  // as it quit, and updated again once the new one read the feed (2026-11-09, pengxiao).
+  const host = new FakeHost();
+  host.store(STORAGE_KEY, [account("s1", "a@x.com", "阿一", "a", "r", nowS(host) + 3600)]);
+  let out = 1200;
+  host.onFetch((req) => {
+    const path = req.url.replace("https://stillfail.test", "");
+    if (path === "/v1/me") return jsonResponse(200, { user: { sub: "s1" }, workspaces: [], invitations: [], relay_url: "https://relay.test" });
+    if (path === "/releases/mac/latest.json") return jsonResponse(200, { versionCode: out, versionName: `0.1.${out}`, file: `mac/stillfail-${out}.zip`, sha256: "ab", size: 9 });
+    return jsonResponse(404, { error: "not_found" });
+  });
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "releases" });
+  await host.settle();
+  apply(host, values);
+  const told = v(values, 1).told;
+  assert.equal((await ask(host, core, ui, 2, "app.update", { platform: "mac", versionCode: 1100 })).versionCode, 1200);
+  // Told of a release: read again, and the app told.
+  out = 1250;
+  host.socketSend("/v1/events", '{"type":"release"}');
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).told, told + 1);
+  assert.equal((await ask(host, core, ui, 3, "app.update", { platform: "mac", versionCode: 1100 })).versionCode, 1250);
+  // The socket closed through the next release: none said, so read again as it opens again.
+  host.socketClose("/v1/events");
+  out = 1300;
+  await host.time.pass(SOCKET_RETRY_MS * 2, 50);
+  await host.settle();
+  apply(host, values);
+  assert.equal(host.openSockets("/v1/events"), 1);
+  assert.equal(v(values, 1).told, told + 2);
+  assert.equal((await ask(host, core, ui, 4, "app.update", { platform: "mac", versionCode: 1100 })).versionCode, 1300);
   core.close();
 });
 
