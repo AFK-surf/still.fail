@@ -244,8 +244,19 @@ pub fn fatal() -> String? {
 /// comes this way too.
 pub fn receive(text : String, bytes : Bytes?) -> Unit {
   let t0 = if perf_counts() { ffi_now() } else { -1.0 }
+  // (how long it took, parsed and taken, by what it was (never what it said), for a hang it is in:
+  // @hostapi.work_part)
+  let name = Ref("?")
+  @hostapi.work_part(fn() { "core " + name.val }, fn() { receive_taken(text, bytes, t0, name) })
+}
+
+///|
+/// Message `text` parsed and taken (receive's), what it was said in `name`; its counts kept where `t0` (the record's
+/// clock as it came) is not below 0.
+fn receive_taken(text : String, bytes : Bytes?, t0 : Double, name : Ref[String]) -> Unit {
   let msg = @json.parse(text) catch { _ => return }
-  let what = if t0 >= 0.0 { client.perf_name(msg) } else { "" }
+  let what = client.perf_name(msg)
+  name.val = what
   take(msg, bytes)
   if t0 >= 0.0 {
     perf_in(what, text, bytes, ffi_now() - t0)
@@ -347,8 +358,9 @@ pub fn receive_said(text : String, bytes : Bytes?) -> Bool {
     Object(m) if !m.contains("mbui_auth") &&
       !m.contains("clocked") &&
       (client.topic_said(m) || client.call_said(m)) => {
-      let what = if t0 >= 0.0 { client.perf_name(msg) } else { "" }
-      take(msg, bytes)
+      let what = client.perf_name(msg)
+      // (how long it took, by what it was, for a hang it is in: @hostapi.work_part)
+      @hostapi.work_part(fn() { "core " + what }, fn() { take(msg, bytes) })
       if t0 >= 0.0 {
         perf_in(what, text, bytes, ffi_now() - t0)
       }

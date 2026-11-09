@@ -485,8 +485,9 @@ pub fn Client::call(
   let id = self.next_id
   self.next_id += 1
   self.calls[id] = on_done
+  // (its name, for what its answer is in the record and in a hang: Client::perf_name)
+  self.perf_calls[id] = name
   if perf_counts() {
-    self.perf_calls[id] = name
     perf_out(name)
   }
   // (one whose answer nobody reads is awaited by nothing: its answer, taken as it comes, asks for no frame)

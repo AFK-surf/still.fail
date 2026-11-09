@@ -2945,6 +2945,7 @@ fn view_frame_end(c : Ctx) -> Unit {
 /// cut where its node is shorter).
 /// `unlaid`, a `natural` one's: how tall it is taken to be till first laid out (in a list: as tall as a screen, the rows
 /// after it made only as it is known to leave room for them).
+#callsite(autofill(loc))
 pub fn old(
   v : @view.View,
   build : (Ctx) -> Unit,
@@ -2953,6 +2954,7 @@ pub fn old(
   gives? : Bool = false,
   fits? : (Double, @signals.Signal[Double?]),
   unlaid? : () -> Double,
+  loc~ : SourceLoc,
 ) -> @view.View {
   v.hosted(make=fn(n) {
     // (as tall as what it holds at the width it is given, as the old frame last laid that out: old_natural_after_layout)
@@ -3007,7 +3009,8 @@ pub fn old(
       }
       match faulted.get() {
         Some(said) => (old_fault_shown.val)(c, said)
-        None => build(c)
+        // (how long it took, by its name, for a hang it is in: @hostapi.work_part)
+        None => @hostapi.work_part(fn() { "old \{loc}" }, fn() { build(c) })
       }
       island_building.val = was
     }

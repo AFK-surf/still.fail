@@ -43,12 +43,35 @@ test "one piece of work at least the stall's length is a hang, closed as the thr
   assert_eq(h.trigger, Stall)
   assert_eq(h.sealed_by, Idle)
   assert_true(h.startup)
-  assert_eq(h.contributors, [{ what: Event("touch-up"), start: 1000.0, end: 1060.0 }])
+  assert_eq(h.contributors, [{ what: Event("touch-up"), start: 1000.0, end: 1060.0, notes: [] }])
   assert_eq(h.stall_ms, 60.0)
   assert_eq(hangs(), told)
   // (its line names its rule and what made it, nothing of what the event carried)
   assert_true(h.said().has_prefix("trigger=stall sealed=idle phase=startup active=60ms stall=60ms "), msg=h.said())
   assert_true(h.said().contains("by: touch-up 60ms"), msg=h.said())
+}
+
+///|
+test "what a piece went on, by part, kept with it the longest first: in its hang's line and JSON, a part under 1 ms not" {
+  let (_, clock) = journal_start()
+  defer set_work_clock(None)
+  let told : Array[Hang] = []
+  hangs_told(Some(fn(h) { told.push(h) }))
+  view_event_said(fn() {  }, fn() {
+    @hostapi.work_part(fn() { "core topic chats value" }, fn() { clock.val += 20.0 })
+    @hostapi.work_part(fn() { "core topic chat delta" }, fn() { clock.val += 0.5 })
+    @hostapi.work_part(fn() { "part a.mbt:1" }, fn() { clock.val += 30.0 })
+    @hostapi.work_part(fn() { "core topic chats value" }, fn() { clock.val += 15.0 })
+  }, what="messages")
+  assert_eq(told.length(), 1)
+  let w = told[0].contributors[0]
+  assert_eq(w.notes, [("core topic chats value", 35.0), ("part a.mbt:1", 30.0)])
+  assert_true(told[0].said().contains("messages 65.5ms on core topic chats value 35ms, part a.mbt:1 30ms"), msg=told[0].said())
+  let json = told[0].json().stringify()
+  assert_true(json.contains("\"parts\":[{\"part\":\"core topic chats value\",\"ms\":35}"), msg=json)
+  // (the next piece begins with none)
+  view_event_said(fn() {  }, fn() { clock.val += 60.0 }, what="touch-up")
+  assert_eq(told[1].contributors[0].notes, [])
 }
 
 ///|
@@ -109,7 +132,7 @@ test "short events are folded, their count and work kept, and still count toward
   journal_work(Frame({ tree: 0.0, messages: 0.0, build: 4.0, layout: 0.0, paint: 1.0, nodes: 1, insts: 1, why: "" }), 1040.0, 1045.0)
   journal_seal(Presented, 1045.0)
   let j = journal()
-  assert_eq(j[0], Work({ what: Small(40, 20.0), start: 1000.0, end: 1039.5 }))
+  assert_eq(j[0], Work({ what: Small(40, 20.0), start: 1000.0, end: 1039.5, notes: [] }))
   let h = hangs()
   assert_eq(h.length(), 1)
   assert_eq(h[0].trigger, LateFrame)

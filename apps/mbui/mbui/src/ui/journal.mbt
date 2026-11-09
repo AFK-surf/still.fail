@@ -50,6 +50,9 @@ pub(all) struct Worked {
   what : Done
   start : Double
   end : Double
+  /// what it went on, by part (@hostapi.work_part: where it was made, ms), the longest first, at most
+  /// `journal_notes_kept`
+  notes : Array[(String, Double)]
 } derive(Eq, Show, Debug)
 
 ///|
@@ -141,6 +144,15 @@ let hang_contributors_kept : Int = 8
 let hangs_kept_most : Int = 16
 
 ///|
+/// How many of what a piece went on are kept with it (Worked's `notes`).
+let journal_notes_kept : Int = 4
+
+///|
+/// What the piece being done went on so far (@hostapi.work_part), by where it was made: its ms summed.
+// kept across runs: emptied as each piece is kept (journal_work) and as a run begins (journal_reset)
+let journal_notes : Map[String, Double] = {}
+
+///|
 // kept across runs: put back as a run begins (journal_reset)
 let journal_ring : FixedArray[Entry] = FixedArray::make(journal_cap, Boundary(Idle, 0.0))
 
@@ -198,6 +210,7 @@ let hang_summary_tell : Ref[((HangSummary) -> Unit)?] = Ref(None)
 /// sends where it sends its reports (still.fail's src/stillfail/reports.mbt).
 pub fn hangs_told(f : ((Hang) -> Unit)?) -> Unit {
   hang_tell.val = f
+  journal_listens()
 }
 
 ///|
@@ -220,6 +233,17 @@ fn journal_reset() -> Unit {
   journal_counts[5] = -1.0
   hang_tell.val = None
   hang_summary_tell.val = None
+  journal_notes.clear()
+  journal_listens()
+}
+
+///|
+/// What a piece goes on told the journal by what runs it (@hostapi.work_part), on its clock: as a run begins and as an
+/// app listens for its hangs.
+fn journal_listens() -> Unit {
+  @hostapi.work_noted_by(
+    Some((work_now, fn(what, ms) { journal_notes[what] = journal_notes.get(what).unwrap_or(0.0) + ms })),
+  )
 }
 
 ///|
@@ -250,6 +274,7 @@ fn journal_flush_small() -> Unit {
         what: Small(journal_small[0].to_int(), journal_small[1]),
         start: journal_small[2],
         end: journal_small[3],
+        notes: [],
       }),
     )
     journal_small.fill(0.0)
@@ -264,6 +289,19 @@ fn journal_work(what : Done, start : Double, end : Double) -> Unit {
     journal_counts[5] = start
   }
   journal_counts[4] += end - start
+  // (what it went on, the longest first)
+  let notes = if journal_notes.is_empty() {
+    []
+  } else {
+    let all = journal_notes.to_array()
+    journal_notes.clear()
+    all.sort_by(fn(a, b) { b.1.compare(a.1) })
+    if all.length() > journal_notes_kept {
+      all[:journal_notes_kept].to_array()
+    } else {
+      all
+    }
+  }
   let foldable = match what {
     Event(_) | FrameEnd => true
     _ => false
@@ -278,7 +316,7 @@ fn journal_work(what : Done, start : Double, end : Double) -> Unit {
     return
   }
   journal_flush_small()
-  journal_put(Work({ what, start, end }))
+  journal_put(Work({ what, start, end, notes }))
 }
 
 ///|
@@ -561,8 +599,19 @@ fn Worked::said(self : Worked) -> String {
       head +
       " (tree=\{journal_ms(f.tree)} msgs=\{journal_ms(f.messages)} build=\{journal_ms(f.build)} layout=\{journal_ms(f.layout)} paint=\{journal_ms(f.paint)} nodes=\{f.nodes} insts=\{f.insts}" +
       (if f.why != "" { " " + f.why } else { "" }) +
-      ")"
-    _ => head
+      ")" +
+      self.notes_said()
+    _ => head + self.notes_said()
+  }
+}
+
+///|
+/// What it went on, in a few words (" on part 12ms, …"); "" none.
+fn Worked::notes_said(self : Worked) -> String {
+  if self.notes.is_empty() {
+    ""
+  } else {
+    " on " + self.notes.map(fn(n) { "\{n.0} \{journal_ms(n.1)}ms" }).join(", ")
   }
 }
 
@@ -589,6 +638,11 @@ pub fn Hang::json(self : Hang) -> Json {
       "kind": Json::string(w.what.name()),
       "start_ms": Json::number(journal_ms(w.start - self.start)),
       "ms": Json::number(journal_ms(w.ms())),
+    }
+    if w.notes.length() > 0 {
+      o["parts"] = Json::array(
+        w.notes.map(fn(n) { Json::object({ "part": Json::string(n.0), "ms": Json::number(journal_ms(n.1)) }) }),
+      )
     }
     if w.what is Frame(f) {
       o["tree_ms"] = Json::number(journal_ms(f.tree))
