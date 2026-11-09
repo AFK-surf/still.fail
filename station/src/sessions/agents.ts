@@ -627,6 +627,9 @@ export const AgentsLive = (control: Control) =>
         if (installed) hub.installed(kind);
         // Codex updated: its app-servers of the old version are replaced (their files are gone).
         void codex.runtimeChanged(kind === "codex" && replaced).catch((error) => log.warn("agents::codex", "codex app-servers not checked after an update", { error: String(error) }));
+        // Another runtime: each session's process of it is started again on the new one (a Claude Code updated from the
+        // page went on refusing a model its old processes did not support until each was restarted by hand, 2026-11-10).
+        if (kind !== "codex") hub.runtimeUpdated(kind);
       });
       hub.deps.updateOldCodex = async (version) => {
         // The sandbox has its own executables: updating the station's Codex would not change the one that failed.

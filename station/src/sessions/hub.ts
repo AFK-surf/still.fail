@@ -992,6 +992,14 @@ export class Hub {
     for (const actor of [...this.actors.values()]) void actor.changed(true).catch(() => {});
   }
 
+  /// A runtime updated here (from the pages): the processes of its sessions still run the old executable, which the
+  /// service may refuse from then on (a model a version before does not support), so each ends now if idle, else before
+  /// its next turn, and the next starts on the new one, resuming. Codex's app-servers are its driver's (codex.ts
+  /// `runtimeChanged`).
+  runtimeUpdated(runtime: RuntimeKind) {
+    for (const actor of [...this.actors.values()]) if (actor.runtime === runtime) void actor.changed(true).catch(() => {});
+  }
+
   /// A profile was deleted: the sessions on it are taken on by another of their runtime's (their process ends now if
   /// idle, else when its turn is over); those no other profile can run are stopped, and their process ends.
   async profileGone(id: string) {
