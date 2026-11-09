@@ -4344,6 +4344,38 @@ pub fn waiting_page(c : @ui.Ctx, mark : String, title : String, lead : String, b
 }
 
 ///|
+/// The same page (waiting_page) as nodes of the window's tree, made once in `parent`: its mark, `title()` and `lead()`
+/// as they change, then what `body` makes in the column under them. The node.
+#callsite(autofill(loc))
+pub fn waiting_page_node(
+  parent : @view.View,
+  mark : String,
+  title : () -> String,
+  lead : () -> String,
+  body : (@view.View) -> Unit,
+  loc~ : SourceLoc,
+) -> @view.View {
+  // (the native input the app was started with: the same the whole run)
+  let touch = @signals.untracked(native_input) is Finger
+  parent.box(made_for=loc, fn(room) {
+    style_node(room, fn() { if touch { wait_room_touch } else { wait_room } })
+    if !touch {
+      room.box(fn(top) { top.height(Is(Some(wait_top))) |> ignore }) |> ignore
+    }
+    room.box(fn(col) {
+      style_node(col, fn() { if touch { wait_column_touch } else { wait_column } })
+      icon_node(col, mark, if touch { wait_icon_touch } else { wait_icon }, By(fn() { theme().p.text })) |> ignore
+      // (each line in the middle, as the old view's centred words: Ctx::text's `center`)
+      words_node(col, title, fn() { if touch { wait_title_touch } else { wait_title } }).words_centered(Is(true))
+      |> ignore
+      words_node(col, lead, fn() { wait_lead }).words_centered(Is(true)) |> ignore
+      body(col)
+    })
+    |> ignore
+  })
+}
+
+///|
 /// The desktop page's place (waiting: margin 110 auto 0) and the touch screen's (mWaiting: its height, the column in
 /// its middle).
 // kept across runs: a value (no field of it changes)

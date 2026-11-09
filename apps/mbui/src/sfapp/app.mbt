@@ -755,42 +755,31 @@ fn setting_page(c : @ui.Ctx, src : Source, w : Workspace, r : @settings.Route) -
 }
 
 ///|
-/// Whether the workspace's pages are shown: not while this device waits to be confirmed in its safe mode, whose page is
-/// drawn instead. `bar` (whether invitations wait): on a phone, under Home's top bar, settings
-/// and the workspace's name, its switcher (Security.kt SecurityWaitingScreen: with no bottom bar either, a phone had no
-/// way out of the workspace, 2026-10-23); none beside the wide screen's rail, which has them.
-fn lock_gate(c : @ui.Ctx, src : Source, w : Workspace, bar? : Bool) -> Bool {
-  let core = settings_core(src, w)
-  if !@settings.lock_waiting(core, w.id) {
-    return true
-  }
-  // (sfpages' page, in the box the frame gives it: over the navigation bar)
-  let page = fn() {
-    c.box(style=gate_fill, fn() {
-      c.box(style=@ui.style(w=Full, h=@sf.grow), fn() {
-        @sfpages.lock_wait_page(c, core, @settings.here_of(core, w.id, w.name))
+/// What a device waiting to be confirmed in the workspace's safe mode sees in Home's place, in `q` (all of the page's
+/// room): sfpages' page over the navigation bar, Home's top bar over it (settings and the workspace's switcher: with no
+/// bottom bar either, a phone had no way out of the workspace, Security.kt SecurityWaitingScreen, 2026-10-23).
+fn lock_gate_node(q : @view.View, src : Source, core : @settings.Core) -> Unit {
+  let workspace = fn() { workspace_in_view(src).0 }
+  q.box(fn(page) {
+    page.over(Is(true)) |> ignore
+    page.box(fn(held) {
+      held.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+      held.show(fn() { workspace() is Some(_) }, fn(p) {
+        let w = @signals.untracked(workspace).unwrap()
+        p.grow(Is(1.0)) |> ignore
+        @sfpages.lock_wait_node(p, core, @settings.here_of(core, w.id, w.name)) |> ignore
       })
-      |> ignore
-      c.box(style=@ui.style(w=Full, h=Fixed(nav_foot())), fn() {  }) |> ignore
     })
     |> ignore
-  }
-  match bar {
-    None => page()
-    Some(invited) =>
-      c.box(style=gate_fill, fn() {
-        c.layer(page) |> ignore
-        c.layer(fn() { top_bar(c, src, w, None, "all", invited) }) |> ignore
-      })
-      |> ignore
-  }
-  false
+    page.box(fn(foot) { foot.height(By(fn() { Some(nav_foot()) })) |> ignore }) |> ignore
+  })
+  |> ignore
+  q.box(fn(bar) {
+    bar.over(Is(true)).lies_along(Is(Start)) |> ignore
+    home_top_bar_node(bar, src, workspace, fn() { None }, bell=false)
+  })
+  |> ignore
 }
-
-///|
-/// The waiting page and Home's top bar over it, the screen's whole.
-// kept across runs: a value (no field of it changes)
-let gate_fill : @ui.Style = @ui.css("w=Full h=Full")
 
 ///|
 /// How long a place switched to on the bar takes to come in: fading in from no side, from the side the ball goes to.
