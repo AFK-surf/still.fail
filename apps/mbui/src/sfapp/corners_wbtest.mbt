@@ -54,7 +54,7 @@ let corner_modes : Array[String] = {
     "screen-reconnecting", "screen-trackpad", "screen-trackpad-command", "settings-home", "settings-appearance",
     "settings-me", "settings-me-reading", "settings-workspace", "settings-security", "settings-vault",
     "settings-vault-items", "settings-vault-item", "settings-stations", "settings-station", "settings-station-offline", "settings-station-env", "settings-station-processes",
-    "settings-station-mark", "settings-station-lower", "settings-station-versions", "settings-station-network", "settings-stations-add",
+    "settings-station-mark", "settings-station-lower", "settings-station-versions", "settings-station-updated", "settings-station-network", "settings-stations-add",
     "settings-stations-existing", "settings-stations-command", "settings-first-station", "settings-adb", "settings-adb-unpaired", "settings-adb-pairing", "settings-adb-connected", "settings-adb-failed", "settings-adb-chats", "settings-adb-chats-long",
     "settings-profiles", "settings-profiles-monthly", "settings-profile", "settings-profile-quota",
     "settings-profile-lower", "settings-profile-login", "settings-profile-login-failed", "settings-profile-quota-failed",

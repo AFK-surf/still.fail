@@ -2807,6 +2807,7 @@ pub fn Tester::windows_fronted(Self) -> Array[String]
 pub fn Tester::windows_opened(Self) -> Array[String]
 pub fn Tester::words(Self) -> Array[(String, Double, Double, Double, Double, Double)]
 pub fn Tester::words_over_frames(Self) -> Array[WordsOverAt]
+pub fn Tester::words_over_now(Self) -> Array[String]
 pub fn Tester::words_said(Self) -> Array[(String, Double, Double, Double, Double, Double)]
 
 type TextCache
