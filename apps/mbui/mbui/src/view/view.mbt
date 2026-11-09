@@ -6201,9 +6201,9 @@ fn View::drop(self : View, v : View) -> Unit {
 /// Node `v` (one this holds) taken out of it, not let go: held by nothing, so not laid out, placed, drawn or pressed,
 /// to be held again by another (View::take_in) or let go (a list's block kept to be made another's:
 /// View::scrolls_window's `reused`). What the hand or the focus had in it lets go, as it would were it let go. What it
-/// and what it holds bind is at rest (@signals.rest): following nothing, so what is held while it is read (a core's
-/// topic) is held for none of them and nothing of it is worked out again meanwhile; what this gives wakes it, each
-/// binding worked out anew, as it is held again.
+/// and what it holds bind is at rest (@signals.rest): what is held while it is read (a core's topic) held for none of
+/// them, and nothing of it worked out again meanwhile; what this gives wakes it as it is held again, each binding that
+/// let go of what it read, or whose reads changed meanwhile, worked out anew.
 fn View::park(self : View, v : View) -> () -> Unit {
   guard self.live() is Some(n) && v.live() is Some(m) else { return fn() {  } }
   let wakes : Array[() -> Unit] = []
@@ -6241,9 +6241,10 @@ fn View::park(self : View, v : View) -> () -> Unit {
 }
 
 ///|
-/// What this and what it holds bind at rest (@signals.rest), left where it is: following nothing, nothing of it worked
-/// out again, what is held while it is read held for none of it; what this gives wakes it, each binding worked out
-/// anew. For what is out of sight and kept to be another's (a list's block put by: View::scrolls_window's `reused`).
+/// What this and what it holds bind at rest (@signals.rest), left where it is: nothing of it worked out again, what is
+/// held while it is read held for none of it; what this gives wakes it, each binding that let go of what it read, or
+/// whose reads changed meanwhile, worked out anew. For what is out of sight and kept to be another's (a list's block
+/// put by: View::scrolls_window's `reused`).
 fn View::rests(self : View) -> () -> Unit {
   guard self.alive() else { return fn() {  } }
   let wakes : Array[() -> Unit] = []
