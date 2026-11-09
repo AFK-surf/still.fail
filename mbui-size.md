@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [2b4e43342](https://github.com/AFK-surf/still.fail/commit/2b4e43342ea46682646295d6d263d70d0bcc0f22) mbui: a motion fault says what drew it: a node's p | 1.74 | 2.32 | 9.64 | 28.19 | 33.65 | 25.17 | 46.11 | 93.01 | 182.11 |
 | [e5d0782dd](https://github.com/AFK-surf/still.fail/commit/e5d0782dd97234ad36ee335f7064fc47527e297b) app: four files mended to no motion fault at 60 an | 1.74 | 2.32 | 9.64 | 28.18 | 33.63 | 25.16 | 46.1 | 93 | 145.19 |
 | [3800c90ad](https://github.com/AFK-surf/still.fail/commit/3800c90ad7d720ab03e1fe41e069648af348a571) station: the queue no longer holds tasks back for  | 1.74 | 2.32 | 9.64 | 28.17 | 33.63 | 25.16 | 46.1 | 93.19 | 181.3 |
 | [aed2ce44e](https://github.com/AFK-surf/still.fail/commit/aed2ce44eeecab50b9506dc391349e29d8d7bb81) mbui: 页面列表行里的内容也让出空间（展开、收起），列表自己的行照样立刻出现 (#5112) | 1.74 | 2.32 | 9.64 | 28.17 | 33.63 | 25.15 | 46.1 | 93.72 | 182.52 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [f8f8ffc06](https://github.com/AFK-surf/still.fail/commit/f8f8ffc068c7974b6fecfbfbc23ab09f38b6f60b) core: a link let go for its pings unanswered is di | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.34 | 136.23 |
 | [33f5b60b7](https://github.com/AFK-surf/still.fail/commit/33f5b60b7149e60d9f197f99255390a65794e09a) app: the bar's ball fading and growing in read as  | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.73 | 162.72 |
 | [6d5e5a4af](https://github.com/AFK-surf/still.fail/commit/6d5e5a4af588f37a999f3895144eec1f994604d8) mbui: send_steady runs at the default rate alone,  | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.19 | 138.67 |
-| [1f9a46795](https://github.com/AFK-surf/still.fail/commit/1f9a467957240cc436f9b420ec84ce873a967b91) Vault keyed anew: a device back meanwhile given th | 1.72 | 2.3 | 9.56 | 28.06 | 33.31 | 25.07 | 45.8 | 93.01 | 129.53 |
