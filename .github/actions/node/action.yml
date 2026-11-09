@@ -48,8 +48,25 @@ runs:
         echo "Node $v in the tool cache in $(( $(date +%s) - t0 )) s"
     # Windows: the image's Node of that version, from its tool cache, put on the PATH as it is. setup-node prints npm's
     # and yarn's versions, their first start on the runner: 45 s of the release's Windows job beside cl compiling the
-    # app (main dd3caeef, 40599181003; preview.yml's own Node step says the same of 29-81 s, 2026-10-25). setup-node when
-    # the image has not that Node.
+    # app (main dd3caeef, 40599181003; preview.yml's own Node step says the same of 29-81 s, 2026-10-25). Where the
+    # image has it not (windows-2025 had no 24.22.1 by 2026-11-05), kept in the Actions cache by its version under
+    # preview.yml's key, setup-node's fetch of it saved there once: from github.com's releases each run it waited out
+    # three 504s, 70 s of the release's Windows setup (main 241a3b0b, 42581442882, 2026-11-09).
+    - id: win-dir
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        v=$(tr -d 'v[:space:]' < .node-version); d="$RUNNER_TOOL_CACHE/node/$v/x64"
+        echo "dir=$d" >> "$GITHUB_OUTPUT"
+        echo "key=node-win32-x64-$v" >> "$GITHUB_OUTPUT"
+        [ ! -x "$(cygpath -u "$d")/node.exe" ] || echo "kept=true" >> "$GITHUB_OUTPUT"
+    - if: runner.os == 'Windows' && steps.win-dir.outputs.kept != 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ steps.win-dir.outputs.dir }}
+          ${{ steps.win-dir.outputs.dir }}.complete
+        key: ${{ steps.win-dir.outputs.key }}
     - id: win-node
       if: runner.os == 'Windows'
       shell: bash
