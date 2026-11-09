@@ -36,10 +36,8 @@ let sizes_steady : SizesSteady = {
 }
 
 ///|
-/// Every fault said, none failing: what the tests show counted (to take the known down to it). On for now: main moved
-/// (#4911's sizes laid out at their end) past the bars counted for #4924, and other PRs failed on them; held again once
-/// counted anew on main.
-let sizes_steady_counting : Bool = true
+/// Every fault said, none failing: what the tests show counted (to take the known down to it).
+let sizes_steady_counting : Bool = false
 
 ///|
 /// Each file's bar: how many faults a Tester made there may show.
