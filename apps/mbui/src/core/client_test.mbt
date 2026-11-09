@@ -566,3 +566,14 @@ test "more of a list asked from what it has: its first value what changed from t
   }
   assert_eq(sent[2].stringify(), ({ "id": 1, "unsubscribe": true } : Json).stringify())
 }
+
+///|
+test "a call still answering keeps its name as the record forgets the others: its progress is said by it" {
+  let (c, _) = recorder()
+  let id = c.stream("station.preview", on_value=fn(_, _) {  })
+  let done = c.call("chat.read")
+  assert_eq(c.perf_name({ "id": Json::number(done.to_double()), "ok": Json::null() }), "answer chat.read")
+  c.perf_forget()
+  assert_eq(c.perf_name({ "id": Json::number(id.to_double()), "value": { "chunk": true } }), "progress station.preview")
+  assert_eq(c.perf_name({ "id": Json::number(id.to_double()), "ok": Json::null() }), "answer station.preview")
+}

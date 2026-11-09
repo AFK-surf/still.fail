@@ -50,8 +50,8 @@ pub(all) struct Worked {
   what : Done
   start : Double
   end : Double
-  /// what it went on, by part (@hostapi.work_part: where it was made, ms), the longest first, at most
-  /// `journal_notes_kept`
+  /// what it went on, by part (@hostapi.work_part: where it was made, ms summed), the longest first, each 1 ms in all at
+  /// least, at most `journal_notes_kept`
   notes : Array[(String, Double)]
 } derive(Eq, Show, Debug)
 
@@ -290,10 +290,11 @@ fn journal_work(what : Done, start : Double, end : Double) -> Unit {
   }
   journal_counts[4] += end - start
   // (what it went on, the longest first)
+  // (a part 1 ms in all at least: each of them however short, summed by where it was made)
   let notes = if journal_notes.is_empty() {
     []
   } else {
-    let all = journal_notes.to_array()
+    let all = journal_notes.to_array().filter(fn(n) { n.1 >= journal_floor_ms })
     journal_notes.clear()
     all.sort_by(fn(a, b) { b.1.compare(a.1) })
     if all.length() > journal_notes_kept {
