@@ -154,12 +154,23 @@ pub fn chat_list(
           }
           Working(a) => {
             // coming in, it comes where it is as its room opens, and leaves where it is, as any row
-            // (ListRows::enter, leave); its turn over, it stays a moment (Activity) first
+            // (ListRows::enter, leave); its turn over, it stays while its messages come out of its avatar (chat_tick)
             rd.fresh.remove(keys[i]) |> ignore
             let leaving = rd.rows.went(keys[i]) is Some(_)
             let here = here_of(r, v, rk, turns, em, None, core, inline=narrow, gutter~)
             let came = rd.rows.came(keys[i])
-            let ri = row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving, came) })
+            // (a turn begun and over between two ticks, nothing of it coming out: no room, unseen, chat_tick)
+            let unseen = match rd.linger.get(a.key) {
+              Some(l) => l.unseen
+              None => false
+            }
+            let ri = if unseen {
+              c.box(style=@ui.style(h=S0, clip=true, opacity=O0), fn() {
+                activity_row(c, src, here, a, em, rk, leaving, came)
+              })
+            } else {
+              row_box(c, side, top, fn() { activity_row(c, src, here, a, em, rk, leaving, came) })
+            }
             @motion.keyed(c, ri, mk, by=makes_way(lf, keys[i]))
             rd.rows.enter(c, ri, keys[i], lead=top, grown=false)
             rd.rows.leave(c, ri, keys[i], lead=top)

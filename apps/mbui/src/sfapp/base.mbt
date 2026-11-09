@@ -242,7 +242,6 @@ pub using @sfbase {
   follow_newest,
   follows,
   kept_places,
-  linger_ms,
   linger_tick,
   list_made,
   read_place,

@@ -33,6 +33,8 @@ test "a flow ends when a motion's rest is a rounding hair past its frame" {
     said: [],
     one_by_one: Ref::new(false),
     at_step: [],
+    followed: Ref::new(""),
+    follow_ys: [],
   }
   f.end() |> ignore
   assert_true(t.time() >= rest)

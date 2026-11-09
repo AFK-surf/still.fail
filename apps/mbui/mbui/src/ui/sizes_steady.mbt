@@ -133,12 +133,20 @@ fn Ctx::sizes_steady_said(self : Ctx, i : Int) -> String {
 /// A measure's last frames (rows_steady_fault's samples, the display's frames `period` apart; it last turned back at
 /// `turned`): the frame before the last a step or a spike (off both frames round it the same way), or a dead stop (at
 /// speed, then at rest at once); or a turn back again soon (rows_steady_fault's). A way setting out at its speed (from
-/// rest, going on as fast or slowing) is none: an eased way out sets out so (sf/motion.mbt).
-fn sizes_steady_fault(all : Array[(Double, Double, Double)], period : Double, turned~ : Double) -> (String?, Double) {
+/// rest, going on as fast or slowing) is none: an eased way out sets out so (sf/motion.mbt). In a list's row whose way
+/// set out at `set_out` between them, as rows_steady_fault has a row's place: the speed it takes up then, from where it
+/// was, is the way's (a row joining the rows' way under way goes on its share of it as they do: list_size.mbt).
+fn sizes_steady_fault(
+  all : Array[(Double, Double, Double)],
+  period : Double,
+  turned~ : Double,
+  set_out? : Double = -1.0,
+) -> (String?, Double) {
   // (the last four; the one before them, where there is one, for whether they set out from rest)
   let seen = if all.length() > 4 { all[all.length() - 4:].to_array() } else { all }
   let n = seen.length()
-  if n >= 4 && seen[0].1 < seen[1].1 && seen[1].1 < seen[2].1 && seen[2].1 < seen[3].1 {
+  if n >= 4 && seen[0].1 < seen[1].1 && seen[1].1 < seen[2].1 && seen[2].1 < seen[3].1 &&
+    !(set_out > seen[0].1 && set_out <= seen[3].1) {
     let speed = fn(a : Int) { (seen[a + 1].2 - seen[a].2) / (seen[a + 1].1 - seen[a].1) * period }
     let v0 = speed(0)
     let v1 = speed(1)
@@ -196,6 +204,8 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
     let c_bot = Array::make(k, 1.0e9)
     let row_at = Array::make(k, 0.0)
     let in_row = Array::make(k, false)
+    // (and when the rows' way of the list it is in last set out: list_size.mbt's RowCauses, -1 none)
+    let set_out = Array::make(k, -1.0)
     for i in 0..<k {
       let n = self.nodes[i]
       let p = n.parent
@@ -223,9 +233,14 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
         if pn.kind == kind_list || pn.tree_scrolls {
           row_at[i] = ya[i] * n.y + yb[i]
           in_row[i] = true
+          set_out[i] = match self.lists.get(pn.id) {
+            Some({ causes: Some(c), .. }) if pn.kind == kind_list => c.start
+            _ => -1.0
+          }
         } else {
           row_at[i] = row_at[p]
           in_row[i] = in_row[p]
+          set_out[i] = set_out[p]
         }
       }
     }
@@ -272,7 +287,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
           seen.remove(0) |> ignore
         }
         let turned = sizes_steady.turned.get(key).unwrap_or(-1.0e9)
-        let (fault, turn) = sizes_steady_fault(seen, period, turned~)
+        let (fault, turn) = sizes_steady_fault(seen, period, turned~, set_out=set_out[i])
         if turn != turned {
           sizes_steady.turned[key] = turn
         }

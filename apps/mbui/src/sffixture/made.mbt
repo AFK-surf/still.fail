@@ -46,6 +46,7 @@ pub fn fixture_reset() -> Unit {
   fix_xshared.clear()
   fix_decided.clear()
   fix_replied.clear()
+  fix_card_replies.clear()
   fix_vault.val = ""
   fix_phone.val = ""
   fix_phone_link.val = ""
