@@ -61,6 +61,9 @@ priv struct BlockWay {
 /// at once, nothing drawn for it); what shows is held by the anchor however tall what is over it is counted meanwhile.
 /// What only scrolling, or the window made another size, brings in or takes out is there or gone at once. `own_ways`:
 /// its blocks' coming and going its own (a chat's rows, which fly in), none made by the list.
+/// What a way costs: while one is under way each frame counts the blocks from the first on its way to the last again
+/// (each a height and a top, nothing made or measured), what is over it as it was; a list of a few hundred blocks, as
+/// a page's are. One of thousands whose ways come near its top would want its tops kept by a tree of sums instead.
 pub fn[K : Hash + Eq] View::scrolls_window(
   self : View,
   s : Scroll,
@@ -85,11 +88,19 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // blocks' tops and the blocks made, reads these)
   let keyed = @signals.computed(fn(_) { keys() })
   let keys = fn() { keyed.get() }
-  // (the blocks making their way in or out, by their key (BlockWay), and those going, where each was among the keys:
-  // made and drawn till their way is shut; `ways_told` told as either changes)
+  // (the blocks making their way in or out, by their key (BlockWay), and those going, each with the keys that were over
+  // it as it went, the nearest first, and in what order they went (the change, then its place then): made and drawn
+  // till their way is shut, each under the nearest of those still there; `ways_told` told as either changes)
   let ways : Map[K, BlockWay] = Map([])
-  let going : Map[K, Int] = Map([])
+  let going : Map[K, (Array[K], Int, Int)] = Map([])
+  let goes = Ref(0)
   let ways_told : @signals.Signal[Int] = @signals.signal(0)
+  // (the moment a way is read at: the frame's (Tree's frame_ms), not the clock set to a change's moment and back as it
+  // is measured, as what comes in a column reads it (View::comes); followed by the clock, read again as frames come)
+  let way_now = fn() {
+    self.tree.drawn_at() |> ignore
+    self.tree.frame_ms
+  }
   // (how much of its height a block is counted at, `t` on: all of it but on its way)
   let way_k = fn(k : K, t : Double) {
     match ways.get(k) {
@@ -110,10 +121,22 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       ks
     } else {
       let out = ks.copy()
-      let at : Array[(Int, K)] = going.iter().map(fn(e) { (e.1, e.0) }).collect()
-      at.sort_by(fn(a, b) { a.0.compare(b.0) })
-      for e in at {
-        out.insert(e.0.min(out.length()).max(0), e.1)
+      // (in the order they went: each under the nearest of what was over it that is still there, or first)
+      let order : Array[(Int, Int, K)] = going.iter().map(fn(e) { (e.1.1, e.1.2, e.0) }).collect()
+      order.sort_by(fn(a, b) { if a.0 != b.0 { a.0.compare(b.0) } else { a.1.compare(b.1) } })
+      for e in order {
+        let (over, _, _) = going[e.2]
+        let mut at = 0
+        for o in over {
+          match out.search(o) {
+            Some(i) => {
+              at = i + 1
+              break
+            }
+            None => ()
+          }
+        }
+        out.insert(at, e.2)
       }
       out
     }
@@ -167,7 +190,6 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   let laid_grid = Ref(-1.0)
   // (how many times they were worked out: what shows by them worked out again each time)
   let laid_rev = Ref(0)
-  let was_moving = Ref(false)
   let laid = @signals.computed(fn(_) {
     laid_rev.val = laid_rev.val + 1
     told.get() |> ignore
@@ -178,13 +200,19 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     // (blocks on their way: each counted as far as its way has got as what is drawn is drawn, all worked out again)
     ways_told.get() |> ignore
     let moving = !ways.is_empty()
-    let t = if moving { self.tree.drawn_at() } else { 0.0 }
-    // (the first worked out after the last way shut: all of it again, as it is now)
-    let fresh = moving || was_moving.val
-    was_moving.val = moving
+    let t = if moving { way_now() } else { 0.0 }
     let mut from = 0
-    if !fresh && physical_equal(ks, laid_keys.val) && g == laid_grid.val && laid_out.length() == ks.length() {
+    if physical_equal(ks, laid_keys.val) && g == laid_grid.val && laid_out.length() == ks.length() {
       from = ks.length()
+      // (from the first on its way down: what is over it as it was; one shut told as its height changed)
+      if moving {
+        for k, _ in ways {
+          match laid_at.get(k) {
+            Some(i) => from = from.min(i)
+            None => ()
+          }
+        }
+      }
       for k in heights_changed {
         match laid_at.get(k) {
           Some(i) => {
@@ -452,7 +480,14 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     for i, k in p {
       if !now.contains(k) && !going.contains(k) {
         if shown_now.contains(k) {
-          going[k] = i
+          let over = []
+          let mut j = i - 1
+          while j >= 0 {
+            over.push(p[j])
+            j = j - 1
+          }
+          goes.val = goes.val + 1
+          going[k] = (over, goes.val, i)
           set_way(k, way_k(k, at), 0.0)
           changed = true
         } else if ways.contains(k) {
@@ -830,7 +865,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       slot
       .height(By(fn() {
         let h = my_tall.get().unwrap_or(est)
-        Some(self.tree.rows_slot(if on_way() { h * way_k(k, self.tree.drawn_at()) } else { h }))
+        Some(self.tree.rows_slot(if on_way() { h * way_k(k, way_now()) } else { h }))
       }))
       .clips(By(on_way))
       .shrink(Is(0.0))
