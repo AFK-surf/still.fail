@@ -30,9 +30,8 @@ test "a moved list draws its new place without fingerprinting it as a still fram
   // The frame after the movement was not fingerprinted, so a still paint establishes its own fingerprint again.
   t.frame_at(at + 16.0)
   assert_true(looks_base.built, msg="a still frame must fingerprint again")
-  let said = looks_base.said
   t.frame_at(at + 16.0)
-  assert_true(looks_base.settled, msg="equal still drawings can use the looks-only path again: before \{said}, now \{looks_base.said}, paint \{painted_why.val}")
+  assert_true(looks_base.settled, msg="a still paint after it can use the looks-only path again: paint \{painted_why.val}")
 }
 
 ///|

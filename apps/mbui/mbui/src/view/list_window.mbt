@@ -109,6 +109,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   if @signals.untracked(follows) {
     s.to_foot()
   }
+  // (the same as they were, the same: what reads them not told as the column scrolls within the same blocks)
   let window = @signals.computed(fn(_) {
     guard self.laid_size_told() is Some((_, vh)) else { return [] }
     // (to be put at its foot, how far that is not told yet: none, nothing made at its top it never shows)
@@ -133,7 +134,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       }
     }
     out
-  })
+  }, same=fn(a, b) { a == b })
   // (what shows held where it is as what is over it changes height: the first block that showed, its top as it was
   // then and where it was among them, the column moved by as far as that moved; as it is scrolled, the first that shows
   // then)
@@ -156,11 +157,15 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       i
     }
   }
+  // (the first that shows where it is scrolled to now: what holds what shows told anew only as that changes, not each
+  // time the column is scrolled within it; while a block brought to the middle holds it, where it is scrolled to)
+  let first_shown = @signals.computed(fn(_) { first_past(laid.get(), at()) }, same=fn(a, b) { a == b })
   self.reacts(fn() {
     laid.get() |> ignore
-    (laid_n.val, at())
+    (laid_n.val, first_shown.get(), if held.val is Some(_) { at() } else { 0.0 })
   }, fn(now) {
-    let (n, x) = now
+    let (n, _, _) = now
+    let x = @signals.untracked(at)
     // (moved since by the hand or the wheel, nothing over it laid out: the block brought holds it no more)
     if held.val is Some(_) && n == put_n.val && (x - dclamp(put_x.val, 0.0, s.most())).abs() > 0.5 {
       held.val = None
@@ -234,8 +239,11 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   // however far that comes to be as what it holds changes, till it is moved off it. At its foot as its blocks are now,
   // not only as it was last laid out: moved down for what came in over what shows (Scroll::grew_above), it is as far
   // from its foot as before, though that is not laid out yet)
-  self.reacts(at, fn(x) {
-    guard @signals.untracked(follows) && !s.at_foot() && x >= s.most() - 0.5 && s.glides_till() is None else {
+  // (whether it is at its foot as it is scrolled, at rest: told as that changes, not each time the column is scrolled)
+  let at_most = @signals.computed(fn(_) { at() >= s.reach() - 0.5 && s.rest_now() is None }, same=fn(a, b) { a == b })
+  self.reacts(fn() { at_most.get() }, fn(foot) {
+    let x = @signals.untracked(at)
+    guard foot && @signals.untracked(follows) && !s.at_foot() && x >= s.most() - 0.5 && s.glides_till() is None else {
       return
     }
     let all = @signals.untracked(fn() { laid.get() })

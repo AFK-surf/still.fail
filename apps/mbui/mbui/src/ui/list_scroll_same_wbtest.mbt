@@ -177,7 +177,8 @@ fn same_ways() -> Array[(String, Int, (Tester) -> Unit)] {
 
 ///|
 /// What of its rows is drawn in the window: each box and glyph seen, where (x, y, w, h), its corners, the clip it is cut
-/// to (top and foot) and its colour, in the order of where.
+/// to (top and foot, its outer clip's as well where it has one), its colour and how tall what shows of it is, in the
+/// order of where.
 fn same_drawn(t : Tester) -> Array[Array[Double]] {
   let out = []
   for a in t.drawn_instances() {
@@ -187,9 +188,15 @@ fn same_drawn(t : Tester) -> Array[Array[Double]] {
       ((a[10] * 255.0).round().to_int64() << 8) |
       (a[11] * 255.0).round().to_int64()
     let ours = kind == 1.0 || (kind == 0.0 && (ink == 0xEEEEEEFFL || ink == 0x3366CCFFL))
-    // (seen: within the window and its clip)
-    if ours && a[1] < 844.0 && a[1] + a[3] > 0.0 && a[19] > a[17] {
-      out.push([kind, a[0], a[1], a[2], a[3], a[4], a[17], a[19], ink.to_double()])
+    // (seen: within the window, its clip and its outer clip where it has one, 40-43: a page's list's rows past the
+    // window cut by its header's clip there, view_ride.mbt's inst_cut_to)
+    let outer = a[40] != 0.0 || a[41] != 0.0 || a[42] != 0.0 || a[43] != 0.0
+    let cut_top = if outer { dmax(a[17], a[41]) } else { a[17] }
+    let cut_foot = if outer { dmin(a[19], a[43]) } else { a[19] }
+    // (and how tall what shows of it is, last)
+    let seen = dmin(dmin(a[1] + a[3], cut_foot), 844.0) - dmax(dmax(a[1], cut_top), 0.0)
+    if ours && seen > 0.0 {
+      out.push([kind, a[0], a[1], a[2], a[3], a[4], cut_top, cut_foot, ink.to_double(), seen])
     }
   }
   out.sort_by(fn(p, q) {
@@ -253,18 +260,28 @@ test "a page's list on the window's tree moves as an old view's list, frame by f
         None => if was.length() != now.length() { differ.push("\{platform} \{name}: \{was.length()} frames, \{now.length()}") }
       }
       // (its rows as drawn, the first frame they differ at)
+      // (where each is, how big as stretched and what cuts it, up to a pixel of the Tester's (scale 2; as Android stretches
+      // it, a fifth more at most): the tree's list moved by whole pixels as it is drawn once and moved (Scroll::held_dy),
+      // an old view's boxes off by part of one and its words each set on one as they came, the rest the same; so what
+      // shows of one at an edge by less than three of them may show in one, not the other: each that shows by more found
+      // in the other)
       let alike = fn(a : Array[Double], b : Array[Double]) {
-        (0).until(a.length()).iter().all(fn(i) { (a[i] - b[i]).abs() <= 1.0e-3 })
+        (0).until(9).iter().all(fn(i) {
+          let most = if (i >= 1 && i <= 4) || i == 6 || i == 7 { 0.6 } else { 1.0e-3 }
+          (a[i] - b[i]).abs() <= most
+        })
+      }
+      let lost = fn(a : Array[Array[Double]], b : Array[Array[Double]]) {
+        a.iter().find_first(fn(e) { e[9] >= 1.5 && !b.iter().any(fn(f) { alike(e, f) }) })
       }
       let r = (0).until(imin(was_rows.length(), now_rows.length())).find_first(fn(k) {
         let (a, b) = (was_rows[k], now_rows[k])
-        (a.length() != b.length() || (0).until(a.length()).iter().any(fn(i) { !alike(a[i], b[i]) }))
+        lost(a, b) is Some(_) || lost(b, a) is Some(_)
       })
       if r is Some(r) {
         let (a, b) = (was_rows[r], now_rows[r])
-        let i = (0).until(imin(a.length(), b.length())).find_first(fn(i) { !alike(a[i], b[i]) })
         differ.push(
-          "\{platform} \{name}: drawn at \{r} (\{was[r].0}): old \{a.length()}, tree \{b.length()}; first apart \{i.map(fn(i) { (a[i], b[i]) })}",
+          "\{platform} \{name}: drawn at \{r} (\{was[r].0}): old \{a.length()}, tree \{b.length()}; the old's not in the tree's \{lost(a, b)}, the tree's not in the old's \{lost(b, a)}",
         )
       }
     }

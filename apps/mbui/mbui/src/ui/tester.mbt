@@ -1825,6 +1825,16 @@ pub fn Tester::hold_drag(
 }
 
 ///|
+/// The finger held down (Tester::hold_drag) moved on to (x, y), a gesture's move later (input_step_ms), drawn as it
+/// comes: one frame.
+pub fn Tester::hold_move(self : Tester, x : Double, y : Double) -> Unit {
+  let at = self.fake.time + input_step_ms
+  self.fake.time = at
+  finger(1, x, y)
+  self.frame_at(at)
+}
+
+///|
 /// The finger let go at (x, y).
 pub fn Tester::release(self : Tester, x : Double, y : Double) -> Unit {
   finger(2, x, y)
