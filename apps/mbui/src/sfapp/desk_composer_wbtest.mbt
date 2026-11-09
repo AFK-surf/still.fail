@@ -98,6 +98,31 @@ test "desk composer: typed words are the core's draft (composer.text); Enter sen
 }
 
 ///|
+test "desk composer: ⌘Enter 发送 chosen in 快捷键 (prefs sendKey), Enter and ⇧Enter are new lines and ⌘Enter sends; Ctrl+Enter on Windows" {
+  for one in [(0, @ui.mod_cmd), (3, @ui.mod_ctrl)] {
+    let (platform, command) = one
+    let calls : Array[Made] = []
+    let (t, src) = desk_composer_tester(calls, platform~)
+    (src.call)("prefs.set", { "sendKey": "mod" }, fn(_) {  })
+    t.draw()
+    t.tap(450.0, 500.0 - 16.0 - 22.0)
+    assert_true(composer_focused())
+    t.type_text("先看第三项")
+    t.enter()
+    t.key(@ui.key_code_enter, mods=@ui.mod_shift_key)
+    t.type_text("再看第四项")
+    t.frame()
+    assert_eq(named(calls, "chat.send").length(), 0, msg="platform \{platform}")
+    assert_eq(@sfbase.writing(src, "ws1/st1:s-c1").text.get(), "先看第三项\n\n再看第四项")
+    t.key(@ui.key_code_enter, mods=command)
+    t.frame()
+    let sends = named(calls, "chat.send")
+    assert_eq(sends.length(), 1, msg="platform \{platform}")
+    assert_eq(text(Some(sends[0].params), "text"), "先看第三项\n\n再看第四项")
+  }
+}
+
+///|
 test "desk composer: a quote waiting is its card over the words, its comment told to the core, ✕ lets it go" {
   let calls : Array[Made] = []
   let (t, src) = desk_composer_tester(calls)

@@ -21,6 +21,8 @@ pub(all) struct Fixture {
   mut haptics : String
   /// automatic updates chosen (the prefs' `appUpdate`: off; "" on)
   mut app_update : String
+  /// how the composer sends (prefs `sendKey`): `mod`, or "" Enter
+  mut send_key : String
   archived : Map[String, Bool]
   hidden : Map[String, Bool]
   muted : Map[String, Bool]
@@ -937,7 +939,8 @@ pub fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json
         "fonts": fixture_fonts(f.fonts),
         "faces": fixture_faces(f.fonts),
         "keys": fixture_keys(f.keys),
-        "keymap": fixture_keymap(f.keys),
+        "sendKey": if f.send_key == "" { Json::null() } else { Json::string(f.send_key) },
+        "keymap": fixture_keymap(f.keys, send_key=f.send_key),
         // the rail as the core says it (rail.ts railView), none kept: its default
         "railView": match fixture_kept("railView", {}, None) {
           Some(Ok((v, _))) => v
@@ -1150,6 +1153,7 @@ pub fn fixture(mode : String) -> Source {
     window_zoom: "",
     haptics: "",
     app_update: "",
+    send_key: "",
     archived: {},
     hidden: {},
     muted: {},
@@ -1472,6 +1476,11 @@ pub fn fixture(mode : String) -> Source {
           match field(Some(params), "appUpdate") {
             Some(String(u)) => f.app_update = u
             Some(Null) => f.app_update = ""
+            _ => ()
+          }
+          match field(Some(params), "sendKey") {
+            Some(String(k)) => f.send_key = k
+            Some(Null) => f.send_key = ""
             _ => ()
           }
           match field(Some(params), "listFilter") {

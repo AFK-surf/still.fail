@@ -53,14 +53,15 @@ pub fn keys_dialog(c : @ui.Ctx, src : Source) -> Unit {
 /// What ⌘/ lists, each place's shortcuts with their keys in words: worked out as it is drawn, not while it is closed.
 fn key_lines(prefs : Json?) -> Array[(String, Array[(String, String)])] {
   let (first_ws, last_ws) = @settings.workspace_keys(prefs)
+  let (send, newline) = @settings.send_lines(prefs)
   let groups = @settings.key_groups(prefs)
   groups.push((@sf.t("web-main.shortcuts.group.workspace"), [(@sf.t("web-main.shortcuts.switchWorkspace"), first_ws + " … " + last_ws)]))
   groups.push(
     (
       @sf.t("web-main.shortcuts.group.composer"),
       [
-        (@sf.t("web-main.shortcuts.send"), "↩"),
-        (@sf.t("web-main.shortcuts.newline"), "⇧↩"),
+        (@sf.t("web-main.shortcuts.send"), send),
+        (@sf.t("web-main.shortcuts.newline"), newline),
         (@sf.t("web-main.shortcuts.prevNextChat"), "↑ / ↓"),
       ],
     ),

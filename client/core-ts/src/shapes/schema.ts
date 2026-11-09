@@ -2124,6 +2124,7 @@ export const SHAPES: Record<string, Shape> = {
     ["driveFavoritesHidden", map("String"), { default: true, doc: "Formerly pinned folders the person removed from their shortcuts on this device, by workspace (JSON places).\nThis leaves the station's existing pinned folders and access rules unchanged." }],
     ["shareLook", opt("String"), { doc: "The look the card shared of the agents at work is drawn in, as last chosen under it on this device: the app's\nkey for it (`night`, `poster`, …; none or one the app does not know: its first)." }],
     ["dropAs", opt("String"), { doc: "How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path." }],
+    ["sendKey", opt("String"), { doc: "How the composer sends on this device (快捷键): `mod`, ⌘Enter (Ctrl+Enter elsewhere), Enter and ⇧Enter a new\nline; or (none) Enter, ⇧Enter a new line. A screen's keyboard's Enter is a new line whatever this says." }],
     ["archiveHint", opt("String"), { doc: "When a done chat is offered to archive (drawn faded): `off`, never;\n`reviewed`, only once its station's archive review recommended it; (none) `done`, whenever nothing is left in it\n(where its station's review is on, once it recommended it). Archiving with one tap is there whatever this says." }],
     ["screenTouch", opt("String"), { doc: "How a finger drives a station's screen on a phone: `direct` (a tap clicks where it is), or (none) as a\ntrackpad (the finger moves the pointer, a tap clicks where it points)." }],
     ["screenQuality", opt("String"), { doc: "How large a picture of a station's screen this device asks for: `smooth` (at most 1280×720), `hd` (at\nmost 1920×1080), `original` (the screen's own size), or (none) as the window is (at most 1920×1080, 2560×1440 on\na screen that has more)." }],
@@ -2161,7 +2162,20 @@ export const SHAPES: Record<string, Shape> = {
     ["groups", vec("KeyGroup"), { doc: "Where the actions work, in the order they are listed." }],
     ["actions", vec("KeyAction"), { doc: "Every action, in the order they are listed." }],
     ["workspace", vec("String"), { doc: "The keys that switch to the workspace at each place (from 0) of its menu, as shown: ⌃1…⌃9, Alt+1…9 elsewhere\n(not changeable)." }],
+    ["send", opt("SendKeys"), { default: true, doc: "The composer's keys, as `sendKey` chooses them (none from a core before it)." }],
   ], { doc: "The app's keyboard shortcuts (client/core-ts/src/keymap.ts): a client turns a key press into a binding and looks it up here." }),
+  SendKeys: struct([
+    ["by", "SendKey"],
+    ["choices", vec("SendKeyChoice"), { doc: "The two ways, in the order 快捷键 offers them." }],
+    ["send", "String", { doc: "The keys that send, as a key cap shows them here (↩, ⌘↩, Ctrl+↩)." }],
+    ["newline", "String", { doc: "The keys that make a new line, as shown (⇧↩, or ↩ / ⇧↩)." }],
+    ["text", "String", { doc: "Both in a line of words, under the choice." }],
+  ], { doc: "How the composer sends (keymap.ts sendView)." }),
+  SendKey: words(["enter","mod"], { doc: "Enter sends (⇧Enter a new line), or ⌘Enter (Ctrl+Enter elsewhere) sends (Enter a new line)." }),
+  SendKeyChoice: struct([
+    ["by", "SendKey"],
+    ["name", "String", { doc: "The way in words, as the choice says it (Enter 发送, ⌘ Enter 发送)." }],
+  ]),
   KeyGroup: struct([
     ["group", "KeyGroupName"],
     ["name", "String", { doc: "Its name, as the list of shortcuts heads it." }],

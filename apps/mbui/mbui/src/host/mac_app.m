@@ -612,6 +612,10 @@ static NSCursor *cursor_of(int kind) {
     if (editing) {
       if (self.imeActive) [self interpretKeyEvents:@[ e ]];
       else mb_cb.key(editing, mods);
+    } else if (e.keyCode == 36 || e.keyCode == 76) {
+      // ⌘Return: the Enter key held with ⌘ (a message sent where Enter is a new line); a composition under way keeps it
+      if (self.markedLen > 0) [self interpretKeyEvents:@[ e ]];
+      else mb_cb.key(7, mods);
     } else if ([c isEqualToString:@"q"]) [NSApp terminate:nil];
     else if ([c isEqualToString:@"a"]) mb_cb.key(12, mods);
     else if ([c isEqualToString:@"c"]) mb_cb.key(13, mods);

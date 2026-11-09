@@ -345,6 +345,28 @@ export interface KeyGroup {
 	name: string;
 }
 
+/** Enter sends (⇧Enter a new line), or ⌘Enter (Ctrl+Enter elsewhere) sends (Enter a new line). */
+export type SendKey = "enter" | "mod";
+
+export interface SendKeyChoice {
+	by: SendKey;
+	/** The way in words, as the choice says it (Enter 发送, ⌘ Enter 发送). */
+	name: string;
+}
+
+/** How the composer sends (keymap.ts sendView). */
+export interface SendKeys {
+	by: SendKey;
+	/** The two ways, in the order 快捷键 offers them. */
+	choices: SendKeyChoice[];
+	/** The keys that send, as a key cap shows them here (↩, ⌘↩, Ctrl+↩). */
+	send: string;
+	/** The keys that make a new line, as shown (⇧↩, or ↩ / ⇧↩). */
+	newline: string;
+	/** Both in a line of words, under the choice. */
+	text: string;
+}
+
 /** The app's keyboard shortcuts (client/core-ts/src/keymap.ts): a client turns a key press into a binding and looks it up here. */
 export interface KeymapView {
 	/** Keys can be changed here (`keys.set`): the desktop app; elsewhere `keys` is not gone by. */
@@ -360,6 +382,8 @@ export interface KeymapView {
 	 * (not changeable).
 	 */
 	workspace: string[];
+	/** The composer's keys, as `sendKey` chooses them (none from a core before it). */
+	send?: SendKeys;
 }
 
 /** A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor, Devin, Hermes Agent or Antigravity CLI. */
@@ -1561,6 +1585,11 @@ export interface PrefsView {
 	shareLook?: string;
 	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */
 	dropAs?: string;
+	/**
+	 * How the composer sends on this device (快捷键): `mod`, ⌘Enter (Ctrl+Enter elsewhere), Enter and ⇧Enter a new
+	 * line; or (none) Enter, ⇧Enter a new line. A screen's keyboard's Enter is a new line whatever this says.
+	 */
+	sendKey?: string;
 	/**
 	 * When a done chat is offered to archive (drawn faded): `off`, never;
 	 * `reviewed`, only once its station's archive review recommended it; (none) `done`, whenever nothing is left in it

@@ -46,7 +46,8 @@ let setting_in_card_y : Double = 8.0
 ///|
 /// A setting of a few choices (setting's with page_choice's in it): wide, its row with the options at its end, as wide
 /// as they are (seg_node); narrow, a section of its own, the options as wide as the page's room (page_choice_node), what
-/// it is for under them. `labels`, `chosen`, `choose`: page_choice_node's.
+/// it is for under them. `labels`, `chosen`, `choose`: page_choice_node's. `alone`: the page's only setting there, not
+/// one of a group's rows: wide, a list card of its own (group_node) round its row.
 #callsite(autofill(loc))
 pub fn setting_choice_node(
   parent : @view.View,
@@ -55,9 +56,14 @@ pub fn setting_choice_node(
   chosen : () -> Int,
   choose : (Int) -> Unit,
   note? : () -> String = fn() { "" },
+  alone? : Bool = false,
   loc~ : SourceLoc,
 ) -> Unit {
   match look_node(parent) {
+    Wide if alone =>
+      group_node(loc~, parent, fn(g) {
+        setting_node(loc~, g, title, fn(r) { seg_node(r, labels, chosen, choose) |> ignore }, note~)
+      })
     Wide => setting_node(loc~, parent, title, fn(r) { seg_node(r, labels, chosen, choose) |> ignore }, note~)
     Narrow => section_node(parent, title, fn(s) { page_choice_node(s, labels, chosen, choose) }, about=note)
   }
