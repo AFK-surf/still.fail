@@ -714,7 +714,22 @@ fn screen_trigger(c : @ui.Ctx, r : ChatRef, v : ChatView) -> Unit {
       chat_screens_open(r, v.screens, from=Of(screen))
     })
     |> ignore
-    if chat_screens_driven(v.screens) {
+    let driven = chat_screens_driven(v.screens)
+    let n = v.screens.length()
+    // (more than one: how many, a menu of them to come, amber while an agent drives one; pengxiao, 2026-11-09:
+    // 标记一下有几个可用屏幕)
+    if n > 1 {
+      c.layer(fn() {
+        c.box(style=screen_count_room, fn() {
+          c.box(style=if driven { screen_count_driven } else { screen_count }, fn() {
+            c.text(n.to_string(), style=screen_count_words) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    } else if driven {
       c.layer(fn() {
         c.box(style=jobs_alarm_room, fn() { c.box(style=screen_driven_dot, fn() {  }) |> ignore }) |> ignore
       })
@@ -729,6 +744,29 @@ fn screen_trigger(c : @ui.Ctx, r : ChatRef, v : ChatView) -> Unit {
 /// work.
 // kept across runs: a value (no field of it changes)
 let screen_driven_dot : @ui.Style = @ui.css("w=S2_5 h=S2_5 radius=Full bg=Warn border=B2 border_color=Bg")
+
+///|
+/// Where the count stands: on the button's top right corner, the icon's corner under its ring.
+// kept across runs: a value (no field of it changes)
+let screen_count_room : @ui.Style = @ui.css("w=S8 h=S8 align=AEnd")
+
+///|
+/// How many screens there are, a pill 16 high as 待处理's (todo_count), ringed 2 in the page's ground: quiet, amber
+/// while an agent drives one.
+// kept across runs: a value (no field of it changes)
+let screen_count : @ui.Style = @ui.css(
+  "min_w=S4 h=S4 px=S1 align=ACenter justify=JCenter radius=Full bg=Muted border=B2 border_color=Bg",
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let screen_count_driven : @ui.Style = @ui.css(
+  "min_w=S4 h=S4 px=S1 align=ACenter justify=JCenter radius=Full bg=Warn border=B2 border_color=Bg",
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let screen_count_words : @ui.TextStyle = @ui.text_style(size=Caption, weight=Semibold, color=Bg, wrap=false)
 
 ///|
 /// What opens under the chat's bar: its info's popover (ChatInfo) and its services' (JobsPanel), each by its button.
