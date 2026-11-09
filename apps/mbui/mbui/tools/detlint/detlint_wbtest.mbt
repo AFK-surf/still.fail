@@ -2080,6 +2080,33 @@ test "layout-read-back" {
 }
 
 ///|
+test "layout-told" {
+  // what the layout came to told back, read by what is made (the framework's outside the view too); the view's own and a
+  // test's not counted
+  let cfg = Config::new(@rjson.parse("{\"mbt\": {\"framework\": [\"src/ui\"]}}"))
+  let fs = found(
+    [
+      (
+        "src/app/card.mbt",
+        "fn v(p : @view.View) -> Unit {\n" +
+        "  let w = p.laid_size_told().map(fn(s) { s.0 }).unwrap_or(0.0)\n" +
+        "  let side = p.went_told()\n" +
+        "  let at = p.pointer_here_told()\n" +
+        "  let h = room.tall(p)\n" +
+        "}\n",
+      ),
+      ("src/app/card_wbtest.mbt", "test \"t\" {\n  v.laid_size_told() |> ignore\n}\n"),
+      ("src/ui/links.mbt", "fn w(v : @view.View) -> Unit {\n  v.pointer_here_told() |> ignore\n}\n"),
+      ("src/view/scroll.mbt", "fn w(v : View) -> Unit {\n  v.laid_size_told() |> ignore\n}\n"),
+    ],
+    "layout-told",
+    4,
+    cfg~,
+  )
+  assert_eq(lines(fs), [2, 2, 3, 4])
+}
+
+///|
 test "tester-branch" {
   let cfg = Config::new(
     @rjson.parse(

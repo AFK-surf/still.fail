@@ -701,121 +701,119 @@ fn things_list_node(
   sides : Double,
   away : (Double) -> Unit,
 ) -> Unit {
-  let scroll = @view.Scroll::new()
-  // (the room the grid's tiles share across, as the field's box is: the list's less its sides, as it is laid out;
-  // before that the window's)
-  let room = fn() {
-    match p.laid_size_told() {
-      Some((w, _)) if w > 0.0 => w - 2.0 * sides
-      _ => p.window().0 - things_room_less
-    }
-  }
-  // (its rows by their keys, as the core has its things now, the kind shown, the room the tiles have)
-  let table : @signals.Computed[(Array[String], Map[String, ThingsRow])] = @signals.computed(fn(_) {
-    let v = value()
-    let k = kind()
-    let keys : Array[String] = []
-    let rows : Map[String, ThingsRow] = {}
-    let put = fn(name : String, row : ThingsRow) {
-      keys.push(name)
-      rows[name] = row
-    }
-    put("head", RowHead)
-    let shown = items(v, k)
-    if shown.length() == 0 {
-      put("none", RowNoneFound)
-    } else if k == "media" {
-      let across = room()
-      for di, d in items(v, "mediaDays") {
-        let day = Some(d)
-        if text(day, "day") != "" {
-          put("day/\{di}/" + text(day, "day"), RowDay(text(day, "day")))
-        }
-        for gi, g in items(day, "groups") {
-          let group = Some(g)
-          put("said/\{di}/\{gi}", RowSaid(g))
-          let tiles = items(group, "items")
-          for line in media_lines(tiles.map(media_aspect), across, things_line_high, things_gap) {
-            let (from, to, high) = line
-            let these = tiles[from:to].to_array()
-            put("tiles/\{di}/\{gi}/\{from}/\{to}/\{high}", RowTiles(these, high))
+  // (its rows by the room it is given, filling the room the panel gives it)
+  p.by_room(fn(p, given) {
+    p.grow(Is(1.0)).min_height(Is(Some(0.0))) |> ignore
+    let scroll = @view.Scroll::new()
+    // (the room the grid's tiles share across, as the field's box is: the list's less its sides, given it as it is laid
+    // out, its rows made by it there)
+    let room = fn() { given.width() - 2.0 * sides }
+    // (its rows by their keys, as the core has its things now, the kind shown, the room the tiles have)
+    let table : @signals.Computed[(Array[String], Map[String, ThingsRow])] = @signals.computed(fn(_) {
+      let v = value()
+      let k = kind()
+      let keys : Array[String] = []
+      let rows : Map[String, ThingsRow] = {}
+      let put = fn(name : String, row : ThingsRow) {
+        keys.push(name)
+        rows[name] = row
+      }
+      put("head", RowHead)
+      let shown = items(v, k)
+      if shown.length() == 0 {
+        put("none", RowNoneFound)
+      } else if k == "media" {
+        let across = room()
+        for di, d in items(v, "mediaDays") {
+          let day = Some(d)
+          if text(day, "day") != "" {
+            put("day/\{di}/" + text(day, "day"), RowDay(text(day, "day")))
+          }
+          for gi, g in items(day, "groups") {
+            let group = Some(g)
+            put("said/\{di}/\{gi}", RowSaid(g))
+            let tiles = items(group, "items")
+            for line in media_lines(tiles.map(media_aspect), across, things_line_high, things_gap) {
+              let (from, to, high) = line
+              let these = tiles[from:to].to_array()
+              put("tiles/\{di}/\{gi}/\{from}/\{to}/\{high}", RowTiles(these, high))
+            }
           }
         }
+      } else {
+        for t in shown {
+          put("thing/" + k + "/" + text(Some(t), "key"), RowThing(k, t))
+        }
       }
-    } else {
-      for t in shown {
-        put("thing/" + k + "/" + text(Some(t), "key"), RowThing(k, t))
+      // not all of the chat is here yet: more may come, older ones
+      if !flag(v, "whole") {
+        put("more", RowMore)
       }
-    }
-    // not all of the chat is here yet: more may come, older ones
-    if !flag(v, "whole") {
-      put("more", RowMore)
-    }
-    put("foot", RowFoot)
-    (keys, rows)
+      put("foot", RowFoot)
+      (keys, rows)
+    })
+    p.scrolls_window(
+      scroll,
+      fn() { table.get().0 },
+      fn(row, name) {
+        match @signals.untracked(fn() { table.get().1.get(name) }) {
+          Some(RowHead) => things_head_node(row, at, value, has, kind, chosen, side, room)
+          Some(RowNoneFound) => {
+            @sf.style_node(row, fn() { things_found_none.then(side()) })
+            @sf.words_node(row, fn() { @sf.t("web-main.find.none") }, fn() { things_none }) |> ignore
+          }
+          Some(RowDay(day)) => {
+            @sf.style_node(row, fn() { things_day.then(side()) })
+            // (as wide as they are, cut where the row has not the room (things_day_words' w=Cut), as an old view's words
+            // in a column are: not stretched across it)
+            row.lines_up(Is(Some(@view.Along::Start))) |> ignore
+            @sf.words_node(row, fn() { day }, fn() { things_day_words }) |> ignore
+          }
+          Some(RowSaid(group)) => {
+            @sf.style_node(row, fn() { things_said_line.then(side()) })
+            media_said_node(row, Some(group))
+          }
+          Some(RowTiles(tiles, high)) => {
+            @sf.style_node(row, fn() { things_grid_line.then(side()) })
+            row.box(fn(line) {
+              @sf.style_node(line, fn() { things_grid_row })
+              for t in tiles {
+                media_tile_node(line, src, r, thread, t, media_aspect(t) * high, high, away)
+              }
+            })
+            |> ignore
+          }
+          Some(RowThing(k, t)) => {
+            @sf.style_node(row, fn() { things_line.then(side()) })
+            // (as the core has it now: a pull request's card read, its title)
+            let tv = fn() {
+              match table.get().1.get(name) {
+                Some(RowThing(_, now)) => Some(now)
+                _ => Some(t)
+              }
+            }
+            thing_row_node(row, src, r, k, tv, away)
+          }
+          Some(RowMore) => {
+            @sf.style_node(row, fn() { things_more })
+            @sf.spinner_node(row, size=things_more_spin) |> ignore
+          }
+          Some(RowFoot) => @sf.style_node(row, fn() { things_foot })
+          None => ()
+        }
+      },
+      est=things_row_est,
+      slop=@ui.touch_slop(),
+      bar=@ui.tree_scroll_bar(),
+    )
+    |> ignore
+    // (another kind chosen: its list from its top, as a list of its own)
+    p.reacts(kind, fn(_) { scroll.put(0.0) })
   })
-  p.scrolls_window(
-    scroll,
-    fn() { table.get().0 },
-    fn(row, name) {
-      match @signals.untracked(fn() { table.get().1.get(name) }) {
-        Some(RowHead) => things_head_node(row, at, value, has, kind, chosen, side, room)
-        Some(RowNoneFound) => {
-          @sf.style_node(row, fn() { things_found_none.then(side()) })
-          @sf.words_node(row, fn() { @sf.t("web-main.find.none") }, fn() { things_none }) |> ignore
-        }
-        Some(RowDay(day)) => {
-          @sf.style_node(row, fn() { things_day.then(side()) })
-          // (as wide as they are, cut where the row has not the room (things_day_words' w=Cut), as an old view's words
-          // in a column are: not stretched across it)
-          row.lines_up(Is(Some(@view.Along::Start))) |> ignore
-          @sf.words_node(row, fn() { day }, fn() { things_day_words }) |> ignore
-        }
-        Some(RowSaid(group)) => {
-          @sf.style_node(row, fn() { things_said_line.then(side()) })
-          media_said_node(row, Some(group))
-        }
-        Some(RowTiles(tiles, high)) => {
-          @sf.style_node(row, fn() { things_grid_line.then(side()) })
-          row.box(fn(line) {
-            @sf.style_node(line, fn() { things_grid_row })
-            for t in tiles {
-              media_tile_node(line, src, r, thread, t, media_aspect(t) * high, high, away)
-            }
-          })
-          |> ignore
-        }
-        Some(RowThing(k, t)) => {
-          @sf.style_node(row, fn() { things_line.then(side()) })
-          // (as the core has it now: a pull request's card read, its title)
-          let tv = fn() {
-            match table.get().1.get(name) {
-              Some(RowThing(_, now)) => Some(now)
-              _ => Some(t)
-            }
-          }
-          thing_row_node(row, src, r, k, tv, away)
-        }
-        Some(RowMore) => {
-          @sf.style_node(row, fn() { things_more })
-          @sf.spinner_node(row, size=things_more_spin) |> ignore
-        }
-        Some(RowFoot) => @sf.style_node(row, fn() { things_foot })
-        None => ()
-      }
-    },
-    est=things_row_est,
-    slop=@ui.touch_slop(),
-    bar=@ui.tree_scroll_bar(),
-  )
+  .grow(Is(1.0))
+  .min_height(Is(Some(0.0)))
   |> ignore
-  // (another kind chosen: its list from its top, as a list of its own)
-  p.reacts(kind, fn(_) { scroll.put(0.0) })
 }
-
-///|
-/// How far the tiles' room is from the window's across before the list is laid out (things_body's: its sides).
-let things_room_less : Double = 32.0
 
 ///|
 /// How tall a row of the list is taken to be till it is laid out (things_body's), and its spinner's side.

@@ -565,7 +565,13 @@
       "src/sfpages/search.mbt": 2,
       "src/sfpages/switcher.mbt": 2
     },
-    "part-place": {}
+    "part-place": {},
+    "layout-told": {
+      "src/sf/panel_node.mbt": 1,
+      "src/sf/stage_node.mbt": 1,
+      "src/sfbase/viewer_marks_node.mbt": 2,
+      "src/sfpages/sidebar_node.mbt": 2
+    }
   },
   "excused": {
     "frame-request": {},
@@ -645,6 +651,7 @@
     "old-panel": {},
     "click-read": {},
     "key-read": {},
-    "part-place": {}
+    "part-place": {},
+    "layout-told": {}
   }
 }

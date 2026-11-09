@@ -684,7 +684,7 @@ fn size_uncached(
   let pbh = b.pbh()
   // leaves measured from their content
   match node.measure {
-    Some(m) =>
+    Some(m) if !node.room =>
       if node.children.length() == 0 {
         if known(w) && known(h) {
           out_h.val = h
@@ -746,6 +746,8 @@ fn size_uncached(
           clamp_size(pbw, b.min_w, b.max_w) - pbw + pbw
         }
       }
+    // (told its room: laid out by what it holds, below)
+    Some(_) => ()
   }
   // as tall as its share of what it holds comes to at its width, what it holds laid out whole in that (Style's
   // content_share): what it holds sized first, then laid out in the height that comes to
@@ -1061,6 +1063,39 @@ fn layout_flex(
   // percentages of children resolve against this content box
   let cb_w = inner_w
   let cb_h = inner_h
+  // one told its room (its `room`) told the room its content box gives what it holds, before that is laid out (the
+  // view's View::by_room, which makes what it holds by that room): what that made or changed in it laid out in this
+  // same layout, below; where it came out otherwise (its first answer more than 0), nothing it was measured to come to
+  // before kept (another room's, or what it held before)
+  match node.measure {
+    Some(m) if node.room => {
+      let wm = if known(inner_w) {
+        Exactly
+      } else if known(avail_inner_w) {
+        AtMost
+      } else {
+        Undefined
+      }
+      let hm = if known(inner_h) {
+        Exactly
+      } else if known(avail_inner_h) {
+        AtMost
+      } else {
+        Undefined
+      }
+      let (changed, _) = m(
+        if known(avail_inner_w) { avail_inner_w } else { 0.0 },
+        wm,
+        if known(avail_inner_h) { avail_inner_h } else { 0.0 },
+        hm,
+      )
+      if changed > 0.0 {
+        node.pre_gen = -1
+        node.cache_n = 0
+      }
+    }
+    _ => ()
+  }
   // flex items, from the pool of this depth
   let d = depth.val
   depth.val = d + 1

@@ -1003,7 +1003,10 @@ pub fn Style::set_padding(self : Style, d : Dim) -> Unit {
 
 ///|
 /// Measures a leaf from its content: (width, width mode, height, height
-/// mode) -> (width, height), as Yoga's measure functions.
+/// mode) -> (width, height), as Yoga's measure functions. On a node said
+/// to be told its room (Node's `room`), told the room its content box gives
+/// what it holds before that is laid out (layout_flex), answering more than
+/// 0 first where what it holds changed by it.
 pub type MeasureFn = (Double, MeasureMode, Double, MeasureMode) -> (Double, Double)
 
 ///|
@@ -1041,6 +1044,9 @@ pub(all) struct Node {
   // its last layout (perform), while not dirty: what it was asked (known
   // size, containing block) and what it came to
   mut p_ok : Bool
+  // its measure is told the room its content box gives what it holds, before that is laid out (layout_flex), not asked
+  // how big it is (the view's View::by_room); here, where the C struct has room for it
+  mut room : Bool
   mut p_kw : Double
   mut p_kh : Double
   mut p_cbw : Double
@@ -1084,6 +1090,7 @@ pub fn Node::new() -> Node {
     box_ver: -1,
     dirty: true,
     p_ok: false,
+    room: false,
     p_kw: 0.0,
     p_kh: 0.0,
     p_cbw: 0.0,

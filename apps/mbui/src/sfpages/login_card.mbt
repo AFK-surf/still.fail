@@ -693,21 +693,8 @@ pub fn login_card_node(
             @sf.style_node(card, fn() { if marked { lc_card_body_marked } else { lc_card_body } })
             // (what is on it as wide as it, a step's button the card's width: its own lines up at the start)
             card.lines_up(Is(None)) |> ignore
-            // (as wide as what it holds, 360 at least where there is the room: its place's width, as laid out)
-            card
-            .min_width(By(fn() {
-              match room.laid_size_told() {
-                Some((w, _)) => Some(@cmp.minimum(lc_card_least, w))
-                None => Some(0.0)
-              }
-            }))
-            .max_width(By(fn() {
-              match room.laid_size_told() {
-                Some((w, _)) => Some(@cmp.minimum(lc_card_most, w))
-                None => Some(lc_card_most)
-              }
-            }))
-            |> ignore
+            // (as wide as what it holds, 360 at least where there is the room: within the width its place gives it)
+            card.min_width(Is(Some(lc_card_least)), within=true).max_width(Is(Some(lc_card_most)), within=true) |> ignore
             let title = fn(t : @view.View) {
               t.box(fn(r) {
                 @sf.style_node(r, fn() { lc_title_room }, in_row=k == 2)

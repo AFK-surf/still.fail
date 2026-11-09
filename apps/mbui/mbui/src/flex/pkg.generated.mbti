@@ -93,6 +93,7 @@ pub(all) struct Node {
   mut box_ver : Int32
   mut dirty : Bool
   mut p_ok : Bool
+  mut room : Bool
   mut p_kw : Double
   mut p_kh : Double
   mut p_cbw : Double
@@ -104,8 +105,8 @@ pub(all) struct Node {
   mut skip_gen : Int32
 }
 pub fn Node::add(Self, Self) -> Unit
-pub fn Node::laid_out(Self) -> Bool
 pub fn Node::laid_given(Self) -> Bool
+pub fn Node::laid_out(Self) -> Bool
 pub fn Node::laid_out_at(Self) -> Int32
 pub fn Node::left_out(Self) -> Bool
 pub fn Node::new() -> Self

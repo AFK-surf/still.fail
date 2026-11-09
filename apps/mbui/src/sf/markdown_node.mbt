@@ -940,66 +940,67 @@ fn md_placed_runs(md : MdNode, xs : Array[MdInline]) -> Array[(Int, Array[MdInli
 
 ///|
 /// A paragraph's images in rows (image_rows'), each by the file it names and its width over its height (`images`, as they
-/// change): 8 apart either way, 8 over and under; as many on a row as fit the room it is laid out in at least 120 high,
+/// change): 8 apart either way, 8 over and under; as many on a row as fit the room it is given at least 120 high,
 /// then grown alike to fill it, 200 high at most; a row's images one height. Each drawn by its file (`md`'s `files`) at
 /// the width it has now, kept by the file and which of its showings in the paragraph it is; another file made again in
 /// its place.
 fn md_image_rows_node(p : @view.View, md : MdNode, images : () -> Array[(String, Double)]) -> Unit {
-  p.padding(Is((0.0, image_row_gap, 0.0, image_row_gap))).gap(Is(image_row_gap)) |> ignore
-  // det-ok(layout-read-back): a message's image is drawn at a width it is given (its box, its picture decoded that size), as image_rows has it
-  let room = fn() {
-    p.words_redone() |> ignore
-    match p.laid_size_told() {
-      Some((w, _)) => w
-      None => p.window().0
+  p.padding(Is((0.0, image_row_gap, 0.0, image_row_gap))) |> ignore
+  // (its rows by the room it is given, laid out in that same layout)
+  p.by_room(fn(p, given) {
+    p.gap(Is(image_row_gap)) |> ignore
+    let room = fn() {
+      p.words_redone() |> ignore
+      given.width()
     }
-  }
-  // (each by its key, the file and how many of it are before it: one file twice two images)
-  let rows = fn() {
-    let out : Array[Array[(String, String, Double)]] = [[]]
-    let mut used = 0.0
-    let r = room()
-    let seen : Map[String, Int] = {}
-    for named in images() {
-      let k = seen.get(named.0).unwrap_or(0)
-      seen[named.0] = k + 1
-      let im = (named.0 + "#" + k.to_string(), named.0, named.1)
-      let row = out[out.length() - 1]
-      let w = im.2 * image_row_least + (if row.length() > 0 { image_row_gap } else { 0.0 })
-      if row.length() > 0 && used + w > r {
-        out.push([im])
-        used = im.2 * image_row_least
-      } else {
-        row.push(im)
-        used = used + w
-      }
-    }
-    out
-  }
-  p.each(fn() { rows().mapi(fn(i, _) { i }) }, fn(i) { i }, fn(line, i) {
-    let i = @signals.untracked(fn() { i.get() })
-    line.row(Is(true)).gap(Is(image_row_gap)) |> ignore
-    let row = fn() { rows().get(i).unwrap_or([]) }
-    let h = fn() {
-      let all = row()
-      let ratios = all.fold(init=0.0, fn(n, im) { n + im.2 })
-      if ratios <= 0.0 { 0.0 } else { dmin(image_row_most, (room() - image_row_gap * (all.length() - 1).to_double()) / ratios) }
-    }
-    line.each(fn() { row().map(fn(im) { im.0 }) }, fn(k) { k }, fn(cell, k) {
-      let k = @signals.untracked(fn() { k.get() })
-      let at = fn() { row().search_by(fn(im) { im.0 == k }) }
-      let width = fn() {
-        match at() {
-          Some(j) => (row()[j].2 * h()).floor()
-          None => 0.0
+    // (each by its key, the file and how many of it are before it: one file twice two images)
+    let rows = fn() {
+      let out : Array[Array[(String, String, Double)]] = [[]]
+      let mut used = 0.0
+      let r = room()
+      let seen : Map[String, Int] = {}
+      for named in images() {
+        let k = seen.get(named.0).unwrap_or(0)
+        seen[named.0] = k + 1
+        let im = (named.0 + "#" + k.to_string(), named.0, named.1)
+        let row = out[out.length() - 1]
+        let w = im.2 * image_row_least + (if row.length() > 0 { image_row_gap } else { 0.0 })
+        if row.length() > 0 && used + w > r {
+          out.push([im])
+          used = im.2 * image_row_least
+        } else {
+          row.push(im)
+          used = used + w
         }
       }
-      let n = @signals.untracked(fn() { at().map(fn(j) { row()[j].1 }).unwrap_or("") })
-      match (md.files)(n).bind(fn(f) { f.image }) {
-        Some(im) => (im.1)(cell, width)
-        None => ()
+      out
+    }
+    p.each(fn() { rows().mapi(fn(i, _) { i }) }, fn(i) { i }, fn(line, i) {
+      let i = @signals.untracked(fn() { i.get() })
+      line.row(Is(true)).gap(Is(image_row_gap)) |> ignore
+      let row = fn() { rows().get(i).unwrap_or([]) }
+      let h = fn() {
+        let all = row()
+        let ratios = all.fold(init=0.0, fn(n, im) { n + im.2 })
+        if ratios <= 0.0 { 0.0 } else { dmin(image_row_most, (room() - image_row_gap * (all.length() - 1).to_double()) / ratios) }
       }
-      cell.width(By(fn() { Some(width()) })) |> ignore
+      line.each(fn() { row().map(fn(im) { im.0 }) }, fn(k) { k }, fn(cell, k) {
+        let k = @signals.untracked(fn() { k.get() })
+        let at = fn() { row().search_by(fn(im) { im.0 == k }) }
+        let width = fn() {
+          match at() {
+            Some(j) => (row()[j].2 * h()).floor()
+            None => 0.0
+          }
+        }
+        let n = @signals.untracked(fn() { at().map(fn(j) { row()[j].1 }).unwrap_or("") })
+        match (md.files)(n).bind(fn(f) { f.image }) {
+          Some(im) => (im.1)(cell, width)
+          None => ()
+        }
+        cell.width(By(fn() { Some(width()) })) |> ignore
+      })
     })
   })
+  |> ignore
 }
