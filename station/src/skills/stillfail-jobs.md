@@ -64,18 +64,18 @@ Choosing where to run: the right OS and architecture first; then enough free mem
 build needs several GiB of each); then the least busy (low CPU busy and load per core, few running tasks). Heavy
 builds and test suites go to a big machine, not a small VM. Offline stations are skipped. There are no locks: do
 not wait for, ask for or announce a "lock" on a machine, and do not queue behind other agents' claims. Look at the
-load, and if a machine is busy pick another or start anyway when nothing better is free: the station queues it.
+load, and if a machine is busy pick another or start anyway when nothing better is free: the station queues it when
+it must.
 
-A station runs other stations' tasks through its own queue. When it is busy, `start` answers with `queue` (its place
-and why it waits: busy CPUs, memory under pressure, the screen another task's) and the task starts by itself when there
-is room: one by one, each next only once the last has got going and the CPUs have room, none while the memory is under
-pressure. A task started beside others gets `STILLFAIL_CPUS` (and `MAKEFLAGS`, `CARGO_BUILD_JOBS`,
-`CMAKE_BUILD_PARALLEL_LEVEL` when not set) with how many CPUs are free: pass it to tools that take every core
-otherwise. You end `waiting` as for any task; its end is told as usual.
+A station runs other stations' tasks through its own queue. Busy CPUs never hold a task back; when one must wait,
+`start` answers with `queue` (its place and why it waits: memory under pressure, the screen another task's or a
+person's, the small-task slot taken) and the task starts by itself when that passes. A task started beside others may
+get `STILLFAIL_CPUS` (and `MAKEFLAGS`, `CARGO_BUILD_JOBS`, `CMAKE_BUILD_PARALLEL_LEVEL` when not set) with how many CPUs
+are free: pass it to tools that take every core otherwise. You end `waiting` as for any task; its end is told as usual.
 
 For a brief offscreen task such as a single picture made with a prebuilt renderer, `station_task` prepare takes
-`small: true`: one such task may run alongside busy builds without waiting for the CPU sampling interval. It is told
-to use one CPU, still waits under memory pressure, and waits if another small task is running. Do not use it for builds,
+`small: true`: one such task may run beside the rest even while the memory is under pressure (not when it is about
+to run out). It is told to use one CPU, and waits if another small task is running. Do not use it for builds,
 test suites, video, or work needing the screen. An older target that cannot do this says so at prepare.
 
 The screen (windows, GUI tests, simulators, emulators, screenshots of what is on it) is one task's at a time. Run just
