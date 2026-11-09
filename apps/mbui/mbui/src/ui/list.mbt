@@ -457,6 +457,7 @@ pub fn Ctx::list(
         on_pixels_by: 0.0,
         rows_read: false,
         island: 0,
+        typed_stays: false,
         glide_shows: false,
         named: "",
         made_at: None,
@@ -542,6 +543,8 @@ pub fn Ctx::list(
   // (rows that show only what they read are kept however what builds them was built: their own watches say when
   // they change; only a build keeping none builds them anew)
   st.rows_read = rows_read
+  // (in a part that goes on through what was typed elsewhere: that part says so as it ends, kept_nodes.mbt)
+  st.typed_stays = false
   st.fresh = if rows_read { nodes_run.whole } else { nodes_run.fresh || nodes_run.part_fresh }
   // shown again (not built the frame before): what of it still moves says so again (where it is at the frame's time
   // is its layout's to work out: Ctx::place_list)

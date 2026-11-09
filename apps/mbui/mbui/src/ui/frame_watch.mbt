@@ -912,9 +912,14 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
   // (the hand's discrete events since the frame before: what reads them takes them as it is built, and a frame that
   // takes one is built anew, its rows too: what took one changes as it is built what built before it read)
   // (the pointer's presses among them: hand_pressed)
-  let events = @signals.untracked(fn() { hand.events.get() + hand.typed.get() + hand.presses.get() })
-  let evented = events != events_seen.val
+  let events = @signals.untracked(fn() { hand.events.get() + hand.presses.get() })
+  let typed = @signals.untracked(fn() { hand.typed.get() })
+  let evented = events != events_seen.val || typed != typed_seen.val
+  // (what was typed into a field of an old view, and nothing else of the hand's: a part kept through it, built anew
+  // for anything else that came, Ctx::kept_part's `typed_stays`)
+  let typed_alone = events == events_seen.val && typed != typed_seen.val
   events_seen.val = events
+  typed_seen.val = typed
   // (and what came from outside that is no signal: a part kept whatever else the frame built anew is built anew for it)
   let outside = outside_events.val != outside_seen.val
   outside_seen.val = outside_events.val
@@ -1014,11 +1019,20 @@ fn frame_drawn(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> D
     nodes_run.evented = evented || outside
     // (the hand's alone, gone to one old view: that one's part alone built for it, view_host.mbt)
     nodes_run.evented_only = if outside { -1 } else { went_to }
+    // (and the frame after it, built for what that changed late in it (app.mbt's `inputs_taken`), nothing else come
+    // meanwhile: the same)
+    let typed_on = !evented && went_to < 0 && typed_frame_last.val >= 0
+    nodes_run.typed_alone = !outside && ((typed_alone && went_to >= 0) || typed_on)
+    if typed_on && !outside {
+      nodes_run.evented_only = typed_frame_last.val
+    }
+    typed_frame_last.val = if nodes_run.typed_alone && !typed_on { nodes_run.evented_only } else { -1 }
     nodes_run.whole = bench_whole.val && bench_measuring.val
     let t0 = watch.read(fn() { frame_body_drawn(c, t) })
     frame_looked(c, w, h, scale, t, 0, false)
     return t0
   }
+  typed_frame_last.val = -1
   // (what the window's tree was told as the frame went, brought before it is decided whether to paint: what that
   // changed of it painted, what changed nothing of it not: view_brought)
   view_arrived()
@@ -1066,6 +1080,17 @@ fn frame_looked(c : Ctx, w : Double, h : Double, scale : Double, t : Double, kin
 /// How many of the hand's discrete events the frame before had seen (hand.mbt's `events`).
 // kept across runs: only counts on with them
 let events_seen : Ref[Int] = Ref(0)
+
+///|
+/// The old view's part what was typed alone went to in the frame before (nodes_run's `typed_alone`), -1: none, or that
+/// frame was the one after it.
+// kept across runs: said as each frame is built
+let typed_frame_last : Ref[Int] = Ref(-1)
+
+///|
+/// How many times the frame before had seen something typed into a field of an old view (hand.mbt's `typed`).
+// kept across runs: only counts on with them
+let typed_seen : Ref[Int] = Ref(0)
 
 ///|
 /// How many events from outside the frame before had seen (kept_part.mbt's `outside_events`).

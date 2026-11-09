@@ -837,6 +837,7 @@ pub fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> 
   let version = f.changes() + @settings.fixture_version() + fix_browse.changes + fix_presets_said.val
   // (a draft's own changes, its words as they are typed: its topic's alone, fix_compose_call)
   let own = if name == "composer" {
+    @settings.fixture_draft_followed()
     match fix_writes.get(text(Some(Json::object(params)), "key")) {
       Some(w) => w.version
       None => 0
