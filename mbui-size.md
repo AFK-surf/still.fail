@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [16974fbc6](https://github.com/AFK-surf/still.fail/commit/16974fbc68586fa0c47785d89e80a6679c01ec4c) mbui: the player's keys are the keymap's actions,  | 1.73 | 2.31 | 9.61 | 28.13 | 33.48 | 25.12 | 45.93 | 93.55 | 146.41 |
 | [874d0a6bb](https://github.com/AFK-surf/still.fail/commit/874d0a6bb8782c31c66812cb403c1e8d6079765a) mbui: a code field as nodes; the narrow frame's lo | 1.73 | 2.31 | 9.61 | 28.13 | 33.48 | 25.12 | 45.93 | 93.36 | 140.08 |
 | [b204ff098](https://github.com/AFK-surf/still.fail/commit/b204ff09804d29d882b26c4a91c162451a7ef5c5) mbui: a page's list asked at a cause to bring a bl | 1.73 | 2.31 | 9.6 | 28.12 | 33.45 | 25.12 | 45.88 | 93.7 | 185.83 |
 | [05da8cd69](https://github.com/AFK-surf/still.fail/commit/05da8cd69b9c7e93ab19a11f8279c9f5d41add00) mbui: a node that draws nothing of its own makes a | 1.73 | 2.31 | 9.6 | 28.11 | 33.44 | 25.1 | 45.88 | 92.91 | 135.88 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [7582e5326](https://github.com/AFK-surf/still.fail/commit/7582e53263e9803ebba40596785683332afe72f6) feat(ios): configure monoid TestFlight and APNs id | 1.71 | 2.28 | 9.52 | 28.01 | 33.18 | 25.02 | 45.7 | 93.06 | 156.81 |
 | [857ada016](https://github.com/AFK-surf/still.fail/commit/857ada016ff4dd68978e863ca62228353a111232) core: a station's stream silent past its keepalive | 1.72 | 2.29 | 9.52 | 28.01 | 33.19 | 25.02 | 45.72 | 93.06 | 156.81 |
 | [dfbe26655](https://github.com/AFK-surf/still.fail/commit/dfbe266551d1dd9d363defbe0d9e9d4ea09a9d6d) mbui: what a row coming in costs as big as the row | 1.72 | 2.29 | 9.52 | 28.01 | 33.19 | 25.03 | 45.72 | 93.06 | 156.81 |
-| [d1aff8e78](https://github.com/AFK-surf/still.fail/commit/d1aff8e78a8d3ba61d94e9822a88498c54ed53f7) mbui: the chat bar's screen button says how many s | 1.71 | 2.28 | 9.52 | 28.01 | 33.18 | 25.02 | 45.7 | 93.06 | 156.81 |
