@@ -53,6 +53,10 @@ priv struct RowSizing {
   /// from what it read, lays it out the same: from there each time)
   mut frame : Int
   mut was : (RowSize, Double, Double, Double, Double, Double, (Double, Double, Double, Double, Double)?)
+  /// the room over what it holds (its lead) as its cause came, and as the frame before this one laid it out: a lead
+  /// another as it changed goes there on the way with its height, what it holds not stepped in its row (row_lead_off)
+  mut lead : Double
+  mut seen_lead : Double
 }
 
 ///|
@@ -188,6 +192,8 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
         before: None,
         frame: -1,
         was: (cause, from - to, to, c.start, c.end, 0.0, None),
+        lead: self.shown_lead.get(key).unwrap_or(c.leads.get(key).unwrap_or(0.0)),
+        seen_lead: self.shown_lead.get(key).unwrap_or(c.leads.get(key).unwrap_or(0.0)),
       }
       self.sizes[key] = r
       c.way_off(key, from - to, 0.0)
@@ -206,6 +212,7 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
   } else {
     r.frame = frame
     r.was = (r.cause, r.a, r.to, r.start, r.end, r.k, r.before)
+    r.seen_lead = self.shown_lead.get(key).unwrap_or(r.seen_lead)
   }
   // (its content going on the way itself: where it goes is where it is laid out now, so that a cause after this one,
   // its content no longer on the way, goes on from where it was laid out, not from where it was as it set out)
@@ -260,6 +267,7 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
     r.before = before
     r.a = h - to
     r.to = to
+    r.lead = r.seen_lead
     r.start = c.start
     r.end = c.end
     r.k = 0.0
@@ -283,6 +291,28 @@ fn ListState::row_sized(self : ListState, k : Int, natural : Double, now : Doubl
     c.opened[key] = (shown, natural)
   }
   shown
+}
+
+///|
+/// How far down from where its row lays it what row `k` holds is placed at `now`, its lead (the room over it at its
+/// top, ListRows::enter) another as it changed: from where the lead put it then, going as far as its height has gone
+/// on the rows' way (the row's room between rows going there with it, not what it holds stepped in it); none once
+/// there, nor for a row coming or going, nor one whose lead is as it was.
+fn ListState::row_lead_off(self : ListState, k : Int, now : Double) -> Double {
+  let (c, key) = match self.causes {
+    Some(c) if k < c.keys.length() && c.end > now => (c, c.keys[k])
+    _ => return 0.0
+  }
+  match (c.by.get(key), self.sizes.get(key)) {
+    (Some((Changed(_), _)), Some(r)) => {
+      let lead = c.leads.get(key).unwrap_or(0.0)
+      if (r.lead - lead).abs() < 0.001 || now < r.start {
+        return if now < r.start { r.lead - lead } else { 0.0 }
+      }
+      (r.lead - lead) * way_share(now, r.start, r.end, r.k).0
+    }
+    _ => 0.0
+  }
 }
 
 ///|
@@ -363,8 +393,9 @@ fn Ctx::room_held_in(self : Ctx, r : Int) -> Array[Int] {
 }
 
 ///|
-/// Row `k` laid out `h` tall: so tall by its key, for a change of it from there (a list whose rows' heights move).
-fn ListState::row_shown(self : ListState, k : Int, h : Double) -> Unit {
+/// Row `k` laid out `h` tall, what it holds `lead_off` down from where its lead puts it (row_lead_off): so tall and its
+/// lead so, by its key, for a change of it from there (a list whose rows' heights move).
+fn ListState::row_shown(self : ListState, k : Int, h : Double, lead_off? : Double = 0.0) -> Unit {
   match self.causes {
     Some(c) if k < c.keys.length() => {
       // (only the rows given now kept: what went from the list long since forgotten)
@@ -372,6 +403,10 @@ fn ListState::row_shown(self : ListState, k : Int, h : Double) -> Unit {
         self.shown_h.clear()
       }
       self.shown_h[c.keys[k]] = h
+      if self.shown_lead.length() > 2 * c.keys.length() + 16 {
+        self.shown_lead.clear()
+      }
+      self.shown_lead[c.keys[k]] = c.leads.get(c.keys[k]).unwrap_or(0.0) + lead_off
     }
     _ => ()
   }
