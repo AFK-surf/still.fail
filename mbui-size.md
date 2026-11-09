@@ -4,6 +4,7 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 
 | commit | web app.js br | gzip | raw | APK | libmbui.so | Mac zip | Mac program | Mac idle | Android idle PSS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| [1fd232e1f](https://github.com/AFK-surf/still.fail/commit/1fd232e1f0935aa7ee629680c5e10ee307f3cda3) app: the page that shares a chat as a picture come | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.16 | 46.1 | 93.49 | 143.42 |
 | [df36baaac](https://github.com/AFK-surf/still.fail/commit/df36baaacbb00f521e3df89269e30385f07b1ab0) app: a share card's night comes in with its pictur | 1.74 | 2.31 | 9.63 | 28.17 | 33.65 | 25.16 | 46.1 | 93.49 | 155.56 |
 | [94512b59f](https://github.com/AFK-surf/still.fail/commit/94512b59f5983e916656a0f5e654351c64652e30) mbui: a panel whose body and foot are nodes has no | 1.73 | 2.31 | 9.63 | 28.17 | 33.65 | 25.16 | 46.1 | 92.96 | 169.65 |
 | [8cc3a8001](https://github.com/AFK-surf/still.fail/commit/8cc3a8001baf1ecca1e6652ebdeea5c88c38b085) mbui: sizes_steady and rows_steady take words made | 1.73 | 2.31 | 9.63 | 28.16 | 33.63 | 25.16 | 46.08 | 93.31 | 125.58 |
@@ -43,4 +44,3 @@ Written by .github/workflows/mbui-size.yml; every line in mbui-size.jsonl (bytes
 | [7cfa246bc](https://github.com/AFK-surf/still.fail/commit/7cfa246bcbd63a27753e3160e957aeee637743dc) mbui: whether a decoration on the resident clock i | 1.72 | 2.29 | 9.54 | 28.06 | 33.25 | 25.05 | 45.75 | 93.06 | 156.81 |
 | [6b01ed01a](https://github.com/AFK-surf/still.fail/commit/6b01ed01a286796bef8170478d779a02fc8b14d8) mbui: an agent's line gives its place to its answe | 1.72 | 2.29 | 9.53 | 28.04 | 33.23 | 25.04 | 45.75 | 93.06 | 156.81 |
 | [0757499ca](https://github.com/AFK-surf/still.fail/commit/0757499ca5381dcc1f55f0b4a5910135f160bf8c) mbui: the order and what takes input worked out wh | 1.72 | 2.29 | 9.53 | 28.04 | 33.23 | 25.04 | 45.73 | 93.06 | 156.81 |
-| [56601c3b1](https://github.com/AFK-surf/still.fail/commit/56601c3b119a46306a0fa0623792c34e6a9fe274) Locks through the stations, not the cloud: read, t | 1.72 | 2.29 | 9.53 | 28.04 | 33.23 | 25.04 | 45.73 | 93.06 | 156.81 |
