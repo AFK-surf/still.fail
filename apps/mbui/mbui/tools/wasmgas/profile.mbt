@@ -339,10 +339,14 @@ priv struct Shape {
   runtime : Map[Int, Int]
   // the functions counted apart (profile's `apart`), by their index
   apart : Map[Int, Bool]
+  // the function whose calls are looked into (profile's `focus`), by its index; -1, none
+  mut focus : Int
+  // whether it is the `focus`'s callers that are looked into (profile's `callers`), not what it calls
+  callers : Bool
 }
 
 ///|
-fn shape(data : Bytes, apart : (String) -> Bool) -> Shape {
+fn shape(data : Bytes, apart : (String) -> Bool, focus : String, callers : Bool) -> Shape {
   let s : Shape = {
     imported_funcs: 0,
     imported_globals: 0,
@@ -354,6 +358,8 @@ fn shape(data : Bytes, apart : (String) -> Bool) -> Shape {
     start: -1,
     runtime: {},
     apart: {},
+    focus: -1,
+    callers,
   }
   let r = Reader::new(data, 8)
   while r.p < data.length() {
@@ -435,6 +441,12 @@ fn shape(data : Bytes, apart : (String) -> Bool) -> Shape {
                 }
                 if apart(name) {
                   s.apart[index] = true
+                }
+                if focus != "" && focus_is(focus, name) {
+                  if s.focus >= 0 {
+                    fail("focus=\{focus}: more than one function of that name")
+                  }
+                  s.focus = index
                 }
               }
             }
@@ -522,9 +534,12 @@ fn counter(v : @buffer.Buffer, g : Int, n : Int64) -> Unit {
 
 ///|
 /// `data` made to count what it runs (the head of this file)
-fn profile(data : Bytes, apart : (String) -> Bool) -> Bytes {
+fn profile(data : Bytes, apart : (String) -> Bool, focus~ : String = "", callers~ : Bool = false) -> Bytes {
   check_magic(data)
-  let s = shape(data, apart)
+  let s = shape(data, apart, focus, callers)
+  if focus != "" && s.focus < 0 {
+    fail("focus=\{focus}: no function of that name")
+  }
   let imported = s.imported_funcs
   let nd = s.func_types.length()
   let funcs = imported + nd
@@ -546,6 +561,8 @@ fn profile(data : Bytes, apart : (String) -> Bool) -> Bytes {
   put(globals_entry, [0x7f, 0x01, 0x41, 0x00, 0x0b])
   put(globals_entry, [0x7e, 0x01, 0x42, 0x00, 0x0b])
   put(globals_entry, [0x7e, 0x01, 0x42, 0x00, 0x0b])
+  // (the defined function running now, for `focus`: its place among them, -1 none)
+  put(globals_entry, [0x7f, 0x01, 0x41, 0x7f, 0x0b])
   let out = @buffer.new()
   out.write_bytesview(data[0:8])
   let mut had_globals = false
@@ -599,7 +616,7 @@ fn profile(data : Bytes, apart : (String) -> Bool) -> Bytes {
         had_globals = true
         let n = r.uint()
         let b = @buffer.new()
-        leb_u(b, (n + 4 + nk).to_int64())
+        leb_u(b, (n + 5 + nk).to_int64())
         b.write_bytesview(data[r.p:next])
         b.write_bytes(globals_entry.to_bytes())
         section(out, 6, b)
@@ -607,7 +624,7 @@ fn profile(data : Bytes, apart : (String) -> Bool) -> Bytes {
       7 => {
         if !had_globals {
           let b = @buffer.new()
-          leb_u(b, (4 + nk).to_int64())
+          leb_u(b, (5 + nk).to_int64())
           b.write_bytes(globals_entry.to_bytes())
           section(out, 6, b)
           had_globals = true
@@ -794,6 +811,8 @@ fn code_section(
   for k in 0..<nd {
     let nb = if s.apart.contains(imported + k) {
       apart_wrapper(s, k, gas, nk, pb, apart_at)
+    } else if s.focus >= 0 {
+      focus_wrapper(s, k, gas, pb, gas + nk + 4, s.focus - imported)
     } else {
       wrapper(s, k, gas, pb)
     }
@@ -859,6 +878,117 @@ fn wrapper(s : Shape, k : Int, gas : Int, pb : Int) -> @buffer.Buffer {
   nb.write_byte(b'\x23')
   leb_u(nb, allocs.to_int64())
   ld(nb, pb, mi, a_began)
+  put(nb, [0x7d, 0x7c])
+  st(nb, mi, a_incl)
+  nb.write_byte(b'\x0b')
+  nb.write_byte(b'\x0b')
+  nb
+}
+
+///|
+/// Whether a function's `name` is `focus`'s: the same, or with one `*` in it, what is before it the start of the name
+/// and what is after it its end (a closure's number changes from build to build: `…GsEC*l439`)
+fn focus_is(focus : String, name : String) -> Bool {
+  match focus.find("*") {
+    None => name == focus
+    Some(at) => {
+      let head = focus.view(end_offset=at).to_string()
+      let tail = focus.view(start_offset=at + 1).to_string()
+      name.length() >= head.length() + tail.length() &&
+      name.has_prefix(head) &&
+      name.has_suffix(tail)
+    }
+  }
+}
+
+///|
+/// The k-th defined function's wrapper where the calls of the `f`-th (profile's `focus`) are looked into: its call
+/// counted, and all run inside it where the `f`-th called it itself (its +8, and the allocator's calls at +56), each
+/// call apart; the function running now in global `cur` (its place, as each wrapper sets it around its call). Where it
+/// is the `f`-th's callers (profile's `callers`), the `f`-th's wrapper counts that into its caller's +8 and +56 instead,
+/// the others nothing there.
+fn focus_wrapper(s : Shape, k : Int, gas : Int, pb : Int, cur : Int, f : Int) -> @buffer.Buffer {
+  let mi = s.memories
+  let base = 64 * k
+  let incl = base + 8
+  let calls = base + 16
+  let a_incl = base + 56
+  let allocs = gas + 1 + K_ALLOC
+  let params = s.type_params[s.func_types[k]]
+  // its locals after its parameters: who called it, __gas and the allocator's calls as it began
+  let prev = params
+  let began = params + 1
+  let a_began = params + 2
+  let nb = @buffer.new()
+  put(nb, [0x02, 0x01, 0x7f, 0x02, 0x7e])
+  let op = fn(o : Int, i : Int) {
+    nb.write_byte(o.to_byte())
+    leb_u(nb, i.to_int64())
+  }
+  bump(nb, pb, mi, calls, 1L)
+  op(0x23, cur)
+  op(0x21, prev)
+  nb.write_byte(b'\x41')
+  leb_s(nb, k.to_int64())
+  op(0x24, cur)
+  op(0x23, gas)
+  op(0x21, began)
+  op(0x23, allocs)
+  op(0x21, a_began)
+  for a in 0..<params {
+    op(0x20, a)
+  }
+  op(0x10, s.imported_funcs + k)
+  op(0x20, prev)
+  op(0x24, cur)
+  if s.callers {
+    if k == f {
+      // if prev >= 0 { prev's incl += gas - began; prev's a_incl += allocs - a_began }
+      op(0x20, prev)
+      put(nb, [0x41, 0x00, 0x4e, 0x04, 0x40])
+      let at_prev = fn() {
+        op(0x23, pb)
+        op(0x20, prev)
+        put(nb, [0x41, 0x06, 0x74, 0x6a])
+      }
+      at_prev()
+      at_prev()
+      put(nb, [0x29, 0x43])
+      leb_u(nb, mi.to_int64())
+      leb_u(nb, 8L)
+      op(0x23, gas)
+      op(0x20, began)
+      put(nb, [0x7d, 0x7c])
+      st(nb, mi, 8)
+      at_prev()
+      at_prev()
+      put(nb, [0x29, 0x43])
+      leb_u(nb, mi.to_int64())
+      leb_u(nb, 56L)
+      op(0x23, allocs)
+      op(0x20, a_began)
+      put(nb, [0x7d, 0x7c])
+      st(nb, mi, 56)
+      nb.write_byte(b'\x0b')
+    }
+    nb.write_byte(b'\x0b')
+    return nb
+  }
+  // if prev == f { incl += gas - began; a_incl += allocs - a_began }
+  op(0x20, prev)
+  nb.write_byte(b'\x41')
+  leb_s(nb, f.to_int64())
+  put(nb, [0x46, 0x04, 0x40])
+  op(0x23, pb)
+  ld(nb, pb, mi, incl)
+  op(0x23, gas)
+  op(0x20, began)
+  put(nb, [0x7d, 0x7c])
+  st(nb, mi, incl)
+  op(0x23, pb)
+  ld(nb, pb, mi, a_incl)
+  op(0x23, allocs)
+  op(0x20, a_began)
   put(nb, [0x7d, 0x7c])
   st(nb, mi, a_incl)
   nb.write_byte(b'\x0b')
