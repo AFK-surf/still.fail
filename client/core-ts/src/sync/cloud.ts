@@ -468,7 +468,9 @@ export class CloudSync {
     // device yet needs to let it in at all)
     const chain = claim === null ? null : (this.carryPerson?.(workspace) ?? null);
     const person = chain !== null && entries !== null && JSON.stringify(entries).length + JSON.stringify(chain).length > CARRY_BYTES ? null : chain;
-    const claimed = (c: Credential): Credential => (claim === null ? c : { ...c, lock: { ...claim, ...(entries ? { entries } : {}), ...(person ? { person } : {}) } });
+    // (and what the device is: the station lists it for the lock's owner, as the cloud did from the ask)
+    const about = { kind: this.#core.host.appKeys ? "app" : "web", label: prefs.deviceName(this.#core.data) ?? "" };
+    const claimed = (c: Credential): Credential => (claim === null ? c : { ...c, lock: { ...claim, ...about, ...(entries ? { entries } : {}), ...(person ? { person } : {}) } });
     return Effect.map(this.#credential(workspace, device, fresh, main, claim), claimed);
   }
 

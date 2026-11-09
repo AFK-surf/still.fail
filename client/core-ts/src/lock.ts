@@ -16,7 +16,8 @@ export type Head = { seq: number; hash: string; genesis: string };
 /// `entries`, what put it in the lock lately, for a station that has not heard of it yet (views/lock.ts `carried`).
 /// `person`: the chain of the person's own lock, where its member bound it in the workspace's (views/lock.ts
 /// `carriedPerson`).
-export type LockClaim = { device: string; proof: string; entries?: Entry[]; person?: Entry[] };
+/// `kind`, `label`: what the device is, for the station to list it for a lock's owner (station/src/mesh/seen-devices.ts).
+export type LockClaim = { device: string; proof: string; kind?: string; label?: string; entries?: Entry[]; person?: Entry[] };
 /// How much of the locks a hello brings at most (a station reads its first line up to 16 KiB).
 export const CARRY_BYTES = 12 * 1024;
 

@@ -21,13 +21,13 @@ const STATION = "ws/st";
 /// A cloud that keeps one chain, as cloud/src/personal-lock.ts does.
 function cloud() {
   const kept = { entries: [] as Entry[] };
-  // (`limited`: how many writes it answers "too many requests" first)
-  const say = { limited: 0 };
+  // (`limited`: how many writes it answers "too many requests" first; `down`: none answered; `asked`: how many asks)
+  const say = { limited: 0, down: false, asked: 0 };
   return {
     kept,
     say,
     call: (_sub: string, method: string, _path: string, body: unknown) =>
-      Effect.suspend(() => method === "POST" && say.limited-- > 0 ? Effect.fail(new CoreError("rate_limited", "too many", 429)) : Effect.sync(() => {
+      Effect.suspend(() => (say.asked++, say.down) ? Effect.fail(new CoreError("network", "the cloud is down")) : method === "POST" && say.limited-- > 0 ? Effect.fail(new CoreError("rate_limited", "too many", 429)) : Effect.sync(() => {
         if (method === "GET") return { entries: kept.entries };
         const adding = (body as { entries: Entry[] }).entries;
         kept.entries = adding[0]!.seq === 0 ? adding : [...kept.entries.slice(0, adding[0]!.seq), ...adding];
@@ -36,8 +36,34 @@ function cloud() {
   };
 }
 
+/// The person's stations, as station/src/mesh/person-chains.ts keeps their lock: each chain by its first entry, the
+/// longer taken where it goes on from the one kept, one at odds refused. `up`: whether any of them is reached.
+function stations() {
+  const kept = new Map<string, Entry[]>();
+  const say = { up: true, read: 0, brought: 0 };
+  const root = (c: Entry[]) => JSON.stringify(c[0]);
+  return {
+    kept,
+    say,
+    env: {
+      read: (_sub: string) => Effect.sync(() => (say.read++, say.up ? [...kept.values()] : null)),
+      bring: (_sub: string, chain: Entry[]) =>
+        Effect.suspend(() => {
+          say.brought++;
+          if (!say.up) return Effect.succeed(null);
+          const had = kept.get(root(chain)) ?? [];
+          const [short, long] = had.length <= chain.length ? [had, chain] : [chain, had];
+          if (!short.every((e, i) => JSON.stringify(e) === JSON.stringify(long[i]))) return Effect.fail(new CoreError("lock_refused", "at odds with the one kept", 409));
+          kept.set(root(chain), long);
+          return Effect.succeed(1);
+        }),
+    },
+  };
+}
+
 /// A device: its host keeps what is sealed with `user: true` apart, each read of it counted, as asking the person.
-function device(c: ReturnType<typeof cloud>, name: string) {
+/// `at`: its person's stations, where it reads and brings the lock (none: the cloud alone, as a core from before).
+function device(c: ReturnType<typeof cloud>, name: string, at?: ReturnType<typeof stations>) {
   const id = name.charCodeAt(0).toString(16).repeat(32);
   const host = new FakeHost();
   host.appKeys = true;
@@ -53,8 +79,8 @@ function device(c: ReturnType<typeof cloud>, name: string) {
   };
   host.secureAsk = () => Effect.sync(() => void asks.n++);
   const runner = new Runner(host.time.clock);
-  const lock = new PersonalLock({ host, runner, cloud: c.call, device: () => Effect.succeed(id), label: () => name, changed: () => {} });
-  return { host, runner, lock, asks };
+  const lock = new PersonalLock({ host, runner, cloud: c.call, device: () => Effect.succeed(id), label: () => name, changed: () => {}, ...(at ? { stations: at.env } : {}) });
+  return { host, runner, lock, asks, id };
 }
 
 const body = (over: Record<string, unknown> = {}) => ({ station: STATION, request: "p1", session: "sess", chat: "chat", scope: "hour" as const, exp: 2_000_000_000, ...over });
@@ -99,6 +125,46 @@ test("an entry the person signs waits out the cloud's too many requests, and is 
     assert.equal(c.kept.entries.at(-1)?.kind, "device.remove");
   } finally {
     a.runner.shutdown();
+  }
+});
+
+test("a person's devices read and bring their lock at their stations, the cloud not waited on", async () => {
+  const c = cloud();
+  const st = stations();
+  const a = device(c, "a", st);
+  const b = device(c, "b", st);
+  try {
+    // Begun at the stations (the cloud told too, for the devices from before, and not waited on: it is down).
+    c.say.down = true;
+    await a.runner.run(a.lock.signGrant(SUB, body(), "why"));
+    assert.equal(a.lock.standing(SUB), "member");
+    assert.deepEqual([...st.kept.values()].map((ch) => ch.length), [1]);
+    // A device let in, the cloud still down: brought to the stations, and b reads it there.
+    const bKey = await b.runner.run(b.lock.makeKey());
+    const whole = await a.runner.run(a.lock.addDevice(SUB, { key: bKey, id: b.id, label: "b" }, "why"));
+    assert.deepEqual([...st.kept.values()].map((ch) => ch.length), [2]);
+    await b.runner.run(b.lock.refresh(SUB));
+    assert.deepEqual(b.lock.approvers(SUB).map((d) => d.label), ["a"]);
+    await b.runner.run(b.lock.joined(SUB, whole));
+    assert.equal(b.lock.standing(SUB), "member");
+    // b lets another in; a reads that of the stations.
+    const other = (n: string) => ({ key: `ed25519:${n.repeat(32)}`, id: n.repeat(32), label: n });
+    await b.runner.run(b.lock.addDevice(SUB, other("22"), "why"));
+    await a.runner.run(a.lock.refresh(SUB));
+    assert.equal(a.lock.entries(SUB).length, 3);
+    // a, behind (it did not read since), signs at odds with what the stations keep: refused there, as the cloud did.
+    await b.runner.run(b.lock.addDevice(SUB, other("33"), "why"));
+    const out = await a.runner.run(Effect.result(a.lock.addDevice(SUB, other("44"), "why")));
+    assert.equal(out._tag === "Failure" && out.failure.code, "lock_refused");
+    // None of the stations reached: the cloud is what it is read of and brought to, as before.
+    c.say.down = false;
+    st.say.up = false;
+    const asked = c.say.asked;
+    await a.runner.run(a.lock.refresh(SUB));
+    assert.ok(c.say.asked > asked);
+  } finally {
+    a.runner.shutdown();
+    b.runner.shutdown();
   }
 });
 

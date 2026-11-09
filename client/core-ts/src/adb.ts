@@ -758,8 +758,9 @@ export class Adb {
     for (const { sub } of this.#env.subs()) this.#readPersonal(sub);
   }
 
-  #readPersonal(sub: string): void {
-    this.#env.runner.fork(Effect.ensuring(Effect.ignore(this.#env.personal.refresh(sub), { log: "Unhandled", message: "personal lock read" }), Effect.sync(() => this.#sync())));
+  /// (`at`: as that station is reached, read of it alone)
+  #readPersonal(sub: string, at?: string): void {
+    this.#env.runner.fork(Effect.ensuring(Effect.ignore(this.#env.personal.refresh(sub, at), { log: "Unhandled", message: "personal lock read" }), Effect.sync(() => this.#sync())));
   }
 
   #keepRevoked(): void {
@@ -806,7 +807,7 @@ export class Adb {
   readGrants(station: string): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
       const sub = this.#subAt(station);
-      if (sub !== null) this.#readPersonal(sub);
+      if (sub !== null) this.#readPersonal(sub, station);
       const read = this.#retold.asked();
       return Effect.map(Effect.orElseSucceed(this.#legacy.askAt(station, { op: "grants" }), () => null), (r) => {
         const list = Array.isArray((r as J)?.grants) ? ((r as J).grants as J[]) : null;
