@@ -666,14 +666,19 @@ pub fn Tester::finish_all(self : Tester) -> Unit {
 ///|
 /// Whether how what moves goes from frame to frame is judged on the frame being drawn (words_over.mbt, rows_steady.mbt,
 /// sizes_steady.mbt: a step, a dead stop, words over words): on a display's own, 60 a second or more, and not on a
-/// frame a run at a rate (MBUI_TEST_FPS, scripts/fps_check.sh) draws on run_for's way. Such a run holds only that what a
+/// frame of a run at a rate (MBUI_TEST_FPS, scripts/fps_check.sh), whose frames are not the default run's. Such a run holds only that what a
 /// test asserts at its moments is the same however many frames came between; its judging is the default run's, on the
 /// same frames (the user, 2026-11-09: 7/24 帧只比结果；fps 跑法只比结果，平滑度另开一条线).
 /// A run that judges motion (MBUI_TEST_MOTION, test_motion_judged) judges those too, at a display's rate (60 a second
 /// or more): every frame a host at that rate draws while something moves.
 pub fn Tester::judges_motion(self : Tester) -> Bool {
-  self.period <= frame_period_default + 1.0e-9 &&
-  (!self.on_way || (self.motion != Results && self.between <= frame_period_default + 1.0e-9))
+  if self.between > 0.0 {
+    // (a run at a rate: none of its frames where it holds results only, its other frames (an input's, what is due)
+    // not the default run's either; every one where it judges motion)
+    self.motion != Results && self.between <= frame_period_default + 1.0e-9 && self.period <= frame_period_default + 1.0e-9
+  } else {
+    self.period <= frame_period_default + 1.0e-9
+  }
 }
 
 ///|
@@ -900,6 +905,10 @@ pub fn Tester::frame_shown_at(self : Tester, now : Double, shown : Double) -> Un
     self.hold_words_over()
     self.hold_rows_steady()
     self.hold_sizes_steady()
+  } else if !words_over.held && !self.on_way && self.period <= frame_period_default + 1.0e-9 {
+    // (where a test does not hold the rule but reads which frames show words over words: kept on a run at a rate's
+    // frames as on the default's, but for those on run_for's way)
+    self.hold_words_over()
   }
   self.hold_seen_whole_now()
   self.hold_corners()
