@@ -26,7 +26,7 @@ import { checkWith, forgetVerifiedHere, keepVerified } from "../src/vault/verifi
 import { BOX_KEY, BOX_PUB, UNLOCK_MS } from "../src/views/vault.ts";
 import { read as readLock } from "../src/views/lock.ts";
 import { subscribe, call } from "./helpers.ts";
-import { type Answers, base, entry, started, stationReplies, status } from "./station-fixture.ts";
+import { type Answers, base, entry, started, stationLater, stationReplies, status } from "./station-fixture.ts";
 // @ts-ignore: the MoonBit build's JS, untyped
 import * as rules from "../../../rules/js/rules.js";
 
@@ -1283,6 +1283,16 @@ test("a vault made on one station is copied to the workspace's others, so an age
   assert.deepEqual([r.st.grants.length, r.st2.grants.length], [0, 1]);
   const grant = r.st2.grants[0] as any;
   assert.equal(JSON.parse(new TextDecoder().decode(openSeal(keeper, grant.secret, grantContext("ws", "r_9")))).fields.value, "xoxp-2");
+  r.core.close();
+});
+
+test("a station gone silent (its machine asleep) is not waited on: a device set up on the one that answers", async () => {
+  const r = await rig(false, true);
+  r.putLock();
+  // st2 asked, it never answers: no answer, no close.
+  stationLater(r.host, (req) => (req.headers.some(([k, v]) => k === "x-test-station" && v === "st2") ? new Promise(() => {}) : undefined));
+  const setup = await r.ask("vault.setup", {});
+  assert.ok(r.st.boxes.get(setup.device), "published on the station that answered");
   r.core.close();
 });
 
