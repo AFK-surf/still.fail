@@ -721,10 +721,12 @@ pub struct Tree {
   /// what each walk of the scene keeps as it goes, kept for the next (Tree::each_drawn_in_order), and how many walk now
   priv mut walks : Array[Walk]
   priv mut walking : Int
-  /// how many times the order or a node's content changed (what a walk's `drawing` reads of the tree), and, as a walk
-  /// last worked them out, the next in the order that draws from each on (Walk's `next_drawn`): kept with the count it
-  /// was for and the walker's own (`drawing_rev`), not worked out again while neither changed
+  /// how many times the order or a node's content changed; and how many times the order changed or a node came to
+  /// draw something of its own or nothing (its content's `draws_any`, what a walk's `drawing` reads of the tree), and,
+  /// as a walk last worked them out, the next in the order that draws from each on (Walk's `next_drawn`): kept with
+  /// the count it was for and the walker's own (`drawing_rev`), not worked out again while neither changed
   priv mut draws_rev : Int
+  priv mut draws_any_rev : Int
   priv mut drawn_next : FixedArray[Int]
   priv mut drawn_next_for : (Int, Int, Int)
   /// the way up from a node to the root's, in the order, kept for the next (Tree::drawn_one: worked out top down)
@@ -1058,6 +1060,7 @@ pub fn Tree::new(
     walks: [],
     walking: 0,
     draws_rev: 0,
+    draws_any_rev: 0,
     drawn_next: FixedArray::make(0, 0),
     drawn_next_for: (-1, -1, -1),
     drawn_path: [],
@@ -1358,6 +1361,7 @@ fn Tree::made(self : Tree, parent : Int, loc? : SourceLoc) -> View {
       n.out = false
       n.content = None
       self.draws_rev = self.draws_rev + 1
+      self.draws_any_rev = self.draws_any_rev + 1
       n.left_at = -1.0
       n.span = 0.0
       n.back_at = -1.0
@@ -1857,6 +1861,7 @@ pub fn Tree::dispose(self : Tree) -> Unit {
   self.pulls_marked.clear()
   self.timeline.clear()
   self.draws_rev = self.draws_rev + 1
+  self.draws_any_rev = self.draws_any_rev + 1
   self.order.clear()
   self.order_holder.clear()
   self.order_end.clear()
@@ -2151,6 +2156,7 @@ fn Tree::order_marked_in(self : Tree, at : Int) -> Unit {
 fn Tree::order_again(self : Tree) -> Unit {
   self.draws_rev = self.draws_rev + 1
   self.places_rev = self.places_rev + 1
+  self.draws_any_rev = self.draws_any_rev + 1
   let n = self.nodes.length()
   while self.order_of.length() < n {
     self.order_of.push(-1)
@@ -6150,6 +6156,7 @@ fn View::let_go(self : View) -> Unit {
   n.parent = -1
   n.content = None
   self.tree.draws_rev = self.tree.draws_rev + 1
+  self.tree.draws_any_rev = self.tree.draws_any_rev + 1
   if self.tree.hosting == self.at {
     self.tree.hosting = -1
   }
@@ -8094,6 +8101,10 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
   let id = { at, gen: n.gen }
   self.work.instances = self.work.instances + 1
   self.draws_rev = self.draws_rev + 1
+  let drew = match n.content {
+    Some(c) => Some(c.draws_any)
+    None => None
+  }
   n.content = Some({
     id,
     w: n.lw,
@@ -8134,6 +8145,11 @@ fn Tree::made_again(self : Tree, at : Int) -> Unit {
   match (n.lift, n.content) {
     (Some(l), Some(c)) => n.content = Some(self.lifted_content(n, l, c))
     _ => ()
+  }
+  // (whether it draws anything of its own told otherwise only where that changed: what a walk keeps of the order)
+  match (drew, n.content) {
+    (Some(d), Some(c)) if d == c.draws_any => ()
+    _ => self.draws_any_rev = self.draws_any_rev + 1
   }
   self.changed.push(id)
   self.pending.push(id)
@@ -8555,7 +8571,8 @@ pub fn Tree::each_drawn_laid(self : Tree, f : (Content, Double, Double, Double, 
 /// (true: it draws all of it itself, as it was drawn before, Tree::drawn_rev). What holds nothing `draws` says draws
 /// anything (a list's rows not made) passed over too, but what the window holds itself. `draws_rev`: how many times
 /// what `draws` reads besides a node's content changed, where it says so (none: -1): what it said of each kept while
-/// neither that nor the order nor any content changed, not asked again each walk.
+/// neither that nor the order nor whether any node draws anything of its own (its content's `draws_any`, all `draws`
+/// reads of a content where it says one) changed, not asked again each walk.
 pub fn Tree::each_drawn_laid_or_past(
   self : Tree,
   f : (Content, Double, Double, Double, Double, Double, Double) -> Bool,
@@ -8602,10 +8619,10 @@ fn Tree::each_drawn_in_order(
   // (`drawing`: whether a node draws anything, as the walker draws it: what holds nothing that does (a list's rows not
   // made, only as tall as they were) passed over whole, none of it given to `f`, but what the window holds itself (a
   // layer: what is under it painted first, as where it is in the window's stack says))
-  // (as the last walk with the same `drawing_rev` worked it out, where neither the order nor any content changed since;
-  // a walk inside another's `f` its own)
+  // (as the last walk with the same `drawing_rev` worked it out, where neither the order nor whether any node draws
+  // anything of its own changed since; a walk inside another's `f` its own)
   let cache = drawing_rev >= 0 && self.walking == 1
-  let kept = cache && self.drawn_next_for == (self.draws_rev, drawing_rev, len)
+  let kept = cache && self.drawn_next_for == (self.draws_any_rev, drawing_rev, len)
   if cache && self.drawn_next.length() < len {
     self.drawn_next = FixedArray::make(len * 2, 0)
   }
@@ -8621,7 +8638,7 @@ fn Tree::each_drawn_in_order(
       nd.unsafe_set(j, next)
     }
     if cache {
-      self.drawn_next_for = (self.draws_rev, drawing_rev, len)
+      self.drawn_next_for = (self.draws_any_rev, drawing_rev, len)
     }
   }
   let g = self.pixel_grid

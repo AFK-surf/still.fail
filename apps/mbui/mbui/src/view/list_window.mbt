@@ -334,18 +334,16 @@ pub fn[K : Hash + Eq] View::scrolls_window(
   }
   // (which show, as the fill last left them)
   let shown_now : Array[K] = []
+  // (told only to those that come or go, each found among the others by looking: what shows is a screen of them, and
+  // those that stay were told as they came, or made so: `shown`'s cell made by `shown_now`)
   let show_only = fn(now : Array[K]) {
-    let on : Map[K, Bool] = Map([])
-    for k in now {
-      on[k] = true
-    }
     for k in shown_now {
-      if !on.contains(k) && shown.get(k) is Some(c) {
+      if !now.contains(k) && shown.get(k) is Some(c) {
         c.set(false)
       }
     }
     for k in now {
-      if shown.get(k) is Some(c) {
+      if !shown_now.contains(k) && shown.get(k) is Some(c) {
         c.set(true)
       }
     }
@@ -421,7 +419,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
     while i < all.length() && all[i].top < x + vh {
       now.push(all[i].key)
       // (one never measured shows as it is laid out, those under it only once it is: where they start is known then)
-      if !heights.contains(all[i].key) {
+      if !all[i].known {
         break
       }
       i = i + 1
@@ -607,7 +605,7 @@ pub fn[K : Hash + Eq] View::scrolls_window(
       let mut i = first_past(all, top)
       while i < all.length() && all[i].top < top + vh {
         now.push(all[i].key)
-        if !heights.contains(all[i].key) {
+        if !all[i].known {
           break
         }
         i = i + 1
