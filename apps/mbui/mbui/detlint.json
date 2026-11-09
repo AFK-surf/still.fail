@@ -226,9 +226,7 @@
     },
     "ui-current": {
       "src/kit/toast_node.mbt": 1,
-      "src/kit/zoom.mbt": 4,
-      "src/motion/anim.mbt": 6,
-      "src/motion/way.mbt": 2
+      "src/kit/zoom.mbt": 4
     },
     "build-clock": {
       "src/kit/progress.mbt": 1,

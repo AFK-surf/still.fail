@@ -74,7 +74,7 @@ pub fn ask_history_trigger(c : @ui.Ctx, key : String, words : Array[@ui.Run], st
     c.box(style=ask_history_mark.then(@ui.style(h=Fixed(line))), fn() {
       let (text, muted) = (theme().p.text, theme().p.muted)
       let mark = icon(c, "chevron-right", size=12.0, color=mix(text, lit.target(), muted))
-      c.ink_by(mark, fn() { mix(text, lit.get(), muted) })
+      c.ink_by(mark, fn() { mix(text, lit.get(c), muted) })
     })
     |> ignore
   })

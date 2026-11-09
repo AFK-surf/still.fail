@@ -194,7 +194,7 @@ fn search_close(c : @ui.Ctx) -> Unit {
   }
   search.leaving = true
   search_told()
-  search_up(c).animate(0.0, search_way())
+  search_up(c).animate(c, 0.0, search_way())
 }
 
 ///|
@@ -358,12 +358,12 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
   match search.fly {
     1 => {
       search.fly = 0
-      up.snap(0.0)
-      up.animate(1.0, search_way())
+      up.snap(c, 0.0)
+      up.animate(c, 1.0, search_way())
     }
     2 => {
       search.fly = 0
-      up.snap(1.0)
+      up.snap(c, 1.0)
     }
     _ => ()
   }
@@ -382,10 +382,10 @@ fn search_page(c : @ui.Ctx, src : Source, w : Workspace, inset : Double, at : @s
   if !search.open {
     return
   }
-  let u = up.get()
+  let u = up.get(c)
   // gone back: the field is the list's again
   // (at the end its going back declared as it set out)
-  if search.leaving && up.over() {
+  if search.leaving && up.over(c) {
     search_gone()
     return
   }

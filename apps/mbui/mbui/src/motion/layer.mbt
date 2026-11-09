@@ -784,7 +784,7 @@ pub fn reshaped_over(c : @ui.Ctx, key : String) -> Double {
   ignore(c)
   match mo.recs.get(motion_key(key)) {
     Some(r) if r.alive && !r.g_carry => {
-      let p = r.gp.get()
+      let p = r.gp.get(c)
       if p < 1.0 {
         ground_over(r.y, r.gy, r.g_carried_y, p)
       } else {
@@ -804,7 +804,7 @@ pub fn reshape_way(c : @ui.Ctx, key : String) -> (Double, Double)? {
   match mo.recs.get(motion_key(key)) {
     Some(r) if r.alive && !r.g_carry && r.gp.start >= 0.0 => {
       // (what reads it built again at its declared end: Anim::over)
-      ignore(r.gp.over())
+      ignore(r.gp.over(c))
       Some((r.gp.start, r.gp.dur))
     }
     _ => None
@@ -1103,8 +1103,8 @@ pub fn list_keys(
               let pm = Anim::new(0.0)
               pf.name = keys[i] + " leaving"
               pm.name = pf.name
-              pf.animate(1.0, t.fade_spec)
-              pm.animate(1.0, t.spec)
+              pf.animate(c, 1.0, t.fade_spec)
+              pm.animate(c, 1.0, t.spec)
               mo.ghosts.push({ list: id, key: k, drawing: rec.drawing.copy(), trans: t, pf, pm })
               lm.reborn[k] = frame
               lm.arrived[k] = now
@@ -1141,8 +1141,8 @@ pub fn list_keys(
             let pm = Anim::new(0.0)
             pf.name = before_names[i] + " leaving"
             pm.name = pf.name
-            pf.animate(1.0, t.fade_spec)
-            pm.animate(1.0, t.spec)
+            pf.animate(c, 1.0, t.fade_spec)
+            pm.animate(c, 1.0, t.spec)
             mo.ghosts.push({ list: id, key: k, drawing: r.drawing.copy(), trans: t, pf, pm })
           }
           None => ()
@@ -1258,19 +1258,19 @@ pub fn presence(
   match start_at {
     Some(at) => {
       if f.target != to {
-        f.animate(to, t.fade_spec, start_at=at)
+        f.animate(c, to, t.fade_spec, start_at=at)
       }
       if m.target != to {
-        m.animate(to, t.spec, start_at=at)
+        m.animate(c, to, t.spec, start_at=at)
       }
     }
     None => {
-      f.follow(to, t.fade_spec)
-      m.follow(to, t.spec)
+      f.follow(c, to, t.fade_spec)
+      m.follow(c, to, t.spec)
     }
   }
   // (read so: what reads it is built again as it is told and each frame while it goes, Anim::get)
-  let (fv, mv) = (f.get(), m.get())
+  let (fv, mv) = (f.get(c), m.get(c))
   if !shown && fv <= 0.0 && mv <= 0.0 {
     return None
   }
@@ -1294,11 +1294,11 @@ pub fn leaving(c : @ui.Ctx, i : Int, shown : Bool) -> Unit {
 ///|
 /// How tall the node keyed `key` (layout) shows now, grown for its cause and on its way to as tall as it is laid out
 /// (from its top); None where it shows whole. Read as it is drawn (a look_by): what is new in a room that does not cut
-/// it (layout's `cut`) grows with it by this.
-pub fn grown_shown(key : String) -> Double? {
+/// it (layout's `cut`) grows with it by this, as the old view `c` draws it.
+pub fn grown_shown(c : @ui.Ctx, key : String) -> Double? {
   match mo.recs.get(motion_key(key)) {
     Some(r) => {
-      let p = r.hp.get()
+      let p = r.hp.get(c)
       if p < 1.0 {
         Some(dmax(r.hh + (r.h - r.hh) * p, 0.0))
       } else {
@@ -1413,12 +1413,13 @@ fn after_layout(c : @ui.Ctx) -> Unit {
   // the frame again lays it out from where the frame began, as the first did)
   measures_told_once(c, fn() {
     laid_once(
+      c,
       fn() {
         for e in if order.is_empty() { mo.entries } else { order } {
           // (what its move reads, read for what draws its node: the part's or the row's kept, whoever told it: Ctx::reads_for)
           c.reads_for(e.node, fn() { layout_entry(c, e, still, frame, scrolled) })
         }
-        moved_together()
+        moved_together(c)
       },
     )
   })
@@ -1476,6 +1477,7 @@ fn foot_moved_in(by : String, frame : Int) -> Double {
 ///|
 /// `a` off to `to` by `spec` (said to go `far`), for cause `by` ("" none: on its own).
 fn moves_with(
+  c : @ui.Ctx,
   by : String,
   far : Double,
   a : Anim,
@@ -1489,7 +1491,7 @@ fn moves_with(
     Some(t) => Some(t)
     None => if by != "" { cause_at.get(by) } else { None }
   }
-  a.animate(to, spec, start_at?, velocity?)
+  a.animate(c, to, spec, start_at?, velocity?)
   guard by != "" && spec is Moved(_, _, _) else { return }
   match together.get(by) {
     Some((most, all)) => {
@@ -1572,7 +1574,7 @@ fn ground_speed_carried(
 
 ///|
 /// Each cause's motions as long as the furthest of them (moves_with): told again from where they set out this frame.
-fn moved_together() -> Unit {
+fn moved_together(c : @ui.Ctx) -> Unit {
   together.each(fn(_, g) {
     let (most, all) = g
     if all.length() < 2 {
@@ -1587,7 +1589,7 @@ fn moved_together() -> Unit {
       }
       let s = spec.over(most)
       if s != spec {
-        a.animate(to, s, start_at?, velocity=a.v0)
+        a.animate(c, to, s, start_at?, velocity=a.v0)
       }
     }
   })
@@ -1668,8 +1670,8 @@ fn makes_room(c : @ui.Ctx) -> Unit {
         if mr.list != r.list || mr.scope_node != r.scope_node || me.node == e.node || mr.moving_dy.abs() <= r.moving_dy.abs() + 0.5 {
           continue
         }
-        ignore(mr.oy.get())
-        ignore(mr.hp.get())
+        ignore(mr.oy.get(c))
+        ignore(mr.hp.get(c))
         let (_, my, _, mh) = c.node_rect(me.node)
         let mlook = c.look_of(me.node)
         let mdy = mlook.dy
@@ -1838,8 +1840,8 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         r.was_alive = r.alive
         r.ox.step(c)
         r.oy.step(c)
-        r.was_ox = r.ox.get()
-        r.was_oy = r.oy.get()
+        r.was_ox = r.ox.get(c)
+        r.was_oy = r.oy.get(c)
         r.was_driven = r.driven
         r.was_by = r.by
         r.was_fx = r.fx
@@ -1849,7 +1851,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         r.was_h = r.h
         r.was_rad = r.rad
         r.gp.step(c)
-        r.was_gp = r.gp.get()
+        r.was_gp = r.gp.get(c)
         r.was_g_carry = r.g_carry
         r.was_g_carried_y = r.g_carried_y
         r.was_gx = r.gx
@@ -1858,7 +1860,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         r.was_gh = r.gh
         r.was_gr = r.gr
         r.hp.step(c)
-        r.was_hp = r.hp.get()
+        r.was_hp = r.hp.get(c)
         r.was_hh = r.hh
         r.g_now = false
       }
@@ -1890,14 +1892,14 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           r.fx = r.was_fx
           r.fy = r.was_fy
           // (where each went before set by hand: laid_once)
-          ignore(r.ox.tells_now())
-          ignore(r.oy.tells_now())
+          ignore(r.ox.tells_now(c))
+          ignore(r.oy.tells_now(c))
           r.ox.value = r.was_ox
           r.oy.value = r.was_oy
           // (on its way again as it was told: the same spec, its way as long as it was, not one of its own)
           let again = fn(a : Anim) { if a.spec is Snap(_) { e.spec } else { a.spec } }
-          if r.was_ox == 0.0 { r.ox.snap(0.0) } else { r.ox.animate(0.0, again(r.ox)) }
-          if r.was_oy == 0.0 { r.oy.snap(0.0) } else { r.oy.animate(0.0, again(r.oy)) }
+          if r.was_ox == 0.0 { r.ox.snap(c, 0.0) } else { r.ox.animate(c, 0.0, again(r.ox)) }
+          if r.was_oy == 0.0 { r.oy.snap(c, 0.0) } else { r.oy.animate(c, 0.0, again(r.oy)) }
         }
       }
       // gone ahead of others (list_keys' reborn): where it is now at once, come in there as a row new to it
@@ -1907,8 +1909,8 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         None => false
       }
       if reborn {
-        r.ox.snap(0.0)
-        r.oy.snap(0.0)
+        r.ox.snap(c, 0.0)
+        r.oy.snap(c, 0.0)
         r.driven = false
         r.moved_now = false
       }
@@ -1974,8 +1976,8 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
             (r.was_ox, r.was_oy)
           }
           if still || (e.drive >= 0.0 && left <= 0.0) {
-            r.ox.snap(0.0)
-            r.oy.snap(0.0)
+            r.ox.snap(c, 0.0)
+            r.oy.snap(c, 0.0)
             r.driven = false
             r.moved_now = false
           } else if !changed {
@@ -1987,8 +1989,8 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
             r.fy = (cy + dy) / left
             r.driven = true
             r.moved_now = true
-            r.ox.snap(0.0)
-            r.oy.snap(0.0)
+            r.ox.snap(c, 0.0)
+            r.oy.snap(c, 0.0)
           } else {
             // closing over a row gone: a little late, unless it went ahead
             let delay = match lm {
@@ -2015,12 +2017,12 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
             let start_at = if carried { Some(c.moment()) } else { None }
             r.driven = false
             r.moved_now = true
-            ignore(r.ox.tells_now())
+            ignore(r.ox.tells_now(c))
             r.ox.value = cx + dx
-            moves_with(group, far, r.ox, 0.0, spec, start_at?, velocity=vx)
-            ignore(r.oy.tells_now())
+            moves_with(c, group, far, r.ox, 0.0, spec, start_at?, velocity=vx)
+            ignore(r.oy.tells_now(c))
             r.oy.value = cy + dy
-            moves_with(group, far, r.oy, 0.0, spec, start_at?, velocity=vy)
+            moves_with(c, group, far, r.oy, 0.0, spec, start_at?, velocity=vy)
               }
         }
       }
@@ -2042,18 +2044,18 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         let shown = r.was_hh + (r.was_h - r.was_hh) * r.was_hp
         let caused = e.by != "" && r.was_by != "" && e.by != r.was_by
         if still || !was_seen || reborn {
-          r.hp.snap(1.0)
+          r.hp.snap(c, 1.0)
         } else if caused && (nh - r.was_h).abs() > 0.5 {
           r.hh = shown
           let goes = nh > shown + 0.5 || (e.cut && nh <= 0.5 && shown > 0.5)
-          r.hp.snap(if goes { 0.0 } else { 1.0 })
+          r.hp.snap(c, if goes { 0.0 } else { 1.0 })
           if goes {
-            moves_with(group, far, r.hp, 1.0, spec)
+            moves_with(c, group, far, r.hp, 1.0, spec)
           }
         } else if (nh - r.was_h).abs() > 0.5 {
           r.hh = r.was_hh + (nh - r.was_h)
         }
-        let p = r.hp.get()
+        let p = r.hp.get(c)
         if p < 1.0 {
           let h = r.hh + (nh - r.hh) * p
           r.shown_h = dmax(h, 0.0)
@@ -2085,10 +2087,10 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           }
           if arrived {
             r.enter = Some(t)
-            r.ef.snap(0.0)
-            r.em.snap(0.0)
-            r.ef.animate(1.0, t.fade_spec)
-            r.em.animate(1.0, t.spec)
+            r.ef.snap(c, 0.0)
+            r.em.snap(c, 0.0)
+            r.ef.animate(c, 1.0, t.fade_spec)
+            r.em.animate(c, 1.0, t.spec)
           }
         }
         _ => ()
@@ -2103,7 +2105,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         let changed_shape = shape_changed(was, laid)
         let p0 = r.was_gp
         if still || !was_seen {
-          r.gp.snap(1.0)
+          r.gp.snap(c, 1.0)
           r.g_now = false
           r.g_carry = false
           r.g_carried_y = 0.0
@@ -2133,7 +2135,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           }
           r.g_set_v = v
           r.g_set_at = c.moment()
-          r.gp.snap(0.0)
+          r.gp.snap(c, 0.0)
           // (its cause's moment said by what changes it, come by now: from then, it and what moves with it)
           let said_at = e.at > @double.neg_infinity && e.at <= c.moment()
           if said_at && group != "" {
@@ -2149,7 +2151,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
           } else {
             spec
           }
-          moves_with(group, far, r.gp, 1.0, spec, start_at?=if said_at { Some(e.at) } else { None }, velocity=v)
+          moves_with(c, group, far, r.gp, 1.0, spec, start_at?=if said_at { Some(e.at) } else { None }, velocity=v)
           r.g_now = true
           r.g_carry = e.carry
         } else {
@@ -2166,13 +2168,13 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
             r.g_now = false
             // (as fast as it set off then)
             let v = r.gp.v0
-            r.gp.snap(p0)
+            r.gp.snap(c, p0)
             if p0 < 1.0 {
-              moves_with(group, far, r.gp, 1.0, spec, velocity=v)
+              moves_with(c, group, far, r.gp, 1.0, spec, velocity=v)
             }
           }
         }
-        let p = r.gp.get()
+        let p = r.gp.get(c)
         if p < 1.0 {
           let (x, y, w, h) = ground_drawn_at((nx - rx, ny - ry), (r.gx, r.gy, r.gw, r.gh), laid, p)
           c.draw_ground(e.node, x, y, w, h, corners_mix(r.gr, to_r, p))
@@ -2201,7 +2203,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       // by that ground, as far from its nearer edges as it is laid out, until the ground is there
       if r.on == 0 && !was_seen && !still && !e.reshape {
         match carrier(c, e.node) {
-          Some((a, ar)) if ar.g_carry && ar.gp.get() < 1.0 => {
+          Some((a, ar)) if ar.g_carry && ar.gp.get(c) < 1.0 => {
             r.on = a.key
             r.on_edges = carried_edges((nx, ny, nw, nh), c.node_rect(a.node))
           }
@@ -2209,11 +2211,11 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         }
       }
       let (cx, cy) = match mo.recs.get(r.on) {
-        Some(ar) if r.on != 0 && ar.seen == frame && ar.gp.get() < 1.0 => {
-          let p = ar.gp.get()
+        Some(ar) if r.on != 0 && ar.seen == frame && ar.gp.get(c) < 1.0 => {
+          let p = ar.gp.get(c)
           // (its own moves none meanwhile: where it is drawn is the ground's)
-          r.ox.snap(0.0)
-          r.oy.snap(0.0)
+          r.ox.snap(c, 0.0)
+          r.oy.snap(c, 0.0)
           r.driven = false
           carried_off((ar.gx, ar.gy, ar.gw, ar.gh), (ar.x, ar.y, ar.w, ar.h), p, r.on_edges)
         }
@@ -2235,7 +2237,7 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
         r.driven = false
         (0.0, 0.0)
       } else {
-        (r.ox.get(), r.oy.get())
+        (r.ox.get(c), r.oy.get(c))
       }
       let ox = ox + cx
       let oy = oy + cy
@@ -2246,8 +2248,8 @@ fn layout_entry(c : @ui.Ctx, e : Moving, still : Bool, frame : Int, scrolled : M
       }
       match r.enter {
         Some(t) => {
-          let pf = r.ef.get()
-          let pm = r.em.get()
+          let pf = r.ef.get(c)
+          let pm = r.em.get(c)
           if pf >= 1.0 && pm >= 1.0 && !r.ef.running && !r.em.running {
             r.enter = None
           } else {
@@ -2336,8 +2338,8 @@ fn draw_ghosts(c : @ui.Ctx, li : Int) -> Unit {
     if gh.list != id {
       continue
     }
-    let pf = gh.pf.get()
-    let pm = gh.pm.get()
+    let pf = gh.pf.get(c)
+    let pm = gh.pm.get(c)
     if pf >= 1.0 && pm >= 1.0 && !gh.pf.running && !gh.pm.running {
       done.push(gi)
       continue

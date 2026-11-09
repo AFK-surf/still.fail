@@ -206,7 +206,7 @@ fn new_narrow(
         let scene = c.box(style=new_scene_narrow, fn() { new_scene_narrow_body(c, src, w, frame, v, station, state) })
         // fading where it is (as it is drawn); back, the chat not made
         match state {
-          Going(up, _) => c.look_by(scene, fn() { @ui.look(alpha=1.0 - up.get()) })
+          Going(up, _) => c.look_by(scene, fn() { @ui.look(alpha=1.0 - up.get(c)) })
           _ => if sending_up > 0.0 { c.look(scene, @ui.look(alpha=1.0 - sending_up)) }
         }
         list_space(c, clear)
@@ -272,7 +272,7 @@ fn new_narrow(
     // over the scene: its scroll bar keeps clear of it
     c.floats_over(foot)
     match state {
-      Going(_, fade) => c.look_by(foot, fn() { @ui.look(alpha=1.0 - fade.get()) })
+      Going(_, fade) => c.look_by(foot, fn() { @ui.look(alpha=1.0 - fade.get(c)) })
       _ => ()
     }
   })
@@ -608,8 +608,8 @@ fn new_column(c : @ui.Ctx, body : (Double) -> Unit, under? : (Double) -> Unit) -
 /// the composer does. While it stays, as it is.
 fn new_part(c : @ui.Ctx, i : Int, state : NewState, up : Bool) -> Unit {
   match state {
-    Going(u, _) if up => c.look_by(i, fn() { @ui.look(alpha=1.0 - u.get()) })
-    Going(_, f) => c.look_by(i, fn() { @ui.look(alpha=1.0 - f.get()) })
+    Going(u, _) if up => c.look_by(i, fn() { @ui.look(alpha=1.0 - u.get(c)) })
+    Going(_, f) => c.look_by(i, fn() { @ui.look(alpha=1.0 - f.get(c)) })
     Here => {
       // the page the new chat again after its first words were sent (the chat not made): coming back
       let (u, f) = @sfbase.new_sending(c)

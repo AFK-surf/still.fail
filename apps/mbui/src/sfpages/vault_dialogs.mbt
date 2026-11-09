@@ -165,7 +165,7 @@ pub fn vault_editor_dialog(
                 // (faded in as it is drawn)
                 let shown = @kit.presence(c, key("file/" + name), true).t
                 let i = c.rich([@ui.span(name + " · " + file_size(e.file_content), color=@sf.theme().p.text)], style=vd_file_name)
-                c.look_by(i, fn() { @ui.look(alpha=@sf.dmax(0.0, @sf.dmin(1.0, shown.get()))) })
+                c.look_by(i, fn() { @ui.look(alpha=@sf.dmax(0.0, @sf.dmin(1.0, shown.get(c)))) })
               }
             })
             |> ignore

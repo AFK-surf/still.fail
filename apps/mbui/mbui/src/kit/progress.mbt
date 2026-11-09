@@ -35,16 +35,16 @@ pub fn progress(
   // (how far, as told: kept while it is not known, what it draws together into as it becomes known again)
   let at = @motion.anim(c, key + "/progress", t.unwrap_or(0.0))
   if t is Some(k) {
-    at.snap(k)
+    at.snap(c, k)
   }
   let known = @motion.anim(c, key + "/progress/known", if t is Some(_) { 1.0 } else { 0.0 })
-  known.follow(if t is Some(_) { 1.0 } else { 0.0 }, @motion.tween(progress_known_ms, ease=InOut))
+  known.follow(c, if t is Some(_) { 1.0 } else { 0.0 }, @motion.tween(progress_known_ms, ease=InOut))
   // (read as it is built: the band running along it while it is not known is drawn into the part come by it, its ends
   // where the look's cycle has them, which no reshape of a laid box goes from)
-  let k = known.get()
+  let k = known.get(c)
   // (a band runs while it is not known: the look's cycle, Ctx::cycle_look; motion reduced, it stands where the look
   // puts it. How far shown while it is known or on its way from known: till its declared end)
-  let shown = if t is Some(_) || !known.over() { Some(at.target()) } else { None }
+  let shown = if t is Some(_) || !known.over(c) { Some(at.target()) } else { None }
   let i = c.box(w~, fn() { look(c, { t: shown, known: k, key }) })
   match (value, t) {
     (Some(v), Some(k)) =>

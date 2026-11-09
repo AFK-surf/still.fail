@@ -203,7 +203,7 @@ pub fn flight_start(
         key,
         placed: false,
         way: @motion.Anim::new(0.0),
-        gone: leaving(),
+        gone: leaving(c),
         carried: false,
         from_top: y - 8.0,
         ms: flight_len(desk),
@@ -222,9 +222,9 @@ pub fn flight_start(
 
 ///|
 /// What leaves as what was sent sets out (SendFlight's `gone`), set off now.
-fn leaving() -> @motion.Anim {
+fn leaving(c : @ui.Ctx) -> @motion.Anim {
   let a = @motion.Anim::new(0.0)
-  a.animate(1.0, @motion.tween(@sf.leave_ms, ease=Leave))
+  a.animate(c, 1.0, @motion.tween(@sf.leave_ms, ease=Leave))
   a
 }
 
@@ -279,7 +279,7 @@ pub fn flight_carry_start(
         key: "",
         placed: false,
         way: @motion.Anim::new(0.0),
-        gone: leaving(),
+        gone: leaving(c),
         carried: true,
         ms: flight_carry_ms,
         timed: false,
@@ -398,7 +398,7 @@ pub fn flight_of(chat : String) -> SendFlight? {
 /// How far it has come (0 … 1, linear), from the moment its row was first laid out.
 pub fn flight_p(c : @ui.Ctx, f : SendFlight) -> Double {
   ignore(c)
-  f.way.get()
+  f.way.get(c)
 }
 
 ///|
@@ -508,7 +508,7 @@ pub fn flight_frame(c : @ui.Ctx, chat : String) -> Unit {
       flight_timed(c, f)
       let waited = @kit.after(c, "flight/wait", !f.placed, flight_wait_ms)
       // (landed: their way at the end it declared as it set out)
-      let landed = f.placed && f.way.over()
+      let landed = f.placed && f.way.over(c)
       if (!f.placed && waited) || landed {
         send_flight.set(None)
         // their turn over: where they were declared to land (or now, never having set out)
@@ -543,11 +543,11 @@ pub fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
       // a new chat's: once its choices have faded (web: 90 ms after what leaves has begun to); in the wide frame at
       // once, the composer going to the chat's foot with them (Chat.tsx toMadeChat: no wait)
       f.after = if f.desk { 0.0 } else { flight_carry_after_ms }
-      f.way.animate(1.0, @motion.tween(f.ms, ease=Linear, delay=f.after))
+      f.way.animate(c, 1.0, @motion.tween(f.ms, ease=Linear, delay=f.after))
       // (the composer let go as they set out: their ground comes in round them from there)
       (f.hold)(c, f.after)
     } else {
-      f.way.animate(1.0, @motion.tween(f.ms, ease=Linear))
+      f.way.animate(c, 1.0, @motion.tween(f.ms, ease=Linear))
       (f.hold)(c, flight_settle * f.ms)
     }
   }
@@ -586,8 +586,8 @@ fn flight_timed(c : @ui.Ctx, f : SendFlight) -> Unit {
       if ms != f.ms {
         f.ms = ms
         // (from the start of their way, as at the moment they set out: wherever the way said first has them by now)
-        f.way.snap(0.0)
-        f.way.animate(1.0, @motion.tween(ms, ease=Linear, delay=f.after), start_at=f.set_out)
+        f.way.snap(c, 0.0)
+        f.way.animate(c, 1.0, @motion.tween(ms, ease=Linear, delay=f.after), start_at=f.set_out)
         if !f.carried {
           (f.hold)(c, dmax(flight_settle * ms - (c.moment() - f.set_out), 0.0))
         }
@@ -1128,7 +1128,7 @@ pub fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
   c.draw_only(l)
   // What belongs only to a quote in the composer goes with its card, leaving from the frame it is sent. Draw it over
   // the card in its own layer: a layer drawn only is over the rest of that layer alone.
-  let gone = f.gone.get()
+  let gone = f.gone.get(c)
   if gone < 1.0 && f.files.iter().any(fn(ff) { ff.key.has_prefix(quote_prefix) }) {
     let across = flight_across_of(c, f)
     let up = flight_up_of(c, f)

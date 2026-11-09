@@ -439,7 +439,7 @@ fn fold_built(c : @ui.Ctx, now : FoldLook) -> FoldLook {
   fold_goes.said.get() |> ignore
   fold_goes.way.said()
   if fold_goes.way.goes_at(c.moment()) {
-    fold_goes.way.get() |> ignore
+    fold_goes.way.get(c) |> ignore
     fold_along(c.moment(), now)
   } else {
     // (at rest, as the state has it now: what it is worked out from that no move follows, the theme, the window's

@@ -828,9 +828,9 @@ pub fn image_reveal(
   let p = match way {
     Some(a) if ready => {
       if a.target() == 0.0 {
-        a.animate(1.0, @motion.tween(reveal_ms, ease=Linear))
+        a.animate(c, 1.0, @motion.tween(reveal_ms, ease=Linear))
       }
-      a.get()
+      a.get(c)
     }
     Some(_) => 0.0
     None => 1.0

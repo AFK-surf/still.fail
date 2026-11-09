@@ -74,7 +74,7 @@ pub fn under_post(
     None => {
       // there at once as it comes; going, by `exit`
       if shown {
-        h.snap(1.0)
+        h.snap(c, 1.0)
       }
       @motion.presence(c, "under-look/" + key, shown, enter=@motion.trans(spec=@motion.Snap(0.0)), exit~, start_at?)
     }
@@ -84,15 +84,15 @@ pub fn under_post(
   // (in a row of a list as what it shows changes: on the way its rows go then, from its start and as long, so that
   // what is over and under it moves one way with it: @ui.Ctx::row_way)
   match (c.row_way(), start_at) {
-    (Some(way), _) if h.target() != to || (!h.over() && under_ways.get(key) is Some(w) && w != way) => {
+    (Some(way), _) if h.target() != to || (!h.over(c) && under_ways.get(key) is Some(w) && w != way) => {
       under_ways[key] = way
       on_row_way(c, h, to, way)
     }
-    (_, Some(at)) if h.target() != to => h.animate(to, spec, start_at=at)
-    _ => h.follow(to, spec)
+    (_, Some(at)) if h.target() != to => h.animate(c, to, spec, start_at=at)
+    _ => h.follow(c, to, spec)
   }
   under_ends[key] = h
-  let share = h.get()
+  let share = h.get(c)
   let look = match look {
     Some(l) => l
     None => if share <= 0.0 { return } else { @ui.look(alpha=0.0) }
@@ -117,7 +117,7 @@ fn on_row_way(c : @ui.Ctx, a : @motion.Anim, to : Double, way : (Double, Double)
   let (at, ms) = way
   let later = dmax(at - c.moment(), 0.0)
   // det-ok(motion-length): the list's rows' way, timed by the list for all of them at once (mbui's view/list_motion.mbt)
-  a.animate(to, @motion.tween(ms, ease=Move, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
+  a.animate(c, to, @motion.tween(ms, ease=Move, delay=later), start_at?=if later > 0.0 { None } else { Some(at) })
 }
 
 // ── the cards in a chat ─────────────────────────────────────────────────

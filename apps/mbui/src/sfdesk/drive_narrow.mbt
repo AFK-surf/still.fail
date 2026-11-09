@@ -121,11 +121,11 @@ fn download_chip(c : @ui.Ctx, key : String, percent : Int) -> Unit {
   let p = if percent < 0 { 0 } else if percent > 100 { 100 } else { percent }
   let drawn = @motion.told(c, "files/narrow/fetch/" + key, p.to_double(), spec=chip_fill)
   c.box(style=chip_box, fn() {
-    if p > 0 || !drawn.over() {
+    if p > 0 || !drawn.over(c) {
       c.layer(fn() {
         c.box(style=chip_track, fn() {
           let fill = c.box(style=chip_done, fn() {  })
-          c.look_by(fill, fn() { @ui.look(sx=dmax(0.0, drawn.get()) / chip_whole, sy=1.0, ox=0.0) })
+          c.look_by(fill, fn() { @ui.look(sx=dmax(0.0, drawn.get(c)) / chip_whole, sy=1.0, ox=0.0) })
         })
         |> ignore
       })

@@ -271,7 +271,7 @@ pub fn chat_row(
     spec=if lit_on { @motion.Snap(0.0) } else { @motion.tween(left_fade_ms, ease=Leave) },
   )
   // (the same motion says its end for the row to forget it: no clock read as it is built)
-  if left && !lit_on && lit.over() {
+  if left && !lit_on && lit.over(c) {
     row_left.val = ("", false)
   }
   let draw = fn(tx : Double, apart : Bool) -> Int {
@@ -280,7 +280,7 @@ pub fn chat_row(
       if held || menu_on || (pressed && tx == 0.0 && !found) {
         @sf.alpha(t.p.text, 0.05)
       } else {
-        let share = lit.get()
+        let share = lit.get(c)
         if share > 0.0 {
           @sf.alpha(t.p.selected, share)
         } else if lifted >= 0.0 {
@@ -1129,17 +1129,17 @@ fn swipe_to_archive(
   let id = c.id(key)
   let width = dmax(c.width, 1.0)
   let off = @motion.anim(c, key, 0.0, global=true)
-  let back = fn(v : Double) { off.animate(0.0, @motion.move_spring, velocity=v) }
+  let back = fn(v : Double) { off.animate(c, 0.0, @motion.move_spring, velocity=v) }
   let going = rows.swiped_off.contains(key)
   match c.drag_of(id) {
     // (gone off already: nothing more to swipe)
     Some(d) if !going => {
       let (dx, _) = d.take_move()
       if dx != 0.0 {
-        off.snap(dclamp(off.get() + dx, -width, 0.0))
+        off.snap(c, dclamp(off.get(c) + dx, -width, 0.0))
       }
       if d.take_end() {
-        let at = off.get()
+        let at = off.get(c)
         let v = d.vx * 1000.0
         if swipe_archives(at, width, d.vx) {
           if busy {
@@ -1151,7 +1151,7 @@ fn swipe_to_archive(
             // off to the left, then archived (no copy of it left behind as it leaves the list: it is out of sight)
             rows.swiped_off[key] = true
             unghost(true)
-            off.animate(-width, @motion.move(), velocity=v)
+            off.animate(c, -width, @motion.move(), velocity=v)
           }
         } else {
           back(v)
@@ -1160,15 +1160,15 @@ fn swipe_to_archive(
     }
     _ => ()
   }
-  let moved = off.get()
+  let moved = off.get(c)
   // gone off: archived (the call once the row has gone, as declared as it set off), drawn off this frame and its place
   // forgotten, so the row asked back (its toast's 撤销) is where it rests; refused, it comes back from off to the left
-  if going && off.over() {
+  if going && off.over(c) {
     rows.swiped_off.remove(key)
-    off.snap(0.0)
+    off.snap(c, 0.0)
     archive_row(src, item, failed=fn() {
       unghost(false)
-      off.snap(-width)
+      off.snap(c, -width)
       back(0.0)
     })
   }

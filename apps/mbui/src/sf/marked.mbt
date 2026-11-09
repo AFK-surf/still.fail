@@ -32,9 +32,9 @@ pub fn found_line(
   let total = strokes_ms(marks.length())
   let drawn = @motion.anim(c, "search/drawn/" + key + "/" + text, 0.0, global=true)
   if drawn.target() == 0.0 && marks.length() > 0 {
-    drawn.animate(total, @motion.tween(total, ease=Linear))
+    drawn.animate(c, total, @motion.tween(total, ease=Linear))
   }
-  let at_ms = drawn.get()
+  let at_ms = drawn.get(c)
   let box = c.box(style=found_words_box, fn() {
     // under the words: each mark's stroke, from its first glyph's left to its last's right (2 past either), 3 under
     // the baseline

@@ -545,9 +545,9 @@ fn rail_menu_add(c : @ui.Ctx, place : String, label : String, hot : Bool, on_pre
   let to = if @sf.pointed_or_finger(c, hot || over) { 1.0 } else { 0.0 }
   let shown = @motion.told(c, "rail-menu/add-shown/" + place, to, spec=nav_fade)
   let b = c.box(style=if over { rail_menu_plus_on } else { rail_menu_plus }, id~, fn() {
-    if to > 0.0 || !shown.over() {
+    if to > 0.0 || !shown.over(c) {
       let i = @sf.icon(c, "plus", size=rail_menu_plus_icon, color=if over { t.p.text } else { t.p.muted })
-      c.look_by(i, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, shown.get()))) })
+      c.look_by(i, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, shown.get(c)))) })
     }
   })
   c.semantics(b, Button, id~, label=@sf.t("web-main.rail.add", args=[("name", label)]))

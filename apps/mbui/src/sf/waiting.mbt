@@ -50,7 +50,7 @@ pub fn breathe(
     return
   }
   match share {
-    Some(s) if s.target() <= 0.0 && s.over() => return
+    Some(s) if s.target() <= 0.0 && s.over(c) => return
     _ => ()
   }
   c.cycle_look(
@@ -59,7 +59,7 @@ pub fn breathe(
     fn(f) {
       let way = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
       let share = match share {
-        Some(s) => dmax(0.0, s.get())
+        Some(s) => dmax(0.0, s.get(c))
         None => 1.0
       }
       @ui.look(alpha=1.0 - (1.0 - low) * share * @ui.Ease::InOut.at(way))

@@ -199,10 +199,10 @@ pub fn chat_list(
               Said(m) => {
                 let on = @sfbase.message_menu_on("m:" + m.ts)
                 let a = @motion.told(c, "msg-menu/" + m.ts, if on { 1.0 } else { 0.0 }, spec=@sf.nav_fade)
-                if on || !a.over() {
+                if on || !a.over(c) {
                   let hover = @sf.theme().p.hover
                   // (the last message's as far under it as over it: the list's foot under it, no row to meet)
-                  (Some((1.0, top / 2.0, if under > 0.0 { under } else { top / 2.0 })), Some(fn() { @sf.alpha(hover, a.get()) }))
+                  (Some((1.0, top / 2.0, if under > 0.0 { under } else { top / 2.0 })), Some(fn() { @sf.alpha(hover, a.get(c)) }))
                 } else {
                   (None, None)
                 }
@@ -287,7 +287,7 @@ pub fn chat_list(
       room~,
       finding=find_chat() == chat_key(r),
       on_found=fn(rd) {
-        found_start(rd, find_chat() == rk)
+        found_start(c, rd, find_chat() == rk)
         found_now.val = true
       },
       find_around~,

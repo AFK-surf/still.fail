@@ -161,11 +161,11 @@ pub fn presence(
   let a = @signals.untracked(fn() {
     let a = @motion.anim(c, k, if shown && !initial { 1.0 } else { 0.0 })
     if shown {
-      a.follow(1.0, enter, loc~)
+      a.follow(c, 1.0, enter, loc~)
     } else {
-      a.follow(0.0, exit, loc~)
+      a.follow(c, 0.0, exit, loc~)
     }
     a
   })
-  { built: shown || !a.over(), shown, t: a }
+  { built: shown || !a.over(c), shown, t: a }
 }

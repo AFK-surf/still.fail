@@ -1397,7 +1397,7 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
       if q.open || how_of(q.shows, q.from, true) != AsSheet {
         most
       } else {
-        @signals.untracked(fn() { dmax(most, q.sheet_h.get() + q.recede.get() * q.pushed.get()) })
+        @signals.untracked(fn() { dmax(most, q.sheet_h.get() + q.recede.get(c) * q.pushed.get()) })
       }
     })
   } else {
@@ -1425,18 +1425,18 @@ pub fn presented(c : @ui.Ctx, alone? : Bool = false) -> Unit {
     }
     // (one closing goes from where it is: pushed up still where it closes with the one over it, both going down; where
     // the one over it closed first that same moment, held where it had got to as it closes too)
-    if !p.open && !p.recede.over() {
-      p.recede.snap(@signals.untracked(fn() { p.recede.get() }))
+    if !p.open && !p.recede.over(c) {
+      p.recede.snap(c, @signals.untracked(fn() { p.recede.get(c) }))
     }
     if p.open && covered != p.receded {
       p.receded = covered
       let to = if covered { 1.0 } else { 0.0 }
       if sheet {
         let way = dmax(@signals.untracked(fn() { p.pushed.get() }), 1.0)
-        p.recede.animate(to, @motion.move(points=way))
+        p.recede.animate(c, to, @motion.move(points=way))
       } else {
         // (dimmed as a dialog's ground comes and goes)
-        p.recede.animate(to, @motion.tween(confirm_ground_ms, ease=if covered { Out } else { Leave }))
+        p.recede.animate(c, to, @motion.tween(confirm_ground_ms, ease=if covered { Out } else { Leave }))
       }
     }
     let was = p.open
@@ -2018,10 +2018,10 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
     base(c, st, fn() {
       body()
       // (dimmed as it is drawn, not built again as it goes: built while it dims or comes back, till its declared end)
-      if p.recede.target() > 0.0 || !p.recede.over() {
+      if p.recede.target() > 0.0 || !p.recede.over(c) {
         c.layer(fn() {
           let v = c.box(style=sheet_veil_at, fn() {  })
-          c.bg_by(v, fn() { @ui.alpha(sheet_scrim, dmax(0.0, p.recede.get())) })
+          c.bg_by(v, fn() { @ui.alpha(sheet_scrim, dmax(0.0, p.recede.get(c))) })
         })
         |> ignore
       }
@@ -2038,7 +2038,7 @@ fn present_sheet(c : @ui.Ctx, key : String, p : Presented) -> (Bool, Bool) {
   // (dimming what is under it only where nothing under it does: scrim_owner; pushed up out of the way of a sheet over
   // it, as far as it has gone, closing from there)
   let scrim = scrim_of(p, true).unwrap_or(sheet_scrim)
-  let r = @kit.sheet(c, key, p.open, h~, detents=if grows { sheet_grows_to } else { [] }, scrim~, look~, on_escape?, raised=p.recede.get() * p.pushed.get(), sinks=p.sinks, fn() {
+  let r = @kit.sheet(c, key, p.open, h~, detents=if grows { sheet_grows_to } else { [] }, scrim~, look~, on_escape?, raised=p.recede.get(c) * p.pushed.get(), sinks=p.sinks, fn() {
     match share {
       Some(_) =>
         c.box(style=sheet_whole, id=whole_id, fn() {
@@ -2369,19 +2369,19 @@ fn steps_shown(
   match @motion.measured(c, key_of(top)) {
     Some(h) =>
       if p.step_h_of < 0 {
-        p.step_h.snap(h)
+        p.step_h.snap(c, h)
         p.step_h_of = top.n
       } else if p.step_h_of != top.n {
         // (another step come or gone back to: its height reached with its slide)
-        p.step_h.animate(h, slide)
+        p.step_h.animate(c, h, slide)
         p.step_h_of = top.n
       } else if p.step_h.target() != h {
         // (what the step holds changed: that height at once, or, before its slide's declared end, where it goes on its
         // way there)
-        if p.step_h.over() {
-          p.step_h.snap(h)
+        if p.step_h.over(c) {
+          p.step_h.snap(c, h)
         } else {
-          p.step_h.animate(h, slide)
+          p.step_h.animate(c, h, slide)
         }
       }
     None => ()
@@ -2391,7 +2391,7 @@ fn steps_shown(
   } else if p.step_h_of < 0 {
     full_width
   } else {
-    @ui.style(w=Full, h=Fixed(p.step_h.get()))
+    @ui.style(w=Full, h=Fixed(p.step_h.get(c)))
   }
   c.box(style=tall.then(@ui.style(mx=room(-out))), fn() {
     // (a flow kept elsewhere takes back on its step: no edge of the panel swiped back past it)

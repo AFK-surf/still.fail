@@ -121,7 +121,7 @@ pub fn ripple(
     }
     let p = Anim::new(0.0)
     p.name = "ripple"
-    p.animate(0.5, tween(ripple_enter_ms, ease=Out))
+    p.animate(c, 0.5, tween(ripple_enter_ms, ease=Out))
     list.push({ x: px - bx + out_x, y: py - by + top, progress: p, at: c.moment(), lifted: false, lifted_at: 0.0, leaving: false })
     ripples[id] = list
   }
@@ -135,7 +135,7 @@ pub fn ripple(
     let out_at = if r.lifted_at > r.at + ripple_enter_ms { r.lifted_at } else { r.at + ripple_enter_ms }
     if r.lifted && !r.leaving && c.moment() >= out_at {
       r.leaving = true
-      r.progress.animate(1.0, tween(ripple_exit_ms, ease=Linear), start_at=out_at)
+      r.progress.animate(c, 1.0, tween(ripple_exit_ms, ease=Linear), start_at=out_at)
     } else if r.lifted && !r.leaving {
       // (what holds it built again at that moment, as it changes then: kept_part.mbt)
       c.shows_until(out_at)
@@ -143,7 +143,7 @@ pub fn ripple(
   }
   // those faded away let go, by their way out's declared end, before what is drawn of the rest (built again at that
   // end: Anim::over)
-  list.retain(fn(r) { !r.leaving || !r.progress.over() })
+  list.retain(fn(r) { !r.leaving || !r.progress.over(c) })
   if list.length() == 0 {
     ripples.remove(id)
   }
@@ -157,7 +157,7 @@ pub fn ripple(
     match c.laid_size(id) {
       Some((bw, bh)) if bw > 0.0 && bh > 0.0 => {
         let most = dmin(press_sink_most, press_sink / dmax(bw, bh))
-        c.look_by(holder, fn() { @ui.look(scale=1.0 - most * sunk.get()) })
+        c.look_by(holder, fn() { @ui.look(scale=1.0 - most * sunk.get(c)) })
       }
       _ => ()
     }
@@ -193,7 +193,7 @@ pub fn ripple(
         |> ignore
         let progress = r.progress
         c.look_by(disc, fn() {
-          let p = progress.get()
+          let p = progress.get(c)
           let fade = sub_progress(0.0, 0.13, p).min(1.0 - sub_progress(0.4, 1.0, p))
           let ink_alpha = (ink & 0xFFL).to_double()
           if fade <= 0.0 || p <= 0.0 || ink_alpha <= 0.0 {

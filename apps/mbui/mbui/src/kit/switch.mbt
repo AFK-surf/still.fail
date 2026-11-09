@@ -115,7 +115,7 @@ pub fn switch_look_of(
           fn() {  },
         )
         // (sliding there: moved as it is drawn, nothing built or laid out for it)
-        c.look_by(knob_at, fn() { @ui.look(dx=travel * (across(s.t.get()) - k)) })
+        c.look_by(knob_at, fn() { @ui.look(dx=travel * (across(s.t.get(c)) - k)) })
         match lens {
           Some(g) if held > 0.0 => {
             c.look(knob_at, @ui.look(alpha=1.0 - dmin(1.0, held)))
@@ -129,7 +129,7 @@ pub fn switch_look_of(
             let y = (h - lh) / 2.0
             let lens_at = c.layer(fn() {
               let l = c.box(style=lens_capsule(lw, lh), glass=g, tx=x, ty=y, fn() {  })
-              c.look_by(l, fn() { @ui.look(dx=x_at(across(s.t.get())) - x) })
+              c.look_by(l, fn() { @ui.look(dx=x_at(across(s.t.get(c))) - x) })
             })
             c.look(lens_at, @ui.look(alpha=dmin(1.0, held)))
           }
@@ -139,7 +139,7 @@ pub fn switch_look_of(
       },
     )
     // (its colour with the knob, as it is drawn)
-    c.bg_by(track, fn() { blend(off, on, s.t.get()) })
+    c.bg_by(track, fn() { blend(off, on, s.t.get(c)) })
   }
 }
 

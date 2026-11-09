@@ -584,7 +584,7 @@ pub fn vault_foot(
                   // (faded in as it is drawn)
                   let shown = @kit.presence(c, "vault/" + request + "/file/" + name, true).t
                   let i = c.rich([@ui.span(name + " · " + file_size(content), color=@sf.theme().p.text)], style=ask_file_name)
-                  c.look_by(i, fn() { @ui.look(alpha=@sf.dmax(0.0, @sf.dmin(1.0, shown.get()))) })
+                  c.look_by(i, fn() { @ui.look(alpha=@sf.dmax(0.0, @sf.dmin(1.0, shown.get(c)))) })
                 }
                 None => ()
               }

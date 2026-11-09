@@ -79,7 +79,7 @@ fn page_switch_said(v : @view.View, holds : () -> Bool) -> Unit {
 fn switch_new_out(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   // (gone once its way out has come to the end it declared: built till then)
   let leave = new_leave(c)
-  if (leave.target() >= 1.0 && leave.over()) || !page_switch.from_new || fresh.became.get() is Some(_) {
+  if (leave.target() >= 1.0 && leave.over(c)) || !page_switch.from_new || fresh.became.get() is Some(_) {
     return
   }
   let v = page_switch.new_view

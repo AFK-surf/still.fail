@@ -635,9 +635,9 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
         }
         c.box(style=ground, fn() {
           match lit {
-            Some(l) if l.target() > 0.0 || !l.over() => {
+            Some(l) if l.target() > 0.0 || !l.over(c) => {
               let g = c.layer(fn() { c.box(style=publish_lit, fn() {  }) |> ignore })
-              c.look_by(g, fn() { @ui.look(alpha=l.get()) })
+              c.look_by(g, fn() { @ui.look(alpha=l.get(c)) })
             }
             _ => ()
           }
@@ -687,7 +687,7 @@ fn publish_picture(c : @ui.Ctx, src : Source, here : MessageHere, p : Json?, w :
           // (faded as it is drawn)
           if !taking {
             let out = publish_out(c, k, on)
-            c.look_by(content.val, fn() { @ui.look(alpha=publish_faded(out.get())) })
+            c.look_by(content.val, fn() { @ui.look(alpha=publish_faded(out.get(c))) })
           }
         })
         |> ignore
@@ -780,7 +780,7 @@ fn publish_ticked(c : @ui.Ctx, k : String, w~ : Double?, draw : () -> Unit) -> U
     @sf.t(if on { "web-pages.chat.publish.leaveOut" } else { "web-pages.chat.publish.putBack" }),
     @sf.message_file_corner,
     w?=w,
-    turn=fn() { out.get() * publish_plus_turn },
+    turn=fn() { out.get(c) * publish_plus_turn },
     on_remove=flip,
     fn() {
       // (pressed anywhere, as its mark is: what the chat would open it by does not here)
@@ -788,7 +788,7 @@ fn publish_ticked(c : @ui.Ctx, k : String, w~ : Double?, draw : () -> Unit) -> U
         draw()
         c.layer(fn() { c.box(style=publish_file_press, id~, fn() {  }) |> ignore }) |> ignore
       })
-      c.look_by(card, fn() { @ui.look(alpha=publish_faded(out.get())) })
+      c.look_by(card, fn() { @ui.look(alpha=publish_faded(out.get(c))) })
     },
   )
   c.on_press(id, flip)

@@ -109,7 +109,7 @@ fn button_part(
   // (told as it is built, read where it is painted: the spinner built while it is busy or on its way back, up to
   // its declared end)
   let turning = @motion.told(c, "sf-btn-busy/\{id}", if busy { 1.0 } else { 0.0 }, spec=@motion.tween(dur_ms, ease=Out))
-  let spun = busy || !turning.over()
+  let spun = busy || !turning.over(c)
   // (faded as it is drawn)
   let seen = @motion.told(c, "sf-btn-seen/\{id}", if disabled { 0.45 } else { 1.0 }, spec=@motion.tween(dur_ms, ease=Out))
   // its ground `h` of the way to the one under the hand (no outline: where a tone has a line, it is its ground), and
@@ -182,10 +182,10 @@ fn button_part(
           let drawn = c.box(fn() { draw_icon(c, icon, button_icon, ink, by_ink=true) })
           // (the spinner over it, in its place and its size: the icon's room kept, nothing beside it moved)
           if spun {
-            c.look_by(drawn, fn() { @ui.look(alpha=1.0 - turning.get()) })
+            c.look_by(drawn, fn() { @ui.look(alpha=1.0 - turning.get(c)) })
             c.layer(fn() {
               let s = c.box(style=button_turning, turn)
-              c.look_by(s, fn() { @ui.look(alpha=turning.get()) })
+              c.look_by(s, fn() { @ui.look(alpha=turning.get(c)) })
             })
             |> ignore
           }
@@ -220,7 +220,7 @@ fn button_part(
               let s = c.box(style=button_spin, fn() { turn() })
               c.look(s, @ui.look(scale=over, ox=0.0))
               let grown = seen_at(over)
-              c.look_by(s, fn() { @ui.look(alpha=turning.get() * grown) })
+              c.look_by(s, fn() { @ui.look(alpha=turning.get(c) * grown) })
             })
             |> ignore
           }
@@ -235,8 +235,8 @@ fn button_part(
       }
     },
   )
-  c.bg_by(b, fn() { ground_at(h.get()) })
-  c.look_by(b, fn() { @ui.look(alpha=seen.get()) })
+  c.bg_by(b, fn() { ground_at(h.get(c)) })
+  c.look_by(b, fn() { @ui.look(alpha=seen.get(c)) })
   // its words changed (复制图片 to 已复制): its ground goes from the width it had to the new one, its words with it, on
   // the curve a thing reshaped is moved by, not at once (the user, 2026-10-30: 按钮的变长应该也有过渡; their cause,
   // its words: sf/motion.mbt 3)
@@ -370,11 +370,11 @@ pub fn icon_button(
       draw_icon(c, icon, icon_size, if on || h.target() > 0.5 { ink } else { quiet })
     },
   )
-  c.bg_by(b, fn() { ground_at(h.get()) })
+  c.bg_by(b, fn() { ground_at(h.get(c)) })
   // (its icon quiet, in the ink once its ground is half way to the hover's, as it is painted; a runtime's mark in its
   // maker's own colours)
   if !on && !icon.has_prefix("runtime:") {
-    c.ink_by(b, fn() { if h.get() > 0.5 { ink } else { quiet } })
+    c.ink_by(b, fn() { if h.get(c) > 0.5 { ink } else { quiet } })
   }
   // named (IconButton's label): what a screen reader calls it, and its tip
   if label != "" {
@@ -426,7 +426,7 @@ pub fn chip(
       }
     },
   )
-  c.bg_by(b, fn() { alpha(ink, 0.07 + 0.05 * h.get()) })
+  c.bg_by(b, fn() { alpha(ink, 0.07 + 0.05 * h.get(c)) })
   c.bone_whole(b)
   if said != "" {
     c.semantics(b, Button, id=if disabled { 0 } else { id }, label=said, disabled~)
@@ -2452,13 +2452,13 @@ pub fn dialog(
 /// it (it takes nothing then): over what it holds, its corners its own; nothing where `f` is not going from 0. Dimmed
 /// as it is drawn (Ctx::bg_by), not built again as it goes; built while it dims or comes back, till its declared end.
 fn dialog_veil(c : @ui.Ctx, f : @motion.Anim) -> Unit {
-  if f.target() <= 0.0 && f.over() {
+  if f.target() <= 0.0 && f.over(c) {
     return
   }
   let scrim = c.theme().scrim
   c.layer(fn() {
     let v = c.box(style=dialog_veil_at, fn() {  })
-    c.bg_by(v, fn() { @ui.alpha(scrim, dmax(0.0, f.get())) })
+    c.bg_by(v, fn() { @ui.alpha(scrim, dmax(0.0, f.get(c))) })
   })
   |> ignore
 }
@@ -4134,11 +4134,11 @@ pub fn ask_line_button(
       let ink = mix(text, lit.target(), muted)
       let words = look.state_quiet.then(ask_line_button_words).then(@ui.text_style(color=Data(ink)))
       let w = c.text(label, style=ask_line_words(words))
-      c.ink_by(w, fn() { mix(text, lit.get(), muted) })
+      c.ink_by(w, fn() { mix(text, lit.get(c), muted) })
     },
   )
-  c.bg_by(b, fn() { alpha(hover, lit.get()) })
-  c.look_by(b, fn() { @ui.look(alpha=seen.get()) })
+  c.bg_by(b, fn() { alpha(hover, lit.get(c)) })
+  c.look_by(b, fn() { @ui.look(alpha=seen.get(c)) })
   c.semantics(b, Button, id=if live { id } else { 0 }, label~, disabled=!live)
   match on_press {
     Some(f) if live => c.on_press(id, f)
@@ -4256,20 +4256,20 @@ pub fn options_card(
                 } else {
                   c.text("\{i + 1}", size=theme().t.caption, weight=600, color~, wrap=false)
                 }
-                if picked_here || !ticked.over() {
-                  c.look_by(number, fn() { @ui.look(alpha=1.0 - ticked.get()) })
+                if picked_here || !ticked.over(c) {
+                  c.look_by(number, fn() { @ui.look(alpha=1.0 - ticked.get(c)) })
                   c.layer(fn() {
                     let mark = c.box(style=option_check_room, fn() {
                       icon(c, "check", size=ot.disc * option_check_share, color=0xFFFFFFFFL) |> ignore
                     })
-                    c.look_by(mark, fn() { @ui.look(alpha=ticked.get()) })
+                    c.look_by(mark, fn() { @ui.look(alpha=ticked.get(c)) })
                   })
                   |> ignore
                 }
               },
             )
             if !o.2 {
-              c.bg_by(disc, fn() { mix_seen(t.p.accent, ticked.get(), disc_off) })
+              c.bg_by(disc, fn() { mix_seen(t.p.accent, ticked.get(c), disc_off) })
             }
             c.box(w=Fill(1.0), fn() {
               c.text(o.0, size=ot.label, weight=500, color=t.p.text, line=ot.label_line) |> ignore
@@ -4279,12 +4279,12 @@ pub fn options_card(
             })
             |> ignore
             // (turning over the row's end, in what it leaves at the end of the words: never narrowing them)
-            if busy == Some(i) || !turning.over() {
+            if busy == Some(i) || !turning.over(c) {
               c.layer(fn() {
                 let s = c.box(style=@ui.style(w=Full, align=AEnd, pt=room_of(ot.pad_in), pr=room_of(option_row_end)), fn() {
                   c.box(h=Px(ot.label_line), justify=JCenter, fn() { spinner(c, size=12.0) |> ignore }) |> ignore
                 })
-                c.look_by(s, fn() { @ui.look(alpha=turning.get()) })
+                c.look_by(s, fn() { @ui.look(alpha=turning.get(c)) })
               })
               |> ignore
             }
@@ -4300,7 +4300,7 @@ pub fn options_card(
             }
           },
         )
-        c.look_by(row, fn() { @ui.look(alpha=there.get()) })
+        c.look_by(row, fn() { @ui.look(alpha=there.get(c)) })
       }
     })
     |> ignore
@@ -4492,15 +4492,15 @@ pub fn update_key(
             icon(c, if offered { "download" } else { "update" }, size=mark, color=t.p.text) |> ignore
           }
         })
-        c.look_by(ready, fn() { @ui.look(alpha=1.0 - progress.get()) })
-        if coming is Some(_) || !progress.over() {
+        c.look_by(ready, fn() { @ui.look(alpha=1.0 - progress.get(c)) })
+        if coming is Some(_) || !progress.over(c) {
           c.layer(fn() {
             let part = match coming {
               Some(part) => part
               None => Some(1.0)
             }
             let downloading = c.box(style=update_ring_at, fn() { coming_mark(c, key, part, mark, t.p.text) })
-            c.look_by(downloading, fn() { @ui.look(alpha=progress.get()) })
+            c.look_by(downloading, fn() { @ui.look(alpha=progress.get(c)) })
           })
           |> ignore
         }
@@ -4614,7 +4614,7 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
         Some(r) =>
           if back == 0.0 {
             c.look_by(a, fn() {
-              let k = resting.get()
+              let k = resting.get(c)
               if k < 1.0 {
                 @ui.look(rot=r.from + (r.to - r.from) * k)
               } else {
@@ -4642,7 +4642,7 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
   })
   // (coming and going, faded as it is drawn)
   let fade = p.t
-  c.look_by(b, fn() { { ..@ui.still_look, alpha: dmin(1.0, fade.get()) } })
+  c.look_by(b, fn() { { ..@ui.still_look, alpha: dmin(1.0, fade.get(c)) } })
   c.semantics(b, Status, id~, label=words)
   tip(c, key + "/tip", id, words, side=Bottom)
 }
