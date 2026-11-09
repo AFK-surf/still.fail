@@ -139,7 +139,9 @@ export class Account extends DurableObject<Env> {
       if (shared)
         for (const old of [...data.sessions].sort((a, b) => a.created - b.created).slice(0, Math.max(0, data.sessions.length - LIMITS.sessions + 1)))
           await this.revoke(data, old.id, "removed");
-      if (data.sessions.length >= LIMITS.sessions || !this.charge()) return limited();
+      // (not charged to the account's requests a minute: what its other devices ask must not keep the person from
+      // signing in a new one; sign-in has its own limits, login.ts's by address and the sessions an account may have)
+      if (data.sessions.length >= LIMITS.sessions) return limited();
       data.email = identity.email;
       data.name = identity.name;
       data.picture = identity.picture;
@@ -292,6 +294,12 @@ export class Account extends DurableObject<Env> {
     if (!this.session(this.data(), claims)) return false;
     if (testChannel && !(await this.beta(claims.sub))) return "not_beta";
     return this.charge() ? true : "limited";
+  }
+
+  /** Whether an access token's session is still live, not charged to the account's requests a minute: for what has
+   * a budget of its own (telemetry, tracing.ts's by sender), so that it uses up none of the account system's. */
+  signedIn(claims: Claims): boolean {
+    return this.session(this.data(), claims) !== undefined;
   }
 
   /** Whether it is let into the test channel: asked of the Directory once, then told as it changes (`deliver`). */

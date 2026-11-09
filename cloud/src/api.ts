@@ -165,10 +165,11 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   }
 
   // Spans from a signed-in client, or from a station signing them with its key (tracing.ts).
+  // (their own budget by sender, tracing.ts: not the account's, which the account system's requests need)
   if (path === "/v1/telemetry/traces" && method === "POST") {
     const token = bearerToken(request);
-    const claims = token ? await account(token, env, request) : null;
-    if (claims instanceof Response) return claims;
+    const claims = token ? await verifyToken(env, token, "access") : null;
+    if (token && (!claims || !(await env.ACCOUNTS.getByName(claims.sub).signedIn(claims)))) return denied();
     return receiveTraces(request, env, claims?.sub ?? null);
   }
 
