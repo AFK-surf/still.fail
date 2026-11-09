@@ -143,6 +143,39 @@ test "on the tape with the window's buttons in the app's top row (a Mac's) what 
 }
 
 ///|
+test "on a Mac's tape the sidebar's first row stands under the window's buttons as far as they stand under its panel's top, the rail's first place beside it" {
+  let t = tape_chat(0, 720.0, 840.0)
+  t.set_window_inset(true)
+  t.run_for(@ui.move_most_ms)
+  assert_eq(@sfdesk.wide.tape_at.get(), @sfdesk.TapePane::Side)
+  // (the buttons 14 high, centred on the top row's 44 and as much lower as the panel stands under the window's top;
+  // the panel's content under its 6 and its line)
+  let down = @sfdesk.closed_bar_in
+  let top = (44.0 - 14.0) / 2.0 + down
+  let bottom = top + 14.0
+  let content_top = down + 1.0
+  // the bell's icon (20) its top as far under the buttons as they stand under the panel's top: its middle there
+  let mid = bottom + (top - content_top) + 10.0
+  guard words_middle(t, "新建对话") is Some(y) else { fail("no 新建对话") }
+  // (its words' box a point over the row's middle)
+  assert_true((y - mid).abs() <= 1.0, msg="新建对话's middle \{y}, \{mid} wanted")
+  // the rail's first place (the bell) on that line, under the buttons
+  let first = t.all(Button).filter(fn(n) { !n.hidden && n.rect.0 < 40.0 && n.rect.1 > 0.0 }).iter().fold(
+    init=None,
+    fn(acc : @ui.SemNode?, n) {
+      match acc {
+        Some(a) if a.rect.1 <= n.rect.1 => acc
+        _ => Some(n)
+      }
+    },
+  )
+  guard first is Some(bell) else { fail("no rail place") }
+  let bell_mid = bell.rect.1 + bell.rect.3 / 2.0
+  assert_true((bell_mid - y).abs() < 1.0, msg="the bell's middle \{bell_mid}, the row's \{y}")
+  assert_true(bell.rect.1 >= bottom, msg="the bell \{bell.rect} under the buttons' \{bottom}")
+}
+
+///|
 test "on the tape the window's buttons stand as far lower as its panels stand under the window's top, back off it" {
   let t = tape_chat(0, 720.0, 840.0)
   t.set_window_inset(true)
