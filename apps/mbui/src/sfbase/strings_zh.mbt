@@ -728,6 +728,7 @@ let zh : Map[String, String] = {
   "common.search": "搜索",
   "common.telemetry.note": "不会包含你的聊天内容",
   "common.telemetry.title": "发送使用统计和错误报告",
+  "common.uploadConfirming": "等待 station 确认收到",
   "common.uploading": "正在上传",
   "core-logic.accounts.login.failed": "登录失败",
   "desktop.contextMenu.copy": "复制",

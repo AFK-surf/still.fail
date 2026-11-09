@@ -284,6 +284,8 @@ pub fn file_card(
   }
   let said = meta
   let going = match sent {
+    // every byte gone, its station not yet saying it has them: not 100% (read as stuck)
+    Some(s) if pending && size > 0.0 && s >= size => t("common.uploadConfirming")
     Some(s) if pending && size > 0.0 =>
       t(
         "web-main.file.uploadingPart",

@@ -197,9 +197,22 @@ export class Requests {
         const status = this.#status(station);
         const waiting = quiet ? null : status.begin({ station: station.toString() }, stationWhat(method, path), false);
         const [span, head] = this.#head(station, method, path, headers, body.length, ctx);
+        // When its body was all gone and its answer's head came, in ms from the start: a slow request says which
+        // part was slow (a 470 KB picture's station had it in 0.7 s, its answer came 9 s later, 2026-11-09).
+        const host = this.#core.host;
+        const began = host.monotonicMs();
+        let all = false;
+        const gone = wrote && ((n: number) => {
+          if (!all && n >= body.length) {
+            all = true;
+            span.set("stillfail.wrote_ms", Math.round(host.monotonicMs() - began));
+          }
+          wrote(n);
+        });
         const result = yield* Effect.result(
           Effect.gen({ self: this }, function* () {
-            const reply = yield* within(this.wire.request(station, head, body, wrote), idleMs);
+            const reply = yield* within(this.wire.request(station, head, body, gone), idleMs);
+            span.set("stillfail.head_ms", Math.round(host.monotonicMs() - began));
             answered(span, reply);
             const tooOld = stationTooOld(reply.headers);
             if (tooOld !== null) return yield* Effect.fail(tooOld);

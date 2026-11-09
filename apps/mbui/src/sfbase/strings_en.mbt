@@ -738,6 +738,7 @@ let en : Map[String, String] = {
   "common.search": "Search",
   "common.telemetry.note": "Never includes your chats.",
   "common.telemetry.title": "Send usage and error reports",
+  "common.uploadConfirming": "Waiting for the station to confirm",
   "common.uploading": "Uploading",
   "core-logic.accounts.login.failed": "Sign-in failed",
   "desktop.contextMenu.copy": "Copy",

@@ -16,6 +16,7 @@
   "common.opening": "正在打开",
   "common.saving": "正在保存",
   "common.uploading": "正在上传",
+  "common.uploadConfirming": "等待 station 确认收到",
   "common.downloading": "正在下载",
   "common.confirm": "确定",
   "common.back": "返回",
