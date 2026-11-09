@@ -199,3 +199,19 @@ test("an account over its requests a minute is told to wait (429), not that it i
     await h.close();
   }
 });
+
+test("an account over its requests a minute still signs in a new device: its other devices' asking keeps no one out", async () => {
+  // (the locks' end to end, 2026-11-10: a person's devices reading their workspaces again as they changed used up the
+  // minute, and the next device's sign-in was refused, 429)
+  const h = await harness();
+  try {
+    const alice = h.as(await h.login("alice"));
+    let last = await alice("GET", "/v1/me");
+    for (let i = 0; i < 130 && last.status === 200; i++) last = await alice("GET", "/v1/me");
+    assert.equal(last.status, 429);
+    const another = await h.login("alice");
+    assert.ok(another.access_token);
+  } finally {
+    await h.close();
+  }
+});
