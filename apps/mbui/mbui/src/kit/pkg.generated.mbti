@@ -260,6 +260,8 @@ pub fn sheet_grabber(@ui.Ctx) -> Unit
 
 pub fn sheet_look(@ui.Ctx, SheetState, () -> Unit) -> Unit
 
+pub fn sheet_place(@ui.Ctx) -> (Double, Double)?
+
 pub fn sheet_rest(String) -> Double
 
 pub let sheet_scrim_ms : Double

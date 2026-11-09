@@ -1635,38 +1635,72 @@ fn Ctx::view_picture(self : Ctx, c : @view.Content, x : Double, y : Double, s : 
 let tree_over_scrim : Array[(Int, Int)] = []
 
 ///|
-/// Where the top of what comes up over the scrim is in the window this frame (points: a sheet's, what the menu from the
-/// foot is in), as what draws it says it once it is laid out; none where nothing is up. What of the tree is drawn over
-/// the scrim stays clear of it (View::over_scrim: the old views' @sf.lift_over).
+/// Where what comes up over the scrim is in the window this frame (points: a sheet's, what the menu from the foot is
+/// in), as what draws it says it once it is laid out: its top and how tall it is; none where nothing is up. What of the
+/// tree is drawn over the scrim stays clear of it (View::over_scrim: the old views' @sf.lift_over).
 // kept across runs: said once, as the program starts (@sf's)
-pub let over_scrim_floor : Ref[(Ctx) -> Double?] = Ref(fn(_) { None })
+pub let over_scrim_floor : Ref[(Ctx) -> (Double, Double)?] = Ref(fn(_) { None })
 
 ///|
 /// How far over the top of what comes up over the scrim what is drawn over it stays.
 let over_scrim_clear : Double = 12.0
 
 ///|
-/// What of the tree is drawn over the scrim (tree_over_scrim) moved up clear of what comes up over it, as far as it
-/// reaches past it and no further than that has come up into the window (what hangs past the window's foot is not
-/// thrown up as it starts out from under it).
+/// What of the tree is drawn over the scrim (tree_over_scrim) drawn whole, and moved up clear of what comes up over it.
+/// Whole: what cut it where it lay (its list's edges, the window's foot) cuts it no more, lifted off them (what cuts
+/// within it still does). Moved up: clear of it once it is all the way up, as far as it is on its way (what hangs past
+/// the window's foot is not thrown up ahead of it as it starts out from under it, nor left cut off under it once it is
+/// up: a row held at the list's foot, 2026-11-09), its top kept in the window.
 fn Ctx::tree_over_scrim_clear(self : Ctx) -> Unit {
-  guard (over_scrim_floor.val)(self) is Some(top) else { return }
   let a = self.inst
+  let mut head = 1.0e300
   let mut foot = -1.0e300
+  // (what cut it where it lay: the loosest of its instances' cuts, what all it holds was drawn inside)
+  let mut x0 = 1.0e300
+  let mut y0 = 1.0e300
+  let mut x1 = -1.0e300
+  let mut y1 = -1.0e300
   for r in tree_over_scrim {
     for k in r.0..<r.1 {
       let b = k * inst_size
       // (its shadow, blurred past it, not what keeps clear)
       if a[b + 5] != 2.0 {
+        head = dmin(head, a[b + 1])
         foot = dmax(foot, a[b + 1] + a[b + 3])
       }
+      x0 = dmin(x0, a[b + 16])
+      y0 = dmin(y0, a[b + 17])
+      x1 = dmax(x1, a[b + 18])
+      y1 = dmax(y1, a[b + 19])
     }
   }
-  guard foot + over_scrim_clear > top else { return }
-  let dy = dmin(0.0, dmax(top - over_scrim_clear - foot, top - self.window_h))
+  let dy = match (over_scrim_floor.val)(self) {
+    Some((top, tall)) if foot + over_scrim_clear > top => {
+      // (as far as it is up, of all the way: where it will stand then, and how far this is to stay clear of it there)
+      let up = if tall > 0.0 { dmin(1.0, dmax(0.0, (self.window_h - top) / tall)) } else { 1.0 }
+      let at_rest = self.window_h - tall - over_scrim_clear - foot
+      dmin(0.0, dmax(dmax(top - over_scrim_clear - foot, at_rest * up), -head))
+    }
+    _ => 0.0
+  }
   for r in tree_over_scrim {
     for k in r.0..<r.1 {
-      shift_inst(a, k * inst_size, 0.0, dy)
+      let b = k * inst_size
+      if a[b + 16] == x0 {
+        a[b + 16] = dmin(x0, 0.0)
+      }
+      if a[b + 17] == y0 {
+        a[b + 17] = dmin(y0, -dy)
+      }
+      if a[b + 18] == x1 {
+        a[b + 18] = dmax(x1, self.window_w)
+      }
+      if a[b + 19] == y1 {
+        a[b + 19] = dmax(y1, self.window_h - dy)
+      }
+      if dy != 0.0 {
+        shift_inst(a, b, 0.0, dy)
+      }
     }
   }
 }

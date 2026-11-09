@@ -307,6 +307,16 @@ pub fn sheet_top(c : @ui.Ctx) -> Double? {
 }
 
 ///|
+/// Where the top of the sheet up is in the window this frame and how tall it is, as it is laid out (None where none is
+/// up): sheet_top's, with how far it has to come up (for what keeps clear of it once it is all the way up).
+pub fn sheet_place(c : @ui.Ctx) -> (Double, Double)? {
+  match @motion.measured_rect(c, sheet_measured) {
+    Some((_, y, _, h)) => Some((y, h))
+    None => None
+  }
+}
+
+///|
 let sheet_measured : String = "kit-sheet"
 
 ///|
