@@ -28,10 +28,11 @@ asc_post() {
     "https://api.appstoreconnect.apple.com/v1/$1" >&2
 }
 asc_preflight() {
+  [[ ${IOS_ASC_APP_ID:-} =~ ^[1-9][0-9]+$ ]] || fail 'configure the product App Store Connect app ID'
   asc_token
-  asc_get 'apps/6818750243' > "$T/app.json"
-  jq -e '.data.type == "apps" and .data.id == "6818750243" and .data.attributes.bundleId == "fail.still.iphone"' "$T/app.json" >/dev/null || fail 'ASC app/bundle mismatch'
-  asc_get "builds?filter[app]=6818750243&filter[version]=$RELEASE_BUILD&limit=200" > "$T/builds.json"
+  asc_get "apps/$IOS_ASC_APP_ID" > "$T/app.json"
+  jq -e --arg app "$IOS_ASC_APP_ID" --arg bid "$IOS_BUNDLE_ID" '.data.type == "apps" and .data.id == $app and .data.attributes.bundleId == $bid' "$T/app.json" >/dev/null || fail 'ASC app/bundle mismatch'
+  asc_get "builds?filter[app]=$IOS_ASC_APP_ID&filter[version]=$RELEASE_BUILD&limit=200" > "$T/builds.json"
   jq -e '.data | type == "array"' "$T/builds.json" >/dev/null || fail 'invalid ASC builds response'
   # Reject reused numbers across marketing versions, including expired builds. No delete/expire calls.
   jq -e '(.data | length) == 0 and (.links.next == null)' "$T/builds.json" >/dev/null || fail 'build number already exists or result is incomplete; choose a fresh number'
