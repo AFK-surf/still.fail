@@ -46,7 +46,7 @@ test "holds_for: its node let go takes its end off the timeline" {
   let there = @signals.signal(true, same=fn(a, b) { a == b })
   let held : Ref[(() -> Unit, () -> Bool)?] = Ref(None)
   let tree = @view.Tree::new(fn(root) {
-    root.show(fn() { there.get() }, fn(v) { held.val = Some(v.holds_for(100.0)) })
+    root.show(at_once=true, fn() { there.get() }, fn(v) { held.val = Some(v.holds_for(100.0)) })
   })
   tree.frame(400.0, 800.0, now=0.0) |> ignore
   let (event, _) = held.val.unwrap()

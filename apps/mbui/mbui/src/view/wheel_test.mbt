@@ -15,7 +15,7 @@ test "wheel: what it is asked of the chain under it as of then: the innermost le
   }
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { a_on.get() }, fn(a) {
+      root.show(at_once=true, fn() { a_on.get() }, fn(a) {
         a.width(Is(Some(300.0))).height(Is(Some(300.0))).on_wheel_moves(said("A", fn() {  })) |> ignore
         a.box(fn(x) {
           x.width(Is(Some(300.0))).height(Is(Some(100.0))).on_wheel_moves(said("X", fn() { a_on.set(false) }))
@@ -23,7 +23,7 @@ test "wheel: what it is asked of the chain under it as of then: the innermost le
         })
         |> ignore
       })
-      root.show(fn() { !a_on.get() }, fn(b) {
+      root.show(at_once=true, fn() { !a_on.get() }, fn(b) {
         b.width(Is(Some(300.0))).height(Is(Some(300.0))).on_wheel_moves(said("B", fn() {  })) |> ignore
         b.box(fn(y) { y.width(Is(Some(300.0))).height(Is(Some(100.0))).on_wheel_moves(said("Y", fn() {  })) |> ignore })
         |> ignore

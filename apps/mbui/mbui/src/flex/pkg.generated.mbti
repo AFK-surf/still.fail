@@ -20,6 +20,20 @@ pub fn measured_height(Node, Double) -> Double
 
 pub fn measured_width(Node, Double) -> Double
 
+pub fn move_at(Double) -> Double
+
+pub let move_end : Double
+
+pub let move_k : Double
+
+pub let move_least_ms : Double
+
+pub let move_most_ms : Double
+
+pub fn move_ms(Double) -> Double
+
+pub let move_whole_frames_ms : Double
+
 pub fn performing() -> Bool
 
 pub fn relayout(Node) -> Unit
@@ -150,6 +164,12 @@ pub(all) struct Style {
   mut min_held : Bool
   mut wrap_least : Bool
   mut content_share : Double
+  mut come_from : Double
+  mut come_to : Double
+  mut come_at : Double
+  mut come_now : Double
+  mut come_ends : Double
+  mut come_k : Double
   mut rows_grid : Double
   // private fields
 }

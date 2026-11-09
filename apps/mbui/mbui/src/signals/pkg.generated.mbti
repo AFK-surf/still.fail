@@ -102,6 +102,7 @@ pub fn Watch::gone(Self) -> Bool
 pub fn Watch::is_stale(Self) -> Bool
 pub fn Watch::on_marked(Self, () -> Unit) -> Unit
 pub fn[T] Watch::read(Self, () -> T) -> T
+pub fn Watch::resting(Self) -> Bool
 pub fn Watch::set_as_read(Self) -> Array[String]
 pub fn Watch::stop(Self) -> Unit
 pub fn Watch::touch(Self) -> Unit

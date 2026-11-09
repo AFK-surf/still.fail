@@ -29,12 +29,12 @@ test "a node made where one let go was, its ground and width said before it is g
   let after : Ref[@view.View?] = Ref(None)
   set_view_app(fn(root) {
     // (one grown about the middle of what it draws, 200 wide of colour: that middle worked out, 100 in)
-    root.show(fn() { first.get() }, fn(p) {
+    root.show(at_once=true, fn() { first.get() }, fn(p) {
       before.val = Some(p)
       p.width(Is(Some(200.0))).height(Is(Some(20.0))).ground(Is(0x3366CCFFL)).scale(Is(0.5), about=Drawn) |> ignore
     })
     // (made as it goes, where it was: 40 wide of colour, then grown about the middle of what it draws)
-    root.show(fn() { !first.get() }, fn(q) {
+    root.show(at_once=true, fn() { !first.get() }, fn(q) {
       after.val = Some(q)
       q.width(Is(Some(40.0))).height(Is(Some(20.0))).ground(Is(0xCC3333FFL)).scale(Is(0.5), about=Drawn) |> ignore
     })

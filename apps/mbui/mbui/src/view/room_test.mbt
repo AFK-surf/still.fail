@@ -14,7 +14,7 @@ fn room_tree(lines : @signals.Signal[Int]) -> (@view.Tree, Ref[@view.NodeId?], A
         col.padding(Is((10.0, 0.0, 10.0, 0.0))) |> ignore
         col.by_room(fn(held, room) {
           makes.val = makes.val + 1
-          held.pick(fn() { ((room.width() / 100.0).to_int(), lines.get()) }, fn(v, k) {
+          held.pick(at_once=true, fn() { ((room.width() / 100.0).to_int(), lines.get()) }, fn(v, k) {
             tiles.clear()
             for _ in 0..<k.1 {
               v.box(fn(line) {
@@ -106,7 +106,7 @@ test "Room::tall: how tall what it holds comes to at its width, read in the same
             })
             |> ignore
           })
-          held.show(fn() { room.tall(body) > 60.0 }, fn(m) {
+          held.show(at_once=true, fn() { room.tall(body) > 60.0 }, fn(m) {
             toggle.val = Some(m.id())
             m.height(Is(Some(20.0))).ground(Is(0x0000FFFFL)) |> ignore
           })

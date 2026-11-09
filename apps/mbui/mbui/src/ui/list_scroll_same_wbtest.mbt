@@ -56,7 +56,7 @@ fn same_tree(
   let s = @view.Scroll::list()
   let t = Tester::new(fn(_c) {  }, platform~, pointing?)
   set_view_app(fn(root) {
-    root.show(fn() { shown.get() }, fn(col) {
+    root.show(at_once=true, fn() { shown.get() }, fn(col) {
       col
       .width(Is(Some(390.0)))
       .height(Is(Some(844.0)))

@@ -690,6 +690,21 @@ fn size_uncached(
   perform : Bool,
 ) -> Double {
   let s = node.style
+  // an item coming or going: as tall as its way has got of what it comes to (as its style says, or what it holds comes
+  // to), what it holds laid out whole from its top in that (Style's come_*); not where what lays it out gives it its
+  // height
+  if known(s.come_now) && !known(kh) {
+    let now = s.come_now
+    s.come_now = undef
+    let fw = size_uncached(node, kw, kh, aw, ah, cb_w, cb_h, false)
+    s.come_now = now
+    let tall = come_height(s, out_h.val)
+    if known(tall) {
+      return size_uncached(node, if known(kw) { kw } else { fw }, tall, aw, ah, cb_w, cb_h, perform)
+    }
+  } else if !known(s.come_now) {
+    s.come_k = 1.0
+  }
   let b = box_for(node, cb_w, cb_h)
   // (its max-sizes only what it asks: given a size, it takes it; Style's stretch_past_max)
   let b = if s.stretch_past_max && ((known(kw) && known(b.max_w)) || (known(kh) && known(b.max_h))) {
@@ -1351,6 +1366,7 @@ fn layout_flex(
         declared = basis
         basis = undef
       }
+      let said_main = known(basis)
       if !known(basis) {
         // size from content: cross known if fixed or stretched in a known line
         let mut kc = cross_style
@@ -1392,8 +1408,22 @@ fn layout_flex(
       let pb_main = if row { cb.pbw() } else { cb.pbh() }
       f.unsafe_set(i + PB_MAIN, pb_main)
       basis = fmax(basis, pb_main)
+      // (coming or going down a column, as tall as its way has got of what it comes to, however tall it is said to be,
+      // its least too: Style's come_*; as what it holds comes to, worked out so as it was sized above)
+      if !row && known(cs.come_now) {
+        if said_main {
+          let tall = come_height(cs, basis)
+          if known(tall) {
+            basis = tall
+          }
+        }
+        if cs.come_k < 1.0 {
+          f.unsafe_set(i + MIN_MAIN, undef)
+          f.unsafe_set(i + PB_MAIN, 0.0)
+        }
+      }
       f.unsafe_set(i + BASIS, basis)
-      f.unsafe_set(i + HYP, clamp_size(basis, min_main, max_main))
+      f.unsafe_set(i + HYP, clamp_size(basis, f.unsafe_get(i + MIN_MAIN), max_main))
     }
     // (no more items: their numbers stay where they are)
     let f = pool.f
@@ -1401,6 +1431,18 @@ fn layout_flex(
     let count = pool.count
     let at = pool.at
     let aligns = pool.aligns
+    // (the gap before each item where one comes or goes in a column: as much of it as that one is there and some before
+    // it is (Style's come_k); none such, none worked out)
+    let mut comes = false
+    if !row {
+      for k in 0..<count {
+        if flow.unsafe_get(at.unsafe_get(k)).style.come_k < 1.0 {
+          comes = true
+          break
+        }
+      }
+    }
+    let gap_before : Array[Double] = if comes { Array::make(count, gap_main) } else { [] }
     // lines
     let lines = pool.lines
     let wrap = s.wrap != NoWrap
@@ -1435,7 +1477,22 @@ fn layout_flex(
     let mut max_line_main = 0.0
     for ln in lines {
       let n = ln.end - ln.start
-      let gaps = if n > 1 { gap_main * (n - 1).to_double() } else { 0.0 }
+      let gaps = if comes {
+        let mut seen = 0.0
+        let mut all = 0.0
+        for k in ln.start..<ln.end {
+          let here = flow.unsafe_get(at.unsafe_get(k)).style.come_k
+          let g = if k == ln.start { 0.0 } else { gap_main * fmin(here, seen) }
+          gap_before.unsafe_set(k, g)
+          all = all + g
+          seen = fmax(seen, here)
+        }
+        all
+      } else if n > 1 {
+        gap_main * (n - 1).to_double()
+      } else {
+        0.0
+      }
       let mut sum_hyp = gaps
       // (and without them, for resolve_flexible)
       let mut items_hyp = 0.0
@@ -1687,6 +1744,10 @@ fn layout_flex(
       let mut p = lead
       for k in ln.start..<ln.end {
         let i = k * ITEM
+        // (the gap before it its share of it where one comes or goes: gap_before)
+        if comes && k > ln.start {
+          p = p - gap_main + gap_before.unsafe_get(k)
+        }
         let fl = flags.unsafe_get(k)
         let m_start = f.unsafe_get(i + MAR_MAIN_START)
         let m_end = f.unsafe_get(i + MAR_MAIN_END)

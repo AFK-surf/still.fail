@@ -65,7 +65,7 @@ test "what takes a finger found passing over what holds nothing that takes one i
   let t = Tree::new(
     fn(root) {
       root.box(fn(list) {
-        list.each(fn() { keys.get() }, fn(k) { k }, fn(row, k) {
+        list.each(at_once=true, fn() { keys.get() }, fn(k) { k }, fn(row, k) {
           let key = @signals.untracked(fn() { k.get() })
           row.height(Is(Some(40.0))) |> ignore
           // (a row held where its key is even, a button pressed in it where it is a multiple of three, words alone
@@ -84,7 +84,7 @@ test "what takes a finger found passing over what holds nothing that takes one i
         })
       })
       |> ignore
-      root.show(fn() { sheet.get() }, fn(s) {
+      root.show(at_once=true, fn() { sheet.get() }, fn(s) {
         s
         .box(fn(p) {
           p.width(Is(Some(390.0))).height(Is(Some(200.0))) |> ignore

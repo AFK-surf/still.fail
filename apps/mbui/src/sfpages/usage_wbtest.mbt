@@ -54,6 +54,8 @@ test "usage: the chosen series keeps its colour and shows its own peak on the wh
   usage_pick.only.set(("models", "b"))
   t.draw()
   assert_eq(t.rect_of("10/18"), Some(date))
+  // (the whole period's peak closing its room as the series' own comes, gone once it has)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("$20") is Some(_))
   assert_true(t.find("$82") is None)
   assert_true(t.drawn_rects().iter().any(fn(r) { r.2 == 24.0 && r.4 == @sf.usage_series(1) }))

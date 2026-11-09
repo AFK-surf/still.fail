@@ -179,6 +179,18 @@ pub(all) struct Style {
   // at its width, what it holds laid out whole in it (past it where the share is less than 1): a room opening on what
   // it holds, its height and what it holds the same layout's, whatever what it holds comes to as it opens.
   mut content_share : Double
+  // Not CSS's: an item coming or going in a column (the view's View::show, pick, each: what comes makes its way in,
+  // what goes closes its way, framework's own, the user 2026-11-09): from `come_from` tall (points) to `come_to` (0 or
+  // 1) of what it comes to, set out at `come_at` on a Move's way as long as how far that is the first time it is laid
+  // out so (move_ms), ending at `come_ends` (NaN till then, kept from then), drawn at `come_now` (NaN: none); as tall as
+  // its way has got, what it holds laid out whole from its top in that, the gap before it in its column its share of
+  // it. `come_k`: the share of what it comes to its last layout was (1 none), read by the column for that gap.
+  mut come_from : Double
+  mut come_to : Double
+  mut come_at : Double
+  mut come_now : Double
+  mut come_ends : Double
+  mut come_k : Double
   // Not CSS's: a column whose items are a page's list's rows set on a host's pixels (this many a point; 0: anywhere): each
   // as tall as whole pixels, rounded up, what is under it lower by as much, the column as much taller (an old view's
   // list's rows', ui's Ctx::row_slot).
@@ -264,6 +276,12 @@ pub fn Style::new() -> Style {
     min_held: false,
     wrap_least: false,
     content_share: 0.0 / 0.0,
+    come_from: 0.0 / 0.0,
+    come_to: 0.0 / 0.0,
+    come_at: 0.0 / 0.0,
+    come_now: 0.0 / 0.0,
+    come_ends: 0.0 / 0.0,
+    come_k: 1.0,
     rows_grid: 0.0,
     ver: 0,
     basis_v: 0.0,

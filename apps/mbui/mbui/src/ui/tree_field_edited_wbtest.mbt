@@ -70,7 +70,7 @@ test "a tree field's edited: let go with its node, nothing told after" {
   set_view_app(fn(root) {
     root.box(fn(h) {
       h.width(Is(Some(200.0))) |> ignore
-      h.show(fn() { shown.get() }, fn(s) {
+      h.show(at_once=true, fn() { shown.get() }, fn(s) {
         field(s, f, font_size=10.0, max_lines=1, edited=fn(w) { told.push(w) }) |> ignore
       })
     })

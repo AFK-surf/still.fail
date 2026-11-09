@@ -27,6 +27,12 @@ yet and you can add one, add it.
   (`on_action`), its keys the tree's keymap's (`View::keymap`: `src/view/keymap.mbt`), never a key read as a build
   runs (detlint `key-read`); time is read where it is drawn (`moved_by`, a look's closure), never as a frame is built.
   `src/view/view.mbt`'s head says the model whole.
+- What a structure makes or lets go down a column makes its way in or closes it on a Move, what is under it going with
+  it (`View::comes`, flex's `come_*`): the framework's, not each page's (the user, 2026-11-09: 方案 A). A show in its
+  opposite's place, or a pick, is one in the other's place, its way from as tall as that one was. Say `at_once=true`
+  only where one is in another's place the column does not see (an old view's drawn there, one sidebar for another);
+  `leave` keeps a structure's coming and going its own; a page's list's rows are the list's; what holds a scroller (a
+  page, a pane) comes and goes at once.
 - State that what is made reads is a signal: a mutable value read by a binding that is not one is never seen to
   change (detlint `built-by-hand`).
 - Layout goes one way (the user, 2026-11-05): what is laid out is never told back as a change to make things by. What

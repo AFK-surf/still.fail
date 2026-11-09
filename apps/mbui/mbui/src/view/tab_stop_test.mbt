@@ -90,11 +90,11 @@ test "tab_stop: its node let go of, one made after in its place, said to take th
   let ids : Map[String, @view.NodeId] = {}
   let t = @view.Tree::new(
     fn(root) {
-      root.show(fn() { one.get() }, fn(x) {
+      root.show(at_once=true, fn() { one.get() }, fn(x) {
         ids["one"] = x.id()
         x.focusable(Is(true), tab=false).tab_stop(By(fn() { c.get() })) |> ignore
       })
-      root.show(fn() { two.get() }, fn(y) {
+      root.show(at_once=true, fn() { two.get() }, fn(y) {
         ids["two"] = y.id()
         y.focusable(Is(true)) |> ignore
       })

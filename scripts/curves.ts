@@ -1,5 +1,6 @@
-// Writes the web's curves (web/ui/src/curves-data.ts) from the app's (apps/mbui/mbui/src/ui/motion.mbt: Out, Leave
-// and Move's spring), so a motion eases one way on both. `--check` fails when the file is not what those make.
+// Writes the web's curves (web/ui/src/curves-data.ts) from the app's (apps/mbui/mbui/src/ui/motion.mbt: Out and Leave;
+// Move's spring and length from apps/mbui/mbui/src/flex/move.mbt, under what lays things out), so a motion eases one way
+// on both. `--check` fails when the file is not what those make.
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -11,10 +12,11 @@ const bezier = (name: string) => {
   if (!m) throw new Error(`no ${name} curve in motion.mbt`);
   return m.slice(1, 5).map(Number);
 };
-const k = src.match(/\nlet move_k : Double = ([\d.]+)\n/);
-const most = src.match(/\n(?:pub )?let move_most_ms : Double = ([\d.]+)\n/);
-if (!most) throw new Error("no move_most_ms in motion.mbt");
-if (!k) throw new Error("no move_k in motion.mbt");
+const move = readFileSync(at("apps/mbui/mbui/src/flex/move.mbt"), "utf8");
+const k = move.match(/\n(?:pub )?let move_k : Double = ([\d.]+)\n/);
+const most = move.match(/\n(?:pub )?let move_most_ms : Double = ([\d.]+)\n/);
+if (!most) throw new Error("no move_most_ms in flex's move.mbt");
+if (!k) throw new Error("no move_k in flex's move.mbt");
 const text =
   "// Made by scripts/curves.ts from the app's apps/mbui/mbui/src/ui/motion.mbt: do not edit.\n\n" +
   `/** What comes (Out). */\nexport const EASE_OUT = [${bezier("Out").join(", ")}] as const;\n` +

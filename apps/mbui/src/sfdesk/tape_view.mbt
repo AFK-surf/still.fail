@@ -737,7 +737,7 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
   // view in one of them says takes back (a page's own stack) taking it before it, what is over them too; whose it is
   // said at the cause that changes it, each step taken at its moment (wide_back_step)
   let held : Ref[WideBack?] = Ref(None)
-  v.show(fn() { wide_takes_back(src) }, fn(b) {
+  v.show(at_once=true, fn() { wide_takes_back(src) }, fn(b) {
     b.follows_back(fn(step) { wide_back_step(src, held, step) }) |> ignore
     // (let go as a gesture goes on to it, as what it takes back by is (told nothing more): what it held of it let go
     // here, the tape back where it was in use)
@@ -844,10 +844,11 @@ pub fn tape_view(v : @view.View, src : Source, ready~ : (Page) -> Bool, most~ : 
     let tips = @sf.TipLayer::new(fn() { Some(v) })
     row.box(fn(edges) {
       edges.over(Is(true)) |> ignore
-      edges.show(fn() { wide.tape_at.get() == Side }, fn(e) {
+      // (the one in the other's place at once: what a finger takes at the tape's edge, nothing that is seen open)
+      edges.show(at_once=true, fn() { wide.tape_at.get() == Side }, fn(e) {
         tape_side_edge(e, edges, src, tips, edges_on.side)
       })
-      edges.show(fn() { wide.tape_at.get() == Panel && tape_shown_side() is Some(_) }, fn(e) {
+      edges.show(at_once=true, fn() { wide.tape_at.get() == Panel && tape_shown_side() is Some(_) }, fn(e) {
         tape_panel_edge(e, edges, tips, edges_on.panel)
       })
     })

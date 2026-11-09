@@ -7,7 +7,8 @@
 /// has it: cut to the block's room, its corners the block's (its line over it, dock_edge_node's); shown while what is in
 /// it is drawn.
 fn side_node(n : @view.View, src : Source, tips : @sf.TipLayer, at : () -> SideAt) -> Unit {
-  n.show(fn() { side_made(side_place()) }, fn(cut) {
+  // (in the place of an old view's sidebar drawn where it is (sidebar's): at once, as one sidebar for another)
+  n.show(at_once=true, fn() { side_made(side_place()) }, fn(cut) {
     cut
     // (not shown, as the device waits in the lock: laid out nowhere, the same nodes, what had the focus in it given
     // it back as it is shown again, as an old view's focus waits for its node)

@@ -76,7 +76,7 @@ test "the pointer within a node: told as it was placed, the pointer there before
           about=At(0.0, 0.0),
         )
         |> ignore
-        holder.show(fn() { there.get() }, fn(band) {
+        holder.show(at_once=true, fn() { there.get() }, fn(band) {
           band.width(Is(Some(200.0))).height(Is(Some(20.0))) |> ignore
           band.reacts(fn() { band.pointer_within() }, fn(w) { within.val = w })
         })
@@ -114,7 +114,7 @@ test "the pointer within a node, read by how it is drawn (its alpha) and by what
       root.lines_up(Is(Some(Start))) |> ignore
       root.box(fn(holder) {
         holder.width(Is(Some(200.0))).height(Is(Some(100.0))).offset(By(fn() { (0.0, down.get()) })) |> ignore
-        holder.show(fn() { there.get() }, fn(band) {
+        holder.show(at_once=true, fn() { there.get() }, fn(band) {
           id.val = Some(band.id())
           band
           .width(Is(Some(200.0)))
@@ -122,7 +122,7 @@ test "the pointer within a node, read by how it is drawn (its alpha) and by what
           .ground(Is(1L))
           .alpha(By(fn() { if band.pointer_within() { 1.0 } else { 0.5 } }))
           |> ignore
-          band.show(fn() { band.pointer_within() }, fn(m) {
+          band.show(at_once=true, fn() { band.pointer_within() }, fn(m) {
             mark.val = Some(m.id())
             m.width(Is(Some(10.0))).height(Is(Some(10.0))).ground(Is(2L)) |> ignore
           })

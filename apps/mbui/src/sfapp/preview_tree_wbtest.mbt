@@ -2477,7 +2477,9 @@ test "viewer on the tree, a wide window, marking: a box drawn, what to say of it
   assert_true(t.find(card) is Some(_), msg="redone, no input: its card back in the frame after")
   @sfbase.marks_undo()
   t.frame_at(t.time() + t.frame_period())
-  assert_true(t.find(card) is None, msg="undone, no input: its card gone in the frame after")
+  // (its room closing on its way from the frame after, gone once it has)
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.find(card) is None, msg="undone, no input: its card gone once its room has closed")
 }
 
 ///|

@@ -48,7 +48,7 @@ fn tools_tester(
     tips_made.val = Some(tips)
     root.box(fn(b) {
       b.width(Is(Some(100.0))).height(Is(Some(100.0))).presses(By(fn() { held.get() })) |> ignore
-      b.show(fn() { there.get() }, fn(b) {
+      b.show(at_once=true, fn() { there.get() }, fn(b) {
       tool_node(
         b,
         fn() {

@@ -96,7 +96,7 @@ fn edge_case(list? : Bool = false) -> EdgeCase {
   let shown = @signals.signal(true, same=fn(a, b) { a == b })
   let tree = @view.Tree::new(
     fn(root) {
-      root.show(fn() { shown.get() }, fn(o) {
+      root.show(at_once=true, fn() { shown.get() }, fn(o) {
         o
         .height(Is(Some(100.0)))
         .scrolls(s, fn(h) { h.box(fn(b) { b.height(By(fn() { Some(tall.get()) })) |> ignore }) |> ignore })
@@ -196,11 +196,11 @@ test "what scrolls round it asked of a node let go of: nothing, whatever is made
         o
         .height(Is(Some(100.0)))
         .scrolls(s, fn(h) {
-          h.show(fn() { first.get() }, fn(c) {
+          h.show(at_once=true, fn() { first.get() }, fn(c) {
             gone.val = Some(c)
             c.height(Is(Some(400.0))) |> ignore
           })
-          h.show(fn() { !first.get() }, fn(c) { c.height(Is(Some(400.0))) |> ignore })
+          h.show(at_once=true, fn() { !first.get() }, fn(c) { c.height(Is(Some(400.0))) |> ignore })
         })
         |> ignore
       })
