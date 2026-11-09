@@ -375,13 +375,16 @@ export function scopeOfJobNames(s: Store, keys: string[]): Scope {
   const rows = new Set(keys), agents = new Set(keys), origins = new Set<string>(), hasChat = new Set<string>();
   const jobNameMembers = new Map<number, store.Membership[]>();
   const target = new Map(keys.map((key) => [key, store.getSession(s, key)]));
+  const owner = keys.length === 1 ? keys[0] : null;
   const chats = store.threadsOfSessionsOnSurface(s, keys, true);
   const checked = new Map<string, boolean>();
   let probe: ((session: string) => boolean) | null = null;
   for (const id of chats) {
     const thread = store.getThread(s, id);
     if (thread === null) continue;
-    const members = store.threadSessions(s, id);
+    const own = owner !== null && thread.home === owner && thread.hiddenAt === null && given(thread) !== null &&
+      target.get(owner)?.archivedAt === null;
+    const members = (own ? store.jobNameFirstMembers(s, owner, id) : null) ?? store.threadSessions(s, id);
     jobNameMembers.set(id, members);
     for (const member of members) {
       rows.add(member.session);

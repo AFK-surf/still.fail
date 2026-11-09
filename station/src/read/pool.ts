@@ -28,6 +28,7 @@ import { WidgetSourcesBuilder } from "./widget-sources-builder.ts";
 import { CcIndexBuilder } from "./cc-index-builder.ts";
 import { CardPostsBuilder, ClosedCardsBuilder, PeopleSinceBuilder } from "./card-posts-builder.ts";
 import { CC_SESSIONS_PENDING } from "../store/cc-thread-index.ts";
+import { JOB_NAME_FIRST_PENDING } from "../store/job-name-first.ts";
 import { CARD_POSTS_PENDING } from "../store/card-post-index.ts";
 import { CLOSED_CARDS_PENDING } from "../store/legacy-closed-cards.ts";
 import { PEOPLE_TIME_PENDING } from "../store/legacy-people-since.ts";
@@ -142,6 +143,7 @@ export class Readers {
   private archiveMarks: ArchiveMarkBuilder | null = null;
   private sessionUpJobs: SessionUpJobsBuilder | null = null;
   private workspaceUpJobs: WorkspaceUpJobsBuilder | null = null;
+  private jobNameFirst: RequestedBuilder<string> | null = null;
   private preparingWorkspaceUpJobs = false;
   /// Reads of the same old session share one unattended preparation, including during handover.
   private preparingUpJobs = new Set<string>();
@@ -373,6 +375,15 @@ export class Readers {
     return this.covered(this.workspaceUpJobs.ready(["all"], signal), signal);
   }
 
+  /// Prepare a requested own chat's first member after handover, sharing and cancelling its bounded batches.
+  prepareJobNameFirst(owner: string, thread: number, signal?: AbortSignal): Promise<void> {
+    if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
+    const file = new URL(import.meta.url.endsWith(".ts") ? "./session-up-jobs-worker.ts" : "./read/session-up-jobs-worker.js", import.meta.url);
+    this.jobNameFirst ??= new RequestedBuilder(join(this.data, "stillfail.db"), this.backfill, file, "scope", "job name first member",
+      (key, cancel) => { const [session, first] = JSON.parse(key) as [string, number]; return { session, first, ...(cancel ? { cancel: true } : {}) }; });
+    return this.covered(this.jobNameFirst.ready([JSON.stringify([owner, thread])], signal), signal);
+  }
+
   /// Prepare only old threads whose widget sources a delivery needs.
   prepareWidgetSources(threads: readonly number[], signal?: AbortSignal): Promise<void> {
     if (this.closed) return Promise.reject(new HttpError(502, "station stopping"));
@@ -458,6 +469,13 @@ export class Readers {
           try { sessions = JSON.parse(error.message.slice(CC_SESSIONS_PENDING.length)); } catch { throw error; }
           if (!Array.isArray(sessions) || sessions.length === 0 || !sessions.every((key) => typeof key === "string")) throw error;
           await this.prepareCcSessions(sessions, signal);
+          continue;
+        }
+        if (error.message.startsWith(JOB_NAME_FIRST_PENDING)) {
+          let key: unknown;
+          try { key = JSON.parse(error.message.slice(JOB_NAME_FIRST_PENDING.length)); } catch { throw error; }
+          if (!Array.isArray(key) || key.length !== 2 || typeof key[0] !== "string" || !Number.isSafeInteger(key[1])) throw error;
+          await this.prepareJobNameFirst(key[0], key[1], signal);
           continue;
         }
         if (error.message.startsWith(CARD_POSTS_PENDING)) {
@@ -729,6 +747,7 @@ export class Readers {
     if (this.archiveMarks !== null) void this.archiveMarks.close();
     if (this.sessionUpJobs !== null) void this.sessionUpJobs.close();
     if (this.workspaceUpJobs !== null) void this.workspaceUpJobs.close();
+    if (this.jobNameFirst !== null) void this.jobNameFirst.close();
     if (this.widgetSources !== null) void this.widgetSources.close();
     if (this.cardPosts !== null) void this.cardPosts.close();
     if (this.closedCards !== null) void this.closedCards.close();
