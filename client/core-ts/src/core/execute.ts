@@ -35,6 +35,9 @@ export const hooks: {
   /// (views/lock.ts).
   lockRefused?: (inner: Inner, workspace: string, station: string, theirs: unknown, told?: { person?: unknown; entries?: unknown }) => CoreError | null;
   lockWaiting?: (inner: Inner, workspace: string, station: string) => CoreError | null;
+  /// A member or a station about to be taken out of a workspace: out of its lock first, by this device's signature
+  /// where it signs there (views/lock.ts).
+  removing?: (inner: Inner, sub: string, workspace: string, what: { member: string } | { station: string }) => Effect.Effect<unknown, CoreError>;
   /// A new device's connection, met face to face (views/pair.ts).
   lockPair?: (inner: Inner, connection: import("../iroh.ts").IrohConnection) => void;
 } = {};
@@ -99,6 +102,13 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
           const sub = call.op.target.cloud;
           return Effect.gen(function* () {
             const made = op.method === "POST" && op.path === "/v1/workspaces";
+            // Taken out of a locked workspace: out of its lock too, or the cloud alone would be keeping them out (it could
+            // hold back their credential's end, or let them back in, and the lock would still take them).
+            const removed = op.method === "DELETE" ? /^\/v1\/workspaces\/([^/]+)\/(members|stations)\/([^/]+)$/.exec(op.path) : null;
+            if (removed && hooks.removing) {
+              const [, ws, kind, id] = removed.map((x) => decodeURIComponent(x));
+              yield* hooks.removing(inner, sub, ws!, kind === "members" ? { member: id! } : { station: id! });
+            }
             let result = yield* inner.provider.request(sub, op.method, op.path, op.body, ctx);
             // A locked workspace's station joins with the lock's hash, to pin it (views/lock.ts).
             const enrolling = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/enrollments$/.exec(op.path) : null;

@@ -328,6 +328,7 @@ const daysLeft = (secs: number) => Math.max(0, Math.ceil(secs / 86400));
 
 export function install(inner: Inner): void {
   hooks.enrolled = enrolled;
+  hooks.removing = removing;
   hooks.lockRefused = refused;
   hooks.lockWaiting = waiting;
   inner.cloudSync.carry = (ws) => carried(inner, ws);
@@ -1340,6 +1341,32 @@ export function enrolled(inner: Inner, sub: string, ws: string, made: unknown): 
     if (typeof out.installWindows === "string") out.installWindows = `${out.installWindows} ${head.hash}`;
     if (typeof out.command === "string") out.command = `${out.command} --lock ${head.hash}`;
     return out;
+  });
+}
+
+/// A member or a station taken out of a locked workspace by this account: out of its lock first, by this device, where it
+/// signs there for an owner or an admin (`member.remove` takes their devices with them). The cloud alone keeping them
+/// out is not the lock's: it could hold back the end of a member's credential, or let a station back in, and the stations
+/// would take them as the lock still says. Where this device signs nothing there (a web page, one not let in), the cloud's
+/// word is all there is, as before; once the lock says it, a failure here is the call's, and the cloud is not asked.
+export function removing(inner: Inner, sub: string, ws: string, what: { member: string } | { station: string }): Effect.Effect<unknown, CoreError> {
+  return Effect.gen(function* () {
+    if (inner.provider.kind !== "stillfail" || inner.workspaces.owner(ws) !== sub) return null;
+    yield* Effect.ignore(read(inner, ws), { log: "Unhandled", message: "lock read before a removal" });
+    const h = held(inner, ws);
+    const key = signerOf(inner);
+    if (!h?.head || key === null || !inner.host.appKeys) return null;
+    const f = fold(h.entries);
+    if (f.disabled || ("member" in what ? !f.members.has(what.member) : !f.stations.has(what.station))) return null;
+    let by: ReturnType<typeof signerIn> = null;
+    try {
+      by = signerIn(checkLock(h.entries, now(inner)), key, now(inner));
+    } catch {
+      return null;
+    }
+    if (by === null || by.sub !== sub || !by.own || (by.role !== "owner" && by.role !== "admin")) return null;
+    const lock = new Lock(inner, ws, sub, null);
+    return yield* ("member" in what ? lock.append("member.remove", { sub: what.member }) : lock.append("station.remove", { key: what.station }));
   });
 }
 
