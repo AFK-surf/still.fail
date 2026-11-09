@@ -129,6 +129,7 @@ export const NOTES: [number, string][] = [
   [122, "phone_send {path} puts a file on the phone granted to your chat (it fetches it as it downloads a chat's file), much faster and surer than adb push over its link, and answers its path there (pm cannot read that folder: install an APK from a copy in /data/local/tmp). Use it instead of adb push for anything but small files."],
   [123, "Skill stillfail-chats corrected: Slack shows login cards (a login on this station that takes a pasted code or a device code, with its link); only Feishu has none, where the login's link goes alone."],
   [124, "A repository's AGENTS.md files (its root's and each directory's down to where you change code) are its rules: read them before changing code there and keep them true in what you change."],
+  [125, "chat_post no longer posts over messages you have not read: when some came in its thread first, it holds the post back and answers its id, and they come to you next. If it still stands, send it unchanged with chat_post {to, send: <id>} plus the state the turn ends with, without writing it again; otherwise post what fits now."],
 ];
 
 /// The last note that replaces every one before it (the instructions rewritten whole): a session behind it hears only

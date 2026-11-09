@@ -998,7 +998,58 @@ test("messages that arrive while a turn cannot take them go in the next turn", a
   await r.close();
 });
 
-test("a message said before the agent's post, unread when it posted, is said to come before that post", async () => {
+test("a post over a message the agent has not read is held back, then sent as written by its id", async () => {
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const to = `C1/${m.threadTs}`;
+  const session = r.claude.last();
+  session.unsteerable = true;
+  await r.accept(reply(m, "9999.3", "wait, not that"));
+  await settle();
+  const said = () => r.said(r.thread("C1", m.threadTs).id).filter((x) => x.text === "Done.");
+  const held = await r.call(key, "chat_post", { to, text: "Done.", kind: "all_done", done: "构建修好了，CI 已通过" });
+  assert.match(held, /^Not posted: a message you had not read came in .*\(ts 9999\.3\).*Held as (held-\d+)/, held);
+  const id = held.match(/Held as (held-\d+)/)![1]!;
+  assert.equal(said().length, 0, "nothing went up");
+  assert.equal(r.store.listTurns(key).at(-1)?.summary.declared ?? null, null, "no state was recorded");
+  await assert.rejects(r.call(key, "chat_post", { to, send: id, text: "Other." }), /send takes only/);
+  session.complete();
+  await settle();
+  assert.ok(session.prompts[1]!.includes("wait, not that"), "the message comes in the next round");
+  const sent = await r.call(key, "chat_post", { to, send: id, kind: "all_done", done: "构建修好了，CI 已通过" });
+  assert.match(sent, /^Posted to .*recorded state all_done\./, sent);
+  assert.ok(!sent.includes("had not read"), sent);
+  assert.equal(said().length, 1, "posted once, as held");
+  await assert.rejects(r.call(key, "chat_post", { to, send: id }), /no held post/);
+  await r.close();
+});
+
+test("a held post's files and title go with it when it is sent", async () => {
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const to = `C1/${m.threadTs}`;
+  const file = join(r.dir, "report.txt");
+  writeFileSync(file, "all green");
+  await r.accept(reply(m, "9999.5", "and the logs"));
+  await settle();
+  const held = await r.call(key, "chat_post", { to, text: "Report attached.", files: [file], title: "构建报告" });
+  assert.ok(held.startsWith("Not posted"), held);
+  assert.deepEqual(r.chat.texts(), []);
+  r.claude.last().reads();
+  const sent = await r.call(key, "chat_post", { to, send: held.match(/Held as (held-\d+)/)![1]! });
+  assert.ok(sent.startsWith("Posted"), sent);
+  assert.deepEqual([r.chat.texts(), r.chat.files.at(-1)], [["Report attached."], ["report.txt"]]);
+  assert.equal(r.thread("C1", m.threadTs).autoTitle, "构建报告");
+  await r.close();
+});
+
+test("a message that comes while the post goes up is said to come before that post", async () => {
   const r = new Rig();
   const m = message();
   await r.accept(m);
@@ -1006,10 +1057,9 @@ test("a message said before the agent's post, unread when it posted, is said to 
   const key = sessionKey("cl", "C1", m.threadTs);
   const session = r.claude.last();
   session.unsteerable = true;
-  await r.accept(reply(m, "9999.3", "wait, not that"));
-  await settle();
+  r.chat.whilePosting = () => r.accept(reply(m, "9999.3", "wait, not that"));
   const result = await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "Done." });
-  assert.ok(result.includes("you had not read yet came in this thread (ts 9999.3)"), result);
+  assert.ok(result.startsWith("Posted") && result.includes("you had not read yet came in this thread (ts 9999.3)"), result);
   const post = r.said(r.thread("C1", m.threadTs).id).find((x) => x.text === "Done.")!;
   session.complete();
   await settle();
@@ -1017,21 +1067,26 @@ test("a message said before the agent's post, unread when it posted, is said to 
   await r.close();
 });
 
-test("a message steered into the turn is unread by the post its model was already writing, not by one after it asked again", async () => {
+test("a message steered into the turn holds the post its model was already writing, not one after it asked again", async () => {
   const r = new Rig();
   const m = message();
   await r.accept(m);
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
+  const to = `C1/${m.threadTs}`;
   const session = r.claude.last();
   await r.accept(reply(m, "9999.4", "also the docs"));
   await settle();
   assert.ok(session.steers[0]!.includes("also the docs"));
-  const result = await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "Fixed the build." });
-  assert.ok(result.includes("(ts 9999.4)"), result);
+  const result = await r.call(key, "chat_post", { to, text: "Fixed the build." });
+  assert.ok(result.startsWith("Not posted") && result.includes("(ts 9999.4)"), result);
+  const id = result.match(/Held as (held-\d+)/)![1]!;
   session.events({ type: "live", event: { kind: "phase", phase: "requesting" } });
-  const later = await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "Docs too." });
-  assert.ok(!later.includes("had not read"), later);
+  const sent = await r.call(key, "chat_post", { to, send: id });
+  assert.ok(sent.startsWith("Posted") && !sent.includes("had not read"), sent);
+  assert.equal(r.said(r.thread("C1", m.threadTs).id).filter((x) => x.text === "Fixed the build.").length, 1);
+  const later = await r.call(key, "chat_post", { to, text: "Docs too." });
+  assert.ok(later.startsWith("Posted") && !later.includes("had not read"), later);
   await r.close();
 });
 
@@ -1090,6 +1145,7 @@ test("two connects in one thread keep separate sessions, share its messages and 
   await settle();
   assert.ok(r.claude.last().steers[0]!.includes("both of you"));
   assert.ok(r.codex.last().steers[0]!.includes("both of you"));
+  r.codex.last().reads();
   await r.call(sessionKey("gpt", "C1", root.threadTs), "chat_post", { to: `C1/${root.threadTs}`, text: "from gpt" });
   assert.deepEqual(r.gptChat.texts(), ["from gpt"]);
   assert.deepEqual(r.chat.texts(), []);
@@ -1687,6 +1743,7 @@ test("a single-session connect gathers every thread into one session and replies
   await r.accept(reply(a, "9999.8", "and tests too"), "team");
   await settle();
   assert.ok(session.steers.at(-1)!.includes("and tests too"));
+  session.reads();
   await r.call(bound, "chat_post", { to: `C2/${b.threadTs}`, text: "B done" });
   assert.deepEqual(r.teamChat.posts, [[{ channel: "C2", threadTs: b.threadTs }, "B done"]]);
   await r.close();
@@ -1730,6 +1787,7 @@ test("a single-session connect can be pointed at a new or an existing session", 
       ["C1", "cl"],
     ],
   );
+  r.claude.last().reads();
   await r.call(clKey, "chat_post", { to: `C7/${t.threadTs}`, text: "to team thread" });
   await r.call(clKey, "chat_post", { to: `C1/${m.threadTs}`, text: "to cl thread" });
   assert.deepEqual(r.teamChat.texts(), ["to team thread"]);

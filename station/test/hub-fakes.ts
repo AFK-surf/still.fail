@@ -64,8 +64,13 @@ export class FakeChat implements ChatSurface {
   workspace() {
     return "T1";
   }
+  /// What happens while a post goes up (a message that comes meanwhile), once.
+  whilePosting: (() => Promise<void>) | null = null;
   async post(thread: ThreadRef, message: string, files: Attachment[], card?: Json | null) {
     if (files.length > 0 && this.noFiles) throw new Error("slack files.getUploadURLExternal: missing_scope");
+    const meanwhile = this.whilePosting;
+    this.whilePosting = null;
+    await meanwhile?.();
     this.files.push(files.map((f) => f.name));
     this.carried.push(card ?? null);
     this.posts.push([thread, message]);
@@ -141,6 +146,10 @@ export class FakeSession implements AgentSession {
     this.events({ type: "live", event: { kind: "start", id, step: "text" } });
     this.events({ type: "live", event: { kind: "delta", id, field: "text", text } });
     this.events({ type: "live", event: { kind: "end", id } });
+  }
+  /// The test has it ask its model again: what was steered into the turn is read.
+  reads() {
+    this.events({ type: "live", event: { kind: "phase", phase: "requesting" } });
   }
   mcpUrl() {
     return this.toolsUrl;

@@ -38,7 +38,7 @@ import type { RecentChatList } from "../store/chat-list.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
 import { Places } from "../ops/places.ts";
-import { threadCommand } from "./args.ts";
+import { threadCommand, type Args } from "./args.ts";
 import type { CardPage } from "../logins/index.ts";
 import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ModelChoice, Person, ThreadRef } from "./chat.ts";
 import { toolStatus } from "./chat.ts";
@@ -228,6 +228,10 @@ export class Hub {
   /// Conversations a chat was relayed to whose agent has not posted there yet, by thread: the session and the station's
   /// first message there, which that post goes into (relay.ts). Kept in memory: after a restart it is a reply.
   readonly openings = new Map<number, { session: string; ts: string; claimed?: boolean }>();
+  /// Posts chat_post held back because messages the agent had not read came in their thread first (conversations.ts),
+  /// by session and then by id, until it sends them with send or the station restarts.
+  readonly heldPosts = new Map<string, Map<string, Args>>();
+  heldCount = 0;
   /// One incoming message or edit at a time per thread: Slack also sends a mention twice (app_mention and message).
   readonly gates = new Map<string, { tail: Promise<{ error: unknown } | null>; waiting: number }>();
   private readonly incoming = new AbortController();

@@ -160,6 +160,7 @@ test("a Comma Task is a thread its agent works in: invited, its Messages heard f
     assert.equal(surface.knownPerson("u_ada")?.name, "Ada");
 
     // What the agent says, and a card, go into the Task; the card as Comma's question.
+    rig.claude.last().reads();
     const answer = await rig.call(key, "chat_post", { to: `TASK/${ts}`, text: "用哪个分支？", card: { type: "options", options: [{ label: "main" }, { label: "dev", recommended: true }] }, kind: "need_human", need: "选分支" });
     assert.ok(answer.startsWith(`Posted to TASK/${ts}`), answer);
     const post = fake.posts().at(-1);
