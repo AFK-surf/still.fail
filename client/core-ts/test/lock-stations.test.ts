@@ -164,4 +164,11 @@ test("a station gone silent is not waited on: the locks are read of the one that
   const t3 = r.host.nowMs();
   assert.equal(await run(own.bring("s1", [])), 1);
   assert.ok(r.host.nowMs() - t3 <= 100, `own lock taken in ${r.host.nowMs() - t3} ms`);
+  // Refused by the one that answers (this device not let in yet): that is its answer, the silent one not waited on
+  // until TAKEN_MS (a new device joining with one station asleep waited twice that before it could ask to be let in).
+  st.say.refuse = true;
+  const t4 = r.host.nowMs();
+  await run(own.read("s1"));
+  await run(read(inner, "ws"));
+  assert.ok(r.host.nowMs() - t4 <= 2 * OTHERS_MS + 200, `refused in ${r.host.nowMs() - t4} ms`);
 });
