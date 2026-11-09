@@ -133,7 +133,37 @@ const film = {
   // (a bench's measured frame begun or ended: counted only by a profiling host, mbui's wasm_shell.c)
   mark() {},
 };
-const imports = { probe, film, wasi_snapshot_preview1: { fd_write(fd, iovs, count, written) {
+// The core's env as moonrun gives it ("__moonbit_fs_unstable" & co., mbui's scripts/wasmrun.mjs): mbui's ui reads its
+// Tester's frame rate there (MBUI_TEST_FPS, tester_time.mbt), so every program of it asks for them. A film's program has
+// no arguments or environment of its own: none here (its words come through film.arg). Without them the film did not
+// start, main e9649951, 42623942152.
+const END = 'ffi_end_of_/string_array';
+const handles = new Map();
+let handled = 0;
+const handle = v => {
+  handles.set(++handled, v);
+  return handled;
+};
+const fsUnstable = {
+  begin_create_string: () => handle({ s: '' }),
+  string_append_char: (h, c) => { handles.get(h).s += String.fromCharCode(c); },
+  finish_create_string: h => { const { s } = handles.get(h); handles.delete(h); return s; },
+  begin_read_string: s => handle({ s: Array.from(s), i: 0 }),
+  string_read_char: h => { const r = handles.get(h); return r.i < r.s.length ? r.s[r.i++].codePointAt(0) : -1; },
+  finish_read_string: h => { handles.delete(h); },
+  begin_read_string_array: a => handle({ a, i: 0 }),
+  string_array_read_string: h => { const r = handles.get(h); return r.i < r.a.length ? r.a[r.i++] : END; },
+  finish_read_string_array: h => { handles.delete(h); },
+  args_get: () => [],
+  current_dir: () => '',
+  get_env_var: () => '',
+  get_env_var_exists: () => 0,
+  get_env_vars: () => [],
+  set_env_var() {},
+  unset_env_var() {},
+};
+const imports = { probe, film, __moonbit_fs_unstable: fsUnstable, __moonbit_sys_unstable: { exit(code) { throw new Exit(code); } },
+  __moonbit_time_unstable: { now: () => BigInt(Date.now()) }, wasi_snapshot_preview1: { fd_write(fd, iovs, count, written) {
   const memory = new DataView(core.memory.buffer); let total = 0;
   for (let i = 0; i < count; i++) {
     const ptr = memory.getUint32(iovs + i * 8, true), len = memory.getUint32(iovs + i * 8 + 4, true);
