@@ -1345,8 +1345,10 @@ fn old_pointer_now(kind : Int, x : Double, y : Double, button : Int, mods : Int,
         quiet = true
       } else if sideways.contains(c.drag_scroll) &&
         !sideways_move(c, c.drag_scroll, x, y) {
-        // dragged sideways (or not yet past the slop); moved up or down first, the list takes it below
-        ()
+        // dragged sideways (or not yet past the slop); moved up or down first, the list takes it below. Dragged across,
+        // where it is is what its paint reads (Ctx::sideways_drawn): the frame painted again, nothing built for it, as
+        // a list following the finger is (one up and down is placed as it is built: Ctx::capped)
+        quiet = c.dragging && sideways_across(c.drag_scroll)
       } else if drags.contains(c.drag_scroll) {
         if drag_move(c.drag_scroll, x, y) && !c.dragging {
           c.dragging = true

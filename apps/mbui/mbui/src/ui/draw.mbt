@@ -153,6 +153,8 @@ priv struct Drawn {
   /// (start, top, end, foot: Ctx::fade_to)
   mut fade_of : Int
   mut fades : (Double, Double, Double, Double)
+  /// those worked out as it is painted (Ctx::fade_to_by), in place of `fades`
+  mut fades_by : (() -> (Double, Double, Double, Double))?
   /// how far before where it is cut it fades out to the cut (0: cut hard)
   mut cut_soft : Double
   /// its own ground (its colour, glass, shadow, border and corners) drawn in this box (x, y, w, h, its corners: top
@@ -419,6 +421,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     left: -1.0,
     fade_of: -1,
     fades: (0.0, 0.0, 0.0, 0.0),
+    fades_by: None,
     cut_soft: 0.0,
     ground: None,
     ground_bg: None,
@@ -766,6 +769,16 @@ pub fn Ctx::fade_to(
     e.fade_of = -1
     e.fades = (0.0, 0.0, 0.0, 0.0)
   }
+  e.fades_by = None
+}
+
+///|
+/// Node `i` faded out towards the edges of node `of` as Ctx::fade_to has it, how far before each (start, top, end,
+/// foot) worked out by `f` as it is painted: what moves with nothing built (a box scrolled sideways, Ctx::sideways).
+fn Ctx::fade_to_by(self : Ctx, i : Int, of : Int, f : () -> (Double, Double, Double, Double)) -> Unit {
+  let e = self.drawn_of(i)
+  e.fade_of = of
+  e.fades_by = Some(f)
 }
 
 ///|
@@ -1190,7 +1203,10 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     self.flat_from(i0)
     let a = self.inst
     let o = self.nodes[e.fade_of]
-    let (start, top, end, foot) = e.fades
+    let (start, top, end, foot) = match e.fades_by {
+      Some(f) => f()
+      None => e.fades
+    }
     for k in i0..<self.ninst {
       let b = k * inst_size
       inst_fade(a, b, o.y, top, o.y + o.fh, foot)

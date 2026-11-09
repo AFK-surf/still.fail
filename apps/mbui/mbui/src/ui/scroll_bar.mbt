@@ -461,6 +461,8 @@ fn Ctx::bar_where(self : Ctx, n : Node) -> BarAt? {
           self.across_seen.push((n.id, n.x, n.fw))
           None
         } else {
+          // (where it is as it is painted: Ctx::sideways_drawn, followed)
+          st.said.get() |> ignore
           // (along the view it is for: `bar_in` in from either side, what it holds as wide less that)
           let b = dclamp(st.bar_in, 0.0, dmax(0.0, n.fw / 2.0 - scroll_bar_least))
           let shows = (dmax(x0, n.x + b), y0, dmin(x1, n.x + n.fw - b), y1)
@@ -538,6 +540,7 @@ fn Ctx::across_found(self : Ctx, n : Node, from : Int) -> Array[BarAt] {
     done.push(id)
     match sideways.get(id) {
       Some(st) => {
+        st.said.get() |> ignore
         let shows = (dmax(x, cx0), dmax(n.y, cy0), dmin(x + w, cx1), dmin(n.y + n.fh, cy1))
         match foot_bar(id, x, w, w + st.max, st.x, shows, r_bl, r_br) {
           Some(b) => found.push(b)
