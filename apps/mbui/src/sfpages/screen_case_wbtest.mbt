@@ -111,7 +111,7 @@ test "a device's case: round the picture once its pictures have come, its button
   assert_true(shown.w > 0.0)
   assert_true(r.ui().case_x > 0.0)
   assert_true(shown.x >= shown.w * r.ui().case_x - 0.5)
-  assert_true(shown.x + shown.w <= r.ui().box_w)
+  assert_true(shown.x + shown.w <= r.ui().box_w.get())
   // what the case has is not offered again; what it has not is
   assert_true(r.labelled(tr("web-pages.screen.device.home")) is Some(_))
   assert_true(r.labelled(tr("web-pages.screen.device.lock")) is Some(_))

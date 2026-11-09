@@ -28,7 +28,7 @@ fn ScreenUi::fit(self : ScreenUi) -> SRect {
   match self.fit_for {
     Some((w, h)) =>
       cased_in(
-        fit_in(self.box_w, self.box_h, w.to_double() * (1.0 + 2.0 * self.case_x), h.to_double() * (1.0 + 2.0 * self.case_y)),
+        fit_in(self.box_w.get(), self.box_h.get(), w.to_double() * (1.0 + 2.0 * self.case_x), h.to_double() * (1.0 + 2.0 * self.case_y)),
         self.case_x,
         self.case_y,
       )
@@ -142,20 +142,20 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
   }
   let stage = c.id("screen-stage/" + key)
   match c.laid_size(stage) {
-    Some((bw, bh)) if bw != u.box_w || bh != u.box_h => {
-      if u.box_w > 0.0 && u.box_h > 0.0 && size == u.fit_for && size is Some(_) {
+    Some((bw, bh)) if bw != u.box_w.get() || bh != u.box_h.get() => {
+      if u.box_w.get() > 0.0 && u.box_h.get() > 0.0 && size == u.fit_for && size is Some(_) {
         // Turned, or a fitted view given a new width by the system column: fit again.
         // Height alone (the keyboard) keeps the picture and pointer as before.
         // (a device's page gives the stage's height to what comes as its state does, its poses: its picture fitted to what
         // is left, or it would be taken for zoomed in, its body gone)
-        if (u.box_w > u.box_h) != (bw > bh) || (u.zoom.fitted && (bw != u.box_w || s.simulator())) {
+        if (u.box_w.get() > u.box_h.get()) != (bw > bh) || (u.zoom.fitted && (bw != u.box_w.get() || s.simulator())) {
           u.zoom.fit_now()
         } else {
           u.zoom.resize_keeping(bw, bh, pointer_now(s, u), screen_keep_margin)
         }
       }
-      u.box_w = bw
-      u.box_h = bh
+      u.box_w.set(bw)
+      u.box_h.set(bh)
     }
     _ => ()
   }
@@ -175,7 +175,7 @@ fn screen_stage(c : @ui.Ctx, s : ScreenSess, u : ScreenUi, key : String) -> Unit
   }
   // (a device's page keeps some of it for what the device has itself: debug_room)
   let (room_w, room_h) = debug_room(u, size, cased)
-  u.zoom.boxed(dmax(0.0, u.box_w - room_w), dmax(0.0, u.box_h - room_h))
+  u.zoom.boxed(dmax(0.0, u.box_w.get() - room_w), dmax(0.0, u.box_h.get() - room_h))
   // where a double tap's glide has got to
   u.zoom.step()
   let fit = u.fit()
@@ -695,8 +695,8 @@ fn screen_gestures(
   }
   u.stage_x = ox
   u.stage_y = oy
-  let bw = u.box_w
-  let bh = u.box_h
+  let bw = u.box_w.get()
+  let bh = u.box_h.get()
   let frame_px = s.frame_size()
   // the double tap's wait closes after its time (what is shown does not wait for it)
   if g.tap_open && @kit.after(c, "screen-tap/\{g.taps}", true, screen_double_tap_ms, later=true) {
