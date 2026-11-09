@@ -19,7 +19,8 @@ pub(all) struct SelectState {
 
 ///|
 /// `key`'s select (see the file's head) of `options`, `value` chosen ("" none: `placeholder` shown), `w` wide, named
-/// `label` for the semantics tree. What is chosen now, and what happened.
+/// `label` for the semantics tree; `on_pick`: what choosing an option from its list does, given its value, as it is
+/// chosen, outside any build (letters typed on the trigger choose in the build). What is chosen now, and what happened.
 pub fn select(
   c : @ui.Ctx,
   key : String,
@@ -31,6 +32,7 @@ pub fn select(
   disabled? : Bool = false,
   look? : (@ui.Ctx, SelectState) -> Unit = select_look,
   item_look? : (@ui.Ctx, MenuItemState) -> Unit = menu_item_look,
+  on_pick? : (String) -> Unit,
 ) -> @ui.Changed[String] {
   install()
   let id = c.id(key)
@@ -101,6 +103,7 @@ pub fn select(
         w,
         fn(c, min_w, body) { menu_look(c, min_w, body) },
         item_look,
+        on_pick?,
       )
       chosen = out.chosen
     })

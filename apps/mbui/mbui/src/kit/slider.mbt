@@ -31,8 +31,11 @@ pub fn snap(v : Double, min : Double, max : Double, step : Double) -> Double {
 }
 
 ///|
-/// A slider (see the file's head) at `value` (its id `key`'s), named `label` for the semantics tree, `w` wide. What
-/// it became, and what happened.
+/// A slider (see the file's head) at `value` (its id `key`'s), named `label` for the semantics tree, `w` wide.
+/// `on_change`: what moving it does, given what it is then, at each step of the press on it (down, moved, let go) and
+/// each key that moves it, outside any build; `on_let_go`: what it does as it is let go there (the press let go or
+/// called off; a key's step is let go at once). Given either, the keys that move it are theirs, as they come (not the
+/// build's). What it became, and what happened.
 pub fn slider(
   c : @ui.Ctx,
   key : String,
@@ -44,11 +47,17 @@ pub fn slider(
   label? : String = "",
   disabled? : Bool = false,
   look? : (@ui.Ctx, SliderState) -> Unit = slider_look,
+  on_change? : (Double) -> Unit,
+  on_let_go? : (Double) -> Unit,
 ) -> @ui.Changed[Double] {
   let id = c.id(key)
   let r = c.interact(id, disabled~, keys=0, focus_on_press=true)
   let span = if max > min { max - min } else { 1.0 }
   let mut now = snap(value, min, max, step)
+  let told = !disabled && (on_change is Some(_) || on_let_go is Some(_))
+  if told {
+    slider_told(c, id, now, min, max, step, on_change, on_let_go)
+  }
   if !disabled {
     // The pointer: where it is along the track (last frame's), the value there. A tap can go down and up between
     // frames, so take its recorded position at a tap or drag end as well as a pointer still down.
@@ -68,8 +77,8 @@ pub fn slider(
       }
       _ => ()
     }
-    // the keys, while it has the focus
-    if r.focused {
+    // the keys, while it has the focus (where they are its handlers', theirs as they come: slider_told)
+    if r.focused && !told {
       let (more, less) = if c.rtl() {
         (@ui.key_code_left, @ui.key_code_right)
       } else {
@@ -94,10 +103,10 @@ pub fn slider(
         now = max
       }
     }
-    if c.action_asked(id, Increment) {
+    if !told && c.action_asked(id, Increment) {
       now = snap(now + step, min, max, step)
     }
-    if c.action_asked(id, Decrement) {
+    if !told && c.action_asked(id, Decrement) {
       now = snap(now - step, min, max, step)
     }
   }
@@ -125,11 +134,97 @@ pub fn slider(
 }
 
 ///|
+/// What moves slider `id` (at `value` as built) told as it comes, outside any build: a press on it at each step, where
+/// along its track the pointer is (the track as the press went down on it: PressStep's Down), and as it is let go; its keys, a step at a time (each from
+/// where the one before left it), let go at once.
+fn slider_told(
+  c : @ui.Ctx,
+  id : Int,
+  value : Double,
+  min : Double,
+  max : Double,
+  step : Double,
+  on_change : ((Double) -> Unit)?,
+  on_let_go : ((Double) -> Unit)?,
+) -> Unit {
+  let span = if max > min { max - min } else { 1.0 }
+  let rtl = c.rtl()
+  // (where the last step left it: what the next key moves from, what the press is let go at)
+  let at = Ref(value)
+  let tell = fn(f : ((Double) -> Unit)?, v : Double) {
+    match f {
+      Some(f) => {
+        @signals.start_batch()
+        @signals.untracked(fn() { f(v) })
+        @signals.end_batch()
+      }
+      None => ()
+    }
+  }
+  let moved = fn(v : Double) {
+    if v != at.val {
+      at.val = v
+      tell(on_change, v)
+    }
+  }
+  // (the track where the press went down on it: what each step of that press is along)
+  let track : Ref[(Double, Double, Double, Double)?] = Ref(None)
+  let along = fn(px : Double) {
+    match track.val {
+      Some((x, _, w, _)) if w > thumb_room => {
+        let a = dclamp((px - x - thumb_room / 2.0) / (w - thumb_room), 0.0, 1.0)
+        moved(snap(min + (if rtl { 1.0 - a } else { a }) * span, min, max, step))
+      }
+      _ => ()
+    }
+  }
+  c.follow_press(id, fn(s) {
+    match s {
+      Down(x, _, box) => {
+        track.val = box
+        along(x)
+      }
+      Moving(x, _) => along(x)
+      Up(x, _) => {
+        along(x)
+        tell(on_let_go, at.val)
+      }
+      Off => tell(on_let_go, at.val)
+    }
+  })
+  let (more, less) = if rtl {
+    (@ui.key_code_left, @ui.key_code_right)
+  } else {
+    (@ui.key_code_right, @ui.key_code_left)
+  }
+  c.on_key(id, fn(code, _) {
+    let v = if code == more || code == @ui.key_code_up {
+      snap(at.val + step, min, max, step)
+    } else if code == less || code == @ui.key_code_down {
+      snap(at.val - step, min, max, step)
+    } else if code == @ui.key_code_page_up {
+      snap(at.val + step * 10.0, min, max, step)
+    } else if code == @ui.key_code_page_down {
+      snap(at.val - step * 10.0, min, max, step)
+    } else if code == @ui.key_code_home {
+      min
+    } else if code == @ui.key_code_end {
+      max
+    } else {
+      return false
+    }
+    moved(v)
+    tell(on_let_go, v)
+    true
+  })
+}
+
+///|
 /// How much of a slider's width its thumb's middle does not run along (a thumb's: half at each end).
 let thumb_room : Double = 22.0
 
 ///|
-/// A slider's look by its sizes (still.fail's, Reader.css.ts slider): a hairline track `track_h` high on `track` (16%
+/// A slider's look by its sizes (still.fail's): a hairline track `track_h` high on `track` (16%
 /// of `ink`, the words' colour), the part up to the thumb in `fill` (the accent); a round thumb `thumb_d` across in the
 /// fill with a ring of `ring` (the page's ground) round it, 4 more while held; 28 high.
 pub fn slider_look_of(

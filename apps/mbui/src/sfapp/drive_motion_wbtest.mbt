@@ -1,4 +1,4 @@
-// The files' rows as the folder changes (rows_view by their keys, docs/list-motion.md): a file made comes where it is,
+// The files' rows as the folder changes (rows_view by their keys, mbui's view/list_motion.mbt): a file made comes where it is,
 // its room opening; one taken out goes where it was, its room closing; none at once.
 
 ///|
@@ -20,7 +20,7 @@ test "files: a file made comes where it is, one taken out goes where it was, nei
   }
   assert_eq(shown("新建的笔记.md"), -1.0)
   // made (the fixture's first step): in the list, as far shown as its room is open
-  clock.val = 2001.0
+  fix_clock_set(clock, 2001.0)
   t.frame()
   t.run_for(@ui.row_size_ms / 4.0)
   let half = shown("新建的笔记.md")
@@ -28,7 +28,7 @@ test "files: a file made comes where it is, one taken out goes where it was, nei
   t.run_for(@ui.row_size_ms)
   assert_eq(shown("新建的笔记.md"), 1.0)
   // taken out (its second): still there as its room closes, then gone
-  clock.val = 3601.0
+  fix_clock_set(clock, 3601.0)
   t.frame()
   // (seen only while it is less than half closed: out of sight by then, row_held_look)
   t.run_for(@ui.row_size_ms / 10.0)

@@ -212,6 +212,30 @@ test "a film cannot begin without its first drawing" {
 }
 
 ///|
+test "a film at 120 Hz can draw a different picture for each frame" {
+  let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
+  t.set_frame_period(1000.0 / 120.0)
+  let shown = Ref::new(0.0)
+  let pictures : Array[Double] = []
+  let film = t.film(
+    "tap go\ntap go\nexit",
+    fps=120.0,
+    draw=fn(t) {
+      shown.val = t.time()
+      true
+    },
+    put=fn(_) {
+      pictures.push(shown.val)
+      true
+    },
+  )
+  assert_eq(film.failure, None)
+  assert_true(film.logs.iter().any(fn(line) { line == "DRIVE PASS" }))
+  assert_true(pictures.length() >= 3)
+  assert_true(pictures[0] < pictures[1] && pictures[1] < pictures[2])
+}
+
+///|
 test "a run filmed: every frame of the film once, in order, from the Tester's first, each the last drawn by its moment" {
   let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
   let drawn : Array[Double] = []
@@ -241,4 +265,52 @@ test "a run filmed: every frame of the film once, in order, from the Tester's fi
   // as long as the run: to its last frame
   let last = drawn[drawn.length() - 1]
   assert_eq(put.length() - 1, ((last - t0) / @ui.frame_period_default).round().to_int())
+}
+
+///|
+fn film_frame_view(value : Ref[Int]) -> (@ui.Ctx) -> Unit {
+  fn(c) {
+    c.button("go", on_press=fn() {
+      value.val = value.val + 1
+    })
+    c.text("count \{value.val}", wrap=false) |> ignore
+  }
+}
+
+///|
+test "a requested frame of a scripted scene is the same picture that its film writes" {
+  let script = "wait 40\ntap go\nwait 40\nexit"
+  let t = @ui.Tester::new(film_frame_view(Ref(0)))
+  t.set_frame_period(1000.0 / 120.0)
+  let shown = Ref(0L)
+  let pictures : Array[Int64] = []
+  let film = t.film(
+    script,
+    fps=120.0,
+    draw=fn(t) {
+      shown.val = t.frame_hash()
+      true
+    },
+    put=fn(_) {
+      pictures.push(shown.val)
+      true
+    },
+  )
+  assert_eq(film.failure, None)
+  assert_true(pictures.length() > 3)
+  assert_true(pictures.iter().any(fn(h) { h != pictures[0] }))
+  for k in 0..<pictures.length() {
+    let t = @ui.Tester::new(film_frame_view(Ref(0)))
+    t.set_frame_period(1000.0 / 120.0)
+    let (reached, logs) = t.film_frame(script, k)
+    assert_true(reached, msg="frame \{k}: \{logs}")
+    assert_eq(t.frame_hash(), pictures[k], msg="frame \{k}")
+  }
+  let t = @ui.Tester::new(film_frame_view(Ref(0)))
+  let (reached, logs) = t.film_frame("no-such-step", 1)
+  assert_false(reached)
+  assert_true(logs.iter().any(fn(l) { l.has_prefix("DRIVE FAIL") }), msg=logs.join("\n"))
+  let t = @ui.Tester::new(film_frame_view(Ref(0)))
+  let (reached, _) = t.film_frame("exit", 10)
+  assert_false(reached)
 }

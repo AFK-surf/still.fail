@@ -1,27 +1,14 @@
-// The station's logins to command-line tools (docs/remote-login.md, 接口): under /machine-logins (/logins/<id> is a new
+// The station's logins to command-line tools (接口): under /machine-logins (/logins/<id> is a new
 // profile's sign-in). Whoever may make things run on the station may start, cancel and finish one, in any workspace it is
 // in (a joined workspace's members too: their agents could run `gh auth login` all the same); a read-only member sees
 // how they stand only (the admin API refuses their writes; their reads lose the pages, codes and callbacks).
-import { type Answer, type Request, error, json } from "../request.ts";
+import { type Answer, type Request, error, ok, input } from "../request.ts";
 import type { Route } from "../admin.ts";
 import { Logins, Refused, type Login } from "../../logins/index.ts";
 import type { Accounts } from "../../accounts/index.ts";
 import { readOnly } from "../../mesh/credential.ts";
 
-/// A request's JSON object: nothing is `{}`; more than a megabyte refused.
-function input(r: Request): Record<string, unknown> {
-  if (r.body.length > 1_000_000) throw new Refused(413, "request too large");
-  if (r.body.length === 0) return {};
-  let value: unknown;
-  try {
-    value = JSON.parse(r.body.toString("utf8"));
-  } catch {
-    throw new Refused(400, "invalid JSON");
-  }
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-}
 
-const ok = (value: unknown) => json(200, JSON.stringify(value));
 
 export const routes = (logins: () => Logins | undefined): Route[] => {
   const answer = async (f: (l: Logins) => Promise<Answer> | Answer): Promise<Answer> => {
@@ -87,7 +74,7 @@ export const routes = (logins: () => Logins | undefined): Route[] => {
 };
 
 /// A login's page opened in the station's own browser (logins/pages.ts) for the person asking, who finishes it there:
-/// `{screen}`, the screen of its tab (docs/remote-screens.md). A login to a command-line tool; a profile's sign-in; a
+/// `{screen}`, the screen of its tab. A login to a command-line tool; a profile's sign-in; a
 /// sign-in for a new profile (`/logins/<id>`, accounts.ts). Not for a read-only member.
 export const pageRoutes = (logins: () => Logins | undefined, accounts: () => Accounts | undefined): Route[] => {
   const answer = async (r: Request, f: () => Promise<string>): Promise<Answer> => {

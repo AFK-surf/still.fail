@@ -21,7 +21,6 @@ pub fn sending_of(rk : String) -> Array[LocalSent] {
 ///|
 pub fn sent_reset() -> Unit {
   local_sending.clear()
-  local_marks.clear()
   local_sent_n.val = 0
   sent_pictures.clear()
 }
@@ -42,16 +41,6 @@ pub(all) struct LocalSent {
 ///|
 let local_sent_n : Ref[Int] = { val: 0 }
 
-///|
-/// The composer's marks in the words of what was sent from here (by its id: refs_sent_marks), which its row draws as
-/// the references the core makes them (message_runs) until the core's row has them so.
-let local_marks : Map[String, Array[(Int, Int)]] = {}
-
-///|
-/// The marks in the words of outbox row `o`: one sent from here not the core's yet (sent_local).
-pub fn sent_marks(o : Outgoing) -> Array[(Int, Int)] {
-  local_marks.get(o.id).unwrap_or([])
-}
 
 ///|
 pub fn local_sent(o : Outgoing) -> Bool {
@@ -127,39 +116,41 @@ fn going_up(going : Array[Json]) -> (Array[Json], Array[(String, Int, Int)]) {
 /// Words sent from chat `rk` (its station and session; `v` its view, None for one just made) are in its list now,
 /// before the core has them (LocalSent), with its files up (`files`, each one put up from here naming its upload as the
 /// core's row will: file_key), those still going up (`going`: going_up) and what it quotes (`quotes`, as the core's row
-/// will have them), its references as the composer's marks (`marks`: refs_sent_marks). Its key, for what flies there
-/// (flight.mbt).
+/// will have them), its words in the runs the core read them in (`runs`: refs_sent_runs). Its key, for what flies there
+/// (flight.mbt). `now`, the core's time (its source's): close under the viewer's own row before it while the core says
+/// it would be (sent_joins), as its row will say.
 pub fn sent_local(
+  c : @ui.Ctx,
   rk : String,
   v : ChatView?,
   words : String,
   files : Array[Json],
   going? : Array[Json] = [],
   quotes? : Array[Json] = [],
-  marks? : Array[(Int, Int)] = [],
+  runs? : Json? = None,
+  now~ : Double,
 ) -> String {
   local_sent_n.val += 1
   let id = "local:\{local_sent_n.val}"
-  if marks.length() > 0 {
-    local_marks[id] = marks
-  }
   let (images, cards) = going_up(going)
+  let joined = sent_joins(rk, v, now)
   sending_of(rk).push({
     row: {
       id,
       text: words,
+      words: runs,
       attachments: (files + images).map(attachment_of),
       quotes: quotes.map(quote_of),
       state: "sending",
       error: "",
-      joined: false,
+      joined,
       followed: false,
       seq: -1.0,
       time: None,
       waits: if going.length() > 0 { @sf.t("common.uploading") } else { "" },
       progress: None,
       uploads: cards,
-      created_at: @ui.current().moment(),
+      created_at: c.moment(),
       final: false,
     },
     // (a chat just made: none)
@@ -176,18 +167,52 @@ pub fn sent_local(
 }
 
 ///|
+/// Whether what is sent from chat `rk` now (`now`, the core's time; `v` its view) goes close under the row before it,
+/// that row's time under it alone: the viewer's own sent a moment ago, not in the view yet, or the view's last while
+/// the core says so (ChatView's `joins_until`). Laid out so the frame it is sent: told only by the core's row, which
+/// comes a round trip later (late, on a busy device), the list had gone up as far as a row standing apart takes it
+/// and came back down (the user, 2026-11-10: 「偶现发消息动效都会抖」).
+fn sent_joins(rk : String, v : ChatView?, now : Double) -> Bool {
+  if !sending_of(rk).is_empty() {
+    return true
+  }
+  match v {
+    Some({ joins_until: Some(till), .. }) => now <= till
+    _ => false
+  }
+}
+
+///|
+/// The rows `all` with what was sent from here and is not among them yet (`still`) put in at `at`, each as its row
+/// will be: one going close under the row before it (LocalSent's `joined`) has that row `followed`, its time under
+/// the new one, from the frame it is sent.
+fn sent_among(all : Array[Entry], keys : Array[String], at : Int, still : Array[LocalSent]) -> Unit {
+  for j, l in still {
+    all.insert(at + j, Out(l.row))
+    keys.insert(at + j, "o:" + l.row.id)
+    if l.row.joined && at + j > 0 {
+      match all[at + j - 1] {
+        Said(m) if !m.followed => all[at + j - 1] = Said({ ..m, followed: true })
+        Out(o) if !o.followed => all[at + j - 1] = Out({ ..o, followed: true })
+        _ => ()
+      }
+    }
+  }
+}
+
+///|
 /// What was sent from chat `rk` (key: sent_local's) did not go: it leaves the list.
 pub fn sent_local_gone(rk : String, key : String) -> Unit {
   let sending = sending_of(rk)
   match sending.search_by(fn(l) { "o:" + l.row.id == key }) {
-    Some(i) => local_marks.remove(sending.remove(i).row.id)
+    Some(i) => sending.remove(i) |> ignore
     None => ()
   }
 }
 
 
 ///|
-/// The pictures of images sent from here, as they were picked (ChatFiles.kt FileData.sentOf): by station and the name
+/// The pictures of images sent from here, as they were picked: by station and the name
 /// it keeps the file under once up, or by the upload's id from when it starts going up (a message sent before it is up
 /// names it so: Attachment.upload). What their messages draw, rather than the likeness and then the station's thumbnail
 /// a round trip after the picture flew in; the bytes are kept for the run anyway (@ui.add_image).

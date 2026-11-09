@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writePrivate } from "../ops/files.ts";
 import { profileFetch } from "../ops/agent-env.ts";
+import { Said } from "../ops/i18n.ts";
 
 type Json = any;
 
@@ -36,7 +37,7 @@ export type Token = { access: string; refresh: string; expiresInMs: number; org:
 /// A sign-in that can no longer be renewed (the Console's, Kimi's, Claude Code's: oauth.ts): its refresh token turned
 /// down (`status`), or none kept (null). It is over (signed out there, or spent elsewhere): its check says to sign in
 /// again.
-export class RenewRefused extends Error {
+export class RenewRefused extends Said {
   readonly status: number | null;
   constructor(status: number | null, message: string) {
     super(message);
@@ -66,10 +67,12 @@ export function consoleIn(file: string): ConsoleLogin | null {
 
 export const writeConsole = (home: string, login: ConsoleLogin) => writePrivate(join(home, CONSOLE_FILE), `${JSON.stringify(login, null, 2)}\n`);
 
-async function post(base: string, path: string, form: Record<string, string>): Promise<{ status: number; body: Json }> {
-  const response = await profileFetch(`${base}${path}`, {
+/// An OAuth form posted (a device's code asked for, a token asked for or renewed): its status and its JSON (null for
+/// none). Kimi's sign-in (kimi.ts) posts its own the same way, with its own headers.
+export async function postForm(url: string, form: Record<string, string>, headers: Record<string, string>): Promise<{ status: number; body: Json }> {
+  const response = await profileFetch(url, {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json", "user-agent": AGENT },
+    headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json", ...headers },
     body: new URLSearchParams(form).toString(),
     signal: AbortSignal.timeout(20_000),
   });
@@ -79,6 +82,24 @@ async function post(base: string, path: string, form: Record<string, string>): P
     body = JSON.parse(text);
   } catch {}
   return { status: response.status, body };
+}
+
+const post = (base: string, path: string, form: Record<string, string>) => postForm(`${base}${path}`, form, { "user-agent": AGENT });
+
+/// A device's poll answered (RFC 8628): signed in, still waiting (`slow_down`: asked too often), or refused.
+export function pollAnswer<T>(token: T | null, error: () => string): { token: T } | { pending: true; slowDown: boolean } | { error: string } {
+  if (token) return { token };
+  const e = error();
+  if (e === "authorization_pending" || e === "slow_down") return { pending: true, slowDown: e === "slow_down" };
+  return { error: e };
+}
+
+/// A renewal answered: the new token, else refused for good (a 400, 401 or 403: RenewRefused) or for now.
+export function renewAnswer<T>(status: number, token: T | null, error: () => string): T {
+  if (token) return token;
+  const e = error();
+  if (status === 400 || status === 401 || status === 403) throw new RenewRefused(status, e);
+  throw new Error(e);
 }
 
 const tokenOf = (body: Json): Token | null =>
@@ -104,21 +125,13 @@ export async function startDevice(base: string): Promise<Device> {
 /// Asks whether the code was approved.
 export async function deviceToken(base: string, deviceCode: string): Promise<DeviceAnswer> {
   const { status, body } = await post(base, "/auth/device/token", { grant_type: "urn:ietf:params:oauth:grant-type:device_code", device_code: deviceCode, client_id: CLIENT_ID });
-  const token = status === 200 ? tokenOf(body) : null;
-  if (token) return { token };
-  const error = errorOf(status, body);
-  if (error === "authorization_pending" || error === "slow_down") return { pending: true, slowDown: error === "slow_down" };
-  return { error };
+  return pollAnswer(status === 200 ? tokenOf(body) : null, () => errorOf(status, body));
 }
 
 /// A new access token for a refresh token (which is spent: the one returned replaces it).
 export async function renewToken(base: string, refresh: string): Promise<Token> {
   const { status, body } = await post(base, "/auth/device/token", { grant_type: "refresh_token", refresh_token: refresh, client_id: CLIENT_ID });
-  const token = status === 200 ? tokenOf(body) : null;
-  if (token) return token;
-  const error = errorOf(status, body);
-  if (status === 400 || status === 401 || status === 403) throw new RenewRefused(status, error);
-  throw new Error(error);
+  return renewAnswer(status, status === 200 ? tokenOf(body) : null, () => errorOf(status, body));
 }
 
 /// Whose account a token is and which workspace it is for, where the Console says (null where it does not).

@@ -42,16 +42,16 @@ test("compressed history keeps usage offsets and subagent discovery", async () =
   await packFile(sub);
   const parts = async (path: string, offset: number) => {
     const out = [];
-    for await (const part of readFrom(path, offset)) out.push(part);
+    for await (const part of readFrom(path, offset)) out.push({ text: part.text, from: part.from, offset: part.offset });
     return out;
   };
-  assert.deepEqual(await parts(main, 6), [{ text: "second\n", offset: 13 }]);
+  assert.deepEqual(await parts(main, 6), [{ text: "second\n", from: 6, offset: 13 }]);
   assert.deepEqual(await parts(main, 13), []);
   const files = await claudeFiles(root, "session");
   assert.ok(files.some(([p, s]) => p === main && !s));
   assert.ok(files.some(([p, s]) => p === sub && s));
   await restoreFile(main);
   appendFileSync(main, "third\n");
-  assert.deepEqual(await parts(main, 13), [{ text: "third\n", offset: 19 }]);
+  assert.deepEqual(await parts(main, 13), [{ text: "third\n", from: 13, offset: 19 }]);
   rmSync(root, { recursive: true });
 });

@@ -10,7 +10,7 @@ test "reacts: an effect made as of a change between frames is the node's, let go
   let runs = Ref(0)
   let cleaned = Ref(0)
   let tree = @view.Tree::new(fn(root) {
-    root.show(fn() { on.get() }, fn(v) {
+    root.show(at_once=true, fn() { on.get() }, fn(v) {
       v.reacts(fn() { go.get() }, fn(n) {
         if n > 0 {
           @signals.effect_cleanup(fn() {
@@ -123,7 +123,7 @@ test "laid_size: asked mid-change, what shows as the change ends is kept: nothin
     let node : Ref[@view.View?] = Ref(None)
     let tree = @view.Tree::new(fn(root) {
       node.val = Some(root.box(fn(v) { v.width(Is(Some(50.0))) |> ignore }))
-      root.show(fn() { on.get() }, fn(_) {
+      root.show(at_once=true, fn() { on.get() }, fn(_) {
         made.val = made.val + 1
         @signals.effect_cleanup(fn() { fn() { cleaned.val = cleaned.val + 1 } }) |> ignore
       })
@@ -173,7 +173,7 @@ test "bindings held: let go as their node goes, at once, none asked of the tree'
   let on = @signals.signal(false, same=fn(a, b) { a == b })
   let x = @signals.signal(1.0, same=fn(a, b) { a == b })
   let tree = @view.Tree::new(fn(root) {
-    root.show(fn() { on.get() }, fn(v) {
+    root.show(at_once=true, fn() { on.get() }, fn(v) {
       v.width(By(fn() { Some(x.get()) })).height(By(fn() { Some(x.get()) })) |> ignore
     })
   })
@@ -379,7 +379,7 @@ test "reacts: its node let go by what was due before the change that tells it (n
     fn(root) {
       // (let go at 100, as what is due then)
       root.at_moment(100.0, fn() { there.set(false) }) |> ignore
-      root.show(fn() { there.get() }, fn(v) {
+      root.show(at_once=true, fn() { there.get() }, fn(v) {
         v.reacts(
           fn() {
             reads.val = reads.val + 1
@@ -398,4 +398,18 @@ test "reacts: its node let go by what was due before the change that tells it (n
   s.set(1)
   assert_eq((reads.val, done.val), (1, 1))
   assert_true(!s.watched())
+}
+
+///|
+test "reacts, not at_start: done as of each change of what it reads alone, never with what it reads as it is said" {
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let seen : Array[Bool] = []
+  let tree = @view.Tree::new(fn(root) { root.reacts(fn() { on.get() }, fn(b) { seen.push(b) }, at_start=false) })
+  tree.frame(390.0, 844.0, now=0.0) |> ignore
+  assert_eq(seen, [], msg="nothing as it is said: true as it was then")
+  tree.event(10.0, fn() { on.set(false) })
+  tree.event(20.0, fn() { on.set(true) })
+  // (set to what it is: no change, nothing done)
+  tree.event(30.0, fn() { on.set(true) })
+  assert_eq(seen, [false, true])
 }

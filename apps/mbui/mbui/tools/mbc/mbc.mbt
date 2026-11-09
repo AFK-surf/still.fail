@@ -4,8 +4,8 @@
 //         moon's build of PKG with stand-ins for its C compiler and archiver (scripts/mbc-stub.sh): only moonc runs.
 //         Prints the generated .c; fails if moon did not write it anew. (Android, iOS: their compiler is not moon's.)
 //     mbc compile --cc CC --cflags FLAGS [--gen-flags F] [--init-flags F] [--extra FILE…] [--optional FILE…]
-//                 [--objc-flags F] --obj DIR [-j N] [--link-flags FILE] FILE.c
-//         FILE.c split into units and compiled with the extra C/Objective-C files, all at once (-j, default the
+//  [--objc-flags F] --obj DIR [-j N] [--link-flags FILE] FILE.c
+//  FILE.c split into units and compiled with the extra C/Objective-C files, all at once (-j, default the
 //         cores); prints the objects. An object whose command and inputs (its depfile's, by content) did not change
 //         is kept. --optional files that do not compile are left out (as the runtime's that a platform lacks).
 //     mbc wrap --real CC -- ARGS…
@@ -17,8 +17,8 @@
 //         the --dep ones). wrap's link is the same.
 //     mbc shim DIR
 //         DIR/cc (Windows: DIR/cl.exe, lib.exe, link.exe) running `mbc wrap` over the real one; prints DIR.
-//     mbc check --cc CC --cflags FLAGS [--nm NM] --obj DIR FILE.c
-//         The self-check: FILE.c compiled whole and split; the global symbols each defines must be the same, none
+//  mbc check --cc CC --cflags FLAGS [--nm NM] --obj DIR FILE.c
+//  The self-check: FILE.c compiled whole and split; the global symbols each defines must be the same, none
 //         defined twice among the units.
 //     mbc work MOON.WORK COPY
 //         A workspace's moon.work for a copy of its module elsewhere: the module ".", its other members by absolute
@@ -137,9 +137,8 @@ fn compiler_kind(cc : Array[Bytes]) -> (Int, Bool) {
 
 ///|
 /// ThinLTO, or MSVC's /GL and /LTCG, only when asked (MBC_LTO=thin): the inlining across units the split loses,
-/// brought back at the link. Not by default: mbui's bench (scripts/bench.sh, Studio) drew its scenes in the same time
-/// with it and without (process CPU 107-111 µs a frame either way), while its link was most of a build of a changed
-/// app: 57 s of Android's, 66 s of Windows' (LTCG made 28% of the functions again for a 116-line change), 2026-10-24.
+/// brought back at the link. Not by default: link-time optimization can make a changed app substantially slower to
+/// build even where its frame time is unchanged (scripts/bench.sh).
 /// The link's flags, or None.
 fn lto_for(cc : Array[Bytes], j : Int) -> Array[Bytes]? {
   match getenv("MBC_LTO") {
@@ -1791,6 +1790,32 @@ fn plain_path(p : Bytes) -> Bytes {
 }
 
 ///|
+///|
+/// MSVC's compile of the program's C on its own (cmd_wrap): split and compiled in parallel, then `obj` a placeholder
+/// and `obj`.mbc-units the units, for the link after
+fn msvc_core_obj(real : Array[Bytes], wargs : Array[Bytes], c_file : Bytes, obj : Bytes) -> Unit {
+  let objdir = cat([sub(obj, 0, obj.length() - 4), b".mbc"])
+  makedirs(objdir)
+  let flags = msvc_compile_flags(wargs[:])
+  let j = match getenv("MBC_JOBS") {
+    Some(v) if parse_int(strip(v)) > 0 => parse_int(strip(v))
+    _ => cpus()
+  }
+  let (jobs, _) = split_jobs(c_file, objdir, real, flags, [], default_init_flags(true), true, false)
+  let objs = run_jobs_c(jobs, j, basename(c_file))
+  if !write_file(cat([obj, b".mbc-units"]), join_words(objs, b"\n")) {
+    fatal("cannot write \{str(obj)}.mbc-units")
+  }
+  let ph = path_join(objdir, b"placeholder.c")
+  let _ = write_file(ph, b"int mbc_link_core_placeholder;\n")
+  let cmd = real.copy()
+  for x in [b"/nologo", b"/c", cat([b"/Fo", obj]), ph] {
+    cmd.push(x)
+  }
+  c_exit(run_inherit(cmd))
+}
+
+///|
 fn cmd_wrap(args : Array[String]) -> Unit {
   let a = parse_args(args, ["--real"])
   let real_s = a.need("--real")
@@ -1829,10 +1854,96 @@ fn cmd_wrap(args : Array[String]) -> Unit {
   for x in wargs {
     whole.push(x)
   }
-  let pass = env_set_to("MBC_SPLIT", "0") ||
-    !links ||
+  // (moon 0.1.20261029 compiles the program's C on its own, `-c -o …/__moonbit_link_core__/<program>.o`, and links
+  // that object after: the one compile split as the whole program's was, its units made one object again (`-r`), the
+  // link as moon does it. Passed through, it was one clang of the whole program at -O2 that did not end in the job's
+  // 5 minutes, every Linux and Mac build of main from 41388708830, 2026-11-02)
+  let core_obj = !links &&
+    !msvc &&
+    cs.length() == 1 &&
+    wargs.iter().any(fn(x) { x == b"-c" }) &&
     (match out {
-      Some(o) => !ends(o, b".exe")
+      Some(o) => ends(o, b".o") && contains(o, b"/__moonbit_link_core__/")
+      None => false
+    })
+  // a test program its build said has no tests (MBC_EMPTY_TESTS: "pkg/name.kind …", apps/mbui/scripts/test.sh): moon
+  // builds a package's internal, blackbox and whitebox programs whatever it has, each the whole app, and runs only
+  // those with tests. Not compiled: in its place a file that is no program, so that one run anyway fails, said
+  // (sfapp's two empty ones were 27 s of the app part's compile, sfreplay's 29 s of the replay part's, 2026-10-24).
+  // Both of moon's steps of it: its core object (`…/__moonbit_link_core__/<program>.o`, moon 0.1.20261029 on) and the
+  // link of that object into the program. (Asked only of the program's own C until 2026-11-09: once moon compiled the
+  // core object apart, the empty programs were compiled whole again, sfapp's two 45 s of the app build's 176 and
+  // flows' internal one 17 s of the replay's, main 4aa7dac2, 42578500757.)
+  match (getenv("MBC_EMPTY_TESTS"), out) {
+    (Some(list), Some(o)) if core_obj || (links && ends(o, b".exe")) => {
+      let prog = if core_obj {
+        let b = basename(o)
+        cat([dirname(dirname(o)), b"/", sub(b, 0, b.length() - 2), b".exe"])
+      } else {
+        o
+      }
+      for e in split_words(list) {
+        if ends(prog, cat([b"/", e, b".exe"])) {
+          let _ = write_file(o, b"mbc: a test program with no tests (MBC_EMPTY_TESTS), not built\n")
+          log("\{str(e)}: no tests, not built")
+          c_exit(0)
+          return
+        }
+      }
+    }
+    _ => ()
+  }
+  // (MSVC's the same: `/c /Fo…\__moonbit_link_core__\<program>.obj`, linked after through cl. MSVC has no `-r`: the
+  // units compiled in its place, the object left a placeholder with the units' list beside it
+  // (<object>.mbc-units), and the link after given the units in its place. Windows of main and every branch from
+  // MoonBit 0.1.20261029 on: the whole program at /O2 in one, as long as the job, 41391826323, 2026-11-02)
+  if msvc && !env_set_to("MBC_SPLIT", "0") {
+    if !links && cs.length() == 1 {
+      let mut fo : Bytes? = None
+      for x in wargs {
+        if x.length() > 3 && (x[0] == b'/' || x[0] == b'-') && x[1] == b'F' && x[2] == b'o' {
+          fo = Some(plain_path(sub(x, 3, x.length())))
+        }
+      }
+      match fo {
+        Some(o) if ends(lower(o), b".obj") && contains(o, b"__moonbit_link_core__") => {
+          msvc_core_obj(real, wargs, wargs[cs[0]], o)
+          return
+        }
+        _ => ()
+      }
+    }
+    if links {
+      let largs = []
+      let mut swapped = false
+      for x in wargs {
+        let units = cat([plain_path(x), b".mbc-units"])
+        match (if ends(lower(x), b".obj") { read_file(units) } else { None }) {
+          Some(list) => {
+            swapped = true
+            for u in lines(list) {
+              if u.length() > 0 {
+                largs.push(u)
+              }
+            }
+          }
+          None => largs.push(x)
+        }
+      }
+      if swapped && out is Some(o) {
+        let cmd = real.copy()
+        for x in largs {
+          cmd.push(x)
+        }
+        c_exit(link(cmd, o, [], None))
+        return
+      }
+    }
+  }
+  let pass = env_set_to("MBC_SPLIT", "0") ||
+    (!links && !core_obj) ||
+    (match out {
+      Some(o) => !ends(o, b".exe") && !core_obj
       None => true
     }) ||
     cs.length() != 1
@@ -1844,24 +1955,16 @@ fn cmd_wrap(args : Array[String]) -> Unit {
     return
   }
   let out = out.unwrap()
-  // a test program its build said has no tests (MBC_EMPTY_TESTS: "pkg/name.kind …", apps/mbui/scripts/test.sh): moon
-  // builds a package's internal, blackbox and whitebox programs whatever it has, each the whole app, and runs only
-  // those with tests. Not compiled: in its place a file that is no program, so that one run anyway fails, said
-  // (sfapp's two empty ones were 27 s of the app part's compile, sfreplay's 29 s of the replay part's, 2026-10-24)
-  match getenv("MBC_EMPTY_TESTS") {
-    Some(list) =>
-      for e in split_words(list) {
-        if ends(out, cat([b"/", e, b".exe"])) {
-          let _ = write_file(out, b"mbc: a test program with no tests (MBC_EMPTY_TESTS), not built\n")
-          log("\{str(e)}: no tests, not built")
-          c_exit(0)
-          return
-        }
-      }
-    None => ()
+  // (the program the core object is for, as the names below say it: …/<pkg>/<program>.exe)
+  let prog = if core_obj {
+    let dir = dirname(dirname(out))
+    let b = basename(out)
+    cat([dir, b"/", sub(b, 0, b.length() - 2), b".exe"])
+  } else {
+    out
   }
   let c_file = wargs[cs[0]]
-  let objdir = cat([sub(out, 0, out.length() - 4), b".mbc"])
+  let objdir = cat([sub(out, 0, out.length() - (if core_obj { 2 } else { 4 })), b".mbc"])
   makedirs(objdir)
   let flags0 = if msvc {
     msvc_compile_flags(wargs[:])
@@ -1869,13 +1972,12 @@ fn cmd_wrap(args : Array[String]) -> Unit {
     gnu_compile_flags(wargs[:])
   }
   // a test program of a few tests compiled less optimised (MBC_LIGHT_TESTS: "pkg/name.kind …", its level
-  // MBC_LIGHT_OPT, -O0 by default, apps/mbui/scripts/test.sh): what it tests is the code, not how fast it runs. (The
-  // library's and the settings' three, against -O2 on Studio: compiled in 9 s for 13, run as fast, 2026-10-25; -O1 12 s)
+  // MBC_LIGHT_OPT, -O0 by default, apps/mbui/scripts/test.sh): what it tests is the code, not how fast it runs.
   let mut light = false
   match getenv("MBC_LIGHT_TESTS") {
     Some(list) if !msvc =>
       for e in split_words(list) {
-        if ends(out, cat([b"/", e, b".exe"])) {
+        if ends(prog, cat([b"/", e, b".exe"])) {
           light = true
         }
       }
@@ -1893,9 +1995,35 @@ fn cmd_wrap(args : Array[String]) -> Unit {
     Some(v) if parse_int(strip(v)) > 0 => parse_int(strip(v))
     _ => cpus()
   }
-  let lto = lto_for(real, j)
+  let lto = if core_obj { None } else { lto_for(real, j) }
   let (jobs, _) = split_jobs(c_file, objdir, real, flags, [], init_flags, msvc, lto is Some(_))
   let objs = run_jobs_c(jobs, j, basename(c_file))
+  if core_obj {
+    let cmd = real.copy()
+    // (for the same machine as the units: -arch, -target, -isysroot, -m…)
+    let mut k = 0
+    while k < flags0.length() {
+      let x = flags0[k]
+      if (x == b"-arch" || x == b"-target" || x == b"-isysroot") && k + 1 < flags0.length() {
+        cmd.push(x)
+        cmd.push(flags0[k + 1])
+        k += 2
+        continue
+      }
+      if starts(x, b"-target=") || starts(x, b"-m") {
+        cmd.push(x)
+      }
+      k += 1
+    }
+    for x in [b"-r", b"-nostdlib", b"-o", out] {
+      cmd.push(x)
+    }
+    for o in objs {
+      cmd.push(o)
+    }
+    c_exit(link(cmd, out, [], None))
+    return
+  }
   let largs = wargs[0:cs[0]].to_array()
   for o in objs {
     largs.push(o)

@@ -1,4 +1,7 @@
 import {
+  "moonbitlang/core/math",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/double",
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
   "mbui/ui",
@@ -19,14 +22,14 @@ import {
 options(
   // (the files the app carries: in its code on the native hosts, fetched beside its script in a browser)
   targets: {
-    "inter_face.mbt": [ "native" ],
+    "inter_face.mbt": [ "native", "wasm", "wasm-gc" ],
     "inter_face_js.mbt": [ "js" ],
-    "inter_face_native.mbt": [ "native" ],
-    "mermaid_hbc.mbt": [ "native" ],
-    "mermaid_script_native.mbt": [ "native" ],
+    "inter_face_native.mbt": [ "native", "wasm", "wasm-gc" ],
+    "mermaid_hbc.mbt": [ "native", "wasm", "wasm-gc" ],
+    "mermaid_script_native.mbt": [ "native", "wasm", "wasm-gc" ],
     "mermaid_script_js.mbt": [ "js" ],
-    "share_face.mbt": [ "native" ],
-    "share_face_native.mbt": [ "native" ],
+    "share_face.mbt": [ "native", "wasm", "wasm-gc" ],
+    "share_face_native.mbt": [ "native", "wasm", "wasm-gc" ],
     "share_face_js.mbt": [ "js" ],
   },
 )

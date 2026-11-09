@@ -38,9 +38,9 @@ fn island(
   let view = fn(c : Ctx) {
     builds.val = builds.val + 1
     let id = c.id("old")
-    if c.clicked(id) {
+    c.on_press(id, fn() {
       old_taps.val = old_taps.val + 1
-    }
+    })
     c.box(w=Fill(1.0), h=Fill(1.0), bg=island_green, id~, fn() {
       // (the old way: the bar's words read as the old view is built)
       if !tree {
@@ -346,9 +346,9 @@ fn wheels_round_a_button(frame_between : Bool) -> Array[(Double, Double, Bool)] 
     button.val = Some(
       old(root, fn(c) {
         let id = c.id("button")
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           button_wheels.val = button_wheels.val + 1
-        }
+        })
         c.box(w=Px(60.0), h=Px(60.0), bg=0x445566FFL, id~, fn() {  }) |> ignore
       })
       .over(Is(true))

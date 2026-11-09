@@ -1,4 +1,4 @@
-// Traces (docs/telemetry.md). Clients and stations send their spans here, to
+// Traces. Clients and stations send their spans here, to
 // POST /v1/telemetry/traces, and still.fail cloud passes them on to Axiom with its
 // own token, which never leaves the Worker. It records spans of its own for
 // the /v1/* calls that carry a recorded W3C traceparent, sent straight to
@@ -122,15 +122,14 @@ const hex = (bytes: ArrayBuffer | Uint8Array) => [...new Uint8Array(bytes)].map(
  * Who sends a batch: an account (`sub`, checked by the caller from its access token), or a station signing
  * "stillfail-station-telemetry-v1:<origin>:<station>:<ts>:<sha256 of the body, hex>" with its key, like its presence
  * socket (x-stillfail-station, x-stillfail-ts within 5 minutes, x-stillfail-signature), that is still enrolled.
- * (Stations from before the rename: "ember-station-telemetry-v1:…" and x-ember-*; the origin is any of the cloud's.)
- * Its notices (push.ts) are signed the same way, tagged "station-notify-v1".
+ * (The origin is any of the cloud's.) Its notices (push.ts) are signed the same way, tagged "station-notify-v1".
  */
-export async function stationSender(request: Request, env: Env, body: string, tag = "station-telemetry-v1"): Promise<string | null> {
+export async function stationSender(request: Request, env: Env, body: string, tag = "station-telemetry-v1", former: readonly string[] = []): Promise<string | null> {
   const station = header(request, "station");
   const ts = Number(header(request, "ts"));
   if (!validKeyHex(station) || !Number.isSafeInteger(ts) || Math.abs(ts - clock.now() / 1000) > 300) return null;
   const digest = hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body)));
-  const messages = signedMessages(tag, publicOrigins(env), `${station}:${ts}:${digest}`);
+  const messages = signedMessages(tag, publicOrigins(env), `${station}:${ts}:${digest}`, former);
   if (!(await verifyAnySignature(station, header(request, "signature") ?? "", messages))) return null;
   return (await env.DIRECTORY.getByName("primary").isStation(station)) ? station : null;
 }
@@ -179,7 +178,7 @@ const NETWORK_KEYS = new Set(["stillfail.net.asn", "stillfail.net.org", "stillfa
  * The network a batch was sent from, as Cloudflare saw it (its `cf`): the carrier (its AS number and name) and where,
  * to the province and city, never the address. Put on every resource of a batch of spans, so a device's ways through
  * the relays (`mesh.speed`, `mesh.connect`, `mesh.route`) are compared network by network: 湖南移动 through Shenzhen and
- * through Hong Kong (docs/telemetry.md). What the sender said of these itself is not kept. A device behind a VPN shows
+ * through Hong Kong. What the sender said of these itself is not kept. A device behind a VPN shows
  * the VPN's network: its spans say the network its telemetry left by, which its ways to stations need not have taken.
  */
 export function networkOf(cf: unknown): { key: string; value: { stringValue: string } | { intValue: string } }[] {
@@ -273,7 +272,7 @@ export async function recordCall(env: Env, parent: TraceParent, request: Request
     ],
     status: { code: response.status >= 500 ? 2 : 1 },
   };
-  // Named after the Worker (ember-cloud, which keeps its name), as the queries in docs/telemetry.md know it.
+  // Named after the Worker (stillfail-cloud), as the queries know it.
   const body = JSON.stringify({ resourceSpans: [{ resource: { attributes: [attribute("service.name", "stillfail-cloud")] }, scopeSpans: [{ scope: { name: "stillfail-cloud" }, spans: [span] }] }] });
   await toAxiom(env, body).catch(() => false);
 }

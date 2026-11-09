@@ -35,6 +35,19 @@ function shell() {
   return { dir, native, bridge, host: new BridgeHost(bridge, "http://127.0.0.1:1", false) };
 }
 
+test("an_app_wall_clock_uses_whole_milliseconds_but_the_monotonic_clock_keeps_its_precision", () => {
+  const { dir, native, host } = shell();
+  native.now = () => 1_793_585_377_985.439;
+  native.monotonic = () => 123.456;
+  try {
+    assert.equal(host.nowMs(), 1_793_585_377_985);
+    assert.equal(host.monotonicMs(), 123.456);
+  } finally {
+    native.host.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("interrupting_a_fetch_cancels_that_native_request", async () => {
   const { dir, native, bridge } = shell();
   const pending: number[] = [];

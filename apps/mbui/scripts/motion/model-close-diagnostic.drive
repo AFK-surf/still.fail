@@ -1,0 +1,7 @@
+# The panel stays visible at the start, then a frequent model is selected.
+timeout 20000
+until 默认
+wait 500
+tap GPT-6 Astra
+wait 500
+exit

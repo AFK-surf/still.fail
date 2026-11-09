@@ -1,4 +1,4 @@
-// tiny-skia's fixed point (src/fixed_point.rs, math.rs) and edges (src/edge.rs, after Skia's SkEdge.cpp): a line,
+// tiny-skia's fixed point and edges (after Skia's SkEdge.cpp): a line,
 // quadratic or cubic stepped down the scanlines in 16.16. One struct for the three (Rust's enum of a line and the
 // curve state around it): a quadratic's q* are its c*.
 

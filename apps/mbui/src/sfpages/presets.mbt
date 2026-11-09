@@ -1,4 +1,4 @@
-// Presets (docs/presets.md): what a chat starts knowing, chosen on the new chat's page beside where it runs and what it
+// Presets: what a chat starts knowing, chosen on the new chat's page beside where it runs and what it
 // runs on (the core's `newChat` view: the station's presets, the one picked and its name; `newChat.pick {preset}`). Its
 // control opens a menu of them (不用预设 and each preset, the one picked checked; 编辑 the one picked, 新预设). A preset is
 // made or changed in a short dialog, as a key's is: its name, its folders (each a row with its × to let go, 添加目录
@@ -33,30 +33,36 @@ fn new_preset_control(c : @ui.Ctx, src : Source, w : Workspace, v : Json?, stati
   if take_asked("preset-new-browse") {
     preset_dialog(src, w, address, "", items(v, "stations"), browsing=true)
   }
-  if (new_capsule(c, "new/preset", label, floating, fn() {
-      // (picked: its folders' marks, as they are shown where they are picked; none: a quiet mark of what it adds)
-      let marks = items(v, "presetMarks")
-      if name != "" && marks.length() > 0 {
-        c.box(style=preset_marks_row, fn() {
-          for m in marks {
-            repo_mark(c, text(Some(m), "name"), text(Some(m), "repo"), text(Some(m), "icon"), new_mark)
-          }
-        })
-        |> ignore
-      } else {
-        @sf.icon(c, "folder-plus", size=new_mark, color=t.p.muted) |> ignore
-      }
-      // (its words left out first, short of room: its mark says what it is, the station's name and the model's matter more)
-      c.box(style=new_station_name, drop=preset_drop_words, fn() {
-        c.text(label, style=if name == "" { preset_capsule_quiet } else { new_capsule_words }) |> ignore
+  let from = c.id("new/preset")
+  let open = fn() { preset_menu(src, w, address, v, picked, @sf.Of(from)) }
+  new_capsule(c, "new/preset", label, floating, fn() {
+    // (picked: its folders' marks, as they are shown where they are picked; none: a quiet mark of what it adds)
+    let marks = items(v, "presetMarks")
+    if name != "" && marks.length() > 0 {
+      c.box(style=preset_marks_row, fn() {
+        for m in marks {
+          repo_mark(c, text(Some(m), "name"), text(Some(m), "repo"), text(Some(m), "icon"), new_mark)
+        }
       })
       |> ignore
-      // (its chevron last, after the station's name: its mark alone, a round, on the narrowest)
-      c.box(drop=preset_drop_chevron, fn() { @sf.icon(c, "chevron-down", size=new_chevron, color=t.p.muted) |> ignore }) |> ignore
-    }) &&
-    !going) ||
-    asked {
-    preset_menu(src, w, address, v, picked, @sf.Of(c.id("new/preset")))
+    } else {
+      @sf.icon(c, "folder-plus", size=new_mark, color=t.p.muted) |> ignore
+    }
+    // (its words left out first, short of room: its mark says what it is, the station's name and the model's matter more)
+    c.box(style=new_station_name, drop=preset_drop_words, fn() {
+      c.text(label, style=if name == "" { preset_capsule_quiet } else { new_capsule_words }) |> ignore
+    })
+    |> ignore
+    // (its chevron last, after the station's name: its mark alone, a round, on the narrowest)
+    c.box(drop=preset_drop_chevron, fn() { @sf.icon(c, "chevron-down", size=new_chevron, color=t.p.muted) |> ignore }) |> ignore
+  }, on_press=fn() {
+    if !going {
+      open()
+    }
+  })
+  // (asked from elsewhere: opened as it is seen)
+  if asked {
+    open()
   }
 }
 
@@ -82,7 +88,7 @@ fn preset_menu(src : Source, w : Workspace, address : String, v : Json?, picked 
     menu.push(
       Some(
         @sf.menu_item_of(@sf.t("web-main.preset.editNamed", args=[("name", text(v, "presetName"))]), fn() {
-          preset_dialog(src, w, if at == "" { address } else { at }, picked, items(v, "stations"))
+          preset_dialog(src, w, if at == "" { address } else { at }, picked, items(v, "stations"), browse_station=address)
         }, icon="edit"),
       ),
     )
@@ -94,7 +100,7 @@ fn preset_menu(src : Source, w : Workspace, address : String, v : Json?, picked 
 ///|
 /// The station's presets and the folders it offers for one (the `presets` topic), read as they are shown.
 fn presets_of(src : Source, address : String) -> Json? {
-  (src.topic)("presets", { "station": Json::string(address) }).value
+  src.topic("presets", { "station": Json::string(address) }).get().value
 }
 
 ///|
@@ -120,9 +126,7 @@ priv struct PresetEditing {
   serial : Int
   mut adding : Bool
   mut browsing : Bool
-  /// What the dialog shows, in place of the one before (no sheet over a sheet): its fields (0), the folders to add (1),
-  /// a station's folders browsed (2).
-  mut step : Int
+  mut browse_station : String
 }
 
 ///|
@@ -136,9 +140,9 @@ let preset_serial : Ref[Int] = Ref(0)
 /// for the station's new chats.
 /// `adding`: 添加目录 asked open as it is first drawn, `browsing` its 浏览文件夹 too (a fixture's screen of each).
 /// `stations`: the workspace's up now (the `newChat` view's), whose folders are offered too.
-fn preset_dialog(src : Source, w : Workspace, address : String, id : String, stations : Array[Json], adding? : Bool = false, browsing? : Bool = false) -> Unit {
+fn preset_dialog(src : Source, w : Workspace, address : String, id : String, stations : Array[Json], adding? : Bool = false, browsing? : Bool = false, browse_station? : String = "") -> Unit {
   preset_serial.val += 1
-  let e : PresetEditing = { dirs: [], auto: "", filled: id == "", saving: false, error: "", serial: preset_serial.val, adding: adding || browsing, browsing, step: 0 }
+  let e : PresetEditing = { dirs: [], auto: "", filled: id == "", saving: false, error: "", serial: preset_serial.val, adding: adding || browsing, browsing, browse_station: if browse_station == "" { address } else { browse_station } }
   let key = fn(part : String) { "preset-editor/" + e.serial.to_string() + "/" + part }
   let name = field_of(key("name"))
   let instructions = field_of(key("instructions"))
@@ -154,24 +158,9 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
   let title = if id == "" { @sf.t("web-main.preset.new") } else { @sf.t("web-main.preset.edit") }
   open_dialog(
     title,
-    live=fn() {
-      match e.step {
-        1 => (@sf.t("web-main.preset.add"), "", "")
-        2 => (@sf.t("web-main.preset.pickFolder"), "", "")
-        _ => (title, "", "")
-      }
-    },
-    on_gone=fn() { (@sfbase.folder_browse_close.val)() },
+    steps=true,
     fn(c, _) {
       let offered = offered_dirs(src, address, stations)
-      if e.step == 1 {
-        preset_add_step(c, src, address, offered, e, key)
-        return
-      }
-      if e.step == 2 {
-        (@sfbase.folder_browse_body.val)(c, src, address)
-        return
-      }
       // (one changed: what it is, once the station's presets are read)
       if !e.filled {
         match was() {
@@ -200,31 +189,51 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
       })
       @sf.field(c, @sf.t("web-main.preset.dirs"), hint=if e.dirs.length() == 0 { @sf.t("web-main.preset.dirsHint") } else { "" }, fn() {
         c.box(style=preset_dirs, fn() {
+          let seen : Map[String, Bool] = {}
           for d in e.dirs {
-            let at = dir_key(Some(d))
-            // (what it shows as: as the station offers it, where it does)
-            let one = match offered.iter().find_first(fn(o) { dir_key(Some(o)) == at }) {
-              Some(x) => Some(x)
-              None => Some(d)
+            let station = dir_station(Some(d), address)
+            if seen.contains(station) {
+              continue
             }
-            let path = text(one, "path")
-            c.box(style=preset_dir_row, fn() {
-              repo_mark(c, dir_label(path), text(one, "repo"), text(one, "icon"), preset_dir_mark)
-              c.box(style=preset_dir_words, fn() {
-                c.text(if text(one, "name") != "" { text(one, "name") } else { dir_label(path) }, style=preset_dir_name) |> ignore
-                c.text(dir_note(one, false), style=preset_dir_note) |> ignore
+            seen[station] = true
+            preset_station_heading(c, preset_station_name(station, text(Some(d), "stationName"), stations))
+            for folder in e.dirs {
+              if dir_station(Some(folder), address) != station {
+                continue
+              }
+              let at = dir_key(Some(folder))
+              // (what it shows as: as that station offers it, where it does)
+              let one = match offered.iter().find_first(fn(o) { dir_key(Some(o)) == at }) {
+                Some(x) => Some(x)
+                None => Some(folder)
+              }
+              let path = text(one, "path")
+              c.box(style=preset_dir_row, fn() {
+                repo_mark(c, dir_label(path), text(one, "repo"), text(one, "icon"), preset_dir_mark)
+                c.box(style=preset_dir_words, fn() {
+                  c.text(if text(one, "name") != "" { text(one, "name") } else { dir_label(path) }, style=preset_dir_name) |> ignore
+                  c.text(dir_note(one, false), style=preset_dir_note) |> ignore
+                })
+                |> ignore
+                @sf.icon_button(c, "close", key=key("drop/" + at), size=preset_dir_x, label=@sf.t("web-main.preset.remove"), on_press=fn() {
+                  e.dirs.retain(fn(x) { dir_key(Some(x)) != at })
+                }) |> ignore
               })
               |> ignore
-              if @sf.icon_button(c, "close", key=key("drop/" + at), size=preset_dir_x, label=@sf.t("web-main.preset.remove")) {
-                e.dirs.retain(fn(x) { dir_key(Some(x)) != at })
-              }
-            })
-            |> ignore
+            }
           }
-          if @sf.button(c, @sf.t("web-main.preset.add"), key=key("add"), tone=Ghost, icon="plus") || (e.adding && e.filled) {
+          let add = fn() {
             e.adding = false
             field_of(key("q")).set("")
-            e.step = 1
+            // (a step in, in the dialog: back from it to the fields)
+            @sf.panel_go(@sf.t("web-main.preset.add"), fn(c, _) {
+              preset_add_step(c, src, address, stations, offered_dirs(src, address, stations), e, key)
+            })
+          }
+          @sf.button(c, @sf.t("web-main.preset.add"), key=key("add"), tone=Ghost, icon="plus", on_press=add) |> ignore
+          // (asked as the fields were filled in: added as it is seen)
+          if e.adding && e.filled {
+            add()
           }
         })
         |> ignore
@@ -236,33 +245,8 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
       })
     },
     fn(c, shut) {
-      // (the folders to add, or a station's browsed: back to what was before, or this folder taken)
-      if e.step == 1 {
-        c.spacer()
-        if @sf.button(c, @sf.t("common.back"), key=key("back"), tone=Ghost) {
-          e.step = 0
-        }
-        return
-      }
-      if e.step == 2 {
-        c.spacer()
-        if @sf.button(c, @sf.t("common.back"), key=key("back2"), tone=Ghost) {
-          (@sfbase.folder_browse_close.val)()
-          e.step = 1
-        }
-        let here = (@sfbase.folder_browse_here.val)()
-        if @sf.button(c, @sf.t("web-main.preset.useFolder"), key=key("use"), tone=Primary, disabled=here == "") {
-          let d = Json::object({ "path": Json::string(here) })
-          if !e.dirs.iter().any(fn(x) { dir_key(Some(x)) == dir_key(Some(d)) }) {
-            e.dirs.push(d)
-          }
-          (@sfbase.folder_browse_close.val)()
-          e.step = 0
-        }
-        return
-      }
       if id != "" {
-        if @sf.button(c, @sf.t("common.delete"), key=key("delete"), tone=GhostDanger) {
+        @sf.button(c, @sf.t("common.delete"), key=key("delete"), tone=GhostDanger, on_press=fn() {
           confirm(
             @sf.t("web-main.preset.deleteTitle", args=[("name", name.text())]),
             @sf.t("web-main.preset.deleteBody"),
@@ -273,16 +257,16 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
               (src.call)("preset.delete", Json::object({ "station": Json::string(address), "id": Json::string(id) }), fn(_) {  })
             },
           )
-        }
+        }) |> ignore
       }
       c.spacer()
-      if @sf.button(c, @sf.t("common.cancel"), key=key("cancel"), tone=Ghost) {
+      @sf.button(c, @sf.t("common.cancel"), key=key("cancel"), tone=Ghost, on_press=fn() {
         c.blur()
         shut()
-      }
+      }) |> ignore
       let ready = e.dirs.length() > 0 && name.text().trim(chars=" \n").to_owned() != ""
       let go = if id == "" { @sf.t("web-main.preset.create") } else { @sf.t("common.save") }
-      if @sf.button(c, go, key=key("save"), tone=Primary, busy=e.saving, disabled=!ready) {
+      @sf.button(c, go, key=key("save"), tone=Primary, busy=e.saving, disabled=!ready, on_press=fn() {
         e.saving = true
         e.error = ""
         c.blur()
@@ -316,14 +300,14 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
             Ok(made) => {
               // made: the one the station's new chats are opened with
               if id == "" {
-                @sfbase.pick_new(src, w.id, { "preset": Json::string(text(Some(made), "id")) })
+                @sfbase.pick_new(src, w.id, { "preset": Json::string(text(Some(made), "id")), "presetStation": Json::string(address) })
               }
               shut()
             }
             Err(err) => e.error = text(Some(err), "message")
           }
         })
-      }
+      }) |> ignore
     },
   )
 }
@@ -334,16 +318,23 @@ fn preset_dialog(src : Source, w : Workspace, address : String, id : String, sta
 /// those their chats worked in first, each where it is, on which station where it is not the preset's, how many chats
 /// used it; last 浏览文件夹, the preset's station's folders browsed there too, whatever was found. One picked, the
 /// fields again with it among the folders.
-fn preset_add_step(c : @ui.Ctx, src : Source, address : String, offered : Array[Json], e : PresetEditing, key : (String) -> String) -> Unit {
+fn preset_add_step(c : @ui.Ctx, src : Source, address : String, stations : Array[Json], offered : Array[Json], e : PresetEditing, key : (String) -> String) -> Unit {
   let has = fn(k : String) { e.dirs.iter().any(fn(d) { dir_key(Some(d)) == k }) }
   let q = @sf.input(c, key("q"), placeholder=@sf.t("web-main.preset.search"), field=field_of(key("q"))).text.trim(chars=" ").to_owned().to_lower()
   c.box(style=preset_offered, fn() {
+    let mut shown_station = ""
     for o in offered {
       let one = Some(o)
       let k = dir_key(one)
+      let station = dir_station(one, address)
+      let station_name = preset_station_name(station, text(one, "stationName"), stations)
       let (name, repo, icon) = (text(one, "name"), text(one, "repo"), text(one, "icon"))
-      if has(k) || (q != "" && !name.to_lower().contains(q) && !repo.to_lower().contains(q) && !text(one, "where").to_lower().contains(q)) {
+      if has(k) || (q != "" && !name.to_lower().contains(q) && !repo.to_lower().contains(q) && !text(one, "where").to_lower().contains(q) && !station_name.to_lower().contains(q)) {
         continue
+      }
+      if shown_station != station {
+        preset_station_heading(c, station_name)
+        shown_station = station
       }
       // (as it will stand among the preset's folders once taken: its mark, its name over where it is)
       let id = c.id(key("offer/" + k))
@@ -356,28 +347,81 @@ fn preset_add_step(c : @ui.Ctx, src : Source, address : String, offered : Array[
         |> ignore
       })
       c.semantics(b, Button, id~, label=name)
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         e.dirs.push(o)
-        e.step = 0
-      }
+        @sf.panel_back() |> ignore
+      })
     }
     // (last, its folder where the others' marks stand)
     let id = c.id(key("browse"))
     let b = c.box(style=preset_browse_row, id~, fn() {
       // (a tile as the folders' marks are, the folder in it)
       let m = preset_dir_mark
-      let tile = preset_browse_mark.then(@ui.style(w=Fixed(m), h=Fixed(m), radius=@sf.agent_mark_corner(m), bg=Data(@sf.theme().p.neutral_bg)))
+      let tile = preset_browse_mark.then(@ui.style(w=Fixed(m), h=Fixed(m), radius=@sf.small_radius, bg=Data(@sf.theme().p.neutral_bg)))
       c.box(style=tile, fn() { @sf.icon(c, "folder", size=preset_browse_icon, color=@sf.theme().p.muted) |> ignore }) |> ignore
       c.text(@sf.t("web-main.preset.browse"), style=preset_dir_name) |> ignore
     })
     c.semantics(b, Button, id~, label=@sf.t("web-main.preset.browse"))
-    if c.clicked(id) || e.browsing {
+    let go = fn() {
       e.browsing = false
-      (@sfbase.folder_browse_open.val)(address)
-      e.step = 2
+      preset_browse(src, address, stations, e, key)
+    }
+    c.on_press(id, go)
+    // (asked from elsewhere: done as it is seen)
+    if e.browsing {
+      go()
     }
   })
   |> ignore
+}
+
+///|
+/// 浏览文件夹, a step in from 添加目录: choose a station (initially the new chat composer's), then go into its folders
+/// one by one. Switching stations starts at that station's home and lets go of any earlier request. The folder taken
+/// keeps its station when it is not the preset's own.
+fn preset_browse(src : Source, address : String, stations : Array[Json], e : PresetEditing, key : (String) -> String) -> Unit {
+  (@sfbase.folder_browse_open.val)(e.browse_station)
+  @sf.panel_go(
+    @sf.t("web-main.preset.pickFolder"),
+    fn(c, _) {
+      @sf.field(c, @sf.t("android-misc.files.lendOn"), fn() {
+        let choices = stations.map(fn(s) { (text(Some(s), "station"), preset_station_name(text(Some(s), "station"), "", stations)) })
+        @sf.select(c, key("browse-station"), e.browse_station, choices, fn(at) {
+          if at != e.browse_station {
+            e.browse_station = at
+            (@sfbase.folder_browse_open.val)(at)
+          }
+        }, label=@sf.t("android-misc.files.lendOn"))
+      })
+      (@sfbase.folder_browse_body.val)(c, src, e.browse_station)
+    },
+    foot=fn(c, _) {
+      c.spacer()
+      let here = (@sfbase.folder_browse_here.val)()
+      @sf.button(c, @sf.t("web-main.preset.useFolder"), key=key("use"), tone=Primary, disabled=here == "", on_press=fn() {
+        let d = if e.browse_station == address {
+          Json::object({ "path": Json::string(here) })
+        } else {
+          // If the station already offered this folder as a repository, preserve that information too.
+          let repo = match items(presets_of(src, e.browse_station), "candidates").iter().find_first(fn(o) { text(Some(o), "path") == here }) {
+            Some(o) => field(Some(o), "repo").unwrap_or(Json::null())
+            None => Json::null()
+          }
+          Json::object({
+            "path": Json::string(here),
+            "repo": repo,
+            "station": Json::string(e.browse_station),
+            "stationName": Json::string(preset_station_name(e.browse_station, "", stations)),
+          })
+        }
+        if !e.dirs.iter().any(fn(x) { dir_key(Some(x)) == dir_key(Some(d)) }) {
+          e.dirs.push(d)
+        }
+        @sf.panel_back(to=1) |> ignore
+      }) |> ignore
+    },
+    left=fn() { (@sfbase.folder_browse_close.val)() },
+  )
 }
 
 ///|
@@ -387,21 +431,34 @@ fn dir_key(d : Json?) -> String {
 }
 
 ///|
+/// The station a folder is on (an absent station means the preset's own).
+fn dir_station(d : Json?, address : String) -> String {
+  let at = text(d, "station")
+  if at == "" { address } else { at }
+}
+
+///|
+/// The workspace's current name for a station, or its saved name when it is offline.
+fn preset_station_name(address : String, saved : String, stations : Array[Json]) -> String {
+  match stations.iter().find_first(fn(s) { text(Some(s), "station") == address }) {
+    Some(s) if text(Some(s), "name") != "" => text(Some(s), "name")
+    _ => if saved != "" { saved } else { address }
+  }
+}
+
+///|
+fn preset_station_heading(c : @ui.Ctx, name : String) -> Unit {
+  c.box(style=preset_station_heading_box, fn() { c.text(name, style=preset_station_heading_words) |> ignore }) |> ignore
+}
+
+///|
 /// The folders the workspace's stations offer (each one's `presets` topic, read as it is shown): the preset's
-/// station's first, then the others', each marked with its station; a repository once (where it is on the preset's
-/// station, else on the first that has it), as its chats find it by its address on whichever station they run.
+/// station's first, then the others', each marked with its station. The same repository on two stations is offered
+/// on both: their paths and the instructions in them can differ.
 fn offered_dirs(src : Source, address : String, stations : Array[Json]) -> Array[Json] {
   let out : Array[Json] = []
-  let repos : Map[String, Bool] = {}
   let take = fn(at : String, station_name : String) {
     for o in items(presets_of(src, at), "candidates") {
-      let repo = text(Some(o), "repo")
-      if repo != "" && repos.contains(repo) {
-        continue
-      }
-      if repo != "" {
-        repos[repo] = true
-      }
       match o {
         Object(m) if at != address => {
           let marked = m.copy()
@@ -424,14 +481,12 @@ fn offered_dirs(src : Source, address : String, stations : Array[Json]) -> Array
 }
 
 ///|
-/// What a folder says under its name: where it is (and on which station, where it is not the preset's), how many chats
-/// worked in it (`chats`: where it is offered).
+/// What a folder says under its name: where it is, and how many chats worked in it (`chats`: where it is offered).
 fn dir_note(o : Json?, chats : Bool) -> String {
   let n = count(o, "chats")
   let at = if text(o, "where") != "" { text(o, "where") } else if text(o, "repo") != "" { text(o, "repo") } else { text(o, "path") }
   let parts = [
     at,
-    text(o, "stationName"),
     if chats && n > 0 { @sf.t("web-main.preset.chats", args=[("n", n.to_string())]) } else { "" },
   ]
   join(parts.filter(fn(x) { x != "" }), " · ")
@@ -440,12 +495,12 @@ fn dir_note(o : Json?, chats : Bool) -> String {
 ///|
 /// A folder's mark: its own picture where the station found one, else its first letter on its repository's colour.
 fn repo_mark(c : @ui.Ctx, name : String, repo : String, icon : String, size : Double) -> Unit {
-  @sf.tile_avatar(c, if repo != "" { repo } else { name }, name, icon, size)
+  @sf.tile_avatar(c, if repo != "" { repo } else { name }, name, icon, size, corner=@sf.small_corner)
 }
 
 ///|
-/// A folder's mark in the preset's dialog: about as high as its two lines, its corner (a tile's, .3 of it) the
-/// ladder's 10, so a ground round it 10 out is the ladder's 18 (preset_offer_row).
+/// A folder's mark in the preset's dialog: about as high as its two lines, its corner the ladder's 10 (repo_mark), so a
+/// ground round it 8 out is the ladder's 18 (preset_offer_row).
 let preset_dir_mark : Double = 34.0
 
 
@@ -458,6 +513,14 @@ let preset_marks_row : @ui.Style = @ui.css("row gap=S0_5 align=ACenter")
 /// The folders offered to add, a row each.
 // kept across runs: a value (no field of it changes)
 let preset_offered : @ui.Style = @ui.css("w=Full gap=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let preset_station_heading_box : @ui.Style = @ui.css("w=Full px=S2 pt=S2 pb=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let preset_station_heading_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 
 ///|
 /// Short of room, the preset's words go with the first of the model's parts (model_triple.mbt triple_drop_name: who
@@ -480,15 +543,15 @@ let preset_dirs : @ui.Style = @ui.css("w=Full gap=S1 align=AStart")
 
 ///|
 /// A folder offered to add, pressed whole: as a folder of the preset stands (preset_dir_row), its ground under the
-/// hand rounded about its mark 10 from it each way (its two lines 4 higher than the mark: 8 over and under them),
-/// concentric with it (the ladder's 18).
+/// hand rounded about its mark 8 from it each way (its two lines 4 higher than the mark: 6 over and under them),
+/// concentric with it (the ladder's 18, as a row 24 in from a panel's 42 is).
 // kept across runs: a value (no field of it changes)
-let preset_offer_row : @ui.Style = @ui.css("row w=Full px=S2_5 py=S2 gap=S3 align=ACenter radius=Around hovered{bg=Hover}")
+let preset_offer_row : @ui.Style = @ui.css("row w=Full px=S2 py=S1_5 gap=S3 align=ACenter radius=Around hovered{bg=Hover}")
 
 ///|
-/// 浏览文件夹's row: one line, as high as its mark, so 10 over and under it as at its start.
+/// 浏览文件夹's row: one line, as high as its mark, so 8 over and under it as at its start.
 // kept across runs: a value (no field of it changes)
-let preset_browse_row : @ui.Style = @ui.css("row w=Full p=S2_5 gap=S3 align=ACenter radius=Around hovered{bg=Hover}")
+let preset_browse_row : @ui.Style = @ui.css("row w=Full p=S2 gap=S3 align=ACenter radius=Around hovered{bg=Hover}")
 
 ///|
 /// 浏览文件夹's folder, in a mark's room.

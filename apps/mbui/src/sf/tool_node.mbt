@@ -1,4 +1,4 @@
-// A bar's tool as a node of the window's tree (the way there, docs/retained.md 4: the library's parts given their
+// A bar's tool as a node of the window's tree (the way there 4: the library's parts given their
 // made-once form beside their old one): viewer_tool's, drawn and answering as it does, each of what it shows bound to
 // what it says as that changes (its icon, its words, whether it is on or can be pressed, its ink), read where it is
 // drawn, not taken once as it is made; its corner as what holds it says (round, or linked to the window's).
@@ -37,6 +37,7 @@ let tool_faint : Double = 0.35
 /// marking tool's, picture_button's: only on or not; the keyboard's focus still shown on it). `ripples`: a press
 /// ripples over it and, where its ground is one of its own (@ui.stands_alone), sinks it (press_look: picture_button's).
 /// The node.
+#callsite(autofill(loc))
 pub fn tool_node(
   parent : @view.View,
   said : () -> ToolSaid,
@@ -46,8 +47,9 @@ pub fn tool_node(
   tip? : TipLayer,
   lights? : Bool = true,
   ripples? : Bool = false,
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     // (where the hand is on it, as a box's hovered look has it: a mouse's pointer over it, a finger pressing it; and
     // where the keyboard's focus shows on it, drawn as the hand on it is: the user, 2026-10-31「焦点就按 hover 样式来」;
     // none where it does not light, `lights` false)
@@ -130,8 +132,11 @@ pub fn tool_node(
     let on_it = fn(d : @view.Drag) { v.finger_target(d.wx, d.wy) }
     v.gesture(
       @ui.touch_slop(),
-      press?=rippled,
+      press?=rippled.map(fn(r) { r.down }),
       tap=fn(d) {
+        if rippled is Some(r) {
+          (r.tapped)(d)
+        }
         if on_it(d) && !@signals.untracked(fn() { said().disabled }) {
           press()
         }
@@ -175,18 +180,31 @@ pub fn tool_node(
 ///|
 /// Icon `name` as a node in `parent`, `size` across, drawn in `tint` as it changes (icon's: its shapes the same, in
 /// the node's tint), called as an old view's icon is by what finds it on screen. The node.
-pub fn icon_node(parent : @view.View, name : String, size : Double, tint : @view.Live[Int64]) -> @view.View {
-  parent.box(fn(i) {
+#callsite(autofill(loc))
+pub fn icon_node(
+  parent : @view.View,
+  name : String,
+  size : Double,
+  tint : @view.Live[Int64],
+  name_now? : () -> String,
+  loc~ : SourceLoc,
+) -> @view.View {
+  // (the icon said as it changes where `name_now` says it: a key's copy turning to a check a moment)
+  let name = match name_now {
+    Some(f) => f
+    None => fn() { name }
+  }
+  parent.box(made_for=loc, fn(i) {
     i
     .width(Is(Some(size)))
     .height(Is(Some(size)))
-    .shapes(Is(
-      match icon_numbers(name) {
+    .shapes(By(fn() {
+      match icon_numbers(name()) {
         Some(d) => icon_shapes(d, size / 24.0, 0x000000FFL)
         None => []
-      },
-    ))
-    .drawn_as(Is("/icon/" + name + "/"))
+      }
+    }))
+    .drawn_as(By(fn() { "/icon/" + name() + "/" }))
     .tint(tint)
     |> ignore
   })
@@ -205,14 +223,16 @@ fn tool_shapes(name : String) -> Array[@ui.Shape] {
 /// A tool's place while what it does goes on, as viewer_download draws it while a download comes (its 32 square, faint
 /// as a tool that cannot be pressed, a ring in the ink's own saying how far, `part` as it changes), in `parent`: read
 /// out as the tool it stands for (`label`), unable to be pressed; its corner `corner`. The node.
+#callsite(autofill(loc))
 pub fn tool_ring_node(
   parent : @view.View,
   part : () -> Double,
   label : () -> String,
   ink : () -> ViewerInk,
   corner : @view.Live[Double],
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(v) {
+  parent.box(made_for=loc, fn(v) {
     v
     .width(Is(Some(tool_side)))
     .height(Is(Some(tool_side)))

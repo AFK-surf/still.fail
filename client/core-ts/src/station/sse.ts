@@ -1,4 +1,4 @@
-// Server-sent events: a text/event-stream split into (event name, data) as chunks arrive (station.rs `SseParser`), with
+// Server-sent events: a text/event-stream split into (event name, data) as chunks arrive, with
 // its id where the event has one; a block with an id and no data is an id alone (name and data "").
 //
 // What has come and is not a whole block yet is kept as bytes, and only what came since is looked through for the

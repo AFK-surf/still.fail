@@ -1,4 +1,4 @@
-// Presets (src/sessions/presets.ts, docs/presets.md): what a chat starts knowing, chosen as it is opened, kept with it.
+// Presets (src/sessions/presets.ts): what a chat starts knowing, chosen as it is opened, kept with it.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
@@ -105,6 +105,14 @@ test("the directories offered are the station's clones, those its chats worked i
   assert.deepEqual(offered.map((c) => [c.name, c.repo, c.chats]), [["app", "github.com/acme/app", 2], ["lib", "github.com/acme/lib", 1], [elsewhere.split("/").pop(), null, 0]]);
 });
 
+test("a preset's remote folders are not offered as directories on this station", async () => {
+  const repos = mkdtempSync(join(tmpdir(), "presets-"));
+  const local = mkdtempSync(join(tmpdir(), "presets-local-"));
+  const remote = "/other-station/Design";
+  const offered = await candidates(repos, [{ id: "p", name: "p", dirs: [{ path: local, repo: null }, { path: remote, repo: null, station: "ws/mba", stationName: "MBA" }], instructions: "", createdBy: "", createdAt: 0, updatedAt: 0 }]);
+  assert.deepEqual(offered.map((c) => c.path), [local]);
+});
+
 test("the repositories on the machine are found under its home, a few levels down, kept and offered after the cache's", async () => {
   const home = mkdtempSync(join(tmpdir(), "presets-home-"));
   clone(join(home, "code"), "app", "git@github.com:acme/app.git");
@@ -140,7 +148,7 @@ test("the repositories on the machine are found under its home, a few levels dow
 });
 
 test("the folders are answered while the machine's repositories are still looked for, and told of once found", { timeout: 20_000 }, async () => {
-  // (2026-11-02: Studio's walk of its home waited on ~/OrbStack for good, and 添加目录 with it)
+  // A slow walk must not hold the folder choices waiting for it.
   const home = mkdtempSync(join(tmpdir(), "presets-home-"));
   clone(join(home, "code"), "app", "git@github.com:acme/app.git");
   const repos = join(home, "station", "repos");
@@ -207,12 +215,12 @@ test("a repository is offered once, the person's checkout of it where there is o
 
 test("a chat opened with another station's preset is told where its folders are, its repositories as this station's clones", async () => {
   const r = new Rig();
-  const [, thread] = newSession(r.hub, { runtime: "claude", createdBy: "local", presetCopy: presetCopyInput({ id: "p1", name: "Docs", dirs: [{ path: "/Users/a/code/app", repo: "github.com/acme/app", elsewhere: "Studio" }, { path: "/Users/a/Design", elsewhere: "Studio" }], instructions: "Be brief." }) });
+  const [, thread] = newSession(r.hub, { runtime: "claude", createdBy: "local", presetCopy: presetCopyInput({ id: "p1", name: "Docs", dirs: [{ path: "/Users/a/code/app", repo: "github.com/acme/app", elsewhere: "Willow" }, { path: "/Users/a/Design", elsewhere: "Willow" }], instructions: "Be brief." }) });
   sayIn(r.hub, thread.id, "local", "go");
   await settle();
   const opened = r.claude.last().options;
   assert.ok(opened.instructions.includes("github.com/acme/app: this station's clone of it"), opened.instructions);
-  assert.ok(opened.instructions.includes("/Users/a/Design on station Studio: read it there with the station tools"), opened.instructions);
+  assert.ok(opened.instructions.includes("/Users/a/Design on station Willow: read it there with the station tools"), opened.instructions);
   assert.ok(opened.instructions.includes("<preset-instructions>\nBe brief.\n</preset-instructions>"));
   await r.close();
 });

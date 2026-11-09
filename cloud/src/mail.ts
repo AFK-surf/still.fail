@@ -1,7 +1,7 @@
 // The sign-in codes sent to an email (login.ts), through Cloudflare Email Service: the send_email binding EMAIL
 // (wrangler.jsonc), from EMAIL_FROM, whose domain is onboarded in the dashboard (Email Service › Email Sending).
 import { escape } from "./page";
-import { tr, type Lang } from "./i18n.ts";
+import { cloudProduct, tr, type Lang } from "./i18n.ts";
 import type { Env } from "./env";
 
 /** An address with the name shown beside it. */
@@ -26,5 +26,5 @@ export async function sendCode(env: Env, lang: Lang, to: string, code: string, d
     `<p style="margin:16px 0;font-size:32px;font-weight:700;letter-spacing:6px;font-variant-numeric:tabular-nums">${code}</p>` +
     more.map((line, i) => `<p${i === more.length - 1 ? ' style="color:#777"' : ""}>${escape(line)}</p>`).join("") +
     "</div>";
-  await env.EMAIL!.send({ from: { email: env.EMAIL_FROM!, name: "still.fail" }, to, subject: tr(lang, "cloud.mail.code.subject"), text: [lead, code, ...more].join("\n\n"), html });
+  await env.EMAIL!.send({ from: { email: env.EMAIL_FROM!, name: cloudProduct().name }, to, subject: tr(lang, "cloud.mail.code.subject"), text: [lead, code, ...more].join("\n\n"), html });
 }

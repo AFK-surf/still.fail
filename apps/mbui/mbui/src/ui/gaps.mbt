@@ -17,7 +17,9 @@
 //    in from the left as from the right where it stands in one line (a row, a button, a chip: what a box with lines
 //    under lines holds stands as its column says): each end by its box, a drawing larger than an icon by its ink (a
 //    file's sheet in its tile), in a capsule what stands at its ends concentric with them by their middles (a dot, a
-//    tab's ×; a capsule button by its end's).
+//    tab's ×; a capsule button by its end's). A capsule's mark concentric with one end and its lines of words at the
+//    other (a file's card: its name over its size) stand each as its end has it: the mark so, the lines' box as clear
+//    of the curve at theirs as of the capsule's top and foot.
 //
 // 5. The blocks that show their edges (a ground, an edge, what lights up), half as wide as what they stand on at least,
 //    the outermost on it, stand on the edges most of them do, whatever boxes lay them out: one off them by less than
@@ -26,7 +28,9 @@
 //
 // 7. A column of rows that light up under the hand (rule 1's) or are pressed whole, rounded (wider than tall, no ground
 //    with no hand on them, not capsules) in a box with a ground (as wide as most of it, from its top to its foot: a
-//    list's rows on its card, a menu's in its panel, a card's options) stand the theme's `lit_reach` in from its sides,
+//    list's rows on its card, a menu's in its panel, a card's options) stand concentric with it in from its sides (its
+//    drawn ground's corner less the row's: a menu's 24 round rows of 18, 6; a card's 26, 8; the user, 2026-11-03; the
+//    theme's `lit_reach` where its ground is not round or no rounder than the rows),
 //    the first from its top, the last from its foot: a row's ground is the row shown under the hand, not a block of its
 //    own the ladder's inset in, and further in it reads as floating off the edge (still.fail's user, 2026-10-26: a card
 //    of options' grounds 10 in, 「6px 就差不多了」, as a menu's are since 2026-10-25). Not rows flush with it (a list whose
@@ -187,6 +191,55 @@ fn Ctx::words_only(self : Ctx, i : Int) -> Bool {
 }
 
 ///|
+/// Whether node `i` holds words one under another (a name over its size): two of its words whose lines do not share a
+/// row.
+fn Ctx::words_stacked(self : Ctx, i : Int) -> Bool {
+  let rows : Array[(Double, Double)] = []
+  let todo = [i]
+  while todo.pop() is Some(k) {
+    let n = self.nodes[k]
+    if (n.kind == kind_text || n.kind == kind_rich) && (n.text != "" || n.rich is Some(_)) && n.fh > 0.0 {
+      for r in rows {
+        if n.y >= r.1 - gap_slack || n.y + n.fh <= r.0 + gap_slack {
+          return true
+        }
+      }
+      rows.push((n.y, n.y + n.fh))
+    }
+    let mut ch = n.first
+    while ch >= 0 {
+      todo.push(ch)
+      ch = self.nodes[ch].next
+    }
+  }
+  false
+}
+
+///|
+/// How words `w` at an end of capsule `gi` (its left end where `left`) reach into the curve there, said, where their
+/// box's corners come nearer it than the box's top or foot is to the capsule's, by more than the slack (rule 4: they
+/// keep as clear of the round end as of the capsule's top and foot; a button's words 16 in from the end of its 34 are
+/// 0.05 nearer, a toast's 18 in its 40 0.2); None where they keep clear.
+fn Ctx::capsule_words_reach(self : Ctx, gi : Int, w : Int, left : Bool) -> String? {
+  let gb = self.nodes[gi]
+  let n = self.nodes[w]
+  let r = gb.fh / 2.0
+  let inset = if left { n.x - gb.x } else { gb.x + gb.fw - (n.x + n.fw) }
+  // (how far past where the round end begins the box reaches, and how far up or down from the end's centre its
+  // farther corner is)
+  let into = r - inset
+  let centre = gb.y + r
+  let half = dmax(centre - n.y, n.y + n.fh - centre)
+  let clear = r - half
+  let off = r - (into * into + half * half).sqrt()
+  if into <= 0.0 || off >= clear - gap_slack {
+    None
+  } else {
+    Some("\{self.named(w)} reaches into its round end, \{inset} in: \{off} from its curve, \{clear} from its top or foot")
+  }
+}
+
+///|
 /// Whether node `i` draws words, a drawing of its own (an icon) or a block with a ground (a chip, a tag): what rule 4
 /// holds in from the edges of the box with a ground round it.
 fn Node::gap_content(self : Node) -> Bool {
@@ -235,7 +288,7 @@ fn gap_between(
 ///|
 /// Whether each node of the frame just built shows whole, and the layer it is in. A node's parent comes before it in
 /// the pool. Shown whole: drawn, not moved off its place, in the window and in what cuts it (a row scrolled half under
-/// a list's edge is measured nowhere). Its layer: a layer, a page of a pager, one put where it is said, over the whole
+/// a list's edge is measured nowhere). Its layer: a layer, one put where it is said, over the whole
 /// window: what lies over another on purpose.
 fn Ctx::shown_whole(self : Ctx) -> (Array[Bool], Array[Int]) {
   let n = self.count
@@ -248,7 +301,7 @@ fn Ctx::shown_whole(self : Ctx) -> (Array[Bool], Array[Int]) {
       b.y >= -gap_slack &&
       b.x + b.fw <= self.width + gap_slack &&
       b.y + b.fh <= self.height + gap_slack
-    let aside = b.layer || b.portal || b.pager != 0 || b.placed_at()
+    let aside = b.layer || b.portal || b.placed_at()
     let moved = b.moved_off()
     if p < 0 || p >= n {
       whole[i] = b.opacity > 0.01 && inside && !moved
@@ -262,7 +315,7 @@ fn Ctx::shown_whole(self : Ctx) -> (Array[Bool], Array[Int]) {
           b.x + b.fw <= a.x + a.fw + gap_slack &&
           b.y + b.fh <= a.y + a.fh + gap_slack
         )
-      whole[i] = whole[p] && b.opacity > 0.01 && inside && !moved && cut_in && !a.sideways
+      whole[i] = whole[p] && b.opacity > 0.01 && inside && !moved && cut_in && !a.sideways && !self.island_scrolls(i)
       layer[i] = if aside { i } else { layer[p] }
     }
   }
@@ -353,7 +406,12 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
     }
     // (kept: its ground with no hand on it, and not where the hand moves the choice, the one chosen following the
     // pointer: one lit at a time)
-    let kept = lit.filter(fn(i) { self.nodes[i].grounded() && !self.hand_chooses.contains(self.nodes[i].id) })
+    // (nor one whose ground is the hand's now: the pointer resting on it, a frame drawn with a hand on it, a picture's
+    // hover, lights it as it would any of them, one at a time)
+    let kept = lit.filter(fn(i) {
+      let id = self.nodes[i].id
+      self.nodes[i].grounded() && !self.hand_chooses.contains(id) && (self.lit_every || !self.hand_at(id))
+    })
     // (what holds both, the nearest; one kept lit is of theirs where it parts from them there and is of their kind, in
     // their column as wide or in their line as high: a row of their list, not a tool or a filter kept on over it)
     let holder = fn(a : Int, b : Int) {
@@ -558,6 +616,38 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
         None
       }
     }
+    // (a mark concentric with one end of a capsule and, beside it, lines of words at the other, one under another (a
+    // file's card: its line icon, its name over its size), which do not stand in one line and were held by nothing
+    // here: each end held as it stands, the mark by its middle, on its end's centre; the lines by their box, its
+    // corners as clear of the curve at that end as its top and foot of the capsule's (Ctx::capsule_words_reach). Lines
+    // as far in from that end as the mark's box from its own reach into its curve: a file's name 14 from its card's
+    // end, its last tall letter 10 from the curve, the mark 15 from its own (still.fail's user, 2026-11-03: 右边是不是边距
+    // 不够). One line of words stands by its box as at the other end, below: its line's room over and under the letters
+    // is most of a small capsule's height (a tag's 18 of its 20).)
+    if capsule && first >= 0 && last >= 0 && first != last {
+      let mark_at = fn(i : Int, left : Bool) -> Bool {
+        match end_mid(i, left) {
+          Some(m) => (m - gb.fh / 2.0).abs() <= gap_slack
+          None => false
+        }
+      }
+      let lines_at = fn(i : Int) -> Bool { self.words_only(i) && self.words_stacked(i) }
+      let (fb, lb) = (self.nodes[first], self.nodes[last])
+      let beside = fb.x + fb.fw <= lb.x + gap_slack
+      let words_at = if beside && mark_at(first, true) && lines_at(last) {
+        Some((last, false))
+      } else if beside && mark_at(last, false) && lines_at(first) {
+        Some((first, true))
+      } else {
+        None
+      }
+      if words_at is Some((w, left)) {
+        if self.capsule_words_reach(gi, w, left) is Some(said) {
+          out.push("rule 4: in \{self.named(gi)}, \{said}")
+        }
+        continue
+      }
+    }
     // (else each end where its box is; a drawing larger than an icon where it draws, not the room round it (a file's
     // sheet drawn 2.75 in its tile): an icon's box is its ink, drawn on its grid)
     let (l, r) = if capsule && end_mid(first, true) is Some(a) && end_mid(last, false) is Some(b) {
@@ -717,6 +807,7 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
     for entry in rows {
       let (q, list) = entry
       let a = self.nodes[q]
+      let reach_of = fn(i : Int) { self.lit_reach_in(ground_of(q).unwrap_or(q), i) }
       let top = fn(i : Int) { self.nodes[i].y - a.y }
       let foot = fn(i : Int) { a.y + a.fh - (self.nodes[i].y + self.nodes[i].fh) }
       let mut first = list[0]
@@ -747,13 +838,13 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
         for s in sides {
           let (name, d) = s
           // (flush with it: a list whose rows are as wide as it, their grounds its own edge to edge)
-          if d > gap_slack && (d - self.lit_reach).abs() > gap_slack {
+          if d > gap_slack && (d - reach_of(i)).abs() > gap_slack {
             off.push("\{d} from its \{name}")
           }
         }
         if off.length() > 0 {
           out.push(
-            "rule 7: \{self.named(i)} lights up in \{self.named(q)}, " + off.join(", ") + " (\{self.lit_reach} in)",
+            "rule 7: \{self.named(i)} lights up in \{self.named(q)}, " + off.join(", ") + " (\{reach_of(i)} in)",
           )
         }
       }
@@ -774,8 +865,8 @@ fn Ctx::gap_faults(self : Ctx) -> Array[String] {
       // beside its own rail; those rows do not set the alignment of the pane's other contents.
       let list = list.filter(fn(i) {
         let row = self.nodes[i]
-        (row.x - a.x - self.lit_reach).abs() <= gap_slack &&
-        (a.x + a.fw - row.x - row.fw - self.lit_reach).abs() <= gap_slack
+        let reach = self.lit_reach_in(ground, i)
+        (row.x - a.x - reach).abs() <= gap_slack && (a.x + a.fw - row.x - row.fw - reach).abs() <= gap_slack
       })
       if list.is_empty() {
         continue
@@ -939,3 +1030,27 @@ fn Ctx::gap_steps(self : Ctx, whole : Array[Bool], layer : Array[Int], out : Arr
 /// How far apart two edges of a column are on purpose at least (an indent, a step of the scale): nearer, they were
 /// meant to be one.
 let gap_align_step : Double = 16.0
+
+///|
+/// Whether node `i` is the box of an old view hosted in a node of the window's tree held by one that scrolls what it
+/// holds (Tree::in_scroller): what it holds moves with that, as what a box of the old frame's that scrolls holds does
+/// (a sideways one, shown_whole's).
+fn Ctx::island_scrolls(self : Ctx, i : Int) -> Bool {
+  match (old_box_owners.get(i), view_app.val) {
+    (Some((_, id)), Some(tree)) => tree.in_scroller(id)
+    _ => false
+  }
+}
+
+///|
+/// How far in from the sides of the box with a ground round them rule 7's row `i` stands: concentric with that drawn
+/// ground `ground` (its corner less the row's), the theme's `lit_reach` where it is not round or no rounder than the
+/// row (a list's square card).
+fn Ctx::lit_reach_in(self : Ctx, ground : Int, i : Int) -> Double {
+  let d = self.nodes[ground].corner() - self.nodes[i].corner()
+  if self.nodes[ground].corner() <= gap_slack || d <= gap_slack {
+    self.lit_reach
+  } else {
+    d
+  }
+}

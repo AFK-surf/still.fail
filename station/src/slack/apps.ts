@@ -1,4 +1,4 @@
-// Managing a connect's Slack app from still.fail (chat/slack_apps.rs): its name, description, colour, icon and
+// Managing a connect's Slack app from still.fail: its name, description, colour, icon and
 // permissions live in the app's manifest, which Slack lets a workspace member change with an app configuration token.
 // The token lasts 12 hours; its refresh token (single use) yields the next pair, so the station keeps both and rotates
 // as needed. Permission changes still need a person to approve them in Slack; the station hands them the link. Also the
@@ -19,7 +19,7 @@ export const SLACK_GROUPS: SlackGroup[] = [
   {
     id: "base",
     label: "读取和回复消息",
-    description: "被 @ 时收到消息，读取所在频道、私信和群聊的消息并回复，干活时在 thread 里显示进度。",
+    description: "被 @ 或用 /sf 时收到消息，读取所在频道、私信和群聊的消息并回复，干活时在 thread 里显示进度。",
     scopes: [
       "app_mentions:read",
       "chat:write",
@@ -33,6 +33,8 @@ export const SLACK_GROUPS: SlackGroup[] = [
       "mpim:read",
       "users:read",
       "assistant:write",
+      // `/sf` (NEW_CHAT_COMMAND): Slack takes no slash command without it.
+      "commands",
     ],
     events: ["agent_session_stopped", "app_mention", "message.channels", "message.groups", "message.im", "message.mpim"],
   },
@@ -101,9 +103,9 @@ export const SLACK_GROUPS: SlackGroup[] = [
   },
   {
     id: "more",
-    label: "状态、元数据和斜杠命令",
-    description: "设置自己的在线状态，读取消息元数据和工作区设置，嵌入视频链接，响应斜杠命令。",
-    scopes: ["users:write", "metadata.message:read", "team.preferences:read", "links.embed:write", "commands"],
+    label: "状态和元数据",
+    description: "设置自己的在线状态，读取消息元数据和工作区设置，嵌入视频链接。",
+    scopes: ["users:write", "metadata.message:read", "team.preferences:read", "links.embed:write"],
     events: [],
   },
 ];
@@ -200,7 +202,7 @@ export function applySettings(manifest: Json, edit: SlackAppEdit): Json {
   object(object(next, "settings"), "event_subscriptions").bot_events = events;
   // Cards' buttons come over Socket Mode (an app made before them gets them on its next save).
   if (next.settings.socket_mode_enabled === true) object(next.settings, "interactivity").is_enabled = true;
-  return next;
+  return withCommand(next);
 }
 
 /// The events of the groups on (base always).
@@ -225,6 +227,30 @@ export function withStopEvent(manifest: Json): Json | null {
   return next;
 }
 
+/// The slash command that opens a new chat with a model picked (surface.ts `newChat`): over Socket Mode, so no url.
+export const NEW_CHAT_COMMAND = "/sf";
+
+/// A manifest with `/sf` when its bot may take slash commands (the `commands` scope: Slack refuses a command without
+/// it), without it otherwise. Other commands stay as they are.
+export function withCommand(manifest: Json): Json {
+  const next = structuredClone(manifest);
+  const features = object(next, "features");
+  const others = (Array.isArray(features.slash_commands) ? features.slash_commands : []).filter((c: Json) => c?.command !== NEW_CHAT_COMMAND);
+  const on = at(next, ["settings", "socket_mode_enabled"]) === true && strings(at(next, ["oauth_config", "scopes", "bot"])).includes("commands");
+  const commands = on ? [...others, { command: NEW_CHAT_COMMAND, description: "Start a chat with a model you pick", usage_hint: "[what to say]", should_escape: false }] : others;
+  if (commands.length > 0) features.slash_commands = commands;
+  else delete features.slash_commands;
+  return next;
+}
+
+/// An existing app brought up to date as the station maintains it (index.ts): the native stop event and agent view
+/// (withStopEvent), and `/sf` (withCommand). Null: nothing to change.
+export function upgraded(manifest: Json): Json | null {
+  const stopped = withStopEvent(manifest) ?? manifest;
+  const next = withCommand(stopped);
+  return JSON.stringify(next) === JSON.stringify(manifest) ? null : next;
+}
+
 /// A manifest with Socket Mode off or on. Off, it has no events or interactivity either (Slack asks those of an app
 /// without Socket Mode to go to a URL): an app made so lets its maker turn Socket Mode on in Slack, which is where Slack
 /// makes the app-level token with its scope already picked. On, its events are those of the groups it has on, and its
@@ -236,14 +262,14 @@ export function withSocketMode(manifest: Json, on: boolean): Json {
   if (!on) {
     delete settings.event_subscriptions;
     settings.interactivity = { is_enabled: false };
-    return next;
+    return withCommand(next);
   }
   object(settings, "interactivity").is_enabled = true;
   const events = eventsOn(settingsOf(manifest).groups);
   const known = knownEvents();
   const others = strings(at(settings, ["event_subscriptions", "bot_events"])).filter((e) => !known.includes(e));
   object(settings, "event_subscriptions").bot_events = unique([...others, ...events]);
-  return next;
+  return withCommand(next);
 }
 
 /// Every bot scope of every permission group.
@@ -256,7 +282,7 @@ export const botScopes = (): string[] => unique(knownScopes());
 export function slackManifest(name: string, description: string | null = null, redirectUrl: string | null = null): Json {
   const oauth: Json = { scopes: { bot: botScopes() } };
   if (redirectUrl !== null) oauth.redirect_urls = [redirectUrl];
-  return {
+  return withCommand({
     display_information: { name, description: description ?? "Coding agent in your threads (still.fail)", background_color: "#7a2e0e" },
     // The Messages tab lets people message the bot directly; without it Slack says messaging the app is turned off.
     features: {
@@ -272,7 +298,7 @@ export function slackManifest(name: string, description: string | null = null, r
       socket_mode_enabled: true,
       token_rotation_enabled: false,
     },
-  };
+  });
 }
 
 export const createAppUrl = (name: string) => `https://api.slack.com/apps?new_app=1&manifest_json=${encodeURIComponent(JSON.stringify(slackManifest(name)))}`;

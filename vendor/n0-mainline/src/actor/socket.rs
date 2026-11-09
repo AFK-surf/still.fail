@@ -25,7 +25,7 @@ const DEFAULT_PORT: u16 = 6881;
 
 const MIN_REQUEST_TIMEOUT: Duration = Duration::from_millis(500);
 
-/// ember: reads failing in a row before the socket is bound anew, and the longest wait after a failed read.
+/// stillfail: reads failing in a row before the socket is bound anew, and the longest wait after a failed read.
 const REBIND_AFTER: u32 = 3;
 const MAX_READ_BACKOFF: Duration = Duration::from_secs(2);
 
@@ -50,7 +50,7 @@ struct UdpIo {
     made: u64,
 }
 
-/// ember: a fault for tests through the whole DHT (dht.rs): the sockets on `PORT` made before `MADE_BEFORE` are
+/// stillfail: a fault for tests through the whole DHT (dht.rs): the sockets on `PORT` made before `MADE_BEFORE` are
 /// readable and each read fails at once, as the phone's was; one bound anew after is not.
 #[cfg(test)]
 pub(crate) mod fault {
@@ -154,13 +154,13 @@ pub struct KrpcSocket {
     inflight_requests: InflightRequests,
     /// Outgoing packets queued by sync send methods.
     outbox: VecDeque<(Vec<u8>, SocketAddr)>,
-    /// ember: reads failed in a row since the last that did not, and when the next may be tried: kept here, not in a
+    /// stillfail: reads failed in a row since the last that did not, and when the next may be tried: kept here, not in a
     /// sleep, so that the actor's select dropping a read for another branch does not cut the wait short.
     failed_reads: u32,
     read_after: Option<Instant>,
-    /// ember: when the first of the reads failing in a row failed (the record's "reads back after").
+    /// stillfail: when the first of the reads failing in a row failed (the record's "reads back after").
     first_failed_at: Option<Instant>,
-    /// ember: this DHT's number in the app's record (`dht#N`).
+    /// stillfail: this DHT's number in the app's record (`dht#N`).
     pub(crate) dht: u64,
 
     #[cfg(test)]
@@ -194,7 +194,7 @@ impl KrpcSocket {
             failed_reads: 0,
             read_after: None,
             first_failed_at: None,
-            dht: crate::ember::next_dht(),
+            dht: crate::stillfail::next_dht(),
 
             #[cfg(test)]
             version: if config.disable_announce_signed_peers {
@@ -296,7 +296,7 @@ impl KrpcSocket {
         if received.is_ok() {
             if let Some(first) = self.first_failed_at.take() {
                 let failed = self.failed_reads;
-                crate::ember::say(self.dht, || format!("reads back after {failed} failed, {}ms after the first", first.elapsed().as_millis()));
+                crate::stillfail::say(self.dht, || format!("reads back after {failed} failed, {}ms after the first", first.elapsed().as_millis()));
             }
             self.failed_reads = 0;
             self.read_after = None;
@@ -369,7 +369,7 @@ impl KrpcSocket {
                 // Ignore unsupported Ipv6 messages
             }
             Err(error) => {
-                // ember: a read that fails at once leaves the socket readable, and the actor's loop asked again
+                // stillfail: a read that fails at once leaves the socket readable, and the actor's loop asked again
                 // straight away, a CPU kept busy for as long as the error lasted (a phone's record, 2026-10-31: a
                 // core busy in here for minutes after the app came back; that iOS took the suspended app's socket
                 // away is a guess, the error itself not recorded). Back off, longer each time (the third failure ~150 ms
@@ -378,11 +378,11 @@ impl KrpcSocket {
                 self.first_failed_at.get_or_insert_with(Instant::now);
                 warn!(failed = self.failed_reads, "IO error {error}");
                 let n = self.failed_reads;
-                let says = crate::ember::says_failure(n);
+                let says = crate::stillfail::says_failure(n);
                 let wait = Duration::from_millis(50 << (n - 1).min(6)).min(MAX_READ_BACKOFF);
                 if says {
                     let os = error.raw_os_error().map_or(String::new(), |code| format!(" (os error {code})"));
-                    crate::ember::say(self.dht, || format!("read failed #{n}: {:?}{os}, next read in {}ms", error.kind(), wait.as_millis()));
+                    crate::stillfail::say(self.dht, || format!("read failed #{n}: {:?}{os}, next read in {}ms", error.kind(), wait.as_millis()));
                 }
                 if n >= REBIND_AFTER {
                     self.rebind(says);
@@ -394,7 +394,7 @@ impl KrpcSocket {
         None
     }
 
-    /// ember: the socket bound anew. A socket on any port is bound first and takes the old one's place, the old one
+    /// stillfail: the socket bound anew. A socket on any port is bound first and takes the old one's place, the old one
     /// closed; then the old port is tried again, the socket on the other port kept while something else still holds
     /// it (the old descriptor open elsewhere). Failing to bind even the first keeps the old socket, tried again at the
     /// next failure. A port that changes loses the answers on their way to the old one (their requests time out as
@@ -408,7 +408,7 @@ impl KrpcSocket {
             Ok(io) => io,
             Err(error) => {
                 if says {
-                    crate::ember::say(self.dht, || format!("binding anew failed: {error}"));
+                    crate::stillfail::say(self.dht, || format!("binding anew failed: {error}"));
                 }
                 return warn!("binding the socket anew failed: {error}");
             }
@@ -421,7 +421,7 @@ impl KrpcSocket {
             Ok(SocketAddr::V4(addr)) => {
                 debug!(?addr, was = port, "socket bound anew after failed reads");
                 if says {
-                    crate::ember::say(self.dht, || format!("bound anew: port {port} -> {}", addr.port()));
+                    crate::stillfail::say(self.dht, || format!("bound anew: port {port} -> {}", addr.port()));
                 }
                 self.local_addr = addr;
             }
@@ -717,7 +717,7 @@ mod test {
         assert_eq!(requests.tid(), 0);
     }
 
-    // ember: a socket whose reads keep failing at once, the readiness never cleared (what a phone's record showed after
+    // stillfail: a socket whose reads keep failing at once, the readiness never cleared (what a phone's record showed after
     // the app came back; iOS taking the suspended app's socket away a guess), neither spins nor stays broken: the reads
     // back off, and the socket is bound anew.
     #[cfg(unix)]
@@ -771,7 +771,7 @@ mod test {
     #[cfg(unix)]
     #[tokio::test]
     async fn failing_reads_back_off_and_rebind() {
-        let _serial = crate::ember::SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        let _serial = crate::stillfail::SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let (mut socket, port, _) = broken(false).await;
         let mut returned = 0;
         let _ = tokio::time::timeout(Duration::from_millis(500), async {
@@ -793,7 +793,7 @@ mod test {
     #[cfg(unix)]
     #[tokio::test]
     async fn failing_reads_back_off_when_the_read_is_dropped() {
-        let _serial = crate::ember::SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        let _serial = crate::stillfail::SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let (mut socket, _, _) = broken(false).await;
         let start = Instant::now();
         while start.elapsed() < Duration::from_millis(120) {
@@ -808,7 +808,7 @@ mod test {
     #[cfg(unix)]
     #[tokio::test]
     async fn failing_reads_wait_at_most_the_longest_backoff() {
-        let _serial = crate::ember::SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        let _serial = crate::stillfail::SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let (mut socket, _, _) = broken(false).await;
         socket.failed_reads = 40;
         let before = Instant::now();
@@ -820,7 +820,7 @@ mod test {
     #[cfg(unix)]
     #[tokio::test]
     async fn failing_reads_rebind_on_another_port_when_theirs_is_held() {
-        let _serial = crate::ember::SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        let _serial = crate::stillfail::SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let (mut socket, port, _kept) = broken(true).await;
         let _ = tokio::time::timeout(Duration::from_millis(500), async {
             while socket.failed_reads < REBIND_AFTER {

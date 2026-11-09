@@ -1,4 +1,4 @@
-// The workspace lock (docs/workspace-lock.md, src/cloud/lock.ts): who may sign what, passkeys, which device a
+// The workspace lock (src/cloud/lock.ts): who may sign what, passkeys, which device a
 // connection is; and, once a station pins it, what the control plane can no longer do — swap the grant key, add a
 // station to the roster, move the station — while an unlocked station goes on as before. Keys are made per run;
 // nothing depends on time or on how fast the machine is.
@@ -8,11 +8,11 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { type Entry, admit, apply, canonical, endpointBytes, entryHash, fold, genesis, LockRefusal, shortCode, signedBytes } from "../src/cloud/lock.ts";
+import { type Entry, admit, apply, canonical, devicesFor, endpointBytes, entryHash, fold, genesis, LockRefusal, memberWithEmail, membersWithEmail, shortCode, signedBytes } from "../src/cloud/lock.ts";
 import { applyState } from "../src/cloud/presence.ts";
 import { Cloud, writeState } from "../src/cloud/state.ts";
 import { verifyMember } from "../src/mesh/credential.ts";
-import { inLock, inLockBringing, lockRoute } from "../src/mesh/serve.ts";
+import { inLock, inLockBringing, lockRoute, personChainsOf, stillIn } from "../src/mesh/serve.ts";
 import { GrantKey } from "./fake-control-plane.ts";
 
 const WS = "01HZZZZZZZZZZZZZZZZZZZZZZZ";
@@ -72,6 +72,24 @@ test("a genesis is its owner's, signed by the owner's own device in it", () => {
   assert.throws(() => genesis({ ...w.first, body: { ...w.first.body, members: [...w.first.body.members, { sub: "eve", email: "e@x", role: "owner" }] } }), /signed/);
 });
 
+test("person and device lookups follow each lock snapshot", () => {
+  const w = workspace();
+  assert.equal(memberWithEmail(w.state, "b@x")?.sub, "bob");
+  assert.deepEqual(devicesFor(w.state, "bob"), [w.bob.base.hex]);
+  const changed = apply(w.state, signed(after(w.state, "member", { sub: "bob", email: "New@x", role: "admin" }), w.alice.signer), 2000);
+  assert.equal(memberWithEmail(changed, "b@x"), null);
+  assert.equal(memberWithEmail(changed, "new@x")?.sub, "bob");
+  assert.equal(memberWithEmail(w.state, "b@x")?.sub, "bob", "the earlier snapshot stays as it was");
+  const removed = apply(changed, signed(after(changed, "member.remove", { sub: "bob" }), w.alice.signer), 2000);
+  assert.equal(memberWithEmail(removed, "new@x"), null);
+  assert.deepEqual(devicesFor(removed, "bob"), []);
+  assert.deepEqual(devicesFor(changed, "bob"), [w.bob.base.hex]);
+  const sameEmail = apply(changed, signed(after(changed, "member", { sub: "carol", email: "NEW@x", role: "member" }), w.alice.signer), 2000);
+  assert.deepEqual(membersWithEmail(sameEmail, "new@x").map((m) => m.sub), ["bob", "carol"]);
+  assert.equal(memberWithEmail(sameEmail, "new@x")?.sub, "bob");
+  assert.deepEqual(membersWithEmail(changed, "new@x").map((m) => m.sub), ["bob"]);
+});
+
 test("who may sign what: admins manage, members add only their own devices, owners alone touch owners", () => {
   const w = workspace();
   let s = w.state;
@@ -101,6 +119,61 @@ test("who may sign what: admins manage, members add only their own devices, owne
   const off = apply(s, signed(after(s, "disable", {}), w.alice.signer), 2000);
   assert.equal(off.disabled, true);
   assert.throws(() => apply(off, signed(after(off, "member", { sub: "x", email: "x", role: "member" }), w.alice.signer), 2000), /turned off/);
+});
+
+test("a person's own devices: an admin puts in only their first; one put in under someone else's name signs nothing", () => {
+  const w = workspace();
+  let s = w.state;
+  const step = (kind: string, body: unknown, by: Key) => (s = apply(s, signed(after(s, kind, body), by), 2000));
+  // The genesis's devices are each person's own.
+  assert.ok([w.alice, w.bob, w.carol].every((p) => s.devices.get(p.base.hex)?.own));
+  // bob (an admin) puts a device of his making in under alice's name, the owner: it is in the lock, not hers.
+  const fake = { signer: ed(), base: ed() };
+  step("device", { id: fake.base.hex, sub: "alice", kind: "app", label: "alice?", sign_key: fake.signer.id }, w.bob.signer);
+  assert.equal(s.devices.get(fake.base.hex)?.own, false);
+  // What it signs keeps the chain going and changes nothing: no owner made, the lock not turned off, no device put in.
+  const head = s.head;
+  step("member", { sub: "bob", email: "b@x", role: "owner" }, fake.signer);
+  assert.equal(s.members.get("bob")?.role, "admin");
+  assert.notEqual(s.head, head);
+  step("disable", {}, fake.signer);
+  assert.equal(s.disabled, false);
+  const more = ed();
+  step("device", { id: more.hex, sub: "alice", kind: "app", label: "more", sign_key: ed().id }, fake.signer);
+  assert.equal(s.devices.has(more.hex), false);
+  // One taken off its own person's signing key by an admin (same id, his key): no longer theirs.
+  const swap = ed();
+  step("device", { id: w.carol.base.hex, sub: "carol", kind: "app", label: "carol", sign_key: swap.id }, w.bob.signer);
+  assert.equal(s.devices.get(w.carol.base.hex)?.own, false);
+  // A passkey an admin puts in under alice's name: not hers either.
+  step("passkey", { id: "cred-x", sub: "alice", key: p256().id, label: "x" }, w.bob.signer);
+  assert.equal([...s.passkeys.values()].find((p) => p.id === "cred-x")?.own, false);
+  // A new member: their first device is put in by an admin (face to face), and is theirs; the next one only by them.
+  step("member", { sub: "dave", email: "d@x", role: "member" }, w.bob.signer);
+  const dave = { signer: ed(), base: ed() };
+  step("device", { id: dave.base.hex, sub: "dave", kind: "app", label: "dave", sign_key: dave.signer.id }, w.bob.signer);
+  assert.equal(s.devices.get(dave.base.hex)?.own, true);
+  const daveAdmins = ed();
+  step("device", { id: daveAdmins.hex, sub: "dave", kind: "app", label: "dave 2?", sign_key: ed().id }, w.bob.signer);
+  assert.equal(s.devices.get(daveAdmins.hex)?.own, false);
+  const davePhone = ed();
+  step("device", { id: davePhone.hex, sub: "dave", kind: "app", label: "dave 2", sign_key: ed().id }, dave.signer);
+  assert.equal(s.devices.get(davePhone.hex)?.own, true);
+  // dave's web page, renewed by an admin under the same (no) key: stays his.
+  const page = ed();
+  step("device", { id: page.hex, sub: "dave", kind: "web", label: "Chrome", exp: 2000 + 86400 }, dave.signer);
+  step("device", { id: page.hex, sub: "dave", kind: "web", label: "Chrome", exp: 2000 + 2 * 86400 }, w.bob.signer);
+  assert.equal(s.devices.get(page.hex)?.own, true);
+  // Every device of dave's gone (lost): an admin's new one is still not his ...
+  for (const id of [dave.base.hex, daveAdmins.hex, davePhone.hex, page.hex]) step("device.remove", { id }, w.bob.signer);
+  const again = ed();
+  step("device", { id: again.hex, sub: "dave", kind: "app", label: "dave 3?", sign_key: ed().id }, w.bob.signer);
+  assert.equal(s.devices.get(again.hex)?.own, false);
+  // ... until dave is taken out and made a member again, in the open: then his first is put in as anyone's first.
+  step("member.remove", { sub: "dave" }, w.bob.signer);
+  step("member", { sub: "dave", email: "d@x", role: "member" }, w.bob.signer);
+  step("device", { id: again.hex, sub: "dave", kind: "app", label: "dave 3", sign_key: ed().id }, w.bob.signer);
+  assert.equal(s.devices.get(again.hex)?.own, true);
 });
 
 test("an entry follows the head it names, signed as it is", () => {
@@ -251,6 +324,47 @@ test("the lock is pinned by its owner's own device, grows entry by entry, and is
   assert.equal(new Cloud(cloud.data).lock, null);
 });
 
+test("a lock its owner turned off is not pinned again: the chain up to before the off, brought late by a device, leaves the station as it is", () => {
+  const w = workspace();
+  const cloud = stationData(w, w.stations[0]!.hex);
+  cloud.takeLock([w.first]);
+  const device = signed(after(cloud.locked()!.state!, "device", { id: ed().hex, sub: "carol", kind: "app", label: "phone" }), w.alice.signer);
+  cloud.takeLock([device]);
+  const off = signed(after(cloud.locked()!.state!, "disable", {}), w.alice.signer);
+  cloud.takeLock([off]);
+  assert.equal(cloud.locked(), null, "off");
+  // What alice's app brought every station when it approved the phone, come after the off.
+  const v = { sub: "alice", email: "", name: "", role: "owner", workspace: WS, device: ed().hex, lockDevice: undefined as any };
+  const endpoint = v.device;
+  v.lockDevice = { base: w.alice.base.hex, proof: w.alice.base.sign(endpointBytes(WS, endpoint)) };
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ entries: [w.first, device] })), v)[0], 409);
+  assert.equal(cloud.locked(), null, "still off");
+  assert.equal(new Cloud(cloud.data).locked(), null, "and after a restart");
+  // A new lock, turned on again: pinned.
+  const again = workspace();
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ entries: [{ ...again.first }] })), { ...v, lockDevice: { base: again.alice.base.hex, proof: again.alice.base.sign(endpointBytes(WS, endpoint)) } })[0], 200);
+  assert.equal(cloud.locked()?.state?.genesis, entryHash(again.first));
+});
+
+test("a station is pinned by any of its owner's devices the lock names now, not only one the genesis named", () => {
+  // The owner turned the lock on from one device, approved a phone of theirs after, and takes a station in from it.
+  const w = workspace();
+  const cloud = stationData(w, w.stations[0]!.hex);
+  const phone = { sub: "alice", signer: ed(), base: ed() };
+  const added = signed(after(w.state, "device", { id: phone.base.hex, sub: "alice", kind: "app", label: "phone", sign_key: phone.signer.id }), w.alice.signer);
+  const station = signed(after(apply(w.state, added, 2000), "station", { key: ed().hex, name: "new" }), phone.signer);
+  const endpoint = ed().hex;
+  const from = (who: { base: Key }, role: string) => ({ sub: "alice", email: "", name: "", role, workspace: WS, device: endpoint, lockDevice: { base: who.base.hex, proof: who.base.sign(endpointBytes(WS, endpoint)) } });
+  assert.deepEqual(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ entries: [w.first, added, station] })), from(phone, "owner"))[0], 200);
+  assert.equal(cloud.locked()?.state?.seq, 2);
+  // One the lock does not name, or not its owner's, pins nothing.
+  const other = stationData(w, w.stations[1]!.hex);
+  assert.equal(lockRoute(other, "POST", [], Buffer.from(JSON.stringify({ entries: [w.first, added, station] })), from({ base: ed() }, "owner"))[0], 409);
+  const bobs = { sub: "bob", email: "", name: "", role: "admin", workspace: WS, device: endpoint, lockDevice: { base: w.bob.base.hex, proof: w.bob.base.sign(endpointBytes(WS, endpoint)) } };
+  assert.equal(lockRoute(other, "POST", [], Buffer.from(JSON.stringify({ entries: [w.first, added, station] })), bobs)[0], 403);
+  assert.equal(other.locked(), null);
+});
+
 test("the control plane's head: a locked station asks for what it lacks and gives back what the plane lost", () => {
   const w = workspace();
   const cloud = stationData(w, w.stations[0]!.hex);
@@ -291,6 +405,29 @@ test("an unlocked station pins no lock the control plane offers, but the one its
   assert.equal(cloud.locked()?.state?.genesis, entryHash(w.first));
 });
 
+test("a workspace that turned its lock on after this station joined it, the station not in it then: pinned once the lock names it", async () => {
+  const B = "01HBBBBBBBBBBBBBBBBBBBBBBB";
+  const w = workspace();
+  const b = workspace(B);
+  const me = w.stations[0]!.hex;
+  const cloud = stationData(w, me);
+  const sent: any[] = [];
+  const frame = (lock: unknown) => JSON.stringify({ type: "state", workspace: WS, workspace_name: "Team", name: "s0", peers: w.stations.map((s) => ({ id: s.hex })), grant_keys: { keys: [w.grant.jwk] }, revocations: [], lock: null, workspaces: [{ workspace: B, workspace_name: "B", name: "s0", peers: [{ id: me }], revocations: [], lock, locked: true }] });
+  applyState(cloud, frame({ seq: 0, hash: entryHash(b.first), genesis: entryHash(b.first) }), (f) => sent.push(f));
+  assert.deepEqual(cloud.memberships().map((m) => m.workspace), [WS], "B's members turned away");
+  assert.equal(cloud.leftOut(B), "unpinned");
+  // Its owner puts this station in B's lock (lock.joinStation, signed on a trusted device): the plane says so, the
+  // station asks for it and pins it.
+  const named = signed({ ...after(b.state, "station", { key: me, name: "s0" }, 2000), ws: B }, b.alice.signer);
+  sent.length = 0;
+  applyState(cloud, frame({ seq: 1, hash: entryHash(named), genesis: entryHash(b.first) }), (f) => sent.push(f));
+  assert.deepEqual(sent, [{ type: "lock.get", after: -1, workspace: B }]);
+  applyState(cloud, JSON.stringify({ type: "lock", workspace: B, entries: [b.first, named] }));
+  assert.equal(cloud.locked(B)?.state?.seq, 1);
+  assert.equal(cloud.leftOut(B), null);
+  assert.deepEqual(cloud.memberships().map((m) => m.workspace), [WS, B], "B's members taken, as its lock says");
+});
+
 test("a station in a second workspace pins that one's lock there: none of its members until then, then only those it names", async () => {
   const { joinedPendingPath, joinedLockPath } = await import("../src/cloud/state.ts");
   const { mkdirSync, writeFileSync, existsSync } = await import("node:fs");
@@ -307,10 +444,14 @@ test("a station in a second workspace pins that one's lock there: none of its me
   const frame = (joined: unknown[], lock: unknown = null) => JSON.stringify({ type: "state", workspace: WS, workspace_name: "Team", name: "s0", peers: w.stations.map((s) => ({ id: s.hex })), grant_keys: { keys: [w.grant.jwk] }, revocations: [], lock, workspaces: joined });
   const inB = { workspace: B, workspace_name: "B", name: "s0", peers: [{ id: b.stations[0]!.hex }, { id: intruder }], revocations: [], lock: { seq: 0, hash: entryHash(b.first) }, locked: true };
   const ws = () => cloud.memberships().map((m) => m.workspace);
-  // In security mode, as the plane says, its lock not pinned here: none of B's members are taken, nor its lock asked.
+  // In security mode, as the plane says, its lock not pinned here: none of B's members are taken. Its lock is asked
+  // for, and not pinned, as it does not name this station.
   applyState(cloud, frame([inB]), (f) => sent.push(f));
   assert.deepEqual(ws(), [WS]);
-  assert.equal(sent.length, 0);
+  assert.equal(cloud.membership(B), null, "a named workspace with an unpinned lock is not admitted");
+  assert.deepEqual(sent.splice(0), [{ type: "lock.get", after: -1, workspace: B }]);
+  applyState(cloud, JSON.stringify({ type: "lock", workspace: B, entries: [b.first] }));
+  assert.equal(cloud.locked(B), null);
   // Joined naming B's lock: asked for it, pinned once the plane brings that one.
   mkdirSync(dirname(joinedPendingPath(cloud.data, B)), { recursive: true });
   writeFileSync(joinedPendingPath(cloud.data, B), JSON.stringify({ hash: entryHash(b.first) }));
@@ -324,6 +465,7 @@ test("a station in a second workspace pins that one's lock there: none of its me
   assert.ok(existsSync(joinedLockPath(cloud.data, B)) && !existsSync(joinedPendingPath(cloud.data, B)));
   assert.deepEqual(ws(), [WS, B]);
   assert.deepEqual(cloud.membership(B)!.peers.map((p) => p.id), [b.stations[0]!.hex], "the stations B's lock names only");
+  assert.deepEqual(cloud.membership(B), cloud.memberships().find((m) => m.workspace === B), "single and full roster agree after pinning");
   // B's members: with B's lock's keys, on devices it names, as it says.
   const endpoint = ed().hex;
   const keys = (x: string) => cloud.grantKeys(x === WS ? null : x);
@@ -414,9 +556,9 @@ test("joining a locked workspace: the plane's frame comes before the join's answ
   const forged = { credential: credential(new GrantKey("k9"), B, endpoint, "member") };
   const refused = (h: unknown) => refusalOf(cloud, h, endpoint, new Error("credential is for another workspace"));
   // The plane tells the station it is in B as it takes the join, before the join is answered: which lock to pin is not
-  // written yet, and nothing is asked for.
+  // written yet. B's lock is asked for (pinned only once it names this station, which this one does not).
   applyState(cloud, frame([inB]), (f) => sent.push(f));
-  assert.equal(sent.length, 0);
+  assert.deepEqual(sent.splice(0), [{ type: "lock.get", after: -1, workspace: B }]);
   assert.equal(cloud.leftOut(B), "unpinned");
   assert.deepEqual(pendingAsks(cloud, asked), []);
   assert.deepEqual(refused(hello), { error: refused(hello).error, code: "lock_station", why: "unpinned" });
@@ -498,6 +640,95 @@ test("over the stations' own transport: a station the control plane stuffs in is
   }
 });
 
+test("a hello bringing its person's own lock is let in on it where its member bound it, and goes by the longest chain heard", () => {
+  const w = workspace();
+  const cloud = stationData(w, w.stations[0]!.hex);
+  const owner = ed().hex;
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ entries: [w.first] })), { sub: "alice", email: "", name: "", role: "owner", workspace: WS, device: owner, lockDevice: { base: w.alice.base.hex, proof: w.alice.base.sign(endpointBytes(WS, owner)) } } as any)[0], 200);
+  const entry = (chain: Entry[], kind: string, body: unknown, key: Key) => {
+    const last = chain[chain.length - 1];
+    chain.push(signed({ v: 1, ws: "person:carol", seq: chain.length, prev: last ? entryHash(last) : null, at: 1000, kind, body }, key));
+  };
+  const first = { key: ed(), base: ed() }, phone = { key: ed(), base: ed() };
+  const chain: Entry[] = [];
+  entry(chain, "genesis", { sub: "carol", device: { key: first.key.id, id: first.base.hex, label: "first" } }, first.key);
+  entry(chain, "device", { key: phone.key.id, id: phone.base.hex, label: "phone" }, first.key);
+  const endpoint = ed().hex;
+  const admitted = (base: Key) => ({ viewer: { sub: "carol", email: "", name: "", role: "member", workspace: WS, device: endpoint, lockDevice: { base: base.hex, proof: base.sign(endpointBytes(WS, endpoint)) } }, exp: 4102444800 }) as any;
+  // Not bound yet: the lock it brings counts for nothing.
+  assert.throws(() => inLockBringing(cloud, admitted(phone.base), "member", endpoint, { lock: { person: chain } }), LockRefusal);
+  cloud.takeLock([signed(after(cloud.locked()!.state!, "person", { sub: "carol", person: entryHash(chain[0]!) }), w.carol.signer)]);
+  // No chain brought, or a device not on it: refused.
+  assert.throws(() => inLockBringing(cloud, admitted(phone.base), "member", endpoint, {}), LockRefusal);
+  assert.throws(() => inLockBringing(cloud, admitted(ed()), "member", endpoint, { lock: { person: chain } }), LockRefusal);
+  // On it: in, with the lower of the two roles.
+  assert.equal(inLockBringing(cloud, admitted(phone.base), "admin", endpoint, { lock: { person: chain } }).viewer.role, "member");
+  // Taken off, the chain from before brought again: judged by the longer one, once the station has heard it.
+  const before = [...chain];
+  entry(chain, "device.remove", { key: phone.key.id }, first.key);
+  assert.equal(inLockBringing(cloud, admitted(first.base), "member", endpoint, { lock: { person: chain } }).viewer.role, "member");
+  assert.throws(() => inLockBringing(cloud, admitted(phone.base), "member", endpoint, { lock: { person: before } }), LockRefusal);
+  // The station says what it knows, for a device to ask before it writes such an entry.
+  const viewer = admitted(first.base).viewer;
+  assert.deepEqual((lockRoute(cloud, "GET", [], Buffer.alloc(0), viewer)[1] as { takes: string[] }).takes, ["person"]);
+  // Told a device was taken off before anyone brings the chain, and after a restart it remembers.
+  const next = [...chain];
+  entry(next, "device", { key: phone.key.id, id: phone.base.hex, label: "phone" }, first.key);
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ person: next })), viewer)[0], 200);
+  entry(next, "device.remove", { key: phone.key.id }, first.key);
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ person: next })), viewer)[0], 200);
+  const restarted = new Cloud(cloud.data);
+  assert.throws(() => inLockBringing(restarted, admitted(phone.base), "member", endpoint, { lock: { person: next.slice(0, 4) } }), LockRefusal);
+  // Another's lock is not told here, nor one that was not bound.
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ person: next })), { ...viewer, sub: "alice" } as any)[0], 409);
+});
+
+test("bound to a lock of their own, a member's app devices are let in only as they are on it, a web page still by its entry", () => {
+  const w = workspace();
+  const cloud = stationData(w, w.stations[0]!.hex);
+  const owner = ed().hex;
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ entries: [w.first] })), { sub: "alice", email: "", name: "", role: "owner", workspace: WS, device: owner, lockDevice: { base: w.alice.base.hex, proof: w.alice.base.sign(endpointBytes(WS, owner)) } } as any)[0], 200);
+  const entry = (chain: Entry[], kind: string, body: unknown, key: Key) => {
+    const last = chain[chain.length - 1];
+    chain.push(signed({ v: 1, ws: "person:carol", seq: chain.length, prev: last ? entryHash(last) : null, at: 1000, kind, body }, key));
+  };
+  // carol's device of the workspace's lock is the first of her own; her tablet, also in the workspace's lock, is not on it.
+  const own = ed(), tablet = { signer: ed(), base: ed() }, web = ed();
+  const now = Math.floor(Date.now() / 1000);
+  const chain: Entry[] = [];
+  entry(chain, "genesis", { sub: "carol", device: { key: own.id, id: w.carol.base.hex, label: "first" } }, own);
+  cloud.takeLock([signed(after(cloud.locked()!.state!, "device", { id: tablet.base.hex, sub: "carol", kind: "app", label: "tablet", sign_key: tablet.signer.id }, now), w.carol.signer)]);
+  cloud.takeLock([signed(after(cloud.locked()!.state!, "device", { id: web.hex, sub: "carol", kind: "web", label: "web", exp: now + 86400 }, now), w.carol.signer)]);
+  const endpoint = ed().hex;
+  const admitted = (base: Key) => ({ viewer: { sub: "carol", email: "", name: "", role: "member", workspace: WS, device: endpoint, lockDevice: { base: base.hex, proof: base.sign(endpointBytes(WS, endpoint)) } }, exp: 4102444800 }) as any;
+  // Not bound: each by its entry.
+  assert.equal(inLockBringing(cloud, admitted(tablet.base), "member", endpoint, {}).viewer.role, "member");
+  cloud.takeLock([signed(after(cloud.locked()!.state!, "person", { sub: "carol", person: entryHash(chain[0]!) }, now), w.carol.signer)]);
+  // Bound: the tablet, not on her own lock, is no longer let in on its entry; nor her first, until the lock is heard.
+  assert.throws(() => inLockBringing(cloud, admitted(tablet.base), "member", endpoint, { lock: { person: [...chain] } }), LockRefusal);
+  assert.throws(() => inLockBringing(cloud, admitted(w.carol.base), "member", endpoint, {}), LockRefusal);
+  assert.equal(inLockBringing(cloud, admitted(w.carol.base), "member", endpoint, { lock: { person: [...chain] } }).viewer.role, "member");
+  // Heard once: an older client that brings none is let in on what was heard.
+  const kept = inLockBringing(cloud, admitted(w.carol.base), "member", endpoint, {});
+  assert.equal(kept.viewer.role, "member");
+  // A web page holds no key of her own lock: by its entry still.
+  assert.equal(inLockBringing(cloud, admitted(web), "member", endpoint, {}).viewer.role, "member");
+  // Taken off her own lock (another device of hers on it now): the connection already in is no longer, and the station
+  // is told as the chain grows.
+  const other = { key: ed(), base: ed() };
+  entry(chain, "device", { key: other.key.id, id: other.base.hex, label: "other" }, own);
+  entry(chain, "device.remove", { key: own.id }, other.key);
+  let told = 0;
+  const stop = personChainsOf(cloud).listen(() => told++);
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ person: [...chain] })), kept.viewer)[0], 200);
+  stop();
+  assert.equal(told, 1);
+  assert.throws(() => stillIn(cloud, kept, "member", endpoint), LockRefusal);
+  // One let in on her own lock alone stays in as it is on it.
+  const otherIn = inLockBringing(cloud, admitted(other.base), "member", endpoint, { lock: { person: [...chain] } });
+  assert.equal(stillIn(cloud, otherIn, "member", endpoint).viewer.role, "member");
+});
+
 test("a device brings what put it in the lock to a station that has not heard of it yet, taken only as any entry is", () => {
   const w = workspace();
   const cloud = stationData(w, w.stations[0]!.hex);
@@ -531,4 +762,26 @@ test("a device brings what put it in the lock to a station that has not heard of
   const other = { sub: "carol", base: ed() };
   const otherEnd = ed().hex;
   assert.throws(() => inLockBringing(cloud, admitted(at(other, otherEnd)), "member", otherEnd, { lock: { entries: [approval] } }), LockRefusal);
+});
+
+test("a device brings what made its person a member too: a station takes no device of someone it has not heard of", () => {
+  const w = workspace();
+  const cloud = stationData(w, w.stations[0]!.hex);
+  const at = (who: { sub: string; base: Key }, endpoint: string) => ({ sub: who.sub, email: "", name: "", role: "member", workspace: WS, device: endpoint, lockDevice: { base: who.base.hex, proof: who.base.sign(endpointBytes(WS, endpoint)) } });
+  const admitted = (v: ReturnType<typeof at>) => ({ viewer: v, exp: 4102444800 }) as any;
+  assert.equal(lockRoute(cloud, "POST", [], Buffer.from(JSON.stringify({ entries: [w.first] })), { ...at(w.alice, ed().hex), role: "owner" } as any)[0], 200);
+  // dave, added to the workspace since the lock was turned on: alice approved his first device, here no one has heard.
+  const phone = { sub: "dave", base: ed() };
+  const endpoint = ed().hex;
+  const v = at(phone, endpoint);
+  const made = signed(after({ seq: 0, head: entryHash(w.first) }, "member", { sub: "dave", email: "dave@example.com", role: "member" }), w.alice.signer);
+  const approval = signed(after({ seq: 1, head: entryHash(made) }, "device", { id: phone.base.hex, sub: "dave", kind: "app", label: "phone" }), w.alice.signer);
+  // The approval alone does not go on from what the station has.
+  assert.throws(() => inLockBringing(cloud, admitted(v), "member", endpoint, { lock: { entries: [approval] } }), LockRefusal);
+  assert.equal(cloud.locked()?.state?.seq, 0);
+  // With what made him a member: taken, and his phone let in on it, as a member.
+  assert.equal(inLockBringing(cloud, admitted(v), "member", endpoint, { lock: { entries: [made, approval] } }).viewer.role, "member");
+  assert.equal(cloud.locked()?.state?.seq, 2);
+  // His credential calling him more: the lock's the lower.
+  assert.equal(inLockBringing(cloud, admitted(v), "admin", endpoint, {}).viewer.role, "member");
 });

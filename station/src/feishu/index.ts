@@ -1,4 +1,4 @@
-// Feishu on the station (docs/feishu.md): its connects as every platform's are kept (connects/connects.ts: connected as
+// Feishu on the station: its connects as every platform's are kept (connects/connects.ts: connected as
 // config.json and the station's workspace say, what Feishu calls people and chats in <data>/feishu-names.json), where
 // its chats' words go (<data>/feishu-threads.json), and the apps being made by a scan.
 import { join } from "node:path";
@@ -21,6 +21,8 @@ export type FeishuConnect = {
   appId: string;
   appSecret: string;
   domain: Domain;
+  /// Thread mode: each thread of a group its own conversation (only where each conversation has its own session).
+  threads: boolean;
   botName: string | null;
   botImage: string | null;
   botOpenId: string | null;
@@ -42,6 +44,7 @@ export function feishuConnects(raw: Json): FeishuConnect[] {
         appId: typeof f.appId === "string" ? f.appId : "",
         appSecret: typeof f.appSecret === "string" ? f.appSecret : "",
         domain: domainOf(f.domain),
+        threads: f.threads === true && c?.mode !== "single-session",
         botName: nonEmpty(f.botName),
         botImage: nonEmpty(f.botImage),
         botOpenId: nonEmpty(f.botOpenId),
@@ -64,15 +67,15 @@ export type FeishuParts = ReturnType<typeof makeFeishu>;
 
 export function makeFeishu(options: FeishuOptions) {
   const threads = new FeishuThreads(join(options.data, "feishu-threads.json"));
-  const registrations = new Registrations({ clock: options.clock });
+  const registrations = new Registrations({ clock: options.clock, file: join(options.data, "feishu-registrations.json") });
   const create =
     options.create ??
-    ((c: FeishuConnect, book: NameBook, t: FeishuThreads) => new FeishuSurface({ connect: c.id, appId: c.appId, appSecret: c.appSecret, domain: c.domain, threads: t, book, clock: options.clock }));
+    ((c: FeishuConnect, book: NameBook, t: FeishuThreads) => new FeishuSurface({ connect: c.id, appId: c.appId, appSecret: c.appSecret, domain: c.domain, threads: t, threadMode: c.threads, book, clock: options.clock }));
   const connects = makeConnects<FeishuConnect>(options, {
     kind: "feishu",
     names: NAMES_FILE.feishu,
     connects: feishuConnects,
-    credentials: (c) => (c.appId === "" || c.appSecret === "" ? null : `${c.domain}\n${c.appId}\n${c.appSecret}`),
+    credentials: (c) => (c.appId === "" || c.appSecret === "" ? null : `${c.domain}\n${c.appId}\n${c.appSecret}\n${c.threads}`),
     create: (c, book) => create(c, book, threads),
     // Its bot's name and picture, its company.
     seen: (c, i) => {
@@ -102,12 +105,12 @@ export function makeFeishu(options: FeishuOptions) {
         name: nonEmpty(f.botName) ?? live?.botName ?? raw?.id,
         team: nonEmpty(f.tenant?.name) ?? (live && live.team !== "" ? live.team : null),
         botImage: nonEmpty(f.botImage),
-        feishu: { appId: typeof f.appId === "string" ? f.appId : "", appSecret: maskSecret(typeof f.appSecret === "string" ? f.appSecret : ""), domain: domainOf(f.domain) },
+        feishu: { appId: typeof f.appId === "string" ? f.appId : "", appSecret: maskSecret(typeof f.appSecret === "string" ? f.appSecret : ""), domain: domainOf(f.domain), threads: f.threads === true },
       };
     },
     close: async () => {
-      await connects.close();
       await registrations.close();
+      await connects.close();
     },
   };
 }

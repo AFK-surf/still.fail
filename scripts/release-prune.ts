@@ -24,7 +24,7 @@ const BETA_INSTALLERS = 5;
 const BETA_BLOCKMAPS = 30;
 /** The beta Electron app's web app: its feed, its archives, and how many of the newest stay. */
 const WEB_FEED = "desktop/web/stillfail-beta-web.json";
-const WEB_ARCHIVE = /^desktop\/web\/stillfail-beta-web-0\.1\.(\d+)\.tar\.gz$/;
+const WEB_ARCHIVE = /^desktop\/web\/stillfail-beta-web-0\.\d+\.(\d+)\.tar\.gz$/;
 const WEB_ARCHIVES = 5;
 /** What a station's job staged, by when (seconds since 1970), and how long it may stay there. */
 const STAGED = /^staged\/(\d+)-/;

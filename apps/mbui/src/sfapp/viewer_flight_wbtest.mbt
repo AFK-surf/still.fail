@@ -16,7 +16,7 @@ fn words_show(t : @ui.Tester, s : String) -> Bool {
 test "a picture of the chat opened on a phone: drawn in each frame from the tap on, its thumbnail's place never left empty" {
   new_run()
   let src = fixture("chat-preview-named")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   // (a phone's: a finger's tap, as a phone's host hands it on)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   nav_rested(t)
@@ -65,7 +65,7 @@ test "a film flying in: its capsule goes with the still as it leaves its thumbna
   // nearly in, its ground whole: the player's controls coming with it (their clock showing), not after it lands
   let nearly = v.fly.end() - @ui.move_most_ms / 8.0
   t.run_for(nearly - t.time())
-  assert_true(v.flies && v.flying() > @sfbase.bars_from)
+  assert_true(v.flies && v.flying(t.ctx()) > @sfbase.bars_from)
   assert_true(words_show(t, "0:00"))
   t.run_for(@ui.move_most_ms)
   assert_true(words_show(t, "0:00"))

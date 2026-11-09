@@ -1,4 +1,4 @@
-// An agent's request about a vault item on its card (vault_approval.mbt; VaultAsk.tsx). The vault's page itself:
+// An agent's request about a vault item on its card. The vault's page itself:
 // src/sfpages vault_wbtest.mbt.
 
 ///|
@@ -16,7 +16,7 @@ fn vault_src(
   let base = fixture("settings")
   {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "vaults" {
         {
           value: Some(
@@ -31,7 +31,7 @@ fn vault_src(
                     o["lasts"] = Json::string(lasts)
                   }
                   if save {
-                    o["save"] = Json::object({ "kind": Json::string("login"), "username": Json::string("zzj") })
+                    o["save"] = Json::object({ "kind": Json::string("login"), "username": Json::string("demo-user") })
                   }
                   Json::object(o)
                 }),
@@ -42,7 +42,7 @@ fn vault_src(
           version: 1,
         }
       } else {
-        (base.topic)(name, params)
+        base.topic(name, params).get().snapshot()
       }
     },
     call: fn(name, params, done) {
@@ -54,7 +54,7 @@ fn vault_src(
 
 ///|
 /// A post of an agent asking to use GitHub token in its chat at ws1/st1, its card in place of its words (sfpages'
-/// message row; `save`: to keep a password for zzj; `typed`: to keep one of that kind the person types in, OpenCode Go;
+/// message row; `save`: to keep a password for demo-user; `typed`: to keep one of that kind the person types in, OpenCode Go;
 /// `status`: how it ended), answered here as the core says with it (`answer`, `lasts`: its vaultAsk's).
 fn ask_card(
   c : @ui.Ctx,
@@ -66,17 +66,23 @@ fn ask_card(
   assignee? : String = "",
   answer? : String = "approve",
   lasts? : String = "",
+  timeout_kind? : String = "",
+  timeout_seconds? : Int = 0,
 ) -> Unit {
   let viewer = Json::object({ "me": Json::object({ "email": Json::string("me@x.com") }) })
   let ask : Map[String, Json] = {
-    "name": Json::string(if typed != "" { "OpenCode Go" } else if save { "UniFi UX7" } else { "GitHub token" }),
+    "name": Json::string(if typed != "" { "OpenCode Go" } else if save { "测试服务登录" } else { "GitHub token" }),
     "mode": Json::string(mode),
     "answer": Json::string(answer),
+  }
+  if timeout_kind != "" {
+    ask["timeoutKind"] = Json::string(timeout_kind)
+    ask["timeoutSeconds"] = Json::number(timeout_seconds.to_double())
   }
   if typed != "" {
     ask["save"] = Json::object({ "kind": Json::string(typed), "typed": Json::boolean(true) })
   } else if save {
-    ask["save"] = Json::object({ "kind": Json::string("login"), "username": Json::string("zzj") })
+    ask["save"] = Json::object({ "kind": Json::string("login"), "username": Json::string("demo-user") })
   } else {
     ask["command"] = Json::string("gh run rerun 1846 --failed")
   }
@@ -117,15 +123,77 @@ fn ask_card(
 }
 
 ///|
+test "an idle timeout requested for a daily task is shown and approved as requested" {
+  new_run()
+  let calls = []
+  let src = vault_src(["r1"], true, calls)
+  let t = @ui.Tester::new(fn(c) { ask_card(c, src, timeout_kind="idle", timeout_seconds=129600) }, w=390.0, h=844.0, platform=2)
+  t.draw()
+  assert_true(t.find("闲置 36 小时后失效") is Some(_))
+  t.tap_text("允许")
+  t.draw()
+  assert_eq(calls, ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r1\",\"scope\":\"chat\",\"timeout\":{\"kind\":\"idle\",\"seconds\":129600}}"])
+}
+
+///|
+test "the timeout button opens a panel for its mode and duration" {
+  new_run()
+  let calls = []
+  let src = vault_src(["r1"], true, calls)
+  let t = @ui.Tester::new(fn(c) {
+    ask_card(c, src, timeout_kind="idle", timeout_seconds=129600)
+    @sf.presented(c)
+  }, w=390.0, h=844.0, platform=2)
+  t.draw()
+  t.tap_text("闲置 36 小时后失效")
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(t.find("授权时限") is Some(_))
+  assert_true(t.find("固定时间后到期") is Some(_))
+  t.tap_text("固定时间后到期")
+  t.tap_text("完成")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("允许")
+  t.draw()
+  assert_eq(calls, ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r1\",\"scope\":\"chat\",\"timeout\":{\"kind\":\"fixed\",\"seconds\":129600}}"])
+}
+
+///|
+test "one use selected in the duration picker is approved once" {
+  new_run()
+  let calls = []
+  let src = vault_src(["r1"], true, calls)
+  let t = @ui.Tester::new(fn(c) {
+    ask_card(c, src, timeout_kind="idle", timeout_seconds=129600)
+    @sf.presented(c)
+  }, w=390.0, h=844.0, platform=2)
+  t.draw()
+  t.tap_text("闲置 36 小时后失效")
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  let (x, y, w, h) = t.query(Button, label="时长: 36 小时").unwrap().rect
+  t.tap(x + w / 2.0, y + h / 2.0)
+  t.draw()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.tap_text("仅这一次")
+  t.draw()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  assert_true(t.find("失效方式") is None)
+  t.tap_text("完成")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("允许")
+  t.draw()
+  assert_eq(calls, ["vault.approve {\"workspace\":\"ws1\",\"request\":\"r1\",\"scope\":\"once\"}"])
+}
+
+///|
 test "a request's card is whole with its post: its answer the core's with it, nothing asked of the vault's topic" {
   new_run()
   let asked : Array[String] = []
   let base = vault_src([], true, [])
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       asked.push(name)
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
   }
   let t = @ui.Tester::new(fn(c) { ask_card(c, src) }, w=390.0, h=844.0, platform=2)
@@ -185,7 +253,7 @@ test "a request to keep a secret: 存入 or 不存, kept as once; its kind and a
   let src = vault_src(["r1"], true, calls, save=true)
   let t = @ui.Tester::new(fn(c) { ask_card(c, src, save=true) }, w=390.0, h=844.0, platform=2)
   t.draw()
-  for w in ["存入密码 UniFi UX7", "zzj", "存入", "不存"] {
+  for w in ["存入密码 测试服务登录", "demo-user", "存入", "不存"] {
     assert_true(t.find(w) is Some(_), msg=w)
   }
   assert_true(t.find("本对话内") is None)
@@ -337,7 +405,7 @@ test "the vault's page's request where it is not this device's to answer, or dec
 /// The vault page's card of request r1 in ws1, from the vaults topic.
 fn vault_ask(c : @ui.Ctx, src : Source) -> Unit {
   let w : Workspace = { id: "ws1", name: "", emoji: "", icon: "", email: "" }
-  let asked : @settings.Asked = { name: "GitHub token", reason: "", mode: "proxy", command: "", how_text: "", save_kind: "", username: "", filename: "", typed: false, station: "" }
+  let asked : @settings.Asked = { name: "GitHub token", reason: "", timeout_kind: "", timeout_seconds: 0, approved_timeout_kind: "", approved_timeout_seconds: 0, mode: "proxy", command: "", how_text: "", save_kind: "", username: "", filename: "", typed: false, station: "" }
   c.box(w=Fill(1.0), fn() { @settings.vault_ask(c, settings_core(src, w), "ws1", "r1", asked, true) }) |> ignore
 }
 
@@ -345,7 +413,7 @@ fn vault_ask(c : @ui.Ctx, src : Source) -> Unit {
 test "how a request ended: one line, its item named" {
   new_run()
   let src = vault_src([], true, [])
-  for case in [(false, "granted", "已允许使用 GitHub token · 本对话内"), (true, "granted", "已存入密码 UniFi UX7"), (false, "denied", "已拒绝使用 GitHub token"), (true, "denied", "未存入 UniFi UX7")] {
+  for case in [(false, "granted", "已允许使用 GitHub token · 本对话内"), (true, "granted", "已存入密码 测试服务登录"), (false, "denied", "已拒绝使用 GitHub token"), (true, "denied", "未存入 测试服务登录")] {
     let (save, status, words) = case
     let t = @ui.Tester::new(fn(c) { ask_card(c, src, save~, status~) }, w=390.0, h=844.0, platform=2)
     t.draw()

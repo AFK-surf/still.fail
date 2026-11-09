@@ -22,7 +22,7 @@ if(WIN32)
   target_compile_definitions(stillfail_engine PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   # the JSI's errors are C++ exceptions, caught in the loop
   target_compile_options(stillfail_engine PRIVATE /EHsc /GR)
-  target_link_libraries(stillfail_engine PRIVATE libhermes ${CMAKE_CURRENT_BINARY_DIR}/stillfail_shell.lib bcrypt)
+  target_link_libraries(stillfail_engine PRIVATE libhermes ${CMAKE_CURRENT_BINARY_DIR}/stillfail_shell.lib bcrypt ole32)
 else()
   # (its own symbols alone exported: Hermes's, linked in, stay inside; named by its file, as the shell is)
   set_target_properties(stillfail_engine PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)

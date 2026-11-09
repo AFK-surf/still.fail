@@ -2,7 +2,7 @@
 // https://www.npmjs.com/package/reactive-framework-test-suite), ported case by case: its framework's signal, computed,
 // effect, run, batch and untracked are fw_* below, each case run as there (fw_run: in a scope, disposed after). A
 // value is the same as another as JS's `===` has them for the numbers and strings the cases use (same: ==).
-// This file: Graph Propagation (graphPropagation.ts).
+// This file: Graph Propagation.
 
 ///|
 fn[T : Eq] fw_signal(v : T) -> Signal[T] {

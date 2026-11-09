@@ -1,4 +1,4 @@
-// The account's foot and 关于's legal rows (settings/home.mbt; Me.kt, SettingsHome.kt Legal).
+// The account's foot and 关于's legal rows (settings/home.mbt).
 
 ///|
 test "the account: 注销账号 at its foot asks first, saying what goes" {

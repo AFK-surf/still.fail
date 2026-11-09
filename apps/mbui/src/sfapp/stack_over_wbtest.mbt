@@ -2,7 +2,7 @@
 // it shows, then slides in: from its causes' moments (pushed, answered, its wait over), whichever frames come between.
 
 ///|
-let over_chat : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Studio" }
+let over_chat : ChatRef = { station: "ws1/st1", session: "s-c2", title: "首页的列表改成按天分组", station_name: "Willow" }
 
 ///|
 /// The fixture's core, the chat opened over the page's view held back till `answered` (an event from outside: what reads
@@ -16,11 +16,11 @@ fn over_source(answered : @signals.Signal[Bool], also? : Array[(ChatRef, @signal
   }
   {
     ..base,
-    topic: fn(name, params) {
+    topic_read: fn(name, params) {
       if name == "chat" && held.get(Json::object(params).stringify()).map(fn(a) { !a.get() }).unwrap_or(false) {
         return { value: None, error: None, version: 0 }
       }
-      (base.topic)(name, params)
+      base.topic(name, params).get().snapshot()
     },
   }
 }
@@ -35,7 +35,7 @@ fn over_seen(late : Double?, frames : Array[Double], at : Double) -> (Double, In
   new_run()
   let answered = @signals.signal(false)
   let src = over_source(answered)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -118,7 +118,7 @@ test "中屏: a chat opened over the page in use, its view later than its wait: 
 test "中屏: a chat opened over the page in use, then back at once, no frame between: the chat taken off, the page under it on top, still in use" {
   new_run()
   let src = over_source(@signals.signal(true))
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -140,7 +140,7 @@ test "中屏: a chat opened over the page in use, then back at once, no frame be
 /// 中屏 on the tape (a mouse's, 720 wide), the page in use, its core `src`: the tester, the window's tree, and a moment
 /// just after its last frame.
 fn over_tape(src : Source) -> (@ui.Tester, @view.Tree, Double) raise {
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
   t.run_for(@ui.move_most_ms)
@@ -153,14 +153,15 @@ fn over_tape(src : Source) -> (@ui.Tester, @view.Tree, Double) raise {
 /// Where the chat titled `title` is drawn across, its title in its bar (-1: not drawn; not where the page under it says
 /// it, as a link in a message, nor the sidebar's row of it).
 fn over_x(t : @ui.Tester, title : String) -> Double {
-  match t.locate(title).iter().filter(fn(p) { p.1 < @sf.wide_bar_h }).collect() {
+  // (in its bar: the tape's, as far down as its keys stand concentric in the panel's corner, tape_bar_over)
+  match t.locate(title).iter().filter(fn(p) { p.1 < @sf.wide_bar_h + @sf.tape_bar_over() }).collect() {
     [p, ..] => p.0
     [] => -1.0
   }
 }
 
 ///|
-let third_chat : ChatRef = { station: "ws1/st1", session: "s-c3", title: "第三个对话", station_name: "Studio" }
+let third_chat : ChatRef = { station: "ws1/st1", session: "s-c3", title: "第三个对话", station_name: "Willow" }
 
 ///|
 /// Events at their moments (ms after `t0`, in order), each before the frames at and after it; frames at `t0 +` each of
@@ -317,7 +318,7 @@ fn over_brought(from_panel : Bool) -> (
   new_run()
   let answered = @signals.signal(false)
   let src = over_source(answered)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=720.0, h=800.0, platform=0)
   t.draw()
   t.run_for(@ui.move_most_ms)

@@ -1,0 +1,17 @@
+# A new preset's dialog going in steps in the middle of a wide window (sf presenters.mbt panel_go): 添加目录, then
+# 浏览文件夹…, then back by Escape, twice, then once more. MBUI_FIXTURE=newchat-preset-new, MBUI_WIN=1280x800,
+# MBUI_FILM_PLATFORM=0.
+timeout 20000
+until 名字
+wait 800
+tap 添加目录
+wait 900
+tap 浏览文件夹…
+wait 900
+key esc
+wait 900
+key esc
+wait 900
+key esc
+wait 900
+exit

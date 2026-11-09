@@ -63,6 +63,28 @@ pub fn Tester::film(
 }
 
 ///|
+/// Stop a scripted run at film frame `frame`, where frame 0 is the picture before its first step. A frame is reached
+/// only if the run has not failed or ended before it. The tester's display period must be set to the film's rate.
+/// The returned log explains a failed step; stopping at a requested frame is not a failed drive.
+pub fn Tester::film_frame(self : Tester, script : String, frame : Int, max? : Int = 3000) -> (Bool, Array[String]) {
+  self.fake.logs.clear()
+  if frame < 0 || frame > max {
+    return (false, self.fake.logs.copy())
+  }
+  drive_start(script, "")
+  let mut n = 0
+  while n < frame && driver.val is Some(_) {
+    self.frame()
+    n = n + 1
+  }
+  let logs = self.fake.logs.copy()
+  let failed = logs.iter().any(fn(line) { line.has_prefix("DRIVE FAIL") || line == "DRIVE END 1" })
+  // This is a requested prefix, not a failure of the script and not an instruction to quit the app.
+  driver.val = None
+  (n == frame && !failed, logs)
+}
+
+///|
 /// What the last frame presented, as a host's renderer is given it (@hostapi.present): its instances (scene.mbt's,
 /// `inst_size` numbers each: the Tester's own, read, not changed), how many, and what is under them (red, green,
 /// blue, 0-1).

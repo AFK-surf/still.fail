@@ -46,7 +46,7 @@ pub let clip_too_large : Int = 2
 pub let clip_unreadable : Int = 3
 
 ///|
-/// The most a picture read off the clipboard is as PNG (still.fail's ScreenClips.kt CLIP_PNG_MAX).
+/// The most a picture read off the clipboard is as PNG.
 pub let clip_png_max : Int = 8 * 1024 * 1024
 
 ///|
@@ -167,6 +167,13 @@ pub let ime_action_go : Int = 2
 ///|
 /// A number's: the keyboard's digits, its Enter a done key (Compose's ImeAction.Done, KeyboardType.Number).
 pub let ime_action_number : Int = 3
+
+///|
+/// A secret's (a password, a token: the field shows dots): the keyboard learns nothing of it and suggests nothing
+/// (Android's TYPE_TEXT_VARIATION_PASSWORD and IME_FLAG_NO_PERSONALIZED_LEARNING; iOS's keyboard with no corrections
+/// nor spelling). Said for
+/// every secret field, whatever its own action (Ctx::sync_ime).
+pub let ime_action_secret : Int = 4
 
 ///|
 /// A long press taking something (Android LONG_PRESS, Compose's HapticFeedbackType.LongPress).

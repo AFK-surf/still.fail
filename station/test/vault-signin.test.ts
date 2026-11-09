@@ -1,4 +1,4 @@
-// Signing in to a site from a card (vault/signin.ts, docs/vault.md 登录态 "Signing in from a card"): one call of the
+// Signing in to a site from a card (vault/signin.ts 登录态 "Signing in from a card"): one call of the
 // agent's, the vault's sign-in asked for where it keeps one; else a card the person answers from their app, what their
 // password manager gave typed in by the station step by step, a code asked on the card, a person given the tab where
 // only they can go on, the agent told when the page left its sign-in and kept in the vault, with no card of its own,
@@ -9,11 +9,13 @@ import { test } from "node:test";
 import type { Driven, FormField, FormValues } from "../src/browser/signin-form.ts";
 import type { Request } from "../src/vault/crypto.ts";
 import { SignIns, siteOf } from "../src/vault/signin.ts";
+import { vaultTools } from "../src/vault/tool.ts";
+import { installSigninSaveIndex, queueSigninSave, stepSigninSaveIndex } from "../src/vault/signin-save-index.ts";
 import { STILLFAIL_SURFACE } from "../src/store/store.ts";
 
 const tick = () => new Promise((r) => setImmediate(r));
 
-function world(o: { listed?: string; held?: string; surface?: string } = {}) {
+function world(o: { listed?: string; held?: string; surface?: string; db?: DatabaseSync; previousGone?: Promise<void> } = {}) {
   const cards: { ts: string; card: any; text: string }[] = [];
   const withdrawn: string[] = [];
   const told: string[] = [];
@@ -32,14 +34,14 @@ function world(o: { listed?: string; held?: string; surface?: string } = {}) {
     store: {
       getSession: (k: string) => sessions.get(k) ?? null,
       starter: () => "pat@example.com",
-      latestThread: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: o.surface ?? STILLFAIL_SURFACE } }) as any,
-      sessionThreads: () => [{ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: o.surface ?? STILLFAIL_SURFACE } }] as any,
+      latestThread: () => ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: o.surface ?? STILLFAIL_SURFACE } }) as any,
+      sessionThreadById: () => ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: o.surface ?? STILLFAIL_SURFACE } }) as any,
       insertMessage: (m: any) => {
         cards.push({ ts: m.ts, card: m.card, text: m.text });
         hidden = false;
         return [++n];
       },
-      pendingCard: (): [{ ts: string }, unknown] | null => hidden || cards.length === 0 ? null : [{ ts: cards.at(-1)!.ts }, cards.at(-1)!.card],
+      pendingCardHeader: (): [{ ts: string }, unknown] | null => hidden || cards.length === 0 ? null : [{ ts: cards.at(-1)!.ts }, cards.at(-1)!.card],
       withdrawCard: (_a: string, _t: number, ts: string) => (withdrawn.push(ts), true),
       restateCard: (_a: string, _t: number, ts: string, f: (was: any) => any) => {
         const c = cards.find((x) => x.ts === ts)!;
@@ -53,8 +55,10 @@ function world(o: { listed?: string; held?: string; surface?: string } = {}) {
     notify: (_s: string, text: string) => void told.push(text),
   };
   const timers: (() => void)[] = [];
+  const db = o.db ?? new DatabaseSync(":memory:");
   const signIns = new SignIns({
-    db: new DatabaseSync(":memory:"), hub, now: () => now, after: (_ms, f) => (timers.push(f), () => {}),
+    db, hub, now: () => now, after: (_ms, f) => (timers.push(f), () => {}),
+    backfill: { previousGone: o.previousGone },
     workspace: () => "ws", screenLink: (tab) => `https://app/w/ws/s/st/screen/browser%3A${tab}`, id: () => "g1",
     browser: {
       tabs: () => tabs,
@@ -78,7 +82,7 @@ function world(o: { listed?: string; held?: string; surface?: string } = {}) {
     },
   });
   return {
-    signIns, cards, withdrawn, told, driven, kept, used, answers, timers, hideCard: () => { hidden = true; }, showCard: () => { hidden = false; }, pass: (ms: number) => { now += ms; },
+    db, hub, signIns, cards, withdrawn, told, driven, kept, used, answers, timers, hideCard: () => { hidden = true; }, showCard: () => { hidden = false; }, pass: (ms: number) => { now += ms; },
     setTabs: (t: typeof tabs) => void (tabs = t), setForm: (f: typeof form) => void (form = f),
     archive: (s: string) => {
       sessions.set(s, { archivedAt: 1 });
@@ -86,6 +90,148 @@ function world(o: { listed?: string; held?: string; surface?: string } = {}) {
     },
   };
 }
+
+test("an active sign-in is found without reading the session's completed sign-ins", async () => {
+  const w = world();
+  await w.signIns.ask("s1", { site: "github.com", reason: "看 PR" });
+  const insert = w.db.prepare("INSERT INTO signin_asks (id, session, owner, status, body) VALUES (?, 's1', 'pat@example.com', 'done', ?)");
+  for (let n = 0; n < 200; n++) insert.run(`old-${n}`, JSON.stringify({ id: `old-${n}`, session: "s1", site: "github.com", status: "done" }));
+  let read = 0;
+  w.db.function("count_signin", (body) => { read++; return body; });
+  const prepare = w.db.prepare.bind(w.db);
+  let selected = "";
+  w.db.prepare = ((sql: string) => {
+    if (sql.startsWith("SELECT body FROM signin_asks WHERE session = ?")) selected = sql;
+    return prepare(sql.replace("SELECT body FROM signin_asks WHERE session = ?",
+      "SELECT count_signin(body) AS body FROM signin_asks WHERE session = ?"));
+  }) as typeof w.db.prepare;
+  assert.match(await w.signIns.ask("s1", { site: "github.com" }), /waits for pat@example.com/);
+  assert.equal(read, 1, "only the active sign-in is read");
+  const plan = (prepare(`EXPLAIN QUERY PLAN ${selected}`).all("s1", "pending", "filling", "code", "person", "left") as { detail: string }[])
+    .map((r) => r.detail).join(" | ");
+  assert.match(plan, /signin_asks_by_session \(session=\? AND status=\?\)/);
+  read = 0;
+  w.archive("s1");
+  assert.equal(read, 1, "archiving also reads only active sign-ins");
+  assert.equal(w.signIns.get("g1")!.status, "ended");
+});
+
+test("a sign-in reask does not post after its chat is archived during old card preparation", async () => {
+  const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  try {
+    await w.signIns.ask("s1", { site: "github.com", reason: "look" });
+    w.hideCard();
+    let ready = false;
+    (w.hub.store as any).pendingCardHeaderIfReady = () => ready ? w.hub.store.pendingCardHeader() : undefined;
+    (w.hub as any).prepareCardPosts = async () => { started.resolve(); await release.promise; ready = true; };
+    const reask = w.signIns.ask("s1", { site: "github.com", reask: true });
+    void reask.catch(() => {});
+    const waiting = await Promise.race([started.promise.then(() => true), reask.then(() => false, () => false)]);
+    assert.equal(waiting, true, "the reask waits for old card preparation");
+    w.archive("s1");
+    release.resolve();
+    await assert.rejects(reask, /archived or gone/);
+    assert.equal(w.cards.length, 1);
+  } finally { release.resolve(); await w.signIns.close(); w.db.close(); }
+});
+
+test("a cancelled sign-in reask does not post after old card preparation", async () => {
+  const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  const controller = new AbortController();
+  try {
+    await w.signIns.ask("s1", { site: "github.com", reason: "look" });
+    w.hideCard();
+    let ready = false, passed: AbortSignal | undefined;
+    (w.hub.store as any).pendingCardHeaderIfReady = () => ready ? w.hub.store.pendingCardHeader() : undefined;
+    (w.hub as any).prepareCardPosts = async (_threads: number[], signal?: AbortSignal) => { passed = signal; started.resolve(); await release.promise; ready = true; };
+    const tool = vaultTools(null as never, () => "/chat/s1", w.signIns).find((t) => t.name === "sign_in")!;
+    const reask = tool.run("s1", { site: "github.com", reask: true }, controller.signal);
+    void reask.catch(() => {});
+    assert.equal(await Promise.race([started.promise.then(() => true), reask.then(() => false, () => false)]), true);
+    assert.equal(passed, controller.signal);
+    controller.abort();
+    release.resolve();
+    const error = await reask.then(() => null, (e: Error) => e);
+    assert.equal(w.cards.length, 1, "the cancelled call did not issue a new card");
+    assert.equal(error?.name, "AbortError");
+  } finally { release.resolve(); await w.signIns.close(); w.db.close(); }
+});
+
+test("a sign-in reask does not record a card after final old-card preparation", async () => {
+  const w = world(), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  try {
+    await w.signIns.ask("s1", { site: "github.com", reason: "look" });
+    w.hideCard();
+    let reads = 0, ready = false;
+    (w.hub.store as any).pendingCardHeaderIfReady = () => ++reads === 1 || ready ? w.hub.store.pendingCardHeader() : undefined;
+    (w.hub as any).prepareCardPosts = async () => { started.resolve(); await release.promise; ready = true; };
+    const reask = w.signIns.ask("s1", { site: "github.com", reask: true });
+    const waiting = await Promise.race([started.promise.then(() => true), reask.then(() => false)]);
+    assert.equal(waiting, true, "the final card check waits for preparation");
+    w.archive("s1");
+    release.resolve();
+    await reask;
+    assert.equal(w.cards.length, 1, "an archived chat did not get another card");
+  } finally { release.resolve(); await w.signIns.close(); w.db.close(); }
+});
+
+test("a vault decision finds its sign-in without reading the session's completed sign-ins", async () => {
+  const w = world();
+  const insert = w.db.prepare("INSERT INTO signin_asks (id,session,owner,status,body) VALUES (?,'s1','pat@example.com','done',?)");
+  for (let n=0; n<500; n++) insert.run(`old-${n}`, JSON.stringify({ id: `old-${n}`, session: "s1", site: "github.com", status: "done" }));
+  await w.signIns.ask("s1", { site: "github.com", reason: "看 PR" });
+  w.signIns.fill("pat@example.com", "ws", "g1", { username: "pat", password: "pw", keep: true });
+  await tick();
+  await w.signIns.ask("s1", { site: "github.com", done: true });
+  let examined = 0;
+  w.db.function("json_extract", { deterministic: true }, (body, path) => {
+    if (path === "$.save") examined++;
+    return JSON.parse(String(body))[String(path).slice(2)] ?? null;
+  });
+  w.signIns.heard({ id: "r_save", session: "s1", status: "granted", save: { kind: "browser" } } as unknown as Request);
+  assert.equal(w.cards[0]!.card.signin.outcome.kept, "granted");
+  assert.ok(examined <= 1, `only the sign-in for this save is examined (examined ${examined})`);
+});
+
+test("a pending old sign-in decision is recovered after the previous station exits", async () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`CREATE TABLE signin_asks (id TEXT PRIMARY KEY, session TEXT NOT NULL, owner TEXT NOT NULL, status TEXT NOT NULL, body TEXT NOT NULL);
+    CREATE INDEX signin_asks_by_session ON signin_asks (session, status);`);
+  const insert = db.prepare("INSERT INTO signin_asks VALUES (?, 's1', 'pat@example.com', 'done', ?)");
+  for (let n=0; n<130; n++) insert.run(`old-${n}`, JSON.stringify({ id:`old-${n}`, session:"s1", owner:"pat@example.com", status:"done", save:`save-${n}` }));
+  const previous = Promise.withResolvers<void>();
+  const w = world({ db, previousGone: previous.promise });
+  try {
+    w.signIns.heard({ id:"save-129", session:"s1", status:"granted", save:{kind:"browser"} } as unknown as Request);
+    await Promise.resolve();
+    assert.equal(w.signIns.get("old-129")!.kept, undefined);
+    previous.resolve();
+    while (w.signIns.get("old-129")!.kept !== "granted") await tick();
+    assert.equal(w.signIns.get("old-128")!.kept, undefined);
+  } finally { previous.resolve(); await w.signIns.close(); db.close(); }
+});
+
+test("a recovered sign-in decision finishes updating its card after an interruption", async () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec(`CREATE TABLE signin_asks (id TEXT PRIMARY KEY, session TEXT NOT NULL, owner TEXT NOT NULL, status TEXT NOT NULL, body TEXT NOT NULL);
+    CREATE INDEX signin_asks_by_session ON signin_asks (session, status);`);
+  db.prepare("INSERT INTO signin_asks VALUES ('old', 's1', 'pat@example.com', 'done', ?)")
+    .run(JSON.stringify({id:"old",session:"s1",owner:"pat@example.com",status:"done",site:"github.com",save:"save",kept:"granted",thread:1,cardTs:"old-card"}));
+  installSigninSaveIndex(db);
+  stepSigninSaveIndex(db, "s1");
+  queueSigninSave(db, "s1", "save", "granted");
+  const previous = Promise.withResolvers<void>();
+  const w = world({ db, previousGone: previous.promise });
+  w.cards.push({ ts:"old-card", card:{signin:{}}, text:"" });
+  try {
+    previous.resolve();
+    await Promise.resolve();
+    await tick();
+    assert.equal(w.cards[0]!.card.signin.outcome.kept, "granted");
+    assert.deepEqual(w.withdrawn, ["old-card"]);
+    assert.equal(db.prepare("SELECT 1 FROM signin_save_pending").get(), undefined);
+  } finally { previous.resolve(); await w.signIns.close(); db.close(); }
+});
 
 test("a site as asked: its host, without scheme, path, port or www.", () => {
   assert.equal(siteOf("https://www.GitHub.com/login?x=1"), "github.com");

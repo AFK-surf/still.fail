@@ -42,7 +42,7 @@ pub fn fix_browse_reset() -> Unit {
 ///|
 /// The prefs the browsing reads and the pages keep, as the core's prefs topic gives them.
 // kept across runs: a table, never written
-pub let fix_browse_prefs : Array[String] = ["driveViews", "filesTabs", "driveFavorites"]
+pub let fix_browse_prefs : Array[String] = ["driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden"]
 
 ///|
 /// The prefs kept here, into the prefs topic's value.
@@ -164,14 +164,18 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
       None => ()
     }
   }
-  // det-ok(app-clock): the core's own input, as the real one reads its host's clock for a letter typed (Host.nowMs)
-  let now = if text(params, "act") == "type" { @ui.now() } else { 0.0 }
+  // (the core's own input, as the real one reads its host's clock for a letter typed (Host.nowMs): the moment of the
+  // call, as the window's context has it)
+  let now = match (text(params, "act"), fix_ctx.val) {
+    ("type", Some(c)) => c.moment()
+    _ => 0.0
+  }
   let prefs : Map[String, Json] = {}
   for k in ["driveViews", "filesTabs"] {
     prefs[k] = Json::object(fix_browse.prefs.get(k).unwrap_or({}).copy())
   }
   for _ in 0..<16 {
-    let ask : Json = {
+    let fields : Map[String, Json] = {
       "state": fix_browse.state,
       "prefs": Json::object(prefs),
       "folders": Json::object(folders.copy()),
@@ -180,6 +184,10 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
       "id": Json::number(fix_browse.id.to_double()),
       "op": op,
     }
+    if @sf.language() == "en" && text(field(Some(op), "topic"), "topic") == "driveBrowse" {
+      fields["lang"] = Json::string("en")
+    }
+    let ask = Json::object(fields)
     match kept("browse", ask, None) {
       Some(Ok((answer, _))) =>
         match field(Some(answer), "need") {
@@ -206,9 +214,9 @@ pub fn fix_browse_step(f : Fixture?, mode : String, op : Json) -> Result[Json, J
 ///|
 /// The `driveBrowse` or `filesTabs` topic's value, as the core gives it now.
 pub fn fix_browse_topic(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
-  if fix_browse.version != f.version {
+  if fix_browse.version != f.changes() {
     fix_browse.shown.clear()
-    fix_browse.version = f.version
+    fix_browse.version = f.changes()
   }
   let topic : Map[String, Json] = { "topic": Json::string(name) }
   for k, v in params {

@@ -1,4 +1,4 @@
-// What the updates go by, as plain functions (the Rust station's updates.rs): versions and how they compare, the release
+// What the updates go by, as plain functions: versions and how they compare, the release
 // channels, what is offered, and the words the pages show while something updates.
 import { closeSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -62,11 +62,13 @@ export function versionIn(text: string): string | null {
 
 /// What is offered for the station going from `version` to `latest` (as `channel`'s feed says it), its release having
 /// come from `installed`: [newer, downgrade]. Back to the stable release from a beta is offered even when it is older,
-/// but only so: a stable station is never offered an older version.
+/// but only so: a stable station is never offered an older version. A station's version is 0.<m>.<n>, compared by n
+/// (its build) alone: m, the stable releases before it, is only said (the user, 2026-11-09).
 export function offer(version: string | null | undefined, latest: string | null | undefined, channel: Channel, installed: Channel): [boolean, boolean] {
   if (!version || !latest) return [false, false];
-  if (newer(version, latest)) return [true, false];
-  return [false, channel === "stable" && installed === "beta" && newer(latest, version)];
+  const [from, to] = [parts(version).at(-1) ?? 0n, parts(latest).at(-1) ?? 0n];
+  if (to > from) return [true, false];
+  return [false, channel === "stable" && installed === "beta" && to < from];
 }
 
 /// The last complete percentage of curl's progress bar in what the installer said (it records the bar in update.log,

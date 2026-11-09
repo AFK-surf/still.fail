@@ -59,6 +59,34 @@ test "an ask made again with other params is matched by its kind and name, and s
 }
 
 ///|
+test "a chat recorded before compact views replays without a changed ask" {
+  let r = @core.Replay::parse((
+    #|{"out":{"id":7,"subscribe":{"topic":"chat","station":"w/s","session":"k"},"keyed":true}}
+    #|{"in":{"id":7,"value":{"title":"hello"}},"w":1}
+  ))
+  let c = r.client()
+  let s = c.subscribe("chat", params={ "station": "w/s", "session": "k", "compact": true })
+  assert_eq(r.deliver(), 1)
+  assert_eq(s.value.unwrap().stringify(), "{\"title\":\"hello\"}")
+  assert_eq(r.fuzzy().length(), 0)
+  assert_eq(r.diverged().length(), 0)
+}
+
+///|
+test "a jobs summary is answered by an older recording's full jobs view" {
+  let r = @core.Replay::parse((
+    #|{"out":{"id":7,"subscribe":{"topic":"chatJobs","station":"w/s","session":"k"},"keyed":true}}
+    #|{"in":{"id":7,"value":{"jobs":[{"id":"j1"}]}},"w":1}
+  ))
+  let c = r.client()
+  let s = c.subscribe("chatJobs", params={ "station": "w/s", "session": "k", "compact": true, "summary": true })
+  assert_eq(r.deliver(), 1)
+  assert_eq(s.value.unwrap().stringify(), "{\"jobs\":[{\"id\":\"j1\"}]}")
+  assert_eq(r.fuzzy().length(), 0)
+  assert_eq(r.diverged().length(), 0)
+}
+
+///|
 test "where the app goes apart from the run is said, and what waits on it stays" {
   let r = @core.Replay::parse(run)
   let c = r.client()
@@ -144,6 +172,26 @@ test "the app's core kept, then given again in its place, its wall clock with it
   @core.Replay::detach()
   @core.trace_stop()
   assert_true(@core.wall_ms() != 1234.0)
+}
+
+///|
+test "attaching a replay sends the still watched subscription to the replay" {
+  let kept =
+    #|{"out":{"id":7,"subscribe":{"topic":"replay-watched"},"keyed":true}}
+    #|{"in":{"id":7,"value":"here"}}
+  let seen : Array[String] = []
+  let stop = @signals.effect(fn() {
+    let s = @core.subscribe("replay-watched").followed()
+    seen.push(match s.value { Some(String(v)) => v; _ => "" })
+  })
+  let r = @core.Replay::parse(kept)
+  r.attach()
+  assert_eq(r.unmade().length(), 0)
+  assert_eq(r.deliver(), 1)
+  assert_eq(seen, ["", "", "here"])
+  stop()
+  @core.Replay::detach()
+  @core.client.reset()
 }
 
 ///|

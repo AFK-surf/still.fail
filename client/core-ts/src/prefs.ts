@@ -1,4 +1,4 @@
-// What this device keeps of how its person likes it (the `prefs` topic; prefs.rs): one record in the data center
+// What this device keeps of how its person likes it (the `prefs` topic): one record in the data center
 // (table `prefs`, key `device`), written by `prefs.set`; with it, what the device is (`client.device`) and what follows.
 import * as brand from "./brand.ts";
 import * as fonts from "./fonts.ts";
@@ -11,19 +11,29 @@ import * as keymap from "./keymap.ts";
 import { SCREEN_FPS, type ScreenFps } from "./station/wire.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
+import { setOwnBuild } from "./station/oldest.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "listFilter", "appearance", "windowZoom", "motion", "haptics", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook"];
-const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "resume", "lockNotice", "rails", "barsBy", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone"];
+const FIELDS = ["onlyMine", "onlyWatching", "listFilter", "appearance", "accent", "windowZoom", "motion", "haptics", "appUpdate", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "screenQuality", "screenFps", "screenCodec", "screenMouse", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone", "fillOff", "fillMax", "shareLook", "sendKey"];
+const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "filesTabs", "driveFavorites", "driveFavoritesHidden", "resume", "lockNotice", "rails", "barsBy", "previewSizes", "sidebars", "trouble", "jobsSeen", "failsGone"];
 const TABS_KEPT = 200;
 /// At most this many jobs kept as looked at in one workspace's bell.
 const JOBS_SEEN_KEPT = 200;
 /// At most this many failures kept as let go in one workspace's 待处理.
 const FAILS_GONE_KEPT = 200;
 const PREFS = { topic: "prefs" };
+/// The app's colour themes other than still.fail's orange (`accent`; none: the orange), or a hue of one's own
+/// (`custom:<0..359>`, the app makes the theme of it).
+const ACCENTS = ["blue", "teal", "purple", "pink"];
+const CUSTOM = /^custom:([0-9]{1,3})$/;
+
+function customHue(v: unknown): number | null {
+  const m = typeof v === "string" ? CUSTOM.exec(v) : null;
+  return m && Number(m[1]) < 360 ? Number(m[1]) : null;
+}
 
 type Map_ = Record<string, unknown>;
 
-/// How the drive's reader lays text out on this device (docs/drive.md): each number within its bounds, its default
+/// How the drive's reader lays text out on this device: each number within its bounds, its default
 /// where none is kept; the papers and faces there are.
 const READER_NUMBERS = { size: [12, 32, 18], line: [1.2, 2.4, 1.7], margin: [8, 44, 22] } as const;
 const PAPERS = ["follow", "white", "green", "grey", "night"];
@@ -49,11 +59,12 @@ export function readerOf(v: unknown): Map_ {
 export type BadgeKinds = { on: boolean; wait: boolean; failed: boolean; done: boolean; message: boolean; services: boolean };
 
 /// What the badge counts, kind by kind: as kept (`badgeKinds`, what it does not say as before), or as the older
-/// `badge` says (decisions: the cards; attention, the default: and what went wrong; all: and the unread). `services`
+/// `badge` says (decisions: the cards; attention: and what went wrong; all, the default: and the unread). `services`
 /// is the rail's bell's alone: the services and jobs left up long light it until looked at (never the app's number).
 export function badgeKindsOf(prefs: unknown): BadgeKinds {
   const by = isObject(prefs) ? prefs.badge : null;
-  const base = { on: true, wait: true, failed: by !== "decisions", done: by === "all", message: by === "all", services: true };
+  const unread = by !== "decisions" && by !== "attention";
+  const base = { on: true, wait: true, failed: by !== "decisions", done: unread, message: unread, services: true };
   const k = isObject(prefs) && isObject(prefs.badgeKinds) ? prefs.badgeKinds : {};
   const flag = (name: keyof BadgeKinds) => (typeof k[name] === "boolean" ? k[name] as boolean : base[name]);
   return { on: flag("on"), wait: flag("wait"), failed: flag("failed"), done: flag("done"), message: flag("message"), services: flag("services") };
@@ -72,8 +83,9 @@ export function failsGoneOf(prefs: unknown, workspace: string): Set<string> {
   return new Set(Array.isArray(by) ? by.filter((k): k is string => typeof k === "string") : []);
 }
 
-/// The looks the card shared can be drawn in (`shareLook`, chosen under it): none kept, night.
-export const SHARE_LOOKS = ["night", "poster", "receipt", "terminal"];
+/// A look the card shared is drawn in (`shareLook`, chosen under it): the app's own key for it (its table of looks is
+/// the app's, which draws the first while none is kept or one it does not know).
+const SHARE_LOOK = /^[a-z][a-z0-9-]{0,31}$/;
 
 export type ArchiveHint = "off" | "done" | "reviewed";
 
@@ -85,11 +97,11 @@ export function archiveHintOf(prefs: unknown): ArchiveHint {
   return v === "off" || v === "reviewed" ? v : "done";
 }
 
-/// The places a phone's bottom bar can hold (web/src/mobile/Bar.tsx, the Android app's ui/Bar.kt), in no order.
-export const BAR_PLACES = ["chats", "files", "stations", "profiles", "connects", "usage", "archive"];
+/// The places a phone's bottom bar can hold, in no order.
+export const BAR_PLACES = ["chats", "files", "stations", "profiles", "connects", "usage", "archive", "vault"];
 /// At most this many places in one bar.
 export const BAR_SIZE = 4;
-const BARS_DEFAULT = { sets: [["chats", "files", "profiles", "stations"], ["usage", "connects", "archive"]], current: 0 };
+const BARS_DEFAULT = { sets: [["chats", "files", "profiles", "stations"], ["archive", "usage", "connects", "vault"]], current: 0 };
 
 /// A phone's bottom bars as kept, whole: each bar one to four known places, none twice in a bar; at least one bar; the
 /// one in view one of them. What is not that (nothing kept, a place this build does not know) reads as the default or
@@ -105,19 +117,19 @@ export function barsOf(v: unknown): { sets: string[][]; current: number } {
 }
 
 /// The lists a workspace's chat list can show (`listFilter`'s words).
-const LIST_FILTERS = ["all", "mine", "watching", "archive"];
+const LIST_FILTERS = ["all", "mine", "watching", "hidden", "archive"];
 
 /// The list filters as kept, without those this build does not know (奏, gone: the list it shows then is all).
 function listFiltersOf(v: unknown): Map_ {
   return isObject(v) ? Object.fromEntries(Object.entries(v).filter(([, f]) => LIST_FILTERS.includes(f as string))) : {};
 }
 
-/// The prefs as they go out: the reader's settings whole, the bottom bars (each workspace's too), the faces, and the
-/// keymap and the rail.
+/// The prefs as they go out: the current product name, the reader's settings whole, the bottom bars (each workspace's
+/// too), the faces, and the keymap and the rail.
 export function shown(v: unknown): unknown {
   if (!isObject(v)) return v;
   const by = isObject(v.barsBy) ? Object.fromEntries(Object.entries(v.barsBy).map(([ws, b]) => [ws, barsOf(b)])) : {};
-  return { ...v, listFilter: listFiltersOf(v.listFilter), reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts), keymap: keymap.view(v), railView: railView(v) };
+  return { ...v, productName: brand.name(), product: brand.current().name, listFilter: listFiltersOf(v.listFilter), reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts), keymap: keymap.view(v), railView: railView(v) };
 }
 
 /// What is kept, as kept (no defaults filled in).
@@ -204,10 +216,13 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   }
   if ("badge" in prefs && !["decisions", "attention", "all"].includes(prefs.badge as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badge" }));
   if ("motion" in prefs && prefs.motion !== "reduce" && prefs.motion !== "full") throw CoreError.invalid(t("core-misc.params.invalid", { error: "motion" }));
+  if ("accent" in prefs && !(ACCENTS.includes(prefs.accent as string) || customHue(prefs.accent) !== null)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "accent" }));
   if ("haptics" in prefs && prefs.haptics !== "off") throw CoreError.invalid(t("core-misc.params.invalid", { error: "haptics" }));
+  if ("appUpdate" in prefs && prefs.appUpdate !== "off") throw CoreError.invalid(t("core-misc.params.invalid", { error: "appUpdate" }));
   if ("windowZoom" in prefs && !["50", "67", "75", "80", "90", "110", "125", "150", "175", "200"].includes(prefs.windowZoom as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "windowZoom" }));
+  if ("sendKey" in prefs && prefs.sendKey !== "mod") throw CoreError.invalid(t("core-misc.params.invalid", { error: "sendKey" }));
   if ("dropAs" in prefs && prefs.dropAs !== "file" && prefs.dropAs !== "path") throw CoreError.invalid(t("core-misc.params.invalid", { error: "dropAs" }));
-  if ("shareLook" in prefs && !SHARE_LOOKS.includes(prefs.shareLook as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "shareLook" }));
+  if ("shareLook" in prefs && !(typeof prefs.shareLook === "string" && SHARE_LOOK.test(prefs.shareLook))) throw CoreError.invalid(t("core-misc.params.invalid", { error: "shareLook" }));
   if ("archiveHint" in prefs && !["off", "done", "reviewed"].includes(prefs.archiveHint as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "archiveHint" }));
   if ("screenTouch" in prefs && prefs.screenTouch !== "direct" && prefs.screenTouch !== "pad") throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenTouch" }));
   if ("screenQuality" in prefs && !["smooth", "hd", "original"].includes(prefs.screenQuality as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenQuality" }));
@@ -280,6 +295,7 @@ export function device(data: Data, facts: unknown): void {
   const app = said("app");
   if (!["web", "desktop", "android", "ios"].includes(app)) throw CoreError.invalid(t("core-misc.params.app"));
   const build = said("build");
+  setOwnBuild(build);
   const agent = said("userAgent");
   const model = said("model");
   const machine = said("machine").slice(0, 60);
@@ -297,12 +313,12 @@ export function device(data: Data, facts: unknown): void {
   if (locale !== "") told.locale = locale;
   prefs.device = told;
   const lang = withLang(prefs);
-  // `client`: an app of its own that runs this core, named so (still.fail mbui), told apart from still.fail's own
-  // where devices are listed and approved; else the brand's
+  // `client` also identifies an app of its own for its update channel. The legacy per-commit app identity is still
+  // sent by installed builds, but its device is named for the product.
   const client = said("client").slice(0, 40);
   if (client !== "") told.client = client;
   brand.setOwnApp(client === "");
-  const name = client !== "" ? client : brand.name();
+  const name = client !== "" ? brand.clientName(client) : brand.name();
   // which machine it is where it says (the person's several Macs, their phone as they named it), else what kind
   let deviceName: string;
   if (app === "android") deviceName = tr(lang, "core-misc.device.android", { brand: name, more: withMore(machine || model) });
@@ -337,8 +353,8 @@ export function deviceParts(label: string): { group: string | null; app: string 
     }
   }
   if (found === null || label.slice(0, found.at).includes(" · ")) return { group: null, app: null, machine: label };
-  const brand = label.slice(0, found.at);
-  return { group: `${found.app} ${brand}`, app: brand + appWords(current(), found.app), machine: label.slice(found.at + found.words.length + 3) };
+  const appBrand = brand.clientName(label.slice(0, found.at));
+  return { group: `${found.app} ${appBrand}`, app: appBrand + appWords(current(), found.app), machine: label.slice(found.at + found.words.length + 3) };
 }
 
 /// The language things are said in (`lang`): as chosen, else as the device is; the core says its words in it.
@@ -371,6 +387,11 @@ function deviceSaid(data: Data, field: string): string | null {
 /// The app a message is sent from ("web 0.1.1150 (phone)"); none until told.
 export function sentFrom(data: Data): string | null {
   return deviceSaid(data, "sentFrom");
+}
+
+/// Which kind of app this is (`desktop`, `ios`, `android`, `web`); none until told.
+export function deviceApp(data: Data): string | null {
+  return deviceSaid(data, "app");
 }
 
 /// The name the device signs in as.

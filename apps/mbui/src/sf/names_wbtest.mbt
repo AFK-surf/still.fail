@@ -1,16 +1,14 @@
-// A folder's names as the viewer reads them (names.mbt: Playlist.kt's tests, PlaylistTest and SideSubtitlesTest), and
+// A folder's names as the viewer reads them (PlaylistTest and SideSubtitlesTest), and
 // how the player says times and speeds (player.mbt).
 
 ///|
-test "a folder's order: numbers as numbers; what follows, what comes before" {
+test "a folder's order: numbers as numbers; what follows" {
   let list = playlist_of(["E10.mp4", "E2.mp4", "notes.txt", "E1.mp4", "E2.mp4"], fn(n) { n.has_suffix(".mp4") })
   assert_eq(list, ["E1.mp4", "E2.mp4", "E10.mp4"])
   assert_eq(next_in("E2.mp4", list), Some("E10.mp4"))
   assert_eq(next_in("E10.mp4", list), None)
   // one not in the list still has a place by its name
   assert_eq(next_in("E3.mp4", list), Some("E10.mp4"))
-  assert_eq(prev_in("E2.mp4", list), Some("E1.mp4"))
-  assert_eq(prev_in("E1.mp4", list), None)
   assert_true(compare_natural("第2集", "第10集") < 0)
   assert_true(compare_natural("a.mp4", "B.mp4") < 0)
   assert_true(compare_natural("E01", "E1") != 0)

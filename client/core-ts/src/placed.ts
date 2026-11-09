@@ -2,9 +2,9 @@
 // links and images give (views.ts drawn(): a message's `placed`), and the images beside one a chat's preview shows, in
 // the order its page shows them (the `imageNear` view): told only for the one open, not the chat's every image.
 
-/** The file a link or image in the text names, by its file name (the last part of its path): `shot.png`, `/w/shot.png`, `ember-file://…/shot.png`. */
+/** The file a link or image in the text names, by its file name (the last part of its path): `shot.png`, `/w/shot.png`, `file:///w/shot.png`. */
 export function nameOf(url: string): string {
-  let u = url.trim().replace(/^(ember-)?file:\/\//, "");
+  let u = url.trim().replace(/^file:\/\//, "");
   try { u = decodeURIComponent(u); } catch { /* kept as written */ }
   return u.slice(u.lastIndexOf("/") + 1);
 }
@@ -36,21 +36,42 @@ type J = any;
 
 /**
  * A chat's page (drawn: its files' `owner`, its messages' `placed`): the images before and after the one at `path`, in
- * the order the page shows them, where it is among them and how many there are.
+ * the order the page shows them. `at` identifies the occurrence in a message when the same file is shown more than once.
  */
-export function near(chat: J, path: string): { before?: J; after?: J; index?: number; count: number } {
-  const images: J[] = [];
-  const add = (files: J[]) => { for (const f of files) if (f !== null && typeof f === "object" && typeof f.name === "string" && typeof f.owner === "string" && isImage(f.name)) images.push(f); };
-  for (const m of Array.isArray(chat?.messages) ? chat.messages : []) {
+export function near(chat: J, path: string, at?: string): { before?: J; after?: J; beforeAt?: string; afterAt?: string; index?: number; count: number } {
+  const images: { file: J; at: string }[] = [];
+  const add = (files: J[], place: string) => {
+    for (const f of files) if (f !== null && typeof f === "object" && typeof f.name === "string" && typeof f.owner === "string" && isImage(f.name)) images.push({ file: f, at: place });
+  };
+  const message = (m: J, row: string) => {
     const files: J[] = Array.isArray(m?.attachments) ? m.attachments : [];
-    // A message shows the files its text places first, where it names them, then the rest below it.
+    const quotes: J[] = Array.isArray(m?.quotes) ? m.quotes : [];
+    const quoted = new Set<string>();
+    quotes.forEach((q, i) => {
+      if (typeof q?.file !== "string" || q.file === "") return;
+      quoted.add(q.file);
+      const file = files.find((f) => f?.name === q.file);
+      if (file !== undefined) add([file], `${row}/q:${i}`);
+    });
+    // Quotes precede the files placed in the text, then the remaining files below it.
+    const beside = files.filter((f) => !quoted.has(f?.name));
     const placed: string[] = Array.isArray(m?.placed) ? m.placed : [];
-    const first = placed.flatMap((n) => files.filter((f) => f?.name === n).slice(0, 1));
-    add(first);
-    add(files.filter((f) => !first.includes(f)));
+    const first = placed.flatMap((n) => beside.filter((f) => f?.name === n).slice(0, 1));
+    add(first, `${row}/f`);
+    add(beside.filter((f) => !first.includes(f)), `${row}/f`);
+  };
+  for (const m of Array.isArray(chat?.messages) ? chat.messages : []) {
+    const row = typeof m?.outgoing === "string" && m.outgoing !== "" ? `o:${m.outgoing}` : `m:${m?.ts ?? ""}`;
+    message(m, row);
   }
-  for (const o of Array.isArray(chat?.outbox) ? chat.outbox : []) add(Array.isArray(o?.attachments) ? o.attachments : []);
-  const at = images.findIndex((f) => f.path === path);
-  if (at < 0) return { count: images.length };
-  return { ...(at > 0 ? { before: images[at - 1] } : {}), ...(at + 1 < images.length ? { after: images[at + 1] } : {}), index: at, count: images.length };
+  for (const o of Array.isArray(chat?.outbox) ? chat.outbox : []) message(o, `o:${o?.id ?? ""}`);
+  const index = images.findIndex((item) => item.file.path === path && (at === undefined || item.at === at));
+  if (index < 0) return { count: images.length };
+  const before = images[index - 1];
+  const after = images[index + 1];
+  return {
+    ...(before === undefined ? {} : { before: before.file, ...(at === undefined ? {} : { beforeAt: before.at }) }),
+    ...(after === undefined ? {} : { after: after.file, ...(at === undefined ? {} : { afterAt: after.at }) }),
+    index, count: images.length,
+  };
 }

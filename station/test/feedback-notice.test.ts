@@ -21,13 +21,13 @@ function ask(admin: Admin, who: typeof member, path: string, body: unknown) {
 test("a failure notice reported: the turn, the agent, versions, variables' names and the session's log lines go", async () => {
   const store = Store.open(":memory:", null);
   try {
-    store.insertSession({ key: "ember:c-aaa111", connect: "ember", runtime: "codex", profile: "pro", model: "gpt-6", workspace: "/w", token: "t", createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
-    store.setRuntimeSessionId("ember:c-aaa111", "019a-codex-thread");
+    store.insertSession({ key: "chat:c-aaa111", connect: "ember", runtime: "codex", profile: "pro", model: "gpt-6", workspace: "/w", token: "t", createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
+    store.setRuntimeSessionId("chat:c-aaa111", "019a-codex-thread");
     store.insertSession({ key: "other", connect: "ember", runtime: "claude", profile: "cc", workspace: "/o", token: "t2", createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
-    const chat = store.openThread("ember", "EMBER", "1.1", null, "ada@x.com");
-    store.joinThread(chat.id, "ember:c-aaa111", "ember");
+    const chat = store.openThread("ember", "CHAT", "1.1", null, "ada@x.com");
+    store.joinThread(chat.id, "chat:c-aaa111", "ember");
     store.insertMessage(newMessage(chat.id, "1.2", "person", "ada@x.com", "fix it"));
-    store.startTurn("t1", "ember:c-aaa111", "message");
+    store.startTurn("t1", "chat:c-aaa111", "message");
     store.endTurn("t1", "failed", "other: workspace routing discovery timed out", null, null);
     store.insertMessage(newMessage(chat.id, "1.3", "ember", "ember", "⚠️ 本轮出错：workspace routing discovery timed out\nmore"));
     const notice = store.lastEntry(chat.id);
@@ -37,7 +37,7 @@ test("a failure notice reported: the turn, the agent, versions, variables' names
     const at = (ms: number) => new Date(Date.now() + ms).toISOString();
     const log = [
       `${at(-3_600_000)}  WARN agents::codex: codex turn error thread=019a-codex-thread error=old`,
-      `${at(-1000)}  INFO session: turn started session=ember:c-aaa111`,
+      `${at(-1000)}  INFO session: turn started session=chat:c-aaa111`,
       `${at(-900)}  WARN agents::codex: codex turn error thread=019a-codex-thread error={"message":"workspace routing discovery timed out"} cwd=/Users/ada/work`,
       `${at(-800)}  WARN agents::codex: a codex app-server not replaced profile=pro error=busy`,
       `${at(-700)}  INFO session: turn started session=other`,
@@ -52,7 +52,8 @@ test("a failure notice reported: the turn, the agent, versions, variables' names
 
     assert.deepEqual(await ask(admin, member, `/threads/${chat.id}/report`, { n: notice }), [200, { number: 12 }]);
     const report = sent[0];
-    assert.equal(report.title, "本轮出错：workspace routing discovery timed out");
+    // Titled by what the runtime said: the notice says only what it means.
+    assert.equal(report.title, "other: workspace routing discovery timed out");
     assert.equal(report.area, "station");
     assert.equal(report.reporter, "Ada (ada@x.com), from the chat");
     assert.match(report.body, /> 本轮出错：workspace routing discovery timed out\n> more/);
@@ -62,12 +63,12 @@ test("a failure notice reported: the turn, the agent, versions, variables' names
     assert.match(report.body, /names only\): HTTPS_PROXY, HTTP_PROXY/);
     assert.deepEqual(
       { ...report.context, notice: undefined },
-      { notice: undefined, os: report.context.os, arch: report.context.arch, software: { station: "0.1.3600", codex: "0.160.0" }, agentEnv: ["HTTPS_PROXY", "HTTP_PROXY"], session: "ember:c-aaa111", connect: "ember", runtime: "codex", profile: "pro", model: "gpt-6", link: "https://app/o/ember:c-aaa111", thread: "EMBER/1.1" },
+      { notice: undefined, os: report.context.os, arch: report.context.arch, software: { station: "0.1.3600", codex: "0.160.0" }, agentEnv: ["HTTPS_PROXY", "HTTP_PROXY"], session: "chat:c-aaa111", connect: "ember", runtime: "codex", profile: "pro", model: "gpt-6", link: "https://app/o/chat:c-aaa111", thread: "CHAT/1.1" },
     );
     // The session's lines of the turn's time: not an hour before, not another session's, not the mesh's; homes scrubbed.
     const lines = report.logs.split("\n");
     assert.equal(lines.length, 3, report.logs);
-    assert.match(lines[0], /turn started session=ember:c-aaa111$/);
+    assert.match(lines[0], /turn started session=chat:c-aaa111$/);
     assert.match(lines[1], /discovery timed out.*cwd=~\/work$/);
     assert.match(lines[2], /app-server not replaced profile=pro/);
 
@@ -89,7 +90,7 @@ test("a failure notice reported: the turn, the agent, versions, variables' names
 test("a report not taken by still.fail cloud is said so", async () => {
   const store = Store.open(":memory:", null);
   try {
-    const chat = store.openThread("ember", "EMBER", "2.1", null, "ada@x.com");
+    const chat = store.openThread("ember", "CHAT", "2.1", null, "ada@x.com");
     store.insertMessage(newMessage(chat.id, "2.2", "ember", "ember", "⚠️ 本轮出错：boom"));
     const parts = new StationParts();
     const deps = { logTail: () => null, versions: () => ({}), envNames: () => [], link: () => null, home: "/h" };

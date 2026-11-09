@@ -1,4 +1,4 @@
-// The pointer's light (docs/ui-panels.md 悬停): one ink, `vars.hover` (the words' colour faint; white faint in the dark),
+// The pointer's light (mbui ui/hand_moves.mbt): one ink, `vars.hover` (the words' colour faint; white faint in the dark),
 // laid over what a thing is, never a colour in its place. A thing with no ground of its own takes it as its
 // background (`background: vars.hover`), over what it stands on; one with a ground of its own (a button's canvas, a
 // chip's tint, the selected grey under an open toggle) takes `litOver`, the ink over that ground. So a lit thing in a

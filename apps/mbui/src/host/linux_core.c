@@ -4,7 +4,7 @@
 // core as Hermes bytecode (core.hbc beside the app, or $MB_CORE_BUNDLE: scripts/core.sh hermes). What the core says
 // comes back through the engine's `say`, through core_native.c into mbui's queue (mb_post), which asks for the frame
 // that takes it (linux_app.c); the calls only the app does are answered here, as win_core.c's:
-//   secure.* (ember hosts/bridge.ts): what the core keeps out of the files it syncs (the lock's signing seed, a vault's
+//   secure.* (still.fail hosts/bridge.ts): what the core keeps out of the files it syncs (the lock's signing seed, a vault's
 //     key), in the desktop's Secret Service (libsecret: GNOME Keyring, KWallet), each value a secret of its own under
 //     the schema fail.still.mbui.core (its key, and whether it is a `user` one: read only as it was kept); where there is
 //     no Secret Service (no session bus, no keyring running), files of <data>/secure readable by this user alone, as

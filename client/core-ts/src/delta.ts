@@ -1,4 +1,4 @@
-// What changed between two values of a topic, as a few ops (delta.rs), so a long transcript that grew by one message
+// What changed between two values of a topic, as a few ops, so a long transcript that grew by one message
 // goes out as one `append`. Objects are compared key by key (in the order serde_json keeps them: sorted), an array
 // that only grew is an `append`, one of the same length is compared item by item, anything else is `set` whole.
 import { compareKeys, equal, isObject } from "./util.ts";
@@ -13,7 +13,8 @@ export function diff(old: unknown, next: unknown): Op[] {
   return ops;
 }
 
-function diffAt(path: Segment[], old: unknown, next: unknown, ops: Op[]): void {
+/// `path` is pushed to and popped back as it goes (collections.ts takes this for a value with no keyed lists in it).
+export function diffAt(path: Segment[], old: unknown, next: unknown, ops: Op[]): void {
   if (old === next) return;
   if (isObject(old) && isObject(next)) {
     // Only the keys that may differ are put in order (serde's): the rest are the same value, no ops; sorting every

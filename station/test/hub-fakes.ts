@@ -12,9 +12,11 @@ import type { ChatMessage, ChatSurface, InboundFile, InboundMessage, ThreadRef }
 import { type HubConfig, hubConfig } from "../src/sessions/config.ts";
 import { type ColdStorage, Hub } from "../src/sessions/hub.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
+import { answerFiles } from "../src/slack/surface.ts";
 import { chatTools } from "../src/tools/chat.ts";
 import { type Attachment, Store } from "../src/store/store.ts";
 import { letterMessage } from "../src/store/rows.ts";
+import { CcIndexPreparation } from "../src/store/cc-thread-index.ts";
 
 type Json = any;
 
@@ -34,6 +36,8 @@ export class FakeChat implements ChatSurface {
   earlier = new Map<string, ChatMessage[]>();
   /// The names of the files each post carried.
   files: string[][] = [];
+  /// The card each post carried (null: none).
+  carried: Json[] = [];
   /// Like a Slack app without files:write.
   noFiles = false;
   /// The bytes of files shared in messages, by file id (others cannot be read); the ids fetched, in order.
@@ -60,9 +64,15 @@ export class FakeChat implements ChatSurface {
   workspace() {
     return "T1";
   }
-  async post(thread: ThreadRef, message: string, files: Attachment[]) {
+  /// What happens while a post goes up (a message that comes meanwhile), once.
+  whilePosting: (() => Promise<void>) | null = null;
+  async post(thread: ThreadRef, message: string, files: Attachment[], card?: Json | null) {
     if (files.length > 0 && this.noFiles) throw new Error("slack files.getUploadURLExternal: missing_scope");
+    const meanwhile = this.whilePosting;
+    this.whilePosting = null;
+    await meanwhile?.();
     this.files.push(files.map((f) => f.name));
+    this.carried.push(card ?? null);
     this.posts.push([thread, message]);
     return `${9_000_000 + next()}.000200`;
   }
@@ -77,6 +87,9 @@ export class FakeChat implements ChatSurface {
     if (bytes === undefined) throw new Error("missing_scope");
     return new TextEncoder().encode(bytes);
   }
+  answerFiles(answer: Json) {
+    return answerFiles(answer);
+  }
   async userOf(email: string) {
     return this.people.get(email.trim().toLowerCase()) ?? null;
   }
@@ -84,8 +97,8 @@ export class FakeChat implements ChatSurface {
     this.statuses.push([`${thread.channel}/${thread.threadTs}`, messageTs, status]);
   }
   /// Where each thread was said to stand as its turn ended (null: no longer so), in order.
-  stands: [string, { kind: "done" | "need"; words: string | null } | null][] = [];
-  standsAt(thread: ThreadRef, stands: { kind: "done" | "need"; words: string | null } | null) {
+  stands: [string, { kind: "done" | "need" | "left"; words: string | null } | null][] = [];
+  standsAt(thread: ThreadRef, stands: { kind: "done" | "need" | "left"; words: string | null } | null) {
     this.stands.push([`${thread.channel}/${thread.threadTs}`, stands]);
   }
   async api(method: string, params: Json) {
@@ -133,6 +146,10 @@ export class FakeSession implements AgentSession {
     this.events({ type: "live", event: { kind: "start", id, step: "text" } });
     this.events({ type: "live", event: { kind: "delta", id, field: "text", text } });
     this.events({ type: "live", event: { kind: "end", id } });
+  }
+  /// The test has it ask its model again: what was steered into the turn is read.
+  reads() {
+    this.events({ type: "live", event: { kind: "phase", phase: "requesting" } });
   }
   mcpUrl() {
     return this.toolsUrl;
@@ -265,8 +282,9 @@ export const reply = (to: InboundMessage, ts: string, text: string, over: Partia
   ...over,
 });
 
-/// `workspaces`: those the station is in, its home one first (docs/multi-workspace.md); a session's link names its own.
-export type Setup = { maxNudges?: number; maxWarmClaude?: number; warmMinutes?: number; teamRequireMention?: boolean; link?: boolean; cold?: ColdStorage; clock?: Clock.Clock; place?: { workspace: string; station: string }; workspaces?: string[] };
+/// `workspaces`: those the station is in, its home one first; a session's link names its own.
+/// `askToName`: asked to name an untitled chat as its turn ends (off unless a test looks at it).
+export type Setup = { maxNudges?: number; askToName?: boolean; maxWarmClaude?: number; warmMinutes?: number; teamRequireMention?: boolean; link?: boolean; cold?: ColdStorage; clock?: Clock.Clock; place?: { workspace: string; station: string }; workspaces?: string[]; fileStore?: boolean };
 
 /// A TestClock for a rig (its hub's, its store's, its sessions'): `adjust(ms)` moves it on, and what was due by then runs.
 /// `asked()` counts the waits begun on it; `begun(n)` resolves once `n` have, each then sleeping on it (an adjust
@@ -325,10 +343,11 @@ export class Rig {
       ],
     };
     if (o.maxNudges !== undefined) this.raw.maxNudges = o.maxNudges;
+    this.raw.askToName = o.askToName ?? false;
     if (o.maxWarmClaude !== undefined) this.raw.maxWarmClaude = o.maxWarmClaude;
     if (o.warmMinutes !== undefined) this.raw.warmMinutes = o.warmMinutes;
     this.config = hubConfig(this.raw, this.dir);
-    this.store = Store.open(":memory:", null, o.clock);
+    this.store = Store.open(o.fileStore ? join(this.dir, "stillfail.db") : ":memory:", null, o.clock);
     const chats = new Map<string, ChatSurface>([
       ["cl", this.chat],
       ["gpt", this.gptChat],
@@ -345,7 +364,7 @@ export class Rig {
 
   /// A hub over this rig's store and config (another station's, after a restart: given its own drivers).
   newHub(o: { chats: (id: string) => ChatSurface | undefined; link?: boolean; cold?: ColdStorage; drivers?: AgentDriver[]; internal?: boolean; mcpUrl?: string; runners?: string[] }) {
-    return new Hub({
+    const hub = new Hub({
       config: () => this.config,
       store: this.store,
       chats: o.chats,
@@ -363,6 +382,11 @@ export class Rig {
         void work.then(() => this.background.delete(work), () => this.background.delete(work));
       },
     });
+    const cc = new CcIndexPreparation();
+    hub.prepareCcSessions = async (sessions) => {
+      for (const session of sessions) while (!cc.step(this.store.db, session).done) {}
+    };
+    return hub;
   }
 
   async accept(m: InboundMessage, connect = "cl") {

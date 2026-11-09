@@ -1,4 +1,4 @@
-// Signing in to a site from a card (docs/vault.md 登录态, "Signing in from a card"; chat EMBER/1793439516.811000,
+// Signing in to a site from a card ( 登录态, "Signing in from a card"; chat EMBER/1793439516.811000,
 // 2026-11-01: 「agent 那边只剩一个动作」). An agent that needs a site signed in to in its chat's browser asks once
 // (`sign_in {site, reason}`): a sign-in the vault keeps for the site is asked for as any secret is (secret_use, mode
 // browser); none, a card asks the person it works for to sign in. On the card their app asks their own password manager
@@ -12,10 +12,12 @@
 import type { DatabaseSync } from "node:sqlite";
 import { UNDECIDED, threadAddress } from "../agents/instructions.ts";
 import { log } from "../ops/log.ts";
-import { CARD_OCCUPIED, cardPlace } from "../sessions/card-place.ts";
+import { CARD_OCCUPIED, cardPlace, postCard } from "../sessions/card-place.ts";
+import type { CardOutcomeSaver } from "../store/card-outbox.ts";
 import { STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
 import type { Driven, FormAsks, FormField, FormValues } from "../browser/signin-form.ts";
 import type { Request } from "./crypto.ts";
+import { SigninSaveBuilder } from "./signin-save-builder.ts";
 
 const SCHEMA = `CREATE TABLE IF NOT EXISTS signin_asks (
   id TEXT PRIMARY KEY,
@@ -47,18 +49,23 @@ const HELD_MS = 15 * 60_000;
 
 export type SignInDeps = {
   db: DatabaseSync;
+  cardOutcomes?: CardOutcomeSaver;
   hub: {
     store: {
       getSession(key: string): { archivedAt?: number | null } | null;
       starter(session: string): string | null;
       latestThread(session: string): SessionThread | null;
-      sessionThreads(session: string): SessionThread[];
-      pendingCard(thread: number): [{ ts: string }, unknown] | null;
+      latestThreadIfReady?(session: string): SessionThread | null | undefined;
+      sessionThreadById(session: string, thread: number): SessionThread | null;
+      pendingCardHeader(thread: number): [{ ts: string }, unknown] | null;
+      pendingCardHeaderIfReady?(thread: number): [{ ts: string }, unknown] | null | undefined;
       insertMessage(m: Record<string, unknown>): readonly unknown[];
       withdrawCard(agent: string, thread: number, ts: string): boolean;
       restateCard(agent: string, thread: number, ts: string, card: (was: any) => any): boolean;
       subscribe(f: (c: { type: string; key?: string }) => void): void;
     };
+    prepareLatestThreads?: ((sessions: readonly string[], signal?: AbortSignal) => Promise<void>) | null;
+    prepareCardPosts?: ((threads: readonly number[], signal?: AbortSignal) => Promise<void>) | null;
     chat(connect: string): { post(where: { channel: string; threadTs: string }, text: string, files: never[]): Promise<string> };
     shared(thread: number, n: number, session: string, text: string): void;
     notify(session: string, text: string): void;
@@ -85,6 +92,7 @@ export type SignInDeps = {
   /// `f` once, `ms` from now (the machine's time); the returned function calls it off.
   after(ms: number, f: () => void): () => void;
   id?(): string;
+  backfill?: { previousGone?: Promise<void>; priority?: SharedArrayBuffer };
 };
 
 export class Refused extends Error {}
@@ -112,10 +120,14 @@ export class SignIns {
   readonly #d: SignInDeps;
   /// What each ask's app gave (by ask), and what of it was typed: in memory only, until done or HELD_MS unused.
   readonly #held = new Map<string, Held>();
+  readonly #saveIndex: SigninSaveBuilder;
 
   constructor(d: SignInDeps) {
     this.#d = d;
     d.db.exec(SCHEMA);
+    this.#saveIndex = new SigninSaveBuilder(d.db, (pending, body) => {
+      if (body !== null) this.#heard(body, pending.status as Request["status"], true);
+    }, d.backfill);
     d.hub.store.subscribe((c) => {
       if ((c.type === "sessionRemoved" || c.type === "session") && typeof c.key === "string") {
         const row = d.hub.store.getSession(c.key);
@@ -134,7 +146,10 @@ export class SignIns {
   }
 
   #bySession(session: string): SignInAsk[] {
-    return (this.#d.db.prepare("SELECT body FROM signin_asks WHERE session = ? ORDER BY rowid").all(session) as { body: string }[]).map((r) => JSON.parse(r.body));
+    // Both callers need only sign-ins still under way; use the session/status index before reading their bodies.
+    const statuses = OPEN.map(() => "?").join(", ");
+    return (this.#d.db.prepare(`SELECT body FROM signin_asks WHERE session = ? AND status IN (${statuses}) ORDER BY rowid`)
+      .all(session, ...OPEN) as { body: string }[]).map((r) => JSON.parse(r.body));
   }
 
   #save(a: SignInAsk) {
@@ -160,7 +175,8 @@ export class SignIns {
   /// keeps, asked for (secret_use); none (or `again`: the one kept ran out), a card asks the person to sign in on the
   /// chat's tab on the site (`tab`, else the last one there). `done`: the agent looked and it is signed in; `stuck`: it
   /// is not, and what is left (given to the person on the tab's screen).
-  async ask(session: string, a: { site: string; reason?: string; tab?: string; again?: boolean; reask?: boolean; done?: boolean; stuck?: string }): Promise<string> {
+  async ask(session: string, a: { site: string; reason?: string; tab?: string; again?: boolean; reask?: boolean; done?: boolean; stuck?: string }, signal?: AbortSignal): Promise<string> {
+    signal?.throwIfAborted();
     const site = siteOf(a.site);
     if (site === "" || !site.includes(".")) throw new Refused("site is the site's host, e.g. github.com");
     const open = this.#bySession(session).filter((x) => x.site === site && OPEN.includes(x.status)).at(-1);
@@ -186,10 +202,22 @@ export class SignIns {
     }
     if (open !== undefined) {
       const place = cardPlace(this.#d.hub.store, session, open.thread, open.cardTs);
+      if (place === undefined) {
+        if (!this.#d.hub.prepareCardPosts || open.thread == null) throw new Refused("card lookup is not ready");
+        await this.#d.hub.prepareCardPosts([open.thread], signal);
+        signal?.throwIfAborted();
+        const sessionRow = this.#d.hub.store.getSession(session);
+        if (sessionRow === null || sessionRow.archivedAt != null) throw new Refused("This chat is archived or gone.");
+        const current = this.get(open.id);
+        if (current === null) return `The sign-in to ${site} is no longer pending.`;
+        if (!OPEN.includes(current.status)) return `The sign-in to ${site} (${current.id}) is ${current.status}.`;
+        if (current.status === "left") return this.#waiting(current);
+        return this.ask(session, a, signal);
+      }
       if (a.reask && open.status !== "left") {
         if (place?.state === "other") throw new Refused(CARD_OCCUPIED);
         if (place?.state === "none") {
-          const posted = await this.#post(session, place.thread, open, true);
+          const posted = await this.#post(session, place.thread, open, true, signal);
           const current = this.get(open.id);
           if (current === null || !OPEN.includes(current.status) || current.status === "left") {
             if (posted !== null) this.#d.hub.store.withdrawCard(session, place.thread.thread.id, posted);
@@ -198,8 +226,12 @@ export class SignIns {
           if (posted !== null) {
             current.thread = place.thread.thread.id;
             current.cardTs = posted;
-            this.#save(current);
-            this.#restate(current);
+            try { this.#saveAndRestate(current, false); }
+            catch (error) {
+              // Posting happens before the request can be saved. Do not leave an unassociated card waiting on failure.
+              try { this.#d.hub.store.withdrawCard(session, place.thread.thread.id, posted); } catch {}
+              throw error;
+            }
           }
           return this.#waiting(current);
         }
@@ -219,13 +251,33 @@ export class SignIns {
     }
     const owner = this.#starter(session);
     if (owner === null) throw new Refused("No one started this chat: there is nobody to sign in.");
-    const thread = this.#d.hub.store.latestThread(session);
+    const prepare = this.#d.hub.prepareLatestThreads;
+    const ready = this.#d.hub.store.latestThreadIfReady;
+    let thread: SessionThread | null;
+    if (prepare && ready) {
+      const found = ready.call(this.#d.hub.store, session);
+      if (found === undefined) {
+        await prepare([session], signal);
+        signal?.throwIfAborted();
+        const current = this.#d.hub.store.getSession(session);
+        if (current === null || current.archivedAt != null) throw new Refused("This chat is archived or gone.");
+        // A sign-in, a vault grant or another delivery may have arrived during preparation.
+        return this.ask(session, a, signal);
+      }
+      thread = found;
+    } else thread = this.#d.hub.store.latestThread(session);
     if (thread === null) throw new Refused("This session has no chat to ask in.");
     const tabs = this.#d.browser.tabs(session);
     const tab = a.tab !== undefined ? tabs.find((t) => t.id === a.tab) : tabs.filter((t) => onSite(hostOf(t.url), site)).at(-1);
     if (tab === undefined) throw new Refused(a.tab !== undefined ? `This chat's browser has no tab ${a.tab}.` : `This chat's browser has no tab on ${site}: open its sign-in page there first (the \`browser\` tool), then call sign_in.`);
     if (!onSite(hostOf(tab.url), site)) throw new Refused(`Tab ${tab.id} is on ${hostOf(tab.url) || tab.url}, not ${site}.`);
     const form = await this.#d.browser.look(session, tab.id);
+    signal?.throwIfAborted();
+    const current = this.#d.hub.store.getSession(session);
+    if (current === null || current.archivedAt != null) throw new Refused("This chat is archived or gone.");
+    // A concurrent call can have created the sign-in while this browser inspection was in flight.
+    if (this.#starter(session) !== owner || this.#bySession(session).some((x) => x.site === site && OPEN.includes(x.status)))
+      return this.ask(session, a, signal);
     if (!form.username && !form.password && !form.code) throw new Refused(`Tab ${tab.id} (${tab.url}) shows no sign-in form: go to ${site}'s sign-in page there (its "Sign in" link), then call sign_in.`);
     const x: SignInAsk = {
       id: this.#d.id?.() ?? `g_${this.#d.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
@@ -253,7 +305,7 @@ export class SignIns {
     }
   }
 
-  async #post(session: string, thread: SessionThread, x: SignInAsk, requireEmpty = false): Promise<string | null> {
+  async #post(session: string, thread: SessionThread, x: SignInAsk, requireEmpty = false, signal?: AbortSignal): Promise<string | null> {
     const stillfail = thread.thread.surface === STILLFAIL_SURFACE;
     const link = this.#d.screenLink(x.tab);
     const text = [`要登录 ${x.site}：${x.reason}`, ...(stillfail ? [] : [link !== null ? `请在 still.fail 中打开此画面登录，登录后在此回复：\n${link}` : "请在 still.fail 客户端里登录。"])].join("\n\n");
@@ -266,38 +318,47 @@ export class SignIns {
           signin: { id: x.id, site: x.site, reason: x.reason, screen: `browser:${x.tab}` },
         }
       : null;
-    const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
-    const posted = await this.#d.hub.chat(thread.connect).post(here, text, []);
-    if (requireEmpty && this.#d.hub.store.pendingCard(thread.thread.id) !== null) throw new Refused(CARD_OCCUPIED);
-    const [n] = this.#d.hub.store.insertMessage({ thread: thread.thread.id, ts: posted, authorKind: "agent", author: session, text, attachments: [], declared: null, card });
-    this.#d.hub.shared(thread.thread.id, n as number, session, text);
-    return card !== null ? posted : null;
+    return postCard(this.#d.hub, session, thread, text, card, requireEmpty ? (why) => new Refused(why) : null,
+      requireEmpty ? () => {
+        const current = this.get(x.id), chat = this.#d.hub.store.getSession(session);
+        return current !== null && OPEN.includes(current.status) && current.status !== "left" && chat !== null && chat.archivedAt == null;
+      } : undefined, signal);
   }
 
-  /// The ask's card as it stands now (`signin.outcome`): where it is, why a person is needed, whether it is kept.
-  #restate(x: SignInAsk) {
-    if (x.thread === undefined || x.cardTs === undefined) return;
-    const outcome = {
+  /// The ask's card as it stands now: where it is, why a person is needed, whether it is kept.
+  #outcome(x: SignInAsk) {
+    return {
       status: x.status, ...(x.why ? { why: x.why } : {}), ...(x.said ? { said: x.said } : {}), ...(x.keep !== undefined ? { keep: x.keep } : {}),
       ...(x.save ? { save: x.save } : {}), ...(x.kept ? { kept: x.kept } : {}),
     };
-    this.#d.hub.store.restateCard(x.session, x.thread, x.cardTs, (card) => ({ ...card, signin: { ...card?.signin, outcome } }));
   }
 
-  #set(x: SignInAsk, status: Status, why?: string) {
+  /// Save the state with its durable card outcome; a closed card is announced only after the transaction commits.
+  #saveAndRestate(x: SignInAsk, close: boolean) {
+    if (x.thread !== undefined && x.cardTs !== undefined && this.#d.cardOutcomes) {
+      this.#d.cardOutcomes.save({ thread: x.thread, ts: x.cardTs, agent: x.session, field: "signin", close, outcome: this.#outcome(x) }, () => this.#save(x));
+      return;
+    }
+    this.#save(x);
+    if (x.thread !== undefined && x.cardTs !== undefined) {
+      const outcome = this.#outcome(x);
+      this.#d.hub.store.restateCard(x.session, x.thread, x.cardTs, (card) => ({ ...card, signin: { ...card?.signin, outcome } }));
+      if (close) this.#d.hub.store.withdrawCard(x.session, x.thread, x.cardTs);
+    }
+  }
+
+  #set(x: SignInAsk, status: Status, why?: string, close = false) {
     x.status = status;
     if (why === undefined) delete x.why;
     else x.why = why;
-    this.#save(x);
-    this.#restate(x);
+    this.#saveAndRestate(x, close);
   }
 
   /// Its card no longer waits on anyone: withdrawn, but while its sign-in's keeping waits for the app to approve it.
   #end(x: SignInAsk, status: "done" | "denied" | "expired" | "ended") {
+    const close = !(status === "done" && x.save !== undefined && (x.kept ?? "pending") === "pending");
+    this.#set(x, status, undefined, close);
     this.#forget(x.id);
-    this.#set(x, status);
-    if (status === "done" && x.save !== undefined && (x.kept ?? "pending") === "pending") return;
-    if (x.thread !== undefined && x.cardTs !== undefined) this.#d.hub.store.withdrawCard(x.session, x.thread, x.cardTs);
   }
 
   /// The ask `id` as its person may answer it (in their workspace's station), or why not.
@@ -426,13 +487,21 @@ export class SignIns {
   /// A request of the vault's decided (secrets.ts listen): a sign-in's keeping said on its card.
   heard(r: Request) {
     if (!r.save || r.status === "pending") return;
-    const row = this.#d.db.prepare("SELECT body FROM signin_asks WHERE session = ? AND json_extract(body, '$.save') = ?").get(r.session, r.id) as { body: string } | undefined;
-    if (row === undefined) return;
-    const x = JSON.parse(row.body) as SignInAsk;
-    if (x.kept === r.status) return;
-    x.kept = r.status;
-    this.#save(x);
-    this.#restate(x);
-    if (x.thread !== undefined && x.cardTs !== undefined) this.#d.hub.store.withdrawCard(x.session, x.thread, x.cardTs);
+    const body = this.#saveIndex.lookup(r.session, r.id);
+    if (body !== null) {
+      this.#heard(body, r.status);
+      this.#saveIndex.forget(r.session, r.id, r.status);
+    } else if (r.save.kind === "browser") this.#saveIndex.wait(r.session, r.id, r.status);
   }
+
+  #heard(body: string, status: Request["status"], replay = false) {
+    const x = JSON.parse(body) as SignInAsk;
+    if (x.kept !== status) {
+      x.kept = status;
+    } else if (!replay) return;
+    // A queued decision can have been saved just before the previous process stopped. Finish telling its card.
+    this.#saveAndRestate(x, true);
+  }
+
+  async close(): Promise<void> { await this.#saveIndex.close(); }
 }

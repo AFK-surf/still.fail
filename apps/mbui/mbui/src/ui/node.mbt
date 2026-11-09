@@ -76,7 +76,7 @@ struct Node {
   mut hit : Bool
   // (with `hit` false: pointed at, never pressed: Ctx::box's `points`)
   mut points : Bool
-  /// what its build said of it as a target, held by it (docs/retained.md, the way there's 1): the pointer's shape over it
+  /// what its build said of it as a target, held by it (the way there's 1): the pointer's shape over it
   /// and what a press on it does besides (hit_marks: Ctx::cursor, takes_presses, window_drag, keeps_selection,
   /// holds_through, menu_asked); 0 none said
   mut marks : Int
@@ -95,6 +95,11 @@ struct Node {
   /// a node of the window's tree's, put among the frame's for the corner rule (corners.mbt with_tree_nodes), that
   /// scrolls what it holds up and down (Tree::scrolls_now): as a list does, what is in it lies under its top and foot
   mut tree_scrolls : Bool
+  /// how far its scroll was put in all for what came out another height over what shows (Tree::scroll_corrected): no
+  /// move of it, what shows held where it was (sizes_steady.mbt takes the scroll out but for this)
+  mut tree_corrected : Double
+  /// a node of the window's tree's, put among the frame's, that holds a page's list's rows (Tree::holds_rows)
+  mut tree_rows : Bool
   /// it floats over what scrolls under it (Ctx::floats_over): the frame's `floating` are found from the nodes
   mut floats : Bool
   /// it scrolls what it holds, as the scrolling box `scroller` is (sideways.mbt: its id, 0 none), what it holds its
@@ -105,7 +110,7 @@ struct Node {
   /// (words_after_layout)
   mut words : WordsMark?
   /// what takes the presses landing on it, which takes none itself (Ctx::presses_to: a target's id), and where that
-  /// was said; held by it (docs/retained.md, the way there's 1)
+  /// was said; held by it (the way there's 1)
   mut press_owner : (Int, SourceLoc)?
   /// the node of the window's tree that takes the presses landing on it (Ctx::presses_to_node: drawn here, pressed
   /// there), if any
@@ -125,7 +130,7 @@ struct Node {
   mut first : Int
   mut last : Int
   mut next : Int
-  /// who it is (docs/incremental.md, What decides the work): what holds it and its key there (its id, or how many
+  /// who it is (What decides the work): what holds it and its key there (its id, or how many
   /// before it there have none), not where it falls in the frame's order; the slot of the frame's nodes it was last
   /// put in; how many of what it holds have no id, as they are built (`keyless`: it is one of them); the pass of a build
   /// that last made it
@@ -223,6 +228,8 @@ struct Node {
   mut spacing : Double
   // digits all one width (@hostapi.style_tabular: Ctx::text `tabular`, the theme's where it says nothing)
   mut tabular : Bool
+  // wrapped words broken where their lines come out even, on as many lines (Ctx::text `balance`: Node::text_layout)
+  mut balance : Bool
   // wrapped words cut after this many lines, the last ending in an ellipsis (0: no limit)
   mut max_lines : Int
   mut fit : Fit
@@ -235,8 +242,6 @@ struct Node {
   // a page of a book, and which
   mut pages : Pages?
   mut page_no : Int
-  // a pager's page: the pager's id
-  mut pager : Int
   // laid over its parent rather than beside its siblings
   mut layer : Bool
   // a ground its style gives it in a state it is not in now (pointed at, pressed, chosen, focused): the corner rule's
@@ -266,10 +271,19 @@ struct Node {
   // a layer's own node: where it is in the window's stack of layers, the old frame's and the tree's (Ctx::stacked);
   // -1 none said (where the old frame built it among its own)
   mut stack : Int
+  // a layer's own node said at no place, opened by an old view of the window's tree: that view's node, at whose place
+  // it is (Ctx::node_stack: as that is now)
+  mut stack_in : @view.NodeId?
   // the stratum it starts over what is put off under it (strata.mbt: 0 none, its bar's or its cover's)
   mut mark : Int
   // a shot's layer (shot.mbt): drawn not on the screen but into the shot's own instances
   mut shot : Bool
+  // the surface of the look it is in, said by what draws it (Ctx::surface: a panel's, a card's that comes first): its own
+  // ground, edge and shadow as faint as the look, what it holds as its look's `words` says (scene.mbt words_alpha)
+  mut surface : Bool
+  // a look is said on it (Ctx::look, look_by, set_look), whatever it comes to now: the scope of a look of its own, its
+  // surface (the one said in it, or itself) as faint as what holds it (scene.mbt look_surface)
+  mut look_scope : Bool
   /// what draws it as it is painted, under what it holds (its alpha): a frame drawn again (reveal.mbt), what the frame
   /// drew round a point larger (loupe.mbt)
   mut paints : ((Node, Double) -> Unit)?
@@ -364,7 +378,7 @@ struct Node {
   fl : @flex.Node
   // what the flex node was last given (layout.mbt, Ctx::flex_tree): the
   // kind, what a leaf measures (text and its font, a rich paragraph, an
-  // image's size), the layout epoch
+  // image's size), the grid of pixels it was laid out on (scale, whole pixels or not)
   mut lk_kind : Int
   mut lk_text : String
   mut lk_shorter : Array[String]
@@ -375,13 +389,18 @@ struct Node {
   mut lk_wrap : Bool
   mut lk_spacing : Double
   mut lk_tabular : Bool
+  mut lk_balance : Bool
   mut lk_max_lines : Int
   // the faces as they were given when its words were laid out (faces.mbt words_shaped_in)
   mut lk_shaped : Int
   mut lk_rich : Rich?
   mut lk_iw : Double
   mut lk_ih : Double
-  mut lk_epoch : Int
+  mut lk_scale : Double
+  mut lk_whole : Bool
+  // who held it when it was last laid out (its parent's ident): moved under another, both are laid out anew (@flex's
+  // compute: a node moved under another parent dirties both)
+  mut lk_up : Int
   // its offsets (tx, ty) when last placed
   mut otx : Double
   mut oty : Double
@@ -404,6 +423,8 @@ fn Node::new() -> Node {
     sem_hid: false,
     island: None,
     tree_scrolls: false,
+    tree_corrected: 0.0,
+    tree_rows: false,
     floats: false,
     scroller: 0,
     scroller_inner: false,
@@ -477,6 +498,7 @@ fn Node::new() -> Node {
     line_trim: false,
     spacing: 0.0,
     tabular: false,
+    balance: false,
     max_lines: 0,
     fit: FitCover,
     fade: true,
@@ -484,7 +506,6 @@ fn Node::new() -> Node {
     still: false,
     pages: None,
     page_no: -1,
-    pager: 0,
     layer: false,
     state_ground: false,
     mar_l: 0.0,
@@ -501,8 +522,11 @@ fn Node::new() -> Node {
     portal: false,
     portal_id: 0,
     stack: -1,
+    stack_in: None,
     mark: 0,
     shot: false,
+    surface: false,
+    look_scope: false,
     paints: None,
     blocks: false,
     stops_wheel: false,
@@ -558,12 +582,15 @@ fn Node::new() -> Node {
     lk_wrap: false,
     lk_spacing: 0.0,
     lk_tabular: false,
+    lk_balance: false,
     lk_max_lines: 0,
     lk_shaped: -1,
     lk_rich: None,
     lk_iw: -1.0,
     lk_ih: -1.0,
-    lk_epoch: -1,
+    lk_scale: -1.0,
+    lk_whole: false,
+    lk_up: 0,
     otx: 0.0,
     oty: 0.0,
     same: false,
@@ -587,6 +614,8 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.sem_hid = false
   self.island = None
   self.tree_scrolls = false
+  self.tree_corrected = 0.0
+  self.tree_rows = false
   self.floats = false
   self.scroller = 0
   self.scroller_inner = false
@@ -611,7 +640,6 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.still = false
   self.pages = None
   self.page_no = -1
-  self.pager = 0
   self.layer = false
   self.mar_l = 0.0
   self.mar_t = 0.0
@@ -625,8 +653,11 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.portal = false
   self.portal_id = 0
   self.stack = -1
+  self.stack_in = None
   self.mark = 0
   self.shot = false
+  self.surface = false
+  self.look_scope = false
   self.paints = None
   self.blocks = false
   self.stops_wheel = false
@@ -733,6 +764,7 @@ fn Node::reset_words(self : Node) -> Unit {
   self.line_trim = false
   self.spacing = 0.0
   self.tabular = false
+  self.balance = false
   self.max_lines = 0
 }
 
@@ -760,13 +792,18 @@ fn Node::radius_at(self : Node, j : Int) -> Double {
 }
 
 ///|
-/// Its corners made `r` (radius_at's order): all four one, `radius`; else each its own.
+/// Its corners made `r` (radius_at's order): all four one, `radius`; else each its own. One within a millionth of a
+/// point: a corner worked out from where boxes are (corners.mbt, concentric) has their rounding in it, and a box laid
+/// out again and one kept and moved there are a rounding apart (layout.mbt's moved_shift): their corners are the same
+/// either way, said the same way.
 fn Node::set_radii(self : Node, r : FixedArray[Double]) -> Unit {
-  if r[0] == r[1] && r[1] == r[2] && r[2] == r[3] {
-    self.radius = r[0]
+  let most = dmax(dmax(r[0], r[1]), dmax(r[2], r[3]))
+  let least = dmin(dmin(r[0], r[1]), dmin(r[2], r[3]))
+  if most - least < 1.0e-6 {
+    self.radius = most
     self.radii = None
   } else {
-    self.radius = dmax(dmax(r[0], r[1]), dmax(r[2], r[3]))
+    self.radius = most
     self.radii = Some(r)
   }
 }

@@ -1,4 +1,4 @@
-// A sign-in asked of a person on its card (vault/signin.ts, docs/vault.md 登录态 "Signing in from a card"), answered from
+// A sign-in asked of a person on its card (vault/signin.ts 登录态 "Signing in from a card"), answered from
 // their app: POST browser/sign-ins/<id>/fill `{username?, password?, code?, keep?}` (what their password manager gave,
 // or the code the page asks; typed into the chat's tab by the station, never kept), POST browser/sign-ins/<id>/self
 // `{done?}` (they sign in themselves on the tab's screen, or say they did), POST browser/sign-ins/<id>/deny. Only the

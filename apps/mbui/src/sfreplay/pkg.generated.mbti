@@ -3,12 +3,16 @@ package "stillfail/sfreplay"
 
 import {
   "mbui/ui",
+  "mbui/view",
+  "moonbitlang/core/json",
   "stillfail/core",
   "stillfail/sfbase",
 }
 
 // Values
 pub fn app(@ui.Ctx) -> Unit
+
+pub fn app_tree(@view.View) -> Unit
 
 pub fn e2e_data() -> Bytes
 
@@ -29,6 +33,8 @@ pub let seeds : Array[UInt32]
 pub fn source() -> @sfbase.Source
 
 pub fn trace(String) -> String
+
+pub fn use_recorded_jobs(@core.Replay) -> Unit
 
 // Errors
 
@@ -52,11 +58,14 @@ pub fn Flow::drag_at(Self, Double, Double, Double, Double, steps? : Int32) -> Un
 pub fn Flow::end(Self, unmade? : Array[String]) -> String
 pub fn Flow::enter(Self) -> Unit
 pub fn Flow::field(Self, String) -> Unit
+pub fn Flow::field_visible(Self, String) -> Unit
+pub fn Flow::follow(Self, String) -> Unit
 pub fn Flow::gone(Self, String) -> Unit
 pub fn Flow::hold(Self, String, Double) -> Unit
 pub fn Flow::hover(Self, String) -> Unit
+pub fn Flow::incidental_calls(Self, Array[String]) -> Unit
 pub fn Flow::key(Self, String) -> Unit
-pub fn Flow::message_taken(Self, (Json) -> Bool) -> Double
+pub fn Flow::message_taken(Self, (@json.Json) -> Bool) -> Double
 pub fn Flow::no_notice(Self, String) -> Unit
 pub fn Flow::noticed(Self, String) -> Unit
 pub fn Flow::open_page(Self, @sfbase.Page) -> Unit
@@ -82,10 +91,12 @@ pub fn Flow::tap_at(Self, Double, Double) -> Unit
 pub fn Flow::tap_notice(Self, String) -> Unit
 pub fn Flow::tap_now(Self, String, top? : Bool) -> Double
 pub fn Flow::toast_gone(Self) -> Unit
+pub fn Flow::turns_followed(Self, least? : Double) -> Int32
 pub fn Flow::type_text(Self, String) -> Unit
 pub fn Flow::until(Self, () -> Bool) -> Unit
 pub fn Flow::until_moving(Self, String) -> Double
 pub fn Flow::wheel(Self, Double) -> Unit
+pub fn Flow::wheel_aligned(Self, Double) -> Unit
 pub fn Flow::wheel_at(Self, String, Double) -> Unit
 
 // Type aliases

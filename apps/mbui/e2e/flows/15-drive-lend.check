@@ -1,1 +1,2 @@
-check "the station lends the folder (its config's drive.roots)" 'drive_roots | grep -qx "$DRIVE"'
+check "the folder is saved in this device's favorites" 'grep -F "CALL prefs.set " "$OUT/$name.log" | grep -F driveFavorites | grep -F "e2e-$TAG" && core_device_has "e2e-$TAG"'
+check "favoriting does not pin the folder on the station" '! drive_roots | grep -Fx "$DRIVE"'

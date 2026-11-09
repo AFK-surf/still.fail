@@ -1,4 +1,4 @@
-// What a command run with a secret in its environment says, with the secret hidden (docs/vault.md, 三种用法): the value
+// What a command run with a secret in its environment says, with the secret hidden (三种用法): the value
 // and the ways it is commonly written out (base64, base64url, URL-encoded, JSON-escaped) are each replaced with a mark,
 // also when a chunk of output ends partway through one. Exact values, not shapes: unlike publish/redact.ts, nothing is
 // guessed. A net for output only: a command that sends the value somewhere itself is not stopped here.

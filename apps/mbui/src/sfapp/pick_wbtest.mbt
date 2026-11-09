@@ -1,4 +1,4 @@
-// Picking a passage of a message (pick.mbt, MessagePick.kt), over the made-up chat. The fake host has no word
+// Picking a passage of a message (pick.mbt), over the made-up chat. The fake host has no word
 // boundaries of its own: a Han character is a word, letters and digits together are one.
 
 ///|
@@ -31,7 +31,7 @@ test "held still on a message's words: the word under the finger is picked, the 
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
   assert_true(pk.ts != "")
   assert_eq(pk.sel.b - pk.sel.a, 1)
-  // felt as it picked, once (MessagePick.kt: LongPress)
+  // felt as it picked, once
   assert_eq(t.haptics(), [@ui.Haptic::LongPress])
   assert_true(t.find("引用") is Some(_))
   assert_true(t.find("复制") is Some(_))
@@ -86,17 +86,117 @@ test "复制 puts the passage on the clipboard and lets go; 全选 takes all of 
 }
 
 ///|
-test "分享这一轮 on the bar lets go and shares the message's turn as a picture (chat.publishPreview by its seq)" {
+test "a message that did not go: a finger can select and copy its words" {
+  new_run()
+  let calls : Array[Made] = []
+  let base = fixture("chat-failed")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  let words = "好，就按这个改，顺便把深色模式的截图也换掉"
+  assert_true(t.find("未发送") is Some(_))
+  hold_on(t, words) |> ignore
+  assert_true(pk.ts != "")
+  assert_true(t.find("复制") is Some(_))
+  // The passage can be quoted too; there is no message at the station to link to or share yet.
+  assert_true(t.find("引用") is Some(_))
+  assert_true(t.query(Button, label="复制消息链接") is None)
+  assert_true(t.query(Button, label="多选") is None)
+  let one = t.ctx().words_of(pk.sel.key).unwrap().slice(pk.sel.a, pk.sel.b)
+  t.tap_text("复制")
+  assert_eq(t.clipboard(), one)
+  t.run_for(@sf.toast_ms)
+  hold_on(t, words) |> ignore
+  t.tap_text("全选")
+  t.tap_text("复制")
+  assert_eq(t.clipboard(), words)
+  assert_true(t.find("未发送") is Some(_))
+  t.run_for(@sf.toast_ms)
+  hold_on(t, words) |> ignore
+  t.tap_text("全选")
+  t.tap_text("引用")
+  let quoted = named(calls, "composer.quote")
+  assert_eq(quoted.length(), 1)
+  let q = field(Some(quoted[0].params), "quote")
+  assert_eq(text(q, "text"), words)
+  assert_eq(text(q, "ts"), "")
+}
+
+///|
+test "a message on its way: a finger can select and copy its words" {
+  new_run()
+  let src = fixture("chat-sending")
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  let words = "好，就按这个改，顺便把深色模式的截图也换掉"
+  hold_on(t, words) |> ignore
+  assert_true(t.find("引用") is Some(_))
+  t.tap_text("全选")
+  t.tap_text("复制")
+  assert_eq(t.clipboard(), words)
+}
+
+///|
+test "a message picked on its way and then delivered keeps its selection and quotes the delivered message" {
+  new_run()
+  let calls : Array[Made] = []
+  let clock : Ref[Double] = { val: 0.0 }
+  fix_clock.val = Some(fn() { clock.val })
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("发消息")
+  t.type_text("测试一下")
+  tap_send(t)
+  t.run_for(@sfbase.flight_ms)
+  hold_on(t, "测试一下") |> ignore
+  let picked = pk.ts
+  let serial = @sfbase.picked.get().serial
+  assert_true(picked != "")
+  fix_clock_set(clock, fix_deliver_ms)
+  t.draw()
+  assert_eq(pk.ts, picked)
+  assert_eq(@sfbase.picked.get().serial, serial)
+  assert_true(t.find("引用") is Some(_))
+  t.tap_text("全选")
+  t.tap_text("引用")
+  let quoted = named(calls, "composer.quote")
+  assert_eq(quoted.length(), 1)
+  let q = field(Some(quoted[0].params), "quote")
+  assert_eq(text(q, "text"), "测试一下")
+  assert_true(text(q, "ts").has_prefix("sent"))
+  fix_clock.val = None
+}
+
+///|
+test "多选 on the bar lets go and opens the chat's picture with that message alone ticked (chat.publishPreview of the whole chat)" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
   hold_on(t, "做完了：列表、跳到最新的按钮") |> ignore
-  t.click(Button, label="分享这一轮")
+  t.click(Button, label="多选")
   assert_eq(pk.ts, "")
   let asked = named(calls, "chat.publishPreview")
   assert_eq(asked.length(), 1)
   assert_eq(text(Some(asked[0].params), "station"), "ws1/st1")
   assert_eq(number(Some(asked[0].params), "thread"), 7.0)
-  assert_eq(number(Some(asked[0].params), "turn"), 11.0)
+  // (the whole chat asked: the message ticked alone once it is read)
+  assert_true(field(Some(asked[0].params), "turn") is None)
 }
 
 ///|

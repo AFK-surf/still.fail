@@ -2,10 +2,15 @@
 // Option is `T | null`; where the Rust leaves a None Value out (EntryRow's agentIdentity, options, card) it is undefined.
 // The readers (read/store.ts) read rows with these same conversions, leaving out what is not for the pages (tokens).
 
+import { LEGACY_SAID_LATEST } from "./legacy-said-build.ts";
+
 export type Json = any;
 
-/// The page's own threads live on this surface, in this channel (stored under the name of before the rename).
+/// The page's own threads live on this surface (stored under the name of before the rename: the stations' data and
+/// the indexes made of it have it).
 export const STILLFAIL_SURFACE = "ember";
+/// The connect the page's own threads' sessions are in (sessions/internal.ts INTERNAL_CONNECT), stored the same way.
+export const STILLFAIL_CONNECT = "ember";
 /// Archived by a person.
 export const MANUAL = "manual";
 /// Archived by the station, for idling (or brought back by something said).
@@ -19,12 +24,15 @@ export function slackSurface(connect: string, teamId: string | null): string {
   return teamId ? `slack:${teamId}` : `slack:${connect}`;
 }
 
-/// Where a Feishu connect's threads live: the connect's own (docs/feishu.md).
+/// Where a Feishu connect's threads live: the connect's own.
 export const feishuSurface = (connect: string): string => `feishu:${connect}`;
+
+/// Where a Comma connect's threads (its Comma Tasks) live: the connect's own.
+export const commaSurface = (connect: string): string => `comma:${connect}`;
 
 export type SessionScope = "thread" | "all";
 
-/// Who looks, as far as the station's workspaces go (docs/multi-workspace.md): their workspace, and whether it is the
+/// Who looks, as far as the station's workspaces go: their workspace, and whether it is the
 /// station's home one (absent: it is, as on a station in one workspace).
 export type InWorkspace = { workspace: string; home?: boolean };
 
@@ -38,8 +46,13 @@ export type SessionRow = {
   /// Whether it goes on afresh once its prompt cache is over, as chosen in its chat (null: as its station is set,
   /// `afreshWhenCold`).
   afresh: boolean | null;
+  /// The most context it runs with, in tokens: its runtime compacts at it (null: the model's whole window).
+  context: number | null;
+  /// The most it ran with while what it holds is over `context`, lowered meanwhile, until compacted (0: the model's
+  /// whole window; null: none over).
+  contextBefore: number | null;
   runtimeSessionId: string | null; workspace: string; cwd: string | null;
-  /// Which of the station's workspaces its chat is in (docs/multi-workspace.md): null is its home workspace (sessions
+  /// Which of the station's workspaces its chat is in: null is its home workspace (sessions
   /// from before, and those made outside any workspace's request). Not the `workspace` above, its directory.
   ws: string | null;
   /// Not for the pages (serde skip).
@@ -52,7 +65,7 @@ export type SessionRow = {
 export type NewSession = {
   key: string; connect: string; scope?: SessionScope | null; title?: string | null; createdBy?: string | null;
   runtime: string; profile: string; profilePinned?: boolean; model?: string | null; effort?: string | null;
-  fast?: boolean | null; workspace: string; cwd?: string | null; runtimeSessionId?: string | null; token: string;
+  fast?: boolean | null; context?: number | null; workspace: string; cwd?: string | null; runtimeSessionId?: string | null; token: string;
   createdAt: number; lastActiveAt: number; ws?: string | null;
 };
 
@@ -70,10 +83,14 @@ export type AutoTitle = { title: string | null; n: number; changes: number };
 export type SessionThread = { thread: ThreadRow; connect: string };
 
 /// A session in a thread, and the connect it posts there through.
-export type Membership = { thread: number; session: string; connect: string; joinedAt: number };
+/// `leftAt`: when the session left the thread (chat_leave): it is still a member (reads it, posts there), but hears
+/// nothing there until someone mentions it again. Absent where it is not read (chat lists).
+export type Membership = { thread: number; session: string; connect: string; joinedAt: number; leftAt?: number | null };
 
-/// "ember" is the station itself (named, stored and sent as before the rename).
-export type AuthorKind = "person" | "agent" | "ember";
+/// The station itself as a message's author (its kind and its name): stored, and sent to the clients, as named before
+/// the rename, like STILLFAIL_SURFACE.
+export const STATION_AUTHOR = "ember";
+export type AuthorKind = "person" | "agent" | typeof STATION_AUTHOR;
 export type EntryKind = "message" | "edit";
 
 export type Quote = { author: string; text: string; comment: string; ts?: string; role?: string; file?: string };
@@ -89,7 +106,20 @@ export type EntryRow = {
   at: number;
   /// A letter's (isLetter): which way it went and the other chat. Absent on every other entry.
   letter?: Letter;
+  /// The station's notice that a session's run changed (sessions/lifecycle.ts `configure`): how it ran before and how it
+  /// runs from its next turn on. Absent on every other entry.
+  change?: RunChange;
 };
+
+/// How a session runs, as a notice of its change says it: its runtime, model, effort, speed, account (`profile`, its
+/// `account` name; `pinned`: kept to it, else the station's pick) and most context (null: as the runtime has it).
+export type RunShown = {
+  runtime: string; model: string | null; effort: string | null; fast: boolean | null; profile: string | null; account: string | null;
+  pinned: boolean; context: number | null;
+};
+
+/// A session's run before a change and after it (EntryRow `change`).
+export type RunChange = { was: RunShown; now: RunShown };
 
 /// What two chats' agents wrote each other (session_send), kept apart from what is said in a chat: `in`, another chat's
 /// agent wrote this one (delivered to its agents); `out`, this chat's agent wrote another (`author`, delivered to none
@@ -104,6 +134,16 @@ export type MessageRow = {
   /// Kept in the letters' own log (schema.ts LETTERS), numbered there, not an entry of its thread.
   apart?: true;
 };
+
+/// What delivery tells an agent about a card ended by a person's message.
+export type DeliveryCardState = {
+  ended: Pick<MessageRow, "author" | "ts">; card: Json; current: Pick<MessageRow, "ts"> | null;
+};
+
+/// What a person chose on a card with an option that closes it, which sent no message (store.ts closeCard): the card's
+/// post (`thread`, `n`, its `ts`; `where`: the thread's channel and thread ts, `question`: its words, each while still
+/// there), who chose (`by`), the option's label and when.
+export type CardChoice = { thread: number; n: number; ts: string | null; where: [string, string] | null; question: string | null; by: string; option: string; at: number };
 
 /// A card someone answered (`answersSince`).
 export type CardAnswer = { question: MessageRow; card: Json; by: string; at: number; answer: MessageRow | null };
@@ -132,14 +172,15 @@ export function isLetter(m: { authorKind: string; author: string; text: string; 
 /// addLetterColumn).
 export const LETTER_SQL = "(letter IS NOT NULL)";
 
-/// The Slack and Feishu threads a still.fail chat can copy what people send to when they ask (`cc`, docs/relay.md
+/// The Slack and Feishu threads a still.fail chat can copy what people send to when they ask (`cc`
 /// "抄送"): every one its agents are in, the one said in last first, at most 20; with a connect that posts there. One
-/// `?`: the chat's thread id.
+/// `?`: the chat's thread id. When each was said in last is its last entry's time (schema.ts thread_state): as the
+/// latest of all its entries, each thread's every entry was read, at each telling of the chat.
 export const CC_THREADS_SQL = `SELECT t.*, o.connect FROM thread_sessions m
   JOIN thread_sessions o ON o.session = m.session JOIN threads t ON t.id = o.thread
   WHERE m.thread = ? AND t.surface != '${STILLFAIL_SURFACE}'
   GROUP BY t.id
-  ORDER BY (SELECT MAX(e.at) FROM entries e WHERE e.thread = t.id) DESC, t.created_at DESC, t.id DESC
+  ORDER BY (SELECT e.at FROM thread_state st JOIN entries e ON e.thread = st.thread AND e.n = st.last_n WHERE st.thread = t.id) DESC, t.created_at DESC, t.id DESC
   LIMIT 20`;
 
 /// The letter an entry's `letter` column (or an archive file's entry) holds (absent: none, or one not read).
@@ -172,7 +213,9 @@ export type TurnSummary = {
 
 export type TurnRow = { id: string; summary: TurnSummary };
 
-export type SessionStats = { turns: number; pending: number; firstText: string | null; lastTurn: TurnSummary | null };
+export type SessionStats = { turns: number; workMs: number | null; pending: number; firstText: string | null; lastTurn: TurnSummary | null };
+/// Whether a session has something going: its messages not delivered yet, and its latest turn (store.ts `statsOf`).
+export type SessionBusy = Pick<SessionStats, "pending" | "lastTurn">;
 
 /// A profile's last check and quota, kept across restarts.
 export type ProfileStatus = { check: Json | null; quota: Json | null };
@@ -184,6 +227,7 @@ export type NewMessage = {
   thread: number; ts: string; authorKind: AuthorKind; author: string; text: string; attachments?: Attachment[];
   quotes?: Quote[]; declared?: string | null; client?: string | null; profile?: string | null; runtime?: string | null; card?: Json | null;
   options?: Json | null; at?: number | null; letter?: Letter;
+  agentIdentity?: Json; change?: RunChange;
 };
 
 export const newMessage = (thread: number, ts: string, authorKind: AuthorKind, author: string, text: string): NewMessage => ({
@@ -201,6 +245,8 @@ export type JobRow = {
   queued?: boolean;
   /// It uses the screen (windows, a simulator): one such job at a time.
   screen?: boolean;
+  /// A brief offscreen task in the station's one small-work slot.
+  small?: boolean;
   /// The sandbox size it asked for, by the name the sandboxes' operator gave it (agents/sandbox.ts): a sandbox of its
   /// own, of that size.
   size?: string;
@@ -216,24 +262,30 @@ export type TurnFor = { profile: string | null; person: string | null; thread: n
 
 /// What the store says changed, for whoever follows it (the admin API's /events, the hub).
 export type StoreChange =
-  /// Anything about that session changed.
-  | { type: "session"; key: string }
+  /// Anything about that session changed; `pending`: how many messages it has yet to take, as it took some.
+  | { type: "session"; key: string; pending?: number }
   /// It was deleted; `ws` the workspace its chat was in (null: the home one).
   | { type: "sessionRemoved"; key: string; ws?: string | null }
-  /// Entries were appended there (contiguous, in order), or its sessions changed (none).
-  | { type: "thread"; id: number; entries: EntryRow[] }
+  /// Entries were appended there (contiguous, in order), or its sessions changed (none); `closed`: the post (its n)
+  /// whose card was closed or withdrawn without a message (closed_cards).
+  | { type: "thread"; id: number; entries: EntryRow[]; closed?: number }
   /// Letters were kept in its own log of them (schema.ts LETTERS; contiguous, in order).
   | { type: "letters"; id: number; letters: EntryRow[] }
   /// It went, with every entry it had; `ws` as its session's.
   | { type: "threadRemoved"; id: number; ws?: string | null }
   /// A viewer's read position moved.
   | { type: "read"; viewer: string; thread: number; n: number }
+  /// A viewer hid a chat from their lists, or made it visible again.
+  | { type: "hidden"; viewer: string; thread: number; hidden: boolean }
+  /// A viewer changed whether a chat sends them notifications.
+  | { type: "muted"; viewer: string; thread: number; muted: boolean }
   /// The Slack users a viewer said are them changed.
   | { type: "identities"; viewer: string }
   /// The chats a viewer pinned changed.
-  | { type: "pins"; viewer: string }
+  | { type: "pins"; viewer: string; session?: string; at?: number | null }
   /// The decisions a viewer dismissed changed.
-  | { type: "dismissed"; viewer: string }
+  /// `card`: the card dismissed (its thread and entry); `kept`: a chat kept from archiving, or let go again.
+  | { type: "dismissed"; viewer: string; card?: { thread: number; n: number }; kept?: { thread: number; kept: boolean } }
   /// The recorded runtime processes changed.
   | { type: "processes" }
   | { type: "decisionChecks" }
@@ -241,8 +293,14 @@ export type StoreChange =
   | { type: "job"; id: string }
   /// A job that was over was taken off its session's record.
   | { type: "jobRemoved"; id: string; session: string }
-  /// Model calls were recorded (store/usage.ts), of these sessions.
-  | { type: "usage"; sessions: string[] }
+  /// What was written of a chat beside what is said in it, as written: a device that makes its sidebar itself puts it
+  /// in place (api/events.ts `chat-mark`). `archive`: the review's suggestion (the version it looked at; null: none
+  /// now) or what it found (`verdict`); `share`: who the chat is shared with now (none: no one); `opened`: a chat an
+  /// agent opened from it.
+  | { type: "chatMark"; thread: number | null; session: string; archive?: { suggested?: number | null; verdict?: Json }; share?: { to: { workspace: string; name: string }[]; write: boolean }; opened?: Json }
+  /// Model calls were recorded (store/usage.ts), of these sessions; `from`, when the earliest of them was made (ms):
+  /// what a page holding the usage reads again of it, from that day on.
+  | { type: "usage"; sessions: string[]; from?: number; statisticsOnly?: boolean }
   /// A session went on in another runtime session, or in none (its context cleared): where its context stands changed.
   | { type: "conversation"; key: string };
 
@@ -336,7 +394,7 @@ export function jsonList<T>(value: T[], write: (v: Json) => T): string | null {
 /// AuthorKind::parse.
 export function authorKind(s: string): AuthorKind {
   if (s === "agent") return "agent";
-  if (s === "ember" || s === "stillfail") return "ember";
+  if (s === STATION_AUTHOR || s === "stillfail") return STATION_AUTHOR;
   return "person";
 }
 
@@ -345,7 +403,8 @@ export function toSession(r: Json): SessionRow {
     key: r.key, connect: r.connect, scope: r.scope === "all" ? "all" : "thread", title: r.title, createdBy: r.created_by,
     runtime: r.runtime, profile: r.profile, profilePinned: r.profile_pinned === 1, model: r.model, effort: r.effort,
     fast: r.fast === null || r.fast === undefined ? null : r.fast !== 0,
-    afresh: r.afresh === null || r.afresh === undefined ? null : r.afresh !== 0, runtimeSessionId: r.runtime_session_id,
+    afresh: r.afresh === null || r.afresh === undefined ? null : r.afresh !== 0, context: typeof r.context === "number" ? r.context : null, contextBefore: typeof r.context_before === "number" ? r.context_before : null,
+    runtimeSessionId: r.runtime_session_id,
     workspace: r.workspace, cwd: r.cwd ?? null, ws: r.ws ?? null, token: r.token, running: r.running === 1, createdAt: r.created_at,
     lastActiveAt: r.last_active_at, archivedAt: r.archived_at, archivedBy: r.archived_by, shownAt: r.shown_at,
   };
@@ -366,21 +425,14 @@ export function toOpened(r: Json): Opened {
   };
 }
 
-/// A chat published as a snapshot (docs/public-share.md): its link's id and key, by whom and when, up to which message.
-export type Published = { id: string; thread: number; key: string; title: string; by: string; byName: string; at: number; upto: number; size: number };
-
-export function toPublished(r: Json): Published {
-  return { id: r.id, thread: r.thread, key: r.key, title: r.title, by: r.created_by, byName: r.by_name, at: r.created_at, upto: r.upto, size: r.size };
-}
-
-/// How long a chat stays shared with a workspace whose agents neither read it nor write to it (docs/chat-share.md):
+/// How long a chat stays shared with a workspace whose agents neither read it nor write to it:
 /// after that a person must share it again.
 export const XSHARE_IDLE_MS = 6 * 60 * 60_000;
 
 /// Why a chat once shared with an agent's workspace is not now.
 export const LAPSED = "that chat's share with your workspace lapsed, unused for 6 hours: a person of its workspace must share it again (by @-mentioning it in a message to you, or in its chat info)";
 
-/// A chat shared with other workspaces (chat_shares, docs/chat-share.md): each workspace with when its agents last read
+/// A chat shared with other workspaces (chat_shares): each workspace with when its agents last read
 /// it or wrote to it, or it was shared with them (`used`).
 export type ChatShare = { to: { workspace: string; name: string; used: number }[]; write: boolean; by: string; at: number };
 
@@ -416,7 +468,22 @@ export function toThread(r: Json): ThreadRow {
 
 export const toSessionThread = (r: Json): SessionThread => ({ thread: toThread(r), connect: r.connect });
 
-export const toMembership = (r: Json): Membership => ({ thread: r.thread, session: r.session, connect: r.connect, joinedAt: r.joined_at });
+export const toMembership = (r: Json): Membership => ({ thread: r.thread, session: r.session, connect: r.connect, joinedAt: r.joined_at, leftAt: r.left_at ?? null });
+
+/// An entry's columns as they are stored (store.ts `#insertEntry`).
+export function entryColumns(e: EntryRow): Json {
+  return {
+    thread: e.thread, n: e.n, kind: e.kind, target: e.target, ts: e.ts, author_kind: e.authorKind, author: e.author, text: e.text,
+    attachments: jsonList<Attachment>(e.attachments, attachment), quotes: jsonList<Quote>(e.quotes, quote), declared: e.declared,
+    client: e.client, profile: e.profile, runtime: e.runtime, options: e.options === undefined ? null : JSON.stringify(e.options),
+    card: e.card === undefined ? null : JSON.stringify(e.card), at: e.at,
+    agent_identity: e.agentIdentity === undefined ? null : JSON.stringify(e.agentIdentity), letter: e.letter === undefined ? null : JSON.stringify(e.letter),
+    change: e.change === undefined ? null : JSON.stringify(e.change),
+  };
+}
+
+/// An entry as a read of it gives it once it is stored: what is told of it as it is written is the same.
+export const stored = (e: EntryRow): EntryRow => toEntry(entryColumns(e));
 
 export function toEntry(r: Json): EntryRow {
   return {
@@ -424,7 +491,7 @@ export function toEntry(r: Json): EntryRow {
     target: r.target, ts: r.ts, authorKind: authorKind(r.author_kind), author: r.author, text: r.text,
     attachments: fromJsonList(r.attachments, attachment), quotes: fromJsonList(r.quotes, quote), declared: r.declared,
     client: r.client, profile: r.profile, runtime: r.runtime ?? null, options: parsed(r.options), card: parsed(r.card), at: r.at,
-    ...withLetter(r.letter),
+    ...withLetter(r.letter), ...withChange(r.change),
   };
 }
 
@@ -432,6 +499,12 @@ export function toEntry(r: Json): EntryRow {
 export const withLetter = (v: unknown): { letter?: Letter } => {
   const letter = letterOf(v);
   return letter === undefined ? {} : { letter };
+};
+
+/// `change` when there is one (a notice's, EntryRow `change`), to spread into a row.
+export const withChange = (v: unknown): { change?: RunChange } => {
+  const change = typeof v === "string" ? parsed(v) : v;
+  return change !== null && typeof change === "object" && change.was !== null && typeof change.was === "object" && change.now !== null && typeof change.now === "object" ? { change } : {};
 };
 
 /// A row of the letters' own log (schema.ts LETTERS) as an entry: a message, never edited, numbered in that log.
@@ -496,6 +569,7 @@ export function toJob(r: Json): JobRow {
     id: r.id, sessionKey: r.session_key, name: r.name, command: r.command, cwd: r.cwd, port: r.port, token: r.token,
     state: r.state, pgid: r.pgid, exitCode: r.exit_code, startedAt: r.started_at, endedAt: r.ended_at,
     restarts: r.restarts, log: r.log, watch: r.watch !== 0, ...(r.queued === 1 ? { queued: true } : {}), ...(r.screen === 1 ? { screen: true } : {}),
+    ...(r.small === 1 ? { small: true } : {}),
     ...(typeof r.size === "string" ? { size: r.size } : {}),
   };
 }
@@ -539,7 +613,21 @@ export const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), 
 
 /// The jobs running now, the latest first, by the index on their state (schema.ts jobs_up): the main thread's and the
 /// readers' (who keeps watch).
-export const JOBS_RUNNING = "SELECT * FROM jobs WHERE state = 'running' ORDER BY started_at DESC";
+// The process watchers need a stable choice when equally large jobs start together. The former query's usual
+// jobs_up plan read ties by port and rowid; spell that order out so either query plan gives the same answer.
+export const JOBS_RUNNING = "SELECT * FROM jobs WHERE state = 'running' ORDER BY started_at DESC, port, rowid";
+
+/// The jobs running, and the services stopped on their own that hold their port (an exited one with a port), the latest
+/// first, by the same index: what a session has up (store.ts `jobsUp`), and the readers' list of them (GET /jobs).
+export const JOBS_UP = "SELECT * FROM (SELECT * FROM jobs WHERE state = 'running' UNION ALL SELECT * FROM jobs WHERE state = 'exited' AND port IS NOT NULL) ORDER BY started_at DESC";
+
+/// The latest running service, or one waiting to restart, holding a port. The two state-and-port seeks do not read
+/// other services or commands (jobs.ts startId).
+export const JOB_AT_PORT = `SELECT id, name, port FROM (
+  SELECT id, name, port, started_at FROM jobs INDEXED BY jobs_up WHERE state = 'running' AND port = ?1
+  UNION ALL
+  SELECT id, name, port, started_at FROM jobs INDEXED BY jobs_up WHERE state = 'exited' AND port = ?1
+) ORDER BY started_at DESC LIMIT 1`;
 
 /// A session's jobs, the latest first, by the index on their session (schema.ts jobs_by_session): the main thread's and
 /// the readers'.
@@ -549,18 +637,58 @@ export const SESSION_JOBS = "SELECT * FROM jobs WHERE session_key = ? ORDER BY s
 /// active first: by the indexes on them (schema.ts sessions_by_runtime_id, runtime_sessions_by_id), not by asking every
 /// session in turn which it ran in.
 export const SESSION_OF_RUNTIME = `SELECT key FROM (
-    SELECT key, last_active_at FROM sessions WHERE runtime_session_id = ?2 AND runtime = ?1
-    UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND s.runtime = ?1
+    SELECT key, last_active_at FROM sessions s WHERE runtime_session_id = ?2 AND runtime = ?1
+      AND NOT EXISTS (SELECT 1 FROM runtime_sessions r WHERE r.session_key = s.key AND r.id = ?2 AND COALESCE(r.runtime, s.original_runtime, s.runtime) != ?1)
+    UNION ALL SELECT s.key, s.last_active_at FROM runtime_sessions r JOIN sessions s ON s.key = r.session_key WHERE r.id = ?2 AND COALESCE(r.runtime, s.original_runtime, s.runtime) = ?1
   ) ORDER BY last_active_at DESC LIMIT 1`;
 
 /// What each list of chats asks of the cards answered lately (answersSince, the main thread's and the readers'): the
 /// latest card, or post with options, before a person's message (schema.ts addClientColumn's entries_cards and
-/// entries_options), and the cards closed since (closed_cards_at).
+/// entries_options), and the cards closed since in each requested thread.
 export const CARD_BEFORE = "SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND card IS NOT NULL";
 export const OPTIONS_BEFORE = "SELECT max(n) AS n FROM entries WHERE thread = ? AND n < ? AND kind = 'message' AND options IS NOT NULL";
-export const CLOSED_SINCE = "SELECT thread, n, viewer, at FROM closed_cards WHERE at >= ?";
+/// The same cards for one thread, by thread and time, with insertion order for ties across threads.
+export const CLOSED_THREAD_SINCE = "SELECT thread, n, viewer, at, rowid AS ordering FROM closed_cards WHERE thread = ? AND at >= ?";
 /// A thread's people's messages since `?2` (the items of a sidebar a change touched), by schema.ts entries_people_since.
 export const SAID_SINCE = "SELECT thread, n FROM entries WHERE thread = ? AND author_kind = 'person' AND kind = 'message' AND at >= ?";
+
+/// The last message as merged, including letters kept among old entries. Seek each kind before reading its edit.
+/// A partially upgraded old store may lack entries_letters; SQLite still reads it there, using the thread's entries.
+export const LAST_MESSAGE = `SELECT * FROM merged WHERE thread = ?1 AND n = (
+  SELECT MAX(n) FROM (
+    SELECT (SELECT n FROM entries INDEXED BY entries_said WHERE thread = ?1 AND kind = 'message' AND letter IS NULL ORDER BY n DESC LIMIT 1) AS n
+    UNION ALL SELECT (SELECT n FROM entries WHERE thread = ?1 AND kind = 'message' AND letter IS NOT NULL ORDER BY n DESC LIMIT 1)
+  )
+)`;
+/// On an old store whose ordinary messages were prepared in bounded batches, use its equivalent lookup.
+export const LEGACY_LAST_MESSAGE = `SELECT * FROM merged WHERE thread = ?1 AND n = (
+  SELECT MAX(n) FROM (
+    SELECT (SELECT n FROM (${LEGACY_SAID_LATEST})) AS n
+    UNION ALL SELECT (SELECT n FROM entries WHERE thread = ?1 AND kind = 'message' AND letter IS NOT NULL ORDER BY n DESC LIMIT 1)
+  )
+)`;
+
+/// A page of messages as merged, latest first. Merge the two ordered message indexes to select a page before reading
+/// the messages and their edits; a page does not walk the edits that followed its messages. Like LAST_MESSAGE, old
+/// letter metadata on non-messages, or a store missing entries_letters, can make the legacy lookup walk more entries.
+export const MESSAGE_KEYS_BEFORE = `
+  SELECT n FROM entries INDEXED BY entries_said
+    WHERE thread = ?1 AND n < ?2 AND kind = 'message' AND letter IS NULL
+  UNION ALL
+  SELECT n FROM entries
+    WHERE thread = ?1 AND n < ?2 AND kind = 'message' AND letter IS NOT NULL
+  ORDER BY n DESC LIMIT ?3`;
+export const LEGACY_MESSAGE_KEYS_BEFORE = `
+  SELECT n FROM legacy_said WHERE thread = ?1 AND n < ?2
+  UNION ALL
+  SELECT n FROM entries WHERE thread = ?1 AND n < ?2 AND kind = 'message' AND letter IS NOT NULL
+  ORDER BY n DESC LIMIT ?3`;
+export const MESSAGES_BEFORE = `SELECT * FROM merged WHERE thread = ?1 AND n IN (${MESSAGE_KEYS_BEFORE}) ORDER BY n DESC`;
+export const LEGACY_MESSAGES_BEFORE = `SELECT * FROM merged WHERE thread = ?1 AND n IN (${LEGACY_MESSAGE_KEYS_BEFORE}) ORDER BY n DESC`;
+
+/// The entries belonging to a page of messages, without reading the other entries between them.
+export const MESSAGE_PAGE_ENTRIES = `SELECT e.* FROM json_each(?2) j
+  CROSS JOIN entries e ON e.thread=?1 AND e.n=CAST(j.value AS INTEGER) ORDER BY e.n`;
 
 /// The usage page's calls are kept added up by this much time (schema.ts USAGE_QUARTERS): a quarter of an hour, which
 /// every time zone's offset is a whole number of.

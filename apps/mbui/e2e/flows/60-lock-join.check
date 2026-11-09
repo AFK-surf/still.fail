@@ -1,0 +1,2 @@
+check "the other device showed a code for this phone" 'grep -q "^PAIRING [0-9]" $OUT/$name.log'
+check "the station's lock has this phone beside the other device, both alice's own app devices" '[ "$("$ROOT/scripts/e2e-local.sh" lock-state | grep -c "^DEVICE .* app own=true")" -ge 2 ]'

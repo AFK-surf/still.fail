@@ -1,6 +1,6 @@
 // The station's services: what its parts are given, each a Context key with the layer that makes it. Async and
 // long-lived work is Effect (fibers in scopes: a part stopped stops all it started); computing what to answer is plain
-// functions (src/read). docs/station-ts.md, 「模块划分」.
+// functions (src/read). 「模块划分」.
 import { Context, Effect, Layer, Queue, Stream, SubscriptionRef } from "effect";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -10,23 +10,26 @@ import { Host } from "./api/host.ts";
 import { jobSeen, sessionSeen, threadSeen } from "./api/seen.ts";
 import { outputAt, tail } from "./read/jobs.ts";
 import { Store as StationStore } from "./store/store.ts";
+import { sees } from "./store/rows.ts";
+import { buildLegacyEntryLookups } from "./store/legacy-said-builder.ts";
 import { type StationKey, loadKey } from "./cloud/key.ts";
 import { Cloud as CloudState } from "./cloud/state.ts";
 import { type ControlPlaneShape, makeControlPlane } from "./cloud/plane.ts";
 import type { Provider } from "./cloud/provider.ts";
 import { type Mesh, loadMesh } from "./mesh/native.ts";
+import { verifyWith } from "./cloud/lock.ts";
 import { Readers as ReaderPool } from "./read/pool.ts";
+import { makeStore } from "./read/store.ts";
+import { apiOf, entryViews, spokenIn } from "./read/views.ts";
 import type { AgentsParts } from "./sessions/agents.ts";
-import { log } from "./ops/log.ts";
 import { platform } from "./platform/index.ts";
 import { ScreenHub } from "./screens/hub.ts";
 import { Desktop } from "./screens/desktop.ts";
 import { Simulators } from "./screens/simulator.ts";
 import { WindowsDesktop, screenBinary } from "./screens/win-desktop.ts";
+import { LinuxDesktop } from "./screens/linux-desktop.ts";
 import { uiBinary } from "./screens/ui.ts";
 import { type Drive, dropFolder, stationDrive } from "./drive/drive.ts";
-import { ModuleSet } from "./modules/modules.ts";
-import { Packages } from "./modules/packages.ts";
 import { stationVersion } from "./ops/version.ts";
 import { channelOf } from "./updates/versions.ts";
 import { HelperApp, helperApp } from "./helper/app.ts";
@@ -34,7 +37,7 @@ import { HelperGrants } from "./helper/grants.ts";
 import { HelperFiles } from "./helper/files.ts";
 import { ConfigFile } from "./ops/config.ts";
 import { Own as OwnPaths } from "./ops/own.ts";
-import { previousProcess } from "./ops/previous.ts";
+import { previousExited, previousProcess } from "./ops/previous.ts";
 import { PeerBus } from "./mesh/bus.ts";
 import type { Outside } from "./mesh/peer.ts";
 import { Net } from "./jobs/load.ts";
@@ -95,7 +98,26 @@ export class Readers extends Context.Service<Readers, ReaderPool>()("stillfail/R
     Readers,
     Effect.gen(function* () {
       const { data } = yield* Paths;
-      return yield* Effect.acquireRelease(Effect.sync(() => new ReaderPool(data)), (pool) => Effect.sync(() => pool.close()));
+      const store = yield* Store;
+      const previous = yield* Previous;
+      yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          const builder = buildLegacyEntryLookups(store, previous.exited);
+          const wait = () => builder.waitForDecisionSessions();
+          store.waitForDecisionSessions = wait;
+          return { builder, wait };
+        }),
+        ({ builder, wait }) => Effect.promise(async () => {
+          if (store.waitForDecisionSessions === wait) store.waitForDecisionSessions = null;
+          await builder.close();
+        }),
+      );
+      return yield* Effect.acquireRelease(Effect.sync(() => {
+        const pool = new ReaderPool(data, undefined, undefined, undefined, { previousGone: previous.exited, priority: store.backfillPriority });
+        pool.startUsageIndex();
+        pool.warm();
+        return pool;
+      }), (pool) => Effect.sync(() => pool.close()));
     }),
   );
 }
@@ -121,10 +143,7 @@ export class Store extends Context.Service<Store, StationStore>()("stillfail/Sto
       const { data } = yield* Paths;
       return yield* Effect.acquireRelease(
         Effect.sync(() => {
-          const store = StationStore.open(join(data, "stillfail.db"), join(data, "archive"));
-          const lost = store.lostArchives();
-          if (lost.length > 0) log.warn("store", "archived threads whose file is not there read as empty", { n: lost.length, threads: lost.join(" ") });
-          return store;
+          return StationStore.open(join(data, "stillfail.db"), join(data, "archive"));
         }),
         (store) => Effect.sync(() => store.close()),
       );
@@ -132,7 +151,10 @@ export class Store extends Context.Service<Store, StationStore>()("stillfail/Sto
   );
 }
 
-/// still.fail Helper (macOS; docs/station-ts-native.md §4), installed and talked to under <data>/helper: this Mac's
+/// Start the store before the usage-index worker, and keep the same store available to the station's other parts.
+export const ReadersAndStore = Readers.layer.pipe(Layer.provideMerge(Store.layer));
+
+/// still.fail Helper (macOS §4), installed and talked to under <data>/helper: this Mac's
 /// screen (the desktop's) and the drive's protected folders (helper/files.ts); null where there is none.
 export class Helper extends Context.Service<Helper, HelperApp | null>()("stillfail/Helper") {
   static readonly layer = Layer.effect(
@@ -157,7 +179,7 @@ export class Grants extends Context.Service<Grants, HelperGrants | null>()("stil
   );
 }
 
-/// The screens members see and drive (docs/remote-screens.md): the registry the station's parts add their sources to
+/// The screens members see and drive: the registry the station's parts add their sources to
 /// (`add`), with this machine's display among them from the start; views of them end as the station stops.
 export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()("stillfail/Screens") {
   static readonly layer = Layer.effect(
@@ -165,11 +187,15 @@ export class ScreenRegistry extends Context.Service<ScreenRegistry, ScreenHub>()
     Effect.gen(function* () {
       const hub = yield* Effect.acquireRelease(Effect.sync(() => new ScreenHub({ drop: () => dropFolder(homedir()) })), (hub) => Effect.sync(() => hub.close()));
       const helper = yield* Helper;
-      // Windows': stillfail-screen, a process a view; macOS's: still.fail Helper, with its grants.
-      const desktop: Desktop | WindowsDesktop =
+      const { data } = yield* Paths;
+      const title = process.env.STILLFAIL_TEST_HOST === "1" ? () => "test-station" : undefined;
+      // Windows': stillfail-screen; macOS's: still.fail Helper; Linux's: the station user's desktop session.
+      const desktop: Desktop | WindowsDesktop | LinuxDesktop =
         platform.desktopScreen === "screen"
-          ? new WindowsDesktop({ binary: screenBinary(), ui: uiBinary(), changed: () => hub.changed() })
-          : new Desktop({ supported: platform.desktopScreen === "helper", helper, grants: yield* Grants, changed: () => hub.changed() });
+          ? new WindowsDesktop({ binary: screenBinary(), ui: uiBinary(), changed: () => hub.changed(), title })
+          : platform.desktopScreen === "x11"
+          ? new LinuxDesktop({ data, changed: () => hub.changed(), title })
+          : new Desktop({ supported: platform.desktopScreen === "helper", helper, grants: yield* Grants, changed: () => hub.changed(), title });
       // Back after it ended by itself: the desktop asks again for a grant still missing.
       if (desktop instanceof Desktop) helper?.onBack(() => void desktop.helperBack());
       yield* Effect.acquireRelease(
@@ -208,14 +234,19 @@ export class Events extends Context.Service<Events, EventStreams>()("stillfail/E
       const screens = yield* ScreenRegistry;
       const { data } = yield* Paths;
       const previous = yield* Previous;
+      // What was just said, made as the pages show it on this thread: over the store's own connection (what it just
+      // wrote is in its memory), with the names the readers are given.
+      const view = Object.assign(makeStore(store.db, data), { names: readers.names });
       const events = new EventStreams({
         readers,
+        said: (thread, entries, lang) => spokenIn(lang, () => entryViews(apiOf(view), thread, entries)),
         subscribe: (listener) => store.subscribe(listener),
         host: () => admin.sample(),
         jobLog: (id) => store.getJob(id)?.log ?? null,
         tail,
         outputAt,
         sessionExists: (key) => store.getSession(key) !== null,
+        liveSeen: (viewer, key) => { const row = store.getSession(key); return row !== null && sees(viewer, row.ws); },
         seen: (viewer, of) => ("session" in of ? sessionSeen(store, viewer, of.session) : "thread" in of ? threadSeen(store, viewer, of.thread) : jobSeen(store, viewer, of.job)),
         handover: { file: eventsHandoverFile(data), previous },
       });
@@ -245,46 +276,6 @@ export class AdminHost extends Context.Service<AdminHost, Host>()("stillfail/Adm
   );
 }
 
-/// The modules beside the station (docs/station-modules.md): which there are and how each is now, for the admin API
-/// (passed on to them), the overview and modules/live.ts (which starts them). Their changes told as the overview's.
-export class Modules extends Context.Service<Modules, ModuleSet>()("stillfail/Modules") {
-  static readonly layer = Layer.effect(
-    Modules,
-    Effect.gen(function* () {
-      const events = yield* Events;
-      return new ModuleSet((yield* Paths).data, () => events.overviewChanged());
-    }),
-  );
-}
-
-/// The packages of the modules the station installs itself (modules/packages.ts): from where its own releases are, on
-/// its channel, once the process before it is gone; started by ModulesLive, read and updated with the station's own
-/// updates (the agents' side adds them to its updates: a line each).
-export class ModulePackages extends Context.Service<ModulePackages, Packages>()("stillfail/ModulePackages") {
-  static readonly layer = Layer.effect(
-    ModulePackages,
-    Effect.gen(function* () {
-      const { data, app } = yield* Paths;
-      const plane = yield* ControlPlane;
-      const config = yield* StationConfig;
-      const previous = yield* Previous;
-      const version = stationVersion(app);
-      return yield* Effect.acquireRelease(
-        Effect.sync(() =>
-          new Packages({
-            data,
-            station: version === undefined ? null : Number(version.slice("0.1.".length)),
-            base: () => plane.releaseBase(),
-            channel: () => channelOf(config.raw(), app),
-            previousGone: previous.gone,
-          }),
-        ),
-        (packages) => Effect.promise(() => packages.close()),
-      );
-    }),
-  );
-}
-
 /// config.json (ops/config.ts): one for the whole station. What an edit must pass is said by the parts that read it
 /// (the agents' side: accounts/check.ts).
 export class StationConfig extends Context.Service<StationConfig, ConfigFile>()("stillfail/Config") {
@@ -309,11 +300,12 @@ export class Own extends Context.Service<Own, OwnPaths>()("stillfail/Own") {
 /// The station process before this one (ops/previous.ts), and its end: what only one process may have waits on it, and
 /// what its event streams told is taken up from it alone (api/events.ts). Looked for as this process starts, before it
 /// writes its own run/hub.json.
-export class Previous extends Context.Service<Previous, { readonly pid: number | null; readonly gone: Promise<void> }>()("stillfail/Previous") {
+export class Previous extends Context.Service<Previous, { readonly pid: number | null; readonly gone: Promise<void>; readonly exited: Promise<void> }>()("stillfail/Previous") {
   static readonly layer = Layer.effect(
     Previous,
     Effect.gen(function* () {
-      return previousProcess(join((yield* Paths).data, "run"));
+      const previous = previousProcess(join((yield* Paths).data, "run"));
+      return { ...previous, exited: previousExited(previous) };
     }),
   );
 }
@@ -360,7 +352,7 @@ export class HelperFolders extends Context.Service<HelperFolders, HelperFiles | 
   );
 }
 
-/// The station's drive (drive/drive.ts, docs/drive.md): one, for the admin API's routes and the modules' local API.
+/// The station's drive (drive/drive.ts): one, for the admin API's routes and the modules' local API.
 /// config.json's roots; what is the station's own never reached; the folders macOS protects through still.fail Helper.
 export class StationDrive extends Context.Service<StationDrive, Drive>()("stillfail/Drive") {
   static readonly layer = Layer.effect(
@@ -387,7 +379,7 @@ export class AdminApi extends Context.Service<AdminApi, Admin>()("stillfail/Admi
       const config = yield* StationConfig;
       return new Admin(yield* Readers, {
         store: yield* Store, events: yield* Events, host: yield* AdminHost, agents: () => side.current ?? undefined, screens: yield* ScreenRegistry, helper: yield* Helper, grants: yield* Grants,
-        drive: yield* StationDrive, modules: yield* Modules, parts: yield* Parts, config, data: (yield* Paths).data, cloud: (yield* ControlPlane).state,
+        drive: yield* StationDrive, parts: yield* Parts, config, data: (yield* Paths).data, cloud: (yield* ControlPlane).state,
       });
     }),
   );
@@ -395,5 +387,10 @@ export class AdminApi extends Context.Service<AdminApi, Admin>()("stillfail/Admi
 
 /// The native mesh addon.
 export class MeshNative extends Context.Service<MeshNative, Mesh>()("stillfail/MeshNative") {
-  static readonly layer = Layer.effect(MeshNative, Effect.sync(loadMesh));
+  // (and the lock's and the vault's signatures checked by its libcrux from now on, where it has it: cloud/lock.ts)
+  static readonly layer = Layer.effect(MeshNative, Effect.sync(() => {
+    const mesh = loadMesh();
+    if (mesh.verify) verifyWith((alg, key, signature, message) => mesh.verify!(alg, key, signature, message));
+    return mesh;
+  }));
 }

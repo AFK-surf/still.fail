@@ -1,0 +1,14 @@
+#!/bin/sh
+# What a classic Wasm program runs, counted (tools/wasmgas, in MoonBit: its main.mbt says how): wasmgas profile IN OUT,
+# report PROGRAM PROFILE [TOP], compare PROGRAM_A PROFILE_A PROGRAM_B PROFILE_B [TOP]. Built here only when there is
+# none built from these very sources (by content).
+D=$(cd "$(dirname "$0")" && pwd)
+T=$D/../tools
+TOOLS_SCRIPTS=$D; . "$D/tooltarget.sh"
+B=$T/_build/$TT/release/build/wasmgas/wasmgas.$TX
+src=$(cd "$T" && find wasmgas sys moon.mod moon.work -type f | LC_ALL=C sort | xargs cat | cksum)
+if [ ! -f "$B" ] || [ "$(cat "$B.src" 2>/dev/null)" != "$src" ]; then
+  (cd "$T" && env -u MOON_CC moon build --target $TT --release wasmgas >&2) || { echo "wasmgas: tools/wasmgas did not build" >&2; exit 1; }
+  echo "$src" > "$B.src"
+fi
+tool_exec "$B" "$@"

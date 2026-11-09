@@ -35,6 +35,16 @@ fn swipe_view(moved : Ref[Double], tapped : Ref[Bool]) -> @ui.Tester {
 }
 
 ///|
+test "a wheel over a drag area scrolls the list containing it" {
+  let t = swipe_view(Ref::new(0.0), Ref::new(false))
+  t.draw()
+  let (_, y, _, _) = t.rect_of("swipe me").unwrap()
+  t.wheel(150.0, y + 5.0, 80.0)
+  t.draw()
+  assert_true(t.list_offset() > 0.0)
+}
+
+///|
 test "a drag area in a list: across first, it is the drag's and the list holds still; up or down first, the list's" {
   let moved = Ref::new(0.0)
   let tapped = Ref::new(false)
@@ -295,8 +305,8 @@ test "pointer_at: each event by its own time, down, moved, up, not by the frames
 }
 
 ///|
-/// A list of rows that scrolls up and down, a pager over it across, and a thin drag area across to be held first (a
-/// column's edge) on the list's first row; what the area was moved by, its taps and the pager's page kept.
+/// A list of rows that scrolls up and down, and a thin drag area across to be held first (a column's edge) on the
+/// list's first row; what the area was moved by and its taps kept.
 fn held_edge_view(
   moved : Ref[Double],
   taps : Ref[Int],
@@ -422,9 +432,9 @@ fn panel_over_area(downs : Ref[Int], taps : Ref[Int], clicks : Ref[Int]) -> @ui.
         }
         None => ()
       }
-      if c.clicked(button) {
+      c.on_press(button, fn() {
         clicks.val += 1
-      }
+      })
       c.drag_area(area, axis=Free, w=Fill(1.0), h=Fill(1.0), fn() {
         c.layer(fn() {
           let panel = c.box(id=c.id("panel"), w=Px(100.0), h=Px(100.0), fn() {

@@ -1,5 +1,5 @@
 // Where the core's time goes, by what took it: the parts of making a view counted as they run, so a page that waited
-// says what of its wait went where (store.ts `chat.open`, docs/telemetry.md). A count only: nothing reads it to decide.
+// says what of its wait went where (store.ts `chat.open`). A count only: nothing reads it to decide.
 
 /// Milliseconds spent on each part since the core started.
 export const spent: Record<string, number> = {};

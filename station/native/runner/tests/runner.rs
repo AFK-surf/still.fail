@@ -90,7 +90,7 @@ impl Runner {
 
     fn connect(&self) -> Client {
         let stream = UnixStream::connect(self.info["socket"].as_str().unwrap()).unwrap();
-        Client { reader: BufReader::new(stream.try_clone().unwrap()), writer: stream }
+        Client { reader: BufReader::new(stream.try_clone().unwrap()), writer: stream, said: None }
     }
 
     fn files(&self) -> Vec<String> {
@@ -134,6 +134,8 @@ fn ready_line(stdout: impl std::io::Read) -> Value {
 struct Client {
     reader: BufReader<UnixStream>,
     writer: UnixStream,
+    /// What the runner said as it was attached to (where it begins): kept aside, the rest read on past it.
+    said: Option<Value>,
 }
 
 impl Client {
@@ -143,13 +145,19 @@ impl Client {
 
     /// The next message, or None once the runner closed the connection.
     fn recv(&mut self) -> Option<Value> {
-        let mut line = String::new();
-        match self.reader.read_line(&mut line) {
-            Ok(0) => None,
-            Ok(_) => Some(serde_json::from_str(&line).unwrap()),
-            // A connection the runner shut down can also end in a reset.
-            Err(e) if e.kind() == std::io::ErrorKind::ConnectionReset => None,
-            Err(e) => panic!("reading from the runner: {e}"),
+        loop {
+            let mut line = String::new();
+            let message: Value = match self.reader.read_line(&mut line) {
+                Ok(0) => return None,
+                Ok(_) => serde_json::from_str(&line).unwrap(),
+                // A connection the runner shut down can also end in a reset.
+                Err(e) if e.kind() == std::io::ErrorKind::ConnectionReset => return None,
+                Err(e) => panic!("reading from the runner: {e}"),
+            };
+            if message["op"] != "attached" {
+                return Some(message);
+            }
+            self.said = Some(message);
         }
     }
 
@@ -312,6 +320,87 @@ fn a_second_connection_attaching_resumes_from_the_ack() {
     let ([out, _], exit) = third.until_exit([4, 0]);
     assert_eq!(out, b"two\n");
     assert_eq!(exit["code"], 0);
+}
+
+#[test]
+fn what_was_acknowledged_gives_its_disk_back_its_offsets_staying() {
+    use std::os::unix::fs::MetadataExt;
+    // 40 MiB written, then a line once stdin says so.
+    let runner = Runner::start("punch", "head -c 41943040 /dev/zero; read x; printf 'after\\n'");
+    let mut client = runner.connect();
+    client.send(json!({"op": "attach"}));
+    let (mut at, mut got) = ([0, 0], [vec![], vec![]]);
+    client.read_until(&mut at, &mut got, 0, 41943040);
+    let out = runner.info["out"].as_str().unwrap().to_string();
+    let before = fs::metadata(&out).unwrap();
+    client.send(json!({"op": "ack", "out": 41943040, "err": 0}));
+    client.handled();
+    let after = fs::metadata(&out).unwrap();
+    assert_eq!(after.len(), before.len(), "the file keeps its length: offsets stay as they were");
+    assert!(after.blocks() * 512 < before.blocks() * 512 / 2, "the disk under what was acknowledged is given back: {} then {}", before.blocks(), after.blocks());
+    client.write(b"go\n");
+    let ([more, _], exit) = client.until_exit([41943040, 0]);
+    assert_eq!(more, b"after\n", "what follows comes on from there");
+    assert_eq!(exit["code"], 0);
+}
+
+#[test]
+fn what_the_station_keeps_is_not_given_back() {
+    use std::os::unix::fs::MetadataExt;
+    // 40 MiB written and acknowledged, the station keeping from its start (a turn still running began there).
+    let runner = Runner::start("keep", "head -c 41943040 /dev/zero; read x; printf 'after\\n'");
+    let mut client = runner.connect();
+    client.send(json!({"op": "attach"}));
+    let (mut at, mut got) = ([0, 0], [vec![], vec![]]);
+    client.read_until(&mut at, &mut got, 0, 41943040);
+    let out = runner.info["out"].as_str().unwrap().to_string();
+    let before = fs::metadata(&out).unwrap();
+    client.send(json!({"op": "ack", "out": 41943040, "err": 0, "keep": 0}));
+    client.handled();
+    assert_eq!(fs::metadata(&out).unwrap().blocks(), before.blocks(), "kept whole");
+    // That turn ended: what came before goes.
+    client.send(json!({"op": "ack", "out": 41943040, "err": 0, "keep": 41943040}));
+    client.handled();
+    let after = fs::metadata(&out).unwrap();
+    assert_eq!(after.len(), before.len());
+    assert!(after.blocks() * 512 < before.blocks() * 512 / 2, "given back once no longer kept: {} then {}", before.blocks(), after.blocks());
+    assert_eq!(client.said, Some(json!({"op": "attached", "out": 0, "err": 0, "keep": null})), "where it began, said first");
+    // The next station, after a crash: told what was acknowledged and kept, both from the same ack.
+    client.send(json!({"op": "ack", "out": 41943040, "err": 0, "keep": 1000}));
+    client.leave();
+    let mut client = runner.connect();
+    client.send(json!({"op": "attach"}));
+    // The first it sends on an attach.
+    let mut line = String::new();
+    client.reader.read_line(&mut line).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&line).unwrap(), json!({"op": "attached", "out": 41943040, "err": 0, "keep": 1000}));
+    client.write(b"go\n");
+    let ([more, _], exit) = client.until_exit([41943040, 0]);
+    assert_eq!(more, b"after\n");
+    assert_eq!(exit["code"], 0);
+}
+
+#[test]
+fn an_ack_on_a_connection_replaced_moves_nothing() {
+    let runner = Runner::start("stale-ack", "printf 'one\\ntwo\\n'; read x");
+    let mut old = runner.connect();
+    old.send(json!({"op": "attach"}));
+    let (mut at, mut got) = ([0, 0], [vec![], vec![]]);
+    old.read_until(&mut at, &mut got, 0, 8);
+    old.send(json!({"op": "ack", "out": 4, "err": 0, "keep": 0}));
+    old.handled();
+    // Another station attaches; the one before, not knowing, acknowledges the rest afterwards.
+    let mut new = runner.connect();
+    new.send(json!({"op": "attach"}));
+    new.handled();
+    // (its connection may be closed by now: what it sends is lost, or read and refused)
+    let _ = old.writer.write_all(format!("{}\n", json!({"op": "ack", "out": 8, "err": 0, "keep": 4})).as_bytes());
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    let mut next = runner.connect();
+    next.send(json!({"op": "attach"}));
+    let mut line = String::new();
+    next.reader.read_line(&mut line).unwrap();
+    assert_eq!(serde_json::from_str::<Value>(&line).unwrap(), json!({"op": "attached", "out": 4, "err": 0, "keep": 0}), "where the current one stood: the old one's late ack taken from nobody");
 }
 
 #[test]
@@ -511,6 +600,21 @@ fn a_start_that_fails_says_why_and_leaves_nothing() {
     let out = Command::new(BIN).args(["--dir", dir.to_str().unwrap(), "--id", "a", "--", "/nonexistent/agent"]).process_group(0).output().unwrap();
     assert_eq!(out.status.code(), Some(1));
     let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_pid_taken_by_a_later_process_does_not_hold_the_id() {
+    let dir = tmpdir("reused");
+    fs::create_dir_all(&dir).unwrap();
+    let mut later = Command::new("/bin/sleep").args(["1000"]).stdin(Stdio::piped()).stdout(Stdio::null()).spawn().unwrap();
+    // As a runner gone long ago left it, its pid given to a process started since.
+    fs::write(dir.join("a.json"), json!({ "id": "a", "runner": later.id(), "startedAt": 1 }).to_string()).unwrap();
+    let mut child = Command::new(BIN).args(["--dir", dir.to_str().unwrap(), "--id", "a", "--"]).args(["/bin/sh", "-c", "read x"]).stdout(Stdio::piped()).spawn().unwrap();
+    let info = ready_line(child.stdout.take().unwrap());
+    let runner = Runner { dir, info, child: Some(child) };
+    assert_ne!(runner.pid("runner"), i64::from(later.id()));
+    later.kill().unwrap();
+    later.wait().unwrap();
 }
 
 #[test]

@@ -14,7 +14,6 @@ import WebSocket from "ws";
 import { connect as tcpConnect } from "node:net";
 import { createServer as createHttpServer } from "node:http";
 import { Core } from "../core.ts";
-import type { CoreModule } from "../module.ts";
 import type { AccountProviderFactory } from "../account-provider.ts";
 // What an app embedding this bundle gives `start` (one bundle: one copy of the core's classes).
 export { commaAccountProvider, type CommaOptions } from "../comma.ts";
@@ -165,7 +164,7 @@ export class NodeHost implements Host {
         }),
         (socket) => Effect.sync(() => socket.close()),
       );
-      // The host's ping (host.rs SOCKET_PING_MS): still.fail cloud answers `pong`. A measurement of the connection, not
+      // The host's ping: still.fail cloud answers `pong`. A measurement of the connection, not
       // a read of anything.
       yield* Effect.forkScoped(Effect.forever(Effect.sleep(SOCKET_PING_MS).pipe(Effect.andThen(Effect.sync(() => socket.send(SOCKET_PING))))));
       return { take: Effect.flatMap(Queue.take(frames), (v) => (v instanceof HostError ? Effect.fail(v) : Effect.succeed(v))) };
@@ -342,10 +341,9 @@ export class NodeHost implements Host {
 /// starts another.
 /// `hostWire`: its stations answer at the cloud's origin over plain HTTP, not on the mesh (the side-by-side run,
 /// harness/run.ts). `account`: who the accounts are with, when not still.fail cloud (an app embedding the core gives
-/// `commaAccountProvider({origin, bearer})`; docs/core-ts.md, "Account providers and embedding"). `sealer`: what seals
-/// values for it (an Electron app's main process). `modules`: what the app adds to the core
-/// (module.ts).
-export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean; account?: AccountProviderFactory; sealer?: Sealer; modules?: readonly CoreModule[] } = {}) {
+/// `commaAccountProvider({origin, bearer})`, "Account providers and embedding"). `sealer`: what seals
+/// values for it (an Electron app's main process).
+export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean; account?: AccountProviderFactory; sealer?: Sealer } = {}) {
   service.name = "stillfail-native";
   service.os = process.platform === "darwin" ? "macos" : process.platform;
   const host = new NodeHost(dataDir, cloudOrigin, channel === "beta", listener, options.sealer);
@@ -369,7 +367,7 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
     if (!running) void ready.then((core) => core.close(), () => {}).catch((e: unknown) => console.error("still.fail core: closing:", e));
   };
   // Messages that arrive while the core starts wait, in order (as the Rust core's queue did).
-  const ready = Core.create(host, { ...(options.hostWire ? { iroh: null, wire: () => new HostWire(host) } : { iroh: nodeIroh() }), account: options.account, modules: options.modules }).then((core) => {
+  const ready = Core.create(host, { ...(options.hostWire ? { iroh: null, wire: () => new HostWire(host) } : { iroh: nodeIroh() }), account: options.account }).then((core) => {
     running = core;
     // A database found damaged on the way is marked first: the core that follows makes it again (data.ts).
     core.inner.runner.onDefect = (error) => void core.inner.data.damageKept().then(() => fatal(error));

@@ -2,9 +2,9 @@
 // data-theme on the root ("light"/"dark"; absent for the system), which the palette in styles/global.css.ts and the
 // brand pictures follow. index.html sets it before the first paint from the copy of the core's last value
 // (`stillfail.appearance`), so a dark page never paints light first; the core's value then keeps it.
-import { useEffect, useState } from "react";
+import { useEffect, useState } from "preact/compat";
 import type { Appearance } from "./core/shapes.ts";
-import { onPrefs, prefs, setPrefs, usePrefs } from "./prefs.ts";
+import { onPrefs, prefs } from "./prefs.ts";
 import { followMotion } from "@stillfail/ui/motion.ts";
 import { APPEARANCE_EVENT as EVENT, announceAppearance } from "./appearanceEvent.ts";
 
@@ -31,17 +31,6 @@ export function followAppearance(): void {
   applyAppearance(prefs().appearance);
   onPrefs(() => applyAppearance(prefs().appearance));
   onPrefs(followMotion(() => prefs().motion));
-}
-
-/** The choice kept on this device, and how to change it. */
-export function useAppearance(): [Appearance, (value: Appearance) => void] {
-  return [usePrefs((p) => p.appearance), (appearance) => setPrefs({ appearance })];
-}
-
-/** 动画: as the system asks (none), reduced or full on this device, and how to change it. */
-export function useMotionSetting(): ["system" | "reduce" | "full", (value: "system" | "reduce" | "full") => void] {
-  const motion = usePrefs((p) => p.motion);
-  return [motion === "reduce" || motion === "full" ? motion : "system", (value) => setPrefs({ motion: value === "system" ? null : value })];
 }
 
 /** Whether the page shows dark now: its choice, or the system's when following it. */

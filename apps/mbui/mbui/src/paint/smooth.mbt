@@ -1,17 +1,4 @@
-// Corners, as still.fail's (its apps/android/shared/src/main/kotlin/fail/still/android/ui/Corners.kt, and the web's
-// web/src/styles/global.css.ts): a rounded rectangle's corner is a superellipse(1.5) one, |x|^n + |y|^n = 1 with
-// n = 2^1.5, over a radius a quarter longer than the one it is given. A corner needs room for the longer radius, and
-// where the box has none (the radius half its shorter side) it is round across: a circle is a circle, and a capsule's
-// end a circle's arc that eases into its long edges as Apple's does (capsule_ease) rather than meeting them at once,
-// how much it bends never jumping or turning at once.
-// Between the two it goes over evenly, so a box that grows (a capsule of one line taking a second) changes shape with
-// its size, and never at once.
-//
-// Every box with a radius is so, with no switch: each renderer draws its ground, edge, shadow and glass by the same
-// distance (src/host/corner.sl, `sd_corner` below number for number), what a rounded clip cuts is cut along it, and a
-// press there is judged by it. A corner given is the one still.fail's tokens give (`Smooth(12.dp)`, the web's token
-// before its --corner-scale): never times 1.25 by hand. Only + - × ÷ and √ (exact in IEEE, the same on every target):
-// a power is `det_pow`'s.
+// Corners as drawn; host/corner.sl is the renderers' copy. A corner's radius places things, its smoothing only draws.
 
 ///|
 /// How much longer a smooth corner's radius is (the web's --corner-scale), and its exponent (CSS superellipse(1.5): 2^1.5).
@@ -22,61 +9,34 @@ pub let smooth_exponent : Double = 2.8284271247461903
 
 ///|
 /// How smooth a corner of `radius` is where `room` is half its box's shorter side: wholly (1) with room for the longer
-/// radius, not at all (0) with none, a capsule's end (Corners.kt smoothness).
+/// radius, not at all (0) with none, a capsule's end.
 pub fn smoothness(radius : Double, room : Double) -> Double {
   if radius <= 0.0 {
     0.0
   } else {
-    dclamp((room - radius) / ((smooth_scale - 1.0) * radius), 0.0, 1.0)
+    dclamp((room - radius) / (0.25 * radius), 0.0, 1.0)
   }
 }
 
 ///|
-/// The corner of a smooth box `inset` inside a smooth one of corner `outer`, concentric with it: a curve moved in by
-/// `inset` is drawn `inset` smaller, and a corner is drawn a quarter larger than it is given, so the inset is taken a
-/// quarter smaller (Corners.kt concentric). Never below 0.
+/// The corner of a smooth box `inset` inside a smooth one of corner `outer`, concentric with it: its corner as given
+/// less the inset (the user, 2026-11-03: 「平滑圆角只是在原有圆角的描述上做平滑」「边距应该是整数」: a corner is
+/// laid out by the radius it is given, its smoothing only how it is drawn). Never below 0.
 pub fn concentric(outer : Double, inset : Double) -> Double {
-  dmax(outer - inset / smooth_scale, 0.0)
+  dmax(outer - inset, 0.0)
 }
 
 ///|
 /// The other way round: the corner of a smooth box round a smooth one of corner `inner`, `inset` in from its edges.
 pub fn concentric_out(inner : Double, inset : Double) -> Double {
-  inner + inset / smooth_scale
+  inner + inset
 }
 
 ///|
-/// How round a circle's arc a wholly smooth corner reads as, to what lies in it (a circle, a capsule's end): no circle
-/// is concentric with a superellipse, and the one tangent to its edges that keeps nearest an even gap to it all along is
-/// centred this much of its radius in from them (fitted: the gap off even by under 1.25% of its radius anywhere, 0.34
-/// in a corner of 28; a circle centred its whole radius in, as a round corner would ask, is 3% off at the curve's
-/// middle, 0.84 there, the user, 2026-10-27: 中型屏的单行 composer 跟圆角还是对不上).
-pub let smooth_round : Double = 0.9565
-
-///|
-/// The round corner a circle or a capsule's end lying in a corner of `radius` follows, `room` half its box's shorter
-/// side (as smooth as that has room for, smoothness): it lies concentric where it stands that less its own half in from
-/// the corner's edges. A wholly smooth corner's smooth_round of it, a round one (a capsule's end) itself.
-pub fn round_like(radius : Double, room? : Double = 1.0e30) -> Double {
-  let r = dmin(radius, room)
-  r * (1.0 - (1.0 - smooth_round) * smoothness(r, room))
-}
-
-///|
-/// The other way round: the corner, of a box `room` its shorter half, that a circle or a capsule's end follows as
-/// `round` (round_like of it is `round`; at most `room`). By halving: round_like grows with the radius.
-pub fn round_like_out(round : Double, room? : Double = 1.0e30) -> Double {
-  let mut lo = dmin(round, room)
-  let mut hi = dmin(round / smooth_round, room)
-  for _ in 0..<48 {
-    let mid = (lo + hi) / 2.0
-    if round_like(mid, room~) < round {
-      lo = mid
-    } else {
-      hi = mid
-    }
-  }
-  hi
+/// How far in from a corner of `corner` a capsule or a circle `height` high stands, concentric with it: the corner less
+/// its half (at most `room`, the corner's box's shorter half: a capsule's end as round as it is), by the radius as given.
+pub fn capsule_in(corner : Double, height : Double, room? : Double = 1.0e30) -> Double {
+  dmin(corner, room) - height / 2.0
 }
 
 ///|
@@ -158,15 +118,21 @@ fn corner_shape(
 }
 
 ///|
+/// How much of its curve a capsule's end has room for along a side of half `ha`: all of it once that side holds it.
+fn capsule_room(ha : Double, rr : Double) -> Double {
+  dmin((ha - rr) / (0.4 * rr), 1.0)
+}
+
+///|
 /// A capsule's end (a corner with no room across its box but room along it), as Apple draws one (iOS 26's alert
 /// buttons, the user, 2026-10-31: 苹果的那个按钮就看不出直线和半圆的接点): a circle's arc at its middle, leaving it and easing
 /// into the long edge further along than a circle meets it. How much it bends goes with no jump and no kink (the user,
 /// 2026-11-01: 要的是平滑): from none on the edge it rises once to at most 1.15 the circle's and comes back to the
 /// circle's, never stepping and never turning at once. As how much further in than the circle it lies, in r, at `u` r
-/// from the tip, `k` the share of the room it needs along the edge (r more) the box has: from u0 = 1 - 0.675 k (the
+/// from the tip, `k` the share of the room the curve takes along the edge the box has (capsule_room): from u0 = 1 - 0.675 k (the
 /// circle's height and its first three rates of change there) to u1 = 1 + 0.4 k (the edge's, all four none) an octic,
 /// the four of each end's weights and k^2.5 t^4 (1 - t)^4, t from 0 to 1 between them (fitted to a capsule the user
-/// measured, 2026-11-01, within 0.008 r; with less room the ease is shorter and less, a circle not at all).
+/// measured, 2026-11-01, within 0.008 r: smooth_wbtest keeps what they measured).
 fn capsule_ease(u : Double, k : Double) -> Double {
   let u0 = 1.0 - 0.675 * k
   let u1 = 1.0 + 0.4 * k
@@ -204,7 +170,7 @@ fn capsule_ease(u : Double, k : Double) -> Double {
 /// the ease as far as the corner has no room across (its own smoothness that way), moved along the round corner's normal
 /// there (to first order: the ease is under 1% of r).
 fn capsule_tail(along : Double, across : Double, ha : Double, hc : Double, rr : Double) -> Double {
-  let k = dmin((ha - rr) / rr, 1.0)
+  let k = capsule_room(ha, rr)
   let tight = 1.0 - smoothness(rr, hc)
   if k <= 0.0 || tight <= 0.0 {
     return 0.0

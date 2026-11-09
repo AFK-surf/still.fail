@@ -8,12 +8,20 @@ import { knownChannel, slackCreator } from "./slack-known.ts";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, remoteRunsSince, seenBy, sessionThreads, usageGroups, usageSince, usageThreads } from "./store.ts";
+import { type BatchedUsage, type Json, STILLFAIL_SURFACE, type Store, type UsageGroup, REMOTE_RUNS_PENDING, USAGE_CHATS_PENDING, remoteRunCount, remoteRunsSince, seenBy, sessionThreads, usageChatTotals, usageGroups, usageSince, usageThreads } from "./store.ts";
+import { usageCardOutcomesComplete } from "../store/usage-chat-stats.ts";
+import type { UsageSqlTimings } from "./usage-batched.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
+import { usageDetailSince } from "../store/usage-detail.ts";
+import { hasCompactUsage } from "../store/usage-compact.ts";
+import { HISTORY_AFTER, HISTORY_DAYS, HISTORY_SCOPES, HISTORY_TOTAL, hasUsageHistory, quarter, usageHistorySince } from "../store/usage-history.ts";
 import { titleOf } from "./views.ts";
 import { profileRuntimes } from "../agents/profiles.ts";
 import { facts } from "../accounts/catalog.ts";
+import { log } from "../ops/log.ts";
 import type { ContextCall } from "../store/usage.ts";
+import { key as modelKey } from "../../../client/core-ts/src/shapes/model.ts";
+import { STILLFAIL_CONNECT } from "../store/rows.ts";
 
 // ── prices (usage.rs) ──
 
@@ -31,6 +39,7 @@ const PRICES: [string, Price][] = [
   ["gpt-6-sol", { input: 2.0, output: 10.0, cacheRead: 0.2 }],
   ["gpt-6-luna", { input: 0.1, output: 0.5, cacheRead: 0.01 }],
   ["gpt-5.6-sol", { input: 4.0, output: 20.0, cacheRead: 0.4 }],
+  ["claude-fable-5-2", { input: 8.0, output: 40.0, cacheRead: 0.2 }],
   ["claude-fable-5-1", { input: 10.0, output: 50.0, cacheRead: 0.25 }],
   ["claude-mythos-5-1", { input: 10.0, output: 50.0, cacheRead: 0.25 }],
   ["claude-fable-5", { input: 10.0, output: 50.0, cacheRead: 1.0 }],
@@ -66,39 +75,9 @@ export function priceTable(lang: Lang, models: (string | null)[] = []): Json {
   };
 }
 
-/// Bedrock's version stamp after `-v`: `1:0` (not a model's own v4). (shapes model.rs `stamp`)
-function stamp(s: string): boolean {
-  const colon = s.indexOf(":");
-  if (colon < 0) return false;
-  const [major, minor] = [s.slice(0, colon), s.slice(colon + 1)];
-  return /^[0-9]+$/.test(major) && /^[0-9]+$/.test(minor);
-}
+/// What a model is, however it is spelled (the core's, client/core-ts/src/shapes/model.ts `key`).
+export { modelKey };
 
-/// shapes model.rs `key`: what a model is, however it is spelled: lower case, without its provider's prefix, region,
-/// version stamp or date; a `[1m]` context stays.
-export function modelKey(spelled: string): string {
-  const id = spelled.trim().toLowerCase();
-  const bracket = id.indexOf("[");
-  const [base, context] = bracket >= 0 ? [id.slice(0, bracket), id.slice(bracket)] : [id, ""];
-  // OpenRouter's and other routers' `vendor/model`; Vertex's `model@date`.
-  let m = base.slice(base.lastIndexOf("/") + 1);
-  m = m.split("@")[0]!;
-  // Bedrock's `us.anthropic.model-v1:0`: region and vendor are words and a dot, a version is not (gpt-5.1).
-  for (let dot = m.indexOf("."); dot >= 0; dot = m.indexOf(".")) {
-    const [head, rest] = [m.slice(0, dot), m.slice(dot + 1)];
-    if (head === "" || !/^[A-Za-z]+$/.test(head) || rest === "") break;
-    m = rest;
-  }
-  const v = m.lastIndexOf("-v");
-  if (v >= 0 && stamp(m.slice(v + 2))) m = m.slice(0, v);
-  // A date: -20251001, or -2024-08-06.
-  const parts = m.split("-");
-  const digits = (s: string, n: number) => s.length === n && /^[0-9]+$/.test(s);
-  const n = parts.length;
-  if (n > 1 && digits(parts[n - 1]!, 8)) m = parts.slice(0, n - 1).join("-");
-  else if (n > 3 && digits(parts[n - 3]!, 4) && digits(parts[n - 2]!, 2) && digits(parts[n - 1]!, 2)) m = parts.slice(0, n - 3).join("-");
-  return m + context;
-}
 
 /// price: a model's prices, however a profile spells it (anthropic/claude-opus-5-5, claude-opus-5-5[1m]): the model
 /// catalog's, else the station's own table's; none for a model without a list price in either.
@@ -156,6 +135,8 @@ type SessionCalls = {
   usageOfSession(session: string): UsageGroup[];
   lastContexts(session: string, limit: number): ContextCall[];
   conversationSince(session: string): number | null;
+  savedCompactContext?(session: string): { model: string | null; contextWindow: number | null; lastCallAt: number;
+    contextTokens?: number; cacheMs?: number; rereadCost?: number } | null;
 };
 
 /// How long a prompt cache keeps what was written to it: five minutes, or an hour where it was asked to.
@@ -176,22 +157,42 @@ export function usageNow(s: SessionCalls, key: string): SessionUsage | null {
   const since = s.conversationSince(key);
   const calls = since === null ? [] : all.filter((c) => c.at >= since);
   const last = calls.at(-1);
-  if (last === undefined) return out;
-  if (last.context !== null) out.contextTokens = last.context;
-  out.lastCallAt = last.at;
-  // A read keeps it for as long again as it was written for: as the latest write asked.
-  const wrote = calls.findLast((c) => c.cacheWrite + c.cacheWriteLong > 0);
-  if (wrote === undefined) return out;
-  const long = wrote.cacheWriteLong > 0;
-  out.cacheMs = long ? CACHE_LONG_MS : CACHE_SHORT_MS;
-  const p = last.model === null ? null : price(last.model);
-  if (p !== null && last.context !== null) out.rereadCost = ((last.context * p.input * (long ? 2.0 : 1.25)) / 1e6) * (last.fast ? 2.0 : 1.0);
+  if (last !== undefined) {
+    if (last.context !== null) out.contextTokens = last.context;
+    out.lastCallAt = last.at;
+    // A read keeps it for as long again as it was written for: as the latest write asked.
+    const wrote = calls.findLast((c) => c.cacheWrite + c.cacheWriteLong > 0);
+    if (wrote !== undefined) {
+      const long = wrote.cacheWriteLong > 0;
+      out.cacheMs = long ? CACHE_LONG_MS : CACHE_SHORT_MS;
+      const p = last.model === null ? null : price(last.model);
+      if (p !== null && last.context !== null) out.rereadCost = ((last.context * p.input * (long ? 2.0 : 1.25)) / 1e6) * (last.fast ? 2.0 : 1.0);
+    }
+  }
+  const saved = s.savedCompactContext?.(key) ?? null;
+  const latest = all.at(-1);
+  if (saved !== null && since !== null && saved.lastCallAt >= since && (latest === undefined || saved.lastCallAt > latest.at)) {
+    out.model = saved.model;
+    out.contextWindow = saved.contextWindow;
+    out.lastCallAt = saved.lastCallAt;
+    for (const name of ["contextTokens", "cacheMs", "rereadCost"] as const) {
+      if (saved[name] !== undefined) out[name] = saved[name];
+      else delete out[name];
+    }
+  }
   return out;
 }
 
 /// Usage::summary: every day's calls from `from` until `to`, by thread, person, profile and model (UsageRow).
-function summary(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint): Json[] {
-  return usageGroups(s, from, to, utcOffsetMin).map((g) => ({
+function summary(s: Store, from: bigint, to: bigint, utcOffsetMin: bigint, viewer: InWorkspace | null,
+  queryTime: (ms: number, diagnostics: { parts?: number; candidates?: number; selectedMs?: number; selectedRestMs?: number;
+    selectedCpuMs?: number; cpuMs?: number; rests?: number; restMs?: number; sql?: UsageSqlTimings }) => void,
+  batched?: BatchedUsage): Json[] {
+  const started = performance.now();
+  const diagnostics: { parts?: number; candidates?: number; selectedMs?: number } = {};
+  const groups = batched?.groups ?? usageGroups(s, from, to, utcOffsetMin, viewer, diagnostics);
+  queryTime(batched?.ms ?? Math.round(performance.now() - started), batched?.diagnostics ?? diagnostics);
+  return groups.map((g) => ({
     day: g.day, session: g.session, thread: g.thread, person: g.person, profile: g.profile, runtime: g.runtime, model: g.model,
     calls: g.calls, input: g.input, cacheRead: g.cacheRead, cacheWrite: g.cacheWrite + g.cacheWriteLong, output: g.output, cost: cost(g),
   }));
@@ -218,7 +219,7 @@ export function configProfiles(dataDir: string): Record<string, Json> {
   return out;
 }
 
-// ── people (views.rs `creator`, as views.ts has it) ──
+// ── people (as views.ts has it) ──
 
 /// A creator reference in words. No Slack connection knows anyone: a Slack user goes by their id, with no email.
 function creator(s: Store, lang: Lang, reference: string): Json {
@@ -234,45 +235,194 @@ const byBytes = (a: string, b: string) => Buffer.compare(Buffer.from(a), Buffer.
 /// admin/views.rs `usage`: what the agents spent from `from` until `to` (ms), by day in the asker's time zone
 /// (`utcOffsetMin`), with the threads, people and profiles the rows name. `from`/`to` are i64s, written as such.
 /// `reading`: whether the counter is still reading everything for the first time (UsageCounter.readingAll). `viewer`:
-/// only the calls of their workspace's chats (docs/multi-workspace.md; those of sessions gone, the home one's); all of
+/// only the calls of their workspace's chats (those of sessions gone, the home one's); all of
 /// them for a read made for no one.
-export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null): Json {
-  const seen = seenBy(s, viewer);
-  const rows = summary(s, from, to, utcOffsetMin).filter((r) => seen(r.session));
-  const wanted = [...new Set(rows.map((r) => r.thread).filter((t): t is number => t !== null))];
+// A reader says once when its cache actually serves a request. Fast reads otherwise leave no trace in the slow-read
+// log, so the absence of that warning alone cannot show whether the cache is used.
+let reportedSummaryReuse = false;
+let reportedCleanSummaryReuse = false;
+
+export function usage(s: Store, lang: Lang, from: bigint, to: bigint, utcOffsetMin: bigint, reading = true, viewer: InWorkspace | null = null, history = false,
+  options: { remoteRuns?: boolean; historyRange?: { from: bigint; to: bigint }; batched?: BatchedUsage; detailsPreparing?: boolean; metadata?: boolean } = {}): Json {
+  const includeRemoteRuns = options.remoteRuns !== false;
+  // A program's usage export needs the rows and their costs, but constructs its own people and does not send the
+  // usage page's chat titles, price table or profile details.
+  const includeMetadata = options.metadata !== false;
+  // Keep the stages of a slow read: a reader has only one request at a time, and a slow aggregate can hold up other
+  // reads. Only durations are logged, never the request's arguments or the rows it reads.
+  const started = performance.now() - (options.batched?.ms ?? 0);
+  let last = started;
+  const stages: Record<string, number> = {};
+  const mark = (stage: string) => {
+    const now = performance.now();
+    stages[stage] = Math.round(now - last);
+    last = now;
+  };
+  let summaryParts: number | undefined;
+  let summaryCandidates: number | undefined;
+  let summarySqlSlowOp: string | undefined;
+  const groups = options.detailsPreparing ? [] : summary(s, from, to, utcOffsetMin, viewer, (ms, diagnostics) => {
+    stages.summaryQuery = ms;
+    if (diagnostics.selectedMs !== undefined) stages.summarySelected = diagnostics.selectedMs;
+    if (diagnostics.selectedRestMs !== undefined) stages.summarySelectedRestMs = diagnostics.selectedRestMs;
+    if (diagnostics.selectedCpuMs !== undefined) stages.summarySelectedCpuMs = diagnostics.selectedCpuMs;
+    if (diagnostics.cpuMs !== undefined) stages.summaryCpuMs = diagnostics.cpuMs;
+    if (diagnostics.rests !== undefined) stages.summaryRests = diagnostics.rests;
+    if (diagnostics.restMs !== undefined) stages.summaryRestMs = diagnostics.restMs;
+    if (diagnostics.sql !== undefined) {
+      stages.summarySqlJournalMs = diagnostics.sql.journal;
+      stages.summarySqlChangesMs = diagnostics.sql.changes;
+      stages.summarySqlPendingMs = diagnostics.sql.pending;
+      stages.summarySqlSelectedMs = diagnostics.sql.selected;
+      stages.summarySqlOwnerMs = diagnostics.sql.owner;
+      stages.summarySqlBucketsMs = diagnostics.sql.buckets;
+      stages.summarySqlSlowMs = diagnostics.sql.slowMs;
+      summarySqlSlowOp = diagnostics.sql.slowOp;
+    }
+    summaryParts = diagnostics.parts;
+    summaryCandidates = diagnostics.candidates;
+  }, options.batched);
+  mark("summary");
+  // Compact groups have already checked each session's current workspace in the same read snapshot. Looking them
+  // up again here needlessly rereads the sessions index for every usage page, including on a cold database.
+  const seen = viewer === null || hasCompactUsage(s.db) ? null : seenBy(s, viewer, groups.map((r) => r.session));
+  const rows = seen === null ? groups : groups.filter((r) => seen(r.session));
+  mark("visibility");
+  const wanted = includeMetadata ? [...new Set(rows.map((r) => r.thread).filter((t): t is number => t !== null))] : [];
   const threads: Record<string, Json> = {};
   for (const [t, first] of usageThreads(s, wanted)) {
     // A Slack channel's name, as far as known (`known_channel`).
     const title = titleOf(t, first, t.surface === STILLFAIL_SURFACE ? null : knownChannel(s, threadConnect(s, t.id), t.channel));
     threads[String(t.id)] = { title, surface: t.surface, home: t.home, archived: t.hiddenAt !== null };
   }
-  const refs = [...new Set(rows.map((r) => r.person).filter((p): p is string => p !== null))].sort(byBytes);
+  mark("threads");
+  const refs = includeMetadata ? [...new Set(rows.map((r) => r.person).filter((p): p is string => p !== null))].sort(byBytes) : [];
   const people: Record<string, Json> = {};
   for (const r of refs) people[r] = creator(s, lang, r);
+  mark("people");
   const i64 = (n: bigint) => (JSON as any).rawJSON(String(n));
-  return {
+  const since = usageSince(s);
+  const detailSince = includeMetadata ? usageDetailSince(s.db) : null;
+  const prices = includeMetadata ? priceTable(lang, rows.map((r) => r.model)) : undefined;
+  const profiles = includeMetadata ? configProfiles(s.dataDir) : undefined;
+  // An older station may not have complete historical statistics. Leave the unavailable part absent so clients can
+  // still show the complete details and distinguish missing history from an actual zero.
+  let remoteRuns: Json | undefined = [];
+  if (includeRemoteRuns) {
+    try { remoteRuns = remoteRunsSince(s, from, viewer); }
+    catch (error) {
+      if (!(error instanceof Error) || error.message !== REMOTE_RUNS_PENDING) throw error;
+      remoteRuns = undefined;
+    }
+  }
+  const historyResult = history ? usageHistory(s, utcOffsetMin, viewer, mark, options.historyRange) : null;
+  mark("details");
+  const answer = {
     from: i64(from),
     to: i64(to),
-    since: usageSince(s),
+    since,
+    ...(detailSince !== null ? { detailSince } : {}),
     reading,
-    prices: priceTable(lang, rows.map((r) => r.model)),
+    ...(options.detailsPreparing ? { detailsPreparing: true } : {}),
+    ...(includeMetadata ? { prices } : {}),
     rows,
-    threads,
-    people,
-    profiles: configProfiles(s.dataDir),
+    ...(includeMetadata ? { threads, people, profiles } : {}),
     // the tasks the viewer's workspace's chats on other stations ran here since `from` (the card's 跨设备执行): the
     // workspace their key names (`remote:<workspace>:…`)
-    remoteRuns: remoteRunsSince(s, from).filter((r) => viewer === null || sees(viewer, r.session.split(":")[1] ?? "")),
+    ...(remoteRuns !== undefined ? { remoteRuns } : {}),
+    ...(historyResult !== null ? { history: historyResult } : {}),
+    ...(history && historyResult === null ? { historyUnavailable: true } : {}),
+  };
+  mark("other");
+  const ms = Math.round(performance.now() - started);
+  const cleanSummaryReuse = summaryCandidates === 0 && summaryParts === 0;
+  if (options.batched?.diagnostics.cache === "reused" && (!reportedSummaryReuse || (cleanSummaryReuse && !reportedCleanSummaryReuse))) {
+    reportedSummaryReuse = true;
+    if (cleanSummaryReuse) reportedCleanSummaryReuse = true;
+    log.info("readers", "a usage read reused its summary", { ms, summaryQuery: stages.summaryQuery, summaryCandidates, summaryParts, summaryClean: cleanSummaryReuse });
+  }
+  if (ms >= 1_000) {
+    const partialMinute = from < to && (from % 60_000n !== 0n || (to !== 9223372036854775807n && to % 60_000n !== 0n));
+    log.warn("readers", "a usage read's stages", { ms, ...stages, summaryGroups: groups.length,
+      ...(summarySqlSlowOp === undefined ? {} : { summarySqlSlowOp }),
+      ...(options.batched === undefined ? {} : { summaryCache: options.batched.diagnostics.cache }),
+      ...(summaryCandidates !== undefined ? { summaryCandidates } : {}),
+      ...(summaryParts !== undefined ? { summaryParts, summaryEdges: partialMinute } : {}) });
+  }
+  return answer;
+}
+
+/// What the viewer's chats did on this station since it began counting (the usage page's summary): the tokens by day
+/// in the asker's time zone (`utcOffsetMin`) over the page's year (`requested`, ms: its first local midnight until the
+/// one after today; absent, an older client's: every day), and in all before the year's end; the chats of each place
+/// (still.fail's, Slack, Feishu) and how many were archived; the tasks other stations' chats ran here (one device's
+/// chat working on another); the decision cards asked and those answered by an option pressed. GET /usage?history=1.
+/// The tokens are read from the history's quarters (store/usage-history.ts): those of the year's days and no more.
+/// `since`: from when the station counted every call (ms; absent, from its first). Null where the history is not
+/// installed yet (just after an update, until the station before has gone).
+export function validHistoryRange(requested: { from: bigint; to: bigint } | undefined, utcOffsetMin: bigint): boolean {
+  const day = 86_400_000n;
+  return requested !== undefined && requested.from <= requested.to && requested.to - requested.from <= 370n * day
+    && requested.from % 60_000n === 0n && requested.to % 60_000n === 0n
+    && (requested.to + utcOffsetMin * 60_000n) % day === 0n
+    && requested.to + utcOffsetMin * 60_000n >= -8_640_000_000_000_000n
+    && requested.to + utcOffsetMin * 60_000n <= 8_640_000_000_000_000n;
+}
+
+export function usageHistory(s: Store, utcOffsetMin: bigint, viewer: InWorkspace | null, mark: (stage: string) => void = () => {},
+  requested?: { from: bigint; to: bigint }): Json | null {
+  if (!hasUsageHistory(s.db)) return null;
+  const range = validHistoryRange(requested, utcOffsetMin) ? requested! : undefined;
+  // Whose quarters the viewer sees (rows.ts `sees`): their workspace's, and the home one's ('') where it is theirs.
+  const scopes = viewer === null ? (s.db.prepare(HISTORY_SCOPES).all() as Json[]).map((r) => String(r.scope))
+    : viewer.home !== false ? [viewer.workspace, ""] : [viewer.workspace];
+  const from = range === undefined ? -(2n ** 62n) : quarter(range.from);
+  const to = range === undefined ? 2n ** 62n : quarter(range.to);
+  const days = new Map<string, { day: string; runtime: string; model: null; tokens: number; calls: number }>();
+  let tokens = 0;
+  for (const scope of scopes) {
+    for (const r of s.db.prepare(HISTORY_DAYS).all(scope, from, to, utcOffsetMin) as Json[]) {
+      const d = days.get(r.day) ?? { day: r.day, runtime: "", model: null, tokens: 0, calls: 0 };
+      d.tokens += Number(r.tokens);
+      d.calls += Number(r.calls);
+      days.set(r.day, d);
+    }
+    // In all before the year's end: the workspace's total, less what came after (a clock ahead; none, as a rule).
+    if (range !== undefined) tokens += Number((s.db.prepare(HISTORY_TOTAL).get(scope) as Json)?.tokens ?? 0) - Number((s.db.prepare(HISTORY_AFTER).get(scope, to) as Json)?.tokens ?? 0);
+  }
+  mark("historyDays");
+  const since = usageHistorySince(s.db);
+  // the chats of each place (still.fail's own, a Slack workspace's, a Feishu one's), those archived and the decision
+  // cards, as their own statistics hold them (none said while those are still being filled)
+  let chats: ReturnType<typeof usageChatTotals> | null = null;
+  try { chats = usageChatTotals(s, viewer, { allowIncompleteCards: true }); }
+  catch (error) { if (!(error instanceof Error) || error.message !== USAGE_CHATS_PENDING) throw error; }
+  mark("historyPlaces");
+  // the tasks the viewer's chats on other stations ran here, as long as they are kept (remote_runs: 90 days)
+  let remoteRuns: number | null = null;
+  try { remoteRuns = remoteRunCount(s, viewer); }
+  catch (error) { if (!(error instanceof Error) || error.message !== REMOTE_RUNS_PENDING) throw error; }
+  mark("historyRemoteRuns");
+  return {
+    days: [...days.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)),
+    ...(range !== undefined ? { tokens, beforeDay: new Date(Number(range.to + utcOffsetMin * 60_000n)).toISOString().slice(0, 10) } : {}),
+    ...(since !== null ? { since } : {}),
+    ...(chats === null || !usageCardOutcomesComplete(s.db) ? { cardsIncomplete: true } : { cards: chats.cards, picked: chats.picked }),
+    ...(chats === null ? { chatsIncomplete: true, places: {} } : { places: chats.places, archived: chats.archived }),
+    ...(remoteRuns === null ? {} : { remoteRuns }),
   };
 }
 
 /// The chats of the resources page (GET /resources): each session's latest thread and its title; null for one `viewer` does
 /// not see (another workspace's).
 export function resourceChats(s: Store, sessions: string[], viewer: InWorkspace | null): Record<string, Json> {
-  const seen = seenBy(s, viewer);
+  // A resource snapshot names a few running chats, not the station's entire history. Check each one's workspace by
+  // its key rather than loading every session for each snapshot (which is refreshed repeatedly).
+  const workspace = viewer === null ? null : s.db.prepare("SELECT ws FROM sessions WHERE key = ?");
   const out: Record<string, Json> = {};
   for (const key of sessions) {
-    if (!seen(key)) {
+    const ws = workspace?.get(key) as { ws: string | null } | undefined;
+    if (viewer !== null && !sees(viewer, ws?.ws ?? null)) {
       out[key] = null;
       continue;
     }
@@ -286,6 +436,6 @@ export function resourceChats(s: Store, sessions: string[], viewer: InWorkspace 
 
 /// The connect a Slack thread came in through: the first of its sessions' that is not the station's own.
 function threadConnect(s: Store, thread: number): string | null {
-  const row = s.db.prepare("SELECT connect FROM thread_sessions WHERE thread = ? AND connect != 'ember' ORDER BY joined_at, rowid LIMIT 1").get(thread) as { connect: string } | undefined;
+  const row = s.db.prepare(`SELECT connect FROM thread_sessions WHERE thread = ? AND connect != '${STILLFAIL_CONNECT}' ORDER BY joined_at, rowid LIMIT 1`).get(thread) as { connect: string } | undefined;
   return row?.connect ?? null;
 }

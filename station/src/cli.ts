@@ -48,7 +48,7 @@ export function staysIn(data: string): boolean {
   return state !== null && !!state.workspace && state.removed_at === undefined;
 }
 
-/// Joins one more workspace with its one-time token, staying in those the station is in (docs/multi-workspace.md):
+/// Joins one more workspace with its one-time token, staying in those the station is in:
 /// at the control plane it is enrolled with, which then names it in its `state` frames. Kept in cloud.json's `joined`
 /// at once, so `status` says it before the running station hears. A locked station joins none: its lock is one
 /// workspace's. What it joined.
@@ -90,7 +90,7 @@ async function redeem(data: string, origin: string, token: string, provider: Pro
     response = await fetch(`${origin}${path}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      // Joining: it pins the lock of a locked workspace it joins (docs/multi-workspace.md), which the plane asks before
+      // Joining: it pins the lock of a locked workspace it joins, which the plane asks before
       // letting it into one.
       body: JSON.stringify({ token, station: key.id, signature, version: version(), ...(path === plane.joinPath ? { locks: true } : {}) }),
       signal: AbortSignal.timeout(20_000),

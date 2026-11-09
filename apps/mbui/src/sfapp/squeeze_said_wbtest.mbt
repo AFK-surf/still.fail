@@ -3,7 +3,7 @@
 // the core's scripts/shapes.ts) made long, with a line break and words that break late in it, as an agent's notice, a
 // chat's title or a station's error may be. A fixture says what a screen shows; what the outside writes there has no
 // length a fixture can promise, so each screen is held to fit it at its longest: what does not, gives way (words cut
-// short, a part left out, words wrapped: mbui's docs/style.md, Short of room). The words made long: fixture_said.mbt.
+// short, a part left out, words wrapped: mbui's ui/squeeze.mbt). The words made long: fixture_said.mbt.
 
 ///|
 test "said_stretch: the words at a path at their longest, each item of a list or a map, none left none, the rest as it was" {
@@ -66,7 +66,7 @@ let said_modes : Array[String] = [
   "drive-upload", "drive-empty", "reader", "history", "history-details",
   "switcher", "keys-dialog", "search", "search-results", "home-jobs", "service", "settings-home", "settings-appearance", "settings-me",
   "settings-workspace", "settings-security", "settings-vault", "settings-vault-items", "settings-vault-item", "settings-stations",
-  "settings-station", "settings-station-env", "settings-station-processes", "settings-profiles", "settings-profile", "settings-profile-models",
+  "settings-station", "settings-station-env", "settings-station-processes", "settings-profiles", "settings-profile",
   "settings-connects", "settings-connect", "settings-memory", "settings-memory-doc", "settings-usage",
   "settings-archive", "settings-run-models", "settings-run", "settings-decisions", "settings-changelog",
   "settings-new-profile",

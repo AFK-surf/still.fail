@@ -154,3 +154,10 @@ pub fn poster_image_id(station : String, key : String, name : String) -> String 
 /// first page waits for it with the rest of what it shows (sfapp's first_page_shown, which reads and clears it each
 /// frame), not shown with a likeness in its place for the frame or two its decoding takes.
 pub let held_pictures_waiting : Ref[Bool] = Ref(false)
+
+///|
+/// Whether the app's first page is built and waits for what it shows (sfapp's first_waiting), followed: what the chats'
+/// lists made once are drawn at none of their opacity by meanwhile, as the old views are (view_in's old_views_look),
+/// the splash in their place.
+// kept across runs: said by the frame as it is told (sfapp's first_hide)
+pub let first_page_waits : @signals.Signal[Bool] = @signals.signal(false)

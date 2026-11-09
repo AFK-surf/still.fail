@@ -25,7 +25,7 @@ function deps(data: string): SearchDeps {
     readSkill: (ws, name, file) => readSkill(data, ws, name, file),
     workspaceOf: () => ({ workspace: "W2", home: false }),
     link: () => undefined,
-    stations: async () => [{ id: "local", name: "Studio", here: true }, { id: "remote", name: "ccvm", here: false }],
+    stations: async () => [{ id: "local", name: "orchard", here: true }, { id: "remote", name: "cedar", here: false }],
     ask: async (_station, request) => request.method === SKILL_READ
       ? skillForPeer(data, request, String(request.workspace), "W1")
       : { groups: [{ kind: "skill", more: false, hits: [{ key: "k:W2:mbui", kind: "skill", skill: "mbui", title: "mbui", text: "offscreen", at: null }] }] },
@@ -54,7 +54,7 @@ test("local and peer readers use only the selected workspace catalog and listed 
   const d = deps(data);
   const read = tool(d, "skill_read");
   assert.match(await read.run("session", { name: "mbui" }), /joined instructions/);
-  assert.match(await read.run("session", { name: "mbui", station: "Studio" }), /joined instructions/);
+  assert.match(await read.run("session", { name: "mbui", station: "orchard" }), /joined instructions/);
   assert.match((await skillForPeer(data, { name: "mbui" }, "W1", "W1")).text, /home instructions/);
   await assert.rejects(skillForPeer(data, { name: "mbui" }, "W3", "W1"), /No skill/);
   for (const args of [{ name: "../mbui" }, { name: "mbui", file: "../MEMORY.md" }, { name: "mbui", file: "/etc/passwd" }, { name: "mbui", file: "missing.md" }]) {
@@ -69,9 +69,9 @@ test("remote failures, old stations and ambiguous station names are explicit", a
   const read = tool(d, "skill_read");
   await assert.rejects(read.run("s", { name: "mbui", station: "missing" }), /No such station/);
   d.ask = async () => ({ error: "unknown method" });
-  await assert.rejects(read.run("s", { name: "mbui", station: "ccvm" }), /may need an update/);
+  await assert.rejects(read.run("s", { name: "mbui", station: "cedar" }), /may need an update/);
   d.ask = async () => { throw new Error("station offline"); };
-  await assert.rejects(read.run("s", { name: "mbui", station: "ccvm" }), /station offline/);
+  await assert.rejects(read.run("s", { name: "mbui", station: "cedar" }), /station offline/);
   d.stations = async () => [{ id: "a", name: "same", here: false }, { id: "b", name: "same", here: false }];
   await assert.rejects(read.run("s", { name: "mbui", station: "same" }), /ambiguous/);
 });

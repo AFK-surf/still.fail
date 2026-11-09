@@ -138,7 +138,7 @@ test "a chat's pictures that failed for want of its station asked again as the c
     },
     images,
   }
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   // (tall enough for the whole chat, its pictures with it)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=6000.0, platform=2)
   t.run_for(@ui.move_most_ms)
@@ -151,7 +151,7 @@ test "a chat's pictures that failed for want of its station asked again as the c
   // left, and opened again: asked again
   t.back()
   t.run_for(@ui.move_most_ms)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.run_for(@ui.move_most_ms)
   assert_true(asked.val > first, msg="asked \{asked.val} times, \{first} the first time")
 }

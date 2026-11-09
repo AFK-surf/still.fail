@@ -12,7 +12,7 @@ pub(all) struct Glass {
   saturation : Double
   solid : Int64
   // the rim, frosted: a hairline inside the edge, light along the top and
-  // left, less along the foot and right (white's alpha each; Bar.kt rim)
+  // left, less along the foot and right (white's alpha each)
   rim_edge : Double
   rim_lit : Double
   rim_back : Double

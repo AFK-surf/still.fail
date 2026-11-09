@@ -52,3 +52,23 @@ test "the workspace on a phone: a person pressed, what can be done about them in
   assert_true(t.find("移出 workspace") is Some(_), msg=t.drawn_text())
   assert_true(t.find("管理所有内容") is Some(_))
 }
+
+///|
+test "leaving a workspace picks another before going home and asking the core" {
+  @sfbase.reset()
+  @settings.reset()
+  @sffixture.fixture_reset()
+  let events : Array[String] = []
+  let calls : Array[(String, Json)] = []
+  let base = @sffixture.fixture("settings")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, _) { events.push(name); calls.push((name, params)) },
+  }
+  let original = @sfbase.settings_core(src, rig_workspace)
+  let core = { ..original, home: fn() { events.push("home") } }
+  ws_gone(core, "ws1", "离开", "workspace.leave", { "workspace": "ws1" }, "")
+  assert_eq(app.picked.get(), "ws2")
+  assert_eq(events, ["prefs.set", "home", "workspace.leave"])
+  assert_eq(text(Some(calls[0].1), "workspace"), "ws2")
+}

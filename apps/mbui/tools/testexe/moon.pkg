@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/cmp",
   "mbctools/sys",
   "moonbitlang/core/env",
   "moonbitlang/core/json",
@@ -6,4 +7,5 @@ import {
 
 options(
   "is-main": true,
+  link: { "wasm-gc": { "use-js-builtin-string": true } },
 )

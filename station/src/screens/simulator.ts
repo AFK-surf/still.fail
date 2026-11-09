@@ -1,4 +1,4 @@
-// The iOS Simulators booted on this Mac as screen sources (`simulator:<udid>`, docs/remote-screens.md "Simulators"):
+// The iOS Simulators booted on this Mac as screen sources (`simulator:<udid>`):
 // people see and drive one from their app as they do the desktop, agents with the `computer` tool, while they build and
 // debug an app on it. still.fail Helper's `simulator.view` (native/helper's SimulatorView.swift, serve-sim's capture and
 // HID in vendor/serve-sim) reads the device's framebuffer and posts touches, keys and buttons to it; nothing of macOS's is
@@ -7,7 +7,7 @@
 // Which are booted is CoreSimulator's own simctl's (`simctl list`), looked at again when CoreSimulator rewrites a device's device.plist (it
 // does as the device boots and shuts down) or the list of devices changes, and as the screens are asked for.
 import { execFile } from "node:child_process";
-import { type FSWatcher, existsSync, readdirSync, watch } from "node:fs";
+import { type FSWatcher, existsSync, readFileSync, readdirSync, watch } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { HelperApp } from "../helper/app.ts";
@@ -15,11 +15,14 @@ import { wall } from "../ops/fibers.ts";
 import { log } from "../ops/log.ts";
 import { HelperView } from "./desktop.ts";
 import { ScreenRefused } from "./hub.ts";
+import { SimDebug } from "./sim-debug.ts";
 import { SimInput } from "./sim-input.ts";
-import type { Codec, ScreenSource, ScreenView, Screens, ViewOptions } from "./source.ts";
+import { type ChromeSource, chromeOf, displaysOf } from "./sim-chrome.ts";
+import { type Panel, panelOf } from "./sim-mask.ts";
+import { type ScreenSource, type ScreenView, type Screens, type ViewOptions, codecFor } from "./source.ts";
 
-/// A booted device as simctl lists it.
-export type Booted = { udid: string; name: string; runtime: string; type: string };
+/// A booted device as simctl lists it: `bootedAt` its `lastUsedAt` (ms), which CoreSimulator sets as it boots.
+export type Booted = { udid: string; name: string; runtime: string; type: string; bootedAt?: number };
 
 /// The booted devices of `simctl list -j devices`: each with its runtime's name ("iOS 26.2", from its identifier).
 export function bootedOf(listed: unknown): Booted[] {
@@ -30,7 +33,8 @@ export function bootedOf(listed: unknown): Booted[] {
     if (!Array.isArray(list)) continue;
     for (const d of list) {
       if (d?.state !== "Booted" || typeof d.udid !== "string" || !/^[0-9A-F-]{36}$/i.test(d.udid)) continue;
-      out.push({ udid: d.udid, name: typeof d.name === "string" ? d.name : d.udid, runtime: runtimeName(runtime), type: typeof d.deviceTypeIdentifier === "string" ? d.deviceTypeIdentifier : "" });
+      const at = typeof d.lastUsedAt === "string" ? Date.parse(d.lastUsedAt) : Number.NaN;
+      out.push({ udid: d.udid, name: typeof d.name === "string" ? d.name : d.udid, runtime: runtimeName(runtime), type: typeof d.deviceTypeIdentifier === "string" ? d.deviceTypeIdentifier : "", ...(Number.isFinite(at) ? { bootedAt: at } : {}) });
     }
   }
   return out;
@@ -38,7 +42,8 @@ export function bootedOf(listed: unknown): Booted[] {
 
 /// "com.apple.CoreSimulator.SimRuntime.iOS-26-2" → "iOS 26.2".
 export function runtimeName(id: string): string {
-  const m = /SimRuntime\.([A-Za-z]+)-([\d-]+)$/.exec(id);
+  // (one made for one device has that after it: iOS-27-2-iPhone19-4)
+  const m = /SimRuntime\.([A-Za-z]+)-(\d+(?:-\d+)*)(?:-[A-Za-z].*)?$/.exec(id);
   if (m === null) return id;
   const os = m[1] === "xrOS" ? "visionOS" : m[1]!;
   return `${os} ${m[2]!.replaceAll("-", ".")}`;
@@ -63,6 +68,9 @@ const run: Run = (file, args) =>
     execFile(file, args, { timeout: 60_000, maxBuffer: 16 << 20 }, (error, out, err) => (error ? reject(new Error(`${file} ${args.join(" ")}: ${error.signal ?? error.code ?? ""} ${String(err).trim()}`.slice(0, 500))) : resolve(out))),
   );
 
+/// A device type as its bundle says it: `#typed`.
+type Typed = { size: { width: number; height: number }; panels: Panel[]; chrome: ChromeSource[] };
+
 export type SimulatorsOptions = {
   screens: Screens;
   /// still.fail Helper; none: no simulator is listed.
@@ -78,8 +86,8 @@ export class Simulators {
   readonly #run: Run;
   readonly #devices: string;
   readonly #listed = new Map<string, { source: Simulator; remove: () => void }>();
-  /// A device type's screen in pixels (its capabilities.plist), by its identifier.
-  readonly #sizes = new Map<string, { width: number; height: number }>();
+  /// A device type's screen and panels (`#typed`), by its identifier.
+  readonly #types = new Map<string, Typed>();
   readonly #watchers = new Map<string, FSWatcher>();
   #looking: Promise<void> | null = null;
   #again = false;
@@ -138,27 +146,38 @@ export class Simulators {
     }
     for (const b of booted) {
       if (this.#listed.has(b.udid)) continue;
-      const source = new Simulator(b, this.#o.helper!, await this.#size(b.type));
+      const { size, panels, chrome } = await this.#typed(b.type);
+      const source = new Simulator(b, this.#o.helper!, size, this.#run, panels, chrome);
       if (this.#closed || this.#listed.has(b.udid)) continue;
       this.#listed.set(b.udid, { source, remove: this.#o.screens.add(source) });
     }
     this.#follow();
   }
 
-  /// A device type's screen in pixels, from its bundle's capabilities.plist (0×0 when it cannot be read).
-  async #size(type: string): Promise<{ width: number; height: number }> {
-    const known = this.#sizes.get(type);
+  /// A device type's screen in pixels (its capabilities.plist; 0×0 when it cannot be read), panels (as its masks say
+  /// them; none: no corners drawn) and case (as Xcode has it: sim-chrome.ts), read from its bundle once.
+  async #typed(type: string): Promise<Typed> {
+    const known = this.#types.get(type);
     if (known) return known;
-    let size = { width: 0, height: 0 };
+    const typed: Typed = { size: { width: 0, height: 0 }, panels: [], chrome: [] };
     try {
       const types = JSON.parse(await this.#run(SIMCTL, ["list", "-j", "devicetypes"])).devicetypes as { identifier?: string; bundlePath?: string }[];
       const bundle = types.find((t) => t.identifier === type)?.bundlePath;
       if (bundle) {
-        size = screenOf(JSON.parse(await this.#run("plutil", ["-convert", "json", "-o", "-", join(bundle, "Contents/Resources/capabilities.plist")])));
+        const capabilities = JSON.parse(await this.#run("plutil", ["-convert", "json", "-o", "-", join(bundle, "Contents/Resources/capabilities.plist")]));
+        typed.size = screenOf(capabilities);
+        const dir = join(bundle, "Contents/Resources");
+        typed.panels = readdirSync(dir)
+          .filter((f) => f.endsWith(".pdf") && !f.startsWith("sensor_bar"))
+          .flatMap((f) => panelOf(readFileSync(join(dir, f))) ?? []);
+        const profile = JSON.parse(await this.#run("plutil", ["-convert", "json", "-o", "-", join(dir, "profile.plist")]));
+        const sensor = typeof profile?.sensorBarImage === "string" ? profile.sensorBarImage : null;
+        const cases = await Promise.all(displaysOf(capabilities, profile).map((d) => chromeOf(d, dir, sensor)));
+        typed.chrome = cases.flatMap((c) => c ?? []);
       }
     } catch {}
-    this.#sizes.set(type, size);
-    return size;
+    this.#types.set(type, typed);
+    return typed;
   }
 
   /// Watches the devices' folder (a device made or deleted) and each device's (its device.plist rewritten as it boots
@@ -219,15 +238,28 @@ export class Simulator implements ScreenSource {
   readonly kind = "simulator" as const;
   /// A preview opens as any view does: nothing to wake.
   readonly peek = true;
+  /// Its apps' logs and their restart, for a person debugging one.
+  readonly debug: SimDebug;
+  readonly poses: boolean;
+  readonly panels: Panel[];
+  readonly chrome: ChromeSource[];
   readonly #device: Booted;
   readonly #helper: HelperApp;
+  readonly #simctl: Run;
+  /// When it was listed: its boot where simctl does not say it.
+  readonly #listedAt = wall.now();
   #size: { width: number; height: number };
   readonly #views = new Set<HelperView>();
 
-  constructor(device: Booted, helper: HelperApp, size: { width: number; height: number }) {
+  constructor(device: Booted, helper: HelperApp, size: { width: number; height: number }, simctl: Run = run, panels: Panel[] = [], chrome: ChromeSource[] = []) {
     this.id = `simulator:${device.udid}`;
+    this.debug = new SimDebug(SIMCTL, device.udid, simctl, () => this.#picture());
+    this.poses = device.type.endsWith(".iPhone-Duo");
+    this.panels = panels;
+    this.chrome = chrome;
     this.#device = device;
     this.#helper = helper;
+    this.#simctl = simctl;
     this.#size = size;
   }
 
@@ -235,13 +267,24 @@ export class Simulator implements ScreenSource {
     return `${this.#device.name} · ${this.#device.runtime}`;
   }
 
+  since(): number {
+    return this.#device.bootedAt ?? this.#listedAt;
+  }
+
+  /// Shut down from a person's app (one left running, the core's `longJobs`): it leaves the list as CoreSimulator says
+  /// it shut down.
+  async discard(): Promise<void> {
+    await this.#simctl(SIMCTL, ["shutdown", this.#device.udid]);
+  }
+
   size(): { width: number; height: number } {
     return this.#size;
   }
 
   async open(options: ViewOptions): Promise<ScreenView> {
-    // H.264 (the helper's encoder; H.265 where asked and this Mac has it), else a JPEG a picture (an agent's view).
-    const codec: Codec | undefined = (["h265", "h264", "jpeg"] as const).find((c) => options.codecs.includes(c));
+    // H.264 (the helper's encoder; H.265 where asked and this Mac has it), else a JPEG a picture (an agent's view, a
+    // preview: a card that also takes a video still gets JPEGs).
+    const codec = codecFor(options, ["h265", "h264", "jpeg"]);
     if (codec === undefined) throw new ScreenRefused(415, "station.screen.codec", { codec: "H.264, JPEG" });
     const socket = await this.#helper.connect({ op: "simulator.view", udid: this.#device.udid, codec, maxWidth: options.maxWidth, maxHeight: options.maxHeight, ...(options.bitrate ? { bitrate: Math.round(options.bitrate) } : {}), ...(options.fps ? { fps: options.fps } : {}) });
     const view = new HelperView(codec, socket, () => this.#views.delete(view), new SimInput(), "CoreSimulator");
@@ -256,8 +299,22 @@ export class Simulator implements ScreenSource {
     }
   }
 
+  /// Its screen as a view has it, as large as the device's own: a view of its own for one picture.
+  async #picture(): Promise<Uint8Array> {
+    const { width, height } = this.#size;
+    const view = await this.open({ maxWidth: width || 4096, maxHeight: height || 4096, codecs: ["jpeg"] });
+    try {
+      const frame = await view.next();
+      if (frame === null) throw new Error("the simulator's view ended");
+      return frame.data;
+    } finally {
+      view.close();
+    }
+  }
+
   /// It shut down (or the station stops): its views end.
   gone() {
+    this.debug.close();
     for (const view of [...this.#views]) view.close();
   }
 }

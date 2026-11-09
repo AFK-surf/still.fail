@@ -1,15 +1,16 @@
-// The ways to the picture before and after (viewer_steps's, FilePreview.css.ts fpStep) as nodes of the window's tree
-// (the way there, docs/retained.md 4): each there as what is beside the picture says, in and out as the bars are (or
+// The ways to the picture before and after as nodes of the window's tree
+// (the way there 4): each there as what is beside the picture says, in and out as the bars are (or
 // the hand is on it) from the moment that changes, on a motion's way; pressed (its press let go on it), done then.
 
 ///|
-/// The ways to the picture before and after in `parent` (a layer over the viewer's, all of its room), as viewer_steps
-/// draws them: 40 discs of the canvas at 80% over a 12 blur, a shadow, 16 in from the sides (36 and 8 where `small`), in
+/// The ways to the picture before and after in `parent` (a layer over the viewer's, all of its room), as the web's
+/// fpStep has them: 40 discs of the canvas at 80% over a 12 blur, a shadow, 16 in from the sides (36 and 8 where `small`), in
 /// the middle, a chevron in the words' ink; each while `before` and `after` say there is one. There while `awake` (or
 /// the hand on it: a mouse's pointer over it, a press held on it), in over wake_ms and out over sleep_ms from where it
 /// is at the moment that changes (at once with motion reduced), as far in as `shown` says of the node as it is drawn
 /// (the viewer's fade); taking a press while any of it shows. Pressed (its press let go on it), `go` (-1 the one before,
 /// 1 the one after) at that moment. Their tips in `tips`. The row's node.
+#callsite(autofill(loc))
 pub fn viewer_steps_node(
   parent : @view.View,
   before : () -> Bool,
@@ -19,8 +20,9 @@ pub fn viewer_steps_node(
   small : () -> Bool,
   go : (Int) -> Unit,
   tips : TipLayer,
+  loc~ : SourceLoc,
 ) -> @view.View {
-  parent.box(fn(row) {
+  parent.box(made_for=loc, fn(row) {
     row
     .over(Is(true))
     .row(Is(true))
@@ -48,6 +50,7 @@ pub fn viewer_steps_node(
 
 ///|
 /// One way, in `b` (its slot, all of it): see viewer_steps_node.
+#callsite(autofill(loc))
 fn step_disc(
   b : @view.View,
   dir : Int,
@@ -58,6 +61,7 @@ fn step_disc(
   disc : () -> Double,
   go : (Int) -> Unit,
   tips : TipLayer,
+  loc~ : SourceLoc,
 ) -> Unit {
   // (where the hand is on it, as a box's hovered look has it: its ground)
   let hot = fn() {
@@ -67,7 +71,7 @@ fn step_disc(
     }
   }
   // (there while the bars are, or the hand is on it or holds it: a mouse's button held down on it and moved off it, it
-  // stays, as viewer_steps's lit or pressed)
+  // stays, as one lit or pressed does)
   let woke = fn() { awake() || hot() || b.pressed() }
   let seen = EdgeWay::new(if @signals.untracked(woke) { 1.0 } else { 0.0 })
   b.reacts(woke, fn(on) { seen.go(b, if on { 1.0 } else { 0.0 }, if on { wake_ms } else { sleep_ms }) })
@@ -96,7 +100,7 @@ fn step_disc(
   .on_press(fn() { go(dir) })
   |> ignore
   // (its chevron in its middle)
-  b.box(fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
+  b.box(made_for=loc, fn(g) { g.grow(Is(1.0)) |> ignore }) |> ignore
   b.box(fn(i) {
     i
     .width(Is(Some(viewer_step_icon)))

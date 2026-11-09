@@ -10,10 +10,10 @@ test "wide: an agent's picture in its line is where its answer's is, out in the 
   t.tap_text("发消息")
   t.type_text("看一下列表")
   tap_send(t)
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   t.run_for(fix_answer_ms)
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   t.run_for(Pose::Fold.ms() + Pose::Float.ms() + Pose::Spit.ms() / 2.0)
   let (face, lands) = landing_faces(t)
@@ -31,10 +31,10 @@ test "wide: the avatar an answer comes out of is drawn where it flies in the win
   t.type_text("看一下列表")
   tap_send(t)
   // the station has it, its agent at work; its answer said a moment on
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   t.run_for(fix_answer_ms)
-  clock.val = clock.val + fix_answer_ms
+  fix_clock_set(clock, clock.val + fix_answer_ms)
   t.draw()
   let em = emits_of("ws1/st1\u{1}s-c1")
   // folded, then on its way: half way through its float

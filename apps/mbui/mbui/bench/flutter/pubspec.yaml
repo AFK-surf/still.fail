@@ -1,4 +1,4 @@
-# Flutter's twin of mbui's hill-climb (src/bench, bench/README.md), built
+# Flutter's twin of mbui's hill-climb (src/bench), built
 # and run by scripts/bench_flutter.sh. Only the sources live here; the
 # script makes the rest of the macOS runner with `flutter create`.
 name: mbui_bench

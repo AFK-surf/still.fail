@@ -4,21 +4,21 @@
 // cancels the turn and kills the command it runs; the SDK's `steer` puts it in the turn, the command going on in the
 // background. The bridge speaks a line of JSON per message (its header).
 //
-// Behaviour pinned against @cursor/sdk 1.0 (docs/cursor.md):
+// Behaviour pinned against @cursor/sdk 1.0:
 // - `open` creates the SDK's agent (it names it) or resumes one it keeps; the station's tools an HTTP MCP server, its
-//   instructions, memory and skills a folder of project rules beside the session's working directory;
+//   instructions (with its workspace's memory) and skills a folder of project rules beside the session's working directory;
 // - `prompt` starts a run (a turn), whose messages stream (status, thinking, assistant text, tool calls, usage) and which
 //   ends finished, cancelled or in error; `steer` puts a message in the running turn (said delivered or not); `cancel`
 //   stops it;
 // - the model is the SDK's selection, `id` or `id[param=value,…]`, set per prompt;
 // - the bridge keeps the transcript itself (<sessions>/<agent id>.jsonl), the turn's usage in it.
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { linkSync } from "../ops/links.ts";
 import { log } from "../ops/log.ts";
 import { peerHttpBase } from "../tools/http.ts";
+import { rulesFolder as folderOf } from "./rules-folder.ts";
 import { LiveFromCursor, chars, type CursorLiveState } from "./live.ts";
 import { type Events, OwnProcessDriver, OwnProcessSession, type TurnState, parseLine } from "./own-process.ts";
 import { expandRoute, profileEnv, profileModel } from "./profiles.ts";
@@ -85,26 +85,11 @@ export function cursorKey(home: string): string | null {
 }
 
 /// The station's instructions as a project rule that always applies, in a folder of the session's own beside its working
-/// directory, with the shared memory (AGENTS.md) and skills (.cursor/skills) linked in: the SDK reads a folder it is given
+/// directory, with the skills of its workspace (`skills`) linked in as .cursor/skills: the SDK reads a folder it is given
 /// as a project's (rules, AGENTS.md, skills) without them being written into the person's project.
-export function rulesFolder(home: string, key: string, instructions: string): string {
-  const dir = join(cursorHome(home), "station", createHash("sha256").update(key).digest("hex").slice(0, 16));
-  mkdirSync(join(dir, ".cursor", "rules"), { recursive: true });
-  writeFileSync(join(dir, ".cursor", "rules", "stillfail.mdc"), `---\ndescription: still.fail station\nalwaysApply: true\n---\n${instructions}\n`);
-  const linked = (target: string, path: string) => {
-    if (!existsSync(target)) return;
-    rmSync(path, { recursive: true, force: true });
-    try {
-      // Where links are refused (Windows without Developer Mode), the skills' a junction and the memory a copy.
-      linkSync(target, path, { junction: true, copy: true });
-    } catch (e) {
-      log.warn("agents::cursor", "the shared memory or skills not linked for Cursor", { path, error: (e as Error).message });
-    }
-  };
-  // The profile home's AGENTS.md and skills/ are the station's shared memory and skills (agent-home.ts).
-  linked(join(home, "AGENTS.md"), join(dir, "AGENTS.md"));
-  linked(join(home, "skills"), join(dir, ".cursor", "skills"));
-  return dir;
+export function rulesFolder(home: string, key: string, instructions: string, skills?: string): string {
+  const rule = `---\ndescription: still.fail station\nalwaysApply: true\n---\n${instructions}\n`;
+  return folderOf(cursorHome(home), key, ".cursor", { file: "stillfail.mdc", text: rule }, "Cursor", skills);
 }
 
 /// What failed a turn, from the SDK's error (its code first).
@@ -171,7 +156,7 @@ export class CursorDriver extends OwnProcessDriver<CursorSession> {
       throw new Error(`no Cursor session ${options.resume}`);
     }
     const model = options.model ?? profileModel(options.profile) ?? null;
-    const rules = rulesFolder(home, options.key, options.instructions);
+    const rules = rulesFolder(home, options.key, options.instructions, options.skills);
     const session = new CursorSession(this, "", { busy: false, aborting: false, closed: false }, new LiveFromCursor(), events, model);
     session.toolsUrl = options.mcpUrl;
     await this.start(session, options, this.node, [this.bridge], this.env(options, sdk));

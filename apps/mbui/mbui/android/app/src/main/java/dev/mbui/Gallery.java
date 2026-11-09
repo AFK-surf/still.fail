@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * The phone's gallery for a picker's recent photos and videos (src/hostapi/gallery.mbt; still.fail's Android app,
  * chat/screens/Attach.kt photoAccess, AttachLaunchers.askPhotos, recentPhotos): how much of it the app may read, asking
  * for it (asked and turned down for good, the app's page of the system's settings), and its photos and videos with
- * their times, read off the main thread (the view ranks them: Attach.kt latest). One is drawn by its content://
+ * their times, read off the main thread. One is drawn by its content://
  * address (Images.java: the gallery's thumbnail, a video's still) and read by Picks.photo (held, where it is big).
  */
 final class Gallery {
@@ -34,7 +34,7 @@ final class Gallery {
 
     /**
      * 1 all of it (photos and videos), 2 some (the ones chosen for the app on Android 14 on, or the photos alone: a
-     * phone that allowed them before videos were asked for), 0 none (Attach.kt photoAccess).
+     * phone that allowed them before videos were asked for), 0 none.
      */
     static int access() {
         Activity a = Host.activity;
@@ -100,7 +100,7 @@ final class Gallery {
         Read r = new Read();
         reads.put(id, r);
         new Thread(() -> {
-            // photos and videos (Attach.kt recentPhotos: MediaStore.Files, its media type), each by its own collection's
+            // photos and videos (its media type), each by its own collection's
             // address (Images' or Video's: what the thumbnail and the read take)
             Uri from = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL);
             String type = MediaStore.Files.FileColumns.MEDIA_TYPE;

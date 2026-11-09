@@ -1,5 +1,5 @@
-// What of the station's chats a viewer sees (docs/multi-workspace.md): those of their own workspace. A request that names
-// a session, a chat, a job or a published snapshot of another workspace is answered as one naming what is not there.
+// What of the station's chats a viewer sees: those of their own workspace. A request that names
+// a session, a chat or a job of another workspace is answered as one naming what is not there.
 import { percentDecode } from "./request.ts";
 import { type InWorkspace, sees } from "../store/rows.ts";
 import type { Store } from "../store/store.ts";
@@ -19,8 +19,8 @@ export const jobSeen = (store: Store, viewer: InWorkspace, id: string) => {
   return job === null || sessionSeen(store, viewer, job.sessionKey);
 };
 
-/// What names one of them: `/sessions/:key…`, `/threads/:id…`, `/jobs/:id…`, `/published/:id`.
-const NAMED = /^\/*(sessions|threads|jobs|published)\/+([^/]+)/;
+/// What names one of them: `/sessions/:key…`, `/threads/:id…`, `/jobs/:id…`.
+const NAMED = /^\/*(sessions|threads|jobs)\/+([^/]+)/;
 /// admin/mod.rs `segment_decode`, as the routes read a key.
 const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
 
@@ -38,11 +38,7 @@ export function elsewhere(store: Store, path: string, viewer: InWorkspace): stri
       const n = /^[+-]?\d+$/.test(id) ? Number(id) : NaN;
       return Number.isSafeInteger(n) && store.getThread(n) !== null && !threadSeen(store, viewer, n) ? `unknown thread ${id}` : null;
     }
-    case "jobs":
+    default:
       return jobSeen(store, viewer, id) ? null : `no job ${id}`;
-    default: {
-      const p = store.published(percentDecode(raw!));
-      return p !== null && store.getThread(p.thread) !== null && !threadSeen(store, viewer, p.thread) ? `no published snapshot ${id}` : null;
-    }
   }
 }

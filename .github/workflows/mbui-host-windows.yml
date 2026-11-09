@@ -1,5 +1,5 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
-# The host's and the text's contracts on Windows (docs/determinism.md, "What is compared, and where"; scripts/
+# The host's and the text's contracts on Windows ("What is compared, and where"; scripts/
 # host_contract.sh): kitdemo's controls page run in a window with its scripted taps, its tape made a Tester's test and
 # run here (every frame the same), then the committed tape's text (windows_controls) asked of DirectWrite again (every
 # answer the same); streamdemo's JPEG stream decoded by WIC to its end. When Windows' host changes.
@@ -15,6 +15,8 @@ on:
       - "apps/mbui/mbui/src/kitdemo/gallery/fontscalecheck.mbt"
       - "apps/mbui/mbui/src/host/win_*"
       - "apps/mbui/mbui/src/host/win.h"
+      - "apps/mbui/mbui/src/host/log_files.h"
+      - "apps/mbui/mbui/scripts/win_logs_test.c"
       - "apps/mbui/mbui/src/host/mini_json.h"
       - "apps/mbui/mbui/src/host/done_watch.h"
       - "apps/mbui/mbui/src/ui/drive.mbt"
@@ -37,6 +39,29 @@ on:
 
 
 jobs:
+  # (a job of its own: a failure here is not the host's contracts' failure, and takes none of their time)
+  log-files:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf false
+        working-directory: ${{ github.workspace }}
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/msvc
+      - name: "The log files: stderr kept in rotating files, nothing of a secret, nobody waiting for a stalled disk (src/host/win_logs.h)"
+        run: |
+          mkdir -p out/logs
+          cl.exe -nologo -W3 -D_CRT_SECURE_NO_WARNINGS -Isrc/host scripts/win_logs_test.c -Foout/logs/ -Feout/logs/win_logs_test.exe
+          timeout 150 out/logs/win_logs_test.exe 2> out/logs/stderr.txt
+          # (given on as it was said, to whoever had stderr before)
+          grep -q 'crt line password=hunter2' out/logs/stderr.txt
+          grep -q 'handle line https://a.example/p?token=hunter3' out/logs/stderr.txt
+          grep -q 'after the stall' out/logs/stderr.txt
+
   contracts:
     runs-on: windows-latest
     timeout-minutes: 5

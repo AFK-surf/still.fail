@@ -19,8 +19,9 @@ pub(all) struct WayLook {
 /// between the first and the last first (the one after the first first, the one before the last last), then the
 /// first; a … where they were offers them instead (a menu of them, in their order). Only where the last alone has not
 /// the room are its words cut short. Nothing scrolled, nothing wrapped (the user, 2026-10-25: a control short of room
-/// neither scrolls nor wraps, and words cut short past knowing are no use).
-pub fn way_line(c : @ui.Ctx, key : String, steps : Array[String], look : WayLook, go : (Int) -> Unit) -> Unit {
+/// neither scrolls nor wraps, and words cut short past knowing are no use). `last_link` is for a way of ancestors
+/// when the current place is shown separately: its last visible step is a way back too.
+pub fn way_line(c : @ui.Ctx, key : String, steps : Array[String], look : WayLook, go : (Int) -> Unit, last_link? : Bool = false) -> Unit {
   let n = steps.length()
   // (each step but the last, and the …: -1)
   let slot = fn(i : Int) { c.id(key + "/slot/\{i}") }
@@ -37,8 +38,8 @@ pub fn way_line(c : @ui.Ctx, key : String, steps : Array[String], look : WayLook
     for i, name in steps {
       let last = i == n - 1
       let id = c.id(key + "/\{i}")
-      if !last && c.clicked(id) {
-        go(i)
+      if !last || last_link {
+        c.on_press(id, fn() { go(i) })
       }
       // (the last: always there, its words kept whole while another may leave, cut short only after)
       if last {
@@ -46,7 +47,12 @@ pub fn way_line(c : @ui.Ctx, key : String, steps : Array[String], look : WayLook
           if i > 0 {
             chevron()
           }
-          c.box(style=look.step, fn() { c.text(name, style=look.here.then(way_last), keep=true) |> ignore }) |> ignore
+          let b = c.box(style=look.step, id=if last_link { id } else { 0 }, fn() {
+            c.text(name, style=(if last_link { look.words } else { look.here }).then(way_last), keep=true) |> ignore
+          })
+          if last_link {
+            c.semantics(b, Link, id~, label=name)
+          }
         })
         |> ignore
       } else {
@@ -66,9 +72,9 @@ pub fn way_line(c : @ui.Ctx, key : String, steps : Array[String], look : WayLook
             chevron()
           }
           let more = c.id(key + "/more")
-          if c.clicked(more) {
+          c.on_press(more, fn() {
             menu(gone, from=Of(more))
-          }
+          })
           let b = c.box(style=look.step, id=more, fn() { c.text(way_more, style=look.words) |> ignore })
           c.semantics(b, Button, id=more, label=t("common.more"))
         })

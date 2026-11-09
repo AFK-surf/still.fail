@@ -1,25 +1,24 @@
 #!/bin/bash
 # The still.fail client core (client/core-ts of this repository) in Hermes on its Rust shell (client/shell), for the
 # Apple apps (src/host/apple_core.mm) and Android's (src/host/android_core.c on still.fail's prebuilt engine): builds the
-# pieces from the checkout and runs a headless smoke test. See core/README.md.
+# pieces from the checkout and runs a headless smoke test..
 #   scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET]
-#                   | smoke [build|run] | listen | exit | sealed | collate | login-test | vectors | sizes | clean | all
+#                   | smoke [build|run] | listen | exit | fairness | sealed | collate | login-test | vectors | sizes | clean | all
 #                   | chat-open | md-parse | mermaid | mermaid-lib | mermaid-smoke | zstd-read
-# EMBER: the still.fail checkout (default: this one, scripts/env.sh); out/core/ gets everything built.
+# SF_SRC: the still.fail checkout (default: this one, scripts/env.sh); out/core/ gets everything built.
 # TARGET: a Rust target (default aarch64-apple-darwin; aarch64-apple-ios, aarch64-apple-ios-sim for iOS).
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$D/.."
 ROOT=$PWD
-EMBER=${EMBER:-$(cd "$TOOLS/.." && pwd)/ember-src}
 OUT=$ROOT/out/core
 # (Git Bash on Windows: paths as D:/…, which both its shell and Windows' programs take)
 if [ "${OSTYPE:-}" = msys ] || [ "${OSTYPE:-}" = cygwin ]; then
   ROOT=$(cygpath -m "$ROOT")
-  EMBER=$(cygpath -m "$EMBER")
+  SF_SRC=$(cygpath -m "$SF_SRC")
 fi
-CORE_TS=$EMBER/client/core-ts
+CORE_TS=$SF_SRC/client/core-ts
 # The shell's intermediate build lives outside the checkout (and outside this repo): only the .a is kept in out/core.
 CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-$(cd "$TOOLS/.." && pwd)/core-target}
 export CARGO_TARGET_DIR
@@ -33,7 +32,7 @@ now() { "$PY" -c 'import time;print(time.time())'; }
 since() { "$PY" -c "print(round($(now)-$1,2))"; }
 
 deps() {
-  [ -d "$CORE_TS" ] || { echo "no ember checkout at $EMBER (EMBER=...)"; exit 1; }
+  [ -d "$CORE_TS" ] || { echo "no still.fail checkout at $SF_SRC (SF_SRC=...)"; exit 1; }
   (cd $CORE_TS && pnpm install --frozen-lockfile --prefer-offline 2>&1 | tail -5)
 }
 
@@ -43,11 +42,11 @@ have_deps() {
 }
 
 # libstillfail_shell.a for TARGET: the crate is a cdylib + lib; `cargo rustc --crate-type staticlib` makes the
-# archive without touching ember's Cargo.toml. What it needs from the system goes to out/core/shell-<target>.libs.
+# archive without touching still.fail's Cargo.toml. What it needs from the system goes to out/core/shell-<target>.libs.
 shell() {
   local target=${1:-aarch64-apple-darwin}
   local t0=$(now)
-  (cd $EMBER/client/shell && cargo rustc --release --lib --crate-type staticlib --target $target \
+  (cd $SF_SRC/client/shell && cargo rustc --release --lib --crate-type staticlib --target $target \
       -- --print native-static-libs 2> >(tee $OUT/shell-$target.log >&2))
   # (rustc prints it only when it builds: a fresh build keeps the last one)
   local libs=$(grep -o 'native-static-libs: .*' $OUT/shell-$target.log | tail -1 | sed 's/native-static-libs: //')
@@ -69,18 +68,18 @@ shell_prebuilt() {
     aarch64-apple-ios-sim) t=ios-sim-arm64 ;;
     *) return 1 ;;
   esac
-  dir=$(node "$EMBER/scripts/native.ts" path shell-apple $t) || return 1
+  dir=$(node "$SF_SRC/scripts/native.ts" path shell-apple $t) || return 1
   mkdir -p $OUT/$1
   cmp -s "$dir/libstillfail_shell.a" $OUT/$1/libstillfail_shell.a || cp "$dir/libstillfail_shell.a" $OUT/$1/ || return 1
   cmp -s "$dir/libstillfail_shell.libs" $OUT/shell-$1.libs || cp "$dir/libstillfail_shell.libs" $OUT/shell-$1.libs || return 1
   echo "shell $1: still.fail's natives, shell-apple $t ($dir)"
 }
 
-# The core for Hermes (every native host: src/host/apple_core.mm, src/host/android_core.c): out/core/core.hbc. Made as ember's
+# The core for Hermes (every native host: src/host/apple_core.mm, src/host/android_core.c): out/core/core.hbc. Made as still.fail's
 # client/core-ts/scripts/hermes-bundle.ts makes it (esbuild to ES2020, async functions as generators; Babel's class
 # transform, as Hermes 0.81 has no classes nor async functions; then React Native 0.81.4's hermesc, the engine's Hermes, to bytecode), but from an entry of ours (ENTRY,
-# default core/hermes.ts: still.fail's alone; core/media-hermes.ts with the media module), `@core/` and `@ember/`
-# aliased (`@core/` is client/core-ts/src, `@ember/` this checkout). hermesc: $HERMESC, else the one kept in ~/Library/Caches/stillfail-build, else
+# default core/hermes.ts: still.fail's), `@core/` and `@stillfail/`
+# aliased (`@core/` is client/core-ts/src, `@stillfail/` this checkout). hermesc: $HERMESC, else the one kept in ~/Library/Caches/stillfail-build, else
 # fetched (npm pack react-native@0.81.4) into out/core/hermesc.
 HERMES_RN=0.81.4
 hermesc() {
@@ -95,11 +94,12 @@ hermesc() {
   echo "$OUT/hermesc/package/$bin"
 }
 
-# core.hbc's stamp: the bundle's inputs (esbuild's metafile), the entry and hermesc, by mtime and size
+# core.hbc's stamp: its source checkout, the bundle's inputs (esbuild's metafile), the entry and hermesc.
+# A shared build directory may be used by several checkouts: the old metafile still points into the first one.
 hbc_stamp() {
-  "$PY" - "$OUT/core-hermes.meta.json" "${ENTRY:-$ROOT/core/hermes.ts}" "$1" <<'PY'
+  "$PY" - "$OUT/core-hermes.meta.json" "${ENTRY:-$ROOT/core/hermes.ts}" "$1" "$SF_SRC" <<'PY'
 import json, os, sys
-meta, entry, hermesc = sys.argv[1:4]
+meta, entry, hermesc, checkout = sys.argv[1:5]
 try:
     inputs = sorted(json.load(open(meta))['inputs'])
 except (OSError, ValueError, KeyError):
@@ -110,7 +110,7 @@ def st(p):
         return [s.st_mtime_ns, s.st_size]
     except OSError:
         return None
-print(json.dumps({'entry': entry, 'hermesc': [hermesc, st(hermesc)], 'inputs': {p: st(p) for p in inputs}}))
+print(json.dumps({'checkout': os.path.realpath(checkout), 'entry': entry, 'hermesc': [hermesc, st(hermesc)], 'inputs': {p: st(p) for p in inputs}}))
 PY
 }
 
@@ -127,8 +127,8 @@ SHA=$(command -v sha256sum > /dev/null && echo sha256sum || echo "shasum -a 256"
 hbc_key() {
   [ -n "${HBC_CACHE:-}" ] || return 1
   local trees
-  trees=$(git -C "$EMBER" rev-parse HEAD:client/core-ts HEAD:media HEAD:web/public/avatars 2> /dev/null) || return 1
-  [ -z "$(git -C "$EMBER" status --porcelain -uno -- client/core-ts media web/public/avatars 2> /dev/null)" ] || return 1
+  trees=$(git -C "$SF_SRC" rev-parse HEAD:client/core-ts HEAD:media HEAD:web/public/avatars 2> /dev/null) || return 1
+  [ -z "$(git -C "$SF_SRC" status --porcelain -uno -- client/core-ts media web/public/avatars 2> /dev/null)" ] || return 1
   { echo "$trees"
     (cd "$ROOT/core" && find . -type f | LC_ALL=C sort | xargs $SHA)
     $SHA < "$D/core.sh"
@@ -157,20 +157,21 @@ hermes() {
     return 0
   fi
   have_deps
-  # the same inputs as the last build's: that build's core.hbc
-  if [ -f $OUT/core.hbc ] && [ -f $OUT/core.hbc.stamp ] && [ "$(hbc_stamp "$hc" 2>/dev/null)" = "$(cat $OUT/core.hbc.stamp)" ]; then
+  # With a clean Git tree the content key decides reuse; a missing key cannot fall back to an older timestamp stamp.
+  # Without a content key, use the last build only when its checkout and inputs still match.
+  if [ -z "$key" ] && [ -f $OUT/core.hbc ] && [ -f $OUT/core.hbc.stamp ] && [ "$(hbc_stamp "$hc" 2>/dev/null)" = "$(cat $OUT/core.hbc.stamp)" ]; then
     echo "hermes: core.hbc as it was (its inputs unchanged)"
     return 0
   fi
   # never an old core.hbc after a failed step (it would hide a module gone missing)
   rm -f $OUT/core-hermes.js $OUT/core.hbc $OUT/core.hbc.stamp
-  # what an app's modules import from npm (media/core's effect) found in the core's own node_modules
+  # what an app's modules import from npm found in the core's own node_modules
   NODE_PATH=$CORE_TS/node_modules $CORE_TS/node_modules/.bin/esbuild ${ENTRY:-$ROOT/core/hermes.ts} --bundle \
     --format=iife --platform=neutral --main-fields=module,main --conditions=hermes --target=es2020 --supported:async-await=false --supported:async-generator=false --minify --legal-comments=none \
-    --alias:@core=$CORE_TS/src --alias:@ember=$EMBER --resolve-extensions=.ts,.js,.mjs \
+    --alias:@core=$CORE_TS/src --alias:@stillfail=$SF_SRC --resolve-extensions=.ts,.js,.mjs \
     --outfile=$OUT/core-hermes.js --metafile=$OUT/core-hermes.meta.json --log-level=warning \
     || { echo "hermes: bundle failed"; return 1; }
-  # Classes as functions (and `extends Error` as Babel's wrapped native super), with ember's Babel.
+  # Classes as functions (and `extends Error` as Babel's wrapped native super), with still.fail's Babel.
   (cd $CORE_TS && node --input-type=module -e "
 import { readFileSync, writeFileSync } from 'node:fs';
 import { transformSync } from '@babel/core';
@@ -235,7 +236,7 @@ hermes_fw() {
 # The core's engine for TARGET: src/host/apple_core.mm (Objective-C++: the core's thread and loop, Hermes and its JSI,
 # the shell's C ABI, secure.* and listen.*) as out/core/<target>/libmbui_core.a, which the apps with the core link
 # beside the shell's .a and Hermes's framework (src/stillfail/moon.pkg; the iOS build's hook). Made again only when its
-# sources (or this script) are newer: 1-2 s (mini1, 2026-10-24), not worth a native part of its own as the shell is.
+# sources (or this script) are newer: 1-2 s in the measured build, not worth a native part of its own as the shell is.
 engine() {
   local target=${1:-aarch64-apple-darwin} cc
   hermes_apple || return 1
@@ -246,7 +247,7 @@ engine() {
     *) echo "engine: no target $target"; return 1 ;;
   esac
   local lib=$OUT/$target/libmbui_core.a
-  if [ -f $lib ] && [ $lib -nt src/host/apple_core.mm ] && [ $lib -nt src/host/apple_collate.h ] && [ $lib -nt src/host/electron_sealed.h ] && [ $lib -nt src/host/core_api.h ] && [ $lib -nt src/host/listen_api.h ] && [ $lib -nt "$D/core.sh" ]; then
+  if [ -f $lib ] && [ $lib -nt src/host/apple_core.mm ] && [ $lib -nt engine/ready_queue.h ] && [ $lib -nt src/host/apple_collate.h ] && [ $lib -nt src/host/electron_sealed.h ] && [ $lib -nt src/host/core_api.h ] && [ $lib -nt src/host/listen_api.h ] && [ $lib -nt "$D/core.sh" ]; then
     return 0
   fi
   mkdir -p $OUT/$target
@@ -258,9 +259,9 @@ engine() {
 
 # What an Apple app with the core needs for TARGET: Hermes, the engine (when stale), the shell's .a (still.fail's natives
 # by its key; where native.ts cannot say, the one here, else built by cargo: rebuild it with `shell`), the core's
-# bytecode (ENTRY, by default the media app's entry, as Android's). apple-native is what the app's link takes (all
+# bytecode (ENTRY, by default still.fail's own, as Android's). apple-native is what the app's link takes (all
 # but the bytecode, which only its bundle carries: scripts/mac.sh makes that beside the app's compile, `hermes apple`).
-APPLE_ENTRY=$ROOT/core/media-hermes.ts
+APPLE_ENTRY=$ROOT/core/hermes.ts
 apple_native() {
   local target=${1:-aarch64-apple-darwin}
   engine $target || return 1
@@ -441,6 +442,27 @@ exit_test() {
   return $code
 }
 
+# Inputs and due timers on both native core loops, in Hermes (engine/tests/fairness.*), plus deterministic ordering,
+# cancellation and equal-clock cases on the queue itself. Neither test depends on how long a task takes to run.
+fairness_test() {
+  local target=aarch64-apple-darwin fw
+  apple_native $target || return 1
+  fw=$(hermes_fw $target)
+  hermes_script "$ROOT/engine/tests/fairness.js" "$OUT/fairness-test.hbc" || return 1
+  clang++ -std=c++20 -O2 "$ROOT/engine/tests/ready_queue.cpp" -o "$OUT/ready-queue-test" || return 1
+  "$OUT/ready-queue-test" || return 1
+  clang++ -std=c++20 -O2 -fexceptions -frtti -I"$OUT/hermes/include" -I"$ROOT/engine" \
+    "$ROOT/engine/engine.cpp" "$ROOT/engine/tests/fairness.cpp" -F"$fw" -framework hermes -Wl,-rpath,"$fw" \
+    -o "$OUT/fairness-engine" || return 1
+  "$OUT/fairness-engine" "$OUT/fairness-test.hbc" || return 1
+  clang -fobjc-arc -O2 -Isrc/host -c mbui/src/host/apple_listen.m -o "$OUT/fairness-listen.o" || return 1
+  clang++ -std=c++20 -O2 -DTEST_APPLE_HOST -Isrc/host "$ROOT/engine/tests/fairness.cpp" "$OUT/fairness-listen.o" \
+    "$OUT/$target/libmbui_core.a" "$OUT/$target/libstillfail_shell.a" $(libs $target) -F"$fw" -framework hermes \
+    -Wl,-rpath,"$fw" -framework LocalAuthentication -framework Foundation -o "$OUT/fairness-apple" || return 1
+  mkdir -p "$OUT/fairness-test-data"
+  "$OUT/fairness-apple" "$OUT/fairness-test.hbc" "$OUT/fairness-test-data"
+}
+
 # What still.fail's desktop app (Electron's safeStorage) sealed, opened as the app built in its place opens it
 # (src/host/electron_sealed.h): core/sealed_test.m against files made as that app makes them. No core, no Keychain.
 sealed_test() {
@@ -476,9 +498,9 @@ p = u.urlparse(sys.argv[1]); q = u.parse_qs(p.query); back = u.urlparse(q.get("r
 ok = p.scheme == "https" and p.path == "/v1/auth/google/start" and "state" in q and back.scheme == "http" and back.hostname == "127.0.0.1" and back.path == "/oauth/callback"
 print(back.port if ok else 0)' "$url")
   ok "it is still.fail cloud's login page, coming back to 127.0.0.1:$port/oauth/callback" '[ "$port" -gt 0 ]'
-  if [ -f "$EMBER/station/src/logins/parse.ts" ]; then
+  if [ -f "$SF_SRC/station/src/logins/parse.ts" ]; then
     local seen=$(node --experimental-strip-types --no-warnings --input-type=module -e "
-const { loopbackOf } = await import('$EMBER/station/src/logins/parse.ts');
+const { loopbackOf } = await import('$SF_SRC/station/src/logins/parse.ts');
 const b = loopbackOf(process.argv[1]);
 console.log(b && b.state ? b.host + ':' + b.port + b.path : 'none');" "$url" 2>&1)
     ok "a station's login takes it as a loopback login with a state ($seen)" '[ "$seen" = "127.0.0.1:$port/oauth/callback" ]'
@@ -502,7 +524,7 @@ console.log(b && b.state ? b.host + ':' + b.port + b.path : 'none');" "$url" 2>&
 
 # src/core/vectors_test.mbt: core-ts's diff and apply over values shaped like the topics (core/delta-vectors.ts).
 vectors() {
-  EMBER=$EMBER node core/delta-vectors.ts > src/core/vectors_test.mbt
+  SF_SRC=$SF_SRC node core/delta-vectors.ts > src/core/vectors_test.mbt
   echo "vectors: $(grep -c '^test ' src/core/vectors_test.mbt) tests in src/core/vectors_test.mbt"
 }
 
@@ -533,6 +555,7 @@ case "${1:-all}" in
   mermaid-smoke) mermaid_smoke ;;
   zstd-read) zstd_read ;;
   exit) exit_test ;;
+  fairness) fairness_test ;;
   collate) collate_test ;;
   sealed) sealed_test ;;
   login-test) login_test ;;
@@ -546,5 +569,5 @@ case "${1:-all}" in
   sizes) sizes ;;
   clean) rm -rf "$CARGO_TARGET_DIR"; echo "removed $CARGO_TARGET_DIR (out/core kept)" ;;
   all) deps; shell; smoke_build; smoke_run; sizes ;;
-  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | apple-native [TARGET] | smoke [build|run] | listen | exit | collate | login-test | vectors | sizes | chat-open | md-parse | mermaid | mermaid-lib | mermaid-smoke | zstd-read | clean | all"; exit 2 ;;
+  *) echo "usage: scripts/core.sh deps | shell [TARGET] | hermes [apple] | hermes-kept [apple] | hermes-script FILE [OUT] | hermes-apple | engine [TARGET] | apple [TARGET] | apple-native [TARGET] | smoke [build|run] | listen | exit | fairness | collate | login-test | vectors | sizes | chat-open | md-parse | mermaid | mermaid-lib | mermaid-smoke | zstd-read | clean | all"; exit 2 ;;
 esac

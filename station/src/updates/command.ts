@@ -4,27 +4,29 @@
 // a line each: `script=<the installer this release carries>` and the variables to give it (`STILLFAIL_…=…`). The shell
 // runs it, not this process: on Windows the installer ends what runs from the release, this Node included.
 // A refusal on stderr, exit code 1; a usage error, exit code 2.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { providerOf, specOf } from "../cloud/provider.ts";
 import { flag } from "../ops/files.ts";
 import { stationLang, tr } from "../ops/i18n.ts";
+import { readJsonFile } from "../ops/json-file.ts";
 import { setChannel } from "./channel.ts";
 import { planUpdate } from "./release.ts";
 import { type Channel, channelOf, releaseChannel } from "./versions.ts";
 
-const configPath = (data: string) => process.env.STILLFAIL_CONFIG || process.env.EMBER_CONFIG || join(data, "config.json");
+const configPath = (data: string) => process.env.STILLFAIL_CONFIG || join(data, "config.json");
 
 /// Where the releases of the control plane the station is in are (cloud.json: its origin, and Comma's under
-/// /stations); none before it joined one. Before the station first ran, its data may still be at the old place.
+/// /stations); none before it joined one.
 export function releaseBaseIn(data: string): string | null {
-  for (const file of [join(data, "mesh", "cloud.json"), join(homedir(), ".ember", "mesh", "cloud.json")]) {
+  for (const file of [join(data, "mesh", "cloud.json")]) {
     let said: any;
     try {
-      said = JSON.parse(readFileSync(file, "utf8"));
-    } catch {
-      continue;
+      said = readJsonFile(file);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw error;
     }
     if (typeof said?.origin === "string" && said.origin) return specOf(providerOf(said.provider)).releaseBase(said.origin.replace(/\/+$/, ""));
   }
@@ -43,7 +45,7 @@ export async function updateCommand(args: string[], data: string, trusted?: Map<
     const named: Channel | null = asked[0] === "--beta" ? "beta" : asked[0] === "--stable" ? "stable" : null;
     if (named !== null) await setChannel(data, named, 10_000);
     let raw: any = {};
-    if (existsSync(configPath(data))) raw = JSON.parse(readFileSync(configPath(data), "utf8"));
+    if (existsSync(configPath(data))) raw = readJsonFile(configPath(data));
     const channel = channelOf(raw, app);
     const installed = releaseChannel(app) ?? channel;
     const plan = await planUpdate({ base, channel, app, installed, lang, trusted });

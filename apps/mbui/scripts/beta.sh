@@ -1,20 +1,17 @@
 #!/bin/bash
-# still.fail mbui's beta (fail.still.mbui, "still.fail mbui": the release build of apps/mbui's Android app), built,
-# signed and put in the releases bucket as .github/workflows/mbui.yml does on mini1:
+# apps/mbui's packages: still.fail preview's (fail.still.mbui: the Windows and Linux apps, the build of every push to
+# main), built, signed and put in the releases bucket as .github/workflows/preview.yml does; and the released and beta
+# Android and Mac apps' builds for scripts/release.sh (MBUI_VARIANT=stable or beta):
 #   apps/mbui/scripts/beta.sh tools      MoonBit, its latest release (installed again only when cli.moonbitlang.com
 #                                        has a newer one: its ETag), mbui (apps/mbui/mbui), the core's packages
-#   apps/mbui/scripts/beta.sh build      the APK (scripts/android.sh, VARIANT=release; MBUI_VARIANT=stable or beta
-#                                        still.fail's Android app's own, for scripts/release.sh): versionCode the build (git
-#                                        rev-list --count HEAD), signed with ANDROID_DEBUG_KEYSTORE_B64 (every still.fail
-#                                        Android release's key; POSTHOG_JSON: the key its crash reports go with), into
-#                                        $RELEASE_DIR as android/stillfail-mbui-<n>.apk and android/mbui/latest.json
-#                                        (still.fail's AppRelease, news: the commits since the build the feed names now,
-#                                        of what the app is built from)
-#   apps/mbui/scripts/beta.sh mac        the macOS app (scripts/mac-app.sh: still.fail mbui.app, fail.still.mbui),
-#                                        signed with still.fail's identity (.github/mac_signing.py), zipped, into
-#                                        $RELEASE_DIR as mac/stillfail-mbui-<n>-arm64-mac.zip and mac/mbui/latest.json
-#                                        (MBUI_VARIANT=stable or beta: still.fail's Mac app itself, in the Electron
-#                                        app's place, for scripts/release.sh: $RELEASE_DIR/mac/app-<variant>.zip)
+#   apps/mbui/scripts/beta.sh build      the APK (scripts/android.sh, VARIANT=$MBUI_VARIANT: stable or beta, still.fail's
+#                                        Android app's own): versionCode the build (git rev-list --count HEAD), signed
+#                                        with ANDROID_DEBUG_KEYSTORE_B64 (every still.fail Android release's key;
+#                                        POSTHOG_JSON: the key its crash reports go with), into $RELEASE_DIR as
+#                                        android/app-<variant>.apk
+#   apps/mbui/scripts/beta.sh mac        the macOS app (scripts/mac-app.sh, MBUI_VARIANT stable or beta: still.fail's
+#                                        Mac app itself, in the Electron app's place), signed with still.fail's identity
+#                                        (.github/mac_signing.py), zipped, into $RELEASE_DIR as mac/app-<variant>.zip
 #   apps/mbui/scripts/beta.sh win        the Windows app's installer (scripts/win.sh setup: the build, its engine, shell
 #                                        and core.hbc packed in it), signed, into $RELEASE_DIR as
 #                                        win/stillfail-mbui-<n>-x64-win.exe and win/mbui/latest.json (carrying its .sig)
@@ -22,15 +19,15 @@
 #                                        with its icon and linux/install.sh, in still.fail-mbui/, into $RELEASE_DIR as
 #                                        linux/stillfail-mbui-<n>-<x64|arm64>-linux.tar.gz and its machine's feed: x64's
 #                                        linux/mbui/latest.json, arm64's linux-arm64/mbui/latest.json (its part, below)
-#   apps/mbui/scripts/beta.sh changed android|mac|win|linux|linux-arm64
+#   apps/mbui/scripts/beta.sh changed win|linux|linux-arm64
 #                                        yes when what the app is made of (APP_SRC: its code, not its tests, docs,
 #                                        scripts or CI) changed since the build that feed names now (or it has none),
 #                                        else no: main's push makes and puts a package only then
-#   apps/mbui/scripts/beta.sh publish android|mac|win|linux|linux-arm64
-#                                        what `build` or `mac` made put (scripts/release-put.sh), fetched back from where
+#   apps/mbui/scripts/beta.sh publish win|linux|linux-arm64
+#                                        what `win` or `linux` made put (scripts/release-put.sh), fetched back from where
 #                                        it is served and checked (size, SHA-256), then its feed: https://app.still.fail/
-#                                        releases/latest/android-mbui (mac-mbui) is the newest from then on
-# MBUI_FRESH=1 (GitHub's runners, .github/workflows/mbui.yml): the checkout built in place (WORK=apps/mbui), what stays
+#                                        releases/latest/win-mbui (linux-mbui) is the newest from then on
+# MBUI_FRESH=1 (GitHub's runners, .github/workflows/preview.yml): the checkout built in place (WORK=apps/mbui), what stays
 # between runs the Actions cache's (MBC_STORE, MBC_LTO_CACHE, HBC_CACHE, the core's parts in out/core), the release in
 # MBUI_CACHE ($RUNNER_TEMP's).
 # Warm between runs on a machine of its own (WORK, MBUI_CACHE): the build runs in a copy of apps/mbui kept outside the job's checkout (which the
@@ -76,7 +73,7 @@ changed() {
 moon_tools() {
   local base=https://cli.moonbitlang.com tag dir
   mkdir -p "$C/moon" "$C/tools"
-  # (a curl that fails, as mini1's line now and then does, is an answer missing: the MoonBit there is kept below)
+  # (a curl that fails is an answer missing: the MoonBit already present is kept below)
   tag=$( { curl -sfI --max-time 5 $base/binaries/latest/moonbit-darwin-aarch64.tar.gz || true; curl -sfI --max-time 5 $base/cores/core-latest.tar.gz || true; } \
     | tr -d '\r' | awk -F': ' 'tolower($1) == "etag" { print $2 }' | tr -d '\n')
   if [ "$(printf '%s' "$tag" | tr -cd '"' | wc -c | tr -d ' ')" != 4 ]; then
@@ -174,14 +171,18 @@ json.dump(feed, open(out, "w"), ensure_ascii=False)' "$n" "$name" "$(shasum -a 2
 }
 
 build() {
-  local t0=$(now) n apk name sum size badging cert prev prev_sha
+  local t0=$(now) n apk badging cert
   # (MBUI_VARIANT=stable or beta: still.fail's Android app's own, fail.still.android(.beta), for scripts/release.sh, which
   # puts it on that app's feed; the APK alone, in $RELEASE_DIR/android/app-<variant>.apk)
-  local variant=${MBUI_VARIANT:-release} id=fail.still.mbui
-  case $variant in stable) id=fail.still.android ;; beta) id=fail.still.android.beta ;; esac
+  local variant=${MBUI_VARIANT:-} id
+  case $variant in
+    stable) id=fail.still.android ;; beta) id=fail.still.android.beta ;;
+    monoid) id=build.monoid.android ;; monoid-beta) id=build.monoid.android.beta ;;
+    *) echo "beta: build: MBUI_VARIANT is stable, beta, monoid or monoid-beta, not '$variant'" >&2; exit 1 ;;
+  esac
   n=$(build_number)
   copy
-  rm -rf "$RELEASE_DIR/android" && mkdir -p "$RELEASE_DIR/android/android/mbui"
+  rm -rf "$RELEASE_DIR/android" && mkdir -p "$RELEASE_DIR/android"
   # every still.fail Android release's key (the debug keystore $ANDROID_USER_HOME holds, as the Android Gradle plugin's
   # signingConfigs.debug had it: mbui's scripts/apk signs with it)
   if [ -n "${ANDROID_DEBUG_KEYSTORE_B64:-}" ]; then
@@ -197,7 +198,7 @@ build() {
     export STILLFAIL_POSTHOG="$posthog/posthog.json"
   fi
   local r=0
-  env APP=stillfail VARIANT=$variant HBC_CACHE="${HBC_CACHE:-$C/hbc}" EMBER="$REPO" ORG_GRADLE_PROJECT_stillfailBuild=$n \
+  env APP=stillfail VARIANT=$variant HBC_CACHE="${HBC_CACHE:-$C/hbc}" SF_SRC="$REPO" ORG_GRADLE_PROJECT_stillfailBuild=$n \
     bash "$WORK/scripts/android.sh" build 2>&1 | tee "$C/build.log" || r=$?
   [ -z "${ANDROID_DEBUG_KEYSTORE_B64:-}" ] || rm -rf "$ANDROID_USER_HOME"
   [ -z "$posthog" ] || rm -rf "$posthog"
@@ -206,55 +207,39 @@ build() {
   badging=$("$BT/aapt2" dump badging "$apk" | sed -n '1p')
   echo "$badging" | grep -q "name='$id' versionCode='$n' " || { echo "beta: not this build's APK: $badging" >&2; exit 1; }
   cert=$("$BT/apksigner" verify --print-certs "$apk" | sed -n '/certificate SHA-256 digest/{s/.*: //;p;}' | sed -n '1p')
-  if [ "$variant" != release ]; then
-    cp "$apk" "$RELEASE_DIR/android/app-$variant.apk"
-    summary "- $id 0.1.$n: $(wc -c < "$apk" | tr -d ' ') bytes, signed by $cert; built in $(secs $t0) s"
-    return 0
-  fi
-  name=android/stillfail-mbui-$n.apk
-  cp "$apk" "$RELEASE_DIR/android/$name"
-  sum=$(shasum -a 256 "$apk" | cut -d' ' -f1)
-  size=$(wc -c < "$apk" | tr -d ' ')
-  feed android "$n" "$name" "$apk"
-  summary "- APK 0.1.$n: $size bytes, SHA-256 $sum, signed by $cert"
-  summary "- $(grep '^android.sh: APP=' "$C/build.log" | sed 's/^android.sh: //'); $(grep '^core.hbc ' "$C/build.log" | head -1); build in $(secs $t0) s"
+  cp "$apk" "$RELEASE_DIR/android/app-$variant.apk"
+  summary "- $id 0.1.$n: $(wc -c < "$apk" | tr -d ' ') bytes, signed by $cert; built in $(secs $t0) s"
 }
 
 # The macOS app, built in WORK (warm as the APK's: moon's outputs, the compiler's; the core's shell is
 # still.fail's natives, scripts/core.sh apple), signed under .github/mac_signing.py (still.fail's identity, its signing
-# lock held for the signing only; a caller holding it already, .github/release-desktop.py, signs in its keychain:
+# lock held for the signing only; a caller holding it already, .github/release-desktop.sh, signs in its keychain:
 # MAC_SIGN_IDENTITY set). MBUI_VARIANT=stable or beta: still.fail's Mac app itself, in the Electron app's place
 # (mac-app.sh's variants: fail.still.desktop(.beta)), for scripts/release.sh, which puts it on that app's feeds: the
 # signed app's zip alone, in $RELEASE_DIR/mac/app-<variant>.zip.
 mac() {
-  local t0=$(now) n zip name tb variant=${MBUI_VARIANT:-mbui} sign
+  local t0=$(now) n zip tb variant=${MBUI_VARIANT:-} sign
+  case $variant in stable|beta|monoid|monoid-beta) ;; *) echo "beta: mac: MBUI_VARIANT is stable, beta, monoid or monoid-beta, not '$variant'" >&2; exit 1 ;; esac
   n=$(build_number)
   copy
-  rm -rf "$RELEASE_DIR/mac" && mkdir -p "$RELEASE_DIR/mac/mac"
-  env MBUI_BUILD=$n EMBER="$REPO" bash "$WORK/scripts/mac-app.sh" build 2>&1 \
+  rm -rf "$RELEASE_DIR/mac" && mkdir -p "$RELEASE_DIR/mac"
+  env MBUI_BUILD=$n SF_SRC="$REPO" MBUI_SIGN_AFTER_BUILD=1 bash "$WORK/scripts/mac-app.sh" build 2>&1 \
     | tee "$C/mac-build.log"
   tb=$(secs $t0)
   sign=(python3 "$REPO/.github/mac_signing.py" run --)
   [ -z "${MAC_SIGN_IDENTITY:-}" ] || sign=()
-  MBUI_BUILD=$n EMBER="$REPO" "${sign[@]}" bash "$WORK/scripts/mac-app.sh" sign 2>&1 | tee "$C/mac-sign.log"
+  MBUI_BUILD=$n SF_SRC="$REPO" "${sign[@]}" bash "$WORK/scripts/mac-app.sh" sign 2>&1 | tee "$C/mac-sign.log"
   case $variant in
     stable) zip=$WORK/out/mac/stillfail-$n-arm64-mac.zip ;;
     beta) zip=$WORK/out/mac/stillfail-beta-$n-arm64-mac.zip ;;
-    *) zip=$WORK/out/mac/stillfail-mbui-$n-arm64-mac.zip ;;
+    monoid) zip=$WORK/out/mac/monoid-$n-arm64-mac.zip ;;
+    monoid-beta) zip=$WORK/out/mac/monoid-beta-$n-arm64-mac.zip ;;
   esac
   [ -f "$zip" ] || { echo "beta: no zip of the app" >&2; exit 1; }
   # (UNSIGNED=1, as scripts/release.sh's: trying it out, signed ad hoc; never put)
   grep -q '^codesign: Authority=' "$C/mac-sign.log" || [ -n "${UNSIGNED:-}" ] || { echo "beta: the app is not signed with an identity" >&2; exit 1; }
-  if [ "$variant" != mbui ]; then
-    cp "$zip" "$RELEASE_DIR/mac/app-$variant.zip"
-    summary "- macOS app ($variant) 0.1.$n: $(wc -c < "$zip" | tr -d ' ') bytes, $(grep '^codesign: Authority=' "$C/mac-sign.log" | head -1 | sed 's/^codesign: //'); built in $tb s, signed and zipped in $(secs $t0) s"
-    return 0
-  fi
-  name=mac/stillfail-mbui-$n-arm64-mac.zip
-  cp "$zip" "$RELEASE_DIR/mac/$name"
-  feed mac "$n" "$name" "$zip"
-  summary "- macOS app 0.1.$n: $(wc -c < "$zip" | tr -d ' ') bytes, $(grep '^codesign: Authority=' "$C/mac-sign.log" | head -1 | sed 's/^codesign: //'); built in $tb s, signed and zipped in $(secs $t0) s"
-  summary "- $(grep '^mac-app.sh: .*\.app' "$C/mac-build.log" | sed 's/^mac-app.sh: //')"
+  cp "$zip" "$RELEASE_DIR/mac/app-$variant.zip"
+  summary "- macOS app ($variant) 0.1.$n: $(wc -c < "$zip" | tr -d ' ') bytes, $(grep '^codesign: Authority=' "$C/mac-sign.log" | head -1 | sed 's/^codesign: //'); built in $tb s, signed and zipped in $(secs $t0) s"
 }
 
 # The Windows app's installer as win.sh setup made it (windows/setup.c: the program, the engine's and the shell's DLLs
@@ -307,22 +292,29 @@ linux() {
 }
 
 # fetched back and the same bytes as made: from R2 itself through Cloudflare's API when there is a token (R2 reads what
-# was written, at once: no waiting for it to show), else from the public URL; a request the line from mini1 drops
+# was written, at once: no waiting for it to show), else from the public URL; a request the network drops is
 # tried again by curl itself (--retry: its network errors, not a wait for the object)
 # (into a file, and its bytes read only once curl said it got them all: piped to shasum, a fetch cut off by --max-time
 # was hashed as it stood, and the retries' bytes after it, linux x64's 36 MB taking 74 s from GitHub's runner on main
 # 57dd8b8e, said "not as made" of what was put whole. A fetch that stalls gives up by its speed, not a fixed time)
+# (and a connection not made in 15 s given up and tried again, as scripts/release-put.sh's: curl's own wait for one is
+# 300 s, and the Windows installer's check said nothing for the 150 s its step waits after the put, main d2791c4f,
+# 41379568722, 2026-11-02)
+md5_of() { if command -v md5sum > /dev/null; then md5sum "$1" | cut -d' ' -f1; else md5 -q "$1"; fi; }
 check_put() {
-  local name=$1 file=$2 want got= account back
+  local name=$1 file=$2 want got= account back limits="--connect-timeout 15 --speed-limit 1024 --speed-time 30"
+  # (R2 said it wrote these very bytes: scripts/release-put.sh's receipt)
+  local receipt="$C/put-receipts/$(printf %s "$name" | tr / _)"
+  if [ -f "$receipt" ] && [ "$(cat "$receipt")" = "$(md5_of "$file")" ]; then echo "beta: $name as made, by R2's own answer"; return 0; fi
   want=$(shasum -a 256 "$file" | cut -d' ' -f1)
   back=$(mktemp)
   if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
-    account=${CLOUDFLARE_ACCOUNT_ID:-$(curl -fsS --retry 4 --retry-all-errors -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts | grep -o '"id":"[0-9a-f]\{32\}"' | head -1 | cut -d'"' -f4)}
-    curl -fsS --retry 4 --retry-all-errors --speed-limit 1024 --speed-time 30 -o "$back" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    account=${CLOUDFLARE_ACCOUNT_ID:-$(curl -fsS $limits --retry 4 --retry-all-errors -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts | grep -o '"id":"[0-9a-f]\{32\}"' | head -1 | cut -d'"' -f4)}
+    curl -fsS $limits --retry 4 --retry-all-errors -o "$back" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
       "https://api.cloudflare.com/client/v4/accounts/$account/r2/buckets/stillfail-releases/objects/$name" 2>/dev/null \
       && got=$(shasum -a 256 "$back" | cut -d' ' -f1)
   else
-    curl -fsS --retry 4 --retry-all-errors --speed-limit 1024 --speed-time 30 -o "$back" "$ORIGIN/releases/$name" 2>/dev/null \
+    curl -fsS $limits --retry 4 --retry-all-errors -o "$back" "$ORIGIN/releases/$name" 2>/dev/null \
       && got=$(shasum -a 256 "$back" | cut -d' ' -f1)
   fi
   rm -f "$back"
@@ -332,23 +324,19 @@ check_put() {
 }
 
 publish() {
-  local part=${1:-android} t0=$(now) name n dir
+  local part=${1:-} t0=$(now) name n dir
   dir=$RELEASE_DIR/$part
   n=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["versionCode"])' "$dir/$part/mbui/latest.json")
   name=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["file"])' "$dir/$part/mbui/latest.json")
   cp "$dir/$name" "$C/last-$part"
   # (wrangler's, when Cloudflare's API cannot be used: without the token)
   [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || (cd "$REPO/cloud" && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
-  sh "$REPO/scripts/release-put.sh" --files "$dir"
+  rm -rf "$C/put-receipts"
+  STILLFAIL_PUT_RECEIPTS="$C/put-receipts" sh "$REPO/scripts/release-put.sh" --files "$dir"
   local tp=$(secs $t0)
   check_put "$name" "$C/last-$part" || { echo "beta: $name did not come back as made: the feed stays as it was" >&2; exit 1; }
   local tc=$(secs $t0)
   sh "$REPO/scripts/release-put.sh" --feeds "$dir"
-  if [ "$part" = mac ]; then
-    local built="$WORK/out/mac/stillfail-mbui-$n-arm64-mac.zip"
-    # check_put just verified last-mac against R2; only remove the matching warm build copy.
-    if [ -f "$built" ] && cmp -s "$built" "$C/last-mac"; then rm -f "$built"; fi
-  fi
   summary "- put $name (${tp} s), checked (${tc} s), the feed: $ORIGIN/releases/$part/mbui/latest.json, $ORIGIN/releases/latest/$part-mbui ($(secs $t0) s)"
 }
 
@@ -358,7 +346,7 @@ case "${1:-}" in
   mac) mac ;;
   win) win ;;
   linux) linux ;;
-  changed) changed "${2:-android}" ;;
-  publish) publish "${2:-android}" ;;
+  changed) changed "$2" ;;
+  publish) publish "$2" ;;
   *) sed -n '2,20p' "$0"; exit 1 ;;
 esac

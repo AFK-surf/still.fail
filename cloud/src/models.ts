@@ -1,10 +1,12 @@
 // What models can do and cost, for stations (GET /v1/models; station/src/models/module.ts asks): models.dev's catalog
-// cut to what still.fail reads, keyed as a station keys a model (claude-opus-5-5, gpt-6.1-sol: without its maker).
+// cut to what still.fail reads, keyed as a station keys a model (claude-opus-5-5, gpt-6.1-sol: without its maker, which
+// it says as `maker`).
 // What a model takes in and holds is its canonical entry's (models.json); its prices and effort levels are its maker's
 // own (api.json, the provider its canonical id names): another provider's are what that one charges. Where models.dev
 // is known to be wrong, CORRECTIONS says what is right. Made at most once an hour in each of Cloudflare's locations
 // (the Cache API), and answered 304 to a station that has it already (its ETag).
 import { reply } from "./auth";
+import type { Env } from "./env";
 
 const CANONICAL = "https://models.dev/models.json";
 const PROVIDERS = "https://models.dev/api.json";
@@ -18,6 +20,12 @@ export type Cost = { input: number; output: number; cacheRead?: number; cacheWri
 /// What still.fail says of a model (station/src/accounts/catalog.ts reads it); a field not known is left out.
 export type Facts = {
   name?: string;
+  /// Who made it, as models.dev's canonical id names its lab (meta, tencent, stepfun…), and that lab's name where
+  /// models.dev has one (its own API's: Meta, StepFun).
+  maker?: string;
+  makerName?: string;
+  /// Its series as its name spells it (Muse, MiMo, LongCat).
+  family?: string;
   input?: string[];
   reasoning?: boolean;
   efforts?: string[];
@@ -71,6 +79,21 @@ function sold(offered: unknown, id: string): Record<string, any> | null {
   return found.every((m) => JSON.stringify(costOf(m.cost) ?? null) === price) ? found[0]! : null;
 }
 
+/// A lab's name, as models.dev names its own API (StepFun for "StepFun (China)"); none where it sells none.
+function labName(provider: unknown): string | undefined {
+  const name = isObject(provider) && typeof provider.name === "string" ? provider.name.replace(/\s*\([^)]*\)\s*$/, "").trim() : "";
+  return name !== "" ? name : undefined;
+}
+
+/// A model's series (models.dev's `family`: muse, mimo, claude-opus) as its name spells it (Muse, MiMo, Claude Opus);
+/// none where the name does not have it (gpt-sol, of GPT-6.1 Sol).
+function familyOf(family: unknown, name: unknown): string | undefined {
+  if (typeof family !== "string" || family.trim() === "") return undefined;
+  const words = family.trim().split(/[\s_-]+/).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const found = typeof name === "string" ? new RegExp(`(?<![a-z0-9])${words.join("[\\s_-]+")}`, "i").exec(name) : null;
+  return found !== null ? found[0] : undefined;
+}
+
 /// The catalog from models.dev's canonical models (`canonical`, models.json) and its providers' (`providers`, api.json).
 export function catalog(canonical: Json, providers: Json): Record<string, Facts> {
   const out: Record<string, Facts> = {};
@@ -83,6 +106,11 @@ export function catalog(canonical: Json, providers: Json): Record<string, Facts>
     if (key === "" || key in out) continue;
     const f: Facts = {};
     if (typeof m.name === "string") f.name = m.name;
+    if (maker !== "") f.maker = maker;
+    const makerName = labName(providers?.[maker]);
+    if (makerName !== undefined) f.makerName = makerName;
+    const family = familyOf(m.family, m.name);
+    if (family !== undefined) f.family = family;
     const input = strings(m.modalities?.input);
     if (input) f.input = input;
     if (typeof m.reasoning === "boolean") f.reasoning = m.reasoning;
@@ -114,9 +142,23 @@ async function made(): Promise<Response> {
   return new Response(body, { headers: { "content-type": "application/json", etag, "cache-control": `public, max-age=${KEPT_SECONDS}` } });
 }
 
+/**
+ * The catalog made afresh (the cron's, hourly): kept for this place's askers, and when it changed, every station told,
+ * naming its ETag (they ask for it by that: `serveModels` makes it afresh where a place keeps an older one).
+ */
+export async function checkModels(env: Env): Promise<void> {
+  const answer = await made();
+  const etag = answer.headers.get("etag");
+  await (caches as unknown as { default: Cache }).default.put(KEPT, answer);
+  if (etag !== null) await env.DIRECTORY.getByName("primary").modelsMade(etag);
+}
+
 export async function serveModels(request: Request): Promise<Response> {
   const cache = (caches as unknown as { default: Cache }).default;
   let answer = await cache.match(KEPT);
+  // Asked for by the catalog stations were told it changed to: one this place keeps from before is made afresh.
+  const wanted = new URL(request.url).searchParams.get("v");
+  if (answer && wanted !== null && answer.headers.get("etag") !== wanted) answer = undefined;
   if (!answer) {
     try {
       answer = await made();

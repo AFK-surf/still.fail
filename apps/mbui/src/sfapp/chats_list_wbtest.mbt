@@ -16,6 +16,16 @@ fn lists_tester(calls : Array[Made], w : Double, platform : Int, regular : Bool)
 }
 
 ///|
+/// The chat's menu up: its 分享… opened (复制会话链接, 接力到频道, 分享给其他 workspace, 分享图片, 在 Slack／飞书打开 in it),
+/// at rest.
+fn open_share(t : @ui.Tester) -> Unit {
+  t.tap_text("分享…")
+  t.frame()
+  let rest = @kit.sheet_rest("sf-present")
+  t.run_for(if rest > t.time() && rest < 1.0e12 { rest - t.time() } else { @ui.move_most_ms })
+}
+
+///|
 test "the chats' lists at each width and with either hand: its days and rows; a finger's 66 high, a mouse's 54, 2 apart but a finger's across a phone" {
   for case in one_page_cases {
     let (w, platform, regular, _) = case
@@ -51,12 +61,77 @@ test "a row's menu at each width and with either hand: held by a finger, right c
     t.frame()
     // not opened by the hold
     assert_false(app.nav.top() is Chat({ title: "夜里的构建又失败了", .. }), msg=at)
-    for item in ["重命名", "复制会话链接", "复制 session 文件路径"] {
+    for item in ["重命名", "分享…"] {
       assert_true(t.find(item) is Some(_), msg="\{at}: \{item}")
     }
+    assert_true(t.find("复制 session 文件路径") is None, msg=at)
+    // 归档 with the chat's own state, not last (a sheet's last row is where a thumb going home lands)
+    let (_, archive_y) = t.find("归档").unwrap()
+    let (_, share_y) = t.find("分享…").unwrap()
+    assert_true(archive_y < share_y, msg="\{at}: 归档 at \{archive_y}, 分享… at \{share_y}")
+    // (复制会话链接 in it, with the rest of what shares it)
+    open_share(t)
     t.tap_text("复制会话链接")
     assert_true(t.clipboard().has_prefix("[夜里的构建又失败了]("), msg=at)
   }
+}
+
+///|
+test "a row's rename ends when its field loses focus, and can be opened again" {
+  let calls : Array[Made] = []
+  let t = lists_tester(calls, 1280.0, 0, false)
+  let title = "夜里的构建又失败了"
+  let (x, y) = t.find(title).unwrap()
+  t.right_click(x, y)
+  t.tap_text("重命名")
+  assert_true(@sfpages.renaming())
+  t.type_text("临时草稿")
+  assert_true(t.ime().1.contains("临时草稿"))
+  let fields = t.semantics().filter(fn(s) { s.value.contains("临时草稿") })
+  assert_eq(fields.length(), 1)
+  let (fx, fy, fw, fh) = fields[0].rect
+  t.tap(fx + fw / 2.0, fy + fh / 2.0)
+  assert_true(@sfpages.renaming())
+  t.ctx().blur()
+  t.draw()
+  assert_false(@sfpages.renaming())
+  assert_false(t.semantics().iter().any(fn(s) { s.value.contains("临时草稿") }))
+  assert_true(t.find(title) is Some(_))
+  assert_eq(named(calls, "chat.rename").length(), 0)
+  let (x, y) = t.find(title).unwrap()
+  t.right_click(x, y)
+  t.tap_text("重命名")
+  t.type_text("再次编辑")
+  assert_true(t.ime().1.contains("再次编辑"))
+  t.key_named("escape") |> ignore
+  assert_false(@sfpages.renaming())
+  assert_false(t.semantics().iter().any(fn(s) { s.value.contains("再次编辑") }))
+  let (x, y) = t.find(title).unwrap()
+  t.right_click(x, y)
+  t.tap_text("重命名")
+  t.type_text("保存")
+  t.enter()
+  assert_eq(named(calls, "chat.rename").length(), 1)
+  assert_eq(text(Some(named(calls, "chat.rename")[0].params), "title"), title + "保存")
+  assert_false(@sfpages.renaming())
+}
+
+///|
+test "clicking another chat leaves an unfinished rename and opens that chat" {
+  let calls : Array[Made] = []
+  let t = lists_tester(calls, 1280.0, 0, false)
+  let (x, y) = t.find("夜里的构建又失败了").unwrap()
+  t.right_click(x, y)
+  t.tap_text("重命名")
+  t.type_text("临时草稿")
+  assert_true(t.ime().1.contains("临时草稿"))
+  let (next_x, next_y) = t.find("首页的列表改成按天分组").unwrap()
+  t.press_at(next_x, next_y)
+  assert_false(@sfpages.renaming())
+  t.release(next_x, next_y)
+  assert_false(t.semantics().iter().any(fn(s) { s.value.contains("临时草稿") }))
+  assert_eq(open_title(), "首页的列表改成按天分组")
+  assert_eq(named(calls, "chat.rename").length(), 0)
 }
 
 ///|
@@ -101,7 +176,7 @@ test "a mouse pointing at a row: its time and 归档 at its top right; a finger'
     let calls : Array[Made] = []
     let t = lists_tester(calls, w, platform, regular)
     let at = "\{w} platform \{platform}"
-    t.scroll_to(12)
+    list_down(t, 12)
     t.draw()
     if platform == 2 {
       // (swiped left, or held for its menu's)
@@ -139,8 +214,8 @@ test "a row pinned, renamed or archived: no spinner while its station answers (t
       )
       let src : Source = {
         ..base,
-        topic: fn(name, params) {
-          let got = (base.topic)(name, params)
+        topic_read: fn(name, params) {
+          let got = base.topic(name, params).get().snapshot()
           if name == "doing" {
             { ..got, value: Some({ "doing": doing }) }
           } else {
@@ -193,7 +268,7 @@ test "wide: rows pressed one after another, one chat open in place of the other;
 test "wide: a chat opened while settings are in view is opened in the chats; the chat open already, nothing changes" {
   let calls : Array[Made] = []
   let t = lists_tester(calls, 1280.0, 0, false)
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   app.nav.push(Settings)
   t.draw()
   assert_eq(@sfdesk.lit_place(), "settings")
@@ -210,5 +285,74 @@ test "wide: a chat opened while settings are in view is opened in the chats; the
   match app.nav.top() {
     Chat(o) => assert_eq(o.session, "s-c2")
     _ => fail("no chat open")
+  }
+}
+
+///|
+test "a row asks its station to regenerate its title from both menu gestures" {
+  for case in one_page_cases {
+    let (w, platform, regular, _) = case
+    let calls : Array[Made] = []
+    let t = lists_tester(calls, w, platform, regular)
+    let (x, y) = t.find("夜里的构建又失败了").unwrap()
+    if platform == 2 {
+      t.press_at(x, y)
+      t.run_for(@ui.tap_indication_ms + @sfpages.hold_ms)
+      t.release(x, y)
+    } else {
+      t.right_click(x, y)
+    }
+    t.frame()
+    t.tap_text("重新生成标题")
+    assert_eq(named(calls, "chat.regenerateTitle").length(), 1, msg="\{w} platform \{platform}")
+  }
+}
+
+///|
+/// The chats' list scrolled down `rows` rows (the theme's row's height each), by the wheel over it (its left, where
+/// the sidebar is too, half way down the window), and let come to rest.
+fn list_down(t : @ui.Tester, rows : Int) -> Unit {
+  let c = t.ctx()
+  t.wheel(150.0, c.height / 2.0, rows.to_double() * @sf.theme().chat_list.row_h)
+  t.run_for(@ui.move_most_ms)
+}
+
+///|
+/// The chats' list scrolled to its very top (what is tucked over its rows in view), by the wheel over it as list_down's,
+/// and let come to rest.
+fn list_up_to_top(t : @ui.Tester) -> Unit {
+  let c = t.ctx()
+  t.wheel(150.0, c.height / 2.0, -4000.0)
+  t.run_for(@ui.move_most_ms)
+}
+
+///|
+test "a mouse's 重命名: the row's title a field in its place, focused; Enter renames it (chat.rename), Esc lets it be" {
+  for w in [720.0, 1280.0] {
+    let calls : Array[Made] = []
+    let t = lists_tester(calls, w, 0, false)
+    let at = "\{w}"
+    let (x, y) = t.find("夜里的构建又失败了").unwrap()
+    t.right_click(x, y)
+    t.tap_text("重命名")
+    t.frame()
+    // (no sheet over the page: the row's own field, its words the title's, written in at once)
+    assert_true(t.find("重命名对话") is None, msg=at)
+    let (active, _, _, _) = t.ime()
+    assert_true(active, msg=at)
+    t.type_text("（已修）")
+    t.key(@ui.key_code_enter)
+    let asked = named(calls, "chat.rename")
+    assert_eq(asked.length(), 1, msg=at)
+    assert_eq(text(Some(asked[0].params), "title"), "夜里的构建又失败了（已修）", msg=at)
+    // again, let be with Esc: nothing asked
+    let (x, y) = t.find("夜里的构建又失败了").unwrap()
+    t.right_click(x, y)
+    t.tap_text("重命名")
+    t.frame()
+    t.type_text("x")
+    t.key(@ui.key_escape)
+    t.frame()
+    assert_eq(named(calls, "chat.rename").length(), 1, msg=at)
   }
 }

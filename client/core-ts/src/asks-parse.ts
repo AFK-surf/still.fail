@@ -1,4 +1,4 @@
-// The asks' calls by name (asks.rs `parse`): a link's target, a newer app, a picture, the buddies, a dev sign-in.
+// The asks' calls by name: a link's target, a newer app, a picture, the buddies, a dev sign-in.
 import { CoreError } from "./error.ts";
 import { t } from "./i18n.ts";
 import { get } from "./util.ts";

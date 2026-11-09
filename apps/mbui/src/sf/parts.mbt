@@ -24,7 +24,7 @@ fn draw_icon(c : @ui.Ctx, name : String, size : Double, color : Int64, by_ink? :
 ///|
 /// What a button is (controls.css.ts): `Plain` lined, on the canvas;
 /// `Primary` the one thing to do, solid; `Ghost` words alone, a ground
-/// under the pointer; `Danger` lined, its words red; `DangerSolid` solid red.
+/// under the pointer or while busy; `Danger` lined, its words red; `DangerSolid` solid red.
 pub(all) enum Tone {
   Plain
   Primary
@@ -39,8 +39,8 @@ pub(all) enum Tone {
 /// A button (Button): a 36 pill on the wide screen, the phone's 38 one on a
 /// narrow, as tall as a bar's tools among them (viewer_bar's: 32); an icon before its words if given, a spinner in its
 /// place while `busy`; `reach`, where it stands in a card's foot corners: how its ground reaches past the card's words
-/// (foot_across); `hint`, what pressing it does in more words, over it while it is pointed at (a Button in a Tip). True
-/// on the frame after it was pressed.
+/// (foot_across); `hint`, what pressing it does in more words, over it while it is pointed at (a Button in a Tip);
+/// `on_press`, what pressing it does, as it is let go (press_does).
 pub fn button(
   c : @ui.Ctx,
   label : String,
@@ -52,8 +52,19 @@ pub fn button(
   w? : @ui.Size = Auto,
   reach? : @ui.Style,
   hint? : String = "",
-) -> Bool {
-  button_part(c, label, key~, tone~, icon~, busy~, disabled~, w~, reach?, hint~).0
+  on_press? : () -> Unit,
+) -> Unit {
+  button_part(c, label, key~, tone~, icon~, busy~, disabled~, w~, reach?, hint~, on_press?) |> ignore
+}
+
+///|
+/// What pressing `id` does (`on_press`), where it takes presses now (`live`): done as the press is let go on it (a tap,
+/// a click, Enter or Space, Activate), outside any build, at its moment (Ctx::on_press), not read by the build after.
+pub fn press_does(c : @ui.Ctx, id : Int, live : Bool, on_press : (() -> Unit)?) -> Unit {
+  match on_press {
+    Some(f) if live => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|
@@ -74,57 +85,52 @@ fn button_part(
   ink_override? : Int64,
   active? : Bool = false,
   expanded? : Bool,
-) -> (Bool, Int) {
+  on_press? : () -> Unit,
+) -> Int {
   let t = theme()
   let p = t.p
   let id = c.id(if key == "" { "sf-btn/" + label } else { key })
   let live = !disabled && !busy
-  let h = ease_to(c, "sf-btn-h/\{id}", live && (c.lit(id) || c.pressed(id) || active))
+  press_does(c, id, live, on_press)
+  // Quiet actions keep their usual look at rest, and show their own ground while doing what was pressed.
+  let quiet_busy = busy && (tone == Ghost || tone == GhostDanger)
+  // (its ground eased as it is painted: told as it is built, read where it is drawn, Ctx::bg_by)
+  let h = @motion.told(
+    c,
+    "sf-btn-h/\{id}",
+    if quiet_busy || (live && (c.lit(id) || c.pressed(id) || active)) { 1.0 } else { 0.0 },
+    spec=@motion.tween(dur_ms, ease=Out),
+  )
   // (turning and greyed as a control answers: over dur_ms, never at once. With an icon, the spinner in its place, the
   // icon fading out under it as it fades in, nothing moved; with none, the spinner coming in before its words, which
   // stay: they are what it does, said on as it does it. At work is not greyed: it is the button pressed, at full
   // strength, its spinner what to look at (2026-10-31 the user: 从不带 loading 到带 loading……感觉有点不对, 能不能不换掉字;
   // it faded to 0.7 as the web's aria-busy does, its icon swapped at once, its words faded out under the spinner).)
-  let turning = ease_to(c, "sf-btn-busy/\{id}", busy)
-  let seen = @motion.animate(
-    c,
-    "sf-btn-seen/\{id}",
-    if disabled {
-      0.45
-    } else {
-      1.0
-    },
-    spec=@motion.tween(dur_ms, ease=Out),
-  )
-  let (ground, line, tone_ink) = if on_night.val {
+  // (told as it is built, read where it is painted: the spinner built while it is busy or on its way back, up to
+  // its declared end)
+  let turning = @motion.told(c, "sf-btn-busy/\{id}", if busy { 1.0 } else { 0.0 }, spec=@motion.tween(dur_ms, ease=Out))
+  let spun = busy || !turning.over(c)
+  // (faded as it is drawn)
+  let seen = @motion.told(c, "sf-btn-seen/\{id}", if disabled { 0.45 } else { 1.0 }, spec=@motion.tween(dur_ms, ease=Out))
+  // its ground `h` of the way to the one under the hand (no outline: where a tone has a line, it is its ground), and
+  // its words' ink
+  let (ground_at, tone_ink) = if on_night.val {
     // (on a stage: the night under it whatever the theme)
     match tone {
-      Primary | DangerSolid => (mix(0xFFFFFFFFL, h, share_ink), 0L, share_ground)
-      _ => (mix(stage_plain_lit, h, stage_plain), 0L, share_ink)
+      Primary | DangerSolid => (fn(h : Double) -> Int64 { mix(0xFFFFFFFFL, h, share_ink) }, share_ground)
+      _ => (fn(h) { mix(stage_plain_lit, h, stage_plain) }, share_ink)
     }
   } else {
-    // the phone's (Parts.kt): the ink with the paper's words, the chip's ground, no outline; pointed at or pressed, a
-    // solid ground a step towards the page and a quiet one the hover's step darker (docs/ui-panels.md 悬停)
+    // the phone's: the ink with the paper's words, the chip's ground, no outline; pointed at or pressed, a
+    // solid ground a step towards the page and a quiet one the hover's step darker (mbui ui/hand_moves.mbt)
     match tone {
-      Primary => {
-        let g = mix(p.primary_hover, h, p.primary)
-        (g, g, p.bg)
-      }
+      Primary => (fn(h : Double) -> Int64 { mix(p.primary_hover, h, p.primary) }, p.bg)
       // (white on the light theme's deep red, the page's ink on the dark one's light red: white was 2.4 to 1 there)
-      DangerSolid => {
-        let g = mix(mix(p.red, 0.85, p.canvas), h, p.red)
-        (g, g, if t.dark { p.bg } else { 0xFFFFFFFFL })
-      }
-      Danger => {
-        let g = over(p.chip, alpha(p.hover, h))
-        (g, g, p.red)
-      }
-      Ghost => (alpha(p.hover, h), 0L, p.text)
-      GhostDanger => (alpha(p.hover, h), 0L, p.red)
-      Plain => {
-        let g = over(p.chip, alpha(p.hover, h))
-        (g, g, p.text)
-      }
+      DangerSolid => (fn(h) { mix(mix(p.red, 0.85, p.canvas), h, p.red) }, if t.dark { p.bg } else { 0xFFFFFFFFL })
+      Danger => (fn(h) { over(p.chip, alpha(p.hover, h)) }, p.red)
+      Ghost => (fn(h) { alpha(p.hover, h) }, p.text)
+      GhostDanger => (fn(h) { alpha(p.hover, h) }, p.red)
+      Plain => (fn(h) { over(p.chip, alpha(p.hover, h)) }, p.text)
     }
   }
   let ink = ink_override.unwrap_or(tone_ink)
@@ -155,11 +161,8 @@ fn button_part(
     gap=if t.touch { 8.0 } else { 6.0 },
     align=ACenter,
     justify=JCenter,
-    bg=ground,
+    bg=ground_at(h.target()),
     radius=height / 2.0,
-    border=if line != 0L && line != ground { 1.0 } else { 0.0 },
-    border_color=line,
-    opacity=seen,
     id=if live { id } else { 0 },
     fn() {
       let turn = fn() {
@@ -178,11 +181,11 @@ fn button_part(
           // taking none, so the two ends look alike)
           let drawn = c.box(fn() { draw_icon(c, icon, button_icon, ink, by_ink=true) })
           // (the spinner over it, in its place and its size: the icon's room kept, nothing beside it moved)
-          if turning > 0.0 {
-            c.look(drawn, @ui.look(alpha=1.0 - turning))
+          if spun {
+            c.look_by(drawn, fn() { @ui.look(alpha=1.0 - turning.get(c)) })
             c.layer(fn() {
               let s = c.box(style=button_turning, turn)
-              c.look(s, @ui.look(alpha=turning))
+              c.look_by(s, fn() { @ui.look(alpha=turning.get(c)) })
             })
             |> ignore
           }
@@ -215,7 +218,9 @@ fn button_part(
           if busy || over > 0.0 {
             c.box(style=@ui.style(row=true, w=Fixed(room * over), h=Fixed(button_icon)), fn() {
               let s = c.box(style=button_spin, fn() { turn() })
-              c.look(s, @ui.look(alpha=turning, scale=over, ox=0.0))
+              c.look(s, @ui.look(scale=over, ox=0.0))
+              let grown = seen_at(over)
+              c.look_by(s, fn() { @ui.look(alpha=turning.get(c) * grown) })
             })
             |> ignore
           }
@@ -230,9 +235,11 @@ fn button_part(
       }
     },
   )
+  c.bg_by(b, fn() { ground_at(h.get(c)) })
+  c.look_by(b, fn() { @ui.look(alpha=seen.get(c)) })
   // its words changed (复制图片 to 已复制): its ground goes from the width it had to the new one, its words with it, on
   // the curve a thing reshaped is moved by, not at once (the user, 2026-10-30: 按钮的变长应该也有过渡; their cause,
-  // its words: docs/motion.md 3)
+  // its words: sf/motion.mbt 3)
   if key != "" {
     @motion.reshape(c, b, "sf-btn/shape/" + key, by=label, spec=button_reshape)
     @motion.layout(c, words_at, "sf-btn/words/" + key, by=label, spec=button_reshape)
@@ -247,7 +254,7 @@ fn button_part(
   if live {
     tip(c, "sf-btn/" + key + label + "/tip", id, hint)
   }
-  (live && c.clicked(id), b)
+  b
 }
 
 ///|
@@ -287,13 +294,14 @@ let button_spin : @ui.Style = @ui.style(w=Fixed(button_icon), h=Fixed(button_ico
 let foot_fills : Ref[Bool] = { val: false }
 
 ///|
-/// Whether a button is drawn on the night whatever the theme (a stage's foot: presenters' stage_centred), in its
+/// Whether a button is drawn on the night whatever the theme (a stage's foot: stage_node), in its
 /// colours.
 // kept across runs: set only while a stage's foot is built, and put back
 let on_night : Ref[Bool] = { val: false }
 
 ///|
-/// A button's height: 34 on every screen with either native input, as keyboard and mouse's rows are (the user,
+/// A button's height: what can be pressed is one height (menu_row_min; the user, 2026-10-30: 「搞这么多标准干啥」), on every
+/// screen with either native input (the user,
 /// 2026-10-31: a finger's 44 「太大了」「我们现在发送按钮也没那么大」「按钮既然缩，那就跟大屏一致呗」「我们本就大屏小屏都支持
 /// 触控」: drawn 44, one in a card's foot corners stood 4 from its edges); its press reaching the 44 every press has.
 pub fn button_height() -> Double {
@@ -328,19 +336,23 @@ pub fn icon_button(
   disabled? : Bool = false,
   label? : String = "",
   shortcut? : String = "",
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = theme()
   // (drawn its own size with a finger too: a finger reaches it from round it, mbui's press_reach)
   let ink = ink.unwrap_or(t.p.text)
   let quiet = quiet.unwrap_or(t.p.muted)
   let id = c.id(if key == "" { "sf-ib/" + icon } else { key })
-  let h = ease_to(c, "sf-ib-h/\{id}", !disabled && (lit || c.lit(id) || c.pressed(id)))
-  let ground = if on {
-    alpha(ink, 0.08)
-  } else {
-    // the page's hover, as a tint of the ink it sits with
-    alpha(ink, 0.065 * h)
-  }
+  press_does(c, id, !disabled, on_press)
+  // (its ground and its icon's ink eased as they are painted: told as it is built, read where it is drawn)
+  let h = @motion.told(
+    c,
+    "sf-ib-h/\{id}",
+    if !disabled && (lit || c.lit(id) || c.pressed(id)) { 1.0 } else { 0.0 },
+    spec=@motion.tween(dur_ms, ease=Out),
+  )
+  // the page's hover, as a tint of the ink it sits with
+  let ground_at = fn(h : Double) { if on { alpha(ink, 0.08) } else { alpha(ink, 0.065 * h) } }
   let corner : @ui.Radius = match linked {
     Some(link) => Linked(link)
     None => rounded(if round { size / 2.0 } else { corner })
@@ -351,23 +363,28 @@ pub fn icon_button(
     h=Px(size),
     align=ACenter,
     justify=JCenter,
-    bg=ground,
+    bg=ground_at(h.target()),
     opacity=if disabled { 0.35 } else { 1.0 },
     id=if disabled { 0 } else { id },
     fn() {
-      draw_icon(c, icon, icon_size, if on || h > 0.5 { ink } else { quiet })
+      draw_icon(c, icon, icon_size, if on || h.target() > 0.5 { ink } else { quiet })
     },
   )
+  c.bg_by(b, fn() { ground_at(h.get(c)) })
+  // (its icon quiet, in the ink once its ground is half way to the hover's, as it is painted; a runtime's mark in its
+  // maker's own colours)
+  if !on && !icon.has_prefix("runtime:") {
+    c.ink_by(b, fn() { if h.get(c) > 0.5 { ink } else { quiet } })
+  }
   // named (IconButton's label): what a screen reader calls it, and its tip
   if label != "" {
     c.semantics(b, Button, id~, label~, disabled~)
     tip(c, "ib/" + key + icon, id, label, shortcut~)
   }
-  !disabled && c.clicked(id)
 }
 
 ///|
-/// A chip (the reader's bars, Reader.css.ts chip): 30 high, its corner 10 (`inner`: in a rounded surface's corner,
+/// A chip (the reader's bars): 30 high, its corner 10 (`inner`: in a rounded surface's corner,
 /// concentric with it), on a 7% tint of the ink, 12% under the pointer; its words small. One with an icon alone named
 /// `said` (its aria-label), and in its tip.
 pub fn chip(
@@ -379,11 +396,14 @@ pub fn chip(
   disabled? : Bool = false,
   inner? : Bool = false,
   said? : String = "",
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = theme()
   let ink = ink.unwrap_or(t.p.text)
   let id = c.id(if key == "" { "sf-chip/" + label + icon } else { key })
-  let h = ease_to(c, "sf-chip-h/\{id}", !disabled && c.lit(id))
+  press_does(c, id, !disabled, on_press)
+  // (its ground eased as it is painted)
+  let h = @motion.told(c, "sf-chip-h/\{id}", if !disabled && c.lit(id) { 1.0 } else { 0.0 }, spec=@motion.tween(dur_ms, ease=Out))
   let b = c.box(
     dir=Row,
     h=Px(30.0),
@@ -392,7 +412,7 @@ pub fn chip(
     gap=2.0,
     align=ACenter,
     justify=JCenter,
-    bg=alpha(ink, 0.07 + 0.05 * h),
+    bg=alpha(ink, 0.07 + 0.05 * h.target()),
     style=if inner { chip_inner } else { @ui.style() },
     radius?=if inner { None } else { Some(10.0) },
     opacity=if disabled { 0.35 } else { 1.0 },
@@ -406,6 +426,7 @@ pub fn chip(
       }
     },
   )
+  c.bg_by(b, fn() { alpha(ink, 0.07 + 0.05 * h.get(c)) })
   c.bone_whole(b)
   if said != "" {
     c.semantics(b, Button, id=if disabled { 0 } else { id }, label=said, disabled~)
@@ -413,7 +434,6 @@ pub fn chip(
       tip(c, "sf-chip/" + key + "/tip", id, said)
     }
   }
-  !disabled && c.clicked(id)
 }
 
 ///|
@@ -459,8 +479,9 @@ let segmented_strip : @ui.Style = @ui.css("row gap=S0_5")
 /// label its tip and what a screen reader says), as wide as a press's room. `bar`: among a bar's buttons, as high as
 /// they are and round as they are, on every page. `said`: what a screen reader calls it. `tips`: what each option says
 /// on hover besides its words ("" nothing; a model's speed what Fast costs). `fill`: as a narrow page's is, as wide as
-/// where it is, each option an equal share (choices one under another, their tracks' ends lined up). Returns the
-/// chosen index.
+/// where it is, each option an equal share (choices one under another, their tracks' ends lined up). `on_pick`: what
+/// choosing another option does, given its index, as it is chosen (a press let go on it, a pick from its menu), outside
+/// any build. Returns the chosen index.
 pub fn segmented(
   c : @ui.Ctx,
   key : String,
@@ -474,6 +495,7 @@ pub fn segmented(
   said? : String = "",
   tips? : Array[String] = [],
   fill? : Bool = false,
+  on_pick? : (Int) -> Unit,
 ) -> Int {
   // (a narrow page's: as wide as where it is, each option an equal share, Seg's look (seg.mbt), but at a head's end
   // (head_end), as wide as its options beside the title; a wide page's: the web's Segmented, as wide as its options,
@@ -485,12 +507,12 @@ pub fn segmented(
       let (whole, least) = seg_room(c, labels)
       let mut now = chosen
       c.box(style=@ui.style(w=Fixed(whole), min_w=Fixed(least)), fn() {
-        now = seg(c, key, labels, chosen, fill=true, height=segmented_narrow_h)
+        now = seg(c, key, labels, chosen, fill=true, height=segmented_narrow_h, on_pick?)
       })
       |> ignore
       return now
     }
-    let now = seg(c, key, labels, chosen, fill=true, height=segmented_narrow_h)
+    let now = seg(c, key, labels, chosen, fill=true, height=segmented_narrow_h, on_pick?)
     segmented_tips(c, key, tips)
     return now
   }
@@ -572,7 +594,7 @@ pub fn segmented(
   // (not side by side: the chosen one in its track, as wide as where it is, a chevron at its end; all of them in a
   // pick)
   if fit is Some({ fit: Menu, .. }) {
-    return choice_pick(c, key, track, labels, chosen, fn(_, _, words) {
+    return choice_pick(c, key, track, labels, chosen, on_pick?, fn(_, _, words) {
       track_box(true, fn() {
         c.box(style=segmented_menu, fn() {
           option(words, true, false)
@@ -617,6 +639,7 @@ pub fn segmented(
         |> ignore
       },
       ground=fn(c, _, items) { track_box(false, fn() { c.box(style=segmented_strip, items) |> ignore }) |> ignore },
+      on_change?=on_pick.map(fn(f) { fn(now : Array[String]) { picked_of(now, labels, chosen, f) } }),
     ).value
   })
   // (icons: each one's words its tip; else what `tips` gives one)
@@ -707,7 +730,7 @@ pub fn field_look(c : @ui.Ctx, s : @kit.FieldState, editor : () -> Unit) -> Unit
 }
 
 // ---------------------------------------------------------------------------
-// Small panels (docs/ui-panels.md)
+// Small panels
 
 ///|
 /// A small panel's ground (controls.css.ts popover): the canvas (the raised
@@ -723,7 +746,7 @@ pub fn small_panel(
   body : () -> Unit,
 ) -> Int {
   let t = theme()
-  c.box(
+  let panel = c.box(
     w~,
     h~,
     min_w?,
@@ -739,6 +762,9 @@ pub fn small_panel(
     clip=true,
     body,
   )
+  // (the panel: the surface of the look it comes in by, coming first, all on it after: Ctx::surface)
+  c.surface(panel)
+  panel
 }
 
 ///|
@@ -787,26 +813,41 @@ pub fn menu_item(
   end? : String = "",
   at_top? : Bool = false,
   at_foot? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = theme()
   let id = c.id(if key == "" { "sf-mi/" + label } else { key })
+  press_does(c, id, true, on_press)
   let ink = if danger { t.p.red } else if on { t.p.accent_text } else { t.p.text }
   // (a capsule in the panel's corners: past its padding to where it is concentric with them, at its sides, and at its
   // top or foot where it is the first (`at_top`) or the last (`at_foot`) in it: menu_row_reach)
   let reach = menu_row_reach(t.rows.pick)
   let (over, under_by) = ends_reach(reach, at_top, at_foot)
+  // (in a large panel's column (a sheet's, a dialog's) as its rows are: its ground out across the room the panel
+  // leaves (rows_out, `panel_card_in` from its sides), its words on the panel's line, a card's corner there; a menu's
+  // row in a small panel, as above)
+  // (at a dialog's foot (dialog_foot_rows) as its rows there: a capsule out to where it is concentric with its foot
+  // corners, its words on the dialog's line: row_line)
+  let (out, words_at, corner) = if foot_rows_now.val {
+    (foot_rows_out(), foot_rows_out(), None)
+  } else if !in_small_panel() && rows_out.val > 0.0 {
+    (rows_out.val, rows_out.val, Some(card_corner))
+  } else {
+    (reach, text_in + reach, Some(small_panel_inner(r_menu)))
+  }
   c.box(
     dir=Row,
     min_h=t.rows.pick,
-    mx=-reach,
+    mx=-out,
     mt=over,
     mb=under_by,
-    padx=text_in + reach,
+    padx=words_at,
     pady=menu_row_over,
     gap=if panel { panel_row_gap } else { menu_row_gap },
     align=ACenter,
     bg=if c.lit(id) { t.p.hover } else { 0L },
-    radius=small_panel_inner(r_menu),
+    style?=if corner is None { Some(menu_row_capsule) } else { None },
+    radius?=corner,
     id~,
     fn() {
       let paneled = panel && (icon != "" || mark is Some(_))
@@ -854,7 +895,6 @@ pub fn menu_item(
     },
   )
   |> ignore
-  c.clicked(id)
 }
 
 ///|
@@ -942,23 +982,10 @@ pub fn card(c : @ui.Ctx, gap? : Double = 14.0, fill? : Bool = false, ground? : I
 }
 
 ///|
-/// The words of a card: a title, what it says.
-pub fn card_text(c : @ui.Ctx, title : String, line? : String = "") -> Unit {
-  let t = theme()
-  c.box(gap=4.0, fn() {
-    c.text(title, size=t.t.title, weight=600, color=t.p.text, line=t.t.title_line)
-    |> ignore
-    if line != "" {
-      c.text(line, size=t.t.ui, color=t.p.muted, line=t.t.ui_line) |> ignore
-    }
-  })
-  |> ignore
-}
-
-///|
-/// A setting along a hairline with a knob (Reader.css.ts slider): mbui's slider (@kit.slider) in still.fail's look, the
+/// A setting along a hairline with a knob: mbui's slider (@kit.slider) in still.fail's look, the
 /// line 2 high on 16% of the ink, the part up to the knob in the accent, the knob 22 with a ring of the ground round
-/// it; dragged or tapped along, and with the keyboard. Returns the value, snapped to `step` (0: none).
+/// it; dragged or tapped along, and with the keyboard. `on_change`, `on_let_go`: what moving it does and what letting it
+/// go there does, as they come (@kit.slider's). Returns the value, snapped to `step` (0: none).
 pub fn slider(
   c : @ui.Ctx,
   key : String,
@@ -969,6 +996,8 @@ pub fn slider(
   ink? : Int64,
   accent? : Int64,
   ground? : Int64,
+  on_change? : (Double) -> Unit,
+  on_let_go? : (Double) -> Unit,
 ) -> Double {
   let t = theme()
   @kit.slider(
@@ -978,6 +1007,8 @@ pub fn slider(
     min~,
     max~,
     step~,
+    on_change?,
+    on_let_go?,
     w=Fill(1.0),
     look=@kit.slider_look_of(
       ink=ink.unwrap_or(t.p.text),
@@ -998,14 +1029,12 @@ let sheet_grab_outer : @ui.Style = @ui.css("w=Full pt=S2 pb=S1")
 let sheet_grab_inner : @ui.Style = @ui.css("w=Full py=S1 align=ACenter")
 
 ///|
-/// What a sheet holds (`body`), laid out as a sheet is on any screen: narrow, as the presenters lay theirs out (its
-/// parts read it: look).
-pub fn sheet_laid(body : () -> Unit) -> Unit {
-  with_look(Narrow, body)
-}
+/// How tall a sheet's grabber stands at its top, all round it (sheet_grab: 8 and 4 over its 5, 4 and 4 under): where
+/// what the sheet holds begins.
+pub let sheet_grab_h : Double = 8.0 + 4.0 + 5.0 + 4.0 + 4.0
 
 ///|
-/// The grabber at a sheet's top (Sheet.kt SheetGrab): 38 × 5 in the line's colour, 12 above it and 8 under.
+/// The grabber at a sheet's top: 38 × 5 in the line's colour, 12 above it and 8 under.
 pub fn sheet_grab(c : @ui.Ctx) -> Unit {
   let grabber = sheet_grabber.then(@ui.style(bg=Data(theme().p.line)))
   c.box(style=sheet_grab_outer, fn() {
@@ -1049,7 +1078,8 @@ pub fn tip(
 /// A tip as the web draws it (parts.css.ts tooltip): small words on the primary ink, 5 by 10 in, 8 round, a soft
 /// shadow; the keys 8 after the words at 60% (tipKeys).
 pub fn tip_look(c : @ui.Ctx, words : String, keys : String) -> Unit {
-  c.box(style=tip_box, fn() {
+  // (the tip: the surface of the look it comes in by: Ctx::surface)
+  let tip = c.box(style=tip_box, fn() {
     c.box(style=tip_line, fn() {
       c.text(words, style=tip_words) |> ignore
       if keys != "" {
@@ -1058,7 +1088,7 @@ pub fn tip_look(c : @ui.Ctx, words : String, keys : String) -> Unit {
     })
     |> ignore
   })
-  |> ignore
+  c.surface(tip)
 }
 
 ///|
@@ -1276,7 +1306,8 @@ let menu_heading_words : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, 
 /// its longest and `w` at least (controls.css.ts menuList 180; a menu of choices chooserMenu, 220), `offset` on `side`
 /// of `trigger` (under it) lined up `along` it, or at `at`; what was chosen. The arrows, letters, Enter and Escape as a
 /// menu's; a press outside closes it. `check_end`: its choices' checks are drawn at their rows' ends (`row_end`:
-/// parts.tsx ChooserItem checkEnd), no column of them before their words.
+/// parts.tsx ChooserItem checkEnd), no column of them before their words. `on_pick`: what choosing an entry does, given
+/// its value, as it is chosen (@kit.dropdown_menu's).
 pub fn dropdown(
   c : @ui.Ctx,
   key : String,
@@ -1295,6 +1326,7 @@ pub fn dropdown(
   marks? : Map[String, (@ui.Ctx, Double) -> Unit] = {},
   notes? : Map[String, String] = {},
   check_end? : Bool = false,
+  on_pick? : (String) -> Unit,
 ) -> @kit.Menu {
   // (a column before every item's words where one has an icon or is one of a choice, its check there, so all their
   // words are on one line; a menu of choices alone, each chosen or not, its check 6 from its words)
@@ -1308,6 +1340,7 @@ pub fn dropdown(
     open,
     trigger,
     entries,
+    on_pick?,
     submenu~,
     side~,
     along~,
@@ -1344,6 +1377,8 @@ pub fn dropdown(
 /// A line between parts of a small panel (controls.css.ts menuSep): the words' ink faintly (in dark the panel is
 /// lighter than the page: its line a groove), 1 high, 6 over and under it, as wide as its rows' grounds (at the
 /// panel's padding), so a row pointed at beside it ends where it does.
+/// Rules are for menus alone; elsewhere room, a heading or a ground groups things (the user, 2026-10-25: 「除了菜单感
+/// 觉都应该去掉」).
 pub fn menu_rule(c : @ui.Ctx) -> Unit {
   c.box(style=menu_rule_at, fn() { c.box(style=rule_line.then(@ui.style(bg=Data(rule_ink(c)))), fn() {  }) |> ignore })
   |> ignore
@@ -1381,53 +1416,62 @@ pub fn menu_item_of(
 }
 
 ///|
-/// The menu open now (one at a time, as Radix's are), by its key, and where a right click opened it.
-let menu_open : Ref[String] = Ref("")
+/// The menu open now (one at a time, as Radix's are), by its key ("" none), and where a right click opened it: what
+/// reads the key whole (menu_open_key) told as it changes.
+// kept across runs: put back by parts_reset
+let menu_open : @signals.Signal[String] = @signals.signal("", same=fn(a, b) { a == b })
+
+///|
+/// The menu open now, by member: what asks whether its own menu is open (menu_is) told as that one opens or closes, not
+/// as another does.
+// kept across runs: put back by parts_reset
+let menu_open_by : @signals.Keyed[String] = @signals.keyed()
 
 ///|
 let menu_open_at : Ref[(Double, Double)] = Ref((0.0, 0.0))
 
 ///|
-/// The menus closed and still going out (their exit playing), by their keys: what opened one keeps it built till gone.
-let menu_going : Set[String] = Set::new()
-
-///|
-/// Told as the menu open or those going out change: what reads them through menu_shown, menu_is_open, menu_open_key
-/// or a ⋯'s own look (a part built apart: a kept row, an island) built again as they do, not left as it was.
-// kept across runs: a count told, nothing reads what it is (only that it changed)
-let menu_told : @signals.Signal[Int] = @signals.signal(0)
-
-///|
-fn menu_changed() -> Unit {
-  menu_told.set(@signals.untracked(fn() { menu_told.get() }) + 1)
-}
+/// The menus closed and still going out (their exit playing), by their keys, by member: what opened one keeps it built
+/// till gone (menu_shown), told as its own comes or goes.
+// kept across runs: put back by parts_reset
+let menu_going : @signals.Keyed[String] = @signals.keyed()
 
 ///|
 /// The menu open now ("" none), read so its change is told to what read it.
 fn menu_now() -> String {
-  menu_told.get() |> ignore
-  menu_open.val
+  menu_open.get()
+}
+
+///|
+/// Whether the menu `key` is the one open now, read so only its own opening or closing is told to what read it.
+fn menu_is(key : String) -> Bool {
+  menu_open_by.has(key)
+}
+
+///|
+/// The menu open now ("" none), as it is, read by nothing.
+fn menu_open_peek() -> String {
+  menu_open.untracked()
 }
 
 ///|
 /// The menu open now: `key` ("" none).
 fn menu_set(key : String) -> Unit {
-  if menu_open.val != key {
-    menu_open.val = key
-    menu_changed()
+  if menu_open_peek() != key {
+    @signals.start_batch()
+    menu_open.set(key)
+    menu_open_by.set(if key == "" { [] } else { [key] })
+    @signals.end_batch()
   }
 }
 
 ///|
 /// The menu `key` going out (its exit playing), or not.
 fn menu_going_set(key : String, going : Bool) -> Unit {
-  if menu_going.contains(key) != going {
-    if going {
-      menu_going.add(key)
-    } else {
-      menu_going.remove(key)
-    }
-    menu_changed()
+  if going {
+    menu_going.add(key)
+  } else {
+    menu_going.remove(key)
   }
 }
 
@@ -1437,11 +1481,10 @@ pub fn parts_reset() -> Unit {
   submenu_hover.val = ""
   held_felt.clear()
   presenters_reset()
-  menu_open.val = ""
+  menu_set("")
   about_open.val = ""
   menu_open_at.val = (0.0, 0.0)
-  menu_going.clear()
-  menu_changed()
+  menu_going.set([])
 }
 
 ///|
@@ -1449,7 +1492,7 @@ pub fn parts_reset() -> Unit {
 /// the one open (unless another is by then), and going out from now, so what shows its button only under the pointer
 /// still builds it as its exit plays.
 fn menu_close(key : String) -> Unit {
-  if menu_open.val == key {
+  if menu_open_peek() == key {
     menu_set("")
   }
   menu_going_set(key, true)
@@ -1458,7 +1501,7 @@ fn menu_close(key : String) -> Unit {
 ///|
 /// The menu `key` opened, or closed where it is the one open: its button pressed.
 fn menu_flip(key : String) -> Unit {
-  if menu_open.val == key {
+  if menu_open_peek() == key {
     menu_close(key)
   } else {
     menu_set(key)
@@ -1479,7 +1522,7 @@ fn menu_items(
   offset? : Double = 6.0,
   at? : (Double, Double, Double, Double),
 ) -> Bool {
-  let open = menu_now() == key
+  let open = menu_is(key)
   let entries : Array[@kit.Entry] = []
   let icons : Map[String, String] = {}
   let danger : Array[String] = []
@@ -1505,34 +1548,37 @@ fn menu_items(
   }
   // (dismissed, closed at the moment of what dismissed it: Escape, a press beside it)
   let menu : Ref[@kit.Menu?] = Ref(None)
+  // (an item chosen: the menu closed and what it does done, as it is chosen)
+  let picked = fn(v : String) {
+    menu_set("")
+    match items.get(entry_index(v)) {
+      Some(Some(item)) => (item.select)()
+      _ => ()
+    }
+  }
   c.with_dismissed(fn(_) { menu_close(key) }, fn() {
-    menu.val = Some(dropdown(c, key, open, trigger, entries, icons, menu_w, submenu~, side~, along~, offset~, at?, danger~))
+    menu.val = Some(dropdown(c, key, open, trigger, entries, icons, menu_w, submenu~, side~, along~, offset~, at?, danger~, on_pick=picked))
   })
   let m = menu.val.unwrap()
   // (a submenu's Left, its own back, is a key taken as it is built)
-  if submenu && open && !m.open && menu_open.val == key {
+  if submenu && open && !m.open && menu_open_peek() == key {
     menu_set("")
   }
   menu_going_set(key, m.shown && !m.open)
-  match m.chosen {
-    Some(v) => {
-      menu_set("")
-      let i = v.iter().fold(init=0, fn(n, ch) { n * 10 + (ch.to_int() - 48) })
-      match items.get(i) {
-        Some(Some(item)) => c.tell(key + "/chosen", item.select)
-        _ => ()
-      }
-    }
-    None => ()
-  }
   m.open
+}
+
+///|
+/// The index an entry's value says (menu_items, the presenters' menus: an item's place among the items, in digits).
+fn entry_index(v : String) -> Int {
+  v.iter().fold(init=0, fn(n, ch) { n * 10 + (ch.to_int() - 48) })
 }
 
 ///|
 /// A menu behind ⋯ (parts.tsx Menu): an icon button (`label`, the app's word for 更多; shaped as a bar's tools are:
 /// tool_button) that opens `items` under it, along its end, 4 below. Whether it is open.
 pub fn menu_of(c : @ui.Ctx, key : String, items : Array[MenuItem?], label~ : String, size? : Double = 32.0) -> Bool {
-  let open = menu_now() == key
+  let open = menu_is(key)
   let id = c.id(key + "/more")
   icon_button(c, "more", key=key + "/more", size~, on=open, round=true, linked?=bar_keys_link(), label~) |> ignore
   // (pressed as it is let go: open or not as it is then)
@@ -1576,9 +1622,9 @@ pub fn tool_button(
     key,
     drop,
     draw: fn() {
-      if icon_button(c, icon, key~, ink?=lit, quiet?=lit, round=true, linked?=bar_keys_link(), disabled~, label~, shortcut~) {
+      icon_button(c, icon, key~, ink?=lit, quiet?=lit, round=true, linked?=bar_keys_link(), disabled~, label~, shortcut~, on_press=fn() {
         on_press()
-      }
+      }) |> ignore
     },
     instead: [menu_item_of(label, on_press, icon~, disabled~)],
   }
@@ -1634,33 +1680,9 @@ pub fn tools_line() -> @ui.Style {
 let tools_line_look : @ui.Style = @ui.css("row align=ACenter")
 
 ///|
-/// A right click's menu (Radix's ContextMenu, Drive.tsx MenuContent): opened at the pointer by `menu_open_here`, then
-/// drawn there while it is open. Whether it is open.
-pub fn context_items(c : @ui.Ctx, key : String, items : Array[MenuItem?]) -> Bool {
-  if menu_now() != key {
-    return false
-  }
-  let (x, y) = menu_open_at.val
-  menu_items(c, key, 0, items, offset=0.0, at=(x, y, 0.0, 0.0))
-}
-
-///|
-/// The menu `key` opened at (`x`, `y`): a right click there.
-pub fn menu_open_here(key : String, x : Double, y : Double) -> Unit {
-  menu_set(key)
-  menu_open_at.val = (x, y)
-}
-
-///|
 /// The key of the menu open now ("" none).
 pub fn menu_open_key() -> String {
   menu_now()
-}
-
-///|
-/// Whether the menu `key` is open now.
-pub fn menu_is_open(key : String) -> Bool {
-  menu_now() == key
 }
 
 ///|
@@ -1668,7 +1690,7 @@ pub fn menu_is_open(key : String) -> Bool {
 /// keeps it while this holds, so the menu goes out where it hung (not cut off, nor from the window's corner where
 /// the ⋯ is not drawn the frame it plays in).
 pub fn menu_shown(key : String) -> Bool {
-  menu_now() == key || menu_going.contains(key)
+  menu_is(key) || menu_going.has(key)
 }
 
 ///|
@@ -1687,9 +1709,11 @@ pub fn about(c : @ui.Ctx, key : String, words : String, label~ : String, side? :
   let t = theme()
   let id = c.id(key)
   let finger = @ui.pointing() is Finger
-  if finger && c.clicked(id) {
-    about_open.val = if about_open.val == key { "" } else { key }
-  } else if about_open.val == key && c.tapped_anywhere() is Some(_) {
+  if finger {
+    c.on_press(id, fn() { about_open.val = if about_open.val == key { "" } else { key } })
+  }
+  // (a tap elsewhere lets it go: its own is its press's, as its tip sees it, Ctx::watch_press)
+  if about_open.val == key && c.tapped_anywhere() is Some(_) && !c.watch_press(id) {
     about_open.val = ""
   }
   let b = c.box(style=about_box, id~, fn() {
@@ -1756,6 +1780,7 @@ pub fn switch(
   disabled? : Bool = false,
   small? : Bool = false,
   busy? : Bool = false,
+  on_change? : (Bool) -> Unit,
 ) -> Bool {
   if busy {
     spinner(c, size=if small { spinner_inline } else { spinner_size }) |> ignore
@@ -1768,7 +1793,7 @@ pub fn switch(
     let reach = fn(c : @ui.Ctx, st : @kit.SwitchState) {
       c.box(style=switch_reach.then(@ui.style(min_h=Fixed(theme().items.least))), fn() { look(c, st) }) |> ignore
     }
-    now = @kit.switch(c, key, on, label~, disabled=disabled || busy, look=reach).value
+    now = @kit.switch(c, key, on, label~, disabled=disabled || busy, look=reach, on_change?).value
   })
   // (in a page's bones, one piece: on or off is not known yet)
   c.bone_whole(b)
@@ -1814,11 +1839,12 @@ fn wide_switch_row(
   title_style? : @ui.TextStyle = theme().rows.title,
   note_style? : @ui.TextStyle = theme().rows.note,
   lead? : (@ui.Ctx) -> Unit,
+  on_change? : (Bool) -> Unit,
 ) -> Bool {
   let id = c.id(key + "/words")
   let mut now = on
   // (the switch alone answers, not its words: 2026-10-27 用户「只有开关响应」)
-  control_row(c, title, fn() { now = switch(c, key, on, label=title, disabled~, busy~) }, note~, title_style~, note_style~, lead?)
+  control_row(c, title, fn() { now = switch(c, key, on, label=title, disabled~, busy~, on_change?) }, note~, title_style~, note_style~, lead?)
   now
 }
 
@@ -1868,7 +1894,7 @@ fn control_row(
 }
 
 ///|
-/// One of several to tick (a list a choice of some of: ChatPage.tsx ShareDialog's rows, the phone's PickRow): its box,
+/// One of several to tick (the phone's PickRow): its box,
 /// then what it is (`note` quieter under it), the whole row pressed to tick it or not, its ground lit under the hand. Its
 /// room, its words and its box the theme's rows' (Rows: a finger's with touch, a list row's with keyboard and mouse). What
 /// it is now. `lead`: what goes before its words, after its box (a workspace's mark: workspace_badge).
@@ -1880,18 +1906,14 @@ pub fn check_row(
   note? : String = "",
   disabled? : Bool = false,
   lead? : (@ui.Ctx) -> Unit,
-) -> Bool {
+  on_change~ : (Bool) -> Unit,
+) -> Unit {
   let id = c.id(key + "/row")
-  let mut now = on
-  let mut ticked = false
   let r = theme().rows
   c.box(style=check_row_box.then(@ui.style(min_h=Fixed(theme().items.least))), id=if disabled { 0 } else { id }, fn() {
     let look = @kit.checkbox_look_of(size=r.check, radius=r.check_corner)
-    let v = @kit.checkbox(c, key, if on { On } else { Off }, label~, disabled~, look~).value
-    if (v == On) != on {
-      ticked = true
-      now = v == On
-    }
+    @kit.checkbox(c, key, if on { On } else { Off }, label~, disabled~, look~, on_change=fn(v) { on_change(v == On) })
+    |> ignore
     match lead {
       Some(draw) => draw(c)
       None => ()
@@ -1906,10 +1928,9 @@ pub fn check_row(
     |> ignore
   })
   |> ignore
-  if !ticked && !disabled && c.clicked(id) {
-    !on
-  } else {
-    now
+  // (the row pressed, past its box: ticked or not as its box would be)
+  if !disabled {
+    c.on_press(id, fn() { on_change(!on) })
   }
 }
 
@@ -1924,7 +1945,6 @@ let check_row_box : @ui.Style = @ui.css("row w=Full px=S3 py=S2_5 gap=S3 align=A
   @ui.style(radius=row_radius, pl=room(row_corner)),
 )
 
-
 ///|
 // kept across runs: a value (no field of it changes)
 let switch_row_box : @ui.Style = @ui.css("row w=Full align=ACenter gap=S4")
@@ -1932,7 +1952,6 @@ let switch_row_box : @ui.Style = @ui.css("row w=Full align=ACenter gap=S4")
 ///|
 // kept across runs: a value (no field of it changes)
 let switch_row_words : @ui.Style = @ui.css("w=Grow(1.0) gap=S0_5")
-
 
 ///|
 /// A titled block of a page (parts.tsx Section, page.css.ts section, parts.css.ts sectionHead): its title (14 on 22,
@@ -1947,7 +1966,7 @@ fn wide_section(
   title_after? : () -> Unit,
 ) -> Unit {
   c.box(style=section_box, fn() {
-    c.box(style=section_head, fn() {
+    c.box(style=section_head.then(section_head_in_pane()), fn() {
       c.box(style=section_words, fn() {
         // what the title holds after its words (its title a node: a count, a mark), 8 after them in a line
         match title_after {
@@ -2004,6 +2023,25 @@ let section_box : @ui.Style = @ui.css("w=Full mb=S7")
 let section_head : @ui.Style = @ui.css("row w=Full justify=JBetween align=ACenter gap=S3").then(
   @ui.style(mb=room(title_card_wide)),
 )
+
+///|
+/// A section's head in a panel of its own (the tape's): its words on the panel's words' line, its cards' 16 and the
+/// rest in (the user, 2026-11-03: 面板自己的字在 24); none elsewhere.
+fn section_head_in_pane() -> @ui.Style {
+  if in_pane() {
+    section_head_pane
+  } else {
+    no_section_head
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let section_head_pane : @ui.Style = @ui.style(px=room(panel_words - panel_card_in))
+
+///|
+// kept across runs: a value (no field of it changes)
+let no_section_head : @ui.Style = @ui.css("")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2067,6 +2105,10 @@ pub fn pill(c : @ui.Ctx, words : String, tone? : PillTone = Neutral, icon? : Str
 
 ///|
 let pill_icon : Double = 14.0
+
+///|
+/// What is between a pill's icon and its words (pill_box's gap=S1).
+let pill_icon_gap : Double = 4.0
 
 ///|
 /// Steps to take in order (controls.css.ts steps: an ordered list, its numbers in the muted ink in 20 at its start,
@@ -2169,6 +2211,18 @@ pub fn empty(c : @ui.Ctx, body : () -> Unit) -> Unit {
 }
 
 ///|
+/// What a list with nothing in it shows (empty's, as a node) in `parent`: what `body` makes, in the middle of the room
+/// left, 40 in.
+#callsite(autofill(loc))
+pub fn empty_node(parent : @view.View, body : (@view.View) -> Unit, loc~ : SourceLoc) -> Unit {
+  parent.box(made_for=loc, fn(b) {
+    style_node(b, fn() { empty_box })
+    body(b)
+  })
+  |> ignore
+}
+
+///|
 // kept across runs: a value (no field of it changes)
 let empty_box : @ui.Style = @ui.css("w=Full h=Grow(1.0) p=S10 gap=S1_5 align=ACenter justify=JCenter")
 
@@ -2260,8 +2314,13 @@ pub fn dialog_body_most(c : @ui.Ctx, key : String, inner : Int) -> Double? {
 /// its top beside the close button (round, 32: `close_label`, none when ""), `description` 6 under it (13, muted),
 /// what `body` holds 18 under that (its parts 16 apart; none of that room where it holds nothing), and `footer`'s
 /// buttons at its end 24 under it, 8 apart; what it holds `column_in` in from its padding (a panel's dialog's: on its
-/// words' line, panel_centred).
-/// Whether it is open now (closed by its close button too).
+/// words' line, panel_centred). `bare`: what it holds has its head and its buttons of its own (a step of a panel that
+/// goes in steps, each sliding in whole: panel_centred), untitled, none of the room round a body (its close button in
+/// its corner, over it: untitled_clear). An Escape `on_escape` says it took is a step back within it, not closing it.
+/// `scrim`: what the page under it is dimmed with (the theme's where not said; none, 0, where what is under it is
+/// dimmed already: presenters' scrim_owner); `veil`: how far another over it dims it over itself (0 … 1, read as it is
+/// drawn: dialog_veil).
+/// Whether it is open now; `on_close`: what its close button does, as it is pressed (its owner's open let go).
 pub fn dialog(
   c : @ui.Ctx,
   key : String,
@@ -2275,8 +2334,12 @@ pub fn dialog(
   close_label? : String = "",
   step? : String = "",
   column_in? : Double = 0.0,
+  bare? : Bool = false,
+  on_escape? : () -> Bool,
+  scrim? : Int64,
+  veil? : @motion.Anim,
+  on_close? : () -> Unit = fn() {  },
 ) -> Bool {
-  let closed = Ref(false)
   let w = w.unwrap_or(if wide { dialog_wide_w } else { dialog_w })
   let d = @kit.dialog(
     c,
@@ -2286,8 +2349,11 @@ pub fn dialog(
     description~,
     w=dmin(w, c.window_size().0 - dialog_margin),
     close_label="",
+    on_escape?,
+    scrim?,
     look=fn(c, s, inner) {
-      c.box(
+      // (the dialog: the surface of the look it comes in by, coming first, all on it after: Ctx::surface)
+      let panel = c.box(
         style=dialog_box,
         id=c.id(key + "/frame"),
         w=Px(s.w),
@@ -2304,23 +2370,9 @@ pub fn dialog(
         // button in its top right corner, concentric with it, over what it holds (which keeps clear of it:
         // untitled_clear)
         let untitled = s.title == "" && step == ""
-        if untitled && close_label != "" {
-          c.layer(fn() {
-            c.box(style=dialog_close_row, fn() {
-              c.box(style=dialog_close_corner(), fn() {
-                if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label) {
-                  closed.val = true
-                }
-              })
-              |> ignore
-            })
-            |> ignore
-          })
-          |> ignore
-        }
         if !untitled {
         c.box(style=dialog_head.then(words_at), fn() {
-          // a step's count beside the title (Connect.css.ts dialogStep: the ui's 13 in 400 muted, 8 after it)
+          // a step's count beside the title (8 after it)
           if step != "" {
             c.box(style=dialog_title_line, fn() {
               c.text(s.title, style=dialog_title_one) |> ignore
@@ -2332,9 +2384,7 @@ pub fn dialog(
           }
           if close_label != "" {
             c.box(style=dialog_close_at(), fn() {
-              if icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label) {
-                closed.val = true
-              }
+              icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label, on_press=on_close) |> ignore
             })
             |> ignore
           }
@@ -2353,8 +2403,9 @@ pub fn dialog(
           // (what it holds `column_in` in from its padding: a panel's dialog's, on its words' line)
           let column = @ui.style(px=room(column_in))
           // (untitled: from its padding's top, its head its own)
-          let top = if untitled { dialog_untitled_top } else { no_style }
-          c.box(style=(if footer is None { dialog_body_end } else { dialog_body }).then(column).then(top), id=c.id(key + "/held"), gone_empty=true, fn() {
+          let top = if untitled { dialog_untitled_top() } else { no_style }
+          let held = if bare { full_width } else if footer is None { dialog_body_end } else { dialog_body }
+          c.box(style=held.then(column).then(top), id=c.id(key + "/held"), gone_empty=true, fn() {
             // (its rows told they are in a dialog: dialog_rows; untitled, its close button over its corner)
             let (was, clear_was) = (in_dialog.val, untitled_clear_now.val)
             in_dialog.val = true
@@ -2370,14 +2421,51 @@ pub fn dialog(
           Some(f) => c.box(style=dialog_foot.then(dialog_corner_foot(dialog_pad)), f) |> ignore
           None => ()
         }
+        // (laid over what it holds, after it: over a step sliding in or away (a bare one's, its own layers) too)
+        if untitled && close_label != "" {
+          c.layer(fn() {
+            c.box(style=dialog_close_row, fn() {
+              c.box(style=dialog_close_corner(), fn() {
+                icon_button(c, "close", key=key + "/close", size=dialog_close, round=true, label=close_label, on_press=on_close) |> ignore
+              })
+              |> ignore
+            })
+            |> ignore
+          })
+          |> ignore
+        }
+        match veil {
+          Some(v) => dialog_veil(c, v)
+          None => ()
+        }
         },
       )
-      |> ignore
+      c.surface(panel)
     },
     body,
   )
-  d.value && !closed.val
+  d.value
 }
+
+///|
+/// A dialog dimmed over all of itself `f` of the way (0 … 1) as the window under it is (the theme's scrim), another over
+/// it (it takes nothing then): over what it holds, its corners its own; nothing where `f` is not going from 0. Dimmed
+/// as it is drawn (Ctx::bg_by), not built again as it goes; built while it dims or comes back, till its declared end.
+fn dialog_veil(c : @ui.Ctx, f : @motion.Anim) -> Unit {
+  if f.target() <= 0.0 && f.over(c) {
+    return
+  }
+  let scrim = c.theme().scrim
+  c.layer(fn() {
+    let v = c.box(style=dialog_veil_at, fn() {  })
+    c.bg_by(v, fn() { @ui.alpha(scrim, dmax(0.0, f.get(c))) })
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let dialog_veil_at : @ui.Style = @ui.css("w=Full h=Full").then(@ui.style(radius=rounded(dialog_r)))
 
 ///|
 /// What the window keeps round a dialog up and down (parts.css.ts dialog: at most 100dvh - 48 tall).
@@ -2415,7 +2503,7 @@ let dialog_head_end : Double = 2.0
 /// An untitled dialog's close button (dialog): in its top right corner as far in as makes it concentric with it
 /// (capsule_in), from its outer edges (a layer is laid over the whole of the box, its padding too).
 fn dialog_close_corner() -> @ui.Style {
-  let d = capsule_in(dialog_r, dialog_close)
+  let d = @ui.capsule_in(dialog_r, dialog_close)
   @ui.style(mt=room(d), mr=room(d))
 }
 
@@ -2427,7 +2515,7 @@ let dialog_close_row : @ui.Style = @ui.css("row w=Full justify=JEnd")
 ///|
 /// How far from its padding's end the first row of an untitled dialog keeps clear of its close button (and 8 more).
 fn dialog_close_clear() -> Double {
-  capsule_in(dialog_r, dialog_close) - dialog_pad + dialog_close + 8.0
+  @ui.capsule_in(dialog_r, dialog_close) - dialog_pad + dialog_close + 8.0
 }
 
 ///|
@@ -2442,9 +2530,12 @@ pub fn untitled_clear() -> @ui.Style {
 }
 
 ///|
-/// An untitled dialog's body from its padding's top (no title over it to stand 18 under).
-// kept across runs: a value (no field of it changes)
-let dialog_untitled_top : @ui.Style = @ui.css("pt=S0")
+/// An untitled dialog's body from under its close button (no title over it to stand 18 under): what it holds clear of
+/// the button in its corner, pressed where it is drawn (the user, 2026-11-04: 内容让开关闭按钮; the button 26 in to be
+/// concentric with the dialog's 42 stood over what a column 24 in holds).
+fn dialog_untitled_top() -> @ui.Style {
+  @ui.style(pt=room(@ui.capsule_in(dialog_r, dialog_close) + dialog_close - dialog_pad))
+}
 
 ///|
 /// Where its close button stands at its title's row's end: in its top right corner as far in as makes it concentric
@@ -2453,7 +2544,7 @@ let dialog_untitled_top : @ui.Style = @ui.css("pt=S0")
 /// title's; the user, 2026-10-25: 25 in, by the corner and not with it).
 fn dialog_close_at() -> @ui.Style {
   let side = dialog_close
-  let d = capsule_in(dialog_r, side)
+  let d = @ui.capsule_in(dialog_r, side)
   let up = d - (dialog_pad + dialog_head_over)
   @ui.style(mt=room(up), mr=room(d - (dialog_pad + dialog_head_end)), mb=room(dialog_close - side - up))
 }
@@ -2500,7 +2591,7 @@ pub fn dialog_rows(row_h : Double) -> (@ui.Style, @ui.Style) {
     return (no_style, no_style)
   }
   // (from its column: its padding, and the room a panel's dialog stands what it holds in from that, column_in_now)
-  let out = capsule_in(dialog_r, row_h) - dialog_pad
+  let out = @ui.capsule_in(dialog_r, row_h) - dialog_pad
   let side = out - column_in_now.val
   (@ui.style(mx=room(side), mb=room(out)), @ui.style(radius=Full, px=room(-side)))
 }
@@ -2510,7 +2601,8 @@ pub fn dialog_rows(row_h : Double) -> (@ui.Style, @ui.Style) {
 let no_style : @ui.Style = @ui.css("")
 
 ///|
-/// With no buttons, its body down to its foot, 24 under what it holds.
+/// With no buttons, its body down to its foot, 24 under what it holds (a card there comes down to `corner_inset` over
+/// it: panel_card_foot).
 // kept across runs: a value (no field of it changes)
 let dialog_body_end : @ui.Style = dialog_body.then(@ui.css("pb=S6"))
 
@@ -2582,7 +2674,9 @@ let field_hint : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Mut
 /// placeholder subtle): mbui's field (@kit.text_field), its editor `key`'s; `field`: what it holds, the view's own;
 /// `small`: 34 high (a small panel's, as its rows: input_box_small); `solid`: on a card's ground in a chat (field_solid);
 /// `shorter`: other ways to say the placeholder where the field has less room (Ctx::editor's); `leaves`: the keys it
-/// leaves to a menu it offers as it is typed in (text_field's). What is in it now, and whether Enter was pressed in it.
+/// leaves to a menu it offers as it is typed in (text_field's); `on_submit`: what Enter giving its words up does, given
+/// them, as the key is taken (text_field's); `on_change`: what typing in it does, given its words, as they are typed.
+/// What is in it now, and whether Enter was pressed in it.
 pub fn input(
   c : @ui.Ctx,
   key : String,
@@ -2594,10 +2688,12 @@ pub fn input(
   solid? : Bool = false,
   leaves? : Array[Int] = [],
   field? : @ui.Field,
+  on_submit? : (String) -> Unit,
+  on_change? : (String) -> Unit,
 ) -> @kit.Field {
   // (its words the body's, as tall as the theme's controls: the web's with keyboard and mouse, a finger's with touch)
   let t = theme()
-  @kit.text_field(c, key, placeholder~, shorter~, secret~, disabled~, size=t.t.body, line=t.t.body_line, leaves~, field?, look=fn(c, s, editor) {
+  @kit.text_field(c, key, placeholder~, shorter~, secret~, disabled~, size=t.t.body, line=t.t.body_line, leaves~, field?, on_submit?, on_change?, look=fn(c, s, editor) {
     let hot = s.hovered || s.focused
     let look = match (small, hot) {
       (false, false) => input_box.then(control_height()).then(field_corner())
@@ -2645,7 +2741,8 @@ fn field_corner() -> @ui.Style {
 /// on lines 1.6 of them, at least
 /// `rows` lines high and growing to `most`; `field`: what it holds, the view's own; `corner`, the ladder's where it
 /// stands (first in a card, on its words' inset in its corners: the small block's 10); `solid`: on a card's ground in a
-/// chat (field_solid). What is in it now.
+/// chat (field_solid); `on_change`: what typing in it does, given its words, as they are typed (Ctx::editor's). What
+/// is in it now.
 pub fn textarea(
   c : @ui.Ctx,
   key : String,
@@ -2655,6 +2752,7 @@ pub fn textarea(
   field? : @ui.Field,
   corner? : Double,
   solid? : Bool = false,
+  on_change? : (String) -> Unit,
 ) -> String {
   let t = theme()
   let box_id = c.id(key + "/frame")
@@ -2674,6 +2772,7 @@ pub fn textarea(
       field?,
       placeholder~,
       font_size=input_size,
+      min_lines=rows,
       max_lines=most,
       plain=true,
       line=textarea_line,
@@ -2681,6 +2780,7 @@ pub fn textarea(
       placeholder_color=t.p.subtle,
       caret_color=t.p.accent,
       enter_sends=false,
+      on_change?,
     ).text
   })
   |> ignore
@@ -2688,7 +2788,7 @@ pub fn textarea(
 }
 
 ///|
-/// A textarea's lines (AutomaticDecisions.css.ts policyText: 1.6 of the words), and what its frame adds over them (7
+/// A textarea's lines, and what its frame adds over them (7
 /// and 1 above and under).
 let textarea_line : Double = 22.4
 
@@ -2706,15 +2806,6 @@ let textarea_box_hot : @ui.Style = textarea_box.then(@ui.css("border_color=Field
 ///|
 /// What is typed in: as what is read (global.css.ts --text-input), on the line of a list's words.
 let input_size : Double = 14.0
-
-///|
-let input_line : Double = 20.0
-
-///|
-/// A one-line field's height (the theme's controls': Theme::control_h), for what stands it concentric in a corner.
-pub fn input_height() -> Double {
-  theme().control_h
-}
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -2741,7 +2832,7 @@ let field_solid_hot : @ui.Style = @ui.css("bg=Bg")
 
 ///|
 /// `small`: a small panel's (its search), as high as its rows (menu_row_min), so a capsule its padding in from its
-/// corner, concentric with it (capsule_in(r_menu, 34) = panel_pad), as its rows are; its words' line (the body's 22, not
+/// corner, concentric with it (@ui.capsule_in(r_menu, 34) = panel_pad), as its rows are; its words' line (the body's 22, not
 /// a row's 20: menu_row_over would make it 36) in its middle.
 // kept across runs: a value (no field of it changes)
 let input_box_small : @ui.Style = input_box.then(@ui.style(h=Fixed(menu_row_min)))
@@ -2802,14 +2893,16 @@ pub fn select(
     },
   )
   c.semantics(b, Button, id~, label=if label == "" { words } else { label + ": " + words }, disabled~)
-  if !disabled && c.clicked(id) {
-    pick(
-      label,
-      options.map(fn(o) { choice(o.0, o.1, value=hints.get(o.0).unwrap_or(""), icon=icons.get(o.0).unwrap_or("")) }),
-      value,
-      choose,
-      from=Of(id),
-    )
+  if !disabled {
+    c.on_press(id, fn() {
+      pick(
+        label,
+        options.map(fn(o) { choice(o.0, o.1, value=hints.get(o.0).unwrap_or(""), icon=icons.get(o.0).unwrap_or("")) }),
+        value,
+        choose,
+        from=Of(id),
+      )
+    })
   }
 }
 
@@ -2841,15 +2934,6 @@ let select_words : @ui.TextStyle = @ui.text_style(size=Body, leading=L6, wrap=fa
 ///|
 // kept across runs: a value (no field of it changes)
 let select_placeholder : @ui.TextStyle = select_words.then(@ui.text_style(color=Subtle))
-
-///|
-/// An option's row (parts.css.ts selectItem: a menu's item, its check at its end 10 in).
-// kept across runs: a value (no field of it changes)
-let select_item : @ui.Style = @ui.css("row w=Full px=S2_5 gap=S2 align=ACenter")
-
-///|
-// kept across runs: a value (no field of it changes)
-let select_hint : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, wrap=false)
 
 ///|
 /// One of a few (a choice whose options need no sentence each: an account, a role): up to `one_of_listed_most` of
@@ -2934,12 +3018,17 @@ pub fn choices(
       let at = options.search_by(fn(o) { o.1 == s.label })
       let v = at.map(fn(i) { options[i].0 }).unwrap_or("")
       let note = at.map(fn(i) { options[i].2 }).unwrap_or("")
-      c.box(style=if s.on { choice_card_on } else if s.hovered { choice_card_hot } else { choice_card }, disabled=s.disabled, fn() {
+      // (in a panel's body: a card of the panel's, `panel_card_in` from its sides, concentric with it, its words on
+      // the panel's line: the user, 2026-11-03, 面板里可以放卡片)
+      let in_panel = in_panel() && !in_small_panel()
+      let card_look = if s.on { choice_card_on } else if s.hovered { choice_card_hot } else { choice_card }
+      c.box(style=if in_panel { card_look.then(choice_in_panel()) } else { card_look }, disabled=s.disabled, fn() {
           // (its icon by its title's line's middle, not the whole's: lead_by_first_line)
           let by_title = fn(f : () -> Unit) {
             c.box(style=@ui.style(min_h=Fixed(c.sp(choice_title_line(c))), justify=JCenter), f) |> ignore
           }
-          c.box(style=if note == "" && note_of is None { choice_hit } else { choice_hit_top }, fn() {
+          let hit = if note == "" && note_of is None { choice_hit } else { choice_hit_top }
+          c.box(style=if in_panel { hit.then(choice_hit_in_panel) } else { hit }, fn() {
             match icon {
               Some(f) => by_title(fn() { f(v) })
               None => ()
@@ -2956,7 +3045,7 @@ pub fn choices(
               }
             })
             |> ignore
-            // (its mark in its end's middle: concentric with the card's corners, docs/ui-panels.md)
+            // (its mark in its end's middle: concentric with the card's corners, sf/align.mbt)
             c.box(style=choice_mark_at, fn() {
               c.box(style=if s.on { radio_mark_on } else { radio_mark }, fn() {
                 if s.on {
@@ -2969,7 +3058,7 @@ pub fn choices(
           })
           |> ignore
           // (parts.css.ts choiceExtra: 14 in at its sides, 12 over and 14 under what it holds; no line over it: only
-          // a menu's parts are set apart by one, docs/ui-panels.md. Narrow, its rows each a ground pressed whole: those
+          // a menu's parts are set apart by one, sf/align.mbt. Narrow, its rows each a ground pressed whole: those
           // a step of the ladder in from its sides and foot, round as that step, their words their own padding in)
           match extra.bind(fn(f) { f(v) }) {
             Some(f) if s.on =>
@@ -2997,6 +3086,17 @@ pub fn choices(
 let choice_card : @ui.Style = @ui.css("w=Full bg=Surface border=B1 border_color=Border disabled{opacity=O55}").then(
   @ui.style(radius=row_radius),
 )
+
+///|
+/// A choice in a panel's body: out to `panel_card_in` from its sides, a card's corner.
+fn choice_in_panel() -> @ui.Style {
+  panel_card_out().then(@ui.style(radius=rounded(card_corner)))
+}
+
+///|
+/// Its words a card's padding in from its edge, as a card's are (not on the panel's line: 卡片里的字跟面板的字不需要对齐).
+// kept across runs: a value (no field of it changes)
+let choice_hit_in_panel : @ui.Style = @ui.style(px=room(card_pad), py=S4)
 
 ///|
 /// Pointed at: the field's hover grey round it; chosen: edged twice in the ink (its line and a ring of 1).
@@ -3078,17 +3178,14 @@ let radio_dot : @ui.Style = @ui.css("w=S2 h=S2 radius=Full bg=Fg")
 // Asking before (parts.tsx Confirm; parts.css.ts dialogAlert, dialogError)
 
 ///|
-/// What a confirm reports: whether it is open now, and whether its action was pressed this frame.
-pub(all) struct Confirmed {
-  open : Bool
-  confirmed : Bool
-}
-
-///|
 /// Asks before something that cannot be undone (parts.tsx Confirm: an alert dialog, a press outside does not close
 /// it): 420 wide, 28 over its title, 24 in; its title (22, 600) and `description` (13, muted), what went wrong (`error`:
-/// 13 red, 12 over the buttons, it stays open), then `cancel` (its words alone) and `action` (solid red, the primary's
-/// when not `danger`; a ring while `busy`) at its end, 16 under, 8 apart. Escape, the back and `cancel` close it.
+/// 13 red, 12 over the buttons, it stays open), an optional red `warning`, then `cancel` (its words alone) and `action`
+/// (solid red, the primary's when not `danger`; a ring while `busy`) at its end, 16 under, 8 apart. Escape, the back
+/// and `cancel` close it.
+/// `scrim`: what the page under it is dimmed with (the theme's where not said; 0 where it is dimmed already);
+/// `on_confirm`: what its action does, as it is pressed (press_does); `on_close`: what closing it does (`cancel`
+/// pressed, Escape, the back), as it is.
 pub fn confirm_dialog(
   c : @ui.Ctx,
   key : String,
@@ -3100,10 +3197,13 @@ pub fn confirm_dialog(
   busy? : Bool = false,
   error? : String = "",
   danger? : Bool = true,
-) -> Confirmed {
-  let mut confirmed = false
-  let mut closed = false
-  let d = @kit.dialog(
+  warning? : String = "",
+  scrim? : Int64,
+  on_confirm? : () -> Unit,
+  on_close? : () -> Unit = fn() {  },
+) -> Unit {
+  c.with_dismissed(fn(_) { on_close() }, fn() {
+  @kit.dialog(
     c,
     key,
     open,
@@ -3112,8 +3212,10 @@ pub fn confirm_dialog(
     w=dmin(confirm_w, c.window_size().0 - dialog_margin),
     outside=false,
     close_label="",
+    scrim?,
     look=fn(c, s, inner) {
-      c.box(
+      // (the dialog: the surface of the look it comes in by, coming first, all on it after: Ctx::surface)
+      let panel = c.box(
         style=confirm_box,
         w=Px(s.w),
         radius=dialog_r,
@@ -3124,27 +3226,27 @@ pub fn confirm_dialog(
         fn() {
           c.text(s.title, style=dialog_title) |> ignore
           c.text(s.description, style=dialog_lead) |> ignore
+          if warning != "" {
+            c.text(warning, style=confirm_warning) |> ignore
+          }
           inner()
         },
       )
-      |> ignore
+      c.surface(panel)
     },
     fn() {
       if error != "" {
         c.box(style=confirm_error_at, fn() { c.text(error, style=confirm_error) |> ignore }) |> ignore
       }
       c.box(style=confirm_foot.then(dialog_corner_foot(dialog_pad)), fn() {
-        if button(c, cancel, key=key + "/cancel", tone=Ghost) {
-          closed = true
-        }
-        if button(c, action, key=key + "/action", tone=if danger { DangerSolid } else { Primary }, busy~) {
-          confirmed = true
-        }
+        button(c, cancel, key=key + "/cancel", tone=Ghost, on_press=on_close)
+        button(c, action, key=key + "/action", tone=if danger { DangerSolid } else { Primary }, busy~, on_press?=on_confirm)
       })
       |> ignore
     },
   )
-  { open: d.value && !closed, confirmed }
+  |> ignore
+  })
 }
 
 ///|
@@ -3160,6 +3262,10 @@ let confirm_error_at : @ui.Style = @ui.css("w=Full pt=S1")
 ///|
 // kept across runs: a value (no field of it changes)
 let confirm_error : @ui.TextStyle = @ui.text_style(size=Ui, leading=L6, color=Danger)
+
+///|
+// kept across runs: a value (no field of it changes)
+let confirm_warning : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Danger)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3263,15 +3369,17 @@ pub(all) enum PanelTone {
 ///|
 /// Words to press in a small panel (PanelButton): a small pill, 24 high, 10 in, its words 12 and 500; a ground only
 /// while pointed at (`Filled`: the accent's pale ground always, the accent at 20% pointed at: the web's 22%, the scale's
-/// nearest). True on the frame after it was pressed.
+/// nearest). `on_press`: what pressing it does, as it is let go (press_does).
 pub fn panel_button(
   c : @ui.Ctx,
   key : String,
   words : String,
   tone? : PanelTone = Plainly,
   disabled? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let id = c.id(key)
+  press_does(c, id, !disabled, on_press)
   let hot = !disabled && c.lit(id)
   let mut words_at = -1
   let b = c.box(
@@ -3290,13 +3398,12 @@ pub fn panel_button(
   @motion.reshape(c, b, "sf-pbtn/shape/" + key, by=words, spec=button_reshape)
   @motion.layout(c, words_at, "sf-pbtn/words/" + key, by=words, spec=button_reshape)
   c.semantics(b, Button, id~, label=words, disabled~)
-  !disabled && c.clicked(id)
 }
 
 ///|
 /// An icon to press in a small panel (PanelIconButton: close, stop, a step): a 24 circle, the muted ink, the hover's
-/// ground and the ink pointed at; named on hover; `cornered`, in the panel's top end corner (panel_icon_corner). True
-/// on the frame after it was pressed.
+/// ground and the ink pointed at; named on hover; `cornered`, in the panel's top end corner (panel_icon_corner).
+/// `on_press`: what pressing it does, as it is let go (press_does).
 pub fn panel_icon_button(
   c : @ui.Ctx,
   key : String,
@@ -3304,9 +3411,11 @@ pub fn panel_icon_button(
   label : String,
   disabled? : Bool = false,
   cornered? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let p = theme().p
   let id = c.id(key)
+  press_does(c, id, !disabled, on_press)
   let hot = !disabled && c.lit(id)
   let style = if cornered { panel_icon_box.then(panel_icon_corner) } else { panel_icon_box }
   let b = c.box(style~, disabled~, id=if disabled { 0 } else { id }, fn() {
@@ -3314,7 +3423,6 @@ pub fn panel_icon_button(
   })
   c.semantics(b, Button, id~, label~, disabled~)
   tip(c, "pib/" + key, id, label)
-  !disabled && c.clicked(id)
 }
 
 ///|
@@ -3345,23 +3453,6 @@ let panel_label_led : @ui.Style = @ui.css("row gap=S1_5 align=ACenter")
 ///|
 // kept across runs: a value (no field of it changes)
 let panel_text_box : @ui.Style = @ui.css("w=Full px=S2_5")
-
-///|
-/// A small panel's foot with a pill at its end (its one thing to do), or at both its ends (`panel_foot_ends`: who runs
-/// it at its start, buttons at its end): each in its foot corner, as far in as makes a pill concentric with it, past the
-/// panel's padding; its words where they are.
-// kept across runs: a value (no field of it changes)
-pub let panel_foot_end : @ui.Style = @ui.style(
-  pr=capsule_room(r_menu, panel_pill, less=panel_pad),
-  pb=capsule_room(r_menu, panel_pill, less=panel_pad),
-)
-
-///|
-// kept across runs: a value (no field of it changes)
-pub let panel_foot_ends : @ui.Style = @ui.style(
-  px=capsule_room(r_menu, panel_pill, less=panel_pad),
-  pb=capsule_room(r_menu, panel_pill, less=panel_pad),
-)
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -3410,7 +3501,7 @@ let panel_icon_box : @ui.Style = @ui.css(
 pub let panel_icon_corner : @ui.Style = @ui.style(mt=room(panel_icon_in), mr=room(panel_icon_in))
 
 ///|
-let panel_icon_in : Double = capsule_in(r_menu, panel_icon_side) - panel_pad
+let panel_icon_in : Double = @ui.capsule_in(r_menu, panel_icon_side) - panel_pad
 
 ///|
 /// Its side (panel_icon_box's S6).
@@ -3428,11 +3519,11 @@ pub fn copy_command(c : @ui.Ctx, key : String, text : String, copy~ : String, co
   let just = c.within(id, copied_ms)
   c.box(style=command_box, bg=theme().p.paper, fn() {
     c.box(style=command_words_at, fn() { c.text(text, style=command_words) |> ignore }) |> ignore
-    if icon_button(c, if just { "check" } else { "copy" }, key=key + "/copy", label=if just { copied } else { copy }) {
+    icon_button(c, if just { "check" } else { "copy" }, key=key + "/copy", label=if just { copied } else { copy }, on_press=fn() {
       @ui.clipboard_set(text)
       c.mark(id)
       c.wake_in(copied_ms, later=true)
-    }
+    }) |> ignore
   })
   |> ignore
 }
@@ -3457,7 +3548,8 @@ let command_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=
 /// a press beside it). What was chosen comes back. `lead`: what stands before its words (a station's mark), in the ink
 /// its words have. `disabled`: out of reach, with any open menu closed. `capsule`: round it as a capsule when it sits
 /// at the end of another capsule, so the two can share a centre. `as_button`: the size and text style of a button,
-/// retaining the chooser's quiet colors, with a chevron after its words.
+/// retaining the chooser's quiet colors, with a chevron after its words. `on_pick`: what choosing an entry does, given
+/// its value, as it is chosen, outside any build (closing it, `set_open(false)`, its own).
 pub fn chooser(
   c : @ui.Ctx,
   key : String,
@@ -3470,6 +3562,7 @@ pub fn chooser(
   disabled? : Bool = false,
   capsule? : Bool = false,
   as_button? : Bool = false,
+  on_pick? : (String) -> Unit,
 ) -> @kit.Menu {
   let p = theme().p
   let id = c.id(key)
@@ -3507,7 +3600,7 @@ pub fn chooser(
     })
   }
   if as_button {
-    let (_, node) = button_part(
+    let node = button_part(
       c,
       words,
       key~,
@@ -3536,7 +3629,7 @@ pub fn chooser(
   }
   let menu : Ref[@kit.Menu?] = Ref(None)
   c.with_dismissed(fn(_) { set_open(false) }, fn() {
-    menu.val = Some(dropdown(c, key + "/menu", opened, if disabled { 0 } else { id }, entries, {}, chooser_menu_w, side~))
+    menu.val = Some(dropdown(c, key + "/menu", opened, if disabled { 0 } else { id }, entries, {}, chooser_menu_w, side~, on_pick?))
   })
   menu.val.unwrap()
 }
@@ -3598,8 +3691,9 @@ let handlings : Map[Int, Handling] = {}
 /// or a scroll that passes over it is what it passes over's): pressed and gone past the slop from where it went down,
 /// the width it is
 /// dragged to (the width it had then, the pointer's way on the right edge, the other way on the left, between `min`
-/// and `max` on whole pixels); let go, the width it ends at, or a press without moving, or the second of two clicks.
-/// A width that changes builds the frame again (Ctx::built_from_changed): the page takes it there, the column and its
+/// and `max` on whole pixels); let go, the width it ends at. A press without moving does `pressed`, the second of two
+/// clicks `twice` in its place, as they are let go (Ctx::on_press, on_double_press). A width that changes builds the
+/// frame again (Ctx::built_from_changed): the page takes it there, the column and its
 /// edge under the pointer at once.
 pub fn handle_drag(
   c : @ui.Ctx,
@@ -3608,11 +3702,20 @@ pub fn handle_drag(
   min~ : Double,
   max~ : Double,
   edge? : @ui.Side = Right,
+  pressed? : () -> Unit,
+  twice? : () -> Unit,
 ) -> Resized {
   c.drag_on(id, axis=Horizontal, hold=true)
-  // (read whatever comes of it: it takes presses in every build of a frame alike, the one that let it go, its end
-  // taken, and one built again after it)
-  let clicked = c.clicked(id)
+  // (a press on it, and a second, where they do something; the handle takes its presses whichever: Ctx::drag_on)
+  c.takes_presses(id)
+  match pressed {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
+  match twice {
+    Some(f) => c.on_double_press(id, f)
+    None => ()
+  }
   let at = fn(h : Handling, x : Double) {
     let d = if edge is Left { h.x0 - x } else { x - h.x0 }
     dmax(min, dmin(max, (h.w0 + d).round()))
@@ -3655,16 +3758,12 @@ pub fn handle_drag(
   // (pressed, moved and let go before a frame saw it: from the width it has)
   let h = handlings.get(id).unwrap_or({ x0: d.x0, w0: width, at_end: 0 })
   handlings.remove(id)
-  if c.double_clicked(id) {
-    Twice
-  } else if d.take_end() {
+  if d.take_end() {
     let w = at(h, d.x)
     if w != width {
       c.built_from_changed("a column's edge let go")
     }
     Dropped(w)
-  } else if clicked {
-    Pressed
   } else {
     Untouched
   }
@@ -3685,7 +3784,7 @@ fn edge_state(over : Bool, on : Bool, active : Bool, line : Bool) -> Int {
 let edges_shown : Map[String, Int] = {}
 
 ///|
-/// A column's edge as it looks (parts.css.ts resizeHandle; Rail.css.ts edge the same), 7 wide and as high as what holds
+/// A column's edge as it looks (parts.css.ts resizeHandle), 7 wide and as high as what holds
 /// it: a bar 5 wide at its middle and a hairline through the bar's middle, 8 short of the ends, clear toward them
 /// (clear to 10%, the field's edge grey at 50%, clear from 90%). The bar shows, 24 high, while the pointer is `over` the
 /// column; 48 high while `on` the edge (pointed at, focused, in hand), in the field's edge grey while `active`
@@ -3788,9 +3887,10 @@ let edge_bar_on : @ui.Style = edge_bar_shown.then(@ui.css("h=S12"))
 let edge_bar_active : @ui.Style = edge_bar_on.then(@ui.css("bg=FieldHover"))
 
 ///|
-/// The edges whose tip is put away, by their keys, and the last frame each was pressed in: pressed since the pointer
-/// came onto them (the web's tip.hide() as the pointer goes down: back only once it has left and come again).
-let edge_tips_away : Map[String, Int] = {}
+/// The edges whose tip is put away, by their keys: pressed since the pointer came onto them (the web's tip.hide() as the
+/// pointer goes down: back only once it has left and come again). None while in hand; once let go, where the pointer
+/// was let go (on the edge, which followed it, wherever the edge was last drawn).
+let edge_tips_away : Map[String, (Double, Double)?] = {}
 
 ///|
 /// A tip that follows the pointer along a tall thin thing (usePointerTip: an edge), `id`: shown 300 ms after the pointer
@@ -3803,15 +3903,15 @@ pub fn edge_tip(c : @ui.Ctx, key : String, id : Int, words : String, side? : @ui
   }
   let (px, py, down) = c.pointer()
   let on = c.lit(id)
-  let frame = c.frame_number()
   // (a drag area's in hand from the press on: pressed no more once it is dragged, Ctx::drag_on)
   if c.watch_press(id) || c.drag_of(id) is Some({ down: true, .. }) {
-    edge_tips_away[key] = frame
-  } else if !on && !down {
+    edge_tips_away[key] = None
+  } else {
     match edge_tips_away.get(key) {
-      // (the frame it is let go in: the pointer may be past where the edge was last drawn, as it followed it)
-      Some(at) if at == frame || at == frame - 1 => ()
-      _ => edge_tips_away.remove(key)
+      // let go: where (the pointer may be past where the edge was last drawn, as it followed it: not left till it moves)
+      Some(None) => edge_tips_away[key] = Some((px, py))
+      Some(Some((x, y))) if !on && !down && (x != px || y != py) => edge_tips_away.remove(key)
+      _ => ()
     }
   }
   // (put away, it is not drawn at all; its delay starts anew once the pointer is back on it. The press itself is told
@@ -3842,7 +3942,7 @@ pub fn edge_tip(c : @ui.Ctx, key : String, id : Int, words : String, side? : @ui
 /// press without moving does), follow the pointer along it, gone as it is pressed until the pointer comes onto it
 /// again. Drawn last in its column's box (it is put by its edges, out of the column's flow). What was done with it
 /// comes back: the page keeps the width (the web's keptWidth and setKeptWidth: where it keeps what it keeps on the
-/// device), and a press or the second of two clicks is the page's.
+/// device), and a press (`pressed`) or the second of two clicks (`twice`) is the page's.
 pub fn resize_handle(
   c : @ui.Ctx,
   key : String,
@@ -3854,10 +3954,12 @@ pub fn resize_handle(
   press? : String = "",
   over? : Bool = false,
   active? : Bool = false,
+  pressed? : () -> Unit,
+  twice? : () -> Unit,
 ) -> Resized {
   let id = c.id(key)
   c.cursor(id, ResizeX)
-  let said = handle_drag(c, id, width, min~, max~, edge~)
+  let said = handle_drag(c, id, width, min~, max~, edge~, pressed?, twice?)
   let held = active || (said is Dragging(_)) || c.pressed(id)
   let on = c.lit(id) || c.focus_shown(id) || held
   let words = if press == "" { label } else { label + " · " + press }
@@ -3874,7 +3976,7 @@ pub fn resize_handle(
 }
 
 // ---------------------------------------------------------------------------
-// A card of options (SettingParts.kt DecisionOptions; Decisions.css.ts options, choice)
+// A card of options (choice)
 
 ///|
 /// How far in the card of options' rows stand: a list card's (list_pad, as a menu's rows in its panel), round by the
@@ -3886,10 +3988,10 @@ let options_card_pad : Double = list_pad
 let option_row_corner : Double = row_corner
 
 ///|
-/// An option's measures, the theme's for the screen (decided once: docs/architecture.md): its number's disc a list
+/// An option's measures, the theme's for the screen (decided once): its number's disc a list
 /// item's mark, as far in from the row's top and side as makes it concentric with the row (its corner less the disc's
 /// half); its label in the controls' words, what it leads to in the meta's. Keyboard and mouse's as the web's
-/// (Decisions.css.ts choice: a 20 disc 8 in, 13 on 20 over 12 on 18); a phone's or a tablet's a size up (a 22 disc 7
+/// (13 on 20 over 12 on 18); a phone's or a tablet's a size up (a 22 disc 7
 /// in, 15 on 22 over 13 on 18).
 priv struct OptionType {
   disc : Double
@@ -3906,7 +4008,7 @@ fn option_type() -> OptionType {
   let disc = t.items.mark
   {
     disc,
-    pad_in: capsule_in(option_row_corner, disc),
+    pad_in: @ui.capsule_in(option_row_corner, disc),
     label: t.t.ui,
     label_line: t.t.ui_line,
     detail: t.t.meta,
@@ -3915,7 +4017,7 @@ fn option_type() -> OptionType {
 }
 
 ///|
-/// The card of options in the wide frame: as wide as what it says, 460 at least (Decisions.css.ts options); on a phone
+/// The card of options in the wide frame: as wide as what it says, 460 at least; on a phone
 /// as wide as where it is.
 let options_least_wide : Double = 460.0
 
@@ -3990,22 +4092,25 @@ pub fn ask_line_start(icon : Double) -> @ui.Style {
 /// the press's room as least as the native input's), its ground under the hand or the finger concentric with the row's
 /// end corner (capsule_in), its words where they stood, as far in as the row's start mark `mark` wide is from its start; on the
 /// first of the row's lines, however many the words before it take. `disabled`: there and faded, taking no press.
-/// True on the frame after it was pressed.
+/// `on_press` as it is pressed.
 pub fn ask_line_button(
   c : @ui.Ctx,
   label : String,
   key~ : String,
   mark~ : Double,
   disabled? : Bool = false,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let h = button_height()
   let pad = option_type().pad_in
-  let inset = capsule_in(option_row_corner, h)
+  let inset = @ui.capsule_in(option_row_corner, h)
   let out = pad - inset
   let id = c.id(key)
   let live = !disabled
-  let lit = ease_to(c, "sf-ask-line-btn/\{id}", live && (c.lit(id) || c.pressed(id)))
-  let seen = @motion.animate(c, "sf-ask-line-btn-seen/\{id}", if disabled { 0.45 } else { 1.0 }, spec=@motion.tween(dur_ms, ease=Out))
+  // (its ground and its words' ink eased, and it faded, as it is painted: told as it is built, read where it is drawn)
+  let ease = @motion.tween(dur_ms, ease=Out)
+  let lit = @motion.told(c, "sf-ask-line-btn/\{id}", if live && (c.lit(id) || c.pressed(id)) { 1.0 } else { 0.0 }, spec=ease)
+  let seen = @motion.told(c, "sf-ask-line-btn-seen/\{id}", if disabled { 0.45 } else { 1.0 }, spec=ease)
   let look = theme().chat_list
   // (its words as far in from its end as the bell's from the row's start: the bell's room in its disc's column)
   let side = (ask_line_disc() - mark) / 2.0
@@ -4018,21 +4123,27 @@ pub fn ask_line_button(
     mr=room(-out),
     radius=Full,
     align=ACenter,
-    bg=Data(alpha(theme().p.hover, lit)),
   )
+  let hover = theme().p.hover
   let b = c.box(
     style=room_of,
     id=if live { id } else { 0 },
     fn() {
-      // (its ink the quiet one's, the line's own under the hand, over dur_ms)
-      let ink = mix(theme().p.text, lit, theme().p.muted)
+      // (its ink the quiet one's, the line's own under the hand, over dur_ms, as it is painted)
+      let (text, muted) = (theme().p.text, theme().p.muted)
+      let ink = mix(text, lit.target(), muted)
       let words = look.state_quiet.then(ask_line_button_words).then(@ui.text_style(color=Data(ink)))
-      c.text(label, style=ask_line_words(words)) |> ignore
+      let w = c.text(label, style=ask_line_words(words))
+      c.ink_by(w, fn() { mix(text, lit.get(c), muted) })
     },
   )
-  c.look(b, @ui.look(alpha=seen))
+  c.bg_by(b, fn() { alpha(hover, lit.get(c)) })
+  c.look_by(b, fn() { @ui.look(alpha=seen.get(c)) })
   c.semantics(b, Button, id=if live { id } else { 0 }, label~, disabled=!live)
-  live && c.clicked(id)
+  match on_press {
+    Some(f) if live => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|
@@ -4068,14 +4179,14 @@ let ask_line_row : @ui.Style = @ui.css("row w=Full gap=S3 align=AStart")
 let ask_line_column : @ui.Style = @ui.css("w=Full align=AStart")
 
 ///|
-/// A card of options (SettingParts.kt DecisionOptions): each a row to be pressed (its ground under the finger list_pad
+/// A card of options: each a row to be pressed (its ground under the finger list_pad
 /// in from the card's edge, as a list card's, rounded 18), its number in a disc (the one recommended in the accent), its label and what it
 /// leads to (`options`: each its label, its detail, whether recommended); half there when not `enabled`, a spinner on
 /// the one being answered (`busy`, none pressed meanwhile; `chosen` stays whole); its measures the theme's for the
 /// screen (option_type). Under a post as the web's (`wide`: as wide as what it says, where it is at most, on the
 /// text at 5%); its row's ground under the pointer. `history` keeps the original choices fully legible and read-only,
-/// with a check beside the chosen one; its presenter supplies the only ground and padding. The option tapped,
-/// on the frame after.
+/// with a check beside the chosen one; its presenter supplies the only ground and padding. `on_pick`: what an option
+/// pressed does, given its index, as it is pressed.
 pub fn options_card(
   c : @ui.Ctx,
   key : String,
@@ -4085,24 +4196,25 @@ pub fn options_card(
   chosen? : Int? = None,
   wide? : Bool = false,
   history? : Bool = false,
-) -> Int? {
+  on_pick? : (Int) -> Unit,
+) -> Unit {
   let t = theme()
   let free = enabled && busy is None && !history
-  let mut picked : Int? = None
   let ot = option_type()
   let ground = if history { 0L } else if wide { alpha(t.p.text, 0.05) } else { t.p.chip }
   let padding = if history { 0.0 } else { options_card_pad }
-  // (in the wide frame as wide as what it says and 460 at least, on the text at 5%: Decisions.css.ts options)
+  // (in the wide frame as wide as what it says and 460 at least)
   c.box(w=Fill(1.0), align=if wide { AStart } else { AStretch }, fn() {
     let across = @ui.style(w=Full, max_w=Fixed(options_most(options, ot, wide)))
     c.box(style=across, radius=options_card_radius, bg=ground, pad=padding, fn() {
-      // (nothing drawn between two: SettingParts.kt DecisionOptions)
+      // 
       for i, o in options {
         let id = c.id(key + "/" + i.to_string())
-        if free && c.clicked(id) {
-          picked = Some(i)
+        match on_pick {
+          Some(f) if free => c.on_press(id, fn() { f(i) })
+          _ => ()
         }
-        // under a mouse's pointer its row's ground, in any layout (Decisions.css.ts choice:hover)
+        // under a mouse's pointer its row's ground, in any layout
         let mouse = @ui.pointing() is Mouse
         let hot = mouse && free && c.lit(id)
         // (the one picked, answered: a check in its disc where its number was, on the accent; the rest half there, the
@@ -4110,10 +4222,14 @@ pub fn options_card(
         let picked_here = !history && chosen == Some(i)
         let ease = @motion.tween(dur_ms, ease=Out)
         let k = key + "/" + i.to_string()
-        let there = @motion.animate(c, "options-seen/" + k, if history || enabled || chosen == Some(i) { 1.0 } else { 0.5 }, spec=ease)
-        let ticked = @motion.animate(c, "options-ticked/" + k, if picked_here { 1.0 } else { 0.0 }, spec=ease)
-        let turning = @motion.animate(c, "options-turning/" + k, if busy == Some(i) { 1.0 } else { 0.0 }, spec=ease)
-        c.box(
+        // (faded as it is drawn)
+        let there = @motion.told(c, "options-seen/" + k, if history || enabled || chosen == Some(i) { 1.0 } else { 0.5 }, spec=ease)
+        // (told as they are built, read where they are painted: the check and the spinner built while they are there
+        // or on their way, up to their declared ends)
+        let ticked = @motion.told(c, "options-ticked/" + k, if picked_here { 1.0 } else { 0.0 }, spec=ease)
+        let turning = @motion.told(c, "options-turning/" + k, if busy == Some(i) { 1.0 } else { 0.0 }, spec=ease)
+        let disc_off = alpha(t.p.text, 0.09)
+        let row = c.box(
           dir=Row,
           w=Fill(1.0),
           pl=ot.pad_in,
@@ -4124,14 +4240,13 @@ pub fn options_card(
           align=AStart,
           radius=option_row_corner,
           bg=if hot { t.p.hover } else { 0L },
-          opacity=there,
           id~,
           fn() {
-            c.box(
+            let disc = c.box(
               w=Px(ot.disc),
               h=Px(ot.disc),
               radius=ot.disc / 2.0,
-              bg=if o.2 { t.p.accent } else { mix_seen(t.p.accent, ticked, alpha(t.p.text, 0.09)) },
+              bg=if o.2 { t.p.accent } else { mix_seen(t.p.accent, ticked.target(), disc_off) },
               align=ACenter,
               justify=JCenter,
               fn() {
@@ -4141,19 +4256,21 @@ pub fn options_card(
                 } else {
                   c.text("\{i + 1}", size=theme().t.caption, weight=600, color~, wrap=false)
                 }
-                if ticked > 0.0 {
-                  c.look(number, @ui.look(alpha=1.0 - ticked))
+                if picked_here || !ticked.over(c) {
+                  c.look_by(number, fn() { @ui.look(alpha=1.0 - ticked.get(c)) })
                   c.layer(fn() {
                     let mark = c.box(style=option_check_room, fn() {
                       icon(c, "check", size=ot.disc * option_check_share, color=0xFFFFFFFFL) |> ignore
                     })
-                    c.look(mark, @ui.look(alpha=ticked))
+                    c.look_by(mark, fn() { @ui.look(alpha=ticked.get(c)) })
                   })
                   |> ignore
                 }
               },
             )
-            |> ignore
+            if !o.2 {
+              c.bg_by(disc, fn() { mix_seen(t.p.accent, ticked.get(c), disc_off) })
+            }
             c.box(w=Fill(1.0), fn() {
               c.text(o.0, size=ot.label, weight=500, color=t.p.text, line=ot.label_line) |> ignore
               if o.1 != "" {
@@ -4162,12 +4279,12 @@ pub fn options_card(
             })
             |> ignore
             // (turning over the row's end, in what it leaves at the end of the words: never narrowing them)
-            if turning > 0.0 {
+            if busy == Some(i) || !turning.over(c) {
               c.layer(fn() {
                 let s = c.box(style=@ui.style(w=Full, align=AEnd, pt=room_of(ot.pad_in), pr=room_of(option_row_end)), fn() {
                   c.box(h=Px(ot.label_line), justify=JCenter, fn() { spinner(c, size=12.0) |> ignore }) |> ignore
                 })
-                c.look(s, @ui.look(alpha=turning))
+                c.look_by(s, fn() { @ui.look(alpha=turning.get(c)) })
               })
               |> ignore
             }
@@ -4183,13 +4300,12 @@ pub fn options_card(
             }
           },
         )
-        |> ignore
+        c.look_by(row, fn() { @ui.look(alpha=there.get(c)) })
       }
     })
     |> ignore
   })
   |> ignore
-  picked
 }
 
 ///|
@@ -4205,7 +4321,7 @@ let dialog_step : @ui.TextStyle = @ui.text_style(size=Meta, leading=L6, color=Mu
 let dialog_title_one : @ui.TextStyle = dialog_title.then(one_line)
 
 ///|
-/// A page that waits on something (cloud/Security.tsx SecurityWaiting, mobile/Security.tsx SecurityWaitingScreen):
+/// A page that waits on something:
 /// its mark (`mark`, an icon's name), what it waits for (`title`, `lead`), then what can be done meanwhile (`body`); its parts 14 apart,
 /// centred. On a touch screen the phone's (mWaiting: in the middle of its height, 28 in at its sides, the mark 44, the
 /// title bold); with keyboard and mouse the desktop page's (waiting: 110 down, 460 wide at most, 24 in, the mark 40, the title
@@ -4225,6 +4341,38 @@ pub fn waiting_page(c : @ui.Ctx, mark : String, title : String, lead : String, b
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// The same page (waiting_page) as nodes of the window's tree, made once in `parent`: its mark, `title()` and `lead()`
+/// as they change, then what `body` makes in the column under them. The node.
+#callsite(autofill(loc))
+pub fn waiting_page_node(
+  parent : @view.View,
+  mark : String,
+  title : () -> String,
+  lead : () -> String,
+  body : (@view.View) -> Unit,
+  loc~ : SourceLoc,
+) -> @view.View {
+  // (the native input the app was started with: the same the whole run)
+  let touch = @signals.untracked(native_input) is Finger
+  parent.box(made_for=loc, fn(room) {
+    style_node(room, fn() { if touch { wait_room_touch } else { wait_room } })
+    if !touch {
+      room.box(fn(top) { top.height(Is(Some(wait_top))) |> ignore }) |> ignore
+    }
+    room.box(fn(col) {
+      style_node(col, fn() { if touch { wait_column_touch } else { wait_column } })
+      icon_node(col, mark, if touch { wait_icon_touch } else { wait_icon }, By(fn() { theme().p.text })) |> ignore
+      // (each line in the middle, as the old view's centred words: Ctx::text's `center`)
+      words_node(col, title, fn() { if touch { wait_title_touch } else { wait_title } }).words_centered(Is(true))
+      |> ignore
+      words_node(col, lead, fn() { wait_lead }).words_centered(Is(true)) |> ignore
+      body(col)
+    })
+    |> ignore
+  })
 }
 
 ///|
@@ -4274,169 +4422,17 @@ let wait_title_touch : @ui.TextStyle = @ui.text_style(size=Heading, weight=Bold,
 let wait_lead : @ui.TextStyle = @ui.text_style(size=Meta, leading=L7, color=Muted, center=true)
 
 ///|
-/// The way into an app, signed out (the web's cloud/gate.tsx SignInPage; SignIn.kt SignInScreen), in the box it is
-/// given: its picture (`art`, a drawable), what it is (`title`, `note`), its button (`label`; `busy` while it is under
-/// way, not pressed again, a spinner before its words), what to know of it (`foot`), and what there is to say of
-/// signing in under the button (`said`: what it waits on, or why it failed, `bad`, in the red), coming and going with
-/// its room. Keyboard and mouse's the picture, the button and what is said of it alone, no wider than the desktop app's
-/// (asked for, 2026-10-23); a touch screen's all of it, the button across its page. True on the frame after the button
-/// was pressed.
-pub fn way_in(
-  c : @ui.Ctx,
-  art : String,
-  title : String,
-  note : String,
-  label : String,
-  foot : String,
-  busy? : Bool = false,
-  said? : String = "",
-  bad? : Bool = false,
-) -> Bool {
-  let bare = native_input() is Mouse
-  let mut pressed = false
-  // (what was said kept as it goes, its room closing under it)
-  if said != "" {
-    way_in_said.val = (said, bad)
-  }
-  let open = @motion.anim(c, "sign-in/said", if said != "" { 1.0 } else { 0.0 }, global=true)
-  open.follow(if said != "" { 1.0 } else { 0.0 }, @motion.move().per_unit(@motion.reveal_height("sign-in/said")))
-  let share = open.get()
-  way_in_page(c, art, fn() {
-    if !bare {
-      way_in_title(c, title)
-      way_in_note(c, note)
-    }
-    c.box(style=sign_in_gap, fn() {  }) |> ignore
-    pressed = way_in_button(c, "sign-in", label, busy~)
-    if share > 0.0 {
-      let (words, red) = way_in_said.val
-      @motion.reveal(c, "sign-in/said", share, middle=true, fn() {
-        let i = c.text(words, style=if red { sign_in_said_bad } else { sign_in_said })
-        @motion.leaving(c, i, said != "")
-      })
-    }
-    if !bare {
-      c.text(foot, style=sign_in_many) |> ignore
-    }
-  })
-  pressed
-}
-
-///|
-/// A page of the way in (way_in's, and those after it till a workspace is open: none yet, an invitation, an account
-/// not let in), in the box it is given: its picture (`art`) over what `body` says and offers, all of it in the middle
-/// of the page, no wider than a tablet's button. The picture keyed: from one of these pages to the next it goes from
-/// where it was to its new place, not at once.
-pub fn way_in_page(c : @ui.Ctx, art : String, body : () -> Unit) -> Unit {
-  let w = dmin(sign_in_picture_w, c.width - sign_in_side_w - sign_in_side_w)
-  // (its foot at the same height on each of them, whatever is under it: what changes from page to page is under the
-  // picture, the picture and the title where they were)
-  let above = dmax(0.0, c.height * way_in_picture_foot - drawable_height(art, w) - way_in_page_top)
-  c.box(style=way_in_whole, fn() {
-    c.box(style=@ui.style(h=Fixed(above)), fn() {  }) |> ignore
-    let picture = drawable(c, art, w)
-    @motion.layout(c, picture, "way-in/picture", spec=button_reshape)
-    c.box(style=way_in_column, body) |> ignore
-  })
-  |> ignore
-}
-
-///|
 /// Where a way-in page's picture ends, down its page (way_in_page): a little over its middle, so a page of a button or
 /// two sits about the middle and one with more has room under it.
 let way_in_picture_foot : Double = 0.42
-
-///|
-/// A way-in page (way_in_page): its picture and what is under it in a column down its middle, 30 in from its sides
-/// and 40 from its top and foot, 12 apart (SignIn.kt: padding(horizontal = 30.dp, vertical = 40.dp), spacedBy(12.dp)).
-// kept across runs: a value (no field of it changes)
-let way_in_whole : @ui.Style = @ui.style(w=Full, h=Full, px=sign_in_side, py=S10, gap=S3, align=ACenter)
 
 ///|
 /// How far down a way-in page what it holds starts (way_in_whole's py: S10).
 let way_in_page_top : Double = 40.0
 
 ///|
-/// A way-in page's title (way_in_page): under the picture, 28, bold.
-pub fn way_in_title(c : @ui.Ctx, title : String) -> Unit {
-  c.box(style=sign_in_title_box, fn() { c.text(title, style=sign_in_title) |> ignore }) |> ignore
-}
-
-///|
-/// What a way-in page says under its title (way_in_page): the body's size, muted, centred.
-pub fn way_in_note(c : @ui.Ctx, note : String) -> Unit {
-  c.text(note, style=sign_in_note) |> ignore
-}
-
-///|
-/// A way-in page's button (way_in_page; `key` its own): 50 high, a pill across a touch screen's page (420 at most),
-/// 300 on a desktop; `solid` the ink's, the one thing to do, else the chip's ground; `busy` while what it does is under
-/// way: a spinner before its words, not pressed again. Its words changed, they move to their new place. True on the
-/// frame after it was pressed.
-pub fn way_in_button(c : @ui.Ctx, key : String, label : String, solid? : Bool = true, busy? : Bool = false) -> Bool {
-  let p = theme().p
-  let bare = native_input() is Mouse
-  let id = c.id(key)
-  let pressed = !busy && c.clicked(id)
-  let ink = if solid { p.bg } else { p.text }
-  let mut words_at = -1
-  let b = c.box(style=way_in_button_style(bare, solid), id~, fn() {
-    // (as a button's: the spinner's room opening before its words, @sf.button)
-    let turning = ease_to(c, key + "/busy", busy)
-    let over = @motion.animate(c, key + "/over", if busy { 1.0 } else { 0.0 }, spec=button_reshape)
-    if busy || over > 0.0 {
-      let room = button_icon + sign_in_spin_gap
-      c.box(style=@ui.style(row=true, w=Fixed(room * over), h=Fixed(button_icon)), fn() {
-        let s = c.box(style=button_spin, fn() {
-          spinner(c, size=button_icon, ring=alpha(ink, 0.3), arc=if solid { ink } else { p.accent }) |> ignore
-        })
-        c.look(s, @ui.look(alpha=turning, scale=over, ox=0.0))
-      })
-      |> ignore
-    }
-    words_at = c.text(label, style=if solid { sign_in_words } else { sign_in_words_plain })
-    // SignIn.kt: clip(CircleShape).clickable
-    if !busy {
-      @motion.ripple(c, id, sign_in_button_h / 2.0)
-    }
-  })
-  // (its words changed, 登录或注册 to 正在登录: moved to their new place, not at once)
-  @motion.layout(c, words_at, key + "/words", by=label, spec=button_reshape)
-  c.semantics(b, Button, id=if busy { 0 } else { id }, label~, disabled=busy)
-  pressed
-}
-
-///|
-/// What a way-in page offers last, quietly (way_in_page: 切换账号): its words alone, the page's ink, a ground under the
-/// pointer. True on the frame after it was pressed.
-pub fn way_in_link(c : @ui.Ctx, key : String, label : String, busy? : Bool = false) -> Bool {
-  button(c, label, key~, tone=Ghost, busy~)
-}
-
-///|
-/// What a way-in page says and offers under its picture (way_in_page): a column 12 apart, its things in its middle,
-/// no wider than a tablet's button.
-// kept across runs: a value (no field of it changes)
-let way_in_column : @ui.Style = @ui.style(w=Full, max_w=Fixed(sign_in_touch_w), gap=S3, align=ACenter)
-
-///|
-/// What was last said under the sign-in button (way_in): kept as its room closes.
-// kept across runs: what the page last said, drawn as it goes
-let way_in_said : Ref[(String, Bool)] = Ref::new(("", false))
-
-///|
 /// Between the sign-in button's spinner and its words.
 let sign_in_spin_gap : Double = 8.0
-
-///|
-/// What is said of signing in under its button: small, muted, centred, wrapping.
-// kept across runs: a value (no field of it changes)
-let sign_in_said : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, center=true, w=Full)
-
-///|
-/// Why signing in failed: as what is said, in the red.
-// kept across runs: a value (no field of it changes)
-let sign_in_said_bad : @ui.TextStyle = sign_in_said.then(@ui.text_style(color=Danger))
 
 ///|
 /// The sign-in button's width at most on a desktop, as the desktop app's.
@@ -4459,104 +4455,10 @@ let sign_in_picture_w : Double = 300.0
 let sign_in_side_w : Double = 30.0
 
 ///|
-/// The title 10 under the picture, 28, bold, on the font's own line (SignIn.kt: 28.sp, Bold).
-// kept across runs: a value (no field of it changes)
-let sign_in_title_box : @ui.Style = @ui.css("pt=S2_5")
-
-///|
-// kept across runs: a value (no field of it changes)
-let sign_in_title : @ui.TextStyle = @ui.text_style(
-  size=sign_in_title_size,
-  weight=Bold,
-  color=Fg,
-  center=true,
-  w=Full,
-  leading=Font,
-)
-
-///|
-/// What still.fail is for: the body's size, muted, centred (SignIn.kt: 15.sp, lineHeight 21.sp).
-// kept across runs: a value (no field of it changes)
-let sign_in_note : @ui.TextStyle = @ui.text_style(size=Body, color=Muted, center=true, w=Full)
-
-///|
-/// 6 more over the button.
-// kept across runs: a value (no field of it changes)
-let sign_in_gap : @ui.Style = @ui.css("h=S1_5")
-
-///|
-/// The button: the ink's, a pill across the page, no wider than `most`; its words the page's ground, semibold.
-fn sign_in_button(most : Double) -> @ui.Style {
-  @ui.style(
-    row=true,
-    w=Full,
-    max_w=Fixed(most),
-    h=Fixed(sign_in_button_h),
-    radius=Full,
-    bg=Fg,
-    // (a step towards the page under the pointer, as a solid button's: @sf.button's primary_hover)
-    hovered=@ui.patch(bg=Over(Fg, A(Bg, O15))),
-    pressed=@ui.patch(bg=Over(Fg, A(Bg, O15))),
-    align=ACenter,
-    justify=JCenter,
-  )
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let sign_in_button_desk : @ui.Style = sign_in_button(sign_in_desk_w)
-
-///|
-// kept across runs: a value (no field of it changes)
-let sign_in_button_touch : @ui.Style = sign_in_button(sign_in_touch_w)
-
-///|
-/// A way-in page's other buttons (way_in_button `solid` false): the quiet ground of the words' colour, a step darker
-/// under the pointer.
-fn sign_in_button_plain(most : Double) -> @ui.Style {
-  sign_in_button(most).then(@ui.style(bg=Tint, hovered=@ui.patch(bg=TintStrong), pressed=@ui.patch(bg=TintStrong)))
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let sign_in_button_desk_plain : @ui.Style = sign_in_button_plain(sign_in_desk_w)
-
-///|
-// kept across runs: a value (no field of it changes)
-let sign_in_button_touch_plain : @ui.Style = sign_in_button_plain(sign_in_touch_w)
-
-///|
-/// A way-in button's look (way_in_button): a desktop's or a touch screen's width, the ink's ground or the quiet one.
-fn way_in_button_style(bare : Bool, solid : Bool) -> @ui.Style {
-  match (bare, solid) {
-    (true, true) => sign_in_button_desk
-    (false, true) => sign_in_button_touch
-    (true, false) => sign_in_button_desk_plain
-    (false, false) => sign_in_button_touch_plain
-  }
-}
-
-///|
-// kept across runs: a value (no field of it changes)
-let sign_in_words : @ui.TextStyle = @ui.text_style(size=Title, weight=Semibold, color=Bg, wrap=false, leading=Font)
-
-///|
-/// A way-in page's other buttons' words (sign_in_button_plain): the ink's.
-// kept across runs: a value (no field of it changes)
-let sign_in_words_plain : @ui.TextStyle = sign_in_words.then(@ui.text_style(color=Fg))
-
-///|
-/// 可同时登录多个账号: small, muted.
-// kept across runs: a value (no field of it changes)
-let sign_in_many : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, wrap=false, leading=Font)
-
-
-///|
-/// A newer build ready for the person's word (Home.kt's update key; one look wherever a frame puts it, the size of the
-/// keys beside it: `side` across, its mark `mark`): the download mark in its middle (the key is there only while the
-/// build waits on its press: no dot over it to say so); while it is `busy` (being put in place), in the mark's place
-/// how far it has come (coming_mark: `coming`, 0 to 1, from its top; None while not known, the spinner's quarter
-/// turning there), no words. `why` its tip. Said to be `label`. True on the frame it is pressed, not while it is busy.
+/// An update in a bar: while it comes, its progress in the mark's place (`coming`: Some of a known part or None for an
+/// unknown part); ready, the update's arrow up in a ring; being put in place (`busy`), that arrow going up. The two
+/// marks fade between each other without moving the key. `why` is its tip, `label` what it is said to be. `on_press` on its
+/// press, not while it is busy.
 pub fn update_key(
   c : @ui.Ctx,
   key : String,
@@ -4564,21 +4466,46 @@ pub fn update_key(
   mark : Double,
   label : String,
   why : String,
-  coming : Double?,
   busy : Bool,
-) -> Bool {
+  coming? : Double?? = None,
+  offered? : Bool = false,
+  on_press? : () -> Unit,
+) -> Unit {
   let t = theme()
   let id = c.id(key)
   let hot = c.lit(id) && !busy
+  // (told as it is built, read where it is painted: the ring built while it comes or is on its way back, up to its
+  // declared end)
+  let progress = @motion.told(c, "update/coming/" + key, if coming is Some(_) { 1.0 } else { 0.0 }, spec=@motion.tween(
+      dur_ms,
+      ease=Out,
+    ))
   let b = c.box(
     style=(if hot { update_key_hot } else { update_key_box }).then(@ui.style(w=Fixed(side), h=Fixed(side))),
     id~,
     fn() {
-      if busy {
-        coming_mark(c, key, coming, mark, t.p.text)
-      } else {
-        icon(c, "download", size=mark, color=t.p.text) |> ignore
-      }
+      c.box(style=@ui.style(w=Fixed(mark), h=Fixed(mark)), fn() {
+        let ready = c.box(style=update_ring_at, fn() {
+          if busy {
+            updating_mark(c, mark, t.p.text) |> ignore
+          } else {
+            icon(c, if offered { "download" } else { "update" }, size=mark, color=t.p.text) |> ignore
+          }
+        })
+        c.look_by(ready, fn() { @ui.look(alpha=1.0 - progress.get(c)) })
+        if coming is Some(_) || !progress.over(c) {
+          c.layer(fn() {
+            let part = match coming {
+              Some(part) => part
+              None => Some(1.0)
+            }
+            let downloading = c.box(style=update_ring_at, fn() { coming_mark(c, key, part, mark, t.p.text) })
+            c.look_by(downloading, fn() { @ui.look(alpha=progress.get(c)) })
+          })
+          |> ignore
+        }
+      })
+      |> ignore
       if !busy {
         press_ripple(c, id, side / 2.0)
       }
@@ -4588,11 +4515,14 @@ pub fn update_key(
   if why != "" {
     tip(c, key + "/tip", id, why, side=Bottom)
   }
-  !busy && c.clicked(id)
+  match on_press {
+    Some(f) if !busy => c.on_press(id, f)
+    _ => ()
+  }
 }
 
 ///|
-/// The list catching up on what changed while away (the chats' `syncing`; docs/ui-panels.md 等待): beside the keys of
+/// The list catching up on what changed while away (the chats' `syncing`; sf/waiting.mbt): beside the keys of
 /// the bar it stands in, `side` across, the refresh mark (`mark`, in the grey of what it says nothing of) turning, a
 /// turn each sync_turn_ms, slow at its ends (by the clock as each frame is drawn: nothing built anew for it); `text` its tip and what it is said to be. Only once it has gone on later_ms
 /// (a moment's catching up shows nothing). Once all is here, the mark becomes a tick: it goes on from where it is and as
@@ -4642,23 +4572,24 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
     return
   }
   let words = sync_said.get(key).unwrap_or(text)
-  // how far on to rest it has gone (0 to 1, as SyncRest::ease)
-  let resting = @kit.animate(c, key + "/rest", if ticked { 1.0 } else { 0.0 }, transition=match rest {
+  // how far on to rest it has gone (0 to 1, as SyncRest::ease): turned as it is drawn
+  let resting = @motion.told(c, key + "/rest", if ticked { 1.0 } else { 0.0 }, spec=match rest {
     Some(r) => @motion.tween_to(duration=r.ms, ease=fn(s) { r.ease(s) })
     None => @motion.tween(0.0, ease=Out)
   })
-  // how far the arrows are drawn back, then the tick drawn (0 to 1 each), once it is at rest
-  let back = @kit.animate(
+  // how far the arrows are drawn back, then the tick drawn (0 to 1 each), once it is at rest: read as it is built, each
+  // a shape traced so far (icon_traced: its points worked out as it is built), which no paint taker draws
+  let back = @motion.animate(
     c,
     key + "/back",
     if ticked { 1.0 } else { 0.0 },
-    transition=@motion.tween(if ticked { sync_back_ms } else { 0.0 }, ease=InOut, delay=settle),
+    spec=@motion.tween(if ticked { sync_back_ms } else { 0.0 }, ease=InOut, delay=settle),
   )
-  let drawn = @kit.animate(
+  let drawn = @motion.animate(
     c,
     key + "/tick",
     if ticked { 1.0 } else { 0.0 },
-    transition=@motion.tween(if ticked { sync_tick_ms } else { 0.0 }, ease=Out, delay=settle + sync_back_ms * 0.6),
+    spec=@motion.tween(if ticked { sync_tick_ms } else { 0.0 }, ease=Out, delay=settle + sync_back_ms * 0.6),
   )
   let id = c.id(key)
   let b = c.box(style=update_key_box.then(@ui.style(w=Fixed(side), h=Fixed(side))), id~, fn() {
@@ -4681,8 +4612,15 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
         None => c.cycle_look(a, sync_turn_ms, fn(k) { @ui.look(rot=sync_turned(k)) })
         // going on to rest (upright again once there: it looks the same each half turn)
         Some(r) =>
-          if back == 0.0 && resting < 1.0 {
-            c.look(a, @ui.look(rot=r.from + (r.to - r.from) * resting))
+          if back == 0.0 {
+            c.look_by(a, fn() {
+              let k = resting.get(c)
+              if k < 1.0 {
+                @ui.look(rot=r.from + (r.to - r.from) * k)
+              } else {
+                @ui.still_look
+              }
+            })
           }
       }
     }
@@ -4702,7 +4640,9 @@ pub fn sync_key(c : @ui.Ctx, key : String, side : Double, mark : Double, shown :
       |> ignore
     }
   })
-  c.look(b, { ..@ui.still_look, alpha: dmin(1.0, p.t) })
+  // (coming and going, faded as it is drawn)
+  let fade = p.t
+  c.look_by(b, fn() { { ..@ui.still_look, alpha: dmin(1.0, fade.get(c)) } })
   c.semantics(b, Status, id~, label=words)
   tip(c, key + "/tip", id, words, side=Bottom)
 }
@@ -4780,17 +4720,28 @@ fn sync_drawn_back(part : Int, pts : Array[Double], left : Double) -> Array[Arra
 
 ///|
 /// What the catching up said last, by its key (said as it goes), and whether it showed (only then the tick).
-// kept across runs: put back as it goes (sync_key)
+// kept across runs: put back as it goes (sync_key), and as a run begins (on_reset)
 let sync_said : LiveMap[String, String] = LiveMap::new()
 
 ///|
-// kept across runs: put back as it goes (sync_key)
+// kept across runs: put back as it goes (sync_key), and as a run begins (on_reset)
 let sync_seen : LiveMap[String, Bool] = LiveMap::new()
 
 ///|
 /// Where each mark comes to rest once all is here, by its key, from the frame it was.
-// kept across runs: put back as it goes (sync_key)
+// kept across runs: put back as it goes (sync_key), and as a run begins (on_reset)
 let sync_rests : LiveMap[String, SyncRest] = LiveMap::new()
+
+///|
+/// A run begins with nothing caught up: what a run before left showing (a mark seen, its tick still to come, as that
+/// run ended) is no run's after it (a Home's catching up drawn as going away in the next run's first frames).
+fn init {
+  @ui.on_reset(fn() {
+    sync_said.clear()
+    sync_seen.clear()
+    sync_rests.clear()
+  })
+}
 
 ///|
 /// A turn of the mark (the web's SyncMark: 1.4s, eased in and out).
@@ -4828,7 +4779,7 @@ let sync_out_ms : Double = 400.0
 /// A key of a bar for what comes by itself (what comes to this device: sfdesk transfers.mbt), as update_key draws one:
 /// round, `side` across, its `glyph` `mark` big in its middle, in its place while something comes how far it has come
 /// (`coming`: coming_mark; None while nothing comes), update_key's dot, red's, where something `failed`; pressed, what
-/// comes (the page's). True on its press.
+/// comes (the page's): `on_press`.
 pub fn progress_key(
   c : @ui.Ctx,
   key : String,
@@ -4838,7 +4789,8 @@ pub fn progress_key(
   label : String,
   coming : Double?,
   failed~ : Bool,
-) -> Bool {
+  on_press? : () -> Unit,
+) -> Unit {
   let t = theme()
   let id = c.id(key)
   let b = c.box(
@@ -4864,7 +4816,10 @@ pub fn progress_key(
     },
   )
   c.semantics(b, Button, id~, label~)
-  c.clicked(id)
+  match on_press {
+    Some(f) => c.on_press(id, f)
+    None => ()
+  }
 }
 
 ///|
@@ -4883,7 +4838,7 @@ let update_key_hot : @ui.Style = update_key_box.then(@ui.css("bg=Hover"))
 let update_ring_at : @ui.Style = @ui.css("w=Full h=Full align=ACenter justify=JCenter")
 
 ///|
-/// What comes (a download, a newer build), drawn as an icon in an icon's place (`size`, the box the icons beside it
+/// What comes (a download), drawn as an icon in an icon's place (`size`, the box the icons beside it
 /// are drawn in, in `color`): a ring where those icons draw their circles (as check-circle's, 3.5 to 20.5 of their 24
 /// grid, a line as wide as theirs), the accent from its top as far round as it has come (`coming`, 0 to 1; None, the
 /// spinner's quarter turning: @sf.progress_spinner), a short arrow down in it. No bigger than the icons beside it: a
@@ -4901,6 +4856,71 @@ pub fn coming_mark(c : @ui.Ctx, key : String, coming : Double?, size : Double, c
 }
 
 ///|
+/// coming_mark as a node of the window's tree in `parent`: the download's mark `size` across in `color`, the ring round
+/// it the accent from its top as far round as `coming` says it has come (0 to 1), going to a part told anew over
+/// @kit.progress_ms, eased out (progress_spinner's).
+#callsite(autofill(loc))
+pub fn coming_mark_node(
+  parent : @view.View,
+  coming : () -> Double,
+  size : Double,
+  color : () -> Int64,
+  loc~ : SourceLoc,
+) -> Unit {
+  let stroke = size * icon_stroke / 24.0
+  let side = size * coming_ring / 24.0 + stroke
+  let pi = 3.141592653589793
+  let mid = side / 2.0
+  let r = mid - stroke / 2.0
+  let ring = @ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi)
+  let part = fn() {
+    let k = coming()
+    if k < 0.0 {
+      0.0
+    } else if k > 1.0 {
+      1.0
+    } else {
+      k
+    }
+  }
+  let way = EdgeWay::new(@signals.untracked(part))
+  let look = coming_mark_box(size)
+  parent.box(made_for=loc, fn(m) {
+    style_node(m, fn() { look })
+    m.reacts(part, fn(k) { way.go(m, k, @kit.progress_ms) })
+    m.box(fn(l) {
+      l
+      .width(Is(Some(side)))
+      .height(Is(Some(side)))
+      .lines(By(fn() {
+        let t = theme()
+        let shown = way.shown(m)
+        let lines = [@ui.line(ring, width=stroke, color=t.p.line_strong)]
+        if shown > 0.0 {
+          lines.push(@ui.line(@ui.arc(mid, mid, r, from=-0.5 * pi, sweep=shown * 2.0 * pi), width=stroke, color=t.p.accent))
+        }
+        lines
+      }))
+      |> ignore
+    })
+    |> ignore
+    m.box(fn(o) {
+      o.over(Is(true)) |> ignore
+      style_node(o, fn() { update_ring_at })
+      icon_node(o, "download-ring", size, By(color)) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// What coming_mark draws in: `size` square, what it holds in its middle.
+fn coming_mark_box(size : Double) -> @ui.Style {
+  @ui.style(w=Fixed(size), h=Fixed(size), align=ACenter, justify=JCenter)
+}
+
+///|
 /// The icons' line (design/icons: stroke-width 1.75 of 24), and the width of the circles they draw (3.5 to 20.5).
 let icon_stroke : Double = 1.75
 
@@ -4908,7 +4928,7 @@ let icon_stroke : Double = 1.75
 let coming_ring : Double = 17.0
 
 ///|
-/// Its dot: 3 in from the key's top right, 9 across on a ring of the page's ground 2 wide (Home.kt).
+/// Its dot: 3 in from the key's top right, 9 across on a ring of the page's ground 2 wide.
 // kept across runs: a value (no field of it changes)
 let update_dot_at : @ui.Style = @ui.style(w=Full, h=Full, pt=room(update_dot_in), pr=room(update_dot_in), align=AEnd)
 
@@ -4934,3 +4954,8 @@ let update_dot_rim : Double = 2.0
 ///|
 // kept across runs: a value (no field of it changes)
 let update_dot_bad : @ui.Style = @ui.css("w=Full h=Full radius=Full bg=Danger")
+
+///|
+/// A menu's row at a dialog's foot: a capsule (row_line's there).
+// kept across runs: a value (no field of it changes)
+let menu_row_capsule : @ui.Style = @ui.css("radius=Full")

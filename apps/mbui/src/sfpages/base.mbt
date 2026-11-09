@@ -117,7 +117,6 @@ using @sfbase {
   list_after,
   list_frame,
   local_sent,
-  message_runs,
   note_thumb,
   number,
   open_link,
@@ -151,7 +150,6 @@ using @sfbase {
   read_only_words,
   sent_local,
   sent_local_gone,
-  sent_marks,
   writing_add,
   writing_drop,
   writing_take,
@@ -180,31 +178,12 @@ using @sfbase {
   relay_go,
   relay_connect,
   type FlyingFile,
-}
-
-///|
-pub fn dmax(a : Double, b : Double) -> Double {
-  if a > b {
-    a
-  } else {
-    b
-  }
-}
-
-
-///|
-pub fn dmin(a : Double, b : Double) -> Double {
-  if a < b {
-    a
-  } else {
-    b
-  }
+  words_runs,
 }
 
 ///|
 using @settings {
   binding_of,
-  decision_form,
   policy_forms,
   profile_forms,
   connects_mine,
@@ -216,6 +195,8 @@ using @settings {
   mode_name,
   profile_groups,
   recovery_words,
+  recovery_words_turned,
+  recovery_words_changed,
   vault_act,
   vault_ask,
   vault_hosts,
@@ -249,7 +230,6 @@ using @settings {
   build_version,
   error_text,
   has,
-  hit,
   is_doing,
   join,
   key_actions,
@@ -267,4 +247,11 @@ using @settings {
   type Core,
   type Asked,
   type Here,
+}
+
+///|
+using @sf {
+  dmin,
+  dmax,
+  dclamp,
 }

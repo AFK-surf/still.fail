@@ -1,4 +1,4 @@
-// A station's address, `"<workspace>/<station>"` (station.rs `StationAddr`).
+// A station's address, `"<workspace>/<station>"`.
 import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 

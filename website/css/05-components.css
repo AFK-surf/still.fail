@@ -1,0 +1,433 @@
+/* =====================================================================================================================
+   monoid's own app, drawn in HTML/CSS (the teams cells, the device cards, the scroll scene).
+   Every value is the product's (REFERENCE: web/src/styles, web/ui/src, web/src/mobile, apps/mbui tokens), at its own
+   1:1 size; a whole picture is scaled with `zoom`, never by shrinking its type. Inter + PingFang, never the site's
+   Suisse; the product's own oranges (#DC5929 marks, #982E01 names), never the brand's. Radii are the product's x1.25
+   (superellipse corners where the browser has them: r-nav 12 reads 15).
+   ===================================================================================================================== */
+.mk {
+  --cv: #FFFFFF; --sb: #F6F5F1; --tx: #24272B; --mu: #565B62; --ln: rgb(50 45 36 / .141); --ls: #C1C4C9;
+  --se: #EAE7E1; --nb: rgb(36 39 43 / .075); --ac: #DC5929; --at: #982E01; --gr: #026039; --am: #6E4802;
+  --rd: #9A2830; --on: #45B164; --code: #7C3FA0; --raised: #E4E4E8; --card: #F4F4F4; --hv: rgb(38 33 23 / .065);
+  --ma: var(--sb); /* the ground a row's faces are cut out of */
+  color: var(--tx); text-align: left; letter-spacing: 0; text-transform: none;
+  font: 400 14px/1.55 "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-feature-settings: "cv11", "ss01"; font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  -webkit-user-select: none; user-select: none; pointer-events: none;
+}
+.mk *, .mk *::before, .mk *::after { box-sizing: border-box; }
+.mk b, .mk strong { font-weight: 600; }
+.mk i { font-style: normal; }
+.mk code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; color: var(--code); }
+/* The phone theme (narrow web, native iOS / Android; the Duo's wide frame uses it too: web/src/mobile/styles/root.css.ts,
+   apps/mbui sf/tokens.mbt light_palette). */
+.mk.mk-m { --cv: #F5F3EF; --sb: #ECE9E1; --se: #E1DBD1; --mu: #535559; --nb: rgb(50 45 36 / .075); --ac: #CC5A34; --at: #8F2B01; --gr: #2F8F5B;
+  --raised: #FFFFFF; --ma: var(--cv); }
+
+/* Line icons: the app's 24-grid set, 1.75 stroke, in muted ink (masks, so they take currentColor). */
+.mk-i { display: inline-block; flex: none; width: var(--s, 16px); height: var(--s, 16px); background: currentColor;
+  -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat; }
+/* Model marks: the maker's logo in ink. */
+.mk-lg { display: inline-block; flex: none; width: var(--s, 12px); height: var(--s, 12px); background: var(--tx);
+  -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat; }
+/* People: the product's fallback face (web/ui/src/Avatar.tsx): a tone of AVATAR_TONES, the first letter of the name's
+   last word in white at .52 of the size; round wherever it stands for a person in a row, a bar or a message. */
+.mk-face { position: relative; display: inline-grid; place-items: center; flex: none; width: var(--s, 16px); height: var(--s, 16px); border-radius: 50%;
+  background: #c9954c; color: #fff; font-weight: 600; font-size: calc(var(--s, 16px) * .52); font-size: round(calc(var(--s, 16px) * .52), 1px); line-height: 1; }
+.mk-face.z { background: #6f8fbf; }
+/* An agent as an avatar: its maker's 12 logo on a disc of ink at 7.5%. */
+.mk-av { position: relative; display: inline-grid; place-items: center; flex: none; width: 18px; height: 18px; border-radius: 50%; background: var(--nb); }
+.mk-av > .mk-lg { --s: 12px; }
+/* Chat marks, in a 10 slot before the title: done / your turn (blue), needs you (red), working (yellow spokes, stepping). */
+.mk-dot { flex: none; width: 8px; height: 8px; margin: 0 1px; border-radius: 50%; background: #3B82F6; }
+.mk-dot.r { background: #E5484D; }
+.mk-slot { flex: none; width: 10px; }
+.mk-busy { --spokes: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.9' stroke-linecap='round'><path d='M12 7.2V2.4'/><path d='M15.39 8.61l3.4-3.4' stroke-opacity='.2'/><path d='M16.8 12h4.8' stroke-opacity='.2'/><path d='M15.39 15.39l3.4 3.4' stroke-opacity='.25'/><path d='M12 16.8v4.8' stroke-opacity='.32'/><path d='M8.61 15.39l-3.4 3.4' stroke-opacity='.42'/><path d='M7.2 12H2.4' stroke-opacity='.55'/><path d='M8.61 8.61l-3.4-3.4' stroke-opacity='.75'/></svg>");
+  display: inline-block; flex: none; width: 10px; height: 10px; background: #F2B01E;
+  -webkit-mask: var(--spokes) center / 100% no-repeat; mask: var(--spokes) center / 100% no-repeat; }
+/* The running ring: eight dashes 3px outside the avatar in the product's orange, the lead bright and the tail fading. */
+.mk-av.ag::after { content: ""; position: absolute; inset: -3px; background: #DC5929;
+  --segments: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.5'><path d='M8.99 1.16A11.25 11.25 0 0 1 15.01 1.16'/><path d='M17.54 2.21A11.25 11.25 0 0 1 21.79 6.46' stroke-opacity='.2'/><path d='M22.84 8.99A11.25 11.25 0 0 1 22.84 15.01' stroke-opacity='.2'/><path d='M21.79 17.54A11.25 11.25 0 0 1 17.54 21.79' stroke-opacity='.25'/><path d='M15.01 22.84A11.25 11.25 0 0 1 8.99 22.84' stroke-opacity='.32'/><path d='M6.46 21.79A11.25 11.25 0 0 1 2.21 17.54' stroke-opacity='.42'/><path d='M1.16 15.01A11.25 11.25 0 0 1 1.16 8.99' stroke-opacity='.55'/><path d='M2.21 6.46A11.25 11.25 0 0 1 6.46 2.21' stroke-opacity='.75'/></svg>");
+  -webkit-mask: var(--segments) center / 100% no-repeat; mask: var(--segments) center / 100% no-repeat; }
+/* Both step an eighth of a turn ten times a second (the product's cadence), only where a picture is shown: the device
+   cards run them in the card in view, the teams cells while they play. The scroll scene keeps them still: the scroll
+   sets its time. Reduced motion stands them still (00-base.css). */
+@keyframes step-turn { to { transform: rotate(1turn); } }
+.fpanel .mk-av.ag::after, .fpanel .mk-busy { animation: step-turn .8s steps(8) infinite; }
+/* Slack's mark in its own colours (web/ui/src/brands.tsx SlackLogo), 12 in a 16 cell at a title's end. */
+.mk-kind { display: grid; place-items: center; flex: none; width: 16px; height: 16px; }
+.mk-slack { width: 12px; height: 12px; background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 54 54'><path fill='%2336C5F0' d='M19.712.133a5.381 5.381 0 0 0-5.376 5.387 5.381 5.381 0 0 0 5.376 5.386h5.376V5.52A5.381 5.381 0 0 0 19.712.133m0 14.365H5.376A5.381 5.381 0 0 0 0 19.884a5.381 5.381 0 0 0 5.376 5.387h14.336a5.381 5.381 0 0 0 5.376-5.387 5.381 5.381 0 0 0-5.376-5.386'/><path fill='%232EB67D' d='M53.76 19.884a5.381 5.381 0 0 0-5.376-5.386 5.381 5.381 0 0 0-5.376 5.386v5.387h5.376a5.381 5.381 0 0 0 5.376-5.387m-14.336 0V5.52A5.381 5.381 0 0 0 34.048.133a5.381 5.381 0 0 0-5.376 5.387v14.364a5.381 5.381 0 0 0 5.376 5.387 5.381 5.381 0 0 0 5.376-5.387'/><path fill='%23ECB22E' d='M34.048 54a5.381 5.381 0 0 0 5.376-5.387 5.381 5.381 0 0 0-5.376-5.386h-5.376v5.386A5.381 5.381 0 0 0 34.048 54m0-14.365h14.336a5.381 5.381 0 0 0 5.376-5.386 5.381 5.381 0 0 0-5.376-5.387H34.048a5.381 5.381 0 0 0-5.376 5.387 5.381 5.381 0 0 0 5.376 5.386'/><path fill='%23E01E5A' d='M0 34.249a5.381 5.381 0 0 0 5.376 5.386 5.381 5.381 0 0 0 5.376-5.386v-5.387H5.376A5.381 5.381 0 0 0 0 34.249m14.336 0v14.364A5.381 5.381 0 0 0 19.712 54a5.381 5.381 0 0 0 5.376-5.387V34.249a5.381 5.381 0 0 0-5.376-5.387 5.381 5.381 0 0 0-5.376 5.387'/></svg>") center / contain no-repeat; }
+
+/* ---- Desktop window (the Mac app; the web app adds a browser bar): 920 × 660 at 1:1, scaled whole ---- */
+.mk-win { --h: 660px; position: relative; width: 920px; height: var(--h); border-radius: 12px; overflow: hidden; background: var(--cv);
+  box-shadow: 0 0 0 .5px rgb(0 0 0 / .2), 0 30px 70px -30px rgb(28 27 26 / .4); }
+.mk-app { display: grid; grid-template-columns: auto minmax(0, 1fr); height: 100%; }
+.mk-win.web .mk-app { height: calc(100% - 40px); }
+/* Rail + sidebar: one block on one warm ground, flush with the white page (web/src/styles/shell.css.ts). */
+.mk-dock { position: relative; display: flex; background: var(--sb); min-height: 0; }
+/* The Mac's buttons, the window key: 16 in, centred in the app's 44 top row (mbui host/mac_app.m). */
+.mk-tl { position: absolute; left: 16px; top: 16px; display: flex; gap: 8px; z-index: 1; }
+.mk-tl i, .mk-browser .tl i { width: 12px; height: 12px; border-radius: 50%; background: #FF5F57; box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .14); }
+.mk-tl i:nth-child(2), .mk-browser .tl i:nth-child(2) { background: #FEBC2E; }
+.mk-tl i:nth-child(3), .mk-browser .tl i:nth-child(3) { background: #28C840; }
+/* The rail (web/src/Rail.css.ts): 56, places 38 (their ground 30, r 11.25) 44 apart; the first at 11, on a Mac 47. */
+.mk-rail { width: 56px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 11px 0 9px; color: var(--mu); }
+.mac .mk-rail { padding-top: 47px; }
+.mk-ri { position: relative; display: grid; place-items: center; width: 38px; height: 38px; }
+.mk-ri::before { content: ""; position: absolute; inset: 4px; border-radius: 11.25px; }
+.mk-ri.on { color: var(--tx); }
+.mk-ri.on::before { background: var(--se); }
+.mk-ri > .mk-i { --s: 20px; position: relative; }
+.mk-ws { position: relative; margin: auto 0 4px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 11.25px; background: var(--hv); color: var(--tx); font-weight: 600; font-size: 13px; }
+.mk-ws::before { content: ""; position: absolute; left: -13px; top: 8px; width: 3px; height: 14px; border-radius: 2px; background: var(--tx); }
+/* The sidebar (web/src/Sidebar.css.ts): the chats' 240, the stations' 280, 8 of it under the rail's edge; New chat /
+   Add station 14 from the top (on a Mac under its 44 row, 50), the list 6 below it. */
+.mk-side { width: 240px; min-width: 0; padding: 0 8px 12px 0; display: flex; flex-direction: column; overflow: hidden; }
+.mk-side.st { width: 280px; }
+.mk-nav { display: flex; align-items: center; gap: 8px; height: 32px; margin: 14px 0 6px; padding: 6px 10px; border-radius: 15px; font-size: 13px; line-height: 20px; }
+.mac .mk-nav { margin-top: 50px; }
+.mk-nav > .mk-i { color: var(--mu); }
+.mk-nav > .mk-i.compose { translate: 0 -1px; }
+.mk-nav > .mk-i.filter { margin: 0 -2px 0 auto; }
+.mk-day { margin: 14px 8px 4px; font-size: 12px; line-height: 18px; color: var(--mu); }
+/* A chat row (navSession): 54 high, [mark] title / last message, then the agents' logos and the faces. */
+.mk-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 7px 10px; border-radius: 15px; font-size: 13px; line-height: 20px; }
+.mk-row + .mk-row { margin-top: 2px; }
+.mk-row.on { --ma: var(--se); background: var(--se); }
+.mk-row .l1 { display: flex; align-items: center; gap: 6px; height: 20px; min-width: 0; }
+.mk-row .l1 > b { font-weight: 400; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-row.unread .l1 > b { font-weight: 500; }
+.mk-row .l2 { display: flex; align-items: center; gap: 6px; height: 18px; font-size: 12px; line-height: 18px; color: var(--mu); }
+:is(.mk-row, .mk-mrow) .l2 > span:not(.mk-aside) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Done: a 14 check in the mark's 10 column, the summary where the title starts. */
+:is(.mk-row, .mk-mrow) .l2 > .mk-i.check { --s: 14px; margin: 0 -2px; }
+/* The aside (RowPicture): the agents' 12 logos in 16 boxes, 6 apart from the faces, 16 round faces overlapping 3 with a
+   1 ring of the row's ground; with more than one, the starter on top, ringed in ink 1 to 2 out. */
+.mk-aside { display: flex; align-items: center; flex: none; padding-left: 2px; }
+.mk-aside > .mk-lg { margin: 0 10px 0 2px; }
+.mk-aside > .mk-face { box-shadow: 0 0 0 1px var(--ma); }
+.mk-aside > .mk-face + .mk-face { margin-left: -3px; }
+.mk-aside > .mk-face:has(+ .mk-face) { z-index: 1; margin-right: 1px; }
+.mk-aside > .mk-face:has(+ .mk-face)::after { content: ""; position: absolute; inset: -2px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--tx); }
+/* Station rows (SidebarList NavItem): 78 high; the mark in a 16 column, the meters and the link under the title. */
+.mk-row .l1 > .mk-st { width: 16px; justify-content: center; margin-right: 2px; }
+.mk-row .run { flex: none; display: inline-flex; align-items: center; gap: 5px; max-width: 45%; font-size: 12px; color: var(--at); white-space: nowrap; }
+.mk-row .run::before, .mk-row .ok::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--on); }
+.mk-row .ok { flex: none; display: inline-flex; }
+.st-swap > .run { max-width: none; }
+.mk-row .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 2px 24px; }
+.mk-row .l3 { margin-left: 24px; font-size: 12px; line-height: 18px; color: var(--mu); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A meter chip: what is left, its fill the share used (muted at .28; amber from 75% used, red from 90%). */
+.mk-chip { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 16px; padding: 0 5px; border-radius: 10.5px; overflow: hidden;
+  background: var(--nb); font-size: 11px; line-height: 16px; font-weight: 600; white-space: nowrap; }
+.mk-chip > .meter { position: absolute; inset: 0; }
+/* Korean's 메모리 is wider than Mem: the chip draws a little tighter, so a station's three chips keep one line. */
+:root:lang(ko) .mk-chip { gap: 4px; padding: 0 4px; }
+.mk-chip > .meter > i { position: absolute; inset: 0 auto 0 0; background: rgb(86 91 98 / .28); transition: background-color 400ms var(--ease-out); }
+.mk-chip.rd > .meter > i { background: rgb(154 40 48 / .28); }
+.mk-chip > :not(.meter) { position: relative; }
+.mk-st { display: flex; flex: none; }
+.mk-st.willow { color: #B75400; } .mk-st.mini { color: #2D74CA; } .mk-st.laptop { color: #835CBE; } .mk-st.server { color: #0E8C41; }
+
+/* ---- The page: bar, messages, composer ---- */
+.mk-page { position: relative; min-width: 0; display: flex; flex-direction: column; background: var(--cv); overflow: hidden; }
+.mk-bar { display: flex; align-items: center; gap: 10px; height: 45px; flex: none; padding: 0 12px 1px 20px; }
+.mk-bar > h4 { margin: 0; font-size: 14px; font-weight: 600; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.mk-faces { display: flex; flex: none; }
+.mk-faces > .mk-face + .mk-face { margin-left: -4px; box-shadow: 0 0 0 1.5px var(--cv); }
+.mk-bar > .end { margin-left: auto; display: flex; gap: 2px; color: var(--mu); }
+.mk-bar > .end > .mk-i { --s: 16px; margin: 8px; }
+/* The agent·station pill: logo | station name, the online dot (10 with a 2 ring of the page) on its corner; spokes on
+   the logo while it works. */
+.mk-pill { position: relative; flex: none; display: inline-flex; align-items: center; height: 20px; border-radius: 7.5px; background: var(--nb); font-size: 12px; line-height: 20px; color: var(--mu); }
+.mk-pill > .lg { position: relative; display: grid; place-items: center; width: 20px; height: 20px; }
+.mk-pill > .lg > .mk-busy { position: absolute; right: -1px; bottom: -1px; width: 8px; height: 8px; }
+.mk-pill > span:last-child { padding: 0 4.8px; white-space: nowrap; }
+.mk-pill::after { content: ""; position: absolute; right: -4px; bottom: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--on); border: 2px solid var(--cv); }
+/* Messages: a 760 column centred in 40 of padding; others' avatars hang in it, 29 left of the words. */
+.mk-msgs { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 28px; width: 100%; max-width: 840px; margin: 0 auto; padding: 24px 40px; }
+.mk-msg { position: relative; display: grid; gap: 4px; }
+.mk-msg > :is(.mk-av, .mk-face) { position: absolute; left: -29px; top: 3px; --s: 18px; }
+.mk-msg .hd { display: flex; align-items: baseline; gap: 6px; min-height: 24px; }
+.mk-msg .hd > b { font-size: 13px; font-weight: 600; color: var(--at); }
+.mk-msg .tm, .mk-mine .tm { font-size: 11px; color: var(--mu); }
+.mk-msg .bd { font-size: 14px; line-height: 1.55; }
+.mk-msg .bd.md { line-height: 1.65; }
+.mk-msg .bd p { margin: 0; }
+.mk-msg .bd ul { margin: 6px 0 0; padding-left: 20px; list-style: disc; }
+.mk-mine { display: grid; justify-items: end; gap: 4px; }
+.mk-mine .bub { max-width: 78%; padding: 8px 14px; border-radius: 22.5px; background: var(--nb); font-size: 14px; line-height: 1.55; }
+/* An agent at work: the activity line, the ringed avatar in the gutter. */
+.act { position: relative; display: flex; align-items: center; gap: 8px; min-height: 24px; font-size: 13px; color: var(--mu); white-space: nowrap; }
+.act > .mk-av { position: absolute; left: -29px; }
+.act > span:not(.t) { overflow: hidden; text-overflow: ellipsis; }
+/* The composer: a 44 pill on raised glass, 12 from the page's sides and 16 from its foot, at most 804. */
+.mk-composer { flex: none; display: flex; align-items: center; gap: 2px; width: calc(100% - 24px); max-width: 804px; height: 44px; margin: 0 auto 16px; padding: 6px; border-radius: 999px;
+  background: color-mix(in srgb, var(--raised) 72%, transparent); }
+.mk-composer .b { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 50%; color: var(--mu); }
+.mk-composer .ph { flex: 1; min-width: 0; font-size: 14px; line-height: 21px; color: var(--mu); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-composer .send { background: #C2C3C6; color: var(--raised); }
+
+/* ---- A station's page, Overview (web/src/cloud: StationPage, settings, MarkPick, StationCards, ProfileCard) ---- */
+.mk-pg { flex: 1; min-height: 0; width: 100%; max-width: 840px; margin: 0 auto; padding: 40px 40px 24px; display: flex; flex-direction: column; }
+.mk-pg > .hd { display: flex; align-items: center; gap: 16px; margin-top: 8px; }
+.mk-pg > .hd .tile { display: grid; place-items: center; flex: none; width: 56px; height: 56px; border-radius: 20px; background: #F1F1F1; }
+.mk-pg > .hd .tile .mk-i { --s: 28px; }
+.mk-pg > .hd h4 { margin: 0; font-size: 22px; line-height: 40px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-pg > .hd > div { min-width: 0; }
+.mk-pg > .hd p { margin: 2px 0 0; display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 20px; color: var(--mu); white-space: nowrap; overflow: hidden; }
+.mk-pg > .hd p > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.mk-pg > .hd p > .dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--on); }
+.mk-pg > .hd > .mk-i.more { margin: 0 8px 0 auto; color: var(--mu); }
+/* The parts: a segmented control, its options as wide as the widest. */
+.mk-seg { align-self: flex-start; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; height: 36px; margin-top: 36px; padding: 3px;
+  border-radius: 999px; background: rgb(36 39 43 / .06); }
+.mk-seg > span { display: grid; place-items: center; height: 30px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--mu); white-space: nowrap; }
+.mk-seg > span.on { background: #fff; color: var(--tx); box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
+.mk-pg h5 { margin: 24px 0 10px; font-size: 14px; font-weight: 600; line-height: 22px; display: flex; gap: 8px; }
+.mk-pg h5 > .n { color: var(--mu); font-weight: 500; }
+.mk-dials { display: flex; flex-wrap: wrap; gap: 12px 36px; }
+.mk-dial { display: grid; gap: 2px; min-width: 96px; color: var(--gr); }
+.mk-dial > b { font-size: 28px; line-height: 1.15; font-weight: 600; letter-spacing: -.02em; color: var(--tx); }
+.mk-dial > b > small { font-size: .55em; font-weight: 500; color: var(--mu); letter-spacing: 0; margin-left: 2px; }
+.mk-dial > .cells { --n: 0; width: 107px; height: 14px; margin: 4px 0 6px;
+  background: linear-gradient(90deg, currentColor calc(var(--n) * 11px - 3px), var(--ln) 0);
+  -webkit-mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='11' height='14'><rect width='8' height='14' rx='2'/></svg>") 0 0 / 11px 14px repeat-x;
+  mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='11' height='14'><rect width='8' height='14' rx='2'/></svg>") 0 0 / 11px 14px repeat-x; }
+.mk-dial > .lb { font-size: 13px; font-weight: 500; color: var(--tx); line-height: 20px; }
+.mk-dial > .sb { font-size: 12px; color: var(--mu); line-height: 18px; }
+/* The link (path over latency, up over down), the agents' processes, what monoid itself takes. */
+.mk-net { display: grid; grid-template-columns: max-content max-content; gap: 2px 14px; margin-top: 18px; font-size: 13px; line-height: 20px; color: var(--mu); white-space: nowrap; }
+:is(.mk-net, .mk-uses) b { font-weight: 500; color: var(--tx); }
+.mk-line { margin: 18px 0 0; font-size: 13px; line-height: 20px; color: var(--mu); white-space: nowrap; }
+.mk-uses { display: flex; align-items: center; gap: 14px; margin: 18px 0 0; font-size: 13px; line-height: 20px; color: var(--mu); white-space: nowrap; }
+.mk-uses > .mk-i { color: var(--mu); }
+/* Profiles: a list on the card's ground (padding 8, outer r 30), 60-high rows. */
+.mk-plist { display: grid; gap: 2px; padding: 8px; border-radius: 30px; background: var(--card); }
+.mk-prow { display: flex; align-items: center; gap: 12px; height: 60px; padding: 10px 12px; border-radius: 22.5px; }
+.mk-prow > .pm { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; }
+.mk-prow > .pm > .mk-lg { --s: 18px; }
+.mk-prow > .t { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.mk-prow .tt { display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 20px; font-weight: 500; }
+.mk-prow small { font-size: 12px; line-height: 18px; color: var(--mu); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-prow > .mk-i.chevr { color: var(--mu); }
+/* The runtime's tag: Claude Code's mark in its orange. */
+.mk-rt { display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 5px; border-radius: 6.25px; background: var(--hv); font-size: 11px; line-height: 18px; font-weight: 500; color: var(--mu); }
+.mk-rt > .cc { width: 12px; height: 12px; flex: none; background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23D97757' d='m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z'/></svg>") center / contain no-repeat; }
+
+/* ---- Browser chrome for the web app (the site's own frame round the app; the app under it at the web's values) ---- */
+.mk-browser { position: relative; display: flex; align-items: center; gap: 16px; height: 40px; padding: 0 14px; background: #EEEDEB; box-shadow: inset 0 -.5px 0 rgb(0 0 0 / .14); color: #6B6E73; }
+.mk-browser .tl { display: flex; gap: 8px; }
+.mk-browser .nav { display: flex; gap: 10px; }
+.mk-browser .nav > .mk-i { --s: 16px; }
+.mk-browser .nav > .mk-i + .mk-i { opacity: .4; }
+.mk-url { position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 6px; width: min(46%, 380px); height: 26px; border-radius: 8px;
+  background: rgb(0 0 0 / .055); font-size: 12.5px; color: #44474C; }
+.mk-url > .mk-i { --s: 11px; }
+
+/* ---- Android (Pixel 9: a 412 × 915 screen, corner 40, safe top 48 / foot 24; web/stories/devices.ts), at 1:1 in a
+   10 bezel and zoomed as a whole. The app draws edge to edge under the system's bars (MainActivity: light bars). ---- */
+.mk-phone { --z: .5; position: relative; flex: none; width: 432px; height: 935px; zoom: var(--z); padding: 10px; border-radius: 50px; background: #101113;
+  box-shadow: inset 0 0 0 1.5px #3A3B3F, 0 50px 90px -40px rgb(28 27 26 / .45); }
+.mk-phone > .mk { position: relative; height: 100%; border-radius: 40px; overflow: hidden; background: var(--cv); }
+.mk-phone .isl { position: absolute; left: 50%; top: 23px; width: 22px; height: 22px; margin-left: -11px; border-radius: 50%; background: #000; z-index: 7; }
+.mk-phone .gest { position: absolute; left: 50%; bottom: 19px; width: 108px; height: 4px; margin-left: -54px; border-radius: 3px; background: var(--tx); z-index: 7; }
+/* The system's status bar: the clock (and the share's small icon after it) at the left; signal, Wi-Fi, battery. */
+.mk-sb { position: absolute; left: 0; right: 0; top: 0; height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; z-index: 6;
+  font: 600 14px/1 system-ui, -apple-system, "Roboto", sans-serif; letter-spacing: -.01em; color: var(--tx); }
+.mk-sb > span { display: flex; align-items: center; }
+.mk-sb .ic { gap: 5px; }
+.mk-sb .sig { width: 17px; height: 11px; background:
+  linear-gradient(currentColor, currentColor) 0 100% / 3px 4px no-repeat, linear-gradient(currentColor, currentColor) 4.5px 100% / 3px 6px no-repeat,
+  linear-gradient(currentColor, currentColor) 9px 100% / 3px 8px no-repeat, linear-gradient(currentColor, currentColor) 13.5px 100% / 3px 11px no-repeat; border-radius: 1px; }
+.mk-sb .wifi { width: 15px; height: 11px; background: currentColor; clip-path: polygon(50% 100%, 0 30%, 15% 15%, 50% 0, 85% 15%, 100% 30%); }
+.mk-sb .bat { position: relative; width: 22px; height: 11px; padding: 2px; margin-right: 2.5px; border-radius: 3.5px; box-shadow: inset 0 0 0 1px currentColor; }
+.mk-sb .bat::before { content: ""; display: block; width: 80%; height: 100%; border-radius: 1.5px; background: currentColor; }
+.mk-sb .bat::after { content: ""; position: absolute; right: -2.5px; top: 3.5px; width: 1.5px; height: 4px; border-radius: 0 1px 1px 0; background: currentColor; opacity: .5; }
+/* The small icon: the launcher face's one-colour version (its eyes and cheeks, res/drawable/launcher_face_mono.xml). */
+.mk-sb .ni, .notif .si::before { --face: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='24 30 60 60'><circle cx='41.33' cy='52.27' r='4.75'/><circle cx='66.67' cy='52.27' r='4.75'/><rect x='28.08' y='66.82' width='10.37' height='5.61' rx='2.8'/><rect x='69.55' y='66.82' width='10.37' height='5.61' rx='2.8'/></svg>");
+  -webkit-mask: var(--face) center / contain no-repeat; mask: var(--face) center / contain no-repeat; }
+.mk-sb .ni { width: 16px; height: 16px; margin-left: 8px; background: currentColor; }
+
+/* Phone lists (the Duo's sidebar too): the search pill, the day, the rows. */
+.mk-search { flex: none; display: flex; align-items: center; gap: 8px; height: 38px; margin: 0 0 6px; padding: 0 12px; border-radius: 19px; background: rgb(36 39 43 / .06); font-size: 15px; color: var(--mu); white-space: nowrap; overflow: hidden; }
+.mk-search > .mk-i { --s: 17px; }
+.mk-mday { padding: 14px 20px 6px; font-size: 15px; font-weight: 600; line-height: 21px; }
+.mk-mrow { display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; height: 66px; padding: 0 16px 0 22px; }
+.mk-mrow .l1 { display: flex; align-items: center; gap: 8px; height: 22px; font-size: 15px; line-height: 22px; min-width: 0; }
+.mk-mrow .l1 > b { font-weight: 400; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-mrow.unread .l1 > b { font-weight: 600; } /* mbui: Semibold when unread */
+.mk-mrow .l2 { display: flex; align-items: center; gap: 8px; height: 20px; font-size: 13px; line-height: 20px; color: var(--mu); }
+/* The aside: the model's 14 logo in a 16 box, 18 faces 16 along with a 1 ring of the page; the starter ringed 22 across. */
+.mk-mrow .mk-aside { padding-left: 2px; }
+.mk-mrow .mk-aside > .mk-lg { --s: 14px; margin: 0 8px 0 1px; }
+.mk-mrow .mk-face { --s: 18px; }
+.mk-mrow .mk-aside > .mk-face + .mk-face { margin-left: -2px; }
+.mk-mrow .mk-aside > .mk-face:has(+ .mk-face) { margin-right: 0; }
+
+/* Phone chat (the native app's, apps/mbui sfapp/chat.mbt): frosted 50 bar under the status bar, no line under it; the
+   back in the accent's ink; the agent's tile (card ground, a line round it) with the station's name. */
+.mk-mchat-top { position: absolute; left: 0; right: 0; top: 0; z-index: 3; border-radius: 40px 40px 0 0; display: flex; align-items: center; gap: 8px; height: 98px; padding: 53px 16px 5px 4px;
+  background: rgb(245 243 239 / .7); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
+.mk-mchat-top > .back { display: grid; place-items: center; flex: none; width: 40px; height: 40px; margin-right: -8px; color: var(--at); }
+.mk-mchat-top > .back > .mk-i { --s: 22px; }
+.mk-mchat-top > h4 { margin: 0; font-size: 16px; font-weight: 600; line-height: 22.4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.mk-mchat-top .mk-faces > .mk-face + .mk-face { margin-left: -5px; }
+.mk-mchat-top .mk-pill { height: 22px; border-radius: 6px; background: #fff; box-shadow: inset 0 0 0 1px var(--ln); font-size: 12px; line-height: 14px; }
+.mk-mchat-top .mk-pill > .lg { width: 22px; height: 22px; }
+.mk-mchat-top .mk-pill > .lg > .mk-lg { --s: 13.2px; }
+.mk-mchat-top .mk-pill > span:last-child { max-width: 96px; padding: 0 5px; overflow: hidden; text-overflow: ellipsis; }
+.mk-mchat-top .mk-pill::after { right: -3px; bottom: auto; top: 15px; }
+.mk-mchat-top > .keys { display: flex; margin-left: auto; color: var(--tx); }
+.mk-mchat-top > .keys > .mk-i { --s: 20px; margin: 7px; }
+.mk-mchat-top > .keys > .mk-i.more { --s: 18px; margin: 8px; }
+.mk-mmsgs { display: flex; flex-direction: column; gap: 20px; padding: 112px 14px 0; }
+/* A message: the 18 avatar, the name (Meta, 600, the accent's ink), the time (Caption), 4 to the words. */
+.mk-mmsg { display: grid; gap: 4px; }
+.mk-mmsg .hd { display: flex; align-items: center; gap: 6px; min-height: 24.75px; }
+.mk-mmsg .hd > :is(.mk-av, .mk-face) { --s: 18px; width: 18px; height: 18px; margin-right: 1px; }
+.mk-mmsg .hd > b { font-size: 13px; font-weight: 600; color: var(--at); }
+.mk-mmsg .hd > .tm { font-size: 12px; color: var(--mu); }
+.mk-mmsg .bd { font-size: 15px; line-height: 23.25px; }
+.mk-mmsg .bd.md { line-height: 24.75px; }
+.mk-mmsg .bd p { margin: 0; }
+.mk-mmsg .bd ul { margin: 0; padding-left: 20px; list-style: disc; }
+.mk-mmsg code { font-size: 13.5px; }
+.mk-mmsgs .act { gap: 13px; min-height: 36.8px; font-size: 15px; line-height: 24.75px; }
+.mk-mmsgs .act > .mk-av { position: relative; left: 0; }
+.mk-mmsgs .act > .t { color: #8A8C90; }
+/* The composer capsule: raised glass at 72%, 52 high, its foot 10 over the safe area. */
+.mk-mcomp { position: absolute; left: 10px; right: 10px; bottom: 34px; height: 52px; z-index: 2; display: flex; align-items: center; gap: 2px; padding: 8px; border-radius: 26px;
+  background: rgb(255 255 255 / .72); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); box-shadow: 0 1px 3px rgb(0 0 0 / .04); }
+.mk-mcomp .b { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; flex: none; color: var(--tx); }
+.mk-mcomp .b > .mk-i { --s: 18px; }
+.mk-mcomp .ph { flex: 1; min-width: 0; font-size: 16px; line-height: 21px; color: var(--mu); white-space: nowrap; overflow: hidden; }
+.mk-mcomp .send { background: #D8D8D9; color: #fff; }
+
+/* Android's shade, pulled down over the app (blurred under it): the date, the Silent section, and in it the share's
+   ongoing notification as AdbShare.java builds it (IMPORTANCE_LOW: never a pop-up). The system draws it: its small
+   icon white in a circle of the notification's colour (#E5704A), the app · when, the expand chevron, the title, the
+   text, its one action in that colour; the system's own type. */
+.mk-phone .shade { position: absolute; inset: 10px; z-index: 5; border-radius: 40px; overflow: hidden; padding: 58px 12px 0;
+  background: rgb(238 235 230 / .64); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  font-family: "Google Sans", "Roboto", system-ui, -apple-system, "PingFang SC", sans-serif; color: #1D1B20; }
+.shade .qs { display: grid; gap: 2px; padding: 0 16px; }
+.shade .qs > b { font-size: 34px; line-height: 40px; font-weight: 400; letter-spacing: -.01em; }
+.shade .qs > span { font-size: 14px; line-height: 20px; color: #49454F; }
+.shade .sil { margin: 22px 16px 10px; font-size: 14px; line-height: 20px; font-weight: 500; color: #49454F; }
+.mk-phone .notif { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 16px 16px 14px; border-radius: 24px; background: #FCFBF9;
+  box-shadow: 0 1px 2px rgb(0 0 0 / .05); text-align: left; font-size: 14px; line-height: 20px; }
+.notif .si { position: relative; width: 32px; height: 32px; border-radius: 50%; background: #E5704A; }
+.notif .si::before { content: ""; position: absolute; inset: 4px; background: #fff; }
+.notif > div { display: grid; min-width: 0; }
+.notif .app { display: flex; align-items: center; gap: 4px; font-size: 12px; line-height: 16px; color: #49454F; margin-bottom: 2px; }
+.notif .app > .mk-i { --s: 18px; margin-left: auto; color: #49454F; }
+.notif b { font-weight: 500; }
+.notif .m { color: #49454F; }
+.notif .acts { margin-top: 12px; font-weight: 500; color: #E5704A; }
+/* The shade comes down a beat after its picture appears (the Android card on screen). */
+@keyframes notif-in { from { opacity: 0; translate: 0 -14px; } }
+@keyframes shade-in { from { opacity: 0; } }
+.fpanel .shade { animation: shade-in 300ms var(--ease-out) 360ms backwards; }
+.fpanel .shade > .notif { animation: notif-in 420ms var(--ease-out) 360ms backwards; }
+
+/* ---- iPhone Duo, opened as a book: its inner screen at 1:1 (890 × 626 points) in its bezel, scaled whole ----
+   apps/mbui: a device whose system lays out the tabs is on the tape (sfdesk/tape_view.mbt), its cards across on the
+   sidebar's ground, 4 from the screen's edges and 4 apart: the sidebar its own 240 (tape_side_w), the page beside it
+   (a line round it); corners at the screen's corners concentric with it (r − 4), the others pane_corner 42. No rail
+   and no bottom bar: iOS lays the card's actions, the tabs (chats, files, stations, settings, the bell) and the new
+   chat (plus, on the accent) in its own glass down the trailing edge; the composer as tall as that round action, its
+   foot on the action's. */
+.duo { position: relative; flex: none; width: 906px; height: 642px; padding: 8px; border-radius: 36px; background: #101113;
+  box-shadow: inset 0 0 0 1.5px #3A3B3F, 0 40px 80px -40px rgb(28 27 26 / .45); }
+.duo-scr { display: flex; gap: 4px; height: 100%; padding: 4px; border-radius: 28px; overflow: hidden; background: var(--sb); }
+.duo .dc { position: relative; display: flex; flex-direction: column; min-width: 0; overflow: hidden; background: var(--cv); }
+.duo .dc.side { flex: none; width: 240px; padding: 6px 8px 0; border-radius: 24px 42px 42px 24px; }
+.duo .dc.page { flex: 1; border-radius: 42px; box-shadow: inset 0 0 0 1px var(--ln); }
+.dws { display: flex; align-items: center; gap: 8px; height: 50px; padding: 0 4px 0 0; }
+.dws > .mk-i.filter { --s: 20px; margin: 0 7px 0 auto; color: var(--tx); }
+.duo .gl { display: inline-flex; align-items: center; justify-content: center; gap: 2px; border-radius: 999px; color: var(--tx);
+  background: rgb(255 255 255 / .66); box-shadow: inset 0 0 0 .5px rgb(255 255 255 / .8), 0 2px 10px -4px rgb(55 53 45 / .28); }
+.duo .gl.ws { height: 40px; gap: 8px; padding: 0 12px 0 6px; font-size: 15px; font-weight: 600; }
+.duo .gl.ws > .b { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: var(--se); font-size: 14px; }
+.duo .gl.ws > .mk-i { --s: 14px; color: var(--mu); }
+.duo .mk-mday { padding: 14px 12px 6px; }
+/* The wide frame's rows at touch's sizes: 54 high (side_row_h), corner 18. */
+.duo .mk-mrow { height: 54px; padding: 0 12px; border-radius: 18px; }
+.duo .mk-mrow + .mk-mrow { margin-top: 2px; }
+.duo .mk-mrow.on { --ma: var(--se); background: var(--se); }
+/* The page bar: 45 (wide_bar_h); the agent pill at the chat bar's 22. */
+.dbar { flex: none; display: flex; align-items: center; gap: 8px; height: 45px; margin-top: 6px; padding: 0 16px 0 24px; }
+.dbar > h4 { margin: 0; min-width: 0; font-size: 16px; font-weight: 600; line-height: 22.4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dbar .mk-faces > .mk-face + .mk-face { margin-left: -4px; }
+.dbar .mk-pill { height: 22px; border-radius: 8.25px; background: rgb(50 45 36 / .07); font-size: 13px; line-height: 22px; }
+.dbar .mk-pill > .lg { width: 22px; height: 22px; }
+.dbar .mk-pill > .lg > .mk-lg { --s: 13px; }
+.dbar .mk-pill > span:last-child { padding: 0 5.18px; }
+.duo .mk-mmsgs { padding: 10px 24px 0; }
+.duo .mk-mcomp { left: 16px; right: 16px; bottom: 16px; height: 56px; padding: 10px; border-radius: 28px; }
+.dcol { flex: none; width: 80px; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 0 16px; }
+.dst { display: grid; justify-items: center; gap: 7px; margin-bottom: 8px; font: 600 15px/1 -apple-system, "SF Pro Text", "Inter", sans-serif; color: var(--tx); }
+.dst > span { display: flex; align-items: center; gap: 5px; }
+.dst .wifi { width: 15px; height: 11px; background: currentColor; clip-path: polygon(50% 100%, 0 30%, 15% 15%, 50% 0, 85% 15%, 100% 30%); }
+.dst .bat { position: relative; width: 22px; height: 11px; padding: 2px; border-radius: 3.5px; box-shadow: inset 0 0 0 1px rgb(36 39 43 / .4); }
+.dst .bat::before { content: ""; display: block; width: 80%; height: 100%; border-radius: 1.5px; background: currentColor; }
+.dcol .gl > .mk-i { --s: 22px; }
+.dcol .gl.two { flex-direction: column; width: 50px; padding: 4px 0; gap: 0; }
+.dcol .gl.two > .mk-i { margin: 11px 0; }
+.dcol .gl.tabs { flex-direction: column; width: 62px; margin-top: auto; padding: 5px; gap: 2px; }
+.dcol .gl.tabs > span { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 26px; }
+.dcol .gl.tabs > span > .mk-i { --s: 24px; }
+.dcol .gl.tabs > .on { color: var(--ac); }
+.dcol .new { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; color: #fff;
+  background: rgb(204 90 52 / .94); box-shadow: inset 0 0 0 .5px rgb(255 255 255 / .4), inset 1.5px 1.5px 1px -1px rgb(255 255 255 / .75), 0 4px 14px -6px rgb(120 40 10 / .45); }
+.dcol .new > .mk-i { --s: 26px; }
+
+/* ---- The device cards (the swiper): each picture whole, at a zoom by the room it gets ----
+   The Duo (906 × 642) and the windows (920 × 660) by the picture's width; the phone (432 × 935) by its height, which
+   the card sets (60-devices.css: --vis-h). */
+.fpanel .vis { container: dvis / inline-size; }
+.fpanel .vis > :is(.duo, .mk-fit) { zoom: var(--dz, .23); }
+.fpanel .vis > .mk-fit { position: relative; z-index: 1; }
+@container dvis (width < 210px) { .fpanel .vis > * { --dz: .2; } } /* the smallest phones on their side */
+@container dvis (width >= 230px) { .fpanel .vis > * { --dz: .25; } }
+@container dvis (width >= 255px) { .fpanel .vis > * { --dz: .27; } }
+@container dvis (width >= 272px) { .fpanel .vis > * { --dz: .29; } }
+@container dvis (width >= 310px) { .fpanel .vis > * { --dz: .33; } }
+@container dvis (width >= 345px) { .fpanel .vis > * { --dz: .37; } }
+@container dvis (width >= 380px) { .fpanel .vis > * { --dz: .41; } }
+@container dvis (width >= 417px) { .fpanel .vis > * { --dz: .45; } }
+@container dvis (width >= 453px) { .fpanel .vis > * { --dz: .49; } }
+@container dvis (width >= 498px) { .fpanel .vis > * { --dz: .54; } }
+@container dvis (width >= 544px) { .fpanel .vis > * { --dz: .58; } }
+@container dvis (width >= 598px) { .fpanel .vis > * { --dz: .64; } }
+/* Below 640 px the picture is at most 320 high (280 inside its padding): a wide card is capped by that height. */
+@media (max-width: 639px) { @container dvis (width >= 417px) { .fpanel .vis > :is(.duo, .mk-fit) { --dz: .42; } } }
+@media (min-width: 640px) and (max-width: 899px) { .fpanel .vis > :is(.duo, .mk-fit) { zoom: .5; } } /* a 400-high band */
+.mk-i.bell { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3V5 M6.5 17V11Q6.5 5 12 5Q17.5 5 17.5 11V17 M4.5 17H19.5 M10 20.5H14'/></svg>"); }
+.mk-i.chats { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M8 5V4.5Q8 3 10 3H17Q20.5 3 20.5 6.5V11Q20.5 13 18.5 13.5 M7 8H12.5Q16 8 16 11.5V15Q16 18.5 12.5 18.5H9L4 21V17.5Q3 16.5 3 15V12Q3 8 7 8Z'/></svg>"); }
+.mk-i.folder { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M3.5 7.5Q3.5 4.5 6.5 4.5H9.5L12 7H17.5Q20.5 7 20.5 10V16.5Q20.5 19.5 17.5 19.5H6.5Q3.5 19.5 3.5 16.5Z'/></svg>"); }
+.mk-i.quota { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M6.5 6H16Q19.5 6 19.5 9.5V14.5Q19.5 18 16 18H6.5Q3 18 3 14.5V9.5Q3 6 6.5 6Z M22 10V14 M7 10V14 M11 10V14'/></svg>"); }
+.mk-i.connects { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M11 4.5H8Q3.5 4.5 3.5 9V14Q3.5 18 7 18H8V21L12.5 18H15.5Q20 18 20 13.5V12 M12 11L20.5 3.5 M15 3.5H20.5V9'/></svg>"); }
+.mk-i.chart { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M3.5 20.5H20.5 M6.5 16.5V12 M12 16.5V5 M17.5 16.5V9'/></svg>"); }
+.mk-i.compose { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M11 4H8Q3.5 4 3.5 8.5V16Q3.5 20.5 8 20.5H15.5Q20 20.5 20 16V13 M9 11.5L16.3 4.2Q17.5 3 18.7 4.2L19.8 5.3Q21 6.5 19.8 7.7L12.5 15L8 16Z M15 5.5L18.5 9'/></svg>"); }
+.mk-i.filter { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M4 6H20 M7 12H17 M10 18H14'/></svg>"); }
+.mk-i.plus { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M12 4.5V19.5 M4.5 12H19.5'/></svg>"); }
+.mk-i.up { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M12 20V4 M6 10L12 4L18 10'/></svg>"); }
+.mk-i.chevl { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M15 6L9 12L15 18'/></svg>"); }
+.mk-i.chevr { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M9 6L15 12L9 18'/></svg>"); }
+.mk-i.chevd { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9L12 15L18 9'/></svg>"); }
+.mk-i.panel { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M8 4H16Q20.5 4 20.5 8.5V15.5Q20.5 20 16 20H8Q3.5 20 3.5 15.5V8.5Q3.5 4 8 4Z M14.5 4.5V19.5 M6.5 12H11.5 M9 9L12 12L9 15'/></svg>"); }
+.mk-i.search { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M17.5 10.5C17.5 15 15 17 11 17C6.5 17 3.5 14.6 3.5 10.5C3.5 6.3 6.1 3.5 10.5 3.5C14.7 3.5 17.5 6 17.5 10.5Z M16 16L20.5 20.5'/></svg>"); }
+.mk-i.monitor { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M8 3.5H16Q20.5 3.5 20.5 8V12Q20.5 16 16 16H8Q3.5 16 3.5 12V8Q3.5 3.5 8 3.5Z M12 16V20.5 M8 20.5H16'/></svg>"); }
+.mk-i.mini { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M7 6H17Q18 6 19 7L21 10Q21.5 10.5 21.5 12V16Q21.5 18 19.5 18H4.5Q2.5 18 2.5 16V12Q2.5 10.5 3 10L5 7Q6 6 7 6Z M3 11H21'/><path d='M6 14.5H9'/><circle cx='18' cy='14.5' r='.9' fill='%23000' stroke='none'/></svg>"); }
+.mk-i.laptop { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M5 15V6Q5 4 7 4H17Q19 4 19 6V15 M4.1 16H19.9Q21.5 16 20.784 17.431L20 19Q19.5 20 18 20H6Q4.5 20 4 19L3.216 17.431Q2.5 16 4.1 16Z M10 16H14'/></svg>"); }
+.mk-i.server { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M4 6C4 2 20 2 20 6C20 10 4 10 4 6Z M4 6V18C4 22 20 22 20 18V6 M4 12C4 16 20 16 20 12'/></svg>"); }
+.mk-i.check { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M4.5 12L9.5 17L19.5 6.5'/></svg>"); }
+.mk-i.gear { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M10.5 5L10.5 3L13.5 3L13.5 5L15.89 5.99L17.3 4.58L19.42 6.7L18.01 8.11L19 10.5L21 10.5L21 13.5L19 13.5L18.01 15.89L19.42 17.3L17.3 19.42L15.89 18.01L13.5 19L13.5 21L10.5 21L10.5 19L8.11 18.01L6.7 19.42L4.58 17.3L5.99 15.89L5 13.5L3 13.5L3 10.5L5 10.5L5.99 8.11L4.58 6.7L6.7 4.58L8.11 5.99Z'/><circle cx='12' cy='12' r='3'/></svg>"); }
+.mk-i.lock { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><rect x='6' y='10.5' width='12' height='9' rx='2.5'/><path d='M8.5 10.5V8Q8.5 4.5 12 4.5Q15.5 4.5 15.5 8V10.5'/></svg>"); }
+.mk-i.more { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' ><circle cx='5' cy='12' r='1.6'/><circle cx='12' cy='12' r='1.6'/><circle cx='19' cy='12' r='1.6'/></svg>"); }
+.mk-i.glyph { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' ><defs><mask id='m'><rect width='24' height='24' fill='white'/><ellipse cx='10.3' cy='12' rx='1.1' ry='1.25'/><ellipse cx='13.7' cy='12' rx='1.1' ry='1.25'/></mask></defs><path d='M2.457 10.259A9.7 9.7 0 0 1 21.543 10.259' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round'/><rect x='7.1' y='7.9' width='9.8' height='8.2' rx='3' mask='url(%23m)'/></svg>"); }
+.mk-lg.a { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' ><path fill-rule='evenodd' d='M13.827 3.52h3.603L24 20h-3.603l-6.57-16.48zm-7.258 0h3.767L16.906 20h-3.674l-1.343-3.461H5.017l-1.344 3.46H0L6.57 3.522zm4.132 9.959L8.453 7.687 6.205 13.48H10.7z'/></svg>"); }
+.mk-lg.o { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' ><path d='M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z'/></svg>"); }
+.mk-i.info { --ic: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><path d='M20.5 12C20.5 17.5 17.5 20.5 12 20.5C6.5 20.5 3.5 17.5 3.5 12C3.5 6.5 6.5 3.5 12 3.5C17.5 3.5 20.5 6.5 20.5 12Z M10.5 11H12V16H13.5'/><circle cx='12' cy='7.5' r='1' fill='%23000' stroke='none'/></svg>"); }

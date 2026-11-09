@@ -17,7 +17,7 @@ fn replay_paste_short() -> Unit raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("paste-short"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
-    f.see("=studio")
+    f.see("=willow")
     f.tap("发消息")
     f.paste("一段短的粘贴文字，来自剪贴板 082947")
     f.field("一段短的粘贴文字，来自剪贴板 082947")

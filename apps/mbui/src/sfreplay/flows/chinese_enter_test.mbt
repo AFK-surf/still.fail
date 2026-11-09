@@ -9,7 +9,7 @@ test "04-chinese-enter" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("chinese-enter"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
-    f.see("=studio")
+    f.see("=willow")
     f.tap("发消息")
     f.compose("ni'hao")
     f.type_text("你好")

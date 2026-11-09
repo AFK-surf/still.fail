@@ -119,6 +119,16 @@ int32_t mbc_screen_ack(double call, double ts) { return engine && engine->screen
 
 int32_t mbc_has_web_auth(void) { return engine && engine->web_auth ? 1 : 0; }
 
+// The scheme the browser session comes back on (core_client.h `auth_scheme`): the engine's, else "stillfail".
+moonbit_string_t mbc_auth_scheme(void) {
+  const char *s = engine && engine->auth_scheme ? engine->auth_scheme() : NULL;
+  if (!s || !*s) s = "stillfail";
+  int32_t n = (int32_t)strlen(s);
+  moonbit_string_t out = moonbit_make_string_raw(n);
+  for (int32_t i = 0; i < n; i++) out[i] = (uint16_t)(unsigned char)s[i];  // (a scheme is ASCII)
+  return out;
+}
+
 int32_t mbc_web_auth(int32_t token, moonbit_string_t url, moonbit_string_t scheme) {
   if (!engine || !engine->web_auth) return 0;
   char *u = utf8_of(url, NULL);

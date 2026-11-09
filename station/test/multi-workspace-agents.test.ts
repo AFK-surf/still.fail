@@ -1,9 +1,9 @@
-// One station in two workspaces, as its agents see it (docs/multi-workspace.md): a session of workspace W reaches W's
+// One station in two workspaces, as its agents see it: a session of workspace W reaches W's
 // chats and stations only (chat_list, chat_read, session_send, station_list, station_task), what other stations ask
 // reaches that workspace's chats only, sessions run on the profiles allowed there, and each workspace has its own
 // memory and skills. The transport is a direct call that checks what mesh/peer.ts checks (`member`).
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -16,6 +16,7 @@ import { workspaceAgentHome } from "../src/sessions/agent-home.ts";
 import { profilesFor } from "../src/sessions/config.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { newSession } from "../src/sessions/lifecycle.ts";
+import { openOptions } from "../src/sessions/actor.ts";
 import { fromPeer } from "../src/sessions/messages.ts";
 import { createForPeer } from "../src/sessions/opened.ts";
 import { stationLang, tr } from "../src/ops/i18n.ts";
@@ -52,7 +53,7 @@ async function twoWorkspaces() {
     const ws = member(cloud, target, workspace);
     asked.push([target, ws, request]);
     if (request?.method === "describe") return { protocol: 1, tasks: true };
-    if (request?.method === "session.message") return { thread: "EMBER/1.1" };
+    if (request?.method === "session.message") return { thread: "CHAT/1.1" };
     if (request?.method === "task.list") return { tasks: [] };
     throw new Error(`unexpected ${request?.method}`);
   };
@@ -141,9 +142,9 @@ test("station_list, station_task and session_send reach the stations of the sess
   await assert.rejects(station(one, "station_task", { station: "B", action: "list" }), /not another station in this workspace/);
   assert.deepEqual(await station(two, "station_task", { station: "B", action: "list" }), { tasks: [] });
   // A chat on B, a station of W2 only: W1's session is refused, W2's sends.
-  const onB = `https://ember.test/o/${W2}/B/ember%3Ac-0123456789`;
+  const onB = `https://ember.test/o/${W2}/B/chat%3Ac-0123456789`;
   assert.match(await rig.refused(one, "session_send", { to: onB, text: "hi" }), /not another station in this workspace/);
-  assert.match(await rig.call(two, "session_send", { to: onB, text: "hi" }), /^Sent to ember:c-0123456789 on station B/);
+  assert.match(await rig.call(two, "session_send", { to: onB, text: "hi" }), /^Sent to chat:c-0123456789 on station B/);
   // Each asked in its session's workspace (station_list asks each listed station how busy it is).
   assert.deepEqual(asked.map(([to, ws, r]) => [to, ws, r.method]), [["A", W1, "describe"], ["B", W2, "describe"], ["B", W2, "describe"], ["B", W2, "task.list"], ["B", W2, "session.message"]]);
 }));
@@ -153,12 +154,12 @@ test("what another station asks reaches the chats of the workspace it asked in; 
   const message = { method: "session.message", session: "s9", to: two, text: "hello" };
   await assert.rejects(fromPeer(rig.hub, "A", message, W1), /no session/);
   await assert.rejects(fromPeer(rig.hub, "A", { ...message, to: one }, W2), /no session/);
-  assert.equal((await fromPeer(rig.hub, "B", message, W2)).thread.startsWith("EMBER/"), true);
-  const made = createForPeer(rig.hub, "B", { session: "s9", key: "k", runtime: "claude", title: "from B" }, W2);
+  assert.equal((await fromPeer(rig.hub, "B", message, W2)).thread.startsWith("CHAT/"), true);
+  const made = await createForPeer(rig.hub, "B", { session: "s9", key: "k", runtime: "claude", title: "from B" }, W2);
   assert.equal(rig.store.getSession(made.session)?.ws, W2);
   assert.ok(made.link.includes(`/o/${W2}/st/`), made.link);
   // The same key asked in the other workspace is not that chat.
-  assert.throws(() => createForPeer(rig.hub, "B", { session: "s9", key: "k", runtime: "claude" }, W1), /gone|another workspace/);
+  await assert.rejects(createForPeer(rig.hub, "B", { session: "s9", key: "k", runtime: "claude" }, W1), /gone|another workspace/);
 }));
 
 test("a session runs on the profiles allowed in its workspace (all but those withheld from it); picking, pinning and changing respect it", () => withTwo(async (t) => {
@@ -202,8 +203,35 @@ test("each workspace has its own memory and skills: a session gets its workspace
   writeFileSync(join(home, "workspaces", W2, "skills", "two-project", "SKILL.md"), "---\ndescription: 项目记忆：two\n---\n");
   writeFileSync(memoryTwo, "# two's lessons\n");
   const ofTwo = memory(rig.dir, W2);
-  assert.deepEqual([ofTwo.global.path, ofTwo.global.text, ofTwo.skills.map((s: any) => [s.name, s.share])], [memoryTwo, "# two's lessons\n", [["two-project", null]]]);
+  assert.deepEqual([ofTwo.global.path, ofTwo.global.text, ofTwo.skills.filter((s: any) => !s.builtin).map((s: any) => [s.name, s.share])], [memoryTwo, "# two's lessons\n", [["two-project", null]]]);
   assert.deepEqual(memory(rig.dir).skills.map((s: any) => s.name), ["one-project"]);
   // A workspace with none yet: empty.
   assert.deepEqual(memory(mkdtempSync(join(tmpdir(), "mws-memory-")), "W3").skills, []);
+}));
+
+test("a session's runtime is given its workspace's memory and skills, never another workspace's", () => withTwo(async (t) => {
+  const { rig, one, two } = t;
+  const home = rig.config.agentHome;
+  mkdirSync(join(home, "skills", "one-project"), { recursive: true });
+  writeFileSync(join(home, "MEMORY.md"), "# one's lessons\n");
+  writeFileSync(join(home, "skills", "one-project", "SKILL.md"), "---\ndescription: 项目记忆：one\n---\n");
+  writeFileSync(rig.hub.deps.memoryPath(two), "# two's lessons\n");
+  mkdirSync(join(home, "workspaces", W2, "skills", "two-project"), { recursive: true });
+  writeFileSync(join(home, "workspaces", W2, "skills", "two-project", "SKILL.md"), "---\ndescription: 项目记忆：two\n---\n");
+  // The same profile runs both: what its home holds reaches both, so a workspace's are given with the session.
+  const opened = (key: string) => {
+    const row = rig.store.getSession(key)!;
+    return { row, options: openOptions(row, rig.hub.accounts.runOn(key), rig.hub.deps) };
+  };
+  const ofTwo = opened(two);
+  assert.ok(ofTwo.options.instructions.includes("# two's lessons") && !ofTwo.options.instructions.includes("# one's lessons"));
+  assert.equal(ofTwo.options.skills, join(home, "workspaces", W2, "skills"));
+  for (const at of [join(".claude", "skills"), join(".agents", "skills")]) {
+    // (with the station's own, written into a joined workspace's as it is made)
+    assert.deepEqual(readdirSync(join(ofTwo.row.workspace, at)).filter((n) => !n.startsWith("stillfail-")), ["two-project"], at);
+    assert.ok(existsSync(join(ofTwo.row.workspace, at, "stillfail-jobs", "SKILL.md")), at);
+  }
+  const ofOne = opened(one);
+  assert.ok(ofOne.options.instructions.includes("# one's lessons") && !ofOne.options.instructions.includes("# two's lessons"));
+  assert.deepEqual(readdirSync(join(ofOne.row.workspace, ".claude", "skills")), ["one-project"]);
 }));

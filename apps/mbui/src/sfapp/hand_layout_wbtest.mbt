@@ -1,4 +1,4 @@
-// The layout is the screen's, never the hand's (docs/architecture.md): each page with touch and with keyboard and mouse,
+// The layout is the screen's, never the hand's: each page with touch and with keyboard and mouse,
 // in a window of each tier, drawn pointed at by a finger and by a mouse, lays out the same boxes; only how they answer
 // the hand differs.
 
@@ -55,7 +55,7 @@ test "the hand grows no row of 待处理: a station offline and a decision to le
   )
   t.run_for(squeeze_opening)
   t.frame()
-  assert_true(t.find("MBA 离线") is Some(_))
+  assert_true(t.find("Maple 离线") is Some(_))
   assert_true(t.find("选一个发布的时间") is Some(_))
   assert_eq(t.hand_moves(), [])
 }

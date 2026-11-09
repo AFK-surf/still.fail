@@ -1,6 +1,6 @@
 // A station's drive as the core shows it, what the phone's drive pages and the desktop's files' page both read (client/core-ts shapes: StationView.overview.drive is DriveRoots, the `drive`
 // topic's DriveFolder of DriveEntry, `drivePlace`'s DrivePlace; the prefs' `driveViews` and `reader`), read into what
-// the drive's pages draw (ember apps/android drive/Files.kt, DriveScreen.kt; shared data/Drives.kt).
+// the drive's pages draw.
 
 
 ///|
@@ -132,7 +132,7 @@ pub fn dv_station(v : Json) -> DvStation {
 ///|
 /// The workspace's stations (the `stations` topic), and why they could not be read.
 pub fn dv_stations(src : Source, ws : String) -> (Array[DvStation]?, String?) {
-  let t = (src.topic)("stations", { "scope": Json::string(ws) })
+  let t = src.topic("stations", { "scope": Json::string(ws) }).get().snapshot()
   let error = match t.error {
     Some(e) => Some(text(Some(e), "message"))
     None => None
@@ -144,7 +144,7 @@ pub fn dv_stations(src : Source, ws : String) -> (Array[DvStation]?, String?) {
 }
 
 ///|
-/// What the viewer may do with a station's drive (DriveScreen.kt DriveRights): name the folders it lends (the
+/// What the viewer may do with a station's drive: name the folders it lends (the
 /// workspace's owners and admins), change what is in them (not a read-only member).
 pub(all) struct DvRights {
   manage : Bool
@@ -155,7 +155,7 @@ pub(all) struct DvRights {
 
 ///|
 pub fn dv_rights(src : Source, ws : String, s : DvStation?) -> DvRights {
-  let w = (src.topic)("workspace", { "workspace": Json::string(ws) }).value
+  let w = src.topic("workspace", { "workspace": Json::string(ws) }).get().value
   let role = match s {
     Some(st) => st.role
     None => ""
@@ -193,8 +193,22 @@ pub fn dv_parent(path : String) -> String {
 }
 
 ///|
+/// Whether an absolute path names a Windows drive or UNC share. A backslash in a Unix name is not a separator.
+pub fn dv_windows_path(path : String) -> Bool {
+  path.has_prefix("\\\\") ||
+  (path.find(":") is Some(1) && (path.view(start_offset=2).has_prefix("\\") || path.view(start_offset=2).has_prefix("/")))
+}
+
+///|
 pub fn dv_name(path : String) -> String {
-  match path.rev_find("/") {
+  let slash = path.rev_find("/")
+  let backslash = if dv_windows_path(path) { path.rev_find("\\") } else { None }
+  let last = match (slash, backslash) {
+    (Some(a), Some(b)) => Some(if a > b { a } else { b })
+    (Some(a), None) | (None, Some(a)) => Some(a)
+    _ => None
+  }
+  match last {
     Some(i) => path.view(start_offset=i + 1).to_owned()
     None => path
   }
@@ -206,7 +220,7 @@ pub fn dv_root_label(roots : Array[DvRoot], root : String) -> String {
   match roots.iter().find_first(fn(r) { r.path == root }) {
     Some(r) => r.name
     None => {
-      let p = root.trim_end(chars="/\\").to_owned()
+      let p = dv_trim_root(root)
       match dv_name(p) {
         "" => root
         n => n
@@ -216,17 +230,23 @@ pub fn dv_root_label(roots : Array[DvRoot], root : String) -> String {
 }
 
 ///|
+/// Remove trailing path separators without treating a Unix name's backslash as one.
+pub fn dv_trim_root(root : String) -> String {
+  root.trim_end(chars=if dv_windows_path(root) { "/\\" } else { "/" }).to_owned()
+}
+
+///|
 /// Where a path under a root is on the station.
 pub fn dv_absolute(root : String, path : String) -> String {
   if path == "" {
     root
   } else {
-    root.trim_end(chars="/\\").to_owned() + "/" + path
+    dv_trim_root(root) + "/" + path
   }
 }
 
 ///|
-/// Why a root cannot be browsed and what to do about it (useDrive.ts rootTrouble); None while it can.
+/// Why a root cannot be browsed and what to do about it; None while it can.
 pub fn dv_trouble(state : String) -> (String, String)? {
   match state {
     "ok" | "" => None
@@ -258,7 +278,7 @@ pub fn dv_check_name(src : Source, name : String, then : (String?) -> Unit) -> U
 }
 
 ///|
-/// The line icon an entry is drawn with, by its kind (Controls.kt kindIcon).
+/// The line icon an entry is drawn with, by its kind.
 pub fn dv_kind_icon(kind : String) -> String {
   match kind {
     "folder" => "folder"
@@ -350,7 +370,9 @@ pub fn dv_beside_name(
 /// A file whose name was taken in its folder kept beside it (保留两者: dv_beside_name over the others going up there),
 /// then on its way again.
 pub fn dv_keep_both(src : Source, u : DvUpload) -> Unit {
-  let others = ups.uploads.filter(fn(x) { x.serial != u.serial && x.station == u.station && x.root == u.root && x.dir == u.dir })
+  let others = ups.uploads.filter(fn(x) {
+    x.serial != u.serial && x.station == u.station && x.root == u.root && x.dir == u.dir && x.state.get() != "done"
+  })
   u.state.set("naming")
   dv_beside_name(src, u.station, u.root, u.dir, u.name.get(), others.map(fn(x) { x.name.get() }), fn(r) {
     match r {
@@ -369,7 +391,7 @@ pub fn dv_keep_both(src : Source, u : DvUpload) -> Unit {
 
 
 ///|
-/// A station's file or folder dragged out of a list of its drive (drag.ts Dragged: the files' page, a chat's 文件 tab):
+/// A station's file or folder dragged out of a list of its drive (a chat's 文件 tab):
 /// its station and that station's name, its root and its path under it, its absolute path, its name, its size,
 /// whether it is a folder. What a composer takes of it is named by its path on its station.
 pub(all) struct Dragged {

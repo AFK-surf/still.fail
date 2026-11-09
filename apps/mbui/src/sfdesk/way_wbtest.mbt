@@ -85,6 +85,22 @@ test "a way with no room even for its first and last: all but the last left for 
 }
 
 ///|
+test "a way of ancestors can open its last visible step when the current place is named separately" {
+  let went : Array[Int] = []
+  let t = @ui.Tester::new(fn(c) {
+    @sf.begin(c) |> ignore
+    c.with_theme(@sf.ui_theme(), fn() {
+      c.box(style=way_test_room, fn() {
+        @sf.way_line(c, "way", ["Home", "Projects"], narrow_way(), fn(i) { went.push(i) }, last_link=true)
+      }) |> ignore
+    })
+  }, w=600.0, h=400.0, platform=2)
+  t.draw()
+  t.tap_text("Projects")
+  assert_eq(went, [1])
+}
+
+///|
 /// Whether the way left its `i`th step out (way_line's slots, as laid out last; -1 its …).
 fn way_left(t : @ui.Tester, i : Int) -> Bool {
   let c = t.ctx()

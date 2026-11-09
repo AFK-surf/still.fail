@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { conform } from "../src/conform.ts";
 import * as d from "../src/decisions.ts";
-import { holdLanguage } from "../src/i18n.ts";
+import { holdLanguage, setCurrent } from "../src/i18n.ts";
+import { rowStateLine } from "../src/present.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -90,11 +91,24 @@ test("options_show_the_recommended_one_last", () => {
 });
 
 test("a_cards_line_is_its_whole_first_line", () => {
-  assert.equal(d.line("**「共」改成按今天累计吗？**\n细节"), "奏 · 「共」改成按今天累计吗？");
-  assert.equal(d.line("\n\n## 选哪个"), "奏 · 选哪个");
+  assert.equal(d.line("**「共」改成按今天累计吗？**\n细节"), "待处理 · 「共」改成按今天累计吗？");
+  assert.equal(d.line("\n\n## 选哪个"), "待处理 · 选哪个");
   const long = "字".repeat(50);
-  assert.equal(d.line(long), `奏 · ${long}`);
-  assert.equal(d.line(""), "奏");
+  assert.equal(d.line(long), `待处理 · ${long}`);
+  assert.equal(d.line(""), "待处理");
+});
+
+test("pending_card_labels_are_localized_and_leave_the_question_separate", () => {
+  setCurrent("en");
+  try {
+    const raw = { card: { seq: 2, card: { type: "text" }, message: { seq: 2, text: "**Which domain?**\nDetails" } } };
+    const row = d.presentRow(raw);
+    assert.equal(row.decision.text, "Needs attention · Which domain?");
+    assert.deepEqual(rowStateLine(row), ["Needs attention · Which domain?", null, "Which domain?", { kind: "decision", text: "Needs attention", rest: " · Which domain?" }]);
+    assert.equal(d.line(""), "Needs attention");
+  } finally {
+    setCurrent("zh");
+  }
 });
 
 test("a_rows_card_is_read_from_its_card_else_its_decision", () => {
@@ -127,7 +141,7 @@ test("a_row_with_a_card_says_so_and_is_marked_wait_until_dismissed", () => {
   let row: J = { state: "run", unread: true, decision: decision(4, false) };
   row = d.presentRow(row);
   assert.equal(row.tone, "wait");
-  assert.equal(row.decision.text, "奏 · 「共」改成按今天累计吗？");
+  assert.equal(row.decision.text, "待处理 · 「共」改成按今天累计吗？");
   assert.equal(row.decision.options[2].label, "按今天累计");
   assert.equal(row.decision.card.type, "options");
   assert.equal(row.decision.message, undefined);
@@ -196,6 +210,61 @@ test("cards_in_a_chat_say_whether_they_wait_and_who_answered_how", () => {
   assert.deepEqual(messages[0].decision, { resolved: true, answeredBy: "林晓", text: "林晓 回复了" });
 });
 
+test("a_login_asked_for_again_is_the_later_posts_card_alone", () => {
+  // An agent asking again for the login its earlier post asked for: two cards of one login would be two code fields
+  // of one login on screen (the Android app closed as such a chat opened, 2026-11-04).
+  const login = (seq: number, ts: string, station?: string): J => ({
+    seq,
+    ts,
+    authorKind: "agent",
+    text: "授权后把授权码填进卡片",
+    card: { type: "login", login: "mw1g340d1ylnm", ...(station ? { station } : {}) },
+  });
+  let messages: J[] = d.inMessages([login(2, "9.000002"), said(3, "person", "我没有号"), login(4, "9.000004")], [4, false]);
+  assert.deepEqual(messages[0].card, { type: "login" });
+  assert.deepEqual(messages[0].decision, { resolved: true, answeredBy: "林晓", text: "林晓 回复了" });
+  assert.deepEqual(messages[2].card, { type: "login", login: "mw1g340d1ylnm" });
+  assert.deepEqual(messages[2].decision, { resolved: false });
+  shape("MessageCard", messages[0].card);
+  // Another station's login of the same id is another login: both keep their cards.
+  messages = d.inMessages([login(2, "9.000002"), login(4, "9.000004", "willow")], [4, false]);
+  assert.equal(messages[0].card.login, "mw1g340d1ylnm");
+  assert.equal(messages[1].card.login, "mw1g340d1ylnm");
+});
+
+test("a_vault_request_asked_again_is_the_later_posts_card_alone", () => {
+  // An agent putting its request to keep a secret in the chat again (secret_reask): two cards of one request would be
+  // two fields for its secret on screen, and the chat showed 这部分显示出错了 as it opened (2026-11-04).
+  const asked = (seq: number, ts: string, request: string): J => ({
+    seq,
+    ts,
+    authorKind: "agent",
+    text: "请填入令牌并存入密钥库",
+    card: { type: "options", options: [{ label: "存入密钥库" }], vault: { request, name: "Cloudflare API 令牌", mode: "proxy", save: { kind: "token", typed: true } } },
+  });
+  let messages: J[] = d.inMessages([asked(2, "9.000002", "r_1"), said(3, "person", "讲详细点"), asked(4, "9.000004", "r_1")], [4, false]);
+  assert.equal(messages[0].card.vault, undefined);
+  assert.equal(messages[0].card.vaultAsk, undefined);
+  assert.deepEqual(messages[0].decision, { resolved: true, answeredBy: "林晓", text: "林晓 回复了" });
+  assert.equal(messages[2].card.vault, "r_1");
+  assert.equal(messages[2].card.vaultAsk.name, "Cloudflare API 令牌");
+  assert.deepEqual(messages[2].decision, { resolved: false });
+  shape("MessageCard", messages[0].card);
+  // Another request: both keep their cards.
+  messages = d.inMessages([asked(2, "9.000002", "r_1"), asked(4, "9.000004", "r_2")], [4, false]);
+  assert.equal(messages[0].card.vault, "r_1");
+  assert.equal(messages[1].card.vault, "r_2");
+  // Any ask living beyond its post, not one kind at a time: a sign-in, a phone request asked again.
+  const signin = (seq: number): J => ({ seq, ts: `9.00000${seq}`, authorKind: "agent", text: "登录", card: { type: "options", options: [{ label: "填入" }], signin: { id: "s_1", site: "github.com", screen: "t1" } } });
+  messages = d.inMessages([signin(2), signin(4)], [4, false]);
+  assert.equal(messages[0].card.signinAsk, undefined);
+  assert.equal(messages[1].card.signinAsk.id, "s_1");
+  const phone = (seq: number): J => ({ seq, ts: `9.00000${seq}`, authorKind: "agent", text: "借手机", card: { type: "options", options: [{ label: "允许" }], adb: { request: "p_1" } } });
+  messages = d.inMessages([phone(2), phone(4)], [4, false]);
+  assert.equal(messages[0].card.phoneAsk, undefined);
+  assert.equal(messages[1].card.phoneAsk.request, "p_1");
+});
+
 test("what_the_viewer_sent_answers_the_last_card_before_the_station_has_it", () => {
   // Written in the composer instead of picking: settled at once, as the viewer's reply.
   let messages: J[] = [askedMsg(2)];
@@ -211,7 +280,7 @@ test("what_the_viewer_sent_answers_the_last_card_before_the_station_has_it", () 
   assert.deepEqual(messages[0].decision, { resolved: true, text: "已替换为新问题" });
   assert.deepEqual(messages[2].decision, { resolved: true, answeredBy: "你", text: "你 回复了" });
   // Its station still saying it waits (its row not told the answer yet): what is on its way settles it all the same,
-  // the card closing with the answer coming in, not a moment after it (docs/list-motion.md).
+  // the card closing with the answer coming in, not a moment after it (mbui's view/list_motion.mbt).
   messages = [askedMsg(2)];
   messages = d.inMessages(messages, [2, false], [{ text: "B", quotes: [{ author: "Claude", text: "选哪个？", ts: "9.000002", role: "agent" }] }]);
   assert.equal(messages[0].decision.resolved, true);

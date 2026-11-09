@@ -10,19 +10,40 @@
 /// come to meanwhile), what it holds in its middle (row_held_look: as big as it is open about the middle of what it
 /// draws, coming in from half open), cut at its top and foot softly (View::cuts_softly); as tall as what it holds once
 /// it is open; nothing tall once it is shut. Taking no press and read out as nothing from the moment it closes. The
-/// room's node.
-pub fn reveal_node(parent : @view.View, open : () -> Bool, make : (@view.View) -> Unit) -> @view.View {
+/// room's node. `lazy`: what `make` makes is made only as it first opens (what it holds asks for what it shows as it
+/// is made: none of it asked while it is shut), kept from then.
+pub fn reveal_node(
+  parent : @view.View,
+  open : () -> Bool,
+  make : (@view.View) -> Unit,
+  lazy? : Bool = false,
+) -> @view.View {
   let way = NodeWay::new(if @signals.untracked(open) { 1.0 } else { 0.0 })
+  let made = @signals.signal(!lazy || @signals.untracked(open), same=fn(a, b) { a == b })
   parent.box(fn(room) {
     // (as tall as it is laid out, whatever room it has: what is past its room cut)
     let held = room.box(fn(h) {
       h.shrink(Is(0.0)) |> ignore
-      make(h)
+      // (open as it is made: made with it, laid out in the same pass as what is round it)
+      if made.untracked() {
+        make(h)
+      } else {
+        // (its way this room's: at once)
+        h.show(fn() { made.get() }, make, at_once=true)
+      }
     })
     let shown = fn() { way.shown(room) }
     room.reacts(open, fn(o) {
       // (how far it goes: what it holds is laid out tall at this moment, the way's length said once, not followed)
-      way.go(room, if o { 1.0 } else { 0.0 }, move().per_unit(held.laid_size().1))
+      let go = fn() { way.go(room, if o { 1.0 } else { 0.0 }, move().per_unit(held.laid_size().1)) }
+      if o && !made.untracked() {
+        // (made as it first opens: its way set off at this moment once what this change makes is made, laid out tall
+        // as it is then)
+        made.set(true)
+        @signals.after_flush(go)
+      } else {
+        go()
+      }
     })
     room
     .opens(By(fn() {
@@ -92,7 +113,7 @@ fn NodeWay::go(self : NodeWay, n : @view.View, to : Double, spec : Spec) -> Unit
   (self.due)()
   self.way.go(to, spec, at=n.cause_at())
   self.due = if self.way.ends_at() >= 0.0 {
-    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
     fn() {  }
   }
@@ -107,10 +128,33 @@ fn NodeWay::put_at(self : NodeWay, n : @view.View, from : Double, to : Double, s
   self.way.put(from)
   self.way.go(to, spec, at~, velocity=v)
   self.due = if self.way.ends_at() >= 0.0 {
-    n.at_moment(self.way.end(), fn() { self.ended.set(@signals.untracked(fn() { self.ended.get() }) + 1) })
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
   } else {
     fn() {  }
   }
+}
+
+///|
+/// On a way from `from` (put there, still) to `to` as `spec` says from the moment `at` (a cause's), its end a moment
+/// of `n`'s: set off anew from its start (a shape's ground from the shape it showed).
+fn NodeWay::go_from(self : NodeWay, n : @view.View, from : Double, to : Double, spec : Spec, at : Double) -> Unit {
+  (self.due)()
+  self.way.put(from)
+  self.way.go(to, spec, at~)
+  self.due = if self.way.ends_at() >= 0.0 {
+    n.at_moment(self.way.end(), fn() { self.ended.set(self.ended.untracked() + 1) })
+  } else {
+    fn() {  }
+  }
+}
+
+///|
+/// Whether it goes at `n`'s logic's moment, followed: told as a way is said and as it ends (its declared end, a moment
+/// of `n`'s).
+fn NodeWay::goes(self : NodeWay, n : @view.View) -> Bool {
+  self.way.said()
+  self.ended.get() |> ignore
+  self.way.goes_at(n.logic_at())
 }
 
 ///|

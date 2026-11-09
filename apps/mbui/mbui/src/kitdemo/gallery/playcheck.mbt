@@ -1,14 +1,16 @@
 // The players' contract (scripts/host_contract.sh HOST play): on a real host, MBUI_PLAYCHECK=<a video's bytes, base64>
-// (test/host/playcheck.mp4: a second of red, 64 × 48 at 10 frames a second, H.264): a player of it (a native view,
-// video/mp4) in a box of its own, each read it asks answered from those bytes (the whole file its total), as the app's
+// (test/host/playcheck.mp4: a second of red, 64 × 48 at 10 frames a second, H.264; MBUI_PLAYCHECK_WEBM=1 or
+// MBUI_PLAYCHECK_OGG=1 selects another container): a player of it in a box of its own, each read it asks answered from those bytes (the whole file its total), as the app's
 // players are; once ready, its length to the tenth of a second and its picture's size said (`PLAYCHECK ready 1000
 // 64x48`); where the host draws its picture in the canvas (MBUI_PLAYCHECK_DRAWN=1: Linux's), once its first frame is
 // drawn, the middle of its picture as the canvas drew it (`PLAYCHECK drawn red`, else its colour: `PLAYCHECK drawn r g
 // b`); where the host reads its frames' times (MBUI_PLAYCHECK_FRAMES=1: Linux's), how many and the first's and last's
 // start (`PLAYCHECK frames 10 0 900`); played, said once it has played to its end (`PLAYCHECK ended`); a frame at 500
-// ms grabbed, said once it is a PNG (`PLAYCHECK grabbed`); then the app's end. `PLAYCHECK none` where the host has no
-// player, `PLAYCHECK failed` where it could not play it. The host asks for a frame as what it does changes: each
-// frame's build only asks.
+// ms grabbed, said once it is a PNG (`PLAYCHECK grabbed`); then the app's end. With MBUI_PLAYCHECK_BEHIND=1, played
+// at a tenth of its speed instead, said once it plays (`PLAYCHECK playing`), and once it stops: paused (`PLAYCHECK paused
+// at MS`, the app sent behind and back meanwhile) or at its end (`PLAYCHECK ended behind`, failed). `PLAYCHECK none`
+// where the host has no player, `PLAYCHECK failed` where it could not play it. The host asks for a frame as what it
+// does changes: each frame's build only asks.
 
 ///|
 // kept across runs: the check's one run (kitdemo run with MBUI_PLAYCHECK), never reset
@@ -89,9 +91,29 @@ fn play_check_next(c : @ui.Ctx, v : @ui.NativeView) -> Bool {
         }
         None => return false
       }
+    // (MBUI_PLAYCHECK_BEHIND=1: at a tenth of its speed, ten seconds, for the app to be sent behind as it plays)
     3 => {
+      let behind = @ui.env("MBUI_PLAYCHECK_BEHIND") == "1"
+      if behind {
+        v.rate(0.1)
+      }
       v.play()
-      play_check_said.val = 4
+      play_check_said.val = if behind { 6 } else { 4 }
+    }
+    6 if v.playing() => {
+      @hostapi.log("PLAYCHECK playing")
+      play_check_said.val = 7
+    }
+    // (back on the screen: paused as the app went behind, or played on there to its end)
+    7 if v.ended() => {
+      @hostapi.log("PLAYCHECK ended behind")
+      @hostapi.exit(1)
+      return false
+    }
+    7 if !v.playing() && !v.buffering() => {
+      @hostapi.log("PLAYCHECK paused at \{v.position().round().to_int()}")
+      @hostapi.exit(0)
+      return false
     }
     4 if v.ended() => {
       @hostapi.log("PLAYCHECK ended")
@@ -127,7 +149,8 @@ pub fn play_check_run(c : @ui.Ctx, video : String) -> Unit {
     Some(v) => v
     None => {
       let data = @codec.from_base64(video)
-      let v = @ui.NativeView::video("video/mp4", fn(offset, length, answer) {
+      let mime = if @ui.env("MBUI_PLAYCHECK_WEBM") == "1" { "video/webm" } else if @ui.env("MBUI_PLAYCHECK_OGG") == "1" { "video/ogg" } else { "video/mp4" }
+      let v = @ui.NativeView::video(mime, fn(offset, length, answer) {
         let n = data.length()
         let from = if offset < 0.0 { 0 } else if offset > n.to_double() { n } else { offset.to_int() }
         let to = if from + length > n { n } else { from + length }

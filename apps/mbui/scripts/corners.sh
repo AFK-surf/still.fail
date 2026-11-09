@@ -55,7 +55,7 @@ if [ $# -gt 0 ]; then printf '%s %s %s\n' "$@"; else cat; fi | while read -r win
   # (the run's whole log kept, <mode>.log; no picture of a run before it left to be taken for this one's)
   log="$dir/$mode.log"
   rm -f "$dir/$mode.png" "$dir/$mode-marked.png" "$dir/$mode.fail.png"
-  MBUI_LOCALE=$lang MBUI_FIXTURE=$mode MBUI_WIN=${w}x$h MBUI_FILM_PLATFORM=$platform MBUI_FILM_SCALE=2 MBUI_FILM_WINDOW_CORNER=$corner MBUI_FILM_NAV_ABLE=$nav \
+  MBUI_CORNERS_SHOWN=1 MBUI_LOCALE=$lang MBUI_FIXTURE=$mode MBUI_WIN=${w}x$h MBUI_FILM_PLATFORM=$platform MBUI_FILM_SCALE=2 MBUI_FILM_WINDOW_CORNER=$corner MBUI_FILM_NAV_ABLE=$nav \
     MBUI_FILM="$PWD/$film" MBUI_FILM_LAST="$PWD/$dir/$mode.png" MBUI_FILM_DRIVE="$PWD/$script" "$EXE" > "$log" 2>&1
   rc=$?
   grep -a 'DRIVE CORNER' "$log" | sed 's|^.*DRIVE CORNER ||' > "$said"

@@ -1,32 +1,12 @@
-// Chats shared with other workspaces, from the pages (docs/chat-share.md): sharing a chat of this station (its starter
+// Chats shared with other workspaces, from the pages: sharing a chat of this station (its starter
 // or a workspace manager), and saying this workspace takes chats from a station of another (any member).
-import { type Request, type Answer, error, json, percentDecode } from "../request.ts";
+import { type Request, type Answer, error, json, segment, Refused, input } from "../request.ts";
 import type { Route } from "../admin.ts";
 import type { Store } from "../../store/store.ts";
 import type { ChatShares, Target } from "../../xshare/index.ts";
 
-const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
 
-class Refused extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
 
-/// A request's JSON object: nothing is `{}`, as is anything not an object; more than a megabyte refused.
-function input(r: Request): Record<string, any> {
-  if (r.body.length > 1_000_000) throw new Refused(413, "request too large");
-  if (r.body.length === 0) return {};
-  let value: unknown;
-  try {
-    value = JSON.parse(r.body.toString("utf8"));
-  } catch {
-    throw new Refused(400, "invalid JSON");
-  }
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, any>) : {};
-}
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
 

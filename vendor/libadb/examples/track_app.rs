@@ -1,0 +1,102 @@
+//! Example: stream debuggable/profileable process snapshots.
+//!
+//! ```text
+//! cargo run --example track_app --features tokio,host-keys -- 127.0.0.1:5555
+//! cargo run --example track_app --no-default-features --features smol,host-keys -- 127.0.0.1:5555
+//! ```
+//!
+//! Reuses `~/.android/adbkey`; if there is none, a key is generated
+//! and saved on first run — confirm it on the device when asked.
+
+#[cfg(not(any(feature = "tokio", feature = "smol")))]
+compile_error!("this example requires --features tokio,host-keys or --features smol,host-keys");
+
+use std::{env, process};
+
+use libadb::{track_app, Connection, Error, Feature};
+
+#[path = "common/adb_key_auth.rs"]
+mod adb_key_auth;
+async fn run(addr: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let auth = adb_key_auth::load_or_generate()?;
+
+    #[cfg(feature = "tokio")]
+    let transport = {
+        let stream = tokio::net::TcpStream::connect(addr).await?;
+        stream.set_nodelay(true)?;
+        libadb::TokioTcp::new(stream)
+    };
+    #[cfg(all(feature = "smol", not(feature = "tokio")))]
+    let transport = {
+        let stream = smol::net::TcpStream::connect(addr).await?;
+        stream.set_nodelay(true)?;
+        libadb::SmolTcp::new(stream)
+    };
+
+    eprintln!("[*] connecting to {addr} ...");
+    let mut conn =
+        Connection::<_>::connect(transport, auth, &[Feature::TrackApp, Feature::AppInfo])
+            .await
+            .map_err(|e| format!("connect: {e}"))?;
+
+    eprintln!("[*] connected, device: {:?}", conn.device_banner());
+
+    let mut rx = [0u8; 64 * 1024];
+    let mut tracker = track_app::open(&mut conn, &mut rx)
+        .await
+        .map_err(|e| format!("open: {e}"))?;
+
+    eprintln!("[*] streaming process snapshots (Ctrl-C to stop) ...");
+
+    loop {
+        match tracker.read_snapshot().await {
+            Ok(procs) => {
+                println!("--- snapshot ({} processes) ---", procs.len());
+                for p in &procs {
+                    println!(
+                        "  pid={:<6} uid={:<6} dbg={} prof={} arch={:<8} name={} pkgs={:?}",
+                        p.pid,
+                        p.uid.unwrap_or(-1),
+                        if p.debuggable { "Y" } else { "N" },
+                        if p.profileable { "Y" } else { "N" },
+                        p.architecture,
+                        p.process_name.as_deref().unwrap_or("?"),
+                        p.package_names,
+                    );
+                }
+            }
+            Err(Error::ChannelClosed) => {
+                eprintln!("[*] channel closed");
+                break;
+            }
+            Err(e) => return Err(format!("read: {e}").into()),
+        }
+    }
+
+    Ok(())
+}
+
+async fn async_main() {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() != 2 {
+        eprintln!("Usage: {} <host:port>", args[0]);
+        process::exit(2);
+    }
+
+    if let Err(e) = run(&args[1]).await {
+        eprintln!("error: {e}");
+        process::exit(1);
+    }
+}
+
+#[cfg(feature = "tokio")]
+#[tokio::main]
+async fn main() {
+    async_main().await;
+}
+
+#[cfg(all(feature = "smol", not(feature = "tokio")))]
+fn main() {
+    smol::block_on(async_main());
+}

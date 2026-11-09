@@ -1,20 +1,20 @@
 #!/bin/sh
 # Lays out the still.fail station's release in DIR/stillfail for PLATFORM (default darwin-arm64): the station in
-# TypeScript (station/, docs/station-ts.md) with its native parts, prebuilt (scripts/native.ts: launcher, mesh, runner),
+# TypeScript (station/) with its native parts, prebuilt (scripts/native.ts: launcher, mesh, runner),
 # and the version of the Node it runs on, which is not in it: the installer gets that once per version
 # (scripts/node-dist.sh, cloud/src/install.ts) and links it at stillfail/node. scripts/release.sh packs it for
 # install.sh. The layout:
-#   stillfail/bin/stillfail                               (the command people and services run; bin/ember beside it)
+#   stillfail/bin/stillfail                               (the command people and services run)
 #   stillfail/bin/install.{zh,en}.sh                      (the installer the station updates itself by, verified with
-#                                                          the release: scripts/installers.ts, docs/release-signing.md)
-#   stillfail/mesh/target/release/stillfail-station       (the launcher, with the Rust station's command line and path,
-#                                                          ember-station beside it: what the installer, bin/stillfail,
-#                                                          the desktop app and services written by older releases run)
-#   stillfail/station/{main.js, read/worker.js, search/worker.js, skills/, mesh.node, stillfail-runner, package.json}
+#                                                          the release: scripts/installers.ts, scripts/release-sign.ts)
+#   stillfail/mesh/target/release/stillfail-station       (the launcher, with the Rust station's command line and path:
+#                                                          what the installer, bin/stillfail, the desktop app and
+#                                                          services run)
+#   stillfail/station/{main.js, built workers and assets, mesh.node, stillfail-runner, stillfail-reader, package.json}
 #                                                         (and on darwin-arm64 "still.fail Helper.app": the station's
-#                                                          macOS app for what macOS grants, docs/station-ts-native.md §4;
+#                                                          macOS app for what macOS grants §4;
 #                                                          on win32-x64 stillfail-screen.exe: the desktop's screen,
-#                                                          docs/remote-screens.md, and agent-desktop.exe: its apps'
+#                                                          and agent-desktop.exe: its apps'
 #                                                          accessibility trees, which the Helper carries on macOS)
 #   stillfail/NODE_VERSION                                (the version of the Node it runs on: .node-version's)
 #   stillfail/dist/admin/posthog.json                     (only the PostHog key the station reports errors with, when
@@ -23,8 +23,8 @@
 #   stillfail/VERSION, BUILD                              (the commit; the commits in its history: version 0.1.<BUILD>)
 # On darwin-arm64 the native parts are signed when $STILLFAIL_SIGN_STATION is set (the station release job).
 # Its Node is the station's own: the agents' PATH never has it (a runtime installed with it would land there).
-# On win32-x64 the executables are .exe, and the command is bin/stillfail.cmd (bin/stillfail.ps1 behind it): no links
-# there (they take a privilege on Windows), so no ember beside them; its installers are bin/install.{zh,en}.ps1.
+# On win32-x64 the executables are .exe, and the command is bin/stillfail.cmd (bin/stillfail.ps1 behind it); its
+# installers are bin/install.{zh,en}.ps1.
 #   station-bundle.sh DIR [darwin-arm64|linux-x64|linux-arm64|win32-x64]
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
@@ -42,17 +42,20 @@ launcher="$(native launcher)"
 mesh="$(native mesh)"
 runner="$(native runner)"
 helper=; [ "$platform" = darwin-arm64 ] && helper="$(native helper)"
+# The reader in MoonBit (station/mb).
+reader="$(native reader)"
 screen=; [ "$platform" = win32-x64 ] && screen="$(native screen)"
 tree=; [ "$platform" = win32-x64 ] && tree="$(native agent-desktop)"
+# The build's output is the complete set of station files for this release, not a previous build's leftover workers.
+rm -rf "$root/station/dist"
 (cd "$root/station" && pnpm run build >&2)
 app="$out/stillfail"
 rm -rf "$app"
-mkdir -p "$app/bin" "$app/mesh/target/release" "$app/dist" "$app/station/read" "$app/station/search"
+mkdir -p "$app/bin" "$app/mesh/target/release" "$app/dist" "$app/station"
 if [ "$platform" = win32-x64 ]; then
   cp "$root/bin/stillfail.cmd" "$root/bin/stillfail.ps1" "$app/bin/"
 else
   cp "$root/bin/stillfail" "$app/bin/"
-  ln -s stillfail "$app/bin/ember"
 fi
 node "$root/scripts/installers.ts" "$app/bin" "$platform"
 cp -R "$root/dist/admin" "$app/dist/admin"
@@ -61,6 +64,7 @@ cp "$launcher" "$app/mesh/target/release/stillfail-station$x"
 # it in the launcher's artifact).
 [ "$platform" = win32-x64 ] && cp "$(dirname "$launcher")/stillfail-station-w.exe" "$app/mesh/target/release/"
 cp "$mesh" "$runner" "$app/station/"
+cp "$reader" "$app/station/"
 [ -z "$helper" ] || cp -R "$helper" "$app/station/"
 [ -z "$screen" ] || cp "$screen" "$app/station/"
 [ -z "$tree" ] || cp "$tree" "$app/station/"
@@ -73,19 +77,17 @@ if [ "$platform" = darwin-arm64 ] && [ -n "${STILLFAIL_SIGN_STATION:-}" ]; then
   hm="$app/station/still.fail Helper.app/Contents/MacOS"
   sh "$root/.github/sign-station.sh" "$app/mesh/target/release/stillfail-station" fail.still.station \
     "$app/station/$(basename "$runner")" fail.still.runner "$app/station/$(basename "$mesh")" fail.still.mesh \
+    "$app/station/stillfail-reader" fail.still.reader \
     "$hm/agent-desktop" fail.still.agent-desktop "$hm/agent-desktop-macos-helper" fail.still.agent-desktop-macos-helper \
     "$app/station/still.fail Helper.app" fail.still.helper >&2 ||
     { echo "::warning::the station's native parts were not signed (.github/sign-station.sh): ad hoc" >&2
-      cp "$launcher" "$app/mesh/target/release/stillfail-station"; cp "$mesh" "$runner" "$app/station/"
+      cp "$launcher" "$app/mesh/target/release/stillfail-station"; cp "$mesh" "$runner" "$reader" "$app/station/"
       rm -rf "$app/station/still.fail Helper.app"; cp -R "$helper" "$app/station/"; }
 fi
-[ "$platform" = win32-x64 ] || ln -s stillfail-station "$app/mesh/target/release/ember-station"
-cp "$root/station/dist/main.js" "$app/station/"
-cp "$root/station/dist/read/worker.js" "$app/station/read/"
-cp "$root/station/dist/search/worker.js" "$app/station/search/"
-cp -R "$root/station/dist/skills" "$app/station/skills"
-# DeepSeek Harness loads the station's driver from here (agents/dsh.ts); Cursor's runs from here (agents/cursor.ts).
-cp "$root/station/dist/dsh-bridge.mjs" "$root/station/dist/cursor-bridge.mjs" "$root/station/dist/sandbox-bridge.mjs" "$app/station/"
+# Copy all files produced by the station build, including workers in new directories. Naming individual workers here
+# left workspace activity, chat export and sign-in recovery without their programs in released stations.
+cp -R "$root/station/dist/." "$app/station/"
+case "$platform" in linux-*) ;; *) rm -f "$app/station/linux-portal.py" "$app/station/linux-x11.py" ;; esac
 # The bundle is an ES module: said, so Node neither guesses nor takes the type of a package.json above the release
 # (the Electron app had one around the station it carried: every command warned).
 printf '{"type":"module"}\n' > "$app/station/package.json"

@@ -6,8 +6,8 @@ fn lang_tester(mode : String, locale : String, lang? : String) -> @ui.Tester {
   let base = fixture(mode)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let got = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
       match (name, lang, got.value) {
         ("prefs", Some(l), Some(Object(m))) => {
           let o = m.copy()

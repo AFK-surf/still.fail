@@ -10,25 +10,11 @@ import { PANEL_PILL, TEXT_IN } from "./styles/align.ts";
 
 /** What a choice or a switch's row says under its title: quieter. */
 export const note = style({ color: vars.muted });
-export const firstOneTitle = style({
-  textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere", margin: "12px 0 0", fontSize: vars.textTitle,
-  fontWeight: "600",
-});
-export const firstOneLead = style({
-  textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere", margin: "0", maxWidth: "34em",
-  color: vars.muted, fontSize: vars.textUi, lineHeight: "1.6",
-});
 export const dialogLead = style({});
 export const empty = style({
   flex: "1", display: "grid", placeContent: "center", justifyItems: "center", gap: "6px", padding: "40px",
   textAlign: "center", color: vars.muted,
 });
-/** Section titles and their actions share a centre line. */
-export const sectionHead = style({
-  display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "10px", alignItems: "center",
-});
-export const sectionSub = style({ margin: "3px 0 0", fontSize: vars.textMeta, color: vars.muted, maxWidth: "52em" });
-export const sectionActions = style({ display: "flex", gap: "8px" });
 export const field = style({ display: "grid", gap: "6px" });
 export const fieldTop = style({ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "8px" });
 export const fieldLabel = style({ fontSize: vars.textUi, fontWeight: "500" });
@@ -105,7 +91,6 @@ export const switchThumbSmall = style({
 });
 export const switchRow = style({ display: "flex", alignItems: "center", gap: "16px" });
 export const switchRowText = style({ flex: "1", display: "grid", gap: "2px", fontSize: vars.textUi, cursor: "pointer" });
-export const choices = style({ display: "grid", gap: "8px" });
 export const choice = style({
   border: `1px solid ${vars.lineStrong}`, borderRadius: `calc(16px * ${vars.cornerScale})`, background: vars.canvas,
   transition: `border-color ${vars.dur} ${vars.easeOut}, box-shadow ${vars.dur} ${vars.easeOut}`,
@@ -116,17 +101,6 @@ export const choice = style({
     "&[data-disabled]": { opacity: ".55" },
   },
 });
-export const choiceHit = style({
-  display: "flex", alignItems: "center", gap: "12px", width: "100%", padding: "12px 14px", border: "0",
-  // Its card's own corner, whatever the card is rounded to (a dialog's cards: DIALOG_INNER).
-  borderRadius: "inherit", background: "none", textAlign: "left", cursor: "pointer",
-  cornerShape: vars.cornerShape,
-  selectors: {
-    "&:disabled": { cursor: "default" },
-  },
-});
-export const choiceText = style({ flex: "1", display: "grid", gap: "2px", fontSize: vars.textUi });
-export const choiceExtra = style({ margin: "0 14px", padding: "12px 0 14px", borderTop: `1px solid ${vars.line}` });
 export const radio = style({
   display: "grid", placeItems: "center", flex: "none", width: "18px", height: "18px", borderRadius: "50%",
   border: `1.5px solid ${vars.lineStrong}`,
@@ -134,7 +108,6 @@ export const radio = style({
     [`${choice}[data-checked] &`]: { borderColor: vars.text },
   },
 });
-export const radioDot = style({ width: "8px", height: "8px", borderRadius: "50%", background: vars.text });
 export const selectIcon = style({ color: vars.muted, display: "grid" });
 export const selectContent = style({
   minWidth: "var(--radix-select-trigger-width)", maxHeight: "min(360px, var(--radix-select-content-available-height))",
@@ -193,7 +166,7 @@ export const overlay = style({
  * height (18) is its radius, so a pill button in a corner, the close button, and a card inside (radius DIALOG_INNER) all
  * follow its edge at the same distance.
  */
-export const DIALOG_PAD = 24;
+const DIALOG_PAD = 24;
 export const DIALOG_INNER = `calc(18px * ${vars.cornerScale})`;
 export const dialog = style({
   position: "fixed", left: "50%", top: "50%", zIndex: "50", transform: "translate(-50%, -50%)", display: "flex",
@@ -238,7 +211,7 @@ export const resizeHandle = style({
       opacity: 0, transition: `opacity 140ms ${vars.easeOut}`,
     },
     "&:hover::after, &:focus-visible::after, &[data-active]::after": { opacity: 1 },
-    // The bar at its middle, on the line (Rail.css.ts edge, the sidebar's, is the same).
+    // The bar at its middle, on the line (the sidebar's, is the same).
     "&::before": {
       // Odd widths on whole pixels: the bar's middle is the line's (the line left 3, 1 wide; the bar left 1, 5 wide).
       content: "\"\"", position: "absolute", top: "50%", left: "1px", width: "5px", height: "24px", borderRadius: "999px",
@@ -262,24 +235,9 @@ export const edgeTip = style({
   selectors: { "&[data-edge=\"left\"]": { translate: "-100% 0" } },
 });
 globalStyle(`${edgeTip} > *`, { transform: "translateY(-50%)" });
-export const firstOne = style({});
-export const firstOneAction = style({
-  width: "100%", minWidth: "0", marginTop: "12px", display: "flex", gap: "8px", alignItems: "center",
-  justifyContent: "center", flexWrap: "wrap",
-});
-export const about = style({
-  selectors: {
-    "&:hover": { color: vars.text },
-    "&:focus-visible": { color: vars.text },
-  },
-});
-export const aboutText = style({ display: "block", lineHeight: "1.5" });
 globalStyle(`${empty} h2`, { margin: "10px 0 0", fontSize: vars.textTitle, color: vars.text });
 globalStyle(`${empty} p`, { margin: "0", maxWidth: "34em", fontSize: vars.textUi });
-globalStyle(`${sectionHead} h2`, { margin: "0", fontSize: vars.textBody, lineHeight: "22px", fontWeight: "600" });
 globalStyle(`${switchRowText} ${note}`, { fontSize: vars.textMeta });
-globalStyle(`${choiceText} strong`, { fontWeight: "600" });
-globalStyle(`${choiceText} ${note}`, { fontSize: vars.textMeta, lineHeight: "1.5" });
 globalStyle(`${select} > span:first-child`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 globalStyle(`${command} code`, { flex: "1", fontSize: vars.textMeta, overflowX: "auto", whiteSpace: "nowrap" });
 globalStyle(`${dialogAlert} ${dialogLead}`, { margin: "0" });
@@ -288,28 +246,6 @@ globalStyle(`${dialogHead} > button`, { borderRadius: "999px", cornerShape: "rou
 globalStyle(`${dialogBody} :is(${choice}, ${command})`, { borderRadius: DIALOG_INNER });
 globalStyle(`${dialogBody} ${command} ${iconBtn}`, { borderRadius: `calc(${DIALOG_INNER} - 6px)` });
 globalStyle(`${dialog} ${command} code`, { minWidth: "0" });
-
-// ── a popped-up panel's parts (parts.tsx Panel*): inside styles/controls.css.ts popover, its rows concentric with it ──
-
-// Its words in by a row's padding (align.ts TEXT_IN), as the rows' icons and words are: one line from the panel's edge.
-export const panelHead = style({ display: "grid", gap: 2, padding: `6px ${TEXT_IN}px 4px` });
-export const panelTitle = style({ fontSize: vars.textUi, fontWeight: 600 });
-export const panelNote = style({ margin: 0, fontSize: vars.textMeta, lineHeight: vars.leadingMeta, color: vars.muted });
-export const panelGroup = style({ display: "grid", gap: 2 });
-export const panelLabel = style({ padding: `6px ${TEXT_IN}px 2px`, fontSize: vars.textMeta, color: vars.muted });
-export const panelRow = style({
-  display: "flex", alignItems: "center", gap: 10, minHeight: 34, padding: `0 ${TEXT_IN}px`, border: 0, borderRadius: "var(--panel-in)",
-  cornerShape: vars.cornerShape, background: "none", color: vars.text, fontSize: vars.textUi, textAlign: "left", cursor: "pointer",
-  selectors: { "&:is(button):hover": { background: vars.hover }, "&:not(button)": { cursor: "default" } },
-});
-export const panelRowIcon = style({ display: "grid", placeItems: "center", width: 20, color: vars.muted, flex: "none" });
-// When the row is too narrow, what is at its end is cut short, not the words; with nothing at the end, the words are.
-export const panelRowLabel = style({
-  flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-  selectors: { "&:not(:last-child)": { flexShrink: 0 } },
-});
-export const panelRowEnd = style({ display: "flex", alignItems: "center", gap: 6, minWidth: 0, color: vars.subtle, flex: "0 1 auto" });
-export const panelFoot = style({ display: "flex", justifyContent: "flex-end", gap: 6, paddingTop: 4 });
 export const panelText = style({ paddingInline: TEXT_IN });
 
 // ── a small panel's buttons (notices, popovers, cards): small pills, whatever the panel's corner (2026-10-15) ──
@@ -331,12 +267,6 @@ export const panelButton = style({
     '&[data-tone="filled"]:hover:not(:disabled)': litOver,
     "&:disabled": { opacity: .5, cursor: "default" },
   },
-});
-/** An icon to press in a small panel (close, stop, step): a 24 circle, as panelButton is a pill. */
-export const panelIcon = style({
-  display: "grid", placeItems: "center", width: PANEL_PILL, height: PANEL_PILL, padding: 0, border: 0, flex: "none",
-  borderRadius: "50%", background: "none", color: vars.muted, cursor: "pointer",
-  selectors: { "&:hover:not(:disabled)": { background: vars.hover, color: vars.text }, "&:disabled": { opacity: .35, cursor: "default" } },
 });
 
 globalStyle(tooltip, {

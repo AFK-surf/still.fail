@@ -4,7 +4,8 @@
 // message; they answer the same way. Nothing limits how long two agents talk: that is theirs to judge.
 import { threadAddress } from "../agents/instructions.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
-import { type Attachment, STILLFAIL_SURFACE, type SessionThread } from "../store/store.ts";
+import { given, titleOf } from "../read/views.ts";
+import { type Attachment, STILLFAIL_SURFACE, type SessionRow, type SessionThread, type ThreadRow } from "../store/store.ts";
 import { type Args, jsString, slackWithFiles } from "./args.ts";
 import { attach } from "./conversations.ts";
 import type { Hub } from "./hub.ts";
@@ -39,6 +40,30 @@ function header(surface: string, title: string, link: string | null, opened = fa
   return tr(stationLang(), opened ? "station.session.openedBy" : "station.session.from", { from: chatNamed(surface, title, link) });
 }
 
+/// The name of a session once its preferred conversation is known.
+function senderTitle(hub: Hub, row: SessionRow, thread: ThreadRow | null): string {
+  // As the chat list calls it (read/views.ts titleOf): a session's own title only where its chat was never named.
+  const named = thread === null ? null : given(thread);
+  const own = row.title?.trim() || null;
+  const first = thread === null || named !== null || own !== null || thread.surface === STILLFAIL_SURFACE ? null : hub.store.firstText(thread.id);
+  return named ?? own ?? (thread !== null ? titleOf(thread, first, null) : row.key);
+}
+
+/// A sender's title when its preferred conversation is ready; undefined asks the caller to prepare its old order.
+/// Read within the caller's snapshot when it also uses readiness to decide whether to wait.
+export function senderTitleIfReady(hub: Hub, key: string): string | null | undefined {
+  const row = hub.store.getSession(key);
+  if (!row) return null;
+  let thread = null;
+  try {
+    const home = hub.store.sessionHomeThread(key);
+    const selected = home ?? hub.store.latestThreadIfReady(key);
+    if (selected === undefined) return undefined;
+    thread = selected?.thread ?? null;
+  } catch {}
+  return senderTitle(hub, row, thread);
+}
+
 /// The sender's chat as a message from it is headed: its title, and its link once the station is in a workspace.
 export function sender(hub: Hub, key: string): [string, string | null] {
   const row = hub.store.getSession(key);
@@ -47,9 +72,7 @@ export function sender(hub: Hub, key: string): [string, string | null] {
   try {
     thread = sessionThreadOf(hub, key).thread;
   } catch {}
-  const title = [thread?.title ?? thread?.autoTitle ?? null, row.title].find((t) => t !== null && t !== undefined);
-  const shown = title !== undefined && title !== null && title.trim() !== "" ? title : key;
-  return [shown, hub.link(key) ?? null];
+  return [senderTitle(hub, row, thread), hub.link(key) ?? null];
 }
 
 /// A chat as a letter to it is kept (keptOut): as its session's messages are headed (sender), or by `named` when that
@@ -63,7 +86,7 @@ function chatOf(hub: Hub, key: string, named: string): [string, string | null] {
 }
 
 /// session_send from session `key`: to a chat of its workspace (or one shared with it to write in), on this station or
-/// another of that workspace (docs/multi-workspace.md).
+/// another of that workspace.
 export async function sessionSend(hub: Hub, key: string, args: Args): Promise<string> {
   const to = (args.to === undefined ? "" : jsString(args.to)).trim();
   const text = (args.text === undefined ? "" : jsString(args.text)).trim();
@@ -156,6 +179,7 @@ export async function fromPeer(hub: Hub, peer: string, request: Json, ws: string
 /// `targets`. A letter (rows.ts Letter) is kept apart from what is said there and posted nowhere, not even in a Slack
 /// thread: only the first message of a chat an agent opened (`opened`) is said in it. Its address.
 export async function postFrom(hub: Hub, thread: SessionThread, author: string, title: string, link: string | null, text: string, targets: string[], given: Attachment[] = [], opened = false): Promise<string> {
+  const identity = hub.actors.get(author)?.messageIdentity() ?? undefined;
   const row = thread.thread;
   let said = `${header(row.surface, title, link, opened)}\n\n${text}`;
   const files = await keep(given, thumbsDir(hub.config().dataDir));
@@ -178,7 +202,7 @@ export async function postFrom(hub: Hub, thread: SessionThread, author: string, 
   }
   const hearing = targets.filter((t) => t !== author);
   if (opened) {
-    const [n] = hub.store.insertMessage({ thread: row.id, ts, authorKind: "agent", author, text: said, attachments: files });
+    const [n] = hub.store.insertMessage({ thread: row.id, ts, authorKind: "agent", author, text: said, attachments: files, agentIdentity: identity });
     hub.deliver(row.id, n, hearing, said);
   } else {
     // (in the chat's own log of letters, not among what is said in it: store/schema.ts LETTERS)

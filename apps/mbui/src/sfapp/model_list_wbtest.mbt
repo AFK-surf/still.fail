@@ -1,4 +1,4 @@
-// The run's models (settings/model_list.mbt; SettingParts.kt ModelList) over settings-run-models' many.
+// The run's models (settings/model_list.mbt) over settings-run-models' many.
 
 ///|
 test "a run's models: by series, filtered by what is typed, none said so" {

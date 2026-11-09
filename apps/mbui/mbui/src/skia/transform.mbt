@@ -1,4 +1,4 @@
-// tiny-skia's Transform (path/src/transform.rs): an affine map, its concatenation in doubles as Skia's.
+// tiny-skia's Transform: an affine map, its concatenation in doubles as Skia's.
 
 ///|
 /// x' = sx·x + kx·y + tx, y' = ky·x + sy·y + ty.

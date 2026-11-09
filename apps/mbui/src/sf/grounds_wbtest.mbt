@@ -1,4 +1,4 @@
-// The panes side by side told apart by their grounds, on every screen (docs/architecture.md, the look): the sidebar a
+// The panes side by side told apart by their grounds, on every screen (the look): the sidebar a
 // step under the page's ground and what is chosen in it a step under that, light and dark, by about the web's step.
 
 ///|

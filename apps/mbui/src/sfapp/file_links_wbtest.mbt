@@ -1,4 +1,4 @@
-// A link within a sentence to one of the message's files (messages.mbt agent_words, Prose.kt OpenedFile), its address
+// A link within a sentence to one of the message's files (messages.mbt agent_words), its address
 // escaped as the station sends it (MBUI_FIXTURE=chat-file-links): a visualization opened over the whole screen, any
 // other file in the preview.
 

@@ -25,7 +25,8 @@
 //                               composer over a list's last row, a sheet); tap1 TEXT the highest
 //   tapxy X Y                   taps there (negative: from the right, the bottom)
 //   hold MS TEXT                pressed on TEXT for MS, then let go (a long press)
-//   type TEXT                   committed by the input method      mark TEXT    composed (not yet committed)
+//   type TEXT                   committed by the input method (the next step once they are in a field)
+//   mark TEXT                   composed (not yet committed)
 //   enter                       backspace                 back       the system's back
 //   paste TEXT                  TEXT on the clipboard, then the system's paste
 //   pasten N TEXT               TEXT repeated to N characters, pasted
@@ -40,8 +41,12 @@
 //                               home, end, pageup, pagedown, backspace, a character; cmd+ (⌘ on macOS, Ctrl
 //                               elsewhere), ctrl+, alt+, shift+ (cmd+k, shift+enter, alt+down)
 //   resize W H                  the window's content resized to W by H (the host's own window, where it can)
+//   trackpad begin|DX DY|end    the keyboard's trackpad (iOS's floating cursor) begun, its finger at DX DY from where it
+//                               began, let go
 //   ime H                       under a Tester (a film's run), the soft keyboard H points over the window's foot, as a
 //                               host says it while it moves (Tester::set_ime_inset); a real host's is its own
+//   viewsaid JSON               under a Tester (a film's run), its host says JSON of a native view, as Tester::view_said
+//                               has it (a frame grabbed: {"still":{"view":N},"b":HEX}); a real host's views say their own
 //   system JSON                 under a Tester (a film's run), the system says JSON on its channel as a host says it
 //                               (@hostapi.system_channel: a size class, the hinge and its fold, the bars), taken at
 //                               the next frame; a real host's system says its own, and the run fails
@@ -64,6 +69,10 @@
 //   exit                        ends the run: DRIVE PASS, exit 0
 //   ends                        the app ends by itself, its host quitting it (an update handed to its installer), within
 //                               the timeout; else the run fails. What follows it is never reached
+//   latency MODE TEXT           input to the screen measured by the host itself (macOS, Android), from the lowest TEXT
+//                               on screen (or @X,Y; none: the window's middle): its own events from then on (type,
+//                               scroll, drag; anim none), the process ending with what it measured (LATENCY …, said by
+//                               the host: still.fail's scripts/latency.sh); `ends` after it. For people, never a check
 //   linger MS                   the run passed (DRIVE PASS said now), the app left running MS more for what the last
 //                               step set off (a share sheet, a download): a check beside the run looks at it
 //   answered CALL               a call to the core named CALL (drive.read; or a subscription's topic key, its first
@@ -73,6 +82,8 @@
 //   decoded SRC                 a picture whose source ends with SRC (e2e-photo.jpg; a PDF's page: "PDF") or
 //                               begins with it (a prefix: a gallery's content://media/) decoded, from its address or
 //                               from bytes handed over for it (Ctx::image_bytes, add_image)
+//   image_ready SRC             the named picture is currently decoded, including before the run; wait for its current
+//                               decodes, and fail if one failed. An exact source wins; a prefix or suffix must name one
 //   ready VIEW                  a native view ready: by its kind's name (video, audio, web, site), pdf (a PDF's page
 //                               drawn), its kind's number (1 video or audio, 2 web, 3 site), #ID its id
 //   outside_done NAME           work outside the app (a wait on the host or the core, by its name: "an update
@@ -84,6 +95,8 @@
 //                               (a locked screen's window is covered): a run about the app put away (e2e/win's)
 //   shown                       the host's word that the app is shown again (after it was not: another app's page
 //                               over it gone) since the last step that acted, and a frame drawn after it
+//   typedone X                  the words the runner found doing X (`ok WORDS`: a code another device shows) typed, as
+//                               `type` types its own, once it has done X
 //   done X                      the run's runner (still.fail's run.sh: what `log do: X` asked of it) has done X: its
 //                               file X come in the directory the run names (MBUI_DONE_DIR, else $MBUI_SHOT_DIR/done),
 //                               the host told of it by its system (src/host/done_watch.h: macOS, Android, Windows);
@@ -94,7 +107,7 @@
 // No step waits for the app to be settled. What a step looks for comes with a frame (an input's, a message's, the
 // host's event's, a motion's), and it is looked for at each; a tap, a hold, a hover or a drag on words goes where the
 // frame just drawn has them, that frame, never waiting for them to hold still. What comes later than a frame is waited
-// for by name (until, gone, answered, decoded, ready, outside_done, shown, done), within the timeout. Nothing waits for
+// for by name (until, gone, answered, decoded, image_ready, ready, outside_done, shown, done), within the timeout. Nothing waits for
 // the app to be at rest (settled by another name): that is asserted of a run, never waited on (a Tester's
 // assert_true(t.at_rest())). The run asks for no frame of its own: what it waits for in time (a timeout, a hold let
 // go, a `wait`, a shot another takes) is a wake at that time. `wait` stays a pause in real time, for what is outside
@@ -153,6 +166,11 @@ priv struct Driver {
   dir : String
   // the app's events (Ctx::say) the run's `said` lines have taken: those before this one
   mut said_taken : Int
+  // words a `type` sent the way the system does (the input method's, @hostapi.drive), not yet in a field: the next
+  // step waits for them there ("" none). The host hands them on to the app later, as their own event; a tap taken
+  // before them moved the focus, and they went into the field it focused (2026-11-05, the vault's editor on Android:
+  // a host's words in the name's field)
+  mut typed : String
 }
 
 ///|
@@ -279,6 +297,7 @@ fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
     seen_frame: -1,
     dir,
     said_taken: 0,
+    typed: "",
   })
   let watched = if watching { " (the runner's directory \{done_dir} watched)" } else { "" }
   h_log("DRIVE start: \{steps.length()} lines" + watched)
@@ -292,10 +311,10 @@ fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
 }
 
 ///|
-/// What of the window's tree shows `what` (its words, `=WORDS` exactly, `icon:NAME` what it draws is called so:
-/// View::drawn_as; or is called `what`, its label whole: View::says), the middle of each where it is drawn, in the
-/// window, as it is made, however faded this frame (made transparent, coming in), as on_screen_nodes finds an old
-/// view's laid out; not on its way out (View::leaving: drawn only, as an old layer leaving is, Ctx::overlay's inert);
+/// What of the window's tree shows `what` (its words, `=WORDS` exactly, `field:WORDS` a field by the words in it,
+/// `icon:NAME` what it draws is called so: View::drawn_as; or is called `what`, its label whole: View::says), the
+/// middle of each where it is drawn, in the window, as it is made, however faded this frame (made transparent, coming
+/// in), as on_screen_nodes finds an old view's laid out; not on its way out (View::leaving: drawn only, as an old layer leaving is, Ctx::overlay's inert);
 /// whether it takes a press or not, whatever lies over it (reachable says which of it a finger
 /// reaches). What is seen is the glyphs' to say (Tester::glyphs_seen), not this.
 fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId)] {
@@ -303,20 +322,36 @@ fn tree_on_screen(c : Ctx, what : String) -> Array[(Double, Double, @view.NodeId
   // (each: where, which, and whether by its words, not its label alone)
   let hits : Array[(Double, Double, @view.NodeId, Bool)] = []
   for d in tree.drawn() {
+    // (none of a page's bones: not there yet, View::bones)
+    if d.bones != 0L {
+      continue
+    }
     // (or by what it is called, its label whole, as an old view's box is: as Compose's test finds a node by its
     // contentDescription, on_screen_nodes)
     let label = tree.said_label(d.id)
-    let by_words = !what.has_prefix("icon:") && d.words != "" &&
-      (if what.has_prefix("=") { d.words == what.unsafe_substring(start=1, end=what.length()) } else { d.words.contains(what) })
+    // (its words as they are drawn: on one line where they do not wrap, as an old view's text is found: view_words_set)
+    let words = view_words_found(d)
+    let by_words = !what.has_prefix("icon:") && words != "" &&
+      (if what.has_prefix("=") { words == what.unsafe_substring(start=1, end=what.length()) } else { words.contains(what) })
     let hit = if what.has_prefix("icon:") {
       tree.drawn_name(d.id).contains("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
+    } else if what.has_prefix("switch:") {
+      // a switch by what it turns (its label, whole), as on_screen_nodes finds an old view's: the switch alone
+      let label = what.unsafe_substring(start=7, end=what.length())
+      tree.said_of(d.id) is Some({ role: Switch, label: l, .. }) && l == label
+    } else if what.has_prefix("field:") && what.length() > 6 {
+      // a field by the words in it, not its placeholder, as on_screen_nodes finds an old view's
+      match tree_fields.get(d.id) {
+        Some(tf) => tf.st.shown().contains(what.unsafe_substring(start=6, end=what.length()))
+        None => false
+      }
     } else if what.has_prefix("=") && what.length() > 1 {
       let exact = what.unsafe_substring(start=1, end=what.length())
-      d.words == exact || (label != "" && label == exact)
+      words == exact || (label != "" && label == exact)
     } else if what.contains(":") {
       false
     } else {
-      (d.words != "" && d.words.contains(what)) || (label != "" && label == what)
+      (words != "" && words.contains(what)) || (label != "" && label == what)
     }
     let (x, y) = (d.x + d.w / 2.0, d.y + d.h / 2.0)
     if hit && !tree.leaving(d.id) && d.w > 0.0 && d.h > 0.0 && x >= 0.0 && x <= c.width && y >= 0.0 && y <= c.height {
@@ -612,23 +647,21 @@ fn fields_hold(c : Ctx, words : String) -> Bool {
 }
 
 ///|
-/// The host's way of sending a step's input (@hostapi.drive); a test's fake host has none.
+/// The host's way of sending a step's input (@hostapi.drive).
 fn h_drive(kind : Int, text : String) -> Bool {
-  match fake.val {
-    Some(_) => false
-    None => @hostapi.drive(kind, text)
-  }
+  @hostapi.drive(kind, text)
 }
 
 ///|
-/// The run over: the app ends with its verdict (a test's fake host notes it).
+/// The run over: the app ends with its verdict (a test's fake host notes it). An interactive preview may keep a
+/// successfully replayed scene open; a failed script still ends with its error.
 fn drive_end(code : Int) -> Unit {
   h_log(if code == 0 { "DRIVE PASS" } else { "DRIVE END \{code}" })
   driver.val = None
-  match fake.val {
-    Some(f) => f.logs.push("EXIT \{code}")
-    None => @hostapi.exit(code)
+  if code == 0 && h_env("MBUI_DRIVE_KEEP_OPEN") == "1" {
+    return
   }
+  @hostapi.exit(code)
 }
 
 ///|
@@ -680,6 +713,18 @@ fn number(s : String) -> Double {
     -v
   } else {
     v
+  }
+}
+
+///|
+/// The place a step says as `@X,Y` (none where it says no such place).
+fn point_said(what : String) -> Array[(Double, Double)] {
+  match what.find(",") {
+    Some(i) => {
+      let x = number(what.unsafe_substring(start=1, end=i))
+      [(x, number(what.unsafe_substring(start=i + 1, end=what.length())))]
+    }
+    None => []
   }
 }
 
@@ -835,6 +880,16 @@ fn drive_steps(c : Ctx) -> Unit {
       d.mark = runtime().outside_ended()
       d.shown_mark = d.shown
     }
+    if d.typed != "" {
+      if fields_hold(c, d.typed) {
+        d.typed = ""
+      } else if waited > d.timeout {
+        drive_fail(c, d, "the words typed (\"\{d.typed}\") never reached a field after \{d.timeout.to_int()} ms")
+        return
+      } else {
+        return
+      }
+    }
     match cmd {
       "" => next()
       _ if cmd.has_prefix("#") => next()
@@ -955,7 +1010,29 @@ fn drive_steps(c : Ctx) -> Unit {
           return
         }
       }
-      "done" => {
+      "image_ready" => {
+        if arg == "" {
+          drive_fail(c, d, "a picture source is required")
+          return
+        }
+        let (state, named) = named_image_state(arg)
+        if state == 1 {
+          h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
+          next()
+        } else if state == -1 {
+          drive_fail(c, d, "picture \{named[0]} could not be decoded")
+          return
+        } else if state == -2 {
+          drive_fail(c, d, "\{arg} names more than one picture: \{named.join("; ")}")
+          return
+        } else if waited > d.timeout {
+          drive_fail(c, d, "picture was not requested or is still decoding after \{d.timeout.to_int()} ms")
+          return
+        } else {
+          return
+        }
+      }
+      "done" | "typedone" => {
         if !d.watching {
           drive_fail(
             c,
@@ -968,7 +1045,24 @@ fn drive_steps(c : Ctx) -> Unit {
         match d.runner_done.get(arg) {
           Some(said) =>
             match said.trim(chars=" \n\r\t").to_string() {
-              "" | "ok" => {
+              "" | "ok" if cmd == "done" => {
+                h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
+                next()
+              }
+              // (what the runner found, typed: the code another device shows, as a person reads it off and types it)
+              words if cmd == "typedone" && words.has_prefix("ok ") => {
+                let typed = words.view(start_offset=3).to_string()
+                if h_drive(0, typed) {
+                  if c.editors.contains(c.focus) {
+                    d.typed = typed
+                  }
+                } else {
+                  on_text(0, typed, 0, 0)
+                }
+                acted()
+                return
+              }
+              why if cmd == "done" && why.has_prefix("ok ") => {
                 h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
                 next()
               }
@@ -1059,17 +1153,7 @@ fn drive_steps(c : Ctx) -> Unit {
         }
         let what = words[4:].to_owned().join(" ")
         // (`@X,Y`: there, words in a field being none of what is on screen to find)
-        let at = if what.has_prefix("@") {
-          match what.find(",") {
-            Some(i) => {
-              let x = number(what.unsafe_substring(start=1, end=i))
-              [(x, number(what.unsafe_substring(start=i + 1, end=what.length())))]
-            }
-            None => []
-          }
-        } else {
-          reachable(c, what)
-        }
+        let at = if what.has_prefix("@") { point_said(what) } else { reachable(c, what) }
         if at.length() == 0 {
           if waited > d.timeout {
             drive_fail(c, d, not_reachable(c, what, d.timeout))
@@ -1150,7 +1234,12 @@ fn drive_steps(c : Ctx) -> Unit {
         return
       }
       "type" => {
-        if !h_drive(0, arg) {
+        if h_drive(0, arg) {
+          // (into a field: what a key catcher takes, a remote screen's, is in none)
+          if c.editors.contains(c.focus) {
+            d.typed = arg
+          }
+        } else {
           on_text(0, arg, 0, 0)
         }
         acted()
@@ -1290,6 +1379,34 @@ fn drive_steps(c : Ctx) -> Unit {
         acted()
         return
       }
+      "latency" => {
+        let (mode, what) = match arg.find(" ") {
+          Some(i) => (arg.unsafe_substring(start=0, end=i), arg.unsafe_substring(start=i + 1, end=arg.length()))
+          None => (arg, "")
+        }
+        // (where a wheel or a key goes: what is under the words, whatever lies over them)
+        let at = if what == "" {
+          [(c.width / 2.0, c.height / 2.0)]
+        } else if what.has_prefix("@") {
+          point_said(what)
+        } else {
+          on_screen(c, what)
+        }
+        if at.length() == 0 {
+          if waited > d.timeout {
+            drive_fail(c, d, not_reachable(c, what, d.timeout))
+          }
+          return
+        }
+        let (x, y) = lowest(at)
+        h_log("DRIVE latency \{mode} at \{x.to_int()},\{y.to_int()}")
+        if !h_drive(12, "\{mode} \{x} \{y}") {
+          drive_fail(c, d, "latency: this host measures no input latency, or not \{mode} (type, scroll, drag, anim)")
+          return
+        }
+        acted()
+        return
+      }
       "key" =>
         match key_named(arg) {
           Some((code, mods)) => {
@@ -1303,25 +1420,27 @@ fn drive_steps(c : Ctx) -> Unit {
             return
           }
         }
-      "system" => {
-        match fake.val {
-          Some(f) => fake_post(f, @hostapi.system_channel, arg, None)
-          None => {
-            drive_fail(c, d, "system: only a Tester's system says what a script tells it")
-            return
-          }
+      "system" | "viewsaid" | "ime" => {
+        // (what only some hosts take of a script: a Tester's says what its system, its native views' host and its
+        // keyboard do as it is told; a host that takes no such step says why)
+        let failed = @hostapi.script_step(cmd, arg)
+        if failed != "" {
+          drive_fail(c, d, failed)
+          return
         }
         acted()
         return
       }
-      "ime" => {
-        match fake.val {
-          Some(f) => {
-            f.dev.ime_inset = number(arg)
-            f.wants = true
-          }
-          None => {
-            drive_fail(c, d, "ime: only a Tester's keyboard moves as a script tells it")
+      "trackpad" => {
+        // (the keyboard's trackpad: begun at the window's top left, its finger moved to DX DY from there, let go)
+        let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
+        let u = text_float_unit
+        match words {
+          ["begin"] => on_text(text_float_begin, "", 0, 0)
+          ["end"] => on_text(text_float_end, "", 0, 0)
+          [dx, dy] => on_text(text_float_move, "", (number(dx) * u).to_int(), (number(dy) * u).to_int())
+          _ => {
+            drive_fail(c, d, "trackpad begin | DX DY | end")
             return
           }
         }
@@ -1335,10 +1454,7 @@ fn drive_steps(c : Ctx) -> Unit {
           return
         }
         if !h_drive(8, "\{wh[0].to_int()}x\{wh[1].to_int()}") {
-          match fake.val {
-            Some(_) => tester_size.val = Some((wh[0], wh[1]))
-            None => h_log("DRIVE resize: the host cannot")
-          }
+          h_log("DRIVE resize: the host cannot")
         }
         acted()
         return
@@ -1368,24 +1484,10 @@ fn drive_steps(c : Ctx) -> Unit {
         next()
       }
       "picks" => {
-        match fake.val {
-          Some(f) => {
-            f.picks.clear()
-            for part in arg.split(" ") {
-              match part.rev_find(":") {
-                Some(i) => {
-                  let mut n = 0
-                  for ch in part[i + 1:] {
-                    n = n * 10 + (ch.to_int() - 48)
-                  }
-                  let bytes = Bytes::make(n, b'x')
-                  f.picks.push({ name: part[:i].to_string(), bytes, held: 0, size: n.to_double(), src: "" })
-                }
-                None => ()
-              }
-            }
-          }
-          None => h_log("DRIVE picks: no Tester here, the host's own pickers answer")
+        // (the pickers' answers a host says as it is told: a Tester's; else its own pickers answer)
+        let failed = @hostapi.script_step(cmd, arg)
+        if failed != "" {
+          h_log("DRIVE picks: " + failed)
         }
         next()
       }
@@ -1442,10 +1544,7 @@ fn drive_steps(c : Ctx) -> Unit {
       }
       "quit" => {
         driver.val = None
-        match fake.val {
-          Some(f) => f.logs.push("EXIT 0")
-          None => @hostapi.exit(0)
-        }
+        @hostapi.exit(0)
         return
       }
       _ => {

@@ -1,0 +1,16 @@
+# A new preset's dialog going in steps (sf presenters.mbt panel_go): 添加目录, then 浏览文件夹…, then back twice by the
+# system's back. MBUI_FIXTURE=newchat-preset-new, a phone's window (MBUI_FILM_PLATFORM=2).
+timeout 20000
+until 名字
+wait 800
+tap 添加目录
+wait 900
+tap 浏览文件夹…
+wait 900
+back
+wait 900
+back
+wait 900
+back
+wait 900
+exit

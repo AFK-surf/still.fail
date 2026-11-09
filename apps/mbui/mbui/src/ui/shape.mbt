@@ -39,8 +39,8 @@ pub fn Ctx::shapes(
 
 ///|
 /// How far in from the left and right of a box `w` wide `shapes` draw: their outlines' points, a stroke's half width
-/// round them.
-fn shapes_ink_in(shapes : Array[Shape], w : Double) -> (Double, Double) {
+/// round them (what a node laid out by its ink, as Ctx::shapes' `by_ink` is, leaves of its box either side).
+pub fn shapes_ink_in(shapes : Array[Shape], w : Double) -> (Double, Double) {
   let mut x0 = w
   let mut x1 = 0.0
   for sh in shapes {
@@ -78,11 +78,25 @@ let shape_band = 8.0
 let seg_slots : FixedArray[Int] = [0, 2, 3, 4, 6, 7]
 
 ///|
+/// An instance of kind 12 with none of its pieces in it yet (Ctx::emit_segs): what each is written over from.
+// kept across runs: a table, never written
+let seg_inst : FixedArray[Double] = {
+  let a = FixedArray::make(inst_size, 0.0)
+  a[5] = 12.0
+  a
+}
+
+///|
 /// A node's shapes painted: the bands they come to worked out once for those shapes (as the node is built with the
 /// same ones again, an icon's, or kept), each frame only put where the node is, in its colours.
 fn Ctx::paint_shapes(self : Ctx, n : Node, alpha : Double) -> Unit {
   let bands = match n.shape_bands {
     Some(b) if physical_equal(b.of, n.shapes) => b
+    Some(b) if b.fits(n.shapes) => {
+      let b = { ..b, of: n.shapes }
+      n.shape_bands = Some(b)
+      b
+    }
     _ => {
       let b = shape_bands(n.shapes)
       n.shape_bands = Some(b)
@@ -118,6 +132,26 @@ priv struct ShapeBand {
   h : Double
   pieces : Array[Double]
   even_odd : Bool
+}
+
+///|
+/// Whether `shapes` come to the bands these are (shape_bands): the same outlines, each filled, stroked as wide and by
+/// the same rule as those they were worked out for, whatever their colours (put as each band is drawn).
+fn ShapeBands::fits(self : ShapeBands, shapes : Array[Shape]) -> Bool {
+  let of = self.of
+  guard of.length() == shapes.length() else { return false }
+  for k, s in shapes {
+    let o = of[k]
+    let stroked = s.stroke != 0L && s.width > 0.0
+    if (o.fill != 0L) != (s.fill != 0L) ||
+      (o.stroke != 0L && o.width > 0.0) != stroked ||
+      (stroked && o.width != s.width) ||
+      o.even_odd != s.even_odd ||
+      !(physical_equal(o.outlines, s.outlines) || o.outlines == s.outlines) {
+      return false
+    }
+  }
+  true
 }
 
 ///|
@@ -190,8 +224,37 @@ fn Ctx::emit_bands(
 ///|
 /// One shape's fill (`fill`) or stroke (`hw` half its width) as bands: its pieces, then a band at a time those that
 /// reach it, as shares of the band. Worked out in its own coordinates: the same numbers wherever it is drawn (moved,
-/// kept_nodes.mbt), and once for a shape drawn again (Ctx::paint_shapes).
+/// kept_nodes.mbt), and once for the same outlines wherever they are drawn again (a row's icon in the row that takes its
+/// place, an old view's shape each frame: shape_bands_known).
 fn shape_band_of(
+  outlines : Array[(Array[Double], Bool)],
+  fill : Bool,
+  hw : Double,
+  even_odd : Bool,
+) -> Array[ShapeBand] {
+  let key = (outlines, fill, hw, even_odd)
+  match shape_bands_known.get(key) {
+    Some(b) => return b
+    None => ()
+  }
+  let out = shape_band_made(outlines, fill, hw, even_odd)
+  // (a few hundred kept, all let go at once past them: what is drawn now is soon among them again)
+  if shape_bands_known.length() >= 256 {
+    shape_bands_known.clear()
+  }
+  // (by a copy of its outlines: one of theirs changed after is not the outlines these were made of)
+  shape_bands_known.set((outlines.map(fn(o) { (o.0.copy(), o.1) }), fill, hw, even_odd), out)
+  out
+}
+
+///|
+/// The bands outlines come to (shape_band_of), by their outlines alone: the same numbers for the same outlines,
+/// whichever node or view draws them, read only once made.
+// kept across runs: what the same outlines come to, the same in any run
+let shape_bands_known : Map[(Array[(Array[Double], Bool)], Bool, Double, Bool), Array[ShapeBand]] = Map([])
+
+///|
+fn shape_band_made(
   outlines : Array[(Array[Double], Bool)],
   fill : Bool,
   hw : Double,
@@ -265,8 +328,101 @@ fn shape_band_of(
 }
 
 ///|
+/// Pieces of shapes put among the frame's as one run, the same each frame (a row drawn again as kept, a node's block):
+/// its instances of kind 12 as packed, its first piece the first of an instance wherever it comes (Ctx::segs_whole),
+/// only those it fills whole: taken as they were put among the frame's the second time they go there (`seen` the
+/// first), one put once (drawn anew, a list kept again as a row comes in) packed for nothing never.
+priv struct SegPack {
+  mut packed : FixedArray[Double]?
+  mut seen : Bool
+}
+
+///|
+fn SegPack::new() -> SegPack {
+  { packed: None, seen: false }
+}
+
+///|
+/// The runs among the frame's pieces put as they were before (Ctx::segs_put): where each begins, its pieces and their
+/// packs, in the order put.
+// kept across runs: emptied with the frame's pieces (Ctx::segs_cut)
+let seg_runs : Array[(Int, Array[Double], SegPack)] = []
+
+///|
+/// Pieces `segs`, the same as the last time `pack` went with them, put after the frame's: packed as they were, each
+/// frame only copied (Ctx::emit_segs).
+fn Ctx::segs_put(self : Ctx, segs : Array[Double], pack : SegPack) -> Unit {
+  self.segs_whole()
+  let at = self.segs.length() / 4
+  self.segs.append(segs)
+  if segs.length() >= 4 * 6 {
+    seg_runs.push((at, segs, pack))
+  }
+}
+
+///|
+/// The frame's pieces made up to whole instances (six to one, kind 12) with pieces of nothing, which no band reaches:
+/// so what the window's tree puts among them (Ctx::segs_put, an old view hosted, a row being kept) begins an instance
+/// wherever it comes, packed as kept the one way (SegPack, its first piece the first of an instance) and so as
+/// drawing it anew puts it.
+fn Ctx::segs_whole(self : Ctx) -> Unit {
+  while self.segs.length() % (4 * 6) != 0 {
+    self.segs.push(0.0)
+  }
+}
+
+///|
+/// Where the next pieces the window's tree puts among the frame's begin (Ctx::segs_whole), none made up yet: so what
+/// is begun to be kept and puts none adds none.
+fn Ctx::segs_whole_at(self : Ctx) -> Int {
+  (self.segs.length() / 4 + 5) / 6 * 6
+}
+
+///|
+/// The frame's pieces from the `at`th on (none where it put none from there: Ctx::segs_whole_at).
+fn Ctx::segs_from(self : Ctx, at : Int) -> Array[Double] {
+  if at * 4 >= self.segs.length() {
+    []
+  } else {
+    self.segs[at * 4:].to_array()
+  }
+}
+
+///|
+/// The frame's pieces cut to the first `len` numbers, and the runs among those cut off forgotten.
+fn Ctx::segs_cut(self : Ctx, len : Int) -> Unit {
+  self.segs.truncate(len)
+  while seg_runs.length() > 0 {
+    let (at, segs, _) = seg_runs[seg_runs.length() - 1]
+    if 4 * at + segs.length() <= len {
+      break
+    }
+    seg_runs.unsafe_pop() |> ignore
+  }
+}
+
+///|
+/// Instance `j` of the frame's kind 12 written at `b` in `a` from the frame's pieces (`n` of them).
+fn seg_inst_put(a : FixedArray[Double], b : Int, segs : Array[Double], j : Int, n : Int) -> Unit {
+  seg_inst.blit_to(a, len=inst_size, dst_offset=b)
+  let first = j * 6
+  let last = if first + 6 < n { first + 6 } else { n }
+  // (each read and written unchecked: the room for the instance there, `4 * n` numbers in the pieces, six slots in
+  // an instance)
+  for i in first..<last {
+    let o = b + seg_slots.unsafe_get(i - first) * 4
+    let p = 4 * i
+    a.unsafe_set(o, segs.unsafe_get(p))
+    a.unsafe_set(o + 1, segs.unsafe_get(p + 1))
+    a.unsafe_set(o + 2, segs.unsafe_get(p + 2))
+    a.unsafe_set(o + 3, segs.unsafe_get(p + 3))
+  }
+}
+
+///|
 /// The frame's pieces of shapes, after every instance it draws (app.mbt, once all is painted): six to an instance of
-/// kind 12, which the renderers draw nothing of.
+/// kind 12, which the renderers draw nothing of. Those of a run put as before (Ctx::segs_put) that fill instances
+/// whole are copied as packed then.
 fn Ctx::emit_segs(self : Ctx) -> Unit {
   let n = self.segs.length() / 4
   if n == 0 {
@@ -277,24 +433,42 @@ fn Ctx::emit_segs(self : Ctx) -> Unit {
     self.grow()
   }
   let a = self.inst
-  for j in 0..<k {
-    let b = (self.ninst + j) * inst_size
-    for q in 0..<inst_size {
-      a[b + q] = 0.0
-    }
-    a[b + 5] = 12.0
-    for s in 0..<6 {
-      let i = j * 6 + s
-      if i < n {
-        let o = b + seg_slots[s] * 4
-        a[o] = self.segs[4 * i]
-        a[o + 1] = self.segs[4 * i + 1]
-        a[o + 2] = self.segs[4 * i + 2]
-        a[o + 3] = self.segs[4 * i + 3]
+  let segs = self.segs
+  let base = self.ninst
+  let mut j = 0
+  let mut r = 0
+  while j < k {
+    if r < seg_runs.length() {
+      let (at, run, pack) = seg_runs[r]
+      let f0 = at / 6
+      let f1 = (at + run.length() / 4) / 6
+      if f1 <= f0 || j >= f1 {
+        r = r + 1
+        continue
+      }
+      if j == f0 {
+        match pack.packed {
+          Some(p) => p.blit_to(a, len=(f1 - f0) * inst_size, dst_offset=(base + j) * inst_size)
+          None => {
+            for t in f0..<f1 {
+              seg_inst_put(a, (base + t) * inst_size, segs, t, n)
+            }
+            if pack.seen {
+              pack.packed = Some(inst_copy(a, (base + f0) * inst_size, (f1 - f0) * inst_size))
+            } else {
+              pack.seen = true
+            }
+          }
+        }
+        j = f1
+        r = r + 1
+        continue
       }
     }
+    seg_inst_put(a, (base + j) * inst_size, segs, j, n)
+    j = j + 1
   }
-  self.ninst = self.ninst + k
+  self.ninst = base + k
 }
 
 ///|
@@ -420,7 +594,8 @@ pub fn Tester::shape_cover(self : Tester, x : Double, y : Double) -> Double {
 }
 
 ///|
-/// The boxes that drew shapes in the last frame (Ctx::shapes), by their names: (name, x, y, w, h) as laid out.
+/// The boxes that drew shapes in the last frame (Ctx::shapes), by their names: (name, x, y, w, h) as laid out; then the
+/// window's tree's nodes drawing shapes or a picture of them, by their words, where they are drawn.
 pub fn Tester::shape_boxes(self : Tester) -> Array[(String, Double, Double, Double, Double)] {
   ignore(self)
   let c = g()
@@ -430,6 +605,16 @@ pub fn Tester::shape_boxes(self : Tester) -> Array[(String, Double, Double, Doub
     if n.shapes.length() > 0 {
       out.push((n.text, n.x, n.y, n.fw, n.fh))
     }
+  }
+  // (and the nodes of the window's tree drawing shapes or a picture of shapes, where they are drawn)
+  match view_tree() {
+    Some(tree) =>
+      for d in tree.drawn() {
+        if d.alpha > 0.0 && (d.shapes.length() > 0 || d.picture is Some(_)) {
+          out.push((d.words, d.x, d.y, d.w, d.h))
+        }
+      }
+    None => ()
   }
   out
 }

@@ -15,7 +15,7 @@ fn preview_tester(what : String, w? : Double = 390.0, platform? : Int = 0, finis
   let src = fixture("chat-preview-" + what)
   preview_src.val = Some(src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w~, h=844.0, platform~, finish~)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   // seen once it is in (grown from its thumbnail, or faded in)
   t.run_for(@ui.move_most_ms)
@@ -36,25 +36,40 @@ test "kinds by name, as the Android app's kindOf" {
 }
 
 ///|
+test "a video's name has the same type when sent, in the chat, and when opened" {
+  let videos = [
+    ("clip.mp4", "video/mp4"), ("clip.M4V", "video/mp4"), ("clip.mov", "video/quicktime"),
+    ("clip.webm", "video/webm"), ("clip.ogv", "video/ogg"), ("clip.3GP", "video/3gpp"),
+    ("clip.3g2", "video/3gpp2"),
+  ]
+  for (name, mime) in videos {
+    assert_true(preview_kind(name).0 == Some(KVideo))
+    assert_eq(preview_kind(name).1, mime)
+    assert_eq(@sfbase.file_type(name), mime)
+    assert_eq(@sfpages.file_kind(name), "video")
+  }
+  assert_true(preview_kind("song.ogg").0 == Some(KAudio))
+  assert_eq(@sfpages.file_kind("song.ogg"), "")
+}
+
+///|
 test "an image opens fitted, its bar over it; a double tap zooms in, another back" {
   let t = preview_tester("image")
   assert_true(t.find("界面草图.png") is Some(_))
   assert_true(t.find("100%") is None)
   let v = viewer.get().unwrap()
-  // a picture read whole, held in memory only (FilePreview.kt: FileData.fetch), not kept on the device
-  assert_true(fix_fetches.iter().all(fn(f) { !flag(Some(f.1), "keep") }))
   // 600 × 400 in 390 × 844 with 12 round it: (390 - 24) / 600
   assert_true((shown_scale(t, v.zoom) - 366.0 / 600.0).abs() < 0.001)
   t.tap(195.0, 422.0)
-  t.advance(double_tap_ms / 2.0)
+  t.advance(@ui.double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
   // (its glide: @ui.move_most_ms from the tap)
   t.run_for(@ui.move_most_ms)
   assert_true((shown_scale(t, v.zoom) - 1.525).abs() < 0.01)
   // (the next two taps a double tap of their own)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_tap_ms)
   t.tap(195.0, 422.0)
-  t.advance(double_tap_ms / 2.0)
+  t.advance(@ui.double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
   // (its glide: @ui.move_most_ms from the tap)
   t.run_for(@ui.move_most_ms)
@@ -66,6 +81,27 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   t.run_for(if v.flies { @ui.move_most_ms } else { pv_fade_ms })
   assert_true(t.find("界面草图.png") is None)
   t.assert_idle()
+}
+
+///|
+test "a chat picture opened is kept on the device when its memory copy has gone" {
+  let t = preview_tester("image")
+  let first = fix_fetches.filter(fn(f) { f.0 == "station.file" && text(Some(f.1), "name") == "界面草图.png" })
+  assert_eq(first.length(), 1)
+  assert_true(flag(Some(first[0].1), "keep"))
+  assert_eq(number(Some(first[0].1), "size"), 18000.0)
+  t.back()
+  t.run_for(@ui.move_most_ms)
+  // The viewer holds only the most recently read files in memory. Once this one is evicted, it must still ask the
+  // core for the device's copy, with the same identity and size.
+  @sfbase.pv_read.clear()
+  let (a, _) = preview_files().iter().find_first(fn(f) { f.0.name == "界面草图.png" }).unwrap()
+  open_preview("ws1/st1", "s-c1", a)
+  t.frame()
+  let reads = fix_fetches.filter(fn(f) { f.0 == "station.file" && text(Some(f.1), "name") == "界面草图.png" })
+  assert_eq(reads.length(), 2)
+  assert_true(flag(Some(reads[1].1), "keep"))
+  assert_eq(number(Some(reads[1].1), "size"), 18000.0)
 }
 
 ///|
@@ -376,9 +412,14 @@ fn video_in_chat(duration? : Double = 0.0) -> @ui.Tester {
     held: false,
   }
   let t = @ui.Tester::new(
-    fn(c) {
-      chat_file(c, src, a)
-      preview(c, src)
+    fn(c) { @ui.old_views_here(c) },
+    tree=fn(root) {
+      root.box(fn(v) {
+        v.grow(Is(1.0)) |> ignore
+        @ui.old(v, fn(c) { chat_file(c, src, a) }).over(Is(true)) |> ignore
+        @sfbase.viewer_node(v, src, fn() { v.window() })
+      })
+      |> ignore
     },
     w=390.0,
     h=844.0,
@@ -408,11 +449,11 @@ test "a video flies from its thumbnail in the chat, its still flying; the player
   // halfway: its still flies (the thumbnail hidden meanwhile), the player's picture not yet
   t.run_for(@ui.move_most_ms / 2.0)
   assert_eq(t.holes().length(), 0)
-  assert_eq(pv_hidden.val, "ws1/st1/s-c1/uploads/fx/演示录屏.mp4")
+  assert_eq(pv_hidden.get(), "ws1/st1/s-c1/uploads/fx/演示录屏.mp4")
   assert_true(t.drawn_images().iter().any(fn(i) { i[2] > 300.0 && i[2] < 390.0 }))
   // in: the player's picture where the still was, edge to edge
   t.run_for(@ui.move_most_ms)
-  assert_eq(pv_hidden.val, "")
+  assert_eq(pv_hidden.get(), "")
   assert_eq(t.holes().length(), 1)
   assert_true((t.holes()[0].2 - 390.0).abs() < 0.5)
 }
@@ -439,12 +480,12 @@ test "a video closed: the frame it shows grabbed, flown back with and kept by it
     None => fail("no frame kept")
   }
   assert_eq(t.holes().length(), 0)
-  assert_eq(pv_hidden.val, id)
+  assert_eq(pv_hidden.get(), id)
   // landed: the viewer gone, its player closed, the thumbnail shown again (with the frame kept)
   t.run_for(@ui.move_most_ms)
   assert_true(viewer.get() is None && pv_leaving.get() is None)
   assert_true(t.views().contains("close 1"))
-  assert_eq(pv_hidden.val, "")
+  assert_eq(pv_hidden.get(), "")
   // opened again: on from where it was left, played once its player says how long it is (not left at its end); the
   // video itself pressed (its name's tip shows under it now, the pointer rested on it as it landed)
   t.click(Button, label=@sf.t("web-main.file.play", args=[("name", "演示录屏.mp4")]))
@@ -522,7 +563,7 @@ test "a PDF's pages, drawn by the host" {
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("pdf ") }))
   let v = viewer.get().unwrap()
   assert_eq(v.pdf.unwrap().pages, 3)
-  // kept on the device with its chat, by its size, as Android keeps a PDF it opens (FilePreview.kt OnDisk)
+  // kept on the device with its chat, by its size, as Android keeps a PDF it opens
   let asked = fix_fetches.filter(fn(f) { f.0 == "station.file" && text(Some(f.1), "name") == "设计说明.pdf" })
   assert_true(asked.length() > 0)
   assert_true(flag(Some(asked[0].1), "keep"))
@@ -545,7 +586,8 @@ test "HTML in a page of its own; its source in the code face" {
 test "a file of no kind it can show: told of, with the download" {
   let t = preview_tester("none")
   assert_true(t.find("此文件类型不支持预览") is Some(_))
-  assert_true(t.find("4 KB · BIN") is Some(_))
+  // (its kind on its card, its size under its name)
+  assert_true(t.find("BIN") is Some(_) && t.find("4 KB") is Some(_))
   assert_true(t.find("下载") is Some(_))
 }
 
@@ -565,7 +607,7 @@ test "an APK asked for: downloaded by the core, how far it has come in its words
   new_run()
   let src = fixture("chat-preview-apk")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   t.tap_text("下载")
@@ -620,7 +662,7 @@ fn named_tester(path : String) -> @ui.Tester {
   new_run()
   let src = fixture("chat-preview-named")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   open_preview("ws1/st1", "s-c1", attachment_of({ "name": Json::string(base_name(path)), "path": Json::string(path) }), named=true)
   t.frame()
@@ -723,7 +765,7 @@ test "a swipe past a fifth of the stage goes to the next; a short one comes back
 ///|
 test "a swipe carries the picture under the finger from where it went down; a second finger takes it back, not left between two" {
   let t = preview_tester("step")
-  let (x, y, w, h) = viewer.get().unwrap().zoom.rect().unwrap()
+  let (x, y, w, h) = viewer.get().unwrap().zoom.rect(t.ctx()).unwrap()
   let at = fn(dx : Double) {
     drawn_pictures(t).any(fn(d) {
       (d.0 - (x + dx)).abs() < 0.001 && (d.1 - y).abs() < 0.001 && (d.2 - w).abs() < 0.001 && (d.3 - h).abs() < 0.001
@@ -746,7 +788,7 @@ test "a swipe carries the picture under the finger from where it went down; a se
 test "a step keeps the bars as they were: hidden by a tap, the next comes without them" {
   let t = preview_tester("step")
   t.tap(195.0, 422.0)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_tap_ms)
   assert_true(!viewer.get().unwrap().awake)
   t.drag(300.0, 422.0, 100.0, 422.0)
   assert_eq(viewer.get().unwrap().file.name, "第二版.png")
@@ -838,10 +880,10 @@ test "the frame a swipe is let go in shows both pictures where the finger left t
 /// to go either way across), the next taps a double tap of their own.
 fn zoom_in_middle(t : @ui.Tester) -> @kit.Zoom raise {
   t.tap(195.0, 422.0)
-  t.advance(double_tap_ms / 2.0)
+  t.advance(@ui.double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
   t.run_for(@ui.move_most_ms)
-  t.run_for(double_tap_ms)
+  t.run_for(@ui.double_tap_ms)
   let z = viewer.get().unwrap().zoom
   assert_true(z.zoomed_at(t.time()))
   z
@@ -871,10 +913,10 @@ test "zoomed in, let go moving it goes on that way, slowing, to its edge; a fing
   // flung harder: it stops at its edge (its right edge at the stage's), when its way said it ends
   t.drag(250.0, 422.0, 130.0, 422.0, steps=3)
   t.run_for(z.fling_ends() - t.time())
-  let (x, _, w, _) = z.rect().unwrap()
+  let (x, _, w, _) = z.rect(t.ctx()).unwrap()
   assert_true((x + w - 390.0).abs() < 0.001)
   t.run_for(@kit.zoom_fling_ms)
-  assert_true((z.rect().unwrap().0 - x).abs() < 0.001)
+  assert_true((z.rect(t.ctx()).unwrap().0 - x).abs() < 0.001)
 }
 
 ///|
@@ -885,7 +927,7 @@ test "zoomed in, dragged on past its edge the next comes in; a quick move that c
   t.drag(385.0, 422.0, 5.0, 422.0, steps=4)
   t.run_for(strip_rest(t))
   assert_eq(viewer.get().unwrap().file.name, "界面草图.png")
-  let (x, _, w, _) = z.rect().unwrap()
+  let (x, _, w, _) = z.rect(t.ctx()).unwrap()
   assert_true((x + w - 390.0).abs() < 0.001)
   // from its edge, a short quick move on: the next
   t.drag(300.0, 422.0, 260.0, 422.0, steps=2)
@@ -899,7 +941,7 @@ test "zoomed in, dragged slowly far past its edge it stops there, nothing beside
   t.drag(385.0, 422.0, 5.0, 422.0, steps=20)
   t.run_for(strip_rest(t))
   assert_eq(viewer.get().unwrap().file.name, "界面草图.png")
-  let (x, _, w, _) = z.rect().unwrap()
+  let (x, _, w, _) = z.rect(t.ctx()).unwrap()
   assert_true((x + w - 390.0).abs() < 0.001)
   t.drag(385.0, 422.0, 5.0, 422.0, steps=20)
   assert_eq(viewer.get().unwrap().file.name, "第二版.png")
@@ -911,7 +953,7 @@ test "marking: a box drawn on the picture is numbered, its note kept, its quote 
   marks_start()
   t.draw()
   let v = viewer.get().unwrap()
-  let (x, y, w, _) = v.zoom.rect().unwrap()
+  let (x, y, w, _) = v.zoom.rect(t.ctx()).unwrap()
   let k = w / v.zoom.nw
   // from (100, 100) to (300, 200) in the picture's pixels
   t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
@@ -937,7 +979,7 @@ test "marking: a box drawn on the picture is numbered, its note kept, its quote 
 test "a picture of the chat grows from its thumbnail; back closes it at once and it flies back into the thumbnail, then nothing moves" {
   new_run()
   let src = fixture("chat-preview-named")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0)
   nav_rested(t)
   // the picture's message is above what shows first (the chat opens at its end): the list put a row up at a time
@@ -960,14 +1002,14 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   t.run_for(@ui.move_most_ms)
   assert_true(!v.flies)
   // where its thumbnail is in the chat under it
-  let th = thumb_of(t.ctx(), v.id()).unwrap()
+  let th = thumb_of(t.ctx(), v.thumb_id()).unwrap()
   let tc = (th.x + th.w / 2.0, th.y + th.h / 2.0)
   t.back()
   // closed as back is taken: only drawn, flying back into its thumbnail
   assert_true(viewer.get() is None)
   assert_true(pv_leaving.get() is Some(_))
   assert_true(v.flies && v.fly_back)
-  let to = v.zoom.rect().unwrap()
+  let to = v.zoom.rect(t.ctx()).unwrap()
   // each frame of the way back the picture is drawn where its flight is, nearer the thumbnail than the frame before,
   // the last one on it
   let mut last = 1.0e9
@@ -976,7 +1018,7 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   let end = t.time() + @ui.move_most_ms
   while t.time() < end {
     t.frame()
-    let p = v.flying()
+    let p = v.flying(t.ctx())
     let ex = th.x + (to.0 - th.x) * p + (th.w + (to.2 - th.w) * p) / 2.0
     let ey = th.y + (to.1 - th.y) * p + (th.h + (to.3 - th.h) * p) / 2.0
     let drawn = t
@@ -992,7 +1034,7 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   assert_true(frames > 3)
   assert_true(last < 0.5)
   assert_true(pv_leaving.get() is None)
-  assert_eq(pv_hidden.val, "")
+  assert_eq(pv_hidden.get(), "")
   // (the chat's other pictures brushed in once decoded: sfpages message_files.mbt)
   t.run_for(@sfpages.reveal_ms)
   t.assert_idle()
@@ -1042,7 +1084,7 @@ test "marking: a box's pin up and right of its corner wherever the marks before 
   marks_start()
   t.draw()
   let v = viewer.get().unwrap()
-  let (x, y, w, _) = v.zoom.rect().unwrap()
+  let (x, y, w, _) = v.zoom.rect(t.ctx()).unwrap()
   let k = w / v.zoom.nw
   // a line drawn by hand first, then a box from (100, 100) to (300, 200) in the picture's pixels
   marking.tool = Pen
@@ -1081,7 +1123,7 @@ test "a desktop's video opened over its chat has the keys: Space plays it each t
   new_run()
   let src = fixture("chat-preview-video")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   t.draw()
   t.run_for(@ui.move_most_ms)
   assert_true(viewer.get() is Some(_))
@@ -1125,7 +1167,7 @@ test "marking: a note written and done, the picture put in the chat: its quote t
   marks_start()
   t.draw()
   let v = viewer.get().unwrap()
-  let (x, y, w, _) = v.zoom.rect().unwrap()
+  let (x, y, w, _) = v.zoom.rect(t.ctx()).unwrap()
   let k = w / v.zoom.nw
   t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
   t.run_for(note_pop_ms)

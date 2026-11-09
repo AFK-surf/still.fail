@@ -1,5 +1,5 @@
 // The services and background jobs left up a long while (an hour), across the chats of the workspace's stations, so
-// none is forgotten running (ember web/src/OpenJobs.tsx OpenJobs, OpenJobs.css.ts): web services and background jobs,
+// none is forgotten running: web services and background jobs,
 // each under its heading, three of a group and the rest folded under 还有 N 个; nothing at all while there are none.
 // Each leads to its chat (a service opens there, in its 任务 tab) and stops from here. The core puts them together (its
 // `longJobs` view); shown in the list the sidebar's foot opens (lists.mbt) and in 待处理's panel (attention.mbt).
@@ -20,7 +20,7 @@ let open_jobs_shown : Int = 3
 ///|
 /// The workspace's long jobs (OpenJobs): each group under its heading; nothing while there are none.
 fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
-  let groups = items((src.topic)("longJobs", { "scope": Json::string(w.id) }).value, "groups")
+  let groups = items(src.topic("longJobs", { "scope": Json::string(w.id) }).get().value, "groups")
   if groups.length() == 0 {
     return
   }
@@ -43,9 +43,9 @@ fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         }
         if shown.length() < list.length() {
           let id = c.id("open-jobs/more/" + key)
-          if c.clicked(id) {
+          c.on_press(id, fn() {
             open_jobs_all[key] = true
-          }
+          })
           let label = @sf.t("web-main.jobs.more", args=[("n", (list.length() - shown.length()).to_string())])
           let b = c.box(style=open_jobs_more, id~, fn() {
             c.text(label, style=if c.lit(id) { open_jobs_more_lit } else { open_jobs_more_words }) |> ignore
@@ -72,16 +72,21 @@ fn open_job(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
     _ => station
   }
   let leads = chat is Some(Object(_)) && chat_station != ""
-  if leads && c.clicked(row) {
-    let r : ChatRef = { station: chat_station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }
-    open_chat_ref(r)
-    if flag(job, "service") {
-      pick_job(id)
-      side_change(src, r, "open", Some("jobs"))
+  c.on_press(row, fn() {
+    if leads {
+      let r : ChatRef = { station: chat_station, session: text(chat, "id"), title: text(chat, "title"), station_name: "" }
+      open_chat_ref(r)
+      if flag(job, "service") {
+        pick_job(id)
+        side_change(src, r, "open", Some("jobs"))
+      }
     }
-  }
+  })
   let stop = c.id("open-job-stop/" + station + "/" + id)
-  let (stopping, failed) = job_stopping(src, station, job)
+  // a job's own stop, or a simulator's or a view's (its `stop`: 关闭, 断开)
+  let (call, params, on) = long_stop(station, job)
+  let stopping = core_doing(src, [call], on)
+  let failed = core_failed(src, [call], on)
   // (no hover to tell: the stop shows over the time)
   let over = @sf.pointed_or_finger(c, c.lit(row) || c.lit(stop) || stopping || c.has_focus(stop))
   c.box(style=open_job_box, fn() {
@@ -100,10 +105,17 @@ fn open_job(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
     if over {
       c.layer(fn() {
         c.box(style=open_job_stop_at, fn() {
-          if !stopping && c.clicked(stop) {
-            job_stop(src, station, job)
+          c.on_press(stop, fn() {
+            if !stopping {
+              act(src, @sf.t("web-main.jobs.stopWhat", args=[("name", text(job, "name"))]), "", call, params)
+            }
+          })
+          let word = text(field(job, "stop"), "word")
+          let label = if word != "" {
+            word + " " + text(job, "name")
+          } else {
+            @sf.t("web-main.jobs.stopNamed", args=[("name", text(job, "name"))])
           }
-          let label = @sf.t("web-main.jobs.stopNamed", args=[("name", text(job, "name"))])
           let s = c.box(style=if c.lit(stop) && !stopping { open_job_stop_lit } else { open_job_stop }, id=stop, fn() {
             if stopping || failed is Some(_) {
               @settings.doing_mark(c, stopping, failed)
@@ -117,7 +129,7 @@ fn open_job(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
             }
           })
           c.semantics(s, Button, id=stop, label~)
-          @sf.tip(c, "open-job-stop/" + station + "/" + id, stop, @sf.t("web-main.jobs.stop"), side=Top)
+          @sf.tip(c, "open-job-stop/" + station + "/" + id, stop, if word != "" { word } else { @sf.t("web-main.jobs.stop") }, side=Top)
         })
         |> ignore
       })
@@ -137,13 +149,7 @@ fn open_chat_ref(r : ChatRef) -> Unit {
     _ => ()
   }
   @sfbase.history_push()
-  while app.nav.depth() > 1 {
-    if !app.nav.pop() {
-      break
-    }
-  }
-  app.nav.replace(Home)
-  app.nav.push(Chat(r))
+  @sfbase.nav_over_home([Chat(r)])
 }
 
 ///|

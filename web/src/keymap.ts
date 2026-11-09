@@ -1,7 +1,7 @@
 // The app's keyboard shortcuts: what each does and the keys that do it are the core's (the prefs' `keymap`;
 // client/core-ts/src/keymap.ts). A component that can do an action says so with useShortcut (the one mounted last
 // answers); one listener on the window turns a key press into a binding and finds the action it is bound to. What shows a shortcut (a tooltip, the list of them) reads it from here.
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef } from "preact/compat";
 import type { KeyAction, KeyActionName, KeymapView } from "./core/shapes.ts";
 import { prefs, usePrefs } from "./prefs.ts";
 
@@ -13,7 +13,7 @@ declare module "@stillfail/ui/shortcuts.ts" {
 }
 
 /** A binding as the core has it (keymap.ts): modifiers Ctrl, Alt, Shift, Mod in that order, then the key ("Shift+Mod+H"). */
-export type Binding = string;
+type Binding = string;
 
 /** None until the core has said it (the first start, before it answers). */
 const NONE: KeymapView = { changeable: false, mac: false, groups: [], actions: [], workspace: [] };
@@ -38,13 +38,8 @@ export function groups(): KeymapView["groups"] {
 }
 
 /** An action as the core says it, or undefined before it has. */
-export function actionOf(action: Action): KeyAction | undefined {
+function actionOf(action: Action): KeyAction | undefined {
   return keymap()[1].get(action);
-}
-
-/** What an action does, in words. */
-export function labelOf(action: Action): string {
-  return actionOf(action)?.name ?? "";
 }
 
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -69,7 +64,7 @@ const KEYS = Object.fromEntries(Object.entries(CODES).map(([key, code]) => [code
  * The binding a key press makes (Shift+Mod+H), or null for a key that is none (a modifier alone, a key with no name
  * here). The key is where it is on the keyboard, so ⌥ or ⇧ changing the character typed does not change which it is.
  */
-export function bindingOf(e: KeyboardEvent): Binding | null {
+function bindingOf(e: KeyboardEvent): Binding | null {
   const key = KEYS[e.code] ?? (/^Key[A-Z]$/.test(e.code) ? e.code.slice(3) : /^Digit\d$/.test(e.code) ? e.code.slice(5) : /^F\d{1,2}$/.test(e.code) ? e.code : null);
   if (!key) return null;
   const mods = [MAC && e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift", (MAC ? e.metaKey : e.ctrlKey) && "Mod"].filter(Boolean);
@@ -79,21 +74,6 @@ export function bindingOf(e: KeyboardEvent): Binding | null {
 /** The binding a key press is bound by: elsewhere than on a Mac, ⌘ (the Windows key) is never part of one. */
 function pressed(e: KeyboardEvent): Binding | null {
   return !MAC && e.metaKey ? null : bindingOf(e);
-}
-
-/**
- * Switching workspace by its place in the sidebar's menu: ⌃1…⌃9 on a Mac, Alt+1…9 elsewhere (Ctrl+digit is the
- * browser's own tabs). Not changeable: nine actions would be nine rows of one thing.
- */
-export function workspaceIndexOf(e: KeyboardEvent): number | null {
-  if (e.isComposing || e.shiftKey || e.metaKey || (MAC ? !e.ctrlKey || e.altKey : !e.altKey || e.ctrlKey)) return null;
-  const digit = /^Digit([1-9])$/.exec(e.code);
-  return digit ? Number(digit[1]) - 1 : null;
-}
-
-/** The key that switches to the workspace at this place (from 0) in the menu. */
-export function workspaceKeyLabel(index: number): string {
-  return keymap()[0].workspace[index] ?? "";
 }
 
 /** An action's first key as shown, or null when it has none here. */
@@ -106,40 +86,10 @@ const handlers = new Map<Action, Handler[]>();
 
 const TYPED = "input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]), textarea, select, [contenteditable]:not([contenteditable='false'])";
 const PRESSED = "button, a[href], summary, input, [role='button'], [role='link'], [role='menuitem'], [role='tab'], [role='option'], [role='checkbox'], [role='radio'], [role='switch'], [role='slider']";
-/** Open over the page, taking the keys: a dialog (a file's preview), a menu, a popover. */
-/** Whether a focused element keeps keys with no modifier (Space) for itself: a text field, a button… */
-export function takesKeys(el: Element | null): boolean {
-  return !!el?.closest(`${TYPED}, ${PRESSED}`);
-}
 const OVER = "[role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox']";
 
 function hasShortcutOverlay(): boolean {
   return !!document.querySelector(OVER);
-}
-
-function pageKeysAvailable(): boolean {
-  return !takesKeys(document.activeElement) && !hasShortcutOverlay();
-}
-
-function watchPageKeys(changed: () => void): () => void {
-  document.addEventListener("focusin", changed);
-  document.addEventListener("focusout", changed);
-  // Portalled menus can open/close without a focus change. Ignore ordinary message mutations.
-  const hasOverlay = (node: Node) => node instanceof Element && (node.matches(OVER) || !!node.querySelector(OVER));
-  const observer = new MutationObserver((records) => {
-    if (records.some((r) => r.type === "attributes" || [...r.addedNodes, ...r.removedNodes].some(hasOverlay))) changed();
-  });
-  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["role"] });
-  return () => {
-    document.removeEventListener("focusin", changed);
-    document.removeEventListener("focusout", changed);
-    observer.disconnect();
-  };
-}
-
-/** Whether an unmodified page shortcut can take focus, including portalled overlays. */
-export function usePageKeysAvailable(): boolean {
-  return useSyncExternalStore(watchPageKeys, pageKeysAvailable, () => false);
 }
 
 
@@ -171,7 +121,7 @@ let listening = false;
  * What an action does while this component is mounted (the latest mounted wins over one before it); null while it
  * cannot. The handler returns false to leave the key to the page, as if it were not bound.
  */
-export function useShortcut(action: Action, handler: Handler | null): void {
+function useShortcut(action: Action, handler: Handler | null): void {
   const latest = useRef(handler);
   latest.current = handler;
   const on = handler !== null;
@@ -185,14 +135,4 @@ export function useShortcut(action: Action, handler: Handler | null): void {
       handlers.set(action, (handlers.get(action) ?? []).filter((h) => h !== entry));
     };
   }, [action, on]);
-}
-
-/** The actions that can be done now (some mounted component does each), in the order the core lists them. */
-export function availableActions(): Action[] {
-  return actions().map((a) => a.action).filter((a) => handlers.get(a)?.length);
-}
-
-/** Does an action as its key would (⌘K's list). */
-export function runAction(action: Action): void {
-  void handlers.get(action)?.at(-1)?.(new KeyboardEvent("keydown"));
 }

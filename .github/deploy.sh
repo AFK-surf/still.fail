@@ -1,12 +1,12 @@
 #!/bin/sh
 # cloud/deploy.py in CI (.github/workflows/pipeline.yml): its deploy directory made for this run from the
-# environment's secrets (removed after), the builds kept for promote-web in mini1's ~/stillfail-deploy/builds,
+# environment's secrets (removed after); the web build is handed to promote-web as a GitHub Actions artifact,
 # and a dropped connection ("fetch failed") tried again, up to three times.
 #   sh .github/deploy.sh [--dry-run] PART…
 # The secrets, each a file's content (none of them needed for --dry-run): CLOUDFLARE_API_TOKEN (without it, the
 # machine's own `wrangler login`), DEPLOY_KEYS_JSON (keys.json), GOOGLE_OAUTH_JSON (google-oauth.json), AXIOM_JSON,
 # VAPID_JSON, FCM_SERVICE_ACCOUNT_JSON, APNS_JSON (apns.json, the APNs key), POSTHOG_JSON, APPLE_JSON (apple.json, Sign in with Apple), REVIEW_ACCOUNTS_JSON
-# (review-accounts.json, App Store review's password sign-in).
+# (review-accounts.json, App Store review's password sign-in), FEEDBACK_TOKEN (feedback-token, the feedback monitor's).
 set -eu
 cd "$(dirname "$0")/.."
 pnpm install --frozen-lockfile --prefer-offline > /dev/null
@@ -25,9 +25,12 @@ put apns.json "${APNS_JSON:-}"
 put posthog.json "${POSTHOG_JSON:-}"
 put apple.json "${APPLE_JSON:-}"
 put review-accounts.json "${REVIEW_ACCOUNTS_JSON:-}"
+put feedback-token "${FEEDBACK_TOKEN:-}"
 umask 022
-mkdir -p "$HOME/stillfail-deploy/builds"
-ln -s "$HOME/stillfail-deploy/builds" "$dir/builds"
+# (another cloud's builds apart: STILLFAIL_CLOUD, cloud/deploy.py CLOUDS)
+builds="$HOME/${STILLFAIL_CLOUD:-stillfail}-deploy/builds"
+mkdir -p "$builds"
+ln -s "$builds" "$dir/builds"
 # The API without keys.json would make new ones: everyone logged out, every station's grant distrusted.
 case " $* " in *" --dry-run "*) ;; *" api "*) [ -s "$dir/keys.json" ] || { echo "DEPLOY_KEYS_JSON is not set: not deploying the API"; exit 1; } ;; esac
 [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || unset CLOUDFLARE_API_TOKEN

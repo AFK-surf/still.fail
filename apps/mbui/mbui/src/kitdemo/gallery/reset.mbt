@@ -1,5 +1,5 @@
 // The gallery's own state (what its live controls keep: controls.mbt and the other pages) as the app starts with it:
-// a kept run's test starts from it (textrec_NAME_wbtest.mbt), as the host's run did, whatever a test before it tapped.
+// a kept run's test starts from it, as the host's run did, whatever a test before it tapped.
 // detlint's `globals` (src/kitdemo is among its roots) fails a global this does not put back.
 
 ///|
@@ -24,6 +24,9 @@ fn reset() -> Unit {
   pdf_check_doc.val = 0
   pdf_check_images.val = []
   pdf_check_said.val = 0
+  image_check_told.val = -1
+  image_check_given.val = false
+  image_check_at.set(0)
   station_check_stopped.val = false
   badge_check_set.val = false
   secret_check_put.val = false

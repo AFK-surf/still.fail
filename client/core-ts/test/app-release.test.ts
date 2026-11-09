@@ -20,6 +20,9 @@ const words = { kind: "stillfail-desktop-win", version: "0.1.5500", build: 5500,
 
 test("a release whose signed words are it is taken", () => {
   assert.equal(winReleaseUnverified(release(words), keys), "");
+  // 0.<m>.<n>: any m (the stable releases before it, only said), n its build.
+  assert.equal(winReleaseUnverified(release({ ...words, version: "0.34.5500" }), keys), "");
+  assert.match(winReleaseUnverified(release({ ...words, version: "0.34.5501" }), keys), /not a Windows release/);
 });
 
 test("none signed, or signed by a key not taken, is not", () => {

@@ -1,4 +1,4 @@
-// Flutter's twin of mbui's hill-climb (src/bench, bench/README.md), itself
+// Flutter's twin of mbui's hill-climb (src/bench), itself
 // a port of nanoui's hillclimb/ (github.com/justrach/nanoui, Rach Pradhan,
 // MIT): the same five scenes, counts, sizes, styles and per-frame changes,
 // written with ordinary Flutter widgets, and measured the same way: 30

@@ -27,7 +27,9 @@ pub(all) struct FieldState {
 /// holds, the view's own to read and write (mbui's Field), else the editor's. `secret`: drawn as dots; `enter_sends`:
 /// Enter is handed on (else a new line is not taken either: one line); `size` and `line` the words' size and line
 /// (0: the theme's); `look` draws its frame round the editor (`editor`, built where the look says), by default the pill;
-/// `leaves`: the keys it leaves to what it offers as it is typed in (Ctx::editor's: ↑ / ↓, Enter, Tab of a menu at it).
+/// `leaves`: the keys it leaves to what it offers as it is typed in (Ctx::editor's: ↑ / ↓, Enter, Tab of a menu at it);
+/// `on_submit`: what Enter giving its words up does, given them, as the key is taken (`submitted` then never true);
+/// `on_change`: what the person's edit of its words does, given them, as it is made (Ctx::editor's).
 pub fn text_field(
   c : @ui.Ctx,
   key : String,
@@ -42,6 +44,8 @@ pub fn text_field(
   look? : (@ui.Ctx, FieldState, () -> Unit) -> Unit = pill_look,
   leaves? : Array[Int] = [],
   field? : @ui.Field,
+  on_submit? : (String) -> Unit,
+  on_change? : (String) -> Unit,
 ) -> Field {
   let mut out = { text: "", submitted: false }
   pill_field(
@@ -60,6 +64,8 @@ pub fn text_field(
     look~,
     leaves~,
     field?,
+    on_submit?,
+    on_change?,
   )
   out
 }
@@ -84,6 +90,8 @@ fn pill_field(
   look? : (@ui.Ctx, FieldState, () -> Unit) -> Unit = pill_look,
   leaves? : Array[Int] = [],
   field? : @ui.Field,
+  on_submit? : (String) -> Unit,
+  on_change? : (String) -> Unit,
 ) -> Unit {
   let t = c.theme()
   let fid = c.id(key + "/field")
@@ -106,6 +114,8 @@ fn pill_field(
         caret_color=t.accent,
         leaves~,
         field?,
+        on_submit?,
+        on_change?,
       ),
     )
     after()

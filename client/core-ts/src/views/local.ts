@@ -1,4 +1,4 @@
-// What a person did here that their station has not confirmed yet (docs/core-ts.md, rules 3 and 4): messages on
+// What a person did here that their station has not confirmed yet (rules 3 and 4): messages on
 // their way (the outbox), chats asked for and not made (pending), messages to an agent before it has a chat (firsts),
 // chats renamed, pinned, kept or archived (changing, archiving). Each is held here and kept in its account's database
 // (tables outbox, pending, first, changing: written again on their own if the rest could not be), so it shows at once,
@@ -10,6 +10,7 @@ import type { AccountDb } from "../db/account.ts";
 import { CoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { localId } from "../ids.ts";
+import { Marks } from "../reactive.ts";
 import { arr as arrU, equal, get as getU, isObject } from "../util.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -64,20 +65,19 @@ export type Change = {
   done?: { rev: number };
 };
 
-/// What changed here, for the views to show it anew.
-export type LocalChange =
-  /// `chat`: what changed shows in the chat alone (a message the station took), not in any list.
-  | { kind: "outbox"; station: string; thread: number; chat?: true }
+/// What changed here: what read it is made again.
+type LocalChange =
+  | { kind: "outbox"; station: string; thread: number }
   | { kind: "pending"; key: string }
   | { kind: "first"; station: string; key: string }
   | { kind: "changing"; station: string }
   | { kind: "archiving" }
   | { kind: "letGo"; station: string; thread: number }
-  /// A vault request decided here (`request`): its card off the 奏 page, how it went on its card in its chat.
+  /// A vault request decided here (`request`): update its card in the chat and the pending list.
   | { kind: "vault"; request: string };
 
 /// How a vault request decided here went, as its station restates its card (station/src/vault/secrets.ts #settle).
-export type VaultOutcome = { status: "granted" | "denied"; scope?: "once" | "hour" | "chat" };
+export type VaultOutcome = { status: "granted" | "denied"; scope?: "once" | "hour" | "chat"; timeout?: { kind: "idle" | "fixed"; seconds: number } };
 
 /// The name a station keeps an upload under: the last part of its path, wherever it is moved.
 const keptName = (path: string) => path.split("/").at(-1)!;
@@ -112,7 +112,10 @@ export class Local {
   readonly #lettingGo: { station: string; thread: number; seq: number; done?: number }[] = [];
   /// Vault requests decided here (their cards' `vault`) and how: the latest few.
   readonly #vaultDecided: { request: string; outcome: VaultOutcome }[] = [];
-  onChange: (change: LocalChange) => void = () => {};
+  /// What reads each kind of it, by what it is of (reactive.ts Marks): made again as that changes. A chat's outbox and
+  /// what is let go of in it by `station thread`; a chat asked for by its key; an agent's first messages by `station key`;
+  /// a vault request by its id; the changes of a station by the station; the archiving, all of it.
+  readonly #seen = { outbox: new Marks(), pending: new Marks(), first: new Marks(), letGo: new Marks(), vault: new Marks(), archiving: new Marks(), changing: new Marks() };
   onMade: (station: string, key: string) => void = () => {};
 
   constructor(data: Data, now: () => number) {
@@ -141,6 +144,19 @@ export class Local {
     for (const c of this.#changing) this.#changes = Math.max(this.#changes, c.id);
   }
 
+  #changed(change: LocalChange): void {
+    const seen = this.#seen;
+    switch (change.kind) {
+      case "outbox": return seen.outbox.touch(`${change.station} ${change.thread}`);
+      case "pending": return seen.pending.touch(change.key);
+      case "first": return seen.first.touch(`${change.station} ${change.key}`);
+      case "letGo": return seen.letGo.touch(`${change.station} ${change.thread}`);
+      case "vault": return seen.vault.touch(change.request);
+      case "archiving": return seen.archiving.touch();
+      case "changing": return seen.changing.touch(change.station);
+    }
+  }
+
   #nextId(): string {
     return localId("out");
   }
@@ -160,23 +176,26 @@ export class Local {
     const db = this.#data.of(station);
     if (db) this.#pendingDb.set(key, db);
     this.#savePending(key);
-    this.onChange({ kind: "pending", key });
+    this.#changed({ kind: "pending", key });
     return key;
   }
 
   /// A chat asked for here, on this station: undefined when it is none; null while not made; its thread once made.
   pendingThread(station: string, key: string): number | null | undefined {
+    this.#seen.pending.read(key);
     const chat = this.#pending.get(key);
     if (!chat || chat.station !== station) return undefined;
     return chat.made ? chat.made[1] : null;
   }
 
   pending(key: string): Pending | undefined {
+    this.#seen.pending.read(key);
     return this.#pending.get(key);
   }
 
   /// A made chat's original key, from either name, only in the account that keeps this station now.
   pendingKey(station: string, session: string): string | undefined {
+    this.#seen.pending.read();
     const key = this.#made.get(join([station, session])) ?? session;
     const pending = this.#pending.get(key);
     const db = this.#data.of(station);
@@ -185,6 +204,7 @@ export class Local {
 
   /// The chats asked for and not answered: what a restart asks for again.
   unmade(): string[] {
+    this.#seen.pending.read();
     return [...this.#pending].filter(([, c]) => c.made === null && c.making).map(([k]) => k);
   }
 
@@ -202,7 +222,7 @@ export class Local {
       delete m.unreached;
     }
     this.#savePending(key);
-    this.onChange({ kind: "pending", key });
+    this.#changed({ kind: "pending", key });
     const ask = isObject(chat.ask) ? { ...chat.ask, clientKey: key } : chat.ask;
     return [chat.station, ask];
   }
@@ -213,7 +233,7 @@ export class Local {
     const id = this.#nextId();
     chat.queue.push({ ...message, id, after: 0, createdAt: Math.round(this.#now()), state: chat.failed !== null ? "failed" : "sending", error: chat.failed, ...(chat.failed !== null && chat.unsent === true ? { unreached: true } : {}) });
     this.#savePending(key);
-    this.onChange({ kind: "pending", key });
+    this.#changed({ kind: "pending", key });
     return id;
   }
 
@@ -229,11 +249,12 @@ export class Local {
       this.#pendingDb.delete(key);
       this.#data.putLocal(PENDING, chat.station, key, undefined);
     } else this.#savePending(key);
-    this.onChange({ kind: "pending", key });
+    this.#changed({ kind: "pending", key });
     return gone;
   }
 
   pendingFailedNow(key: string): boolean {
+    this.#seen.pending.read(key);
     const chat = this.#pending.get(key);
     return !!chat && chat.made === null && chat.failed !== null;
   }
@@ -253,7 +274,7 @@ export class Local {
       }
       this.#savePending(key);
     }
-    this.onChange({ kind: "pending", key });
+    this.#changed({ kind: "pending", key });
   }
 
   /// Its station made it: what waited goes to the chat's outbox, in order, and is answered (id, message) to send.
@@ -269,13 +290,14 @@ export class Local {
     this.onMade(chat.station, key);
     const sends = queue.map((m) => [String(m.id ?? ""), sentAs(m)] as [string, J]);
     if (queue.length > 0) this.#outboxPut(chat.station, thread, [...this.outbox(chat.station, thread), ...queue]);
-    this.onChange({ kind: "pending", key });
-    this.onChange({ kind: "outbox", station: chat.station, thread });
+    this.#changed({ kind: "pending", key });
+    this.#changed({ kind: "outbox", station: chat.station, thread });
     return sends;
   }
 
-  /// The rows of the chats asked for here on a station that its rows do not have yet (see views.rs `pending_rows`).
+  /// The rows of the chats asked for here on a station that its rows do not have yet.
   pendingRows(station: string): J[] {
+    this.#seen.pending.read();
     const out: J[] = [];
     for (const [key, chat] of this.#pending) {
       if (chat.station !== station) continue;
@@ -340,7 +362,7 @@ export class Local {
     const ask = !first.making;
     this.#saveFirst(k);
     if (ask) this.firstTry(station, key);
-    else this.onChange({ kind: "first", station, key });
+    else this.#changed({ kind: "first", station, key });
     return [id, ask];
   }
 
@@ -355,16 +377,18 @@ export class Local {
       m.error = null;
     }
     this.#saveFirst(k);
-    this.onChange({ kind: "first", station, key });
+    this.#changed({ kind: "first", station, key });
     return true;
   }
 
   firstWaits(station: string, key: string): boolean {
+    this.#seen.first.read(`${station} ${key}`);
     return (this.#firsts.get(this.#firstKey(station, key))?.queue.length ?? 0) > 0;
   }
 
   /// The agents whose chats were asked for and not answered: what a restart asks for again.
   firstsMaking(): [string, string][] {
+    this.#seen.first.read();
     return [...this.#firsts].filter(([, f]) => f.making).map(([k]) => {
       const at = k.indexOf(SEP);
       return [k.slice(0, at), k.slice(at + 1)];
@@ -383,7 +407,7 @@ export class Local {
       }
       this.#saveFirst(k);
     }
-    this.onChange({ kind: "first", station, key });
+    this.#changed({ kind: "first", station, key });
   }
 
   firstDiscard(station: string, key: string, id: string): void {
@@ -394,7 +418,7 @@ export class Local {
       if (first.queue.length === 0 && !first.making) this.#firsts.delete(k);
       this.#saveFirst(k);
     }
-    this.onChange({ kind: "first", station, key });
+    this.#changed({ kind: "first", station, key });
   }
 
   firstMade(station: string, key: string, thread: number): [string, J][] {
@@ -404,12 +428,13 @@ export class Local {
     this.#saveFirst(k);
     const sends = queue.map((m) => [String(m.id ?? ""), sentAs(m)] as [string, J]);
     if (queue.length > 0) this.#outboxPut(station, thread, [...this.outbox(station, thread), ...queue]);
-    this.onChange({ kind: "first", station, key });
-    this.onChange({ kind: "outbox", station, thread });
+    this.#changed({ kind: "first", station, key });
+    this.#changed({ kind: "outbox", station, thread });
     return sends;
   }
 
   firstOutbox(station: string, key: string): J[] {
+    this.#seen.first.read(`${station} ${key}`);
     return structuredClone(this.#firsts.get(this.#firstKey(station, key))?.queue ?? []);
   }
 
@@ -427,12 +452,14 @@ export class Local {
 
   /// What waits to go into a chat, oldest first.
   outbox(station: string, thread: number): J[] {
+    this.#seen.outbox.read(`${station} ${thread}`);
     return this.#outbox.get(join([station, thread])) ?? [];
   }
 
   /// A station's messages that failed as it was not reached, oldest first in each chat; and its chats asked for here and
   /// not asked of it, its having been down: what goes once it is reached again.
   unreached(station: string): { messages: [number, string][]; chats: string[] } {
+    this.#seen.pending.read();
     const messages: [number, string][] = [];
     for (const [s, thread, list] of this.outboxes()) {
       if (s !== station) continue;
@@ -444,10 +471,24 @@ export class Local {
 
   /// Every chat with something in its outbox: what a restart sends again.
   outboxes(): [string, number, J[]][] {
+    this.#seen.outbox.read();
     return [...this.#outbox].map(([k, list]) => {
       const at = k.indexOf(SEP);
       return [k.slice(0, at), Number(k.slice(at + 1)), list];
     });
+  }
+
+  /// A station's chats with a message that failed to go, each with the first such (`unsent` of each of its chats).
+  failedOutboxes(station: string): Map<number, J> {
+    this.#seen.outbox.read();
+    const out = new Map<number, J>();
+    for (const [k, list] of this.#outbox) {
+      const at = k.indexOf(SEP);
+      if (k.slice(0, at) !== station) continue;
+      const failed = list.find((m) => m.state === "failed");
+      if (failed !== undefined) out.set(Number(k.slice(at + 1)), failed);
+    }
+    return out;
   }
 
   /// Puts back a chat's outbox as its view found it (what arrived goes).
@@ -460,7 +501,7 @@ export class Local {
   outboxAdd(station: string, thread: number, message: J, after: number): string {
     const id = this.#nextId();
     this.#outboxPut(station, thread, [...this.outbox(station, thread), { ...message, id, after, createdAt: Math.round(this.#now()), state: "sending" }]);
-    this.onChange({ kind: "outbox", station, thread });
+    this.#changed({ kind: "outbox", station, thread });
     return id;
   }
 
@@ -469,12 +510,30 @@ export class Local {
     this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => m.id === id ? { ...m, queued: false } : m));
   }
 
+  /// A message sent while its chat is archived must restore it before delivery. Keep that intention with the outbox
+  /// through a restart; once restored, a retry of the message must not restore it a second time.
+  outboxRestore(station: string, thread: number, id: string, session: string | null): void {
+    this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => {
+      if (m.id !== id) return m;
+      const { restore: _, ...rest } = m;
+      return session === null ? rest : { ...rest, restore: session };
+    }));
+  }
+
+  /// Every message already waiting behind a successful restore can go without restoring the same chat again.
+  outboxRestored(station: string, thread: number): void {
+    this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => {
+      const { restore: _, ...rest } = m;
+      return rest;
+    }));
+  }
+
   /// Persist resolved attachments before delivery, so a retry/restart never needs their source Blobs again.
   outboxUploaded(station: string, thread: number, id: string, files: J[]): void {
     const uploads = this.outboxGet(station, thread, id)?.uploads;
     files.forEach((f, i) => this.uploadedHere(station, get(f, "path"), get(arr(uploads)[i], "id")));
     this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => m.id === id ? { ...m, attachments: [...(m.attachments ?? []), ...files], uploads: [] } : m));
-    this.onChange({ kind: "outbox", station, thread });
+    this.#changed({ kind: "outbox", station, thread });
   }
 
   /// A file went up to `station` from here as upload `from` (`composer.add`'s id) and is kept there at `path`: its
@@ -499,6 +558,7 @@ export class Local {
   /// The first message sent here into a chat that did not go (failed: waiting to be sent again or dropped), for its
   /// row to say so: by its thread, or, a chat asked for here and not made yet, by its key.
   unsent(station: string, thread: number | null, key: string | null): J | undefined {
+    if (key !== null) this.#seen.pending.read(key);
     const pending = key !== null ? this.#pending.get(key) : undefined;
     const queue = thread !== null ? this.outbox(station, thread) : pending?.station === station ? pending.queue : [];
     return queue.find((m) => m.state === "failed");
@@ -510,7 +570,7 @@ export class Local {
   outboxState(station: string, thread: number, id: string, failed: string | null, final = false, unreached = false): void {
     const list = this.outbox(station, thread).map((m) => (m.id === id ? { ...m, state: failed !== null ? "failed" : "sending", error: failed, final: failed !== null && final ? true : undefined, unreached: failed !== null && unreached ? true : undefined } : m));
     this.#outboxPut(station, thread, list);
-    this.onChange({ kind: "outbox", station, thread });
+    this.#changed({ kind: "outbox", station, thread });
   }
 
   /// The station has the message as entry `seq`: it is `sent`, and stays until the chat's entries reach it. `shown`:
@@ -521,12 +581,12 @@ export class Local {
     const madeHere = [...this.#pending.values()].some((c) => c.station === station && c.made?.[1] === thread);
     if (!madeHere && !shown) return this.outboxRemove(station, thread, id);
     this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => (m.id === id ? { ...m, seq, state: "sent" } : m)));
-    this.onChange({ kind: "outbox", station, thread, chat: true });
+    this.#changed({ kind: "outbox", station, thread });
   }
 
   outboxRemove(station: string, thread: number, id: string): void {
     this.#outboxPut(station, thread, this.outbox(station, thread).filter((m) => m.id !== id));
-    this.onChange({ kind: "outbox", station, thread });
+    this.#changed({ kind: "outbox", station, thread });
   }
 
   /// What an upload has come to after the message it goes with was sent: an image's size (a big one takes a while to
@@ -546,14 +606,14 @@ export class Local {
       const at = k.indexOf(SEP);
       const [station, thread] = [k.slice(0, at), Number(k.slice(at + 1))];
       this.#outboxPut(station, thread, next);
-      this.onChange({ kind: "outbox", station, thread });
+      this.#changed({ kind: "outbox", station, thread });
     }
     for (const [key, chat] of this.#pending) {
       const next = changed(chat.queue);
       if (!next) continue;
       chat.queue = next;
       this.#savePending(key);
-      this.onChange({ kind: "pending", key });
+      this.#changed({ kind: "pending", key });
     }
     for (const [k, first] of this.#firsts) {
       const next = changed(first.queue);
@@ -561,21 +621,22 @@ export class Local {
       first.queue = next;
       this.#saveFirst(k);
       const at = k.indexOf(SEP);
-      this.onChange({ kind: "first", station: k.slice(0, at), key: k.slice(at + 1) });
+      this.#changed({ kind: "first", station: k.slice(0, at), key: k.slice(at + 1) });
     }
   }
 
   /// Whether the card at `seq` in a chat is answered from here: something sent is on its way into it (not failed), or
   /// went in after the card.
   answered(station: string, thread: number, seq: number): boolean {
+    this.#seen.outbox.read(`${station} ${thread}`);
     return this.outbox(station, thread).some((m) => m.state !== "failed") || this.#sentIn.some(([s, t, n]) => s === station && t === thread && n > seq);
   }
 
-  /// A card let go from here (`decision.dismiss`): off the 奏 page at once. Refused (`ok` false), it is back; taken,
+  /// A card let go from here (`decision.dismiss`): removed from the pending list at once. Refused (`ok` false), it is back; taken,
   /// it stays off until its station's rows change from how they were then (`rev`), which then say it is dismissed.
   letGo(station: string, thread: number, seq: number): void {
     this.#lettingGo.push({ station, thread, seq });
-    this.onChange({ kind: "letGo", station, thread });
+    this.#changed({ kind: "letGo", station, thread });
   }
 
   letGoEnded(station: string, thread: number, seq: number, ok: boolean, rev: number): void {
@@ -584,22 +645,23 @@ export class Local {
     if (ok) this.#lettingGo[i] = { ...this.#lettingGo[i], done: rev };
     else {
       this.#lettingGo.splice(i, 1);
-      this.onChange({ kind: "letGo", station, thread });
+      this.#changed({ kind: "letGo", station, thread });
     }
   }
 
   /// Whether the card at `seq` in a chat is let go from here.
   lettingGo(station: string, thread: number, seq: number): boolean {
+    this.#seen.letGo.read(`${station} ${thread}`);
     return this.#lettingGo.some((l) => l.station === station && l.thread === thread && l.seq === seq);
   }
 
-  /// A vault request approved or turned down here (`outcome`): its card is off the 奏 page, and its card in its chat says
+  /// A vault request approved or turned down here (`outcome`): the pending list and its card in the chat say
   /// how it went, at once (its station says so as it tells it).
   vaultDecided(request: string, outcome: VaultOutcome): void {
     if (this.decidedVault(request)) return;
     this.#vaultDecided.push({ request, outcome });
     if (this.#vaultDecided.length > 64) this.#vaultDecided.shift();
-    this.onChange({ kind: "vault", request });
+    this.#changed({ kind: "vault", request });
   }
 
   decidedVault(request: string): boolean {
@@ -608,6 +670,7 @@ export class Local {
 
   /// How a vault request decided here went (none: not decided here).
   vaultOutcome(request: string): VaultOutcome | undefined {
+    this.#seen.vault.read(request);
     return this.#vaultDecided.find((d) => d.request === request)?.outcome;
   }
 
@@ -619,10 +682,19 @@ export class Local {
       const i = this.#archiving.findIndex(([s, t, k]) => s === station && t === thread && k === session);
       if (i >= 0) this.#archiving.splice(i, 1);
     }
-    this.onChange({ kind: "archiving" });
+    this.#changed({ kind: "archiving" });
+  }
+
+  /// Whether nothing done here changes how a station's rows show (none of its chats being archived or changed from here):
+  /// a list's rows made before are then as they would be made again (views.ts keptBetween).
+  rowsQuiet(station: string): boolean {
+    this.#seen.archiving.read();
+    this.#seen.changing.read(station);
+    return !this.#archiving.some(([s]) => s === station) && !this.#changing.some((c) => c.station === station);
   }
 
   beingArchived(station: string, row: J): boolean {
+    this.#seen.archiving.read();
     return this.#archiving.some(([s, thread, session]) => s === station && (thread !== null ? get(row, "thread") === thread : get(row, "session") === session));
   }
 
@@ -631,7 +703,7 @@ export class Local {
     const change: Change = { id, station, thread, session, row, archived };
     this.#changing.push(change);
     this.#data.putLocal(CHANGING, station, String(id), change);
-    this.onChange({ kind: "changing", station });
+    this.#changed({ kind: "changing", station });
     return id;
   }
 
@@ -648,7 +720,7 @@ export class Local {
     }
     this.#changing.splice(i, 1);
     this.#data.putLocal(CHANGING, change.station, String(id), undefined);
-    this.onChange({ kind: "changing", station: change.station });
+    this.#changed({ kind: "changing", station: change.station });
   }
 
   /// Lets go of what is done that its station's rows have had since (they changed after it answered).
@@ -669,6 +741,7 @@ export class Local {
 
   /// Whether any change of a station's is done and waits for its rows to have it.
   settling(station: string): boolean {
+    this.#seen.changing.read(station);
     return this.#changing.some((c) => c.station === station && c.done !== undefined);
   }
 
@@ -678,6 +751,7 @@ export class Local {
 
   /// A station's row as the changes from here have it, oldest first (a copy when any applies).
   asChanging(station: string, row: J): J {
+    this.#seen.changing.read(station);
     const thread = typeof get(row, "thread") === "number" ? row.thread : null;
     const session = typeof get(row, "session") === "string" ? row.session : null;
     let out = row;
@@ -691,6 +765,7 @@ export class Local {
 
   /// Whether a chat's page is being taken out of the archive (false) or put in it (true), from here.
   archivedChanging(station: string, thread: number | null, session: string | null): boolean | null {
+    this.#seen.changing.read(station);
     for (let i = this.#changing.length - 1; i >= 0; i--) {
       const c = this.#changing[i];
       if (Local.#matches(c, station, thread, session) && c.archived !== null) return c.archived;

@@ -1,4 +1,4 @@
-// usvg's render tree (tree/mod.rs, tree/geom.rs): groups, paths, images and text as resvg draws them, with paint
+// usvg's render tree (tree/mod.rs): groups, paths, images and text as resvg draws them, with paint
 // servers, clip paths, masks and filters resolved into user space.
 
 ///|
@@ -568,7 +568,7 @@ fn SPath::abs_stroke_bounding_box(self : SPath) -> @skia.Rect? {
   }
 }
 
-// ── view boxes (tree/geom.rs) ─────────────────────────────────────────
+// ── view boxes ─────────────────────────────────────────
 
 ///|
 priv struct SViewBox {

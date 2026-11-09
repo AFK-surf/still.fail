@@ -35,9 +35,8 @@ fn presenting_view(open : (Anchor) -> Unit, at? : @ui.Justify = JStart) -> (@ui.
     begin(c) |> ignore
     c.with_theme(ui_theme(), fn() {
       c.box(w=Fill(1.0), h=Fill(1.0), pad=40.0, justify=at, fn() {
-        if button(c, "打开", key="open") {
-          open(Of(c.id("open")))
-        }
+        let from = c.id("open")
+        button(c, "打开", key="open", on_press=fn() { open(Of(from)) }) |> ignore
       })
       |> ignore
       presented(c)
@@ -49,7 +48,7 @@ fn presenting_view(open : (Anchor) -> Unit, at? : @ui.Justify = JStart) -> (@ui.
 fn presenting_tester(at : (Int, Double, Double), open : (Anchor) -> Unit, button_at? : @ui.Justify = JStart) -> @ui.Tester {
   presenters_reset()
   let (platform, w, h) = at
-  let t = @ui.Tester::new(presenting_view(open, at=button_at), w~, h~, platform~)
+  let t = @ui.Tester::new(@ui.old_views_here, tree=presented_tree(presenting_view(open, at=button_at)), w~, h~, platform~)
   t.draw()
   t
 }
@@ -60,7 +59,7 @@ fn beside_of(from : Anchor) -> Beside {
   match from {
     Anchor::Of(id) => Of(id)
     Anchor::At(x, y, w, h) => At(x, y, w, h)
-    Unanchored => abort("a menu or a pick is opened beside what opened it")
+    Unanchored | Node(_) => abort("a menu or a pick is opened beside what opened it")
   }
 }
 
@@ -73,6 +72,53 @@ fn open_it(t : @ui.Tester) -> Unit {
   } else {
     t.run_for(@kit.presence_in_ms)
   }
+}
+
+///|
+test "a panel's long list draws its rows in the panel's arrangement" {
+  for at in [phone, desk] {
+    let seen : Array[Look] = []
+    let t = presenting_tester(at, fn(from) {
+      panel("账号", from~, tall=0.8, grows=true, fn(c, _) {
+        panel_list(c, "accounts", 12, 48.0, fn(i) {
+          seen.push(look())
+          c.text("账号 " + i.to_string()) |> ignore
+        }) |> ignore
+      })
+    })
+    open_it(t)
+    t.draw()
+    assert_true(!seen.is_empty(), msg="the list draws rows")
+    let expected = if at == phone { Narrow } else { Wide }
+    for arrangement in seen {
+      assert_true(arrangement == expected, msg="each row takes the panel's arrangement")
+    }
+  }
+}
+
+///|
+test "a capped sheet measures lists that arrive after it opens" {
+  let shown = Ref(false)
+  let t = presenting_tester(phone, fn(from) {
+    panel("内容", from~, tall=0.8, fn(c, _) {
+      button(c, "显示列表", on_press=fn() {
+        shown.val = true
+      }) |> ignore
+      if shown.val {
+        panel_list(c, "late-a", 1, 20.0, fn(_) {
+          c.box(style=@ui.style(w=Full, h=Fixed(96.0)), fn() { c.text("第一组") |> ignore }) |> ignore
+        }) |> ignore
+        panel_list(c, "late-b", 1, 20.0, fn(_) {
+          c.box(style=@ui.style(w=Full, h=Fixed(80.0)), fn() { c.text("第二组") |> ignore }) |> ignore
+        }) |> ignore
+      }
+    })
+  })
+  open_it(t)
+  t.tap_text("显示列表")
+  t.draw()
+  assert_true(t.find("第一组") is Some(_))
+  assert_true(t.find("第二组") is Some(_))
 }
 
 ///|
@@ -143,6 +189,43 @@ fn inks_of(t : @ui.Tester, words : String) -> Array[Int64] raise {
 }
 
 ///|
+test "a confirmation warning is red in both a sheet and a dialog" {
+  for at in [phone, desk] {
+    let t = presenting_tester(at, fn(from) {
+      confirm("分享账号？", "其他 station 会发送请求", "分享账号", fn() {  }, warning="请确认安全访问", from~)
+    })
+    open_it(t)
+    t.run_for(@ui.move_most_ms)
+    t.draw()
+    let warning_ink = inks_of(t, "请确认安全访问")
+    let words_ink = inks_of(t, "其他 station 会发送请求")
+    assert_true(warning_ink == [light_palette.red] || warning_ink == [web_light.red], msg="warning at \{at}")
+    assert_true(words_ink == [light_palette.muted] || words_ink == [web_light.muted], msg="description at \{at}")
+  }
+}
+
+///|
+test "a confirmation drawn in the window's tree shows its warning in red" {
+  presenters_reset()
+  let t = @ui.Tester::new(fn(_c) {  }, w=1280.0, h=800.0, platform=0)
+  t.check_looks(false)
+  @ui.set_view_app(fn(root) {
+    @ui.set_tree_theme(ui_theme_now)
+    @ui.old(root, fn(c) {
+      begin(c) |> ignore
+      c.with_theme(ui_theme(), fn() { presented(c) })
+    }).over(Is(true)) |> @ui.old_takes_own |> ignore
+    presented_nodes(root)
+  })
+  t.draw()
+  confirm("分享账号？", "其他 station 会发送请求", "分享账号", fn() {  }, warning="请确认安全访问")
+  t.run_for(@ui.move_most_ms)
+  t.draw()
+  assert_eq(inks_of(t, "请确认安全访问"), [@ui.tree_theme().color(Danger)])
+  assert_eq(inks_of(t, "其他 station 会发送请求"), [@ui.tree_theme().color(Muted)])
+}
+
+///|
 test "a menu with a mouse at Large: an item not to be chosen now in the subtle ink (it is never lit), clicked does nothing" {
   let said : Array[String] = []
   let items = [
@@ -190,11 +273,15 @@ test "a long pick with a mouse at Large: its search over it finds by the words, 
   assert_eq(presented_how, [AsPopover])
   assert_true(t.find("第2项") is Some(_))
   t.type_text("第11")
+  // (what no longer matches closing its room, gone once it has)
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("第2项") is None)
   assert_true(t.find("第11项") is Some(_))
   t.type_text("x")
+  t.run_for(@ui.move_most_ms)
   assert_true(t.find("common.noMatch") is Some(_))
   t.backspace()
+  t.run_for(@ui.move_most_ms)
   assert_true(t.key_named("enter"))
   assert_eq(chosen.val, "c11")
   assert_true(!presenting())
@@ -221,10 +308,10 @@ fn panel_body(said : Array[String]) -> (@ui.Ctx, () -> Unit) -> Unit {
   fn(c, close) {
     panel_text(c, fn() { c.text("面板里的话", style=paragraph) |> ignore })
     panel_foot(c, fn() {
-      if panel_button(c, "ok", "好的", tone=Filled) {
+      panel_button(c, "ok", "好的", tone=Filled, on_press=fn() {
         said.push("ok")
         close()
-      }
+      }) |> ignore
     })
   }
 }
@@ -272,10 +359,10 @@ fn lines_body(n : Int, held : Ref[Bool]) -> (@ui.Ctx, () -> Unit) -> Unit {
 /// A panel's foot: 好的, which says so and closes it.
 fn ok_foot(said : Array[String]) -> (@ui.Ctx, () -> Unit) -> Unit {
   fn(c, close) {
-    if button(c, "好的", key="ok", tone=Primary) {
+    button(c, "好的", key="ok", tone=Primary, on_press=fn() {
       said.push("ok")
       close()
-    }
+    }) |> ignore
   }
 }
 
@@ -451,9 +538,9 @@ test "one over another: a confirm from a menu's item comes when the menu has gon
   let said : Array[String] = []
   let t = presenting_tester(phone, fn(from) {
     panel("面板", fn(c, _) {
-      if button(c, "删除它", key="del") {
+      button(c, "删除它", key="del", on_press=fn() {
         confirm("删掉吗？", "删掉后不能恢复。", "删掉", fn() { said.push("deleted") }, danger=true)
-      }
+      }) |> ignore
     }, from~)
   })
   open_it(t)
@@ -478,14 +565,113 @@ fn dialog_panel(said : Array[String]) -> (Anchor) -> Unit {
       from=Unanchored,
       description="每项都会加密保存",
       foot=fn(c, close) {
-        if button(c, "确认添加", key="add") {
+        button(c, "确认添加", key="add", on_press=fn() {
           said.push("added")
           close()
-        }
+        }) |> ignore
       },
       gone=fn() { said.push("gone") },
     )
   }
+}
+
+///|
+/// How many grounds over the whole window dim what is under them in the last frame (`at`'s window).
+fn scrims_drawn(t : @ui.Tester, at : (Int, Double, Double)) -> Int {
+  let (_, w, h) = at
+  t
+  .drawn_rects()
+  .filter(fn(r) { r.0 <= 0.0 && r.1 <= 0.0 && r.2 >= w && r.3 >= h && (r.4 & 0xFFL) > 0L && (r.4 & 0xFFL) < 0xFFL })
+  .length()
+}
+
+///|
+/// Whether something less than the window is dimmed over itself in the last frame, in the colour the window is dimmed
+/// with (a dialog with another over it).
+fn veiled_drawn(t : @ui.Tester, at : (Int, Double, Double)) -> Bool {
+  veiled_in(t.drawn_rects(), at.1, at.2)
+}
+
+///|
+/// Whether of `rects` one less than the window (`w` by `h`) is drawn in the colour one over all of it dims it with.
+fn veiled_in(rects : Array[(Double, Double, Double, Double, Int64)], w : Double, h : Double) -> Bool {
+  let see_through = fn(c : Int64) { (c & 0xFFL) > 0L && (c & 0xFFL) < 0xFFL }
+  match rects.iter().find_first(fn(r) { r.0 <= 0.0 && r.1 <= 0.0 && r.2 >= w && r.3 >= h && see_through(r.4) }) {
+    Some(scrim) => rects.iter().any(fn(r) { (r.2 < w || r.3 < h) && see_through(r.4) && (r.4 >> 8) == (scrim.4 >> 8) })
+    None => false
+  }
+}
+
+///|
+/// A panel (opened by 打开, `from` it or by nothing) with 删掉 in it, which asks a confirm over it.
+fn panel_with_confirm(at : (Int, Double, Double), by_nothing? : Bool = false) -> @ui.Tester {
+  presenting_tester(at, fn(from) {
+    panel(
+      "面板",
+      from=if by_nothing { Unanchored } else { from },
+      fn(c, _) {
+        c.text("面板内容") |> ignore
+        button(c, "删掉", key="drop", on_press=fn() {
+          confirm("删掉这个？", "删掉后找不回来。", "确认删掉", fn() {  }, danger=true)
+        }) |> ignore
+      },
+    )
+  })
+}
+
+///|
+test "one over another with a finger at Small: one scrim however many sheets, the one under pushed up out of the way and down again" {
+  let t = panel_with_confirm(phone)
+  open_it(t)
+  assert_eq(scrims_drawn(t, phone), 1)
+  let (_, y0) = t.drawn_of("面板内容").unwrap()
+  t.tap_text("删掉")
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@ui.move_most_ms)
+  assert_eq(presented_how, [AsSheet, AsSheet])
+  // (no darker for the second: the one under dims, the one over it not)
+  assert_eq(scrims_drawn(t, phone), 1)
+  // (the one under pushed up out of its way, whole over it, not laid under it: its words over the confirm's title)
+  let (_, y1) = t.drawn_of("面板内容").unwrap()
+  let (_, title) = t.drawn_of("删掉这个？").unwrap()
+  assert_true(y1 < y0 - pushed_gap && y1 < title, msg="\{y0} \{y1} \{title}")
+  // (the two not laid one over the other: the one under ends, foot and all, pushed_gap over the one over it)
+  let sheets = t.drawn_glass().copy()
+  sheets.sort_by_key(fn(g) { g.1 })
+  assert_eq(sheets.length(), 2, msg="\{sheets}")
+  assert_true(sheets[0].1 + sheets[0].3 + pushed_gap <= sheets[1].1 + 0.5, msg="\{sheets}")
+  // (the one under taking nothing while it is up: dimmed over itself as the window is, not the window twice)
+  assert_true(
+    t.drawn_rects().iter().any(fn(r) { r.4 == sheet_scrim && r.3 < phone.2 }),
+    msg="\{t.drawn_rects().filter(fn(r) { (r.4 & 0xFFL) < 0xFFL })}",
+  )
+  // (the one over it gone: the one under forward again, its scrim as it was all along)
+  t.back()
+  t.run_for(@kit.sheet_rest("sf-present") - t.time())
+  t.run_for(@ui.move_most_ms)
+  assert_eq(presented_how, [AsSheet])
+  assert_eq(scrims_drawn(t, phone), 1)
+  let (_, y2) = t.drawn_of("面板内容").unwrap()
+  assert_true((y2 - y0).abs() < 0.5, msg="\{y0} \{y2}")
+}
+
+///|
+test "one over another with a mouse at Large: a confirm over a dialog dims no darker" {
+  let t = panel_with_confirm(desk, by_nothing=true)
+  open_it(t)
+  assert_eq(presented_how, [AsDialog])
+  assert_eq(scrims_drawn(t, desk), 1)
+  t.tap_text("删掉")
+  t.run_for(@kit.presence_in_ms)
+  assert_eq(presented_how, [AsDialog, AsDialog])
+  assert_eq(scrims_drawn(t, desk), 1)
+  // (the dialog under it taking nothing: dimmed over itself, as the window is)
+  t.run_for(confirm_ground_ms)
+  assert_true(veiled_drawn(t, desk), msg="\{t.drawn_rects()}")
+  // (the confirm closed: the dialog's scrim as it was all along, none fading over it)
+  assert_true(t.key_named("esc"))
+  t.run_for(@kit.presence_in_ms)
+  assert_eq(scrims_drawn(t, desk), 1)
 }
 
 ///|

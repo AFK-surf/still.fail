@@ -1,20 +1,6 @@
 // The pages pushed from Home, as far as these slices go: a chat (chat.mbt), the archive and settings (Parts.kt NavBar
-// over nothing yet); the filter's menu (Sheet.kt MenuHost) and the workspaces' sheet (Workspaces.kt WorkspacesSheet, in
+// over nothing yet); the filter's menu and the workspaces' sheet (Workspaces.kt WorkspacesSheet, in
 // Sheet.kt's frame).
-
-///|
-/// A page's compact bar (Parts.kt NavBar): back to the chats, in the accent; its title in the middle.
-fn nav_bar(c : @ui.Ctx, title : String) -> Unit {
-  if @sf.nav_bar(c, "nav-back", tr("android-misc.bar.place.chats"), title, top=status_top()) {
-    @sfbase.go_back() |> ignore
-  }
-}
-
-///|
-/// A list card on a sheet (Parts.kt RowsCard): its rows list_pad in, its corner concentric round theirs; its ground the
-/// caller's (the workspace in use: the chips' grey).
-// kept across runs: a value (no field of it changes)
-let chip_list_card : @ui.Style = @ui.style(w=Full, p=@sf.list_room, radius=@sf.list_card_radius, clip=true)
 
 ///|
 /// A phone menu's rows' ground menu_pad in from the panel's edge, rounded menu_row (Sheet.kt MenuHost MENU_PAD,
@@ -28,22 +14,16 @@ let menu_row : Double = 14.0
 let menu_words_in : Double = 16.0
 
 ///|
-/// A phone menu's height of `n` rows of 45 (MenuHost's menuHeight: 45 a row, its padding over and under).
-fn menu_height(n : Int) -> Double {
-  45.0 * n.to_double() + menu_pad * 2.0
-}
-
-///|
-/// A phone menu's panel (Sheet.kt MenuHost) at (`tx`, `ty`): 180 wide, the surface, the menu's shadow, its rows
+/// A phone menu's panel at (`tx`, `ty`): 180 wide, the surface, the menu's shadow, its rows
 /// menu_pad in, its corner concentric round theirs (concentricOut(MENU_ROW, MENU_PAD)).
 fn phone_menu(c : @ui.Ctx, tx? : Double = 0.0, ty? : Double = 0.0, body : () -> Unit) -> Int {
   let t = @sf.theme()
-  c.box(
+  let menu = c.box(
     w=Px(180.0),
     tx~,
     ty~,
     pad=menu_pad,
-    radius=@sf.surface_corner(menu_pad, menu_row),
+    radius=@ui.concentric_out(menu_row, menu_pad),
     bg=t.p.card,
     shadow=@sf.menu_raised.sigma,
     shadow_y=@sf.menu_raised.dy,
@@ -51,6 +31,9 @@ fn phone_menu(c : @ui.Ctx, tx? : Double = 0.0, ty? : Double = 0.0, body : () -> 
     clip=true,
     body,
   )
+  // (the menu: the surface of the look it comes in by: Ctx::surface)
+  c.surface(menu)
+  menu
 }
 
 ///|
@@ -94,13 +77,4 @@ fn menu_row_look(c : @ui.Ctx, s : @kit.MenuItemState, icon : String) -> Unit {
   if !s.entry.disabled {
     @motion.ripple(c, s.id, menu_row)
   }
-}
-
-///|
-fn sheet_label(c : @ui.Ctx, label : String) -> Unit {
-  let t = @sf.theme()
-  c.box(pl=20.0, pr=20.0, pt=6.0, pb=2.0, fn() {
-    c.text(label, size=t.t.meta, color=t.p.muted, wrap=false) |> ignore
-  })
-  |> ignore
 }

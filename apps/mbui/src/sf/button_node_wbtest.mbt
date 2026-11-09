@@ -39,7 +39,7 @@ fn button_case(
     @ui.set_view_app(fn(root) {
       root.box(fn(col) {
         col.width(Is(Some(300.0))).height(Is(Some(200.0))).lines_up(Is(if start { Some(Start) } else { None })) |> ignore
-        col.show(fn() { there.get() }, fn(at) {
+        col.show(at_once=true, fn() { there.get() }, fn(at) {
           // (what it is shown in as wide as the column and lining it up as the column does: the button laid out as
           // in the column itself)
           at.width_share(Is(1.0)).lines_up(Is(if start { Some(Start) } else { None })) |> ignore
@@ -105,6 +105,29 @@ test "the button as a node idle: nothing turning; at work, its spinner turning; 
   t.run_for(past_button_ms)
   let rested = tree.cycle_read()
   assert_eq((idle, turn_a.length() > 0, turn_a != turn_b, working, rested), (false, true, true, true, false))
+}
+
+///|
+test "quiet buttons show their ground while busy, then return to words alone" {
+  for tone in [Ghost, GhostDanger] {
+    for node in [false, true] {
+      let busy = @signals.signal(false, same=fn(a, b) { a == b })
+      let t = button_case(@signals.signal("Join"), busy, node, tone~)
+      assert_true(t.drawn_rects().is_empty())
+      busy.set(true)
+      t.frame()
+      t.run_for(past_button_ms)
+      assert_true(t.drawn_rects().iter().any(fn(r) { r.4 == theme().p.hover }))
+      assert_true(t.find("Join") is Some(_))
+      assert_true(t.drawn_instances().iter().any(fn(i) { i[5] == 10.0 }))
+      busy.set(false)
+      t.frame()
+      t.run_for(past_button_ms)
+      assert_true(t.drawn_rects().is_empty())
+      let already_busy = button_case(@signals.signal("Join"), @signals.signal(true), node, tone~)
+      assert_true(already_busy.drawn_rects().iter().any(fn(r) { r.4 == theme().p.hover }))
+    }
+  }
 }
 
 ///|
@@ -209,11 +232,11 @@ test "the button as a node set to work and back: its spinner's room opening and 
   }
   let (old, new) = (seen(false), seen(true))
   let same = Array::makei(old.length(), fn(k) { drawn_near(old[k].0, new[k].0) && pieces_near(old[k].1, new[k].1) })
-  // (no spinner at rest, before or after; one on the way in and at work)
+  // (no spinner at rest, before or after; none yet while it is under half its size, one past that and at work)
   let spun = new.map(fn(k) { k.1.length() > 0 })
   assert_eq(
-    (same, spun[0], spun[1], spun[4], spun[8]),
-    (Array::make(old.length(), true), false, true, true, false),
+    (same, spun[0], spun[1], spun[2], spun[4], spun[8]),
+    (Array::make(old.length(), true), false, false, true, true, false),
     msg="old \{old}\nnode \{new}",
   )
 }

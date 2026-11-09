@@ -1,4 +1,4 @@
-// What changes the height of a chat's list plays one at a time (ListTurns.kt, web/src/listQueue.ts, docs/list-motion.md):
+// What changes the height of a chat's list plays one at a time (mbui's view/list_motion.mbt):
 // words sent flying in from the composer, a message simply coming in, the agent's line coming, messages coming out of
 // its avatar, what comes under a post (what is answered there goes only out of sight: Turns::in_turn). Each waits its
 // turn here, in the order they came, but words sent: they fly at once, in the list the frame they are sent
@@ -27,7 +27,7 @@ pub(all) enum TurnFor {
 
 ///|
 /// A turn asked for: what for, how long its motion takes (inf: till said over), and whether it goes after the others
-/// asked with it (an agent's line, after what closes under a post as it starts: Chat.kt `after`).
+/// asked with it (an agent's line).
 pub(all) struct TurnAsk {
   what : TurnFor
   ms : Double
@@ -59,9 +59,9 @@ pub(all) struct Turns {
   mut sent_until : Double
   /// the list's glide after what came, as last seen: over from then (inf: under way, its end not known yet)
   mut list_rest : Double
-  /// the frame they were last played on in (Turns::step): their chat's page shown then; that frame's time, as handed
-  /// to what moves (Moving::sample)
-  mut stepped : Int
+  /// the moment they were last played on at (Turns::step): their chat's page shown then; the time handed to what
+  /// moves (Moving::sample)
+  mut stepped_at : Double
   mut now : Double
   mover : @ui.Mover
 }
@@ -88,7 +88,7 @@ pub fn turns_of(key : String) -> Turns {
         sent_at: -1.0,
         sent_until: -1.0,
         list_rest: -1.0,
-        stepped: -1,
+        stepped_at: @double.neg_infinity,
         now: 0.0,
         mover: @ui.Mover::new(),
       }
@@ -116,7 +116,7 @@ let turn_owed_ms : Double = 1.0
 pub let turn_calm_ms : Double = 2.0 * 1000.0 / 60.0
 
 ///|
-/// The most a turn holds the next one back, whatever it does (one whose motion never ends: ListTurns.kt MOST_MS).
+/// The most a turn holds the next one back, whatever it does.
 pub let turn_most_ms : Double = 3000.0
 
 ///|
@@ -124,7 +124,7 @@ pub fn Turns::ask(self : Turns, c : @ui.Ctx, what : TurnFor, ms : Double, after?
   self.asked_n = self.asked_n + 1
   // (said once as it is asked, from the moment it is: frames until its turn is played, Moving below)
   let at = self.moment(c)
-  // (one going after the others asked with it asked a couple of frames on: ListTurns.kt take's `after`)
+  // 
   self.asks.push({ what, ms, after, at: if after { at + turn_calm_ms } else { at }, n: self.asked_n })
 }
 
@@ -171,11 +171,11 @@ pub fn Turns::emitting(self : Turns) -> Bool {
 
 ///|
 /// `target` (something under a post shown or not: a decision's options, 忽略, a card asking) as it shows. What changes
-/// out of sight (`seen` false: its row not on screen the frame before, Reading::sees) changes at once, its motion over
-/// before it is seen (`started` long ago: unseen_at). On screen, what comes waits its turn among what changes the
-/// list's height and holds the next for `ms` (its motion) once made; what goes does not go: it stays as it is, its
-/// room with it, until it is out of sight (the user, 2026-10-29: what is answered on screen moves nothing, the list
-/// changing only for what comes). The first time it is asked, as it is.
+/// out of sight (`seen` false: its row not on screen as the build before left it, Reading::sees) changes at once, its
+/// motion over before it is seen (`started` long ago: unseen_at). On screen, what comes waits its turn among what
+/// changes the list's height and holds the next for `ms` (its motion) once made; what goes does not go: it stays as it
+/// is, its room with it, until it is out of sight (the user, 2026-10-29: what is answered on screen moves nothing, the
+/// list changing only for what comes). The first time it is asked, as it is.
 pub fn Turns::in_turn(self : Turns, c : @ui.Ctx, key : String, target : Bool, ms : Double, seen~ : Bool) -> Bool {
   ignore(ms)
   ignore(seen)
@@ -203,7 +203,7 @@ pub let unseen_at : Double = -1.0e9
 ///|
 /// The row of what the viewer just did here (a card's option picked: their answer, in the outbox) takes its turn as
 /// they do it, before what comes of it (the agent's line taking it up): the next row asked comes in it
-/// (web/src/listQueue.ts reserveRow), the options staying as they are, none pressed. No row by
+/// , the options staying as they are, none pressed. No row by
 /// turn_most_ms (an option that closes the card without one), the turn goes.
 pub fn Turns::keep_turn(self : Turns, c : @ui.Ctx) -> Unit {
   ignore(self)
@@ -270,27 +270,17 @@ pub fn Turns::next_ask(self : Turns) -> Int? {
 /// When the next turn may start (inf: not known yet): the one under way over (at most turn_most_ms after it began), the
 /// list at rest, and it asked.
 pub fn Turns::free_at(self : Turns, a : TurnAsk) -> Double {
-  // (nothing waits for another: docs/list-motion.md)
+  // (nothing waits for another: mbui's view/list_motion.mbt)
   a.at
-}
-
-///|
-/// What ask `a` waits for of words sent: their landing, asked after they were sent (-1: nothing).
-pub fn Turns::after_sent(self : Turns, a : TurnAsk) -> Double {
-  if self.sent_at >= 0.0 && a.at >= self.sent_at {
-    self.sent_until
-  } else {
-    -1.0
-  }
 }
 
 ///|
 /// Plays the turns on, before the page is built (chat_tick): each one whose turn has come starts, from when it came.
 /// `list_rest`: when the list's glide after what came is over (Ctx::list_info's `glide_rest`; inf: under way, its end
-/// not known), not the reader's hand on it (listQueue.ts listStill).
+/// not known), not the reader's hand on it.
 pub fn Turns::step(self : Turns, c : @ui.Ctx, list_rest : Double) -> Unit {
   self.list_rest = list_rest
-  self.stepped = c.frame_number()
+  self.stepped_at = c.moment()
   let mut steps = 0
   while steps < 16 {
     steps = steps + 1
@@ -342,8 +332,9 @@ impl @ui.Moving for Turns with keeps_time(self) {
 
 ///|
 impl @ui.Moving for Turns with rest_at(self, now, frame) {
-  // (their chat's page not shown this frame: nothing plays; shown again, its build plays them on)
-  if self.stepped < frame {
+  ignore(frame)
+  // (not played on at this moment, their chat's page not shown: nothing plays; shown again, its build plays them on)
+  if self.stepped_at < now {
     return -1.0
   }
   match self.next_ask() {
@@ -362,9 +353,9 @@ impl @ui.Moving for Turns with rest_at(self, now, frame) {
 }
 
 ///|
-/// How long a turn holds the next: a row coming in (its rise: Chat.kt admit, 320), an agent's line (its room opening,
-/// 220), a decision's options closing (their leave and the delayed close: ListMotion.kt CLOSE_TURN_MS), 忽略 going
-/// (Chat.kt AskDismiss, 280).
+/// How long a turn holds the next: a row coming in (320), an agent's line (its room opening,
+/// 220), a decision's options closing, 忽略 going
+/// (280).
 pub let row_turn_ms : Double = 320.0
 
 ///|

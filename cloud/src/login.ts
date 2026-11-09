@@ -1,5 +1,5 @@
 import { devicePage, escape } from "./page";
-import { requestLang, tr, type Lang } from "./i18n.ts";
+import { cloudProduct, requestLang, setCloud, tr, type Lang } from "./i18n.ts";
 import { mailConfigured, sendCode } from "./mail";
 import { passwordAccounts, passwordIdentity } from "./password";
 export { devicePage } from "./page";
@@ -107,6 +107,12 @@ function legalLink(lang: Lang, page: "terms" | "privacy"): string {
 
 /** One login attempt, single-use callback and PKCE code, removed on its alarm. */
 export class LoginAttempt extends DurableObject<Env> {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    // (its pages' and mails' words name its product)
+    setCloud(env.PUBLIC_ORIGIN);
+  }
+
   private async google(id: string, attempt: Attempt, browser: string): Promise<Response> {
     const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     for (const [key, value] of Object.entries({
@@ -540,7 +546,7 @@ export async function googleStart(env: Env, request: Request): Promise<Response>
   if (!validRedirect(env, callback) || !validSecret(state) || !validSecret(challenge) || url.searchParams.get("code_challenge_method") !== "S256") return reply({ error: "invalid_login" }, 400);
   if (!(await consumeLoginRate(env, request))) return limited();
   const id = randomSecret();
-  const name = (url.searchParams.get("name") ?? "still.fail").slice(0, 80);
+  const name = (url.searchParams.get("name") ?? cloudProduct().name).slice(0, 80);
   return env.LOGINS.getByName(id).start(id, { redirect: callback, state, challenge, name }, request);
 }
 

@@ -26,6 +26,26 @@ test "contrast: a node of the tree's words too faint on its ground found, as mad
 }
 
 ///|
+test "contrast: what a node of the tree said disabled (its presses off) holds is not asked, as what an old view's widget said disabled holds; the same words where it takes presses are" {
+  let faint = fn(off : Bool) {
+    let t = tree_tester(fn(root) {
+      root.box(fn(b) {
+        b.over(Is(true)).ground(Is(0xFFFFFFFFL)) |> ignore
+        b.box(fn(k) {
+          k.says(Is(Some(@view.said(Button, label="faint words")))).presses(Is(!off)) |> ignore
+          k.box(fn(w) { w.width(Is(Some(200.0))).words(Is("faint words"), ink=0xDDDDDDFFL) |> ignore }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    t.contrast_faults().filter(fn(f) { f.contains("faint words") }).length()
+  }
+  assert_eq(faint(true), 0)
+  assert_eq(faint(false), 1)
+}
+
+///|
 /// Words of a node of the tree's ("held words"), a solid ground of another node over them drawn after (`covered`) or
 /// below them: what the words held seen whole are drawn over by, on the frame first drawn and on one drawn again with
 /// all of it moved (the nodes' instances kept, composed where they are then), and whether none was made again.

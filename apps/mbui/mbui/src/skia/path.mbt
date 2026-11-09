@@ -1,4 +1,4 @@
-// tiny-skia's Path (path/src/path.rs): verbs and points, never empty, with its bounds.
+// tiny-skia's Path: verbs and points, never empty, with its bounds.
 
 ///|
 pub(all) enum PathVerb {

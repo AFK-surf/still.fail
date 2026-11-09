@@ -22,12 +22,17 @@ hex = "0.4"
 iroh = { version = "=1.0.3" }
 iroh-mdns-address-lookup = "=0.4.0"
 iroh-mainline-address-lookup = "=0.5.0"
+# Its DHT, for the nodes it starts from (`dht` in src/lib.rs).
+n0-mainline = "=0.6.0"
 # The type of what an address lookup resolves (`Unmade`), as iroh names it.
 n0-future = "0.3"
 napi = { version = "3", features = ["async", "tokio_rt"] }
 napi-derive = "3"
 noq-proto = { version = "1", default-features = false }
 sha2 = "0.10"
+# Signatures checked by formally verified implementations (src/verify.rs), as a native app's shell checks them.
+libcrux-ed25519 = { version = "=0.0.10", default-features = false }
+libcrux-ecdsa = { version = "=0.0.9", default-features = false }
 # Thumbnails (src/thumbs.rs): exactly as mesh/app builds them (mesh/Cargo.lock), so both stations make the same bytes;
 # the codecs under `image` pinned too (Cargo.lock is not kept here).
 image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }

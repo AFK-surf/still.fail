@@ -1,4 +1,4 @@
-// A chat's way to the screens of the station it runs on (docs/remote-screens.md, "A chat's screens"): from its bar
+// A chat's way to the screens of the station it runs on ("A chat's screens"): from its bar
 // (the wide frame's chat page) and its agent's card (the phone's), the same for both. One screen alone opens at once;
 // more, a menu of them, the machine's own display first (the core's order). Opened as any screen is (open_screen): the
 // shell puts it beside the chat where the frame has room, over it where not.
@@ -40,7 +40,7 @@ pub fn chat_screen_first(r : ChatRef, screens : Array[ChatScreen]) -> Unit {
 
 ///|
 /// The chat's screens from what was pressed (`from`): the one alone opened, else a menu of them.
-pub fn chat_screens_open(r : ChatRef, screens : Array[ChatScreen], from~ : @sf.Beside) -> Unit {
+pub fn chat_screens_open(r : ChatRef, screens : Array[ChatScreen], from~ : @sf.Beside, along? : @ui.Along = Start) -> Unit {
   match screens {
     [] => ()
     [s] => open_screen(r.station, s.id, Some(s.title))
@@ -51,6 +51,7 @@ pub fn chat_screens_open(r : ChatRef, screens : Array[ChatScreen], from~ : @sf.B
         }),
         from~,
         title=@sf.t("web-pages.chat.screen"),
+        along~,
       )
   }
 }

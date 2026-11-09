@@ -140,10 +140,10 @@ test "kept layouts: styles changing (padding, sizes, gaps, alignment, colours on
 /// changing with it), for each that layout reads.
 test "kept layouts: each style property changed alone" {
   same_both_ways("one property", fn() {
-    let step = Ref::new(0)
+    let step = @signals.signal(0)
     let t = Tester::new(
       fn(c) {
-        let k = step.val
+        let k = step.get()
         let at = fn(n : Int) { k == n }
         c.column(w=Fill(1.0), h=Fill(1.0), fn() {
           c.text("before") |> ignore
@@ -234,7 +234,7 @@ test "kept layouts: each style property changed alone" {
       0, 24, 0, 25, 0, 26, 0, 27, 0, 28, 0, 29, 0,
     ]
     for k in steps {
-      step.val = k
+      step.set(k)
       t.frame()
       t.frame()
     }
@@ -245,11 +245,11 @@ test "kept layouts: each style property changed alone" {
 ///|
 test "kept layouts: a text cut to fit, its box narrower and wider" {
   same_both_ways("cut", fn() {
-    let w = Ref::new(120.0)
+    let w = @signals.signal(120.0)
     let t = Tester::new(
       fn(c) {
         c.column(fn() {
-          c.box(w=Px(w.val), fn() {
+          c.box(w=Px(w.get()), fn() {
             c.text("a title far too long to fit on its line", wrap=false) |> ignore
           })
           |> ignore
@@ -260,7 +260,7 @@ test "kept layouts: a text cut to fit, its box narrower and wider" {
       h=200.0,
     )
     for x in [100.0, 100.0, 140.0, 90.0, 400.0, 120.0] {
-      w.val = x
+      w.set(x)
       t.frame()
     }
   })
@@ -270,19 +270,19 @@ test "kept layouts: a text cut to fit, its box narrower and wider" {
 ///|
 test "kept layouts: a box moving into the row before it, the same as it was" {
   same_both_ways("into the row", fn() {
-    let inside = Ref::new(false)
+    let inside = @signals.signal(false)
     let t = Tester::new(
       fn(c) {
         // (of a fixed height: the row's containing block stays the same)
         c.column(align=AStart, h=Px(100.0), fn() {
           c.row(bg=0xEEEEEEFFL, fn() {
             c.box(w=Px(20.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  }) |> ignore
-            if inside.val {
+            if inside.get() {
               c.box(w=Px(20.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  }) |> ignore
             }
           })
           |> ignore
-          if !inside.val {
+          if !inside.get() {
             c.box(w=Px(20.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  }) |> ignore
           }
         })
@@ -292,7 +292,7 @@ test "kept layouts: a box moving into the row before it, the same as it was" {
       h=200.0,
     )
     for v in [true, true, false, true] {
-      inside.val = v
+      inside.set(v)
       t.frame()
     }
   })
@@ -301,15 +301,15 @@ test "kept layouts: a box moving into the row before it, the same as it was" {
 
 ///|
 /// What a slot held last frame is gone when it holds something else: a
-/// coloured, padded box then a spacer, a pager then a plain box.
+/// coloured, padded box then a spacer, a list then a plain box.
 test "kept layouts: a slot holding another kind of thing" {
   same_both_ways("slot reused", fn() {
-    let flip = Ref::new(false)
+    let flip = @signals.signal(false)
     let t = Tester::new(
       fn(c) {
         c.column(w=Fill(1.0), h=Fill(1.0), fn() {
           c.row(h=Px(30.0), fn() {
-            if flip.val {
+            if flip.get() {
               c.spacer()
             } else {
               c.box(w=Px(50.0), pad=5.0, bg=0x336699FFL, radius=4.0, fn() {  }) |> ignore
@@ -317,10 +317,10 @@ test "kept layouts: a slot holding another kind of thing" {
             c.text("right", wrap=false) |> ignore
           })
           |> ignore
-          if flip.val {
+          if flip.get() {
             c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
           } else {
-            c.pager("p", 3, 0, fn(k) { c.text("page \{k}") |> ignore }) |> ignore
+            c.list("p", 3, 40.0, fn(k) { c.text("page \{k}") |> ignore }) |> ignore
           }
         })
         |> ignore
@@ -329,7 +329,7 @@ test "kept layouts: a slot holding another kind of thing" {
       h=300.0,
     )
     for v in [true, false, true, true] {
-      flip.val = v
+      flip.set(v)
       t.frame()
     }
   })
@@ -375,19 +375,20 @@ test "kept layouts: texts changing (words, size, weight, wrapping, cut to fit)" 
 ///|
 test "kept layouts: children added, removed, reordered, of another kind" {
   same_both_ways("children", fn() {
-    let items : Array[Int] = [1, 2, 3]
+    // (the children as a page holds them: a signal, its next value the last one changed)
+    let items = @signals.signal([1, 2, 3])
     let t = Tester::new(
       fn(c) {
         c.column(gap=2.0, fn() {
           c.text("head") |> ignore
           // the last children of a row come and go, nothing after them
           c.row(fn() {
-            for i in items {
+            for i in items.get() {
               c.box(w=Px(10.0), h=Px(i.to_double() + 2.0), bg=0x445566FFL, fn() {  }) |> ignore
             }
           })
           |> ignore
-          for i in items {
+          for i in items.get() {
             if i % 5 == 0 {
               c.box(h=Px(i.to_double()), bg=0x336699FFL, fn() {  }) |> ignore
             } else {
@@ -406,18 +407,20 @@ test "kept layouts: children added, removed, reordered, of another kind" {
       w=240.0,
       h=400.0,
     )
-    let steps : Array[() -> Unit] = [
-      fn() { items.push(4) },
-      fn() { items.insert(0, 0) },
-      fn() { items.remove(2) |> ignore },
-      fn() { items.rev_in_place() },
-      fn() { items[1] = 5 },
-      fn() { items[1] = 6 },
-      fn() { items.clear() },
-      fn() { items.push(7) },
+    let steps : Array[(Array[Int]) -> Unit] = [
+      fn(a) { a.push(4) },
+      fn(a) { a.insert(0, 0) },
+      fn(a) { a.remove(2) |> ignore },
+      fn(a) { a.rev_in_place() },
+      fn(a) { a[1] = 5 },
+      fn(a) { a[1] = 6 },
+      fn(a) { a.clear() },
+      fn(a) { a.push(7) },
     ]
     for f in steps {
-      f()
+      let a = items.get().copy()
+      f(a)
+      items.set(a)
       t.frame()
       t.frame()
     }
@@ -665,9 +668,9 @@ test "kept layouts: pages pushed and popped, mid-slide" {
         fn(i) {
           c.column(w=Fill(1.0), h=Fill(1.0), fn() {
             c.text("title \{i}", wrap=false) |> ignore
-            if c.button("open \{i + 1}") {
+            c.button("open \{i + 1}", on_press=fn() {
               nav.push(i + 1)
-            }
+            })
             c.list("rows", 50, 30.0, fn(r) { c.text("row \{r} of \{i}") |> ignore }) |> ignore
           })
           |> ignore
@@ -693,35 +696,8 @@ test "kept layouts: pages pushed and popped, mid-slide" {
 }
 
 ///|
-test "kept layouts: a pager dragged and turned, images arriving" {
-  same_both_ways("pager", fn() {
-    let t = Tester::new(
-      fn(c) {
-        c.column(w=Fill(1.0), h=Fill(1.0), fn() {
-          c.image("a.png", w=Px(100.0)) |> ignore
-          c.pager("p", 5, 0, fn(k) {
-            c.column(pad=10.0, fn() { c.text("page \{k}") |> ignore }) |> ignore
-          })
-          |> ignore
-        })
-        |> ignore
-      },
-      w=300.0,
-      h=500.0,
-      images=[("a.png", 400, 200)],
-    )
-    t.draw()
-    t.drag(250.0, 300.0, 120.0, 300.0)
-    t.draw()
-    t.drag(100.0, 300.0, 140.0, 300.0)
-    t.draw()
-  })
-  |> ignore
-}
-
-///|
 test "kept layouts: nothing that did not change is laid out again" {
-  let tick = Ref::new(0)
+  let tick = @signals.signal(0)
   let t = Tester::new(
     fn(c) {
       c.column(w=Fill(1.0), h=Fill(1.0), fn() {
@@ -729,7 +705,7 @@ test "kept layouts: nothing that did not change is laid out again" {
           c.row(pad=4.0, fn() {
             c.text("row \{i}") |> ignore
             c.spacer()
-            c.text(if i == 7 { "\{tick.val}" } else { "same" }) |> ignore
+            c.text(if i == 7 { "\{tick.get()}" } else { "same" }) |> ignore
           })
           |> ignore
         }
@@ -750,7 +726,7 @@ test "kept layouts: nothing that did not change is laid out again" {
   assert_eq(commit_counts[0], placed)
   assert_eq(commit_counts[2], kept + 2)
   // one label changes: its row, the column and the root, not the others
-  tick.val = 1
+  tick.set(1)
   let before2 = @flex.counters[0]
   let placed2 = commit_counts[0]
   t.frame()
@@ -797,10 +773,20 @@ test "a list's running sums are its rows' heights added up" {
     glide_meant: -1.0,
     follow_item: -1,
     follow_margin: 0.0,
+    clear_top: 0.0,
+    clear_foot: 0.0,
+    field_id: -1,
+    field_row: -1,
+    field_row_y: 0.0,
+    field_in: 0.0,
+    field_h: 0.0,
     built: -1,
     stepped: -1,
     fresh: true,
+    on_pixels_by: 0.0,
     rows_read: false,
+    island: 0,
+    typed_stays: false,
     glide_shows: false,
     named: "",
     made_at: None,
@@ -817,6 +803,7 @@ test "a list's running sums are its rows' heights added up" {
     fling_dist: 0.0,
     fling_dur: 0.0,
     fling_done: 0.0,
+    fling_from: None,
     drag_pending: 0.0,
     held: false,
     over: 0.0,
@@ -836,6 +823,7 @@ test "a list's running sums are its rows' heights added up" {
         sel: false,
         theme: Theme::light(),
         direction: Ltr,
+        stint: 0,
         layer: 0,
         causes: None,
         sizes: {},
@@ -843,6 +831,7 @@ test "a list's running sums are its rows' heights added up" {
         from_end: false,
         put_at: -1.0,
         shown_h: {},
+        shown_lead: {},
         sizes_mover: Mover::new(),
   }
   let mut seed = 7
@@ -894,7 +883,7 @@ test "a slot taken by another builder starts afresh" {
         if flip.val {
           c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
         } else {
-          c.pager("p", 3, 0, fn(k) { c.text("page \{k}") |> ignore }) |> ignore
+          c.list("p", 3, 40.0, fn(k) { c.text("page \{k}") |> ignore }) |> ignore
         }
       })
       |> ignore
@@ -906,7 +895,7 @@ test "a slot taken by another builder starts afresh" {
   assert_eq(g().scroll_ids.length(), 1)
   flip.val = true
   t.frame()
-  // nothing drawn: no colour, no words, no pager to drag
+  // nothing drawn: no colour, no words, no list to drag
   assert_eq(t.drawn_rects().length(), 0)
   assert_eq(t.drawn_glyphs().length(), 0)
   assert_eq(g().scroll_ids.length(), 0)

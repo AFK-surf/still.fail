@@ -8,7 +8,7 @@ test "74-markdown" {
     let f = @sfreplay.Flow::start(@sfreplay.trace("markdown"), seed~)
     f.tap("端到端测试")
     f.run_for(@ui.move_most_ms)
-    f.see("=studio")
+    f.see("=willow")
     f.tap("发消息")
     f.type_text("给个表格 082947 md:表格和代码 082947")
     f.tap("icon:arrow-up")

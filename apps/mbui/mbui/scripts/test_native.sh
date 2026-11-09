@@ -32,6 +32,10 @@ for p in $pkgs; do
   n=$(basename "$p")
   light="$light ${p#mbui/}/$n.internal_test ${p#mbui/}/$n.blackbox_test ${p#mbui/}/$n.whitebox_test"
 done
+# (and ui's blackbox tests (its *_test.mbt: few, quick to run): their program compiled without optimising took half the
+# time and ran as fast, on Studio's four jobs 14.7 s of compile to 6.8, the run 4.6 s either way; ui's whitebox tests
+# so ran three times as long, kept optimised, 2026-11-04)
+case " $pkgs " in *" mbui/ui "*) light="$light ui/ui.blackbox_test" ;; esac
 export MBC_LIGHT_TESTS="$light"
 F='^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │'
 moon_test_native "${args[@]}" 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}

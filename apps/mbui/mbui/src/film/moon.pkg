@@ -8,5 +8,5 @@ import {
 }
 
 options(
-  targets: { "film_native.mbt": [ "native" ], "film_js.mbt": [ "js" ] },
+  targets: { "film_native.mbt": [ "native" ], "film_js.mbt": [ "js" ], "film_wasm.mbt": [ "wasm" ] },
 )

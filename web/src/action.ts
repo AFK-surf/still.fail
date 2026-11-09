@@ -1,5 +1,5 @@
 // Buttons observe the core's operation state. Only host work (browser/native APIs) needs a local pending flag.
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "preact/compat";
 import { callDetails, captureCall } from "./core/client.ts";
 import { useTopic } from "./core/react.ts";
 import { doingMatches, failed } from "./doing.ts";

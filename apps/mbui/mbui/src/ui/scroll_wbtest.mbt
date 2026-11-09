@@ -72,11 +72,11 @@ test "the velocity tracker forgets samples over 100 ms old and stops at a 40 ms 
 ///|
 test "the fling spline is Android's (computeSplineInfo)" {
   // the bisection stops within 1e-5 of the time, not at 0
-  approx(spline_positions[0], 0.0, 1.0e-4)
-  approx(spline_positions[10], 0.2740024733220569, 1.0e-9)
-  approx(spline_positions[35], 0.7217749311525871, 1.0e-9)
-  approx(spline_positions[70], 0.9567898524767604, 1.0e-9)
-  approx(spline_positions[100], 1.0, 0.0)
+  approx(@view.spline_positions[0], 0.0, 1.0e-4)
+  approx(@view.spline_positions[10], 0.2740024733220569, 1.0e-9)
+  approx(@view.spline_positions[35], 0.7217749311525871, 1.0e-9)
+  approx(@view.spline_positions[70], 0.9567898524767604, 1.0e-9)
+  approx(@view.spline_positions[100], 1.0, 0.0)
 }
 
 ///|
@@ -142,9 +142,9 @@ fn rows_view(n : Int) -> (Ctx) -> Unit {
       let id = c.id("row")
       c.box(h=Px(50.0), bg=0xEEEEEEFFL, id~, fn() { c.text("row \{i}") |> ignore })
       |> ignore
-      if c.clicked(id) {
+      c.on_press(id, fn() {
         clicks.push(i)
-      }
+      })
     })
     |> ignore
   }
@@ -164,7 +164,7 @@ fn swipe(t : Tester, y0 : Double, dy : Double, steps : Int) -> Unit {
 
 ///|
 /// The list's own motion run to its end (its fling, its overscroll going back, its scroll bar faded: what it said as
-/// it set out, scroll_path.mbt), and nothing after.
+/// it set out, @view's list_motion.mbt), and nothing after.
 fn run_to_rest(t : Tester) -> Unit {
   let r = t.rest_of("a list")
   if r > t.time() {
@@ -231,6 +231,50 @@ test "Android: the drag starts where the slop ends, nothing jumps or is lost" {
   m.touch(1, 200.0, 490.0)
   m.frame(ms=0.0)
   approx(m.list_offset(), 4.0, 1.0e-9)
+}
+
+///|
+/// The host's fingers (`phase`, the system's id, y; all at x 200), each half a drag step after the one before, and
+/// where the list stands after each.
+fn fingers_on_list(events : Array[(Int, Int, Double)]) -> Array[Double] {
+  let t = Tester::new(rows_view(100), platform=2)
+  let stands = []
+  for e in events {
+    t.advance(drag_step_ms / 2.0)
+    t.touch_raw(e.0, e.1, 200.0, e.2, t.time())
+    t.frame(ms=0.0)
+    stands.push(t.list_offset())
+  }
+  stands
+}
+
+///|
+test "Android: a second finger down on a dragged list leads it, and the first let go, nothing jumps (2026-11-08 左子健: 两个手指协同滚动页面的时候体验会很奇怪)" {
+  let stands = fingers_on_list([
+    (0, 7, 500.0),
+    (1, 7, 480.0),
+    // the second down, 300 above the first: the list follows it, not the first
+    (0, 9, 200.0),
+    (1, 9, 190.0),
+    (1, 7, 470.0),
+    // the first let go: the second goes on from where it is
+    (2, 7, 470.0),
+    (1, 9, 185.0),
+    (1, 9, 175.0),
+  ])
+  assert_eq(stands, [0.0, 12.0, 12.0, 22.0, 22.0, 22.0, 27.0, 37.0])
+}
+
+///|
+test "Android: the first finger let go before the slop, the second's moves start the drag from where it is" {
+  let stands = fingers_on_list([(0, 7, 500.0), (0, 9, 200.0), (2, 7, 500.0), (1, 9, 195.0), (1, 9, 188.0)])
+  assert_eq(stands, [0.0, 0.0, 0.0, 0.0, 4.0])
+}
+
+///|
+test "Android: a second finger let go on a list it led, the first leads again from where it is" {
+  let stands = fingers_on_list([(0, 7, 500.0), (1, 7, 480.0), (0, 9, 200.0), (1, 9, 190.0), (2, 9, 190.0), (1, 7, 470.0)])
+  assert_eq(stands, [0.0, 12.0, 12.0, 22.0, 22.0, 32.0])
 }
 
 ///|
@@ -433,6 +477,25 @@ test "iOS: pulled past the top on a rubber band, and back" {
 }
 
 ///|
+test "iOS: a fling into the end bounces past it on the rubber band and back" {
+  let t = Tester::new(rows_view(40), platform=1)
+  swipe(t, 700.0, -24.0, 12)
+  t.draw()
+  // (each of the display's frames for 1.5 s, the rows moved past the end at their furthest kept)
+  let mut furthest = 0.0
+  let end = t.time() + 1500.0
+  while t.time() < end {
+    t.frame()
+    furthest = dmin(furthest, t.list_state().over_offset())
+  }
+  // (a fling met at about 1.25 points a ms: past the end as far as the critically damped band takes it, ~29 points)
+  assert_true(furthest < -20.0, msg="furthest past the end \{furthest}")
+  run_to_rest(t)
+  approx(t.list_offset(), 40.0 * 50.0 - 844.0, 1.0e-6)
+  approx(t.list_state().over_offset(), 0.0, 0.0)
+}
+
+///|
 test "the desktop: a mouse drag past the top coasts into it and stops there, nothing stretches" {
   let t = Tester::new(rows_view(40))
   swipe(t, 300.0, 20.0, 10)
@@ -511,6 +574,58 @@ test "a list dragged again once the frames no longer say a drag is the pointer's
   swipe(t, 700.0, -24.0, 12)
   t.frame()
   assert_true(t.list_offset() > 200.0)
+}
+
+///|
+/// A desktop's list (the mouse drags no list) whose rows hold what else takes a press: a box scrolled sideways (a code
+/// block, a table) and a row swiped across (a drag area along its row).
+fn desk_rows_with_others(at : Ref[Double]) -> (Ctx) -> Unit {
+  fn(c) {
+    c.mouse_drags_lists(false)
+    c.list("l", 100, 50.0, fn(i) {
+      if i == 2 {
+        // (where it is scrolled to, read where it is built: its key is the row's)
+        at.val = c.sideways_at("wide")
+        c.sideways("wide", fn() {
+          c.rich([plain("x".repeat(400))], size=10.0, wrap=false) |> ignore
+        })
+        |> ignore
+      } else if i == 4 {
+        let id = c.id("swiped")
+        c.drag_on(id, axis=Horizontal)
+        c.box(h=Px(50.0), id~, fn() { c.text("swiped row") |> ignore }) |> ignore
+      } else {
+        c.box(h=Px(50.0), fn() { c.text("row \{i}") |> ignore }) |> ignore
+      }
+    })
+    |> ignore
+  }
+}
+
+///|
+test "desktop: the mouse dragged up or down on a code block or a swiped row in a list drags the list no more than on a row (2026-11-05 用户: codeblock/table 啥的，鼠标是可以拖动导致 chat 页面滚动的)" {
+  let at = Ref::new(0.0)
+  let t = Tester::new(desk_rows_with_others(at), w=900.0, h=800.0)
+  t.draw()
+  // on the sideways box's row (its third row: 100 to 150), dragged up: the list stands
+  let (_, y, _, _) = t.rect_of("xxxx").unwrap()
+  t.drag(200.0, y + 5.0, 200.0, y - 300.0)
+  t.frame()
+  assert_eq(t.list_offset(), 0.0)
+  // dragged sideways there: the box scrolls, the list stands
+  t.drag(250.0, y + 5.0, 50.0, y + 5.0)
+  t.draw()
+  assert_true(at.val > 150.0)
+  assert_eq(t.list_offset(), 0.0)
+  // on the swiped row, dragged up: the list stands
+  let (_, sy, _, _) = t.rect_of("swiped row").unwrap()
+  t.drag(200.0, sy + 5.0, 200.0, sy - 300.0)
+  t.frame()
+  assert_eq(t.list_offset(), 0.0)
+  // the wheel scrolls it as ever
+  t.wheel(200.0, 400.0, 300.0)
+  run_to_rest(t)
+  assert_true(t.list_offset() > 0.0)
 }
 
 ///|

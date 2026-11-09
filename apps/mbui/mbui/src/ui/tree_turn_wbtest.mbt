@@ -192,7 +192,7 @@ test "a node turned by the clock let go: nothing reads the clock for it any more
   let shown = @signals.signal(true, same=fn(a, b) { a == b })
   let t = Tester::new(fn(_c) {  }, w=400.0, h=300.0)
   set_view_app(fn(root) {
-    root.show(fn() { shown.get() }, fn(b) {
+    root.show(at_once=true, fn() { shown.get() }, fn(b) {
       b.width(Is(Some(40.0))).height(Is(Some(10.0))).lines(Is(turn_bar)).turn(By(fn() { b.cycle(800.0) * 4.0 * quarter })) |> ignore
     })
   })

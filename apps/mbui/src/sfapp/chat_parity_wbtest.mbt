@@ -1,8 +1,8 @@
 // What a chat offers as Android's does, over the fixture's chat with its views edited for each case: its station's tag
-// opens the station's card (PageParts.kt ChatStationChip), a notice's word installs a runtime or reports a failure,
-// one about a profile leads to it, one saying a chat was opened links to it (Chat.kt SystemNotice), a waiting message's
-// line installs (BlockedLine), a link to an archived chat reads as its title and its card says so (ChatRef.tsx), a
-// Slack user's name in a history offers 这是我 (History.kt SlackName), and the chat's sheet opens it in Slack or Feishu.
+// opens the station's card, a notice's word installs a runtime or reports a failure,
+// one about a profile leads to it, one saying a chat was opened links to it, a waiting message's
+// line installs (BlockedLine), a link to an archived chat reads as its title and its card says so, a
+// Slack user's name in a history offers 这是我, and the chat's sheet opens it in Slack or Feishu.
 
 ///|
 /// `v` with `more` said over its fields (an object; anything else as it is).
@@ -49,21 +49,21 @@ fn edited_core(
   mode : String,
   edit : (String, Json) -> Json,
   answer? : (String) -> Json = fn(_) { Json::object({}) },
-  epoch? : Ref[Int] = Ref::new(0),
+  epoch? : @signals.Signal[Int] = @signals.signal(0),
   platform? : Int = 2,
 ) -> @ui.Tester {
   new_run()
   let base = fixture(mode)
   let src : Source = {
     ..base,
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
-      // (a change the test makes is a new version of what the core says: made up as it is read, followed by its
-      // version, as the core's by what it says)
-      topic_as_read(name, params, match t.value {
-        Some(v) => { ..t, value: Some(edit(name, v)), version: t.version + epoch.val }
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
+      // (a change the test makes is a new version of what the core says: `epoch` set as it makes it, followed as the
+      // core's is)
+      match t.value {
+        Some(v) => { ..t, value: Some(edit(name, v)), version: t.version + epoch.get() }
         None => t
-      })
+      }
     },
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
@@ -134,10 +134,12 @@ test "a failure the viewer may report: 上报 asks first, then reports it and sa
   t.run_for(@kit.presence_in_ms)
   // the confirm's own 上报: its words alone on their node (the notice's is in a rich line of its own)
   let (x, y) = words_node(t, "上报").unwrap()
+  let felt = t.haptics().length()
   t.tap(x, y)
   t.frame()
   let sent = named(calls, "chat.report")
   assert_eq(sent.length(), 1)
+  assert_eq(t.haptics()[felt:].to_array(), [@ui.Confirm])
   assert_eq(number(Some(sent[0].params), "seq"), 9.0)
   assert_eq(number(Some(sent[0].params), "thread"), 7.0)
   assert_eq(text(Some(sent[0].params), "station"), "ws1/st1")
@@ -146,13 +148,55 @@ test "a failure the viewer may report: 上报 asks first, then reports it and sa
 }
 
 ///|
+test "an overload notice offers to cancel its retry at the notice" {
+  let calls : Array[Made] = []
+  let retrying = Ref::new(true)
+  let epoch = @signals.signal(0)
+  let t = edited_core(
+    calls,
+    "chat",
+    fn(name, v) {
+      if name == "chat" {
+        let notice : Json = if retrying.val {
+          { "failed": true, "words": "模型满载，自动重试，与额度无关", "retrySession": "agent-a" }
+        } else {
+          { "failed": true, "words": "模型满载，自动重试，与额度无关" }
+        }
+        with_chat_message(v, 9.0, [("notice", notice), ("reportable", false)])
+      } else {
+        v
+      }
+    },
+    epoch~,
+  )
+  for _ in 0..<6 {
+    if t.find("模型满载") is Some(_) {
+      break
+    }
+    t.wheel(195.0, 400.0, -300.0)
+  }
+  t.tap_text("取消")
+  let sent = named(calls, "session.cancelRetry")
+  assert_eq(sent.length(), 1)
+  assert_eq(text(Some(sent[0].params), "station"), "ws1/st1")
+  assert_eq(text(Some(sent[0].params), "key"), "agent-a")
+  assert_eq(number(Some(sent[0].params), "thread"), 7.0)
+  assert_eq(number(Some(sent[0].params), "seq"), 9.0)
+  retrying.val = false
+  epoch.set(epoch.get() + 1)
+  t.frame()
+  t.run_for(@ui.row_size_ms)
+  assert_true(t.find("取消") is None, msg="the action leaves once the retry is over")
+}
+
+///|
 test "a notice that a runtime is missing: its word installs it (software.update)" {
   let calls : Array[Made] = []
   let t = edited_core(calls, "chat", fn(name, v) {
     if name == "chat" {
       with_chat_message(v, 9.0, [
-        ("text", "Studio 上没有 codex。"),
-        ("notice", { "failed": false, "words": "Studio 上没有 codex" }),
+        ("text", "Willow 上没有 codex。"),
+        ("notice", { "failed": false, "words": "Willow 上没有 codex" }),
         ("install", { "runtime": "codex", "state": "missing", "title": "codex", "action": "安装" }),
       ])
     } else {
@@ -160,7 +204,7 @@ test "a notice that a runtime is missing: its word installs it (software.update)
     }
   })
   for _ in 0..<6 {
-    if t.find("Studio 上没有 codex") is Some(_) {
+    if t.find("Willow 上没有 codex") is Some(_) {
       break
     }
     t.wheel(195.0, 400.0, -300.0)
@@ -180,7 +224,7 @@ test "a notice about a profile: what went wrong (after its ：) leads to the pro
       // (the core says where the profile's link begins: after the ：)
       with_chat_message(v, 9.0, [
         ("profile", "p1"),
-        ("notice", { "failed": true, "words": "Studio 上 codex 的登录已失效：请在设置里重新登录", "linkAt": 22 }),
+        ("notice", { "failed": true, "words": "Willow 上 codex 的登录已失效：请在设置里重新登录", "linkAt": 22 }),
       ])
     } else {
       v
@@ -203,7 +247,8 @@ test "a notice about a profile: what went wrong (after its ：) leads to the pro
 test "a notice that a chat was opened: its line is its Markdown drawn, the chat's chip in it, and tapped it opens that chat" {
   let calls : Array[Made] = []
   let link = "https://app.still.fail/o/ws1/st1/s-c2"
-  // (as the station says it in a still.fail chat, sessions/opened.ts sayOpened, and the core's tree of its words)
+  // (as the station says it in a still.fail chat, sessions/opened.ts sayOpened, and the core's tree of its words: its
+  // link to a chat, as it says, refLinks.ts linkTo)
   let words = "已创建对话：[共享调试：配对后连不上](\{link})"
   let t = edited_core(
     calls,
@@ -217,7 +262,7 @@ test "a notice that a chat was opened: its line is its Markdown drawn, the chat'
             {
               "failed": false,
               "words": Json::string(words),
-              "md": [["p", [[0, 6], ["a", [[7, 18]], { "href": Json::string(link) }]]]],
+              "md": [["p", [[0, 6], ["a", [[7, 18]], { "href": Json::string(link), "to": { "chat": true } }]]]],
             },
           ),
         ])
@@ -256,7 +301,7 @@ test "an agent's link to an archived chat written bare: its title as the core sa
         // (the core's tree of its words, and the chats they link to as their lists have them: views.ts drawn)
         with_chat_message(v, 11.0, [
           ("text", Json::string(words)),
-          ("md", [["p", [[0, 2], ["a", [[2, 40]], { "href": Json::string(link) }]]]]),
+          ("md", [["p", [[0, 2], ["a", [[2, 40]], { "href": Json::string(link), "bare": true, "to": { "chat": true } }]]]]),
           ("chats", [{ "href": Json::string(link), "title": "旧的对话", "archived": true, "note": "已归档" }]),
         ])
       } else {
@@ -273,6 +318,26 @@ test "an agent's link to an archived chat written bare: its title as the core sa
   t.move(x + w / 2.0, y + h / 2.0)
   t.run_for(@sfpages.hover_open_ms * 2.0)
   assert_true(t.find("已归档") is Some(_), msg="its card: that it is archived")
+}
+
+///|
+test "a link to one message of a chat written bare: the chat's title, not its address" {
+  let calls : Array[Made] = []
+  let link = "https://app.still.fail/o/ws1/st1/c-old?message=2"
+  let words = "看 \{link}"
+  let t = edited_core(calls, "chat", fn(name, v) {
+    if name == "chat" {
+      with_chat_message(v, 11.0, [
+        ("text", Json::string(words)),
+        ("md", [["p", [[0, 2], ["a", [[2, 50]], { "href": Json::string(link), "bare": true, "to": { "chat": true } }]]]]),
+        ("chats", [{ "href": Json::string(link), "title": "旧的对话" }]),
+      ])
+    } else {
+      v
+    }
+  })
+  assert_true(t.find("看 @旧的对话") is Some(_), msg="its title, not its link")
+  assert_true(t.find(link) is None)
 }
 
 ///|
@@ -312,22 +377,26 @@ test "a Slack user's name in a history: 这是我 binds them to the viewer (slac
 }
 
 ///|
-test "the chat's sheet: one from Slack or Feishu opens there" {
-  let calls : Array[Made] = []
-  let t = edited_core(calls, "chat-info", fn(name, v) {
-    if name == "chat" {
-      with_fields(v, [
-        ("slackUrl", "https://example.slack.com/archives/C1/p1"),
-        ("feishuUrl", "https://example.feishu.cn/client/chat/open?openChatId=oc_1"),
-      ])
-    } else {
-      v
-    }
-  })
-  t.tap_text("在飞书中打开")
-  assert_true(t.opened().contains("https://example.feishu.cn/client/chat/open?openChatId=oc_1"))
-  t.tap_text("在 Slack 中打开")
-  assert_true(t.opened().contains("https://example.slack.com/archives/C1/p1"))
+test "the chat's menu: one from Slack or Feishu opens there" {
+  for (words, url) in [
+    ("在飞书中打开", "https://example.feishu.cn/client/chat/open?openChatId=oc_1"),
+    ("在 Slack 中打开", "https://example.slack.com/archives/C1/p1"),
+  ] {
+    let calls : Array[Made] = []
+    let t = edited_core(calls, "chat-actions", fn(name, v) {
+      if name == "chat" {
+        with_fields(v, [
+          ("slackUrl", "https://example.slack.com/archives/C1/p1"),
+          ("feishuUrl", "https://example.feishu.cn/client/chat/open?openChatId=oc_1"),
+        ])
+      } else {
+        v
+      }
+    })
+    open_share(t)
+    t.tap_text(words)
+    assert_true(t.opened().contains(url), msg=words)
+  }
 }
 
 ///|
@@ -340,9 +409,9 @@ test "a station's failed update stays out of the chat bar even when its notice w
           "stationUpdate",
           {
             "tone": "trouble",
-            "text": "Studio 更新失败",
+            "text": "Willow 更新失败",
             "label": "更新失败",
-            "station": "Studio",
+            "station": "Willow",
             "detail": "更新时正在运行的 agent 会稍后继续。",
             "from": "1.2.0",
             "to": "1.3.0",

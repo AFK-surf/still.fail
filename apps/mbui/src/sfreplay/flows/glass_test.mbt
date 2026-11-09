@@ -1,4 +1,4 @@
-// 29-glass (e2e/traces/glass.trace: Mini1 against the local still.fail, 92 messages): the chat under its frosted
+// 29-glass (e2e/traces/glass.trace: a local still.fail, 92 messages): the chat under its frosted
 // glass, the top bar and the composer glass over the messages. Four long messages sent from the composer, enough that
 // the first runs on under the top bar's glass; scrolled up, the last runs under the composer's. (The end-to-end run's
 // pictures had the glass's rows not flat; here, the frame's own frosted glass over the words.)
@@ -42,6 +42,8 @@ let glass_window_h : Double = 700.0
 test "29-glass" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace("glass"), seed~, h=glass_window_h)
+    // The recording used a Mac window whose buttons occupy the app's top row.
+    f.t.set_window_inset(true)
     f.tap("端到端测试")
     f.run_to(@ui.nav_rest())
     f.see("发消息")
@@ -56,7 +58,7 @@ test "29-glass" {
       // its answer come (in the words sent and in the agent's message)
       f.see_n(2, glass_reply(i))
     }
-    // (what came with them in the list in its turn: turns.mbt, one at a time)
+    // (one at a time)
     let turns = f.t.rest_of("a chat's list turns")
     if turns > f.t.time() && turns < @double.infinity {
       f.run_to(turns)
@@ -71,13 +73,25 @@ test "29-glass" {
     }
     // the first scrolled to run on under the top bar's glass (how far it went up past it the layout's: the composer's
     // room under the list, the words' lines)
+    // The list virtualizes messages above the viewport. Bring the first one into the tree before measuring it.
+    for _ in 0..<12 {
+      match f.t.rect_of(glass_words[0]) {
+        Some(_) => break
+        None => ()
+      }
+      f.wheel(-300.0)
+      let eased = f.t.rest_of("wheel ease")
+      if eased > f.t.time() && eased < @double.infinity {
+        f.run_to(eased)
+      }
+    }
     let (_, top_y, _, top_h, _, _) = f.t.drawn_glass().filter(fn(g) { g.4 == 5 && g.1 < 100.0 })[0]
     match f.t.rect_of(glass_words[0]) {
       Some((_, y, _, h)) => {
         // (whole points: as the scripted run is told it)
         let down = (top_y + top_h / 2.0 - (y + h / 2.0)).to_int().to_double()
         if down.abs() >= 1.0 {
-          f.wheel(-down)
+          f.wheel_aligned(-down)
           let eased = f.t.rest_of("wheel ease")
           if eased > f.t.time() && eased < @double.infinity {
             f.run_to(eased)
@@ -94,6 +108,21 @@ test "29-glass" {
       f.run_to(eased)
     }
     // scrolled up: what was above runs under the composer's
+    // Align a visible message with the composer's pane; fixed scrolling can stop between messages.
+    let (_, bottom_y, _, bottom_h, _, _) = f.t.drawn_glass().filter(fn(g) { g.4 == 5 && g.1 > 350.0 })[0]
+    match f.t.rect_of(glass_words[2]) {
+      Some((_, y, _, h)) => {
+        let down = (bottom_y + bottom_h / 2.0 - (y + h / 2.0)).to_int().to_double()
+        if down.abs() >= 1.0 {
+          f.wheel_aligned(-down)
+          let rest = f.t.rest_of("wheel ease")
+          if rest > f.t.time() && rest < @double.infinity {
+            f.run_to(rest)
+          }
+        }
+      }
+      None => ()
+    }
     assert_true(under_glass(f, top=false))
     f.end()
   })

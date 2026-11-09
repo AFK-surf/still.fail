@@ -1,4 +1,4 @@
-// Push notifications (docs/notifications.md): devices register where they can be pushed to (a browser's Web Push
+// Push notifications: devices register where they can be pushed to (a browser's Web Push
 // subscription, the Android app's FCM token, the iOS app's APNs token) with the signed-in account and session; a station sends the notices of
 // its chats, signed with its key, naming who they are for by email; still.fail cloud makes each one's text and pushes it
 // to the devices of those people who are members of the station's workspace (the one the notices say, for a station in
@@ -12,6 +12,7 @@ import { apnsKey, apnsPush } from "./apns";
 import { fcmPush, serviceAccount } from "./fcm";
 import { langOf, requestLang, type Lang } from "./i18n.ts";
 import { line, noticeBodyFor, shown, showsOf, type Shows } from "./noticeText";
+import { FORMER_NOTICE_PREFIX } from "./compat";
 import { stationSender } from "./tracing";
 import { validAuthSecret, validPoint, webPush, type Outcome, type Vapid } from "./webpush";
 
@@ -121,7 +122,8 @@ export async function stationNotify(request: Request, env: Env): Promise<Respons
   } catch {
     return reply({ error: "too_large" }, 413);
   }
-  const station = await stationSender(request, env, body, "station-notify-v1");
+  // (stations from before 2026-11-05 sign them as ember-station-notify-v1)
+  const station = await stationSender(request, env, body, "station-notify-v1", [FORMER_NOTICE_PREFIX]);
   if (!station) return reply({ error: "invalid_signature" }, 401);
   let notices: Notice[];
   let workspace: string | null = null;

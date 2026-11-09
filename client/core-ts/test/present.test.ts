@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { conform } from "../src/conform.ts";
-import { holdLanguage } from "../src/i18n.ts";
+import { holdLanguage, setCurrent } from "../src/i18n.ts";
 import * as p from "../src/present.ts";
 import { packetsSince } from "../src/station/topics.ts";
 
@@ -10,6 +10,47 @@ holdLanguage();
 // deno-lint-ignore no-explicit-any
 type J = any;
 const GIB = 1024 ** 3;
+
+test("an incomplete Codex is not labelled up to date", () => {
+  const raw = { id: "codex", name: "Codex", installed: true, version: "0.166.0", latest: "0.166.0", newer: false, downgrade: false, updatable: false, repairable: true, state: "idle" };
+  const shown = p.software(raw) as J;
+  assert.equal(shown.tipText, "");
+  assert.equal((conform("SoftwareVersion", shown) as J).ok.repairable, true);
+});
+
+test("reset credits show the expiries known for each available card", () => {
+  const now = 1_900_000_000_000;
+  const day = 86_400_000;
+  const c = { now, offsetMin: 0 };
+  const raw = { state: "ok", windows: [], detail: null, checkedAt: now, resetCount: 3, resetExpiries: [now + 8 * day, now + 3 * day, now + 3 * day] };
+  let shown = p.times(raw, c) as J;
+  assert.equal(shown.resetText, "剩余 3 次 · 3 天后、3 天后、8 天后到期");
+  const shaped = conform("Quota", shown) as J;
+  assert.deepEqual(shaped.ok.resetExpiries, raw.resetExpiries);
+  assert.equal(shaped.ok.resetText, shown.resetText);
+  assert.equal((p.times({ ...raw, resetExpiries: [now + day + 19 * 3_600_000] }, c) as J).resetText, "剩余 3 次 · 1 天 19 小时后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + day] }, c) as J).resetText, "剩余 3 次 · 1 天后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + day - 1] }, c) as J).resetText, "剩余 3 次 · 23 小时 59 分钟后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 6 * 3_600_000 + 35 * 60_000] }, c) as J).resetText, "剩余 3 次 · 6 小时 35 分钟后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 3_600_000] }, c) as J).resetText, "剩余 3 次 · 1 小时后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 5 * 60_000] }, c) as J).resetText, "剩余 3 次 · 5 分钟后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 1] }, c) as J).resetText, "剩余 3 次 · 1 分钟内到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 60_000 - 1] }, c) as J).resetText, "剩余 3 次 · 1 分钟内到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 60_000] }, c) as J).resetText, "剩余 3 次 · 1 分钟后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now + 90_000] }, c) as J).resetText, "剩余 3 次 · 1 分钟后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now - 1] }, c) as J).resetText, "剩余 3 次 · 已到期");
+  assert.equal((p.times({ ...raw, resetExpiries: [now - 1, now + day] }, c) as J).resetText, "剩余 3 次 · 已到期 · 1 天后到期");
+  assert.equal((p.times({ ...raw, resetExpiries: undefined }, c) as J).resetText, "剩余 3 次");
+  assert.equal((p.times({ ...raw, resetCount: 0 }, c) as J).resetText, "剩余 0 次");
+  try {
+    setCurrent("en");
+    shown = p.times(raw, c) as J;
+    assert.equal(shown.resetText, "3 left · Expiry: in 3 days, in 3 days, in 8 days");
+    assert.equal((p.times({ ...raw, resetExpiries: [now + 1] }, c) as J).resetText, "3 left · Expiry: in 1 min");
+  } finally {
+    setCurrent("zh");
+  }
+});
 
 test("a_connection_is_said_in_words_and_only_what_is_off_is_coloured", () => {
   const unnamed = () => null;
@@ -85,6 +126,26 @@ test("profile_recovery_follows_states_and_clears_after_success", () => {
   q = p.profile(q);
   assert.equal(q.trouble.title, "账号被停用");
   assert.equal(q.checkTone, "red");
+});
+
+test("Codex allowance errors saved by older stations are explained; recovery follows the account check", () => {
+  const raw = `codex ${JSON.stringify({ code: -32603, message: 'failed to fetch codex rate limits: GET https://chatgpt.com/backend-api/wham/usage failed: 401 Unauthorized; body={"error":{"code":"token_revoked"}}' })}`;
+  const base = { runtime: "codex", access: { kind: "subscription" }, check: { state: "ok" }, quota: { state: "unavailable", detail: raw, windows: [] } };
+  const legacy = p.profile(base);
+  assert.equal(legacy.quota.detail, "ChatGPT 登录已失效，请重新登录");
+  assert.equal(legacy.quota.reason, undefined);
+  assert.equal(legacy.trouble.action, "quota", "an old station's error does not override its check");
+  assert.equal(base.quota.detail, raw, "the stored station response is not mutated");
+  const current = p.profile({ ...base, check: { state: "login", detail: "登录已失效" }, quota: { state: "unavailable", detail: "登录已失效", windows: [] } });
+  assert.equal(current.trouble.action, "login");
+  assert.equal(current.trouble.detail, "登录已失效");
+  const machine = p.profile({ ...base, check: { state: "login" }, machine: true });
+  assert.equal(machine.trouble.action, "command");
+  const later = p.profile({ ...base, quota: { state: "ok", windows: [] } });
+  assert.equal(later.trouble, null);
+  const busy = p.profile({ ...base, quota: { ...base.quota, detail: `codex ${JSON.stringify({ message: "failed to fetch codex rate limits: GET /usage failed: 503 Service Unavailable; body=private" })}` } });
+  assert.equal(busy.quota.detail, "ChatGPT 暂时无法提供额度信息（HTTP 503）");
+  assert.equal(busy.trouble.action, "quota");
 });
 
 test("a_profile_says_what_it_can_do_from_where_its_provider_speaks", () => {
@@ -172,7 +233,10 @@ test("a_session_stands_where_its_process_and_last_turn_say", () => {
   said = p.session(said);
   assert.equal(said.statusText, "等待：CI 跑完");
   assert.equal(p.waiting({ process: "running", lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5 } }), null);
-  assert.equal(p.waiting({ process: "warm", pending: 1, lastTurn: { declared: "waiting", endedAt: 5 } }), null);
+  // Given a message while it waits: still at what it waits on until the turn the message begins, not queued between.
+  assert.deepEqual(p.waiting({ process: "warm", pending: 1, lastTurn: { declared: "waiting", endedAt: 5 } }), { since: 5, seconds: null, text: "等待中" });
+  assert.equal(st({ process: "warm", pending: 1, lastTurn: { declared: "waiting", outcome: "completed", endedAt: 5 } }), "running");
+  assert.equal(st({ process: "warm", pending: 1, lastTurn: { declared: "final", outcome: "completed", endedAt: 5 } }), "queued");
   assert.equal(st({}), "idle");
 });
 
@@ -225,9 +289,19 @@ test("the_last_speaker_is_named_and_an_agents_state_rides_on_it", () => {
   });
   const agent = p.lastBy(row("agent", "k"), me, [], members);
   assert.deepEqual([agent.name, agent.state], ["DeepSeek Flash", "block"]);
+  const switched = row("agent", "k");
+  switched.last.agentIdentity = { model: "claude-opus-5-5", runtime: "claude" };
+  const old = p.lastBy(switched, me, [], members);
+  assert.deepEqual([old.name, old.runtime], ["Opus 5.5", "claude"]);
+  switched.last.agentIdentity = { model: null, runtime: "claude" };
+  const defaultModel = p.lastBy(switched, me, [], members);
+  assert.deepEqual([defaultModel.model, defaultModel.runtime], [null, "claude"]);
   const legacy = row("agent", "k");
   delete legacy.last.agentIdentity;
   assert.equal(p.lastBy(legacy, me, [], members).name, "GPT-6 Astra");
+  legacy.last.authorRuntime = "claude";
+  legacy.last.authorModel = "claude-opus-5-5";
+  assert.deepEqual([p.lastBy(legacy, me, [], members).name, p.lastBy(legacy, me, [], members).runtime], ["Opus 5.5", "claude"]);
   const other = p.lastBy(row("person", "b@x.com"), me, [], members);
   assert.deepEqual([other.name, other.picture, other.mine], ["阿二", "https://p/b", false]);
   assert.equal(p.lastBy(row("person", "A@x.com"), me, [], members).name, "你");
@@ -239,7 +313,7 @@ test("the_last_speaker_is_named_and_an_agents_state_rides_on_it", () => {
 });
 
 test("a_profiles_models_come_by_series", () => {
-  let q: J = { models: ["claude-opus-5-5"], check: { models: ["claude-sonnet-5", "claude-opus-4-8", "claude-opus-5-5", "my-model", "claude-fable-5-1"] } };
+  let q: J = { models: ["claude-opus-5-5", "claude-sonnet-5", "claude-opus-4-8", "my-model", "claude-fable-5-1"], check: { models: ["claude-sonnet-5", "claude-opus-4-8", "claude-opus-5-5", "claude-fable-5-1"] } };
   q = p.profile(q);
   assert.deepEqual(q.series, [
     { name: "Fable", models: ["claude-fable-5-1"] },
@@ -260,23 +334,28 @@ test("how_a_turn_ended_says_itself_in_words", () => {
   assert.equal(words({ declared: "block", outcome: "completed" }), "需要你处理");
   assert.equal(words({ declared: "block", ending: "need_decision", outcome: "completed" }), "需要你处理");
   assert.equal(words({ outcome: "failed", detail: "rate_limit: You've hit your limit" }), "出错：额度已用完");
-  assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出错：登录失效");
-  assert.equal(words({ outcome: "aborted" }), "出错：被停止");
+  // A model's own limit is the model's: the account's quota bars still show room (#4365).
+  assert.equal(words({ outcome: "failed", detail: "rate_limit: You've reached your Fable limit. Switch to another model, or manage usage credits at https://claude.ai/settings/usage, to continue." }), "出错：Fable 自身限额已用完");
+  assert.equal(words({ outcome: "failed", detail: "auth: 401" }), "出错：账号认证失败");
+  assert.equal(words({ outcome: "aborted" }), "已停止");
   assert.equal(words({ outcome: "completed" }), "出错：意外停止");
   // Without its lead (the 待处理 list's line, its dot says that much): what it needs, why it stopped.
   const what = (turn: J) => p.rowStateLine({ agents: [p.session({ process: "warm", lastTurn: turn })] })?.[2];
   assert.equal(what({ declared: "block", ending: "need_help", need: "要 Stripe 的测试 key", outcome: "completed" }), "要 Stripe 的测试 key");
   assert.equal(what({ declared: "block", outcome: "completed" }), "需要你处理");
-  assert.equal(what({ outcome: "failed", detail: "auth: 401" }), "登录失效");
+  assert.equal(what({ outcome: "failed", detail: "auth: 401" }), "账号认证失败");
   assert.equal(what({ outcome: "aborted" }), "被停止");
   assert.equal(what({ outcome: "completed" }), "意外停止");
+  const stopped = p.session({ process: "warm", lastTurn: { outcome: "aborted" } });
+  const failed = p.session({ process: "warm", lastTurn: { outcome: "failed", detail: "auth: 401" } });
+  assert.equal(p.rowStateLine({ agents: [stopped, failed] }, false, (a) => a === stopped)?.[0], "出错：账号认证失败");
   let decided: J = { process: "warm", lastTurn: { declared: "block", ending: "need_decision", outcome: "completed" } };
   decided = p.session(decided);
   assert.equal(decided.mark, "block");
 });
 
 test("a_decision_agent_passes_the_chat_shape", () => {
-  let s: J = { key: "ember:c-decision", runtime: "codex", process: "warm", pending: 0, lastTurn: { kind: "message", startedAt: 1, declared: "block", ending: "need_decision", outcome: "completed" } };
+  let s: J = { key: "chat:c-decision", runtime: "codex", process: "warm", pending: 0, lastTurn: { kind: "message", startedAt: 1, declared: "block", ending: "need_decision", outcome: "completed" } };
   s = p.session(s);
   const agent = { status: p.shownStatus(s), badge: p.markOf(s), session: s, profiles: [], choices: [], attention: [], turns: [], threads: [], jobs: [] };
   const checked = conform("ChatAgent", agent) as J;
@@ -346,19 +425,19 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   const asked = row([done], false);
   asked.card = card;
   // A line that asks for a decision is about no message: the chat leads to what it asks.
-  assert.deepEqual([p.settled(asked), p.rowStateLine(asked)], [false, ["奏 · 域名用哪个？", null, "域名用哪个？", { kind: "decision", text: "奏", rest: " · 域名用哪个？" }]]);
+  assert.deepEqual([p.settled(asked), p.rowStateLine(asked)], [false, ["待处理 · 域名用哪个？", null, "域名用哪个？", { kind: "decision", text: "待处理", rest: " · 域名用哪个？" }]]);
   // A card waiting for the viewer: not ended, its agent's done or not.
   assert.ok(!p.ended(asked));
   asked.agents = [agent(null, "running")];
-  assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
+  assert.equal(p.rowStateText(asked), "待处理 · 域名用哪个？");
   asked.agents = [waits];
-  assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
+  assert.equal(p.rowStateText(asked), "待处理 · 域名用哪个？");
   asked.agents = [helped];
   assert.deepEqual(p.rowStateLine(asked), ["需要你处理：要 key", null, "要 key", { kind: "need", rest: "要 key" }]);
   asked.agents = [agent({ outcome: "failed", detail: "auth: 401" }, "warm")];
-  assert.equal(p.rowStateText(asked), "出错：登录失效");
+  assert.equal(p.rowStateText(asked), "出错：账号认证失败");
   asked.agents = [agent({ declared: "block", ending: "need_decision", outcome: "completed" }, "warm")];
-  assert.equal(p.rowStateText(asked), "奏 · 域名用哪个？");
+  assert.equal(p.rowStateText(asked), "待处理 · 域名用哪个？");
   // Let go by the viewer: the row says nothing of it, its agent asking still.
   asked.card.dismissed = true;
   assert.equal(p.rowStateText(asked), null);
@@ -384,15 +463,19 @@ test("a_chat_with_nothing_left_is_settled_and_says_where_it_stands", () => {
   assert.deepEqual([waits.statusText, waits.statusLead, waits.statusRest], ["等待：CI 跑完", "wait", "CI 跑完"]);
   assert.deepEqual([works.statusLead, works.statusRest], [undefined, undefined]);
   const failed = agent({ outcome: "failed", detail: "auth: 401" }, "warm");
-  assert.deepEqual([failed.statusText, failed.statusLead], ["出错：登录失效", undefined]);
+  assert.deepEqual([failed.statusText, failed.statusLead], ["出错：账号认证失败", undefined]);
   const watching = p.session({ key: "w", process: "warm", pending: 0, lastTurn: { declared: "waiting", ending: "waiting", outcome: "completed", endedAt: 5 }, watch: { every: 60 } });
   assert.deepEqual([watching.statusText, watching.statusLead, watching.statusRest], ["监控中", "watch", "监控中"]);
 });
 
-test("what_a_profile_can_enable_and_which_machine_logins_are_offered", () => {
-  let q: J = { models: ["mine", "b"], check: { models: ["a", "b"] } };
+test("what_a_profile_runs_what_can_be_taken_off_and_which_machine_logins_are_offered", () => {
+  // all it runs (the station's: those named, then the rest its check found); of those named, the one its provider does
+  // not list can be taken off
+  let q: J = { models: ["mine", "b", "a"], named: ["mine", "b"], check: { models: ["a", "b"] } };
   q = p.profile(q);
-  assert.deepEqual(q.available, ["a", "b", "mine"]);
+  assert.deepEqual(q.available, ["mine", "b", "a"]);
+  assert.deepEqual(q.added, ["mine"]);
+  assert.equal(q.modelsText, "3 个模型");
   const c = { now: 0, offsetMin: 0 };
   let o: J = {
     profiles: [{ runtime: "claude", machine: true, models: [] }],
@@ -400,15 +483,18 @@ test("what_a_profile_can_enable_and_which_machine_logins_are_offered", () => {
       { runtime: "claude", loggedIn: true, plan: "max" },
       { runtime: "codex", loggedIn: true, plan: "plus" },
       { runtime: "codex", loggedIn: true, plan: null },
+      { runtime: "codex", loggedIn: true, plan: "unknown" },
       { runtime: "codex", loggedIn: false, plan: "plus" },
       { runtime: "codex", loggedIn: false, plan: "prolite" },
+      { runtime: "codex", loggedIn: false, plan: "pro" },
+      { runtime: "codex", loggedIn: false, plan: "promax" },
       { runtime: "codex", loggedIn: false, plan: "free_workspace" },
     ],
   };
   o = p.decorate({ topic: "overview", station: "w/s" }, o, c);
-  assert.deepEqual(o.machineLogins.map((l: J) => l.offered === true), [false, true, false, false, false, false]);
+  assert.deepEqual(o.machineLogins.map((l: J) => l.offered === true), [false, true, false, false, false, false, false, false, false]);
   // its plan as its vendor names it, for its tag (the web's and the apps' alike)
-  assert.deepEqual(o.machineLogins.map((l: J) => l.planText), ["Max", "Plus", "", "Plus", "Pro Lite", "Free Workspace"]);
+  assert.deepEqual(o.machineLogins.map((l: J) => l.planText), ["Max", "Plus", "", "", "Plus", "Pro 100", "Pro 200", "Pro 500", "Free Workspace"]);
 });
 
 test("a_stations_profiles_come_by_kind_of_account_those_in_trouble_first_in_each", () => {
@@ -514,26 +600,27 @@ test("what_the_clients_show_is_put_in_here", () => {
   const fromSlack = p.person({ id: "slack:c:U1", name: "A", email: "a@x.com", via: "slack", picture: "https://avatars.slack-edge.com/a_72.png" }, me, members);
   assert.equal(fromSlack.shown.picture, "https://avatars.slack-edge.com/a_72.png", "a Slack person's own picture, over their account's");
   let h: J = {
-    hostname: "studio", os: "macOS 26", arch: "arm64", cpus: 8, load: 0.5, uptimeSec: 90_000,
+    hostname: "willow", os: "macOS 26", arch: "arm64", cpus: 8, load: 0.5, uptimeSec: 90_000,
     memory: { usedBytes: 8 * GIB, totalBytes: 32 * GIB, swapUsedBytes: null },
-    disk: { totalBytes: 1000 * GIB, freeBytes: 50 * GIB }, emberRssBytes: 100 * 1024 ** 2,
+    disk: { totalBytes: 1000 * GIB, freeBytes: 50 * GIB }, stationRssBytes: 100 * 1024 ** 2,
   };
   h = p.host(h);
   assert.ok(Number.isInteger(h.meters[0].percent) && Number.isInteger(v.quota.windows[0].left));
   assert.deepEqual([h.summary, h.facts[3]], ["8 核 · 32 GB", "已运行 1 天 1 小时"]);
   assert.deepEqual([h.meters[0].label, h.meters[0].value], ["CPU 负载", "50%"]);
   h.cpuBusy = 0.93;
-  h.cpuModel = "Apple M2 Max";
+  h.cpuModel = "Apple M1 Pro";
   h = p.host(h);
   const cpu = h.meters[0];
-  assert.deepEqual([cpu.label, cpu.percent, cpu.level, cpu.value, cpu.note], ["CPU", 93, "red", "93%", "负载 4.0 · Apple M2 Max"]);
-  assert.deepEqual([h.meters[2].level, h.meters[2].value, h.emberText], ["red", "剩余 50.0 GB / 1000 GB", "still.fail 100 MB"]);
+  assert.deepEqual([cpu.label, cpu.percent, cpu.level, cpu.value, cpu.note], ["CPU", 93, "red", "93%", "负载 4.0 · Apple M1 Pro"]);
+  assert.deepEqual([h.meters[2].level, h.meters[2].value, h.stationText], ["red", "剩余 50.0 GB / 1000 GB", "still.fail 100 MB"]);
   assert.match(h.usage, /^内存 .+ · 磁盘 剩余 50\.0 GB \/ 1000 GB$/);
-  assert.equal(h.identity, "Apple M2 Max · 32 GB · macOS 26");
-  assert.deepEqual(h.details.map((d: J) => `${d.label} ${d.value}`), ["主机名 studio", "芯片 Apple M2 Max · 8 核 · arm64", "已运行 1 天 1 小时", "still.fail 进程占用 100 MB"]);
-  assert.deepEqual([cpu.left, cpu.remaining, cpu.big, cpu.unit, cpu.title, cpu.total], [7, "空闲 7%", "7", "%", "CPU 空闲", "负载 4.0"]);
+  assert.equal(h.identity, "Apple M1 Pro · 32 GB · macOS 26");
+  assert.deepEqual(h.details.map((d: J) => `${d.label} ${d.value}`), ["主机名 willow", "芯片 Apple M1 Pro · 8 核 · arm64", "已运行 1 天 1 小时", "still.fail 进程占用 100 MB"]);
+  assert.deepEqual([cpu.left, cpu.remaining, cpu.big, cpu.unit, cpu.title, cpu.total], [7, "空闲 7%", "7", "%", "CPU 空闲率", "负载 4.0"]);
   const left = h.meters[2];
-  assert.deepEqual([left.left, left.big, left.unit, left.title, left.total], [5, "50.0", "GB", "磁盘剩", "共 1000 GB"]);
+  assert.deepEqual([left.left, left.big, left.unit, left.title, left.total], [5, "50.0", "GB", "可用磁盘", "总磁盘 1000 GB"]);
+  assert.deepEqual([cpu.titleShort, left.totalShort], ["CPU 空闲", "总 1000 GB"]);
 });
 
 test("a_watching_chat_says_what_it_watches_and_what_archiving_it_means", () => {
@@ -553,6 +640,29 @@ test("a_meter_is_drawn_as_an_allowance_to_what_is_left", () => {
   h.memory.usedBytes = 7 * GIB;
   h = p.host(h);
   assert.equal(h.meters[1].remaining, "剩 0.0 G");
+});
+
+test("a station's GPUs are shown separately with only measurements that are known", () => {
+  const one = p.host({ gpus: [{ name: "Apple M1 Pro", cores: 16, busy: 0.21 }] });
+  assert.deepEqual(one.gpus, [{ big: "79", unit: "%", left: 79, level: "ok", title: "GPU 空闲率", titleShort: "GPU 空闲", total: "16 核", model: "Apple M1 Pro" }]);
+  const several = p.host({ gpus: [
+    { name: "NVIDIA RTX 4090", busy: 0.37, memoryUsedBytes: 4 * GIB, memoryTotalBytes: 24 * GIB },
+    { name: "Tesla T4", busy: 0, memoryTotalBytes: 16 * GIB },
+    { name: "GPU without metrics" },
+  ] });
+  assert.deepEqual(several.gpus, [
+    { big: "63", unit: "%", left: 63, level: "ok", title: "GPU 1 空闲率", titleShort: "GPU 1 空闲", total: "显存剩 20/24G", model: "NVIDIA RTX 4090" },
+    { big: "100", unit: "%", left: 100, level: "ok", title: "GPU 2 空闲率", titleShort: "GPU 2 空闲", total: "显存 16G", model: "Tesla T4" },
+    { big: "—", unit: "", left: 100, level: "ok", title: "GPU 3 空闲率", titleShort: "GPU 3 空闲", total: "", model: "GPU without metrics" },
+  ]);
+  assert.deepEqual(p.host({}).gpus, [], "older stations do not say GPUs");
+  assert.deepEqual(p.host({ gpus: null }).gpus, [], "none detected");
+  assert.deepEqual(p.host({ gpus: [{ name: "GPU", busy: -1, memoryUsedBytes: 2 * GIB }] }).gpus,
+    [{ big: "—", unit: "", left: 100, level: "ok", title: "GPU 空闲率", titleShort: "GPU 空闲", total: "显存已用 2G", model: "" }]);
+  assert.deepEqual(p.host({ gpus: [{ name: "AMD Radeon", memoryUsedBytes: 4 * GIB, memoryTotalBytes: 16 * GIB }] }).gpus,
+    [{ big: "12.0", unit: "GB", left: 75, level: "ok", title: "GPU 可用显存", titleShort: "可用显存", total: "总显存 16 GB", model: "AMD Radeon" }]);
+  assert.deepEqual(p.host({ gpus: [{ name: "AMD Radeon", memoryUsedBytes: 17 * GIB, memoryTotalBytes: 16 * GIB }] }).gpus,
+    [{ big: "—", unit: "", left: 100, level: "ok", title: "GPU 空闲率", titleShort: "GPU 空闲", total: "显存 16G", model: "AMD Radeon" }]);
 });
 
 test("loss_is_counted_on_the_way_in_use_and_not_across_a_change_of_it", () => {
@@ -661,6 +771,18 @@ test("a_connect_says_where_it_is_reached_how_it_runs_and_what_switching_it_does"
   assert.deepEqual([same.changed, same.effects, same.action], [false, [], "确认更改"]);
   const all = changes.find((x: J) => x.mode === "single-session" && !x.requireMention);
   assert.equal(all.effects[0], "无需 @：它所在的所有群和私聊中的每条消息都会发送给 agent，用量会明显增加。");
+  // thread mode: a way of its own for a Feishu connect, switched to and from one each by group; Slack's has none
+  const groups = { ...base, mode: "multi-session", feishu: { appId: "cli_1", domain: "feishu" } };
+  const threads = { ...groups, feishu: { ...groups.feishu, threads: true } };
+  assert.equal(p.connect(threads).modeLabel, "每个 thread 一个会话");
+  assert.equal(p.connect(groups).modeLabel, "每个群一个会话");
+  assert.equal(p.modeWords("slack").threads, undefined);
+  const way = (c: J, on: boolean) => p.modeChanges(c, 0).find((x: J) => x.mode === "multi-session" && x.threads === on);
+  assert.deepEqual([way(groups, true).changed, way(groups, false).changed], [true, false]);
+  assert.ok(way(groups, true).effects[0].includes("回复留在 thread 里"));
+  assert.ok(way(threads, false).effects[0].includes("回复发在群里"));
+  assert.ok(way(base, true).effects[0].includes("回复留在 thread 里"));
+  assert.equal(p.modeChanges({ ...base, kind: "slack", feishu: undefined }, 0).length, 3);
 });
 
 test("a_slack_apps_permissions_are_said_in_sections_those_only_admins_allow_marked", () => {

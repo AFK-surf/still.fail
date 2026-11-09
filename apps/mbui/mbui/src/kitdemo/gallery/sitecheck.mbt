@@ -1,4 +1,4 @@
-// The pages' contract (docs/determinism.md, "What is compared, and where"; scripts/host_contract.sh HOST site): on a
+// The pages' contract ("What is compared, and where"; scripts/host_contract.sh HOST site): on a
 // real host, MBUI_SITECHECK=1: a site view and a page's view, each step started by what the page said before it, so
 // nothing waits on a time:
 //   the site's page says what cookies it has at the start (none: a run begins with none, whatever the last left), then

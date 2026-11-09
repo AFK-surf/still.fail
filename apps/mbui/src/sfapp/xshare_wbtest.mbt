@@ -1,19 +1,19 @@
 // Sharing a chat with the viewer's other workspaces on a phone (sfpages' xshare.mbt, its row xshare.mbt) and archiving a
-// chat that keeps watch from its sheet (ChatInfo.kt: asked first), over the fixture's chat.
+// chat that keeps watch from its sheet, over the fixture's chat.
 
 ///|
-/// The chat's sheet over the fixture's chat, its `chat` topic as `over` makes it; calls kept and answered with nothing.
+/// The chat's menu over the fixture's chat, its `chat` topic as `over` makes it; calls kept and answered with nothing.
 fn sheet_core(calls : Array[Made], over? : (Json?) -> Json? = fn(v) { v }) -> @ui.Tester {
   new_run()
-  let base = fixture("chat-info")
+  let base = fixture("chat-actions")
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
       calls.push({ name, params, bytes: None, done, heard: None })
       done(Ok(Json::object({})))
     },
-    topic: fn(name, params) {
-      let t = (base.topic)(name, params)
+    topic_read: fn(name, params) {
+      let t = base.topic(name, params).get().snapshot()
       if name == "chat" {
         { ..t, value: over(t.value) }
       } else {
@@ -21,7 +21,7 @@ fn sheet_core(calls : Array[Made], over? : (Json?) -> Json? = fn(v) { v }) -> @u
       }
     },
   }
-  open_fixture_over("chat-info", src)
+  open_fixture_over("chat-actions", src)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t
@@ -31,7 +31,7 @@ fn sheet_core(calls : Array[Made], over? : (Json?) -> Json? = fn(v) { v }) -> @u
 test "分享给其他 workspace: its row says where; the sheet ticks another and lets their agents send, 完成 says so" {
   let calls : Array[Made] = []
   let t = sheet_core(calls)
-  assert_true(t.find("开源 · 只读") is Some(_))
+  open_share(t)
   t.tap_text("分享给其他 workspace")
   // (the chat's sheet put down, the presenters' sheet up: its own end)
   t.frame()
@@ -55,6 +55,7 @@ test "分享给其他 workspace: its row says where; the sheet ticks another and
 test "分享给其他 workspace: none ticked, their agents cannot be let send" {
   let calls : Array[Made] = []
   let t = sheet_core(calls)
+  open_share(t)
   t.tap_text("分享给其他 workspace")
   // (the chat's sheet put down, the presenters' sheet up: its own end)
   t.frame()
@@ -75,32 +76,10 @@ test "分享给其他 workspace: none ticked, their agents cannot be let send" {
 }
 
 ///|
-test "归档对话 from the sheet: a chat keeping watch is archived only once asked" {
-  let calls : Array[Made] = []
-  let t = sheet_core(calls, over=fn(v) {
-    match v {
-      Some(Object(m)) => {
-        let o = m.copy()
-        o["watch"] = { "ask": "它还在盯着 CI，归档后会继续盯。" }
-        Some(Json::object(o))
-      }
-      v => v
-    }
-  })
-  t.tap_text("归档对话")
-  assert_eq(named(calls, "chat.archive").length(), 0)
-  assert_true(t.find("它还在盯着 CI，归档后会继续盯。") is Some(_))
-  assert_true(t.find("归档「整理发布清单」？") is Some(_))
-  // its 归档, beside 取消
-  let (cx, cy, cw, ch) = t.rect_of("取消").unwrap()
-  t.tap(cx + cw + 40.0, cy + ch / 2.0)
-  assert_eq(named(calls, "chat.archive").length(), 1)
-}
-
-///|
 test "分享给其他 workspace on a phone: its rows a finger's, 完成 across the sheet in a thumb's reach" {
   let calls : Array[Made] = []
   let t = sheet_core(calls)
+  open_share(t)
   t.tap_text("分享给其他 workspace")
   t.frame()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())
@@ -127,6 +106,7 @@ test "分享给其他 workspace on a phone: its rows a finger's, 完成 across t
 test "分享给其他 workspace on a phone: 完成 drawn as the large screen's, reached past its edge" {
   let calls : Array[Made] = []
   let t = sheet_core(calls)
+  open_share(t)
   t.tap_text("分享给其他 workspace")
   t.frame()
   t.run_for(@kit.sheet_rest("sf-present") - t.time())

@@ -1,4 +1,4 @@
-// Slack through the pages (admin/slack.rs): Slack apps made and edited with a person's configuration token, their
+// Slack through the pages: Slack apps made and edited with a person's configuration token, their
 // installs, new connects from tokens, the token check, the people of the connected Slack workspaces, a viewer saying a
 // Slack user is them, and a Slack connect's part of its config entry (`slackEntry`). Editing, deleting and reconnecting
 // a connect are every connect's (routes/connects.ts). Config edits go through config.json (ConfigFile.update); what
@@ -94,6 +94,8 @@ export type SlackRoutesDeps = {
   apps?: SlackService;
   /// Tells the pages the overview changed (an install is in).
   overviewChanged?: () => void;
+  /// Where a connect being added runs already (routes/connects.ts `ConnectEditDeps`).
+  heldBy?: (ws: string | null, kind: string, own: unknown) => Promise<string | null>;
 };
 
 /// A Slack connect's part of its config entry (`slack`): its tokens as given (blank ones stay as they were), its app, and
@@ -216,7 +218,7 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
       }
     }
     const name = identity.botName === "" ? DEFAULT_APP_NAME : identity.botName;
-    const taken = new Set(slack.connects().map((c) => c.id));
+    const taken = new Set(connectsRaw(raw()).map((c: Json) => c?.id));
     const base = connectSlug(name);
     let id = base;
     for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;

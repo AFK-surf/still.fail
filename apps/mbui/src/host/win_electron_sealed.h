@@ -1,4 +1,4 @@
-// What still.fail's desktop app (Electron's, apps/desktop/src/secure.ts) kept sealed on Windows, opened for the app built
+// What still.fail's desktop app (Electron's) kept sealed on Windows, opened for the app built
 // in its place (scripts/win.sh's stable and beta variants: its id, its data). win_core.c's secure.get takes a key from it
 // the first time the core asks for one this app does not have, and seals it again in its own files, as
 // electron_sealed.h does on the Mac. A file of that app's userData\sealed: "SFS1", the `user` byte, then Electron's
@@ -135,7 +135,7 @@ static uint8_t *es_unseal(const uint8_t key[32], const uint8_t *s, size_t n, siz
   return out;
 }
 
-// A key as that app's file is named (secure.ts fileName): letters, digits, `-` and `_` as they are, the rest %XX.
+// A key as that app's file is named: letters, digits, `-` and `_` as they are, the rest %XX.
 static void es_name(const char *key, WCHAR *out, size_t cap) {
   size_t k = 0;
   for (const unsigned char *p = (const unsigned char *)key; *p && k + 4 < cap; p++) {

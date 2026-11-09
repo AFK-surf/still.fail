@@ -44,13 +44,13 @@ test "activity: a row reserved for later reveals its words in its own turn" {
   let clock = Ref::new(0.0)
   fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
-  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
   t.run_for(@ui.move_most_ms)
   t.tap_text("发消息")
   t.type_text("看一下列表")
   tap_send(t)
-  clock.val = clock.val + fix_deliver_ms
+  fix_clock_set(clock, clock.val + fix_deliver_ms)
   t.draw()
   // The row itself follows the flight's landing; the chat's turn and the row's reserved time are distinct.
   let at = reading_of("ws1/st1\u{1}s-c1").rows.came("act:s-c1").unwrap()
@@ -102,8 +102,7 @@ test "activity: a step changes glyphs individually before the next step is whole
   let src = fixture_app("chat-working")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=360.0, h=740.0, platform=2)
   t.run_for(squeeze_opening)
-  @sffixture.fix_due.push(fn() { @sffixture.fix_working_now.val = ("call:2", activity_next_words) })
-  @settings.fixture_changed()
+  @sffixture.fix_now(fn() { @sffixture.fix_working_now.val = ("call:2", activity_next_words) })
   t.draw()
   // The next step is first held long enough to exclude one that vanishes during its own arrival.
   t.run_for(@sfbase.glyph_change_in_ms + @sfbase.glyph_change_in_ms / 2.0)
@@ -120,8 +119,7 @@ fn activity_glyphs_do_not_collide(before : String, next : String) -> Unit raise 
   @sffixture.fix_working_now.val = ("call:1", before)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=360.0, h=740.0, platform=2)
   t.run_for(squeeze_opening)
-  @sffixture.fix_due.push(fn() { @sffixture.fix_working_now.val = ("call:2", next) })
-  @settings.fixture_changed()
+  @sffixture.fix_now(fn() { @sffixture.fix_working_now.val = ("call:2", next) })
   t.draw()
   t.run_for(@sfbase.glyph_change_in_ms)
   for _ in 0..<6 {
@@ -154,8 +152,8 @@ test "activity: glyphs do not collide when their widths change" {
   activity_glyphs_do_not_collide("宽宽宽宽宽宽宽宽宽宽宽宽", "iiiiiiiiiiii")
   activity_glyphs_do_not_collide("iiiiiiiiiiii", "宽宽宽宽宽宽")
   activity_glyphs_do_not_collide("宽宽宽宽宽宽", "iiiiiiiiiiii")
-  activity_glyphs_do_not_collide("在 Studio 上跑整套检查", "正在核对动效和测试结果")
-  activity_glyphs_do_not_collide("在 Studio 上跑整套检查：先编译 mbui 的原生代码", "正在核对动效和测试结果")
+  activity_glyphs_do_not_collide("在 Willow 上跑整套检查", "正在核对动效和测试结果")
+  activity_glyphs_do_not_collide("在 Willow 上跑整套检查：先编译 mbui 的原生代码", "正在核对动效和测试结果")
 }
 
 ///|
@@ -163,8 +161,7 @@ test "activity: changing the words of the same step keeps them whole" {
   let src = fixture_app("chat-working")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=360.0, h=740.0, platform=2)
   t.run_for(squeeze_opening)
-  @sffixture.fix_due.push(fn() { @sffixture.fix_working_now.val = ("call:1", activity_next_words) })
-  @settings.fixture_changed()
+  @sffixture.fix_now(fn() { @sffixture.fix_working_now.val = ("call:1", activity_next_words) })
   t.draw()
   t.run_for(@sfbase.glyph_line_ms / 2.0)
   let now = activity_glyphs_shown(t, activity_next_words)
@@ -179,8 +176,7 @@ test "activity: reduced motion shows the new step at once" {
   let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=360.0, h=740.0, platform=2)
   t.run_for(squeeze_opening)
   t.set_reduce_motion(true)
-  @sffixture.fix_due.push(fn() { @sffixture.fix_working_now.val = ("call:2", activity_next_words) })
-  @settings.fixture_changed()
+  @sffixture.fix_now(fn() { @sffixture.fix_working_now.val = ("call:2", activity_next_words) })
   t.draw()
   t.run_for(@sfbase.glyph_change_in_ms + @sfbase.glyph_line_ms / 2.0)
   let now = activity_glyphs_shown(t, activity_next_words)

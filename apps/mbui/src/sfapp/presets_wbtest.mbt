@@ -29,13 +29,13 @@ test "添加目录 opens before the station's folders are said, and they come in
   let t = preset_add(true)
   // open already: browsing a station's folders there, nothing else to pick yet, nothing to type a path into
   assert_true(shows(t, "浏览文件夹…"), msg="\{t.text_runs().map(fn(r) { r.text })}")
-  assert_false(shows(t, "tstst"))
+  assert_false(shows(t, "web-app"))
   assert_false(shows(t, "输入路径"))
   // said: in the pick that is open, not one opened again
   @sffixture.fix_presets_say()
   t.draw()
   t.run_for(@ui.move_most_ms)
-  assert_true(shows(t, "tstst"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  assert_true(shows(t, "web-app"), msg="\{t.text_runs().map(fn(r) { r.text })}")
   assert_true(shows(t, "浏览文件夹…"))
 }
 
@@ -43,12 +43,25 @@ test "添加目录 opens before the station's folders are said, and they come in
 test "wide, 添加目录 shows the other stations' folders while its own says nothing, and its own as they come, frames going on" {
   let t = preset_add(true, wide=true)
   assert_true(shows(t, "浏览文件夹…"), msg="\{t.text_runs().map(fn(r) { r.text })}")
-  // (MBA's, said: there whatever the preset's station says)
+  // (Maple's, said: there whatever the preset's station says)
   assert_true(shows(t, "still.fail 设计稿"), msg="\{t.text_runs().map(fn(r) { r.text })}")
   // said: the frames that follow show it, none drawn on purpose
   @sffixture.fix_presets_say()
   t.run_for(@ui.move_most_ms)
-  assert_true(shows(t, "tstst"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  assert_true(shows(t, "web-app"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+}
+
+///|
+test "adding directories groups them by station, including the same repository on both" {
+  let t = preset_add(false, wide=true)
+  // Filter to the same repository on both machines. Both paths and both station headings remain visible.
+  t.tap_text("搜仓库或目录")
+  t.type_text("still.fail")
+  t.frame()
+  assert_true(shows(t, "Willow") && shows(t, "Maple"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+  assert_eq(t.all(Button, label="still.fail").length(), 2, msg=t.semantics_dump())
+  assert_true(shows(t, "~/projects/still.fail · 12 个对话用过"))
+  assert_true(shows(t, "~/code/still.fail · 2 个对话用过"))
 }
 
 ///|
@@ -61,9 +74,190 @@ test "a phone's new chat shows its preset's control, the composer a capsule as t
   t.run_for(@ui.move_most_ms)
   // (a round beside the composer's ＋, on its one line as when it is opened; where it runs and on what over it whole)
   assert_true(t.query(Button, label="预设") is Some(_), msg=t.semantics_dump())
-  assert_true(shows(t, "Studio"))
+  assert_true(shows(t, "Willow"))
   // pressed: the presets to pick, from the foot
   t.click(Button, label="预设")
   t.run_for(@ui.move_most_ms)
   assert_true(shows(t, "不用预设") && shows(t, "新预设"), msg="\{t.text_runs().map(fn(r) { r.text })}")
+}
+
+///|
+test "browsing starts on the station picked in the new chat composer" {
+  new_run()
+  @sffixture.new_fix.station = "st2"
+  let calls : Array[Made] = []
+  let base = fixture("newchat-preset-new-browse")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  open_mode("newchat-preset-new-browse")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="选择文件夹所在的 station: Maple") is Some(_), msg=t.semantics_dump())
+  assert_eq(text(Some(named(calls, "drive.folders")[0].params), "station"), "ws1/st2")
+}
+
+///|
+test "switching the browsing station starts at its home and saves the chosen folder on that station" {
+  new_run()
+  let calls : Array[Made] = []
+  let base = fixture("newchat-preset-new-browse")
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  open_mode("newchat-preset-new-browse")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  assert_eq(text(Some(named(calls, "drive.folders")[0].params), "station"), "ws1/st1")
+  t.click(Button, label="项目")
+  t.frame()
+  assert_eq(text(Some(named(calls, "drive.folders")[1].params), "path"), "/Users/lin/项目")
+  t.click(Button, label="选择文件夹所在的 station: Willow")
+  t.run_for(@ui.move_most_ms)
+  t.click(MenuItemRadio, label="Maple")
+  t.run_for(@ui.move_most_ms)
+  let asks = named(calls, "drive.folders")
+  assert_eq(text(Some(asks[2].params), "station"), "ws1/st2")
+  assert_eq(text(Some(asks[2].params), "path"), "")
+  t.click(Button, label="项目")
+  t.frame()
+  t.click(Button, label="用这个文件夹")
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="创建")
+  t.frame()
+  let made = Some(named(calls, "preset.add")[0].params)
+  let folder = Some(items(made, "dirs")[0])
+  assert_eq(text(folder, "path"), "/Users/lin/项目")
+  assert_eq(text(folder, "station"), "ws1/st2")
+  assert_eq(text(folder, "stationName"), "Maple")
+  let picked = Some(named(calls, "newChat.pick").last().unwrap().params)
+  assert_eq(text(picked, "presetStation"), "ws1/st1")
+}
+
+///|
+test "editing another station's preset still starts browsing on the composer's station" {
+  new_run()
+  @sffixture.new_fix.station = "st2"
+  @sffixture.new_fix.preset = "p-sf"
+  let calls : Array[Made] = []
+  let base = fixture("newchat")
+  let src : Source = {
+    ..base,
+    topic_read: fn(name, params) {
+      let got = base.topic(name, params).get().snapshot()
+      match got.value {
+        Some(Object(m)) if name == "newChat" => {
+          let v = m.copy()
+          v["presetStation"] = "ws1/st1"
+          { ..got, value: Some(Json::object(v)) }
+        }
+        _ => got
+      }
+    },
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      (base.call)(name, params, done)
+    },
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  open_mode("newchat")
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="still.fail 开发")
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("编辑「still.fail 开发」")
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="添加目录")
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="浏览文件夹…")
+  t.run_for(@ui.move_most_ms)
+  assert_true(t.query(Button, label="选择文件夹所在的 station: Maple") is Some(_), msg=t.semantics_dump())
+  assert_eq(text(Some(named(calls, "drive.folders")[0].params), "station"), "ws1/st2")
+}
+
+///|
+/// 浏览文件夹 on a Windows station with four disks, the folders it is asked for kept in `asked`.
+fn preset_browse_disks(asked : Array[String], wide : Bool) -> @ui.Tester raise {
+  new_run()
+  let base = fixture("newchat-preset-new-add")
+  let home = "C:\\Users\\lin"
+  let place = fn(name : String, path : String, disk : Bool) {
+    Json::object({ "name": Json::string(name), "path": Json::string(path), "disk": Json::boolean(disk) })
+  }
+  let places = [
+    place("主目录", home, false),
+    place("桌面", home + "\\Desktop", false),
+    place("文档", home + "\\Documents", false),
+    place("下载", home + "\\Downloads", false),
+    place("视频", home + "\\Videos", false),
+    place("音乐", home + "\\Music", false),
+    place("图片", home + "\\Pictures", false),
+    place("C:", "C:\\", true),
+    place("D:", "D:\\", true),
+    place("E:", "E:\\", true),
+    place("F:", "F:\\", true),
+  ]
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      if name != "drive.folders" {
+        (base.call)(name, params, done)
+        return
+      }
+      let at = text(Some(params), "path")
+      asked.push(at)
+      done(Ok(Json::object({
+        "path": Json::string(if at == "" { home } else { at }),
+        "home": Json::string(home),
+        "entries": Json::array([]),
+        "crumbs": Json::array([]),
+        "places": Json::array(places),
+      })))
+    },
+  }
+  let t = if wide {
+    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=1280.0, h=800.0, platform=0)
+  } else {
+    @ui.Tester::new(fn(c) { view(c, src) }, tree=app_tree(src), w=390.0, h=844.0, platform=2)
+  }
+  open_mode("newchat-preset-new-add")
+  t.draw()
+  t.run_for(@ui.move_most_ms)
+  t.click(Button, label="浏览文件夹…")
+  t.run_for(@ui.move_most_ms)
+  t
+}
+
+///|
+test "wide, a machine's last disk is reached in the picker's places (the column's room ended at D:)" {
+  let asked : Array[String] = []
+  let t = preset_browse_disks(asked, true)
+  let (x, y) = t.find("桌面").unwrap()
+  t.wheel(x, y, 2000.0)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("F:")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(asked.last(), Some("F:\\"))
+}
+
+///|
+test "narrow, a machine's last disk is reached in the picker's places, its folders keeping room under them" {
+  let asked : Array[String] = []
+  let t = preset_browse_disks(asked, false)
+  let (x, y) = t.find("桌面").unwrap()
+  t.wheel(x, y, 2000.0)
+  t.run_for(@ui.move_most_ms)
+  t.tap_text("F:")
+  t.run_for(@ui.move_most_ms)
+  assert_eq(asked.last(), Some("F:\\"))
+  assert_true(shows(t, "此处没有文件夹"), msg="\{t.text_runs().map(fn(r) { r.text })}")
 }

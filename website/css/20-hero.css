@@ -1,0 +1,94 @@
+/* ---------- Hero ----------
+   Paper: the headline on the left, the lead and two calls to action beside it (under it on narrow screens), then a
+   low band of the mark's field, drawn quietly in greys, like a faint pattern under the words. */
+.hero {
+  /* The field's cell: 1U on the 24-unit grid; 1.5U on a tablet and 2U on a phone, so a dot stays a dot, not a speck. */
+  --cols: 24; --fc: calc(100cqw / var(--cols)); --rows: 5;
+  --f-eye: 201 199 193; --f-cheek: 222 220 215; --f-you: 28 27 26;
+  container-type: inline-size; display: flex; flex-direction: column;
+}
+.hero > .w { width: 100%; padding-top: clamp(48px, 7.4vw, 112px); padding-bottom: clamp(36px, 4.4vw, 64px); } /* a column flex item: full width, still centred */
+.hero-top { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 24px clamp(24px, 4vw, 64px); align-items: start; }
+.hero h1 { max-width: 15ch; }
+.hero-body { display: flex; flex-direction: column; align-items: flex-start; gap: 24px; padding-top: .55em; }
+.hero .lead { max-width: 30em; text-wrap: pretty; }
+.hero .lead b { color: var(--ink); font-weight: 500; white-space: nowrap; }
+/* Japanese runs long phrases with no spaces: a bold phrase kept whole would break the line early. */
+:root:lang(ja) .hero .lead b { white-space: normal; }
+.hero .lead .nb { white-space: nowrap; } /* no lone 干。 on the last line (WebKit has no text-wrap: pretty yet) */
+
+/* ---------- The field ----------
+   The mark taken apart: its eyes (dots) and cheeks (pills), one to a cell, in diagonal runs of dot, dot, pill, in the
+   band's greys (--f-eye, --f-cheek) with one cell in its strongest colour (--f-you): you. main.js draws whole rows. */
+.field-wrap { position: relative; }
+.hero .field-wrap { height: calc(var(--fc) * var(--rows)); }
+.field { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+
+/* Pause: the field moves on its own, so it can be stopped. It takes a cell of its own, the second from the right on the
+   top row, a thin grey ring (32 px; 44 px to a finger). main.js shows it only where the field moves. */
+.fpause {
+  position: absolute; z-index: 1; top: calc(var(--fc) / 2 - 16px); right: max(calc(var(--fc) * 1.5 - 16px), env(safe-area-inset-right, 0px));
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid rgba(28,27,26,.22); border-radius: 50%;
+  background: var(--paper); color: var(--graphite); cursor: pointer;
+  -webkit-user-select: none; user-select: none; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--dur-ui) ease, border-color var(--dur-ui) ease, scale var(--dur-press) ease-out;
+}
+.fpause[hidden] { display: none; }
+.fpause::before { content: ""; position: absolute; inset: -7px; border-radius: 50%; }
+/* Pause and play share the cell and cross-fade (both stay in the DOM, so either way round it can turn back mid-way). */
+.fpause svg { grid-area: 1 / 1; width: 10px; height: 10px; fill: currentColor;
+  transition: opacity 300ms cubic-bezier(0.2, 0, 0, 1), scale 300ms cubic-bezier(0.2, 0, 0, 1), filter 300ms cubic-bezier(0.2, 0, 0, 1); }
+.fpause .pl { translate: .5px 0; } /* the triangle's optical centre */
+.fpause .pl, .fpause[aria-pressed=true] .ps { opacity: 0; scale: .25; filter: blur(4px); }
+.fpause[aria-pressed=true] .pl { opacity: 1; scale: 1; filter: blur(0); }
+@media (prefers-reduced-motion: no-preference) { .fpause:not(:disabled):active { scale: .96; } }
+.fpause:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) {
+  .fpause:hover { color: var(--ink); border-color: var(--ink); }
+}
+
+/* ---------- Entrance, once, on load ----------
+   The words are painted at the first frame and rise into place on a strong ease-out, one after another; the headline
+   and the lead (the largest text, what LCP measures) start fading at once, so their paint is never held back. The
+   field fades in once main.js has drawn it (the canvas is blank until then). */
+@keyframes hero-fade { from { opacity: 0; } }
+@keyframes hero-dim { from { opacity: .25; } } /* never 0: an element painted transparent is not an LCP candidate */
+@keyframes hero-rise { from { transform: translateY(14px); } }
+.hero :is(h1, .lead, .actions) {
+  animation: hero-fade 560ms var(--ease-out) both, hero-rise 900ms var(--ease-out) both;
+  animation-delay: var(--fd, 0ms), calc(var(--hi, 0) * var(--stagger));
+}
+.hero h1 { --hi: 0; }
+.hero .lead { --hi: 1; }
+.hero :is(h1, .lead) { animation-name: hero-dim, hero-rise; }
+.hero .actions { --hi: 2; --fd: 120ms; }
+.field:not([data-drawn]), .field:not([data-drawn]) ~ .fpause { visibility: hidden; }
+.hero .field[data-drawn] { animation: hero-fade 800ms var(--ease-out) 120ms both; }
+.hero .field[data-drawn] ~ .fpause { animation: hero-fade 420ms var(--ease-out) 900ms both; }
+/* Reduced motion: nothing moves; the words and the field only fade in, briefly. */
+@media (prefers-reduced-motion: reduce) {
+  .hero :is(h1, .lead, .actions), .hero .field[data-drawn] { animation: hero-fade 300ms ease both !important; }
+}
+
+/* ---------- Smaller screens ---------- */
+@media (max-width: 960px) {
+  .hero-top { grid-template-columns: minmax(0, 1fr); }
+  .hero-body { padding-top: 0; }
+}
+/* A tablet: 16 cells across (a dot of 1U would be a speck). */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .hero { --cols: 16; }
+}
+/* A phone: 12 cells across, four rows, the calls to action in reach of a thumb. */
+@media (max-width: 640px) {
+  .hero { --cols: 12; --rows: 4; }
+  .hero .actions { align-self: stretch; }
+  .hero .actions .btn { flex: 1 1 0; min-width: max-content; } /* equal halves, or full width each when they don't fit */
+}
+/* A phone on its side: a short screen, so the headline steps down and the field keeps three rows. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .hero { --rows: 3; }
+  .hero > .w { padding-top: 24px; padding-bottom: 24px; }
+  .hero h1 { font-size: 34px; }
+  .hero-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}

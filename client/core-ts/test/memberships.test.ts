@@ -1,4 +1,4 @@
-// One station in several workspaces (views/memberships.ts, docs/multi-workspace.md): which stations of the viewer's
+// One station in several workspaces (views/memberships.ts): which stations of the viewer's
 // other workspaces could be added to one (`joinable`), `station.join` (an enrollment made there, the station told to
 // join with it over its home link) and what it says when it cannot, and the workspaces a station is in.
 import assert from "node:assert/strict";
@@ -259,6 +259,8 @@ test("a_new_chat_runs_on_the_profiles_the_station_says_serve_this_workspace_on_i
   };
   assert.equal(await blocked({ ...copy, serves: false }), "profile");
   assert.equal(await blocked({ ...copy, serves: true }), null);
+  assert.equal(await blocked({ ...copy, serves: true, enabled: false }), "disabled", "a disabled profile can be enabled again");
+  assert.equal(await blocked({ ...copy, serves: false, enabled: false }), "profile", "one not shared here cannot be enabled here");
   // A station of before it says nothing: every profile of its own serves its home.
   assert.equal(await blocked(copy), null);
 });

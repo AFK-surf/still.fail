@@ -1,5 +1,5 @@
 // What the default looks share: the focus ring, the tints of what is pointed at and pressed, the look of what is
-// disabled. A component's look is a function of its state (docs/components.md, rule 1): an app passes its own.
+// disabled. A component's look is a function of its state (mbui's kit/styles.mbt, rule 1): an app passes its own.
 
 ///|
 /// The ring round what has the keyboard's focus (when `shown`), `radius` the corner of what it rings, as wide and as

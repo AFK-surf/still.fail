@@ -1,4 +1,4 @@
-// Presets: what a chat starts knowing, chosen as it is opened (docs/presets.md). A preset names the directories its
+// Presets: what a chat starts knowing, chosen as it is opened. A preset names the directories its
 // chats work with and what people want of them there; it does not bind the agent to them (it runs in its own session
 // workspace as every chat does). A workspace's presets are its agent home's presets.json; a chat opened with one keeps a
 // copy of it in its session workspace (`.stillfail-preset.json`), so a preset changed later changes none of the chats
@@ -9,6 +9,7 @@ import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { protectedPlace } from "../drive/fs.ts";
+import { SKILL_HOMES } from "./agent-home.ts";
 
 /// A directory a preset works with: a path, and the repository it is a clone of (its origin), if one. `station`
 /// (its address) and `stationName`: another station of the workspace's it is on; none: the station the preset is on.
@@ -240,8 +241,6 @@ export class NoPreset extends Error {
 const GUIDES = ["AGENTS.md", "CLAUDE.md", join(".claude", "CLAUDE.md")];
 /// What of a folder's instruction file the chat is told at most (the rest is read there).
 const GUIDE_MOST = 16 * 1024;
-/// Where the runtimes find skills in the directory they run in: Claude Code's project skills, Codex's repository ones.
-const SKILL_HOMES = [join(".claude", "skills"), join(".agents", "skills")];
 
 /// Keeps `copy` as what a chat in `workspace` is opened with. Its folders on this machine are made the chat's as a
 /// runtime opened in them would have them (neither reads them where it does not run): their instruction files kept
@@ -389,7 +388,9 @@ export async function candidates(reposDir: string, presets: Preset[], found: Can
     if (mine) out.set(keyOf(c), { ...mine, chats: mine.chats + c.chats, lastAt: Math.max(mine.lastAt, c.lastAt), ...(mine.icon || !c.icon ? {} : { icon: c.icon }) });
     else out.set(keyOf(c), { ...c, cached: true, where: c.repo ?? shortPath(c.path) });
   }
-  for (const p of presets) for (const d of p.dirs) if (!out.has(d.repo ?? d.path)) out.set(d.repo ?? d.path, { path: d.path, name: basename(d.path), repo: d.repo, chats: 0, lastAt: p.updatedAt, where: shortPath(d.path) });
+  // A preset may also name another station's folders. Those are not candidates on this machine: treating them as
+  // local both puts them in the wrong group and can make a later save try to validate a remote path here.
+  for (const p of presets) for (const d of p.dirs) if (!d.station && !out.has(d.repo ?? d.path)) out.set(d.repo ?? d.path, { path: d.path, name: basename(d.path), repo: d.repo, chats: 0, lastAt: p.updatedAt, where: shortPath(d.path) });
   return [...out.values()].sort((a, b) => b.chats - a.chats || b.lastAt - a.lastAt || a.name.localeCompare(b.name));
 }
 

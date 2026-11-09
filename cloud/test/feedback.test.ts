@@ -19,7 +19,7 @@ async function workspace(h: Harness) {
   const aliceTokens = await h.login("alice");
   const alice = h.as(aliceTokens);
   const id = ((await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as any).id as string;
-  const enrollment = (await (await alice("POST", `/v1/workspaces/${id}/enrollments`, { name: "studio" })).json()) as any;
+  const enrollment = (await (await alice("POST", `/v1/workspaces/${id}/enrollments`, { name: "willow" })).json()) as any;
   const station = await key();
   const response = await h.fetch("/v1/stations/enroll", {
     method: "POST",
@@ -58,7 +58,7 @@ const report = (extra: Record<string, unknown> = {}) => ({
   body: "chat_post 回了 500，消息没出现在 thread 里。",
   area: "station",
   reporter: "Ada, Slack #ops",
-  context: { version: "0.1.1309", session: "ember:c-1", runtime: "claude" },
+  context: { version: "0.1.1309", session: "chat:c-1", runtime: "claude" },
   logs: "ERROR chat_post: 500",
   ...extra,
 });
@@ -82,7 +82,7 @@ test("a station's report is kept once, numbered, and listed in the console with 
     const listed = (await (await admin("GET", "/v1/admin/feedback")).json()) as any;
     assert.deepEqual(listed.feedback.map((f: any) => [f.number, f.channel, f.area]), [[2, "beta", "unknown"], [1, "stable", "station"]]);
     const one = listed.feedback[1];
-    assert.deepEqual(one.station, { id: station.id, name: "studio" });
+    assert.deepEqual(one.station, { id: station.id, name: "willow" });
     assert.deepEqual(one.workspace, { id, name: "Home" });
     assert.equal(one.account, null);
     assert.equal(one.title, "chat_post 发不出去");
@@ -96,6 +96,22 @@ test("a station's report is kept once, numbered, and listed in the console with 
     assert.equal((await admin("POST", `/v1/admin/feedback/${"0".repeat(26)}/status`, { status: "fixed" })).status, 404);
     const after = (await (await admin("GET", "/v1/admin/feedback")).json()) as any;
     assert.equal(after.feedback[1].status, "fixed");
+  } finally {
+    await h.close();
+  }
+});
+
+test("the feedback monitor reads the console's list with its token, and that token does nothing else", async () => {
+  const h = await harness();
+  try {
+    const { station } = await workspace(h);
+    assert.equal((await send(h, station, report())).status, 201);
+    const list = (token: string, path = "/v1/admin/feedback/list") => h.fetch(path, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: "{}" });
+    const listed = (await (await list(h.feedbackToken)).json()) as any;
+    assert.deepEqual(listed.feedback.map((f: any) => [f.number, f.title, f.station?.name]), [[1, "chat_post 发不出去", "willow"]]);
+    assert.equal((await list(h.adminToken)).status, 401, "not the admin token");
+    assert.equal((await list("x".repeat(43))).status, 401);
+    assert.equal((await list(h.feedbackToken, "/v1/admin/workspaces/list")).status, 401, "nothing else");
   } finally {
     await h.close();
   }
@@ -146,7 +162,7 @@ test("a report the changelog fixes is marked fixed, and its station told once th
   const h = await harness();
   try {
     const { station, aliceTokens } = await workspace(h);
-    await send(h, station, report({ context: { session: "ember:c-1", thread: "EMBER/1.1" } }));
+    await send(h, station, report({ context: { session: "chat:c-1", thread: "CHAT/1.1" } }));
     await send(h, station, report({ key: "k2", title: "安卓列表跳动" }));
     const bucket = (await h.mf.getR2Bucket("RELEASES", "api")) as unknown as { put(key: string, value: string): Promise<unknown> };
     // Nothing in the changelog yet: nothing fixed.
@@ -169,8 +185,8 @@ test("a report the changelog fixes is marked fixed, and its station told once th
     assert.equal(out[0].version, 1330);
     assert.deepEqual(out[0].parts, ["station"]);
     assert.equal(out[0].released.station, 1335);
-    assert.equal(out[0].session, "ember:c-1");
-    assert.equal(out[0].thread, "EMBER/1.1");
+    assert.equal(out[0].session, "chat:c-1");
+    assert.equal(out[0].thread, "CHAT/1.1");
     // Told: not again.
     assert.deepEqual(await fixed(h, station, [out[0].id]), []);
     await bucket.put("android/latest.json", JSON.stringify({ versionCode: 1341 }));
@@ -192,7 +208,7 @@ test("the changelog is anyone's to read, with what each part has out on the host
     await bucket.put("changelog.json", JSON.stringify([{ version: 1340, commit: "b", at: 2, text: ["新功能：更新日志"], fixes: [], parts: ["web", "android"] }]));
     await bucket.put("web.json", JSON.stringify({ build: 1338 }));
     await bucket.put("web-beta.json", JSON.stringify({ build: 1340 }));
-    await bucket.put("desktop/stillfail-mac.yml", "version: 0.1.1300\npath: x.zip\n");
+    await bucket.put("mac/latest.json", JSON.stringify({ versionCode: 1300, file: "desktop/stillfail-0.1.1300-arm64-mac.zip" }));
     const stable = (await (await h.fetch("/v1/changelog")).json()) as any;
     assert.equal(stable.entries[0].text[0], "新功能：更新日志");
     assert.deepEqual(stable.released, { station: null, android: null, desktop: 1300, web: 1338 });

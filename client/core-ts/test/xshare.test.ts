@@ -1,4 +1,4 @@
-// A chat shared with the viewer's other workspaces (views/xshare.ts, docs/chat-share.md): what its "…" shows, and
+// A chat shared with the viewer's other workspaces (views/xshare.ts): what its "…" shows, and
 // `chat.xshare` — the chat's station told first, then each workspace newly given it through one of its own stations
 // that answers; shown at once and under way (`doing`) until its station has it.
 import assert from "node:assert/strict";
@@ -50,7 +50,8 @@ class Wire implements StationWire {
 /// (`wc`, two, one of still.fail's icons its mark).
 async function setUp(role = "admin", thread: J = threadView(7, 3), chats?: J[], roleC = "member") {
   let wire: Wire | null = null;
-  const s = await started({ ...base(), "GET /threads": [thread], ...(chats ? { "GET /chats": chats } : {}) }, 0, (host) => (wire = new Wire(host)), ({ host }) => {
+  const s = await started({ ...base(), "GET /threads": [thread], ...(chats ? { "GET /chats": chats } : {}) }, 0, (host) => (wire = new Wire(host)), ({ host, cloud }) => {
+    cloud.role = role;
     const fetch = host.fetch.bind(host);
     host.fetch = (req: HttpRequest) => {
       const path = req.url.replace(ORIGIN, "");
@@ -331,6 +332,31 @@ test("what_a_message_refers_to_is_shared_by_the_core_those_the_viewer_may_and_no
     call(core, ui, 4, "chat.outsideShare", { station: "ws/st", text: "没有引用" });
     await host.settle();
     assert.deepEqual(answerOf(host, values, 4).ok, { shared: 0 });
+    core.close();
+  }
+});
+
+test("a_row_offers_in_its_menu_what_its_page_does_sharing_it_and_a_picture_of_it", async () => {
+  // The viewer (a@x.com) as a member, its starter, an admin, a read-only member: a row's mayShare and mayPublish as its
+  // page's xshare.may and publish.may.
+  const cases = [["member", "b@x.com", false, true], ["member", "a@x.com", true, true], ["admin", "b@x.com", true, true], ["viewer", "b@x.com", false, false]] as const;
+  for (const [role, starter, share, publish] of cases) {
+    const thread = { ...threadView(7, 3), creator: { id: starter, name: "s", via: "cloud" }, createdBy: starter };
+    const { host, core } = await setUp(role, thread, [row({ creator: { id: starter, name: "s", via: "cloud" } })]);
+    const ui = core.connect();
+    const values = new Map<number, unknown>();
+    subscribe(core, ui, 1, { topic: "chats", scope: "ws" });
+    subscribe(core, ui, 2, { topic: "chat", station: "ws/st", thread: 7 });
+    await host.settle();
+    await host.time.pass(500);
+    await host.settle();
+    apply(host, values);
+    const item = v(values, 1).days.flatMap((d: J) => d.items).find((i: J) => i.thread === 7);
+    const page = v(values, 2);
+    assert.equal(item.mayShare === true, share, `${role} ${starter}: mayShare`);
+    assert.equal(item.mayShare === true, page.xshare.may, `${role} ${starter}: as its page's`);
+    assert.equal(item.mayPublish === true, publish, `${role} ${starter}: mayPublish`);
+    assert.equal(item.mayPublish === true, page.publish.may, `${role} ${starter}: as its page's`);
     core.close();
   }
 });

@@ -153,7 +153,7 @@ test "liquid glass of a group is drawn first, as one capture, its words inked by
 }
 
 ///|
-/// A bar with a notch cut into its top (Bar.kt's), a line drawn over it, then a ball and a disc of glass over it that
+/// A bar with a notch cut into its top, a line drawn over it, then a ball and a disc of glass over it that
 /// frost what the bar frosts.
 fn notched_scene(c : @ui.Ctx) -> Unit {
   let frost = @ui.Glass::frosted(blur=20.0, tint=0xFFFFFFB8L, solid=0xFDFCFBFFL)

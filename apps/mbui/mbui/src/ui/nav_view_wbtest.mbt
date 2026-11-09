@@ -9,9 +9,10 @@
 fn stacked(
   ready? : @signals.Signal[Bool],
   most? : Double = 0.0,
+  from_left? : (String, String?) -> Bool = fn(_, _) { false },
 ) -> (Tester, Nav[String], Array[String]) {
   let left : Array[String] = []
-  let nav = Nav::new("a", on_leave=fn(p) { left.push(p) })
+  let nav = Nav::new("a", on_leave=fn(p) { left.push(p) }, from_left~)
   let t = Tester::new(fn(_c) {  })
   t.check_looks(false)
   set_view_app(fn(root) {
@@ -27,6 +28,33 @@ fn stacked(
   })
   t.draw()
   (t, nav, left)
+}
+
+///|
+test "window tree: a page's side follows where it was pushed from, including when it goes back" {
+  let (t, nav, _) = stacked(from_left=fn(p, under) { p == "settings" && under is Some("other") })
+  let half = move_ms(390.0) / 2.0
+  nav.push("settings")
+  t.draw()
+  t.run_for(half)
+  assert_true(pages_drawn()[1].0 > 0.0)
+  t.run_for(half)
+  assert_true(nav.pop())
+  t.draw()
+  t.run_for(half)
+  assert_true(pages_drawn()[1].0 > 0.0)
+  t.run_for(half)
+  nav.replace("other")
+  t.draw()
+  nav.push("settings")
+  t.draw()
+  t.run_for(half)
+  assert_true(pages_drawn()[1].0 < 0.0)
+  t.run_for(half)
+  assert_true(nav.pop())
+  t.draw()
+  t.run_for(half)
+  assert_true(pages_drawn()[1].0 < 0.0)
 }
 
 ///|
@@ -176,8 +204,9 @@ test "window tree: a page waited for asks no frames while it waits, frames as it
   t.frame_at(t0 + 40.0)
   // (waiting: nothing said to move, no frame asked after this one; what its wait is over at waited for alone, as the
   // old frame's stack waits on it, Nav::comes_when's wake)
-  let waits = "a wake in \{(t0 + 10.0 + 300.0 - (t0 + 40.0)).ceil().to_int()} ms (the window's tree's)"
-  assert_true(!slides() && t.rest_why() == waits, msg="waiting: \{t.moving()} \{t.rest_why()}")
+  // (the tree's wake, said with where it was said: Tree::wake_waited_by)
+  let waits = "a wake in \{(t0 + 10.0 + 300.0 - (t0 + 40.0)).ceil().to_int()} ms (the window's tree's"
+  assert_true(!slides() && t.rest_why().has_prefix(waits), msg="waiting: \{t.moving()} \{t.rest_why()}")
   told_at(t, t0 + 60.0, fn() { ready.set(true) })
   t.frame_at(t0 + 80.0)
   // (sliding from 60: said to move, frames till it ends)
@@ -204,8 +233,8 @@ fn waits_over_slide(comes : Bool) -> Unit raise {
     } else {
       match waits {
         Some(w) => {
-          let only = "a wake in \{(w - t.time()).ceil().to_int()} ms (the window's tree's)"
-          assert_true(t.rest_why() == only, msg="comes \{comes}, \{at}: \{t.rest_why()}")
+          let only = "a wake in \{(w - t.time()).ceil().to_int()} ms (the window's tree's"
+          assert_true(t.rest_why().has_prefix(only), msg="comes \{comes}, \{at}: \{t.rest_why()}")
         }
         None => assert_true(t.at_rest(), msg="comes \{comes}, \{at}: \{t.rest_why()}")
       }
@@ -271,9 +300,9 @@ fn buttoned() -> (Tester, Nav[String], Map[String, Int]) {
       nav,
       fn(c, p) {
         let id = c.id("button " + p)
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           pressed[p] = pressed.get(p).unwrap_or(0) + 1
-        }
+        })
         c.box(w=Px(100.0), h=Px(100.0), bg=0x3366CCFFL, id~, fn() { c.text(p, size=12.0) |> ignore }) |> ignore
       },
       bg=fn() { 0xFFFFFFFFL },

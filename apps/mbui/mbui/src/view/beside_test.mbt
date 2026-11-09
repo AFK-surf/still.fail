@@ -37,13 +37,65 @@ test "beside: below its anchor, its middle on its anchor's; above it where there
 }
 
 ///|
+test "beside: leaving, or its anchor gone, it stays where it last went beside it as it fades: never after its anchor, never where it is laid out" {
+  let ay = @signals.signal(100.0, same=fn(a, b) { a == b })
+  let anchor_on = @signals.signal(true, same=fn(a, b) { a == b })
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let fade = @signals.signal(1.0, same=fn(a, b) { a == b })
+  let ids : Map[String, @view.NodeId] = {}
+  let t = @view.Tree::new(
+    fn(root) {
+      root.show(at_once=true, fn() { anchor_on.get() }, fn(a) {
+        ids["a"] = a.id()
+        a.over(Is(true)).width(Is(Some(40.0))).height(Is(Some(20.0))).offset(By(fn() { (100.0, ay.get()) })) |> ignore
+      })
+      root.show(at_once=true, fn() { on.get() }, leave=100.0, fn(b) {
+        ids["b"] = b.id()
+        b
+        .width(Is(Some(60.0)))
+        .height(Is(Some(30.0)))
+        .alpha(By(fn() { fade.get() }))
+        .beside(ids["a"], side=Bottom, along=Middle, offset=6.0)
+        |> ignore
+      })
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(400.0, 300.0) |> ignore
+  let at = fn() {
+    let d = t.drawn_of(ids["b"]).unwrap()
+    (d.x, d.y)
+  }
+  assert_eq(at(), (90.0, 126.0), msg="below its anchor")
+  t.event(10.0, fn() { ay.set(140.0) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (90.0, 166.0), msg="following its anchor while both are there")
+  // (leaving: its anchor moves on, it fades where it was)
+  t.event(20.0, fn() { on.set(false) })
+  t.event(30.0, fn() {
+    ay.set(40.0)
+    fade.set(0.5)
+  })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (90.0, 166.0), msg="leaving: where it was")
+  // (back, then its anchor gone: placed again by its own fading, where it was)
+  t.event(40.0, fn() { on.set(true) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (90.0, 66.0), msg="back: beside its anchor again")
+  t.event(50.0, fn() { anchor_on.set(false) })
+  t.event(60.0, fn() { fade.set(0.25) })
+  t.frame(400.0, 300.0) |> ignore
+  assert_eq(at(), (90.0, 66.0), msg="its anchor gone: where it was")
+}
+
+///|
 test "lives_with: a node held elsewhere let go with its owner" {
   let owner_on = @signals.signal(true, same=fn(a, b) { a == b })
   let made : Ref[@view.View?] = Ref(None)
   let t = @view.Tree::new(
     fn(root) {
       let layer = root.box(fn(l) { l.over(Is(true)) |> ignore })
-      root.show(fn() { owner_on.get() }, fn(o) {
+      root.show(at_once=true, fn() { owner_on.get() }, fn(o) {
         made.val = Some(layer.box(fn(x) { x.width(Is(Some(10.0))) |> ignore }).lives_with(o))
       })
     },
@@ -64,7 +116,7 @@ test "lives_with: held beside its owner in one layer, the layer let go whole (a 
   let after : Ref[@view.View?] = Ref(None)
   let t = @view.Tree::new(
     fn(root) {
-      root.pick(fn() { theme.get() }, fn(p, _) {
+      root.pick(at_once=true, fn() { theme.get() }, fn(p, _) {
         let layer = p.box(fn(l) { l.over(Is(true)) |> ignore })
         layer.box(fn(o) {
           mades.push(layer.box(fn(x) { x.width(Is(Some(10.0))) |> ignore }).lives_with(o))
@@ -172,4 +224,97 @@ test "beside: two beside each other (a ring), and one beside what it holds: each
   t.event(10.0, fn() { grow.set(60.0) })
   t.frame(400.0, 300.0) |> ignore
   assert_eq(laid(), first, msg="the same, frame after frame")
+}
+
+///|
+test "went_over: the side it went on as it is placed: moved along its anchor or within the room it has, the same; no room below, above; room again, below" {
+  let ax = @signals.signal(100.0, same=fn(a, b) { a == b })
+  let ay = @signals.signal(100.0, same=fn(a, b) { a == b })
+  let ids : Map[String, @view.NodeId] = {}
+  let t = @view.Tree::new(
+    fn(root) {
+      root.box(fn(a) {
+        ids["a"] = a.id()
+        a.over(Is(true)).width(Is(Some(40.0))).height(Is(Some(20.0))).offset(By(fn() { (ax.get(), ay.get()) })) |> ignore
+      })
+      |> ignore
+      root.box(fn(b) {
+        ids["b"] = b.id()
+        b.width(Is(Some(60.0))).height(Is(Some(30.0))).beside(ids["a"], side=Bottom, along=Middle, offset=6.0) |> ignore
+        // (what it holds: the side what holds it went on, as it is)
+        b.box(fn(c) { ids["c"] = c.id() }) |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  t.frame(400.0, 300.0) |> ignore
+  let first = t.went_over(ids["c"])
+  // (moved along it, and down within the room below it)
+  t.event(10.0, fn() { ax.set(200.0) })
+  t.frame(400.0, 300.0) |> ignore
+  t.event(20.0, fn() { ay.set(150.0) })
+  t.frame(400.0, 300.0) |> ignore
+  let moved = t.went_over(ids["c"])
+  // (no room below: above it)
+  t.event(30.0, fn() { ay.set(260.0) })
+  t.frame(400.0, 300.0) |> ignore
+  let flipped = t.went_over(ids["b"])
+  t.event(40.0, fn() { ay.set(100.0) })
+  t.frame(400.0, 300.0) |> ignore
+  let back = t.went_over(ids["b"])
+  assert_eq(
+    (first, moved, flipped, back, t.went_over(ids["a"])),
+    (Some(@view.Side::Bottom), Some(@view.Side::Bottom), Some(@view.Side::Top), Some(@view.Side::Bottom), None),
+  )
+}
+
+///|
+/// A tree in a window 400×500: an anchor 40×20 at (100, `ay`) while `on`, a node 60×484 beside it (Bottom, 6 off).
+fn went_tree(ay : @signals.Signal[Double], on : @signals.Signal[Bool]) -> (@view.Tree, Map[String, @view.NodeId]) {
+  let ids : Map[String, @view.NodeId] = {}
+  let t = @view.Tree::new(
+    fn(root) {
+      root.show(at_once=true, fn() { on.get() }, fn(s) {
+        s.box(fn(a) {
+          ids["a"] = a.id()
+          a.over(Is(true)).width(Is(Some(40.0))).height(Is(Some(20.0))).offset(By(fn() { (100.0, ay.get()) })) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      root.box(fn(n) {
+        ids["b"] = n.id()
+        n.over(Is(true)).width(Is(Some(60.0))).height(Is(Some(484.0))).beside(ids["a"], side=Bottom, along=Middle, offset=6.0) |> ignore
+      })
+      |> ignore
+    },
+    time=fn() { 0.0 },
+  )
+  (t, ids)
+}
+
+///|
+test "went_over: as tall as the window less its padding, kept at the window's top on either side, its anchor moved from 200 to 300 down a 500 high window: below, then above" {
+  let ay = @signals.signal(200.0, same=fn(a, b) { a == b })
+  let (t, ids) = went_tree(ay, @signals.signal(true))
+  t.frame(400.0, 500.0) |> ignore
+  let y = fn() { t.drawn_of(ids["b"]).unwrap().y }
+  let first = (y(), t.went_over(ids["b"]))
+  t.event(10.0, fn() { ay.set(300.0) })
+  t.frame(400.0, 500.0) |> ignore
+  let moved = (y(), t.went_over(ids["b"]))
+  assert_eq((first, moved), ((8.0, Some(@view.Side::Bottom)), (8.0, Some(@view.Side::Top))))
+}
+
+///|
+test "went_over: placed above its anchor, then its anchor gone: beside nothing" {
+  let ay = @signals.signal(300.0, same=fn(a, b) { a == b })
+  let on = @signals.signal(true, same=fn(a, b) { a == b })
+  let (t, ids) = went_tree(ay, on)
+  t.frame(400.0, 500.0) |> ignore
+  let placed = t.went_over(ids["b"])
+  t.event(10.0, fn() { on.set(false) })
+  t.frame(400.0, 500.0) |> ignore
+  assert_eq((placed, t.went_over(ids["b"])), (Some(@view.Side::Top), None))
 }

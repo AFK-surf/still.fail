@@ -1,5 +1,5 @@
-// What a search finds among what the station has (docs/search.md): nothing is indexed, everything is looked through as
-// it is asked for (search/worker.ts reads it). Each thing found is a document: its kind, whom it is for (the workspace
+// What a search finds among what the station has: document text is looked through as it is asked for
+// (search/worker.ts reads it). Each thing found is a document: its kind, whom it is for (the workspace
 // it is in, and a scope a viewer must have), what it is called, what it says, when, and what opens it.
 
 export type Doc = {
@@ -68,7 +68,75 @@ export const has = (text: string, words: string[]): boolean => {
 
 /// A document as a hit, said around the words (a chat's from its title when that has them: a long one is cut where it is
 /// listed).
-export const hitOf = (d: Doc, words: string[]): Hit => ({ ...d.ref, kind: d.kind, key: d.key, title: d.title, text: excerpt(d.kind === "chat" && has(d.title, words) ? d.title : d.body, words), at: d.at });
+type Ranked = { titled: boolean; at: number | null; order: number; hit: Hit };
+
+// Negative when a belongs before b. The input order breaks ties, as a stable sort of the original documents did.
+const compare = (a: Pick<Ranked, "titled" | "at" | "order">, b: Pick<Ranked, "titled" | "at" | "order">): number =>
+  Number(b.titled) - Number(a.titled) || Number(a.at === null) - Number(b.at === null) || (b.at ?? 0) - (a.at ?? 0) || a.order - b.order;
+
+/// Keep only enough matches for the requested page. Each kind has a heap with its worst retained result at the root.
+class Pages {
+  readonly #words: string[];
+  readonly #asker: Asker;
+  readonly #limit: number;
+  readonly #offset: number;
+  readonly #want: number;
+  readonly #kinds = new Map<string, { heap: Ranked[]; count: number }>();
+  #order = 0;
+
+  constructor(words: string[], asker: Asker, options: { limit?: number; offset?: number }) {
+    this.#words = words;
+    this.#asker = asker;
+    this.#limit = Math.max(1, Math.min(options.limit ?? 8, 200));
+    this.#offset = Math.max(0, options.offset ?? 0);
+    this.#want = this.#offset + this.#limit;
+  }
+
+  add(d: Doc): void {
+    if (!sees(d, this.#asker)) return;
+    const title = d.title, body = d.body;
+    if (!has(`${title}\n${body}`, this.#words)) return;
+    const list = this.#kinds.get(d.kind) ?? { heap: [], count: 0 };
+    this.#kinds.set(d.kind, list);
+    list.count++;
+    const key = { titled: title.toLowerCase().includes(this.#words[0]!), at: d.at, order: this.#order++ };
+    const heap = list.heap;
+    if (heap.length >= this.#want && compare(key, heap[0]!) >= 0) return;
+    const hit: Hit = { ...d.ref, kind: d.kind, key: d.key, title, text: excerpt(d.kind === "chat" && has(title, this.#words) ? title : body, this.#words), at: key.at };
+    const ranked = { ...key, hit };
+    if (heap.length < this.#want) {
+      let i = heap.push(ranked) - 1;
+      while (i > 0) {
+        const parent = Math.floor((i - 1) / 2);
+        if (compare(heap[i]!, heap[parent]!) <= 0) break;
+        [heap[i], heap[parent]] = [heap[parent]!, heap[i]!];
+        i = parent;
+      }
+    } else {
+      heap[0] = ranked;
+      let i = 0;
+      for (;;) {
+        const left = i * 2 + 1, right = left + 1;
+        if (left >= heap.length) break;
+        const worst = right < heap.length && compare(heap[right]!, heap[left]!) > 0 ? right : left;
+        if (compare(heap[worst]!, heap[i]!) <= 0) break;
+        [heap[i], heap[worst]] = [heap[worst]!, heap[i]!];
+        i = worst;
+      }
+    }
+  }
+
+  result(): Group[] {
+    const out: Group[] = [];
+    for (const kind of [...this.#kinds.keys()].sort()) {
+      const { heap, count } = this.#kinds.get(kind)!;
+      heap.sort(compare);
+      const hits = heap.slice(this.#offset, this.#offset + this.#limit).map((x) => x.hit);
+      if (hits.length > 0) out.push({ kind, more: count > this.#want, hits });
+    }
+    return out;
+  }
+}
 
 /**
  * What of `docs` the words find for `asker`, by kind, `limit` of each from `offset`: those whose title has the first word
@@ -76,22 +144,21 @@ export const hitOf = (d: Doc, words: string[]): Hit => ({ ...d.ref, kind: d.kind
  */
 export function pick(docs: Iterable<Doc>, words: string[], asker: Asker, options: { limit?: number; offset?: number } = {}): Group[] {
   if (words.length === 0) return [];
-  const limit = Math.max(1, Math.min(options.limit ?? 8, 200));
-  const offset = Math.max(0, options.offset ?? 0);
-  const byKind = new Map<string, { d: Doc; titled: boolean }[]>();
+  const pages = new Pages(words, asker, options);
+  for (const d of docs) pages.add(d);
+  return pages.result();
+}
+
+/// The worker gives other searches a turn between bounded batches; undefined marks a source batch with no documents.
+export async function pickAsync(docs: Iterable<Doc | undefined>, words: string[], asker: Asker, options: { limit?: number; offset?: number } = {}, cancelled: () => boolean = () => false): Promise<Group[]> {
+  if (words.length === 0) return [];
+  const pages = new Pages(words, asker, options);
+  let processed = 0;
   for (const d of docs) {
-    if (!sees(d, asker) || !has(`${d.title}\n${d.body}`, words)) continue;
-    const list = byKind.get(d.kind) ?? [];
-    list.push({ d, titled: d.title.toLowerCase().includes(words[0]!) });
-    byKind.set(d.kind, list);
+    if (cancelled()) throw new Error("the search took too long");
+    if (d !== undefined) pages.add(d);
+    if (d === undefined || ++processed % 128 === 0) await new Promise<void>((resolve) => setImmediate(resolve));
   }
-  const out: Group[] = [];
-  for (const kind of [...byKind.keys()].sort()) {
-    const list = byKind.get(kind)!;
-    list.sort((a, b) => Number(b.titled) - Number(a.titled) || (a.d.at === null ? 1 : 0) - (b.d.at === null ? 1 : 0) || (b.d.at ?? 0) - (a.d.at ?? 0));
-    const page = list.slice(offset, offset + limit);
-    if (page.length === 0) continue;
-    out.push({ kind, more: list.length > offset + limit, hits: page.map((x) => hitOf(x.d, words)) });
-  }
-  return out;
+  if (cancelled()) throw new Error("the search took too long");
+  return pages.result();
 }

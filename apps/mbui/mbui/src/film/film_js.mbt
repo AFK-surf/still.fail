@@ -29,6 +29,12 @@ fn draw_timed(
 }
 
 ///|
+/// (a frame's work counted only by a Wasm host: film_wasm.mbt's)
+fn mark(frame : Int, end : Bool) -> Unit {
+  ignore((frame, end))
+}
+
+///|
 fn now_ms() -> Double {
   0.0
 }
@@ -65,6 +71,12 @@ fn finish(publish : Bool) -> Bool {
 
 ///|
 fn snapshot(path : String) -> Bool {
+  ignore(path)
+  false
+}
+
+///|
+fn snapshot_transparent(path : String) -> Bool {
   ignore(path)
   false
 }

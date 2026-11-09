@@ -1,4 +1,4 @@
-// Copies (and moves) into a station's drive (docs/drive.md "Copying between stations"): what the core holds of the
+// Copies (and moves) into a station's drive: what the core holds of the
 // transfers a person asked, on every station of a workspace, and what they do about them. Each runs on the station the
 // files go to (station/src/drive/transfers.ts), whatever becomes of this device: the core only asks for it, and shows it
 // as its station says it. Held in each station's link's memory (kept, station/memory.ts: there as the app opens again),

@@ -1,8 +1,8 @@
 // What this station shares with the other stations of its workspaces, and what it uses of theirs
-// (docs/station-share.md). It is between the stations only (the station transport, `share.*`, jobs/remote.ts hands
+//. It is between the stations only (the station transport, `share.*`, jobs/remote.ts hands
 // them here); still.fail cloud says nothing of it beyond which stations are in each workspace.
 //
-// - Which stations a share is for (docs/multi-workspace.md): a profile, those of every workspace this station is in
+// - Which stations a share is for: a profile, those of every workspace this station is in
 //   that it serves (all but those it is withheld from); a skill, those of the home workspace, whose agents' skills it
 //   is. Its `allow` narrows that. A copy of a profile serves only the workspaces its host shares it in (it says which,
 //   `share.workspaces`); a copy of a skill is linked into the skills of the workspace it was had in.
@@ -28,7 +28,7 @@
 // (made and removed only here). Shared skills are config.json `sharedSkills: {name: {id, allow}}`.
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, unlinkSync, watch, writeFileSync } from "node:fs";
-import { dirname, join, relative, sep } from "node:path";
+import { basename, dirname, join, relative, sep } from "node:path";
 import type { Clock } from "effect";
 import type { Env, MachineToken } from "../agents/machine-logins.ts";
 import { codexAuthFile } from "../agents/machine-logins.ts";
@@ -45,6 +45,7 @@ import { joinPath, portableName, relativeParts } from "../ops/paths.ts";
 import { profileFetch } from "../ops/agent-env.ts";
 import { workspaceAgentHome } from "../sessions/agent-home.ts";
 import { allowedIn } from "../sessions/config.ts";
+import { Said, stationLang, tr } from "../ops/i18n.ts";
 
 type Json = any;
 
@@ -56,6 +57,8 @@ const CODEX_LEND_MS = 24 * 3600_000;
 const CODEX_MIN_MS = 3600_000;
 /// A login lent before is used again while its host does not answer, if it still has this long.
 const KEEP_LENT_MS = 3600_000;
+/// How long a login wanted waits for the cloud to say the workspace's stations.
+const ROSTER_WAIT_MS = 10_000;
 /// Edits to a skill are taken once they have settled this long.
 const SETTLE_MS = 2000;
 /// What could not be done because another station did not answer is tried again after this, then twice as long each
@@ -82,6 +85,8 @@ export type SharingDeps = {
   agentHome: () => string;
   /// The station's environment (the machine's own logins are found in it).
   env: Env;
+  /// The account of a profile on the machine's login, as read by Accounts.
+  machineEmail?: (runtime: string) => string | null;
   /// A Claude profile's current access token, renewed when about to run out (the accounts module's).
   /// `rejected`: the token a borrower was refused with, renewed first if it is still the current one.
   claudeToken: (profile: Json, rejected?: string) => Promise<MachineToken>;
@@ -95,6 +100,10 @@ export type SharingDeps = {
   changed: () => void;
   /// A host that had not answered answers again: what is borrowed from it is checked again.
   recheck?: () => void;
+  /// A copied profile changed on its host; refresh its login and, for a reset, its allowance.
+  profileChanged?: (id: string, reset: boolean) => Promise<void>;
+  /// A borrower redeemed a reset: read the host's allowance and wake its waiting sessions.
+  quotaReset?: (id: string) => Promise<void>;
   clock?: Clock.Clock;
   /// Tests: Codex's token endpoint.
   codexTokenUrl?: string;
@@ -103,13 +112,13 @@ export type SharingDeps = {
 /// `dir`: of a skill, its directory's device and inode (`dev:ino`), by which it is found again once renamed.
 /// `missing`: the stations that may use it but do not, and why (Missing). `unread`: why what it is cannot be read now
 /// (too-large: past what may be shared; unreadable), so its stations keep the last of it.
-type Hosted = { version: number; hash: string; kind: ShareKind; name: string; allow: string[] | null; told: Record<string, number>; dir?: string; missing?: Record<string, Missing>; unread?: string };
+type Hosted = { version: number; hash: string; kind: ShareKind; name: string; allow: string[] | null; told: Record<string, number>; dir?: string; missing?: Record<string, Missing>; unread?: string; quotaRevision?: number; resetKeys?: string[] };
 /// Why a station that may use a share does not: it refused the share's name (name), it has a skill of its own by that
 /// name, which wins (same-name), it refused for another reason (refused).
 export type Missing = "name" | "same-name" | "refused";
 /// `workspace`: of a skill, the workspace it was had in, whose agents' skills it is linked into (absent: the home one's,
 /// as files of before have it).
-type Borrowed = { version: number; hash: string; kind: ShareKind; name: string; host: string; allow: string[] | null; workspace?: string; pending?: boolean; stale?: boolean };
+type Borrowed = { version: number; hash: string; kind: ShareKind; name: string; host: string; allow: string[] | null; workspace?: string; pending?: boolean; stale?: boolean; quotaRevision?: number; resetPending?: string[]; profileUpdate?: { reset: boolean } };
 /// A share of this station's: what it is, who may use it, its content's hash (null: unreadable now, `unread` why).
 type Own = { kind: ShareKind; name: string; allow: string[] | null; hash: string | null; profile?: Json; skill?: string; unread?: string };
 type State = {
@@ -136,7 +145,7 @@ const keyed = (kind: unknown) => kind === "opencode-go" || kind === "anthropic-a
 /// A profile as another station gets it: what it is, its key when it has one, never where its files are or a login.
 function portable(p: Json): Json {
   const out: Json = {};
-  for (const k of ["name", "runtime", "access", "env", "model", "models", "backgroundOnMessage", "fast"]) if (p[k] !== undefined) out[k] = structuredClone(p[k]);
+  for (const k of ["name", "runtime", "access", "env", "model", "models", "backgroundOnMessage", "fast", "enabled"]) if (p[k] !== undefined) out[k] = structuredClone(p[k]);
   if (isObject(out.access) && !keyed(out.access.kind)) delete out.access.key;
   return out;
 }
@@ -242,6 +251,7 @@ export class Sharing {
   private deps: SharingDeps;
   private time: Fibers;
   private watchers = new Map<string, { close(): void }>();
+  private loginDirs = new Map<string, string>();
   private settle = new Map<string, () => void>();
   private retry: (() => void) | null = null;
   private retryMs = RETRY_MS;
@@ -250,6 +260,7 @@ export class Sharing {
   private unreachable = new Map<string, number>();
   /// Shares this station is handing to another right now: not lent meanwhile.
   private moving = new Set<string>();
+  private moveDone = new Map<string, Promise<void>>();
   /// The Claude token each borrowed profile was last lent (Codex keeps its own in its home's auth.json).
   private lentClaude = new Map<string, MachineToken>();
   private reconciling: Promise<void> | null = null;
@@ -297,7 +308,18 @@ export class Sharing {
 
   /// What a shared profile is, hashed: where it is shared too (its copies serve those workspaces only).
   private profileHash(p: Json): string {
-    return hashOf({ ...portable(p), workspaces: this.sharedIn(p) });
+    let login: string | null = null;
+    if (p.runtime === "codex" && p.access?.kind === "subscription") {
+      try { login = hashOf(readFileSync(this.codexFile(p), "utf8")); } catch {}
+    }
+    // A machine login is read outside the profile's home. Include its account so existing copies receive it after an
+    // upgrade and again after a different account is signed in.
+    const email = p.machine === true && p.access?.kind === "subscription" ? { email: this.emailOf(p) } : {};
+    return hashOf({ ...portable(p), workspaces: this.sharedIn(p), ...email, ...(login === null ? {} : { login }) });
+  }
+
+  private codexFile(p: Json): string {
+    return p.machine === true ? codexAuthFile(this.deps.env) : join(this.home(p), "auth.json");
   }
 
   /// The workspace a share reaches `station` in (`rosters`: as they are now): the first both are in that it is for;
@@ -490,8 +512,14 @@ export class Sharing {
     // What this station shares: its version raised when what it is changed, each station that may use it told
     // (again, one that did not answer), in a workspace it is for, one that no longer may told so.
     const own = this.ownShares();
+    for (const id of this.loginDirs.keys()) if (!own.has(id)) {
+      this.stopWatch(`login:${id}`);
+      this.loginDirs.delete(id);
+    }
     for (const [id, now] of own) {
       if (now.kind === "skill") this.watchHosted(now.skill!, join(this.skillsDir(), now.skill!));
+      if (now.kind === "profile" && now.profile?.runtime === "codex" && now.profile?.access?.kind === "subscription") this.watchLogin(id, this.codexFile(now.profile));
+      else if (this.loginDirs.has(id)) { this.stopWatch(`login:${id}`); this.loginDirs.delete(id); }
       const was = state.hosted[id];
       const hosted: Hosted = was ?? { version: 0, hash: "", kind: now.kind, name: now.name, allow: now.allow, told: {} };
       if (now.hash === null) {
@@ -515,8 +543,9 @@ export class Sharing {
       for (const peer of rosters.keys()) {
         const ws = this.reach(now, peer, rosters);
         if (ws !== null && this.mayUse(now.allow, peer)) {
-          if (hosted.told[peer] === hosted.version) continue;
-          if (!((await tell(peer, ws, { method: "share.changed", id, kind: now.kind, name: now.name, version: hosted.version, allow: now.allow }, hosted)) instanceof Error)) hosted.told[peer] = hosted.version;
+          const version = hosted.version;
+          if (hosted.told[peer] === version) continue;
+          if (!((await tell(peer, ws, { method: "share.changed", id, kind: now.kind, name: now.name, version, allow: now.allow }, hosted)) instanceof Error)) hosted.told[peer] = version;
         } else {
           miss(hosted, peer, null);
           if (peer in hosted.told && !((await tell(peer, null, { method: "share.changed", id, gone: true })) instanceof Error)) delete hosted.told[peer];
@@ -555,10 +584,22 @@ export class Sharing {
         delete state.borrowed[id];
         continue;
       }
-      if (!had.stale && !had.pending && this.checked.has(id)) continue;
+      if (!had.stale && !had.pending && !had.profileUpdate && !had.resetPending?.length && this.checked.has(id)) continue;
       try {
+        for (const key of [...(had.resetPending ?? [])]) {
+          try {
+            await this.deps.ask(had.host, this.askIn(had), { method: "share.quotaReset", id, key });
+            had.resetPending = had.resetPending?.filter((pending) => pending !== key);
+            this.writeState(state);
+          } catch (e) {
+            // An older host may not know this request yet. Retry it, without holding up other profile updates.
+            pending = true;
+            log.info("share", "an allowance reset could not be sent to its host", { id, host: had.host, by: whoSaid(e), error: (e as Error).message });
+            break;
+          }
+        }
         if (had.pending && had.kind === "skill") await this.sendSkillEdit(id, had);
-        if (!had.stale) {
+        if (!had.stale && !had.profileUpdate) {
           const now = await this.deps.ask(had.host, this.askIn(had), { method: "share.version", id, ...(had.kind === "skill" ? { hidden: !this.skillLinked(id, had) } : {}) });
           this.unreachable.delete(had.host);
           if (typeof now?.moved === "string") {
@@ -569,13 +610,26 @@ export class Sharing {
             continue;
           }
         }
-        const got = await this.deps.ask(had.host, this.askIn(had), { method: "share.get", id });
-        this.unreachable.delete(had.host);
-        if (had.kind === "profile") this.placeProfile(id, had, got);
-        else this.placeSkill(id, had, got);
-        had.version = Number(got?.version ?? 0);
-        had.allow = Array.isArray(got?.allow) ? got.allow : null;
-        had.stale = false;
+        if (had.stale || !had.profileUpdate) {
+          const got = await this.deps.ask(had.host, this.askIn(had), { method: "share.get", id });
+          this.unreachable.delete(had.host);
+          if (had.kind === "profile") {
+            this.placeProfile(id, had, got);
+            const revision = Number(got?.quotaRevision ?? 0);
+            if (had.version >= 0) had.profileUpdate = { reset: revision > (had.quotaRevision ?? 0) || had.profileUpdate?.reset === true };
+            had.quotaRevision = revision;
+          } else this.placeSkill(id, had, got);
+          had.version = Number(got?.version ?? 0);
+          had.allow = Array.isArray(got?.allow) ? got.allow : null;
+          had.stale = false;
+          this.writeState(state);
+        }
+        if (had.profileUpdate) {
+          const profile = this.profiles().find((p) => p.share?.id === id && p.share?.borrowed === true);
+          if (profile) await this.deps.profileChanged?.(String(profile.id), had.profileUpdate.reset);
+          delete had.profileUpdate;
+          this.writeState(state);
+        }
         this.checked.add(id);
       } catch (e) {
         pending = true;
@@ -744,6 +798,24 @@ export class Sharing {
     this.watchDir(`hosted:${name}`, dir, () => void this.reconcile());
   }
 
+  /// Follow the directory, not auth.json itself: Codex replaces the file when it signs in or renews.
+  private watchLogin(id: string, file: string) {
+    const key = `login:${id}`;
+    if (this.loginDirs.get(id) === file && this.watchers.has(key)) return;
+    this.stopWatch(key);
+    this.loginDirs.delete(id);
+    try {
+      const w = watch(dirname(file), { persistent: false }, (_event, name) => {
+        if (name !== null && String(name) !== basename(file)) return;
+        this.settle.get(key)?.();
+        this.settle.set(key, this.time.after(SETTLE_MS, () => (this.settle.delete(key), void this.reconcile())));
+      });
+      w.on("error", () => { if (this.watchers.get(key) === w) this.stopWatch(key); });
+      this.watchers.set(key, w);
+      this.loginDirs.set(id, file);
+    } catch { /* The profile's home may not exist until it is signed in. */ }
+  }
+
   private watchBorrowed(id: string, dir: string) {
     this.watchDir(`borrowed:${id}`, dir, () => {
       const state = this.readState();
@@ -804,13 +876,20 @@ export class Sharing {
       if (method === "share.get") {
         // It has a copy now: it is told when this one changes.
         this.told(id, peer, version);
-        return { version, profile: portable(p), email: p.access?.kind === "subscription" ? this.emailOf(p) : null, allow: own.allow, workspaces: this.sharedIn(p) };
+        return { version, profile: portable(p), email: p.access?.kind === "subscription" ? this.emailOf(p) : null, allow: own.allow, workspaces: this.sharedIn(p), quotaRevision: state.hosted[id]?.quotaRevision ?? 0 };
       }
       if (method === "share.lend") {
         if (this.moving.has(id)) throw new Error("the login is being moved to another station");
         return this.lend(p, typeof request.rejected === "string" ? request.rejected : undefined);
       }
       if (method === "share.status") return this.deps.status(p.id);
+      if (method === "share.quotaReset") {
+        const key = typeof request.key === "string" ? request.key : "";
+        if (!key || p.runtime !== "codex" || p.access?.kind !== "subscription") throw new Error("invalid allowance reset");
+        if (!state.hosted[id]?.resetKeys?.includes(key)) await this.deps.quotaReset?.(p.id);
+        await this.quotaReset(p.id, key);
+        return { heard: true };
+      }
     } else {
       const dir = join(this.skillsDir(), own.skill!);
       if (method === "share.get") {
@@ -843,6 +922,9 @@ export class Sharing {
       had.host = peer;
       had.stale = true;
     }
+    // The new host's announcement may arrive before the old host's handover notice. A notice naming the host already
+    // taken is a harmless retry, so the old host can stop sending it.
+    if (had && had.host !== peer && request.host === had.host) return { heard: true };
     if (had && had.host !== peer) throw new Error("only the station that has it says so");
     if (request.gone === true) {
       if (had) {
@@ -874,6 +956,7 @@ export class Sharing {
 
   private emailOf(p: Json): string | null {
     if (typeof p.share?.email === "string") return p.share.email;
+    if (p.machine === true) return this.deps.machineEmail?.(p.runtime) ?? null;
     const home = this.home(p);
     if (p.runtime === "grok") return grokEmail(home);
     if (p.runtime === "cursor") return cursorEmail(home);
@@ -936,7 +1019,7 @@ export class Sharing {
       const t = await this.deps.claudeToken(p, rejected);
       return { runtime: "claude", token: t.token, expiresAt: t.expiresAt };
     }
-    const file = p.machine === true ? codexAuthFile(this.deps.env) : join(this.home(p), "auth.json");
+    const file = this.codexFile(p);
     let auth = JSON.parse(readFileSync(file, "utf8"));
     let expiresAt = jwtExpiry(auth?.tokens?.access_token) ?? 0;
     if (expiresAt - this.time.now() < CODEX_LEND_MS) {
@@ -989,9 +1072,30 @@ export class Sharing {
     return host;
   }
 
+  /// Once the cloud has said the workspace's stations, or ROSTER_WAIT_MS on. A station just started hears them some
+  /// 500 ms after what waited for an agent is given one again (2026-11-02), and nothing would try that again until it
+  /// next restarts: only what has no login kept to go on with waits here.
+  private rosterSaid(): Promise<void> {
+    const cloud = this.deps.cloud;
+    if (cloud.peersCurrent || cloud.state === null) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => {
+        stop();
+        giveUp();
+        resolve();
+      };
+      const stop = cloud.listen(() => {
+        if (cloud.peersCurrent) done();
+      });
+      const giveUp = this.time.after(ROSTER_WAIT_MS, done);
+    });
+  }
+
   /// A borrowed Claude subscription's token, from its host; `rejected`, the one a process here was refused with.
   async lendClaude(profile: Json, rejected?: string): Promise<MachineToken> {
     const host = this.hostOf(profile);
+    const before = this.lentClaude.get(profile.id);
+    if (!before || before.token === rejected || before.expiresAt - this.time.now() < KEEP_LENT_MS) await this.rosterSaid();
     try {
       const got = await this.deps.ask(host, null, { method: "share.lend", id: profile.share.id, ...(rejected !== undefined ? { rejected } : {}) });
       this.unreachable.delete(host);
@@ -1007,15 +1111,22 @@ export class Sharing {
         log.warn("share", "the host did not lend a new token; the one lent before is used", { profile: profile.id, error: (e as Error).message });
         return kept;
       }
-      throw new Error(`the station this subscription is signed in on did not lend it: ${(e as Error).message}`);
+      log.warn("share", "the host did not lend it", { profile: profile.id, error: (e as Error).message });
+      throw new Said(tr(stationLang(), "station.share.notLent"));
     }
   }
 
   /// A borrowed Codex subscription: its home's auth.json written with the host's current tokens (no refresh token, so
   /// Codex never renews it here); when they run out.
-  async lendCodex(profile: Json): Promise<number> {
+  async lendCodex(profile: Json, rejected = false, sandboxFile?: string): Promise<number> {
     const host = this.hostOf(profile);
     const home = this.home(profile);
+    const copyForSandbox = () => {
+      if (sandboxFile === undefined) return;
+      mkdirSync(dirname(sandboxFile), { recursive: true });
+      writePrivate(sandboxFile, readFileSync(join(home, "auth.json"), "utf8"));
+    };
+    if (keptCodexExpiry(join(home, "auth.json")) - this.time.now() < KEEP_LENT_MS) await this.rosterSaid();
     let got: Json;
     try {
       got = await this.deps.ask(host, null, { method: "share.lend", id: profile.share.id });
@@ -1024,11 +1135,13 @@ export class Sharing {
       this.unreachable.set(host, this.time.now());
       this.deps.changed();
       const kept = keptCodexExpiry(join(home, "auth.json"));
-      if (kept - this.time.now() >= KEEP_LENT_MS) {
+      if (!rejected && kept - this.time.now() >= KEEP_LENT_MS) {
         log.warn("share", "the host did not lend a new login; the one lent before is used", { profile: profile.id, error: (e as Error).message });
+        copyForSandbox();
         return kept;
       }
-      throw new Error(`the station this subscription is signed in on did not lend it: ${(e as Error).message}`);
+      log.warn("share", "the host did not lend it", { profile: profile.id, error: (e as Error).message });
+      throw new Said(tr(stationLang(), "station.share.notLent"));
     }
     const auth = {
       auth_mode: "chatgpt",
@@ -1038,6 +1151,7 @@ export class Sharing {
     };
     mkdirSync(home, { recursive: true });
     writePrivate(join(home, "auth.json"), JSON.stringify(auth, null, 2));
+    copyForSandbox();
     return Number(got.expiresAt ?? 0);
   }
 
@@ -1069,6 +1183,37 @@ export class Sharing {
     }
   }
 
+  /// A reset made here or by a borrower is sent to every copy, including those currently offline. The redemption key
+  /// makes a retry after a lost reply harmless.
+  async quotaReset(profileId: string, key: string): Promise<void> {
+    const profile = this.profiles().find((p) => p.id === profileId);
+    const id = profile?.share?.id;
+    if (typeof id !== "string") return;
+    const moving = this.moveDone.get(id);
+    if (moving) {
+      await moving;
+      return this.quotaReset(profileId, key);
+    }
+    const state = this.readState();
+    if (profile.share.borrowed === true) {
+      const had = state.borrowed[id];
+      if (!had) return;
+      had.resetPending = [...new Set([...(had.resetPending ?? []), key])];
+    } else {
+      let hosted = state.hosted[id];
+      if (!hosted) {
+        await this.reconcile();
+        hosted = state.hosted[id];
+      }
+      if (!hosted || hosted.resetKeys?.includes(key)) return;
+      hosted.resetKeys = [...(hosted.resetKeys ?? []), key].slice(-32);
+      hosted.quotaRevision = (hosted.quotaRevision ?? 0) + 1;
+      hosted.version++;
+    }
+    this.writeState(state);
+    void this.reconcile();
+  }
+
   // ── what the pages ask (this station hosting) ──
 
   /// A profile shared (with who may use it: null, every station), its stations changed, or no longer shared.
@@ -1082,6 +1227,8 @@ export class Sharing {
     if (on && p.access?.kind === "subscription" && p.runtime === "cursor") throw new Error("a Cursor account cannot be shared with other stations yet");
     // Nor Devin's.
     if (on && p.access?.kind === "subscription" && p.runtime === "devin") throw new Error("a Devin account cannot be shared with other stations yet");
+    // Nor the Antigravity CLI's Google account.
+    if (on && p.access?.kind === "subscription" && p.runtime === "agy") throw new Error("an Antigravity CLI sign-in cannot be shared with other stations yet");
     // Nor a Kimi sign-in (its token is renewed every few minutes here, accounts/kimi.ts).
     if (on && p.access?.provider === "kimi-code" && p.access?.login === true) throw new Error("a Kimi Code sign-in cannot be shared with other stations yet");
     const had = isObject(p.share) && typeof p.share.id === "string" ? (p.share.id as string) : null;
@@ -1123,6 +1270,7 @@ export class Sharing {
     const ws = this.reach({ kind: "profile", profile: p }, to);
     if (ws === null) throw new Error("that station is in none of the workspaces this profile is for now");
     const id = p.share.id as string;
+    if (this.moving.has(id)) throw new Error("the login is being moved to another station");
     const allow: string[] | null = Array.isArray(p.share.allow) ? p.share.allow : null;
     const credentials: Record<string, string> = {};
     const home = this.home(p);
@@ -1134,26 +1282,28 @@ export class Sharing {
     }
     const state = this.readState();
     const was = state.hosted[id];
+    const done = Promise.withResolvers<void>();
     this.moving.add(id);
+    this.moveDone.set(id, done.promise);
     try {
-      await this.deps.ask(to, ws, { method: "share.take", id, profile: { ...portable(p), access: p.access }, email: this.emailOf(p), credentials, allow, version: (was?.version ?? 0) + 1 });
-    } catch (e) {
+      await this.deps.ask(to, ws, { method: "share.take", id, profile: { ...portable(p), access: p.access }, email: this.emailOf(p), credentials, allow, version: (was?.version ?? 0) + 1, quotaRevision: was?.quotaRevision ?? 0, resetKeys: was?.resetKeys ?? [] });
+      // Ours no more: the login forgotten (the new host renews it now), the profile kept as a copy under the same id.
+      for (const name of Object.keys(credentials)) rmSync(join(home, name), { force: true });
+      const email = this.emailOf(p);
+      this.deps.config.update((raw) => {
+        for (const x of raw.profiles ?? []) if (x.id === profileId) x.share = { id, borrowed: true, host: to, ...(email ? { email } : {}) };
+      });
+      const after = this.readState();
+      delete after.hosted[id];
+      // Fetched from the new host at once: the workspaces it shares it in are its to say now.
+      after.borrowed[id] = { version: (was?.version ?? 0) + 1, hash: "", kind: "profile", name: String(p.name ?? p.id), host: to, allow, stale: true, quotaRevision: was?.quotaRevision ?? 0 };
+      after.moved[id] = { to, tell: Object.keys(was?.told ?? {}) };
+      this.writeState(after);
+    } finally {
       this.moving.delete(id);
-      throw e;
+      this.moveDone.delete(id);
+      done.resolve();
     }
-    // Ours no more: the login forgotten (the new host renews it now), the profile kept as a copy under the same id.
-    for (const name of Object.keys(credentials)) rmSync(join(home, name), { force: true });
-    const email = this.emailOf(p);
-    this.deps.config.update((raw) => {
-      for (const x of raw.profiles ?? []) if (x.id === profileId) x.share = { id, borrowed: true, host: to, ...(email ? { email } : {}) };
-    });
-    const after = this.readState();
-    delete after.hosted[id];
-    // Fetched from the new host at once: the workspaces it shares it in are its to say now.
-    after.borrowed[id] = { version: (was?.version ?? 0) + 1, hash: "", kind: "profile", name: String(p.name ?? p.id), host: to, allow, stale: true };
-    after.moved[id] = { to, tell: Object.keys(was?.told ?? {}) };
-    this.writeState(after);
-    this.moving.delete(id);
     log.info("share", "a shared profile moved to another station", { profile: profileId, to });
     await this.reconcile();
   }
@@ -1196,7 +1346,9 @@ export class Sharing {
     // The station that handed it over keeps a copy, at this version.
     const version = Number(request.version ?? 1);
     const p = this.profiles().find((x) => x.id === localId);
-    after.hosted[id] = { version, hash: p ? this.profileHash(p) : "", kind: "profile", name: String(given.name ?? localId), allow, told: { [peer]: version } };
+    const quotaRevision = Number.isSafeInteger(request.quotaRevision) && request.quotaRevision >= 0 ? request.quotaRevision : 0;
+    const resetKeys = Array.isArray(request.resetKeys) ? request.resetKeys.filter((key: unknown): key is string => typeof key === "string").slice(-32) : [];
+    after.hosted[id] = { version, hash: p ? this.profileHash(p) : "", kind: "profile", name: String(given.name ?? localId), allow, told: { [peer]: version }, quotaRevision, resetKeys };
     this.writeState(after);
     log.info("share", "a shared profile handed over to this station", { id, from: peer });
     void this.reconcile();
@@ -1229,11 +1381,3 @@ export class Sharing {
     return null;
   }
 }
-
-export const sharedSkillConflicts = (dir: string): string[] => {
-  try {
-    return readdirSync(dir).filter((n) => /^SKILL\.conflict-.*\.md$/.test(n));
-  } catch {
-    return [];
-  }
-};

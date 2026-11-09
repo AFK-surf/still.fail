@@ -10,7 +10,7 @@ timeout 180000
 until 预览四个文件 {T}
 timeout 60000
 tap 预览四个文件 {T}
-until =studio
+until =willow
 timeout 120000
 decoded e2e-photo.jpg
 timeout 60000

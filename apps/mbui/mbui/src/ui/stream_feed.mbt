@@ -27,7 +27,7 @@
 //                   stream's texture, W × H (now, on the frames' thread)
 //   drop N          the surface's N frames no one was told of latched away (now, on the frames' thread)
 //
-// The rules (Android's remote/Decoders.kt, and what its SurfaceTexture asks):
+// The rules (and what its SurfaceTexture asks):
 // - a frame waits for an input buffer; with two inside the decoder, the older counts as taken (a decoder holding frames
 //   back would wait for more while the sender waits for an acknowledgement)
 // - one decoded frame at a time is on the surface: released, then told ("f") once it arrived, the next released only

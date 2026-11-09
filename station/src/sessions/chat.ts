@@ -1,5 +1,6 @@
 // What the station needs from a chat platform (the Rust station's chat/mod.rs): Slack is one, the station's own chat
 // (./internal.ts) another. The hub routes what a surface says to sessions, and posts what agents write through it.
+import type { CardEnd } from "../connects/card-ends.ts";
 import type { BotIdentity } from "../connects/connections.ts";
 import type { Attachment } from "../store/store.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
@@ -18,7 +19,12 @@ export type InboundMessage = {
   addressed: boolean;
   /// Files shared with it, fetched (`download`) into the uploads of a session of its thread when it is recorded.
   files?: InboundFile[];
+  /// The model it was sent to (Slack's `/sf`): a session it starts runs it instead of its connect's.
+  model?: ModelChoice;
 };
+
+/// A model a person picks for a new chat on a platform: its runtime, and its model (null: the runtime's default).
+export type ModelChoice = { runtime: string; model: string | null };
 
 /// A file shared with a message, as the platform holds it. `url`: where its bytes are; null where the platform keeps
 /// them back (a file over a free workspace's limit, a deleted one).
@@ -29,10 +35,13 @@ export type InboundFile = { id: string; name: string; size: number; url: string 
 export type ChatEvent =
   | { type: "message"; message: InboundMessage }
   | { type: "changed"; channel: string; threadTs: string; ts: string; text: string }
-  | { type: "stop"; channel: string; threadTs: string; ts: string; localAt?: number | null };
+  | { type: "stop"; channel: string; threadTs: string; ts: string; localAt?: number | null }
+  /// A login card's field answered (Slack): what its page gave (a code), for the login the card at `ts` is of. Never a
+  /// message of the thread: the code goes to the login's command alone. Throws what refused it, said to that person.
+  | { type: "loginCode"; channel: string; threadTs: string; ts: string; user: string; code: string };
 
 /// A channel or group a bot is in. `kind`: a Slack channel (a new thread in it); a Feishu topic group (a new topic); a
-/// Feishu group (the group's conversation, taken over: docs/feishu.md「会话怎么分」).
+/// Feishu group (the group's conversation, taken over:「会话怎么分」).
 export type Place = { id: string; name: string; kind: "channel" | "topics" | "group"; private?: boolean };
 
 /// A person in a place, as they are mentioned there (`id`, as `mention` takes it): the name people know them by, the
@@ -71,20 +80,29 @@ export interface ChatSurface {
   /// The answer cards it shows (options and text; Slack's and Feishu's buttons and fields): absent, none but the
   /// station's chats.
   cards?: boolean;
+  /// Whether it shows a login card whose page gives a code with a field for that code (Slack), answered as a
+  /// `loginCode` event; absent, none but the station's chats.
+  loginCards?: boolean;
+  /// A card it showed stopped waiting other than by a press of its own button (connects/card-ends.ts): its message
+  /// (`ts` the post's, as `post` gave it, and its words) changed to say so, with nothing left to press. Best effort.
+  cardEnded?(thread: ThreadRef, ts: string, text: string, card: Json, end: CardEnd): Promise<void>;
   /// How a new session's link is said as it starts (null: it is not said: Feishu's status card has it); absent: Slack's
   /// `<url|label>`.
   sessionLink?(url: string, label: string): string | null;
   /// A shared file's bytes, as the bot may read them; throws where it may not (a Slack app without files:read).
   download?(file: InboundFile): Promise<Uint8Array>;
+  /// The files of an `api` answer.
+  answerFiles?(answer: Json): InboundFile[];
   /// A person's display name, or null if unknown.
   userName?(user: string): Promise<string | null>;
   /// Says in the thread what the agent working for it is doing ("" when it is done), best effort, never waited on.
   /// `messageTs`: the message that started the work; `page`: the session's page in still.fail, where there is one.
   working?(thread: ThreadRef, messageTs: string | null, status: string, page?: string | null): void;
-  /// Says in the thread where it stands as the agent's turn ended (`kind` done or need, with the turn's words), under
-  /// its last message, as still.fail's chat says it at its end; null takes back what was said (the turn ended
-  /// otherwise). It goes by itself as the agent works again. Best effort, never waited on.
-  standsAt?(thread: ThreadRef, stands: { kind: "done" | "need"; words: string | null } | null): void;
+  /// Says in the thread where it stands as the agent's turn ended (`kind` done or need, with the turn's words, or left:
+  /// the agent no longer follows it, chat_leave), under its last message, as still.fail's chat says it at its end; null
+  /// takes back what was said (the turn ended otherwise). It goes by itself as the agent works again. Best effort,
+  /// never waited on.
+  standsAt?(thread: ThreadRef, stands: { kind: "done" | "need" | "left"; words: string | null } | null): void;
   /// Calls the platform's API as the bot (Slack's Web API): what the agent reaches through slack_api.
   api?(method: string, params: Record<string, Json>): Promise<Json>;
   /// A person's email, where the platform shares it.

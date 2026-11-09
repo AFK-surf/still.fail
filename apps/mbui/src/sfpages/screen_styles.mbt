@@ -1,4 +1,4 @@
-// How the remote screen's viewer looks (ember apps/android app/remote/ScreenViewer.kt), its sizes as Android says
+// How the remote screen's viewer looks, its sizes as Android says
 // them: on the scale's steps where they are one, else named in src/sf/tokens.mbt.
 
 // ── the page ──────────────────────────────────────────────────────────────
@@ -85,6 +85,12 @@ let round_icon : Double = 20.0
 /// Upright: the bar, 56 high, 6 in at its start and 10 at its end, 8 between.
 // kept across runs: a value (no field of it changes)
 let screen_bar : @ui.Style = @ui.css("row w=Full h=S14 pl=S1_5 pr=S2_5 gap=S2 align=ACenter")
+
+///|
+/// Under a panel's tabs (the tab in front names it, its mark first): its figures from under the tab's mark, its last
+/// under the panel's close.
+// kept across runs: a value (no field of it changes)
+let screen_bar_in_tabs : @ui.Style = @ui.css("row w=Full h=S11 pl=S10 pr=S6 gap=S2 align=ACenter")
 
 ///|
 // kept across runs: a value (no field of it changes)
@@ -270,6 +276,16 @@ let take_over_button_words : @ui.TextStyle = @ui.text_style(
 let stage_box : @ui.Style = @ui.css("w=Full h=Full clip")
 
 ///|
+/// Beside a chat: a ground a shade off the page's, what a wide picture leaves of a tall panel not taken for the page.
+// kept across runs: a value (no field of it changes)
+let stage_box_in_panel : @ui.Style = @ui.css("w=Full h=Full clip bg=Faint")
+
+///|
+/// A device's at its whole size, its body round the picture being past this box.
+// kept across runs: a value (no field of it changes)
+let stage_box_body : @ui.Style = @ui.css("w=Full h=Full")
+
+///|
 /// The frame as it was, faded while the view is on its way back (40%).
 // kept across runs: a value (no field of it changes)
 let frame_faded : @ui.Style = @ui.css("opacity=O40")
@@ -309,7 +325,7 @@ let undriven_icon : Double = 16.0
 let undriven_words : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=Muted, max_lines=3)
 
 ///|
-/// On its way (Waiting.kt WaitPill floating over the frame): 24 round it, the capsule floating still with no ground of
+/// On its way: 24 round it, the capsule floating still with no ground of
 /// its own, 12 and 6 in, the spinner (12) 8 before the words (13 on 18, the ink, two lines).
 // kept across runs: a value (no field of it changes)
 let wait_pill_box : @ui.Style = @ui.css("row px=S3 py=S1_5 gap=S2 align=ACenter radius=Full bg=Floating shadow=Sm")
@@ -358,7 +374,7 @@ let ended_why : @ui.TextStyle = @ui.text_style(size=Meta, leading=L5, color=A(On
 let ended_keys : @ui.Style = @ui.css("row gap=S2 justify=JCenter")
 
 ///|
-/// 重新打开 (Controls.kt Button at 34 high, 16 in, 12 more under the words): the ink with the page's colour on it in
+/// 重新打开 (16 in, 12 more under the words): the ink with the page's colour on it in
 /// the dark theme, a solid light grey with the ink on it in the light one (on the screen's dark veil, not the page: the
 /// neutral ground, the ink at an opacity, came out as dark as the veil, 1.2 to 1 under its words).
 // kept across runs: a value (no field of it changes)
@@ -408,7 +424,7 @@ let drop_row_box : @ui.Style = @ui.style(
 
 ///|
 /// How far in a row's round key stands from the panel's top and end (the ladder's card corner less its half).
-let drop_key_in : Double = @sf.capsule_in(@sf.card_corner, drop_key_side)
+let drop_key_in : Double = @ui.capsule_in(@sf.card_corner, drop_key_side)
 
 ///|
 /// A row's least height: its key at its top, and under it as far as the panel's foot corner is round.
@@ -486,7 +502,7 @@ let row_key_round : @ui.Style = @ui.style(
 let drop_key_icon : Double = 16.0
 
 ///|
-/// A button that is not the main one (Controls.kt Button: 38 high, 16 in, the chip under the ink's words, 14 semibold).
+/// A button that is not the main one (16 in, the chip under the ink's words, 14 semibold).
 // kept across runs: a value (no field of it changes)
 let soft_button_box : @ui.Style = @ui.style(
   h=@sf.button_38,
@@ -559,6 +575,55 @@ let net_panel_w : Double = 280.0
 
 ///|
 // kept across runs: a value (no field of it changes)
+let debug_body : @ui.Style = @ui.css("w=Full px=S3 py=S2 gap=S1")
+
+///|
+/// What App, 日志 or 设备 holds in 日志's panel made of nodes, as one: as far apart as what debug_body holds.
+// kept across runs: a value (no field of it changes)
+let debug_tab_box : @ui.Style = @ui.css("w=Full gap=S1")
+
+///|
+/// Rows of a panel's group that come and go together (matched or not, the app started again), as far apart as the
+/// group's (panel_group_box's).
+// kept across runs: a value (no field of it changes)
+let debug_rows_box : @ui.Style = @ui.css("w=Full gap=S0_5")
+
+///|
+// kept across runs: a value (no field of it changes)
+let debug_line : @ui.TextStyle = @ui.text_style(size=Caption, color=Fg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let debug_row_place : @ui.Style = @ui.css("row w=Full justify=JCenter")
+
+///|
+/// Where a device's picture is, with room round it for its body.
+// kept across runs: a value (no field of it changes)
+let debug_stage_body : @ui.Style = @ui.style(w=@sf.grow, h=@sf.grow, p=S3)
+
+///|
+/// The device's buttons in a row over or under the picture, as near it as they can be.
+// kept across runs: a value (no field of it changes)
+let debug_tools_bar : @ui.Style = @ui.css("row w=Full py=S2 gap=S2 justify=JCenter align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let debug_tools_column : @ui.Style = @ui.css("w=Full gap=S2 align=ACenter")
+
+///|
+// kept across runs: a value (no field of it changes)
+let debug_pane_box : @ui.Style = @ui.css("bg=Surface px=S3 py=S3 gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let debug_device_box : @ui.Style = @ui.css("w=Full gap=S2")
+
+///|
+// kept across runs: a value (no field of it changes)
+let debug_pane_head : @ui.Style = @ui.css("row w=Full align=ACenter justify=JBetween")
+
+///|
+// kept across runs: a value (no field of it changes)
 let net_panel_box : @ui.Style = @ui.css("w=Full px=S2_5 py=S2 gap=S2_5")
 
 ///|
@@ -622,6 +687,11 @@ let tiles_row : @ui.Style = @ui.css("row w=Full gap=S2")
 let tile_box : @ui.Style = @ui.style(w=@sf.grow).then(
   @ui.css("h=S16 gap=S1_5 radius=Xl bg=Tint align=ACenter justify=JCenter pressed{bg=Hover}"),
 )
+
+///|
+/// A tile's ground while pressed (tile_box's and key_tile_box's `pressed`, on a tile made as a node).
+// kept across runs: a value (no field of it changes)
+let tile_pressed : @ui.Style = @ui.css("bg=Hover")
 
 ///|
 // kept across runs: a value (no field of it changes)

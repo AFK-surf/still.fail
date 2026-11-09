@@ -1,4 +1,4 @@
-// The station's error reports (telemetry.rs's tests): scrubbed, off by default, only with a built key.
+// The station's error reports: scrubbed, off by default, only with a built key.
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";

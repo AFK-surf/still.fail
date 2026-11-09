@@ -8,8 +8,10 @@
 import { type Dirent, closeSync, opendirSync, openSync, readSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { type Lang, tr } from "../ops/i18n.ts";
-import { type Json, type Store, listSessions, runtimeSessions, sessionOfRuntime } from "./store.ts";
+import { type Json, type Store, sessionOfRuntime } from "./store.ts";
 import { HttpError } from "./views.ts";
+import { parseIso } from "./transcript.ts";
+import { splitWhitespace, trim, trimStart } from "../../../client/core-ts/src/whitespace.ts";
 
 type Runtime = "claude" | "codex";
 
@@ -41,14 +43,6 @@ const LINE_LIMIT = 256 * 1024;
 
 // ---- Rust's text handling ----
 
-const WS = "\\t\\n\\v\\f\\r \\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000";
-const TRIM = new RegExp(`^[${WS}]+|[${WS}]+$`, "g");
-const TRIM_START = new RegExp(`^[${WS}]+`);
-const SPLIT = new RegExp(`[${WS}]+`);
-/// str::trim, trim_start, split_whitespace (char::is_whitespace).
-const trim = (s: string) => s.replace(TRIM, "");
-const trimStart = (s: string) => s.replace(TRIM_START, "");
-const splitWhitespace = (s: string) => s.split(SPLIT).filter((w) => w !== "");
 const str = (v: Json): string | null => (typeof v === "string" ? v : null);
 const get = (v: Json, k: string): Json => (v !== null && typeof v === "object" && !Array.isArray(v) ? v[k] : undefined);
 
@@ -158,29 +152,7 @@ function lines(path: string, limit = Infinity): string[] {
 }
 
 /// transcript.rs parse_iso: milliseconds of an ISO time (YYYY-MM-DDTHH:MM:SS[.fff]), read by position.
-export function parseIso(at: string): number | null {
-  const b = Buffer.from(at, "utf8");
-  const num = (from: number, len: number): number | null => {
-    if (from + len > b.length) return null;
-    const s = b.subarray(from, from + len).toString("latin1");
-    return /^[+-]?[0-9]+$/.test(s) ? parseInt(s, 10) : null;
-  };
-  const [y, mo, d, h, mi, s] = [num(0, 4), num(5, 2), num(8, 2), num(11, 2), num(14, 2), num(17, 2)];
-  if (y === null || mo === null || d === null || h === null || mi === null || s === null) return null;
-  let ms = 0;
-  if (b[19] === 0x2e) {
-    const frac = /^[0-9]*/.exec(b.subarray(20).toString("utf8"))![0];
-    ms = parseInt(frac.slice(0, 3).padEnd(3, "0"), 10) || 0;
-  }
-  // Days from the civil date (Howard Hinnant's algorithm).
-  const [yy, mm] = mo <= 2 ? [y - 1, mo + 9] : [y, mo - 3];
-  const era = Math.floor(yy / 400);
-  const yoe = yy - era * 400;
-  const doy = Math.trunc((153 * mm + 2) / 5) + d - 1;
-  const doe = yoe * 365 + Math.trunc(yoe / 4) - Math.trunc(yoe / 100) + doy;
-  const days = era * 146_097 + doe - 719_468;
-  return (days * 86_400 + h * 3600 + mi * 60 + s) * 1000 + ms;
-}
+export { parseIso };
 
 // ---- what was said ----
 
@@ -529,12 +501,11 @@ function shown(s: MachineSession): Json {
 // ---- the routes' answers (admin/mod.rs) ----
 
 /// GET /machine-sessions: the machine's latest 100, each with the station's session already going on with it.
-export function machineSessions(s: Store): Json {
-  const found = list(roots(), 100);
-  // A HashMap collected from every session: of two going on with one, the last listed (least recently active) stands.
-  const going = new Map<string, string>();
-  for (const r of listSessions(s)) for (const id of runtimeSessions(s, r.key)) going.set(`${r.runtime}\0${id}`, r.key);
-  for (const m of found) m.session = going.get(`${m.runtime}\0${m.id}`) ?? null;
+export function machineSessions(s: Store, source: Roots = roots()): Json {
+  const found = list(source, 100);
+  // The session going on with each, by the index of runtime sessions (the latest active of two): every session the
+  // station ever had was read with its runtime sessions for it, 1,500 on a station, 14 s (2026-11-03).
+  for (const m of found) m.session = sessionOfRuntime(s, m.runtime, m.id);
   return { sessions: found.map(shown) };
 }
 

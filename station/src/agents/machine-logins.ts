@@ -1,4 +1,4 @@
-// How a `machine` profile uses this machine's own login (the Rust station's machine_logins.rs). Never copied: both vendors
+// How a `machine` profile uses this machine's own login. Never copied: both vendors
 // rotate single-use refresh tokens, so a copy would sign one side out later.
 // - Codex: the profile's home links auth.json to the machine's; Codex saves through the link, so both share one login.
 // - Claude Code: a link does not hold (it replaces the file when it refreshes), so the profile's processes are handed
@@ -16,7 +16,7 @@ export type Env = Record<string, string | undefined>;
 /// process handed one this close is started again for its next turn.
 export const CLAUDE_TOKEN_MARGIN_MS = 5 * 60_000;
 
-export type MachineToken = { token: string; expiresAt: number };
+export type MachineToken = { token: string; expiresAt: number; subscriptionType?: string; rateLimitTier?: string };
 
 const homeOf = (env: Env) => platform.home(env) ?? ".";
 export const claudeCredentialsFile = (env: Env) => join(homeOf(env), ".claude", ".credentials.json");
@@ -46,7 +46,12 @@ export function parseClaudeCredentials(text: string): MachineToken | undefined {
     const oauth = JSON.parse(text)?.claudeAiOauth;
     const token = oauth?.accessToken;
     if (typeof token !== "string" || token === "") return undefined;
-    return { token, expiresAt: typeof oauth.expiresAt === "number" ? oauth.expiresAt : 0 };
+    return {
+      token,
+      expiresAt: typeof oauth.expiresAt === "number" ? oauth.expiresAt : 0,
+      ...(typeof oauth.subscriptionType === "string" ? { subscriptionType: oauth.subscriptionType } : {}),
+      ...(typeof oauth.rateLimitTier === "string" ? { rateLimitTier: oauth.rateLimitTier } : {}),
+    };
   } catch {
     return undefined;
   }
@@ -67,7 +72,7 @@ export async function readClaudeCredentials(env: Env): Promise<MachineToken | un
 }
 
 /// The machine's current token, as machine_claude_token gives it. Renewing it when it is about to run out
-/// (claude_oauth.rs, under Claude Code's own locks) is the accounts module's: a driver is given that as
+/// (under Claude Code's own locks) is the accounts module's: a driver is given that as
 /// `machineToken`; this default only reads, and refuses a token about to run out.
 export async function machineClaudeToken(env: Env): Promise<MachineToken> {
   const found = await readClaudeCredentials(env);

@@ -51,7 +51,7 @@ test "83-profile" {
     f.answered("profile.flow.edit", 3)
     f.tap("验证并添加")
     f.see("验证没通过")
-    // back: the step before, the providers again (Profiles.kt leave: its BackHandler before the pages')
+    // back: the step before, the providers again
     f.back()
     f.gone("验证并添加")
     f.see("=Anthropic")

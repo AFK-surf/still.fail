@@ -5,10 +5,10 @@ wait 600
 tap 新建对话
 wait 900
 until 描述要做的事
-# (the station's control by where it is: the words MBA are lower in the list beside it, higher in the line over it)
+# (the station's control by where it is: the words Maple are lower in the list beside it, higher in the line over it)
 tapxy 520 493
 wait 1200
-tap Studio
+tap Willow
 wait 1200
 tap1 Opus 5.5
 wait 1800

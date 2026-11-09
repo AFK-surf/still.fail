@@ -5,8 +5,7 @@
 // the fastest and slowest of the 10 samples), the sizings it did, and the layout it came to (the root's size and the
 // sums of every node's left, top, width and height), to compare with another engine's or another commit's.
 //
-// AWLY_ONLY=<index> runs one workload; AWLY_PROFILE=<seconds> lays it out over and over for a profiler (Studio, its
-// screen locked: `xcrun xctrace record --template 'Time Profiler' --launch -- <exe>`; `sample` hangs there).
+// AWLY_ONLY=<index> runs one workload; AWLY_PROFILE=<seconds> lays it out over and over for a profiler.
 // Workloads: scripts/awly_gen.py <arewelayoutyet>/benchmarks/pangui > src/awly/workloads.mbt. Build and run:
 // moon build --target native --release src/awly && _build/native/release/build/awly/awly.exe > run.jsonl; two runs
 // compared: scripts/awly_compare.py before.jsonl after.jsonl.
@@ -98,7 +97,7 @@ fn min_max(s : Sz) -> @flex.Dim {
 
 ///|
 /// The node of a template's node, translated as the harness translates it into a flexbox style for Taffy and Yoga
-/// (benches/pangui.rs `style`): Expand along the parent's main axis shares out its space (grow by the weight, shrink
+/// : Expand along the parent's main axis shares out its space (grow by the weight, shrink
 /// 1, basis 0, min 0); an Expand minimum grows from the node's own size; Expand across is stretched.
 fn node(sp : Spec, parent_is_row : Bool) -> @flex.Node {
   let n = @flex.Node::new()

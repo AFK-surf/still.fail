@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test, type TestContext } from "node:test";
 import { Effect, Fiber, Layer, Stream, SubscriptionRef } from "effect";
 import { MeshLive } from "../src/mesh/mesh.ts";
 import { Net } from "../src/jobs/load.ts";
-import { AdminApi, ControlPlane, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../src/services.ts";
+import { AdminApi, ControlPlane, Events, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../src/services.ts";
 import type { Mesh } from "../src/mesh/native.ts";
 import { memoryMesh } from "./memory-mesh.ts";
 import { StationParts } from "../src/parts.ts";
@@ -25,10 +28,11 @@ function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cub
   let presence = false;
   let boundCongestion: string | undefined;
   // The cloud's state as the mesh reads it once bound: a workspace, no relays, no other stations.
-  const cloud = { state: { workspace_name: "ws" }, relays: () => [], memberships: () => [], peersCurrent: false, listen: () => () => {}, toolCalls: null };
+  // (`data`: where it keeps what the mesh keeps of the locks, mesh/person-chains.ts)
+  const cloud = { state: { workspace_name: "ws" }, data: mkdtempSync(join(tmpdir(), "mesh-handover-")), relays: () => [], memberships: () => [], peersCurrent: false, listen: () => () => {}, toolCalls: null };
   const inputs = Layer.mergeAll(
     Layer.succeed(MeshSide)({ net: new Net(), peers: { route: null }, outside: null, forwarded: () => false, runtimes: () => [] }),
-    Layer.succeed(Previous)({ pid: null, gone: previous.promise }),
+    Layer.succeed(Previous)({ pid: null, gone: previous.promise, exited: previous.promise }),
     Layer.succeed(Own)({ paths: () => [] } as never),
     Layer.succeed(Peers)({ attach: () => {} } as never),
     Layer.succeed(Parts)(new StationParts()),
@@ -55,7 +59,7 @@ function startup(t: TestContext, bindAddr: string | undefined, congestion?: "cub
       };
       return endpoint;
     } } as unknown as Mesh),
-    Layer.succeed(Store)(null!), Layer.succeed(AdminApi)(null!),
+    Layer.succeed(Store)(null!), Layer.succeed(AdminApi)(null!), Layer.succeed(Events)({ tell: () => {} } as never),
     Layer.succeed(Up)(Effect.runSync(SubscriptionRef.make(true))), Layer.succeed(ScreenRegistry)(null!),
   );
   const running = Effect.runFork(Effect.scoped(Effect.gen(function* () {

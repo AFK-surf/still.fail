@@ -37,7 +37,7 @@ void mb_host_request_frame(void);
 
 // ---- WebKitGTK 6.0, as it is there ----
 
-// its enums' values (webkit/WebKitWebView.h, WebKitError.h, WebKitUserContent.h)
+// its enums' values
 enum { WK_LOAD_STARTED = 0, WK_LOAD_FINISHED = 3 };
 enum { WK_POLICY_NAVIGATION = 0, WK_POLICY_NEW_WINDOW = 1 };
 enum { WK_NAV_LINK = 0, WK_NAV_FORM = 1, WK_NAV_FORM_AGAIN = 4 };

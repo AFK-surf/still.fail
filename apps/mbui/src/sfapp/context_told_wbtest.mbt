@@ -3,7 +3,7 @@
 // a right click opening it again its own.
 
 ///|
-/// 大屏, a mouse's, the chat open, scrolled till Ana's message shows: its words right clicked (its menu, 分享这一轮
+/// 大屏, a mouse's, the chat open, scrolled till Ana's message shows: its words right clicked (its menu, 多选
 /// and what else there is), dismissed by `how` (as the host hands it on, no frame after it): whether it is open then, once a
 /// frame is drawn, as a right click opens it again and a frame after.
 fn context_dismissed(how : (@ui.Tester) -> Unit) -> Array[Bool] raise {
@@ -18,7 +18,7 @@ fn context_dismissed(how : (@ui.Tester) -> Unit) -> Array[Bool] raise {
   let open = fn() { @sfdesk.context.open }
   t.right_click(x + w / 2.0, y + h / 2.0)
   t.frame()
-  let shown = t.find("分享这一轮") is Some(_)
+  let shown = t.find("多选") is Some(_)
   let seen = [open()]
   how(t)
   seen.push(open())

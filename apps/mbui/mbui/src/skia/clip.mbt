@@ -1,5 +1,5 @@
-// tiny-skia's curve chopping at extrema (src/path_geometry.rs), line and edge clipping (src/line_clipper.rs,
-// src/edge_clipper.rs) and edge building (src/edge_builder.rs), after Skia's SkGeometry, SkLineClipper,
+// tiny-skia's curve chopping at extrema, line and edge clipping (src/line_clipper.rs,
+// src/edge_clipper.rs) and edge building, after Skia's SkGeometry, SkLineClipper,
 // SkEdgeClipper and SkEdgeBuilder.
 
 ///|

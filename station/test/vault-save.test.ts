@@ -1,4 +1,4 @@
-// Agents asking to keep a secret in the vault (docs/vault.md agent 存入; src/vault/secrets.ts `save`): sealed to the
+// Agents asking to keep a secret in the vault ( agent 存入; src/vault/secrets.ts `save`): sealed to the
 // devices of whoever started the chat and decided by them alone, kept once their app wrote it into their vault (or,
 // without security mode, written into their plain library here), sealed to a device set up later, a command's output
 // taken without being shown, or one its owner types in on the card. Nothing waits on time: a request's answer is awaited
@@ -10,7 +10,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
-import { type Entry, entryHash, genesis, signedBytes as lockBytes } from "../src/cloud/lock.ts";
+import { type Entry, apply as applyLock, entryHash, genesis, signedBytes as lockBytes } from "../src/cloud/lock.ts";
+import { routes as requestRoutes } from "../src/api/routes/vault-requests.ts";
+import { routes as vaultRoutes } from "../src/api/routes/vault.ts";
 import { type BoxCert, type Deny, type Grant, type Item, type Request, type Sig, type Vault, TAG, encryptWith, grantContext, itemContext, keyContext, newBoxPair, openSeal, saveContext, seal, signedBytes } from "../src/vault/crypto.ts";
 import { PLAIN, PlainStore } from "../src/vault/plain.ts";
 import { Secrets } from "../src/vault/secrets.ts";
@@ -38,12 +40,14 @@ function signed<T extends Record<string, unknown>>(o: T, tag: string, key: Key):
 }
 
 /// A lock: alice and bob, each with a device; alice's vault, keyed to her device.
-function world() {
+function world(otherDevices = 0, sameEmail = false) {
   const [alice, bob] = ["alice", "bob"].map((sub) => ({ sub, signer: ed(), base: ed(), box: newBoxPair() })) as [Person, Person];
+  const extras = Array.from({ length: otherDevices }, (_, i) => ({ id: i.toString(16).padStart(64, "0"), sub: "bob", kind: "app", label: "bob", sign_key: bob.signer.id }));
   const body = {
     owner: "alice", origins: ["https://app.still.fail"], rp_id: "app.still.fail", cloud_keys: { keys: [] },
-    members: [{ sub: "alice", email: "alice@x.com", role: "owner" }, { sub: "bob", email: "bob@x.com", role: "member" }],
-    devices: [alice, bob].map((p) => ({ id: p.base.hex, sub: p.sub, kind: "app", label: p.sub, sign_key: p.signer.id })),
+    members: [{ sub: "alice", email: "alice@x.com", role: "owner" }, { sub: "bob", email: sameEmail ? "alice@x.com" : "bob@x.com", role: "member" },
+      ...Array.from({ length: otherDevices }, (_, i) => ({ sub: `other-${i}`, email: `other-${i}@x.com`, role: "member" }))],
+    devices: [...[alice, bob].map((p) => ({ id: p.base.hex, sub: p.sub, kind: "app", label: p.sub, sign_key: p.signer.id })), ...extras],
     passkeys: [], stations: [], gateways: [],
   };
   const e = { v: 1, ws: WS, seq: 0, prev: null, at: 1000, kind: "genesis", body } as Omit<Entry, "sig">;
@@ -53,7 +57,7 @@ function world() {
     { v: 1 as const, ws: WS, id: VAULT, seq: 0, owner: "alice", name: "Personal", members: ["alice"], epoch: 0, keys: [{ cert: cert(alice), wrapped: seal(alice.box.pub, fill(4), keyContext(WS, VAULT, 0)) }], at: 1000 },
     TAG.vault, alice.signer,
   );
-  return { alice, bob, state, vault, cert };
+  return { alice, bob, state, vault, cert, extras };
 }
 
 /// The item alice's app writes for request `r`: what the station sealed to her, under the request's item id.
@@ -65,25 +69,27 @@ function written(r: Request, by: Person, fields: Record<string, string>): Item {
   );
 }
 
-function harness(lock: () => ReturnType<typeof world>["state"] | null, starter = "alice@x.com") {
-  const db = new DatabaseSync(":memory:");
-  const vaults = new VaultStore(db);
-  const plain = new PlainStore(db);
+function harness(lock: (ws: string | null) => ReturnType<typeof world>["state"] | null, starter = "alice@x.com", dbFile = ":memory:", observe?: (db: DatabaseSync) => DatabaseSync) {
+  const db = new DatabaseSync(dbFile);
+  const connection = observe?.(db) ?? db;
+  const vaults = new VaultStore(connection);
+  const plain = new PlainStore(connection);
   const notified: [string, string][] = [];
   const cards: { text: string; card: any }[] = [];
   const withdrawn: string[] = [];
   let hidden = false;
   let onPost: (() => void) | null = null;
+  let sessionWs: string | null = null;
   const hub = {
     store: {
-      getSession: (k: string) => (k === "s1" ? { key: "s1", ws: null, workspace: "/tmp", archivedAt: null } : null),
+      getSession: (k: string) => (k === "s1" ? { key: "s1", ws: sessionWs, workspace: "/tmp", archivedAt: null } : null),
       starter: () => starter.toLowerCase(),
-      latestThread: () => ({ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }),
-      sessionThreads: () => [{ connect: "c", thread: { id: 1, channel: "EMBER", threadTs: "1.0", surface: STILLFAIL_SURFACE } }],
+      latestThread: () => ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: STILLFAIL_SURFACE } }),
+      sessionThreadById: () => ({ connect: "c", thread: { id: 1, channel: "CHAT", threadTs: "1.0", surface: STILLFAIL_SURFACE } }),
       withdrawCard: (_session: string, _thread: number, ts: string) => (withdrawn.push(ts), true),
       restateCard: () => true,
       insertMessage: (m: { text: string; card: unknown }) => (cards.push({ text: m.text, card: m.card }), hidden = false, [cards.length]),
-      pendingCard: () => hidden || cards.length === 0 ? null : [{ ts: String(cards.length) }, cards.at(-1)!.card],
+      pendingCardHeader: () => hidden || cards.length === 0 ? null : [{ ts: String(cards.length) }, cards.at(-1)!.card],
       subscribe: () => () => {},
     },
     chat: () => ({ post: async () => { onPost?.(); return String(cards.length + 1); } }),
@@ -92,13 +98,35 @@ function harness(lock: () => ReturnType<typeof world>["state"] | null, starter =
   };
   const dir = mkdtempSync(join(tmpdir(), "vault-save-"));
   // The chats' browsers: the cookies each was asked for (`jar`, as JSON) and the sign-ins put in.
-  const browser = { jar: "[]", asked: [] as [string, string[], boolean][], signedIn: [] as [string, { request: string; sites: string[]; cookies: string; until: number }][] };
+  const browser = { jar: "[]", at: 1_000_000, asked: [] as [string, string[], boolean][], signedIn: [] as [string, { request: string; workspace?: string; sites: string[]; cookies: string; until: number }][], extended: [] as [string, string, number][] };
   const browsers = {
     cookies: async (session: string, sites: string[], station: boolean) => (browser.asked.push([session, sites, station]), browser.jar),
     signIn: async (session: string, d: { request: string; sites: string[]; cookies: string; until: number }) => void browser.signedIn.push([session, d]),
+    extendSignIn: (session: string, request: string, until: number) => void browser.extended.push([session, request, until]),
   };
-  const make = () => new Secrets({ db, vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => 1_000_000, browsers });
-  return { db, vaults, plain, notified, cards, withdrawn, dir, make, browser, secrets: make(), hideCard: () => { hidden = true; }, occupyCard: () => { cards.push({ text: "another question", card: { type: "text" } }); hidden = false; }, onPost: (f: (() => void) | null) => { onPost = f; } };
+  const make = (backfill?: { previousGone?: Promise<void> }) => new Secrets({ db: connection, vaults, plain, home: () => WS, hub: hub as never, data: dir, lock, now: () => browser.at, browsers, ...(backfill ? { backfill } : {}) });
+  return { db, hub, vaults, plain, notified, cards, withdrawn, dir, make, browser, secrets: make(), hideCard: () => { hidden = true; }, occupyCard: () => { cards.push({ text: "another question", card: { type: "text" } }); hidden = false; }, onPost: (f: (() => void) | null) => { onPost = f; }, setSessionWs: (ws: string | null) => { sessionWs = ws; } };
+}
+
+function requestWriteHook() {
+  let before: (() => void) | undefined;
+  const observe = (db: DatabaseSync) => new Proxy(db, { get(target, property) {
+    if (property === "prepare") return (sql: string) => {
+      const statement = target.prepare(sql);
+      if (!/^(?:INSERT INTO|UPDATE) vault_requests\b/i.test(sql.trim())) return statement;
+      return new Proxy(statement, { get(inner, key) {
+        if (key === "run") return (...args: any[]) => {
+          const go = before; before = undefined; go?.();
+          return (inner.run as (...args: any[]) => unknown).apply(inner, args);
+        };
+        const value = Reflect.get(inner, key, inner);
+        return typeof value === "function" ? value.bind(inner) : value;
+      } });
+    };
+    const value = Reflect.get(target, property, target);
+    return typeof value === "function" ? value.bind(target) : value;
+  } });
+  return { observe, before: (f: () => void) => { before = f; } };
 }
 
 /// What the agent was told of request `asked` once decided: secret_save answers at once that it waits, and the decision
@@ -111,6 +139,83 @@ const decided = async (h: { notified: [string, string][] }, asked: Promise<strin
 };
 const pendingOf = (secrets: Secrets, lock: ReturnType<typeof world>["state"] | null, email: string, sub = email.split("@")[0]!) => secrets.pending(WS, lock, { sub, email });
 const opened = (r: Request, p: Person) => JSON.parse(Buffer.from(openSeal(p.box.priv, r.sealed!.find((s) => s.box === p.box.pub)!.secret, saveContext(WS, r.id))).toString());
+
+for (const change of ["member.remove", "device.remove", "member"] as const) test(`a pending-request read checks ${change} while old requests are prepared`, async () => {
+  const w = world();
+  let current = w.state;
+  let ready!: () => void;
+  const preparing = new Promise<void>((resolve) => { ready = resolve; });
+  const secrets = { preparePending: () => preparing, pending: () => [{ id: "private" }] };
+  const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => current })
+    .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
+  const answer = route.handle({ viewer: { sub: "bob", email: "bob@x.com", workspace: WS, device: w.bob.base.hex } } as never, []);
+  const body = change === "member.remove" ? { sub: "bob" } : change === "device.remove" ? { id: w.bob.base.hex } : { sub: "carol", email: "carol@x.com", role: "member" };
+  const entry = { v: 1 as const, ws: WS, seq: current.seq + 1, prev: current.head, at: 1001, kind: change, body };
+  current = applyLock(current, { ...entry, sig: { key: w.alice.signer.id, alg: "Ed25519", sig: w.alice.signer.sign(lockBytes(entryHash(entry as Entry))) } }, 1001);
+  ready();
+  assert.equal((await answer).status, change === "member" ? 200 : 403);
+});
+
+test("a cancelled pending-request read does not settle requests after preparation", async () => {
+  let ready!: () => void;
+  const preparing = new Promise<void>((resolve) => { ready = resolve; });
+  let read = false;
+  const secrets = { preparePending: () => preparing, pending: () => { read = true; return []; } };
+  const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => null })
+    .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
+  const controller = new AbortController();
+  const answer = route.handle({ viewer: { sub: "bob", email: "bob@x.com", workspace: WS }, signal: controller.signal } as never, []);
+  controller.abort();
+  const result = await Promise.race([answer, tick().then(() => null)]);
+  ready();
+  assert.equal(result?.status, 503);
+  assert.equal(read, false);
+});
+
+test("cancelling one pending-request read leaves another caller's preparation intact", async () => {
+  let ready!: () => void;
+  const preparing = new Promise<void>((resolve) => { ready = resolve; });
+  let reads = 0;
+  const secrets = { preparePending: () => preparing, pending: () => { reads++; return []; } };
+  const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => null })
+    .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
+  const controller = new AbortController(), viewer = { sub: "bob", email: "bob@x.com", workspace: WS };
+  const cancelled = route.handle({ viewer, signal: controller.signal } as never, []);
+  const remaining = route.handle({ viewer } as never, []);
+  controller.abort();
+  assert.equal((await cancelled).status, 503);
+  ready();
+  assert.equal((await remaining).status, 200);
+  assert.equal(reads, 1);
+});
+
+test("a pending-request read retries if security mode ends while old requests are prepared", async () => {
+  const w = world();
+  let current: typeof w.state | null = w.state, ready!: () => void;
+  const preparing = new Promise<void>((resolve) => { ready = resolve; });
+  const secrets = { preparePending: () => preparing, pending: () => { throw new Error("must not read"); } };
+  const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => current })
+    .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
+  const answer = route.handle({ viewer: { sub: "bob", email: "bob@x.com", workspace: WS, device: w.bob.base.hex } } as never, []);
+  current = null;
+  ready();
+  assert.equal((await answer).status, 409);
+});
+
+test("a pending-request read prepares vault membership if security mode starts while it waits", async () => {
+  const w = world();
+  let current: typeof w.state | null = null, ready!: () => void;
+  const preparing = new Promise<void>((resolve) => { ready = resolve; });
+  const scopes: boolean[] = [];
+  const secrets = { preparePending: (_ws: string, members: boolean) => { scopes.push(members); return scopes.length === 1 ? preparing : Promise.resolve(); }, pending: () => [] };
+  const route = requestRoutes({ secrets: secrets as never, plain: {} as never, lock: () => current })
+    .find((r) => r.method === "GET" && r.pattern.test("/vault/requests"))!;
+  const answer = route.handle({ viewer: { sub: "bob", email: "bob@x.com", workspace: WS, device: w.bob.base.hex } } as never, []);
+  current = w.state;
+  ready();
+  assert.equal((await answer).status, 200);
+  assert.deepEqual(scopes, [false, true]);
+});
 
 test("a still-needed secret save can be asked again without reading the secret again", async () => {
   const h = harness(() => null);
@@ -132,6 +237,69 @@ test("a still-needed secret save can be asked again without reading the secret a
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }
+});
+
+test("a secret reask rechecks its decision after old card preparation", async () => {
+  const h = harness(() => null), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  try {
+    await h.secrets.save("s1", { name: "Test key", kind: "token", reason: "keep it", value: "test-key", cwd: h.dir });
+    const request = h.cards[0]!.card.vault.request;
+    h.hideCard();
+    let ready = false;
+    (h.hub.store as any).pendingCardHeaderIfReady = () => ready ? h.hub.store.pendingCardHeader() : undefined;
+    (h.hub as any).prepareCardPosts = async () => { started.resolve(); await release.promise; ready = true; };
+    const reask = h.secrets.reask("s1", request);
+    void reask.catch(() => {});
+    const waiting = await Promise.race([started.promise.then(() => true), reask.then(() => false, () => false)]);
+    assert.equal(waiting, true, "the reask waits for old card preparation");
+    assert.notEqual(typeof h.secrets.savedPlain(WS, null, "alice@x.com", { request }), "string");
+    release.resolve();
+    await assert.rejects(reask, /no longer pending/);
+    assert.equal(h.cards.length, 1);
+  } finally { release.resolve(); rmSync(h.dir, { recursive: true, force: true }); }
+});
+
+test("a cancelled secret reask does not post after old card preparation", async () => {
+  const h = harness(() => null), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  const controller = new AbortController();
+  try {
+    await h.secrets.save("s1", { name: "Test key", kind: "token", reason: "keep it", value: "test-key", cwd: h.dir });
+    const request = h.cards[0]!.card.vault.request;
+    h.hideCard();
+    let ready = false, passed: AbortSignal | undefined;
+    (h.hub.store as any).pendingCardHeaderIfReady = () => ready ? h.hub.store.pendingCardHeader() : undefined;
+    (h.hub as any).prepareCardPosts = async (_threads: number[], signal?: AbortSignal) => { passed = signal; started.resolve(); await release.promise; ready = true; };
+    const tool = vaultTools(h.secrets, () => h.dir).find((t) => t.name === "secret_reask")!;
+    const reask = tool.run("s1", { request }, controller.signal);
+    void reask.catch(() => {});
+    assert.equal(await Promise.race([started.promise.then(() => true), reask.then(() => false, () => false)]), true);
+    assert.equal(passed, controller.signal);
+    controller.abort();
+    release.resolve();
+    const error = await reask.then(() => null, (e: Error) => e);
+    assert.equal(h.cards.length, 1, "the cancelled call did not issue a new card");
+    assert.equal(error?.name, "AbortError");
+  } finally { release.resolve(); rmSync(h.dir, { recursive: true, force: true }); }
+});
+
+test("a secret reask does not record a card decided during final old-card preparation", async () => {
+  const h = harness(() => null), started = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  try {
+    await h.secrets.save("s1", { name: "Test key", kind: "token", reason: "keep it", value: "test-key", cwd: h.dir });
+    const request = h.cards[0]!.card.vault.request;
+    h.hideCard();
+    let reads = 0, ready = false;
+    (h.hub.store as any).pendingCardHeaderIfReady = () => ++reads === 1 || ready ? h.hub.store.pendingCardHeader() : undefined;
+    (h.hub as any).prepareCardPosts = async () => { started.resolve(); await release.promise; ready = true; };
+    const reask = h.secrets.reask("s1", request);
+    void reask.catch(() => {});
+    const waiting = await Promise.race([started.promise.then(() => true), reask.then(() => false, () => false)]);
+    assert.equal(waiting, true, "the final card check waits for preparation");
+    assert.notEqual(typeof h.secrets.savedPlain(WS, null, "alice@x.com", { request }), "string");
+    release.resolve();
+    await assert.rejects(reask, /no longer pending/);
+    assert.equal(h.cards.length, 1, "a card for the decided request was not recorded");
+  } finally { release.resolve(); rmSync(h.dir, { recursive: true, force: true }); }
 });
 
 test("a still-needed secret use can be asked again as the same request", async () => {
@@ -177,11 +345,44 @@ test("a decision arriving while a secret card is reissued is not reset", async (
       assert.notEqual(typeof h.secrets.savedPlain(WS, null, "alice@x.com", { request }), "string");
     });
     await assert.rejects(h.secrets.reask("s1", request), /no longer pending/);
-    assert.deepEqual(h.withdrawn, ["1", "2"], "both the old card and the raced new card were closed");
+    assert.deepEqual(h.withdrawn, ["1"], "the old card was closed");
+    assert.equal(h.cards.length, 1, "no new card was recorded after the decision");
     assert.equal(h.secrets.held("s1")[0]!.request.id, request, "the decision survived");
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }
+});
+
+test("a decision after the last reask read is not overwritten by the new card", async () => {
+  const h = harness(() => null);
+  try {
+    await h.secrets.save("s1", { name: "Test key", kind: "token", reason: "keep it", value: "test-key", cwd: h.dir });
+    const request = h.cards[0]!.card.vault.request;
+    h.hideCard();
+    const insert = h.hub.store.insertMessage;
+    let posted = false, reads = 0;
+    h.hub.store.insertMessage = (message) => { const result = insert(message); posted = true; return result; };
+    const prepare = h.db.prepare.bind(h.db);
+    (h.db as any).prepare = (sql: string) => {
+      const stmt = prepare(sql);
+      if (sql !== "SELECT body, thread, card_ts FROM vault_requests WHERE ws = ? AND id = ?") return stmt;
+      return new Proxy(stmt, { get(target, property) {
+        if (property === "get") return (...args: any[]) => {
+          const row = target.get(...args);
+          if (posted && ++reads === 2 && row !== undefined) {
+            const body = { ...JSON.parse(String(row.body)), status: "denied" };
+            prepare("UPDATE vault_requests SET status='denied',body=? WHERE ws=? AND id=?").run(JSON.stringify(body), WS, request);
+          }
+          return row;
+        };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      } });
+    };
+    await assert.rejects(h.secrets.reask("s1", request), /changed|no longer pending/);
+    assert.equal(prepare("SELECT status FROM vault_requests WHERE ws=? AND id=?").get(WS, request)?.status, "denied");
+    assert.deepEqual(h.withdrawn, ["2"]);
+  } finally { rmSync(h.dir, { recursive: true, force: true }); }
 });
 
 test("a new question arriving while a secret card is reissued is not replaced", async () => {
@@ -211,39 +412,39 @@ test("a secret to keep in a vault: sealed to its owner's devices, decided by the
     await assert.rejects(h.secrets.save("s1", { name: "UX7", kind: "login", reason: "x", value: "p", modes: ["ssh"], cwd: h.dir }), /SSH key is given by ssh/);
     await assert.rejects(h.secrets.save("s1", { name: "UX7", kind: "token", reason: "x", value: "p", modes: ["proxy"], cwd: h.dir }), /names its hosts/);
 
-    const asked = h.secrets.save("s1", { name: "UniFi UX7", kind: "login", reason: "log in to the router", value: PASSWORD, username: "zzj", env: "UX7_PASSWORD", cwd: h.dir });
+    const asked = h.secrets.save("s1", { name: "测试服务登录", kind: "login", reason: "log in to the test service", value: PASSWORD, username: "demo-user", env: "SERVICE_PASSWORD", cwd: h.dir });
     await tick();
     const [r] = pendingOf(h.secrets, w.state, "alice@x.com");
     assert.ok(r && r.save && r.vault === VAULT && r.owner === "alice@x.com" && r.box !== "");
-    assert.deepEqual(r.save, { kind: "login", name: "UniFi UX7", modes: ["env"], hosts: [], env: "UX7_PASSWORD", username: "zzj" });
+    assert.deepEqual(r.save, { kind: "login", name: "测试服务登录", modes: ["env"], hosts: [], env: "SERVICE_PASSWORD", username: "demo-user" });
     // Sealed to her device alone (bob's is his), nothing of it in the clear.
     assert.deepEqual(r.sealed!.map((s) => s.device), [w.alice.base.hex]);
-    assert.deepEqual(opened(r, w.alice), { username: "zzj", password: PASSWORD });
+    assert.deepEqual(opened(r, w.alice), { username: "demo-user", password: PASSWORD });
     assert.ok(!JSON.stringify(r).includes(PASSWORD));
     // The card: what it is and whose, to keep or turn down.
     const { text, card } = h.cards[0]!;
-    assert.equal(text, "申请将「UniFi UX7」存入密钥库（登录 · zzj）：log in to the router");
+    assert.equal(text, "申请将「测试服务登录」存入密钥库（登录 · demo-user）：log in to the test service");
     assert.equal(card.assignee, "alice@x.com");
     assert.deepEqual(card.options.map((o: { label: string }) => o.label), ["存入密钥库", "拒绝"]);
-    assert.deepEqual(card.vault.save, { kind: "login", username: "zzj" });
+    assert.deepEqual(card.vault.save, { kind: "login", username: "demo-user" });
 
     // bob neither sees nor decides it; alice's word comes only once the item is in her vault here.
     assert.deepEqual(pendingOf(h.secrets, w.state, "bob@x.com"), []);
     assert.match(h.secrets.saved(w.state, "bob", { request: r.id, vault: VAULT })!, /only the person it is kept for/);
     assert.match(h.secrets.grant(w.state, "alice", { request: r.id } as never)!, /POST vault\/saves/);
     assert.match(h.secrets.saved(w.state, "alice", { request: r.id, vault: VAULT })!, /not in that vault here/);
-    h.vaults.putItem(written(r, w.alice, { username: "zzj", password: PASSWORD }));
+    h.vaults.putItem(written(r, w.alice, { username: "demo-user", password: PASSWORD }));
     // Her app's grant to this chat comes with it, sealed to the request's box.
     const grant: Grant = signed(
-      { v: 1 as const, ws: WS, request: r.id, vault: VAULT, item: r.item, mode: "env" as const, hosts: [], scope: "chat" as const, exp: 1000 + 30 * 86400, secret: seal(r.box, Buffer.from(JSON.stringify({ kind: "login", name: "UniFi UX7", fields: { username: "zzj", password: PASSWORD } })), grantContext(WS, r.id)), at: 1000 },
+      { v: 1 as const, ws: WS, request: r.id, vault: VAULT, item: r.item, mode: "env" as const, hosts: [], scope: "chat" as const, exp: 1000 + 30 * 86400, secret: seal(r.box, Buffer.from(JSON.stringify({ kind: "login", name: "测试服务登录", fields: { username: "demo-user", password: PASSWORD } })), grantContext(WS, r.id)), at: 1000 },
       TAG.grant, w.alice.signer,
     );
     assert.equal(h.secrets.saved(w.state, "alice", { request: r.id, vault: VAULT, grant }), null);
-    assert.match(await decided(h, asked), /Kept: 「UniFi UX7」 is in alice@x.com's vault now \(item i_\w+\)\. This chat may use it now: secret_run \{grant: "r_/);
+    assert.match(await decided(h, asked), /Kept: 「测试服务登录」 is in alice@x.com's vault now \(item i_\w+\)\. This chat may use it now: secret_run \{grant: "r_/);
     assert.deepEqual(h.secrets.held("s1").map((x) => [x.request.id, x.grant.scope, x.secret.fields.password]), [[r.id, "chat", PASSWORD]]);
     // Now one agents may ask for; the save is no use of it.
-    assert.deepEqual(h.secrets.listings("s1").map((l) => l.listing.name), ["UniFi UX7"]);
-    assert.deepEqual(h.secrets.uses(WS, w.state, VAULT, { sub: "alice", email: "alice@x.com" }), []);
+    assert.deepEqual(h.secrets.listings("s1").map((l) => l.listing.name), ["测试服务登录"]);
+    assert.deepEqual(await h.secrets.uses(WS, w.state, VAULT, { sub: "alice", email: "alice@x.com" }), []);
     assert.match(h.secrets.saved(w.state, "alice", { request: r.id, vault: VAULT })!, /the request is granted/);
 
     // Turned down from one of her devices, signed; not by bob.
@@ -265,7 +466,7 @@ test("a secret to keep while the vault is not turned on: it waits, sealed to the
   const h = harness(() => w.state);
   try {
     assert.equal(h.secrets.status("s1"), "off");
-    const asked = h.secrets.save("s1", { name: "UniFi UX7", kind: "login", reason: "router", value: PASSWORD, cwd: h.dir });
+    const asked = h.secrets.save("s1", { name: "测试服务登录", kind: "login", reason: "test service", value: PASSWORD, cwd: h.dir });
     await tick();
     let [r] = pendingOf(h.secrets, w.state, "alice@x.com");
     assert.ok(r && r.vault === "" && r.sealed!.length === 0);
@@ -285,7 +486,7 @@ test("a secret to keep while the vault is not turned on: it waits, sealed to the
     h.vaults.putVault(w.vault);
     h.vaults.putItem(written(r!, w.alice, { password: PASSWORD }));
     assert.equal(h.secrets.saved(w.state, "alice", { request: r!.id, vault: VAULT }), null);
-    assert.match(await decided(h, asked), /Kept: 「UniFi UX7」.*When you need it, ask with secret_use/);
+    assert.match(await decided(h, asked), /Kept: 「测试服务登录」.*When you need it, ask with secret_use/);
 
     // One sealed to no device is gone with a restart; one sealed to a device stays.
     void h.secrets.save("s1", { name: "Lost", kind: "token", reason: "z", value: "tok", cwd: h.dir });
@@ -294,6 +495,761 @@ test("a secret to keep while the vault is not turned on: it waits, sealed to the
     h.db.prepare("UPDATE vault_requests SET body = json_set(body, '$.sealed', json('[]')) WHERE json_extract(body, '$.save.name') = 'Lost'").run();
     const after = h.make();
     assert.deepEqual(pendingOf(after, w.state, "alice@x.com").map((x) => x.save!.name), ["Stays"]);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a device registered while the save card is being posted can approve the secret", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  try {
+    h.onPost(() => {
+      const other = w.cert(w.bob);
+      h.vaults.putBox(other);
+      h.secrets.boxed(w.state, other);
+      const cert = w.cert(w.alice);
+      h.vaults.putBox(cert);
+      h.secrets.boxed(w.state, cert);
+    });
+    const asked = h.secrets.save("s1", { name: "During post", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    assert.match(await asked, /You are told in this session when it is decided/);
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.ok(request);
+    assert.equal(request.sealed?.length, 1);
+    assert.deepEqual(opened(request, w.alice), { value: "sample" });
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a stale certificate cannot replace the key a waiting save was sealed to", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  try {
+    const old = { ...w.alice, box: newBoxPair() }, newer = { ...w.alice, box: newBoxPair() };
+    const cert = (p: Person, at: number) => signed({ v: 1 as const, ws: WS, device: p.base.hex, box: p.box.pub, at }, TAG.box, p.signer);
+    const staleCert = cert(old, 1100), newCert = cert(newer, 1200);
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    assert.deepEqual(pendingOf(h.secrets, w.state, "alice@x.com")[0]!.sealed, []);
+    let raced = false;
+    const interleaved = new Proxy(h.vaults, { get(target, property) {
+      if (property === "putBoxIf") return (incoming: BoxCert, previous: string | null) => {
+        if (!raced) {
+          raced = true;
+          target.putBox(newCert);
+          h.secrets.boxed(w.state, newCert);
+        }
+        return target.putBoxIf(incoming, previous);
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    const put = vaultRoutes({ vaults: interleaved, lock: () => w.state, boxed: (lock, value) => h.secrets.boxed(lock, value) })
+      .find((r) => r.method === "PUT" && r.pattern.test("/vault/boxes"))!;
+    const answer = await put.handle({ method: "PUT", path: "/vault/boxes", query: [], headers: {}, body: Buffer.from(JSON.stringify(staleCert)),
+      viewer: { sub: "alice", workspace: WS, email: "alice@x.com", name: "Alice", role: "owner", device: w.alice.base.hex }, lang: "en" }, []);
+    assert.equal(answer.status, 200);
+    assert.equal(raced, true);
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.deepEqual(request!.sealed!.map((s) => s.box), [newer.box.pub]);
+    assert.deepEqual(opened(request!, newer), { value: "sample" });
+  } finally { rmSync(h.dir, { recursive: true, force: true }); }
+});
+
+test("a newer certificate written before reboxing keeps its key on a waiting save", async () => {
+  const w = world();
+  const dir = mkdtempSync(join(tmpdir(), "vault-box-concurrent-"));
+  const path = join(dir, "data.sqlite");
+  const h = harness(() => w.state, "alice@x.com", path);
+  h.db.exec("PRAGMA journal_mode=WAL");
+  const other = new DatabaseSync(path), otherVaults = new VaultStore(other);
+  try {
+    const old = { ...w.alice, box: newBoxPair() }, newer = { ...w.alice, box: newBoxPair() };
+    const cert = (p: Person, at: number) => signed({ v: 1 as const, ws: WS, device: p.base.hex, box: p.box.pub, at }, TAG.box, p.signer);
+    const staleCert = cert(old, 1100), newCert = cert(newer, 1200);
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    let raced = false;
+    const interleaved = new Proxy(h.vaults, { get(target, property) {
+      if (property === "putBoxIf") return (incoming: BoxCert, previous: string | null) => {
+        const saved = target.putBoxIf(incoming, previous);
+        if (saved && !raced) {
+          raced = true;
+          otherVaults.putBox(newCert);
+          h.secrets.boxed(w.state, newCert);
+        }
+        return saved;
+      };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    } });
+    const put = vaultRoutes({ vaults: interleaved, lock: () => w.state, boxed: (lock, value) => h.secrets.boxed(lock, value) })
+      .find((r) => r.method === "PUT" && r.pattern.test("/vault/boxes"))!;
+    await put.handle({ method: "PUT", path: "/vault/boxes", query: [], headers: {}, body: Buffer.from(JSON.stringify(staleCert)),
+      viewer: { sub: "alice", workspace: WS, email: "alice@x.com", name: "Alice", role: "owner", device: w.alice.base.hex }, lang: "en" }, []);
+    assert.equal(raced, true);
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.deepEqual(request!.sealed!.map((s) => s.box), [newer.box.pub]);
+    assert.deepEqual(opened(request!, newer), { value: "sample" });
+  } finally { await h.secrets.close(); other.close(); h.db.close(); rmSync(h.dir, { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a certificate changed between reboxing and its write is checked again", async () => {
+  const w = world(), dir = mkdtempSync(join(tmpdir(), "vault-box-rebox-")), path = join(dir, "data.sqlite");
+  const hook = requestWriteHook();
+  const h = harness(() => w.state, "alice@x.com", path, hook.observe);
+  h.db.exec("PRAGMA journal_mode=WAL");
+  const other = new DatabaseSync(path), otherVaults = new VaultStore(other);
+  try {
+    const old = { ...w.alice, box: newBoxPair() }, newer = { ...w.alice, box: newBoxPair() };
+    const cert = (p: Person, at: number) => signed({ v: 1 as const, ws: WS, device: p.base.hex, box: p.box.pub, at }, TAG.box, p.signer);
+    const staleCert = cert(old, 1100), newCert = cert(newer, 1200);
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    h.vaults.putBox(staleCert);
+    let raced = false;
+    hook.before(() => { raced = true; otherVaults.putBox(newCert); });
+    h.secrets.boxed(w.state, staleCert);
+    assert.equal(raced, true);
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.deepEqual(request!.sealed!.map((s) => s.box), [newer.box.pub]);
+    assert.deepEqual(opened(request!, newer), { value: "sample" });
+  } finally {
+    await h.secrets.close(); other.close(); h.db.close();
+    rmSync(h.dir, { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("reboxing does not restore a request decided by another connection", async () => {
+  const w = world(), dir = mkdtempSync(join(tmpdir(), "vault-box-decided-")), path = join(dir, "data.sqlite");
+  const hook = requestWriteHook();
+  const h = harness(() => w.state, "alice@x.com", path, hook.observe);
+  h.db.exec("PRAGMA journal_mode=WAL");
+  const other = new DatabaseSync(path);
+  try {
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com");
+    const cert = w.cert(w.alice);
+    h.vaults.putBox(cert);
+    let raced = false, notifications = 0;
+    h.secrets.listen(() => { notifications++; });
+    hook.before(() => {
+      raced = true;
+      other.prepare("UPDATE vault_requests SET status='denied', body=json_set(body, '$.status', 'denied') WHERE ws=? AND id=?").run(WS, request!.id);
+    });
+    assert.equal(h.secrets.boxed(w.state, cert), true);
+    const row = other.prepare("SELECT status, body FROM vault_requests WHERE ws=? AND id=?").get(WS, request!.id) as { status: string; body: string };
+    assert.equal(raced, true);
+    assert.equal(row.status, "denied");
+    assert.equal(JSON.parse(row.body).status, "denied");
+    assert.deepEqual(JSON.parse(row.body).sealed, []);
+    assert.equal(notifications, 0);
+  } finally {
+    await h.secrets.close(); other.close(); h.db.close();
+    rmSync(h.dir, { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a busy reboxing retries even if the device does not send its certificate again", async () => {
+  const w = world(), dir = mkdtempSync(join(tmpdir(), "vault-box-busy-")), path = join(dir, "data.sqlite");
+  const hook = requestWriteHook(), h = harness(() => w.state, "alice@x.com", path, hook.observe);
+  h.db.exec("PRAGMA journal_mode=WAL");
+  const other = new DatabaseSync(path);
+  try {
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com");
+    const cert = w.cert(w.alice);
+    let attempts = 0, notifications = 0;
+    const told = Promise.withResolvers<void>();
+    h.secrets.listen(() => { notifications++; told.resolve(); });
+    const interfere = () => {
+      attempts++;
+      other.prepare("UPDATE vault_requests SET body=json_set(body, '$.reason', ?) WHERE ws=? AND id=?").run(`changed-${attempts}`, WS, request!.id);
+      if (attempts < 3) hook.before(interfere);
+    };
+    hook.before(interfere);
+    const put = vaultRoutes({ vaults: h.vaults, lock: () => w.state, boxed: (lock, value) => h.secrets.boxed(lock, value) })
+      .find((r) => r.method === "PUT" && r.pattern.test("/vault/boxes"))!;
+    const answer = await put.handle({ method: "PUT", path: "/vault/boxes", query: [], headers: {}, body: Buffer.from(JSON.stringify(cert)),
+      viewer: { sub: "alice", workspace: WS, email: "alice@x.com", name: "Alice", role: "owner", device: w.alice.base.hex }, lang: "en" }, []);
+    assert.equal(answer.status, 503);
+    const [busy] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.equal(attempts, 3);
+    assert.equal(busy!.reason, "changed-3");
+    assert.deepEqual(busy!.sealed, []);
+    assert.equal(notifications, 0);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try { await Promise.race([told.promise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("reboxing was not retried")), 5000); })]); }
+    finally { if (timer !== undefined) clearTimeout(timer); }
+    const [finished] = pendingOf(h.secrets, w.state, "alice@x.com");
+    assert.deepEqual(opened(finished!, w.alice), { value: "sample" });
+    assert.equal(finished!.reason, "changed-3");
+    assert.equal(notifications, 1);
+  } finally {
+    await h.secrets.close(); other.close(); h.db.close();
+    rmSync(h.dir, { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a queued reboxing checks that the device is still admitted", async () => {
+  const w = world(), dir = mkdtempSync(join(tmpdir(), "vault-box-revoked-")), path = join(dir, "data.sqlite");
+  const hook = requestWriteHook();
+  let lock = w.state;
+  const h = harness(() => lock, "alice@x.com", path, hook.observe);
+  h.db.exec("PRAGMA journal_mode=WAL");
+  const other = new DatabaseSync(path);
+  try {
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com"), cert = w.cert(w.alice);
+    h.vaults.putBox(cert);
+    let attempts = 0, notifications = 0;
+    h.secrets.listen(() => { notifications++; });
+    const interfere = () => {
+      attempts++;
+      other.prepare("UPDATE vault_requests SET body=json_set(body, '$.reason', ?) WHERE ws=? AND id=?").run(`changed-${attempts}`, WS, request!.id);
+      if (attempts < 3) hook.before(interfere);
+    };
+    hook.before(interfere);
+    assert.equal(h.secrets.boxed(lock, cert), false);
+    lock = { ...lock, devices: new Map([...lock.devices].filter(([id]) => id !== cert.device)) };
+    const retried = Promise.withResolvers<void>(), box = h.vaults.box.bind(h.vaults);
+    h.vaults.box = (ws, device) => { retried.resolve(); return box(ws, device); };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try { await Promise.race([retried.promise, new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("reboxing was not retried")), 5000); })]); }
+    finally { if (timer !== undefined) clearTimeout(timer); }
+    const row = other.prepare("SELECT body FROM vault_requests WHERE ws=? AND id=?").get(WS, request!.id) as { body: string };
+    assert.deepEqual(JSON.parse(row.body).sealed, []);
+    assert.equal(notifications, 0);
+  } finally {
+    await h.secrets.close(); other.close(); h.db.close();
+    rmSync(h.dir, { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("stopping the station cancels a queued reboxing", async () => {
+  const w = world(), dir = mkdtempSync(join(tmpdir(), "vault-box-stopped-")), path = join(dir, "data.sqlite");
+  const hook = requestWriteHook(), h = harness(() => w.state, "alice@x.com", path, hook.observe);
+  h.db.exec("PRAGMA journal_mode=WAL");
+  const other = new DatabaseSync(path);
+  try {
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    const [request] = pendingOf(h.secrets, w.state, "alice@x.com"), cert = w.cert(w.alice);
+    h.vaults.putBox(cert);
+    let attempts = 0, notifications = 0;
+    h.secrets.listen(() => { notifications++; });
+    const interfere = () => {
+      attempts++;
+      other.prepare("UPDATE vault_requests SET body=json_set(body, '$.reason', ?) WHERE ws=? AND id=?").run(`changed-${attempts}`, WS, request!.id);
+      if (attempts < 3) hook.before(interfere);
+    };
+    hook.before(interfere);
+    assert.equal(h.secrets.boxed(w.state, cert), false);
+    await h.secrets.close();
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    const row = other.prepare("SELECT body FROM vault_requests WHERE ws=? AND id=?").get(WS, request!.id) as { body: string };
+    assert.deepEqual(JSON.parse(row.body).sealed, []);
+    assert.equal(notifications, 0);
+  } finally {
+    await h.secrets.close(); other.close(); h.db.close();
+    rmSync(h.dir, { recursive: true, force: true }); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a replacement certificate is checked before a waiting secret is sealed to it", async () => {
+  const w = world(), h = harness(() => w.state);
+  try {
+    await h.secrets.save("s1", { name: "Pending", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    const original = w.cert(w.alice), forged = { ...w.cert(w.bob), device: w.alice.base.hex };
+    h.vaults.putBox(forged);
+    assert.equal(h.secrets.boxed(w.state, original), false);
+    assert.deepEqual(pendingOf(h.secrets, w.state, "alice@x.com")[0]!.sealed, []);
+  } finally { await h.secrets.close(); h.db.close(); rmSync(h.dir, { recursive: true, force: true }); }
+});
+
+test("a save made by the new station during handover receives a certificate from the old station", async () => {
+  const w = world(), exit = Promise.withResolvers<void>();
+  const dir = mkdtempSync(join(tmpdir(), "vault-save-handover-"));
+  const path = join(dir, "data.sqlite");
+  const old = harness(() => w.state, "alice@x.com", path);
+  old.db.exec("PRAGMA journal_mode=WAL");
+  const next = harness(() => w.state, "alice@x.com", path);
+  const secrets = next.make({ previousGone: exit.promise });
+  let oldClosed = false;
+  try {
+    await secrets.save("s1", { name: "New save", kind: "token", reason: "test", value: "sample", cwd: next.dir });
+    assert.deepEqual(pendingOf(secrets, w.state, "alice@x.com")[0]!.sealed, []);
+    const cert = w.cert(w.alice);
+    old.vaults.putBox(cert);
+    old.secrets.boxed(w.state, cert);
+    // The old station did not hold the new station's fields and cannot rebox this save.
+    assert.deepEqual(pendingOf(secrets, w.state, "alice@x.com")[0]!.sealed, []);
+    await old.secrets.close();
+    old.db.close();
+    oldClosed = true;
+    exit.resolve();
+    await tick();
+    const [request] = pendingOf(secrets, w.state, "alice@x.com");
+    assert.deepEqual(request!.sealed!.map((s) => s.box), [w.alice.box.pub]);
+    assert.deepEqual(opened(request!, w.alice), { value: "sample" });
+  } finally {
+    exit.resolve();
+    await secrets.close();
+    await next.secrets.close();
+    if (!oldClosed) { await old.secrets.close(); old.db.close(); }
+    next.db.close();
+    rmSync(old.dir, { recursive: true, force: true });
+    rmSync(next.dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a save still posting when the old station exits includes its last certificate", async () => {
+  const w = world(), exit = Promise.withResolvers<void>(), posting = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+  const dir = mkdtempSync(join(tmpdir(), "vault-save-posting-")), path = join(dir, "data.sqlite");
+  const old = harness(() => w.state, "alice@x.com", path);
+  old.db.exec("PRAGMA journal_mode=WAL");
+  const next = harness(() => w.state, "alice@x.com", path);
+  const secrets = next.make({ previousGone: exit.promise });
+  let oldClosed = false;
+  try {
+    (next.hub as any).chat = () => ({ post: async () => { posting.resolve(); await release.promise; return "1"; } });
+    const asked = secrets.save("s1", { name: "Posting", kind: "token", reason: "test", value: "sample", cwd: next.dir });
+    await posting.promise;
+    const cert = w.cert(w.alice);
+    old.vaults.putBox(cert);
+    old.secrets.boxed(w.state, cert);
+    await old.secrets.close();
+    old.db.close();
+    oldClosed = true;
+    exit.resolve();
+    await tick();
+    release.resolve();
+    await asked;
+    const [request] = pendingOf(secrets, w.state, "alice@x.com");
+    assert.deepEqual(request!.sealed!.map((s) => s.box), [w.alice.box.pub]);
+    assert.deepEqual(opened(request!, w.alice), { value: "sample" });
+  } finally {
+    release.resolve(); exit.resolve();
+    await secrets.close(); await next.secrets.close();
+    if (!oldClosed) { await old.secrets.close(); old.db.close(); }
+    next.db.close();
+    rmSync(old.dir, { recursive: true, force: true });
+    rmSync(next.dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("saving a secret does not read other people's device certificates or traverse their lock devices", async () => {
+  const work: { certificates: number; devices: number; members: number; previousKeys: number }[] = [];
+  for (const count of [10, 100]) {
+    const w = world(count);
+    const h = harness(() => w.state);
+    try {
+      h.vaults.putBox(w.cert(w.alice));
+      for (const d of w.extras) h.vaults.putBox(signed({ v: 1 as const, ws: WS, device: d.id, box: w.bob.box.pub, at: 1000 }, TAG.box, w.bob.signer));
+      let reading = false, certificates = 0, devices = 0, members = 0, previousKeys = 0;
+      const boxes = h.vaults.boxes.bind(h.vaults), box = h.vaults.box.bind(h.vaults);
+      h.vaults.boxes = (ws) => { const rows = boxes(ws); if (reading) certificates += rows.length; return rows; };
+      h.vaults.box = (ws, id) => { const row = box(ws, id); if (reading && row !== null) certificates++; return row; };
+      const entries = w.state.devices[Symbol.iterator].bind(w.state.devices);
+      w.state.devices[Symbol.iterator] = function* () { for (const entry of entries()) { if (reading) devices++; yield entry; } return undefined; };
+      const memberEntries = w.state.members[Symbol.iterator].bind(w.state.members), memberValues = w.state.members.values.bind(w.state.members);
+      w.state.members[Symbol.iterator] = function* () { for (const entry of memberEntries()) { if (reading) members++; yield entry; } return undefined; };
+      w.state.members.values = function* () { for (const member of memberValues()) { if (reading) members++; yield member; } return undefined; };
+      w.state.signKeys.set(w.alice.base.hex, new Proxy([...Array.from({ length: count }, (_, i) => `old-${i}`), w.alice.signer.id], {
+        get(target, property, receiver) { if (reading && typeof property === "string" && /^\d+$/.test(property)) previousKeys++; return Reflect.get(target, property, receiver); },
+      }));
+      reading = true;
+      await h.secrets.save("s1", { name: "Bounded", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+      reading = false;
+      const [request] = pendingOf(h.secrets, w.state, "alice@x.com");
+      assert.ok(request);
+      assert.deepEqual(opened(request, w.alice), { value: "sample" });
+      work.push({ certificates, devices, members, previousKeys });
+    } finally {
+      rmSync(h.dir, { recursive: true, force: true });
+    }
+  }
+  assert.deepEqual(work[0], work[1]);
+  assert.ok(work[0]!.certificates <= 2);
+  assert.ok(work[0]!.devices <= 2);
+  assert.ok(work[0]!.members <= 2);
+  assert.equal(work[0]!.previousKeys, 0);
+});
+
+test("a waiting save is available after a handover before requests are reboxed", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  try {
+    await h.secrets.save("s1", { name: "Carried", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    const next = h.make();
+    next.carry(JSON.parse(JSON.stringify(h.secrets.carried())));
+    const cert = w.cert(w.alice);
+    h.vaults.putBox(cert);
+    next.boxed(w.state, cert);
+    const [request] = pendingOf(next, w.state, "alice@x.com");
+    assert.ok(request);
+    assert.deepEqual(opened(request, w.alice), { value: "sample" });
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a device registered during a handover receives a save the old process has yet to write", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  let exited!: () => void;
+  const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+  try {
+    let next!: Secrets;
+    h.onPost(() => {
+      h.onPost(null);
+      next = h.make({ previousGone });
+      next.carry(JSON.parse(JSON.stringify(h.secrets.carried())));
+      next.reboxed();
+      const cert = w.cert(w.alice);
+      h.vaults.putBox(cert);
+      next.boxed(w.state, cert);
+    });
+    await h.secrets.save("s1", { name: "Handover", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    exited();
+    await tick();
+    const [request] = pendingOf(next, w.state, "alice@x.com");
+    assert.ok(request);
+    assert.deepEqual(opened(request, w.alice), { value: "sample" });
+  } finally {
+    exited();
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+for (const legacy of [false, true]) for (const afterExit of [false, true]) {
+  test(`a device registered before ${legacy ? "an older" : "a scoped"} handover arrives receives its save${afterExit ? " even when the handover arrives after exit" : ""}`, async () => {
+    const w = world();
+    const h = harness(() => w.state);
+    let exited!: () => void;
+    const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+    try {
+      let next!: Secrets;
+      let carried!: ReturnType<Secrets["carried"]>;
+      h.onPost(() => {
+        h.onPost(null);
+        next = h.make({ previousGone });
+        carried = JSON.parse(JSON.stringify(h.secrets.carried()));
+        if (legacy) carried.unsaved = carried.unsaved.map(([id, fields]) => [id, fields]);
+        const cert = w.cert(w.alice);
+        h.vaults.putBox(cert);
+        next.boxed(w.state, cert);
+        if (!afterExit) {
+          next.carry(carried);
+          next.reboxed();
+        }
+      });
+      await h.secrets.save("s1", { name: "Early device", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+      exited();
+      await tick();
+      if (afterExit) {
+        next.carry(carried);
+        next.reboxed();
+        await tick();
+      }
+      const [request] = pendingOf(next, w.state, "alice@x.com");
+      assert.ok(request);
+      assert.deepEqual(opened(request, w.alice), { value: "sample" });
+    } finally {
+      exited();
+      rmSync(h.dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test("an early device of another member with the same email receives a carried save", async () => {
+  const w = world(0, true);
+  const h = harness(() => w.state);
+  let exited!: () => void;
+  const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+  try {
+    let next!: Secrets;
+    h.onPost(() => {
+      h.onPost(null);
+      next = h.make({ previousGone });
+      const cert = w.cert(w.bob);
+      h.vaults.putBox(cert);
+      next.boxed(w.state, cert);
+      next.carry(JSON.parse(JSON.stringify(h.secrets.carried())));
+      next.reboxed();
+    });
+    await h.secrets.save("s1", { name: "Shared email", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    exited();
+    await tick();
+    const [request] = pendingOf(next, w.state, "alice@x.com");
+    assert.ok(request);
+    assert.deepEqual(opened(request, w.bob), { value: "sample" });
+  } finally {
+    exited();
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+for (const legacy of [false, true, "mixed"] as const) test(`an early device tells ${legacy === "mixed" ? "mixed older and scoped" : legacy ? "older" : "scoped"} carried saves in their existing request order`, async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  let exited!: () => void;
+  const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+  try {
+    await h.secrets.save("s1", { name: "First", kind: "token", reason: "test", value: "one", cwd: h.dir });
+    await h.secrets.save("s1", { name: "Second", kind: "token", reason: "test", value: "two", cwd: h.dir });
+    const carried = JSON.parse(JSON.stringify(h.secrets.carried()));
+    carried.unsaved.sort((a: [string], b: [string]) => a[0] < b[0] ? 1 : -1);
+    const ids = carried.unsaved.map(([id]: [string]) => id).sort();
+    carried.unsaved = carried.unsaved.map(([id, fields, scopes]: [string, Record<string, string>, unknown], i: number) => legacy === true || (legacy === "mixed" && i === 0) ? [id, fields] : [id, fields, scopes]);
+    const next = h.make({ previousGone });
+    const told: string[] = [];
+    next.listen((request) => told.push(request.id));
+    const cert = w.cert(w.alice);
+    h.vaults.putBox(cert);
+    next.boxed(w.state, cert);
+    next.carry(carried);
+    next.reboxed();
+    exited();
+    await tick();
+    assert.deepEqual(told, ids);
+  } finally {
+    exited();
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+for (const removed of [false, true]) {
+  test(`an early device ${removed ? "removed" : "given a new certificate"} before carry is checked again`, async () => {
+    const w = world();
+    let lock = w.state;
+    const h = harness(() => lock);
+    const newer = { ...w.alice, box: newBoxPair() };
+    let exited!: () => void;
+    const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+    try {
+      let next!: Secrets;
+      h.onPost(() => {
+        h.onPost(null);
+        next = h.make({ previousGone });
+        const cert = w.cert(w.alice);
+        h.vaults.putBox(cert);
+        next.boxed(lock, cert);
+        if (removed) lock = { ...lock, devices: new Map([...lock.devices].filter(([id]) => id !== w.alice.base.hex)) };
+        else h.vaults.putBox(w.cert(newer));
+        next.carry(JSON.parse(JSON.stringify(h.secrets.carried())));
+        next.reboxed();
+      });
+      await h.secrets.save("s1", { name: "Early device", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+      exited();
+      await tick();
+      const [request] = pendingOf(next, lock, "alice@x.com");
+      assert.ok(request);
+      if (removed) assert.deepEqual(request.sealed, []);
+      else {
+        assert.equal(request.sealed?.length, 1);
+        assert.deepEqual(opened(request, newer), { value: "sample" });
+      }
+    } finally {
+      exited();
+      rmSync(h.dir, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const legacy of [false, true]) {
+  test(`a failed save after an early device and ${legacy ? "an older" : "a scoped"} handover leaves no secret`, async () => {
+    const w = world();
+    const h = harness(() => w.state);
+    let exited!: () => void;
+    const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+    try {
+      let next!: Secrets;
+      h.onPost(() => {
+        h.onPost(null);
+        next = h.make({ previousGone });
+        const cert = w.cert(w.alice);
+        h.vaults.putBox(cert);
+        next.boxed(w.state, cert);
+        const carried = JSON.parse(JSON.stringify(h.secrets.carried()));
+        if (legacy) carried.unsaved = carried.unsaved.map(([id, fields]: [string, Record<string, string>]) => [id, fields]);
+        next.carry(carried);
+        next.reboxed();
+        throw new Error("post failed");
+      });
+      await assert.rejects(h.secrets.save("s1", { name: "Failed early", kind: "token", reason: "test", value: "sample", cwd: h.dir }), /post failed/);
+      exited();
+      await tick();
+      assert.deepEqual(next.carried().unsaved, []);
+      assert.deepEqual(next.carried().keeper.boxes, []);
+    } finally {
+      exited();
+      rmSync(h.dir, { recursive: true, force: true });
+    }
+  });
+}
+
+for (const legacy of [false, true]) {
+  test(`a save granted before ${legacy ? "an older" : "a scoped"} handover arrives keeps its grant`, async () => {
+    const w = world();
+    const h = harness(() => w.state);
+    let exited!: () => void;
+    const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+    try {
+      h.vaults.putBox(w.cert(w.alice));
+      h.vaults.putVault(w.vault);
+      await h.secrets.save("s1", { name: "Already approved", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+      const carried = JSON.parse(JSON.stringify(h.secrets.carried()));
+      if (legacy) carried.unsaved = carried.unsaved.map(([id, fields]: [string, Record<string, string>]) => [id, fields]);
+      const next = h.make({ previousGone });
+      next.reboxed();
+      const [request] = pendingOf(next, w.state, "alice@x.com");
+      assert.ok(request);
+      h.vaults.putItem(written(request, w.alice, { value: "sample" }));
+      const grant: Grant = signed({ v: 1 as const, ws: WS, request: request.id, vault: VAULT, item: request.item, mode: "env" as const, hosts: [], scope: "chat" as const, exp: 1000 + 30 * 86400, secret: seal(request.box, Buffer.from(JSON.stringify({ kind: "token", name: "Already approved", fields: { value: "sample" } })), grantContext(WS, request.id)), at: 1000 }, TAG.grant, w.alice.signer);
+      assert.equal(next.saved(w.state, "alice", { request: request.id, vault: VAULT, grant }), null);
+      assert.equal(next.held("s1").length, 1);
+      next.carry(carried);
+      exited();
+      await tick();
+      assert.deepEqual(next.held("s1").map((held) => held.secret.fields), [{ value: "sample" }]);
+      assert.deepEqual(next.carried().unsaved, []);
+      assert.deepEqual(next.carried().keeper.boxes, []);
+    } finally {
+      exited();
+      rmSync(h.dir, { recursive: true, force: true });
+    }
+  });
+}
+
+test("an older handover retries a device registered before its save is written", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  let exited!: () => void;
+  const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+  try {
+    let next!: Secrets;
+    h.onPost(() => {
+      h.onPost(null);
+      next = h.make({ previousGone });
+      const carried = JSON.parse(JSON.stringify(h.secrets.carried()));
+      carried.unsaved = carried.unsaved.map(([id, fields]: [string, Record<string, string>]) => [id, fields]);
+      next.carry(carried);
+      next.reboxed();
+      const cert = w.cert(w.alice);
+      h.vaults.putBox(cert);
+      next.boxed(w.state, cert);
+    });
+    await h.secrets.save("s1", { name: "Old handover", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    exited();
+    await tick();
+    const [request] = pendingOf(next, w.state, "alice@x.com");
+    assert.ok(request);
+    assert.deepEqual(opened(request, w.alice), { value: "sample" });
+  } finally {
+    exited();
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("only the latest device certificate receives a save carried during handover", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  let exited!: () => void;
+  const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+  try {
+    let next!: Secrets;
+    const newer = { ...w.alice, box: newBoxPair() };
+    h.onPost(() => {
+      h.onPost(null);
+      next = h.make({ previousGone });
+      next.carry(JSON.parse(JSON.stringify(h.secrets.carried())));
+      next.reboxed();
+      const old = w.cert(w.alice), latest = w.cert(newer);
+      h.vaults.putBox(old);
+      next.boxed(w.state, old);
+      h.vaults.putBox(latest);
+      next.boxed(w.state, latest);
+    });
+    await h.secrets.save("s1", { name: "Replaced", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    exited();
+    await tick();
+    const [request] = pendingOf(next, w.state, "alice@x.com");
+    assert.ok(request);
+    assert.equal(request.sealed?.length, 1);
+    assert.deepEqual(opened(request, newer), { value: "sample" });
+  } finally {
+    exited();
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a device removed before the previous process exits is not sent a carried save", async () => {
+  const w = world();
+  let lock = w.state;
+  const h = harness(() => lock);
+  let exited!: () => void;
+  const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+  try {
+    let next!: Secrets;
+    h.onPost(() => {
+      h.onPost(null);
+      next = h.make({ previousGone });
+      next.carry(JSON.parse(JSON.stringify(h.secrets.carried())));
+      next.reboxed();
+      const cert = w.cert(w.alice);
+      h.vaults.putBox(cert);
+      next.boxed(lock, cert);
+      lock = { ...lock, devices: new Map([...lock.devices].filter(([id]) => id !== w.alice.base.hex)) };
+    });
+    await h.secrets.save("s1", { name: "Removed", kind: "token", reason: "test", value: "sample", cwd: h.dir });
+    exited();
+    await tick();
+    const [request] = pendingOf(next, lock, "alice@x.com");
+    assert.ok(request);
+    assert.deepEqual(request.sealed, []);
+  } finally {
+    exited();
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a failed save during handover leaves no carried secret once the old process exits", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  let exited!: () => void;
+  const previousGone = new Promise<void>((resolve) => { exited = resolve; });
+  try {
+    let next!: Secrets;
+    h.onPost(() => {
+      h.onPost(null);
+      next = h.make({ previousGone });
+      next.carry(JSON.parse(JSON.stringify(h.secrets.carried())));
+      next.reboxed();
+      const cert = w.cert(w.alice);
+      h.vaults.putBox(cert);
+      next.boxed(w.state, cert);
+      throw new Error("post failed");
+    });
+    await assert.rejects(h.secrets.save("s1", { name: "Failed handover", kind: "token", reason: "test", value: "sample", cwd: h.dir }), /post failed/);
+    exited();
+    await tick();
+    assert.deepEqual(next.carried().unsaved, []);
+    assert.deepEqual(next.carried().keeper.boxes, []);
+  } finally {
+    exited();
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a failed save card does not leave the secret or its request box in memory", async () => {
+  const w = world();
+  const h = harness(() => w.state);
+  try {
+    h.onPost(() => { throw new Error("post failed"); });
+    await assert.rejects(h.secrets.save("s1", { name: "Failed", kind: "token", reason: "test", value: "sample", cwd: h.dir }), /post failed/);
+    assert.deepEqual(h.secrets.carried().unsaved, []);
+    assert.deepEqual(h.secrets.carried().keeper.boxes, []);
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }
@@ -338,7 +1294,7 @@ test("a secret to keep without security mode: written into the owner's plain lib
     assert.deepEqual([kept.id, kept.owner, kept.fields, kept.listing], [r.item, "bob@x.com", { value: "xoxb-1" }, { name: "Slack", kind: "token", modes: ["proxy"], hosts: ["slack.com"] }]);
     assert.match(await decided(h, asked), /Kept: 「Slack」.*This chat may use it now/);
     assert.deepEqual(h.secrets.listings("s1").map((l) => l.listing.name), ["Slack"]);
-    assert.deepEqual(h.secrets.held("s1").map((x) => [x.request.id, x.grant.scope, x.grant.hosts]), [[r.id, "chat", ["slack.com"]]]);
+    assert.deepEqual(h.secrets.held("s1").map((x) => [x.request.id, x.grant.scope, x.grant.hosts]), [[r.id, "hour", ["slack.com"]]]);
 
     // Waiting through a restart: gone, so let go.
     void h.secrets.save("s1", { name: "Other", kind: "token", reason: "x", value: "v", cwd: h.dir });
@@ -381,7 +1337,7 @@ test("a secret its owner types in: nothing of it held or sealed here, the card a
 test("a secret its owner types in without security mode: written into their plain library with the fields their app sends, its secret not empty", async () => {
   const h = harness(() => null, "bob@x.com");
   try {
-    const asked = h.secrets.save("s1", { name: "Router", kind: "login", reason: "router", cwd: h.dir });
+    const asked = h.secrets.save("s1", { name: "Router", kind: "login", reason: "test service", cwd: h.dir });
     await tick();
     const [r] = pendingOf(h.secrets, null, "bob@x.com");
     assert.ok(r && r.vault === PLAIN && r.save?.typed === true);
@@ -485,6 +1441,7 @@ test("a sign-in to keep: its sites' cookies read from the chat's browser (or the
     assert.match(await decided(h, asked), /Kept/);
     // Kept, the chat that asked has it in its browser, for as long as its grant lasts.
     assert.deepEqual(h.browser.signedIn.map(([s, d]) => [s, d.request, d.sites, d.cookies]), [["s1", r.id, ["github.com"], h.browser.jar]]);
+    assert.equal(h.browser.signedIn[0]![1].workspace, WS);
     await assert.rejects(h.secrets.run("s1", { grant: r.id, command: "true", cwd: h.dir }), /is not run with/);
     // Asked again (another chat would): its card says where it goes, and it goes in once granted.
     void h.secrets.ask("s1", { item: "GitHub · bob", reason: "看 PR" });
@@ -492,7 +1449,7 @@ test("a sign-in to keep: its sites' cookies read from the chat's browser (or the
     const [use] = pendingOf(h.secrets, null, "bob@x.com");
     assert.ok(use && use.mode === "browser");
     assert.match(h.cards.at(-1)!.text, /放进这个对话的浏览器（限 github.com/);
-    assert.equal(h.secrets.grantPlain(WS, null, "bob@x.com", { request: use.id, scope: "hour" }), null);
+    assert.equal(h.secrets.grantPlain(WS, null, "bob@x.com", { request: use.id, scope: "hour", timeout: { kind: "idle", seconds: 3600 } }), null);
     assert.equal(h.browser.signedIn.length, 2);
     assert.equal(h.browser.signedIn[1]![1].until, 1000 + 3600);
     // Taken out with new cookies: the item keeps them; the same again is no new version.
@@ -504,6 +1461,29 @@ test("a sign-in to keep: its sites' cookies read from the chat's browser (or the
     // A context made anew: what is still granted goes in again.
     h.secrets.signInAgain("s1");
     assert.equal(h.browser.signedIn.length, 4);
+    assert.ok(h.browser.signedIn.every(([, d]) => d.workspace === WS));
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a vault sign-in returns to its original workspace after its chat moves", () => {
+  const w = world();
+  const h = harness((ws) => ws === null || ws === WS ? w.state : null);
+  try {
+    h.vaults.putVault(w.vault);
+    h.vaults.putBox(w.cert(w.alice));
+    const item = `i_${"0".repeat(26)}`;
+    h.db.prepare("INSERT INTO vault_requests(ws,id,session,status,body) VALUES(?,?,?,?,?)").run(WS, "request", "s1", "granted", JSON.stringify({
+      ws: WS, id: "request", session: "s1", vault: VAULT, item, owner: "alice@x.com", mode: "browser", status: "granted",
+    }));
+    h.setSessionWs("another-workspace");
+    const cookies = JSON.stringify([{ name: "session", value: "renewed", domain: "github.com", path: "/" }]);
+    h.secrets.renewed("s1", "request", cookies, WS);
+    const row = h.db.prepare("SELECT body FROM vault_renewals WHERE ws = ? AND item = ?").get(WS, item) as { body: string } | undefined;
+    assert.ok(row);
+    const renewal = JSON.parse(row.body) as { id: string; sealed: { secret: string }[] };
+    assert.deepEqual(JSON.parse(Buffer.from(openSeal(w.alice.box.priv, renewal.sealed[0]!.secret, saveContext(WS, renewal.id))).toString()), { cookies });
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }
@@ -522,7 +1502,7 @@ test("a sign-in in a vault: its newer cookies, which the station cannot write, s
     assert.deepEqual(opened(r!, w.alice), { cookies: h.browser.jar });
     h.vaults.putItem(written(r!, w.alice, { cookies: h.browser.jar }));
     const grantOf = (req: Request, cookies: string, scope: "hour" | "chat") => signed(
-      { v: 1 as const, ws: WS, request: req.id, vault: VAULT, item: req.item, mode: "browser" as const, hosts: ["github.com"], scope, exp: 1000 + 3600, secret: seal(req.box, Buffer.from(JSON.stringify({ kind: "browser", name: "GitHub", fields: { cookies } })), grantContext(WS, req.id)), at: 1000 },
+      { v: 1 as const, ws: WS, request: req.id, vault: VAULT, item: req.item, mode: "browser" as const, hosts: ["github.com"], scope, exp: 1000 + 3600, ...(req.timeout ? { timeout: { kind: "idle" as const, seconds: 3600 } } : {}), secret: seal(req.box, Buffer.from(JSON.stringify({ kind: "browser", name: "GitHub", fields: { cookies } })), grantContext(WS, req.id)), at: 1000 },
       TAG.grant, w.alice.signer,
     );
     assert.equal(h.secrets.saved(w.state, "alice", { request: r!.id, vault: VAULT, grant: grantOf(r!, h.browser.jar, "hour") }), null);
@@ -541,6 +1521,12 @@ test("a sign-in in a vault: its newer cookies, which the station cannot write, s
     assert.deepEqual(JSON.parse(Buffer.from(openSeal(w.alice.box.priv, next.renewal.sealed[0]!.secret, saveContext(WS, next.renewal.id))).toString()), { cookies: renewed });
     // Granted with the cookies it had (an app from before renewals): they stay for the next.
     assert.equal(h.secrets.grant(w.state, "alice", grantOf(next, h.browser.jar, "hour")), null);
+    h.browser.at += 3000_000;
+    h.secrets.browserUsed("s1", "notgithub.com");
+    assert.deepEqual(h.browser.extended, []);
+    h.secrets.browserUsed("s1", "github.com");
+    assert.deepEqual(h.browser.extended, [["s1", next.id, 7600]]);
+    h.browser.at -= 3000_000;
     const after = await ask();
     assert.equal(after.renewal?.id, next.renewal.id);
     // Granted with them (the app wrote them as the item's next version): kept no longer.

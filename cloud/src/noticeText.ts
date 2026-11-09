@@ -1,4 +1,4 @@
-// What a notification says (docs/notifications.md's table), apart from push.ts so the tests can load it outside
+// What a notification says ( table), apart from push.ts so the tests can load it outside
 // Workers.
 import { tr, type Lang } from "./i18n.ts";
 
@@ -11,7 +11,7 @@ export function line(text: string): string {
   return chars.length <= MAX_TEXT ? chars.join("") : chars.slice(0, MAX_TEXT - 1).join("").trimEnd() + "…";
 }
 
-/** A notification's text, by its kind (docs/notifications.md's table), in the language of the device it goes to. */
+/** A notification's text, by its kind ( table), in the language of the device it goes to. */
 export function noticeBody(kind: string, text: string, by?: string, lang: Lang = "zh"): string {
   if (kind === "block") return line(tr(lang, "cloud.notice.block", { text }));
   if (kind === "failed") return line(tr(lang, "cloud.notice.failed", { text }));
@@ -19,7 +19,7 @@ export function noticeBody(kind: string, text: string, by?: string, lang: Lang =
 }
 
 /**
- * What a device shows of notices, as it says when it registers (docs/notifications.md `notify.set`): which kinds
+ * What a device shows of notices, as it says when it registers: which kinds
  * (`wait` covers `block`; `done` is `off`, `away` or `always`), whether what was said (`preview`), and the workspaces
  * it hears nothing of (`muted`; an older app says none).
  */

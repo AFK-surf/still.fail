@@ -1,4 +1,4 @@
-// `Core`: takes messages from connected UIs, answers calls, keeps subscriptions (docs/client-core.md; core.rs for the
+// `Core`: takes messages from connected UIs, answers calls, keeps subscriptions (core.rs for the
 // protocol). Construction opens the signed-in accounts' databases (data.ts), wires the modules together and starts the
 // sync (sync/), which keeps everything the core holds current by itself; subscriptions only read what is held.
 import { Cause, Effect, type Clock, type Fiber } from "effect";
@@ -35,7 +35,7 @@ import { CloudSync } from "./sync/cloud.ts";
 import { Priority, Scheduler } from "./sync/scheduler.ts";
 import { Kind, SAMPLE, Tracer } from "./trace.ts";
 import { spentClock } from "./spent.ts";
-import { keepVerified } from "./vault/verified.ts";
+import { checkWith, keepVerified } from "./vault/verified.ts";
 import { Wakes, WakingHost } from "./wake.ts";
 import { Workspaces } from "./workspace.ts";
 import { install as installStationCalls } from "./station/calls.ts";
@@ -60,6 +60,9 @@ import { installForms, type Forms } from "./forms-calls.ts";
 import { Loads } from "./preview-load.ts";
 import { Asks } from "./asks.ts";
 import { Adb } from "./adb.ts";
+import { PersonalLock } from "./personal-lock.ts";
+import { bindPerson, keepToPerson, lockSeen, personalStations, refusedAgain, tellStations } from "./views/lock.ts";
+import { personalBegin, personalCancel, personalPairState, personalProve } from "./views/pair.ts";
 import { envOf, Views } from "./views/views.ts";
 import * as xshare from "./views/xshare.ts";
 import * as memberships from "./views/memberships.ts";
@@ -72,7 +75,6 @@ import * as browseCalls from "./views/browse.ts";
 import * as downloads from "./views/downloads.ts";
 import * as fill from "./fill.ts";
 import { get, isObject } from "./util.ts";
-import { type CoreModule, type ModuleCall, installModules } from "./module.ts";
 
 /// Where a device's member credentials are kept (`credential/<account>/<workspace>`), and how long one serves.
 export const CREDENTIAL_KEY = "credential";
@@ -97,8 +99,6 @@ export type Options = {
   /// Who the accounts are with (account-provider.ts): still.fail cloud unless the embedding app gives another
   /// (`commaAccountProvider`, comma.ts).
   account?: AccountProviderFactory;
-  /// What the app adds besides the platform (module.ts, docs/core-modules.md): installed once the rest is.
-  modules?: readonly CoreModule[];
 };
 
 /// What the core holds: every module.
@@ -142,9 +142,6 @@ export class Inner {
   /// What was opened and let go, brought whole after everything else (fill.ts).
   fill!: fill.Fill;
   router!: Router;
-  /// The calls of the app's modules, by full name (module.ts), and the modules' names (their topics are `<name>.…`).
-  moduleCalls = new Map<string, ModuleCall<any>>();
-  moduleNames: string[] = [];
   /// The calls under way that a UI can stop, by `client/id`.
   calls = new Map<string, Fiber.Fiber<unknown, unknown>>();
   doing = new Doing();
@@ -178,7 +175,8 @@ export class Core {
       // (the files kept for messages left behind a week)
       inner.runner.fork(inner.driveKept.dropOldUploads());
       brand.setTestChannel(inner.host.testChannel());
-      fonts.setOrigin(inner.host.cloudOrigin());
+      brand.setCloud(inner.host.cloudOrigin());
+      fonts.setOrigin(inner.host.cloudOrigin(), inner.host.testChannel());
       inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE);
       spentClock(() => inner.host.monotonicMs());
       // A failure let go of is a span of its own: Axiom has it though nothing waited on it.
@@ -212,6 +210,8 @@ export class Core {
       yield* inner.data.open(inner.accounts.list().map((a) => a.sub));
       // (signatures checked once on this device, kept with its own values: vault/verified.ts)
       keepVerified({ get: (k) => inner.data.device.get("verified", k), put: (k, ok) => void inner.data.device.put("verified", k, ok) });
+      // (checked by the host's own, where it has one: a native app's shell, libcrux)
+      checkWith(inner.host.verify ? (alg, key, signature, message) => inner.host.verify!(alg, key, signature, message) : null);
       prefs.followLang(inner.data);
       prefs.followApp(inner.data);
       // What goes out is what the clients' types say (client/core-ts/src/shapes/schema.ts).
@@ -224,19 +224,12 @@ export class Core {
           for (const t of store.liveTopics()) if (holds(t)) store.changed(t);
         } else store.changed(topic);
       });
-      inner.status.onChange(() => store.invalidateAll((t) => t.topic === "status"));
       // Why a station down is not reached is said again as still.fail cloud is reached, or no longer is.
       inner.status.onCloud = () => inner.stations?.recause();
       inner.scheduler = new Scheduler(inner.runner, inner.runner.root);
       inner.cloudSync = new CloudSync(inner);
       inner.status.setNames((address) => inner.cloudSync.nameOf(address));
-      inner.workspaces.wireStatus(
-        (id) => {
-          store.invalidateAll((t) => t.topic === "status" && (t.workspace === undefined || t.workspace === id));
-          store.invalidate({ topic: "doing" });
-        },
-        (address) => inner.cloudSync.nameOf(address),
-      );
+      inner.workspaces.wireStatus((address) => inner.cloudSync.nameOf(address));
       inner.router = new Router(inner);
       store.setSource(inner.router);
       inner.iroh = options.iroh ?? null;
@@ -253,7 +246,7 @@ export class Core {
       inner.viewCalls = new ViewCalls(inner, inner.views);
       inner.viewCalls.install();
       // What agents said lately read ahead, kept on the device: a chat opens with its Markdown read (md-ahead.ts).
-      const ahead = new MdAhead(inner.data, inner.runner, () => inner.host.nowMs(), (station, of) => inner.views.mdChanged(station, of));
+      const ahead = new MdAhead(inner.data, inner.runner, () => inner.host.nowMs(), (station, of) => inner.data.mdChanged(station, of));
       inner.data.onOldMd = (station, of, text) => ahead.refresh(station, of, text);
       inner.data.onLogChange((table, station, id) => {
         if (table === "entry") ahead.thread(station, Number(id));
@@ -277,6 +270,17 @@ export class Core {
       inner.forms = installForms(inner);
       const asks = new Asks(inner.host, (from, to) => inner.changelog.brings(from, to));
       asks.follow(inner.accounts);
+      // A release may be out (still.fail cloud said one is, or its events socket opened again: what it said while closed
+      // is not said again): the newest of each feed read again when next asked, and the app told (the `releases`
+      // topic's `told`) so the build it gets ready is the newest, not one read before.
+      let told = 0;
+      const releaseOut = () => {
+        asks.released();
+        told += 1;
+        inner.store.invalidate({ topic: "releases" });
+      };
+      inner.router.owners.push({ owns: (topic) => topic.topic === "releases", compute: () => ({ ok: { told } }) });
+      inner.cloudSync.onRelease = releaseOut;
       inner.adb = new Adb({
         host: inner.host,
         runner: inner.runner,
@@ -285,10 +289,37 @@ export class Core {
         credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, inner.meshNow()?.deviceId() ?? null, inner.meshNow()?.lockClaim(workspace, device) ?? null),
         relays: (workspace) => inner.cloudSync.workspaceRelays(workspace),
         off: (workspace) => inner.cloudSync.workspaceOff(workspace),
+        part: (station, key, name, offset, length) => inner.stations.requests.filePart(station, key, name, offset, length, null, undefined, undefined, undefined, true),
         lends: () => inner.host.tcp !== undefined && (inner.data.shared({ topic: "prefs" }) as { device?: { app?: unknown } } | undefined)?.device?.app === "android",
+        personal: new PersonalLock({
+          host: inner.host,
+          runner: inner.runner,
+          cloud: (sub, method, path, body) => inner.provider.request(sub, method, path, body),
+          device: () => Effect.map(inner.mesh(), (m) => m.deviceId()),
+          label: () => prefs.deviceName(inner.data) ?? "",
+          changed: () => {
+            inner.adb.touched();
+            for (const [ws] of inner.workspaces.owned()) {
+              lockSeen(inner).touch(`lock ${ws}`);
+              inner.runner.fork(bindPerson(inner, ws));
+              inner.runner.fork(keepToPerson(inner, ws));
+              refusedAgain(inner, ws);
+            }
+          },
+          told: (sub, chain) => tellStations(inner, sub, chain),
+          stations: personalStations(inner),
+        }),
+        subOf: (workspace) => inner.workspaces.owner(workspace),
+        subs: () => inner.accounts.list().map((a) => ({ sub: a.sub, email: a.email })),
+        pair: {
+          begin: (subs) => personalBegin(inner, subs),
+          code: (typed) => personalProve(inner, typed),
+          cancel: () => personalCancel(inner),
+          state: (sub) => personalPairState(inner, sub),
+        },
       });
       handlers.adb = (_i, call) => inner.adb.run((call as Extract<Call, { kind: "adb" }>).call);
-      // This person's chats' grants of their phone, as each station says them (docs/adb-share.md).
+      // This person's chats' grants of their phone, as each station says them.
       inner.stations.also.push({ read: (address) => inner.adb.readGrants(address), event: (address, name, data) => (name === "adb-grant" ? inner.adb.heard(address, data) : undefined), resume: true });
       handlers.ask = (_i, call) => asks.run((call as Extract<Call, { kind: "ask" }>).ask, inner.accounts);
       inner.changelog = new Changelog(inner.host, inner.store, inner.data);
@@ -343,10 +374,10 @@ export class Core {
       inner.router.owners.push(fontFiles);
       handlers.fonts = (_i, call) => fontFiles.run((call as Extract<Call, { kind: "fonts" }>).call);
       hooks.device = (_inner, facts) => inner.changelog.device(facts);
-      inner.router.owners.push(new AdminRelays(inner));
+      const adminRelays = new AdminRelays(inner);
+      inner.router.owners.push(adminRelays);
+      inner.cloudSync.onRelayLoad = (sub) => adminRelays.told(sub);
       inner.router.owners.push(new Pills(inner.store, inner.runner, () => inner.host.nowMs(), (station) => inner.views.stationName(station)));
-      inner.moduleCalls = installModules(inner, options.modules ?? []);
-      inner.moduleNames = (options.modules ?? []).map((m) => m.name);
       // The stations every account reaches are linked, as the workspaces say (once a burst of changes settles).
       let reconciling = false;
       inner.cloudSync.onReach = () => {
@@ -360,12 +391,16 @@ export class Core {
         );
       };
       inner.shownAccounts = inner.accounts.list();
+      inner.adb.accountsKnown();
       inner.tracer.setExport((body) => {
         const account = inner.accounts.list()[0];
-        return account ? Effect.ignore(inner.provider.traces(account.sub, body)) : Effect.void;
+        // Sent again when the network or the cloud was down; not one the cloud refused (it would be refused again).
+        const refused = (e: CoreError) => e.status !== undefined && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429;
+        return account ? Effect.catch(inner.provider.traces(account.sub, body), (e) => (refused(e) ? Effect.void : Effect.fail(e))) : Effect.void;
       });
       // An account signed in has its database opened; one signed out, removed (before what it reached is let go).
       inner.accounts.onChange(() => {
+        inner.adb.accountsKnown();
         inner.runner.fork(Effect.andThen(inner.data.accounts(inner.accounts.list().map((a) => a.sub)), Effect.sync(() => inner.cloudSync.accountsChanged())));
       });
       // From now on the core keeps what it holds current, whatever the UI shows.
@@ -378,9 +413,13 @@ export class Core {
       inner.viewCalls.resume();
       inner.downloads.resume();
       inner.fill.start();
-      // What changed in still.fail: read now, and again each time an account's events socket opens.
+      // What changed in still.fail: read now, and again each time an account's events socket opens (a release missed
+      // while it was closed too).
       inner.scheduler.enqueue("cloud", "changelog", Priority.background, inner.changelog.read());
-      inner.cloudSync.onOpen = () => inner.scheduler.enqueue("cloud", "changelog", Priority.background, inner.changelog.read());
+      inner.cloudSync.onOpen = () => {
+        inner.scheduler.enqueue("cloud", "changelog", Priority.background, inner.changelog.read());
+        inner.cloudSync.onRelease();
+      };
       return new Core(inner);
     });
   }
@@ -421,7 +460,7 @@ export class Core {
 
   /// A message from a UI as an object; `bytes`, those a native host handed over beside it.
   receiveRaw(client: ClientId, raw: unknown, bytes?: Uint8Array): void {
-    const message = parseClientMessage(raw, bytes, (name) => this.inner.moduleNames.some((m) => name.startsWith(`${m}.`)));
+    const message = parseClientMessage(raw, bytes);
     if ("invalid" in message) {
       const id = isObject(raw) && typeof raw.id === "number" && Number.isInteger(raw.id) && raw.id >= 0 ? raw.id : null;
       if (id !== null) this.inner.host.emit(client, { id, error: new CoreError("bad_message", t("core-misc.host.bad_message", { error: message.invalid })) });
@@ -435,7 +474,7 @@ export class Core {
     const inner = this.inner;
     switch (message.kind) {
       case "subscribe":
-        return inner.store.subscribe(client, message.id, message.subscribe, message.keyed === true);
+        return inner.store.subscribe(client, message.id, message.subscribe, message.keyed === true, message.from);
       case "unsubscribe":
         return inner.store.unsubscribe(client, message.id);
       case "cancel": {
@@ -457,7 +496,7 @@ export class Core {
     const asked = heavy(name) ? null : params;
     let call: Call;
     try {
-      call = parseCall(name, params, bytes, inner.moduleCalls);
+      call = parseCall(name, params, bytes);
     } catch (e) {
       inner.host.emit(client, answer(id, { err: asCoreError(e) }));
       return;
@@ -466,7 +505,6 @@ export class Core {
     let doing: number | null = null;
     if (asked !== null && counts(call, name)) {
       doing = inner.doing.start(name, asked, inner.host.nowMs());
-      inner.store.invalidate({ topic: "doing" });
     }
     // Each call is a trace: what it asks of stations and still.fail cloud are its spans. One that asks nothing and
     // answers at once is not sent (trace.ts QUIET_MS).
@@ -477,7 +515,6 @@ export class Core {
     // A preview's resource: its page's progress counts it (preview-load.ts).
     const loads = call.kind === "stationPreview" ? inner.workspaces.ofStation(call.station).part("previewLoad", () => new Loads()) : null;
     const resource = loads !== null && call.kind === "stationPreview" ? loads.start(call.station, call.port, call.method, call.path, call.headers, inner.host.nowMs()) : null;
-    if (resource) inner.store.invalidate(resource[0]);
     const progress: Progress = (value, bytes) => {
       const head = isObject(value) && isObject(value.head) ? value.head : null;
       if (loads && resource && head && typeof head.status === "number") {
@@ -485,7 +522,6 @@ export class Core {
         // Event streams stay open after they have connected.
         const stream = Array.isArray(head.headers) && head.headers.some((h) => Array.isArray(h) && typeof h[0] === "string" && h[0].toLowerCase() === "content-type" && typeof h[1] === "string" && h[1].startsWith("text/event-stream"));
         if (stream) loads.end(resource, inner.host.nowMs(), null);
-        inner.store.invalidate(resource[0]);
       }
       inner.host.emit(client, bytes === undefined ? { id, value } : { id, value, bytes });
     };
@@ -502,11 +538,9 @@ export class Core {
           // Its resource ends with it: the page's progress counts it as failed.
           if (loads && resource) {
             loads.end(resource, inner.host.nowMs(), cancelled.message);
-            inner.store.invalidate(resource[0]);
           }
           if (doing !== null) {
             inner.doing.end(doing);
-            inner.store.invalidate({ topic: "doing" });
           }
           inner.host.emit(client, answer(id, { err: cancelled }));
         }),
@@ -522,7 +556,6 @@ export class Core {
             const status = isObject(said) ? said.status : undefined;
             if (typeof status === "number") loads.head(resource, status);
             loads.end(resource, inner.host.nowMs(), "err" in result ? result.err.message : null);
-            inner.store.invalidate(resource[0]);
           }
           span.end();
           let failed: number | null = null;
@@ -531,13 +564,11 @@ export class Core {
               inner.doing.fail(doing, result.err.message);
               failed = doing;
             } else inner.doing.end(doing);
-            inner.store.invalidate({ topic: "doing" });
           }
           inner.host.emit(client, answer(id, result));
           if (failed !== null) {
             yield* Effect.sleep(FAILED_SHOWN_MS);
             inner.doing.end(failed);
-            inner.store.invalidate({ topic: "doing" });
           }
         }),
       ),

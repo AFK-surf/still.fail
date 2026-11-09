@@ -9,18 +9,21 @@ export function fallback(runtime: string): string[] {
   if (runtime === "dsh") return ["low", "medium", "high", "max"];
   if (runtime === "grok") return ["low", "medium", "high", "xhigh", "max"];
   // Cursor sets no effort: its models are picked by name alone.
-  if (runtime === "cursor" || runtime === "hermes") return [];
+  if (runtime === "cursor" || runtime === "hermes" || runtime === "agy") return [];
   // Devin's models are a family at its thinking levels: each model's own list comes with it (modelEfforts).
   return ["low", "medium", "high", "xhigh", "max"];
 }
 
-export function available(runtime: string, model: string | null | undefined, catalog: Catalog | null | undefined): string[] {
+/// The levels a model's runtime reported, null where it has reported none.
+export function reported(runtime: string, model: string | null | undefined, catalog: Catalog | null | undefined): string[] | null {
   const models = catalog?.[runtime];
-  if (model !== null && model !== undefined && models) {
-    const levels = models[model] ?? Object.entries(models).find(([id]) => same(id, model))?.[1];
-    if (levels) return [...levels];
-  }
-  return fallback(runtime);
+  if (model === null || model === undefined || !models) return null;
+  const levels = models[model] ?? Object.entries(models).find(([id]) => same(id, model))?.[1];
+  return levels ? [...levels] : null;
+}
+
+export function available(runtime: string, model: string | null | undefined, catalog: Catalog | null | undefined): string[] {
+  return reported(runtime, model, catalog) ?? fallback(runtime);
 }
 
 export function common(profiles: string[][], runtime: string): string[] {

@@ -86,7 +86,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * its own.
  * Kind 4, a stream's picture (StreamLayer): not drawn in the canvas but on a layer of the system's under it, where
  * the canvas is cleared for it (android_host.c's views_under).
- * Kind 2, a page of HTML in a WebView, as still.fail's Android app shows an HTML file (FilePreview.kt HtmlPage):
+ * Kind 2, a page of HTML in a WebView, as still.fail's Android app shows an HTML file:
  * scripts on, no file or content access, no DOM storage, no link followed. A page's and a site's frame draws its
  * WebView into its picture (TouchFrame.draw) as the WebView changes, not as it moves; a page taller than a picture can
  * be, a part of it at a time (Page).
@@ -863,6 +863,18 @@ final class NativeViews {
             if (from != null) from.removeView(v.clip);
             v.context.setBaseContext(to.getContext());
             to.addView(v.clip, p);
+        }
+    }
+
+    /**
+     * The app off the screen (MainActivity, the main thread): each video playing paused, as an iPhone's AVPlayer is as
+     * its app goes to the background; it stays paused once back (the app sees it so: info's 2), played again by a tap.
+     */
+    static void behind() {
+        for (NView v : views.values()) {
+            if (v.closed || !(v instanceof Video)) continue;
+            ExoPlayer p = ((Video) v).player;
+            if (p != null && p.getPlayWhenReady()) p.pause();
         }
     }
 
@@ -1954,7 +1966,7 @@ final class NativeViews {
          * The frame showing now, its picture's (its content at the video's proportions, not the transform the app's
          * zoom puts on it), at most `side` pixels on its longer side, as a JPEG: `still` once it is made (main thread;
          * read on the GL thread).
-         * As still.fail's Android app keeps the frame a video was left at (VideoViewer.kt frameOut: getBitmap).
+         * As still.fail's Android app keeps the frame a video was left at.
          */
         void grabShown(double side) {
             stillState = 1;
@@ -2332,7 +2344,7 @@ final class NativeViews {
         /**
          * The page scrolled to the part its frame is, by its own script (main thread). A page's own scroll: the WebView's
          * (WebView.scrollTo) is a user's, which a page whose root does not scroll takes nothing of (as a viz's does not:
-         * ember-viz.css, overflow: hidden), and a picture of its top said to be a part of it far down (0.1.5309).
+         * viz.css, overflow: hidden), and a picture of its top said to be a part of it far down (0.1.5309).
          */
         void scrollToPart() {
             if (web == null || partTop < 0 || atPart(web.getScrollY())) return;
@@ -2414,7 +2426,7 @@ final class NativeViews {
     // ---- a site: a web view whose own host is answered by the app ----
 
     /**
-     * A site served by the app (still.fail's preview of a service, Preview.kt / PreviewWeb.kt): a WebView at a host of
+     * A site served by the app (still.fail's preview of a service): a WebView at a host of
      * its own; every request it makes of that host is said to the app (`siteNext`, on the GL thread), which answers it
      * (`siteHead`, `siteChunk`s, `siteEnd`) from the station through the core while the WebView's thread waits here for
      * the head (a minute at most) and then reads the body as it comes. A body the page lets go of is said (`gone`). A

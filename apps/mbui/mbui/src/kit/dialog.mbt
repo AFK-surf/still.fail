@@ -67,6 +67,7 @@ pub(all) struct Alert {
 /// over `description` ("" none) and what `body` builds; a close button named `close_label` in its corner unless it
 /// is "". Whether it is open now (closed by Escape, the back, a press outside unless not `outside`, the close button).
 /// `scrim`: what the page under it is dimmed with (the theme's where not said: a picture shown alone over a deeper one).
+/// An Escape `on_escape` says it took is a step back within it (Ctx::overlay's), not closing it.
 pub fn dialog(
   c : @ui.Ctx,
   key : String,
@@ -79,13 +80,14 @@ pub fn dialog(
   close_label? : String = "关闭",
   look? : (@ui.Ctx, DialogState, () -> Unit) -> Unit = dialog_look,
   scrim? : Int64,
+  on_escape? : () -> Bool,
   body : () -> Unit,
 ) -> @ui.Changed[Bool] {
   let mut now = open
   if dialog_shows(c, key, open) is Some((shows, ground)) {
     let st = { title, description, w, closes: close_label != "" }
     let scrim = scrim.unwrap_or(c.theme().scrim)
-    let o = c.overlay(key, modal~, outside~, scrim=pick(modal, faded(scrim, ground), 0L), inert=!open, fn() {
+    let o = c.overlay(key, modal~, outside~, on_escape?, scrim=pick(modal, faded(scrim, ground), 0L), inert=!open, fn() {
       centered(c, key, shows, Dialog, title, description, modal, fn() {
         look(c, st, fn() {
           body()
@@ -229,7 +231,8 @@ fn faded(colour : Int64, t : Double) -> Int64 {
 pub fn dialog_look_of(pad? : Double = 24.0, gap? : Double = 16.0) -> (@ui.Ctx, DialogState, () -> Unit) -> Unit {
   fn(c, s, body) {
     let t = c.theme()
-    c.box(
+    // (the dialog: its look's surface, coming first, all on it after: Ctx::surface)
+    let panel = c.box(
       w=Px(s.w),
       pad~,
       // the title's middle on the close button's: 26 + 16, the dialog's corner (the button in it, concentric)
@@ -257,7 +260,7 @@ pub fn dialog_look_of(pad? : Double = 24.0, gap? : Double = 16.0) -> (@ui.Ctx, D
         body()
       },
     )
-    |> ignore
+    c.surface(panel)
   }
 }
 

@@ -1,4 +1,4 @@
-// The first view from a large dataset in Chrome (docs/core-db.md, Measurements): the core's worker of a web build
+// The first view from a large dataset in Chrome (Measurements): the core's worker of a web build
 // (`build:cloud`'s dist) served here with no still.fail cloud behind it, its IndexedDB seeded as the core before the
 // databases per account kept it (the same dataset as first-view.ts: 20 stations × 2 000 chats, sessions and threads,
 // 100 000 entries), then started by a bare page that subscribes the chat list as the app does (no UI drawing it):

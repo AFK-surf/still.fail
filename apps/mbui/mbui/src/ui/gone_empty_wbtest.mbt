@@ -3,12 +3,12 @@
 
 ///|
 test "a box gone_empty: none of its room while it holds nothing, all of it while it holds something" {
-  let holds = Ref(false)
+  let holds = @signals.signal(false)
   let t = Tester::new(
     fn(c) {
       c.box(fn() {
         c.box(pt=18.0, pb=24.0, mt=4.0, gone_empty=true, fn() {
-          if holds.val {
+          if holds.get() {
             c.text("里面") |> ignore
           }
         })
@@ -23,7 +23,7 @@ test "a box gone_empty: none of its room while it holds nothing, all of it while
   t.frame()
   let (_, y, _, _) = t.rect_of("下面").unwrap()
   assert_eq(y, 0.0)
-  holds.val = true
+  holds.set(true)
   t.frame()
   let (_, iy, _, ih) = t.rect_of("里面").unwrap()
   let (_, y, _, _) = t.rect_of("下面").unwrap()

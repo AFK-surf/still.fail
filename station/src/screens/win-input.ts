@@ -120,6 +120,10 @@ export class WinInput {
       }
       case "text":
         return e.text === "" ? [] : [{ op: "text", text: e.text }];
+      case "pose":
+      case "device":
+      case "button":
+        return [];
     }
   }
 }

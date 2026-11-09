@@ -8,6 +8,9 @@
 // Shown as the table is pointed at (2026-10-30 用户：「表格右边的按钮改成 hover 表格那一行才显示」), its menu open or
 // it saying it copied, always to a finger: what a pointer over a thing shows (@sf.pointed_or_finger); its room kept
 // either way, so nothing moves as it comes and goes.
+//
+// Hung to the table's right, over nothing (the user, 2026-10-26: 「不要压在表格上」); a row over it and a button
+// inside its corner were tried and refused.
 
 ///|
 /// The key's size (icon_button's), and how far it is from the table and from what follows it (a press's room round it).
@@ -39,17 +42,19 @@ let table_shot_in : Double = @ui.Space::S4.px()
 let table_shot_scale : Double = 2.0
 
 ///|
-/// The shot (Ctx::shot) of the table `key` names.
-fn table_shot(key : String) -> String {
-  key + "/picture"
+/// The shot (Ctx::shot) of the table whose id (in its message's scope) is `id`: a shot's key is the window's, not its
+/// message's, and every message's first table has the same key (two of them drawn, the one built last was taken
+/// whichever's key was pressed).
+fn table_shot(id : Int) -> String {
+  "sf-md/table-picture/" + id.to_string()
 }
 
 ///|
-/// The copy key of the table `key` names (`table`, as the core wrote it to copy), table_key_gap past it and before what
+/// The copy key of the table `key` names (`table`, as the core wrote it to copy; `shot` its picture), table_key_gap past it and before what
 /// follows, its middle on the head's row's (as the frame measured it: `key`/head; at its top till then). Pressed, its
 /// menu (table_menu); once one is copied, a check a moment (copied_ms). Faded in as the table is pointed at (`key`/beside,
 /// it and its key), out as the pointer leaves it, its menu gone and its check said; not pressed while not seen.
-fn Md::table_key(self : Md, key : String, table : MdTable) -> Unit {
+fn Md::table_key(self : Md, key : String, shot : String, table : MdTable) -> Unit {
   let c = self.c
   let id = c.id(key + "/copy")
   let y = match @motion.measured(c, key + "/head") {
@@ -58,51 +63,43 @@ fn Md::table_key(self : Md, key : String, table : MdTable) -> Unit {
     None => 0.0
   }
   let copied = c.within(id, copied_ms)
-  let pointed = c.hovered(c.id(key + "/beside")) || c.lit(id) || table_menus.contains(key) || copied
-  let seen = @kit.animate(
-    c,
-    key + "/copy-seen",
-    if pointed_or_finger(c, pointed) { 1.0 } else { 0.0 },
-    transition=nav_fade,
-  )
+  let pointed = c.hovered(c.id(key + "/beside")) || c.lit(id) || table_menus.contains(shot) || copied
+  // (built while it is seen or fading, till its fade's declared end; faded as it is drawn)
+  let to = if pointed_or_finger(c, pointed) { 1.0 } else { 0.0 }
+  let seen = @motion.told(c, key + "/copy-seen", to, spec=nav_fade)
   let label = if copied { t("common.copied") } else { t("web-main.prose.copyTable") }
   c.box(style=@ui.style(px=room_of(table_key_gap), pt=room_of(y)), fn() {
-    if seen == 0.0 {
+    if to == 0.0 && seen.over(c) {
       // (its room, nothing in it to press)
       c.box(style=@ui.style(w=Fixed(table_key_size), h=Fixed(table_key_size)), fn() {  }) |> ignore
       return
     }
-    // (faded as its icon's ink: the button's own colours, so far on)
-    let th = theme()
+    // (faded whole, its ink and the ground it tints with it, as it is drawn)
     let icon = if copied { "check" } else { "copy" }
-    if icon_button(
-        c,
-        icon,
-        key=key + "/copy",
-        size=table_key_size,
-        round=true,
-        label~,
-        ink=alpha(th.p.text, seen),
-        quiet=alpha(th.p.muted, seen),
-      ) {
-      self.table_menu(key, table, id)
-    }
+    let b = c.box(fn() {
+      icon_button(c, icon, key=key + "/copy", size=table_key_size, round=true, label~, on_press=fn() {
+        self.table_menu(shot, table, id)
+      })
+      |> ignore
+    })
+    c.look_by(b, fn() { @ui.look(alpha=dmax(0.0, dmin(1.0, seen.get(c)))) })
   })
   |> ignore
 }
 
 ///|
-/// The tables whose key's menu is open, by their key: their key shown till it closes.
+/// The tables whose key's menu is open, by their picture's shot (table_shot: the window's, not a message's): their key
+/// shown till it closes.
 let table_menus : LiveMap[String, Bool] = LiveMap::new()
 
 ///|
-/// The menu of the table `key` names (`table`, as the core wrote it to copy), opened by its key (`id`), along its end:
+/// The menu of the table whose picture is `shot` (`table`, as the core wrote it to copy), opened by its key (`id`), along its end:
 /// copy it as Markdown, as CSV, as a picture (or on a phone save that); once one is copied, the key says so a moment.
 /// Open, it is in table_menus.
-fn Md::table_menu(self : Md, key : String, table : MdTable, id : Int) -> Unit {
+fn Md::table_menu(self : Md, shot : String, table : MdTable, id : Int) -> Unit {
   let c = self.c
-  table_menus[key] = true
-  let closed = fn() { table_menus.remove(key) }
+  table_menus[shot] = true
+  let closed = fn() { table_menus.remove(shot) }
   let said = fn() {
     c.mark(id)
     c.wake_in(copied_ms, later=true)
@@ -124,7 +121,7 @@ fn Md::table_menu(self : Md, key : String, table : MdTable, id : Int) -> Unit {
   let picture = fn() {
     closed()
     c.take_shot(
-      table_shot(key),
+      shot,
       fn(png) { if (picture_out_by.val)(c, png, !album) && !album { said() } },
       scale=dmax(c.drawn_scale(), table_shot_scale),
     )

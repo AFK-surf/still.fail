@@ -1,4 +1,4 @@
-// Back, the shell's one way in every tier (sfbase's shell.mbt back_step, go_back; docs/architecture.md, the tiers'
+// Back, the shell's one way in every tier (sfbase's shell.mbt back_step, go_back, the tiers'
 // table), with touch and with keyboard and mouse: laid out Small a page popped, a place's top page back to the chats,
 // none at the chats'; on the tape the sidebar brought over from the chat, none with the chats' sidebar in use; laid
 // out Large the chat popped to the list, a new chat beside it, and back from that none. A page's own back and close
@@ -68,7 +68,7 @@ test "back laid out Large, a computer's and a tablet's: the chat popped to the l
 ///|
 test "a page closed through the shell: taken off where it lies with what is over it; not there, or the root, nothing" {
   new_run()
-  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Willow" }
   let read : Page = DriveRead({ station: "ws1/st1", root: Some("r"), path: "a.md" })
   app.nav.push(Chat(r))
   app.nav.push(read)

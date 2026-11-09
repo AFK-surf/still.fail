@@ -1,4 +1,4 @@
-// A chat's 文件 tab (ember web/src/pages/DriveTab.tsx, DriveTab.css.ts; mobile/StationFiles.tsx): the files of the
+// A chat's 文件 tab: the files of the
 // workspace's stations beside a chat, to put into what is being written. That is what it is for, on every screen: a
 // few files picked (a press picks a file, goes into a folder; the folder shown picked as a whole from the top of its
 // list), then 添加 n at its foot puts them into the message; what a file is, seen by its row's menu (打开) or the
@@ -13,12 +13,12 @@
 
 ///|
 /// The tab: whether it is being built, where it is by workspace (None: the places; none kept: where it starts), what
-/// was asked put into a chat's message (the chat, what), and a row let go off it (what, where, the frame).
+/// was asked put into a chat's message (the chat, what), and a row let go off it not taken yet (what, where).
 priv struct FChatTab {
   mut building : Bool
   places : Map[String, DriveAt?]
   mut scope : String
-  mut let_go : (Dragged, Double, Double, Int)?
+  mut let_go : (Dragged, Double, Double)?
   mut chat : String
   /// what is picked to go into the chat's message, in the order picked
   picked : Array[Dragged]
@@ -36,11 +36,44 @@ let ftab : FChatTab = {
 }
 
 ///|
+/// Where the tab is, by workspace (as ftab.places: None none kept, Some(None) the places), each as a signal of its own
+/// made as it is first read: told as that workspace's changes (ftab_put), so what reads it (ftab_place_of) is built
+/// again then, a part kept as its nodes too, whether it was a press in the tab, the composer's way to a folder or
+/// anything else; what reads another workspace's not.
+// kept across runs: said again as the tab is put back (tab_reset)
+let ftab_places_said : Map[String, @signals.Signal[DriveAt??]] = {}
+
+///|
+/// The tab of `ws` put at `at` (None: the places).
+fn ftab_put(ws : String, at : DriveAt?) -> Unit {
+  ftab.places[ws] = at
+  match ftab_places_said.get(ws) {
+    Some(s) => s.set(Some(at))
+    None => ()
+  }
+}
+
+///|
+/// Where the tab of `ws` is (None: none kept), read as a signal.
+fn ftab_place_of(ws : String) -> DriveAt?? {
+  let s = match ftab_places_said.get(ws) {
+    Some(s) => s
+    None => {
+      let s = @signals.signal(ftab.places.get(ws), same=fn(a, b) { a == b })
+      ftab_places_said[ws] = s
+      s
+    }
+  }
+  s.get()
+}
+
+///|
 fn tab_reset() -> Unit {
   panel_screens.clear()
   panel_screen_pages.clear()
   ftab.building = false
   ftab.places.clear()
+  ftab_places_said.each(fn(_, s) { s.set(None) })
   ftab.scope = ""
   ftab.let_go = None
   ftab.chat = ""
@@ -64,7 +97,7 @@ fn ftab_pick(d : Dragged) -> Unit {
 }
 
 ///|
-/// What is picked, at the tab's foot (StationFiles.tsx's 添加; 添加 n once something is): pressed, it goes into chat
+/// What is picked, at the tab's foot (添加 n once something is): pressed, it goes into chat
 /// `key`'s message (files_into: the composer takes it, by its path or as a file as the chat says), the picks let go.
 fn ftab_add(c : @ui.Ctx, key : String) -> Unit {
   let n = ftab.picked.length()
@@ -73,18 +106,18 @@ fn ftab_add(c : @ui.Ctx, key : String) -> Unit {
   } else {
     @sf.t("web-mobile.files.addCount", args=[("n", n.to_string())])
   }
-  if @sf.button(c, label, key="files-tab/add", tone=Primary, disabled=n == 0) {
+  @sf.button(c, label, key="files-tab/add", tone=Primary, disabled=n == 0, on_press=fn() {
     for d in ftab.picked {
       files_into(key, d)
     }
     ftab.picked.clear()
-  }
+  }) |> ignore
 }
 
 ///|
 /// The tab into a folder of a station (its root, the path under it).
 fn ftab_go(station : String, root : String, path : String) -> Unit {
-  ftab.places[ftab.scope] = Some({ station, root: Some(root), path })
+  ftab_put(ftab.scope, Some({ station, root: Some(root), path }))
 }
 
 ///|
@@ -96,14 +129,14 @@ pub fn tab_building() -> Bool {
 ///|
 /// The tab of the workspace `ws` at `at` (None: the places), as going there in it does.
 pub fn tab_place_set(ws : String, at : DriveAt?) -> Unit {
-  ftab.places[ws] = at
+  ftab_put(ws, at)
 }
 
 ///|
 /// Where the tab of `ws` is: None while nothing was chosen there (it starts where the chat's station does), Some(None)
 /// at the places.
 pub fn tab_place(ws : String) -> DriveAt?? {
-  ftab.places.get(ws)
+  ftab_place_of(ws)
 }
 
 ///|
@@ -113,16 +146,17 @@ pub fn tab_go(at : DriveAt) -> Unit {
 }
 
 ///|
-/// A row let go off the tab, where (x, y in the window), taken once, in the frame it was let go or the next: for the
-/// chat's composer, when let go over it, to put it into the message.
+/// A row let go off the tab, where (x, y in the window), taken once, by the first that asks once it is let go: for the
+/// chat's composer, when let go over it, to put it into the message. What asks follows the drag, so it is built again
+/// as the row is let go, whether it is built before the tab or after it.
 pub fn tab_take_drop(c : @ui.Ctx) -> (Dragged, Double, Double)? {
-  match ftab.let_go {
-    Some((item, x, y, frame)) if c.frame_number() - frame <= 1 => {
-      ftab.let_go = None
-      Some((item, x, y))
-    }
-    _ => None
+  ignore(c)
+  if dragged() is Some(_) {
+    return None
   }
+  let taken = ftab.let_go
+  ftab.let_go = None
+  taken
 }
 
 ///|
@@ -136,16 +170,6 @@ pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station 
     ftab.picked.clear()
   }
   ftab.chat = chat
-  // a row let go off the tab (the desk's drag_frame lets the carried go where nothing here takes it)
-  let carried = dragged()
-  drag_frame(c, src, ws, outside=false)
-  match carried {
-    Some(i) if dragged() is None => {
-      let (px, py, _) = c.pointer()
-      ftab.let_go = Some((i, px, py, c.frame_number()))
-    }
-    _ => ()
-  }
   let (list, _) = dv_stations(src, ws)
   let stations = list.unwrap_or([]).filter(fn(s) { s.drive && (!only_station || s.station == station) })
   let start : DriveAt? = match stations.iter().find_first(fn(s) { s.station == station }) {
@@ -153,7 +177,7 @@ pub fn files_tab(c : @ui.Ctx, src : Source, ws : String, chat : String, station 
     Some(s) if s.roots.length() == 1 => Some({ station, root: Some(s.roots[0].path), path: "" })
     _ => None
   }
-  let place = match ftab.places.get(scope) {
+  let place = match ftab_place_of(scope) {
     Some(p) => p
     None => start
   }
@@ -193,11 +217,11 @@ fn ftab_places(c : @ui.Ctx, stations : Array[DvStation]) -> Unit {
       @sf.section(c, s.name, note=if s.online { "" } else { @sf.t("web-pages.stations.offline") }, fn() {
         @sf.group(c, fn() {
           let row = fn(key : String, icon : String, name : String, where_ : String, trouble : String, root : String) {
-            if @sf.link_row(c, "files-tab/place/" + s.station + "/" + key, name, note=where_, trouble~, lead=fn() {
-                @sf.icon(c, icon, size=tab_icon, color=t.p.muted) |> ignore
-              }) {
+            @sf.link_row(c, "files-tab/place/" + s.station + "/" + key, name, note=where_, trouble~, lead=fn() {
+              @sf.icon(c, icon, size=tab_icon, color=t.p.muted) |> ignore
+            }, on_press=fn() {
               ftab_go(s.station, root, "")
-            }
+            }) |> ignore
           }
           if s.anywhere && s.home != "" {
             row("home", "server", @sf.t("web-pages.drive.home"), s.home, "", s.home)
@@ -219,7 +243,7 @@ fn ftab_places(c : @ui.Ctx, stations : Array[DvStation]) -> Unit {
 }
 
 ///|
-/// The way to `abs` (useDrive.ts trailOf): from the home (主目录) when it is under it, else from the top of the disk.
+/// The way to `abs`: from the home (主目录) when it is under it, else from the top of the disk.
 fn ftab_trail(abs : String, home : String) -> Array[(String, String)] {
   let trim = fn(p : String) { if p.length() > 1 && p.has_suffix("/") { p.view(end_offset=p.length() - 1).to_string() } else { p } }
   let at = trim(abs)
@@ -248,7 +272,8 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
   let t = @sf.theme()
   let root = at.root.unwrap_or("")
   let here = dv_absolute(root, at.path)
-  let pinned = st.roots.iter().any(fn(r) { r.path == here })
+  let favs = favorites_in(src, ws, [st])
+  let kept = favorite_has(favs, at.station, root, at.path)
   // (a list, whatever the files' page shows: picking from it needs no columns nor tree)
   let view = "list"
   let previewing = preview_shown(src, "tab")
@@ -283,18 +308,18 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
   c.box(style=ftab_head, fn() {
     c.box(style=ftab_trail_box, fn() {
       let sid = c.id("files-tab/places")
-      if c.clicked(sid) {
-        ftab.places[ftab.scope] = None
-      }
+      c.on_press(sid, fn() {
+        ftab_put(ftab.scope, None)
+      })
       let sb = c.box(style=ftab_step, id=sid, fn() { c.text(st.name, style=ftab_step_words) |> ignore })
       c.semantics(sb, Button, id=sid, label=st.name)
       for i, step in way {
         let (name, abs) = step
         @sf.icon(c, "chevron-right", size=ftab_chevron, color=t.p.muted) |> ignore
         let id = c.id("files-tab/step/" + abs)
-        if c.clicked(id) {
+        c.on_press(id, fn() {
           go_to(abs)
-        }
+        })
         let last = i == way.length() - 1
         let b = c.box(style=ftab_step, id~, fn() {
           c.text(name, style=if last { ftab_step_last } else { ftab_step_words }) |> ignore
@@ -304,25 +329,29 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
     })
     |> ignore
     c.box(style=ftab_actions, fn() {
-      if st.anywhere &&
-        lit_button(c, "files-tab/pin", "pin", @sf.t(if pinned { "web-pages.drive.unpin" } else { "web-pages.drive.pin" }), pinned) {
-        pin_folder(c, src, st, here, !pinned)
-      }
-      if lit_button(
-          c,
-          "files-tab/preview",
-          if previewing { "panel-close" } else { "panel-open" },
-          @sf.t(if previewing { "web-pages.files.hidePreview" } else { "web-pages.files.showPreview" }),
-          previewing,
-        ) {
-        set_preview_shown(src, "tab", !previewing)
-      }
-      if @sf.icon_button(c, "copy", key="files-tab/copy", label=@sf.t("web-pages.drive.copyPath")) {
+      lit_button(c, "files-tab/favorite", "star", @sf.t(if kept { "web-pages.files.unfavorite" } else { "web-pages.files.favorite" }, args=[("name", folder_name(st, at))]), kept, on_press=fn() {
+        if kept {
+          favorite_remove(src, ws, at.station, root, at.path)
+        } else {
+          favorite_add(src, ws, { station: at.station, root, path: at.path, name: folder_name(st, at) })
+        }
+      })
+      lit_button(
+        c,
+        "files-tab/preview",
+        if previewing { "panel-close" } else { "panel-open" },
+        @sf.t(if previewing { "web-pages.files.hidePreview" } else { "web-pages.files.showPreview" }),
+        previewing,
+        on_press=fn() {
+          set_preview_shown(src, "tab", !previewing)
+        },
+      )
+      @sf.icon_button(c, "copy", key="files-tab/copy", label=@sf.t("web-pages.drive.copyPath"), on_press=fn() {
         copy_path(c, here)
-      }
-      if @sf.icon_button(c, "refresh", key="files-tab/refresh", label=@sf.t("web-pages.drive.refresh")) {
+      }) |> ignore
+      @sf.icon_button(c, "refresh", key="files-tab/refresh", label=@sf.t("web-pages.drive.refresh"), on_press=fn() {
         refresh_folder(c, src, at)
-      }
+      }) |> ignore
     })
     |> ignore
   })
@@ -375,10 +404,15 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
         if !e.dir {
           out.push(Some(@sf.menu_item_of(@sf.t("web-pages.drive.download"), icon="download", fn() { save_entry(c, src, in_, e) })))
         }
-        if e.dir && st.anywhere {
-          let on = st.roots.iter().any(fn(r) { r.path == abs })
-          out.push(Some(@sf.menu_item_of(@sf.t(if on { "web-pages.drive.unpin" } else { "web-pages.drive.pin" }), icon="pin", fn() {
-            pin_folder(c, src, st, abs, !on)
+        if e.dir {
+          let path = dv_join(in_.path, e.name)
+          let saved = favorite_has(favs, at.station, root, path)
+          out.push(Some(@sf.menu_item_of(@sf.t(if saved { "web-pages.files.unfavorite" } else { "web-pages.files.favorite" }, args=[("name", e.name)]), icon="star", fn() {
+            if saved {
+              favorite_remove(src, ws, at.station, root, path)
+            } else {
+              favorite_add(src, ws, { station: at.station, root, path, name: e.name })
+            }
           })))
         }
         out
@@ -410,9 +444,9 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
           (None, Some(e)) =>
             c.box(style=ftab_problem, fn() {
               c.text(e, style=tab_trouble) |> ignore
-              if @sf.button(c, @sf.t("web-pages.drive.retry"), key="files-tab/retry", tone=Ghost, icon="retry") {
+              @sf.button(c, @sf.t("web-pages.drive.retry"), key="files-tab/retry", tone=Ghost, icon="retry", on_press=fn() {
                 refresh_folder(c, src, at)
-              }
+              }) |> ignore
             })
             |> ignore
           (None, None) => @sf.waiting(c, fn() { rows_sample(c, at, shown, 5, compact=true) })
@@ -434,19 +468,21 @@ fn ftab_folder(c : @ui.Ctx, src : Source, ws : String, st : DvStation, at : Driv
                     dir: true,
                   }
                   // (the folder as a whole, where it is under it: the library's row of choices, as the places' rows)
-                  if @sf.choice_row(c, "files-tab/whole", ftab_picked(whole), @sf.t("web-mobile.files.wholeFolder"), note=here, lead=fn() {
-                      @sf.icon(c, "folder", size=tab_icon, color=t.p.muted) |> ignore
-                    }) {
+                  @sf.choice_row(c, "files-tab/whole", ftab_picked(whole), @sf.t("web-mobile.files.wholeFolder"), note=here, lead=fn() {
+                    @sf.icon(c, "folder", size=tab_icon, color=t.p.muted) |> ignore
+                  }, on_press=fn() {
                     ftab_pick(whole)
-                  }
+                  }) |> ignore
                 })
             }
         }
     }
     // a press where there is no row: nothing chosen
-    if c.clicked(lid) && !row_took(c) {
-      b.clear(c, src)
-    }
+    c.on_press(lid, fn() {
+      if !row_took(c) {
+        b.clear(c, src)
+      }
+    })
   })
   |> ignore
   if previewing {
@@ -537,7 +573,7 @@ let ftab_note : @ui.TextStyle = @ui.text_style(size=Meta, color=Muted, w=Full)
 let ftab_problem : @ui.Style = @ui.css("w=Full p=S3 gap=S2_5 align=AStart")
 
 ///|
-/// Where `name` goes in the folder `folder`, as an absolute path (useDrive.ts childOf).
+/// Where `name` goes in the folder `folder`, as an absolute path.
 fn ftab_child(folder : String, name : String) -> String {
   if folder.has_suffix("/") {
     folder + name
@@ -547,10 +583,11 @@ fn ftab_child(folder : String, name : String) -> String {
 }
 
 ///|
-/// A button of the tab's head lit while what it says is so (pin, the preview): the accent's ink then.
-fn lit_button(c : @ui.Ctx, key : String, icon : String, label : String, on : Bool) -> Bool {
+/// A button of the tab's head lit while what it says is so (pin, the preview): the accent's ink then; `on_press` as it is
+/// pressed.
+fn lit_button(c : @ui.Ctx, key : String, icon : String, label : String, on : Bool, on_press~ : () -> Unit) -> Unit {
   let lit = @sf.theme().p.accent
-  @sf.icon_button(c, icon, key~, on~, ink?=if on { Some(lit) } else { None }, label~)
+  @sf.icon_button(c, icon, key~, on~, ink?=if on { Some(lit) } else { None }, label~, on_press=on_press) |> ignore
 }
 
 ///|

@@ -1,0 +1,25 @@
+import {
+  "mbui/ui",
+  "mbui/svg",
+  "moonbitlang/core/encoding/utf8",
+}
+
+options(
+  "pre-build": [
+    {
+      "input": "devices/iphone-11-pro.svg",
+      "output": "iphone_11_pro.mbt",
+      "command": ":embed -i $input -o $output --name iphone_11_pro_svg",
+    },
+    {
+      "input": "devices/ipad-pro-11.svg",
+      "output": "ipad_pro_11.mbt",
+      "command": ":embed -i $input -o $output --name ipad_pro_11_svg",
+    },
+    {
+      "input": "devices/macbook-pro-16.svg",
+      "output": "macbook_pro_16.mbt",
+      "command": ":embed -i $input -o $output --name macbook_pro_16_svg",
+    },
+  ],
+)

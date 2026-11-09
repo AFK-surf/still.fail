@@ -1,12 +1,13 @@
-// What the people of a chat hear about while no client of theirs runs (admin/notify.rs, docs/notifications.md): an
+// What the people of a chat hear about while no client of theirs runs: an
 // agent's turn ending in one of the station's own chats (done with something said, or blocked), something going wrong
 // there (the station says so, ⚠️ first), and a person saying something there. Worked out here, off the main thread,
 // from a store change the station saw; the station posts them to still.fail cloud (src/cloud/notify.ts).
 import { type Lang, tr as translate } from "../ops/i18n.ts";
 import { type EntryRow, type MessageRow, STILLFAIL_SURFACE, type Store, type TurnSummary } from "./store.ts";
 import * as store from "./store.ts";
-import { apiOf, authorNames, chatTitle, people, useNames } from "./views.ts";
+import { apiOf, authorNames, people, titleOf, useNames } from "./views.ts";
 import { wall } from "../ops/fibers.ts";
+import { STATION_AUTHOR } from "../store/rows.ts";
 
 /// How long a notice's text is kept, in characters (still.fail cloud cuts it shorter).
 const TEXT = 400;
@@ -32,7 +33,8 @@ export function turnNotice(turn: TurnSummary, last: MessageRow | null, key: stri
 
 /// The station's word in a chat that something went wrong (⚠️ first, as the session posts it): what went wrong.
 export function wentWrong(text: string): string | null {
-  return text.startsWith("⚠️") ? text.slice("⚠️".length).trim() : null;
+  // Its first paragraph: what it means; what failed said, under it, is for the chat.
+  return text.startsWith("⚠️") ? text.slice("⚠️".length).split("\n\n")[0]!.trim() : null;
 }
 
 /// The emails of a chat's people: who made it, who said something in it, who started its agents; but `except`.
@@ -46,27 +48,47 @@ function emailsOf(s: Store, creator: string | null, said: string[], sessions: st
     .filter((e) => e !== not && !seen.has(e) && (seen.add(e), true));
 }
 
+/// A notice of a chat: its name and whom to tell, each looked up alone. As lists have the chat, its every message was
+/// counted besides (unread, for no one): many pages of a chat of many messages, 3 to 16 s each time on a station short of
+/// memory (2026-11-02), every telling after it waiting.
 function notice(s: Store, thread: number, seq: number | null, session: string, kind: string, by: string, text: string, except: string | null): Notice | null {
-  const summary = store.listThreads(s, "", null, thread).pop();
-  if (summary === undefined) return null;
-  const to = emailsOf(s, summary.thread.createdBy, summary.people, summary.sessions.map((m) => m.session), except);
+  const t = store.getThread(s, thread);
+  if (t === null) return null;
+  const sessions = store.threadSessions(s, thread).map((m) => m.session);
+  const recipients = emailsOf(s, t.createdBy, store.threadPeople(s, thread, t.surface), sessions, except);
+  const muted = store.mutedViewers(s, thread, recipients);
+  const to = recipients.filter((email) => !muted.has(email));
   if (to.length === 0) return null;
-  return { to, kind, session, thread, seq, title: chatTitle(summary, null), by, text: [...text].slice(0, TEXT).join(""), at: wall.now() };
+  // Our own chats use their given title or the untitled label, never the first message (core's chatTitle rule).
+  const first = t.surface === STILLFAIL_SURFACE ? null : store.firstText(s, thread);
+  return { to, kind, session, thread, seq, title: titleOf(t, first, null), by, text: [...text].slice(0, TEXT).join(""), at: wall.now() };
 }
 
 /// A session changed: its last turn, if it ended since `since` and is not `ended` (the end already told), told to its
 /// chats. Gives the end it saw.
 export function turnNotices(s: Store, key: string, since: number, ended: number | null, lang: Lang): { ended: number | null; notices: Notice[] } {
   useNames(s);
-  const turn = store.sessionStats(s, key).get(key)?.lastTurn ?? null;
+  const turn = store.lastTurn(s, key);
   const at = turn?.endedAt;
   if (turn === null || typeof at !== "number" || at < since) return { ended, notices: [] };
   if (at === ended) return { ended, notices: [] };
   const api = apiOf(s);
-  const out: Notice[] = [];
+  const missing: number[] = [];
+  const found: { thread: ReturnType<typeof store.sessionThreads>[number]; last: MessageRow | null }[] = [];
   for (const thread of store.sessionThreads(s, key)) {
     if (thread.surface !== STILLFAIL_SURFACE || thread.hiddenAt !== null) continue;
-    const last = store.lastMessage(s, thread.id);
+    let last: MessageRow | null;
+    try { last = store.lastMessage(s, thread.id); }
+    catch (error) {
+      if (!(error instanceof store.LastMessageUnavailable)) throw error;
+      missing.push(...error.threads);
+      continue;
+    }
+    found.push({ thread, last });
+  }
+  if (missing.length) throw new store.LastMessageUnavailable([...new Set(missing)]);
+  const out: Notice[] = [];
+  for (const { thread, last } of found) {
     const fresh = turn.declared === "block" && store.blockedAsk(s, thread.id, key, turn)?.fresh === true;
     const told = turnNotice(turn, last, key, translate(lang, "station.notice.file"), fresh);
     if (told === null) continue;
@@ -83,7 +105,7 @@ export function saidNotices(s: Store, id: number, entries: EntryRow[], since: nu
   useNames(s);
   const fresh = entries.filter((e) => e.kind === "message" && e.at >= since);
   const person = fresh.filter((e) => e.authorKind === "person").at(-1);
-  const wrong = fresh.filter((e) => e.authorKind === "ember").flatMap((e) => {
+  const wrong = fresh.filter((e) => e.authorKind === STATION_AUTHOR).flatMap((e) => {
     const what = e.text === null ? null : wentWrong(e.text);
     return what === null ? [] : [{ n: e.n, what }];
   }).at(-1);
@@ -105,4 +127,3 @@ export function saidNotices(s: Store, id: number, entries: EntryRow[], since: nu
   }
   return out;
 }
-

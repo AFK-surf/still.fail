@@ -8,11 +8,11 @@ import { centred } from "./styles/align.ts";
 import { STILL, stillLoop } from "./styles/still.ts";
 
 /** Words about a wait come only when it takes a while: what is there in a moment (from the device) shows none. */
-export const LATER_MS = 400;
+const LATER_MS = 400;
 const later = `${appearKeyframes} 0s linear ${LATER_MS}ms both`;
 
 // 1 → 0.5 and back in 1.4s; still for reduced motion (and still, whole, when what is waited on failed: the red words
-// over them say so; faded to 0.6 they were drawn too faint to be seen, docs/ui-panels.md 对比度). A light sweeping over
+// over them say so; faded to 0.6 they were drawn too faint to be seen, mbui ui/contrast.mbt). A light sweeping over
 // them was tried and judged busier (2026-10-17).
 const breathe = keyframes({ "0%, 100%": { opacity: 1 }, "50%": { opacity: 0.5 } });
 
@@ -50,12 +50,12 @@ globalStyle(`${boneBody} [data-bone-ground]`, { background: "transparent !import
 globalStyle(`${boneBody} [data-bone-whole]`, { background: "transparent !important", borderColor: "transparent !important", boxShadow: "none !important" });
 globalStyle(`${boneBody} [data-bone-whole] > *`, { visibility: "hidden" });
 export const boneMarks = style({ position: "absolute", inset: 0, pointerEvents: "none" });
-// (in the line's grey, as what is drawn with nothing in it: docs/ui-panels.md 对比度)
+// (in the line's grey, as what is drawn with nothing in it: mbui ui/contrast.mbt)
 export const bone = style({ position: "absolute", background: vars.line });
 
 export const track = style({
   position: "relative", display: "block", flex: "none", height: "3px", borderRadius: "999px", overflow: "hidden",
-  // (what is empty of it in the line's grey, as what is drawn with nothing in it: seen on any ground, docs/ui-panels.md
+  // (what is empty of it in the line's grey, as what is drawn with nothing in it: seen on any ground, sf/align.mbt
   // 对比度; the accent at 18% was 1.2 to 1 on white)
   background: vars.line,
 });
