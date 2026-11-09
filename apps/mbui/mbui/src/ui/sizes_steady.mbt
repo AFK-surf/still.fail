@@ -1,5 +1,5 @@
 // Sizes steady: what draws on the screen (a ground, an edge, words, a picture) neither steps in height nor in its place
-// in its row (a list's), or in the window outside one, in one frame, nor goes in one frame at a speed off the frames
+// in its row (a list's, or what scrolls it), or in the window outside one, in one frame, nor goes in one frame at a speed off the frames
 // round it, nor turns back again and again (2026-11-09 the user: 「chat 页面好像还存在高度突变的元素，查出来」, 「动画执行到
 // 一半突变也算突变」). rows_steady.mbt holds where a list's rows stand; this, what is drawn in them and outside lists:
 // a group opened at once, a toast pushed up by the next, a box grown as what it shows comes in.
@@ -186,13 +186,14 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
       let id = self.nodes[i].ident
       count[id] = count.get(id).unwrap_or(0) + 1
     }
-    let faults : Array[(Int, String)] = []
+    // (each with whether it is of its height, and how far it went in the last frame)
+    let faults : Array[(Int, String, Bool, Double)] = []
     // (each node's drawn down the window as its looks and theirs over it have it, y -> a * y + b; how opaque; what
     // of the window its holders' clips leave it; its row's top as drawn, where it is in a list's row, or in what a node of
-    // the tree scrolls (View::scrolls): there the one node it holds, drawn moved by how far it is scrolled alone (Node's
-    // scroll_off), so what is in it measured from that node's top has the scroll taken out, but for where a page's
-    // list's scroll was put for what came out another height over what shows (Tree::scroll_corrected), what shows held
-    // where it was by it: worked out from what holds it, which comes before it)
+    // the tree scrolls (View::scrolls) or an old view's scroll: there the one node it holds, drawn moved by how far it is
+    // scrolled alone (Node's scroll_off), so what is in it measured from that node's top has the scroll taken out, but
+    // for where a page's list's scroll was put for what came out another height over what shows (Tree::scroll_corrected),
+    // what shows held where it was by it: worked out from what holds it)
     let k = self.count
     let ya = Array::make(k, 1.0)
     let yb = Array::make(k, 0.0)
@@ -203,10 +204,25 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
     let in_row = Array::make(k, false)
     // (and when the rows' way of the list it is in last set out: list_size.mbt's RowCauses, -1 none)
     let set_out = Array::make(k, -1.0)
+    // (what holds each before it: a node of the window's tree put among the frame's may come after what it holds)
+    let order : Array[Int] = []
+    let ordered = Array::make(k, false)
     for i in 0..<k {
+      let up : Array[Int] = []
+      let mut q = i
+      while q >= 0 && q < k && !ordered[q] {
+        ordered[q] = true
+        up.push(q)
+        q = self.nodes[q].parent
+      }
+      for j = up.length() - 1; j >= 0; j = j - 1 {
+        order.push(up[j])
+      }
+    }
+    for i in order {
       let n = self.nodes[i]
       let p = n.parent
-      let (pa, pb, palpha) = if p >= 0 && p < i { (ya[p], yb[p], al[p]) } else { (1.0, 0.0, 1.0) }
+      let (pa, pb, palpha) = if p >= 0 && p < k { (ya[p], yb[p], al[p]) } else { (1.0, 0.0, 1.0) }
       let (la, lb, lalpha) = match self.drawn_entry(i) {
         Some(e) => {
           let l = e.look_now()
@@ -218,7 +234,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
       ya[i] = pa * la
       yb[i] = pa * lb + pb
       al[i] = palpha * n.opacity * lalpha
-      if p >= 0 && p < i {
+      if p >= 0 && p < k {
         let pn = self.nodes[p]
         c_top[i] = c_top[p]
         c_bot[i] = c_bot[p]
@@ -227,7 +243,7 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
           c_top[i] = dmax(c_top[i], top)
           c_bot[i] = dmin(c_bot[i], top + ya[p] * pn.fh)
         }
-        if pn.kind == kind_list || pn.tree_scrolls {
+        if pn.kind == kind_list || pn.kind == kind_scroll || pn.scroller != 0 || pn.tree_scrolls {
           // (less how far its scroll was put for what came out another height over what shows: what is under that moved
           // down in it as far, held where it was)
           row_at[i] = ya[i] * (n.y + pn.tree_corrected) + yb[i]
@@ -291,23 +307,55 @@ fn Ctx::sizes_steady_faults(self : Ctx, now : Double, period : Double) -> Array[
           sizes_steady.turned[key] = turn
         }
         match fault {
-          Some(f) =>
-            faults.push((i, (if m.0 { "its height " } else if in_row { "its place in its row " } else { "its place " }) + f))
+          Some(f) => {
+            let went = if seen.length() >= 2 { seen[seen.length() - 1].2 - seen[seen.length() - 2].2 } else { 0.0 }
+            faults.push(
+              (i, (if m.0 { "its height " } else if in_row { "its place in its row " } else { "its place " }) + f, m.0, went),
+            )
+          }
           None => ()
         }
       }
     }
-    // (the innermost of what goes together: what holds it goes with it)
-    let holds : Set[Int] = Set::new()
+    // (what goes as what holds it went, by as far in the frame, carried by it: that one said, the outermost so carried,
+    // not each thing in it)
+    let placed : Map[Int, Double] = {}
     for f in faults {
+      if !f.2 {
+        placed[f.0] = f.3
+      }
+    }
+    let carried : Set[Int] = Set::new()
+    for k, f in faults {
+      if f.2 {
+        continue
+      }
+      let mut p = self.nodes[f.0].parent
+      while p >= 0 {
+        match placed.get(p) {
+          Some(w) if (w - f.3).abs() < 0.01 => {
+            carried.add(k)
+            break
+          }
+          _ => ()
+        }
+        p = self.nodes[p].parent
+      }
+    }
+    // (else the innermost of what goes together: what holds it goes with it)
+    let holds : Set[Int] = Set::new()
+    for k, f in faults {
+      if carried.contains(k) {
+        continue
+      }
       let mut p = self.nodes[f.0].parent
       while p >= 0 {
         holds.add(p)
         p = self.nodes[p].parent
       }
     }
-    for f in faults {
-      if !holds.contains(f.0) {
+    for k, f in faults {
+      if !carried.contains(k) && !holds.contains(f.0) {
         out.push(self.sizes_steady_said(f.0) + ": " + f.1)
       }
     }
